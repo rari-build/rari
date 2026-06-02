@@ -1,9 +1,10 @@
+import type { ReactNode } from 'react'
 import ErrorLayoutClient from './ErrorLayoutClient'
 
 export default function ErrorLayoutTest({
   children,
 }: {
-  children: React.ReactNode
+  children: ReactNode
 }) {
   return <ErrorLayoutClient>{children}</ErrorLayoutClient>
 }

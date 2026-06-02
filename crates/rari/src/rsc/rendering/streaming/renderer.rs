@@ -2,7 +2,7 @@ use cow_utils::CowUtils;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
 use tokio::sync::{Mutex, mpsc};
-use tracing::{error, warn};
+use tracing::{error, info, warn};
 
 use crate::error::RariError;
 use crate::runtime::JsExecutionRuntime;
@@ -123,8 +123,8 @@ impl StreamingRenderer {
                         if let Some(dom_path) = boundary_positions_clone.lock().await.get(&update.boundary_id) {
                             update.dom_path = dom_path.clone();
                         } else {
-                            error!(
-                                "DOM path not found for boundary '{}' in boundary_positions map. This may cause incorrect skeleton replacement.",
+                            info!(
+                                "DOM path not found for boundary '{}' in boundary_positions map.",
                                 update.boundary_id
                             );
                         }
@@ -398,10 +398,10 @@ impl StreamingRenderer {
                                  );
 
                                  #[allow(clippy::disallowed_methods)]
-                                 let error_json = serde_json::to_string(&serde_json::json!({
-                                     "message": error.error_message,
-                                     "boundaryId": error.boundary_id
-                                 })).unwrap_or_else(|_| "{}".to_string());
+                                  let error_json = serde_json::to_string(&serde_json::json!({
+                                      "error": error.error_message,
+                                      "boundary_id": error.boundary_id
+                                  })).unwrap_or_else(|_| "{}".to_string());
 
                                  let error_str = format!(
                                      "{:x}:E{}\n",

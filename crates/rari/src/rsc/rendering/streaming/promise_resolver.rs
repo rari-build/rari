@@ -3,7 +3,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::VecDeque;
 use std::sync::Arc;
 use tokio::sync::{Mutex, mpsc};
-use tracing::{error, warn};
+use tracing::{error, info, warn};
 
 use crate::runtime::JsExecutionRuntime;
 
@@ -176,6 +176,34 @@ fn nested_pending_promises(
         .collect()
 }
 
+async fn get_or_allocate_row_id(
+    promise_id: &str,
+    promise_to_row_map: &Arc<Mutex<FxHashMap<String, u32>>>,
+    shared_row_counter: &Arc<Mutex<u32>>,
+) -> u32 {
+    if let Some(row_id) = {
+        let map = promise_to_row_map.lock().await;
+        map.get(promise_id).copied()
+    } {
+        return row_id;
+    }
+
+    let new_row_id = {
+        let mut counter = shared_row_counter.lock().await;
+        *counter += 1;
+        *counter
+    };
+
+    let mut map = promise_to_row_map.lock().await;
+    match map.get(promise_id).copied() {
+        Some(row_id) => row_id,
+        None => {
+            map.insert(promise_id.to_string(), new_row_id);
+            new_row_id
+        }
+    }
+}
+
 pub struct BackgroundPromiseResolver {
     runtime: Arc<JsExecutionRuntime>,
     active_promises: Arc<Mutex<FxHashMap<String, PendingSuspensePromise>>>,
@@ -297,42 +325,28 @@ impl BackgroundPromiseResolver {
                                                     }
                                                 }
 
+                                                for nested in &nested_promises {
+                                                    get_or_allocate_row_id(
+                                                        &nested.id,
+                                                        &promise_to_row_map,
+                                                        &shared_row_counter,
+                                                    )
+                                                    .await;
+                                                }
+
                                                 let map = {
-                                                    let mut map = promise_to_row_map.lock().await;
-                                                    let mut counter =
-                                                        shared_row_counter.lock().await;
-                                                    for nested in &nested_promises {
-                                                        if !map.contains_key(&nested.id) {
-                                                            *counter += 1;
-                                                            map.insert(nested.id.clone(), *counter);
-                                                        }
-                                                    }
+                                                    let map = promise_to_row_map.lock().await;
                                                     map.clone()
                                                 };
 
                                                 replace_lazy_markers(&mut content, &map);
-                                                drop(map);
 
-                                                let row_id = {
-                                                    let maybe_row = {
-                                                        let map = promise_to_row_map.lock().await;
-                                                        map.get(promise_id).copied()
-                                                    };
-                                                    if let Some(id) = maybe_row {
-                                                        id
-                                                    } else {
-                                                        let mut map =
-                                                            promise_to_row_map.lock().await;
-                                                        let mut counter =
-                                                            shared_row_counter.lock().await;
-                                                        *counter += 1;
-                                                        map.insert(
-                                                            promise_id.to_string(),
-                                                            *counter,
-                                                        );
-                                                        *counter
-                                                    }
-                                                };
+                                                let row_id = get_or_allocate_row_id(
+                                                    promise_id,
+                                                    &promise_to_row_map,
+                                                    &shared_row_counter,
+                                                )
+                                                .await;
                                                 let import_rows = {
                                                     let mut counter =
                                                         shared_row_counter.lock().await;
@@ -365,7 +379,7 @@ impl BackgroundPromiseResolver {
                                                     .as_str()
                                                     .unwrap_or("No stack trace");
                                                 let error_context = &result_data["errorContext"];
-                                                error!(
+                                                info!(
                                                     "Promise resolution failed for boundary {}: {} (Name: {}, Phase: {}, Component: {}, Promise: {}, Stack: {})",
                                                     boundary_id,
                                                     error_message,
@@ -381,12 +395,12 @@ impl BackgroundPromiseResolver {
                                                         .unwrap_or("unknown"),
                                                     error_stack
                                                 );
-                                                let row_id = {
-                                                    let mut counter =
-                                                        shared_row_counter.lock().await;
-                                                    *counter += 1;
-                                                    *counter
-                                                };
+                                                let row_id = get_or_allocate_row_id(
+                                                    promise_id,
+                                                    &promise_to_row_map,
+                                                    &shared_row_counter,
+                                                )
+                                                .await;
                                                 if let Err(e) = error_sender.send(BoundaryError {
                                                     boundary_id: boundary_id.clone(),
                                                     error_message: error_message.to_string(),
@@ -404,11 +418,12 @@ impl BackgroundPromiseResolver {
                                                 "Failed to parse promise resolution result for {}: {} - Raw: {}",
                                                 boundary_id, e, result_string
                                             );
-                                            let row_id = {
-                                                let mut counter = shared_row_counter.lock().await;
-                                                *counter += 1;
-                                                *counter
-                                            };
+                                            let row_id = get_or_allocate_row_id(
+                                                promise_id,
+                                                &promise_to_row_map,
+                                                &shared_row_counter,
+                                            )
+                                            .await;
                                             if let Err(e) = error_sender.send(BoundaryError {
                                                 boundary_id: boundary_id.clone(),
                                                 error_message: format!(
@@ -430,11 +445,12 @@ impl BackgroundPromiseResolver {
                                         "Failed to execute promise resolution script for boundary {}: {}",
                                         boundary_id, e
                                     );
-                                    let row_id = {
-                                        let mut counter = shared_row_counter.lock().await;
-                                        *counter += 1;
-                                        *counter
-                                    };
+                                    let row_id = get_or_allocate_row_id(
+                                        promise_id,
+                                        &promise_to_row_map,
+                                        &shared_row_counter,
+                                    )
+                                    .await;
                                     if let Err(e) = error_sender.send(BoundaryError {
                                         boundary_id: boundary_id.clone(),
                                         error_message: format!("Failed to execute promise: {}", e),
@@ -453,15 +469,19 @@ impl BackgroundPromiseResolver {
                 }
 
                 if received < n {
-                    let mut counter = shared_row_counter.lock().await;
                     for (idx, promise) in batch.iter().enumerate() {
                         if !received_indices.contains(&idx) {
-                            *counter += 1;
+                            let row_id = get_or_allocate_row_id(
+                                &promise.id,
+                                &promise_to_row_map,
+                                &shared_row_counter,
+                            )
+                            .await;
                             if let Err(e) = error_sender.send(BoundaryError {
                                 boundary_id: promise.boundary_id.clone(),
                                 error_message: "Promise channel closed before result arrived"
                                     .to_string(),
-                                row_id: *counter,
+                                row_id,
                             }) {
                                 error!(
                                     "Failed to send boundary error for {}: {}",
