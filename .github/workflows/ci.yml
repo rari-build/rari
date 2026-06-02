@@ -65,7 +65,9 @@ jobs:
   build-snapshot:
     name: Build V8 snapshot
     needs: changes
-    if: needs.changes.outputs.rust == 'true' || needs.changes.outputs.src == 'true'
+    if: |
+      needs.changes.outputs.rust == 'true' ||
+      (needs.changes.outputs.src == 'true' && (github.event_name != 'push' || github.ref_name != 'main'))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
