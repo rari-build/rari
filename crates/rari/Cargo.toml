@@ -1,6 +1,6 @@
 [package]
 name = "rari"
-version = "0.14.2"
+version = "0.14.3"
 authors = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
@@ -140,7 +140,7 @@ smallvec = "1.15.1"
 regex = { workspace = true }
 rustc-hash = { workspace = true }
 lru = "0.18.0"
-uuid = { version = "1.23.1", features = [ "v4" ] }
+uuid = { version = "1.23.2", features = [ "v4" ] }
 thiserror = "2.0.18"
 
 # === Image Processing & Layout ===
@@ -155,7 +155,7 @@ webp = "0.3.1"
 
 # Layout and text rendering
 taffy = "0.10.1"
-parley = "0.9.0"
+parley = "0.10.0"
 swash = "0.2.7"
 zeno = "0.3.3"
 wuff = "0.2.5"

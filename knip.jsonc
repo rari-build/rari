@@ -60,9 +60,6 @@
       ],
       "ignore": [
         "src/proxy.ts" // Proxy configuration file is used via Vite plugin
-      ],
-      "ignoreDependencies": [
-        "tailwindcss"
       ]
     },
     "web": {
