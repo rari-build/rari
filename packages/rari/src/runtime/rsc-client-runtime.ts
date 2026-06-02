@@ -13,6 +13,7 @@ import {
   NEWLINE_REGEX,
 } from '../shared/regex-constants'
 import { getClientComponent as getClientComponentShared } from './shared/get-client-component'
+import { isSuspenseType } from './shared/suspense'
 import { createFromFetch as rariCreateFromFetch, createFromReadableStream as rariCreateFromReadableStream } from './vendor/react-flight-client'
 
 function resolveRariServerUrl(): string {
@@ -614,7 +615,7 @@ class RscClient {
         if (element.length >= 4 && element[0] === '$') {
           const [, type, key, props] = element
 
-          if (['$Sreact.suspense', 'react.suspense', 'suspense', 'Suspense'].includes(type)) {
+          if (isSuspenseType(type)) {
             const suspenseProps = {
               fallback: props?.fallback ? convertRscToReact(props.fallback) : null,
             }
@@ -750,7 +751,7 @@ class RscClient {
                 if (Array.isArray(parsed) && parsed.length >= 4) {
                   const [marker, selector, props] = parsed
                   const boundaryId = props?.['~boundaryId']
-                  if (marker === '$' && ['react.suspense', 'suspense', 'Suspense'].includes(selector) && props && boundaryId)
+                  if (marker === '$' && isSuspenseType(selector) && props && boundaryId)
                     boundaryRowMap.set(`$L${rowId}`, boundaryId)
 
                   if (marker === '$' && props && Object.hasOwn(props, 'children')) {
@@ -773,7 +774,7 @@ class RscClient {
                     const sel = parsed[1]
                     const p = parsed[3]
                     const boundaryId = p?.['~boundaryId']
-                    if (typeof sel === 'string' && ['react.suspense', 'suspense', 'Suspense'].includes(sel) && p && boundaryId)
+                    if (typeof sel === 'string' && isSuspenseType(sel) && p && boundaryId)
                       canUseAsRoot = false
                   }
                   if (canUseAsRoot) {
@@ -990,7 +991,7 @@ class RscClient {
         const boundaryId = props?.['~boundaryId']
         const resolvedType = typeof type === 'string' && type.startsWith('$') ? symbols.get(type) : undefined
         if (
-          (['$Sreact.suspense', 'react.suspense', 'suspense', 'Suspense'].includes(type) || resolvedType === '$Sreact.suspense' || resolvedType === '$Sreact.Suspense')
+          (isSuspenseType(type) || isSuspenseType(resolvedType))
           && props && boundaryId
         ) {
           continue
@@ -1083,9 +1084,8 @@ class RscClient {
 
         const resolvedType = typeof type === 'string' && type.startsWith('$') && !type.startsWith('$L') ? symbols?.get(type) : undefined
         if (
-          ['$Sreact.suspense', 'react.suspense', 'suspense', 'Suspense'].includes(type)
-          || resolvedType === '$Sreact.suspense'
-          || resolvedType === '$Sreact.Suspense'
+          isSuspenseType(type)
+          || isSuspenseType(resolvedType)
         ) {
           actualType = Suspense
         }

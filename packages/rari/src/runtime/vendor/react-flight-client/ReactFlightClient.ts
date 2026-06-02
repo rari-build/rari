@@ -18,6 +18,7 @@ import type {
   StringDecoder,
 } from './ReactFlightClientConfig'
 
+import { isSuspenseType } from '../../shared/suspense'
 import {
   createStringDecoder,
   preloadModule,
@@ -469,7 +470,7 @@ function createElement(
   props: any,
 ): React.ReactElement {
   props ??= {}
-  if (['$Sreact.suspense', 'react.suspense', 'suspense', 'Suspense'].includes(type)) {
+  if (isSuspenseType(type)) {
     type = Symbol.for('react.suspense')
   }
 

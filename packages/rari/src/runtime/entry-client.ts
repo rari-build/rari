@@ -15,6 +15,7 @@ import { createFromReadableStream } from 'virtual:react-flight-client'
 import { NUMERIC_REGEX } from '../shared/regex-constants'
 import { getClientComponent, getClientComponentAsync, getComponentFromInfo } from './shared/get-client-component'
 import { preloadModulesFromWireFormat } from './shared/preload-modules'
+import { isSuspenseType } from './shared/suspense'
 // eslint-disable-next-line ts/ban-ts-comment
 // @ts-ignore - virtual module resolved by Vite
 import 'virtual:rsc-integration.ts'
@@ -631,7 +632,7 @@ function rscToReact(rsc: any, modules: Map<string, any>, symbols: Map<string, an
     if (rsc.length >= 4 && rsc[0] === '$') {
       const [, type, key, props] = rsc
 
-      if (type === '$Sreact.suspense' || type === 'react.suspense' || type === 'suspense') {
+      if (isSuspenseType(type)) {
         const processedProps = processProps(props, modules, symbols)
         return React.createElement(Suspense, key ? { ...processedProps, key } : processedProps)
       }
@@ -641,7 +642,7 @@ function rscToReact(rsc: any, modules: Map<string, any>, symbols: Map<string, an
         const symbolRef = symbols?.get(symbolRowId)
         if (symbolRef && symbolRef.startsWith('$S')) {
           const symbolName = symbolRef.slice(2)
-          if (symbolName === 'react.suspense') {
+          if (isSuspenseType(symbolName)) {
             const processedProps = processProps(props, modules, symbols)
             return React.createElement(Suspense, key ? { ...processedProps, key } : processedProps)
           }
@@ -650,7 +651,7 @@ function rscToReact(rsc: any, modules: Map<string, any>, symbols: Map<string, an
 
       if (typeof type === 'string' && type.startsWith('$S')) {
         const symbolName = type.slice(2)
-        if (symbolName === 'react.suspense') {
+        if (isSuspenseType(symbolName)) {
           const processedProps = processProps(props, modules, symbols)
           return React.createElement(Suspense, key ? { ...processedProps, key } : processedProps)
         }
