@@ -8,6 +8,7 @@ import Sanity from '@/components/icons/sponsors/Sanity'
 import Sentry from '@/components/icons/sponsors/Sentry'
 import Socket from '@/components/icons/sponsors/Socket'
 import { HEX_REGEX } from '@/lib/regex-constants'
+import { container } from '@/lib/styles'
 
 const SPONSOR_URL = 'https://github.com/sponsors/skiniks'
 
@@ -279,7 +280,7 @@ export default function SponsorsPage() {
         <div className="absolute inset-0 bg-linear-to-b from-[#161b22]/30 via-transparent to-transparent" />
         <div className="absolute bottom-0 left-0 right-0 h-40 bg-linear-to-t from-[#0d1117] to-transparent pointer-events-none" />
 
-        <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-20 w-full">
+        <div className={`relative ${container.marketing} py-20 w-full`}>
           <div className="text-center">
             <h1 className="text-4xl lg:text-6xl font-bold text-white mb-6 max-w-3xl mx-auto leading-tight">
               Partner with
@@ -316,8 +317,8 @@ export default function SponsorsPage() {
         </div>
       </div>
 
-      <div className="w-full py-16 lg:py-24">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className={container.section}>
+        <div className={container.marketing}>
           <div className="text-center mb-16">
             <h2 className="text-3xl lg:text-5xl font-bold text-[#f0f6fc] mb-4">
               Monthly
@@ -343,8 +344,8 @@ export default function SponsorsPage() {
         </div>
       </div>
 
-      <div className="w-full py-16 lg:py-24">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className={container.section}>
+        <div className={container.marketing}>
           <div className="text-center mb-16">
             <h2 className="text-3xl lg:text-5xl font-bold text-[#f0f6fc] mb-4">
               One-time
@@ -364,8 +365,8 @@ export default function SponsorsPage() {
         </div>
       </div>
 
-      <div className="w-full py-16 lg:py-24">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className={container.section}>
+        <div className={container.marketing}>
           <div className="text-center mb-16">
             <h2 className="text-3xl lg:text-5xl font-bold text-[#f0f6fc] mb-4">
               Infrastructure
@@ -413,8 +414,8 @@ export default function SponsorsPage() {
         </div>
       </div>
 
-      <div className="w-full py-16 lg:py-24">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className={container.section}>
+        <div className={container.marketing}>
           <div className="text-center mb-16">
             <h2 className="text-3xl lg:text-5xl font-bold text-[#f0f6fc] mb-4">
               Financial

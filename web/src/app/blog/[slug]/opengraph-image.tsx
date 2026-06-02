@@ -1,8 +1,8 @@
 import type { PageProps } from 'rari'
 import { readFile } from 'node:fs/promises'
 import { getBlogFilePath, isValidSlug } from '@/lib/content'
+import { extractBasicMetadata } from '@/lib/metadata'
 import { generateOGImage } from '@/lib/og-image'
-import { DESCRIPTION_EXPORT_REGEX, TITLE_EXPORT_REGEX } from '@/lib/regex-constants'
 
 export default async function Image({ params }: PageProps) {
   const slug = params?.slug
@@ -12,13 +12,12 @@ export default async function Image({ params }: PageProps) {
   if (isValidSlug(slug)) {
     try {
       const content = await readFile(getBlogFilePath(slug), 'utf-8')
-      const titleMatch = content.match(TITLE_EXPORT_REGEX)
-      const descriptionMatch = content.match(DESCRIPTION_EXPORT_REGEX)
+      const metadata = extractBasicMetadata(content)
 
-      if (titleMatch)
-        title = titleMatch[2]
-      if (descriptionMatch)
-        description = descriptionMatch[2]
+      if (metadata.title)
+        title = metadata.title
+      if (metadata.description)
+        description = metadata.description
     }
     catch {}
   }

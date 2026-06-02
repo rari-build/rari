@@ -48,6 +48,7 @@ catalogs:
     '@shikijs/langs': ^3.23.0
     '@shikijs/themes': ^3.23.0
     '@shikijs/types': ^3.23.0
+    mermaid: ^11.15.0
     remark-gfm: ^4.0.1
   monitoring:
     '@sentry/react': ^10.55.0

@@ -1,10 +1,11 @@
 import type { Metadata } from 'rari'
 import Breadcrumbs from '@/components/Breadcrumbs'
 import PageHeader from '@/components/PageHeader'
+import { container } from '@/lib/styles'
 
 export default function ApiReferencePage() {
   return (
-    <div className="max-w-5xl mx-auto px-4 lg:px-8 py-4 lg:py-8 pt-16 lg:pt-8 w-full">
+    <div className={container.base}>
       <div className="prose prose-invert max-w-none">
         <Breadcrumbs pathname="/docs/api-reference" />
         <PageHeader title="API Reference" pagePath="web/src/app/docs/api-reference/page.tsx" />

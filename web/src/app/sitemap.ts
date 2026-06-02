@@ -2,44 +2,13 @@ import type { Sitemap } from 'rari'
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import process from 'node:process'
-import { DATE_EXPORT_REGEX } from '@/lib/regex-constants'
+import { getBlogPostsMinimal } from '@/lib/content'
 
 const baseUrl = 'https://rari.build'
-
-interface BlogPost {
-  slug: string
-  date: string
-}
 
 interface DocPage {
   slug: string
   lastModified: Date
-}
-
-async function getBlogPosts(): Promise<BlogPost[]> {
-  try {
-    const blogDir = join(process.cwd(), 'public', 'content', 'blog')
-    const files = await readdir(blogDir)
-    const mdxFiles = files.filter(file => file.endsWith('.mdx'))
-
-    const posts = await Promise.all(
-      mdxFiles.map(async (file) => {
-        const slug = file.replace('.mdx', '')
-        const content = await readFile(join(blogDir, file), 'utf-8')
-        const dateMatch = content.match(DATE_EXPORT_REGEX)
-
-        return {
-          slug,
-          date: dateMatch?.[1] || new Date().toISOString(),
-        }
-      }),
-    )
-
-    return posts
-  }
-  catch {
-    return []
-  }
 }
 
 async function getDocPages(): Promise<DocPage[]> {
@@ -80,10 +49,8 @@ async function getDocPages(): Promise<DocPage[]> {
 }
 
 export default async function sitemap(): Promise<Sitemap> {
-  const [blogPosts, docPages] = await Promise.all([
-    getBlogPosts(),
-    getDocPages(),
-  ])
+  const blogPosts = getBlogPostsMinimal()
+  const docPages = await getDocPages()
 
   return [
     {
@@ -116,5 +83,17 @@ export default async function sitemap(): Promise<Sitemap> {
       changeFrequency: 'monthly' as const,
       priority: 0.7,
     })),
+    {
+      url: `${baseUrl}/enterprise`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.6,
+    },
+    {
+      url: `${baseUrl}/enterprise/sponsors`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.6,
+    },
   ]
 }

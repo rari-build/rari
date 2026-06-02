@@ -1,16 +1,17 @@
 import type { ComponentProps } from 'react'
+import type { BlogMetadata } from '@/lib/metadata'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { cwd } from 'node:process'
 import { evaluate } from '@mdx-js/mdx'
-import { createMDXClientReferences } from 'rari/mdx'
 import * as runtime from 'react/jsx-runtime'
 import remarkGfm from 'remark-gfm'
 import NotFoundPage from '@/app/not-found'
 import Breadcrumbs from '@/components/Breadcrumbs'
 import Heading from '@/components/Heading'
 import PageHeader from '@/components/PageHeader'
-import { mdxComponentMetadata } from '@/lib/mdx-components'
+import { getMDXComponents } from '@/lib/mdx-components'
+import { extractBlogMetadata } from '@/lib/metadata'
 import { remarkCodeBlock } from '@/lib/remark-codeblock'
 import { getHighlighter, SHIKI_THEME } from '@/lib/shiki'
 
@@ -40,10 +41,10 @@ function PageHeaderWithFilePath({ filePath, ...props }: ComponentProps<typeof Pa
   return <PageHeader {...props} filePath={filePath} />
 }
 
-function createMdxComponents(filePath: string, mdxComponents: Record<string, any>) {
+function createMdxComponents(filePath: string, mdxComponents: Record<string, any>, blogMetadata?: BlogMetadata) {
   return {
     ...mdxComponents,
-    PageHeader: (props: any) => <PageHeaderWithFilePath {...props} filePath={filePath} />, // oxlint-disable-line react/component-hook-factories
+    PageHeader: (props: any) => <PageHeaderWithFilePath {...props} filePath={filePath} {...blogMetadata} />, // oxlint-disable-line react/component-hook-factories
     h2: (props: any) => <Heading level={2} {...props} />,
     h3: (props: any) => <Heading level={3} {...props} />,
     h4: (props: any) => <Heading level={4} {...props} />,
@@ -79,16 +80,10 @@ export default async function MdxRenderer({
       remarkPlugins,
     })
 
-    const mdxComponents = createMDXClientReferences(
-      Object.fromEntries(
-        mdxComponentMetadata.map(({ name, component, id }) => [
-          name,
-          { component, id },
-        ]),
-      ),
-    )
-
-    const allComponents = createMdxComponents(filePath, mdxComponents)
+    const mdxComponents = getMDXComponents(content)
+    const isBlogPost = filePath.startsWith('blog/')
+    const blogMetadata = isBlogPost ? extractBlogMetadata(content) : undefined
+    const allComponents = createMdxComponents(filePath, mdxComponents, blogMetadata)
 
     return (
       <div

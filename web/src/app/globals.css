@@ -47,6 +47,8 @@ code {
 .prose {
   color: #c9d1d9;
   max-width: none;
+  font-size: 1.0625rem;
+  line-height: 1.75;
 }
 
 @media (max-width: 768px) {
@@ -85,39 +87,45 @@ code {
 .prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {
   color: var(--github-text);
   font-weight: 600;
-  border-bottom: 1px solid var(--github-dark-border);
-  padding-bottom: 0.5rem;
-  margin-bottom: 1rem;
 }
 
+.prose h2 {
+  border-bottom: 1px solid var(--github-dark-border);
+  padding-bottom: 0.5rem;
+}
+
+.prose .page-header + * h1,
 .prose .page-header h1 {
   border-bottom: none;
   padding-bottom: 0;
-  margin-bottom: 0;
+  margin-top: 0;
 }
 
 .prose h1 {
   font-size: 2rem;
-  margin-top: 2rem;
+  margin-top: 2.5rem;
+  margin-bottom: 1rem;
 }
 
 .prose h2 {
   font-size: 1.5rem;
-  margin-top: 1.5rem;
+  margin-top: 2.5rem;
+  margin-bottom: 1rem;
 }
 
 .prose h3 {
   font-size: 1.25rem;
-  margin-top: 1.25rem;
+  margin-top: 2rem;
+  margin-bottom: 0.75rem;
 }
 
 .prose p {
-  margin-bottom: 1rem;
-  line-height: 1.6;
+  margin-bottom: 1.25rem;
+  line-height: 1.75;
 }
 
 .prose ul, .prose ol {
-  margin-bottom: 1rem;
+  margin-bottom: 1.25rem;
   padding-left: 1.5rem;
 }
 
@@ -168,6 +176,16 @@ code {
   background-color: var(--github-dark-card);
 }
 
+.prose a code {
+  border-color: var(--rust-orange);
+  transition: all 0.2s ease;
+}
+
+.prose a:hover code {
+  border-color: var(--rust-orange-dark);
+  background-color: rgba(253, 126, 20, 0.1);
+}
+
 .prose blockquote {
   border-left: 4px solid var(--rust-orange);
   background: var(--github-dark-card);
@@ -179,10 +197,11 @@ code {
 .prose table {
   width: 100%;
   border-collapse: collapse;
-  margin: 1rem 0;
+  margin: 1.5rem 0;
   display: block;
   overflow-x: auto;
   max-width: 100%;
+  font-size: 0.9375rem;
 }
 
 .prose th, .prose td {
@@ -193,6 +212,21 @@ code {
 
 .prose th {
   background: var(--github-dark-card);
+  font-weight: 600;
+}
+
+.prose tr:nth-child(even) {
+  background: rgba(22, 27, 34, 0.5);
+}
+
+.prose hr {
+  border: none;
+  border-top: 1px solid var(--github-dark-border);
+  margin: 2.5rem 0;
+}
+
+.prose strong {
+  color: var(--github-text);
   font-weight: 600;
 }
 

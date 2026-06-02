@@ -1,5 +1,6 @@
 import { formatCompactNumber } from '@/lib/format'
 import { getLatestCommitHash, getRepoStars } from '@/lib/github'
+import { container } from '@/lib/styles'
 import Bluesky from './icons/Bluesky'
 import Discord from './icons/Discord'
 import Github from './icons/Github'
@@ -12,7 +13,7 @@ export default async function Footer() {
 
   return (
     <footer className="w-full bg-[#0d1117] rounded-t-md">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-4 lg:flex lg:items-center lg:justify-between lg:gap-x-3">
+      <div className={`${container.marketing} py-8 lg:py-4 lg:flex lg:items-center lg:justify-between lg:gap-x-3`}>
         <div className="flex items-center justify-center lg:justify-start lg:flex-1 gap-x-1.5 mt-3 lg:mt-0 lg:order-1">
           <p className="text-gray-300 text-sm">
             <a

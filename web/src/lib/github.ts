@@ -57,15 +57,6 @@ export async function getLastCommitDate(filePath: string): Promise<string | null
   }
 }
 
-export function formatDate(isoDate: string): string {
-  const date = new Date(isoDate)
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  })
-}
-
 async function getRepoInfo(): Promise<GitHubRepo | null> {
   try {
     const url = `${GITHUB_API_BASE}/repos/${GITHUB_REPO}`

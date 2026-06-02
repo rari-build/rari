@@ -1,5 +1,6 @@
 import type { Metadata } from 'rari'
 import ArrowNarrowRight from '@/components/icons/ArrowNarrowRight'
+import { container } from '@/lib/styles'
 
 export default function EnterprisePage() {
   return (
@@ -8,7 +9,7 @@ export default function EnterprisePage() {
         <div className="absolute inset-0 bg-linear-to-b from-[#161b22]/30 via-transparent to-transparent" />
         <div className="absolute bottom-0 left-0 right-0 h-40 bg-linear-to-t from-[#0d1117] to-transparent pointer-events-none" />
 
-        <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-20 w-full">
+        <div className={`relative ${container.marketing} py-20 w-full`}>
           <div className="text-center mb-12">
             <h1 className="text-4xl lg:text-6xl font-bold text-white mb-4 max-w-3xl mx-auto leading-none">
               <span className="block">Build faster.</span>
@@ -59,8 +60,8 @@ export default function EnterprisePage() {
         </div>
       </div>
 
-      <div className="w-full py-16 lg:py-24">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className={container.section}>
+        <div className={container.marketing}>
           <div className="relative">
             <div className="absolute -inset-0.5 bg-linear-to-r from-[#fd7e14] to-[#e8590c] rounded-2xl blur opacity-20" />
             <div className="relative bg-linear-to-br from-[#161b22] to-[#0d1117] border border-[#30363d] rounded-2xl p-8 lg:p-12">
@@ -83,8 +84,8 @@ export default function EnterprisePage() {
         </div>
       </div>
 
-      <div className="w-full py-16 lg:py-24">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className={container.section}>
+        <div className={container.marketing}>
           <div className="text-center mb-16">
             <h2 className="text-3xl lg:text-5xl font-bold text-[#f0f6fc] mb-4">
               Enterprise
@@ -159,8 +160,8 @@ export default function EnterprisePage() {
         </div>
       </div>
 
-      <div className="w-full py-16 lg:py-24">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className={container.section}>
+        <div className={container.marketing}>
           <div className="text-center mb-16">
             <h2 className="text-3xl lg:text-5xl font-bold text-[#f0f6fc] mb-4">
               Why
@@ -198,8 +199,8 @@ export default function EnterprisePage() {
         </div>
       </div>
 
-      <div className="w-full py-16 lg:py-24">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className={container.section}>
+        <div className={container.marketing}>
           <div className="relative">
             <div className="absolute -inset-0.5 bg-linear-to-r from-[#fd7e14] to-[#e8590c] rounded-2xl blur opacity-20" />
             <div className="relative bg-linear-to-br from-[#161b22] to-[#0d1117] border border-[#30363d] rounded-2xl p-8 lg:p-12 text-center">

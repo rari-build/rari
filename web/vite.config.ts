@@ -25,9 +25,12 @@ export default defineConfig({
     tailwindcss(),
   ],
   build: {
+    chunkSizeWarningLimit: 2000,
     rolldownOptions: {
       output: {
         codeSplitting: {
+          includeDependenciesRecursively: false,
+          minShareCount: 10,
           groups: [
             {
               name: (moduleId) => {

@@ -1,68 +1,15 @@
 import type { Metadata } from 'rari'
-import { readdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
-import process from 'node:process'
+import BlogPostCard from '@/components/BlogPostCard'
 import News from '@/components/icons/News'
-import { isValidSlug } from '@/lib/content'
-import {
-  AUTHOR_EXPORT_REGEX,
-  DATE_EXPORT_REGEX,
-  DESCRIPTION_EXPORT_REGEX,
-  TITLE_EXPORT_REGEX,
-} from '@/lib/regex-constants'
-
-interface BlogPost {
-  slug: string
-  title: string
-  description: string
-  date: string
-  author?: string
-}
-
-function getBlogPosts(): BlogPost[] {
-  try {
-    const blogDir = join(process.cwd(), 'public', 'content', 'blog')
-    const files = readdirSync(blogDir)
-    const mdxFiles = files.filter(file => file.endsWith('.mdx'))
-
-    const posts = mdxFiles.map((file) => {
-      const slug = file.replace('.mdx', '')
-      const content = readFileSync(join(blogDir, file), 'utf-8')
-
-      const titleMatch = content.match(TITLE_EXPORT_REGEX)
-      const descriptionMatch = content.match(DESCRIPTION_EXPORT_REGEX)
-      const dateMatch = content.match(DATE_EXPORT_REGEX)
-      const authorMatch = content.match(AUTHOR_EXPORT_REGEX)
-
-      return {
-        slug,
-        title: titleMatch?.[2] || 'Untitled',
-        description: descriptionMatch?.[2] || '',
-        date: dateMatch?.[2] || '',
-        author: authorMatch?.[2],
-      }
-    })
-
-    return posts.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-  }
-  catch {
-    return []
-  }
-}
-
-function formatDate(dateString: string): string {
-  if (!dateString)
-    return ''
-  const date = new Date(dateString)
-  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
-}
+import { getAllBlogPosts, isValidSlug } from '@/lib/content'
+import { container } from '@/lib/styles'
 
 export default function BlogIndexPage() {
-  const posts = getBlogPosts()
+  const posts = getAllBlogPosts()
   const validPosts = posts.filter(post => isValidSlug(post.slug))
 
   return (
-    <div className="max-w-5xl mx-auto px-4 lg:px-8 py-4 lg:py-8 pt-16 lg:pt-8 w-full">
+    <div className={`${container.marketing} py-12`}>
       <div className="space-y-12">
         <div className="space-y-4">
           <h1 className="text-5xl font-bold text-[#f0f6fc] tracking-tight">
@@ -77,21 +24,13 @@ export default function BlogIndexPage() {
           ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {validPosts.map(post => (
-                  <a
+                  <BlogPostCard
                     key={post.slug}
-                    href={`/blog/${encodeURIComponent(post.slug)}`}
-                    className="group block p-6 bg-[#161b22] border border-[#30363d] rounded-lg hover:border-[#fd7e14] hover:shadow-lg hover:shadow-[#fd7e14]/10 transition-all duration-200"
-                  >
-                    <div className="flex items-center gap-2 text-sm text-gray-400 mb-3">
-                      <time>{formatDate(post.date)}</time>
-                    </div>
-                    <h2 className="text-xl font-semibold text-[#f0f6fc] mb-3 group-hover:text-[#fd7e14] transition-colors">
-                      {post.title}
-                    </h2>
-                    <p className="text-gray-300 leading-relaxed">
-                      {post.description}
-                    </p>
-                  </a>
+                    slug={post.slug}
+                    title={post.title}
+                    description={post.description}
+                    date={post.date}
+                  />
                 ))}
               </div>
             )

@@ -1,4 +1,5 @@
-import { formatDate, getLastCommitDate } from '@/lib/github'
+import { formatDate } from '@/lib/date'
+import { getLastCommitDate } from '@/lib/github'
 
 interface LastUpdatedProps {
   filePath: string

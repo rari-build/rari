@@ -3,14 +3,15 @@ import FeatureCard from '@/components/FeatureCard'
 import HeroSection from '@/components/HeroSection'
 import ArrowNarrowRight from '@/components/icons/ArrowNarrowRight'
 import PackageManagerTabs from '@/components/PackageManagerTabs'
+import { container } from '@/lib/styles'
 
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-[#0d1117] text-white">
       <HeroSection />
 
-      <div className="w-full py-16 lg:py-24">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className={container.section}>
+        <div className={container.marketing}>
           <div className="relative">
             <div className="absolute -inset-0.5 bg-linear-to-r from-[#fd7e14] to-[#e8590c] rounded-2xl blur opacity-20" />
 
@@ -47,8 +48,8 @@ export default function HomePage() {
         </div>
       </div>
 
-      <div className="w-full py-16 lg:py-24">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className={container.section}>
+        <div className={container.marketing}>
           <div className="text-center mb-16">
             <h2 className="text-3xl lg:text-5xl font-bold text-[#f0f6fc] mb-4">
               Three layers,

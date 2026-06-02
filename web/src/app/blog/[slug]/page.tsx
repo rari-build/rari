@@ -4,11 +4,8 @@ import { join } from 'node:path'
 import process from 'node:process'
 import MdxRenderer from '@/components/MdxRenderer'
 import { getBlogFilePath, isValidSlug } from '@/lib/content'
-import {
-  DESCRIPTION_EXPORT_REGEX,
-  HEADING_REGEX,
-  TITLE_EXPORT_REGEX,
-} from '@/lib/regex-constants'
+import { extractBasicMetadata } from '@/lib/metadata'
+import { container } from '@/lib/styles'
 
 const DEFAULT_METADATA = {
   title: 'rari Blog',
@@ -19,12 +16,12 @@ export default function BlogPage({ params }: PageProps) {
   const slug = params?.slug
 
   if (!isValidSlug(slug))
-    return <div className="max-w-5xl mx-auto px-4 lg:px-8 py-4 lg:py-8 pt-16 lg:pt-8 w-full">Invalid blog post path.</div>
+    return <div className={container.base}>Invalid blog post path.</div>
 
   return (
-    <div className="max-w-5xl mx-auto px-4 lg:px-8 py-4 lg:py-8 pt-16 lg:pt-8 w-full">
+    <article className="max-w-4xl mx-auto px-4 lg:px-8 py-8 lg:py-12 pt-16 lg:pt-12 w-full">
       <MdxRenderer filePath={`blog/${slug}.mdx`} />
-    </div>
+    </article>
   )
 }
 
@@ -51,22 +48,11 @@ export function generateMetadata({ params }: PageProps) {
 
   try {
     const content = readFileSync(getBlogFilePath(slug), 'utf-8')
-    const titleMatch = content.match(TITLE_EXPORT_REGEX)
-    const descriptionMatch = content.match(DESCRIPTION_EXPORT_REGEX)
+    const metadata = extractBasicMetadata(content)
 
-    if (titleMatch || descriptionMatch) {
-      return {
-        title: titleMatch ? `${titleMatch[2]} / rari Blog` : DEFAULT_METADATA.title,
-        description: descriptionMatch ? descriptionMatch[2] : DEFAULT_METADATA.description,
-      }
-    }
-
-    const headingMatch = content.match(HEADING_REGEX)
-    if (headingMatch) {
-      return {
-        title: `${headingMatch[1]} / rari Blog`,
-        description: DEFAULT_METADATA.description,
-      }
+    return {
+      title: metadata.title ? `${metadata.title} / rari Blog` : DEFAULT_METADATA.title,
+      description: metadata.description ?? DEFAULT_METADATA.description,
     }
   }
   catch {}
