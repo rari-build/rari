@@ -7,7 +7,6 @@ import { generateOGImage } from '@/lib/og-image'
 export default async function Image({ params }: PageProps) {
   const slug = params?.slug
   let title = 'rari Blog'
-  let description = 'Latest news and updates from the rari team.'
 
   if (isValidSlug(slug)) {
     try {
@@ -16,15 +15,12 @@ export default async function Image({ params }: PageProps) {
 
       if (metadata.title)
         title = metadata.title
-      if (metadata.description)
-        description = metadata.description
     }
     catch {}
   }
 
   return generateOGImage({
     title,
-    description,
     section: 'blog',
   })
 }

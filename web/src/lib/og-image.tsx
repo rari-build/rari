@@ -3,7 +3,7 @@ import Rari from '@/components/icons/Rari'
 
 interface OGImageOptions {
   title: string
-  description: string
+  description?: string
   section?: string
   logoSize?: 'small' | 'large'
 }
@@ -125,22 +125,24 @@ export function generateOGImage({ title, description, section, logoSize = 'small
               fontSize: 56,
               fontWeight: 'bold',
               color: '#f0f6fc',
-              marginBottom: '30px',
+              marginBottom: description ? '30px' : '0',
               lineHeight: 1.2,
             }}
           >
             {title}
           </div>
 
-          <div
-            style={{
-              fontSize: 32,
-              color: '#8b949e',
-              lineHeight: 1.4,
-            }}
-          >
-            {description}
-          </div>
+          {description && (
+            <div
+              style={{
+                fontSize: 32,
+                color: '#8b949e',
+                lineHeight: 1.4,
+              }}
+            >
+              {description}
+            </div>
+          )}
         </div>
       </div>
     </div>,
