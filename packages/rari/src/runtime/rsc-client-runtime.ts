@@ -614,9 +614,9 @@ class RscClient {
         if (element.length >= 4 && element[0] === '$') {
           const [, type, key, props] = element
 
-          if (type === 'react.suspense' || type === 'suspense') {
+          if (['$Sreact.suspense', 'react.suspense', 'suspense', 'Suspense'].includes(type)) {
             const suspenseProps = {
-              fallback: convertRscToReact(props?.fallback) || null,
+              fallback: props?.fallback ? convertRscToReact(props.fallback) : null,
             }
 
             const children = props?.children ? convertRscToReact(props.children) : null
@@ -735,7 +735,8 @@ class RscClient {
               else if (content.startsWith('E{')) {
                 try {
                   const err = JSON.parse(content.substring(1))
-                  console.error('RSC stream error:', err)
+                  const errorMsg = err?.error ?? err?.message ?? JSON.stringify(err)
+                  console.error('RSC stream error:', errorMsg)
                 }
                 catch (e) {
                   console.error('Failed to parse error row:', content, e)
@@ -749,7 +750,7 @@ class RscClient {
                 if (Array.isArray(parsed) && parsed.length >= 4) {
                   const [marker, selector, props] = parsed
                   const boundaryId = props?.['~boundaryId']
-                  if (marker === '$' && (selector === 'react.suspense' || selector === 'suspense') && props && boundaryId)
+                  if (marker === '$' && ['react.suspense', 'suspense', 'Suspense'].includes(selector) && props && boundaryId)
                     boundaryRowMap.set(`$L${rowId}`, boundaryId)
 
                   if (marker === '$' && props && Object.hasOwn(props, 'children')) {
@@ -772,7 +773,7 @@ class RscClient {
                     const sel = parsed[1]
                     const p = parsed[3]
                     const boundaryId = p?.['~boundaryId']
-                    if (typeof sel === 'string' && (sel === 'react.suspense' || sel === 'suspense') && p && boundaryId)
+                    if (typeof sel === 'string' && ['react.suspense', 'suspense', 'Suspense'].includes(sel) && p && boundaryId)
                       canUseAsRoot = false
                   }
                   if (canUseAsRoot) {
@@ -926,6 +927,7 @@ class RscClient {
     const lines = rscPayload.trim().split(NEWLINE_REGEX)
     const modules = new Map()
     const elements = new Map()
+    const symbols = new Map<string, string>()
     const errors = []
 
     for (const line of lines) {
@@ -947,8 +949,9 @@ class RscClient {
         else if (rest.startsWith('E{')) {
           const data = rest.substring(1)
           const errorData = JSON.parse(data)
-          errors.push(errorData)
-          console.error('RSC: Server error', errorData)
+          const errorMsg = errorData?.error ?? errorData?.message ?? JSON.stringify(errorData)
+          errors.push(errorMsg)
+          console.error('RSC: Server error', errorMsg)
         }
         else if (rest.startsWith('[')) {
           const elementData = JSON.parse(rest)
@@ -956,6 +959,12 @@ class RscClient {
         }
         else if (rest.startsWith('Symbol.for(')) {
           continue
+        }
+        else if (rest.startsWith('"$S')) {
+          const symbolName = JSON.parse(rest)
+          if (typeof symbolName === 'string') {
+            symbols.set(`$${rowId}`, symbolName)
+          }
         }
         else {
           console.error('Unknown RSC row format:', line)
@@ -967,7 +976,7 @@ class RscClient {
     }
 
     if (errors.length > 0)
-      throw new Error(`RSC Server Error: ${errors.map(e => e.message || e).join(', ')}`)
+      throw new Error(`RSC Server Error: ${errors.map(e => e?.error ?? e?.message ?? e).join(', ')}`)
 
     let rootElement = null
 
@@ -979,8 +988,13 @@ class RscClient {
       if (Array.isArray(element) && element.length >= 2 && element[0] === '$') {
         const [, type, , props] = element
         const boundaryId = props?.['~boundaryId']
-        if (type === 'react.suspense' && props && boundaryId)
+        const resolvedType = typeof type === 'string' && type.startsWith('$') ? symbols.get(type) : undefined
+        if (
+          (['$Sreact.suspense', 'react.suspense', 'suspense', 'Suspense'].includes(type) || resolvedType === '$Sreact.suspense' || resolvedType === '$Sreact.Suspense')
+          && props && boundaryId
+        ) {
           continue
+        }
 
         rootElement = element
         break
@@ -992,10 +1006,10 @@ class RscClient {
       return null
     }
 
-    return this.reconstructElementFromRscData(rootElement, modules)
+    return this.reconstructElementFromRscData(rootElement, modules, symbols)
   }
 
-  reconstructElementFromRscData(elementData: any, modules: Map<string, ModuleData>): any {
+  reconstructElementFromRscData(elementData: any, modules: Map<string, ModuleData>, symbols?: Map<string, string>): any {
     if (elementData === null || elementData === undefined)
       return null
 
@@ -1065,12 +1079,21 @@ class RscClient {
           }
         }
 
-        const processedProps = props ? this.processPropsRecursively(props, modules) : {}
+        const processedProps = props ? this.processPropsRecursively(props, modules, symbols) : {}
+
+        const resolvedType = typeof type === 'string' && type.startsWith('$') && !type.startsWith('$L') ? symbols?.get(type) : undefined
+        if (
+          ['$Sreact.suspense', 'react.suspense', 'suspense', 'Suspense'].includes(type)
+          || resolvedType === '$Sreact.suspense'
+          || resolvedType === '$Sreact.Suspense'
+        ) {
+          actualType = Suspense
+        }
 
         return createElement(actualType, { key, ...processedProps })
       }
       else {
-        return elementData.map(item => this.reconstructElementFromRscData(item, modules))
+        return elementData.map(item => this.reconstructElementFromRscData(item, modules, symbols))
       }
     }
 
@@ -1080,7 +1103,7 @@ class RscClient {
     return elementData
   }
 
-  processPropsRecursively(props: any, modules: Map<string, ModuleData>): any {
+  processPropsRecursively(props: any, modules: Map<string, ModuleData>, symbols?: Map<string, string>): any {
     if (!props || typeof props !== 'object')
       return props
 
@@ -1090,14 +1113,13 @@ class RscClient {
       if (key === 'children') {
         if (Array.isArray(value)) {
           if (value.length >= 2 && value[0] === '$') {
-            const result = this.reconstructElementFromRscData(value, modules)
+            const result = this.reconstructElementFromRscData(value, modules, symbols)
             processed[key] = result
           }
           else {
-            const processedChildren = value.map((child) => {
-              const result = this.reconstructElementFromRscData(child, modules)
-              return result
-            }).filter(child => child !== null && child !== undefined)
+            const processedChildren = value.map(child =>
+              this.reconstructElementFromRscData(child, modules, symbols),
+            ).filter(child => child !== null && child !== undefined)
 
             if (processedChildren.length === 0)
               processed[key] = null
@@ -1108,7 +1130,7 @@ class RscClient {
           }
         }
         else {
-          const processedChild = this.reconstructElementFromRscData(value, modules)
+          const processedChild = this.reconstructElementFromRscData(value, modules, symbols)
           processed[key] = processedChild
         }
       }
@@ -1116,7 +1138,7 @@ class RscClient {
         processed[key] = value
       }
       else {
-        processed[key] = this.reconstructElementFromRscData(value, modules)
+        processed[key] = this.reconstructElementFromRscData(value, modules, symbols)
       }
     }
 

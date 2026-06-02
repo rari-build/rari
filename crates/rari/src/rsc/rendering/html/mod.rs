@@ -795,7 +795,11 @@ impl RscHtmlRenderer {
             let is_suspense_symbol = tag.starts_with('$')
                 && tag.len() > 1
                 && tag[1..].chars().all(|c| c.is_ascii_hexdigit());
-            if tag == "$Sreact.suspense" || tag == "react.suspense" || is_suspense_symbol {
+            if tag == "$Sreact.suspense"
+                || tag == "react.suspense"
+                || tag == "suspense"
+                || is_suspense_symbol
+            {
                 if let Some(props_obj) = props.as_object() {
                     let children = props_obj.get("children");
                     if let Some(children) = children {
@@ -1123,13 +1127,75 @@ impl RscToHtmlConverter {
                 }
             }
 
-            RscChunkType::BoundaryError => match self.generate_error_replacement(&chunk).await {
-                Ok(html) => Ok(html),
-                Err(e) => {
-                    error!("Error generating error replacement: {}", e);
-                    Ok(self.generate_fallback_error_html())
+            RscChunkType::BoundaryError => {
+                let mut html = Vec::new();
+
+                if !self.root_div_closed {
+                    self.root_div_closed = true;
+                    html.extend(b"</div>\n");
                 }
-            },
+
+                if !self.payload_embedding_disabled {
+                    let rsc_line = String::from_utf8_lossy(&chunk.data);
+                    let parts: Vec<&str> = rsc_line.trim().splitn(2, ':').collect();
+                    let error_msg = if parts.len() == 2 {
+                        let json_part = parts[1].strip_prefix('E').unwrap_or(parts[1]);
+                        serde_json::from_str::<serde_json::Value>(json_part)
+                            .ok()
+                            .and_then(|error_data| {
+                                error_data["error"].as_str().map(ToString::to_string)
+                            })
+                            .unwrap_or_else(|| "Error loading content".to_string())
+                    } else {
+                        "Error loading content".to_string()
+                    };
+
+                    #[allow(clippy::disallowed_methods)]
+                    let placeholder_payload = serde_json::json!([
+                        "$",
+                        "div",
+                        null,
+                        {
+                            "className": "rari-error",
+                            "children": ["Error loading content: ", error_msg],
+                        }
+                    ]);
+                    let placeholder_row = format!("{:x}:{}\n", chunk.row_id, placeholder_payload);
+                    self.rsc_wire_format.push(placeholder_row.trim().to_string());
+                }
+
+                let fallback_html = self.generate_fallback_error_html();
+
+                match self.generate_error_replacement(&chunk).await {
+                    Ok(error_html) => {
+                        html.extend(error_html);
+                        Ok(html)
+                    }
+                    Err(e) => {
+                        error!("Error generating error replacement: {}", e);
+                        if let Some(ref boundary_id) = chunk.boundary_id {
+                            let react_boundary_id = {
+                                let map = self.rari_to_react_boundary_map.lock();
+                                map.get(boundary_id).cloned()
+                            };
+                            if let Some(react_id) = react_boundary_id {
+                                let content_id = format!("E:{}", react_id.trim_start_matches("B:"));
+                                let cleanup = format!(
+                                    r#"<div hidden id="{}">{}</div><script>$RC=window.$RC||function(b,c){{var t=document.getElementById(b);var s=document.getElementById(c);if(t&&s){{var p=t.parentNode;var f=document.createDocumentFragment();Array.from(s.childNodes).forEach(function(n){{f.appendChild(n)}});var d=t.nextSibling;while(d&&!(d.nodeType===8&&d.data==='/$')){{var next=d.nextSibling;d.remove();d=next;}}if(d)d.remove();p.insertBefore(f,t.nextSibling);t.remove();s.remove();}}}};$RC("{}","{}")</script>"#,
+                                    content_id,
+                                    String::from_utf8_lossy(&fallback_html),
+                                    react_id,
+                                    content_id
+                                );
+                                html.extend(cleanup.into_bytes());
+                                return Ok(html);
+                            }
+                        }
+                        html.extend(fallback_html);
+                        Ok(html)
+                    }
+                }
+            }
 
             RscChunkType::StreamComplete => {
                 let mut html = Vec::new();
@@ -1463,7 +1529,10 @@ if (typeof window !== 'undefined') {{
                 {
                     let props_obj = props.as_object();
 
-                    if type_str == "$Sreact.suspense" || type_str == "react.suspense" {
+                    if type_str == "$Sreact.suspense"
+                        || type_str == "react.suspense"
+                        || type_str == "suspense"
+                    {
                         return self.render_suspense_boundary(type_str, props_obj).await;
                     }
 
@@ -1563,6 +1632,10 @@ if (typeof window !== 'undefined') {{
         tag: &str,
         props: Option<&serde_json::Map<String, serde_json::Value>>,
     ) -> Result<String, RariError> {
+        if tag == "$Sreact.suspense" || tag == "react.suspense" || tag == "suspense" {
+            return self.render_suspense_boundary(tag, props).await;
+        }
+
         if !tag.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ':') {
             return Err(RariError::internal(format!("Invalid tag name: {}", tag)));
         }

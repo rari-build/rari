@@ -14,6 +14,7 @@ const TAG_TEXT = 84
 const PRIMITIVE_JSON_REGEX = /^(?:-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null)$/
 const HEX_REGEX = /^[0-9a-f]+$/i
 const MODULE_REF_REGEX = /^\$L?[0-9a-f]+$/i
+const SUSPENSE_TYPES = ['Suspense', '$Sreact.suspense', 'react.suspense', 'suspense']
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
@@ -340,7 +341,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           if (NUMERIC_REGEX.test(symbolId)) {
             const symbolName = symbols.get(type)
             if (symbolName) {
-              if (symbolName === '$Sreact.suspense' || symbolName === 'react.suspense')
+              if (SUSPENSE_TYPES.includes(symbolName))
                 resolvedType = 'Suspense'
               else
                 console.warn('[rari] AppRouter: Unknown symbol:', symbolName)
@@ -348,7 +349,10 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           }
         }
 
-        if (resolvedType === 'Suspense' || type === 'Suspense') {
+        if (
+          (typeof resolvedType === 'string' && SUSPENSE_TYPES.includes(resolvedType))
+          || (typeof type === 'string' && SUSPENSE_TYPES.includes(type))
+        ) {
           const processedProps = processProps(props, modules, layoutPath, symbols, rows)
           return React.createElement(React.Suspense, serverKey ? { ...processedProps, key: serverKey } : processedProps)
         }

@@ -99,8 +99,9 @@
       let rscData
       let nestedPendingPromises = []
       try {
+        const suspense = globalThis['~suspense']
+
         if (globalThis['~suspense']) {
-          const suspense = globalThis['~suspense']
           suspense.pendingPromises = []
           suspense.pendingPromisesByBoundary ??= {}
           suspense.pendingPromisesByBoundary[boundaryId] = []
@@ -109,14 +110,13 @@
           suspense.currentBoundaryId = boundaryId
         }
 
-        if (globalThis.renderToRsc)
-          rscData = await globalThis.renderToRsc(resolvedElement, globalThis['~clientComponents'] || {}, boundaryId)
-        else
-          rscData = resolvedElement
+        rscData = globalThis.renderToRsc
+          ? await globalThis.renderToRsc(resolvedElement, globalThis['~clientComponents'] || {}, boundaryId)
+          : resolvedElement
 
-        const suspense = globalThis['~suspense']
         const pb = suspense?.pendingPromisesByBoundary
         const allIds = [boundaryId, ...(suspense?.discoveredBoundaries || []).map(b => b.id)]
+
         nestedPendingPromises = []
         for (const id of allIds) {
           for (const p of (pb?.[id] || [])) {

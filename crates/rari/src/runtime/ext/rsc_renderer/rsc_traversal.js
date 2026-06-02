@@ -256,7 +256,7 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
           }
         }
 
-        if (child.props && child.props.children)
+        if (child.props && child.props.children && !isSuspenseComponent(child.type))
           detectAsyncComponents(child.props.children, depth + 1)
       }
     }
@@ -730,7 +730,6 @@ function createErrorElement(message, componentName) {
 
 async function renderToRsc(element, clientComponents = {}) {
   try {
-    globalThis['~rsc'].keyCounter = 0
     return await traverseToRsc(element, clientComponents)
   }
   catch (error) {

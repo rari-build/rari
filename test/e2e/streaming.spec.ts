@@ -1,7 +1,8 @@
-import type { Page, Response } from '@playwright/test'
+import type { Response } from '@playwright/test'
 import { expect, test } from '@playwright/test'
 import { URL_PATTERNS } from './shared/constants'
 import { hasClientRouter, hasRariRuntime, hasRouteCache, waitForRariRuntime } from './shared/helpers'
+import { assertProgressiveTimestamps, getServerTimestamps, gotoWithRetry } from './shared/streaming-helpers'
 
 test.describe('RSC Streaming Infrastructure Tests', () => {
   test('should load pages without RSC parsing errors', async ({ page }) => {
@@ -276,60 +277,6 @@ test.describe('RSC Protocol Tests', () => {
 test.describe.serial('Suspense Streaming Tests', () => {
   test.setTimeout(60000)
 
-  async function getServerTimestamps(page: Page): Promise<{ timeA: number, timeB: number, timeC: number }> {
-    await page.waitForFunction(
-      () => {
-        const a = document.querySelector('[data-testid="component-a"]')
-        const b = document.querySelector('[data-testid="component-b"]')
-        const c = document.querySelector('[data-testid="component-c"]')
-        return a?.textContent?.includes(':') && b?.textContent?.includes(':') && c?.textContent?.includes(':')
-      },
-      { timeout: 40000 },
-    )
-    return page.evaluate(() => {
-      const getText = (id: string) => document.querySelector(`[data-testid="${id}"]`)?.textContent || ''
-      const parseTime = (text: string) => new Date(text.split(':').slice(1).join(':')).getTime()
-      return {
-        timeA: parseTime(getText('component-a')),
-        timeB: parseTime(getText('component-b')),
-        timeC: parseTime(getText('component-c')),
-      }
-    })
-  }
-
-  function assertProgressiveServerTimestamps(timeA: number, timeB: number, timeC: number) {
-    const gapAB = timeB - timeA
-    const gapBC = timeC - timeB
-    const spanAC = timeC - timeA
-
-    expect(timeA).toBeLessThan(timeB)
-    expect(timeB).toBeLessThan(timeC)
-
-    expect(gapAB).toBeGreaterThan(500)
-    expect(gapBC).toBeGreaterThan(500)
-
-    expect(gapAB).toBeLessThan(3500)
-    expect(gapBC).toBeLessThan(3500)
-    expect(spanAC).toBeLessThan(6500)
-  }
-
-  async function gotoWithRetry(page: Page, url: string, maxRetries = 5) {
-    let lastError: Error | undefined
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      try {
-        await page.goto(url, { waitUntil: 'domcontentloaded' })
-        await page.waitForSelector('#root > *', { timeout: 5000 })
-        return
-      }
-      catch (error) {
-        lastError = error instanceof Error ? error : new Error(String(error))
-        if (attempt < maxRetries - 1)
-          await page.waitForTimeout(1000)
-      }
-    }
-    throw new Error(`gotoWithRetry failed after ${maxRetries} attempts for ${url}: ${lastError?.message}`)
-  }
-
   test('should stream Suspense boundaries progressively and independently', async ({ page }) => {
     await gotoWithRetry(page, '/suspense-streaming')
 
@@ -342,16 +289,17 @@ test.describe.serial('Suspense Streaming Tests', () => {
     expect(renderA).toBeLessThanOrEqual(renderB)
     expect(renderB).toBeLessThanOrEqual(renderC)
 
-    const { timeA, timeB, timeC } = await getServerTimestamps(page)
-    assertProgressiveServerTimestamps(timeA, timeB, timeC)
+    const times = await getServerTimestamps(page, ['component-a', 'component-b', 'component-c'])
+    assertProgressiveTimestamps(times, { minGap: 500, maxGap: 3500 })
+    expect(times['component-c'] - times['component-a']).toBeLessThan(6500)
   })
 
   test('should resolve boundaries independently based on their delay', async ({ page }) => {
     await gotoWithRetry(page, '/suspense-streaming')
 
-    const { timeA, timeB, timeC } = await getServerTimestamps(page)
-
-    assertProgressiveServerTimestamps(timeA, timeB, timeC)
+    const times = await getServerTimestamps(page, ['component-a', 'component-b', 'component-c'])
+    assertProgressiveTimestamps(times, { minGap: 500, maxGap: 3500 })
+    expect(times['component-c'] - times['component-a']).toBeLessThan(6500)
   })
 })
 

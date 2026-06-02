@@ -1,11 +1,12 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import { useState } from 'react'
 
 export default function ErrorLayoutClient({
   children,
 }: {
-  children: React.ReactNode
+  children: ReactNode
 }) {
   const [shouldThrow, setShouldThrow] = useState(false)
 

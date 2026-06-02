@@ -631,6 +631,11 @@ function rscToReact(rsc: any, modules: Map<string, any>, symbols: Map<string, an
     if (rsc.length >= 4 && rsc[0] === '$') {
       const [, type, key, props] = rsc
 
+      if (type === '$Sreact.suspense' || type === 'react.suspense' || type === 'suspense') {
+        const processedProps = processProps(props, modules, symbols)
+        return React.createElement(Suspense, key ? { ...processedProps, key } : processedProps)
+      }
+
       if (typeof type === 'string' && type.startsWith('$') && type.length > 1 && NUMERIC_REGEX.test(type.slice(1))) {
         const symbolRowId = type.slice(1)
         const symbolRef = symbols?.get(symbolRowId)
