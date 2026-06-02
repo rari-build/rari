@@ -10,6 +10,7 @@ vi.mock('@rari/shared/http-utils', () => ({
 
 describe('HMRCoordinator', () => {
   const TEST_DEBOUNCE_MS = 300
+  const TEST_PORT = Number(process.env.PORT || 3000)
 
   let coordinator: HMRCoordinator
   let mockBuilder: any
@@ -44,7 +45,7 @@ describe('HMRCoordinator', () => {
     mockFetch = vi.fn()
     globalThis.fetch = mockFetch
 
-    coordinator = new HMRCoordinator(mockBuilder, 3000)
+    coordinator = new HMRCoordinator(mockBuilder, TEST_PORT)
   })
 
   afterEach(() => {
@@ -139,7 +140,7 @@ describe('HMRCoordinator', () => {
       await vi.advanceTimersByTimeAsync(TEST_DEBOUNCE_MS)
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'http://localhost:3000/_rari/hmr',
+        `http://localhost:${TEST_PORT}/_rari/hmr`,
         expect.objectContaining({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

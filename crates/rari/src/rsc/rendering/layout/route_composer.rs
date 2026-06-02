@@ -46,6 +46,7 @@ impl RouteComposer {
                 if (!globalThis['~suspense']) globalThis['~suspense'] = {{}};
                 globalThis['~suspense'].discoveredBoundaries = [];
                 globalThis['~suspense'].pendingPromises = [];
+                globalThis['~suspense'].currentBoundaryId = null;
 
                 if (!globalThis['~react']) globalThis['~react'] = {{}};
                 if (!globalThis['~react'].originalCreateElement) {{
