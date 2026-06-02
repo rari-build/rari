@@ -7,6 +7,18 @@ if (typeof globalThis !== 'undefined') {
     globalThis['~rsc'].keyCounter = 0
 }
 
+function pushPendingPromise(item) {
+  const suspense = globalThis['~suspense']
+  suspense.pendingPromises ??= []
+  suspense.pendingPromises.push(item)
+
+  if (item.boundaryId) {
+    suspense.pendingPromisesByBoundary ??= {}
+    suspense.pendingPromisesByBoundary[item.boundaryId] ??= []
+    suspense.pendingPromisesByBoundary[item.boundaryId].push(item)
+  }
+}
+
 if (typeof globalThis !== 'undefined' && !globalThis['~suspense']) {
   globalThis['~suspense'] = {
     streaming: true,
@@ -14,6 +26,7 @@ if (typeof globalThis !== 'undefined' && !globalThis['~suspense']) {
     boundaryProps: {},
     discoveredBoundaries: [],
     pendingPromises: [],
+    pendingPromisesByBoundary: {},
     currentBoundaryId: null,
   }
 }
@@ -41,7 +54,7 @@ async function traverseToRsc(element, clientComponents = {}, depth = 0) {
         globalThis['~suspense'].promises = {}
 
       globalThis['~suspense'].promises[promiseId] = element
-      globalThis['~suspense'].pendingPromises.push({
+      pushPendingPromise({
         id: promiseId,
         boundaryId: globalThis['~suspense'].currentBoundaryId,
         componentPath: 'AsyncPromise',
@@ -168,6 +181,10 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
       globalThis['~suspense'].pendingPromises = []
     if (!globalThis['~suspense'].promises)
       globalThis['~suspense'].promises = {}
+    if (!globalThis['~suspense'].pendingPromisesByBoundary) {
+      globalThis['~suspense'].pendingPromisesByBoundary = {}
+    }
+    globalThis['~suspense'].pendingPromisesByBoundary[boundaryId] = []
 
     const previousBoundaryId = globalThis['~suspense'].currentBoundaryId
     globalThis['~suspense'].currentBoundaryId = boundaryId
@@ -204,7 +221,7 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
             globalThis['~suspense'].promises = {}
 
           globalThis['~suspense'].promises[promiseId] = child
-          globalThis['~suspense'].pendingPromises.push({
+          pushPendingPromise({
             id: promiseId,
             boundaryId,
             componentPath: 'AsyncComponent',
@@ -225,7 +242,7 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
 
               const actualType = isAsyncMarker ? child.type._originalType : child.type
 
-              globalThis['~suspense'].pendingPromises.push({
+              pushPendingPromise({
                 id: promiseId,
                 boundaryId,
                 componentPath: actualType.name || 'anonymous',
@@ -360,7 +377,7 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
       if (!globalThis['~suspense'].pendingPromises)
         globalThis['~suspense'].pendingPromises = []
 
-      globalThis['~suspense'].pendingPromises.push({
+      pushPendingPromise({
         id: promiseId,
         boundaryId: globalThis['~suspense'].currentBoundaryId,
         componentPath: asyncType.name || 'AsyncComponent',
@@ -442,7 +459,7 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
       if (!globalThis['~suspense'].pendingPromises)
         globalThis['~suspense'].pendingPromises = []
 
-      globalThis['~suspense'].pendingPromises.push({
+      pushPendingPromise({
         id: promiseId,
         boundaryId: globalThis['~suspense'].currentBoundaryId,
         componentPath: type.name || 'anonymous',

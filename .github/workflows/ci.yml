@@ -33,7 +33,7 @@ jobs:
       src: ${{ steps.filter.outputs.src }}
       rust: ${{ steps.filter.outputs.rust }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0
 
@@ -65,14 +65,16 @@ jobs:
   build-snapshot:
     name: Build V8 snapshot
     needs: changes
-    if: needs.changes.outputs.rust == 'true' || needs.changes.outputs.src == 'true'
+    if: |
+      needs.changes.outputs.rust == 'true' ||
+      (needs.changes.outputs.src == 'true' && (github.event_name != 'push' || github.ref_name != 'main'))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       actions: write
       contents: read
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
@@ -86,6 +88,8 @@ jobs:
 
       - name: Cache Rust
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          shared-key: snapshot
 
       - name: Create snapshot placeholder
         run: |
@@ -122,7 +126,7 @@ jobs:
       actions: write
       contents: read
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
@@ -137,6 +141,8 @@ jobs:
 
       - name: Cache Rust
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          shared-key: rust-check
 
       - name: Download snapshot
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -159,6 +165,87 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
+  build-rari-binary:
+    name: Build rari binary (${{ matrix.os }})
+    needs: [changes, build-snapshot]
+    if: (needs.changes.outputs.rust == 'true' || needs.changes.outputs.src == 'true') && (github.event_name != 'push' || github.ref_name != 'main')
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    permissions:
+      actions: write
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        exclude:
+          - os: ${{ github.event_name == 'merge_group' && 'windows-latest' || '' }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: nightly
+
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libfontconfig1-dev
+
+      - name: Install dependencies (Windows)
+        if: runner.os == 'Windows'
+        run: vcpkg install fontconfig:x64-windows
+        shell: pwsh
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          shared-key: "e2e-${{ runner.os }}"
+
+      - name: Download snapshot
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: v8-snapshot
+          path: crates/rari/snapshots
+
+      - name: Build rari binary (Windows)
+        if: runner.os == 'Windows'
+        run: cargo build --bin rari
+        env:
+          AWS_LC_SYS_PREBUILT_NASM: 1
+          PKG_CONFIG_PATH: C:\vcpkg\installed\x64-windows\lib\pkgconfig
+          VCPKG_ROOT: C:\vcpkg
+
+      - name: Build rari binary (Unix)
+        if: runner.os != 'Windows'
+        run: cargo build --bin rari
+
+      - name: Upload binary (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: rari-binary-linux
+          path: target/debug/rari
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload binary (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: rari-binary-windows
+          path: target/debug/rari.exe
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Cancel workflow on failure
+        if: failure() && github.event_name == 'merge_group'
+        run: gh run cancel ${{ github.run_id }} --repo ${{ github.repository }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+
   build:
     needs: changes
     if: needs.changes.outputs.src == 'true' || needs.changes.outputs.rust == 'true'
@@ -168,7 +255,7 @@ jobs:
       actions: write
       contents: read
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
 
@@ -226,7 +313,7 @@ jobs:
       actions: write
       contents: read
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
 
@@ -266,6 +353,7 @@ jobs:
     needs:
       - changes
       - build
+      - build-rari-binary
     strategy:
       fail-fast: ${{ github.event_name == 'merge_group' }}
       matrix:
@@ -273,53 +361,9 @@ jobs:
         node: ['lts/*']
         exclude:
           - os: ${{ github.event_name == 'merge_group' && 'windows-latest' || '' }}
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Create snapshot placeholder
-        run: |
-          mkdir -p crates/rari/snapshots
-          touch crates/rari/snapshots/RARI_SNAPSHOT.bin
-          echo 'pub static RESIDUAL_LAZY_ESM_SOURCES: &[(&str, &str)] = &[];' > crates/rari/snapshots/residual_lazy_sources.rs
-          echo 'pub static RESIDUAL_LAZY_JS_SOURCES: &[(&str, &str)] = &[];' >> crates/rari/snapshots/residual_lazy_sources.rs
-        shell: bash
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
-        with:
-          toolchain: nightly
-
-      - name: Install dependencies (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y pkg-config libfontconfig1-dev
-
-      - name: Install dependencies (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          vcpkg install fontconfig:x64-windows
-        shell: pwsh
-
-      - name: Cache Rust
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
-
-      - name: Generate V8 snapshot
-        run: cargo run --manifest-path tools/snapshot/Cargo.toml -- crates/rari/snapshots
-        shell: bash
-
-      - name: Prepare Rust binaries (Windows)
-        if: runner.os == 'Windows'
-        run: cargo run --bin prepare-binaries -- --dev
-        env:
-          AWS_LC_SYS_PREBUILT_NASM: 1
-          PKG_CONFIG_PATH: C:\vcpkg\installed\x64-windows\lib\pkgconfig
-          VCPKG_ROOT: C:\vcpkg
-
-      - name: Prepare Rust binaries (Unix)
-        if: runner.os != 'Windows'
-        run: cargo run --bin prepare-binaries -- --dev
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
 
@@ -333,6 +377,24 @@ jobs:
         with:
           name: dist
           path: packages
+
+      - name: Download rari binary (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: rari-binary-linux
+          path: packages/rari-linux-x64/bin
+
+      - name: Download rari binary (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: rari-binary-windows
+          path: packages/rari-win32-x64/bin
+
+      - name: Make binary executable (Linux)
+        if: runner.os == 'Linux'
+        run: chmod +x packages/rari-linux-x64/bin/rari
 
       - name: Install dependencies
         run: pnpm install
@@ -357,6 +419,7 @@ jobs:
       - build-snapshot
       - rust-check
       - build
+      - build-rari-binary
       - lint-and-test
       - test-e2e
     steps:
@@ -368,6 +431,7 @@ jobs:
             "${{ needs.build-snapshot.result }}"
             "${{ needs.rust-check.result }}"
             "${{ needs.build.result }}"
+            "${{ needs.build-rari-binary.result }}"
             "${{ needs.lint-and-test.result }}"
             "${{ needs.test-e2e.result }}"
           )

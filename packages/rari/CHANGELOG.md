@@ -9,6 +9,10 @@
 - *(rsc)* Await element resolution and wrap state updates in transition
 - *(rsc)* Handle streaming responses without transition wrapping
 
+### 💼 Other
+
+- Rari@0.14.1
+
 ### 🚜 Refactor
 
 - *(rsc)* Remove unused export regex patterns and simplify manifest
