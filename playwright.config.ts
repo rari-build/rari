@@ -10,7 +10,7 @@ export default defineConfig({
   reporter: process.env.CI ? 'github' : 'html',
 
   use: {
-    baseURL: process.env.BASE_URL || 'http://localhost:3000',
+    baseURL: process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}`,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -18,7 +18,7 @@ export default defineConfig({
 
   webServer: {
     command: 'pnpm --filter @test/app build && pnpm --filter @test/app start',
-    url: 'http://localhost:3000',
+    url: `http://localhost:${process.env.PORT || 3000}`,
     reuseExistingServer: !process.env.CI,
     timeout: 120000,
   },

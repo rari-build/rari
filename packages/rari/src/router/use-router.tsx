@@ -31,7 +31,6 @@ export function RouterProvider({ children, initialPathname }: RouterProviderProp
       ? new URLSearchParams(window.location.search)
       : new URLSearchParams(),
   )
-  const [params, setParams] = useState<Record<string, string | string[]>>({})
   const navigateRef = useRef<((href: string, options?: NavigationOptions) => Promise<void>) | null>(null)
 
   useEffect(() => {
@@ -42,7 +41,6 @@ export function RouterProvider({ children, initialPathname }: RouterProviderProp
       if (detail?.to) {
         setPathname(detail.to)
         setSearchParams(new URLSearchParams(window.location.search))
-        setParams({})
       }
     }
     window.addEventListener('rari:navigate', handleNavigate)
@@ -77,7 +75,7 @@ export function RouterProvider({ children, initialPathname }: RouterProviderProp
 
   const value = useMemo<RouterContextValue>(() => ({
     pathname,
-    params,
+    params: {},
     searchParams,
     push: async (href: string, options?: NavigationOptions) => {
       if (navigateRef.current) {
@@ -118,7 +116,7 @@ export function RouterProvider({ children, initialPathname }: RouterProviderProp
         console.warn('[rari] Prefetch failed:', error)
       }
     },
-  }), [pathname, params, searchParams])
+  }), [pathname, searchParams])
 
   return (
     <RouterContext value={value}>
