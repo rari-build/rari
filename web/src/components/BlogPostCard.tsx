@@ -8,9 +8,10 @@ interface BlogPostCardProps {
 }
 
 export default function BlogPostCard({ slug, title, description, date }: BlogPostCardProps) {
+  const safeSlug = encodeURIComponent(slug)
   return (
     <a
-      href={`/blog/${slug}`}
+      href={`/blog/${safeSlug}`}
       className="group block p-6 bg-[#161b22] border border-[#30363d] rounded-lg hover:border-[#fd7e14] hover:shadow-lg hover:shadow-[#fd7e14]/10 transition-all duration-200"
     >
       <div className="flex items-center gap-2 text-sm text-gray-400 mb-3">
