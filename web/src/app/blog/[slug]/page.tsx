@@ -50,9 +50,16 @@ export function generateMetadata({ params }: PageProps) {
     const content = readFileSync(getBlogFilePath(slug), 'utf-8')
     const metadata = extractBasicMetadata(content)
 
+    const title = metadata.title ? `${metadata.title} / rari Blog` : DEFAULT_METADATA.title
+    const description = metadata.description ?? DEFAULT_METADATA.description
+
     return {
-      title: metadata.title ? `${metadata.title} / rari Blog` : DEFAULT_METADATA.title,
-      description: metadata.description ?? DEFAULT_METADATA.description,
+      title,
+      description,
+      openGraph: {
+        title: metadata.title ?? DEFAULT_METADATA.title,
+        description,
+      },
     }
   }
   catch {}
