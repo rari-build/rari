@@ -1,7 +1,7 @@
 {
   "name": "rari",
   "type": "module",
-  "version": "0.14.3",
+  "version": "0.14.4",
   "description": "Runtime Accelerated Rendering Infrastructure (rari)",
   "author": "Ryan Skinner",
   "license": "MIT",

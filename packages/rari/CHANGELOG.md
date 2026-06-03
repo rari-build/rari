@@ -1,8 +1,21 @@
+## [rari@0.14.4] - 2026-06-03
+
+### 🚀 Features
+
+- Add CSS module support for server-rendered pages
+
+### 🚜 Refactor
+
+- *(router)* Make componentId optional and reorder CSS modules config
 ## [rari@0.14.3] - 2026-06-02
 
 ### 🐛 Bug Fixes
 
 - Reset suspense.currentBoundaryId between renders to prevent async components from returning null during RSC navigation
+
+### 💼 Other
+
+- Rari@0.14.3
 
 ### 🚜 Refactor
 
