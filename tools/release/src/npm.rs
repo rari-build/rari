@@ -31,7 +31,23 @@ pub async fn publish_package(
     is_prerelease: bool,
     otp: Option<&str>,
 ) -> Result<()> {
-    let mut args = vec!["publish", "--access", "public", "--no-git-checks"];
+    let pack_output =
+        Command::new("pnpm").args(["pack"]).current_dir(package_path).output().await?;
+
+    if !pack_output.status.success() {
+        let stderr = String::from_utf8_lossy(&pack_output.stderr);
+        let stdout = String::from_utf8_lossy(&pack_output.stdout);
+        anyhow::bail!("Failed to pack package:\nstdout: {}\nstderr: {}", stdout, stderr);
+    }
+
+    let pack_output_str = String::from_utf8_lossy(&pack_output.stdout);
+    let tgz_filename = pack_output_str
+        .lines()
+        .last()
+        .and_then(|line| line.split_whitespace().last())
+        .ok_or_else(|| anyhow::anyhow!("Could not determine packed tarball filename"))?;
+
+    let mut args = vec!["publish", tgz_filename, "--access", "public"];
 
     if is_prerelease {
         args.push("--tag");
@@ -46,16 +62,12 @@ pub async fn publish_package(
         args.push(otp_code);
     }
 
-    let mut cmd = Command::new("pnpm");
+    let mut cmd = Command::new("npm");
     cmd.args(&args).current_dir(package_path);
 
-    if let Some(otp_code) = otp_value {
-        cmd.env("PNPM_CONFIG_OTP", otp_code);
-    }
-
-    cmd.stdin(std::process::Stdio::null());
-
     let output = cmd.output().await?;
+
+    let _ = tokio::fs::remove_file(package_path.join(tgz_filename)).await;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
