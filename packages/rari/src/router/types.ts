@@ -36,7 +36,7 @@ export interface LoadingEntry {
   path: string
   filePath: string
   css?: string[]
-  componentId: string
+  componentId?: string
 }
 
 export interface ErrorEntry {

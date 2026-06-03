@@ -604,7 +604,7 @@ if (import.meta.hot) {
       config.css = {
         ...config.css,
         transformer: config.css?.transformer ?? 'lightningcss' as const,
-        modules: { pattern: RARI_CSS_MODULES_PATTERN, ...existingCssModules } as CSSModulesOptions,
+        modules: { ...existingCssModules, pattern: RARI_CSS_MODULES_PATTERN } as CSSModulesOptions,
       }
 
       if (command === 'build') {
