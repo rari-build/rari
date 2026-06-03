@@ -177,17 +177,11 @@ deno_package_json = { version = "0.52.0", default-features = false }
 deno_semver = "=0.10.0"
 
 # === Platform-specific Dependencies ===
-winapi = { version = "0.3.9", features = [
-  "std",
-  "wincon",
-  "handleapi",
-  "consoleapi",
-  "minwindef",
-] }
 windows-sys = { version = "=0.59.0", features = [
-  "Win32_Networking",
-  "Win32_Networking_WinSock",
-  "Win32_System_SystemInformation",
+  "Win32_Foundation",
+  "Win32_Storage_FileSystem",
+  "Win32_System_Console",
+  "Win32_UI_Input_KeyboardAndMouse",
 ] }
 
 # === CLI & Logging ===

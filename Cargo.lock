@@ -7254,7 +7254,6 @@ dependencies = [
  "urlencoding",
  "uuid",
  "webp",
- "winapi",
  "windows-sys 0.59.0",
  "wuff",
  "zeno",
