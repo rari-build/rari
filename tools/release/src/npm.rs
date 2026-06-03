@@ -38,7 +38,7 @@ pub async fn publish_package(
         args.push("next");
     }
 
-    let env_otp = std::env::var("NPM_OTP").ok();
+    let env_otp = std::env::var("NPM_OTP").ok().or_else(|| std::env::var("PNPM_CONFIG_OTP").ok());
     let otp_value = otp.or(env_otp.as_deref());
 
     if let Some(otp_code) = otp_value {
@@ -46,10 +46,19 @@ pub async fn publish_package(
         args.push(otp_code);
     }
 
-    let status = Command::new("pnpm").args(&args).current_dir(package_path).status().await?;
+    let mut cmd = Command::new("pnpm");
+    cmd.args(&args).current_dir(package_path);
 
-    if !status.success() {
-        anyhow::bail!("Failed to publish package");
+    if let Some(otp_code) = otp_value {
+        cmd.env("PNPM_CONFIG_OTP", otp_code);
+    }
+
+    let output = cmd.output().await?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        anyhow::bail!("Failed to publish package:\nstdout: {}\nstderr: {}", stdout, stderr);
     }
 
     Ok(())

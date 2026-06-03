@@ -348,7 +348,8 @@ async fn run_non_interactive(
                 );
             } else {
                 println!("  {} Publishing {} to npm...", "→".cyan(), pkg.name);
-                let otp = std::env::var("NPM_OTP").ok();
+                let otp =
+                    std::env::var("NPM_OTP").ok().or_else(|| std::env::var("PNPM_CONFIG_OTP").ok());
                 let publish_result =
                     crate::npm::publish_package(&pkg.path, is_prerelease, otp.as_deref()).await;
 

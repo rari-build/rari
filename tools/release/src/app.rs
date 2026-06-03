@@ -87,7 +87,8 @@ impl App {
             }
         }
 
-        let needs_otp = std::env::var("NPM_OTP").is_err();
+        let needs_otp =
+            std::env::var("NPM_OTP").is_err() && std::env::var("PNPM_CONFIG_OTP").is_err();
 
         Ok(Self {
             screen: Screen::PackageSelection,
