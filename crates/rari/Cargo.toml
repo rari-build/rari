@@ -39,48 +39,48 @@ path = "src/bin/rari.rs"
 # === Core Runtime Dependencies ===
 deno_core = { workspace = true }
 deno_error = { workspace = true }
-deno_features = "0.46.0"
-deno_bundle_runtime = "0.36.0"
-deno_runtime = "0.257.0"
-deno_permissions = "0.108.0"
-deno_process = "0.64.0"
+deno_features = "0.47.0"
+deno_bundle_runtime = "0.37.0"
+deno_runtime = "0.258.0"
+deno_permissions = "0.109.0"
+deno_process = "0.65.0"
 
 # === Essential Web APIs ===
-deno_cache = "0.182.0"
-deno_crypto = "0.263.0"
-deno_fetch = "0.273.0"
-deno_web = "0.280.0"
-deno_webidl = "0.249.0"
-deno_webstorage = "0.244.0"
+deno_cache = "0.183.0"
+deno_crypto = "0.264.0"
+deno_fetch = "0.274.0"
+deno_web = "0.281.0"
+deno_webidl = "0.250.0"
+deno_webstorage = "0.245.0"
 
 # === Network & HTTP ===
-deno_http = "0.247.0"
-deno_net = "0.241.0"
-deno_tls = "0.236.0"
-deno_websocket = "0.254.0"
+deno_http = "0.248.0"
+deno_net = "0.242.0"
+deno_tls = "0.237.0"
+deno_websocket = "0.255.0"
 
 # === File System & I/O ===
-deno_fs = "0.159.0"
-deno_io = "0.159.0"
+deno_fs = "0.160.0"
+deno_io = "0.160.0"
 
 # === Advanced Features ===
-deno_telemetry = "0.71.0"
+deno_telemetry = "0.72.0"
 deno_terminal = "=0.2.3"
-deno_webgpu = "0.216.0"
-deno_kv = "0.157.0"
-deno_cron = "0.129.0"
+deno_webgpu = "0.217.0"
+deno_kv = "0.158.0"
+deno_cron = "0.130.0"
 
 # === Node.js Integration ===
-deno_node = "0.187.0"
-deno_node_crypto = "0.19.0"
-deno_node_sqlite = "0.19.0"
-deno_resolver = "0.80.0"
-node_resolver = "0.87.0"
+deno_node = "0.188.0"
+deno_node_crypto = "0.20.0"
+deno_node_sqlite = "0.20.0"
+deno_resolver = "0.81.0"
+node_resolver = "0.88.0"
 num-bigint-dig = "=0.8.2"
 
 # === FFI & NAPI ===
-deno_ffi = "0.236.0"
-deno_napi = "0.180.0"
+deno_ffi = "0.237.0"
+deno_napi = "0.181.0"
 
 # === Async & Concurrency ===
 async-stream = "0.3.6"
@@ -173,7 +173,7 @@ sys_traits = "=0.1.28"
 # === Development Tools ===
 rustyline = "=17.0.0"
 deno_ast = { workspace = true }
-deno_package_json = { version = "0.51.0", default-features = false }
+deno_package_json = { version = "0.52.0", default-features = false }
 deno_semver = "=0.10.0"
 
 # === Platform-specific Dependencies ===

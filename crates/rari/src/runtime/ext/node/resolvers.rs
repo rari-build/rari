@@ -488,6 +488,13 @@ impl NodeRequireLoader for RequireLoader {
             _ => Ok(true),
         }
     }
+
+    fn is_maybe_cjs_from_require(
+        &self,
+        specifier: &reqwest::Url,
+    ) -> Result<bool, PackageJsonLoadError> {
+        self.is_maybe_cjs(specifier)
+    }
 }
 impl Clone for RequireLoader {
     fn clone(&self) -> Self {

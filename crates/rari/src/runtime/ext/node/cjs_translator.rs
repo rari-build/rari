@@ -144,11 +144,13 @@ impl CjsCodeAnalyzer {
                 Some(CjsAnalysisExports {
                     exports: analysis.exports,
                     reexports: analysis.reexports,
+                    member_reexports: vec![],
                 }),
             )),
             CjsAnalysis::Cjs(analysis) => Ok(ExtNodeCjsAnalysis::Cjs(CjsAnalysisExports {
                 exports: analysis.exports,
                 reexports: analysis.reexports,
+                member_reexports: vec![],
             })),
         }
     }
@@ -178,12 +180,14 @@ impl node_resolver::analyze::CjsCodeAnalyzer for CjsCodeAnalyzer {
                         return Ok(ExtNodeCjsAnalysis::Cjs(CjsAnalysisExports {
                             exports: vec![],
                             reexports: vec![],
+                            member_reexports: vec![],
                         }));
                     }
                 } else {
                     return Ok(ExtNodeCjsAnalysis::Cjs(CjsAnalysisExports {
                         exports: vec![],
                         reexports: vec![],
+                        member_reexports: vec![],
                     }));
                 }
             }
@@ -198,12 +202,23 @@ impl node_resolver::analyze::CjsCodeAnalyzer for CjsCodeAnalyzer {
                 Some(CjsAnalysisExports {
                     exports: analysis.exports,
                     reexports: analysis.reexports,
+                    member_reexports: vec![],
                 }),
             )),
             CjsAnalysis::Cjs(analysis) => Ok(ExtNodeCjsAnalysis::Cjs(CjsAnalysisExports {
                 exports: analysis.exports,
                 reexports: analysis.reexports,
+                member_reexports: vec![],
             })),
         }
+    }
+
+    async fn analyze_cjs_member_props<'a>(
+        &self,
+        _specifier: &ModuleSpecifier,
+        _source: Option<Cow<'a, str>>,
+        _member: &str,
+    ) -> Result<Option<Vec<String>>, JsErrorBox> {
+        Ok(None)
     }
 }
