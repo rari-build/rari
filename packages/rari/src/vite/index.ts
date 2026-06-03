@@ -1,4 +1,4 @@
-import type { Plugin, UserConfig } from 'vite-plus'
+import type { CSSModulesOptions, Plugin, UserConfig } from 'vite-plus'
 import type { ProxyPluginOptions } from '../proxy/vite-plugin'
 import type { ServerBuildOptions } from './server-build'
 import { Buffer } from 'node:buffer'
@@ -12,19 +12,18 @@ import { rariProxy } from '../proxy/vite-plugin'
 import { rariRouter } from '../router/vite-plugin'
 import {
   BACKSLASH_REGEX,
-  COMPONENT_ID_REGEX,
   EXPORT_NAMED_DECLARATION_REGEX,
   EXTENSION_REGEX,
   HTTP_PROTOCOL_REGEX,
-  SRC_PREFIX_REGEX,
   TSX_EXT_REGEX,
   WINDOWS_PATH_REGEX,
 } from '../shared/regex-constants'
+import { getComponentId } from './component-id-utils'
 import { hasDefaultExport, hasTopLevelUseClientDirective, hasTopLevelUseServerDirective } from './directive-utils'
 import { resolveIndexFile, resolveWithExtensions } from './file-resolver'
 import { HMRCoordinator } from './hmr-coordinator'
 import { scanForImageUsage } from './image-scanner'
-import { createServerBuildPlugin } from './server-build'
+import { createServerBuildPlugin, RARI_CSS_MODULES_PATTERN } from './server-build'
 
 const IMPORT_TYPE_SPECIFIER_REGEX = /import\s+type\s+(\{[^}]+\})\s+from\s+["']\.\.?\/([^"']+)["'];?/g
 const IMPORT_TYPE_NAMESPACE_REGEX = /import\s+type\s+(\*\s+as\s+\w+)\s+from\s+["']\.\.?\/([^"']+)["'];?/g
@@ -43,13 +42,13 @@ const EXPORT_DECLARATION_REGEX = /export\s+(?:async\s+)?(?:const|let|var|functio
 const USE_CLIENT_DIRECTIVE_REGEX = /^['"]use client['"];?\s*$/gm
 const IMPORT_REGEX = /import\s+["']([^"']+)["']/g
 const IMPORT_LINE_REGEX = /^\s*import\s+(?:(\w+)(?:\s*,\s*\{\s*(?:(\w+(?:\s*,\s*\w+)*)\s*)?\})?|\{\s*(\w+(?:\s*,\s*\w+)*)\s*\})\s+from\s+['"]([./@][^'"]+)['"].*$/
+
 const REACT_IMPORT_REGEX = /import\s+\{[^}]*\}\s+from\s+['"]react['"]/
 const REACT_IMPORT_WITH_DEFAULT_REGEX = /import\s+[^,\s]+\s*,\s*\{[^}]*\}\s+from\s+['"]react['"]/
 const REACT_IMPORT_MATCH_REGEX = /import React(,\s*\{([^}]*)\})?\s+from\s+['"]react['"];?/
 const IMPORT_PATH_REGEX = /import\s+["']([^"']+)["']/g
 const RSC_CLIENT_IMPORT_REGEX = /from(\s*)(['"])(?:\.\/vendor\/react-flight-client\/index|rari\/runtime\/vendor\/react-flight-client\/index)\.mjs\2/g
 const JSX_TEST_REGEX = /\bJSX\b/
-const COMPONENTS_PREFIX_REGEX = /^components\//
 const IMPORT_SPECIFIERS_REGEX = /\{([^}]*)\}/
 const USE_CLIENT_DIRECTIVE_LINE_REGEX = /^['"]use client['"];?\s*\n/
 
@@ -430,6 +429,7 @@ if (import.meta.hot) {
   }
 
   function transformClientModule(code: string, id: string): string {
+    const projectRoot = options.projectRoot || process.cwd()
     const isServerFunction = hasTopLevelUseServerDirective(code)
     const isServerComp = isServerComponent(id)
 
@@ -438,12 +438,7 @@ if (import.meta.hot) {
       if (exportedNames.length === 0)
         return ''
 
-      const relativePath = path.relative(process.cwd(), id)
-      const moduleId = relativePath
-        .replace(BACKSLASH_REGEX, '/')
-        .replace(TSX_EXT_REGEX, '')
-        .replace(COMPONENT_ID_REGEX, '_')
-        .replace(SRC_PREFIX_REGEX, '')
+      const moduleId = getComponentId(id, projectRoot)
 
       let newCode = 'import { createServerReference } from "rari/runtime/actions";\n'
 
@@ -462,13 +457,7 @@ if (import.meta.hot) {
       if (exportedNames.length === 0)
         return ''
 
-      const relativePath = path.relative(process.cwd(), id)
-      const componentId = relativePath
-        .replace(BACKSLASH_REGEX, '/')
-        .replace(TSX_EXT_REGEX, '')
-        .replace(COMPONENT_ID_REGEX, '_')
-        .replace(SRC_PREFIX_REGEX, '')
-        .replace(COMPONENTS_PREFIX_REGEX, '')
+      const componentId = getComponentId(id, projectRoot)
 
       let newCode
         = 'import { createServerComponentWrapper } from "virtual:rsc-integration.ts";\n'
@@ -609,6 +598,13 @@ if (import.meta.hot) {
         }
 
         config.define['import.meta.env.RARI_SERVER_URL'] = JSON.stringify(serverUrl)
+      }
+
+      const existingCssModules = typeof config.css?.modules === 'object' ? config.css.modules : {}
+      config.css = {
+        ...config.css,
+        transformer: config.css?.transformer ?? 'lightningcss' as const,
+        modules: { pattern: RARI_CSS_MODULES_PATTERN, ...existingCssModules } as CSSModulesOptions,
       }
 
       if (command === 'build') {

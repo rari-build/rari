@@ -6,12 +6,11 @@ import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import { build } from 'rolldown'
 import {
-  COMPONENT_ID_REGEX as COMPONENT_ID_SANITIZE_REGEX,
   FILE_PROTOCOL_REGEX,
-  SRC_PREFIX_REGEX,
   TSX_EXT_REGEX,
 } from '../shared/regex-constants'
 import { resolveAlias } from './alias-resolver'
+import { getReadableComponentId, getComponentId as getSharedComponentId, getProjectRelativePath as getSharedProjectRelativePath, hashString as sharedHashString } from './component-id-utils'
 import { hasDefaultExport, hasTopLevelUseClientDirective, hasTopLevelUseServerDirective } from './directive-utils'
 import { resolveIndexFile, resolveWithExtensions } from './file-resolver'
 
@@ -22,12 +21,17 @@ const COMPONENT_IMPORT_REGEX = /import\s+(\w+)\s+from\s+['"]([^'"]+)['"]/g
 const CLIENT_IMPORT_REGEX = /import\s+(?:(\w+)|\{([^}]+)\})\s+from\s+['"]([^'"]+)['"];?\s*$/gm
 const PROXY_FILE_REGEX = /^proxy\.(?:tsx?|jsx?|mts|mjs)$/
 const COMPONENT_PATH_BACKSLASH_REGEX = /\\/g
-const TS_JS_EXTENSION_REGEX = /\.(tsx?|jsx?)$/
 const COMPONENTS_PATH_REGEX = /\/components\/(\w+)(?:\.tsx?|\.jsx?)?$/
 const COMPONENTS_PATH_ALT_REGEX = /[/\\]components[/\\](\w+)(?:\.tsx?|\.jsx?)?$/
 const SPECIAL_FILE_REGEX = /^(?:robots|sitemap)\.(?:tsx?|jsx?)$/
 const NODE_PROTOCOL_REGEX = /^node:/
 const PATH_SEPARATOR_NORMALIZE_REGEX = /\\/g
+export const RARI_CSS_MODULES_PATTERN = '[hash]_[local]'
+
+interface BuiltComponent {
+  code: string
+  css: string[]
+}
 
 interface ServerComponentManifest {
   components: Record<
@@ -40,9 +44,25 @@ interface ServerComponentManifest {
       moduleSpecifier: string
       dependencies: string[]
       hasNodeImports: boolean
+      css?: string[]
     }
   >
   buildTime: string
+}
+
+interface RouteManifestEntry {
+  filePath?: string
+  css?: string[]
+  componentId?: string
+}
+
+interface RouteManifest {
+  routes?: RouteManifestEntry[]
+  layouts?: RouteManifestEntry[]
+  loading?: RouteManifestEntry[]
+  errors?: RouteManifestEntry[]
+  notFound?: RouteManifestEntry[]
+  apiRoutes?: RouteManifestEntry[]
 }
 
 export interface ServerBuildOptions {
@@ -97,6 +117,7 @@ export class ServerComponentBuilder {
 
   private buildCache = new Map<string, {
     code: string
+    css: string[]
     timestamp: number
     dependencies: string[]
   }>()
@@ -119,6 +140,80 @@ export class ServerComponentBuilder {
 
   getHtmlOnlyImports(): ReadonlySet<string> {
     return new Set(this.htmlOnlyImports)
+  }
+
+  private hashString(value: string, length = 8): string {
+    return sharedHashString(value, length)
+  }
+
+  private async writeComponentCssAsset(componentId: string, cssModules: string[]): Promise<string[]> {
+    if (cssModules.length === 0)
+      return []
+
+    const assetsDir = path.join(this.options.outDir, 'assets', 'server')
+    await fs.promises.mkdir(assetsDir, { recursive: true })
+
+    const cssContent = `${cssModules.join('\n')}\n`
+    const cssFileName = `${this.hashString(componentId + cssContent, 12)}.css`
+    const cssPath = path.join(assetsDir, cssFileName)
+    await fs.promises.writeFile(cssPath, cssContent, 'utf-8')
+
+    return [`/assets/server/${cssFileName}`]
+  }
+
+  private getComponentIdFromRouteManifestPath(filePath: string): string {
+    return this.getComponentId(path.join(this.projectRoot, 'src', 'app', filePath))
+  }
+
+  private getLegacyComponentReferenceId(filePath: string): string {
+    return this.getReadableComponentId(this.getProjectRelativePath(filePath))
+  }
+
+  private async writeRouteCssEntries(manifest: ServerComponentManifest): Promise<void> {
+    const routesPath = path.join(this.options.outDir, this.options.rscDir, 'routes.json')
+    if (!fs.existsSync(routesPath))
+      return
+
+    const content = await fs.promises.readFile(routesPath, 'utf-8')
+    const routeManifest = JSON.parse(content) as RouteManifest
+
+    const applyCss = (entries?: RouteManifestEntry[]) => {
+      if (!entries)
+        return
+
+      for (const entry of entries) {
+        if (!entry.filePath) {
+          continue
+        }
+
+        const componentId = this.getComponentIdFromRouteManifestPath(entry.filePath)
+        entry.componentId = componentId
+
+        const css = manifest.components[componentId]?.css ?? []
+        if (css.length) {
+          entry.css = css
+        }
+        else {
+          delete entry.css
+        }
+      }
+    }
+
+    applyCss(routeManifest.routes)
+    applyCss(routeManifest.layouts)
+    applyCss(routeManifest.loading)
+    applyCss(routeManifest.errors)
+    applyCss(routeManifest.notFound)
+
+    if (routeManifest.apiRoutes) {
+      for (const entry of routeManifest.apiRoutes) {
+        if (entry.filePath) {
+          entry.componentId = this.getComponentIdFromRouteManifestPath(entry.filePath)
+        }
+      }
+    }
+
+    await fs.promises.writeFile(routesPath, JSON.stringify(routeManifest, null, 2), 'utf-8')
   }
 
   constructor(projectRoot: string, options: ServerBuildOptions = {}) {
@@ -517,8 +612,7 @@ const ${importName} = (props) => {
           if (!isClient)
             continue
 
-          const relativeFromRoot = path.relative(this.projectRoot, actualPath)
-          const componentId = this.getComponentId(relativeFromRoot)
+          const componentId = this.getLegacyComponentReferenceId(actualPath)
 
           const replacement = `// Component reference: ${componentName}
 const ${importName} = (props) => {
@@ -555,7 +649,14 @@ const ${importName} = (props) => {
     return inputPath.includes('/app/') || inputPath.includes('\\app\\')
   }
 
-  private createBuildPlugins(virtualModuleId: string, transformedCode: string, loader: 'tsx' | 'jsx' | 'ts' | 'js', inputPath: string, isPage = false) {
+  private createBuildPlugins(
+    virtualModuleId: string,
+    transformedCode: string,
+    loader: 'tsx' | 'jsx' | 'ts' | 'js',
+    inputPath: string,
+    isPage = false,
+    cssModules?: string[],
+  ) {
     const resolveDir = path.dirname(inputPath)
     const isProxyFile = PROXY_FILE_REGEX.test(path.basename(inputPath))
     const self = this
@@ -571,6 +672,10 @@ const ${importName} = (props) => {
             return id
 
           if (importer === virtualModuleId && (id.startsWith('./') || id.startsWith('../'))) {
+            if (id.endsWith('.module.css')) {
+              return null
+            }
+
             const resolved = path.resolve(resolveDir, id)
             const extensions = ['.ts', '.tsx', '.js', '.jsx', '']
             for (const ext of extensions) {
@@ -642,8 +747,7 @@ const ${importName} = (props) => {
                 try {
                   const content = fs.readFileSync(pathWithExt, 'utf-8')
                   if (hasTopLevelUseServerDirective(content)) {
-                    const relActionPath = path.relative(self.projectRoot, pathWithExt)
-                    const actionId = relActionPath.startsWith('..') ? pathWithExt : relActionPath
+                    const actionId = self.getComponentId(pathWithExt)
                     const hasDefault = hasDefaultExport(content)
                     serverActionRefs.set(pathWithExt, { actionId, hasDefaultExport: hasDefault })
                     return { id: `\0server-action:${pathWithExt}` }
@@ -694,10 +798,8 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
           if (id.startsWith('\0server-action:')) {
             const filePath = id.slice('\0server-action:'.length)
 
-            const relativePath = path.relative(self.projectRoot, filePath)
-            const normalizedRelativePath = relativePath.replace(PATH_SEPARATOR_NORMALIZE_REGEX, '/')
-            const srcRelativePath = normalizedRelativePath.startsWith('src/') ? normalizedRelativePath.slice(4) : normalizedRelativePath
-            const builtPath = path.join(self.options.outDir, self.options.rscDir, srcRelativePath.replace(TS_JS_EXTENSION_REGEX, '.js'))
+            const actionId = serverActionRefs.get(filePath)?.actionId ?? self.getComponentId(filePath)
+            const builtPath = path.join(self.options.outDir, self.options.rscDir, `${actionId}.js`)
             const absoluteBuiltPath = path.resolve(self.projectRoot, builtPath)
 
             const builtFileUrl = pathToFileURL(absoluteBuiltPath).href
@@ -758,8 +860,8 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
               if (!pathWithExt.startsWith(srcDir))
                 return null
 
-              const relativePath = path.relative(srcDir, pathWithExt)
-              const distPath = path.join(self.options.outDir, self.options.rscDir, relativePath.replace(TS_JS_EXTENSION_REGEX, '.js'))
+              const componentId = self.getComponentId(pathWithExt)
+              const distPath = path.join(self.options.outDir, self.options.rscDir, `${componentId}.js`)
 
               if (fs.existsSync(distPath))
                 return { id: `\0transformed:${distPath}` }
@@ -834,6 +936,54 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
           return null
         },
       },
+      {
+        name: 'css-modules',
+        resolveId: (source: string, importer: string | undefined) => {
+          if (source.endsWith('.module.css')) {
+            const importerDir = !importer?.startsWith('\0') && importer ? path.dirname(importer) : resolveDir
+            const resolved = path.resolve(importerDir, source)
+
+            if (fs.existsSync(resolved)) {
+              return { id: `\0css-module:${resolved}` }
+            }
+          }
+
+          return null
+        },
+        load: async (id: string) => {
+          const CSS_MODULE_PREFIX = '\0css-module:'
+          if (!id.startsWith(CSS_MODULE_PREFIX)) {
+            return null
+          }
+
+          const filePath = id.slice(CSS_MODULE_PREFIX.length)
+
+          try {
+            const { transform } = await import('lightningcss')
+            const code = fs.readFileSync(filePath)
+            const result = transform({
+              filename: path.relative(this.projectRoot, filePath),
+              code,
+              cssModules: { pattern: RARI_CSS_MODULES_PATTERN },
+            })
+
+            if (cssModules)
+              cssModules.push(new TextDecoder().decode(result.code))
+
+            const classes: Record<string, string> = {}
+            if (result.exports) {
+              for (const [key, value] of Object.entries(result.exports)) {
+                classes[key] = value.name
+              }
+            }
+
+            return { code: `export default ${JSON.stringify(classes)}`, moduleType: 'js' }
+          }
+          catch (e) {
+            throw new Error(`[rari] Failed to process CSS module ${id}: ${e instanceof Error ? e.message : String(e)}`)
+          }
+        },
+      } satisfies Plugin,
       {
         name: 'externalize-deps',
         resolveId: (source: string) => {
@@ -923,7 +1073,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
           ...this.options.define,
         },
       },
-      plugins: this.createBuildPlugins(virtualModuleId, transformedCode, loader, inputPath, isPage),
+      plugins: this.createBuildPlugins(virtualModuleId, transformedCode, loader, inputPath, isPage, []),
     })
 
     if (!result.output || result.output.length === 0)
@@ -956,14 +1106,15 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
         continue
 
       const relativePath = path.relative(this.projectRoot, filePath)
-      const componentId = this.getComponentId(relativePath)
+      const componentId = this.getComponentId(filePath)
       const bundlePath = path.join(this.options.rscDir, `${componentId}.js`)
       const fullBundlePath = path.join(this.options.outDir, bundlePath)
 
       const bundleDir = path.dirname(fullBundlePath)
       await fs.promises.mkdir(bundleDir, { recursive: true })
 
-      await this.buildSingleComponent(filePath, fullBundlePath)
+      const built = await this.buildSingleComponent(filePath, fullBundlePath)
+      const css = await this.writeComponentCssAsset(componentId, built.css)
 
       const moduleSpecifier = pathToFileURL(path.resolve(this.projectRoot, fullBundlePath)).href
 
@@ -975,6 +1126,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
         moduleSpecifier,
         dependencies: component.dependencies,
         hasNodeImports: component.hasNodeImports,
+        css,
       }
     }
 
@@ -983,14 +1135,15 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
         continue
 
       const relativePath = path.relative(this.projectRoot, filePath)
-      const componentId = this.getComponentId(relativePath)
+      const componentId = this.getComponentId(filePath)
       const bundlePath = path.join(this.options.rscDir, `${componentId}.js`)
       const fullBundlePath = path.join(this.options.outDir, bundlePath)
 
       const bundleDir = path.dirname(fullBundlePath)
       await fs.promises.mkdir(bundleDir, { recursive: true })
 
-      await this.buildSingleComponent(filePath, fullBundlePath)
+      const built = await this.buildSingleComponent(filePath, fullBundlePath)
+      const css = await this.writeComponentCssAsset(componentId, built.css)
 
       const moduleSpecifier = pathToFileURL(path.resolve(this.projectRoot, fullBundlePath)).href
 
@@ -1002,19 +1155,21 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
         moduleSpecifier,
         dependencies: component.dependencies,
         hasNodeImports: component.hasNodeImports,
+        css,
       }
     }
 
     for (const [filePath, action] of this.serverActions) {
       const relativePath = path.relative(this.projectRoot, filePath)
-      const actionId = this.getComponentId(relativePath)
+      const actionId = this.getComponentId(filePath)
       const bundlePath = path.join(this.options.rscDir, `${actionId}.js`)
       const fullBundlePath = path.join(this.options.outDir, bundlePath)
 
       const bundleDir = path.dirname(fullBundlePath)
       await fs.promises.mkdir(bundleDir, { recursive: true })
 
-      await this.buildSingleComponent(filePath, fullBundlePath)
+      const built = await this.buildSingleComponent(filePath, fullBundlePath)
+      const css = await this.writeComponentCssAsset(actionId, built.css)
 
       const moduleSpecifier = pathToFileURL(path.resolve(this.projectRoot, fullBundlePath)).href
 
@@ -1026,6 +1181,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
         moduleSpecifier,
         dependencies: action.dependencies,
         hasNodeImports: action.hasNodeImports,
+        css,
       }
     }
 
@@ -1038,6 +1194,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
       JSON.stringify(manifest, null, 2),
       'utf-8',
     )
+    await this.writeRouteCssEntries(manifest)
 
     const serverConfig: ServerConfig = {}
     if (this.options.csp)
@@ -1074,8 +1231,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
   private async buildSingleComponent(
     inputPath: string,
     outputPath: string,
-    returnCode = false,
-  ): Promise<string | void> {
+  ): Promise<BuiltComponent> {
     const originalCode = await fs.promises.readFile(inputPath, 'utf-8')
     const clientTransformedCode = this.transformClientImports(
       originalCode,
@@ -1098,6 +1254,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
       loader = 'js'
 
     const virtualModuleId = `\0virtual:${inputPath}`
+    const cssModules: string[] = []
 
     const result = await build({
       input: virtualModuleId,
@@ -1130,7 +1287,14 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
           ...this.options.define,
         },
       },
-      plugins: this.createBuildPlugins(virtualModuleId, transformedCode, loader, inputPath, isPage),
+      plugins: this.createBuildPlugins(
+        virtualModuleId,
+        transformedCode,
+        loader,
+        inputPath,
+        isPage,
+        cssModules,
+      ),
     })
 
     if (!result.output || result.output.length === 0)
@@ -1151,8 +1315,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     await fd.sync()
     await fd.close()
 
-    if (returnCode)
-      return code
+    return { code, css: cssModules }
   }
 
   private transformClientImports(code: string, inputPath: string): string {
@@ -1290,18 +1453,20 @@ function registerClientReference(clientReference, id, exportName) {
     return `${resolvedPath}.tsx`
   }
 
-  private getComponentId(relativePath: string): string {
-    return relativePath
-      .replace(COMPONENT_PATH_BACKSLASH_REGEX, '/')
-      .replace(TS_JS_EXTENSION_REGEX, '')
-      .replace(COMPONENT_ID_SANITIZE_REGEX, '_')
-      .replace(SRC_PREFIX_REGEX, '')
+  private getProjectRelativePath(filePath: string): string {
+    return getSharedProjectRelativePath(filePath, this.projectRoot)
+  }
+
+  private getReadableComponentId(projectRelativePath: string): string {
+    return getReadableComponentId(projectRelativePath)
+  }
+
+  private getComponentId(filePath: string): string {
+    return getSharedComponentId(filePath, this.projectRoot)
   }
 
   async rebuildComponent(filePath: string): Promise<ComponentRebuildResult> {
-    const componentId = this.getComponentId(
-      path.relative(this.projectRoot, filePath),
-    )
+    const componentId = this.getComponentId(filePath)
 
     const code = await fs.promises.readFile(filePath, 'utf-8')
     const dependencies = this.extractDependencies(code)
@@ -1335,7 +1500,7 @@ function registerClientReference(clientReference, id, exportName) {
       && JSON.stringify(cached.dependencies) === JSON.stringify(dependencies)
     ) {
       await fs.promises.writeFile(fullBundlePath, cached.code, 'utf-8')
-      await this.updateManifestForComponent(componentId, filePath, relativeBundlePath)
+      await this.updateManifestForComponent(componentId, filePath, relativeBundlePath, cached.css)
       return {
         componentId,
         bundlePath: path.join(this.options.outDir, relativeBundlePath),
@@ -1346,19 +1511,20 @@ function registerClientReference(clientReference, id, exportName) {
     const bundleDir = path.dirname(fullBundlePath)
     await fs.promises.mkdir(bundleDir, { recursive: true })
 
-    const builtCode = await this.buildSingleComponent(
+    const built = await this.buildSingleComponent(
       filePath,
       fullBundlePath,
-      true,
-    ) as string
+    )
+    const css = await this.writeComponentCssAsset(componentId, built.css)
 
     this.buildCache.set(filePath, {
-      code: builtCode,
+      code: built.code,
+      css,
       timestamp: Date.now(),
       dependencies,
     })
 
-    await this.updateManifestForComponent(componentId, filePath, relativeBundlePath)
+    await this.updateManifestForComponent(componentId, filePath, relativeBundlePath, css)
 
     return {
       componentId,
@@ -1373,6 +1539,7 @@ function registerClientReference(clientReference, id, exportName) {
     componentId: string,
     filePath: string,
     bundlePath: string,
+    css: string[] = [],
   ): Promise<void> {
     const manifestPath = path.join(
       this.options.outDir,
@@ -1411,6 +1578,7 @@ function registerClientReference(clientReference, id, exportName) {
         moduleSpecifier,
         dependencies: this.extractDependencies(code),
         hasNodeImports: this.hasNodeImports(code),
+        css,
       }
     }
     else {
@@ -1422,6 +1590,7 @@ function registerClientReference(clientReference, id, exportName) {
         moduleSpecifier,
         dependencies: componentData.dependencies,
         hasNodeImports: componentData.hasNodeImports,
+        css,
       }
     }
 
@@ -1432,6 +1601,7 @@ function registerClientReference(clientReference, id, exportName) {
       JSON.stringify(manifest, null, 2),
       'utf-8',
     )
+    await this.writeRouteCssEntries(manifest)
 
     this.manifestCache = manifest
   }

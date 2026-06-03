@@ -19,6 +19,7 @@ Object.assign(globalThis['~suspense'], {
   boundaryProps: {},
   discoveredBoundaries: [],
   pendingPromises: [],
+  pendingPromisesById: {},
   currentBoundaryId: null,
   renderGeneration: globalThis['~rsc'].renderGeneration,
 })

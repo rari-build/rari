@@ -1,4 +1,29 @@
 use cow_utils::CowUtils;
+use sha2::{Digest, Sha256};
+
+pub fn short_hash(value: &str) -> String {
+    let hash = Sha256::digest(value.as_bytes());
+    hex::encode(hash)[..8].to_string()
+}
+
+pub fn readable_component_id(project_relative_path: &str) -> String {
+    let without_extension = project_relative_path
+        .trim_end_matches(".tsx")
+        .trim_end_matches(".ts")
+        .trim_end_matches(".jsx")
+        .trim_end_matches(".js");
+
+    without_extension
+        .strip_prefix("src/")
+        .unwrap_or(without_extension)
+        .chars()
+        .map(
+            |c| {
+                if c.is_ascii_alphanumeric() || c == '/' || c == '-' || c == '_' { c } else { '_' }
+            },
+        )
+        .collect()
+}
 
 pub fn has_use_client_directive(code: &str) -> bool {
     for line in code.lines() {
@@ -88,33 +113,30 @@ pub fn extract_component_id(
 ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
     let path = std::path::Path::new(file_path);
 
-    let relative_path = if path.is_absolute() {
+    let project_relative_path = if path.is_absolute() {
         let components: Vec<_> = path.components().collect();
-        if let Some(src_idx) = components.iter().position(|c| c.as_os_str() == "src") {
-            let after_src: std::path::PathBuf = components[src_idx + 1..].iter().collect();
-            after_src
+        if let Some(src_idx) = components.iter().rposition(|c| c.as_os_str() == "src") {
+            components[src_idx..].iter().collect()
         } else {
             return Err(format!("Path does not contain 'src' directory: {}", file_path).into());
         }
     } else {
-        let src_dir = std::path::Path::new("src");
-        if let Ok(rel) = path.strip_prefix(src_dir) {
-            rel.to_path_buf()
-        } else {
+        let normalized = file_path.cow_replace('\\', "/");
+        if normalized.starts_with("src/") {
             path.to_path_buf()
+        } else {
+            std::path::Path::new("src").join(path)
         }
     };
 
-    let component_id = relative_path
-        .to_str()
-        .ok_or("Invalid path encoding")?
-        .trim_end_matches(".tsx")
-        .trim_end_matches(".ts")
-        .trim_end_matches(".jsx")
-        .trim_end_matches(".js")
-        .cow_replace('\\', "/");
+    let project_relative_path =
+        project_relative_path.to_str().ok_or("Invalid path encoding")?.cow_replace('\\', "/");
 
-    Ok(component_id.into_owned())
+    Ok(format!(
+        "{}_{}",
+        readable_component_id(&project_relative_path),
+        short_hash(&project_relative_path)
+    ))
 }
 
 pub fn get_dist_path_for_component(

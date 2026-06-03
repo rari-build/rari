@@ -27,6 +27,8 @@ pub struct ApiRouteEntry {
     pub path: String,
     #[serde(rename = "filePath")]
     pub file_path: String,
+    #[serde(rename = "componentId", default, skip_serializing_if = "Option::is_none")]
+    pub component_id: Option<String>,
     pub segments: Vec<RouteSegment>,
     pub params: Vec<String>,
     #[serde(rename = "isDynamic")]
@@ -95,6 +97,18 @@ impl ApiRouteHandler {
 
     pub fn invalidate_handler(&self, file_path: &str) {
         self.handler_cache.remove(file_path);
+        // Handlers may be stored under component_id instead of file_path
+        // (e.g. "app/api/hello/route_6634b3ed" vs "api/hello/route.ts").
+        // Use a precise prefix match to avoid over-invalidating unrelated routes.
+        let route_prefix = format!(
+            "app/{}_",
+            file_path
+                .trim_end_matches(".tsx")
+                .trim_end_matches(".ts")
+                .trim_end_matches(".jsx")
+                .trim_end_matches(".js")
+        );
+        self.handler_cache.retain(|key, _| key != file_path && !key.starts_with(&route_prefix));
     }
 
     pub fn get_supported_methods(&self, path: &str) -> Option<Vec<String>> {
@@ -218,10 +232,11 @@ impl ApiRouteHandler {
         is_development: bool,
     ) -> Result<CompiledHandler, RariError> {
         let file_path = &route.file_path;
+        let cache_key = route.component_id.as_deref().unwrap_or(file_path);
 
-        if let Some(cached) = self.handler_cache.get(file_path) {
+        if let Some(cached) = self.handler_cache.get(cache_key) {
             if is_development {
-                let dist_path = Self::resolve_dist_path(file_path)?;
+                let dist_path = Self::resolve_route_dist_path(route)?;
                 if let Ok(metadata) = tokio::fs::metadata(&dist_path).await
                     && let Ok(modified) = metadata.modified()
                     && modified <= cached.last_modified
@@ -233,7 +248,7 @@ impl ApiRouteHandler {
             }
         }
 
-        let dist_path = Self::resolve_dist_path(file_path)?;
+        let dist_path = Self::resolve_route_dist_path(route)?;
 
         if !dist_path.exists() {
             error!(
@@ -277,9 +292,17 @@ impl ApiRouteHandler {
             last_modified,
         };
 
-        self.handler_cache.insert(file_path.clone(), compiled.clone());
+        self.handler_cache.insert(cache_key.to_string(), compiled.clone());
 
         Ok(compiled)
+    }
+
+    fn resolve_route_dist_path(route: &ApiRouteEntry) -> Result<std::path::PathBuf, RariError> {
+        if let Some(component_id) = &route.component_id {
+            return Ok(Path::new("dist").join("server").join(format!("{component_id}.js")));
+        }
+
+        Self::resolve_dist_path(&route.file_path)
     }
 
     fn resolve_dist_path(file_path: &str) -> Result<std::path::PathBuf, RariError> {
@@ -397,7 +420,7 @@ impl ApiRouteHandler {
 
         self.runtime
             .execute_with_request_context(request_context, async {
-                let dist_path = Self::resolve_dist_path(&route_match.route.file_path)?;
+                let dist_path = Self::resolve_route_dist_path(&route_match.route)?;
                 let canonical_path = dist_path.canonicalize().map_err(|e| {
                     RariError::io(format!(
                         "Failed to canonicalize API route path {}: {e}",
@@ -430,18 +453,23 @@ impl ApiRouteHandler {
                     )));
                 }
 
-                let component_id = dist_path
-                    .strip_prefix(Path::new("dist").join("server"))
-                    .map_err(|_| {
-                        RariError::configuration(format!(
-                            "Failed to derive component_id from dist path: {}",
-                            dist_path.display()
-                        ))
-                    })?
-                    .with_extension("")
-                    .to_string_lossy()
-                    .cow_replace('\\', "/")
-                    .into_owned();
+                let component_id = route_match.route.component_id.clone().unwrap_or_else(|| {
+                    dist_path
+                        .strip_prefix(Path::new("dist").join("server"))
+                        .map(|p| {
+                            p.with_extension("")
+                                .to_string_lossy()
+                                .cow_replace('\\', "/")
+                                .into_owned()
+                        })
+                        .unwrap_or_else(|_| {
+                            dist_path
+                                .with_extension("")
+                                .to_string_lossy()
+                                .cow_replace('\\', "/")
+                                .into_owned()
+                        })
+                });
 
                 let module_id = self.runtime.load_es_module(&component_id).await.map_err(|e| {
                     error!(

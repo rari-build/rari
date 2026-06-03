@@ -11,6 +11,8 @@ function pushPendingPromise(item) {
   const suspense = globalThis['~suspense']
   suspense.pendingPromises ??= []
   suspense.pendingPromises.push(item)
+  suspense.pendingPromisesById ??= {}
+  suspense.pendingPromisesById[item.id] = item
 
   if (item.boundaryId) {
     suspense.pendingPromisesByBoundary ??= {}
@@ -26,6 +28,7 @@ if (typeof globalThis !== 'undefined' && !globalThis['~suspense']) {
     boundaryProps: {},
     discoveredBoundaries: [],
     pendingPromises: [],
+    pendingPromisesById: {},
     pendingPromisesByBoundary: {},
     currentBoundaryId: null,
   }

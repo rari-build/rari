@@ -1,6 +1,7 @@
 use crate::error::RariError;
 use crate::server::routing::app_router::AppRouteMatch;
 use crate::server::routing::types::ParamValue;
+use crate::server::utils::component_utils::{readable_component_id, short_hash};
 use cow_utils::CowUtils;
 use rustc_hash::FxHashMap;
 use serde_json::Value;
@@ -31,19 +32,34 @@ pub fn generate_cache_key(route_match: &AppRouteMatch, context: &LayoutRenderCon
     hasher.finish()
 }
 
+fn normalize_route_component_path(file_path: &str) -> String {
+    let normalized = file_path.cow_replace('\\', "/").into_owned();
+    if normalized.starts_with("src/") {
+        normalized
+    } else if normalized.starts_with("app/") {
+        format!("src/{}", normalized)
+    } else {
+        format!("src/app/{}", normalized)
+    }
+}
+
 pub fn create_component_id(file_path: &str) -> String {
-    let path = file_path
-        .cow_replace('\\', "/")
-        .cow_replace(".tsx", "")
-        .cow_replace(".ts", "")
-        .cow_replace(".jsx", "")
-        .cow_replace(".js", "")
-        .into_owned();
-    let normalized = path
-        .chars()
-        .map(|c| if c.is_alphanumeric() || c == '/' || c == '-' || c == '_' { c } else { '_' })
-        .collect::<String>();
-    format!("app/{}", normalized)
+    let project_relative_path = normalize_route_component_path(file_path);
+    format!(
+        "{}_{}",
+        readable_component_id(&project_relative_path),
+        short_hash(&project_relative_path)
+    )
+}
+
+pub fn create_client_component_id(file_path: &str) -> String {
+    let project_relative_path = normalize_route_component_path(file_path);
+    project_relative_path
+        .trim_end_matches(".tsx")
+        .trim_end_matches(".ts")
+        .trim_end_matches(".jsx")
+        .trim_end_matches(".js")
+        .to_string()
 }
 
 pub fn get_component_id(file_path: &str) -> String {

@@ -18,6 +18,19 @@ fn test_get_component_id() {
 }
 
 #[test]
+fn test_create_component_id_includes_stable_hash_suffix() {
+    assert_eq!(utils::create_component_id("page.tsx"), "app/page_73d7a23e");
+    assert_eq!(utils::create_component_id("css/page.tsx"), "app/css/page_1a52d086");
+
+    let at_path = utils::create_component_id("foo@bar/page.tsx");
+    let hash_path = utils::create_component_id("foo#bar/page.tsx");
+
+    assert_eq!(at_path, "app/foo_bar/page_e35d0d78");
+    assert_eq!(hash_path, "app/foo_bar/page_9744e5ac");
+    assert_ne!(at_path, hash_path);
+}
+
+#[test]
 fn test_create_page_props() {
     let mut params = FxHashMap::default();
     params.insert("id".to_string(), ParamValue::Single("123".to_string()));
@@ -37,6 +50,8 @@ fn test_create_page_props() {
         route: crate::server::routing::app_router::AppRouteEntry {
             path: "/test".to_string(),
             file_path: "app/test/page.tsx".to_string(),
+            component_id: None,
+            css: vec![],
             segments: vec![],
             params: vec![],
             is_dynamic: false,
@@ -63,6 +78,8 @@ fn test_wrapped_html_error_message_contains_key_info() {
         route: AppRouteEntry {
             path: "/test".to_string(),
             file_path: "app/test/page.tsx".to_string(),
+            component_id: None,
+            css: vec![],
             segments: vec![],
             params: vec![],
             is_dynamic: false,
@@ -72,6 +89,8 @@ fn test_wrapped_html_error_message_contains_key_info() {
         layouts: vec![LayoutEntry {
             path: "/".to_string(),
             file_path: "app/layout.tsx".to_string(),
+            component_id: None,
+            css: vec![],
             parent_path: None,
             is_root: true,
         }],
@@ -117,6 +136,8 @@ fn test_build_composition_script_with_use_suspense_true() {
         route: crate::server::routing::app_router::AppRouteEntry {
             path: "/test".to_string(),
             file_path: "app/test/page.tsx".to_string(),
+            component_id: None,
+            css: vec![],
             segments: vec![],
             params: vec![],
             is_dynamic: false,
@@ -156,6 +177,8 @@ fn test_build_composition_script_with_use_suspense_false() {
         route: crate::server::routing::app_router::AppRouteEntry {
             path: "/test".to_string(),
             file_path: "app/test/page.tsx".to_string(),
+            component_id: None,
+            css: vec![],
             segments: vec![],
             params: vec![],
             is_dynamic: false,
@@ -266,6 +289,8 @@ fn test_composition_script_includes_layout_structure_markers() {
         route: crate::server::routing::app_router::AppRouteEntry {
             path: "/test".to_string(),
             file_path: "app/test/page.tsx".to_string(),
+            component_id: None,
+            css: vec![],
             segments: vec![],
             params: vec![],
             is_dynamic: false,
@@ -275,6 +300,8 @@ fn test_composition_script_includes_layout_structure_markers() {
         layouts: vec![LayoutEntry {
             path: "/".to_string(),
             file_path: "app/layout.tsx".to_string(),
+            component_id: None,
+            css: vec![],
             parent_path: None,
             is_root: true,
         }],
@@ -310,6 +337,8 @@ fn test_mode_consistency_both_modes_generate_render_to_rsc() {
         route: crate::server::routing::app_router::AppRouteEntry {
             path: "/test".to_string(),
             file_path: "app/test/page.tsx".to_string(),
+            component_id: None,
+            css: vec![],
             segments: vec![],
             params: vec![],
             is_dynamic: false,
@@ -352,6 +381,8 @@ fn test_mode_consistency_suspense_serialization_format() {
         route: crate::server::routing::app_router::AppRouteEntry {
             path: "/test".to_string(),
             file_path: "app/test/page.tsx".to_string(),
+            component_id: None,
+            css: vec![],
             segments: vec![],
             params: vec![],
             is_dynamic: false,
@@ -394,6 +425,8 @@ fn test_mode_consistency_metadata_structure() {
         route: crate::server::routing::app_router::AppRouteEntry {
             path: "/test".to_string(),
             file_path: "app/test/page.tsx".to_string(),
+            component_id: None,
+            css: vec![],
             segments: vec![],
             params: vec![],
             is_dynamic: false,
@@ -442,6 +475,8 @@ fn test_mode_consistency_async_component_handling_with_loading() {
         route: crate::server::routing::app_router::AppRouteEntry {
             path: "/test".to_string(),
             file_path: "app/test/page.tsx".to_string(),
+            component_id: None,
+            css: vec![],
             segments: vec![],
             params: vec![],
             is_dynamic: false,
@@ -491,6 +526,8 @@ fn test_mode_consistency_boundary_id_format() {
         route: crate::server::routing::app_router::AppRouteEntry {
             path: "/test".to_string(),
             file_path: "app/test/page.tsx".to_string(),
+            component_id: None,
+            css: vec![],
             segments: vec![],
             params: vec![],
             is_dynamic: false,
@@ -533,6 +570,8 @@ fn test_mode_consistency_wrapper_elements() {
         route: crate::server::routing::app_router::AppRouteEntry {
             path: "/test".to_string(),
             file_path: "app/test/page.tsx".to_string(),
+            component_id: None,
+            css: vec![],
             segments: vec![],
             params: vec![],
             is_dynamic: false,
@@ -580,6 +619,8 @@ fn test_mode_consistency_error_handling() {
         route: crate::server::routing::app_router::AppRouteEntry {
             path: "/test".to_string(),
             file_path: "app/test/page.tsx".to_string(),
+            component_id: None,
+            css: vec![],
             segments: vec![],
             params: vec![],
             is_dynamic: false,
@@ -622,6 +663,8 @@ fn test_mode_consistency_rsc_props_cleanup() {
         route: crate::server::routing::app_router::AppRouteEntry {
             path: "/test".to_string(),
             file_path: "app/test/page.tsx".to_string(),
+            component_id: None,
+            css: vec![],
             segments: vec![],
             params: vec![],
             is_dynamic: false,
