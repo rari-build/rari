@@ -60,7 +60,7 @@ unused_peekable = "warn"
 
 [workspace.dependencies]
 deno_ast = { version = "=0.53.2", features = [ "transpiling" ] }
-deno_core = "0.402.0"
+deno_core = "0.403.0"
 deno_error = "=0.7.1"
 rustc-hash = "2.1.2"
 url = "2.5.8"
