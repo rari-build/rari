@@ -29,8 +29,9 @@
   }
 
   try {
-    const pendingPromises = globalThis['~suspense']?.pendingPromises || []
-    const pendingInfo = pendingPromises.find(p => p.id === promiseId)
+    const suspense = globalThis['~suspense']
+    const pendingInfo = suspense?.pendingPromisesById?.[promiseId]
+      || (suspense?.pendingPromises || []).find(p => p.id === promiseId)
 
     if (!pendingInfo) {
       return Promise.resolve({
@@ -99,8 +100,6 @@
       let rscData
       let nestedPendingPromises = []
       try {
-        const suspense = globalThis['~suspense']
-
         if (globalThis['~suspense']) {
           suspense.pendingPromises = []
           suspense.pendingPromisesByBoundary ??= {}

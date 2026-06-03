@@ -40,14 +40,18 @@ else {
         globalThis['~suspense'] = {}
       if (!globalThis['~suspense'].pendingPromises)
         globalThis['~suspense'].pendingPromises = []
+      if (!globalThis['~suspense'].pendingPromisesById)
+        globalThis['~suspense'].pendingPromisesById = {}
 
-      globalThis['~suspense'].pendingPromises.push({
+      const pendingPromiseInfo = {
         id: promiseId,
         boundaryId: promiseId,
         componentPath: '{route_file_path}#default',
         componentType: PageComponent,
         componentProps: pageProps,
-      })
+      }
+      globalThis['~suspense'].pendingPromises.push(pendingPromiseInfo)
+      globalThis['~suspense'].pendingPromisesById[promiseId] = pendingPromiseInfo
 
       const lazyMarker = {
         '~rari_lazy': true,

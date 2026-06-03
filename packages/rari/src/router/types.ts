@@ -15,6 +15,8 @@ export interface RouteSegment {
 export interface AppRouteEntry {
   path: string
   filePath: string
+  css?: string[]
+  componentId?: string
   segments: RouteSegment[]
   params: string[]
   isDynamic: boolean
@@ -25,23 +27,30 @@ export interface AppRouteEntry {
 export interface LayoutEntry {
   path: string
   filePath: string
+  css?: string[]
+  componentId?: string
   parentPath?: string
 }
 
 export interface LoadingEntry {
   path: string
   filePath: string
+  css?: string[]
   componentId: string
 }
 
 export interface ErrorEntry {
   path: string
   filePath: string
+  css?: string[]
+  componentId?: string
 }
 
 export interface NotFoundEntry {
   path: string
   filePath: string
+  css?: string[]
+  componentId?: string
 }
 
 export interface OgImageEntry {

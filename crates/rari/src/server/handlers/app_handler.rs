@@ -22,6 +22,7 @@ use axum::{
 };
 use cow_utils::CowUtils;
 use rustc_hash::FxHashMap;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tracing::error;
 
@@ -137,38 +138,57 @@ async fn collect_page_metadata(
         }
     };
 
-    fn convert_route_path_to_dist_path(path: &str) -> String {
-        let (base, ext) =
-            if let Some(pos) = path.rfind('.') { (&path[..pos], &path[pos..]) } else { (path, "") };
+    fn component_dist_path(
+        base_path: &Path,
+        file_path: &str,
+        component_id: Option<&str>,
+    ) -> PathBuf {
+        if let Some(component_id) = component_id {
+            return base_path.join(format!("{component_id}.js"));
+        }
 
-        let converted_base = base
-            .chars()
-            .map(|c| if c.is_alphanumeric() || c == '/' || c == '-' || c == '_' { c } else { '_' })
-            .collect::<String>();
+        fn convert_route_path_to_dist_path(path: &str) -> String {
+            let (base, ext) = if let Some(pos) = path.rfind('.') {
+                (&path[..pos], &path[pos..])
+            } else {
+                (path, "")
+            };
 
-        format!("{}{}", converted_base, ext)
+            let converted_base =
+                base.chars()
+                    .map(|c| {
+                        if c.is_alphanumeric() || c == '/' || c == '-' || c == '_' {
+                            c
+                        } else {
+                            '_'
+                        }
+                    })
+                    .collect::<String>();
+
+            format!("{}{}", converted_base, ext)
+        }
+
+        let js_filename =
+            file_path.cow_replace(".tsx", ".js").cow_replace(".ts", ".js").into_owned();
+        let dist_filename = convert_route_path_to_dist_path(&js_filename);
+        base_path.join("app").join(&dist_filename)
     }
 
     let layout_paths: Vec<String> = route_match
         .layouts
         .iter()
         .filter_map(|layout| {
-            let js_filename =
-                layout.file_path.cow_replace(".tsx", ".js").cow_replace(".ts", ".js").into_owned();
-            let dist_filename = convert_route_path_to_dist_path(&js_filename);
-            let file_path = base_path.join("app").join(&dist_filename);
+            let file_path =
+                component_dist_path(&base_path, &layout.file_path, layout.component_id.as_deref());
             if file_path.exists() { Some(path_to_file_url(&file_path)) } else { None }
         })
         .collect();
 
-    let js_filename = route_match
-        .route
-        .file_path
-        .cow_replace(".tsx", ".js")
-        .cow_replace(".ts", ".js")
-        .into_owned();
-    let dist_filename = convert_route_path_to_dist_path(&js_filename);
-    let page_file_path = base_path.join("app").join(&dist_filename);
+    let page_file_path = component_dist_path(
+        &base_path,
+        &route_match.route.file_path,
+        route_match.route.component_id.as_deref(),
+    );
 
     if !page_file_path.exists() {
         return None;

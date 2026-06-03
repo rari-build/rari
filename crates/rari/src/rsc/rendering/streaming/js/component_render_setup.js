@@ -19,6 +19,15 @@ function registerBoundary(id, fallback, parentId) {
   })
 }
 
+function registerPendingPromise(item) {
+  globalThis['~suspense'] ??= {}
+  const suspense = globalThis['~suspense']
+  suspense.pendingPromises = suspense.pendingPromises || []
+  suspense.pendingPromises.push(item)
+  suspense.pendingPromisesById = suspense.pendingPromisesById || {}
+  suspense.pendingPromisesById[item.id] = item
+}
+
 globalThis['~render'].componentAsync = async function () {
   try {
     let Component = (globalThis['~rsc']?.modules && globalThis['~rsc'].modules['{component_id}']?.default)
@@ -32,11 +41,10 @@ globalThis['~render'].componentAsync = async function () {
       throw new Error('Component {component_id} not found or not a function')
 
     const props = {props_json}
-    if (!globalThis['~suspense'])
-      globalThis['~suspense'] = {}
-    if (!globalThis['~suspense'].boundaryProps)
-      globalThis['~suspense'].boundaryProps = {}
-    globalThis['~suspense'].boundaryProps.root = props
+    globalThis['~suspense'] ??= {}
+    const suspense = globalThis['~suspense']
+    suspense.boundaryProps ??= {}
+    suspense.boundaryProps.root = props
 
     let element
     let renderError = null
@@ -135,9 +143,7 @@ globalThis['~render'].componentAsync = async function () {
 
         registerBoundary(boundaryId, fallbackContent, null)
 
-        if (!globalThis['~suspense'].pendingPromises)
-          globalThis['~suspense'].pendingPromises = []
-        globalThis['~suspense'].pendingPromises.push({
+        registerPendingPromise({
           id: promiseId,
           boundaryId,
           componentPath: '{component_id}',
@@ -191,8 +197,7 @@ globalThis['~render'].componentAsync = async function () {
         globalThis['~suspense'].promises = globalThis['~suspense'].promises || {}
         globalThis['~suspense'].promises[promiseId] = element
 
-        globalThis['~suspense'].pendingPromises = globalThis['~suspense'].pendingPromises || []
-        globalThis['~suspense'].pendingPromises.push({
+        registerPendingPromise({
           id: promiseId,
           boundaryId,
           componentPath: '{component_id}',
@@ -320,8 +325,7 @@ globalThis['~render'].componentAsync = async function () {
                   globalThis['~suspense'].promises = globalThis['~suspense'].promises || {}
                   globalThis['~suspense'].promises[promiseId] = result
 
-                  globalThis['~suspense'].pendingPromises = globalThis['~suspense'].pendingPromises || []
-                  globalThis['~suspense'].pendingPromises.push({
+                  registerPendingPromise({
                     id: promiseId,
                     boundaryId,
                     componentPath: (child.type.name || 'AnonymousComponent'),
@@ -341,8 +345,7 @@ globalThis['~render'].componentAsync = async function () {
                 globalThis['~suspense'].promises = globalThis['~suspense'].promises || {}
                 globalThis['~suspense'].promises[promiseId] = error
 
-                globalThis['~suspense'].pendingPromises = globalThis['~suspense'].pendingPromises || []
-                globalThis['~suspense'].pendingPromises.push({
+                registerPendingPromise({
                   id: promiseId,
                   boundaryId,
                   componentPath: 'ThrownPromise',
@@ -397,11 +400,10 @@ globalThis['~render'].componentAsync = async function () {
         if (isLeafAsyncComponent) {
           const promiseId = `promise_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
           globalThis['~suspense'].promises = globalThis['~suspense'].promises || {}
-          globalThis['~suspense'].pendingPromises = globalThis['~suspense'].pendingPromises || []
           globalThis['~suspense'].promises[promiseId] = suspenseError.promise
 
           const boundaryId = globalThis['~suspense'].currentBoundaryId || 'root_boundary'
-          globalThis['~suspense'].pendingPromises.push({
+          registerPendingPromise({
             id: promiseId,
             boundaryId,
             componentPath: componentName,

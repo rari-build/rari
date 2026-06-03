@@ -2,8 +2,9 @@ use crate::error::{RariError, StreamingError};
 use crate::rsc::rendering::streaming::{RscChunkType, RscStreamChunk};
 use crate::rsc::types::RscElement;
 use crate::runtime::JsExecutionRuntime;
+use crate::server::routing::app_router::AppRouteMatch;
 use cow_utils::CowUtils;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use serde_json::Value as JsonValue;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -401,6 +402,71 @@ impl RscHtmlRenderer {
         Ok(result.to_string())
     }
 
+    fn css_links_for_route(route_match: &AppRouteMatch) -> Vec<String> {
+        let mut seen = FxHashSet::default();
+        let mut css_links = Vec::new();
+
+        let mut push_css = |links: &[String]| {
+            for css in links {
+                if seen.insert(css.clone()) {
+                    css_links.push(css.clone());
+                }
+            }
+        };
+
+        for layout in &route_match.layouts {
+            push_css(&layout.css);
+        }
+
+        if let Some(loading) = &route_match.loading {
+            push_css(&loading.css);
+        }
+
+        if let Some(error) = &route_match.error {
+            push_css(&error.css);
+        }
+
+        if let Some(not_found) = &route_match.not_found {
+            push_css(&not_found.css);
+        } else {
+            push_css(&route_match.route.css);
+        }
+
+        css_links
+    }
+
+    fn inject_css_links(template: &str, css_links: &[String]) -> String {
+        if css_links.is_empty() {
+            return template.to_string();
+        }
+
+        let links = css_links
+            .iter()
+            .filter(|href| !template.contains(href.as_str()))
+            .map(|href| {
+                format!(
+                    r#"<link rel="stylesheet" href="{}">"#,
+                    RscHtmlRenderer::escape_html_attribute(href)
+                )
+            })
+            .collect::<Vec<_>>();
+
+        if links.is_empty() {
+            return template.to_string();
+        }
+
+        let link_block = format!("{}\n", links.join("\n"));
+        if let Some(head_end) = template.find("</head>") {
+            let mut result = String::with_capacity(template.len() + link_block.len());
+            result.push_str(&template[..head_end]);
+            result.push_str(&link_block);
+            result.push_str(&template[head_end..]);
+            result
+        } else {
+            format!("{}{}", link_block, template)
+        }
+    }
+
     pub fn parse_rsc_wire_format(&self, rsc_data: &str) -> Result<Vec<RscRow>, RariError> {
         let mut rows = Vec::new();
 
@@ -535,6 +601,24 @@ impl RscHtmlRenderer {
         rsc_wire_format: &str,
         config: &crate::server::config::Config,
     ) -> Result<String, RariError> {
+        self.render_to_html_inner(rsc_wire_format, config, None).await
+    }
+
+    pub async fn render_to_html_for_route(
+        &self,
+        rsc_wire_format: &str,
+        config: &crate::server::config::Config,
+        route_match: &AppRouteMatch,
+    ) -> Result<String, RariError> {
+        self.render_to_html_inner(rsc_wire_format, config, Some(route_match)).await
+    }
+
+    async fn render_to_html_inner(
+        &self,
+        rsc_wire_format: &str,
+        config: &crate::server::config::Config,
+        route_match: Option<&AppRouteMatch>,
+    ) -> Result<String, RariError> {
         if !config.rsc_html.enabled {
             return Err(RariError::internal(
                 "RSC-to-HTML rendering is disabled in configuration".to_string(),
@@ -543,6 +627,11 @@ impl RscHtmlRenderer {
         let timeout_ms = config.rsc_html.timeout_ms;
         let cache_template = config.rsc_html.cache_template;
         let is_dev_mode = config.is_development();
+        let css_links = if let Some(route_match) = route_match {
+            Self::css_links_for_route(route_match)
+        } else {
+            Vec::new()
+        };
 
         let render_future = async {
             let rsc_rows = self.parse_rsc_wire_format(rsc_wire_format).map_err(|e| {
@@ -576,6 +665,8 @@ impl RscHtmlRenderer {
                     final_html.insert_str(body_end, &format!("\n{}\n", script_tags));
                 }
 
+                final_html = Self::inject_css_links(&final_html, &css_links);
+
                 let trimmed_lower = final_html.trim_start().cow_to_lowercase();
                 if !trimmed_lower.starts_with("<!doctype") {
                     final_html = format!("<!DOCTYPE html>\n{}", final_html);
@@ -588,6 +679,8 @@ impl RscHtmlRenderer {
                 .load_template(cache_template, is_dev_mode)
                 .await
                 .map_err(|e| RariError::internal(format!("Failed to load HTML template: {}", e)))?;
+
+            let template = Self::inject_css_links(&template, &css_links);
 
             let final_html = self.inject_into_template(&html_content, &template).map_err(|e| {
                 RariError::internal(format!("Failed to inject HTML into template: {}", e))
@@ -618,7 +711,7 @@ impl RscHtmlRenderer {
                 eprintln!("RSC-to-HTML rendering failed: {}, falling back to shell", e);
 
                 let fallback_template = self.load_template(cache_template, is_dev_mode).await?;
-                Ok(fallback_template)
+                Ok(Self::inject_css_links(&fallback_template, &css_links))
             }
         }
     }

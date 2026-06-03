@@ -144,7 +144,8 @@ impl LayoutRenderer {
         let html_renderer =
             crate::rsc::rendering::html::RscHtmlRenderer::new(Arc::clone(&renderer.runtime));
         let config = Config::get().ok_or_else(|| RariError::internal("Config not available"))?;
-        let html = html_renderer.render_to_html(&rsc_wire_format, config).await?;
+        let html =
+            html_renderer.render_to_html_for_route(&rsc_wire_format, config, route_match).await?;
         Self::validate_html_structure(&html, route_match)?;
 
         let is_not_found = route_match.not_found.is_some();
@@ -166,15 +167,24 @@ impl LayoutRenderer {
         let page_props = utils::create_page_props(route_match, context)?;
         let page_props_json = serde_json::to_string(&page_props)?;
 
-        fn convert_route_path_to_dist_path(path: &str) -> String {
-            let (base, ext) = if let Some(pos) = path.rfind('.') {
-                (&path[..pos], &path[pos..])
-            } else {
-                (path, "")
-            };
+        fn component_dist_path(
+            base_path: &std::path::Path,
+            file_path: &str,
+            component_id: Option<&str>,
+        ) -> std::path::PathBuf {
+            if let Some(component_id) = component_id {
+                return base_path.join(format!("{component_id}.js"));
+            }
 
-            let converted_base =
-                base.chars()
+            fn convert_route_path_to_dist_path(path: &str) -> String {
+                let (base, ext) = if let Some(pos) = path.rfind('.') {
+                    (&path[..pos], &path[pos..])
+                } else {
+                    (path, "")
+                };
+
+                let converted_base = base
+                    .chars()
                     .map(|c| {
                         if c.is_alphanumeric() || c == '/' || c == '-' || c == '_' {
                             c
@@ -184,7 +194,13 @@ impl LayoutRenderer {
                     })
                     .collect::<String>();
 
-            format!("{}{}", converted_base, ext)
+                format!("{}{}", converted_base, ext)
+            }
+
+            let js_filename =
+                file_path.cow_replace(".tsx", ".js").cow_replace(".ts", ".js").into_owned();
+            let dist_filename = convert_route_path_to_dist_path(&js_filename);
+            base_path.join("app").join(&dist_filename)
         }
 
         let dist_server_path = std::env::current_dir()
@@ -197,14 +213,11 @@ impl LayoutRenderer {
             None => return Ok(false),
         };
 
-        let js_filename = route_match
-            .route
-            .file_path
-            .cow_replace(".tsx", ".js")
-            .cow_replace(".ts", ".js")
-            .into_owned();
-        let dist_filename = convert_route_path_to_dist_path(&js_filename);
-        let page_file_path = base_path.join("app").join(&dist_filename);
+        let page_file_path = component_dist_path(
+            &base_path,
+            &route_match.route.file_path,
+            route_match.route.component_id.as_deref(),
+        );
 
         if !page_file_path.exists() {
             return Ok(false);
@@ -257,7 +270,10 @@ impl LayoutRenderer {
 
         let loading_component_id = if loading_enabled {
             if let Some(loading_entry) = &route_match.loading {
-                let loading_id = utils::create_component_id(&loading_entry.file_path);
+                let loading_id = loading_entry
+                    .component_id
+                    .clone()
+                    .unwrap_or_else(|| utils::create_component_id(&loading_entry.file_path));
                 Some(loading_id)
             } else {
                 None
@@ -331,7 +347,10 @@ impl LayoutRenderer {
 
         let loading_component_id = if loading_enabled {
             if let Some(loading_entry) = &route_match.loading {
-                let loading_id = utils::create_component_id(&loading_entry.file_path);
+                let loading_id = loading_entry
+                    .component_id
+                    .clone()
+                    .unwrap_or_else(|| utils::create_component_id(&loading_entry.file_path));
                 Some(loading_id)
             } else {
                 None
@@ -356,7 +375,9 @@ impl LayoutRenderer {
             let html_renderer = crate::rsc::rendering::html::RscHtmlRenderer::new(runtime);
             let config =
                 Config::get().ok_or_else(|| RariError::internal("Config not available"))?;
-            let html = html_renderer.render_to_html(&rsc_wire_format, config).await?;
+            let html = html_renderer
+                .render_to_html_for_route(&rsc_wire_format, config, route_match)
+                .await?;
 
             let rsc_payload = if rsc_wire_format.ends_with('\n') {
                 rsc_wire_format.clone()
@@ -937,13 +958,18 @@ if (typeof window !== 'undefined') {
             ))
         })?;
 
-        let page_file_path = if let Some(ref not_found) = route_match.not_found {
-            &not_found.file_path
+        let page_component_id = if let Some(ref not_found) = route_match.not_found {
+            not_found
+                .component_id
+                .clone()
+                .unwrap_or_else(|| utils::create_component_id(&not_found.file_path))
         } else {
-            &route_match.route.file_path
+            route_match
+                .route
+                .component_id
+                .clone()
+                .unwrap_or_else(|| utils::create_component_id(&route_match.route.file_path))
         };
-
-        let page_component_id = utils::create_component_id(page_file_path);
 
         let page_render_script = if route_match.not_found.is_some() {
             JS_PAGE_RENDER_SIMPLE
@@ -976,14 +1002,17 @@ if (typeof window !== 'undefined') {
             .layouts
             .iter()
             .map(|layout| super::route_composer::LayoutInfo {
-                component_id: utils::create_component_id(&layout.file_path),
+                component_id: layout
+                    .component_id
+                    .clone()
+                    .unwrap_or_else(|| utils::create_component_id(&layout.file_path)),
                 is_root: layout.is_root,
                 file_path: layout.file_path.clone(),
             })
             .collect();
 
         let error_boundary = route_match.error.as_ref().map(|error| {
-            let component_id = format!("src/{}", utils::create_component_id(&error.file_path));
+            let component_id = utils::create_client_component_id(&error.file_path);
             super::route_composer::ErrorBoundaryInfo {
                 component_id,
                 file_path: error.file_path.clone(),

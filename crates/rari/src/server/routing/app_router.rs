@@ -19,6 +19,10 @@ pub struct AppRouteEntry {
     pub path: String,
     #[serde(rename = "filePath")]
     pub file_path: String,
+    #[serde(rename = "componentId", default, skip_serializing_if = "Option::is_none")]
+    pub component_id: Option<String>,
+    #[serde(default)]
+    pub css: Vec<String>,
     pub segments: Vec<RouteSegment>,
     pub params: Vec<String>,
     #[serde(rename = "isDynamic")]
@@ -32,6 +36,10 @@ pub struct LayoutEntry {
     pub path: String,
     #[serde(rename = "filePath")]
     pub file_path: String,
+    #[serde(rename = "componentId", default, skip_serializing_if = "Option::is_none")]
+    pub component_id: Option<String>,
+    #[serde(default)]
+    pub css: Vec<String>,
     #[serde(rename = "parentPath", skip_serializing_if = "Option::is_none")]
     pub parent_path: Option<String>,
     #[serde(rename = "isRoot", default)]
@@ -43,6 +51,10 @@ pub struct LoadingEntry {
     pub path: String,
     #[serde(rename = "filePath")]
     pub file_path: String,
+    #[serde(rename = "componentId", default, skip_serializing_if = "Option::is_none")]
+    pub component_id: Option<String>,
+    #[serde(default)]
+    pub css: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -50,6 +62,10 @@ pub struct ErrorEntry {
     pub path: String,
     #[serde(rename = "filePath")]
     pub file_path: String,
+    #[serde(rename = "componentId", default, skip_serializing_if = "Option::is_none")]
+    pub component_id: Option<String>,
+    #[serde(default)]
+    pub css: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -57,6 +73,10 @@ pub struct NotFoundEntry {
     pub path: String,
     #[serde(rename = "filePath")]
     pub file_path: String,
+    #[serde(rename = "componentId", default, skip_serializing_if = "Option::is_none")]
+    pub component_id: Option<String>,
+    #[serde(default)]
+    pub css: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -139,6 +159,8 @@ impl AppRouter {
         let not_found_route = AppRouteEntry {
             path: normalized_path.clone(),
             file_path: not_found_entry.file_path.clone(),
+            component_id: not_found_entry.component_id.clone(),
+            css: not_found_entry.css.clone(),
             segments: vec![],
             params: vec![],
             is_dynamic: false,
@@ -401,6 +423,8 @@ mod tests {
                 AppRouteEntry {
                     path: "/".to_string(),
                     file_path: "page.tsx".to_string(),
+                    component_id: None,
+                    css: vec![],
                     segments: vec![],
                     params: vec![],
                     is_dynamic: false,
@@ -409,6 +433,8 @@ mod tests {
                 AppRouteEntry {
                     path: "/about".to_string(),
                     file_path: "about/page.tsx".to_string(),
+                    component_id: None,
+                    css: vec![],
                     segments: vec![RouteSegment {
                         segment_type: RouteSegmentType::Static,
                         value: "about".to_string(),
@@ -421,6 +447,8 @@ mod tests {
                 AppRouteEntry {
                     path: "/blog/[slug]".to_string(),
                     file_path: "blog/[slug]/page.tsx".to_string(),
+                    component_id: None,
+                    css: vec![],
                     segments: vec![
                         RouteSegment {
                             segment_type: RouteSegmentType::Static,
@@ -440,6 +468,8 @@ mod tests {
                 AppRouteEntry {
                     path: "/docs/[...slug]".to_string(),
                     file_path: "docs/[...slug]/page.tsx".to_string(),
+                    component_id: None,
+                    css: vec![],
                     segments: vec![
                         RouteSegment {
                             segment_type: RouteSegmentType::Static,
@@ -461,12 +491,16 @@ mod tests {
                 LayoutEntry {
                     path: "/".to_string(),
                     file_path: "layout.tsx".to_string(),
+                    component_id: None,
+                    css: vec![],
                     parent_path: None,
                     is_root: false,
                 },
                 LayoutEntry {
                     path: "/blog".to_string(),
                     file_path: "blog/layout.tsx".to_string(),
+                    component_id: None,
+                    css: vec![],
                     parent_path: Some("/".to_string()),
                     is_root: false,
                 },
@@ -577,6 +611,8 @@ mod tests {
                 AppRouteEntry {
                     path: "/".to_string(),
                     file_path: "page.tsx".to_string(),
+                    component_id: None,
+                    css: vec![],
                     segments: vec![],
                     params: vec![],
                     is_dynamic: false,
@@ -585,6 +621,8 @@ mod tests {
                 AppRouteEntry {
                     path: "/[slug]".to_string(),
                     file_path: "[slug]/page.tsx".to_string(),
+                    component_id: None,
+                    css: vec![],
                     segments: vec![RouteSegment {
                         segment_type: RouteSegmentType::Dynamic,
                         value: "[slug]".to_string(),

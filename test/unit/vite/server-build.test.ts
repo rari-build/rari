@@ -6,6 +6,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 vi.mock('node:fs')
 vi.mock('rolldown')
 
+function mockRoutesManifest() {
+  return JSON.stringify({
+    routes: [],
+    layouts: [],
+    loading: [],
+    errors: [],
+    notFound: [],
+    apiRoutes: [],
+    generated: new Date().toISOString(),
+  })
+}
+
 describe('ServerComponentBuilder', () => {
   let builder: ServerComponentBuilder
   const mockProjectRoot = '/test/project'
@@ -46,6 +58,10 @@ describe('ServerComponentBuilder', () => {
         readFile: vi.fn().mockImplementation(async (path: any) => {
           if (typeof path === 'string' && path.includes('manifest.json')) {
             return manifestJson
+          }
+
+          if (typeof path === 'string' && path.includes('routes.json')) {
+            return mockRoutesManifest()
           }
 
           return 'export default function Component() { return null }'
@@ -259,6 +275,9 @@ export default function WithDeps() {
           })
         }
 
+        if (path.includes('routes.json'))
+          return mockRoutesManifest()
+
         return code
       })
 
@@ -294,6 +313,9 @@ export default function NodeImports() {
             buildTime: new Date().toISOString(),
           })
         }
+
+        if (path.includes('routes.json'))
+          return mockRoutesManifest()
 
         return code
       })
@@ -434,6 +456,9 @@ export async function action() { return {} }`)
           })
         }
 
+        if (path.includes('routes.json'))
+          return mockRoutesManifest()
+
         return code
       })
 
@@ -474,6 +499,9 @@ export async function action() { return {} }`)
           })
         }
 
+        if (path.includes('routes.json'))
+          return mockRoutesManifest()
+
         return code
       })
 
@@ -510,6 +538,9 @@ export async function action() { return {} }`)
           })
         }
 
+        if (path.includes('routes.json'))
+          return mockRoutesManifest()
+
         return code
       })
 
@@ -539,6 +570,9 @@ export async function action() { return {} }`)
             buildTime: new Date().toISOString(),
           })
         }
+
+        if (path.includes('routes.json'))
+          return mockRoutesManifest()
 
         return code
       })
@@ -584,6 +618,9 @@ export async function action() { return {} }`)
           })
         }
 
+        if (path.includes('routes.json'))
+          return mockRoutesManifest()
+
         return code
       })
 
@@ -620,6 +657,34 @@ export async function action() { return {} }`)
       await builder.buildServerComponents()
 
       expect(fsSync.promises.unlink).toHaveBeenCalled()
+    })
+
+    it('should fail fast on malformed routes.json', async () => {
+      const filePath = '/test/project/src/MalformedTest.tsx'
+      const code = `export default function MalformedTest() { return <div>Test</div> }`
+
+      vi.mocked(fsSync.existsSync).mockReturnValue(true)
+      vi.mocked(fsSync.readFileSync).mockReturnValue(code)
+
+      vi.mocked(fsSync.promises.readFile).mockImplementation(async (path: any) => {
+        if (path.includes('manifest.json')) {
+          return JSON.stringify({
+            components: {},
+            actions: {},
+            importMap: { imports: {} },
+            buildTime: new Date().toISOString(),
+          })
+        }
+
+        if (path.includes('routes.json'))
+          return 'not valid json'
+
+        return code
+      })
+
+      builder.addServerComponent(filePath)
+
+      await expect(builder.buildServerComponents()).rejects.toThrow(SyntaxError)
     })
   })
 })
