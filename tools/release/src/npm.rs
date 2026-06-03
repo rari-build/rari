@@ -53,6 +53,8 @@ pub async fn publish_package(
         cmd.env("PNPM_CONFIG_OTP", otp_code);
     }
 
+    cmd.stdin(std::process::Stdio::null());
+
     let output = cmd.output().await?;
 
     if !output.status.success() {
