@@ -114,7 +114,7 @@
     "react-dom": "^19.2.6"
   },
   "dependencies": {
-    "lightningcss": "catalog:",
+    "lightningcss": "catalog:build",
     "rolldown": "catalog:build"
   },
   "optionalDependencies": {

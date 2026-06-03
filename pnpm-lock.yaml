@@ -10,6 +10,9 @@ catalogs:
       specifier: ^1.378.1
       version: 1.378.1
   build:
+    lightningcss:
+      specifier: ^1.32.0
+      version: 1.32.0
     rolldown:
       specifier: ^1.0.3
       version: 1.0.3
@@ -24,9 +27,6 @@ catalogs:
       specifier: ^1.5.0
       version: 1.5.0
   default:
-    lightningcss:
-      specifier: ^1.32.0
-      version: 1.32.0
     rari:
       specifier: ^0.14.3
       version: 0.14.3
@@ -234,7 +234,7 @@ importers:
   packages/rari:
     dependencies:
       lightningcss:
-        specifier: 'catalog:'
+        specifier: catalog:build
         version: 1.32.0
       react:
         specifier: ^19.2.6
@@ -2462,8 +2462,8 @@ packages:
     resolution: {integrity: sha512-6obghkliLdmKa56xdbLOpUZ43pAR6xFy1uOrxBaIDjT+yaRuuybLjGS9eVBoSR/UPU5fq3OXClEHLJNGvbxKpQ==}
     engines: {node: '>=20'}
 
-  electron-to-chromium@1.5.365:
-    resolution: {integrity: sha512-xfip4u1QF1s+URFqpA6N+OeFpDGpN7VJz1f3MO3bVL0QYBjpGiZ5/Of7kugvM+o8TTqmanUlviHN3c8M9vYWCw==}
+  electron-to-chromium@1.5.366:
+    resolution: {integrity: sha512-OlRuhb688YTCzzU3gXPLn6nGyd+F+53INE1qaKKlu6kETErE8FYsyDh0XqXEU+uBRn0MpCzz2vfNwORhkap8qg==}
 
   empathic@2.0.1:
     resolution: {integrity: sha512-YGRs8knHhKHVShLkFET/rWAU8kmHbOV5LwN938RHI0pljAJ1Gf6SzXsSmRaEzcXTtOOmVqJ5+WtQPL5uigY50Q==}
@@ -5611,7 +5611,7 @@ snapshots:
     dependencies:
       baseline-browser-mapping: 2.10.33
       caniuse-lite: 1.0.30001793
-      electron-to-chromium: 1.5.365
+      electron-to-chromium: 1.5.366
       node-releases: 2.0.47
       update-browserslist-db: 1.2.3(browserslist@4.28.2)
 
@@ -5905,7 +5905,7 @@ snapshots:
     optionalDependencies:
       '@types/trusted-types': 2.0.7
 
-  electron-to-chromium@1.5.365: {}
+  electron-to-chromium@1.5.366: {}
 
   empathic@2.0.1: {}
 

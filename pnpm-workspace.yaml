@@ -25,6 +25,7 @@ catalogs:
   analytics:
     posthog-js: ^1.378.1
   build:
+    lightningcss: ^1.32.0
     rolldown: ^1.0.3
     vite: ^8.0.16
     vite-plus: ^0.1.24
@@ -32,7 +33,6 @@ catalogs:
     '@clack/prompts': ^1.5.0
   default:
     rari: ^0.14.3
-    lightningcss: ^1.32.0
   eslint:
     '@antfu/eslint-config': ^9.0.0
     '@eslint-react/eslint-plugin': ^5.8.10
