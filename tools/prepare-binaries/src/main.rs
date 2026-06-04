@@ -66,9 +66,6 @@ const TARGETS: &[Target] = &[
     },
 ];
 
-const NAPI_ADDON_NAME: &str = "use_cache_transform.node";
-const NAPI_ADDON_PACKAGE: &str = "use-cache-transform";
-
 fn log(message: &str) {
     println!("{} {}", "➜".cyan(), message);
 }
@@ -130,29 +127,6 @@ async fn check_rust_installed() -> Result<()> {
     }
 }
 
-/// Verify that `@napi-rs/cli` (`napi` / `napi.cmd`) is on PATH.
-///
-/// The 'use cache' transform addon is built via `napi build`, so the CLI must
-/// be installed. Failing here with a clear message is much friendlier than
-/// `Command::new("napi.cmd") -> program not found` deeper in the build pipeline.
-async fn check_napi_installed() -> Result<()> {
-    let bin = if cfg!(windows) { "napi.cmd" } else { "napi" };
-
-    let output = Command::new(bin).arg("--version").output().await.with_context(|| {
-        format!("Failed to invoke `{bin}` (is @napi-rs/cli installed and on PATH?)")
-    })?;
-
-    if output.status.success() {
-        let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        log_success(&format!("@napi-rs/cli is installed ({bin} {version})"));
-        Ok(())
-    } else {
-        log_error("@napi-rs/cli is not installed or not on PATH");
-        log_error("Install it with:  npm install -g @napi-rs/cli");
-        anyhow::bail!("@napi-rs/cli not found");
-    }
-}
-
 async fn install_target(target: &str) -> Result<()> {
     log(&format!("Installing Rust target: {}", target));
 
@@ -172,8 +146,7 @@ async fn install_target(target: &str) -> Result<()> {
     }
 }
 
-async fn build_binary(target_info: &Target, project_root: &Path, dev_mode: bool) -> Result<bool> {
-    let target = target_info.target;
+async fn build_binary(target: &str, project_root: &Path, dev_mode: bool) -> Result<bool> {
     let build_type = if dev_mode { "debug" } else { "release" };
     log(&format!("Building binary for {} ({})", target, build_type));
 
@@ -192,68 +165,15 @@ async fn build_binary(target_info: &Target, project_root: &Path, dev_mode: bool)
 
     let output = cmd.output().await.context("Failed to execute cargo build")?;
 
-    if !output.status.success() {
+    if output.status.success() {
+        log_success(&format!("Built binary for {}", target));
+        Ok(true)
+    } else {
         log_error(&format!("Failed to build binary for {}", target));
         let stderr = String::from_utf8_lossy(&output.stderr);
         log_error(&format!("Error: {}", stderr));
-        return Ok(false);
+        Ok(false)
     }
-    log_success(&format!("Built binary for {}", target));
-
-    build_napi_addon(target_info, project_root, dev_mode).await
-}
-
-async fn build_napi_addon(
-    target_info: &Target,
-    project_root: &Path,
-    dev_mode: bool,
-) -> Result<bool> {
-    let target = target_info.target;
-    let profile = if dev_mode { "debug" } else { "release" };
-    let output_dir = project_root.join("target").join(target).join(profile);
-    let index_path = output_dir.join("index.node");
-    let addon_path = output_dir.join(NAPI_ADDON_NAME);
-
-    log(&format!("Building napi addon {} for {} ({})", NAPI_ADDON_PACKAGE, target, profile));
-
-    let mut addon_cmd = Command::new(if cfg!(windows) { "napi.cmd" } else { "napi" });
-    addon_cmd
-        .args(["build", "--target", target, "-p", NAPI_ADDON_PACKAGE, "--output-dir"])
-        .arg(&output_dir);
-
-    if !dev_mode {
-        addon_cmd.arg("--release");
-    }
-
-    if target == "aarch64-unknown-linux-gnu" {
-        addon_cmd.env("CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER", "aarch64-linux-gnu-gcc");
-    }
-
-    addon_cmd.current_dir(project_root);
-
-    let addon_output = addon_cmd
-        .output()
-        .await
-        .context("Failed to execute `napi build` for napi addon (is @napi-rs/cli installed?)")?;
-
-    if !addon_output.status.success() {
-        log_error(&format!("Failed to build napi addon for {}", target));
-        let stderr = String::from_utf8_lossy(&addon_output.stderr);
-        log_error(&format!("Error: {}", stderr));
-        return Ok(false);
-    }
-
-    if !index_path.exists() {
-        log_error(&format!("`napi build` did not produce expected file: {}", index_path.display()));
-        return Ok(false);
-    }
-
-    fs::rename(&index_path, &addon_path).with_context(|| {
-        format!("Failed to rename {} -> {}", index_path.display(), addon_path.display())
-    })?;
-
-    log_success(&format!("Built napi addon for {} -> {}", target, addon_path.display()));
-    Ok(true)
 }
 
 fn copy_binary_to_platform_package(
@@ -325,40 +245,6 @@ fn copy_binary_to_platform_package(
     }
 
     log_success(&format!("Copied binary to: {}", dest_path.display()));
-    Ok(true)
-}
-
-fn copy_napi_addon_to_platform_package(
-    target_info: &Target,
-    project_root: &Path,
-    build_type: &str,
-) -> Result<bool> {
-    let source_path =
-        project_root.join("target").join(target_info.target).join(build_type).join(NAPI_ADDON_NAME);
-
-    let dest_dir = project_root.join(target_info.package_dir).join("bin");
-    let dest_path = dest_dir.join(NAPI_ADDON_NAME);
-
-    if !source_path.exists() {
-        log_error(&format!("napi addon not found: {}", source_path.display()));
-        return Ok(false);
-    }
-
-    if !dest_dir.exists() {
-        fs::create_dir_all(&dest_dir).context("Failed to create destination directory")?;
-        log(&format!("Created directory: {}", dest_dir.display()));
-    }
-
-    fs::copy(&source_path, &dest_path).context("Failed to copy napi addon")?;
-
-    #[cfg(unix)]
-    if !target_info.platform.starts_with("win32") {
-        let mut perms = fs::metadata(&dest_path)?.permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&dest_path, perms)?;
-    }
-
-    log_success(&format!("Copied napi addon to: {}", dest_path.display()));
     Ok(true)
 }
 
@@ -452,7 +338,6 @@ async fn main() -> Result<()> {
     println!();
 
     check_rust_installed().await?;
-    check_napi_installed().await?;
 
     if args.all {
         install_linux_cross_compiler().await?;
@@ -470,7 +355,7 @@ async fn main() -> Result<()> {
     let mut failure_count = 0;
 
     for target_info in &targets_to_build {
-        let success = build_binary(target_info, &project_root, args.dev).await?;
+        let success = build_binary(target_info.target, &project_root, args.dev).await?;
         if success {
             success_count += 1;
         } else {
@@ -499,14 +384,6 @@ async fn main() -> Result<()> {
             if !success {
                 failure_count += 1;
             }
-            let addon_success = copy_napi_addon_to_platform_package(
-                target_info,
-                &project_root,
-                if args.dev { "debug" } else { "release" },
-            )?;
-            if !addon_success {
-                failure_count += 1;
-            }
         }
     }
 
@@ -515,12 +392,6 @@ async fn main() -> Result<()> {
     log("Validating binaries...");
     for target_info in &targets_to_build {
         validate_binary(target_info, &project_root, args.dev)?;
-        let addon_path =
-            project_root.join(target_info.package_dir).join("bin").join(NAPI_ADDON_NAME);
-        if !addon_path.exists() {
-            log_error(&format!("napi addon missing in package: {}", addon_path.display()));
-            failure_count += 1;
-        }
     }
 
     println!();

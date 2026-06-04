@@ -68,14 +68,6 @@ jobs:
           vcpkg install fontconfig:${{ matrix.vcpkg_triplet }}
         shell: pwsh
 
-      - name: Setup Node.js
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
-        with:
-          node-version: 22.14.0
-
-      - name: Install @napi-rs/cli
-        run: npm install -g @napi-rs/cli
-
       - name: Cache cargo registry
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
@@ -110,10 +102,6 @@ jobs:
           echo 'pub static RESIDUAL_LAZY_JS_SOURCES: &[(&str, &str)] = &[];' >> crates/rari/snapshots/residual_lazy_sources.rs
           cargo run --release --manifest-path tools/snapshot/Cargo.toml -- crates/rari/snapshots
           cargo build --release --target ${{ matrix.target }} --bin rari
-          # napi-rs 'use cache' transform addon (consumed by packages/rari via packages/rari-<platform>/bin/).
-          # `napi build` produces index.node; rename to use_cache_transform.node to match the JS-side lookup.
-          napi.cmd build --target ${{ matrix.target }} -p use-cache-transform --release --output-dir target/${{ matrix.target }}/release
-          mv target/${{ matrix.target }}/release/index.node target/${{ matrix.target }}/release/use_cache_transform.node
         env:
           AWS_LC_SYS_PREBUILT_NASM: 1
           PKG_CONFIG_PATH: C:\vcpkg\installed\${{ matrix.vcpkg_triplet }}\lib\pkgconfig
@@ -128,43 +116,25 @@ jobs:
           echo 'pub static RESIDUAL_LAZY_JS_SOURCES: &[(&str, &str)] = &[];' >> crates/rari/snapshots/residual_lazy_sources.rs
           cargo run --release --manifest-path tools/snapshot/Cargo.toml -- crates/rari/snapshots
           cargo build --release --target ${{ matrix.target }} --bin rari
-          # napi-rs 'use cache' transform addon (consumed by packages/rari via packages/rari-<platform>/bin/)
-          napi build --target ${{ matrix.target }} -p use-cache-transform --release --output-dir target/${{ matrix.target }}/release
-          mv target/${{ matrix.target }}/release/index.node target/${{ matrix.target }}/release/use_cache_transform.node
-
-      - name: Verify napi addon built
-        shell: bash
-        run: |
-          ADDON="target/${{ matrix.target }}/release/use_cache_transform.node"
-          if [ ! -f "$ADDON" ]; then
-            echo "::error::Expected napi addon at $ADDON but it was not produced"
-            exit 1
-          fi
-          echo "napi addon present: $ADDON ($(du -h "$ADDON" | cut -f1))"
 
       - name: Prepare binary (Unix)
         if: runner.os != 'Windows'
         run: |
           mkdir -p binaries
           cp target/${{ matrix.target }}/release/rari binaries/${{ matrix.name }}
-          cp target/${{ matrix.target }}/release/use_cache_transform.node binaries/use_cache_transform.node
           chmod +x binaries/${{ matrix.name }}
-          chmod +x binaries/use_cache_transform.node
 
       - name: Prepare binary (Windows)
         if: runner.os == 'Windows'
         run: |
           mkdir binaries
           copy target\${{ matrix.target }}\release\rari.exe binaries\${{ matrix.name }}
-          copy target\${{ matrix.target }}\release\use_cache_transform.node binaries\use_cache_transform.node
 
       - name: Upload binary
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ matrix.name }}
-          path: |
-            binaries/${{ matrix.name }}
-            binaries/use_cache_transform.node
+          path: binaries/${{ matrix.name }}
 
   npm-release-platform:
     needs: build-binaries
@@ -224,14 +194,6 @@ jobs:
           else
             cp "${BINARY_FILE}" "${PACKAGE_DIR}/bin/rari"
             chmod +x "${PACKAGE_DIR}/bin/rari"
-          fi
-
-          # 'use cache' transform napi addon — required at runtime by packages/rari/src/vite/use-cache-transform.ts
-          if [ -f "platform-binary/use_cache_transform.node" ]; then
-            cp "platform-binary/use_cache_transform.node" "${PACKAGE_DIR}/bin/use_cache_transform.node"
-          else
-            echo "::error::use_cache_transform.node missing from platform-binary artifact"
-            exit 1
           fi
 
           ls -la "${PACKAGE_DIR}/bin/"

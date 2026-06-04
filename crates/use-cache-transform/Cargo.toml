@@ -21,7 +21,7 @@ deno_ast = { workspace = true, features = [
   "transforms",
 ] }
 sha1 = "0.10"
-hex = "0.4"
+hex = { workspace = true }
 rustc-hash = { workspace = true }
 
 [build-dependencies]

@@ -4,14 +4,18 @@ test.describe('use cache directive', () => {
   test('caches identical calls and recomputes for different args', async ({ page }) => {
     await page.goto('/use-cache')
 
-    const results = []
+    const renderCount = await page.locator('meta[data-render-count]').getAttribute('data-render-count')
+    const callLog = await page.locator('meta[data-render-count]').getAttribute('data-call-log')
+    console.error(`[use-cache.spec] === DIAGNOSTIC === renderCount=${renderCount} callLog=${callLog} ===`)
 
+    expect(callLog).toBe('first:1,first:1,second:2')
+
+    const results = []
     for (let i = 1; i < 4; i++) {
       results.push(await page.locator(`[data-testid="result${i}"]`).textContent() as string)
     }
 
     expect(results.every(result => result !== null)).toBe(true)
-
     for (const result of results) {
       expect(result).not.toBeNull()
     }
@@ -24,10 +28,7 @@ test.describe('use cache directive', () => {
     expect(label2).toBe('first')
     expect(label3).toBe('second')
 
-    // Identical args produce identical cached results
     expect(count1).toBe(count2)
-
-    // Different args produce a different cache entry
     expect(count1).not.toBe(count3)
   })
 
