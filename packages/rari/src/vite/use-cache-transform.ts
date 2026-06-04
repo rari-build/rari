@@ -25,6 +25,9 @@ function getUseCacheTransformAddon(): any {
     path.join(packageRoot, 'target/release/use_cache_transform.node'),
     path.join(repoRoot, 'target/release/use_cache_transform.node'),
     path.join(packageRoot, '../../target/release/use_cache_transform.node'),
+    path.join(packageRoot, 'target/debug/use_cache_transform.node'),
+    path.join(repoRoot, 'target/debug/use_cache_transform.node'),
+    path.join(packageRoot, '../../target/debug/use_cache_transform.node'),
     path.join(repoRoot, 'packages/rari-linux-x64/bin/use_cache_transform.node'),
     path.join(repoRoot, 'packages/rari-win32-x64/bin/use_cache_transform.node'),
   ]
@@ -101,13 +104,15 @@ export function transformUseCacheModule(code: string, id: string): string | null
     }
 
     const prologueLines = extractPrologueLines(result.code)
+    const importBlock = imports.length ? `${imports.join(';\n')};\n` : ''
+
     if (prologueLines.length) {
       const rest = result.code.split('\n').slice(prologueLines.length).join('\n').trimStart()
 
-      return `${prologueLines.join('\n')}\n${imports.join(';\n')}\n${rest}`
+      return `${prologueLines.join('\n')}\n${importBlock}${rest}`
     }
 
-    return `${imports.join(';\n')}\n${result.code}`
+    return `${importBlock}${result.code}`
   }
   catch (err) {
     throw new Error(

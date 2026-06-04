@@ -116,8 +116,8 @@ async function getData(id) {
       expect(result.code).toContain('$$RSC_SERVER_CACHE_0_getData_INNER')
       expect(result.code).toContain('async function getData(id)')
       expect(result.code).not.toContain('async function getData([], id)')
-      expect(result.code).toContain('var $$RSC_SERVER_CACHE_0_getData = async function()')
-      expect(result.code).toContain('var getData = $$RSC_SERVER_CACHE_0_getData.bind(null)')
+      expect(result.code).toContain('var $$RSC_SERVER_CACHE_0_getData = function()')
+      expect(result.code).toContain('var getData = async function(...args)')
       expect(result.code).not.toContain('"use cache"')
     })
 
@@ -308,7 +308,9 @@ async function getData(id) {
       const result = useCacheAddon.transformUseCache(src, defaultOpts)
 
       expect(result.code).toContain('encodeBoundArgs')
-      expect(result.code).toContain('async function getData($$ACTION_BOUND_ARGS, id)')
+      expect(result.code).toContain('var getData = ((')
+      expect(result.code).toContain('$$ACTION_BOUND_ARGS)=>async (...args)=>')
+      expect(result.code).toContain('encodeBoundArgs(')
       expect(result.code).not.toContain('async function getData([$$ACTION_ARG_0], id)')
       expect(result.code).toMatch(/"[\da-f]{42}"/)
     })
@@ -325,7 +327,7 @@ async function getData() {
       const result = useCacheAddon.transformUseCache(src, defaultOpts)
 
       expect(result.code).not.toContain('encodeBoundArgs')
-      expect(result.code).toContain('var getData = $$RSC_SERVER_CACHE_0_getData.bind(null)')
+      expect(result.code).toContain('var getData = async function(...args)')
     })
 
     it('does not capture the transformed function name as a closure variable', () => {
@@ -338,7 +340,7 @@ async function getData(depth) {
       const result = useCacheAddon.transformUseCache(src, defaultOpts)
 
       expect(result.code).not.toContain('encodeBoundArgs')
-      expect(result.code).toContain('var getData = $$RSC_SERVER_CACHE_0_getData.bind(null)')
+      expect(result.code).toContain('var getData = async function(...args)')
     })
 
     it('does not capture local function declarations that shadow module bindings', () => {
@@ -356,7 +358,7 @@ async function getData() {
 
       expect(result.code).not.toContain('encodeBoundArgs')
       expect(result.code).toContain('function helper()')
-      expect(result.code).toContain('var getData = $$RSC_SERVER_CACHE_0_getData.bind(null)')
+      expect(result.code).toContain('var getData = async function(...args)')
     })
 
     it('does not capture local class declarations that shadow module bindings', () => {
@@ -372,7 +374,7 @@ async function getData() {
 
       expect(result.code).not.toContain('encodeBoundArgs')
       expect(result.code).toContain('class Model')
-      expect(result.code).toContain('var getData = $$RSC_SERVER_CACHE_0_getData.bind(null)')
+      expect(result.code).toContain('var getData = async function(...args)')
     })
 
     it('preserves named default export binding', () => {
@@ -386,7 +388,7 @@ export const getDataRef = getData;
 `
       const result = useCacheAddon.transformUseCache(src, defaultOpts)
 
-      expect(result.code).toContain('var getData = $$RSC_SERVER_CACHE_0_getData.bind(null)')
+      expect(result.code).toContain('var getData = async function(...args)')
       expect(result.code).toContain('export default getData')
       expect(result.code).toContain('export const getDataRef = getData')
       expect(result.code).not.toContain('"use cache"')
@@ -406,7 +408,7 @@ export default async function(id) {
       expect(result.needsRegisterRef).toBe(true)
       expect(result.code).not.toContain('"use cache"')
       expect(result.code).toContain('$$RSC_SERVER_CACHE_0_default_INNER')
-      expect(result.code).toContain('var $$RSC_SERVER_CACHE_DEFAULT_EXPORT = $$RSC_SERVER_CACHE_0_default.bind(null)')
+      expect(result.code).toContain('var $$RSC_SERVER_CACHE_DEFAULT_EXPORT = async function(...args)')
       expect(result.code).toContain('export default $$RSC_SERVER_CACHE_DEFAULT_EXPORT')
     })
 
@@ -507,7 +509,7 @@ async function getData(input) {
       const result = useCacheAddon.transformUseCache(src, defaultOpts)
 
       expect(result.code).not.toContain('encodeBoundArgs')
-      expect(result.code).toContain('var getData = $$RSC_SERVER_CACHE_0_getData.bind(null)')
+      expect(result.code).toContain('var getData = async function(...args)')
     })
   })
 })
