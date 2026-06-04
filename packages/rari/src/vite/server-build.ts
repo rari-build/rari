@@ -17,6 +17,7 @@ import { resolveAlias } from './alias-resolver'
 import { getReadableComponentId, getComponentId as getSharedComponentId, getProjectRelativePath as getSharedProjectRelativePath, hashString as sharedHashString } from './component-id-utils'
 import { getDirectives, hasDefaultExport, hasTopLevelUseClientDirective, hasTopLevelUseServerDirective } from './directive-utils'
 import { resolveIndexFile, resolveWithExtensions } from './file-resolver'
+import { transformUseCacheModule } from './use-cache-transform'
 
 const HTML_IMPORT_REGEX = /import\s*\(\s*["']([^"']+)["']\s*\)|import\s+["']([^"']+)["']/g
 const CODE_IMPORT_REGEX = /from\s+['"]([^'"]+)['"]|import\s*\(\s*['"]([^'"]+)['"]\s*\)|import\s+['"]([^'"]+)['"]/g
@@ -104,6 +105,9 @@ export interface ServerBuildOptions {
   define?: Record<string, string>
   csp?: ServerCSPConfig
   cacheControl?: ServerCacheControlConfig
+  experimental?: {
+    useCache?: boolean
+  }
 }
 
 export interface ComponentRebuildResult {
@@ -113,11 +117,12 @@ export interface ComponentRebuildResult {
   error?: string
 }
 
-type ResolvedServerBuildOptions = Required<Omit<ServerBuildOptions, 'csp' | 'cacheControl' | 'define' | 'serverConfigPath'>> & {
+type ResolvedServerBuildOptions = Required<Omit<ServerBuildOptions, 'csp' | 'cacheControl' | 'define' | 'serverConfigPath' | 'experimental'>> & {
   serverConfigPath: string
   csp?: ServerBuildOptions['csp']
   cacheControl?: ServerBuildOptions['cacheControl']
   define?: ServerBuildOptions['define']
+  experimental?: ServerBuildOptions['experimental']
 }
 
 export class ServerComponentBuilder {
@@ -258,6 +263,7 @@ export class ServerComponentBuilder {
       define: options.define,
       csp: options.csp,
       cacheControl: options.cacheControl,
+      experimental: options.experimental,
     }
 
     this.parseHtmlImports()
@@ -710,6 +716,13 @@ const ${importName} = (props) => {
 
           return null
         },
+        transform(code: string, id: string) {
+          if (!self.options.experimental?.useCache) {
+            return null
+          }
+
+          return transformUseCacheModule(code, id)
+        },
       },
       {
         name: 'resolve-client-server-boundaries',
@@ -999,19 +1012,22 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
           if (source.startsWith('node:') || self.isNodeBuiltin(source))
             return { id: source, external: true }
 
-          const externalPackages = [
-            'react',
-            'react-dom',
-            'react/jsx-runtime',
-            'react/jsx-dev-runtime',
-            'rari/image',
-          ]
-
-          if (externalPackages.includes(source))
-            return { id: source, external: true }
-
           if (source === 'rari' || source === 'rari/client')
             return null
+
+          const externalPackages: Record<string, string | null> = {
+            'react': null,
+            'react-dom': null,
+            'react/jsx-runtime': null,
+            'react/jsx-dev-runtime': null,
+            'rari/image': null,
+            'rari/runtime/cache-wrapper': 'node_modules/rari/dist/runtime/cache-wrapper.mjs',
+            'react-server-dom-rari/server': 'node_modules/rari/dist/runtime/react-server-dom-shim.mjs',
+          }
+
+          if (source in externalPackages) {
+            return { id: source, external: true }
+          }
 
           if (!source.startsWith('.') && !source.startsWith('/'))
             return { id: source, external: true }

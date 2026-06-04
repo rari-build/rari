@@ -1,6 +1,7 @@
 [workspace]
 members = [
   "crates/rari",
+  "crates/use-cache-transform",
   "tools/prepare-binaries",
   "tools/release",
   "tools/snapshot",
@@ -60,6 +61,7 @@ unused_peekable = "warn"
 
 [workspace.dependencies]
 deno_ast = { version = "=0.53.2", features = [ "transpiling" ] }
+swc_ecma_transforms_base = "=30.0.1"
 deno_core = "0.403.0"
 deno_error = "=0.7.1"
 rustc-hash = "2.1.2"

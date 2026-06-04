@@ -14,3 +14,4 @@ playwright/.cache
 crates/rari/snapshots/*.bin
 crates/rari/snapshots/*.rs
 .env
+*.node

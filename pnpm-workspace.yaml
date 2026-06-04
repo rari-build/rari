@@ -26,6 +26,7 @@ catalogs:
     '@clack/prompts': ^1.5.1
   default:
     rari: ^0.14.8
+    lru-cache: ^11.5.1
   eslint:
     '@antfu/eslint-config': ^9.0.0
     '@eslint-react/eslint-plugin': ^5.8.16
