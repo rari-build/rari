@@ -15,7 +15,6 @@ pub struct Package {
     pub name: String,
     pub path: PathBuf,
     pub current_version: String,
-    pub needs_build: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -84,13 +83,6 @@ impl ReleaseUnit {
         }
     }
 
-    pub fn needs_build(&self) -> bool {
-        match self {
-            Self::Single(pkg) => pkg.needs_build,
-            Self::Group(group) => group.packages.iter().any(|p| p.needs_build),
-        }
-    }
-
     pub async fn update_version(&self, new_version: &str) -> Result<()> {
         match self {
             Self::Single(pkg) => pkg.update_version(new_version).await,
@@ -116,18 +108,13 @@ pub struct ReleasedPackage {
 }
 
 impl Package {
-    pub async fn load(name: &str, path: &str, needs_build: bool) -> Result<Self> {
+    pub async fn load(name: &str, path: &str) -> Result<Self> {
         let pkg_path = PathBuf::from(path);
         let pkg_json_path = pkg_path.join("package.json");
         let content = tokio::fs::read_to_string(&pkg_json_path).await?;
         let pkg_json: PackageJson = serde_json::from_str(&content)?;
 
-        Ok(Self {
-            name: name.to_string(),
-            path: pkg_path,
-            current_version: pkg_json.version,
-            needs_build,
-        })
+        Ok(Self { name: name.to_string(), path: pkg_path, current_version: pkg_json.version })
     }
 
     pub async fn update_version(&self, new_version: &str) -> Result<()> {

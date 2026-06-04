@@ -1,5 +1,5 @@
 use crate::{
-    git, npm,
+    changelog, git,
     package::{Package, ReleaseType, ReleasedPackage},
     ui,
 };
@@ -13,8 +13,7 @@ pub enum Screen {
     PackageSelection,
     VersionSelection { package_idx: usize },
     CustomVersion { package_idx: usize, input: String },
-    OtpInput { package_idx: usize, version: String, input: String },
-    Publishing { package_idx: usize, version: String, otp: Option<String> },
+    Publishing { package_idx: usize, version: String },
     PostPublish { has_more_packages: bool },
     PostRelease { released: Vec<ReleasedPackage>, step: PostReleaseStep },
     Complete,
@@ -31,7 +30,6 @@ pub enum PostReleaseStep {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum PublishStep {
-    Building,
     UpdatingVersion,
     GeneratingChangelog,
     Committing,
@@ -53,7 +51,6 @@ pub struct App {
     pub released_packages: Vec<ReleasedPackage>,
     pub error_message: Option<String>,
     pub dry_run: bool,
-    pub needs_otp: bool,
     pub post_release_messages: Vec<String>,
 }
 
@@ -62,20 +59,20 @@ impl App {
         use crate::package::{PackageGroup, ReleaseUnit};
 
         let binary_packages = vec![
-            Package::load("rari-darwin-arm64", "packages/rari-darwin-arm64", false).await?,
-            Package::load("rari-darwin-x64", "packages/rari-darwin-x64", false).await?,
-            Package::load("rari-linux-arm64", "packages/rari-linux-arm64", false).await?,
-            Package::load("rari-linux-x64", "packages/rari-linux-x64", false).await?,
-            Package::load("rari-win32-arm64", "packages/rari-win32-arm64", false).await?,
-            Package::load("rari-win32-x64", "packages/rari-win32-x64", false).await?,
+            Package::load("rari-darwin-arm64", "packages/rari-darwin-arm64").await?,
+            Package::load("rari-darwin-x64", "packages/rari-darwin-x64").await?,
+            Package::load("rari-linux-arm64", "packages/rari-linux-arm64").await?,
+            Package::load("rari-linux-x64", "packages/rari-linux-x64").await?,
+            Package::load("rari-win32-arm64", "packages/rari-win32-arm64").await?,
+            Package::load("rari-win32-x64", "packages/rari-win32-x64").await?,
         ];
 
         let binary_group = PackageGroup::new("rari-binaries".to_string(), binary_packages).await?;
 
         let mut release_units = vec![
-            ReleaseUnit::Single(Package::load("rari", "packages/rari", true).await?),
+            ReleaseUnit::Single(Package::load("rari", "packages/rari").await?),
             ReleaseUnit::Single(
-                Package::load("create-rari-app", "packages/create-rari-app", true).await?,
+                Package::load("create-rari-app", "packages/create-rari-app").await?,
             ),
             ReleaseUnit::Group(binary_group),
         ];
@@ -87,9 +84,6 @@ impl App {
             }
         }
 
-        let needs_otp =
-            std::env::var("NPM_OTP").is_err() && std::env::var("PNPM_CONFIG_OTP").is_err();
-
         Ok(Self {
             screen: Screen::PackageSelection,
             release_units,
@@ -98,13 +92,12 @@ impl App {
             version_types: ReleaseType::all(),
             recent_commits: vec![],
             previous_tag: None,
-            publish_step: PublishStep::Building,
+            publish_step: PublishStep::UpdatingVersion,
             publish_progress: 0.0,
             status_messages: vec![],
             released_packages: vec![],
             error_message: None,
             dry_run,
-            needs_otp,
             post_release_messages: vec![],
         })
     }
@@ -149,23 +142,11 @@ impl App {
                     } else if let Some(new_version) =
                         release_type.to_version(unit.current_version())
                     {
-                        let is_binary_group = matches!(unit.name(), "rari-binaries");
-                        if self.needs_otp && !is_binary_group {
-                            self.screen = Screen::OtpInput {
-                                package_idx: *package_idx,
-                                version: new_version,
-                                input: String::new(),
-                            };
-                        } else {
-                            self.screen = Screen::Publishing {
-                                package_idx: *package_idx,
-                                version: new_version,
-                                otp: None,
-                            };
-                            self.publish_step = PublishStep::Building;
-                            self.publish_progress = 0.0;
-                            self.status_messages.clear();
-                        }
+                        self.screen =
+                            Screen::Publishing { package_idx: *package_idx, version: new_version };
+                        self.publish_step = PublishStep::UpdatingVersion;
+                        self.publish_progress = 0.0;
+                        self.status_messages.clear();
                     }
                 }
                 KeyCode::Esc => {
@@ -192,69 +173,19 @@ impl App {
                         let current = semver::Version::parse(unit.current_version())
                             .expect("current version should be valid semver");
                         if version > current {
-                            let is_binary_group = matches!(unit.name(), "rari-binaries");
-                            if self.needs_otp && !is_binary_group {
-                                self.screen = Screen::OtpInput {
-                                    package_idx: *package_idx,
-                                    version: version.to_string(),
-                                    input: String::new(),
-                                };
-                            } else {
-                                self.screen = Screen::Publishing {
-                                    package_idx: *package_idx,
-                                    version: version.to_string(),
-                                    otp: None,
-                                };
-                                self.publish_step = PublishStep::Building;
-                                self.publish_progress = 0.0;
-                                self.status_messages.clear();
-                            }
+                            self.screen = Screen::Publishing {
+                                package_idx: *package_idx,
+                                version: version.to_string(),
+                            };
+                            self.publish_step = PublishStep::UpdatingVersion;
+                            self.publish_progress = 0.0;
+                            self.status_messages.clear();
                         } else {
                             self.error_message =
                                 Some("Version must be greater than current".to_string());
                         }
                     } else {
                         self.error_message = Some("Invalid semantic version".to_string());
-                    }
-                }
-                KeyCode::Esc => {
-                    self.screen = Screen::VersionSelection { package_idx: *package_idx };
-                    self.error_message = None;
-                }
-                _ => {}
-            },
-            Screen::OtpInput { package_idx, version, input } => match key {
-                KeyCode::Char(c) if c.is_ascii_digit() && input.len() < 6 => {
-                    let mut new_input = input.clone();
-                    new_input.push(c);
-                    self.screen = Screen::OtpInput {
-                        package_idx: *package_idx,
-                        version: version.clone(),
-                        input: new_input,
-                    };
-                }
-                KeyCode::Backspace => {
-                    let mut new_input = input.clone();
-                    new_input.pop();
-                    self.screen = Screen::OtpInput {
-                        package_idx: *package_idx,
-                        version: version.clone(),
-                        input: new_input,
-                    };
-                }
-                KeyCode::Enter => {
-                    if input.len() == 6 {
-                        self.screen = Screen::Publishing {
-                            package_idx: *package_idx,
-                            version: version.clone(),
-                            otp: Some(input.clone()),
-                        };
-                        self.publish_step = PublishStep::Building;
-                        self.publish_progress = 0.0;
-                        self.status_messages.clear();
-                        self.error_message = None;
-                    } else {
-                        self.error_message = Some("OTP must be 6 digits".to_string());
                     }
                 }
                 KeyCode::Esc => {
@@ -319,26 +250,9 @@ impl App {
     }
 
     pub async fn update(&mut self) -> Result<()> {
-        if let Screen::Publishing { package_idx, version, otp } = &self.screen.clone() {
+        if let Screen::Publishing { package_idx, version } = &self.screen.clone() {
             let unit = &self.release_units[*package_idx];
             match self.publish_step {
-                PublishStep::Building => {
-                    if self.dry_run {
-                        self.status_messages.push("[DRY RUN] Would build package...".to_string());
-                    } else {
-                        self.status_messages.push("Building package...".to_string());
-                        if unit.needs_build() {
-                            for pkg in unit.packages() {
-                                if pkg.needs_build {
-                                    npm::build_package(&pkg.path).await?;
-                                }
-                            }
-                        }
-                    }
-                    self.status_messages.push("* Built package".to_string());
-                    self.publish_step = PublishStep::UpdatingVersion;
-                    self.publish_progress = 0.2;
-                }
                 PublishStep::UpdatingVersion => {
                     if self.dry_run {
                         self.status_messages
@@ -363,7 +277,7 @@ impl App {
                             self.status_messages.push("Generating changelog...".to_string());
                             let tag = format!("{}@{}", unit_name, version);
                             let package_path = unit.paths()[0];
-                            npm::generate_changelog(&tag, unit_name, package_path).await?;
+                            changelog::generate(&tag, unit_name, package_path).await?;
                         }
                         self.status_messages.push("* Generated changelog".to_string());
                     } else if self.dry_run {
@@ -422,102 +336,20 @@ impl App {
                     }
                     self.status_messages.push("* Committed and tagged".to_string());
 
-                    for pkg in unit.packages() {
-                        let needs_generated_files =
-                            matches!(pkg.name.as_str(), "rari" | "create-rari-app");
-                        if needs_generated_files {
-                            if self.dry_run {
-                                self.status_messages.push(format!(
-                                    "[DRY RUN] Would generate README and LICENSE for {}...",
-                                    pkg.name
-                                ));
-                            } else {
-                                self.status_messages.push(format!(
-                                    "Generating README and LICENSE for {}...",
-                                    pkg.name
-                                ));
-                                crate::files::generate_package_files(&pkg.name, &pkg.path).await?;
-                            }
-                            self.status_messages
-                                .push(format!("* Generated README and LICENSE for {}", pkg.name));
-                        }
-                    }
-
                     self.publish_step = PublishStep::Publishing;
                     self.publish_progress = 0.85;
                 }
                 PublishStep::Publishing => {
-                    let is_prerelease =
-                        semver::Version::parse(version).map(|v| !v.pre.is_empty()).unwrap_or(false);
-
-                    let is_binary_group = matches!(unit.name(), "rari-binaries");
-
-                    if is_binary_group {
-                        if self.dry_run {
-                            self.status_messages.push(
-                                "[DRY RUN] Binary packages will be published via GitHub Actions"
-                                    .to_string(),
-                            );
-                        } else {
-                            self.status_messages.push(
-                                "Binary packages will be published via GitHub Actions".to_string(),
-                            );
-                        }
+                    if self.dry_run {
+                        self.status_messages.push(format!(
+                            "[DRY RUN] {} will be published via GitHub Actions after push",
+                            unit.name()
+                        ));
                     } else {
-                        for pkg in unit.packages() {
-                            if self.dry_run {
-                                let tag = if is_prerelease { "next" } else { "latest" };
-                                self.status_messages.push(format!(
-                                    "[DRY RUN] Would publish {}@{} with tag '{}'",
-                                    pkg.name, version, tag
-                                ));
-                            } else {
-                                self.status_messages
-                                    .push(format!("Publishing {} to npm...", pkg.name));
-                                let publish_result =
-                                    npm::publish_package(&pkg.path, is_prerelease, otp.as_deref())
-                                        .await;
-
-                                if publish_result.is_ok() {
-                                    self.status_messages
-                                        .push(format!("* Published {}@{}", pkg.name, version));
-                                }
-
-                                let needs_generated_files =
-                                    matches!(pkg.name.as_str(), "rari" | "create-rari-app");
-                                if needs_generated_files {
-                                    self.status_messages.push(format!(
-                                        "Cleaning up generated files for {}...",
-                                        pkg.name
-                                    ));
-                                    let cleanup_result =
-                                        crate::files::cleanup_package_files(&pkg.path).await;
-
-                                    if let Err(e) = publish_result {
-                                        if let Err(cleanup_err) = cleanup_result {
-                                            self.status_messages.push(format!(
-                                                "⚠ Cleanup also failed: {}",
-                                                cleanup_err
-                                            ));
-                                        }
-                                        return Err(e);
-                                    }
-
-                                    if let Err(cleanup_err) = cleanup_result {
-                                        self.status_messages
-                                            .push(format!("⚠ Cleanup failed: {}", cleanup_err));
-                                        return Err(cleanup_err);
-                                    }
-
-                                    self.status_messages.push(format!(
-                                        "* Cleaned up generated files for {}",
-                                        pkg.name
-                                    ));
-                                } else {
-                                    publish_result?;
-                                }
-                            }
-                        }
+                        self.status_messages.push(format!(
+                            "{} will be published via GitHub Actions after push",
+                            unit.name()
+                        ));
                     }
 
                     self.publish_step = PublishStep::Done;
@@ -608,11 +440,7 @@ impl App {
                 let unit = &self.release_units[*package_idx];
                 ui::render_custom_version(frame, self, unit, input);
             }
-            Screen::OtpInput { package_idx, input, .. } => {
-                let unit = &self.release_units[*package_idx];
-                ui::render_otp_input(frame, self, unit, input);
-            }
-            Screen::Publishing { package_idx, version, .. } => {
+            Screen::Publishing { package_idx, version } => {
                 let unit = &self.release_units[*package_idx];
                 ui::render_publishing(frame, self, unit, version);
             }

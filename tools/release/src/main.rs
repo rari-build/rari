@@ -1,7 +1,6 @@
 mod app;
-mod files;
+mod changelog;
 mod git;
-mod npm;
 mod package;
 mod ui;
 
@@ -66,26 +65,6 @@ async fn main() -> Result<()> {
         use colored::Colorize;
         println!("{}", "rari Release Script".cyan().bold());
         println!();
-        print!("{} Checking npm login status... ", "→".cyan());
-        io::stdout().flush()?;
-
-        match npm::check_npm_login().await {
-            Ok(_) => {
-                println!("{}", "✓".green());
-                println!();
-            }
-            Err(e) => {
-                println!("{}", "✗".red());
-                println!();
-                eprintln!("{} {}", "Error:".red().bold(), e);
-                eprintln!();
-                eprintln!(
-                    "{}",
-                    "Please run 'npm login' before proceeding with the release.".yellow()
-                );
-                std::process::exit(1);
-            }
-        }
     }
 
     enable_raw_mode()?;
@@ -142,29 +121,20 @@ async fn run_non_interactive(
     }
     println!();
 
-    if !dry_run {
-        println!("{} Checking npm login status...", "→".cyan());
-        crate::npm::check_npm_login().await?;
-        println!("{} npm login verified", "✓".green());
-        println!();
-    }
-
     let binary_packages = vec![
-        Package::load("rari-darwin-arm64", "packages/rari-darwin-arm64", false).await?,
-        Package::load("rari-darwin-x64", "packages/rari-darwin-x64", false).await?,
-        Package::load("rari-linux-arm64", "packages/rari-linux-arm64", false).await?,
-        Package::load("rari-linux-x64", "packages/rari-linux-x64", false).await?,
-        Package::load("rari-win32-arm64", "packages/rari-win32-arm64", false).await?,
-        Package::load("rari-win32-x64", "packages/rari-win32-x64", false).await?,
+        Package::load("rari-darwin-arm64", "packages/rari-darwin-arm64").await?,
+        Package::load("rari-darwin-x64", "packages/rari-darwin-x64").await?,
+        Package::load("rari-linux-arm64", "packages/rari-linux-arm64").await?,
+        Package::load("rari-linux-x64", "packages/rari-linux-x64").await?,
+        Package::load("rari-win32-arm64", "packages/rari-win32-arm64").await?,
+        Package::load("rari-win32-x64", "packages/rari-win32-x64").await?,
     ];
 
     let binary_group = PackageGroup::new("rari-binaries".to_string(), binary_packages).await?;
 
     let mut release_units = vec![
-        ReleaseUnit::Single(Package::load("rari", "packages/rari", true).await?),
-        ReleaseUnit::Single(
-            Package::load("create-rari-app", "packages/create-rari-app", true).await?,
-        ),
+        ReleaseUnit::Single(Package::load("rari", "packages/rari").await?),
+        ReleaseUnit::Single(Package::load("create-rari-app", "packages/create-rari-app").await?),
         ReleaseUnit::Group(binary_group),
     ];
 
@@ -235,18 +205,6 @@ async fn run_non_interactive(
         println!();
 
         if dry_run {
-            println!("  {} Would build package...", "[DRY RUN]".yellow());
-        } else if unit.needs_build() {
-            println!("  {} Building package...", "→".cyan());
-            for pkg in &packages {
-                if pkg.needs_build {
-                    crate::npm::build_package(&pkg.path).await?;
-                }
-            }
-            println!("  {} Built package", "✓".green());
-        }
-
-        if dry_run {
             println!("  {} Would update version to {}...", "[DRY RUN]".yellow(), new_version);
         } else {
             println!("  {} Updating version...", "→".cyan());
@@ -268,7 +226,7 @@ async fn run_non_interactive(
             println!("  {} Generating changelog...", "→".cyan());
             let tag = format!("{}@{}", unit_name, new_version);
             let package_path = unit.paths()[0];
-            crate::npm::generate_changelog(&tag, unit_name, package_path).await?;
+            crate::changelog::generate(&tag, unit_name, package_path).await?;
             println!("  {} Generated changelog", "✓".green());
         } else {
             println!("  {} Skipping changelog generation", "ℹ".blue());
@@ -318,65 +276,26 @@ async fn run_non_interactive(
         }
 
         for pkg in &packages {
-            let needs_generated_files = matches!(pkg.name.as_str(), "rari" | "create-rari-app");
-
-            if needs_generated_files {
-                if dry_run {
-                    println!(
-                        "  {} Would generate README and LICENSE for {}...",
-                        "[DRY RUN]".yellow(),
-                        pkg.name
-                    );
-                } else {
-                    println!("  {} Generating README and LICENSE for {}...", "→".cyan(), pkg.name);
-                    crate::files::generate_package_files(&pkg.name, &pkg.path).await?;
-                    println!("  {} Generated README and LICENSE", "✓".green());
-                }
-            }
-
             let is_prerelease =
                 semver::Version::parse(&new_version).map(|v| !v.pre.is_empty()).unwrap_or(false);
             let npm_tag = if is_prerelease { "next" } else { "latest" };
 
             if dry_run {
                 println!(
-                    "  {} Would publish {}@{} with tag '{}'",
+                    "  {} Would publish {}@{} with tag '{}' via GitHub Actions after push",
                     "[DRY RUN]".yellow(),
                     pkg.name,
                     new_version,
                     npm_tag
                 );
             } else {
-                println!("  {} Publishing {} to npm...", "→".cyan(), pkg.name);
-                let otp =
-                    std::env::var("NPM_OTP").ok().or_else(|| std::env::var("PNPM_CONFIG_OTP").ok());
-                let publish_result =
-                    crate::npm::publish_package(&pkg.path, is_prerelease, otp.as_deref()).await;
-
-                if publish_result.is_ok() {
-                    println!("  {} Published {}@{}", "✓".green(), pkg.name, new_version);
-                }
-
-                if needs_generated_files {
-                    println!("  {} Cleaning up generated files for {}...", "→".cyan(), pkg.name);
-                    let cleanup_result = crate::files::cleanup_package_files(&pkg.path).await;
-
-                    if let Err(e) = publish_result {
-                        if let Err(cleanup_err) = cleanup_result {
-                            println!("  {} Cleanup also failed: {}", "⚠".yellow(), cleanup_err);
-                        }
-                        return Err(e);
-                    }
-
-                    if let Err(cleanup_err) = cleanup_result {
-                        println!("  {} Cleanup failed: {}", "⚠".yellow(), cleanup_err);
-                        return Err(cleanup_err);
-                    }
-
-                    println!("  {} Cleaned up generated files", "✓".green());
-                } else {
-                    publish_result?;
-                }
+                println!(
+                    "  {} {}@{} will be published via GitHub Actions (tag: '{}')",
+                    "ℹ".blue(),
+                    pkg.name,
+                    new_version,
+                    npm_tag
+                );
             }
         }
 
