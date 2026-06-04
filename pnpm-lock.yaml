@@ -269,23 +269,23 @@ importers:
         version: 0.1.24(@opentelemetry/api@1.9.0)(@types/node@25.9.1)(@vitest/coverage-v8@4.1.8)(jiti@2.7.0)(typescript@5.9.3)(vite@8.0.16(@types/node@25.9.1)(jiti@2.7.0)(yaml@2.9.0))(yaml@2.9.0)
     optionalDependencies:
       rari-darwin-arm64:
-        specifier: 0.14.4
-        version: 0.14.4
+        specifier: 0.14.5
+        version: 0.14.5
       rari-darwin-x64:
-        specifier: 0.14.4
-        version: 0.14.4
+        specifier: 0.14.5
+        version: 0.14.5
       rari-linux-arm64:
-        specifier: 0.14.4
-        version: 0.14.4
+        specifier: 0.14.5
+        version: 0.14.5
       rari-linux-x64:
-        specifier: 0.14.4
-        version: 0.14.4
+        specifier: 0.14.5
+        version: 0.14.5
       rari-win32-arm64:
-        specifier: 0.14.4
-        version: 0.14.4
+        specifier: 0.14.5
+        version: 0.14.5
       rari-win32-x64:
-        specifier: 0.14.4
-        version: 0.14.4
+        specifier: 0.14.5
+        version: 0.14.5
 
   packages/rari-darwin-arm64: {}
 
@@ -3562,8 +3562,22 @@ packages:
     os: [darwin]
     hasBin: true
 
+  rari-darwin-arm64@0.14.5:
+    resolution: {integrity: sha512-ucLmwkTFqVXvypwy8K9UywGw0ijcvj4R7kH3tY3IBIhqhaZQPhnGQjJv67uPp5j7vHuUI0zxgUKCODTcRVuy+g==}
+    engines: {node: '>=22.12.0'}
+    cpu: [arm64]
+    os: [darwin]
+    hasBin: true
+
   rari-darwin-x64@0.14.4:
     resolution: {integrity: sha512-r6zjzcCFBDvzrhXHlAe4EJiB6l+M0/bi1qIlwbmUj5BiJYjWaAjYKAL971rtwgZAwqqaxHezWD6jADa2SYZjvA==}
+    engines: {node: '>=22.12.0'}
+    cpu: [x64]
+    os: [darwin]
+    hasBin: true
+
+  rari-darwin-x64@0.14.5:
+    resolution: {integrity: sha512-Ijx5D2STK/gDiuKUkvH+9KHBw6bGToedV//ogRmCU+iubA0dH4mR9uRdCm3qaw6vUwQUBysfSq7myujdNHCt9w==}
     engines: {node: '>=22.12.0'}
     cpu: [x64]
     os: [darwin]
@@ -3576,8 +3590,22 @@ packages:
     os: [linux]
     hasBin: true
 
+  rari-linux-arm64@0.14.5:
+    resolution: {integrity: sha512-2/FCYmTK+qaX2pjC4rB8/VRnZX3Go1s5l9lzTbeH5LeV4hq8OGBTCcLADqmV9PUC0mrPIi79lUsoAZgpwDWmww==}
+    engines: {node: '>=22.12.0'}
+    cpu: [arm64]
+    os: [linux]
+    hasBin: true
+
   rari-linux-x64@0.14.4:
     resolution: {integrity: sha512-Vk7jWBoHWnsvUnJ/FaCMJwz81+nDsKVYodEH31UhCih+8+w0jWRvoW2dJC4V/srWRGmHfUUg2LNFUEeZipO8yg==}
+    engines: {node: '>=22.12.0'}
+    cpu: [x64]
+    os: [linux]
+    hasBin: true
+
+  rari-linux-x64@0.14.5:
+    resolution: {integrity: sha512-j1ZybcMZzpPKrr1LSezERb3feWnh3FEq3aTrfdwG9Pdy3oJTq9iON8wPgVYpGCUyXW4hEzwT3d4aET3ayeW5ZQ==}
     engines: {node: '>=22.12.0'}
     cpu: [x64]
     os: [linux]
@@ -3590,8 +3618,22 @@ packages:
     os: [win32]
     hasBin: true
 
+  rari-win32-arm64@0.14.5:
+    resolution: {integrity: sha512-NkiTUVa23kifFGyTU/bXZp4aimMGJ0MWq0mkUBBda68kGfDmvXrZ/Kx1DO/PO93CV2ONw7oL8bjaKyEj0Hbtuw==}
+    engines: {node: '>=22.12.0'}
+    cpu: [arm64]
+    os: [win32]
+    hasBin: true
+
   rari-win32-x64@0.14.4:
     resolution: {integrity: sha512-tSRaeQtjbalMHL9IypVLnexRZEk7zbw5JqRobLRNJm419/zc4AL3Vcvv3neWBMklX9/npnCKOu8gP0pfbOKcRQ==}
+    engines: {node: '>=22.12.0'}
+    cpu: [x64]
+    os: [win32]
+    hasBin: true
+
+  rari-win32-x64@0.14.5:
+    resolution: {integrity: sha512-imKJifa2InbVmKxpT3L9JvmqgK/zA4z6YL430x5yHIK7HaRXeeACV5uP1OabeAGj7kibUzaqVLCTcJV0tatJwg==}
     engines: {node: '>=22.12.0'}
     cpu: [x64]
     os: [win32]
@@ -7513,19 +7555,37 @@ snapshots:
   rari-darwin-arm64@0.14.4:
     optional: true
 
+  rari-darwin-arm64@0.14.5:
+    optional: true
+
   rari-darwin-x64@0.14.4:
+    optional: true
+
+  rari-darwin-x64@0.14.5:
     optional: true
 
   rari-linux-arm64@0.14.4:
     optional: true
 
+  rari-linux-arm64@0.14.5:
+    optional: true
+
   rari-linux-x64@0.14.4:
+    optional: true
+
+  rari-linux-x64@0.14.5:
     optional: true
 
   rari-win32-arm64@0.14.4:
     optional: true
 
+  rari-win32-arm64@0.14.5:
+    optional: true
+
   rari-win32-x64@0.14.4:
+    optional: true
+
+  rari-win32-x64@0.14.5:
     optional: true
 
   rari@0.14.4(react-dom@19.2.7(react@19.2.7))(react@19.2.7):
