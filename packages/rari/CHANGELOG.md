@@ -1,8 +1,17 @@
+## [rari@0.14.6] - 2026-06-04
+
+### ⚡ Performance
+
+- *(server,router)* Parallelize cache warmup and optimize route resolution
 ## [rari@0.14.4] - 2026-06-03
 
 ### 🚀 Features
 
 - Add CSS module support for server-rendered pages
+
+### 💼 Other
+
+- Rari@0.14.4
 
 ### 🚜 Refactor
 
