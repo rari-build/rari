@@ -372,9 +372,7 @@ jobs:
           npm_config_trust_lockfile: 'true'
 
       - name: Build package
-        run: |
-          cd "packages/${{ steps.pkg.outputs.name }}"
-          pnpm build
+        run: pnpm --filter "${{ steps.pkg.outputs.name }}..." build
 
       - name: Generate README and LICENSE
         run: |
