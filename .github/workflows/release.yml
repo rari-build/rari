@@ -590,10 +590,14 @@ jobs:
             process.stdout.write(v.includes('-') ? 'true' : 'false');
           ")
 
+          # pnpm pack resolves catalog: and workspace: protocols
+          TARBALL=$(pnpm pack | tail -1)
+          echo "Packed: ${TARBALL}"
+
           if [[ "${IS_PRERELEASE}" == "true" ]]; then
             echo "Publishing with tag 'next'..."
-            npm publish --access public --tag next
+            npm publish "${TARBALL}" --access public --tag next
           else
             echo "Publishing with tag 'latest'..."
-            npm publish --access public
+            npm publish "${TARBALL}" --access public
           fi
