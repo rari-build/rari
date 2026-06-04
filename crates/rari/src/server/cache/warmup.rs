@@ -2,10 +2,14 @@ use crate::rsc::rendering::layout::{LayoutRenderContext, LayoutRenderer};
 use crate::server::ServerState;
 use crate::server::cache::response_cache;
 use crate::server::routing::types::ParamValue;
+use futures::stream::{self, StreamExt};
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 use tracing::{error, info};
+
+const WARMUP_CONCURRENCY: usize = 10;
 
 pub async fn warm_cache(state: &ServerState) {
     let app_router = match &state.app_router {
@@ -26,25 +30,33 @@ pub async fn warm_cache(state: &ServerState) {
     info!("[rari] Cache warmup: Pre-rendering {} routes...", paths.len());
     let start = Instant::now();
 
-    let mut success_count = 0;
-    let mut error_count = 0;
+    let success_count = Arc::new(AtomicUsize::new(0));
+    let error_count = Arc::new(AtomicUsize::new(0));
 
-    for path in &paths {
-        match warm_route(state, app_router, path).await {
-            Ok(()) => success_count += 1,
-            Err(e) => {
-                error!("[rari] Cache warmup: Failed to warm '{}': {}", path, e);
-                error_count += 1;
+    stream::iter(paths.iter())
+        .for_each_concurrent(WARMUP_CONCURRENCY, |path| {
+            let success_count = Arc::clone(&success_count);
+            let error_count = Arc::clone(&error_count);
+            async move {
+                match warm_route(state, app_router, path).await {
+                    Ok(()) => {
+                        success_count.fetch_add(1, Ordering::Relaxed);
+                    }
+                    Err(e) => {
+                        error!("[rari] Cache warmup: Failed to warm '{}': {}", path, e);
+                        error_count.fetch_add(1, Ordering::Relaxed);
+                    }
+                }
             }
-        }
-    }
+        })
+        .await;
 
     let elapsed = start.elapsed();
     info!(
         "[rari] Cache warmup: Completed in {:.1}ms ({} succeeded, {} failed)",
         elapsed.as_secs_f64() * 1000.0,
-        success_count,
-        error_count,
+        success_count.load(Ordering::Relaxed),
+        error_count.load(Ordering::Relaxed),
     );
 }
 

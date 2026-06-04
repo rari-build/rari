@@ -3,6 +3,7 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { BACKSLASH_REGEX, QUOTE_REGEX, TSX_EXT_REGEX } from '../shared/regex-constants'
+import { generateAppRouteManifest } from './routes'
 
 const METADATA_EXPORT_REGEX = /export\s+const\s+metadata\s*(?::\s*\w+\s*)?=\s*(\{[\s\S]*?\n\})/
 const TITLE_REGEX = /title\s*:\s*['"]([^'"]+)['"]/
@@ -236,8 +237,6 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
       if (!forceRegenerate && routeStructureHash === currentHash && cachedManifestContent)
         return cachedManifestContent
 
-      const { generateAppRouteManifest } = await import('./routes')
-
       const manifest = await generateAppRouteManifest(appDir, {
         extensions: opts.extensions,
       })
@@ -440,12 +439,14 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
           if (!route.isDynamic)
             continue
 
-          const sanitizedFilePath = route.filePath
-            .replace(/\[\.\.\.([^\]]+)\]/g, '____$1_')
-            .replace(/\[([^\]]+)\]/g, '_$1_')
-            .replace(/\.tsx?$/, '.js')
+          const componentId = route.componentId
+          if (!componentId)
+            continue
 
-          const compiledPath = path.resolve(root, 'dist', 'server', 'app', sanitizedFilePath)
+          const relativePath = componentId.startsWith('app/')
+            ? componentId.slice(4)
+            : componentId
+          const compiledPath = path.resolve(serverDir, 'app', `${relativePath}.js`)
 
           try {
             const module = await import(/* @vite-ignore */ compiledPath)

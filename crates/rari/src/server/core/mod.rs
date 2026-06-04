@@ -186,7 +186,10 @@ impl Server {
 
         if config.is_production() {
             CacheLoader::load_page_cache_configs(&state).await?;
-            crate::server::cache::warmup::warm_cache(&state).await;
+            let warmup_state = state.clone();
+            tokio::spawn(async move {
+                crate::server::cache::warmup::warm_cache(&warmup_state).await;
+            });
         }
 
         let mut config = config;

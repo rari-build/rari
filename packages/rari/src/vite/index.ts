@@ -23,7 +23,7 @@ import { hasDefaultExport, hasTopLevelUseClientDirective, hasTopLevelUseServerDi
 import { resolveIndexFile, resolveWithExtensions } from './file-resolver'
 import { HMRCoordinator } from './hmr-coordinator'
 import { scanForImageUsage } from './image-scanner'
-import { createServerBuildPlugin, RARI_CSS_MODULES_PATTERN } from './server-build'
+import { createServerBuildPlugin, RARI_CSS_MODULES_PATTERN, scanDirectory, ServerComponentBuilder } from './server-build'
 
 const IMPORT_TYPE_SPECIFIER_REGEX = /import\s+type\s+(\{[^}]+\})\s+from\s+["']\.\.?\/([^"']+)["'];?/g
 const IMPORT_TYPE_NAMESPACE_REGEX = /import\s+type\s+(\*\s+as\s+\w+)\s+from\s+["']\.\.?\/([^"']+)["'];?/g
@@ -1157,10 +1157,6 @@ const ${componentName} = registerClientReference(
 
       const discoverAndRegisterComponents = async () => {
         try {
-          const { ServerComponentBuilder, scanDirectory } = await import(
-            './server-build',
-          )
-
           const builder = new ServerComponentBuilder(projectRoot, {
             outDir: 'dist',
             rscDir: 'server',
@@ -1414,7 +1410,6 @@ const ${componentName} = registerClientReference(
           if (!isServerComponent(filePath))
             return
 
-          const { ServerComponentBuilder } = await import('./server-build')
           const builder = new ServerComponentBuilder(projectRoot, {
             outDir: 'dist',
             rscDir: 'server',
