@@ -14,6 +14,7 @@ export default defineConfig({
       'mdx': 'src/mdx.ts',
       'headers': 'src/headers.ts',
       'runtime/actions': 'src/runtime/actions.ts',
+      'runtime/cache-wrapper': 'src/runtime/cache-wrapper.ts',
       'runtime/entry-client': 'src/runtime/entry-client.ts',
       'runtime/react-server-dom-shim': 'src/runtime/react-server-dom-shim.ts',
       'runtime/rsc-client-runtime': 'src/runtime/rsc-client-runtime.ts',
@@ -41,6 +42,9 @@ export default defineConfig({
         'virtual:rsc-integration.ts',
         'rari/client',
         'rari/router',
+      ],
+      alwaysBundle: [
+        'lru-cache',
       ],
     },
   },

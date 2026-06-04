@@ -24,8 +24,7 @@ import { resolveIndexFile, resolveWithExtensions } from './file-resolver'
 import { HMRCoordinator } from './hmr-coordinator'
 import { scanForImageUsage } from './image-scanner'
 import { createServerBuildPlugin, RARI_CSS_MODULES_PATTERN, scanDirectory, ServerComponentBuilder } from './server-build'
-
-const DIST_NOT_BUILT_ERROR = '[rari] Runtime dist not built. Run `pnpm build` in the rari package first.'
+import { transformUseCacheModule } from './use-cache-transform'
 
 const IMPORT_TYPE_SPECIFIER_REGEX = /import\s+type\s+(\{[^}]+\})\s+from\s+["']\.\.?\/([^"']+)["'];?/g
 const IMPORT_TYPE_NAMESPACE_REGEX = /import\s+type\s+(\*\s+as\s+\w+)\s+from\s+["']\.\.?\/([^"']+)["'];?/g
@@ -44,7 +43,6 @@ const EXPORT_DECLARATION_REGEX = /export\s+(?:async\s+)?(?:const|let|var|functio
 const USE_CLIENT_DIRECTIVE_REGEX = /^['"]use client['"];?\s*$/gm
 const IMPORT_REGEX = /import\s+["']([^"']+)["']/g
 const IMPORT_LINE_REGEX = /^\s*import\s+(?:(\w+)(?:\s*,\s*\{\s*(?:(\w+(?:\s*,\s*\w+)*)\s*)?\})?|\{\s*(\w+(?:\s*,\s*\w+)*)\s*\})\s+from\s+['"]([./@][^'"]+)['"].*$/
-
 const REACT_IMPORT_REGEX = /import\s+\{[^}]*\}\s+from\s+['"]react['"]/
 const REACT_IMPORT_WITH_DEFAULT_REGEX = /import\s+[^,\s]+\s*,\s*\{[^}]*\}\s+from\s+['"]react['"]/
 const REACT_IMPORT_MATCH_REGEX = /import React(,\s*\{([^}]*)\})?\s+from\s+['"]react['"];?/
@@ -59,7 +57,7 @@ interface RouterPluginOptions {
   extensions?: string[]
 }
 
-interface RariOptions {
+export interface RariOptions {
   projectRoot?: string
   serverBuild?: ServerBuildOptions
   serverHandler?: boolean
@@ -95,6 +93,9 @@ interface RariOptions {
   }
   cacheControl?: {
     routes: Record<string, string>
+  }
+  experimental?: {
+    useCache?: boolean
   }
 }
 
@@ -211,10 +212,6 @@ async function loadEntryClient(imports: string, registrations: string): Promise<
     .replace('/*! @preserve CLIENT_COMPONENT_REGISTRATIONS_PLACEHOLDER */', registrations)
 }
 
-async function loadReactServerDomShim(): Promise<string> {
-  return loadRuntimeFile('react-server-dom-shim.mjs')
-}
-
 async function writeImageConfig(projectRoot: string, options: RariOptions): Promise<void> {
   const srcDir = path.join(projectRoot, 'src')
   const imageManifest = await scanForImageUsage(srcDir)
@@ -304,9 +301,8 @@ export function rari(options: RariOptions = {}): Plugin[] {
 
     try {
       const code = fs.readFileSync(id, 'utf-8')
-      const directives = getDirectives(code)
-      result.hasUseServer = directives.hasUseServer
-      result.hasUseClient = directives.hasUseClient
+      result.hasUseServer = hasTopLevelUseServerDirective(code)
+      result.hasUseClient = hasTopLevelUseClientDirective(code)
       directiveCache.set(id, result)
     }
     catch {
@@ -316,47 +312,32 @@ export function rari(options: RariOptions = {}): Plugin[] {
     return result
   }
 
-  let htmlEntryImports: Set<string> | null = null
-  let lastIndexHtmlMtime: number | null = null
-
-  function getHtmlEntryImports(): Set<string> {
-    const projectRoot = options.projectRoot || process.cwd()
-    const indexHtmlPath = path.join(projectRoot, 'index.html')
-
-    try {
-      const mtime = fs.statSync(indexHtmlPath).mtimeMs
-      if (htmlEntryImports !== null && mtime === lastIndexHtmlMtime)
-        return htmlEntryImports
-      lastIndexHtmlMtime = mtime
-    }
-    catch {
-      if (htmlEntryImports === null)
-        htmlEntryImports = new Set()
-
-      return htmlEntryImports
-    }
-
-    htmlEntryImports = new Set()
-    try {
-      const htmlContent = fs.readFileSync(indexHtmlPath, 'utf-8')
-      for (const match of htmlContent.matchAll(HTML_IMPORT_REGEX)) {
-        const importPath = match[1]
-        if (importPath.startsWith('/src/')) {
-          htmlEntryImports.add(path.join(projectRoot, importPath.slice(1)))
-        }
-      }
-    }
-    catch {}
-
-    return htmlEntryImports
-  }
-
   function isServerComponent(filePath: string): boolean {
     if (filePath.includes('node_modules') || isRariInternalFile(filePath))
       return false
 
-    if (getHtmlEntryImports().has(filePath))
-      return false
+    const projectRoot = options.projectRoot || process.cwd()
+    const indexHtmlPath = path.join(projectRoot, 'index.html')
+
+    if (fs.existsSync(indexHtmlPath)) {
+      try {
+        const htmlContent = fs.readFileSync(indexHtmlPath, 'utf-8')
+
+        for (const match of htmlContent.matchAll(HTML_IMPORT_REGEX)) {
+          const importPath = match[1]
+          if (importPath.startsWith('/src/')) {
+            const absolutePath = path.join(projectRoot, importPath.slice(1))
+            if (absolutePath === filePath)
+              return false
+          }
+        }
+      }
+      catch (err) {
+        if ((err as any)?.code !== 'ENOENT') {
+          console.warn('[rari] Unexpected error reading index.html:', err)
+        }
+      }
+    }
 
     let pathForFsOperations
     try {
@@ -367,13 +348,17 @@ export function rari(options: RariOptions = {}): Plugin[] {
     }
 
     try {
-      const code = fs.readFileSync(pathForFsOperations, 'utf-8')
-      const directives = getDirectives(code)
-
-      if (directives.hasUseServer)
+      if (!fs.existsSync(pathForFsOperations))
         return false
 
-      return !directives.hasUseClient
+      const code = fs.readFileSync(pathForFsOperations, 'utf-8')
+      const hasClientDirective = hasTopLevelUseClientDirective(code)
+      const hasServerDirective = hasTopLevelUseServerDirective(code)
+
+      if (hasServerDirective)
+        return false
+
+      return !hasClientDirective
     }
     catch {
       return false
@@ -423,10 +408,11 @@ export function rari(options: RariOptions = {}): Plugin[] {
     if (exportedNames.length === 0)
       return code
 
-    const idJson = JSON.stringify(id)
+    const projectRoot = options.projectRoot || process.cwd()
+    const moduleId = getComponentId(id, projectRoot)
     let newCode = code
     newCode
-      += '\n\nimport {registerServerReference} from "react-server-dom-rari/server";\n'
+      += '\n\nimport {registerServerReference} from "rari/runtime/react-server-dom-shim";\n'
 
     for (const name of exportedNames) {
       if (name === 'default') {
@@ -435,7 +421,7 @@ export function rari(options: RariOptions = {}): Plugin[] {
         if (functionDeclMatch) {
           const functionName = functionDeclMatch[1]
           newCode += `\n// Register server reference for default export\n`
-          newCode += `registerServerReference(${functionName}, ${idJson}, ${JSON.stringify(name)});\n`
+          newCode += `registerServerReference(${functionName}, ${JSON.stringify(moduleId)}, ${JSON.stringify(name)});\n`
         }
         else {
           const match = code.match(EXPORT_DEFAULT_VALUE_REGEX)
@@ -448,7 +434,7 @@ export function rari(options: RariOptions = {}): Plugin[] {
             )
             newCode += `\n// Register server reference for default export\n`
             newCode += `if (typeof ${tempVarName} === "function") {\n`
-            newCode += `  registerServerReference(${tempVarName}, ${idJson}, ${JSON.stringify(name)});\n`
+            newCode += `  registerServerReference(${tempVarName}, ${JSON.stringify(moduleId)}, ${JSON.stringify(name)});\n`
             newCode += `}\n`
           }
         }
@@ -456,7 +442,7 @@ export function rari(options: RariOptions = {}): Plugin[] {
       else {
         newCode += `\n// Register server reference for ${name}\n`
         newCode += `if (typeof ${name} === "function") {\n`
-        newCode += `  registerServerReference(${name}, ${idJson}, ${JSON.stringify(name)});\n`
+        newCode += `  registerServerReference(${name}, ${JSON.stringify(moduleId)}, ${JSON.stringify(name)});\n`
         newCode += `}\n`
       }
     }
@@ -482,15 +468,14 @@ if (import.meta.hot) {
         return ''
 
       const moduleId = getComponentId(id, projectRoot)
-      const moduleIdJson = JSON.stringify(moduleId)
 
       let newCode = 'import { createServerReference } from "rari/runtime/actions";\n'
 
       for (const name of exportedNames) {
         if (name === 'default')
-          newCode += `export default createServerReference("default", ${moduleIdJson}, "default");\n`
+          newCode += `export default createServerReference("default", ${JSON.stringify(moduleId)}, "default");\n`
         else
-          newCode += `export const ${name} = createServerReference("${name}", ${moduleIdJson}, "${name}");\n`
+          newCode += `export const ${name} = createServerReference("${name}", ${JSON.stringify(moduleId)}, "${name}");\n`
       }
 
       return newCode
@@ -502,16 +487,15 @@ if (import.meta.hot) {
         return ''
 
       const componentId = getComponentId(id, projectRoot)
-      const idJson = JSON.stringify(id)
 
       let newCode
         = 'import { createServerComponentWrapper } from "virtual:rsc-integration.ts";\n'
 
       for (const name of exportedNames) {
         if (name === 'default')
-          newCode += `export default createServerComponentWrapper("${componentId}", ${idJson});\n`
+          newCode += `export default createServerComponentWrapper("${componentId}", ${JSON.stringify(id)});\n`
         else
-          newCode += `export const ${name} = createServerComponentWrapper("${componentId}_${name}", ${idJson});\n`
+          newCode += `export const ${name} = createServerComponentWrapper("${componentId}_${name}", ${JSON.stringify(id)});\n`
       }
 
       return newCode
@@ -524,9 +508,8 @@ if (import.meta.hot) {
     if (exportedNames.length === 0)
       return ''
 
-    const idJson = JSON.stringify(id)
     let newCode
-      = 'import {registerClientReference} from "react-server-dom-rari/server";\n'
+      = 'import {registerClientReference} from "rari/runtime/react-server-dom-shim";\n'
 
     for (const name of exportedNames) {
       if (name === 'default') {
@@ -542,7 +525,7 @@ if (import.meta.hot) {
         newCode += `throw new Error(${JSON.stringify(errorMsg)});`
       }
       newCode += '},'
-      newCode += `${idJson},`
+      newCode += `${JSON.stringify(id)},`
       newCode += `${JSON.stringify(name)});\n`
     }
 
@@ -993,6 +976,15 @@ if (import.meta.hot) {
         return transformClientModuleForClient(code, id)
       }
 
+      let wasUseCacheTransformed = false
+      if (options.experimental?.useCache) {
+        const useCacheResult = transformUseCacheModule(code, id)
+        if (useCacheResult) {
+          code = useCacheResult
+          wasUseCacheTransformed = true
+        }
+      }
+
       if (componentTypeCache.get(id) === 'client' || clientComponents.has(id))
         return transformClientModuleForClient(code, id)
 
@@ -1062,9 +1054,6 @@ ${clientTransformedCode}`
       let needsReactImport = false
       let needsWrapperImport = false
       const serverComponentReplacements: string[] = []
-      const importingFileIsClient = hasTopLevelUseClientDirective(code)
-        || componentTypeCache.get(id) === 'client'
-        || id.includes('entry-client')
 
       for (const line of lines) {
         const importMatch = line.match(IMPORT_LINE_REGEX)
@@ -1075,6 +1064,10 @@ ${clientTransformedCode}`
         const importPath = importMatch[4]
         const componentName = getComponentName(importPath)
         const resolvedImportPath = resolveImportToFilePath(importPath, id)
+
+        const importingFileIsClient = hasTopLevelUseClientDirective(code)
+          || componentTypeCache.get(id) === 'client'
+          || id.includes('entry-client')
 
         const isClientComponent
           = componentTypeCache.get(resolvedImportPath) === 'client'
@@ -1096,7 +1089,7 @@ ${clientTransformedCode}`
             const componentName = importedDefault || 'default'
 
             const clientRefReplacement = `
-import { registerClientReference } from "react-server-dom-rari/server";
+import { registerClientReference } from "rari/runtime/react-server-dom-shim";
 const ${componentName} = registerClientReference(
   function() {
     throw new Error("Attempted to call ${componentName} from the server but it's on the client. It can only be rendered as a Component or passed to props of a Client Component.");
@@ -1190,6 +1183,10 @@ const ${componentName} = registerClientReference(
         return modifiedCode
       }
 
+      if (wasUseCacheTransformed) {
+        return code
+      }
+
       return null
     },
 
@@ -1210,6 +1207,7 @@ const ${componentName} = registerClientReference(
             alias: resolvedAlias,
             csp: options.csp,
             cacheControl: options.cacheControl,
+            experimental: options.experimental,
           })
 
           serverComponentBuilder = builder
@@ -1463,6 +1461,7 @@ const ${componentName} = registerClientReference(
             alias: resolvedAlias,
             csp: options.csp,
             cacheControl: options.cacheControl,
+            experimental: options.experimental,
           })
 
           builder.addServerComponent(filePath)
@@ -1714,10 +1713,10 @@ const ${componentName} = registerClientReference(
         return 'virtual:app-router-provider.tsx'
       if (id === 'virtual:error-boundary-wrapper' || id === 'virtual:error-boundary-wrapper.tsx')
         return 'virtual:error-boundary-wrapper.tsx'
+      if (id === './DefaultLoadingIndicator' || id === './DefaultLoadingIndicator.tsx')
+        return 'virtual:default-loading-indicator.tsx'
       if (id === './LoadingErrorBoundary' || id === './LoadingErrorBoundary.tsx')
         return 'virtual:loading-error-boundary.tsx'
-      if (id === 'react-server-dom-rari/server')
-        return id
 
       if (importer && importer.startsWith('virtual:') && id.startsWith('../')) {
         const currentFileUrl = import.meta.url
@@ -1908,15 +1907,20 @@ for (const [path, config] of Object.entries(lazyComponentRegistry)) {
         return await loadEntryClient(allImports, allRegistrations)
       }
 
-      if (id === 'react-server-dom-rari/server')
-        return await loadReactServerDomShim()
-
       if (id === 'virtual:app-router-provider.tsx') {
         const runtimeFile = resolveRuntimeDistFile('AppRouterProvider.mjs')
         if (runtimeFile)
           return fs.readFileSync(runtimeFile, 'utf-8')
 
-        throw new Error(DIST_NOT_BUILT_ERROR)
+        return 'export function AppRouterProvider({ children }) { return children; }'
+      }
+
+      if (id === 'virtual:default-loading-indicator.tsx') {
+        const runtimeFile = resolveRuntimeDistFile('DefaultLoadingIndicator.mjs')
+        if (runtimeFile)
+          return fs.readFileSync(runtimeFile, 'utf-8')
+
+        return 'export function DefaultLoadingIndicator() { return null; }'
       }
 
       if (id === 'virtual:loading-error-boundary.tsx') {
@@ -1924,7 +1928,7 @@ for (const [path, config] of Object.entries(lazyComponentRegistry)) {
         if (runtimeFile)
           return fs.readFileSync(runtimeFile, 'utf-8')
 
-        throw new Error(DIST_NOT_BUILT_ERROR)
+        return 'import * as React from \'react\';\nexport class LoadingErrorBoundary extends React.Component { render() { return this.props.children; } }'
       }
 
       if (id === 'virtual:error-boundary-wrapper.tsx') {
@@ -1947,7 +1951,79 @@ import * as React from 'react';\n${content}`
           return content
         }
 
-        throw new Error(DIST_NOT_BUILT_ERROR)
+        return `'use client';
+import * as React from 'react';
+export class ErrorBoundaryWrapper extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null, ErrorComponent: null };
+    this._isMounted = false;
+  }
+
+  componentDidMount() {
+    this._isMounted = true;
+  }
+
+  componentWillUnmount() {
+    this._isMounted = false;
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('[rari] Error boundary caught error:', error, errorInfo);
+
+    const errorComponentId = this.props.errorComponentId;
+    if (errorComponentId && typeof window !== 'undefined') {
+      const globalThis = window;
+      const componentInfo = globalThis['~clientComponents']?.[errorComponentId];
+
+      if (componentInfo) {
+        if (componentInfo.component && typeof componentInfo.component === 'function') {
+          if (this._isMounted) {
+            this.setState({ ErrorComponent: componentInfo.component });
+          }
+        } else if (componentInfo.loader && !componentInfo.loading) {
+          componentInfo.loading = true;
+          componentInfo.loader()
+            .then((module) => {
+              const component = module.default || module;
+              componentInfo.component = component;
+              componentInfo.registered = true;
+              componentInfo.loading = false;
+              if (this._isMounted) {
+                this.setState({ ErrorComponent: component });
+              }
+            })
+            .catch((loadError) => {
+              componentInfo.loading = false;
+              console.error('[rari] Failed to load error component ' + errorComponentId + ':', loadError);
+            });
+        }
+      }
+    }
+  }
+
+  reset = () => {
+    this.setState({ hasError: false, error: null, ErrorComponent: null });
+  }
+
+  render() {
+    if (this.state.hasError && this.state.error) {
+      const ErrorComponent = this.state.ErrorComponent;
+      if (ErrorComponent) {
+        return React.createElement(ErrorComponent, { error: this.state.error, reset: this.reset });
+      }
+      return React.createElement('div', { style: { padding: '20px', background: '#fee', border: '2px solid #f00' } },
+        React.createElement('h2', null, 'Error'),
+        React.createElement('p', null, 'Something went wrong.')
+      );
+    }
+    return this.props.children;
+  }
+}`
       }
 
       if (id === 'virtual:rsc-integration.ts') {
@@ -2001,12 +2077,12 @@ import * as React from 'react';\n${content}`
       const componentType = hmrCoordinator?.detectComponentType(file) || 'unknown'
 
       const isAppRouterFile = file.includes('/app/') || file.includes('\\app\\')
-      const hasExtension = (fileName: string, baseName: string) =>
-        fileName.endsWith(`${baseName}.tsx`) || fileName.endsWith(`${baseName}.jsx`)
-        || fileName.endsWith(`${baseName}.ts`) || fileName.endsWith(`${baseName}.js`)
-
-      const SPECIAL_ROUTE_FILE_BASES = ['page', 'layout', 'template', 'loading', 'error', 'not-found'] as const
-      const isSpecialRouteFile = SPECIAL_ROUTE_FILE_BASES.some(base => hasExtension(file, base))
+      const isPageFile = file.endsWith('page.tsx') || file.endsWith('page.jsx')
+      const isLayoutFile = file.endsWith('layout.tsx') || file.endsWith('layout.jsx')
+      const isLoadingFile = file.endsWith('loading.tsx') || file.endsWith('loading.jsx')
+      const isErrorFile = file.endsWith('error.tsx') || file.endsWith('error.jsx')
+      const isNotFoundFile = file.endsWith('not-found.tsx') || file.endsWith('not-found.jsx')
+      const isSpecialRouteFile = isPageFile || isLayoutFile || isLoadingFile || isErrorFile || isNotFoundFile
 
       if (isAppRouterFile && isSpecialRouteFile)
         return undefined
@@ -2092,6 +2168,7 @@ import * as React from 'react';\n${content}`
     ...options.serverBuild,
     csp: options.csp,
     cacheControl: options.cacheControl,
+    experimental: options.experimental,
   })
 
   const plugins: Plugin[] = [mainPlugin, serverBuildPlugin]

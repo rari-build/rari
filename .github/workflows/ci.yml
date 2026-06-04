@@ -199,6 +199,14 @@ jobs:
         run: vcpkg install fontconfig:x64-windows
         shell: pwsh
 
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: lts/*
+
+      - name: Install @napi-rs/cli
+        run: npm install -g @napi-rs/cli
+
       - name: Cache Rust
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
@@ -212,7 +220,13 @@ jobs:
 
       - name: Build rari binary (Windows)
         if: runner.os == 'Windows'
-        run: cargo build --bin rari
+        run: |
+          cargo build --bin rari
+          # napi-rs 'use cache' transform addon — required at runtime by packages/rari
+          # (see packages/rari/src/vite/use-cache-transform.ts).
+          # `napi build` produces index.node; rename to use_cache_transform.node to match the JS-side lookup.
+          napi.cmd build --target x86_64-pc-windows-msvc -p use-cache-transform --output-dir target/x86_64-pc-windows-msvc/debug
+          mv target/x86_64-pc-windows-msvc/debug/index.node target/x86_64-pc-windows-msvc/debug/use_cache_transform.node
         env:
           AWS_LC_SYS_PREBUILT_NASM: 1
           PKG_CONFIG_PATH: C:\vcpkg\installed\x64-windows\lib\pkgconfig
@@ -220,14 +234,36 @@ jobs:
 
       - name: Build rari binary (Unix)
         if: runner.os != 'Windows'
-        run: cargo build --bin rari
+        run: |
+          cargo build --bin rari
+          # napi-rs 'use cache' transform addon — required at runtime by packages/rari
+          # (see packages/rari/src/vite/use-cache-transform.ts)
+          napi build --target x86_64-unknown-linux-gnu -p use-cache-transform --output-dir target/x86_64-unknown-linux-gnu/debug
+          mv target/x86_64-unknown-linux-gnu/debug/index.node target/x86_64-unknown-linux-gnu/debug/use_cache_transform.node
+
+      - name: Verify napi addon built
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            TRIPLE="x86_64-pc-windows-msvc"
+          else
+            TRIPLE="x86_64-unknown-linux-gnu"
+          fi
+          ADDON="target/${TRIPLE}/debug/use_cache_transform.node"
+          if [ ! -f "$ADDON" ]; then
+            echo "::error::Expected napi addon at $ADDON but it was not produced"
+            exit 1
+          fi
+          echo "napi addon present: $ADDON ($(du -h "$ADDON" | cut -f1))"
 
       - name: Upload binary (Linux)
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: rari-binary-linux
-          path: target/debug/rari
+          path: |
+            target/debug/rari
+            target/x86_64-unknown-linux-gnu/debug/use_cache_transform.node
           if-no-files-found: error
           retention-days: 1
 
@@ -236,7 +272,9 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: rari-binary-windows
-          path: target/debug/rari.exe
+          path: |
+            target/debug/rari.exe
+            target/x86_64-pc-windows-msvc/debug/use_cache_transform.node
           if-no-files-found: error
           retention-days: 1
 
@@ -392,9 +430,23 @@ jobs:
           name: rari-binary-windows
           path: packages/rari-win32-x64/bin
 
-      - name: Make binary executable (Linux)
+      - name: Make binaries executable (Linux)
         if: runner.os == 'Linux'
-        run: chmod +x packages/rari-linux-x64/bin/rari
+        run: |
+          chmod +x packages/rari-linux-x64/bin/rari
+          chmod +x packages/rari-linux-x64/bin/use_cache_transform.node
+
+      - name: Verify rari and napi addon present (e2e)
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            BIN_DIR="packages/rari-win32-x64/bin"
+          else
+            BIN_DIR="packages/rari-linux-x64/bin"
+          fi
+          ls -la "$BIN_DIR"
+          test -f "$BIN_DIR/rari" || test -f "$BIN_DIR/rari.exe" || { echo "::error::rari binary missing in $BIN_DIR"; exit 1; }
+          test -f "$BIN_DIR/use_cache_transform.node" || { echo "::error::use_cache_transform.node missing in $BIN_DIR"; exit 1; }
 
       - name: Set up cache (Linux)
         if: runner.os == 'Linux'
