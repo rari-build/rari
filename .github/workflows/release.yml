@@ -368,6 +368,8 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+        env:
+          npm_config_trust_lockfile: 'true'
 
       - name: Build package
         run: |
