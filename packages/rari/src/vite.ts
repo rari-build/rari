@@ -67,6 +67,7 @@ export type {
   PageProps,
   RouteSegment,
   RouteSegmentType,
+  TemplateEntry,
 } from './router/types'
 
 export type { Metadata } from './router/types'

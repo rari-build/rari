@@ -1387,7 +1387,10 @@ impl StreamingRenderer {
                                 self.convert_children(v, symbol_row_id, boundary_lazy_refs)?,
                             );
                         } else {
-                            new_props.insert(k.clone(), v.clone());
+                            new_props.insert(
+                                k.clone(),
+                                self.json_to_rsc_element(v, symbol_row_id, boundary_lazy_refs)?,
+                            );
                         }
                     }
 
@@ -1442,7 +1445,11 @@ impl StreamingRenderer {
                 return Ok(serde_json::Value::Null);
             }
 
-            if let (Some(element_type), Some(props)) = (obj.get("type"), obj.get("props")) {
+            let is_rsc_element = obj.get("~rsc_element").and_then(|v| v.as_bool()).unwrap_or(false);
+
+            if is_rsc_element
+                && let (Some(element_type), Some(props)) = (obj.get("type"), obj.get("props"))
+            {
                 let mut converted_props = serde_json::Map::new();
                 let is_suspense = matches!(
                     element_type.as_str(),
@@ -1457,7 +1464,10 @@ impl StreamingRenderer {
                                 self.convert_children(value, symbol_row_id, boundary_lazy_refs)?,
                             );
                         } else {
-                            converted_props.insert(key.clone(), value.clone());
+                            converted_props.insert(
+                                key.clone(),
+                                self.json_to_rsc_element(value, symbol_row_id, boundary_lazy_refs)?,
+                            );
                         }
                     }
                 }
@@ -1478,6 +1488,15 @@ impl StreamingRenderer {
                     serde_json::Value::Object(converted_props),
                 ]));
             }
+
+            let mut converted_obj = serde_json::Map::new();
+            for (key, value) in obj {
+                converted_obj.insert(
+                    key.clone(),
+                    self.json_to_rsc_element(value, symbol_row_id, boundary_lazy_refs)?,
+                );
+            }
+            return Ok(serde_json::Value::Object(converted_obj));
         }
 
         Ok(json.clone())
@@ -1491,6 +1510,10 @@ impl StreamingRenderer {
     ) -> Result<serde_json::Value, RariError> {
         match children {
             serde_json::Value::Array(arr) => {
+                if arr.first().and_then(|v| v.as_str()) == Some("$") {
+                    return self.json_to_rsc_element(children, symbol_row_id, boundary_lazy_refs);
+                }
+
                 let mut converted = Vec::new();
                 for child in arr {
                     let converted_child =
@@ -1554,5 +1577,128 @@ impl StreamingRenderer {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::disallowed_methods)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_json_to_rsc_element_converts_lazy_markers_inside_client_template_props() {
+        let runtime = Arc::new(JsExecutionRuntime::new(None));
+        let renderer = StreamingRenderer::new(runtime);
+        let mut lazy_refs = FxHashMap::default();
+        lazy_refs.insert("promise:1".to_string(), 7);
+
+        let input = serde_json::json!([
+            "$",
+            "$L4",
+            "/suspense-streaming",
+            {
+                "key": "/suspense-streaming",
+                "children": [
+                    "$",
+                    "react.suspense",
+                    null,
+                    {
+                        "~boundaryId": "boundary:1",
+                        "fallback": ["$", "div", null, { "children": "Loading..." }],
+                        "children": {
+                            "~rari_lazy": true,
+                            "~rari_promise_id": "promise:1"
+                        }
+                    }
+                ]
+            }
+        ]);
+
+        let converted = renderer.json_to_rsc_element(&input, Some(9), &lazy_refs).unwrap();
+
+        assert_eq!(
+            converted,
+            serde_json::json!([
+                "$",
+                "$L4",
+                "/suspense-streaming",
+                {
+                    "key": "/suspense-streaming",
+                    "children": [
+                        "$",
+                        "$9",
+                        null,
+                        {
+                            "~boundaryId": "boundary:1",
+                            "fallback": ["$", "div", null, { "children": "Loading..." }],
+                            "children": "$7"
+                        }
+                    ]
+                }
+            ])
+        );
+    }
+
+    #[test]
+    fn test_json_to_rsc_element_preserves_ordinary_objects_with_type_and_props() {
+        let runtime = Arc::new(JsExecutionRuntime::new(None));
+        let renderer = StreamingRenderer::new(runtime);
+        let lazy_refs = FxHashMap::default();
+
+        // A plain config object that *happens* to have "type" and "props"
+        // fields. Without the marker guard this would be incorrectly coerced
+        // into an RSC element array. The fix is to leave it as-is while
+        // still recursing into its values to find nested RSC payloads.
+        let input = serde_json::json!({
+            "type": "user-config",
+            "props": {
+                "variant": "primary",
+                "metadata": {
+                    "~rari_lazy": true,
+                    "~rari_promise_id": "missing"
+                }
+            }
+        });
+
+        let converted = renderer.json_to_rsc_element(&input, None, &lazy_refs).unwrap();
+
+        assert_eq!(
+            converted,
+            serde_json::json!({
+                "type": "user-config",
+                "props": {
+                    "variant": "primary",
+                    "metadata": serde_json::Value::Null
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn test_json_to_rsc_element_converts_tagged_object_form() {
+        let runtime = Arc::new(JsExecutionRuntime::new(None));
+        let renderer = StreamingRenderer::new(runtime);
+        let lazy_refs = FxHashMap::default();
+
+        // When the producer explicitly tags the object with `~rsc_element`,
+        // the object-form `{type, props}` is treated as a serialized RSC
+        // element and rewritten into the wire-format array.
+        let input = serde_json::json!({
+            "~rsc_element": true,
+            "type": "div",
+            "props": { "children": "hello" }
+        });
+
+        let converted = renderer.json_to_rsc_element(&input, None, &lazy_refs).unwrap();
+
+        assert_eq!(
+            converted,
+            serde_json::json!([
+                "$",
+                "div",
+                null,
+                { "children": "hello" }
+            ])
+        );
     }
 }

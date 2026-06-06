@@ -2063,12 +2063,12 @@ export class ErrorBoundaryWrapper extends React.Component {
       const componentType = hmrCoordinator?.detectComponentType(file) || 'unknown'
 
       const isAppRouterFile = file.includes('/app/') || file.includes('\\app\\')
-      const isPageFile = file.endsWith('page.tsx') || file.endsWith('page.jsx')
-      const isLayoutFile = file.endsWith('layout.tsx') || file.endsWith('layout.jsx')
-      const isLoadingFile = file.endsWith('loading.tsx') || file.endsWith('loading.jsx')
-      const isErrorFile = file.endsWith('error.tsx') || file.endsWith('error.jsx')
-      const isNotFoundFile = file.endsWith('not-found.tsx') || file.endsWith('not-found.jsx')
-      const isSpecialRouteFile = isPageFile || isLayoutFile || isLoadingFile || isErrorFile || isNotFoundFile
+      const hasExtension = (fileName: string, baseName: string) =>
+        fileName.endsWith(`${baseName}.tsx`) || fileName.endsWith(`${baseName}.jsx`)
+        || fileName.endsWith(`${baseName}.ts`) || fileName.endsWith(`${baseName}.js`)
+
+      const SPECIAL_ROUTE_FILE_BASES = ['page', 'layout', 'template', 'loading', 'error', 'not-found'] as const
+      const isSpecialRouteFile = SPECIAL_ROUTE_FILE_BASES.some(base => hasExtension(file, base))
 
       if (isAppRouterFile && isSpecialRouteFile)
         return undefined

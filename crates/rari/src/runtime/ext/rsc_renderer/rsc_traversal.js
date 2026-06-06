@@ -1,4 +1,3 @@
-/* eslint-disable no-undef */
 const TSX_DEFAULT_REGEX = /\/([^/]+)\.tsx#/
 
 if (typeof globalThis !== 'undefined') {
@@ -508,6 +507,7 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
     }
   }
 
+  // eslint-disable-next-line no-undef
   if (type === React.Fragment)
     return await traverseToRsc(props.children, clientComponents, depth + 1)
 
@@ -744,8 +744,8 @@ async function renderToRsc(element, clientComponents = {}) {
 function isSuspenseComponent(type) {
   if (
     typeof React !== 'undefined'
-    && React.Suspense
-    && type === React.Suspense
+    // eslint-disable-next-line no-undef
+    && React.Suspense && type === React.Suspense
   ) {
     return true
   }

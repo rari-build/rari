@@ -6,6 +6,13 @@ pub struct LayoutInfo {
 }
 
 #[derive(Debug, Clone)]
+pub struct TemplateInfo {
+    pub component_id: String,
+    pub client_component_id: String,
+    pub file_path: String,
+}
+
+#[derive(Debug, Clone)]
 pub struct ErrorBoundaryInfo {
     pub component_id: String,
     pub file_path: String,
@@ -31,6 +38,24 @@ impl RouteComposer {
     pub fn build_composition_script_with_error(
         page_render_script: &str,
         layouts: &[LayoutInfo],
+        pathname_json: &str,
+        error_boundary: Option<&ErrorBoundaryInfo>,
+        metadata_json: &str,
+    ) -> String {
+        Self::build_composition_script_with_templates(
+            page_render_script,
+            layouts,
+            &[],
+            pathname_json,
+            error_boundary,
+            metadata_json,
+        )
+    }
+
+    pub fn build_composition_script_with_templates(
+        page_render_script: &str,
+        layouts: &[LayoutInfo],
+        templates: &[TemplateInfo],
         pathname_json: &str,
         error_boundary: Option<&ErrorBoundaryInfo>,
         metadata_json: &str,
@@ -82,6 +107,19 @@ impl RouteComposer {
 
         let mut current_element = "pageElement".to_string();
 
+        for (i, template) in templates.iter().rev().enumerate() {
+            let template_var = format!("template{}", i);
+            script.push_str(&Self::generate_template_wrapper(
+                i,
+                &template.component_id,
+                &template.client_component_id,
+                &current_element,
+                &template_var,
+                pathname_json,
+            ));
+            current_element = template_var;
+        }
+
         for (i, layout) in layouts.iter().rev().enumerate() {
             let layout_var = format!("layout{}", i);
 
@@ -128,6 +166,43 @@ impl RouteComposer {
             layout_component_id = layout_component_id,
             current_element = current_element,
             layout_var = layout_var,
+            pathname_json = pathname_json
+        )
+    }
+
+    fn generate_template_wrapper(
+        index: usize,
+        template_component_id: &str,
+        template_client_component_id: &str,
+        current_element: &str,
+        template_var: &str,
+        pathname_json: &str,
+    ) -> String {
+        format!(
+            r#"
+            const startTemplate{index} = performance.now();
+            const ServerTemplateComponent{index} = globalThis["{template_component_id}"];
+            const ClientTemplateComponent{index} = {{
+                $$typeof: Symbol.for('react.client.reference'),
+                $$id: "{template_client_component_id}#default",
+                $$async: false,
+                name: 'default',
+                '~isClientComponent': true,
+            }};
+            const TemplateComponent{index} = ServerTemplateComponent{index} || ClientTemplateComponent{index};
+
+            const templateResult{index} = React.createElement(
+                TemplateComponent{index},
+                {{ key: {pathname_json}, children: {current_element} }},
+            );
+            const {template_var} = templateResult{index};
+            timings.template{index} = performance.now() - startTemplate{index};
+            "#,
+            index = index,
+            template_component_id = template_component_id,
+            template_client_component_id = template_client_component_id,
+            current_element = current_element,
+            template_var = template_var,
             pathname_json = pathname_json
         )
     }
@@ -336,5 +411,94 @@ mod tests {
             RouteComposer::generate_rsc_conversion("finalElement", None, metadata_json);
 
         assert!(conversion.contains(r#"metadata: {"title":"Test Page","description":"A test"}"#));
+    }
+
+    fn template_info(file_path: &str) -> TemplateInfo {
+        TemplateInfo {
+            component_id: format!("template:{}", file_path),
+            client_component_id: format!("src/app/{}", file_path.trim_end_matches(".tsx")),
+            file_path: file_path.to_string(),
+        }
+    }
+
+    #[test]
+    fn test_build_composition_script_with_templates_empty_matches_no_templates_output() {
+        let page_script = "const pageElement = Page();";
+        let no_tpl = RouteComposer::build_composition_script_with_error(
+            page_script,
+            &[],
+            "\"/\"",
+            None,
+            "{}",
+        );
+        let empty_tpl = RouteComposer::build_composition_script_with_templates(
+            page_script,
+            &[],
+            &[],
+            "\"/\"",
+            None,
+            "{}",
+        );
+        assert_eq!(empty_tpl, no_tpl);
+    }
+
+    #[test]
+    fn test_build_composition_script_with_templates_single() {
+        let script = RouteComposer::build_composition_script_with_templates(
+            "const pageElement = Page();",
+            &[],
+            &[template_info("template.tsx")],
+            "\"/about\"",
+            None,
+            "{}",
+        );
+
+        assert!(script.contains("TemplateComponent0"));
+        assert!(script.contains("template:template.tsx"));
+        assert!(script.contains(r#"$$id: "src/app/template#default""#));
+        assert!(script.contains("key: \"/about\""));
+        assert!(
+            !script.contains("pathname: \"/about\", children: pageElement"),
+            "template wrapper must not include pathname as a prop, only key and children"
+        );
+    }
+
+    #[test]
+    fn test_build_composition_script_with_templates_and_layouts() {
+        let script = RouteComposer::build_composition_script_with_templates(
+            "const pageElement = Page();",
+            &[LayoutInfo {
+                component_id: "layout:blog".to_string(),
+                is_root: false,
+                file_path: "blog/layout.tsx".to_string(),
+            }],
+            &[template_info("blog/template.tsx")],
+            "\"/blog/hello\"",
+            None,
+            "{}",
+        );
+
+        let page_idx = script.find("pageElement").expect("pageElement present");
+        let template_idx = script.find("template0").expect("template0 present");
+        let layout_idx = script.find("layout0").expect("layout0 present");
+        assert!(page_idx < template_idx);
+        assert!(template_idx < layout_idx);
+        assert!(script.contains("key: \"/blog/hello\""));
+    }
+
+    #[test]
+    fn test_build_composition_script_with_templates_multiple() {
+        let script = RouteComposer::build_composition_script_with_templates(
+            "const pageElement = Page();",
+            &[],
+            &[template_info("template.tsx"), template_info("about/template.tsx")],
+            "\"/about\"",
+            None,
+            "{}",
+        );
+
+        assert!(script.contains("TemplateComponent0"));
+        assert!(script.contains("TemplateComponent1"));
+        assert!(script.contains("key: \"/about\""));
     }
 }

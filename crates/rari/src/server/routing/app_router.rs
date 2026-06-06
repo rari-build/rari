@@ -50,6 +50,21 @@ pub struct LayoutEntry {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TemplateEntry {
+    pub path: String,
+    #[serde(rename = "filePath")]
+    pub file_path: String,
+    #[serde(rename = "componentId", default, skip_serializing_if = "Option::is_none")]
+    pub component_id: Option<String>,
+    #[serde(default)]
+    pub css: Vec<String>,
+    #[serde(rename = "parentPath", skip_serializing_if = "Option::is_none")]
+    pub parent_path: Option<String>,
+    #[serde(rename = "additionalPaths", default, skip_serializing_if = "Option::is_none")]
+    pub additional_paths: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LoadingEntry {
     pub path: String,
     #[serde(rename = "filePath")]
@@ -96,6 +111,8 @@ pub struct AppRouteManifest {
     pub errors: Vec<ErrorEntry>,
     #[serde(rename = "notFound")]
     pub not_found: Vec<NotFoundEntry>,
+    #[serde(default)]
+    pub templates: Vec<TemplateEntry>,
     pub generated: String,
 }
 
@@ -107,6 +124,7 @@ pub struct AppRouteMatch {
     pub loading: Option<LoadingEntry>,
     pub error: Option<ErrorEntry>,
     pub not_found: Option<NotFoundEntry>,
+    pub templates: Vec<TemplateEntry>,
     pub pathname: String,
 }
 
@@ -136,6 +154,7 @@ impl AppRouter {
         for route in &self.manifest.routes {
             if let Some(params) = self.match_route_pattern(route, &normalized_path) {
                 let layouts = self.resolve_layouts_for_route(route);
+                let templates = self.resolve_templates_for_route(route);
 
                 let loading = self.find_loading_for_route(route);
 
@@ -148,6 +167,7 @@ impl AppRouter {
                     loading,
                     error,
                     not_found: None,
+                    templates,
                     pathname: normalized_path,
                 });
             }
@@ -162,6 +182,7 @@ impl AppRouter {
         let not_found_entry = self.find_not_found(&normalized_path)?;
 
         let layouts = self.resolve_layouts(&normalized_path);
+        let templates = self.resolve_templates(&normalized_path);
         let loading = self.find_loading(&normalized_path);
         let error = self.find_error(&normalized_path);
 
@@ -183,6 +204,7 @@ impl AppRouter {
             loading,
             error,
             not_found: Some(not_found_entry),
+            templates,
             pathname: normalized_path,
         })
     }
@@ -269,14 +291,22 @@ impl AppRouter {
         normalized.rsplit_once('/').map(|(dir, _)| dir.to_string()).unwrap_or_default()
     }
 
-    fn is_layout_ancestor(layout_file_path: &str, route_file_path: &str) -> bool {
-        let layout_dir = Self::normalized_dir(layout_file_path);
-        if layout_dir.is_empty() {
+    fn is_boundary_ancestor(boundary_file_path: &str, route_file_path: &str) -> bool {
+        let boundary_dir = Self::normalized_dir(boundary_file_path);
+        if boundary_dir.is_empty() {
             return true;
         }
 
         let route_dir = Self::normalized_dir(route_file_path);
-        route_dir == layout_dir || route_dir.starts_with(&format!("{}/", layout_dir))
+        route_dir == boundary_dir || route_dir.starts_with(&format!("{}/", boundary_dir))
+    }
+
+    #[deprecated(
+        note = "Use is_boundary_ancestor instead — works for layouts, templates, loading, error, not-found, og-image"
+    )]
+    #[allow(dead_code)]
+    fn is_layout_ancestor(layout_file_path: &str, route_file_path: &str) -> bool {
+        Self::is_boundary_ancestor(layout_file_path, route_file_path)
     }
 
     fn file_path_depth(file_path: &str) -> usize {
@@ -333,7 +363,7 @@ impl AppRouter {
         entries
             .iter()
             .filter(|entry| {
-                Self::is_layout_ancestor(file_path_of(entry), &route.file_path)
+                Self::is_boundary_ancestor(file_path_of(entry), &route.file_path)
                     || Self::matches_path_or_additional(
                         path_of(entry),
                         additional_paths_of(entry),
@@ -350,7 +380,7 @@ impl AppRouter {
             .layouts
             .iter()
             .filter(|layout| {
-                Self::is_layout_ancestor(&layout.file_path, &route.file_path)
+                Self::is_boundary_ancestor(&layout.file_path, &route.file_path)
                     || Self::matches_path_or_additional(
                         &layout.path,
                         &layout.additional_paths,
@@ -410,6 +440,64 @@ impl AppRouter {
         }
 
         layouts
+    }
+
+    pub fn resolve_templates(&self, route_path: &str) -> Vec<TemplateEntry> {
+        let mut templates = Vec::new();
+        let segments: Vec<&str> = route_path.split('/').filter(|s| !s.is_empty()).collect();
+
+        for i in 0..=segments.len() {
+            let current_path =
+                if i == 0 { "/".to_string() } else { format!("/{}", segments[..i].join("/")) };
+
+            let mut matching: Vec<_> = self
+                .manifest
+                .templates
+                .iter()
+                .filter(|template| {
+                    Self::matches_path_or_additional(
+                        &template.path,
+                        &template.additional_paths,
+                        &current_path,
+                    )
+                })
+                .cloned()
+                .collect();
+
+            matching.sort_by_key(|t| Self::file_path_depth(&t.file_path));
+
+            for template in matching {
+                if templates
+                    .iter()
+                    .any(|existing: &TemplateEntry| existing.file_path == template.file_path)
+                {
+                    continue;
+                }
+                templates.push(template);
+            }
+        }
+
+        templates
+    }
+
+    fn resolve_templates_for_route(&self, route: &AppRouteEntry) -> Vec<TemplateEntry> {
+        let mut templates: Vec<_> = self
+            .manifest
+            .templates
+            .iter()
+            .filter(|template| {
+                Self::is_boundary_ancestor(&template.file_path, &route.file_path)
+                    || Self::matches_path_or_additional(
+                        &template.path,
+                        &template.additional_paths,
+                        &route.path,
+                    )
+            })
+            .cloned()
+            .collect();
+
+        templates.sort_by_key(|t| Self::file_path_depth(&t.file_path));
+        templates
     }
 
     pub(crate) fn find_loading(&self, route_path: &str) -> Option<LoadingEntry> {
@@ -578,6 +666,7 @@ mod tests {
             loading: vec![],
             errors: vec![],
             not_found: vec![],
+            templates: vec![],
             generated: "2026-01-01T00:00:00.000Z".to_string(),
         }
     }
@@ -675,6 +764,7 @@ mod tests {
             loading: vec![],
             errors: vec![],
             not_found: vec![],
+            templates: vec![],
             generated: "2025-09-30T00:00:00.000Z".to_string(),
         }
     }
@@ -804,6 +894,7 @@ mod tests {
             loading: vec![],
             errors: vec![],
             not_found: vec![],
+            templates: vec![],
             generated: "2025-01-10T00:00:00.000Z".to_string(),
         };
 
@@ -840,6 +931,7 @@ mod tests {
             loading: vec![],
             errors: vec![],
             not_found: vec![],
+            templates: vec![],
             generated: "2026-01-01T00:00:00.000Z".to_string(),
         };
         let router = AppRouter::new(manifest);
@@ -930,6 +1022,7 @@ mod tests {
             loading: vec![],
             errors: vec![],
             not_found: vec![],
+            templates: vec![],
             generated: "2026-01-01T00:00:00.000Z".to_string(),
         };
         let router = AppRouter::new(manifest);
@@ -964,6 +1057,7 @@ mod tests {
             loading: vec![],
             errors: vec![],
             not_found: vec![],
+            templates: vec![],
             generated: "2026-01-01T00:00:00.000Z".to_string(),
         };
         let router = AppRouter::new(manifest);
@@ -1190,5 +1284,107 @@ mod tests {
         assert_eq!(matched.layouts[0].file_path, "(marketing)/layout.tsx");
         assert_eq!(matched.loading.unwrap().file_path, "(marketing)/loading.tsx");
         assert_eq!(matched.error.unwrap().file_path, "(marketing)/error.tsx");
+    }
+
+    fn template_entry(path: &str, file_path: &str) -> TemplateEntry {
+        TemplateEntry {
+            path: path.to_string(),
+            file_path: file_path.to_string(),
+            component_id: None,
+            css: vec![],
+            parent_path: None,
+            additional_paths: None,
+        }
+    }
+
+    #[test]
+    fn test_resolve_templates_chain() {
+        let mut manifest = create_test_manifest();
+        manifest.templates =
+            vec![template_entry("/", "template.tsx"), template_entry("/blog", "blog/template.tsx")];
+        let router = AppRouter::new(manifest);
+
+        let templates = router.resolve_templates("/blog/hello-world");
+
+        assert_eq!(templates.len(), 2);
+        assert_eq!(templates[0].path, "/");
+        assert_eq!(templates[1].path, "/blog");
+    }
+
+    #[test]
+    fn test_resolve_templates_root_only() {
+        let mut manifest = create_test_manifest();
+        manifest.templates = vec![template_entry("/", "template.tsx")];
+        let router = AppRouter::new(manifest);
+
+        let templates = router.resolve_templates("/about");
+
+        assert_eq!(templates.len(), 1);
+        assert_eq!(templates[0].path, "/");
+    }
+
+    #[test]
+    fn test_resolve_templates_honors_additional_paths() {
+        let mut manifest = create_test_manifest();
+        let mut tpl = template_entry("/contact", "(_public)/template.tsx");
+        tpl.additional_paths = Some(vec!["/pricing".to_string()]);
+        manifest.templates = vec![tpl];
+        let router = AppRouter::new(manifest);
+
+        assert_eq!(router.resolve_templates("/contact").len(), 1);
+        assert_eq!(router.resolve_templates("/pricing").len(), 1);
+        assert_eq!(router.resolve_templates("/other").len(), 0);
+    }
+
+    #[test]
+    fn test_resolve_templates_for_route_includes_ancestor_templates() {
+        let mut manifest = create_test_manifest();
+        manifest.templates = vec![template_entry("/dashboard", "dashboard/template.tsx")];
+        let router = AppRouter::new(manifest);
+
+        let templates = router.resolve_templates_for_route(&AppRouteEntry {
+            path: "/dashboard/settings".to_string(),
+            file_path: "dashboard/settings/page.tsx".to_string(),
+            component_id: None,
+            css: vec![],
+            segments: vec![],
+            params: vec![],
+            is_dynamic: false,
+            static_params: None,
+        });
+
+        assert_eq!(templates.len(), 1);
+        assert_eq!(templates[0].path, "/dashboard");
+    }
+
+    #[test]
+    fn test_match_route_populates_templates() {
+        let mut manifest = create_test_manifest();
+        manifest.templates =
+            vec![template_entry("/", "template.tsx"), template_entry("/blog", "blog/template.tsx")];
+        let router = AppRouter::new(manifest);
+
+        let matched = router.match_route("/blog/hello-world").unwrap();
+        assert_eq!(matched.templates.len(), 2);
+        assert_eq!(matched.templates[0].path, "/");
+        assert_eq!(matched.templates[1].path, "/blog");
+    }
+
+    #[test]
+    fn test_create_not_found_match_populates_templates() {
+        let mut manifest = create_test_manifest();
+        manifest.not_found = vec![NotFoundEntry {
+            path: "/".to_string(),
+            file_path: "not-found.tsx".to_string(),
+            component_id: None,
+            css: vec![],
+            additional_paths: None,
+        }];
+        manifest.templates = vec![template_entry("/", "template.tsx")];
+        let router = AppRouter::new(manifest);
+
+        let matched = router.create_not_found_match("/missing").unwrap();
+        assert_eq!(matched.templates.len(), 1);
+        assert_eq!(matched.templates[0].path, "/");
     }
 }
