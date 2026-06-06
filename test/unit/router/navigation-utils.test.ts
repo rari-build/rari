@@ -588,3 +588,114 @@ describe('extractPathname', () => {
     expect(result).toBe('https://example.com/test')
   })
 })
+
+describe('findLayoutChain with additionalPaths', () => {
+  it('includes a layout matched via additionalPaths', () => {
+    const manifest: AppRouteManifest = {
+      routes: [],
+      layouts: [
+        { path: '/', filePath: 'layout.tsx' },
+        {
+          path: '/about',
+          filePath: '(marketing)/layout.tsx',
+          additionalPaths: ['/pricing'],
+        },
+      ],
+      loading: [],
+      errors: [],
+      notFound: [],
+      apiRoutes: [],
+      ogImages: [],
+      generated: '2026-01-01T00:00:00.000Z',
+    }
+
+    const chain = findLayoutChain('/pricing', manifest)
+    expect(chain).toHaveLength(2)
+    expect(chain[0].filePath).toBe('layout.tsx')
+    expect(chain[1].filePath).toBe('(marketing)/layout.tsx')
+  })
+
+  it('prefers exact layout matches over additionalPaths matches', () => {
+    const manifest: AppRouteManifest = {
+      routes: [],
+      layouts: [
+        {
+          path: '/about',
+          filePath: '(marketing)/layout.tsx',
+          additionalPaths: ['/pricing'],
+        },
+        { path: '/pricing', filePath: 'pricing/layout.tsx' },
+      ],
+      loading: [],
+      errors: [],
+      notFound: [],
+      apiRoutes: [],
+      ogImages: [],
+      generated: '2026-01-01T00:00:00.000Z',
+    }
+
+    const chain = findLayoutChain('/pricing', manifest)
+    expect(chain).toHaveLength(1)
+    expect(chain[0].filePath).toBe('pricing/layout.tsx')
+  })
+
+  it('does not include duplicate layout entries', () => {
+    const manifest: AppRouteManifest = {
+      routes: [],
+      layouts: [
+        {
+          path: '/',
+          filePath: 'layout.tsx',
+          additionalPaths: ['/dashboard'],
+        },
+      ],
+      loading: [],
+      errors: [],
+      notFound: [],
+      apiRoutes: [],
+      ogImages: [],
+      generated: '2026-01-01T00:00:00.000Z',
+    }
+
+    const chain = findLayoutChain('/dashboard', manifest)
+    expect(chain.map(layout => layout.filePath)).toEqual(['layout.tsx'])
+  })
+
+  it('does not include a layout that does not match', () => {
+    const manifest: AppRouteManifest = {
+      routes: [],
+      layouts: [
+        {
+          path: '/about',
+          filePath: '(marketing)/layout.tsx',
+          additionalPaths: ['/pricing'],
+        },
+      ],
+      loading: [],
+      errors: [],
+      notFound: [],
+      apiRoutes: [],
+      ogImages: [],
+      generated: '2026-01-01T00:00:00.000Z',
+    }
+
+    const chain = findLayoutChain('/dashboard', manifest)
+    expect(chain).toHaveLength(0)
+  })
+
+  it('still works when additionalPaths is absent', () => {
+    const manifest: AppRouteManifest = {
+      routes: [],
+      layouts: [{ path: '/', filePath: 'layout.tsx' }],
+      loading: [],
+      errors: [],
+      notFound: [],
+      apiRoutes: [],
+      ogImages: [],
+      generated: '2026-01-01T00:00:00.000Z',
+    }
+
+    const chain = findLayoutChain('/', manifest)
+    expect(chain).toHaveLength(1)
+  })
+})

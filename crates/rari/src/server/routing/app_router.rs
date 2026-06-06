@@ -2,6 +2,7 @@ use crate::error::RariError;
 #[cfg(test)]
 use crate::server::routing::types::RouteSegmentType;
 use crate::server::routing::types::{ParamValue, RouteSegment};
+use cow_utils::CowUtils;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -44,6 +45,8 @@ pub struct LayoutEntry {
     pub parent_path: Option<String>,
     #[serde(rename = "isRoot", default)]
     pub is_root: bool,
+    #[serde(rename = "additionalPaths", default, skip_serializing_if = "Option::is_none")]
+    pub additional_paths: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,6 +58,8 @@ pub struct LoadingEntry {
     pub component_id: Option<String>,
     #[serde(default)]
     pub css: Vec<String>,
+    #[serde(rename = "additionalPaths", default, skip_serializing_if = "Option::is_none")]
+    pub additional_paths: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -66,6 +71,8 @@ pub struct ErrorEntry {
     pub component_id: Option<String>,
     #[serde(default)]
     pub css: Vec<String>,
+    #[serde(rename = "additionalPaths", default, skip_serializing_if = "Option::is_none")]
+    pub additional_paths: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -77,6 +84,8 @@ pub struct NotFoundEntry {
     pub component_id: Option<String>,
     #[serde(default)]
     pub css: Vec<String>,
+    #[serde(rename = "additionalPaths", default, skip_serializing_if = "Option::is_none")]
+    pub additional_paths: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -126,11 +135,11 @@ impl AppRouter {
 
         for route in &self.manifest.routes {
             if let Some(params) = self.match_route_pattern(route, &normalized_path) {
-                let layouts = self.resolve_layouts(&route.path);
+                let layouts = self.resolve_layouts_for_route(route);
 
-                let loading = self.find_loading(&route.path);
+                let loading = self.find_loading_for_route(route);
 
-                let error = self.find_error(&route.path);
+                let error = self.find_error_for_route(route);
 
                 return Ok(AppRouteMatch {
                     route: route.clone(),
@@ -150,11 +159,11 @@ impl AppRouter {
     pub fn create_not_found_match(&self, path: &str) -> Option<AppRouteMatch> {
         let normalized_path = Self::normalize_path(path);
 
-        let not_found_entry = self.find_not_found("/")?;
+        let not_found_entry = self.find_not_found(&normalized_path)?;
 
-        let layouts = self.resolve_layouts("/");
-        let loading = self.find_loading("/");
-        let error = self.find_error("/");
+        let layouts = self.resolve_layouts(&normalized_path);
+        let loading = self.find_loading(&normalized_path);
+        let error = self.find_error(&normalized_path);
 
         let not_found_route = AppRouteEntry {
             path: normalized_path.clone(),
@@ -244,6 +253,123 @@ impl AppRouter {
         if path_idx == path_segments.len() { Some(params) } else { None }
     }
 
+    fn matches_path_or_additional(
+        path: &str,
+        additional_paths: &Option<Vec<String>>,
+        current_path: &str,
+    ) -> bool {
+        path == current_path
+            || additional_paths.as_ref().is_some_and(|paths| {
+                paths.iter().any(|additional_path| additional_path == current_path)
+            })
+    }
+
+    fn normalized_dir(file_path: &str) -> String {
+        let normalized = file_path.cow_replace('\\', "/").into_owned();
+        normalized.rsplit_once('/').map(|(dir, _)| dir.to_string()).unwrap_or_default()
+    }
+
+    fn is_layout_ancestor(layout_file_path: &str, route_file_path: &str) -> bool {
+        let layout_dir = Self::normalized_dir(layout_file_path);
+        if layout_dir.is_empty() {
+            return true;
+        }
+
+        let route_dir = Self::normalized_dir(route_file_path);
+        route_dir == layout_dir || route_dir.starts_with(&format!("{}/", layout_dir))
+    }
+
+    fn file_path_depth(file_path: &str) -> usize {
+        let dir = Self::normalized_dir(file_path);
+        if dir.is_empty() { 0 } else { dir.split('/').count() }
+    }
+
+    fn nearest_boundary_by_path<T, PathFn, AdditionalPathsFn, FilePathFn>(
+        entries: &[T],
+        route_path: &str,
+        path_of: PathFn,
+        additional_paths_of: AdditionalPathsFn,
+        file_path_of: FilePathFn,
+    ) -> Option<T>
+    where
+        T: Clone,
+        PathFn: Fn(&T) -> &str,
+        AdditionalPathsFn: Fn(&T) -> &Option<Vec<String>>,
+        FilePathFn: Fn(&T) -> &str,
+    {
+        let segments: Vec<&str> = route_path.split('/').filter(|s| !s.is_empty()).collect();
+
+        (0..=segments.len()).rev().find_map(|i| {
+            let current_path =
+                if i == 0 { "/".to_string() } else { format!("/{}", segments[..i].join("/")) };
+
+            entries
+                .iter()
+                .filter(|entry| {
+                    Self::matches_path_or_additional(
+                        path_of(entry),
+                        additional_paths_of(entry),
+                        &current_path,
+                    )
+                })
+                .max_by_key(|entry| Self::file_path_depth(file_path_of(entry)))
+                .cloned()
+        })
+    }
+
+    fn nearest_boundary_for_route<T, PathFn, AdditionalPathsFn, FilePathFn>(
+        entries: &[T],
+        route: &AppRouteEntry,
+        path_of: PathFn,
+        additional_paths_of: AdditionalPathsFn,
+        file_path_of: FilePathFn,
+    ) -> Option<T>
+    where
+        T: Clone,
+        PathFn: Fn(&T) -> &str,
+        AdditionalPathsFn: Fn(&T) -> &Option<Vec<String>>,
+        FilePathFn: Fn(&T) -> &str,
+    {
+        entries
+            .iter()
+            .filter(|entry| {
+                Self::is_layout_ancestor(file_path_of(entry), &route.file_path)
+                    || Self::matches_path_or_additional(
+                        path_of(entry),
+                        additional_paths_of(entry),
+                        &route.path,
+                    )
+            })
+            .max_by_key(|entry| Self::file_path_depth(file_path_of(entry)))
+            .cloned()
+    }
+
+    fn resolve_layouts_for_route(&self, route: &AppRouteEntry) -> Vec<LayoutEntry> {
+        let mut layouts: Vec<LayoutEntry> = self
+            .manifest
+            .layouts
+            .iter()
+            .filter(|layout| {
+                Self::is_layout_ancestor(&layout.file_path, &route.file_path)
+                    || Self::matches_path_or_additional(
+                        &layout.path,
+                        &layout.additional_paths,
+                        &route.path,
+                    )
+            })
+            .cloned()
+            .collect();
+
+        layouts.sort_by_key(|layout| Self::file_path_depth(&layout.file_path));
+
+        for layout in &mut layouts {
+            layout.is_root =
+                Self::normalized_dir(&layout.file_path).is_empty() || layout.path == "/";
+        }
+
+        layouts
+    }
+
     pub fn resolve_layouts(&self, route_path: &str) -> Vec<LayoutEntry> {
         let mut layouts = Vec::new();
         let segments: Vec<&str> = route_path.split('/').filter(|s| !s.is_empty()).collect();
@@ -252,9 +378,33 @@ impl AppRouter {
             let current_path =
                 if i == 0 { "/".to_string() } else { format!("/{}", segments[..i].join("/")) };
 
-            if let Some(layout) = self.manifest.layouts.iter().find(|l| l.path == current_path) {
+            let mut matching_layouts: Vec<_> = self
+                .manifest
+                .layouts
+                .iter()
+                .filter(|layout| {
+                    Self::matches_path_or_additional(
+                        &layout.path,
+                        &layout.additional_paths,
+                        &current_path,
+                    )
+                })
+                .cloned()
+                .collect();
+
+            matching_layouts.sort_by_key(|layout| Self::file_path_depth(&layout.file_path));
+
+            for layout in matching_layouts {
+                if layouts
+                    .iter()
+                    .any(|existing: &LayoutEntry| existing.file_path == layout.file_path)
+                {
+                    continue;
+                }
+
                 let mut layout_entry = layout.clone();
-                layout_entry.is_root = layout_entry.path == "/";
+                layout_entry.is_root = Self::normalized_dir(&layout_entry.file_path).is_empty()
+                    || layout_entry.path == "/";
                 layouts.push(layout_entry);
             }
         }
@@ -262,50 +412,54 @@ impl AppRouter {
         layouts
     }
 
-    fn find_loading(&self, route_path: &str) -> Option<LoadingEntry> {
-        let segments: Vec<&str> = route_path.split('/').filter(|s| !s.is_empty()).collect();
-
-        for i in (0..=segments.len()).rev() {
-            let current_path =
-                if i == 0 { "/".to_string() } else { format!("/{}", segments[..i].join("/")) };
-
-            if let Some(loading) = self.manifest.loading.iter().find(|l| l.path == current_path) {
-                return Some(loading.clone());
-            }
-        }
-
-        None
+    pub(crate) fn find_loading(&self, route_path: &str) -> Option<LoadingEntry> {
+        Self::nearest_boundary_by_path(
+            &self.manifest.loading,
+            route_path,
+            |loading| &loading.path,
+            |loading| &loading.additional_paths,
+            |loading| &loading.file_path,
+        )
     }
 
-    fn find_error(&self, route_path: &str) -> Option<ErrorEntry> {
-        let segments: Vec<&str> = route_path.split('/').filter(|s| !s.is_empty()).collect();
-
-        for i in (0..=segments.len()).rev() {
-            let current_path =
-                if i == 0 { "/".to_string() } else { format!("/{}", segments[..i].join("/")) };
-
-            if let Some(error) = self.manifest.errors.iter().find(|e| e.path == current_path) {
-                return Some(error.clone());
-            }
-        }
-
-        None
+    fn find_loading_for_route(&self, route: &AppRouteEntry) -> Option<LoadingEntry> {
+        Self::nearest_boundary_for_route(
+            &self.manifest.loading,
+            route,
+            |loading| &loading.path,
+            |loading| &loading.additional_paths,
+            |loading| &loading.file_path,
+        )
     }
 
-    pub fn find_not_found(&self, route_path: &str) -> Option<NotFoundEntry> {
-        let segments: Vec<&str> = route_path.split('/').filter(|s| !s.is_empty()).collect();
+    pub(crate) fn find_error(&self, route_path: &str) -> Option<ErrorEntry> {
+        Self::nearest_boundary_by_path(
+            &self.manifest.errors,
+            route_path,
+            |error| &error.path,
+            |error| &error.additional_paths,
+            |error| &error.file_path,
+        )
+    }
 
-        for i in (0..=segments.len()).rev() {
-            let current_path =
-                if i == 0 { "/".to_string() } else { format!("/{}", segments[..i].join("/")) };
+    fn find_error_for_route(&self, route: &AppRouteEntry) -> Option<ErrorEntry> {
+        Self::nearest_boundary_for_route(
+            &self.manifest.errors,
+            route,
+            |error| &error.path,
+            |error| &error.additional_paths,
+            |error| &error.file_path,
+        )
+    }
 
-            if let Some(not_found) = self.manifest.not_found.iter().find(|n| n.path == current_path)
-            {
-                return Some(not_found.clone());
-            }
-        }
-
-        None
+    pub(crate) fn find_not_found(&self, route_path: &str) -> Option<NotFoundEntry> {
+        Self::nearest_boundary_by_path(
+            &self.manifest.not_found,
+            route_path,
+            |not_found| &not_found.path,
+            |not_found| &not_found.additional_paths,
+            |not_found| &not_found.file_path,
+        )
     }
 
     fn normalize_path(path: &str) -> String {
@@ -417,6 +571,17 @@ impl AppRouter {
 mod tests {
     use super::*;
 
+    fn build_minimal_manifest() -> AppRouteManifest {
+        AppRouteManifest {
+            routes: vec![],
+            layouts: vec![],
+            loading: vec![],
+            errors: vec![],
+            not_found: vec![],
+            generated: "2026-01-01T00:00:00.000Z".to_string(),
+        }
+    }
+
     fn create_test_manifest() -> AppRouteManifest {
         AppRouteManifest {
             routes: vec![
@@ -494,6 +659,7 @@ mod tests {
                     component_id: None,
                     css: vec![],
                     parent_path: None,
+                    additional_paths: None,
                     is_root: false,
                 },
                 LayoutEntry {
@@ -502,6 +668,7 @@ mod tests {
                     component_id: None,
                     css: vec![],
                     parent_path: Some("/".to_string()),
+                    additional_paths: None,
                     is_root: false,
                 },
             ],
@@ -655,5 +822,373 @@ mod tests {
             matched.params.get("slug").and_then(|p| p.as_string()),
             Some(&"about".to_string())
         );
+    }
+
+    #[test]
+    fn test_resolve_layouts_with_additional_paths() {
+        let manifest = AppRouteManifest {
+            routes: vec![],
+            layouts: vec![LayoutEntry {
+                path: "/about".to_string(),
+                file_path: "(marketing)/layout.tsx".to_string(),
+                component_id: None,
+                css: vec![],
+                parent_path: Some("/".to_string()),
+                is_root: false,
+                additional_paths: Some(vec!["/pricing".to_string()]),
+            }],
+            loading: vec![],
+            errors: vec![],
+            not_found: vec![],
+            generated: "2026-01-01T00:00:00.000Z".to_string(),
+        };
+        let router = AppRouter::new(manifest);
+
+        let layouts_for_about = router.resolve_layouts("/about");
+        assert_eq!(layouts_for_about.len(), 1);
+        assert_eq!(layouts_for_about[0].file_path, "(marketing)/layout.tsx");
+
+        let layouts_for_pricing = router.resolve_layouts("/pricing");
+        assert_eq!(layouts_for_pricing.len(), 1);
+        assert_eq!(layouts_for_pricing[0].file_path, "(marketing)/layout.tsx");
+
+        let layouts_for_unrelated = router.resolve_layouts("/dashboard");
+        assert_eq!(layouts_for_unrelated.len(), 0);
+    }
+
+    #[test]
+    fn test_match_route_resolves_group_layouts_by_file_path() {
+        let manifest = AppRouteManifest {
+            routes: vec![
+                AppRouteEntry {
+                    path: "/pricing".to_string(),
+                    file_path: "(_public)/pricing/page.tsx".to_string(),
+                    component_id: None,
+                    css: vec![],
+                    segments: vec![RouteSegment {
+                        segment_type: RouteSegmentType::Static,
+                        value: "pricing".to_string(),
+                        param: None,
+                    }],
+                    params: vec![],
+                    is_dynamic: false,
+                    static_params: None,
+                },
+                AppRouteEntry {
+                    path: "/forgot".to_string(),
+                    file_path: "(auth)/(flow)/forgot/page.tsx".to_string(),
+                    component_id: None,
+                    css: vec![],
+                    segments: vec![RouteSegment {
+                        segment_type: RouteSegmentType::Static,
+                        value: "forgot".to_string(),
+                        param: None,
+                    }],
+                    params: vec![],
+                    is_dynamic: false,
+                    static_params: None,
+                },
+            ],
+            layouts: vec![
+                LayoutEntry {
+                    path: "/".to_string(),
+                    file_path: "layout.tsx".to_string(),
+                    component_id: None,
+                    css: vec![],
+                    parent_path: None,
+                    is_root: false,
+                    additional_paths: None,
+                },
+                LayoutEntry {
+                    path: "/contact".to_string(),
+                    file_path: "(_public)/layout.tsx".to_string(),
+                    component_id: None,
+                    css: vec![],
+                    parent_path: Some("/".to_string()),
+                    is_root: false,
+                    additional_paths: Some(vec!["/pricing".to_string()]),
+                },
+                LayoutEntry {
+                    path: "/forgot".to_string(),
+                    file_path: "(auth)/layout.tsx".to_string(),
+                    component_id: None,
+                    css: vec![],
+                    parent_path: Some("/".to_string()),
+                    is_root: false,
+                    additional_paths: Some(vec!["/login".to_string(), "/signup".to_string()]),
+                },
+                LayoutEntry {
+                    path: "/forgot".to_string(),
+                    file_path: "(auth)/(flow)/layout.tsx".to_string(),
+                    component_id: None,
+                    css: vec![],
+                    parent_path: Some("/".to_string()),
+                    is_root: false,
+                    additional_paths: Some(vec!["/reset".to_string()]),
+                },
+            ],
+            loading: vec![],
+            errors: vec![],
+            not_found: vec![],
+            generated: "2026-01-01T00:00:00.000Z".to_string(),
+        };
+        let router = AppRouter::new(manifest);
+
+        let pricing = router.match_route("/pricing").unwrap();
+        let pricing_layouts: Vec<_> =
+            pricing.layouts.iter().map(|layout| layout.file_path.as_str()).collect();
+        assert_eq!(pricing_layouts, vec!["layout.tsx", "(_public)/layout.tsx"]);
+
+        let forgot = router.match_route("/forgot").unwrap();
+        let forgot_layouts: Vec<_> =
+            forgot.layouts.iter().map(|layout| layout.file_path.as_str()).collect();
+        assert_eq!(
+            forgot_layouts,
+            vec!["layout.tsx", "(auth)/layout.tsx", "(auth)/(flow)/layout.tsx"]
+        );
+    }
+
+    #[test]
+    fn test_resolve_layouts_falls_back_to_path() {
+        let manifest = AppRouteManifest {
+            routes: vec![],
+            layouts: vec![LayoutEntry {
+                path: "/".to_string(),
+                file_path: "layout.tsx".to_string(),
+                component_id: None,
+                css: vec![],
+                parent_path: None,
+                is_root: true,
+                additional_paths: None,
+            }],
+            loading: vec![],
+            errors: vec![],
+            not_found: vec![],
+            generated: "2026-01-01T00:00:00.000Z".to_string(),
+        };
+        let router = AppRouter::new(manifest);
+
+        let layouts = router.resolve_layouts("/");
+        assert_eq!(layouts.len(), 1);
+    }
+
+    #[test]
+    fn test_find_loading_with_additional_paths() {
+        let manifest = AppRouteManifest {
+            loading: vec![LoadingEntry {
+                path: "/about".to_string(),
+                file_path: "(marketing)/loading.tsx".to_string(),
+                component_id: None,
+                css: vec![],
+                additional_paths: Some(vec!["/pricing".to_string()]),
+            }],
+            ..build_minimal_manifest()
+        };
+        let router = AppRouter::new(manifest);
+
+        let found = router.find_loading("/pricing");
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().file_path, "(marketing)/loading.tsx");
+
+        assert!(router.find_loading("/dashboard").is_none());
+    }
+
+    #[test]
+    fn test_find_error_with_additional_paths() {
+        let manifest = AppRouteManifest {
+            errors: vec![ErrorEntry {
+                path: "/about".to_string(),
+                file_path: "(marketing)/error.tsx".to_string(),
+                component_id: None,
+                css: vec![],
+                additional_paths: Some(vec!["/pricing".to_string()]),
+            }],
+            ..build_minimal_manifest()
+        };
+        let router = AppRouter::new(manifest);
+
+        assert!(router.find_error("/pricing").is_some());
+        assert!(router.find_error("/dashboard").is_none());
+    }
+
+    #[test]
+    fn test_find_not_found_with_additional_paths() {
+        let manifest = AppRouteManifest {
+            not_found: vec![NotFoundEntry {
+                path: "/about".to_string(),
+                file_path: "(marketing)/not-found.tsx".to_string(),
+                component_id: None,
+                css: vec![],
+                additional_paths: Some(vec!["/pricing".to_string()]),
+            }],
+            ..build_minimal_manifest()
+        };
+        let router = AppRouter::new(manifest);
+
+        assert!(router.find_not_found("/pricing").is_some());
+        assert!(router.find_not_found("/dashboard").is_none());
+    }
+
+    #[test]
+    fn test_match_route_uses_nearest_group_boundary() {
+        let manifest = AppRouteManifest {
+            routes: vec![AppRouteEntry {
+                path: "/forgot".to_string(),
+                file_path: "(auth)/(flow)/forgot/page.tsx".to_string(),
+                component_id: None,
+                css: vec![],
+                segments: vec![RouteSegment {
+                    segment_type: RouteSegmentType::Static,
+                    value: "forgot".to_string(),
+                    param: None,
+                }],
+                params: vec![],
+                is_dynamic: false,
+                static_params: None,
+            }],
+            loading: vec![
+                LoadingEntry {
+                    path: "/forgot".to_string(),
+                    file_path: "(auth)/loading.tsx".to_string(),
+                    component_id: None,
+                    css: vec![],
+                    additional_paths: None,
+                },
+                LoadingEntry {
+                    path: "/forgot".to_string(),
+                    file_path: "(auth)/(flow)/loading.tsx".to_string(),
+                    component_id: None,
+                    css: vec![],
+                    additional_paths: None,
+                },
+            ],
+            errors: vec![
+                ErrorEntry {
+                    path: "/forgot".to_string(),
+                    file_path: "(auth)/error.tsx".to_string(),
+                    component_id: None,
+                    css: vec![],
+                    additional_paths: None,
+                },
+                ErrorEntry {
+                    path: "/forgot".to_string(),
+                    file_path: "(auth)/(flow)/error.tsx".to_string(),
+                    component_id: None,
+                    css: vec![],
+                    additional_paths: None,
+                },
+            ],
+            not_found: vec![
+                NotFoundEntry {
+                    path: "/forgot".to_string(),
+                    file_path: "(auth)/not-found.tsx".to_string(),
+                    component_id: None,
+                    css: vec![],
+                    additional_paths: None,
+                },
+                NotFoundEntry {
+                    path: "/forgot".to_string(),
+                    file_path: "(auth)/(flow)/not-found.tsx".to_string(),
+                    component_id: None,
+                    css: vec![],
+                    additional_paths: None,
+                },
+            ],
+            ..build_minimal_manifest()
+        };
+        let router = AppRouter::new(manifest);
+
+        let matched = router.match_route("/forgot").unwrap();
+        assert_eq!(matched.loading.unwrap().file_path, "(auth)/(flow)/loading.tsx");
+        assert_eq!(matched.error.unwrap().file_path, "(auth)/(flow)/error.tsx");
+
+        let not_found = router.find_not_found("/forgot").unwrap();
+        assert_eq!(not_found.file_path, "(auth)/(flow)/not-found.tsx");
+    }
+
+    #[test]
+    fn test_not_found_match_includes_all_group_layouts_for_same_path() {
+        let manifest = AppRouteManifest {
+            layouts: vec![
+                LayoutEntry {
+                    path: "/forgot".to_string(),
+                    file_path: "(auth)/layout.tsx".to_string(),
+                    component_id: None,
+                    css: vec![],
+                    parent_path: Some("/".to_string()),
+                    is_root: false,
+                    additional_paths: None,
+                },
+                LayoutEntry {
+                    path: "/forgot".to_string(),
+                    file_path: "(auth)/(flow)/layout.tsx".to_string(),
+                    component_id: None,
+                    css: vec![],
+                    parent_path: Some("/".to_string()),
+                    is_root: false,
+                    additional_paths: None,
+                },
+            ],
+            not_found: vec![NotFoundEntry {
+                path: "/forgot".to_string(),
+                file_path: "(auth)/(flow)/not-found.tsx".to_string(),
+                component_id: None,
+                css: vec![],
+                additional_paths: None,
+            }],
+            ..build_minimal_manifest()
+        };
+        let router = AppRouter::new(manifest);
+
+        let matched = router.create_not_found_match("/forgot").unwrap();
+        let layout_paths: Vec<_> =
+            matched.layouts.iter().map(|layout| layout.file_path.as_str()).collect();
+
+        assert_eq!(layout_paths, vec!["(auth)/layout.tsx", "(auth)/(flow)/layout.tsx"]);
+    }
+
+    #[test]
+    fn test_create_not_found_match_uses_requested_path_for_additional_paths() {
+        let manifest = AppRouteManifest {
+            layouts: vec![LayoutEntry {
+                path: "/about".to_string(),
+                file_path: "(marketing)/layout.tsx".to_string(),
+                component_id: None,
+                css: vec![],
+                parent_path: Some("/".to_string()),
+                is_root: false,
+                additional_paths: Some(vec!["/pricing".to_string()]),
+            }],
+            loading: vec![LoadingEntry {
+                path: "/about".to_string(),
+                file_path: "(marketing)/loading.tsx".to_string(),
+                component_id: None,
+                css: vec![],
+                additional_paths: Some(vec!["/pricing".to_string()]),
+            }],
+            errors: vec![ErrorEntry {
+                path: "/about".to_string(),
+                file_path: "(marketing)/error.tsx".to_string(),
+                component_id: None,
+                css: vec![],
+                additional_paths: Some(vec!["/pricing".to_string()]),
+            }],
+            not_found: vec![NotFoundEntry {
+                path: "/about".to_string(),
+                file_path: "(marketing)/not-found.tsx".to_string(),
+                component_id: None,
+                css: vec![],
+                additional_paths: Some(vec!["/pricing".to_string()]),
+            }],
+            ..build_minimal_manifest()
+        };
+        let router = AppRouter::new(manifest);
+
+        let matched = router.create_not_found_match("/pricing").unwrap();
+        assert_eq!(matched.pathname, "/pricing");
+        assert_eq!(matched.not_found.unwrap().file_path, "(marketing)/not-found.tsx");
+        assert_eq!(matched.layouts[0].file_path, "(marketing)/layout.tsx");
+        assert_eq!(matched.loading.unwrap().file_path, "(marketing)/loading.tsx");
+        assert_eq!(matched.error.unwrap().file_path, "(marketing)/error.tsx");
     }
 }

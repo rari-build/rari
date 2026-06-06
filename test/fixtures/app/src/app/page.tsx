@@ -17,6 +17,12 @@ export default async function HomePage() {
           <a href="/nested" className="block text-blue-600 hover:underline">
             Nested Routes
           </a>
+          <a href="/contact" className="block text-blue-600 hover:underline">
+            Contact (in (_public) group)
+          </a>
+          <a href="/login" className="block text-blue-600 hover:underline">
+            Login (in (auth) group)
+          </a>
         </nav>
       </div>
     </div>

@@ -30,6 +30,7 @@ export interface LayoutEntry {
   css?: string[]
   componentId?: string
   parentPath?: string
+  additionalPaths?: string[]
 }
 
 export interface LoadingEntry {
@@ -37,6 +38,7 @@ export interface LoadingEntry {
   filePath: string
   css?: string[]
   componentId?: string
+  additionalPaths?: string[]
 }
 
 export interface ErrorEntry {
@@ -44,6 +46,7 @@ export interface ErrorEntry {
   filePath: string
   css?: string[]
   componentId?: string
+  additionalPaths?: string[]
 }
 
 export interface NotFoundEntry {
@@ -51,6 +54,7 @@ export interface NotFoundEntry {
   filePath: string
   css?: string[]
   componentId?: string
+  additionalPaths?: string[]
 }
 
 export interface OgImageEntry {
@@ -59,6 +63,7 @@ export interface OgImageEntry {
   width?: number
   height?: number
   contentType?: string
+  additionalPaths?: string[]
 }
 
 export interface ApiRouteEntry {

@@ -27,6 +27,21 @@ export default function RootLayout({ children }: LayoutProps) {
             <a href="/actions" className="text-sm text-gray-700 no-underline hover:text-gray-900">
               Actions
             </a>
+            <a href="/contact" className="text-sm text-gray-700 no-underline hover:text-gray-900">
+              Contact
+            </a>
+            <a href="/pricing" className="text-sm text-gray-700 no-underline hover:text-gray-900">
+              Pricing
+            </a>
+            <a href="/login" className="text-sm text-gray-700 no-underline hover:text-gray-900">
+              Login
+            </a>
+            <a href="/signup" className="text-sm text-gray-700 no-underline hover:text-gray-900">
+              Signup
+            </a>
+            <a href="/forgot" className="text-sm text-gray-700 no-underline hover:text-gray-900">
+              Forgot
+            </a>
           </div>
         </div>
       </nav>
