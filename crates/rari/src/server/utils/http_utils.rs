@@ -48,7 +48,7 @@ pub fn merge_vary_with_accept(existing_vary: Option<&HeaderValue>) -> String {
 }
 
 pub fn get_content_type(path: &str) -> &'static str {
-    if path.ends_with(".js") {
+    if path.ends_with(".js") || path.ends_with(".mjs") {
         "application/javascript"
     } else if path.ends_with(".css") {
         "text/css"
@@ -60,8 +60,38 @@ pub fn get_content_type(path: &str) -> &'static str {
         "image/png"
     } else if path.ends_with(".jpg") || path.ends_with(".jpeg") {
         "image/jpeg"
+    } else if path.ends_with(".gif") {
+        "image/gif"
+    } else if path.ends_with(".webp") {
+        "image/webp"
+    } else if path.ends_with(".avif") {
+        "image/avif"
     } else if path.ends_with(".svg") {
         "image/svg+xml"
+    } else if path.ends_with(".ico") {
+        "image/x-icon"
+    } else if path.ends_with(".woff") {
+        "font/woff"
+    } else if path.ends_with(".woff2") {
+        "font/woff2"
+    } else if path.ends_with(".ttf") {
+        "font/ttf"
+    } else if path.ends_with(".otf") {
+        "font/otf"
+    } else if path.ends_with(".wasm") {
+        "application/wasm"
+    } else if path.ends_with(".xml") {
+        "application/xml"
+    } else if path.ends_with(".txt") {
+        "text/plain"
+    } else if path.ends_with(".map") {
+        "application/json"
+    } else if path.ends_with(".mp4") {
+        "video/mp4"
+    } else if path.ends_with(".webm") {
+        "video/webm"
+    } else if path.ends_with(".pdf") {
+        "application/pdf"
     } else {
         "application/octet-stream"
     }
