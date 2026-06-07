@@ -1,7 +1,7 @@
 name: Dependency Diff
 
 on:
-  pull_request:
+  pull_request_target:
     paths:
       - pnpm-lock.yaml
       - package.json
