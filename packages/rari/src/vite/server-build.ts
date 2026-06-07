@@ -6,8 +6,8 @@ import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import { build } from 'rolldown'
 import {
-  EXPORTED_ARROW_OR_CLASS_REGEX,
   EXPORTED_CONST_FUNCTION_REGEX,
+  EXPORTED_DEFAULT_ARROW_REGEX,
   EXPORTED_FUNCTION_REGEX,
   FILE_PROTOCOL_REGEX,
   TSX_EXT_REGEX,
@@ -1626,7 +1626,7 @@ function registerClientReference(clientReference, id, exportName) {
 export function hasComponentExport(code: string): boolean {
   return hasDefaultExport(code)
     || EXPORTED_FUNCTION_REGEX.test(code)
-    || EXPORTED_ARROW_OR_CLASS_REGEX.test(code)
+    || EXPORTED_DEFAULT_ARROW_REGEX.test(code)
     || EXPORTED_CONST_FUNCTION_REGEX.test(code)
 }
 
