@@ -14,7 +14,7 @@
     "start": "rari start",
     "deploy:railway": "rari deploy railway",
     "deploy:render": "rari deploy render",
-    "clean": "rm -rf dist",
+    "clean": "rimraf dist",
     "typecheck": "tsgo"
   },
   "dependencies": {
@@ -29,6 +29,7 @@
     "@types/react-dom": "^19.2.3",
     "@typescript/native-preview": "^7.0.0-dev.20260602.1",
     "tailwindcss": "^4.3.0",
-    "vite-plus": "^0.1.24"
+    "vite-plus": "^0.1.24",
+    "rimraf": "^6.1.3"
   }
 }

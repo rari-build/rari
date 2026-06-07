@@ -42,7 +42,7 @@
   "scripts": {
     "build": "pnpm clean && pnpm typecheck && vp pack",
     "dev": "vp pack --watch",
-    "clean": "rm -rf dist",
+    "clean": "rimraf dist",
     "lint": "vp lint",
     "lint:fix": "vp lint --fix",
     "typecheck": "tsgo"
@@ -53,6 +53,7 @@
   "devDependencies": {
     "@types/node": "catalog:typescript",
     "@typescript/native-preview": "catalog:typescript",
+    "rimraf": "catalog:default",
     "vite-plus": "catalog:build"
   }
 }

@@ -104,7 +104,7 @@
   },
   "scripts": {
     "build": "pnpm clean && pnpm typecheck && vp pack",
-    "clean": "rm -rf dist",
+    "clean": "rimraf dist",
     "lint": "vp lint",
     "lint:fix": "vp lint --fix",
     "typecheck": "tsgo"
@@ -132,6 +132,7 @@
     "@types/react": "catalog:react",
     "@types/react-dom": "catalog:react",
     "@typescript/native-preview": "catalog:typescript",
+    "rimraf": "catalog:",
     "vite-plus": "catalog:build"
   }
 }

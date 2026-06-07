@@ -14,7 +14,7 @@
     "build": "rari build",
     "dev": "rari dev",
     "start": "rari start",
-    "clean": "rm -rf dist",
+    "clean": "rimraf dist",
     "lint": "vp lint",
     "lint:fix": "vp lint --fix",
     "typecheck": "tsgo"
@@ -40,6 +40,7 @@
     "@types/react": "catalog:react",
     "@types/react-dom": "catalog:react",
     "@typescript/native-preview": "catalog:typescript",
+    "rimraf": "catalog:default",
     "tailwindcss": "catalog:tailwind",
     "vite-plus": "catalog:build"
   }
