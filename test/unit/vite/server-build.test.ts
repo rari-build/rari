@@ -1,6 +1,6 @@
 import fsSync from 'node:fs'
 import path from 'node:path'
-import { ServerComponentBuilder } from '@rari/vite/server-build'
+import { hasComponentExport, ServerComponentBuilder } from '@rari/vite/server-build'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 
 vi.mock('node:fs')
@@ -685,6 +685,95 @@ export async function action() { return {} }`)
       builder.addServerComponent(filePath)
 
       await expect(builder.buildServerComponents()).rejects.toThrow(SyntaxError)
+    })
+  })
+})
+
+describe('hasComponentExport', () => {
+  describe('should return false for const-only modules', () => {
+    it('rejects single const export', () => {
+      expect(hasComponentExport('export const TEST_LABEL = "hello"')).toBe(false)
+    })
+
+    it('rejects multiple const exports', () => {
+      const code = `export const A = 1
+export const B = "test"
+export const C = { key: "value" }`
+      expect(hasComponentExport(code)).toBe(false)
+    })
+
+    it('rejects object const exports', () => {
+      expect(hasComponentExport('export const config = { port: 3000, host: "localhost" }')).toBe(false)
+    })
+
+    it('rejects array const exports', () => {
+      expect(hasComponentExport('export const items = [1, 2, 3]')).toBe(false)
+    })
+
+    it('rejects re-exports of values', () => {
+      expect(hasComponentExport('export { FOO, BAR } from "./constants"')).toBe(false)
+    })
+
+    it('rejects type-only exports', () => {
+      expect(hasComponentExport('export type Foo = { bar: string }')).toBe(false)
+    })
+
+    it('rejects interface exports', () => {
+      expect(hasComponentExport('export interface Config { port: number }')).toBe(false)
+    })
+
+    it('rejects enum exports', () => {
+      expect(hasComponentExport('export enum Status { Active, Inactive }')).toBe(false)
+    })
+  })
+
+  describe('should return true for modules with function/component exports', () => {
+    it('detects export default function', () => {
+      expect(hasComponentExport('export default function Page() { return <div/> }')).toBe(true)
+    })
+
+    it('detects named function export', () => {
+      expect(hasComponentExport('export function getData() { return 1 }')).toBe(true)
+    })
+
+    it('detects async function export', () => {
+      expect(hasComponentExport('export async function fetchData() { return await fetch("/") }')).toBe(true)
+    })
+
+    it('detects arrow function const export', () => {
+      expect(hasComponentExport('export const handler = () => {}')).toBe(true)
+    })
+
+    it('detects typed arrow function export', () => {
+      expect(hasComponentExport('export const handler: Handler = () => {}')).toBe(true)
+    })
+
+    it('detects async arrow function export', () => {
+      expect(hasComponentExport('export const handler = async () => {}')).toBe(true)
+    })
+
+    it('detects single-param arrow function', () => {
+      expect(hasComponentExport('export const fn = x => x')).toBe(true)
+    })
+
+    it('detects export default class', () => {
+      expect(hasComponentExport('export default class MyComponent {}')).toBe(true)
+    })
+
+    it('detects default anonymous function', () => {
+      expect(hasComponentExport('export default function() { return null }')).toBe(true)
+    })
+
+    it('detects function among consts', () => {
+      const code = `export const LABEL = "hello"
+export function Component() { return <div>{LABEL}</div> }`
+      expect(hasComponentExport(code)).toBe(true)
+    })
+
+    it('detects default export via variable assignment', () => {
+      const code = `function Page() { return <div/> }
+export default Page`
+      expect(hasComponentExport(code)).toBe(true)
     })
   })
 })
