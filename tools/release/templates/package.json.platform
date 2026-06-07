@@ -1,21 +1,21 @@
 {
-  "name": "rari-linux-x64",
+  "name": "{NAME}",
   "type": "module",
-  "version": "0.14.5",
-  "description": "Runtime Accelerated Rendering Infrastructure (Linux x64 binary)",
+  "version": "{VERSION}",
+  "description": "Runtime Accelerated Rendering Infrastructure ({DESCRIPTION})",
   "author": "Ryan Skinner",
   "license": "MIT",
   "os": [
-    "linux"
+    "{OS}"
   ],
   "cpu": [
-    "x64"
+    "{CPU}"
   ],
   "homepage": "https://github.com/rari-build/rari#readme",
   "repository": {
     "type": "git",
     "url": "https://github.com/rari-build/rari.git",
-    "directory": "packages/rari-linux-x64"
+    "directory": "packages/{NAME}"
   },
   "bugs": {
     "url": "https://github.com/rari-build/rari/issues"
@@ -23,19 +23,18 @@
   "keywords": [
     "rari",
     "binary",
-    "linux",
-    "x64",
+    {KEYWORDS}
     "rust",
     "react",
     "server-components"
   ],
   "bin": {
-    "rari": "./bin/rari"
+    "rari": "{BIN_PATH}"
   },
   "files": [
     "LICENSE",
     "README.md",
-    "bin/rari"
+    "{BIN_FILE}"
   ],
   "engines": {
     "node": ">=22.12.0"

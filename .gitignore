@@ -2,6 +2,9 @@
 dist
 node_modules
 packages/*/bin
+packages/rari-darwin-*/
+packages/rari-linux-*/
+packages/rari-win32-*/
 .cache
 coverage
 test-results

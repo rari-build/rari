@@ -7276,6 +7276,7 @@ dependencies = [
  "anyhow",
  "clap",
  "colored",
+ "cow-utils",
  "crossterm",
  "open",
  "ratatui",

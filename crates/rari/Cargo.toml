@@ -133,7 +133,7 @@ tungstenite = "0.29.0"
 
 # === Utilities ===
 bytes = "1.11.1"
-cow-utils = "0.1.3"
+cow-utils = { workspace = true }
 dashmap = "6.2.1"
 parking_lot = "0.12.5"
 smallvec = "1.15.1"
