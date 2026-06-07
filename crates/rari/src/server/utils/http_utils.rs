@@ -48,7 +48,7 @@ pub fn merge_vary_with_accept(existing_vary: Option<&HeaderValue>) -> String {
 }
 
 pub fn get_content_type(path: &str) -> &'static str {
-    if path.ends_with(".js") {
+    if path.ends_with(".js") || path.ends_with(".mjs") {
         "application/javascript"
     } else if path.ends_with(".css") {
         "text/css"
@@ -60,8 +60,38 @@ pub fn get_content_type(path: &str) -> &'static str {
         "image/png"
     } else if path.ends_with(".jpg") || path.ends_with(".jpeg") {
         "image/jpeg"
+    } else if path.ends_with(".gif") {
+        "image/gif"
+    } else if path.ends_with(".webp") {
+        "image/webp"
+    } else if path.ends_with(".avif") {
+        "image/avif"
     } else if path.ends_with(".svg") {
         "image/svg+xml"
+    } else if path.ends_with(".ico") {
+        "image/x-icon"
+    } else if path.ends_with(".woff") {
+        "font/woff"
+    } else if path.ends_with(".woff2") {
+        "font/woff2"
+    } else if path.ends_with(".ttf") {
+        "font/ttf"
+    } else if path.ends_with(".otf") {
+        "font/otf"
+    } else if path.ends_with(".wasm") {
+        "application/wasm"
+    } else if path.ends_with(".xml") {
+        "application/xml"
+    } else if path.ends_with(".txt") {
+        "text/plain"
+    } else if path.ends_with(".map") {
+        "application/json"
+    } else if path.ends_with(".mp4") {
+        "video/mp4"
+    } else if path.ends_with(".webm") {
+        "video/webm"
+    } else if path.ends_with(".pdf") {
+        "application/pdf"
     } else {
         "application/octet-stream"
     }
@@ -399,5 +429,35 @@ mod tests {
         assert!(is_origin_allowed("http://app.example.com:8080", &allowed));
         assert!(!is_origin_allowed("https://app.example.com:443", &allowed));
         assert!(!is_origin_allowed("http://app.example.com:80", &allowed));
+    }
+
+    #[test]
+    fn test_get_content_type_mappings() {
+        assert_eq!(get_content_type("app.js"), "application/javascript");
+        assert_eq!(get_content_type("module.mjs"), "application/javascript");
+        assert_eq!(get_content_type("style.css"), "text/css");
+        assert_eq!(get_content_type("index.html"), "text/html");
+        assert_eq!(get_content_type("data.json"), "application/json");
+        assert_eq!(get_content_type("bundle.js.map"), "application/json");
+        assert_eq!(get_content_type("feed.xml"), "application/xml");
+        assert_eq!(get_content_type("readme.txt"), "text/plain");
+        assert_eq!(get_content_type("photo.png"), "image/png");
+        assert_eq!(get_content_type("photo.jpg"), "image/jpeg");
+        assert_eq!(get_content_type("photo.jpeg"), "image/jpeg");
+        assert_eq!(get_content_type("anim.gif"), "image/gif");
+        assert_eq!(get_content_type("photo.webp"), "image/webp");
+        assert_eq!(get_content_type("photo.avif"), "image/avif");
+        assert_eq!(get_content_type("logo.svg"), "image/svg+xml");
+        assert_eq!(get_content_type("favicon.ico"), "image/x-icon");
+        assert_eq!(get_content_type("font.woff"), "font/woff");
+        assert_eq!(get_content_type("font.woff2"), "font/woff2");
+        assert_eq!(get_content_type("font.ttf"), "font/ttf");
+        assert_eq!(get_content_type("font.otf"), "font/otf");
+        assert_eq!(get_content_type("app.wasm"), "application/wasm");
+        assert_eq!(get_content_type("video.mp4"), "video/mp4");
+        assert_eq!(get_content_type("video.webm"), "video/webm");
+        assert_eq!(get_content_type("doc.pdf"), "application/pdf");
+        assert_eq!(get_content_type("file.xyz"), "application/octet-stream");
+        assert_eq!(get_content_type("noextension"), "application/octet-stream");
     }
 }
