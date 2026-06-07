@@ -218,6 +218,19 @@ where
     }
 }
 
+fn resolve_rari_package_dir() -> Option<std::path::PathBuf> {
+    let cwd = std::env::current_dir().ok()?;
+    let mut search_dir = cwd.as_path();
+
+    loop {
+        let candidate = search_dir.join("node_modules").join("rari");
+        if candidate.exists() {
+            return Some(candidate);
+        }
+        search_dir = search_dir.parent()?;
+    }
+}
+
 pub async fn initialize_proxy(state: &ServerState) -> Result<(), Box<dyn std::error::Error>> {
     if !is_proxy_enabled() {
         return Ok(());
@@ -226,24 +239,26 @@ pub async fn initialize_proxy(state: &ServerState) -> Result<(), Box<dyn std::er
     let renderer = state.renderer.lock().await;
     let runtime = &renderer.runtime;
 
-    let executor_path = std::path::Path::new("node_modules/rari/dist/proxy/runtime-executor.mjs");
+    let rari_pkg_dir = match resolve_rari_package_dir() {
+        Some(dir) => dir,
+        None => return Ok(()),
+    };
+
+    let executor_path = rari_pkg_dir.join("dist/proxy/runtime-executor.mjs");
 
     if !executor_path.exists() {
         return Ok(());
     }
 
-    let executor_absolute = if let Ok(canonical) = executor_path.canonicalize() {
-        canonical
-    } else {
-        std::env::current_dir()?.join(executor_path)
-    };
+    let executor_absolute =
+        if let Ok(canonical) = executor_path.canonicalize() { canonical } else { executor_path };
     let executor_specifier = path_to_file_url(&executor_absolute);
 
-    let rari_request_path = std::path::Path::new("node_modules/rari/dist/proxy/RariRequest.mjs");
+    let rari_request_path = rari_pkg_dir.join("dist/proxy/RariRequest.mjs");
     let rari_request_absolute = if let Ok(canonical) = rari_request_path.canonicalize() {
         canonical
     } else {
-        std::env::current_dir()?.join(rari_request_path)
+        rari_request_path
     };
     let rari_request_specifier = path_to_file_url(&rari_request_absolute);
 

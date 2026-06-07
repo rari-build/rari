@@ -170,6 +170,26 @@ async function loadRuntimeFile(filename: string): Promise<string> {
   throw new Error(`Could not find ${filename}. Tried: ${possiblePaths.join(', ')}`)
 }
 
+const RARI_DIST_DIR = path.dirname(fileURLToPath(import.meta.url))
+
+function resolveRuntimeDistFile(filename: string): string | null {
+  const possiblePaths = [
+    path.join(RARI_DIST_DIR, 'runtime', filename),
+    path.join(RARI_DIST_DIR, '../runtime', filename),
+  ]
+
+  for (const filePath of possiblePaths) {
+    if (fs.existsSync(filePath))
+      return filePath
+  }
+
+  return null
+}
+
+function isRariInternalFile(filePath: string): boolean {
+  return filePath.startsWith(RARI_DIST_DIR)
+}
+
 async function loadRscClientRuntime(): Promise<string> {
   return loadRuntimeFile('rsc-client-runtime.mjs')
 }
@@ -286,7 +306,7 @@ export function rari(options: RariOptions = {}): Plugin[] {
   }
 
   function isServerComponent(filePath: string): boolean {
-    if (filePath.includes('node_modules') || (filePath.includes('/rari/dist/') || filePath.includes('\\rari\\dist\\')))
+    if (filePath.includes('node_modules') || isRariInternalFile(filePath))
       return false
 
     const projectRoot = options.projectRoot || process.cwd()
@@ -1869,72 +1889,47 @@ for (const [path, config] of Object.entries(lazyComponentRegistry)) {
         return await loadReactServerDomShim()
 
       if (id === 'virtual:app-router-provider.tsx') {
-        const possiblePaths = [
-          path.join(process.cwd(), 'packages/rari/dist/runtime/AppRouterProvider.mjs'),
-          path.join(process.cwd(), 'node_modules/rari/dist/runtime/AppRouterProvider.mjs'),
-        ]
-
-        for (const providerSourcePath of possiblePaths) {
-          if (fs.existsSync(providerSourcePath))
-            return fs.readFileSync(providerSourcePath, 'utf-8')
-        }
+        const runtimeFile = resolveRuntimeDistFile('AppRouterProvider.mjs')
+        if (runtimeFile)
+          return fs.readFileSync(runtimeFile, 'utf-8')
 
         return 'export function AppRouterProvider({ children }) { return children; }'
       }
 
       if (id === 'virtual:default-loading-indicator.tsx') {
-        const possiblePaths = [
-          path.join(process.cwd(), 'packages/rari/dist/runtime/DefaultLoadingIndicator.mjs'),
-          path.join(process.cwd(), 'node_modules/rari/dist/runtime/DefaultLoadingIndicator.mjs'),
-        ]
-
-        for (const sourcePath of possiblePaths) {
-          if (fs.existsSync(sourcePath))
-            return fs.readFileSync(sourcePath, 'utf-8')
-        }
+        const runtimeFile = resolveRuntimeDistFile('DefaultLoadingIndicator.mjs')
+        if (runtimeFile)
+          return fs.readFileSync(runtimeFile, 'utf-8')
 
         return 'export function DefaultLoadingIndicator() { return null; }'
       }
 
       if (id === 'virtual:loading-error-boundary.tsx') {
-        const possiblePaths = [
-          path.join(process.cwd(), 'packages/rari/dist/runtime/LoadingErrorBoundary.mjs'),
-          path.join(process.cwd(), 'node_modules/rari/dist/runtime/LoadingErrorBoundary.mjs'),
-        ]
-
-        for (const sourcePath of possiblePaths) {
-          if (fs.existsSync(sourcePath))
-            return fs.readFileSync(sourcePath, 'utf-8')
-        }
+        const runtimeFile = resolveRuntimeDistFile('LoadingErrorBoundary.mjs')
+        if (runtimeFile)
+          return fs.readFileSync(runtimeFile, 'utf-8')
 
         return 'export class LoadingErrorBoundary extends React.Component { render() { return this.props.children; } }'
       }
 
       if (id === 'virtual:error-boundary-wrapper.tsx') {
-        const possiblePaths = [
-          path.join(process.cwd(), 'packages/rari/dist/runtime/ErrorBoundaryWrapper.mjs'),
-          path.join(process.cwd(), 'node_modules/rari/dist/runtime/ErrorBoundaryWrapper.mjs'),
-          path.join(process.cwd(), 'packages/rari/src/runtime/ErrorBoundaryWrapper.tsx'),
-        ]
-
-        for (const possiblePath of possiblePaths) {
-          if (fs.existsSync(possiblePath)) {
-            const content = fs.readFileSync(possiblePath, 'utf-8')
-            if (!content.includes('import React') && !content.includes('from "react"') && !content.includes('from \'react\'')) {
-              const useClientMatch = content.match(USE_CLIENT_DIRECTIVE_LINE_REGEX)
-              if (useClientMatch) {
-                const directive = useClientMatch[0]
-                const rest = content.slice(directive.length)
-                return `
-${directive}import * as React from 'react';\n${rest}`
-              }
-
+        const runtimeFile = resolveRuntimeDistFile('ErrorBoundaryWrapper.mjs')
+        if (runtimeFile) {
+          const content = fs.readFileSync(runtimeFile, 'utf-8')
+          if (!content.includes('import React') && !content.includes('from "react"') && !content.includes('from \'react\'')) {
+            const useClientMatch = content.match(USE_CLIENT_DIRECTIVE_LINE_REGEX)
+            if (useClientMatch) {
+              const directive = useClientMatch[0]
+              const rest = content.slice(directive.length)
               return `
-import * as React from 'react';\n${content}`
+${directive}import * as React from 'react';\n${rest}`
             }
 
-            return content
+            return `
+import * as React from 'react';\n${content}`
           }
+
+          return content
         }
 
         return `'use client';

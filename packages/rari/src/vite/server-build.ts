@@ -3,7 +3,7 @@ import type { ServerCacheControlConfig, ServerConfig, ServerCSPConfig } from '..
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { build } from 'rolldown'
 import {
   EXPORTED_CONST_FUNCTION_REGEX,
@@ -30,6 +30,11 @@ const SPECIAL_FILE_REGEX = /^(?:robots|sitemap)\.(?:tsx?|jsx?)$/
 const NODE_PROTOCOL_REGEX = /^node:/
 const PATH_SEPARATOR_NORMALIZE_REGEX = /\\/g
 export const RARI_CSS_MODULES_PATTERN = '[hash]_[local]'
+
+const RARI_DIST_DIR = path.dirname(fileURLToPath(import.meta.url))
+function isRariInternalPath(filePath: string): boolean {
+  return filePath.startsWith(RARI_DIST_DIR)
+}
 
 interface BuiltComponent {
   code: string
@@ -711,7 +716,7 @@ const ${importName} = (props) => {
       {
         name: 'resolve-client-server-boundaries',
         resolveId: (source: string, importer: string | undefined) => {
-          if (!importer || importer.includes('node_modules') || importer.includes('/packages/rari/dist'))
+          if (!importer || importer.includes('node_modules') || isRariInternalPath(importer))
             return null
 
           if (
@@ -927,13 +932,9 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
         name: 'resolve-rari-proxy',
         resolveId: (source: string) => {
           if (isProxyFile && source === 'rari') {
-            const rariResponsePath = path.resolve(self.projectRoot, 'node_modules/rari/dist/proxy/RariResponse.mjs')
+            const rariResponsePath = path.join(RARI_DIST_DIR, 'proxy/RariResponse.mjs')
             if (fs.existsSync(rariResponsePath))
               return rariResponsePath
-
-            const rariResponseSrcPath = path.resolve(self.projectRoot, 'node_modules/rari/src/proxy/RariResponse.ts')
-            if (fs.existsSync(rariResponseSrcPath))
-              return rariResponseSrcPath
           }
 
           return null
