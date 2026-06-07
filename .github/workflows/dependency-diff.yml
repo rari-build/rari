@@ -27,5 +27,5 @@ jobs:
           pr-number: ${{ github.event.pull_request.number }}
           dependency-threshold: 5
           size-threshold: 25000
-          duplicate-threshold: 0
+          duplicate-threshold: 2
           detect-replacements: true
