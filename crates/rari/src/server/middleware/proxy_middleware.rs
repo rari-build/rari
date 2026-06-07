@@ -250,6 +250,10 @@ pub async fn initialize_proxy(state: &ServerState) -> Result<(), Box<dyn std::er
     let executor_path = rari_pkg_dir.join("dist/proxy/runtime-executor.mjs");
 
     if !executor_path.exists() {
+        tracing::debug!(
+            "Proxy: executor not found at {}, skipping proxy setup",
+            executor_path.display()
+        );
         return Ok(());
     }
 
