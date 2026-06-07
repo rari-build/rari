@@ -190,6 +190,7 @@ mod tests {
         assert_eq!(result.unwrap(), test_file.canonicalize().unwrap());
     }
 
+    #[cfg(unix)]
     #[test]
     fn test_rejects_symlink_escape() {
         let temp_dir = TempDir::new().unwrap();
@@ -199,7 +200,6 @@ mod tests {
         let outside_file = outside_dir.path().join("secret.txt");
         fs::write(&outside_file, "secret").unwrap();
 
-        #[cfg(unix)]
         {
             use std::os::unix::fs::symlink;
             let link_path = base.join("escape");

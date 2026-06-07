@@ -41,6 +41,77 @@ const SEGMENT_PATTERNS = {
   OPTIONAL_CATCH_ALL: /^\[\[\.\.\.([^\]]+)\]\]$/,
 } as const
 
+const ROUTE_SEGMENT_MATCHERS = [
+  {
+    pattern: SEGMENT_PATTERNS.OPTIONAL_CATCH_ALL,
+    type: 'optional-catch-all' as const,
+    format: (param: string) => `[[...${param}]]`,
+  },
+  {
+    pattern: SEGMENT_PATTERNS.CATCH_ALL,
+    type: 'catch-all' as const,
+    format: (param: string) => `[...${param}]`,
+  },
+  {
+    pattern: SEGMENT_PATTERNS.DYNAMIC,
+    type: 'dynamic' as const,
+    format: (param: string) => `[${param}]`,
+  },
+] as const
+
+const GROUP_SEGMENT = /^\([^/]+\)$/
+
+export function isGroupSegment(name: string) {
+  return GROUP_SEGMENT.test(name)
+}
+
+function isInGroup(filePath: string) {
+  if (!filePath) {
+    return false
+  }
+
+  return filePath
+    .replace(BACKSLASH_REGEX, '/')
+    .split('/')
+    .filter(Boolean)
+    .some(isGroupSegment)
+}
+
+function matchRouteSegment(segment: string) {
+  for (const matcher of ROUTE_SEGMENT_MATCHERS) {
+    const match = segment.match(matcher.pattern)
+    if (match) {
+      return {
+        type: matcher.type,
+        param: match[1],
+        format: matcher.format,
+      }
+    }
+  }
+}
+
+function formatRouteSegment(segment: string) {
+  const match = matchRouteSegment(segment)
+
+  return match ? match.format(match.param) : segment
+}
+
+function parseRouteSegment(segment: string): RouteSegment {
+  const match = matchRouteSegment(segment)
+  if (match) {
+    return {
+      type: match.type,
+      value: segment,
+      param: match.param,
+    }
+  }
+
+  return {
+    type: 'static' as RouteSegmentType,
+    value: segment,
+  }
+}
+
 const SIZE_EXPORT_REGEX = /export\s+const\s+size\s*=\s*\{\s*width\s*:\s*(\d+)\s*,\s*height\s*:\s*(\d+)\s*[,}]/
 const CONTENT_TYPE_EXPORT_REGEX = /export\s+const\s+contentType\s*=\s*['"]([^'"]+)['"]/
 
@@ -71,6 +142,10 @@ class AppRouteGenerator {
 
     await this.scanDirectory('', routes, layouts, loading, errors, notFound, apiRoutes, ogImages)
 
+    for (const entries of [layouts, loading, errors, notFound, ogImages]) {
+      this.finalizeGroupEntries(routes, entries)
+    }
+
     if (this.verbose) {
       console.warn(`[rari] Router: Found ${routes.length} routes`)
       console.warn(`[rari] Router: Found ${layouts.length} layouts`)
@@ -89,6 +164,39 @@ class AppRouteGenerator {
       apiRoutes: this.sortApiRoutes(apiRoutes),
       ogImages,
       generated: new Date().toISOString(),
+    }
+  }
+
+  private finalizeGroupEntries<T extends { path: string, filePath: string, additionalPaths?: string[] }>(
+    pages: AppRouteEntry[],
+    entries: T[],
+  ): void {
+    for (let i = entries.length - 1; i >= 0; i--) {
+      const entry = entries[i]
+      const fileDir = path.dirname(entry.filePath).replace(BACKSLASH_REGEX, '/')
+      if (!isInGroup(fileDir)) {
+        continue
+      }
+
+      const pagesInSubtree = pages
+        .filter((p) => {
+          const pDir = path.dirname(p.filePath).replace(BACKSLASH_REGEX, '/')
+
+          return pDir === fileDir || pDir.startsWith(`${fileDir}/`)
+        })
+        .map(p => p.path)
+
+      if (pagesInSubtree.length === 0) {
+        entries.splice(i, 1)
+        continue
+      }
+
+      const uniqueSorted = Array.from(new Set(pagesInSubtree)).sort()
+      entry.path = uniqueSorted[0]
+
+      if (uniqueSorted.length > 1) {
+        entry.additionalPaths = uniqueSorted.slice(1)
+      }
     }
   }
 
@@ -244,7 +352,7 @@ class AppRouteGenerator {
     }
 
     const routeFile = this.findFile(files, SPECIAL_FILES.ROUTE)
-    if (routeFile) {
+    if (routeFile && !isInGroup(relativePath)) {
       const apiRoute = await this.processApiRouteFile(relativePath, routeFile)
       apiRoutes.push(apiRoute)
     }
@@ -267,22 +375,9 @@ class AppRouteGenerator {
     const normalized = filePath.replace(BACKSLASH_REGEX, '/')
 
     const segments = normalized.split('/').filter(Boolean)
-    const routeSegments = segments.map((segment) => {
-      if (SEGMENT_PATTERNS.OPTIONAL_CATCH_ALL.test(segment)) {
-        const match = segment.match(SEGMENT_PATTERNS.OPTIONAL_CATCH_ALL)
-        return `[[...${match![1]}]]`
-      }
-      if (SEGMENT_PATTERNS.CATCH_ALL.test(segment)) {
-        const match = segment.match(SEGMENT_PATTERNS.CATCH_ALL)
-        return `[...${match![1]}]`
-      }
-      if (SEGMENT_PATTERNS.DYNAMIC.test(segment)) {
-        const match = segment.match(SEGMENT_PATTERNS.DYNAMIC)
-        return `[${match![1]}]`
-      }
-
-      return segment
-    })
+    const routeSegments = segments
+      .filter(segment => !isGroupSegment(segment))
+      .map(formatRouteSegment)
 
     return `/${routeSegments.join('/')}`
   }
@@ -292,39 +387,9 @@ class AppRouteGenerator {
       return []
 
     const segments = filePath.split(PATH_SEPARATOR_REGEX).filter(Boolean)
-    return segments.map((segment) => {
-      if (SEGMENT_PATTERNS.OPTIONAL_CATCH_ALL.test(segment)) {
-        const match = segment.match(SEGMENT_PATTERNS.OPTIONAL_CATCH_ALL)
-        return {
-          type: 'optional-catch-all' as RouteSegmentType,
-          value: segment,
-          param: match![1],
-        }
-      }
-
-      if (SEGMENT_PATTERNS.CATCH_ALL.test(segment)) {
-        const match = segment.match(SEGMENT_PATTERNS.CATCH_ALL)
-        return {
-          type: 'catch-all' as RouteSegmentType,
-          value: segment,
-          param: match![1],
-        }
-      }
-
-      if (SEGMENT_PATTERNS.DYNAMIC.test(segment)) {
-        const match = segment.match(SEGMENT_PATTERNS.DYNAMIC)
-        return {
-          type: 'dynamic' as RouteSegmentType,
-          value: segment,
-          param: match![1],
-        }
-      }
-
-      return {
-        type: 'static' as RouteSegmentType,
-        value: segment,
-      }
-    })
+    return segments
+      .filter(segment => !isGroupSegment(segment))
+      .map(parseRouteSegment)
   }
 
   private extractParams(segments: RouteSegment[]): string[] {
@@ -362,7 +427,7 @@ class AppRouteGenerator {
       'coverage',
     ]
 
-    return !skipDirs.includes(name) && !name.startsWith('.')
+    return !skipDirs.includes(name) && !name.startsWith('_') && !name.startsWith('.')
   }
 
   private sortRoutes(routes: AppRouteEntry[]): AppRouteEntry[] {

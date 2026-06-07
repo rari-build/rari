@@ -59,6 +59,14 @@ impl OgImageGenerator {
         if let Some(og_images) = manifest_data.get("ogImages").and_then(|v| v.as_array()) {
             for entry in og_images {
                 if let Ok(og_entry) = serde_json::from_value::<OgImageEntry>(entry.clone()) {
+                    if let Some(existing) = manifest.get(&og_entry.path) {
+                        tracing::warn!(
+                            "OG image path collision: '{}' is already used by '{}', overwriting with '{}'",
+                            og_entry.path,
+                            existing.file_path,
+                            og_entry.file_path
+                        );
+                    }
                     manifest.insert(og_entry.path.clone(), og_entry);
                 }
             }
@@ -88,63 +96,7 @@ impl OgImageGenerator {
 
     pub async fn find_og_image_for_route(&self, route_path: &str) -> Option<OgImageEntry> {
         let manifest = self.manifest.read().await;
-
-        if let Some(entry) = manifest.get(route_path) {
-            return Some(entry.clone());
-        }
-
-        let path_segments: Vec<&str> = route_path.split('/').filter(|s| !s.is_empty()).collect();
-
-        for (pattern, entry) in manifest.iter() {
-            let pattern_segments: Vec<&str> =
-                pattern.split('/').filter(|s| !s.is_empty()).collect();
-
-            let has_catch_all =
-                pattern_segments.iter().any(|seg| seg.starts_with("[...") && seg.ends_with(']'));
-
-            if has_catch_all {
-                let mut matches = true;
-                let mut path_idx = 0;
-
-                for pattern_seg in pattern_segments.iter() {
-                    if pattern_seg.starts_with("[...") && pattern_seg.ends_with(']') {
-                        break;
-                    } else if path_idx >= path_segments.len()
-                        || pattern_seg != &path_segments[path_idx]
-                    {
-                        matches = false;
-                        break;
-                    } else {
-                        path_idx += 1;
-                    }
-                }
-
-                if matches {
-                    return Some(entry.clone());
-                }
-            } else {
-                if pattern_segments.len() != path_segments.len() {
-                    continue;
-                }
-
-                let mut matches = true;
-
-                for (pattern_seg, path_seg) in pattern_segments.iter().zip(path_segments.iter()) {
-                    if pattern_seg.starts_with('[') && pattern_seg.ends_with(']') {
-                        continue;
-                    } else if pattern_seg != path_seg {
-                        matches = false;
-                        break;
-                    }
-                }
-
-                if matches {
-                    return Some(entry.clone());
-                }
-            }
-        }
-
-        None
+        self.find_matching_entry(&manifest, route_path).map(|(entry, _)| entry.clone())
     }
 
     pub async fn generate(&self, route_path: &str) -> Result<(Vec<u8>, bool), OgImageError> {
@@ -201,6 +153,15 @@ impl OgImageGenerator {
         use crate::server::routing::types::ParamValue;
 
         if let Some(entry) = manifest.get(route_path) {
+            return Some((entry, FxHashMap::default()));
+        }
+
+        if let Some(entry) = manifest.values().find(|entry| {
+            entry
+                .additional_paths
+                .as_deref()
+                .is_some_and(|paths| paths.iter().any(|path| path.as_str() == route_path))
+        }) {
             return Some((entry, FxHashMap::default()));
         }
 
@@ -436,6 +397,7 @@ mod tests {
             width: Some(1200),
             height: Some(630),
             content_type: Some("image/png".to_string()),
+            additional_paths: None,
         };
 
         generator.register_component("/blog".to_string(), entry.clone()).await;
@@ -459,6 +421,7 @@ mod tests {
             width: Some(1200),
             height: Some(630),
             content_type: Some("image/png".to_string()),
+            additional_paths: None,
         };
 
         generator.register_component("/blog/[slug]".to_string(), entry.clone()).await;
@@ -491,6 +454,7 @@ mod tests {
             width: Some(1200),
             height: Some(630),
             content_type: Some("image/png".to_string()),
+            additional_paths: None,
         };
 
         let static_entry = OgImageEntry {
@@ -499,6 +463,7 @@ mod tests {
             width: Some(1600),
             height: Some(900),
             content_type: Some("image/png".to_string()),
+            additional_paths: None,
         };
 
         generator.register_component("/blog/[slug]".to_string(), dynamic_entry).await;
@@ -508,6 +473,87 @@ mod tests {
         assert!(found.is_some());
         let found = found.unwrap();
         assert_eq!(found.path, "/blog/featured");
+        assert_eq!(found.width, Some(1600));
+    }
+
+    #[tokio::test]
+    async fn test_find_og_image_with_additional_paths() {
+        let runtime = Arc::new(JsExecutionRuntime::new(None));
+        let generator = OgImageGenerator::new(runtime, std::path::PathBuf::from("."));
+
+        let entry = OgImageEntry {
+            path: "/about".to_string(),
+            file_path: "(marketing)/opengraph-image.tsx".to_string(),
+            width: Some(1200),
+            height: Some(630),
+            content_type: Some("image/png".to_string()),
+            additional_paths: Some(vec!["/pricing".to_string()]),
+        };
+
+        generator.register_component("/about".to_string(), entry).await;
+
+        let found = generator.find_og_image_for_route("/pricing").await;
+        assert!(found.is_some());
+        let found = found.unwrap();
+        assert_eq!(found.path, "/about");
+        assert_eq!(found.file_path, "(marketing)/opengraph-image.tsx");
+    }
+
+    #[test]
+    fn test_og_image_entry_deserializes_additional_paths() {
+        let entry: OgImageEntry = serde_json::from_value(serde_json::json!({
+            "path": "/about",
+            "filePath": "(marketing)/opengraph-image.tsx",
+            "width": 1200,
+            "height": 630,
+            "contentType": "image/png",
+            "additionalPaths": ["/pricing"]
+        }))
+        .unwrap();
+
+        assert_eq!(entry.additional_paths, Some(vec!["/pricing".to_string()]));
+    }
+
+    #[tokio::test]
+    #[tracing_test::traced_test]
+    async fn test_load_manifest_warns_on_path_collision_and_overwrites() {
+        let manifest = serde_json::json!({
+            "ogImages": [
+                {
+                    "path": "/",
+                    "filePath": "(marketing)/opengraph-image.tsx",
+                    "width": 1200,
+                    "height": 630,
+                    "contentType": "image/png"
+                },
+                {
+                    "path": "/",
+                    "filePath": "(auth)/opengraph-image.tsx",
+                    "width": 1600,
+                    "height": 900,
+                    "contentType": "image/png"
+                }
+            ]
+        });
+
+        let dir = tempfile::tempdir().unwrap();
+        let manifest_path = dir.path().join("routes.json");
+        std::fs::write(&manifest_path, serde_json::to_string(&manifest).unwrap()).unwrap();
+
+        let runtime = Arc::new(JsExecutionRuntime::new(None));
+        let generator = OgImageGenerator::new(runtime, std::path::PathBuf::from("."));
+
+        let result = generator.load_manifest(manifest_path.to_str().unwrap()).await;
+        assert!(result.is_ok(), "load_manifest should succeed: {:?}", result);
+
+        assert!(logs_contain("OG image path collision"), "expected a warning about path collision");
+        assert!(logs_contain("(marketing)/opengraph-image.tsx"));
+        assert!(logs_contain("(auth)/opengraph-image.tsx"));
+
+        let found = generator.find_og_image_for_route("/").await;
+        assert!(found.is_some());
+        let found = found.unwrap();
+        assert_eq!(found.file_path, "(auth)/opengraph-image.tsx");
         assert_eq!(found.width, Some(1600));
     }
 }

@@ -138,30 +138,19 @@ export function matchRouteParams(
   return params
 }
 
-const layoutChainCache = new Map<string, LayoutEntry[]>()
-
-let cachedManifestVersion: number | undefined
-
-function getManifestVersion(manifest: AppRouteManifest): number {
-  return manifest.layouts.length * 1000 + manifest.routes.length
-}
-
-function invalidateCacheIfNeeded(manifest: AppRouteManifest): void {
-  const currentVersion = getManifestVersion(manifest)
-
-  if (cachedManifestVersion !== currentVersion) {
-    layoutChainCache.clear()
-    cachedManifestVersion = currentVersion
-  }
-}
+const layoutChainCache = new WeakMap<AppRouteManifest, Map<string, LayoutEntry[]>>()
 
 export function findLayoutChain(
   routePath: string,
   manifest: AppRouteManifest,
 ): LayoutEntry[] {
-  invalidateCacheIfNeeded(manifest)
+  let manifestCache = layoutChainCache.get(manifest)
+  if (!manifestCache) {
+    manifestCache = new Map()
+    layoutChainCache.set(manifest, manifestCache)
+  }
 
-  const cached = layoutChainCache.get(routePath)
+  const cached = manifestCache.get(routePath)
   if (cached)
     return cached
 
@@ -170,12 +159,18 @@ export function findLayoutChain(
 
   for (let i = 0; i <= segments.length; i++) {
     const currentPath = i === 0 ? '/' : `/${segments.slice(0, i).join('/')}`
-    const layout = manifest.layouts.find(l => l.path === currentPath)
-    if (layout)
-      chain.push(layout)
+    const exactLayouts = manifest.layouts.filter(l => l.path === currentPath)
+    const layouts = exactLayouts.length > 0
+      ? exactLayouts
+      : manifest.layouts.filter(l => l.additionalPaths?.includes(currentPath))
+
+    for (const layout of layouts) {
+      if (!chain.some(existing => existing.filePath === layout.filePath))
+        chain.push(layout)
+    }
   }
 
-  layoutChainCache.set(routePath, chain)
+  manifestCache.set(routePath, chain)
 
   return chain
 }

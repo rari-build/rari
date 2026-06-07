@@ -1,5 +1,5 @@
 import { promises as fs } from 'node:fs'
-import { generateAppRouteManifest } from '@rari/router/routes'
+import { generateAppRouteManifest, isGroupSegment } from '@rari/router/routes'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 
 vi.mock('node:fs', () => ({
@@ -12,7 +12,7 @@ vi.mock('node:fs', () => ({
 
 describe('generateAppRouteManifest', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    vi.resetAllMocks()
   })
 
   afterEach(() => {
@@ -349,6 +349,25 @@ describe('generateAppRouteManifest', () => {
         params: ['id'],
       })
     })
+
+    it('skips API routes inside groups', async () => {
+      vi.mocked(fs.readdir)
+        .mockResolvedValueOnce(['(api)'] as any)
+        .mockResolvedValueOnce(['hello'] as any)
+        .mockResolvedValueOnce(['route.ts'] as any)
+
+      vi.mocked(fs.stat)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+
+      vi.mocked(fs.readFile).mockResolvedValue('export function GET() {}' as any)
+
+      const manifest = await generateAppRouteManifest('/app')
+
+      expect(manifest.apiRoutes).toHaveLength(0)
+      expect(fs.readFile).not.toHaveBeenCalled()
+    })
   })
 
   describe('route sorting', () => {
@@ -595,6 +614,284 @@ describe('generateAppRouteManifest', () => {
     })
   })
 
+  describe('private folders', () => {
+    it('skips _components directory', async () => {
+      vi.mocked(fs.readdir).mockResolvedValueOnce(['_components', 'page.tsx'] as any)
+      vi.mocked(fs.stat)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+
+      const manifest = await generateAppRouteManifest('/app')
+
+      expect(manifest.routes).toHaveLength(1)
+      expect(manifest.routes[0].path).toBe('/')
+    })
+
+    it('does not recurse into _private subdirectories', async () => {
+      vi.mocked(fs.readdir).mockResolvedValueOnce(['_private', 'page.tsx'] as any)
+      vi.mocked(fs.stat)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+
+      const manifest = await generateAppRouteManifest('/app')
+
+      expect(fs.readdir).toHaveBeenCalledTimes(1)
+      expect(manifest.routes).toHaveLength(1)
+    })
+
+    it('skips _private nested in groups', async () => {
+      vi.mocked(fs.readdir)
+        .mockResolvedValueOnce(['(marketing)'] as any)
+        .mockResolvedValueOnce(['_private'] as any)
+      vi.mocked(fs.stat)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+
+      const manifest = await generateAppRouteManifest('/app')
+
+      expect(manifest.routes).toHaveLength(0)
+      expect(manifest.layouts).toHaveLength(0)
+    })
+  })
+
+  describe('route groups in URLs', () => {
+    it('strips a single group segment from the URL', async () => {
+      vi.mocked(fs.readdir)
+        .mockResolvedValueOnce(['(marketing)'] as any)
+        .mockResolvedValueOnce(['page.tsx'] as any)
+      vi.mocked(fs.stat)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+
+      const manifest = await generateAppRouteManifest('/app')
+
+      expect(manifest.routes).toHaveLength(1)
+      expect(manifest.routes[0].path).toBe('/')
+      expect(manifest.routes[0].filePath).toBe('(marketing)/page.tsx')
+      expect(manifest.routes[0].segments).toEqual([])
+    })
+
+    it('strips group from nested page URL', async () => {
+      vi.mocked(fs.readdir)
+        .mockResolvedValueOnce(['(marketing)'] as any)
+        .mockResolvedValueOnce(['about', 'page.tsx'] as any)
+        .mockResolvedValueOnce(['page.tsx'] as any)
+      vi.mocked(fs.stat)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+
+      const manifest = await generateAppRouteManifest('/app')
+
+      const aboutRoute = manifest.routes.find(r => r.path === '/about')
+      expect(aboutRoute).toBeDefined()
+      expect(aboutRoute!.filePath).toBe('(marketing)/about/page.tsx')
+    })
+
+    it('strips multiple nested groups from URL', async () => {
+      vi.mocked(fs.readdir)
+        .mockResolvedValueOnce(['(a)'] as any)
+        .mockResolvedValueOnce(['(b)'] as any)
+        .mockResolvedValueOnce(['page.tsx'] as any)
+      vi.mocked(fs.stat)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+
+      const manifest = await generateAppRouteManifest('/app')
+
+      expect(manifest.routes[0].path).toBe('/')
+    })
+
+    it('keeps dynamic segments but strips groups', async () => {
+      vi.mocked(fs.readdir)
+        .mockResolvedValueOnce(['(marketing)'] as any)
+        .mockResolvedValueOnce(['[slug]', 'page.tsx'] as any)
+        .mockResolvedValueOnce(['page.tsx'] as any)
+      vi.mocked(fs.stat)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+
+      const manifest = await generateAppRouteManifest('/app')
+
+      const slugRoute = manifest.routes.find(r => r.path === '/[slug]')
+      expect(slugRoute).toBeDefined()
+      expect(slugRoute!.isDynamic).toBe(true)
+      expect(slugRoute!.params).toEqual(['slug'])
+    })
+  })
+
+  describe('layout in route group (initial Phase 1 shape)', () => {
+    it('emits a layout entry per file in the group, with filePath including the group', async () => {
+      vi.mocked(fs.readdir)
+        .mockResolvedValueOnce(['(marketing)'] as any)
+        .mockResolvedValueOnce(['layout.tsx', 'about', 'pricing'] as any)
+        .mockResolvedValueOnce(['page.tsx'] as any)
+        .mockResolvedValueOnce(['page.tsx'] as any)
+      vi.mocked(fs.stat)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+
+      const manifest = await generateAppRouteManifest('/app')
+
+      const layout = manifest.layouts.find(l => l.filePath === '(marketing)/layout.tsx')
+      expect(layout).toBeDefined()
+      expect(layout!.path).toBe('/about')
+      expect(layout!.additionalPaths).toEqual(['/pricing'])
+    })
+  })
+
+  describe('route groups - additionalPaths finalization', () => {
+    it('does not emit empty additionalPaths for a single grouped page target', async () => {
+      vi.mocked(fs.readdir)
+        .mockResolvedValueOnce(['(marketing)'] as any)
+        .mockResolvedValueOnce(['layout.tsx', 'about'] as any)
+        .mockResolvedValueOnce(['page.tsx'] as any)
+      vi.mocked(fs.stat)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+
+      const manifest = await generateAppRouteManifest('/app')
+
+      const layout = manifest.layouts.find(l => l.filePath === '(marketing)/layout.tsx')
+      expect(layout).toBeDefined()
+      expect(layout!.path).toBe('/about')
+      expect(layout!.additionalPaths).toBeUndefined()
+    })
+
+    it('layout in a group applies to all pages in the subtree', async () => {
+      vi.mocked(fs.readdir)
+        .mockResolvedValueOnce(['(marketing)'] as any)
+        .mockResolvedValueOnce(['layout.tsx', 'about', 'pricing'] as any)
+        .mockResolvedValueOnce(['page.tsx'] as any)
+        .mockResolvedValueOnce(['page.tsx'] as any)
+      vi.mocked(fs.stat)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+
+      const manifest = await generateAppRouteManifest('/app')
+
+      const layout = manifest.layouts.find(l => l.filePath === '(marketing)/layout.tsx')
+      expect(layout).toBeDefined()
+      expect(layout!.path).toBe('/about')
+      expect(layout!.additionalPaths).toEqual(['/pricing'])
+    })
+
+    it('sorts additionalPaths alphabetically', async () => {
+      vi.mocked(fs.readdir)
+        .mockResolvedValueOnce(['(g)'] as any)
+        .mockResolvedValueOnce(['layout.tsx', 'zebra', 'apple'] as any)
+        .mockResolvedValueOnce(['page.tsx'] as any)
+        .mockResolvedValueOnce(['page.tsx'] as any)
+      vi.mocked(fs.stat)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+
+      const manifest = await generateAppRouteManifest('/app')
+
+      const layout = manifest.layouts.find(l => l.filePath === '(g)/layout.tsx')
+      expect(layout!.path).toBe('/apple')
+      expect(layout!.additionalPaths).toEqual(['/zebra'])
+    })
+
+    it('layout in nested groups applies to all pages in the deep subtree', async () => {
+      vi.mocked(fs.readdir)
+        .mockResolvedValueOnce(['(a)'] as any)
+        .mockResolvedValueOnce(['(b)'] as any)
+        .mockResolvedValueOnce(['layout.tsx', 'page.tsx', 'sub'] as any)
+        .mockResolvedValueOnce(['page.tsx'] as any)
+        .mockResolvedValueOnce(['page.tsx'] as any)
+      vi.mocked(fs.stat)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+
+      const manifest = await generateAppRouteManifest('/app')
+
+      const layout = manifest.layouts.find(
+        l => l.filePath === '(a)/(b)/layout.tsx',
+      )
+      expect(layout).toBeDefined()
+      expect(layout!.additionalPaths).toContain('/sub')
+    })
+
+    it('drops a layout in a group with no pages anywhere in the subtree', async () => {
+      vi.mocked(fs.readdir)
+        .mockResolvedValueOnce(['(empty)'] as any)
+        .mockResolvedValueOnce(['layout.tsx'] as any)
+      vi.mocked(fs.stat)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+
+      const manifest = await generateAppRouteManifest('/app')
+
+      expect(manifest.layouts).toHaveLength(0)
+    })
+
+    it('loading/error/not-found in groups also get additionalPaths', async () => {
+      vi.mocked(fs.readdir)
+        .mockResolvedValueOnce(['(g)'] as any)
+        .mockResolvedValueOnce(['loading.tsx', 'error.tsx', 'not-found.tsx', 'a', 'b'] as any)
+        .mockResolvedValueOnce(['page.tsx'] as any)
+        .mockResolvedValueOnce(['page.tsx'] as any)
+      vi.mocked(fs.stat)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+
+      const manifest = await generateAppRouteManifest('/app')
+
+      const loading = manifest.loading.find(l => l.filePath === '(g)/loading.tsx')
+      expect(loading!.path).toBe('/a')
+      expect(loading!.additionalPaths).toEqual(['/b'])
+
+      const error = manifest.errors.find(e => e.filePath === '(g)/error.tsx')
+      expect(error!.path).toBe('/a')
+      expect(error!.additionalPaths).toEqual(['/b'])
+
+      const nf = manifest.notFound.find(n => n.filePath === '(g)/not-found.tsx')
+      expect(nf!.path).toBe('/a')
+      expect(nf!.additionalPaths).toEqual(['/b'])
+    })
+
+    it('layout not in a group has no additionalPaths', async () => {
+      vi.mocked(fs.readdir).mockResolvedValueOnce(['layout.tsx', 'page.tsx'] as any)
+      vi.mocked(fs.stat)
+        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+
+      const manifest = await generateAppRouteManifest('/app')
+
+      expect(manifest.layouts[0].path).toBe('/')
+      expect(manifest.layouts[0].additionalPaths).toBeUndefined()
+    })
+  })
+
   describe('error handling', () => {
     it('should handle readdir errors gracefully', async () => {
       vi.mocked(fs.readdir).mockRejectedValue(new Error('Permission denied'))
@@ -647,5 +944,45 @@ describe('generateAppRouteManifest', () => {
       expect(consoleSpy).toHaveBeenCalled()
       consoleSpy.mockRestore()
     })
+  })
+})
+
+describe('isGroupSegment', () => {
+  it('returns true for (marketing)', () => {
+    expect(isGroupSegment('(marketing)')).toBe(true)
+  })
+
+  it('returns true for (auth)', () => {
+    expect(isGroupSegment('(auth)')).toBe(true)
+  })
+
+  it('returns true for nested-style names (a-b)', () => {
+    expect(isGroupSegment('(a-b)')).toBe(true)
+  })
+
+  it('returns false for plain folder names', () => {
+    expect(isGroupSegment('about')).toBe(false)
+    expect(isGroupSegment('dashboard')).toBe(false)
+  })
+
+  it('returns false for _private folders', () => {
+    expect(isGroupSegment('_components')).toBe(false)
+  })
+
+  it('returns false for dynamic segments', () => {
+    expect(isGroupSegment('[id]')).toBe(false)
+  })
+
+  it('returns false for empty parentheses', () => {
+    expect(isGroupSegment('()')).toBe(false)
+  })
+
+  it('returns false for unmatched parens', () => {
+    expect(isGroupSegment('(marketing')).toBe(false)
+    expect(isGroupSegment('marketing)')).toBe(false)
+  })
+
+  it('returns false for nested paths', () => {
+    expect(isGroupSegment('(a)/(b)')).toBe(false)
   })
 })
