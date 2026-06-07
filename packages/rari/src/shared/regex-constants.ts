@@ -47,8 +47,8 @@ export const CAMEL_TO_KEBAB_REGEX = /([A-Z])/g
 
 export const EXPORT_DEFAULT_REGEX = /export\s+default\s+/
 export const EXPORT_NAMED_DECLARATION_REGEX = /export\s+(?:function|const|class)\s+(\w+)/
-export const EXPORTED_FUNCTION_REGEX = /export\s+(?:default\s+)?(?:async\s+)?function[\s*(]/
-export const EXPORTED_ARROW_OR_CLASS_REGEX = /export\s+default\s+(?:class\b|(?:async\s+)?\(|(?:async\s+)?[a-zA-Z_$][\w$]*\s*=>)/
+export const EXPORTED_FUNCTION_REGEX = /export\s+(?:default\s+)?(?:async\s+)?(?:function|class)[\s{(]/
+export const EXPORTED_ARROW_OR_CLASS_REGEX = /export\s+default\s+(?:(?:async\s+)?\(|(?:async\s+)?[a-zA-Z_$][\w$]*\s*=>)/
 export const EXPORTED_CONST_FUNCTION_REGEX = /export\s+(?:const|let|var)\s+\w[^=]*=\s*(?:async\s+)?(?:\(|[a-zA-Z_$][\w$]*\s*=>)/
 
 export const TITLE_EXPORT_REGEX = /^export\s+const\s+title\s*=\s*['"](.+?)['"]/m
