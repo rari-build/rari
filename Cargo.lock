@@ -7288,7 +7288,7 @@ dependencies = [
 
 [[package]]
 name = "rari-prepare-binaries"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -7298,7 +7298,7 @@ dependencies = [
 
 [[package]]
 name = "rari-release"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -7317,7 +7317,7 @@ dependencies = [
 
 [[package]]
 name = "rari-snapshot"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "deno_ast",
  "deno_core",
