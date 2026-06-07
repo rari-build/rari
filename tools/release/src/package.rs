@@ -77,7 +77,7 @@ pub struct ReleasedPackage {
     pub name: String,
     pub version: String,
     pub tag: String,
-    pub commits: Vec<String>,
+    pub release_notes: String,
     pub previous_tag: Option<String>,
 }
 
@@ -204,19 +204,11 @@ impl ReleasedPackage {
         let title = urlencoding::encode(&title_text);
         let tag = urlencoding::encode(&tag_text);
 
-        let mut body = "## What's Changed\n\n".to_string();
-
-        if !self.commits.is_empty() {
-            for commit in &self.commits {
-                body.push_str(&format!("- {}\n", commit));
-            }
-        } else {
-            body.push_str("See CHANGELOG.md for details.\n");
-        }
+        let mut body = self.release_notes.clone();
 
         if let Some(prev_tag) = &self.previous_tag {
             body.push_str(&format!(
-                "\n**Full Changelog**: https://github.com/{}/{}/compare/{}...{}",
+                "\n\n**Full Changelog**: https://github.com/{}/{}/compare/{}...{}",
                 owner, repo, prev_tag, tag_text
             ));
         }

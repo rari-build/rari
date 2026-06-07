@@ -361,11 +361,18 @@ impl App {
                     } else {
                         format!("{}@{}", unit.name(), version)
                     };
+                    let release_notes = changelog::generate_release_notes(
+                        &tag,
+                        unit.name(),
+                        self.previous_tag.as_deref(),
+                    )
+                    .await
+                    .unwrap_or_else(|_| "See CHANGELOG.md for details.".to_string());
                     self.released_packages.push(ReleasedPackage {
                         name: unit.name().to_string(),
                         version: version.clone(),
                         tag: tag.clone(),
-                        commits: self.recent_commits.clone(),
+                        release_notes,
                         previous_tag: self.previous_tag.clone(),
                     });
 

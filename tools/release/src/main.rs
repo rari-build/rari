@@ -302,7 +302,13 @@ async fn run_non_interactive(
             name: unit_name.to_string(),
             version: new_version.clone(),
             tag: tag.clone(),
-            commits: commits.clone(),
+            release_notes: crate::changelog::generate_release_notes(
+                &tag,
+                unit_name,
+                previous_tag.as_deref(),
+            )
+            .await
+            .unwrap_or_else(|_| "See CHANGELOG.md for details.".to_string()),
             previous_tag,
         });
     }
