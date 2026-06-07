@@ -6,6 +6,9 @@ import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import { build } from 'rolldown'
 import {
+  EXPORTED_CONST_FUNCTION_REGEX,
+  EXPORTED_DEFAULT_ARROW_REGEX,
+  EXPORTED_FUNCTION_REGEX,
   FILE_PROTOCOL_REGEX,
   TSX_EXT_REGEX,
 } from '../shared/regex-constants'
@@ -1620,6 +1623,13 @@ function registerClientReference(clientReference, id, exportName) {
   }
 }
 
+export function hasComponentExport(code: string): boolean {
+  return hasDefaultExport(code)
+    || EXPORTED_FUNCTION_REGEX.test(code)
+    || EXPORTED_DEFAULT_ARROW_REGEX.test(code)
+    || EXPORTED_CONST_FUNCTION_REGEX.test(code)
+}
+
 export function scanDirectory(dir: string, builder: ServerComponentBuilder, isTopLevel = true) {
   if (isTopLevel)
     builder.buildImportGraph(dir)
@@ -1650,8 +1660,12 @@ export function scanDirectory(dir: string, builder: ServerComponentBuilder, isTo
         if (builder.isOnlyImportedByClientComponents(fullPath))
           continue
 
-        if (builder.isServerComponent(fullPath, code))
+        if (builder.isServerComponent(fullPath, code)) {
+          if (!hasComponentExport(code))
+            continue
+
           builder.addServerComponent(fullPath, code)
+        }
       }
       catch (error) {
         console.warn(
