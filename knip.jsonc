@@ -25,6 +25,9 @@
       ],
       "project": [
         "src/**/*.{ts,tsx,js,jsx}"
+      ],
+      "ignoreBinaries": [
+        "npx.cmd" // Windows-specific npx command used in cross-platform spawn logic
       ]
     },
     "packages/create-rari-app": {
