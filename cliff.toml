@@ -15,9 +15,18 @@ body = """
     {% for commit in commits %}
         - {% if commit.scope %}*({{ commit.scope }})* {% endif %}\
             {% if commit.breaking %}[**breaking**] {% endif %}\
-            {{ commit.message | upper_first }}\
+            {{ commit.message }}{% if commit.remote.username %} by @{{ commit.remote.username }}{% endif %}\
     {% endfor %}
 {% endfor %}
+{% if github.contributors | filter(attribute="is_first_time", value=true) | length != 0 %}
+    ### 🆕 New Contributors
+    {% for contributor in github.contributors | filter(attribute="is_first_time", value=true) %}
+        - @{{ contributor.username }} made their first contribution
+    {%- endfor %}
+{% endif %}
+{% if previous %}\
+    **Full Changelog**: https://github.com/{{ remote.github.owner }}/{{ remote.github.repo }}/compare/{{ previous.version }}...{{ version }}
+{% endif %}
 """
 # Remove leading and trailing whitespaces from the changelog's body.
 trim = true
@@ -62,10 +71,17 @@ commit_parsers = [
   { message = "^refactor", group = "<!-- 2 -->🚜 Refactor" },
   { message = "^style", group = "<!-- 5 -->🎨 Styling" },
   { message = "^test", group = "<!-- 6 -->🧪 Testing" },
-  { message = "^chore\\(release\\): prepare for", skip = true },
+  { message = "^chore\\(release\\)", skip = true },
+  { message = "^ci\\(release\\)", skip = true },
+  { message = "^chore\\(deps\\): bump rari version", skip = true },
+  { message = "^chore\\(deps\\): upgrade rari to", skip = true },
   { message = "^chore\\(deps.*\\)", skip = true },
   { message = "^chore\\(pr\\)", skip = true },
   { message = "^chore\\(pull\\)", skip = true },
+  { message = "^Merge pull request", skip = true },
+  { message = "^Merge branch", skip = true },
+  { message = "^[Rr]ari@", skip = true },
+  { message = "^release:", skip = true },
   { message = "^chore|^ci", group = "<!-- 7 -->⚙️ Miscellaneous Tasks" },
   { body = ".*security", group = "<!-- 8 -->🛡️ Security" },
   { message = "^revert", group = "<!-- 9 -->◀️ Revert" },
@@ -86,3 +102,7 @@ topo_order_commits = true
 sort_commits = "oldest"
 # Process submodules commits
 recurse_submodules = false
+
+[remote.github]
+owner = "rari-build"
+repo = "rari"
