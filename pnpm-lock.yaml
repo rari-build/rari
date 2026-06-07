@@ -269,25 +269,23 @@ importers:
         version: 0.1.24(@opentelemetry/api@1.9.0)(@types/node@25.9.2)(@vitest/coverage-v8@4.1.8)(jiti@2.7.0)(typescript@5.9.3)(vite@8.0.16(@types/node@25.9.2)(jiti@2.7.0)(yaml@2.9.0))(yaml@2.9.0)
     optionalDependencies:
       rari-darwin-arm64:
-        specifier: 0.14.5
-        version: 0.14.5
+        specifier: 0.14.7
+        version: 0.14.7
       rari-darwin-x64:
-        specifier: 0.14.5
-        version: 0.14.5
+        specifier: 0.14.7
+        version: 0.14.7
       rari-linux-arm64:
-        specifier: 0.14.5
-        version: 0.14.5
+        specifier: 0.14.7
+        version: 0.14.7
       rari-linux-x64:
-        specifier: 0.14.5
-        version: 0.14.5
+        specifier: 0.14.7
+        version: 0.14.7
       rari-win32-arm64:
-        specifier: 0.14.5
-        version: 0.14.5
+        specifier: 0.14.7
+        version: 0.14.7
       rari-win32-x64:
-        specifier: 0.14.5
-        version: 0.14.5
-
-  packages/rari-darwin-arm64: {}
+        specifier: 0.14.7
+        version: 0.14.7
 
   test/fixtures/app:
     dependencies:
@@ -3553,8 +3551,22 @@ packages:
     os: [darwin]
     hasBin: true
 
+  rari-darwin-arm64@0.14.7:
+    resolution: {integrity: sha512-3LXHWxcsUQsIqY9wNgszq2OAMb7rRtNVCQ0I1uC4TV0Tmj+QwSn9xv18MBcVnIg/zIS8D70+WXEp3XmbQTVCcg==}
+    engines: {node: '>=22.12.0'}
+    cpu: [arm64]
+    os: [darwin]
+    hasBin: true
+
   rari-darwin-x64@0.14.5:
     resolution: {integrity: sha512-Ijx5D2STK/gDiuKUkvH+9KHBw6bGToedV//ogRmCU+iubA0dH4mR9uRdCm3qaw6vUwQUBysfSq7myujdNHCt9w==}
+    engines: {node: '>=22.12.0'}
+    cpu: [x64]
+    os: [darwin]
+    hasBin: true
+
+  rari-darwin-x64@0.14.7:
+    resolution: {integrity: sha512-kiWOAZX+fODSXaUBp5FyfxnbXTKz/AKIQQMd6w7o9xY4dya1DWnBKfBoggedEjNOpDrLFcH0YMVynI/ZJsLpgg==}
     engines: {node: '>=22.12.0'}
     cpu: [x64]
     os: [darwin]
@@ -3567,8 +3579,22 @@ packages:
     os: [linux]
     hasBin: true
 
+  rari-linux-arm64@0.14.7:
+    resolution: {integrity: sha512-mvY2gBZrRcGJyMxIVFIkeIUDpHuAmSOOtBwrQdZWDYJaKVjpkfwkUUvCUst4Qx0wWY/5UEgyNDAegmfdN0SvNw==}
+    engines: {node: '>=22.12.0'}
+    cpu: [arm64]
+    os: [linux]
+    hasBin: true
+
   rari-linux-x64@0.14.5:
     resolution: {integrity: sha512-j1ZybcMZzpPKrr1LSezERb3feWnh3FEq3aTrfdwG9Pdy3oJTq9iON8wPgVYpGCUyXW4hEzwT3d4aET3ayeW5ZQ==}
+    engines: {node: '>=22.12.0'}
+    cpu: [x64]
+    os: [linux]
+    hasBin: true
+
+  rari-linux-x64@0.14.7:
+    resolution: {integrity: sha512-TQnBQO3OG4+puMnIyGt7wHqOGXk+JSn/HTbNmstUoCxN32HTmbTZ4QBx/g97rl/kFw5vmP6kjRDOQjR6ABBmJQ==}
     engines: {node: '>=22.12.0'}
     cpu: [x64]
     os: [linux]
@@ -3581,8 +3607,22 @@ packages:
     os: [win32]
     hasBin: true
 
+  rari-win32-arm64@0.14.7:
+    resolution: {integrity: sha512-iEMPdzRGLcld+O/0AuwmD+juo4pYYRIjgjHOiBNVnOuVtEiVGRqqKf8QSdUt7+oe3n7Vnmxn117CzcI3vjrn7w==}
+    engines: {node: '>=22.12.0'}
+    cpu: [arm64]
+    os: [win32]
+    hasBin: true
+
   rari-win32-x64@0.14.5:
     resolution: {integrity: sha512-imKJifa2InbVmKxpT3L9JvmqgK/zA4z6YL430x5yHIK7HaRXeeACV5uP1OabeAGj7kibUzaqVLCTcJV0tatJwg==}
+    engines: {node: '>=22.12.0'}
+    cpu: [x64]
+    os: [win32]
+    hasBin: true
+
+  rari-win32-x64@0.14.7:
+    resolution: {integrity: sha512-c89u4cX0WzmQfQNubIg+Cjdew1JwTjnjuyMGSyQYdQWIVT6LdU+agFHFD4N9+TTcWOqJREIbseDBQgnF5kN1zw==}
     engines: {node: '>=22.12.0'}
     cpu: [x64]
     os: [win32]
@@ -7439,19 +7479,37 @@ snapshots:
   rari-darwin-arm64@0.14.5:
     optional: true
 
+  rari-darwin-arm64@0.14.7:
+    optional: true
+
   rari-darwin-x64@0.14.5:
+    optional: true
+
+  rari-darwin-x64@0.14.7:
     optional: true
 
   rari-linux-arm64@0.14.5:
     optional: true
 
+  rari-linux-arm64@0.14.7:
+    optional: true
+
   rari-linux-x64@0.14.5:
+    optional: true
+
+  rari-linux-x64@0.14.7:
     optional: true
 
   rari-win32-arm64@0.14.5:
     optional: true
 
+  rari-win32-arm64@0.14.7:
+    optional: true
+
   rari-win32-x64@0.14.5:
+    optional: true
+
+  rari-win32-x64@0.14.7:
     optional: true
 
   rari@0.14.6(react-dom@19.2.7(react@19.2.7))(react@19.2.7):
