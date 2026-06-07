@@ -777,3 +777,37 @@ export default Page`
     })
   })
 })
+
+describe('hasComponentExport - additional coverage', () => {
+  it('detects named class export', () => {
+    expect(hasComponentExport('export class MyComponent {}')).toBe(true)
+  })
+
+  it('detects let arrow function export', () => {
+    expect(hasComponentExport('export let handler = () => {}')).toBe(true)
+  })
+
+  it('detects var function expression export', () => {
+    expect(hasComponentExport('export var handler = function() {}')).toBe(true)
+  })
+
+  it('detects const function expression export', () => {
+    expect(hasComponentExport('export const Foo = function Foo() {}')).toBe(true)
+  })
+
+  it('detects async const function expression export', () => {
+    expect(hasComponentExport('export const Foo = async function() {}')).toBe(true)
+  })
+
+  it('rejects parenthesized expression (grouped math)', () => {
+    expect(hasComponentExport('export const value = (1 + 2)')).toBe(false)
+  })
+
+  it('rejects parenthesized identifier', () => {
+    expect(hasComponentExport('export const value = (someIdentifier)')).toBe(false)
+  })
+
+  it('rejects parenthesized object', () => {
+    expect(hasComponentExport('export const obj = ({})')).toBe(false)
+  })
+})
