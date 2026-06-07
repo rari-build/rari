@@ -19,3 +19,4 @@ jobs:
         with:
           mode: comment-from-artifact
           github-token: ${{ github.token }}
+          artifact-path: dependency-diff
