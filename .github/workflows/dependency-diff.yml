@@ -22,7 +22,9 @@ jobs:
           ref: ${{ github.event.pull_request.base.sha }}
 
       - name: Fetch PR head
-        run: git fetch origin ${{ github.event.pull_request.head.sha }}
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: git fetch origin "$HEAD_SHA"
 
       - name: Dependency Diff
         uses: e18e/action-dependency-diff@8e9b8c1957ab066d36235a43f4c1ff1522e1bdbc # v1.6.1
