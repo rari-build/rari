@@ -83,16 +83,16 @@ export function getBinaryPath(): string {
   const selfDir = dirname(fileURLToPath(import.meta.url))
   let searchDir = selfDir
   while (true) {
-    const parent = dirname(searchDir)
-    if (parent === searchDir)
-      break
-    searchDir = parent
     if (existsSync(join(searchDir, 'pnpm-workspace.yaml'))) {
       const localBinary = join(searchDir, 'packages', packageName, 'bin', binaryName)
       if (existsSync(localBinary))
         return localBinary
       break
     }
+    const parent = dirname(searchDir)
+    if (parent === searchDir)
+      break
+    searchDir = parent
   }
 
   try {

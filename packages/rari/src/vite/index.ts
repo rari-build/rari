@@ -171,6 +171,7 @@ async function loadRuntimeFile(filename: string): Promise<string> {
 }
 
 const RARI_DIST_DIR = path.dirname(fileURLToPath(import.meta.url))
+const RARI_PACKAGE_ROOT = path.dirname(RARI_DIST_DIR)
 
 function resolveRuntimeDistFile(filename: string): string | null {
   const possiblePaths = [
@@ -187,7 +188,7 @@ function resolveRuntimeDistFile(filename: string): string | null {
 }
 
 function isRariInternalFile(filePath: string): boolean {
-  return filePath.startsWith(RARI_DIST_DIR)
+  return filePath.startsWith(RARI_PACKAGE_ROOT)
 }
 
 async function loadRscClientRuntime(): Promise<string> {
@@ -1909,7 +1910,7 @@ for (const [path, config] of Object.entries(lazyComponentRegistry)) {
         if (runtimeFile)
           return fs.readFileSync(runtimeFile, 'utf-8')
 
-        return 'export class LoadingErrorBoundary extends React.Component { render() { return this.props.children; } }'
+        return 'import * as React from \'react\';\nexport class LoadingErrorBoundary extends React.Component { render() { return this.props.children; } }'
       }
 
       if (id === 'virtual:error-boundary-wrapper.tsx') {

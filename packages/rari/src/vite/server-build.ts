@@ -32,8 +32,9 @@ const PATH_SEPARATOR_NORMALIZE_REGEX = /\\/g
 export const RARI_CSS_MODULES_PATTERN = '[hash]_[local]'
 
 const RARI_DIST_DIR = path.dirname(fileURLToPath(import.meta.url))
+const RARI_PACKAGE_ROOT = path.dirname(RARI_DIST_DIR)
 function isRariInternalPath(filePath: string): boolean {
-  return filePath.startsWith(RARI_DIST_DIR)
+  return filePath.startsWith(RARI_PACKAGE_ROOT)
 }
 
 interface BuiltComponent {
@@ -935,6 +936,10 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
             const rariResponsePath = path.join(RARI_DIST_DIR, 'proxy/RariResponse.mjs')
             if (fs.existsSync(rariResponsePath))
               return rariResponsePath
+
+            const rariResponseSrcPath = path.join(RARI_PACKAGE_ROOT, 'src/proxy/RariResponse.ts')
+            if (fs.existsSync(rariResponseSrcPath))
+              return rariResponseSrcPath
           }
 
           return null
