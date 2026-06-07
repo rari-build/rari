@@ -4,13 +4,14 @@ version = "0.1.0"
 authors = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
+publish = false
 
 [[bin]]
 name = "release"
 path = "src/main.rs"
 
 [dependencies]
-ratatui = "0.30.0"
+ratatui = "0.30.1"
 crossterm = "0.29.0"
 tokio = { workspace = true }
 serde = { workspace = true }

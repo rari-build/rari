@@ -1,9 +1,10 @@
 [package]
 name = "rari-snapshot"
 version = "0.1.0"
-edition = "2024"
+authors = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
 publish = false
-description = "Generates the V8 startup snapshot for the rari runtime"
 
 [[bin]]
 name = "build-snapshot"
