@@ -1,0 +1,21 @@
+name: Dependency Diff Comment
+
+on:
+  workflow_run:
+    workflows: [Dependency Diff]
+    types:
+      - completed
+
+jobs:
+  comment:
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
+    permissions:
+      pull-requests: write
+
+    steps:
+      - name: Post Comment
+        uses: e18e/action-dependency-diff@8e9b8c1957ab066d36235a43f4c1ff1522e1bdbc # v1.6.1
+        with:
+          mode: comment-from-artifact
+          github-token: ${{ github.token }}
