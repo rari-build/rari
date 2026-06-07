@@ -121,21 +121,14 @@ async fn run_non_interactive(
     }
     println!();
 
-    let binary_packages = vec![
-        Package::load("rari-darwin-arm64", "packages/rari-darwin-arm64").await?,
-        Package::load("rari-darwin-x64", "packages/rari-darwin-x64").await?,
-        Package::load("rari-linux-arm64", "packages/rari-linux-arm64").await?,
-        Package::load("rari-linux-x64", "packages/rari-linux-x64").await?,
-        Package::load("rari-win32-arm64", "packages/rari-win32-arm64").await?,
-        Package::load("rari-win32-x64", "packages/rari-win32-x64").await?,
-    ];
-
-    let binary_group = PackageGroup::new("rari-binaries".to_string(), binary_packages).await?;
+    let rari_pkg = Package::load("rari", "packages/rari").await?;
+    let binary_version = rari_pkg.current_version.clone();
+    let binary_group = PackageGroup::new_virtual("rari-binaries".to_string(), binary_version);
 
     let mut release_units = vec![
-        ReleaseUnit::Single(Package::load("rari", "packages/rari").await?),
+        ReleaseUnit::Single(rari_pkg),
         ReleaseUnit::Single(Package::load("create-rari-app", "packages/create-rari-app").await?),
-        ReleaseUnit::Group(binary_group),
+        ReleaseUnit::Virtual(binary_group),
     ];
 
     if let Some(only_list) = &only {
@@ -185,7 +178,8 @@ async fn run_non_interactive(
 
         println!("  {} {} → {}", "Version:".bold(), unit.current_version(), new_version.green());
 
-        let first_path = unit.paths()[0];
+        let first_path =
+            unit.paths().first().map(|p| p.as_path()).unwrap_or(std::path::Path::new("."));
         let commits = crate::git::get_commits_since_tag(unit_name, first_path).await?;
         let previous_tag = crate::git::get_previous_tag(unit_name, None).await?;
         if !commits.is_empty() {
@@ -244,7 +238,8 @@ async fn run_non_interactive(
         } else {
             println!("  {} Committing changes...", "→".cyan());
             let paths = unit.paths();
-            if paths.len() > 1 {
+            if paths.is_empty() {
+            } else if paths.len() > 1 {
                 let path_refs: Vec<&std::path::Path> = paths.iter().map(|p| p.as_path()).collect();
                 crate::git::add_and_commit_multiple(&message, &path_refs).await?;
             } else {
@@ -253,8 +248,8 @@ async fn run_non_interactive(
 
             let generates_changelog = matches!(unit_name, "rari" | "create-rari-app");
             let mut files_to_add = Vec::new();
-            if generates_changelog {
-                let changelog_path = unit.paths()[0].join("CHANGELOG.md");
+            if generates_changelog && let Some(first_path) = unit.paths().first() {
+                let changelog_path = first_path.join("CHANGELOG.md");
                 if changelog_path.exists() {
                     files_to_add.push(changelog_path);
                 }

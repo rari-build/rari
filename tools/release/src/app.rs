@@ -6,7 +6,7 @@ use crate::{
 use anyhow::Result;
 use crossterm::event::KeyCode;
 use ratatui::Frame;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Screen {
@@ -107,7 +107,8 @@ impl App {
                 KeyCode::Enter => {
                     let package_idx = self.selected_package_idx;
                     let unit = &self.release_units[package_idx];
-                    let first_path = unit.paths()[0];
+                    let paths = unit.paths();
+                    let first_path = paths.first().map(|p| p.as_path()).unwrap_or(Path::new("."));
                     self.recent_commits =
                         git::get_commits_since_tag(unit.name(), first_path).await?;
                     self.previous_tag = git::get_previous_tag(unit.name(), None).await?;

@@ -20,49 +20,18 @@ pub struct Package {
 #[derive(Debug, Clone)]
 pub struct PackageGroup {
     pub name: String,
-    pub packages: Vec<Package>,
     pub current_version: String,
 }
 
 impl PackageGroup {
-    pub async fn new(name: String, packages: Vec<Package>) -> Result<Self> {
-        if packages.is_empty() {
-            anyhow::bail!("PackageGroup must contain at least one package");
-        }
-
-        let current_version = packages[0].current_version.clone();
-
-        for pkg in &packages {
-            if pkg.current_version != current_version {
-                anyhow::bail!(
-                    "All packages in group '{}' must have the same version. Found {} with version {} but expected {}",
-                    name,
-                    pkg.name,
-                    pkg.current_version,
-                    current_version
-                );
-            }
-        }
-
-        Ok(Self { name, packages, current_version })
-    }
-
     pub fn new_virtual(name: String, version: String) -> Self {
-        Self { name, packages: vec![], current_version: version }
-    }
-
-    pub async fn update_all_versions(&self, new_version: &str) -> Result<()> {
-        for package in &self.packages {
-            package.update_version(new_version).await?;
-        }
-        Ok(())
+        Self { name, current_version: version }
     }
 }
 
 #[derive(Debug, Clone)]
 pub enum ReleaseUnit {
     Single(Package),
-    Group(PackageGroup),
     Virtual(PackageGroup),
 }
 
@@ -70,21 +39,20 @@ impl ReleaseUnit {
     pub fn name(&self) -> &str {
         match self {
             Self::Single(pkg) => &pkg.name,
-            Self::Group(group) | Self::Virtual(group) => &group.name,
+            Self::Virtual(group) => &group.name,
         }
     }
 
     pub fn current_version(&self) -> &str {
         match self {
             Self::Single(pkg) => &pkg.current_version,
-            Self::Group(group) | Self::Virtual(group) => &group.current_version,
+            Self::Virtual(group) => &group.current_version,
         }
     }
 
     pub fn packages(&self) -> Vec<&Package> {
         match self {
             Self::Single(pkg) => vec![pkg],
-            Self::Group(group) => group.packages.iter().collect(),
             Self::Virtual(_) => vec![],
         }
     }
@@ -92,7 +60,6 @@ impl ReleaseUnit {
     pub async fn update_version(&self, new_version: &str) -> Result<()> {
         match self {
             Self::Single(pkg) => pkg.update_version(new_version).await,
-            Self::Group(group) => group.update_all_versions(new_version).await,
             Self::Virtual(_) => Ok(()),
         }
     }
@@ -100,7 +67,6 @@ impl ReleaseUnit {
     pub fn paths(&self) -> Vec<&PathBuf> {
         match self {
             Self::Single(pkg) => vec![&pkg.path],
-            Self::Group(group) => group.packages.iter().map(|p| &p.path).collect(),
             Self::Virtual(_) => vec![],
         }
     }

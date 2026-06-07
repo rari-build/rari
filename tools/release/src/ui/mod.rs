@@ -76,13 +76,10 @@ pub fn render_version_selection(frame: &mut Frame, app: &App, unit: &ReleaseUnit
         ]),
     ];
 
-    if let ReleaseUnit::Group(group) = unit {
+    if let ReleaseUnit::Virtual(_) = unit {
         info_lines.push(Line::from(vec![
-            Span::raw("Packages: "),
-            Span::styled(
-                format!("{} binaries", group.packages.len()),
-                Style::default().fg(Color::Green),
-            ),
+            Span::raw("Type: "),
+            Span::styled("virtual (CI-published binaries)", Style::default().fg(Color::Green)),
         ]));
     }
 
