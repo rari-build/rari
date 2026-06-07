@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { dirname, join, parse } from 'node:path'
+import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
@@ -80,36 +80,21 @@ function getPlatformInfo(): PlatformInfo {
 export function getBinaryPath(): string {
   const { packageName, binaryName } = getPlatformInfo()
 
-  try {
-    let currentDir = process.cwd()
-    let workspaceRoot = null
-
-    /* v8 ignore start - workspace search logic, tested in actual workspace */
-    const rootDir = parse(currentDir).root
-    while (currentDir !== rootDir && currentDir !== '') {
-      const packagesDir = join(currentDir, 'packages')
-      if (existsSync(packagesDir)) {
-        workspaceRoot = currentDir
-        break
-      }
-      const parentDir = dirname(currentDir)
-      if (parentDir === currentDir)
-        break
-      currentDir = parentDir
+  const selfDir = dirname(fileURLToPath(import.meta.url))
+  let searchDir = selfDir
+  while (true) {
+    if (existsSync(join(searchDir, 'pnpm-workspace.yaml'))) {
+      const localBinary = join(searchDir, 'packages', packageName, 'bin', binaryName)
+      if (existsSync(localBinary))
+        return localBinary
+      break
     }
-
-    if (workspaceRoot) {
-      const packageDir = join(workspaceRoot, 'packages', packageName)
-      const binaryPath = join(packageDir, 'bin', binaryName)
-
-      if (existsSync(binaryPath))
-        return binaryPath
-    }
-    /* v8 ignore stop */
+    const parent = dirname(searchDir)
+    if (parent === searchDir)
+      break
+    searchDir = parent
   }
-  catch {}
 
-  /* v8 ignore start - fallback to import.meta.resolve, tested in workspace */
   try {
     const packagePath = import.meta.resolve(`${packageName}/package.json`)
     const packageDir = fileURLToPath(new URL('.', packagePath))
@@ -126,7 +111,6 @@ export function getBinaryPath(): string {
       + `Please ensure the platform package is installed: npm install ${packageName}`,
     )
   }
-  /* v8 ignore stop */
 }
 
 export function getInstallationInstructions(): string {
