@@ -1,5 +1,4 @@
-use anyhow::{Context, Result};
-use cow_utils::CowUtils;
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -48,6 +47,10 @@ impl PackageGroup {
         Ok(Self { name, packages, current_version })
     }
 
+    pub fn new_virtual(name: String, version: String) -> Self {
+        Self { name, packages: vec![], current_version: version }
+    }
+
     pub async fn update_all_versions(&self, new_version: &str) -> Result<()> {
         for package in &self.packages {
             package.update_version(new_version).await?;
@@ -60,20 +63,21 @@ impl PackageGroup {
 pub enum ReleaseUnit {
     Single(Package),
     Group(PackageGroup),
+    Virtual(PackageGroup),
 }
 
 impl ReleaseUnit {
     pub fn name(&self) -> &str {
         match self {
             Self::Single(pkg) => &pkg.name,
-            Self::Group(group) => &group.name,
+            Self::Group(group) | Self::Virtual(group) => &group.name,
         }
     }
 
     pub fn current_version(&self) -> &str {
         match self {
             Self::Single(pkg) => &pkg.current_version,
-            Self::Group(group) => &group.current_version,
+            Self::Group(group) | Self::Virtual(group) => &group.current_version,
         }
     }
 
@@ -81,6 +85,7 @@ impl ReleaseUnit {
         match self {
             Self::Single(pkg) => vec![pkg],
             Self::Group(group) => group.packages.iter().collect(),
+            Self::Virtual(_) => vec![],
         }
     }
 
@@ -88,6 +93,7 @@ impl ReleaseUnit {
         match self {
             Self::Single(pkg) => pkg.update_version(new_version).await,
             Self::Group(group) => group.update_all_versions(new_version).await,
+            Self::Virtual(_) => Ok(()),
         }
     }
 
@@ -95,6 +101,7 @@ impl ReleaseUnit {
         match self {
             Self::Single(pkg) => vec![&pkg.path],
             Self::Group(group) => group.packages.iter().map(|p| &p.path).collect(),
+            Self::Virtual(_) => vec![],
         }
     }
 }
@@ -113,99 +120,10 @@ impl Package {
         let pkg_path = PathBuf::from(path);
         let pkg_json_path = pkg_path.join("package.json");
 
-        if !pkg_json_path.exists() && name.starts_with("rari-") && name != "rari" {
-            Self::generate_platform_package_json(name, &pkg_path).await?;
-        }
-
         let content = tokio::fs::read_to_string(&pkg_json_path).await?;
         let pkg_json: PackageJson = serde_json::from_str(&content)?;
 
         Ok(Self { name: name.to_string(), path: pkg_path, current_version: pkg_json.version })
-    }
-
-    async fn generate_platform_package_json(name: &str, pkg_path: &PathBuf) -> Result<()> {
-        let rari_pkg_json = PathBuf::from("packages/rari/package.json");
-        let rari_content = tokio::fs::read_to_string(&rari_pkg_json).await?;
-        let rari_json: PackageJson = serde_json::from_str(&rari_content)?;
-        let version = &rari_json.version;
-
-        let platform = name.strip_prefix("rari-").unwrap_or(name);
-        let parts: Vec<&str> = platform.split('-').collect();
-
-        let (os, cpu, description, keywords, bin_path, bin_file) = match parts.as_slice() {
-            ["darwin", "arm64"] => (
-                "darwin",
-                "arm64",
-                "macOS ARM64 binary",
-                "\"darwin\",\n    \"arm64\",\n    \"macos\",\n    \"apple-silicon\",",
-                "./bin/rari",
-                "bin/rari",
-            ),
-            ["darwin", "x64"] => (
-                "darwin",
-                "x64",
-                "macOS x64 binary",
-                "\"darwin\",\n    \"macos\",\n    \"x64\",",
-                "./bin/rari",
-                "bin/rari",
-            ),
-            ["linux", "arm64"] => (
-                "linux",
-                "arm64",
-                "Linux ARM64 binary",
-                "\"linux\",\n    \"arm64\",",
-                "./bin/rari",
-                "bin/rari",
-            ),
-            ["linux", "x64"] => (
-                "linux",
-                "x64",
-                "Linux x64 binary",
-                "\"linux\",\n    \"x64\",",
-                "./bin/rari",
-                "bin/rari",
-            ),
-            ["win32", "x64"] => (
-                "win32",
-                "x64",
-                "Windows x64 binary",
-                "\"win32\",\n    \"windows\",\n    \"x64\",",
-                "./bin/rari.exe",
-                "bin/rari.exe",
-            ),
-            ["win32", "arm64"] => (
-                "win32",
-                "arm64",
-                "Windows ARM64 binary",
-                "\"win32\",\n    \"windows\",\n    \"arm64\",",
-                "./bin/rari.exe",
-                "bin/rari.exe",
-            ),
-            _ => anyhow::bail!("Unknown platform: {}", platform),
-        };
-
-        let template_path = PathBuf::from("tools/release/templates/package.json.platform");
-        let template = tokio::fs::read_to_string(&template_path)
-            .await
-            .context("Failed to read package.json template")?;
-
-        let package_json = template
-            .cow_replace("{NAME}", name)
-            .cow_replace("{VERSION}", version)
-            .cow_replace("{DESCRIPTION}", description)
-            .cow_replace("{OS}", os)
-            .cow_replace("{CPU}", cpu)
-            .cow_replace("{KEYWORDS}", keywords)
-            .cow_replace("{BIN_PATH}", bin_path)
-            .cow_replace("{BIN_FILE}", bin_file)
-            .into_owned();
-
-        tokio::fs::create_dir_all(pkg_path).await?;
-
-        let pkg_json_path = pkg_path.join("package.json");
-        tokio::fs::write(&pkg_json_path, package_json).await?;
-
-        Ok(())
     }
 
     pub async fn update_version(&self, new_version: &str) -> Result<()> {

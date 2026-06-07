@@ -58,23 +58,16 @@ impl App {
     pub async fn new(only: Option<Vec<String>>, dry_run: bool) -> Result<Self> {
         use crate::package::{PackageGroup, ReleaseUnit};
 
-        let binary_packages = vec![
-            Package::load("rari-darwin-arm64", "packages/rari-darwin-arm64").await?,
-            Package::load("rari-darwin-x64", "packages/rari-darwin-x64").await?,
-            Package::load("rari-linux-arm64", "packages/rari-linux-arm64").await?,
-            Package::load("rari-linux-x64", "packages/rari-linux-x64").await?,
-            Package::load("rari-win32-arm64", "packages/rari-win32-arm64").await?,
-            Package::load("rari-win32-x64", "packages/rari-win32-x64").await?,
-        ];
-
-        let binary_group = PackageGroup::new("rari-binaries".to_string(), binary_packages).await?;
+        let rari_pkg = Package::load("rari", "packages/rari").await?;
+        let binary_version = rari_pkg.current_version.clone();
+        let binary_group = PackageGroup::new_virtual("rari-binaries".to_string(), binary_version);
 
         let mut release_units = vec![
-            ReleaseUnit::Single(Package::load("rari", "packages/rari").await?),
+            ReleaseUnit::Single(rari_pkg),
             ReleaseUnit::Single(
                 Package::load("create-rari-app", "packages/create-rari-app").await?,
             ),
-            ReleaseUnit::Group(binary_group),
+            ReleaseUnit::Virtual(binary_group),
         ];
 
         if let Some(only_list) = only {
@@ -302,36 +295,43 @@ impl App {
                             .push(format!("[DRY RUN] Would commit with message: {}", message));
                         self.status_messages.push(format!("[DRY RUN] Would create tag: {}", tag));
                     } else {
-                        self.status_messages.push("Committing changes...".to_string());
                         let paths = unit.paths();
-                        if paths.len() > 1 {
-                            let path_refs: Vec<&std::path::Path> =
-                                paths.iter().map(|p| p.as_path()).collect();
-                            git::add_and_commit_multiple(&message, &path_refs).await?;
+
+                        if !paths.is_empty() {
+                            self.status_messages.push("Committing changes...".to_string());
+
+                            if paths.len() > 1 {
+                                let path_refs: Vec<&std::path::Path> =
+                                    paths.iter().map(|p| p.as_path()).collect();
+                                git::add_and_commit_multiple(&message, &path_refs).await?;
+                            } else {
+                                git::add_and_commit(&message, paths[0]).await?;
+                            }
+
+                            let generates_changelog =
+                                matches!(unit.name(), "rari" | "create-rari-app");
+                            let mut files_to_add = Vec::new();
+                            if generates_changelog {
+                                let changelog_path = unit.paths()[0].join("CHANGELOG.md");
+                                if changelog_path.exists() {
+                                    files_to_add.push(changelog_path);
+                                }
+                            }
+                            let lockfile_path = PathBuf::from("pnpm-lock.yaml");
+                            if lockfile_path.exists() {
+                                files_to_add.push(lockfile_path);
+                            }
+
+                            if !files_to_add.is_empty() {
+                                for file in &files_to_add {
+                                    git::add_file(file).await?;
+                                }
+                                git::amend_commit().await?;
+                            }
                         } else {
-                            git::add_and_commit(&message, paths[0]).await?;
+                            self.status_messages
+                                .push("Skipping commit (virtual release)...".to_string());
                         }
-
-                        let generates_changelog = matches!(unit.name(), "rari" | "create-rari-app");
-                        let mut files_to_add = Vec::new();
-                        if generates_changelog {
-                            let changelog_path = unit.paths()[0].join("CHANGELOG.md");
-                            if changelog_path.exists() {
-                                files_to_add.push(changelog_path);
-                            }
-                        }
-                        let lockfile_path = PathBuf::from("pnpm-lock.yaml");
-                        if lockfile_path.exists() {
-                            files_to_add.push(lockfile_path);
-                        }
-
-                        if !files_to_add.is_empty() {
-                            for file in &files_to_add {
-                                git::add_file(file).await?;
-                            }
-                            git::amend_commit().await?;
-                        }
-
                         git::create_tag(&tag).await?;
                     }
                     self.status_messages.push("* Committed and tagged".to_string());
@@ -355,7 +355,11 @@ impl App {
                     self.publish_step = PublishStep::Done;
                     self.publish_progress = 1.0;
 
-                    let tag = format!("{}@{}", unit.name(), version);
+                    let tag = if unit.name() == "rari-binaries" {
+                        format!("v{}", version)
+                    } else {
+                        format!("{}@{}", unit.name(), version)
+                    };
                     self.released_packages.push(ReleasedPackage {
                         name: unit.name().to_string(),
                         version: version.clone(),

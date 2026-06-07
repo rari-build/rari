@@ -198,6 +198,77 @@ jobs:
 
           ls -la "${PACKAGE_DIR}/bin/"
 
+      - name: Generate package.json
+        run: |
+          PACKAGE_NAME="rari-${{ matrix.platform }}"
+          PACKAGE_DIR="packages/${PACKAGE_NAME}"
+          VERSION="${GITHUB_REF#refs/tags/v}"
+
+          case "${{ matrix.platform }}" in
+            darwin-arm64)
+              OS="darwin"
+              CPU="arm64"
+              DESCRIPTION="macOS ARM64 binary"
+              KEYWORDS='"darwin", "arm64", "macos", "apple-silicon",'
+              BIN_PATH="./bin/rari"
+              BIN_FILE="bin/rari"
+              ;;
+            darwin-x64)
+              OS="darwin"
+              CPU="x64"
+              DESCRIPTION="macOS x64 binary"
+              KEYWORDS='"darwin", "x64", "macos", "intel",'
+              BIN_PATH="./bin/rari"
+              BIN_FILE="bin/rari"
+              ;;
+            linux-arm64)
+              OS="linux"
+              CPU="arm64"
+              DESCRIPTION="Linux ARM64 binary"
+              KEYWORDS='"linux", "arm64",'
+              BIN_PATH="./bin/rari"
+              BIN_FILE="bin/rari"
+              ;;
+            linux-x64)
+              OS="linux"
+              CPU="x64"
+              DESCRIPTION="Linux x64 binary"
+              KEYWORDS='"linux", "x64",'
+              BIN_PATH="./bin/rari"
+              BIN_FILE="bin/rari"
+              ;;
+            win32-x64)
+              OS="win32"
+              CPU="x64"
+              DESCRIPTION="Windows x64 binary"
+              KEYWORDS='"win32", "windows", "x64",'
+              BIN_PATH="./bin/rari.exe"
+              BIN_FILE="bin/rari.exe"
+              ;;
+            win32-arm64)
+              OS="win32"
+              CPU="arm64"
+              DESCRIPTION="Windows ARM64 binary"
+              KEYWORDS='"win32", "windows", "arm64",'
+              BIN_PATH="./bin/rari.exe"
+              BIN_FILE="bin/rari.exe"
+              ;;
+          esac
+
+          cp .github/templates/package.json.platform "${PACKAGE_DIR}/package.json"
+          sed -i "s|{NAME}|${PACKAGE_NAME}|g" "${PACKAGE_DIR}/package.json"
+          sed -i "s|{VERSION}|${VERSION}|g" "${PACKAGE_DIR}/package.json"
+          sed -i "s|{DESCRIPTION}|${DESCRIPTION}|g" "${PACKAGE_DIR}/package.json"
+          sed -i "s|{OS}|${OS}|g" "${PACKAGE_DIR}/package.json"
+          sed -i "s|{CPU}|${CPU}|g" "${PACKAGE_DIR}/package.json"
+          sed -i "s|{KEYWORDS}|${KEYWORDS}|g" "${PACKAGE_DIR}/package.json"
+          sed -i "s|{BIN_PATH}|${BIN_PATH}|g" "${PACKAGE_DIR}/package.json"
+          sed -i "s|{BIN_FILE}|${BIN_FILE}|g" "${PACKAGE_DIR}/package.json"
+
+          node --input-type=module -e "import { readFileSync, writeFileSync } from 'fs'; const f = '${PACKAGE_DIR}/package.json'; writeFileSync(f, JSON.stringify(JSON.parse(readFileSync(f, 'utf8')), null, 2) + '\n');"
+
+          echo "✓ Generated package.json for ${PACKAGE_NAME}@${VERSION}"
+
       - name: Copy LICENSE
         run: |
           PACKAGE_NAME="rari-${{ matrix.platform }}"
