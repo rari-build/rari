@@ -350,7 +350,7 @@ describe('generateAppRouteManifest', () => {
       })
     })
 
-    it('skips API routes inside groups', async () => {
+    it('supports API routes inside groups', async () => {
       vi.mocked(fs.readdir)
         .mockResolvedValueOnce(['(api)'] as any)
         .mockResolvedValueOnce(['hello'] as any)
@@ -365,8 +365,9 @@ describe('generateAppRouteManifest', () => {
 
       const manifest = await generateAppRouteManifest('/app')
 
-      expect(manifest.apiRoutes).toHaveLength(0)
-      expect(fs.readFile).not.toHaveBeenCalled()
+      expect(manifest.apiRoutes).toHaveLength(1)
+      expect(manifest.apiRoutes[0].path).toBe('/hello')
+      expect(manifest.apiRoutes[0].methods).toContain('GET')
     })
   })
 
@@ -943,6 +944,67 @@ describe('generateAppRouteManifest', () => {
 
       expect(consoleSpy).toHaveBeenCalled()
       consoleSpy.mockRestore()
+    })
+  })
+
+  describe('duplicate route detection', () => {
+    it('throws when two groups produce the same page route', async () => {
+      vi.mocked(fs.readdir)
+        .mockResolvedValueOnce(['(a)', '(b)'] as any)
+        .mockResolvedValueOnce(['about'] as any)
+        .mockResolvedValueOnce(['page.tsx'] as any)
+        .mockResolvedValueOnce(['about'] as any)
+        .mockResolvedValueOnce(['page.tsx'] as any)
+
+      vi.mocked(fs.stat)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+
+      await expect(generateAppRouteManifest('/app')).rejects.toThrow(/Route conflict.*\/about/)
+    })
+
+    it('throws when two groups produce the same API route', async () => {
+      vi.mocked(fs.readdir)
+        .mockResolvedValueOnce(['(a)', '(b)'] as any)
+        .mockResolvedValueOnce(['users'] as any)
+        .mockResolvedValueOnce(['route.ts'] as any)
+        .mockResolvedValueOnce(['users'] as any)
+        .mockResolvedValueOnce(['route.ts'] as any)
+
+      vi.mocked(fs.stat)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+
+      vi.mocked(fs.readFile).mockResolvedValue('export function GET() {}' as any)
+
+      await expect(generateAppRouteManifest('/app')).rejects.toThrow(/Route conflict.*\/users/)
+    })
+
+    it('does not throw when routes are unique', async () => {
+      vi.mocked(fs.readdir)
+        .mockResolvedValueOnce(['(a)', '(b)'] as any)
+        .mockResolvedValueOnce(['about'] as any)
+        .mockResolvedValueOnce(['page.tsx'] as any)
+        .mockResolvedValueOnce(['pricing'] as any)
+        .mockResolvedValueOnce(['page.tsx'] as any)
+
+      vi.mocked(fs.stat)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+
+      await expect(generateAppRouteManifest('/app')).resolves.toBeDefined()
     })
   })
 })

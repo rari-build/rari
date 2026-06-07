@@ -146,6 +146,9 @@ class AppRouteGenerator {
       this.finalizeGroupEntries(routes, entries)
     }
 
+    this.assertNoDuplicateRoutes(routes)
+    this.assertNoDuplicateRoutes(apiRoutes)
+
     if (this.verbose) {
       console.warn(`[rari] Router: Found ${routes.length} routes`)
       console.warn(`[rari] Router: Found ${layouts.length} layouts`)
@@ -196,6 +199,21 @@ class AppRouteGenerator {
 
       if (uniqueSorted.length > 1) {
         entry.additionalPaths = uniqueSorted.slice(1)
+      }
+    }
+  }
+
+  private assertNoDuplicateRoutes(routes: Array<{ path: string, filePath: string }>): void {
+    const seen = new Map<string, string>()
+    for (const route of routes) {
+      const existing = seen.get(route.path)
+      if (existing) {
+        throw new Error(
+          `[rari] Route conflict: path '${route.path}' is defined by both '${existing}' and '${route.filePath}'.`,
+        )
+      }
+      else {
+        seen.set(route.path, route.filePath)
       }
     }
   }
@@ -352,7 +370,7 @@ class AppRouteGenerator {
     }
 
     const routeFile = this.findFile(files, SPECIAL_FILES.ROUTE)
-    if (routeFile && !isInGroup(relativePath)) {
+    if (routeFile) {
       const apiRoute = await this.processApiRouteFile(relativePath, routeFile)
       apiRoutes.push(apiRoute)
     }
