@@ -49,7 +49,7 @@ export const EXPORT_DEFAULT_REGEX = /export\s+default\s+/
 export const EXPORT_NAMED_DECLARATION_REGEX = /export\s+(?:function|const|class)\s+(\w+)/
 export const EXPORTED_FUNCTION_REGEX = /export\s+(?:default\s+)?(?:async\s+)?(?:function|class)[\s{(]/
 export const EXPORTED_DEFAULT_ARROW_REGEX = /export\s+default\s+(?:(?:async\s+)?\(|(?:async\s+)?[a-zA-Z_$][\w$]*\s*=>)/
-export const EXPORTED_CONST_FUNCTION_REGEX = /export\s+(?:const|let|var)\s+[a-zA-Z_$][\w$]*(?:\s*:[^;]*[^;=\s])?\s*=\s*(?:async\s+)?(?:function[\s*(]|\(\s*[)a-zA-Z_$.{[]|[a-zA-Z_$][\w$]*\s*=>)/
+export const EXPORTED_CONST_FUNCTION_REGEX = /export\s+(?:const|let|var)\s+[a-zA-Z_$][\w$]*(?:\s*:[^;]*[^;=\s])?\s*=\s*(?:async\s+)?(?:function[\s*(]|\([^)]*\)\s*=>|[a-zA-Z_$][\w$]*\s*=>)/
 
 export const TITLE_EXPORT_REGEX = /^export\s+const\s+title\s*=\s*['"](.+?)['"]/m
 export const DESCRIPTION_EXPORT_REGEX = /^export\s+const\s+description\s*=\s*['"](.+?)['"]/m
