@@ -1,6 +1,7 @@
 // oxlint-disable no-unused-expressions
 /* eslint-disable no-undef, style/object-curly-spacing */
 const LOADING_PATH_REGEX = /\/[^/]+$/
+const REACT_SUSPENSE_PENDING = Symbol.for('react.suspense.pending')
 
 if (!globalThis['~render'])
   globalThis['~render'] = {}
@@ -364,7 +365,7 @@ globalThis['~render'].componentAsync = async function () {
       element = processSuspenseInStructure(element)
     }
     catch (suspenseError) {
-      if (suspenseError && suspenseError.$$typeof === Symbol.for('react.suspense.pending')) {
+      if (suspenseError && suspenseError.$$typeof === REACT_SUSPENSE_PENDING) {
         const componentName = suspenseError.componentName || suspenseError.name || suspenseError.message || '{component_id}'
         const asyncDetected = suspenseError.asyncComponentDetected === true
         const hasPromise = suspenseError.promise && typeof suspenseError.promise.then === 'function'
