@@ -32,6 +32,10 @@
     "full-stack",
     "web-framework"
   ],
+  "sideEffects": [
+    "./dist/runtime/entry-client.mjs",
+    "./dist/runtime/rsc-client-runtime.mjs"
+  ],
   "exports": {
     ".": {
       "browser": "./dist/client.mjs",

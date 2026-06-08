@@ -1,3 +1,4 @@
+/* eslint-disable node/prefer-global/process */
 import type { GlobalWithRari, ModuleData, WindowWithRari } from './shared/types'
 import * as React from 'react'
 import { cloneElement, createElement, isValidElement, Suspense, use, useEffect, useState } from 'react'
@@ -16,6 +17,12 @@ import { getClientComponent as getClientComponentShared } from './shared/get-cli
 import { isSuspenseType } from './shared/suspense'
 import { createFromFetch as rariCreateFromFetch, createFromReadableStream as rariCreateFromReadableStream } from './vendor/react-flight-client'
 
+const RSC_ALLOWED_TAGS = new Set(
+  'div,span,p,ul,ol,li,a,img,section,article,header,footer,nav,main,aside,strong,em,b,i,button,input,label,form,select,option,textarea,h1,h2,h3,h4,h5,h6,table,thead,tbody,tr,td,th,code,pre,blockquote,hr,br,small,mark,del,ins,sub,sup,abbr,time,figure,figcaption,details,summary,dialog,menu,menuitem,canvas,svg,path,circle,rect,line,polygon,polyline,ellipse,text,g,defs,use,symbol,clippath,mask,pattern,lineargradient,radialgradient,stop,image,video,audio,source,track,picture,dl,dt,dd,fieldset,legend'.split(','),
+)
+
+const PassthroughComponent = ({ children }: any) => children ?? null
+
 function resolveRariServerUrl(): string {
   if (typeof import.meta !== 'undefined' && import.meta.env?.RARI_SERVER_URL)
     return import.meta.env.RARI_SERVER_URL
@@ -28,7 +35,6 @@ function resolveRariServerUrl(): string {
 if (typeof (globalThis as unknown as GlobalWithRari)['~rari'] === 'undefined')
   (globalThis as unknown as GlobalWithRari)['~rari'] = {}
 
-// eslint-disable-next-line node/prefer-global/process
 ; (globalThis as unknown as GlobalWithRari)['~rari'].isDevelopment = process.env.NODE_ENV !== 'production'
 
 if (typeof (globalThis as unknown as GlobalWithRari)['~clientComponents'] === 'undefined')
@@ -54,98 +60,6 @@ if (typeof window !== 'undefined') {
   if (!(window as unknown as WindowWithRari)['~rari'].pendingBoundaryHydrations)
     (window as unknown as WindowWithRari)['~rari'].pendingBoundaryHydrations = new Map()
 }
-
-const RSC_ALLOWED_TAGS = new Set([
-  'div',
-  'span',
-  'p',
-  'ul',
-  'ol',
-  'li',
-  'a',
-  'img',
-  'section',
-  'article',
-  'header',
-  'footer',
-  'nav',
-  'main',
-  'aside',
-  'strong',
-  'em',
-  'b',
-  'i',
-  'button',
-  'input',
-  'label',
-  'form',
-  'select',
-  'option',
-  'textarea',
-  'h1',
-  'h2',
-  'h3',
-  'h4',
-  'h5',
-  'h6',
-  'table',
-  'thead',
-  'tbody',
-  'tr',
-  'td',
-  'th',
-  'code',
-  'pre',
-  'blockquote',
-  'hr',
-  'br',
-  'small',
-  'mark',
-  'del',
-  'ins',
-  'sub',
-  'sup',
-  'abbr',
-  'time',
-  'figure',
-  'figcaption',
-  'details',
-  'summary',
-  'dialog',
-  'menu',
-  'menuitem',
-  'canvas',
-  'svg',
-  'path',
-  'circle',
-  'rect',
-  'line',
-  'polygon',
-  'polyline',
-  'ellipse',
-  'text',
-  'g',
-  'defs',
-  'use',
-  'symbol',
-  'clippath',
-  'mask',
-  'pattern',
-  'lineargradient',
-  'radialgradient',
-  'stop',
-  'image',
-  'video',
-  'audio',
-  'source',
-  'track',
-  'picture',
-  'dl',
-  'dt',
-  'dd',
-  'fieldset',
-  'legend',
-])
 
 interface ParsedImportRow {
   id: string
@@ -1029,22 +943,10 @@ class RscClient {
             actualType = clientComponent
           }
           else {
-            actualType = ({ children, ...restProps }: any) => createElement(
-              'div',
-              {
-                ...restProps,
-                'data-client-component': type,
-                'style': {
-                  border: '2px dashed #f00',
-                  padding: '8px',
-                  margin: '4px',
-                  backgroundColor: '#fff0f0',
-                },
-              },
-              createElement('small', { style: { color: '#c00' } }, `Missing Client Component: ${type}`,
-              ),
-              children,
-            )
+            if (process.env.NODE_ENV !== 'production') {
+              console.warn(`[rari] Missing client component: ${type}`)
+            }
+            actualType = PassthroughComponent
           }
         }
         else if (typeof type === 'string' && type.startsWith('$L')) {
@@ -1059,22 +961,10 @@ class RscClient {
                 actualType = clientComponent
               }
               else {
-                actualType = ({ children, ...restProps }: any) => createElement(
-                  'div',
-                  {
-                    ...restProps,
-                    'data-client-component': type,
-                    'style': {
-                      border: '2px dashed #f00',
-                      padding: '8px',
-                      margin: '4px',
-                      backgroundColor: '#fff0f0',
-                    },
-                  },
-                  createElement('small', { style: { color: '#c00' } }, `Missing Client Component: ${moduleData.name} (${moduleData.id})`,
-                  ),
-                  children,
-                )
+                if (process.env.NODE_ENV !== 'production') {
+                  console.warn(`[rari] Missing client component: ${moduleData.name} (${moduleData.id})`)
+                }
+                actualType = PassthroughComponent
               }
             }
           }
@@ -1149,18 +1039,11 @@ class RscClient {
 const rscClient = new RscClient()
 
 function RscErrorComponent({ error, details }: { error: string, details?: any }): any {
-  return createElement('div', {
-    className: 'rsc-error',
-    style: {
-      padding: '16px',
-      backgroundColor: '#fee',
-      border: '1px solid #fcc',
-      borderRadius: '4px',
-      margin: '8px 0',
-      fontFamily: 'monospace',
-    },
-  }, createElement('h3', { style: { margin: '0 0 8px 0', color: '#c00' } }, 'RSC Error'), createElement('p', { style: { margin: '0 0 8px 0' } }, error), details && createElement('details', { style: { marginTop: '8px' } }, createElement('summary', { style: { cursor: 'pointer' } }, 'Error Details'), createElement('pre', { style: { fontSize: '12px', overflow: 'auto', backgroundColor: '#f5f5f5', padding: '8px' } }, JSON.stringify(details, null, 2),
-  )))
+  if (process.env.NODE_ENV !== 'production') {
+    return createElement('div', { 'data-rsc-error': '' }, createElement('p', null, error), details && createElement('pre', null, JSON.stringify(details, null, 2)))
+  }
+
+  return null
 }
 
 function RscRootReader({ rootPromise }: { rootPromise: Promise<any> }): any {

@@ -101,7 +101,7 @@ async function renderHtmlElement(tagName, props, depth) {
 async function renderToHtml(element, depth = 0, isRawContent = false) {
   if (depth > 100) {
     console.error('HTML render depth limit exceeded')
-    return '<div style="color:red">Error: Render depth limit exceeded</div>'
+    return ''
   }
 
   if (element === null || element === undefined)
@@ -114,7 +114,7 @@ async function renderToHtml(element, depth = 0, isRawContent = false) {
     }
     catch (error) {
       console.error('Error awaiting Promise in HTML render:', error)
-      return `<div style="color:red">Error: ${escapeHtml(error.message)}</div>`
+      return ''
     }
   }
 
@@ -153,7 +153,7 @@ async function renderToHtml(element, depth = 0, isRawContent = false) {
       }
       catch (error) {
         console.error('Error rendering function component:', error)
-        return `<div style="color:red">Error: ${escapeHtml(error.message)}</div>`
+        return ''
       }
     }
 

@@ -31,17 +31,17 @@
     return Deno.core.ops.op_sanitize_html(html, componentId)
   }
 
-  const elementToRSC = (element, componentId) => {
+  const elementToRSC = async (element, componentId) => {
     try {
       const clientComponents = globalThis['~clientComponents'] || {}
 
       let rscResult
       if (typeof globalThis.renderToRsc === 'function') {
         const currentBoundaryId = globalThis['~suspense']?.currentBoundaryId || null
-        rscResult = globalThis.renderToRsc(element, clientComponents, currentBoundaryId)
+        rscResult = await globalThis.renderToRsc(element, clientComponents, currentBoundaryId)
       }
       else if (typeof globalThis.traverseToRsc === 'function') {
-        rscResult = globalThis.traverseToRsc(element, clientComponents)
+        rscResult = await globalThis.traverseToRsc(element, clientComponents)
       }
       else {
         rscResult = {
@@ -79,8 +79,9 @@
       element = result
     }
     catch (asyncError) {
+      console.error(`[rari] Error rendering ${componentSource}:`, asyncError)
       const errorResult = {
-        html: `<div><h2>Error Rendering {component_id}</h2><p>${asyncError.message}</p></div>`,
+        html: '',
         rsc: null,
         hasSuspense: false,
         debug: {
@@ -101,7 +102,7 @@
   }
 
   try {
-    const rscResult = elementToRSC(element, '{component_id}')
+    const rscResult = await elementToRSC(element, '{component_id}')
 
     let htmlResult = null
     try {
@@ -115,9 +116,7 @@
 
     if (!rscResult) {
       const emptyResult = {
-        html:
-          htmlResult
-          || `<div><h2>Component: ${componentSource}</h2><p>Empty result from component rendering</p></div>`,
+        html: htmlResult || '',
         rsc: null,
         hasSuspense: false,
         debug: {
@@ -159,7 +158,7 @@
 
           const newElement = isAsyncComponent ? await Component(props) : Component(props)
 
-          const rscResult = elementToRSC(newElement, '{component_id}')
+          const rscResult = await elementToRSC(newElement, '{component_id}')
 
           let htmlResult = null
           try {
@@ -193,16 +192,15 @@
           return suspenseResolvedResult
         }
         catch (resolveError) {
-          const finalError = resolveError
-
+          console.error(`[rari] Error rendering ${componentSource} after suspense:`, resolveError)
           const errorResult = {
-            html: `<div><h2>Error Rendering {component_id}</h2><p>${finalError.message}</p></div>`,
+            html: '',
             rsc: null,
             hasSuspense: false,
             debug: {
               component_id: componentSource,
               success: false,
-              error: finalError.message,
+              error: resolveError.message,
             },
           }
 
@@ -214,8 +212,9 @@
       }
     }
 
+    console.error(`[rari] Error rendering ${componentSource}:`, error)
     const errorResult = {
-      html: `<div><h2>Error Rendering {component_id}</h2><p>${error.message}</p></div>`,
+      html: '',
       rsc: null,
       hasSuspense: false,
       debug: {
