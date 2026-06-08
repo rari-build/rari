@@ -26,17 +26,16 @@ function pushPendingPromise(item) {
   }
 }
 
-if (typeof globalThis !== 'undefined' && !globalThis['~suspense']) {
-  globalThis['~suspense'] = {
-    streaming: true,
-    promises: {},
-    boundaryProps: {},
-    discoveredBoundaries: [],
-    pendingPromises: [],
-    pendingPromisesById: {},
-    pendingPromisesByBoundary: {},
-    currentBoundaryId: null,
-  }
+if (typeof globalThis !== 'undefined') {
+  const s = globalThis['~suspense'] ??= {}
+  s.streaming ??= true
+  s.promises ??= {}
+  s.boundaryProps ??= {}
+  s.discoveredBoundaries ??= []
+  s.pendingPromises ??= []
+  s.pendingPromisesById ??= {}
+  s.pendingPromisesByBoundary ??= {}
+  s.currentBoundaryId ??= null
 }
 
 async function traverseToRsc(element, clientComponents = {}, depth = 0) {
