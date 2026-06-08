@@ -114,8 +114,8 @@
     "typecheck": "tsgo"
   },
   "peerDependencies": {
-    "react": "^19.2.6",
-    "react-dom": "^19.2.6"
+    "react": "catalog:react",
+    "react-dom": "catalog:react"
   },
   "dependencies": {
     "lightningcss": "catalog:build",
