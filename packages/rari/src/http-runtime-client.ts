@@ -46,15 +46,6 @@ interface HealthResponse {
   timestamp: string
 }
 
-interface StatusResponse {
-  status: string
-  mode: string
-  uptime_seconds: number
-  request_count: number
-  components_registered: number
-  memory_usage?: number
-}
-
 export class HttpRuntimeClient implements RuntimeClient {
   private baseUrl: string
   private timeout: number
@@ -274,11 +265,6 @@ export class HttpRuntimeClient implements RuntimeClient {
   async shutdown(): Promise<void> {
     this.initialized = false
     this.components = []
-  }
-
-  async getServerStatus(): Promise<StatusResponse> {
-    this.assertInitialized()
-    return await this.request<StatusResponse>('/_rari/status')
   }
 
   async checkHealth(): Promise<HealthResponse> {
