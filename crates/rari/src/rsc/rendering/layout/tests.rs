@@ -62,6 +62,7 @@ fn test_create_page_props() {
         loading: None,
         error: None,
         not_found: None,
+        templates: vec![],
         pathname: "/test".to_string(),
     };
 
@@ -98,6 +99,7 @@ fn test_wrapped_html_error_message_contains_key_info() {
         loading: None,
         error: None,
         not_found: None,
+        templates: vec![],
         pathname: "/test".to_string(),
     };
 
@@ -149,6 +151,7 @@ fn test_build_composition_script_with_use_suspense_true() {
         loading: None,
         error: None,
         not_found: None,
+        templates: vec![],
         pathname: "/test".to_string(),
     };
 
@@ -190,6 +193,7 @@ fn test_build_composition_script_with_use_suspense_false() {
         loading: None,
         error: None,
         not_found: None,
+        templates: vec![],
         pathname: "/test".to_string(),
     };
 
@@ -310,6 +314,7 @@ fn test_composition_script_includes_layout_structure_markers() {
         loading: None,
         error: None,
         not_found: None,
+        templates: vec![],
         pathname: "/test".to_string(),
     };
 
@@ -351,6 +356,7 @@ fn test_mode_consistency_both_modes_generate_render_to_rsc() {
         loading: None,
         error: None,
         not_found: None,
+        templates: vec![],
         pathname: "/test".to_string(),
     };
 
@@ -395,6 +401,7 @@ fn test_mode_consistency_suspense_serialization_format() {
         loading: None,
         error: None,
         not_found: None,
+        templates: vec![],
         pathname: "/test".to_string(),
     };
 
@@ -439,6 +446,7 @@ fn test_mode_consistency_metadata_structure() {
         loading: None,
         error: None,
         not_found: None,
+        templates: vec![],
         pathname: "/test".to_string(),
     };
 
@@ -489,6 +497,7 @@ fn test_mode_consistency_async_component_handling_with_loading() {
         loading: None,
         error: None,
         not_found: None,
+        templates: vec![],
         pathname: "/test".to_string(),
     };
 
@@ -540,6 +549,7 @@ fn test_mode_consistency_boundary_id_format() {
         loading: None,
         error: None,
         not_found: None,
+        templates: vec![],
         pathname: "/test".to_string(),
     };
 
@@ -584,6 +594,7 @@ fn test_mode_consistency_wrapper_elements() {
         loading: None,
         error: None,
         not_found: None,
+        templates: vec![],
         pathname: "/test".to_string(),
     };
 
@@ -633,6 +644,7 @@ fn test_mode_consistency_error_handling() {
         loading: None,
         error: None,
         not_found: None,
+        templates: vec![],
         pathname: "/test".to_string(),
     };
 
@@ -677,6 +689,7 @@ fn test_mode_consistency_rsc_props_cleanup() {
         loading: None,
         error: None,
         not_found: None,
+        templates: vec![],
         pathname: "/test".to_string(),
     };
 

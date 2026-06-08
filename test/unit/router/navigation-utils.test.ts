@@ -1,5 +1,5 @@
-import type { AppRouteManifest, RouteSegment } from '@rari/router/types'
-import { createRouteInfo, extractPathname, findLayoutChain, isExternalUrl, matchRouteParams, normalizePath, parseRoutePath } from '@rari/router/navigation-utils'
+import type { AppRouteManifest, RouteSegment, TemplateEntry } from '@rari/router/types'
+import { createRouteInfo, extractPathname, findLayoutChain, findTemplateChain, isExternalUrl, matchRouteParams, normalizePath, parseRoutePath } from '@rari/router/navigation-utils'
 import { afterEach, beforeEach, describe, expect, it } from 'vite-plus/test'
 
 describe('parseRoutePath', () => {
@@ -368,6 +368,7 @@ describe('createRouteInfo', () => {
       loading: [],
       errors: [],
       notFound: [],
+      templates: [],
       apiRoutes: [],
       ogImages: [],
       generated: '2024-01-01',
@@ -401,6 +402,7 @@ describe('createRouteInfo', () => {
       loading: [],
       errors: [],
       notFound: [],
+      templates: [],
       apiRoutes: [],
       ogImages: [],
       generated: '2024-01-01',
@@ -428,6 +430,7 @@ describe('createRouteInfo', () => {
       loading: [],
       errors: [],
       notFound: [],
+      templates: [],
       apiRoutes: [],
       ogImages: [],
       generated: '2024-01-01',
@@ -456,6 +459,7 @@ describe('createRouteInfo', () => {
       loading: [],
       errors: [],
       notFound: [],
+      templates: [],
       apiRoutes: [],
       ogImages: [],
       generated: '2024-01-01',
@@ -481,6 +485,7 @@ describe('createRouteInfo', () => {
       loading: [],
       errors: [],
       notFound: [],
+      templates: [],
       apiRoutes: [],
       ogImages: [],
       generated: '2024-01-01',
@@ -499,6 +504,7 @@ describe('createRouteInfo', () => {
       loading: [],
       errors: [],
       notFound: [],
+      templates: [],
       apiRoutes: [],
       ogImages: [],
       generated: '2024-01-01',
@@ -528,6 +534,7 @@ describe('createRouteInfo', () => {
       loading: [],
       errors: [],
       notFound: [],
+      templates: [],
       apiRoutes: [],
       ogImages: [],
       generated: '2024-01-01',
@@ -697,5 +704,124 @@ describe('findLayoutChain with additionalPaths', () => {
 
     const chain = findLayoutChain('/', manifest)
     expect(chain).toHaveLength(1)
+  })
+})
+
+function manifestWithTemplates(overrides: Partial<AppRouteManifest> = {}): AppRouteManifest {
+  return {
+    routes: [],
+    layouts: [],
+    loading: [],
+    errors: [],
+    notFound: [],
+    templates: [],
+    apiRoutes: [],
+    ogImages: [],
+    generated: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  }
+}
+
+describe('findTemplateChain', () => {
+  it('returns empty array when no templates exist', () => {
+    const m = manifestWithTemplates()
+
+    expect(findTemplateChain('/', m)).toEqual([])
+    expect(findTemplateChain('/about', m)).toEqual([])
+  })
+
+  it('returns root and nested templates in correct order', () => {
+    const root: TemplateEntry = { path: '/', filePath: 'template.tsx' }
+    const about: TemplateEntry = { path: '/about', filePath: 'about/template.tsx', parentPath: '/' }
+    const m = manifestWithTemplates({ templates: [about, root] })
+
+    const chain = findTemplateChain('/about', m)
+
+    expect(chain).toHaveLength(2)
+    expect(chain[0].path).toBe('/')
+    expect(chain[1].path).toBe('/about')
+  })
+
+  it('honors additionalPaths for templates in route groups', () => {
+    const tpl: TemplateEntry = {
+      path: '/contact',
+      filePath: '(_public)/template.tsx',
+      additionalPaths: ['/pricing'],
+    }
+    const m = manifestWithTemplates({ templates: [tpl] })
+
+    expect(findTemplateChain('/contact', m)).toHaveLength(1)
+    expect(findTemplateChain('/pricing', m)).toHaveLength(1)
+    expect(findTemplateChain('/other', m)).toHaveLength(0)
+  })
+
+  it('includes grouped ancestor via additionalPaths together with exact child template', () => {
+    const ancestor: TemplateEntry = {
+      path: '/',
+      filePath: '(_public)/template.tsx',
+      additionalPaths: ['/pricing'],
+    }
+    const child: TemplateEntry = {
+      path: '/pricing',
+      filePath: '(_public)/pricing/template.tsx',
+      parentPath: '/',
+    }
+    const m = manifestWithTemplates({ templates: [ancestor, child] })
+
+    const chain = findTemplateChain('/pricing', m)
+
+    expect(chain).toHaveLength(2)
+    expect(chain[0].filePath).toBe('(_public)/template.tsx')
+    expect(chain[1].filePath).toBe('(_public)/pricing/template.tsx')
+  })
+
+  it('merges exact and additionalPaths matches on the same segment', () => {
+    const exact: TemplateEntry = { path: '/pricing', filePath: 'pricing/template.tsx' }
+    const viaGroup: TemplateEntry = {
+      path: '/contact',
+      filePath: '(_public)/template.tsx',
+      additionalPaths: ['/pricing'],
+    }
+    const m = manifestWithTemplates({ templates: [exact, viaGroup] })
+
+    const chain = findTemplateChain('/pricing', m)
+
+    expect(chain).toHaveLength(2)
+    expect(chain.map(t => t.filePath)).toEqual([
+      'pricing/template.tsx',
+      '(_public)/template.tsx',
+    ])
+  })
+
+  it('caches results per manifest', () => {
+    const root: TemplateEntry = { path: '/', filePath: 'template.tsx' }
+    const m = manifestWithTemplates({ templates: [root] })
+
+    const a = findTemplateChain('/about', m)
+    const b = findTemplateChain('/about', m)
+
+    expect(a).toBe(b)
+  })
+
+  it('invalidates cache when manifest is replaced', () => {
+    const t1: TemplateEntry = { path: '/', filePath: 'template-a.tsx' }
+    const t2: TemplateEntry = { path: '/', filePath: 'template-b.tsx' }
+
+    const chain1 = findTemplateChain('/', manifestWithTemplates({ templates: [t1] }))
+    const chain2 = findTemplateChain('/', manifestWithTemplates({ templates: [t2] }))
+
+    expect(chain1[0].filePath).toBe('template-a.tsx')
+    expect(chain2[0].filePath).toBe('template-b.tsx')
+  })
+})
+
+describe('createRouteInfo with templateChain', () => {
+  it('returns templateChain alongside layoutChain', () => {
+    const root: TemplateEntry = { path: '/', filePath: 'template.tsx' }
+    const info = createRouteInfo('/', manifestWithTemplates({ templates: [root] }))
+
+    expect(info.templateChain).toHaveLength(1)
+    expect(info.templateChain[0].filePath).toBe('template.tsx')
+    expect(info.layoutChain).toEqual([])
   })
 })

@@ -22,7 +22,7 @@ const DEFAULT_OPTIONS: Required<RariRouterPluginOptions> = {
   outDir: 'dist',
 }
 
-type AppRouterFileType = 'page' | 'layout' | 'loading' | 'error' | 'not-found' | 'route' | 'server-action'
+type AppRouterFileType = 'page' | 'layout' | 'template' | 'loading' | 'error' | 'not-found' | 'route' | 'server-action'
 
 interface AppRouterHMRData {
   fileType: AppRouterFileType
@@ -46,6 +46,8 @@ function getAppRouterFileType(filePath: string): AppRouterFileType | null {
       return 'page'
     case 'layout':
       return 'layout'
+    case 'template':
+      return 'template'
     case 'loading':
       return 'loading'
     case 'error':
@@ -59,6 +61,22 @@ function getAppRouterFileType(filePath: string): AppRouterFileType | null {
   }
 }
 
+function isGroupSegment(segment: string): boolean {
+  return /^\([^/]+\)$/.test(segment)
+}
+
+function stripRouteGroups(routePath: string): string {
+  if (!routePath || routePath === '/')
+    return '/'
+
+  const segments = routePath
+    .replace(BACKSLASH_REGEX, '/')
+    .split('/')
+    .filter(segment => Boolean(segment) && !isGroupSegment(segment))
+
+  return segments.length > 0 ? `/${segments.join('/')}` : '/'
+}
+
 function filePathToRoutePath(filePath: string, appDir: string): string {
   const relativePath = path.relative(appDir, path.dirname(filePath))
 
@@ -68,7 +86,7 @@ function filePathToRoutePath(filePath: string, appDir: string): string {
   const normalized = relativePath.replace(BACKSLASH_REGEX, '/')
   const segments = normalized.split('/').filter(Boolean)
 
-  return `/${segments.join('/')}`
+  return stripRouteGroups(`/${segments.join('/')}`)
 }
 
 function getAffectedRoutes(
@@ -79,8 +97,9 @@ function getAffectedRoutes(
   if (fileType === 'page')
     return [routePath]
 
+  const prefix = `${routePath}${routePath !== '/' ? '/' : ''}`
   const affected = allRoutes.filter((route) => {
-    return route === routePath || route.startsWith(`${routePath}/`)
+    return route === routePath || route.startsWith(prefix)
   })
 
   return affected.length > 0 ? affected : [routePath]

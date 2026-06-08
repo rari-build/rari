@@ -1473,6 +1473,7 @@ if (import.meta.hot) {
         routes = [routePath]
         break
       case 'layout':
+      case 'template':
       case 'loading':
       case 'error':
       case 'not-found':

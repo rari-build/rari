@@ -75,12 +75,22 @@ export interface ApiRouteEntry {
   methods: string[]
 }
 
+export interface TemplateEntry {
+  path: string
+  filePath: string
+  css?: string[]
+  componentId?: string
+  parentPath?: string
+  additionalPaths?: string[]
+}
+
 export interface AppRouteManifest {
   routes: AppRouteEntry[]
   layouts: LayoutEntry[]
   loading: LoadingEntry[]
   errors: ErrorEntry[]
   notFound: NotFoundEntry[]
+  templates: TemplateEntry[]
   apiRoutes: ApiRouteEntry[]
   ogImages: OgImageEntry[]
   generated: string
@@ -169,6 +179,7 @@ export interface AppRouteMatch {
   layouts: LayoutEntry[]
   loading?: LoadingEntry
   error?: ErrorEntry
+  templates: TemplateEntry[]
   pathname: string
 }
 

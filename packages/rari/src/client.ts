@@ -44,6 +44,7 @@ export type {
   NotFoundEntry,
   RouteSegment,
   RouteSegmentType,
+  TemplateEntry,
 } from './router/types'
 
 export {

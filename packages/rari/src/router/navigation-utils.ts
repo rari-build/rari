@@ -1,5 +1,5 @@
 import type { RouteInfo } from './navigation-types'
-import type { AppRouteManifest, LayoutEntry, RouteSegment } from './types'
+import type { AppRouteManifest, LayoutEntry, RouteSegment, TemplateEntry } from './types'
 
 const LEADING_TRAILING_SLASHES_REGEX = /(^\/+)|(\/+$)/g
 
@@ -139,6 +139,7 @@ export function matchRouteParams(
 }
 
 const layoutChainCache = new WeakMap<AppRouteManifest, Map<string, LayoutEntry[]>>()
+const templateChainCache = new WeakMap<AppRouteManifest, Map<string, TemplateEntry[]>>()
 
 export function findLayoutChain(
   routePath: string,
@@ -167,6 +168,44 @@ export function findLayoutChain(
     for (const layout of layouts) {
       if (!chain.some(existing => existing.filePath === layout.filePath))
         chain.push(layout)
+    }
+  }
+
+  manifestCache.set(routePath, chain)
+
+  return chain
+}
+
+export function findTemplateChain(
+  routePath: string,
+  manifest: AppRouteManifest,
+): TemplateEntry[] {
+  let manifestCache = templateChainCache.get(manifest)
+  if (!manifestCache) {
+    manifestCache = new Map()
+    templateChainCache.set(manifest, manifestCache)
+  }
+
+  const cached = manifestCache.get(routePath)
+  if (cached)
+    return cached
+
+  const chain: TemplateEntry[] = []
+  const segments = parseRoutePath(routePath)
+
+  for (let i = 0; i <= segments.length; i++) {
+    const currentPath = i === 0 ? '/' : `/${segments.slice(0, i).join('/')}`
+    const matched = new Map<string, TemplateEntry>()
+    for (const t of manifest.templates) {
+      if (t.path === currentPath || t.additionalPaths?.includes(currentPath)) {
+        matched.set(t.filePath, t)
+      }
+    }
+    const templates = [...matched.values()]
+
+    for (const template of templates) {
+      if (!chain.some(existing => existing.filePath === template.filePath))
+        chain.push(template)
     }
   }
 
@@ -216,6 +255,7 @@ export function createRouteInfo(
     params,
     searchParams: searchParams || new URLSearchParams(),
     layoutChain,
+    templateChain: findTemplateChain(route?.path ?? normalizedPath, manifest),
   }
 }
 

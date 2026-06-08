@@ -103,7 +103,7 @@ test-rust-all: test-rust test-rust-doc
 
 # Run Node.js tests
 test-node: _ensure-node-deps
-    pnpm vitest --run
+    pnpm test:unit:run
 
 # Run tests with coverage
 test-coverage:
@@ -226,11 +226,7 @@ update-actions:
 
 # Ensure pnpm dependencies are installed
 _ensure-node-deps:
-    #!/usr/bin/env bash
-    if [ ! -d "node_modules" ] || [ "pnpm-lock.yaml" -nt "node_modules" ] || [ "package.json" -nt "node_modules" ]; then
-        echo "📦 Installing Node.js dependencies..."
-        pnpm install
-    fi
+    pnpm install --frozen-lockfile
 
 # Run the rari CLI
 run *args:

@@ -9,6 +9,7 @@ import type {
   OgImageEntry,
   RouteSegment,
   RouteSegmentType,
+  TemplateEntry,
 } from './types'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
@@ -137,12 +138,13 @@ class AppRouteGenerator {
     const loading: LoadingEntry[] = []
     const errors: ErrorEntry[] = []
     const notFound: NotFoundEntry[] = []
+    const templates: TemplateEntry[] = []
     const apiRoutes: ApiRouteEntry[] = []
     const ogImages: OgImageEntry[] = []
 
-    await this.scanDirectory('', routes, layouts, loading, errors, notFound, apiRoutes, ogImages)
+    await this.scanDirectory('', routes, layouts, loading, errors, notFound, templates, apiRoutes, ogImages)
 
-    for (const entries of [layouts, loading, errors, notFound, ogImages]) {
+    for (const entries of [layouts, loading, errors, notFound, templates, ogImages]) {
       this.finalizeGroupEntries(routes, entries)
     }
 
@@ -154,6 +156,7 @@ class AppRouteGenerator {
       console.warn(`[rari] Router: Found ${layouts.length} layouts`)
       console.warn(`[rari] Router: Found ${loading.length} loading components`)
       console.warn(`[rari] Router: Found ${errors.length} error boundaries`)
+      console.warn(`[rari] Router: Found ${templates.length} templates`)
       console.warn(`[rari] Router: Found ${apiRoutes.length} API routes`)
       console.warn(`[rari] Router: Found ${ogImages.length} OG images`)
     }
@@ -164,6 +167,7 @@ class AppRouteGenerator {
       loading,
       errors,
       notFound,
+      templates: this.sortTemplates(templates),
       apiRoutes: this.sortApiRoutes(apiRoutes),
       ogImages,
       generated: new Date().toISOString(),
@@ -225,6 +229,7 @@ class AppRouteGenerator {
     loading: LoadingEntry[],
     errors: ErrorEntry[],
     notFound: NotFoundEntry[],
+    templates: TemplateEntry[],
     apiRoutes: ApiRouteEntry[],
     ogImages: OgImageEntry[],
   ): Promise<void> {
@@ -263,13 +268,14 @@ class AppRouteGenerator {
       loading,
       errors,
       notFound,
+      templates,
       apiRoutes,
       ogImages,
     )
 
     for (const dir of dirs) {
       const subPath = relativePath ? path.join(relativePath, dir) : dir
-      await this.scanDirectory(subPath, routes, layouts, loading, errors, notFound, apiRoutes, ogImages)
+      await this.scanDirectory(subPath, routes, layouts, loading, errors, notFound, templates, apiRoutes, ogImages)
     }
   }
 
@@ -281,6 +287,7 @@ class AppRouteGenerator {
     loading: LoadingEntry[],
     errors: ErrorEntry[],
     notFound: NotFoundEntry[],
+    templates: TemplateEntry[],
     apiRoutes: ApiRouteEntry[],
     ogImages: OgImageEntry[],
   ): Promise<void> {
@@ -306,7 +313,7 @@ class AppRouteGenerator {
       layouts.push({
         path: routePath,
         filePath: path.join(relativePath, layoutFile).replace(BACKSLASH_REGEX, '/'),
-        parentPath: parentPath ? this.pathToRoute(parentPath) : undefined,
+        parentPath: parentPath !== null ? this.pathToRoute(parentPath) : undefined,
       })
     }
 
@@ -333,6 +340,16 @@ class AppRouteGenerator {
       notFound.push({
         path: routePath,
         filePath: path.join(relativePath, notFoundFile).replace(BACKSLASH_REGEX, '/'),
+      })
+    }
+
+    const templateFile = this.findFile(files, SPECIAL_FILES.TEMPLATE)
+    if (templateFile) {
+      const parentPath = this.getParentPath(relativePath)
+      templates.push({
+        path: routePath,
+        filePath: path.join(relativePath, templateFile).replace(BACKSLASH_REGEX, '/'),
+        parentPath: parentPath !== null ? this.pathToRoute(parentPath) : undefined,
       })
     }
 
@@ -501,6 +518,21 @@ class AppRouteGenerator {
   private sortLayouts(layouts: LayoutEntry[]): LayoutEntry[] {
     return layouts.sort((a, b) => {
       /* v8 ignore start - root layout sorting comparisons */
+      if (a.path === '/' && b.path !== '/')
+        return -1
+      if (b.path === '/' && a.path !== '/')
+        return 1
+      /* v8 ignore stop */
+
+      const aDepth = a.path.split('/').length
+      const bDepth = b.path.split('/').length
+      return aDepth - bDepth
+    })
+  }
+
+  private sortTemplates(templates: TemplateEntry[]): TemplateEntry[] {
+    return templates.sort((a, b) => {
+      /* v8 ignore start - root template sorting comparisons */
       if (a.path === '/' && b.path !== '/')
         return -1
       if (b.path === '/' && a.path !== '/')

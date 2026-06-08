@@ -1011,6 +1011,19 @@ if (typeof window !== 'undefined') {
             })
             .collect();
 
+        let templates: Vec<super::route_composer::TemplateInfo> = route_match
+            .templates
+            .iter()
+            .map(|template| super::route_composer::TemplateInfo {
+                component_id: template
+                    .component_id
+                    .clone()
+                    .unwrap_or_else(|| utils::create_component_id(&template.file_path)),
+                client_component_id: utils::create_client_component_id(&template.file_path),
+                file_path: template.file_path.clone(),
+            })
+            .collect();
+
         let error_boundary = route_match.error.as_ref().map(|error| {
             let component_id = utils::create_client_component_id(&error.file_path);
             super::route_composer::ErrorBoundaryInfo {
@@ -1032,9 +1045,10 @@ if (typeof window !== 'undefined') {
             })
             .unwrap_or_else(|| "{}".to_string());
 
-        let script = super::route_composer::RouteComposer::build_composition_script_with_error(
+        let script = super::route_composer::RouteComposer::build_composition_script_with_templates(
             &page_render_script,
             &layouts,
+            &templates,
             &pathname_json,
             error_boundary.as_ref(),
             &metadata_json,
