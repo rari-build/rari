@@ -182,7 +182,9 @@ export async function myAction() {
     it('should handle file read errors', () => {
       const filePath = '/test/project/src/components/Error.tsx'
 
-      vi.mocked(fsSync.existsSync).mockReturnValue(false)
+      vi.mocked(fsSync.readFileSync).mockImplementation(() => {
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+      })
 
       const result = builder.isServerComponent(filePath)
 
@@ -340,10 +342,12 @@ export default function NodeImports() {
         return path === srcDir || path.toString().endsWith('B.tsx')
       })
 
-      vi.mocked(fsSync.statSync).mockReturnValue({
-        isFile: () => true,
-        isDirectory: () => false,
-      } as any)
+      vi.mocked(fsSync.statSync).mockImplementation((path: any) => {
+        if (path.toString().endsWith('B.tsx')) {
+          return { isFile: () => true, isDirectory: () => false } as any
+        }
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+      })
 
       vi.mocked(fsSync.readdirSync).mockReturnValue([
         { name: 'A.tsx', isFile: () => true, isDirectory: () => false } as any,
