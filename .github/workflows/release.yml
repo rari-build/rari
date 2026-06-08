@@ -335,6 +335,7 @@ jobs:
         run: |
           PACKAGE_NAME="rari-${{ matrix.platform }}"
           cd "packages/${PACKAGE_NAME}"
+          npm pkg fix
           echo "Publishing ${PACKAGE_NAME}..."
           npm publish --access public
           echo "Successfully published ${PACKAGE_NAME}"
