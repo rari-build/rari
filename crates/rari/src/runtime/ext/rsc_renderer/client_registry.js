@@ -7,6 +7,8 @@ if (typeof globalThis['~clientComponentNames'] === 'undefined')
 if (typeof globalThis['~clientComponentPaths'] === 'undefined')
   globalThis['~clientComponentPaths'] = {}
 
+const REACT_CLIENT_REFERENCE = Symbol.for('react.client.reference')
+
 function registerClientComponent(componentId, componentPath, component) {
   if (!componentId || !componentPath) {
     console.warn('registerClientComponent: componentId and componentPath are required')
@@ -48,7 +50,7 @@ function isClientComponent(componentType, registry) {
       return true
   }
 
-  if (componentType && componentType.$$typeof === Symbol.for('react.client.reference'))
+  if (componentType && componentType.$$typeof === REACT_CLIENT_REFERENCE)
     return true
 
   if (typeof componentType === 'string' && clientRegistry[componentType])
@@ -73,7 +75,7 @@ function getClientComponentInfo(componentType) {
   if (typeof componentType === 'string' && globalThis['~clientComponents'][componentType])
     return globalThis['~clientComponents'][componentType]
 
-  if (componentType && componentType.$$typeof === Symbol.for('react.client.reference')) {
+  if (componentType && componentType.$$typeof === REACT_CLIENT_REFERENCE) {
     const componentId = componentType.$$id || componentType.name || 'UnknownClient'
     return {
       id: componentId,
@@ -158,7 +160,7 @@ function markAsClientComponent(component, componentId) {
 
 function createClientReference(componentId, componentPath) {
   const reference = {
-    '$$typeof': Symbol.for('react.client.reference'),
+    '$$typeof': REACT_CLIENT_REFERENCE,
     '$$id': componentId,
     '$$async': false,
     'name': componentId,

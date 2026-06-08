@@ -8,6 +8,7 @@ const HTML_ESCAPE_MAP = {
 const HTML_ESCAPE_REGEX = /[&<>"']/g
 const VENDOR_PREFIX_REGEX = /^(?:Webkit|Moz|Ms|O)[A-Z]/
 const CAMEL_CASE_REGEX = /([a-z])([A-Z])/g
+const REACT_FRAGMENT_TYPE = Symbol.for('react.fragment')
 
 function escapeHtml(text) {
   if (text === null || text === undefined)
@@ -22,24 +23,25 @@ function kebabCase(str) {
   return VENDOR_PREFIX_REGEX.test(str) ? `-${kebab}` : kebab
 }
 
+const SELF_CLOSING_TAGS = new Set([
+  'area',
+  'base',
+  'br',
+  'col',
+  'embed',
+  'hr',
+  'img',
+  'input',
+  'link',
+  'meta',
+  'param',
+  'source',
+  'track',
+  'wbr',
+])
+
 function isSelfClosing(tagName) {
-  const selfClosingTags = new Set([
-    'area',
-    'base',
-    'br',
-    'col',
-    'embed',
-    'hr',
-    'img',
-    'input',
-    'link',
-    'meta',
-    'param',
-    'source',
-    'track',
-    'wbr',
-  ])
-  return selfClosingTags.has(tagName.toLowerCase())
+  return SELF_CLOSING_TAGS.has(tagName.toLowerCase())
 }
 
 async function renderHtmlElement(tagName, props, depth) {
@@ -137,7 +139,7 @@ async function renderToHtml(element, depth = 0, isRawContent = false) {
     if (typeof type === 'string')
       return await renderHtmlElement(type, props, depth)
 
-    if (type === Symbol.for('react.fragment') || (type && type === globalThis.React?.Fragment))
+    if (type === REACT_FRAGMENT_TYPE || (type && type === globalThis.React?.Fragment))
       return await renderToHtml(props.children, depth + 1, isRawContent)
 
     if (typeof type === 'function') {

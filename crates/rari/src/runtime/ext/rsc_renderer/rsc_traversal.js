@@ -1,4 +1,10 @@
 const TSX_DEFAULT_REGEX = /\/([^/]+)\.tsx#/
+const REACT_ELEMENT_TYPE = Symbol.for('react.transitional.element')
+const REACT_CLIENT_REFERENCE = Symbol.for('react.client.reference')
+const REACT_SUSPENSE_TYPE = Symbol.for('react.suspense')
+const REACT_FRAGMENT_TYPE = Symbol.for('react.fragment')
+const REACT_PROVIDER_TYPE = Symbol.for('react.provider')
+const REACT_CONSUMER_TYPE = Symbol.for('react.consumer')
 
 if (typeof globalThis !== 'undefined') {
   globalThis['~rsc'] = globalThis['~rsc'] || {}
@@ -100,8 +106,8 @@ async function traverseToRsc(element, clientComponents = {}, depth = 0) {
   if (
     element
     && typeof element === 'object'
-    && element.$$typeof === Symbol.for('react.transitional.element')
-    && element.type === Symbol.for('react.fragment')
+    && element.$$typeof === REACT_ELEMENT_TYPE
+    && element.type === REACT_FRAGMENT_TYPE
   ) {
     return await traverseToRsc(element.props.children, clientComponents, depth + 1)
   }
@@ -109,7 +115,7 @@ async function traverseToRsc(element, clientComponents = {}, depth = 0) {
   if (
     element
     && typeof element === 'object'
-    && element.$$typeof === Symbol.for('react.transitional.element')
+    && element.$$typeof === REACT_ELEMENT_TYPE
   ) {
     return await traverseReactElement(element, clientComponents, depth + 1)
   }
@@ -126,7 +132,7 @@ async function traverseToRsc(element, clientComponents = {}, depth = 0) {
       }
 
       const fakeElement = {
-        $$typeof: Symbol.for('react.transitional.element'),
+        $$typeof: REACT_ELEMENT_TYPE,
         type: element.type,
         props: mergedProps,
         key: element.key ?? null,
@@ -143,7 +149,7 @@ async function traverseToRsc(element, clientComponents = {}, depth = 0) {
       }
 
       const fakeSuspenseElement = {
-        $$typeof: Symbol.for('react.transitional.element'),
+        $$typeof: REACT_ELEMENT_TYPE,
         type: 'suspense',
         props: mergedProps,
         key: element.key ?? null,
@@ -232,7 +238,7 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
           continue
         }
 
-        if (child.$$typeof === Symbol.for('react.transitional.element') && typeof child.type === 'function') {
+        if (child.$$typeof === REACT_ELEMENT_TYPE && typeof child.type === 'function') {
           try {
             const isAsyncMarker = child.type._isAsyncComponent && child.type._originalType
             const isAsync = isAsyncMarker
@@ -511,13 +517,13 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
   if (type === React.Fragment)
     return await traverseToRsc(props.children, clientComponents, depth + 1)
 
-  if (type === Symbol.for('react.fragment'))
+  if (type === REACT_FRAGMENT_TYPE)
     return await traverseToRsc(props.children, clientComponents, depth + 1)
 
-  if (type && type.$$typeof === Symbol.for('react.provider'))
+  if (type && type.$$typeof === REACT_PROVIDER_TYPE)
     return await traverseToRsc(props.children, clientComponents, depth + 1)
 
-  if (type && type.$$typeof === Symbol.for('react.consumer'))
+  if (type && type.$$typeof === REACT_CONSUMER_TYPE)
     return await traverseToRsc(props.children, clientComponents, depth + 1)
 
   return [
@@ -590,7 +596,7 @@ async function renderServerComponent(element) {
 function isClientComponent(componentType, clientComponents) {
   if (
     componentType
-    && componentType.$$typeof === Symbol.for('react.client.reference')
+    && componentType.$$typeof === REACT_CLIENT_REFERENCE
   ) {
     return true
   }
@@ -640,7 +646,7 @@ function isServerComponent(componentType) {
 
 function getClientComponentId(componentType, clientComponents) {
   if (componentType && (typeof componentType === 'object' || typeof componentType === 'function')) {
-    const reactClientSymbol = Symbol.for('react.client.reference')
+    const reactClientSymbol = REACT_CLIENT_REFERENCE
     if (componentType.$$typeof === reactClientSymbol) {
       const clientId = componentType.$$id
       if (clientId)
@@ -750,10 +756,10 @@ function isSuspenseComponent(type) {
     return true
   }
 
-  if (type && type.$$typeof === Symbol.for('react.suspense'))
+  if (type && type.$$typeof === REACT_SUSPENSE_TYPE)
     return true
 
-  if (type === Symbol.for('react.suspense'))
+  if (type === REACT_SUSPENSE_TYPE)
     return true
 
   if (
