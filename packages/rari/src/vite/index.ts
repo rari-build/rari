@@ -307,32 +307,36 @@ export function rari(options: RariOptions = {}): Plugin[] {
     return result
   }
 
+  let htmlEntryImports: Set<string> | null = null
+
+  function getHtmlEntryImports(): Set<string> {
+    if (htmlEntryImports !== null)
+      return htmlEntryImports
+
+    htmlEntryImports = new Set()
+    const projectRoot = options.projectRoot || process.cwd()
+    const indexHtmlPath = path.join(projectRoot, 'index.html')
+
+    try {
+      const htmlContent = fs.readFileSync(indexHtmlPath, 'utf-8')
+      for (const match of htmlContent.matchAll(HTML_IMPORT_REGEX)) {
+        const importPath = match[1]
+        if (importPath.startsWith('/src/')) {
+          htmlEntryImports.add(path.join(projectRoot, importPath.slice(1)))
+        }
+      }
+    }
+    catch {}
+
+    return htmlEntryImports
+  }
+
   function isServerComponent(filePath: string): boolean {
     if (filePath.includes('node_modules') || isRariInternalFile(filePath))
       return false
 
-    const projectRoot = options.projectRoot || process.cwd()
-    const indexHtmlPath = path.join(projectRoot, 'index.html')
-
-    if (fs.existsSync(indexHtmlPath)) {
-      try {
-        const htmlContent = fs.readFileSync(indexHtmlPath, 'utf-8')
-
-        for (const match of htmlContent.matchAll(HTML_IMPORT_REGEX)) {
-          const importPath = match[1]
-          if (importPath.startsWith('/src/')) {
-            const absolutePath = path.join(projectRoot, importPath.slice(1))
-            if (absolutePath === filePath)
-              return false
-          }
-        }
-      }
-      catch (err) {
-        if ((err as any)?.code !== 'ENOENT') {
-          console.warn('[rari] Unexpected error reading index.html:', err)
-        }
-      }
-    }
+    if (getHtmlEntryImports().has(filePath))
+      return false
 
     let pathForFsOperations
     try {
@@ -343,9 +347,6 @@ export function rari(options: RariOptions = {}): Plugin[] {
     }
 
     try {
-      if (!fs.existsSync(pathForFsOperations))
-        return false
-
       const code = fs.readFileSync(pathForFsOperations, 'utf-8')
       const directives = getDirectives(code)
 
@@ -402,6 +403,7 @@ export function rari(options: RariOptions = {}): Plugin[] {
     if (exportedNames.length === 0)
       return code
 
+    const idJson = JSON.stringify(id)
     let newCode = code
     newCode
       += '\n\nimport {registerServerReference} from "react-server-dom-rari/server";\n'
@@ -413,7 +415,7 @@ export function rari(options: RariOptions = {}): Plugin[] {
         if (functionDeclMatch) {
           const functionName = functionDeclMatch[1]
           newCode += `\n// Register server reference for default export\n`
-          newCode += `registerServerReference(${functionName}, ${JSON.stringify(id)}, ${JSON.stringify(name)});\n`
+          newCode += `registerServerReference(${functionName}, ${idJson}, ${JSON.stringify(name)});\n`
         }
         else {
           const match = code.match(EXPORT_DEFAULT_VALUE_REGEX)
@@ -426,7 +428,7 @@ export function rari(options: RariOptions = {}): Plugin[] {
             )
             newCode += `\n// Register server reference for default export\n`
             newCode += `if (typeof ${tempVarName} === "function") {\n`
-            newCode += `  registerServerReference(${tempVarName}, ${JSON.stringify(id)}, ${JSON.stringify(name)});\n`
+            newCode += `  registerServerReference(${tempVarName}, ${idJson}, ${JSON.stringify(name)});\n`
             newCode += `}\n`
           }
         }
@@ -434,7 +436,7 @@ export function rari(options: RariOptions = {}): Plugin[] {
       else {
         newCode += `\n// Register server reference for ${name}\n`
         newCode += `if (typeof ${name} === "function") {\n`
-        newCode += `  registerServerReference(${name}, ${JSON.stringify(id)}, ${JSON.stringify(name)});\n`
+        newCode += `  registerServerReference(${name}, ${idJson}, ${JSON.stringify(name)});\n`
         newCode += `}\n`
       }
     }
@@ -460,14 +462,15 @@ if (import.meta.hot) {
         return ''
 
       const moduleId = getComponentId(id, projectRoot)
+      const moduleIdJson = JSON.stringify(moduleId)
 
       let newCode = 'import { createServerReference } from "rari/runtime/actions";\n'
 
       for (const name of exportedNames) {
         if (name === 'default')
-          newCode += `export default createServerReference("default", ${JSON.stringify(moduleId)}, "default");\n`
+          newCode += `export default createServerReference("default", ${moduleIdJson}, "default");\n`
         else
-          newCode += `export const ${name} = createServerReference("${name}", ${JSON.stringify(moduleId)}, "${name}");\n`
+          newCode += `export const ${name} = createServerReference("${name}", ${moduleIdJson}, "${name}");\n`
       }
 
       return newCode
@@ -479,15 +482,16 @@ if (import.meta.hot) {
         return ''
 
       const componentId = getComponentId(id, projectRoot)
+      const idJson = JSON.stringify(id)
 
       let newCode
         = 'import { createServerComponentWrapper } from "virtual:rsc-integration.ts";\n'
 
       for (const name of exportedNames) {
         if (name === 'default')
-          newCode += `export default createServerComponentWrapper("${componentId}", ${JSON.stringify(id)});\n`
+          newCode += `export default createServerComponentWrapper("${componentId}", ${idJson});\n`
         else
-          newCode += `export const ${name} = createServerComponentWrapper("${componentId}_${name}", ${JSON.stringify(id)});\n`
+          newCode += `export const ${name} = createServerComponentWrapper("${componentId}_${name}", ${idJson});\n`
       }
 
       return newCode
@@ -500,6 +504,7 @@ if (import.meta.hot) {
     if (exportedNames.length === 0)
       return ''
 
+    const idJson = JSON.stringify(id)
     let newCode
       = 'import {registerClientReference} from "react-server-dom-rari/server";\n'
 
@@ -517,7 +522,7 @@ if (import.meta.hot) {
         newCode += `throw new Error(${JSON.stringify(errorMsg)});`
       }
       newCode += '},'
-      newCode += `${JSON.stringify(id)},`
+      newCode += `${idJson},`
       newCode += `${JSON.stringify(name)});\n`
     }
 

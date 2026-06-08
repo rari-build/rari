@@ -28,6 +28,27 @@ const COMPONENTS_PATH_REGEX = /\/components\/(\w+)(?:\.tsx?|\.jsx?)?$/
 const COMPONENTS_PATH_ALT_REGEX = /[/\\]components[/\\](\w+)(?:\.tsx?|\.jsx?)?$/
 const SPECIAL_FILE_REGEX = /^(?:robots|sitemap)\.(?:tsx?|jsx?)$/
 const NODE_PROTOCOL_REGEX = /^node:/
+const NODE_BUILTINS = new Set([
+  'fs',
+  'path',
+  'os',
+  'crypto',
+  'util',
+  'stream',
+  'events',
+  'process',
+  'buffer',
+  'url',
+  'querystring',
+  'zlib',
+  'http',
+  'https',
+  'net',
+  'tls',
+  'child_process',
+  'cluster',
+  'worker_threads',
+])
 const PATH_SEPARATOR_NORMALIZE_REGEX = /\\/g
 export const RARI_CSS_MODULES_PATTERN = '[hash]_[local]'
 
@@ -275,10 +296,7 @@ export class ServerComponentBuilder {
       return false
 
     try {
-      const code = source ?? (fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf-8') : null)
-      if (code === null)
-        return false
-
+      const code = source ?? fs.readFileSync(filePath, 'utf-8')
       const directives = getDirectives(code)
       return !directives.hasUseClient && !directives.hasUseServer
     }
@@ -289,10 +307,7 @@ export class ServerComponentBuilder {
 
   private isClientComponent(filePath: string, source?: string): boolean {
     try {
-      const code = source ?? (fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf-8') : null)
-      if (code === null)
-        return false
-
+      const code = source ?? fs.readFileSync(filePath, 'utf-8')
       return getDirectives(code).hasUseClient
     }
     catch {
@@ -343,10 +358,13 @@ export class ServerComponentBuilder {
 
                 for (const ext of extensions) {
                   const pathWithExt = resolvedPath + ext
-                  if (fs.existsSync(pathWithExt) && fs.statSync(pathWithExt).isFile()) {
-                    foundPath = pathWithExt
-                    break
+                  try {
+                    if (fs.statSync(pathWithExt).isFile()) {
+                      foundPath = pathWithExt
+                      break
+                    }
                   }
+                  catch {}
                 }
 
                 if (foundPath) {
@@ -447,28 +465,7 @@ export class ServerComponentBuilder {
   }
 
   private isNodeBuiltin(moduleName: string): boolean {
-    const nodeBuiltins = [
-      'fs',
-      'path',
-      'os',
-      'crypto',
-      'util',
-      'stream',
-      'events',
-      'process',
-      'buffer',
-      'url',
-      'querystring',
-      'zlib',
-      'http',
-      'https',
-      'net',
-      'tls',
-      'child_process',
-      'cluster',
-      'worker_threads',
-    ]
-    return nodeBuiltins.includes(moduleName)
+    return NODE_BUILTINS.has(moduleName)
   }
 
   private hasNodeImports(code: string): boolean {
