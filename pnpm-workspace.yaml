@@ -57,7 +57,6 @@ catalogs:
   eslint:
     '@antfu/eslint-config': ^9.0.0
     '@eslint-react/eslint-plugin': ^5.8.16
-    '@typescript-eslint/utils': ^8.60.1
     eslint: ^10.4.1
     eslint-plugin-de-morgan: ^2.1.2
     eslint-plugin-oxlint: ^1.68.0

@@ -22,7 +22,6 @@
     "@eslint-react/eslint-plugin": "catalog:eslint",
     "@playwright/test": "catalog:testing",
     "@types/node": "catalog:typescript",
-    "@typescript-eslint/utils": "catalog:eslint",
     "@typescript/native-preview": "catalog:typescript",
     "@vitest/coverage-v8": "catalog:testing",
     "eslint": "catalog:eslint",

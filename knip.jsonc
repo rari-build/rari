@@ -14,7 +14,6 @@
       ],
       "ignoreDependencies": [
         "@typescript/native-preview", // Used by TypeScript tooling
-        "@typescript-eslint/utils", // Used by antfu eslint config
         "@vitest/coverage-v8" // Used by vitest for coverage
       ]
     },

@@ -37,9 +37,6 @@ catalogs:
     '@eslint-react/eslint-plugin':
       specifier: ^5.8.16
       version: 5.8.16
-    '@typescript-eslint/utils':
-      specifier: ^8.60.1
-      version: 8.60.1
     eslint:
       specifier: ^10.4.1
       version: 10.4.1
@@ -135,9 +132,6 @@ importers:
       '@types/node':
         specifier: catalog:typescript
         version: 25.9.2
-      '@typescript-eslint/utils':
-        specifier: catalog:eslint
-        version: 8.60.1(eslint@10.4.1(jiti@2.7.0))(typescript@5.9.3)
       '@typescript/native-preview':
         specifier: catalog:typescript
         version: 7.0.0-dev.20260607.1
