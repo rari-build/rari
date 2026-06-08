@@ -320,11 +320,11 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
     configResolved(config) {
       viteRoot = config.root
 
-      // Suppress Vite warnings about dynamic imports in our runtime-client
+      // Suppress Vite warnings about dynamic imports in our dist files
       // These are intentional and use @vite-ignore comments that get stripped by minification
       const originalWarn = config.logger.warn
       config.logger.warn = (msg, options) => {
-        if (typeof msg === 'string' && msg.includes('runtime-client') && msg.includes('The above dynamic import cannot be analyzed'))
+        if (typeof msg === 'string' && msg.includes('The above dynamic import cannot be analyzed') && msg.includes('packages/rari/dist/'))
           return
 
         originalWarn(msg, options)
