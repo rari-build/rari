@@ -394,7 +394,7 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
       return null
     }
 
-    const rendered = renderServerComponent(element)
+    const rendered = await renderServerComponent(element)
     return await traverseToRsc(rendered, clientComponents, depth + 1)
   }
 
