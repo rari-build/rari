@@ -1,5 +1,5 @@
+/* eslint-disable node/prefer-global/process */
 import type { GlobalWithRari, ModuleData, WindowWithRari } from './shared/types'
-import process from 'node:process'
 import * as React from 'react'
 import { cloneElement, createElement, isValidElement, Suspense, use, useEffect, useState } from 'react'
 import * as ReactDOMClient from 'react-dom/client'
