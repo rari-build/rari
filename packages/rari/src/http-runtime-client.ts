@@ -228,7 +228,7 @@ export class HttpRuntimeClient implements RuntimeClient {
   ): Promise<void> {
     if (!this.initialized) {
       console.error(
-        '[rari] Runtime: Client not initialized. Client component registration will be delayed.',
+        `[rari] Runtime: Client not initialized. Registration for "${componentId}" dropped.`,
       )
       return
     }
@@ -272,20 +272,17 @@ export class HttpRuntimeClient implements RuntimeClient {
   }
 
   async shutdown(): Promise<void> {
-    try {
-      this.initialized = false
-      this.components = []
-    }
-    catch (error) {
-      console.error('[rari] Runtime: Error during shutdown:', error)
-    }
+    this.initialized = false
+    this.components = []
   }
 
   async getServerStatus(): Promise<StatusResponse> {
+    this.assertInitialized()
     return await this.request<StatusResponse>('/_rari/status')
   }
 
   async checkHealth(): Promise<HealthResponse> {
+    this.assertInitialized()
     return await this.request<HealthResponse>('/_rari/health')
   }
 
