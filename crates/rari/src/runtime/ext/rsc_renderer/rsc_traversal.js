@@ -168,165 +168,168 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
     const previousBoundaryId = suspense.currentBoundaryId
     suspense.currentBoundaryId = boundaryId
 
-    const safeFallback = props?.fallback
-      ? await traverseToRsc(props.fallback, clientComponents, depth + 1)
-      : null
+    try {
+      const safeFallback = props?.fallback
+        ? await traverseToRsc(props.fallback, clientComponents, depth + 1)
+        : null
 
-    suspense.discoveredBoundaries.push({
-      id: boundaryId,
-      fallback: safeFallback,
-      parentId: previousBoundaryId,
-    })
+      suspense.discoveredBoundaries.push({
+        id: boundaryId,
+        fallback: safeFallback,
+        parentId: previousBoundaryId,
+      })
 
-    const processedChildren = Array.isArray(props?.children)
-      ? props.children
-      : [props?.children]
+      const processedChildren = Array.isArray(props?.children)
+        ? props.children
+        : [props?.children]
 
-    function detectAsyncComponents(children, depth = 0) {
-      if (depth > 10)
-        return
+      function detectAsyncComponents(children, depth = 0) {
+        if (depth > 10)
+          return
 
-      const childArray = Array.isArray(children) ? children : [children]
+        const childArray = Array.isArray(children) ? children : [children]
 
-      for (const child of childArray) {
-        if (!child || typeof child !== 'object')
-          continue
+        for (const child of childArray) {
+          if (!child || typeof child !== 'object')
+            continue
 
-        if (typeof child.then === 'function') {
-          const promiseId = `promise:${globalThis['~rsc'].keyCounter++}`
-          suspense.promises[promiseId] = child
-          pushPendingPromise({
-            id: promiseId,
-            boundaryId,
-            componentPath: 'AsyncComponent',
-          })
-          continue
+          if (typeof child.then === 'function') {
+            const promiseId = `promise:${globalThis['~rsc'].keyCounter++}`
+            suspense.promises[promiseId] = child
+            pushPendingPromise({
+              id: promiseId,
+              boundaryId,
+              componentPath: 'AsyncComponent',
+            })
+            continue
+          }
+
+          if (child.$$typeof === REACT_ELEMENT_TYPE && typeof child.type === 'function') {
+            try {
+              const isAsyncMarker = child.type._isAsyncComponent && child.type._originalType
+              const isAsync = isAsyncMarker
+                || child.type.constructor.name === 'AsyncFunction'
+                || child.type.toString().trim().startsWith('async ')
+
+              if (isAsync) {
+                const promiseId = `promise:${globalThis['~rsc'].keyCounter++}`
+
+                const actualType = isAsyncMarker ? child.type._originalType : child.type
+
+                pushPendingPromise({
+                  id: promiseId,
+                  boundaryId,
+                  componentPath: actualType.name || 'anonymous',
+                  componentType: actualType,
+                  componentProps: child.props || {},
+                })
+              }
+            }
+            catch (error) {
+              console.error('Error detecting async component:', error)
+            }
+          }
+
+          if (child.props && child.props.children && !isSuspenseComponent(child.type))
+            detectAsyncComponents(child.props.children, depth + 1)
         }
+      }
 
-        if (child.$$typeof === REACT_ELEMENT_TYPE && typeof child.type === 'function') {
-          try {
-            const isAsyncMarker = child.type._isAsyncComponent && child.type._originalType
-            const isAsync = isAsyncMarker
-              || child.type.constructor.name === 'AsyncFunction'
-              || child.type.toString().trim().startsWith('async ')
+      detectAsyncComponents(processedChildren)
 
-            if (isAsync) {
-              const promiseId = `promise:${globalThis['~rsc'].keyCounter++}`
+      const hasPendingPromises = suspense.pendingPromises.some(
+        p => p.boundaryId === boundaryId,
+      )
 
-              const actualType = isAsyncMarker ? child.type._originalType : child.type
+      const hasLazyMarker = processedChildren.some(
+        child => child && typeof child === 'object' && child['~rari_lazy'] === true,
+      )
 
-              pushPendingPromise({
-                id: promiseId,
-                boundaryId,
-                componentPath: actualType.name || 'anonymous',
-                componentType: actualType,
-                componentProps: child.props || {},
+      let traversedChildren
+      if (hasPendingPromises) {
+        const isStreaming = globalThis['~rari']?.streaming?.enabled === true
+
+        if (isStreaming) {
+          if (!globalThis['~rari'].lazy)
+            globalThis['~rari'].lazy = { pending: new Map(), resolved: new Map(), counter: 0 }
+
+          const boundaryPromises = suspense.pendingPromises.filter(
+            p => p.boundaryId === boundaryId,
+          )
+
+          for (const pending of boundaryPromises) {
+            if (!pending.componentType && suspense.promises[pending.id]) {
+              globalThis['~rari'].lazy.pending.set(pending.id, suspense.promises[pending.id])
+            }
+            else {
+              globalThis['~rari'].lazy.pending.set(pending.id, {
+                component: pending.componentType,
+                props: pending.componentProps,
+                isDeferred: true,
               })
             }
           }
-          catch (error) {
-            console.error('Error detecting async component:', error)
-          }
-        }
 
-        if (child.props && child.props.children && !isSuspenseComponent(child.type))
-          detectAsyncComponents(child.props.children, depth + 1)
+          const lazyMarkers = boundaryPromises.map(pending => ({
+            '~rari_lazy': true,
+            '~rari_promise_id': pending.id,
+            '~rari_component_id': pending.componentPath || 'AsyncComponent',
+            '~rari_loading_id': '',
+          }))
+
+          traversedChildren = lazyMarkers.length === 1
+            ? lazyMarkers[0]
+            : lazyMarkers.length > 0 ? lazyMarkers : null
+        }
+        else {
+          const boundaryPromises = suspense.pendingPromises.filter(
+            p => p.boundaryId === boundaryId,
+          )
+
+          const resolvedComponents = []
+          for (const pending of boundaryPromises) {
+            if (pending.componentType && pending.componentProps !== undefined) {
+              try {
+                const result = await pending.componentType(pending.componentProps)
+                const traversed = await traverseToRsc(result, clientComponents, depth + 1)
+                resolvedComponents.push(traversed)
+              }
+              catch (error) {
+                console.error(`[rari] Error rendering async component ${pending.componentPath}:`, error)
+                resolvedComponents.push(null)
+              }
+            }
+          }
+
+          suspense.pendingPromises = suspense.pendingPromises.filter(
+            p => p.boundaryId !== boundaryId,
+          )
+
+          traversedChildren = resolvedComponents.length === 1 ? resolvedComponents[0] : resolvedComponents
+        }
       }
-    }
-
-    detectAsyncComponents(processedChildren)
-
-    const hasPendingPromises = suspense.pendingPromises.some(
-      p => p.boundaryId === boundaryId,
-    )
-
-    const hasLazyMarker = processedChildren.some(
-      child => child && typeof child === 'object' && child['~rari_lazy'] === true,
-    )
-
-    let traversedChildren
-    if (hasPendingPromises) {
-      const isStreaming = globalThis['~rari']?.streaming?.enabled === true
-
-      if (isStreaming) {
-        if (!globalThis['~rari'].lazy)
-          globalThis['~rari'].lazy = { pending: new Map(), resolved: new Map(), counter: 0 }
-
-        const boundaryPromises = suspense.pendingPromises.filter(
-          p => p.boundaryId === boundaryId,
-        )
-
-        for (const pending of boundaryPromises) {
-          if (!pending.componentType && suspense.promises[pending.id]) {
-            globalThis['~rari'].lazy.pending.set(pending.id, suspense.promises[pending.id])
-          }
-          else {
-            globalThis['~rari'].lazy.pending.set(pending.id, {
-              component: pending.componentType,
-              props: pending.componentProps,
-              isDeferred: true,
-            })
-          }
-        }
-
-        const lazyMarkers = boundaryPromises.map(pending => ({
-          '~rari_lazy': true,
-          '~rari_promise_id': pending.id,
-          '~rari_component_id': pending.componentPath || 'AsyncComponent',
-          '~rari_loading_id': '',
-        }))
-
-        traversedChildren = lazyMarkers.length === 1
-          ? lazyMarkers[0]
-          : lazyMarkers.length > 0 ? lazyMarkers : null
+      else if (hasLazyMarker) {
+        traversedChildren = await traverseToRsc(props?.children, clientComponents, depth + 1)
       }
       else {
-        const boundaryPromises = suspense.pendingPromises.filter(
-          p => p.boundaryId === boundaryId,
-        )
-
-        const resolvedComponents = []
-        for (const pending of boundaryPromises) {
-          if (pending.componentType && pending.componentProps !== undefined) {
-            try {
-              const result = await pending.componentType(pending.componentProps)
-              const traversed = await traverseToRsc(result, clientComponents, depth + 1)
-              resolvedComponents.push(traversed)
-            }
-            catch (error) {
-              console.error(`[rari] Error rendering async component ${pending.componentPath}:`, error)
-              resolvedComponents.push(null)
-            }
-          }
-        }
-
-        suspense.pendingPromises = suspense.pendingPromises.filter(
-          p => p.boundaryId !== boundaryId,
-        )
-
-        traversedChildren = resolvedComponents.length === 1 ? resolvedComponents[0] : resolvedComponents
+        traversedChildren = await traverseToRsc(props?.children, clientComponents, depth + 1)
       }
-    }
-    else if (hasLazyMarker) {
-      traversedChildren = await traverseToRsc(props?.children, clientComponents, depth + 1)
-    }
-    else {
-      traversedChildren = await traverseToRsc(props?.children, clientComponents, depth + 1)
-    }
 
-    suspense.currentBoundaryId = previousBoundaryId
-
-    return [
-      '$',
-      'react.suspense',
-      null,
-      {
-        ...props,
-        '~boundaryId': boundaryId,
-        'fallback': safeFallback,
-        'children': traversedChildren,
-      },
-    ]
+      return [
+        '$',
+        'react.suspense',
+        null,
+        {
+          ...props,
+          '~boundaryId': boundaryId,
+          'fallback': safeFallback,
+          'children': traversedChildren,
+        },
+      ]
+    }
+    finally {
+      suspense.currentBoundaryId = previousBoundaryId
+    }
   }
 
   if (typeof type === 'function' && type._isAsyncComponent && type._originalType) {
