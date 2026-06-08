@@ -301,14 +301,6 @@ impl AppRouter {
         route_dir == boundary_dir || route_dir.starts_with(&format!("{}/", boundary_dir))
     }
 
-    #[deprecated(
-        note = "Use is_boundary_ancestor instead — works for layouts, templates, loading, error, not-found, og-image"
-    )]
-    #[allow(dead_code)]
-    fn is_layout_ancestor(layout_file_path: &str, route_file_path: &str) -> bool {
-        Self::is_boundary_ancestor(layout_file_path, route_file_path)
-    }
-
     fn file_path_depth(file_path: &str) -> usize {
         let dir = Self::normalized_dir(file_path);
         if dir.is_empty() { 0 } else { dir.split('/').count() }
