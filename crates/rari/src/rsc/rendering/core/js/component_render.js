@@ -1,6 +1,9 @@
 /* eslint-disable no-undef, style/object-curly-spacing */
 // oxlint-disable @typescript-eslint/no-floating-promises
 (async function () {
+  const REACT_ELEMENT_TYPE = Symbol.for('react.transitional.element')
+  const REACT_SUSPENSE_PENDING = Symbol.for('react.suspense.pending')
+
   let Component
   let componentSource = 'not found'
 
@@ -42,7 +45,7 @@
       }
       else {
         rscResult = {
-          $$typeof: Symbol.for('react.transitional.element'),
+          $$typeof: REACT_ELEMENT_TYPE,
           type: 'div',
           props: {
             'data-rsc-component': componentId,
@@ -55,7 +58,7 @@
     }
     catch (error) {
       return {
-        $$typeof: Symbol.for('react.transitional.element'),
+        $$typeof: REACT_ELEMENT_TYPE,
         type: 'div',
         props: {
           'data-rsc-component': componentId,
@@ -148,7 +151,7 @@
     return finalResult
   }
   catch (error) {
-    if (error && error.$$typeof === Symbol.for('react.suspense.pending')) {
+    if (error && error.$$typeof === REACT_SUSPENSE_PENDING) {
       if (error.promise && typeof error.promise.then === 'function') {
         try {
           await error.promise

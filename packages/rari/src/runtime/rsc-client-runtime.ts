@@ -59,6 +59,7 @@ if (typeof window !== 'undefined') {
     (window as unknown as WindowWithRari)['~rari'].pendingBoundaryHydrations = new Map()
 }
 
+
 interface ParsedImportRow {
   id: string
   chunks: string[]
@@ -189,8 +190,6 @@ if (typeof window !== 'undefined') {
             .replace(HTML_QUOTE_REGEX, '&quot;')
             .replace(HTML_APOS_REGEX, '&#39;')
 
-        const ALLOWED_TAGS = RSC_ALLOWED_TAGS
-
         if (!element)
           return ''
 
@@ -201,7 +200,7 @@ if (typeof window !== 'undefined') {
           if (element.length >= 4 && element[0] === '$') {
             const [, tag, , props] = element
 
-            const sanitizedTag = typeof tag === 'string' && ALLOWED_TAGS.has(tag.toLowerCase())
+            const sanitizedTag = typeof tag === 'string' && RSC_ALLOWED_TAGS.has(tag.toLowerCase())
               ? tag.toLowerCase()
               : 'div'
 

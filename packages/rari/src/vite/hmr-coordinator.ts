@@ -4,9 +4,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { throwIfNotOk } from '../shared/http-utils'
+import { hasTopLevelUseClientDirective } from './directive-utils'
 import { HMRErrorHandler } from './hmr-error-handler'
-
-const USE_CLIENT_DIRECTIVE_RE = /^(["'])use client\1\s*(?:;\s*)?(?:\/\/.*)?$/
 
 export interface ComponentRebuildResult {
   componentId: string
@@ -292,81 +291,7 @@ export class HMRCoordinator {
   detectComponentType(filePath: string): 'client' | 'server' | 'unknown' {
     try {
       const code = fs.readFileSync(filePath, 'utf-8')
-
-      const lines = code.split('\n')
-      let inBlockComment = false
-
-      function isUseClientDirective(value: string): boolean {
-        return USE_CLIENT_DIRECTIVE_RE.test(value.trim())
-      }
-
-      function stripInlineBlockComments(str: string): string {
-        let result = str
-        while (result.includes('/*') && result.includes('*/')) {
-          const startIdx = result.indexOf('/*')
-          const endIdx = result.indexOf('*/', startIdx)
-          if (endIdx === -1)
-            break
-          result = result.substring(0, startIdx) + result.substring(endIdx + 2)
-        }
-        if (result.includes('/*')) {
-          const startIdx = result.indexOf('/*')
-          result = result.substring(0, startIdx)
-        }
-
-        return result
-      }
-
-      for (const line of lines) {
-        const trimmed = line.trim()
-
-        if (inBlockComment) {
-          if (trimmed.includes('*/')) {
-            inBlockComment = false
-            const afterComment = trimmed.substring(trimmed.indexOf('*/') + 2).trim()
-            if (!afterComment || afterComment.startsWith('//'))
-              continue
-            const cleanAfterComment = stripInlineBlockComments(afterComment).trim()
-            if (!cleanAfterComment || cleanAfterComment.startsWith('//'))
-              continue
-            if (isUseClientDirective(cleanAfterComment))
-              return 'client'
-            break
-          }
-          continue
-        }
-
-        if (!trimmed || trimmed.startsWith('//'))
-          continue
-
-        if (trimmed.includes('/*')) {
-          if (trimmed.includes('*/')) {
-            const cleanLine = stripInlineBlockComments(trimmed).trim()
-            if (!cleanLine || cleanLine.startsWith('//'))
-              continue
-            if (isUseClientDirective(cleanLine))
-              return 'client'
-            break
-          }
-          else {
-            const beforeComment = trimmed.substring(0, trimmed.indexOf('/*')).trim()
-            if (beforeComment) {
-              if (isUseClientDirective(beforeComment))
-                return 'client'
-              break
-            }
-            inBlockComment = true
-            continue
-          }
-        }
-
-        if (isUseClientDirective(trimmed))
-          return 'client'
-
-        break
-      }
-
-      return 'server'
+      return hasTopLevelUseClientDirective(code) ? 'client' : 'server'
     }
     catch {
       return 'unknown'
