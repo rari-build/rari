@@ -293,7 +293,7 @@ export class ServerComponentBuilder {
       if (code === null)
         return false
 
-      return hasTopLevelUseClientDirective(code)
+      return getDirectives(code).hasUseClient
     }
     catch {
       return false
@@ -419,7 +419,7 @@ export class ServerComponentBuilder {
   }
 
   private isServerAction(code: string): boolean {
-    return hasTopLevelUseServerDirective(code)
+    return getDirectives(code).hasUseServer
   }
 
   private extractDependencies(code: string): string[] {

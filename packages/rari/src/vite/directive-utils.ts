@@ -27,6 +27,7 @@ const CH_BACKTICK = 96
 const CH_SEMICOLON = 59
 const CH_OPEN_BRACE = 123
 const CH_CLOSE_BRACE = 125
+const CH_OPEN_PAREN = 40
 const CH_OPEN_BRACKET = 91
 const CH_CLOSE_BRACKET = 93
 const CH_COMMA = 44
@@ -44,7 +45,6 @@ const CH_TILDE = 126
 const CH_LT = 60
 const CH_GT = 62
 const CH_DOT = 46
-const CH_DASH = 45
 const CH_UNDERSCORE = 95
 const CH_DOLLAR = 36
 
@@ -152,7 +152,7 @@ function skipJSX(source: string, i: number, len: number): number {
 
   while (i < len) {
     const ch = source.charCodeAt(i)
-    if (isIdentifierPartCode(ch) || ch === CH_DOT || ch === CH_DASH) {
+    if (isIdentifierPartCode(ch) || ch === CH_DOT || ch === CH_MINUS) {
       i++
     }
     else {
@@ -214,7 +214,7 @@ function skipJSX(source: string, i: number, len: number): number {
         i++
         while (i < len) {
           const tch = source.charCodeAt(i)
-          if (isIdentifierPartCode(tch) || tch === CH_DOT || tch === CH_DASH) {
+          if (isIdentifierPartCode(tch) || tch === CH_DOT || tch === CH_MINUS) {
             i++
           }
           else {
@@ -454,7 +454,7 @@ export function hasTopLevelUseClientDirective(source: string): boolean {
 }
 
 function canPrecedeRegexCode(ch: number): boolean {
-  return ch === 40 || ch === CH_OPEN_BRACKET || ch === CH_OPEN_BRACE || ch === CH_COMMA
+  return ch === CH_OPEN_PAREN || ch === CH_OPEN_BRACKET || ch === CH_OPEN_BRACE || ch === CH_COMMA
     || ch === CH_SEMICOLON || ch === CH_EQUALS || ch === CH_COLON || ch === CH_QUESTION || ch === CH_EXCL
     || ch === CH_PLUS || ch === CH_MINUS || ch === CH_STAR || ch === CH_PERCENT || ch === CH_AMP
     || ch === CH_PIPE || ch === CH_CARET || ch === CH_TILDE || ch === CH_LT || ch === CH_GT
