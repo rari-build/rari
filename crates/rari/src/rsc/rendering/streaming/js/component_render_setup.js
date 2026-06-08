@@ -149,7 +149,9 @@ globalThis['~render'].componentAsync = async function () {
 
         const fallbackRsc = ['$', 'react.suspense', null, {
           '~boundaryId': boundaryId,
-          'fallback': ['$', serializedFallback.type, serializedFallback.key, serializedFallback.props],
+          'fallback': serializedFallback
+            ? ['$', serializedFallback.type, serializedFallback.key, serializedFallback.props]
+            : null,
           'children': null,
         }]
 
@@ -243,11 +245,9 @@ globalThis['~render'].componentAsync = async function () {
           key: null,
           props: {
             '~boundaryId': boundaryId,
-            'fallback': {
-              type: serializedFallback.type,
-              key: serializedFallback.key,
-              props: serializedFallback.props,
-            },
+            'fallback': serializedFallback
+              ? { type: serializedFallback.type, key: serializedFallback.key, props: serializedFallback.props }
+              : null,
             'children': null,
           },
         }

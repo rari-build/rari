@@ -21,6 +21,8 @@ const RSC_ALLOWED_TAGS = new Set(
   'div,span,p,ul,ol,li,a,img,section,article,header,footer,nav,main,aside,strong,em,b,i,button,input,label,form,select,option,textarea,h1,h2,h3,h4,h5,h6,table,thead,tbody,tr,td,th,code,pre,blockquote,hr,br,small,mark,del,ins,sub,sup,abbr,time,figure,figcaption,details,summary,dialog,menu,menuitem,canvas,svg,path,circle,rect,line,polygon,polyline,ellipse,text,g,defs,use,symbol,clippath,mask,pattern,lineargradient,radialgradient,stop,image,video,audio,source,track,picture,dl,dt,dd,fieldset,legend'.split(','),
 )
 
+const PassthroughComponent = ({ children }: any) => children ?? null
+
 function resolveRariServerUrl(): string {
   if (typeof import.meta !== 'undefined' && import.meta.env?.RARI_SERVER_URL)
     return import.meta.env.RARI_SERVER_URL
@@ -58,7 +60,6 @@ if (typeof window !== 'undefined') {
   if (!(window as unknown as WindowWithRari)['~rari'].pendingBoundaryHydrations)
     (window as unknown as WindowWithRari)['~rari'].pendingBoundaryHydrations = new Map()
 }
-
 
 interface ParsedImportRow {
   id: string
@@ -945,7 +946,7 @@ class RscClient {
             if (process.env.NODE_ENV !== 'production') {
               console.warn(`[rari] Missing client component: ${type}`)
             }
-            actualType = ({ children }: any) => children ?? null
+            actualType = PassthroughComponent
           }
         }
         else if (typeof type === 'string' && type.startsWith('$L')) {
@@ -963,7 +964,7 @@ class RscClient {
                 if (process.env.NODE_ENV !== 'production') {
                   console.warn(`[rari] Missing client component: ${moduleData.name} (${moduleData.id})`)
                 }
-                actualType = ({ children }: any) => children ?? null
+                actualType = PassthroughComponent
               }
             }
           }
