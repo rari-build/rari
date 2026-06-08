@@ -12,22 +12,20 @@ body = """
 {% endif %}\
 {% for group, commits in commits | group_by(attribute="group") %}
     ### {{ group | striptags | trim | upper_first }}
-
-    {% for commit in commits
-    %}- {% if commit.scope %}*({{ commit.scope }})* {% endif %}\
+    {% for commit in commits %}
+        - {% if commit.scope %}*({{ commit.scope }})* {% endif %}\
             {% if commit.breaking %}[**breaking**] {% endif %}\
-            {{ commit.message }}{% if commit.remote.username %} by @{{ commit.remote.username }}{% endif %}
+            {{ commit.message }}{% if commit.remote.username %} by @{{ commit.remote.username }}{% endif %}\
     {% endfor %}
-{% endfor %}\
+{% endfor %}
 {% if github.contributors | filter(attribute="is_first_time", value=true) | length != 0 %}
     ### 🆕 New Contributors
     {% for contributor in github.contributors | filter(attribute="is_first_time", value=true) %}
         - @{{ contributor.username }} made their first contribution
     {%- endfor %}
-{% endif -%}
-{%- if previous %}
-
-**Full Changelog**: https://github.com/{{ remote.github.owner }}/{{ remote.github.repo }}/compare/{{ previous.version }}...{{ version }}
+{% endif %}
+{% if previous %}\
+    **Full Changelog**: https://github.com/{{ remote.github.owner }}/{{ remote.github.repo }}/compare/{{ previous.version }}...{{ version }}
 {% endif %}
 """
 # Remove leading and trailing whitespaces from the changelog's body.
@@ -35,10 +33,7 @@ trim = true
 # Render body even when there are no releases to process.
 render_always = false
 # An array of regex based postprocessors to modify the changelog.
-postprocessors = [
-  { pattern = "\n{3,}", replace = "\n\n" },
-  { pattern = "([^\n])\n(### )", replace = "$1\n\n$2" },
-]
+postprocessors = []
 # render body even when there are no releases to process
 # render_always = true
 # output file path
