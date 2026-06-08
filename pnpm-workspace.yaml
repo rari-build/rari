@@ -1,12 +1,13 @@
 catalogMode: prefer
+minimumReleaseAge: 0
 minimumReleaseAgeExclude:
-  - rari-darwin-arm64@0.14.7
-  - rari-darwin-x64@0.14.7
-  - rari-linux-arm64@0.14.7
-  - rari-linux-x64@0.14.7
-  - rari-win32-arm64@0.14.7
-  - rari-win32-x64@0.14.7
-  - rari@0.14.7
+  - rari-darwin-arm64@0.14.8
+  - rari-darwin-x64@0.14.8
+  - rari-linux-arm64@0.14.8
+  - rari-linux-x64@0.14.8
+  - rari-win32-arm64@0.14.8
+  - rari-win32-x64@0.14.8
+  - rari@0.14.8
 shellEmulator: true
 trustPolicy: no-downgrade
 trustPolicyExclude:
@@ -35,7 +36,7 @@ catalogs:
     rari: ^0.14.7
   eslint:
     '@antfu/eslint-config': ^9.0.0
-    '@eslint-react/eslint-plugin': ^5.8.13
+    '@eslint-react/eslint-plugin': ^5.8.16
     '@typescript-eslint/utils': ^8.60.1
     eslint: ^10.4.1
     eslint-plugin-de-morgan: ^2.1.2
