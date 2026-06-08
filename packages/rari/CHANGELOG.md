@@ -1,3 +1,41 @@
+## [rari@0.14.8] - 2026-06-08
+
+### 🐛 Bug Fixes
+
+- *(vite-plugin)* update warning suppression for dynamic imports in dist files by @skiniks
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/v0.14.8...rari@0.14.8
+## [0.14.8] - 2026-06-08
+
+### 🚀 Features
+
+- add Next.js App Router template.tsx (per-segment re-mount) to Rari by @jarick
+
+### 🐛 Bug Fixes
+
+- *(rsc)* await renderServerComponent in traverseReactElement for proper async handling by @skiniks
+- *(rsc-client-runtime)* disable eslint rule for process global usage by @skiniks
+
+### 🚜 Refactor
+
+- *(routing)* remove deprecated is_layout_ancestor method by @skiniks
+- *(vite)* optimize directive utils with char code comparisons by @skiniks
+- *(vite)* consolidate directive detection and standardize char code constants by @skiniks
+- *(vite)* optimize server component detection and cache html entry imports by @skiniks
+- *(rsc)* extract React symbol constants for improved maintainability by @skiniks
+- *(rsc)* rename REACT_FRAGMENT_SYMBOL to REACT_FRAGMENT_TYPE for consistency by @skiniks
+- *(rendering)* streamline error handling and remove unused components by @skiniks
+- *(rendering)* enhance fallback handling and streamline client component registration by @skiniks
+- *(rsc)* simplify global suspense initialization and remove unused status response interface by @skiniks
+- *(rsc)* enhance async component detection and error handling in traverseReactElement by @skiniks
+- *(rendering)* update component rendering to support async operations by @skiniks
+- *(error-handling)* streamline error display and improve error boundary logic by @skiniks
+
+### ⚙️ Miscellaneous Tasks
+
+- bump version to 0.14.8 by @skiniks
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.14.7...v0.14.8
 ## [rari@0.14.7] - 2026-06-07
 
 ### 🚀 Features
@@ -25,14 +63,12 @@
 
 - *(http_utils)* add comprehensive content type mapping tests by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.14.6...rari@0.14.7
 ## [rari@0.14.6] - 2026-06-04
 
 ### ⚡ Performance
 
 - *(server,router)* parallelize cache warmup and optimize route resolution by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.14.4...rari@0.14.6
 ## [rari@0.14.4] - 2026-06-03
@@ -45,7 +81,6 @@
 
 - *(router)* make componentId optional and reorder CSS modules config by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.14.3...rari@0.14.4
 ## [rari@0.14.3] - 2026-06-02
 
@@ -56,7 +91,6 @@
 ### 🚜 Refactor
 
 - extract suspense type checking into shared utility by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.14.2...rari@0.14.3
 ## [rari@0.14.2] - 2026-06-01
@@ -69,7 +103,6 @@
 ### 🎨 Styling
 
 - *(path)* reformat file_path_to_component_id method by @skiniks
-
 
 ### 🆕 New Contributors
 
@@ -91,7 +124,6 @@
 
 - *(rsc)* remove unused export regex patterns and simplify manifest by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.14.0...rari@0.14.1
 ## [rari@0.14.0] - 2026-05-26
 
@@ -104,14 +136,12 @@
 - *(rsc)* handle double-dollar escape sequences and remove redundant escaping by @skiniks
 - *(rsc)* escape props values before JSON serialization in wire format by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.13.12...rari@0.14.0
 ## [rari@0.13.12] - 2026-05-26
 
 ### 🚀 Features
 
 - *(sitemap)* add alias resolution and Vite dev server CORS support by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.13.11...rari@0.13.12
 ## [rari@0.13.11] - 2026-05-24
@@ -124,14 +154,12 @@
 
 - *(security)* update COEP header from require-corp to credentialless by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.13.10...rari@0.13.11
 ## [rari@0.13.9] - 2026-05-24
 
 ### ⚙️ Miscellaneous Tasks
 
 - refactor snapshot generation and consolidate dependencies by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.13.8...rari@0.13.9
 ## [rari@0.13.8] - 2026-05-24
@@ -149,7 +177,6 @@
 ### ⚙️ Miscellaneous Tasks
 
 - remove binary runtime initialization check by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.13.7...rari@0.13.8
 ## [rari@0.13.7] - 2026-05-23
@@ -172,14 +199,12 @@
 
 - refactor release workflow permissions and enhance buffer encoding support by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.13.6...rari@0.13.7
 ## [rari@0.13.4] - 2026-05-07
 
 ### ⚙️ Miscellaneous Tasks
 
 - *(rari)* downgrade version to 0.13.2 by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.13.3...rari@0.13.4
 ## [rari@0.13.2] - 2026-04-29
@@ -194,7 +219,6 @@
 - bump rari version to 0.13.2 by @skiniks
 - *(rari)* bump rari-binaries to 0.13.2 by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.13.1...rari@0.13.2
 ## [rari@0.13.1] - 2026-04-24
 
@@ -203,7 +227,6 @@
 - update dependencies and standardize health check endpoint by @skiniks
 - update rari version to 0.13.1 in Cargo.toml by @skiniks
 - update optionalDependencies to version 0.13.1 by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.13.0...rari@0.13.1
 ## [rari@0.13.0] - 2026-04-21
@@ -217,14 +240,12 @@
 - update package version to 0.13.0 in Cargo.toml by @skiniks
 - update dependencies in pnpm-workspace.yaml by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.12.2...rari@0.13.0
 ## [rari@0.12.2] - 2026-04-18
 
 ### 🐛 Bug Fixes
 
 - *(rsc)* mark Image component as client reference on server by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.12.1...rari@0.12.2
 ## [rari@0.12.1] - 2026-04-16
@@ -237,7 +258,6 @@
 ### ⚙️ Miscellaneous Tasks
 
 - *(rari)* bump version to 0.12.1 by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.12.0...rari@0.12.1
 ## [rari@0.12.0] - 2026-04-16
@@ -294,7 +314,6 @@
 ### ◀️ Revert
 
 - back to working state at 55be557f by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.11.0...rari@0.12.0
 ## [rari@0.11.0] - 2026-04-03
@@ -354,7 +373,6 @@
 
 - *(rsc)* fix indentation in layout rendering error handling by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.10.25...rari@0.11.0
 ## [rari@0.10.25] - 2026-03-26
 
@@ -372,7 +390,6 @@
 ### 🚜 Refactor
 
 - *(rsc)* revert wire_format serializer to address memory regressions by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.10.24...rari@0.10.25
 ## [rari@0.10.24] - 2026-03-25
@@ -394,7 +411,6 @@
 
 - *(rari)* bump version to 0.10.24 by @skiniks
 - *(rari)* bump optional dependencies to 0.10.24 by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.10.23...rari@0.10.24
 ## [rari@0.10.23] - 2026-03-24
@@ -425,7 +441,6 @@
 - *(rari)* bump version to 0.10.23 by @skiniks
 - *(rari)* bump optional dependencies to 0.10.23 by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.10.22...rari@0.10.23
 ## [rari@0.10.22] - 2026-03-19
 
@@ -433,14 +448,12 @@
 
 - *(module-loader)* refactor React stub resolution logic by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.10.21...rari@0.10.22
 ## [rari@0.10.21] - 2026-03-19
 
 ### 🐛 Bug Fixes
 
 - resolve removed React stub regression by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.10.20...rari@0.10.21
 ## [rari@0.10.20] - 2026-03-18
@@ -470,7 +483,6 @@
 - improve JSX delegate creation and component ID resolution by @skiniks
 - add defensive checks and improve component resolution by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.10.19...rari@0.10.20
 ## [rari@0.10.19] - 2026-03-15
 
@@ -481,7 +493,6 @@
 ### ⚙️ Miscellaneous Tasks
 
 - *(rari)* bump version to 0.10.19 by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.10.18...rari@0.10.19
 ## [rari@0.10.18] - 2026-03-14
@@ -501,7 +512,6 @@
 - *(typescript)* centralize TypeScript configuration by @skiniks
 - *(rari)* bump version to 0.10.18 by @skiniks
 - *(rari)* bump binary dependencies to 0.10.18 by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.10.17...rari@0.10.18
 ## [rari@0.10.17] - 2026-03-14
@@ -531,7 +541,6 @@
 
 - migrate from tsdown to vite-plus and consolidate build tooling by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.10.16...rari@0.10.17
 ## [rari@0.10.16] - 2026-03-12
 
@@ -546,7 +555,6 @@
 ### 🐛 Bug Fixes
 
 - *(runtime)* handle component registration collisions and library utilities by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.10.15...rari@0.10.16
 ## [rari@0.10.15] - 2026-03-11
@@ -576,7 +584,6 @@
 - *(rari)* bump version to 0.10.15 by @skiniks
 - *(rari)* bump optional dependencies to 0.10.15 by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.10.14...rari@0.10.15
 ## [rari@0.10.14] - 2026-03-10
 
@@ -588,7 +595,6 @@
 - *(rsc)* deduplicate rsc namespace initialization and improve suspense handling by @skiniks
 - *(rsc)* simplify client components namespace access by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.10.13...rari@0.10.14
 ## [rari@0.10.13] - 2026-03-07
 
@@ -597,7 +603,6 @@
 - *(runtime)* update keyseq timeout to use Option type by @skiniks
 - *(runtime)* downgrade libc and simplify interrupt handling by @skiniks
 - *(runtime)* remove WindowResized from readline error handling by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.10.12...rari@0.10.13
 ## [rari@0.10.12] - 2026-03-06
@@ -608,7 +613,6 @@
 - *(cli)* improve main module detection by @skiniks
 - *(cli)* resolve symlinks in module detection by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.10.11...rari@0.10.12
 ## [rari@0.10.11] - 2026-03-04
 
@@ -616,7 +620,6 @@
 
 - *(cli)* simplify bun package executor to use bunx directly by @skiniks
 - *(cli)* improve cross-platform spawn handling by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.10.10...rari@0.10.11
 ## [rari@0.10.10] - 2026-03-01
@@ -629,7 +632,6 @@
 
 - *(cli)* improve bun package executor handling for cross-platform compatibility by @skiniks
 - *(cli)* refactor bun package executor to improve cross-platform compatibility by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.10.9...rari@0.10.10
 ## [rari@0.10.9] - 2026-02-26
@@ -647,7 +649,6 @@
 
 - *(fetch,streaming)* improve cache handling and clarify test descriptions by @skiniks
 - *(routing)* use cow_replace for efficient path normalization by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.10.8...rari@0.10.9
 ## [rari@0.10.8] - 2026-02-25
@@ -670,7 +671,6 @@
 
 - *(rari)* bump optional dependencies to 0.10.8 by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.10.7...rari@0.10.8
 ## [rari@0.10.7] - 2026-02-24
 
@@ -680,7 +680,6 @@
 - *(rsc)* improve null handling and empty array detection in streaming by @skiniks
 - *(rsc)* use nullish coalescing for children fallback logic by @skiniks
 - *(rsc)* improve children null handling in streaming initialization by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.10.6...rari@0.10.7
 ## [rari@0.10.6] - 2026-02-24
@@ -692,14 +691,12 @@
 - *(runtime)* normalize SVG element names to lowercase by @skiniks
 - *(runtime)* add error handling for client component hydration by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.10.5...rari@0.10.6
 ## [rari@0.10.5] - 2026-02-24
 
 ### 🐛 Bug Fixes
 
 - *(AppRouterProvider)* remove redundant cache control headers by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.10.4...rari@0.10.5
 ## [rari@0.10.4] - 2026-02-23
@@ -720,7 +717,6 @@
 - *(http-headers)* extract Vary header merging logic into utility function by @skiniks
 - *(http-headers)* use cached_key for Vary header sorting and merge in 304 responses by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.10.3...rari@0.10.4
 ## [rari@0.10.3] - 2026-02-23
 
@@ -730,7 +726,6 @@
 - *(router)* use useLayoutEffect for navigate ref synchronization by @skiniks
 - *(router)* move ref assignments into useLayoutEffect with cleanup by @skiniks
 - *(router)* add null safety to navigateRef and cleanup on unmount by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.10.2...rari@0.10.3
 ## [rari@0.10.2] - 2026-02-22
@@ -760,7 +755,6 @@
 - *(rari)* bump version to 0.10.2 by @skiniks
 - *(rari)* bump optional dependencies to 0.10.2 by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.10.1...rari@0.10.2
 ## [rari@0.10.1] - 2026-02-20
 
@@ -788,7 +782,6 @@
 
 - *(rsc-client-runtime)* improve code formatting and extract server URL resolution by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.10.0...rari@0.10.1
 ## [rari@0.10.0] - 2026-02-18
 
@@ -805,7 +798,6 @@
 ### 🚜 Refactor
 
 - *(og)* extract component resolution logic into dedicated method by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.9.3...rari@0.10.0
 ## [rari@0.9.3] - 2026-02-17
@@ -835,7 +827,6 @@
 - *(rari)* bump version to 0.9.3 by @skiniks
 - *(rari)* bump optional dependencies to 0.9.3 by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.9.2...rari@0.9.3
 ## [rari@0.9.2] - 2026-02-14
 
@@ -852,7 +843,6 @@
 
 - *(rari)* bump version to 0.9.2 by @skiniks
 - *(rari)* bump optional dependencies to 0.9.2 by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.9.1...rari@0.9.2
 ## [rari@0.9.1] - 2026-02-13
@@ -879,7 +869,6 @@
 - *(rari)* bump version to 0.9.1 by @skiniks
 - *(rari)* bump optional dependencies to 0.9.1 by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.9.0...rari@0.9.1
 ## [rari@0.9.0] - 2026-02-12
 
@@ -903,14 +892,12 @@
 
 - format conditional statements and update linting rules by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.8.14...rari@0.9.0
 ## [rari@0.8.14] - 2026-02-05
 
 ### ⚙️ Miscellaneous Tasks
 
 - *(rari)* add RariResponse to tsdown exports by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.8.13...rari@0.8.14
 ## [rari@0.8.13] - 2026-02-05
@@ -937,14 +924,12 @@
 - *(rari)* bump version to 0.8.12 by @skiniks
 - *(rari)* bump optional dependencies to 0.8.12 by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.8.12...rari@0.8.13
 ## [rari@0.8.12] - 2026-02-04
 
 ### 🐛 Bug Fixes
 
 - *(proxy)* improve module path resolution and runtime imports by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.8.11...rari@0.8.12
 ## [0.8.10] - 2026-02-04
@@ -991,7 +976,6 @@
 - *(runtime)* remove react-server-dom-shim type definitions by @skiniks
 - *(package)* remove src directory from published files by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.8.10...v0.8.10
 ## [rari@0.8.10] - 2026-02-03
 
@@ -1019,7 +1003,6 @@
 
 - *(packages)* remove @rari/colors package and migrate to native Node.js utilities by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.8.9...rari@0.8.10
 ## [rari@0.8.9] - 2026-02-02
 
@@ -1032,14 +1015,12 @@
 
 - *(module-loader)* simplify workspace root detection logic by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.8.8...rari@0.8.9
 ## [rari@0.8.8] - 2026-02-02
 
 ### 🐛 Bug Fixes
 
 - *(vite)* handle absolute paths in client and server component resolution by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.8.7...rari@0.8.8
 ## [rari@0.8.7] - 2026-02-02
@@ -1048,7 +1029,6 @@
 
 - *(module_loader)* improve CommonJS module resolution and require handling by @skiniks
 - *(module_loader)* improve CommonJS path resolution and error handling by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.8.6...rari@0.8.7
 ## [rari@0.8.6] - 2026-02-02
@@ -1079,7 +1059,6 @@
 - migrate remaining uses of esbuild to rolldown by @skiniks
 - *(rari)* remove redundant no-op log message by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.8.5...rari@0.8.6
 ## [rari@0.8.5] - 2026-02-01
 
@@ -1095,7 +1074,6 @@
 - *(rari)* bump binary package versions to 0.8.5 by @skiniks
 - *(rari)* bump version to 0.8.4 by @skiniks
 - *(rari)* revert version to 0.8.4 by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.8.4...rari@0.8.5
 ## [0.8.4] - 2026-01-30
@@ -1126,7 +1104,6 @@
 - remove unused variable assignments and simplify encoding defaults by @skiniks
 - *(cli)* remove unnecessary blank lines in detectPackageManager by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.8.3...v0.8.4
 ## [0.8.3] - 2026-01-30
 
@@ -1153,14 +1130,12 @@
 - *(image-optimizer)* pre-allocate vector capacity for response bytes by @skiniks
 - *(runtime)* implement HTTP client singleton with OnceLock by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.8.2...v0.8.3
 ## [rari@0.8.2] - 2026-01-30
 
 ### ⚙️ Miscellaneous Tasks
 
 - *(rari)* bump optional dependencies to 0.8.2 by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/v0.8.2...rari@0.8.2
 ## [0.8.2] - 2026-01-29
@@ -1183,7 +1158,6 @@
 - *(metadata-injection)* simplify nested conditionals with let-else chains by @skiniks
 - *(metadata-injection)* simplify image optimizer reference handling by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.8.1...v0.8.2
 ## [rari@0.8.1] - 2026-01-29
 
@@ -1195,7 +1169,6 @@
 ### ⚙️ Miscellaneous Tasks
 
 - *(rari)* bump optional dependencies to 0.8.1 by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/v0.8.1...rari@0.8.1
 ## [0.8.1] - 2026-01-29
@@ -1237,14 +1210,12 @@
 - *(rari)* remove unused lazy promise resolution script by @skiniks
 - upgrade Node.js minimum version to 20.6.0 by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.8.0...v0.8.1
 ## [rari@0.8.0] - 2026-01-27
 
 ### ⚙️ Miscellaneous Tasks
 
 - *(rari)* update optional dependencies to 0.8.0 by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/v0.8.0...rari@0.8.0
 ## [0.8.0] - 2026-01-27
@@ -1265,14 +1236,12 @@
 
 - *(colors)* extract colors utility into standalone package by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.7.14...v0.8.0
 ## [rari@0.7.14] - 2026-01-27
 
 ### 🐛 Bug Fixes
 
 - *(vite)* correct client reference property names by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.7.13...rari@0.7.14
 ## [rari@0.7.13] - 2026-01-27
@@ -1284,7 +1253,6 @@
 ### 🚜 Refactor
 
 - *(vite)* rename server build plugin for clarity by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.7.12...rari@0.7.13
 ## [0.7.9] - 2026-01-27
@@ -1302,7 +1270,6 @@
 
 - Add DoS mitigations to server action validation by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.7.11...v0.7.9
 ## [rari@0.7.11] - 2026-01-26
 
@@ -1316,14 +1283,12 @@
 - *(router)* replace chokidar with vite dev server watcher by @skiniks
 - *(router)* replace dynamic import function with vite-ignore comments by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.7.10...rari@0.7.11
 ## [rari@0.7.10] - 2026-01-24
 
 ### 💼 Other
 
 - *(tsdown)* enable minification for build output by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.7.9...rari@0.7.10
 ## [rari@0.7.9] - 2026-01-24
@@ -1332,7 +1297,6 @@
 
 - *(vite)* replace acorn with esbuild by @skiniks
 - *(rari)* replace picocolors with internal colors util by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.7.8...rari@0.7.9
 ## [0.7.7] - 2026-01-23
@@ -1350,7 +1314,6 @@
 ### 🚜 Refactor
 
 - *(og-cache)* defer cache directory creation until first use by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.7.6...v0.7.7
 ## [0.7.6] - 2026-01-21
@@ -1378,7 +1341,6 @@
 
 - *(rari)* bump optional dependencies to 0.7.5 by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/v0.7.5...v0.7.6
 ## [0.7.5] - 2026-01-18
 
@@ -1388,14 +1350,12 @@
 - *(rari,web)* add custom define option and integrate sponsor link into navigation by @skiniks
 - *(og)* add ImageResponse documentation by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.7.4...v0.7.5
 ## [rari@0.7.4] - 2026-01-15
 
 ### ⚙️ Miscellaneous Tasks
 
 - *(rari)* bump binary version to 0.7.4 by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/v0.7.4...rari@0.7.4
 ## [0.7.4] - 2026-01-15
@@ -1408,14 +1368,12 @@
 
 - *(rari)* bump binary version to 0.7.4 by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.7.3...v0.7.4
 ## [rari@0.7.3] - 2026-01-14
 
 ### ⚙️ Miscellaneous Tasks
 
 - *(rari)* bump binary version to 0.7.3 by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/v0.7.3...rari@0.7.3
 ## [0.7.3] - 2026-01-14
@@ -1433,7 +1391,6 @@
 
 - *(rari)* bump binary version to 0.7.3 by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.7.2...v0.7.3
 ## [rari@0.7.1] - 2026-01-13
 
@@ -1441,14 +1398,12 @@
 
 - *(rari)* bump optional dependencies to 0.7.1 by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/v0.7.1...rari@0.7.1
 ## [0.7.1] - 2026-01-13
 
 ### ⚙️ Miscellaneous Tasks
 
 - remove dav1d dependency and update dependencies by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.7.0...v0.7.1
 ## [rari@0.7.0] - 2026-01-13
@@ -1501,7 +1456,6 @@
 - *(router)* remove item from skip directories list by @skiniks
 - *(rari)* bump optional dependencies to 0.7.0 by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.6.1...rari@0.7.0
 ## [0.6.1] - 2026-01-08
 
@@ -1509,7 +1463,6 @@
 
 - *(server)* implement separate rate limiting for revalidation endpoints by @skiniks
 - *(server)* expand spam blocker patterns for WordPress and IDE configs by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.6.0...v0.6.1
 ## [0.6.0] - 2026-01-08
@@ -1549,7 +1502,6 @@
 - *(rari)* remove fsevents from external dependencies by @skiniks
 - *(vite)* remove external dependencies configuration by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.5.30...v0.6.0
 ## [rari@0.5.30] - 2026-01-03
 
@@ -1565,7 +1517,6 @@
 ### ⚙️ Miscellaneous Tasks
 
 - *(router)* remove router index barrel export and consolidate exports by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.5.29...rari@0.5.30
 ## [0.5.23] - 2026-01-02
@@ -1597,7 +1548,6 @@
 
 - *(rari)* remove unnecessary comment by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.5.28...v0.5.23
 ## [0.5.22] - 2025-12-24
 
@@ -1613,14 +1563,12 @@
 
 - *(module-loader)* improve dynamic import path resolution logic by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.5.27...v0.5.22
 ## [0.5.21] - 2025-12-24
 
 ### 🚀 Features
 
 - *(server)* implement on-demand revalidation and response caching by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.5.26...v0.5.21
 ## [0.5.20] - 2025-12-23
@@ -1632,7 +1580,6 @@
 ### 🐛 Bug Fixes
 
 - *(server)* block access to app-routes.json in request handlers by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.5.25...v0.5.20
 ## [0.5.19] - 2025-12-23
@@ -1655,7 +1602,6 @@
 ### 🎨 Styling
 
 - *(rsc)* remove unnecessary braces from single-line conditional by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.5.24...v0.5.19
 ## [0.5.18] - 2025-12-20
@@ -1683,14 +1629,12 @@
 - *(logging)* remove warn-level logging and upgrade to error-level where appropriate by @skiniks
 - *(logging)* remove warn-level logging and unused variables by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.5.23...v0.5.18
 ## [rari@0.5.23] - 2025-12-18
 
 ### ⚙️ Miscellaneous Tasks
 
 - *(rari)* bump optional dependencies to 0.5.17 by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/v0.5.17...rari@0.5.23
 ## [0.5.17] - 2025-12-18
@@ -1699,14 +1643,12 @@
 
 - *(rsc)* implement getData-based page not found detection by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.5.22...v0.5.17
 ## [rari@0.5.22] - 2025-12-17
 
 ### ⚙️ Miscellaneous Tasks
 
 - *(rari)* bump optional dependencies to 0.5.16 by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/v0.5.16...rari@0.5.22
 ## [0.5.16] - 2025-12-17
@@ -1715,14 +1657,12 @@
 
 - *(server)* return 404 status code for not found routes by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.5.21...v0.5.16
 ## [rari@0.5.21] - 2025-12-17
 
 ### ⚙️ Miscellaneous Tasks
 
 - *(rari)* bump optional dependencies to 0.5.15 by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/v0.5.15...rari@0.5.21
 ## [0.5.15] - 2025-12-17
@@ -1740,7 +1680,6 @@
 - *(rsc)* standardize client component marker prop naming by @skiniks
 - *(rsc)* standardize data attribute naming with tilde prefix by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.5.20...v0.5.15
 ## [0.5.14] - 2025-12-17
 
@@ -1756,14 +1695,12 @@
 - *(rsc)* remove legacy module fallback patterns and simplify runtime by @skiniks
 - *(vite)* simplify node imports transformation in server build by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.5.19...v0.5.14
 ## [0.5.12] - 2025-12-16
 
 ### 🐛 Bug Fixes
 
 - *(server)* correct asset injection detection logic by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.5.17...v0.5.12
 ## [0.5.11] - 2025-12-16
@@ -1776,14 +1713,12 @@
 
 - *(server)* extract html wrapping logic into function by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.5.16...v0.5.11
 ## [rari@0.5.16] - 2025-12-13
 
 ### 🚜 Refactor
 
 - *(docs,examples)* migrate to path aliases by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.5.15...rari@0.5.16
 ## [0.5.10] - 2025-12-12
@@ -1801,7 +1736,6 @@
 
 - *(docs,rari)* improve markdown rendering and module resolution by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.5.14...v0.5.10
 ## [0.5.8] - 2025-12-11
 
@@ -1811,7 +1745,6 @@
 - *(deps)* expand windows-sys features for Windows API support by @skiniks
 - *(deps)* add Win32_System_SystemInformation feature to windows-sys by @skiniks
 - *(deps)* add Win32_Networking_WinSock feature to windows-sys by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/v0.5.7...v0.5.8
 ## [0.5.7] - 2025-12-11
@@ -1830,14 +1763,12 @@
 - *(rari)* disable doctests and remove bin tests by @skiniks
 - *(server)* remove verbose startup completion messages by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.5.12...v0.5.7
 ## [rari@0.5.12] - 2025-12-11
 
 ### 🚀 Features
 
 - *(router)* improve loading component handling and validation by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.5.11...rari@0.5.12
 ## [rari@0.5.11] - 2025-12-11
@@ -1847,14 +1778,12 @@
 - *(rari)* improve client-server routing and add manifest middleware by @skiniks
 - *(router)* convert loading component modules to Map by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.5.10...rari@0.5.11
 ## [rari@0.5.10] - 2025-12-09
 
 ### ⚙️ Miscellaneous Tasks
 
 - *(rari)* bump optional dependencies to 0.5.6 by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/v0.5.6...rari@0.5.10
 ## [0.5.6] - 2025-12-09
@@ -1883,14 +1812,12 @@
 - upgrade dependencies and enhance linting rules by @skiniks
 - bump rari version to 0.5.6 by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.5.9...v0.5.6
 ## [rari@0.5.9] - 2025-12-09
 
 ### 🚀 Features
 
 - *(rsc)* extract RSC wire format escaping utilities by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.5.8...rari@0.5.9
 ## [0.5.4] - 2025-12-04
@@ -1918,7 +1845,6 @@
 
 - *(rari)* configure cargo-machete to ignore num-bigint-dig dependency by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.5.7...v0.5.4
 ## [0.5.2] - 2025-12-03
 
@@ -1945,7 +1871,6 @@
 - *(runtime)* Remove unused fields and dead code by @skiniks
 - *(rsc,runtime)* Remove auto-register logic and hardcoded paths by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.5.5...v0.5.2
 ## [0.5.1] - 2025-12-02
 
@@ -1957,14 +1882,12 @@
 
 - bump binary packages to v0.5.1 by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.5.4...v0.5.1
 ## [rari@0.5.4] - 2025-11-24
 
 ### 🚜 Refactor
 
 - *(cli)* fix for issue #45 by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.5.3...rari@0.5.4
 ## [0.5.0] - 2025-11-24
@@ -1985,7 +1908,6 @@
 
 - *(layout_renderer)* Remove obsolete assertion messages from tests by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.4.0...v0.5.0
 ## [rari@0.4.0] - 2025-10-30
 
@@ -1994,14 +1916,12 @@
 - *(runtime)* Add API request bridge for Rari server runtime by @skiniks
 - *(runtime)* Upgrade Deno dependencies and improve module loading by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.3.3...rari@0.4.0
 ## [rari@0.3.3] - 2025-10-28
 
 ### 🚜 Refactor
 
 - *(rsc)* Remove JSX transformation from core  and simplify dependency extraction by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.3.2...rari@0.3.3
 ## [0.3.2] - 2025-10-28
@@ -2010,14 +1930,12 @@
 
 - prevent false ES module detection when code contains "export" in strings by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.3.1...v0.3.2
 ## [0.3.1] - 2025-10-24
 
 ### 🚀 Features
 
 - *(rari)* Add pathname support for layouts and server components by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.3.0...v0.3.1
 ## [0.3.0] - 2025-10-21
@@ -2089,14 +2007,12 @@
 - *(rari)* Bump package version to 0.3.0 by @skiniks
 - *(rari)* Bump package version to 0.3.0 by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.2.24...v0.3.0
 ## [rari@0.2.24] - 2025-09-23
 
 ### ⚙️ Miscellaneous Tasks
 
 - update dependencies across multiple packages to latest versions by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.2.23...rari@0.2.24
 ## [rari@0.2.23] - 2025-09-23
@@ -2109,14 +2025,12 @@
 
 - enhance error handling and retry logic in component rendering and registration processes by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.2.22...rari@0.2.23
 ## [rari@0.2.22] - 2025-09-04
 
 ### 🚜 Refactor
 
 - improve formatting and error handling in extractCacheConfigFromContent function by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.2.21...rari@0.2.22
 ## [rari@0.2.21] - 2025-09-04
@@ -2125,14 +2039,12 @@
 
 - update rari dependencies to version 0.2.15 and remove unused client-dev entry by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/v0.2.15...rari@0.2.21
 ## [0.2.15] - 2025-09-04
 
 ### ⚙️ Miscellaneous Tasks
 
 - update rari to version 0.2.8 and bump dependencies across multiple packages by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.2.20...v0.2.15
 ## [rari@0.2.20] - 2025-09-04
@@ -2145,7 +2057,6 @@
 
 - update dependencies across multiple packages to latest versions by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.2.19...rari@0.2.20
 ## [rari@0.2.19] - 2025-09-02
 
@@ -2153,7 +2064,6 @@
 
 - update rari to version 0.2.7, add caching configuration support, and remove macOS Rust version override in release workflow by @skiniks
 - update optionalDependencies for rari to version 0.2.14 by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.2.18...rari@0.2.19
 ## [rari@0.2.18] - 2025-08-22
@@ -2163,7 +2073,6 @@
 - bump rari version to 0.2.6 and update type annotations by @skiniks
 - update dependencies by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.2.17...rari@0.2.18
 ## [rari@0.2.17] - 2025-08-21
 
@@ -2171,14 +2080,12 @@
 
 - adjust resource limits and improve performance by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.2.16...rari@0.2.17
 ## [rari@0.2.16] - 2025-08-21
 
 ### ⚙️ Miscellaneous Tasks
 
 - update rari crate version to 0.2.4, adjust dependencies, and improve error handling in module loader by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.2.15...rari@0.2.16
 ## [rari@0.2.15] - 2025-08-20
@@ -2200,14 +2107,12 @@
 - bump rari package version to 0.2.15-next.0 by @skiniks
 - remove CHANGELOG.md and update release script to copy generated changelog to package directory by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/v0.2.2...rari@0.2.15
 ## [0.2.2] - 2025-08-15
 
 ### ⚙️ Miscellaneous Tasks
 
 - update rari package to use workspace link and remove unused cache control settings by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.2.2...v0.2.2
 ## [rari@0.2.2] - 2025-08-15
@@ -2231,7 +2136,6 @@
 
 - update rari package version to 0.2.8 in package.json and dependencies by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.2.8...rari@0.2.2
 ## [0.2.7] - 2025-08-16
 
@@ -2239,14 +2143,12 @@
 
 - bump all package versions to 0.2.7 after rollback to stable commit by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.2.1...v0.2.7
 ## [rari@0.2.1] - 2025-08-13
 
 ### 🚜 Refactor
 
 - streamline RscClient endpoint configuration by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.2.0...rari@0.2.1
 ## [0.2.0] - 2025-08-13
@@ -2275,7 +2177,6 @@
 - update changelog generation settings and remove unused changelog files by @skiniks
 - update esbuild and eslint-react dependencies by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/v0.1.5...v0.2.0
 ## [0.1.5] - 2025-08-07
 
@@ -2283,13 +2184,11 @@
 
 - update rari dependency versions to 0.1.4 in examples and docs, and bump optional dependencies to 0.1.5 in rari package by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.1.4...v0.1.5
 ## [rari@0.1.4] - 2025-08-07
 
 ### ⚙️ Miscellaneous Tasks
 
 - add git-cliff configuration and update changelog generation by @skiniks
-
 
 **Full Changelog**: https://github.com/rari-build/rari/compare/v0.1.3...rari@0.1.4
