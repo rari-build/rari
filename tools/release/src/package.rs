@@ -206,7 +206,9 @@ impl ReleasedPackage {
 
         let mut body = self.release_notes.clone();
 
-        if let Some(prev_tag) = &self.previous_tag {
+        if !body.contains("**Full Changelog**")
+            && let Some(prev_tag) = &self.previous_tag
+        {
             body.push_str(&format!(
                 "\n\n**Full Changelog**: https://github.com/{}/{}/compare/{}...{}",
                 owner, repo, prev_tag, tag_text
