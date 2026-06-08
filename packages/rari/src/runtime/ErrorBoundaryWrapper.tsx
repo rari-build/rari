@@ -93,12 +93,7 @@ export class ErrorBoundaryWrapper extends Component<
         return <ErrorComponent error={this.state.error} reset={this.reset} />
       }
 
-      return (
-        <div style={{ padding: '20px', background: '#fee', border: '2px solid #f00' }}>
-          <h2>Error</h2>
-          <p>Something went wrong.</p>
-        </div>
-      )
+      return null
     }
 
     return this.props.children

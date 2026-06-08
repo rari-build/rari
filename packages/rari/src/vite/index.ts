@@ -25,6 +25,8 @@ import { HMRCoordinator } from './hmr-coordinator'
 import { scanForImageUsage } from './image-scanner'
 import { createServerBuildPlugin, RARI_CSS_MODULES_PATTERN, scanDirectory, ServerComponentBuilder } from './server-build'
 
+const DIST_NOT_BUILT_ERROR = '[rari] Runtime dist not built. Run `pnpm build` in the rari package first.'
+
 const IMPORT_TYPE_SPECIFIER_REGEX = /import\s+type\s+(\{[^}]+\})\s+from\s+["']\.\.?\/([^"']+)["'];?/g
 const IMPORT_TYPE_NAMESPACE_REGEX = /import\s+type\s+(\*\s+as\s+\w+)\s+from\s+["']\.\.?\/([^"']+)["'];?/g
 const IMPORT_TYPE_DEFAULT_REGEX = /import\s+type\s+(\w+)\s+from\s+["']\.\.?\/([^"']+)["'];?/g
@@ -1705,8 +1707,6 @@ const ${componentName} = registerClientReference(
         return 'virtual:app-router-provider.tsx'
       if (id === 'virtual:error-boundary-wrapper' || id === 'virtual:error-boundary-wrapper.tsx')
         return 'virtual:error-boundary-wrapper.tsx'
-      if (id === './DefaultLoadingIndicator' || id === './DefaultLoadingIndicator.tsx')
-        return 'virtual:default-loading-indicator.tsx'
       if (id === './LoadingErrorBoundary' || id === './LoadingErrorBoundary.tsx')
         return 'virtual:loading-error-boundary.tsx'
       if (id === 'react-server-dom-rari/server')
@@ -1909,15 +1909,7 @@ for (const [path, config] of Object.entries(lazyComponentRegistry)) {
         if (runtimeFile)
           return fs.readFileSync(runtimeFile, 'utf-8')
 
-        return 'export function AppRouterProvider({ children }) { return children; }'
-      }
-
-      if (id === 'virtual:default-loading-indicator.tsx') {
-        const runtimeFile = resolveRuntimeDistFile('DefaultLoadingIndicator.mjs')
-        if (runtimeFile)
-          return fs.readFileSync(runtimeFile, 'utf-8')
-
-        return 'export function DefaultLoadingIndicator() { return null; }'
+        throw new Error(DIST_NOT_BUILT_ERROR)
       }
 
       if (id === 'virtual:loading-error-boundary.tsx') {
@@ -1925,7 +1917,7 @@ for (const [path, config] of Object.entries(lazyComponentRegistry)) {
         if (runtimeFile)
           return fs.readFileSync(runtimeFile, 'utf-8')
 
-        return 'import * as React from \'react\';\nexport class LoadingErrorBoundary extends React.Component { render() { return this.props.children; } }'
+        throw new Error(DIST_NOT_BUILT_ERROR)
       }
 
       if (id === 'virtual:error-boundary-wrapper.tsx') {
@@ -1948,79 +1940,7 @@ import * as React from 'react';\n${content}`
           return content
         }
 
-        return `'use client';
-import * as React from 'react';
-export class ErrorBoundaryWrapper extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false, error: null, ErrorComponent: null };
-    this._isMounted = false;
-  }
-
-  componentDidMount() {
-    this._isMounted = true;
-  }
-
-  componentWillUnmount() {
-    this._isMounted = false;
-  }
-
-  static getDerivedStateFromError(error) {
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error, errorInfo) {
-    console.error('[rari] Error boundary caught error:', error, errorInfo);
-
-    const errorComponentId = this.props.errorComponentId;
-    if (errorComponentId && typeof window !== 'undefined') {
-      const globalThis = window;
-      const componentInfo = globalThis['~clientComponents']?.[errorComponentId];
-
-      if (componentInfo) {
-        if (componentInfo.component && typeof componentInfo.component === 'function') {
-          if (this._isMounted) {
-            this.setState({ ErrorComponent: componentInfo.component });
-          }
-        } else if (componentInfo.loader && !componentInfo.loading) {
-          componentInfo.loading = true;
-          componentInfo.loader()
-            .then((module) => {
-              const component = module.default || module;
-              componentInfo.component = component;
-              componentInfo.registered = true;
-              componentInfo.loading = false;
-              if (this._isMounted) {
-                this.setState({ ErrorComponent: component });
-              }
-            })
-            .catch((loadError) => {
-              componentInfo.loading = false;
-              console.error('[rari] Failed to load error component ' + errorComponentId + ':', loadError);
-            });
-        }
-      }
-    }
-  }
-
-  reset = () => {
-    this.setState({ hasError: false, error: null, ErrorComponent: null });
-  }
-
-  render() {
-    if (this.state.hasError && this.state.error) {
-      const ErrorComponent = this.state.ErrorComponent;
-      if (ErrorComponent) {
-        return React.createElement(ErrorComponent, { error: this.state.error, reset: this.reset });
-      }
-      return React.createElement('div', { style: { padding: '20px', background: '#fee', border: '2px solid #f00' } },
-        React.createElement('h2', null, 'Error'),
-        React.createElement('p', null, 'Something went wrong.')
-      );
-    }
-    return this.props.children;
-  }
-}`
+        throw new Error(DIST_NOT_BUILT_ERROR)
       }
 
       if (id === 'virtual:rsc-integration.ts') {

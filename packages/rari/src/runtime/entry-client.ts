@@ -522,15 +522,6 @@ export async function renderApp(): Promise<void> {
   }
   catch (error) {
     console.error('[rari] Error rendering app:', error)
-    rootElement.innerHTML = `
-      <div style="padding: 20px; background: #fee; border: 2px solid #f00; margin: 20px;">
-        <h2>Error Loading App</h2>
-        <p></p>
-      </div>
-    `
-    const errorP = rootElement.querySelector('p')
-    if (errorP)
-      errorP.textContent = error instanceof Error ? error.message : String(error)
   }
 }
 
