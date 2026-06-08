@@ -241,10 +241,6 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
         p => p.boundaryId === boundaryId,
       )
 
-      const hasLazyMarker = processedChildren.some(
-        child => child && typeof child === 'object' && child['~rari_lazy'] === true,
-      )
-
       let traversedChildren
       if (hasPendingPromises) {
         const isStreaming = globalThis['~rari']?.streaming?.enabled === true
@@ -307,9 +303,6 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
 
           traversedChildren = resolvedComponents.length === 1 ? resolvedComponents[0] : resolvedComponents
         }
-      }
-      else if (hasLazyMarker) {
-        traversedChildren = await traverseToRsc(props?.children, clientComponents, depth + 1)
       }
       else {
         traversedChildren = await traverseToRsc(props?.children, clientComponents, depth + 1)

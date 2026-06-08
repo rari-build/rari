@@ -2,8 +2,6 @@ export { ClientRouter } from './router/ClientRouter'
 
 export type { ClientRouterProps } from './router/ClientRouter'
 
-export { LayoutErrorBoundary } from './router/LayoutErrorBoundary'
-
 export { NavigationErrorHandler } from './router/navigation-error-handler'
 
 export type { NavigationError, NavigationErrorHandlerOptions, NavigationErrorType } from './router/navigation-error-handler'

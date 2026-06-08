@@ -31,17 +31,17 @@
     return Deno.core.ops.op_sanitize_html(html, componentId)
   }
 
-  const elementToRSC = (element, componentId) => {
+  const elementToRSC = async (element, componentId) => {
     try {
       const clientComponents = globalThis['~clientComponents'] || {}
 
       let rscResult
       if (typeof globalThis.renderToRsc === 'function') {
         const currentBoundaryId = globalThis['~suspense']?.currentBoundaryId || null
-        rscResult = globalThis.renderToRsc(element, clientComponents, currentBoundaryId)
+        rscResult = await globalThis.renderToRsc(element, clientComponents, currentBoundaryId)
       }
       else if (typeof globalThis.traverseToRsc === 'function') {
-        rscResult = globalThis.traverseToRsc(element, clientComponents)
+        rscResult = await globalThis.traverseToRsc(element, clientComponents)
       }
       else {
         rscResult = {
@@ -102,7 +102,7 @@
   }
 
   try {
-    const rscResult = elementToRSC(element, '{component_id}')
+    const rscResult = await elementToRSC(element, '{component_id}')
 
     let htmlResult = null
     try {
@@ -158,7 +158,7 @@
 
           const newElement = isAsyncComponent ? await Component(props) : Component(props)
 
-          const rscResult = elementToRSC(newElement, '{component_id}')
+          const rscResult = await elementToRSC(newElement, '{component_id}')
 
           let htmlResult = null
           try {
