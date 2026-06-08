@@ -1,7 +1,6 @@
 {
   "name": "@rari/deploy",
   "type": "module",
-  "version": "0.1.0",
   "private": true,
   "description": "Deployment utilities for rari CLI tools",
   "author": "Ryan Skinner",
