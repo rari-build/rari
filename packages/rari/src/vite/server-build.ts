@@ -6,6 +6,7 @@ import process from 'node:process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { build } from 'rolldown'
 import {
+  BACKSLASH_REGEX,
   EXPORTED_CONST_FUNCTION_REGEX,
   EXPORTED_DEFAULT_ARROW_REGEX,
   EXPORTED_FUNCTION_REGEX,
@@ -23,12 +24,10 @@ const EXTRACT_DEPENDENCIES_REGEX = /import(?:\s+(?:\w+|\{[^}]*\}|\*\s+as\s+\w+)(
 const COMPONENT_IMPORT_REGEX = /import\s+(\w+)\s+from\s+['"]([^'"]+)['"]/g
 const CLIENT_IMPORT_REGEX = /import\s+(?:(\w+)|\{([^}]+)\})\s+from\s+['"]([^'"]+)['"];?\s*$/gm
 const PROXY_FILE_REGEX = /^proxy\.(?:tsx?|jsx?|mts|mjs)$/
-const COMPONENT_PATH_BACKSLASH_REGEX = /\\/g
 const COMPONENTS_PATH_REGEX = /\/components\/(\w+)(?:\.tsx?|\.jsx?)?$/
 const COMPONENTS_PATH_ALT_REGEX = /[/\\]components[/\\](\w+)(?:\.tsx?|\.jsx?)?$/
 const SPECIAL_FILE_REGEX = /^(?:robots|sitemap)\.(?:tsx?|jsx?)$/
 const NODE_PROTOCOL_REGEX = /^node:/
-const PATH_SEPARATOR_NORMALIZE_REGEX = /\\/g
 export const RARI_CSS_MODULES_PATTERN = '[hash]_[local]'
 
 const RARI_DIST_DIR = path.dirname(fileURLToPath(import.meta.url))
@@ -748,7 +747,7 @@ const ${importName} = (props) => {
               if (fs.existsSync(pathWithExt) && fs.statSync(pathWithExt).isFile()) {
                 if (self.isClientComponent(pathWithExt)) {
                   const relativePath = path.relative(self.projectRoot, pathWithExt)
-                  const componentId = (relativePath.startsWith('..') ? pathWithExt : relativePath).replace(PATH_SEPARATOR_NORMALIZE_REGEX, '/')
+                  const componentId = (relativePath.startsWith('..') ? pathWithExt : relativePath).replace(BACKSLASH_REGEX, '/')
                   clientComponentRefs.set(pathWithExt, componentId)
                   return { id: `\0client-ref:${pathWithExt}` }
                 }
@@ -776,7 +775,7 @@ const ${importName} = (props) => {
           if (id.startsWith('\0client-ref:')) {
             const filePath = id.slice('\0client-ref:'.length)
             const relativePath = path.relative(self.projectRoot, filePath)
-            const componentId = (clientComponentRefs.get(filePath) || (relativePath.startsWith('..') ? filePath : relativePath)).replace(PATH_SEPARATOR_NORMALIZE_REGEX, '/')
+            const componentId = (clientComponentRefs.get(filePath) || (relativePath.startsWith('..') ? filePath : relativePath)).replace(BACKSLASH_REGEX, '/')
 
             return {
               code: `
@@ -1355,7 +1354,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
         const resolvedPath = this.resolveImportPath(importPath, inputPath)
         if (this.isClientComponent(resolvedPath)) {
           isClientComponent = true
-          componentId = path.relative(this.projectRoot, resolvedPath).replace(PATH_SEPARATOR_NORMALIZE_REGEX, '/')
+          componentId = path.relative(this.projectRoot, resolvedPath).replace(BACKSLASH_REGEX, '/')
         }
       }
 
@@ -1782,7 +1781,7 @@ export function createServerBuildPlugin(
       if (!builder || !isDev)
         return
 
-      const relativePath = path.relative(projectRoot, file).replace(COMPONENT_PATH_BACKSLASH_REGEX, '/')
+      const relativePath = path.relative(projectRoot, file).replace(BACKSLASH_REGEX, '/')
       if (!relativePath.startsWith('src/') || !TSX_EXT_REGEX.test(relativePath))
         return
 

@@ -76,8 +76,9 @@
       element = result
     }
     catch (asyncError) {
+      console.error(`[rari] Error rendering ${componentSource}:`, asyncError)
       const errorResult = {
-        html: `<div><h2>Error Rendering {component_id}</h2><p>${asyncError.message}</p></div>`,
+        html: '',
         rsc: null,
         hasSuspense: false,
         debug: {
@@ -112,9 +113,7 @@
 
     if (!rscResult) {
       const emptyResult = {
-        html:
-          htmlResult
-          || `<div><h2>Component: ${componentSource}</h2><p>Empty result from component rendering</p></div>`,
+        html: htmlResult || '',
         rsc: null,
         hasSuspense: false,
         debug: {
@@ -190,16 +189,15 @@
           return suspenseResolvedResult
         }
         catch (resolveError) {
-          const finalError = resolveError
-
+          console.error(`[rari] Error rendering ${componentSource} after suspense:`, resolveError)
           const errorResult = {
-            html: `<div><h2>Error Rendering {component_id}</h2><p>${finalError.message}</p></div>`,
+            html: '',
             rsc: null,
             hasSuspense: false,
             debug: {
               component_id: componentSource,
               success: false,
-              error: finalError.message,
+              error: resolveError.message,
             },
           }
 
@@ -211,8 +209,9 @@
       }
     }
 
+    console.error(`[rari] Error rendering ${componentSource}:`, error)
     const errorResult = {
-      html: `<div><h2>Error Rendering {component_id}</h2><p>${error.message}</p></div>`,
+      html: '',
       rsc: null,
       hasSuspense: false,
       debug: {

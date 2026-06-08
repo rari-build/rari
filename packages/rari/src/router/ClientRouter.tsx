@@ -1,14 +1,13 @@
 'use client'
 
+import type * as React from 'react'
 import type { NavigationError } from './navigation-error-handler'
 import type { NavigationOptions } from './navigation-types'
-import * as React from 'react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { debounce } from './debounce'
 import { deregisterNavigate, registerNavigate } from './navigate'
 import { NavigationErrorHandler } from './navigation-error-handler'
 import { extractPathname, isExternalUrl, normalizePath } from './navigation-utils'
-import { NavigationErrorOverlay } from './NavigationErrorOverlay'
 import { routeInfoCache } from './route-info-client'
 import { StatePreserver } from './StatePreserver'
 
@@ -752,25 +751,6 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
     }
   }
 
-  const handleRetry = () => {
-    if (navigationState.error && navigationState.error.url) {
-      const targetPath = navigationState.error.url
-      errorHandlerRef.current.incrementRetry(targetPath)
-      navigate(targetPath, { replace: false })
-    }
-  }
-
-  const handleReload = () => {
-    window.location.reload()
-  }
-
-  const handleDismiss = () => {
-    setNavigationState(prev => ({
-      ...prev,
-      error: null,
-    }))
-  }
-
   useEffect(() => {
     const currentHistoryState = window.history.state as HistoryState | null
 
@@ -869,19 +849,5 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
     }
   }, [])
 
-  return (
-    <>
-      {children}
-      {navigationState.error && (
-        <NavigationErrorOverlay
-          error={navigationState.error}
-          onRetry={handleRetry}
-          onReload={handleReload}
-          onDismiss={handleDismiss}
-          retryCount={errorHandlerRef.current.getRetryCount(navigationState.error.url || '')}
-          maxRetries={3}
-        />
-      )}
-    </>
-  )
+  return children
 }

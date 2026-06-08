@@ -9,11 +9,14 @@ export type {
 
 export { ApiResponse } from './api-routes'
 
-export { RariRequest } from './proxy/RariRequest'
-export { RariResponse } from './proxy/RariResponse'
+export { createHttpRuntimeClient, HttpRuntimeClient } from './http-runtime-client'
+export type { RuntimeClient } from './http-runtime-client'
 
 export type Request = globalThis.Request
 export type Response = globalThis.Response
+
+export { RariRequest } from './proxy/RariRequest'
+export { RariResponse } from './proxy/RariResponse'
 
 export type {
   CookieOptions,
@@ -73,10 +76,6 @@ export type {
 export type { Metadata } from './router/types'
 
 export { rariRouter } from './router/vite-plugin'
-
-export { createHttpRuntimeClient, HttpRuntimeClient } from './runtime-client'
-
-export type { RuntimeClient } from './runtime-client'
 
 export type { Robots, RobotsRule, Sitemap, SitemapEntry, SitemapImage, SitemapVideo } from './types/metadata-route'
 

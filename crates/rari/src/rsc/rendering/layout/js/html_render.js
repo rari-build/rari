@@ -22,24 +22,25 @@ function kebabCase(str) {
   return VENDOR_PREFIX_REGEX.test(str) ? `-${kebab}` : kebab
 }
 
+const SELF_CLOSING_TAGS = new Set([
+  'area',
+  'base',
+  'br',
+  'col',
+  'embed',
+  'hr',
+  'img',
+  'input',
+  'link',
+  'meta',
+  'param',
+  'source',
+  'track',
+  'wbr',
+])
+
 function isSelfClosing(tagName) {
-  const selfClosingTags = new Set([
-    'area',
-    'base',
-    'br',
-    'col',
-    'embed',
-    'hr',
-    'img',
-    'input',
-    'link',
-    'meta',
-    'param',
-    'source',
-    'track',
-    'wbr',
-  ])
-  return selfClosingTags.has(tagName.toLowerCase())
+  return SELF_CLOSING_TAGS.has(tagName.toLowerCase())
 }
 
 async function renderHtmlElement(tagName, props, depth) {
@@ -99,7 +100,7 @@ async function renderHtmlElement(tagName, props, depth) {
 async function renderToHtml(element, depth = 0, isRawContent = false) {
   if (depth > 100) {
     console.error('HTML render depth limit exceeded')
-    return '<div style="color:red">Error: Render depth limit exceeded</div>'
+    return ''
   }
 
   if (element === null || element === undefined)
@@ -112,7 +113,7 @@ async function renderToHtml(element, depth = 0, isRawContent = false) {
     }
     catch (error) {
       console.error('Error awaiting Promise in HTML render:', error)
-      return `<div style="color:red">Error: ${escapeHtml(error.message)}</div>`
+      return ''
     }
   }
 
@@ -151,7 +152,7 @@ async function renderToHtml(element, depth = 0, isRawContent = false) {
       }
       catch (error) {
         console.error('Error rendering function component:', error)
-        return `<div style="color:red">Error: ${escapeHtml(error.message)}</div>`
+        return ''
       }
     }
 
