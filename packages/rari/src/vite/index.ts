@@ -308,15 +308,26 @@ export function rari(options: RariOptions = {}): Plugin[] {
   }
 
   let htmlEntryImports: Set<string> | null = null
+  let lastIndexHtmlMtime: number | null = null
 
   function getHtmlEntryImports(): Set<string> {
-    if (htmlEntryImports !== null)
-      return htmlEntryImports
-
-    htmlEntryImports = new Set()
     const projectRoot = options.projectRoot || process.cwd()
     const indexHtmlPath = path.join(projectRoot, 'index.html')
 
+    try {
+      const mtime = fs.statSync(indexHtmlPath).mtimeMs
+      if (htmlEntryImports !== null && mtime === lastIndexHtmlMtime)
+        return htmlEntryImports
+      lastIndexHtmlMtime = mtime
+    }
+    catch {
+      if (htmlEntryImports === null)
+        htmlEntryImports = new Set()
+
+      return htmlEntryImports
+    }
+
+    htmlEntryImports = new Set()
     try {
       const htmlContent = fs.readFileSync(indexHtmlPath, 'utf-8')
       for (const match of htmlContent.matchAll(HTML_IMPORT_REGEX)) {

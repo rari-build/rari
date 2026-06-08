@@ -1,5 +1,7 @@
 /* eslint-disable no-undef, react/error-boundaries, react/purity  */
 (function () {
+  const REACT_SUSPENSE_PENDING = Symbol.for('react.suspense.pending')
+
   if (typeof React === 'undefined') {
     try {
       if (typeof globalThis['~rsc']?.modules !== 'undefined') {
@@ -33,7 +35,7 @@
             return props.children
           }
           catch (error) {
-            if (error && error.$$typeof === Symbol.for('react.suspense.pending') && error.promise) {
+            if (error && error.$$typeof === REACT_SUSPENSE_PENDING && error.promise) {
               const promiseId = `suspense_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
               if (!globalThis['~suspense'].promises)
                 globalThis['~suspense'].promises = {}
