@@ -14,7 +14,7 @@ import {
 } from '../shared/regex-constants'
 import { resolveAlias } from './alias-resolver'
 import { getReadableComponentId, getComponentId as getSharedComponentId, getProjectRelativePath as getSharedProjectRelativePath, hashString as sharedHashString } from './component-id-utils'
-import { hasDefaultExport, hasTopLevelUseClientDirective, hasTopLevelUseServerDirective } from './directive-utils'
+import { getDirectives, hasDefaultExport, hasTopLevelUseClientDirective, hasTopLevelUseServerDirective } from './directive-utils'
 import { resolveIndexFile, resolveWithExtensions } from './file-resolver'
 
 const HTML_IMPORT_REGEX = /import\s*\(\s*["']([^"']+)["']\s*\)|import\s+["']([^"']+)["']/g
@@ -279,7 +279,8 @@ export class ServerComponentBuilder {
       if (code === null)
         return false
 
-      return !hasTopLevelUseClientDirective(code) && !hasTopLevelUseServerDirective(code)
+      const directives = getDirectives(code)
+      return !directives.hasUseClient && !directives.hasUseServer
     }
     catch {
       return false

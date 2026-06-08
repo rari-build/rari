@@ -19,7 +19,7 @@ import {
   WINDOWS_PATH_REGEX,
 } from '../shared/regex-constants'
 import { getComponentId } from './component-id-utils'
-import { hasDefaultExport, hasTopLevelUseClientDirective, hasTopLevelUseServerDirective } from './directive-utils'
+import { getDirectives, hasDefaultExport, hasTopLevelUseClientDirective, hasTopLevelUseServerDirective } from './directive-utils'
 import { resolveIndexFile, resolveWithExtensions } from './file-resolver'
 import { HMRCoordinator } from './hmr-coordinator'
 import { scanForImageUsage } from './image-scanner'
@@ -295,8 +295,9 @@ export function rari(options: RariOptions = {}): Plugin[] {
 
     try {
       const code = fs.readFileSync(id, 'utf-8')
-      result.hasUseServer = hasTopLevelUseServerDirective(code)
-      result.hasUseClient = hasTopLevelUseClientDirective(code)
+      const directives = getDirectives(code)
+      result.hasUseServer = directives.hasUseServer
+      result.hasUseClient = directives.hasUseClient
       directiveCache.set(id, result)
     }
     catch {
@@ -346,13 +347,12 @@ export function rari(options: RariOptions = {}): Plugin[] {
         return false
 
       const code = fs.readFileSync(pathForFsOperations, 'utf-8')
-      const hasClientDirective = hasTopLevelUseClientDirective(code)
-      const hasServerDirective = hasTopLevelUseServerDirective(code)
+      const directives = getDirectives(code)
 
-      if (hasServerDirective)
+      if (directives.hasUseServer)
         return false
 
-      return !hasClientDirective
+      return !directives.hasUseClient
     }
     catch {
       return false
@@ -1037,6 +1037,9 @@ ${clientTransformedCode}`
       let needsReactImport = false
       let needsWrapperImport = false
       const serverComponentReplacements: string[] = []
+      const importingFileIsClient = hasTopLevelUseClientDirective(code)
+        || componentTypeCache.get(id) === 'client'
+        || id.includes('entry-client')
 
       for (const line of lines) {
         const importMatch = line.match(IMPORT_LINE_REGEX)
@@ -1047,10 +1050,6 @@ ${clientTransformedCode}`
         const importPath = importMatch[4]
         const componentName = getComponentName(importPath)
         const resolvedImportPath = resolveImportToFilePath(importPath, id)
-
-        const importingFileIsClient = hasTopLevelUseClientDirective(code)
-          || componentTypeCache.get(id) === 'client'
-          || id.includes('entry-client')
 
         const isClientComponent
           = componentTypeCache.get(resolvedImportPath) === 'client'
