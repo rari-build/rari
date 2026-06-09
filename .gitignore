@@ -5,6 +5,7 @@ packages/*/bin
 packages/rari-darwin-*/
 packages/rari-linux-*/
 packages/rari-win32-*/
+.pnpm-store/
 .cache
 coverage
 test-results
