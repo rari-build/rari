@@ -7,39 +7,11 @@ minimumReleaseAgeExclude:
   - rari-win32-arm64@0.14.8
   - rari-win32-x64@0.14.8
   - rari@0.14.8
-  - '@eslint-react/ast@5.8.16'
-  - '@eslint-react/core@5.8.16'
-  - '@eslint-react/eslint-plugin@5.8.16'
-  - '@eslint-react/eslint@5.8.16'
-  - '@eslint-react/jsx@5.8.16'
-  - '@eslint-react/shared@5.8.16'
-  - '@eslint-react/var@5.8.16'
-  - '@typescript/native-preview@7.0.0-dev.20260607.1'
-  - '@typescript/native-preview-darwin-arm64@7.0.0-dev.20260607.1'
-  - '@typescript/native-preview-darwin-x64@7.0.0-dev.20260607.1'
-  - '@typescript/native-preview-linux-arm@7.0.0-dev.20260607.1'
-  - '@typescript/native-preview-linux-arm64@7.0.0-dev.20260607.1'
-  - '@typescript/native-preview-linux-x64@7.0.0-dev.20260607.1'
-  - '@typescript/native-preview-win32-arm64@7.0.0-dev.20260607.1'
-  - '@typescript/native-preview-win32-x64@7.0.0-dev.20260607.1'
-  - eslint-plugin-react-dom@5.8.16
-  - eslint-plugin-react-jsx@5.8.16
-  - eslint-plugin-react-naming-convention@5.8.16
-  - eslint-plugin-react-rsc@5.8.16
-  - eslint-plugin-react-web-api@5.8.16
-  - eslint-plugin-react-x@5.8.16
 shellEmulator: true
 trustPolicy: no-downgrade
-trustPolicyExclude:
-  - semver@6.3.1
 packages:
   - examples/*
   - packages/*
-  - '!packages/rari-darwin-x64'
-  - '!packages/rari-linux-arm64'
-  - '!packages/rari-linux-x64'
-  - '!packages/rari-win32-arm64'
-  - '!packages/rari-win32-x64'
   - test/fixtures/*
   - web
 catalogs:
@@ -87,10 +59,5 @@ catalogs:
   typescript:
     '@types/node': ^25.9.2
     '@typescript/native-preview': ^7.0.0-dev.20260607.1
-onlyBuiltDependencies:
-  - esbuild
-  - oxlint
-  - '@shikijs/engine-oniguruma'
 allowBuilds:
   core-js: true
-  protobufjs: true
