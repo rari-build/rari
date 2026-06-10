@@ -38,14 +38,17 @@ function getUseCacheTransformAddon(): any {
         const nodeRequire = createRequire(import.meta.url)
         useCacheAddon = nodeRequire(addonPath)
 
+        console.error(`[use-cache-transform] loaded addon from ${addonPath}`)
+
         return useCacheAddon
       }
       catch (err) {
-        console.warn('[rari] Failed to load use-cache-transform addon:', err)
+        console.error(`[use-cache-transform] failed to load addon from ${addonPath}:`, err)
       }
     }
   }
 
+  console.error('[use-cache-transform] NO addon found in any of:', possiblePaths)
   return null
 }
 
@@ -74,8 +77,11 @@ export function transformUseCacheModule(code: string, id: string): string | null
     return null
   }
 
+  console.error(`[use-cache-transform] found 'use cache' directive in ${id}`)
+
   const addon = getUseCacheTransformAddon()
   if (!addon) {
+    console.error(`[use-cache-transform] NO ADDON — skipping transform for ${id}`)
     return null
   }
 
@@ -87,8 +93,11 @@ export function transformUseCacheModule(code: string, id: string): string | null
     })
 
     if (result.code === code) {
+      console.error(`[use-cache-transform] addon returned unchanged code for ${id}`)
       return null
     }
+
+    console.error(`[use-cache-transform] transformed ${id} (needsCacheWrapper=${result.needsCacheWrapper}, needsRegisterRef=${result.needsRegisterRef})`)
 
     const imports = []
     if (result.needsReactCache) {
@@ -115,6 +124,7 @@ export function transformUseCacheModule(code: string, id: string): string | null
     return `${importBlock}${result.code}`
   }
   catch (err) {
+    console.error(`[use-cache-transform] addon threw for ${id}:`, err)
     throw new Error(
       `Failed to transform 'use cache' directive in ${id}: ${err instanceof Error ? err.message : String(err)}`,
     )
