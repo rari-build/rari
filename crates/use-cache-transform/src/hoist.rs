@@ -281,7 +281,7 @@ fn build_apply_args_array(closure_vars_empty: bool) -> ArrayLit {
     }
 }
 
-/// Build the `try { return cacheName.apply(null, [...]); } catch (e) { if (e?.then) await e; throw e; }` body.
+/// Build the `try { return cacheName.apply(null, [...]); } catch (e) { if (e?.then) return await e; throw e; }` body.
 fn build_try_body(cache_name: &str, apply_args_arr: ArrayLit) -> Stmt {
     let apply_call = || {
         Expr::Call(CallExpr {
@@ -343,12 +343,12 @@ fn build_try_body(cache_name: &str, apply_args_arr: ArrayLit) -> Stmt {
                                 right: Box::new(Expr::Lit(Lit::Str(str_lit("function")))),
                             })),
                         })),
-                        cons: Box::new(Stmt::Expr(ExprStmt {
+                        cons: Box::new(Stmt::Return(ReturnStmt {
                             span: DUMMY_SP,
-                            expr: Box::new(Expr::Await(AwaitExpr {
+                            arg: Some(Box::new(Expr::Await(AwaitExpr {
                                 span: DUMMY_SP,
                                 arg: ident_expr("e"),
-                            })),
+                            }))),
                         })),
                         alt: None,
                     }),
