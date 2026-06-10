@@ -191,185 +191,188 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
     const previousBoundaryId = globalThis['~suspense'].currentBoundaryId
     globalThis['~suspense'].currentBoundaryId = boundaryId
 
-    const defaultFallback = null
-    const safeFallback = props?.fallback
-      ? await traverseToRsc(props.fallback, clientComponents, depth + 1)
-      : defaultFallback
+    try {
+      const defaultFallback = null
+      const safeFallback = props?.fallback
+        ? await traverseToRsc(props.fallback, clientComponents, depth + 1)
+        : defaultFallback
 
-    globalThis['~suspense'].discoveredBoundaries.push({
-      id: boundaryId,
-      fallback: safeFallback,
-      parentId: previousBoundaryId,
-    })
+      globalThis['~suspense'].discoveredBoundaries.push({
+        id: boundaryId,
+        fallback: safeFallback,
+        parentId: previousBoundaryId,
+      })
 
-    const processedChildren = Array.isArray(props?.children)
-      ? props.children
-      : [props?.children]
+      const processedChildren = Array.isArray(props?.children)
+        ? props.children
+        : [props?.children]
 
-    function detectAsyncComponents(children, depth = 0) {
-      if (depth > 10)
-        return
+      function detectAsyncComponents(children, depth = 0) {
+        if (depth > 10)
+          return
 
-      const childArray = Array.isArray(children) ? children : [children]
+        const childArray = Array.isArray(children) ? children : [children]
 
-      for (const child of childArray) {
-        if (!child || typeof child !== 'object')
-          continue
+        for (const child of childArray) {
+          if (!child || typeof child !== 'object')
+            continue
 
-        if (typeof child.then === 'function') {
-          const promiseId = `promise:${globalThis['~rsc'].keyCounter++}`
+          if (typeof child.then === 'function') {
+            const promiseId = `promise:${globalThis['~rsc'].keyCounter++}`
 
-          if (!globalThis['~suspense'].promises)
-            globalThis['~suspense'].promises = {}
+            if (!globalThis['~suspense'].promises)
+              globalThis['~suspense'].promises = {}
 
-          globalThis['~suspense'].promises[promiseId] = child
-          pushPendingPromise({
-            id: promiseId,
-            boundaryId,
-            componentPath: 'AsyncComponent',
-          })
+            globalThis['~suspense'].promises[promiseId] = child
+            pushPendingPromise({
+              id: promiseId,
+              boundaryId,
+              componentPath: 'AsyncComponent',
+            })
 
-          continue
+            continue
+          }
+
+          if (child.$$typeof === Symbol.for('react.transitional.element') && typeof child.type === 'function') {
+            try {
+              const isAsyncMarker = child.type._isAsyncComponent && child.type._originalType
+              const isAsync = isAsyncMarker
+                || child.type.constructor.name === 'AsyncFunction'
+                || child.type.toString().trim().startsWith('async ')
+
+              if (isAsync) {
+                const promiseId = `promise:${globalThis['~rsc'].keyCounter++}`
+
+                const actualType = isAsyncMarker ? child.type._originalType : child.type
+
+                pushPendingPromise({
+                  id: promiseId,
+                  boundaryId,
+                  componentPath: actualType.name || 'anonymous',
+                  componentType: actualType,
+                  componentProps: child.props || {},
+                })
+              }
+            }
+            catch (error) {
+              console.error('Error detecting async component:', error)
+            }
+          }
+
+          if (child.props && child.props.children && !isSuspenseComponent(child.type))
+            detectAsyncComponents(child.props.children, depth + 1)
         }
+      }
 
-        if (child.$$typeof === Symbol.for('react.transitional.element') && typeof child.type === 'function') {
-          try {
-            const isAsyncMarker = child.type._isAsyncComponent && child.type._originalType
-            const isAsync = isAsyncMarker
-              || child.type.constructor.name === 'AsyncFunction'
-              || child.type.toString().trim().startsWith('async ')
+      detectAsyncComponents(processedChildren)
 
-            if (isAsync) {
-              const promiseId = `promise:${globalThis['~rsc'].keyCounter++}`
+      const hasPendingPromises = globalThis['~suspense'].pendingPromises.some(
+        p => p.boundaryId === boundaryId,
+      )
 
-              const actualType = isAsyncMarker ? child.type._originalType : child.type
+      const hasLazyMarker = processedChildren.some((child) => {
+        const isLazy = child && typeof child === 'object' && child['~rari_lazy'] === true
+        return isLazy
+      })
 
-              pushPendingPromise({
-                id: promiseId,
-                boundaryId,
-                componentPath: actualType.name || 'anonymous',
-                componentType: actualType,
-                componentProps: child.props || {},
+      let traversedChildren
+      if (hasPendingPromises) {
+        const isStreaming = globalThis['~rari']?.streaming?.enabled === true
+
+        if (isStreaming) {
+          if (!globalThis['~rari'].lazy)
+            globalThis['~rari'].lazy = { pending: new Map(), resolved: new Map(), counter: 0 }
+
+          const boundaryPromises = globalThis['~suspense'].pendingPromises.filter(
+            p => p.boundaryId === boundaryId,
+          )
+
+          for (const pending of boundaryPromises) {
+            if (!pending.componentType && globalThis['~suspense'].promises?.[pending.id]) {
+              globalThis['~rari'].lazy.pending.set(pending.id, globalThis['~suspense'].promises[pending.id])
+            }
+            else {
+              globalThis['~rari'].lazy.pending.set(pending.id, {
+                component: pending.componentType,
+                props: pending.componentProps,
+                isDeferred: true,
               })
             }
           }
-          catch (error) {
-            console.error('Error detecting async component:', error)
-          }
-        }
 
-        if (child.props && child.props.children && !isSuspenseComponent(child.type))
-          detectAsyncComponents(child.props.children, depth + 1)
-      }
-    }
-
-    detectAsyncComponents(processedChildren)
-
-    const hasPendingPromises = globalThis['~suspense'].pendingPromises.some(
-      p => p.boundaryId === boundaryId,
-    )
-
-    const hasLazyMarker = processedChildren.some((child) => {
-      const isLazy = child && typeof child === 'object' && child['~rari_lazy'] === true
-      return isLazy
-    })
-
-    let traversedChildren
-    if (hasPendingPromises) {
-      const isStreaming = globalThis['~rari']?.streaming?.enabled === true
-
-      if (isStreaming) {
-        if (!globalThis['~rari'].lazy)
-          globalThis['~rari'].lazy = { pending: new Map(), resolved: new Map(), counter: 0 }
-
-        const boundaryPromises = globalThis['~suspense'].pendingPromises.filter(
-          p => p.boundaryId === boundaryId,
-        )
-
-        for (const pending of boundaryPromises) {
-          if (!pending.componentType && globalThis['~suspense'].promises?.[pending.id]) {
-            globalThis['~rari'].lazy.pending.set(pending.id, globalThis['~suspense'].promises[pending.id])
-          }
-          else {
-            globalThis['~rari'].lazy.pending.set(pending.id, {
-              component: pending.componentType,
-              props: pending.componentProps,
-              isDeferred: true,
+          const lazyMarkers = []
+          for (const pending of boundaryPromises) {
+            lazyMarkers.push({
+              '~rari_lazy': true,
+              '~rari_promise_id': pending.id,
+              '~rari_component_id': pending.componentPath || 'AsyncComponent',
+              '~rari_loading_id': '',
             })
           }
-        }
 
-        const lazyMarkers = []
-        for (const pending of boundaryPromises) {
-          lazyMarkers.push({
-            '~rari_lazy': true,
-            '~rari_promise_id': pending.id,
-            '~rari_component_id': pending.componentPath || 'AsyncComponent',
-            '~rari_loading_id': '',
-          })
-        }
-
-        let traversedChildrenValue
-        if (lazyMarkers.length === 1) {
-          traversedChildrenValue = lazyMarkers[0]
-        }
-        else if (lazyMarkers.length) {
-          traversedChildrenValue = lazyMarkers
+          let traversedChildrenValue
+          if (lazyMarkers.length === 1) {
+            traversedChildrenValue = lazyMarkers[0]
+          }
+          else if (lazyMarkers.length) {
+            traversedChildrenValue = lazyMarkers
+          }
+          else {
+            traversedChildrenValue = null
+          }
+          traversedChildren = traversedChildrenValue
         }
         else {
-          traversedChildrenValue = null
-        }
-        traversedChildren = traversedChildrenValue
-      }
-      else {
-        const boundaryPromises = globalThis['~suspense'].pendingPromises.filter(
-          p => p.boundaryId === boundaryId,
-        )
+          const boundaryPromises = globalThis['~suspense'].pendingPromises.filter(
+            p => p.boundaryId === boundaryId,
+          )
 
-        const resolvedComponents = []
-        for (const pending of boundaryPromises) {
-          if (pending.componentType && pending.componentProps !== undefined) {
-            try {
-              const result = await pending.componentType(pending.componentProps)
-              const traversed = await traverseToRsc(result, clientComponents, depth + 1)
-              resolvedComponents.push(traversed)
-            }
-            catch (error) {
-              console.error('Error rendering async component:', error)
-              resolvedComponents.push(createErrorElement(error.message, pending.componentPath))
+          const resolvedComponents = []
+          for (const pending of boundaryPromises) {
+            if (pending.componentType && pending.componentProps !== undefined) {
+              try {
+                const result = await pending.componentType(pending.componentProps)
+                const traversed = await traverseToRsc(result, clientComponents, depth + 1)
+                resolvedComponents.push(traversed)
+              }
+              catch (error) {
+                console.error('Error rendering async component:', error)
+                resolvedComponents.push(createErrorElement(error.message, pending.componentPath))
+              }
             }
           }
+
+          globalThis['~suspense'].pendingPromises = globalThis['~suspense'].pendingPromises.filter(
+            p => p.boundaryId !== boundaryId,
+          )
+
+          traversedChildren = resolvedComponents.length === 1 ? resolvedComponents[0] : resolvedComponents
         }
-
-        globalThis['~suspense'].pendingPromises = globalThis['~suspense'].pendingPromises.filter(
-          p => p.boundaryId !== boundaryId,
-        )
-
-        traversedChildren = resolvedComponents.length === 1 ? resolvedComponents[0] : resolvedComponents
       }
-    }
-    else if (hasLazyMarker) {
-      traversedChildren = await traverseToRsc(props?.children, clientComponents, depth + 1)
-    }
-    else {
-      traversedChildren = await traverseToRsc(props?.children, clientComponents, depth + 1)
-    }
+      else if (hasLazyMarker) {
+        traversedChildren = await traverseToRsc(props?.children, clientComponents, depth + 1)
+      }
+      else {
+        traversedChildren = await traverseToRsc(props?.children, clientComponents, depth + 1)
+      }
 
-    globalThis['~suspense'].currentBoundaryId = previousBoundaryId
+      const rscProps = {
+        ...props,
+        '~boundaryId': boundaryId,
+        'fallback': safeFallback,
+        'children': traversedChildren,
+      }
 
-    const rscProps = {
-      ...props,
-      '~boundaryId': boundaryId,
-      'fallback': safeFallback,
-      'children': traversedChildren,
+      return [
+        '$',
+        'react.suspense',
+        null,
+        rscProps,
+      ]
     }
-
-    return [
-      '$',
-      'react.suspense',
-      null,
-      rscProps,
-    ]
+    finally {
+      globalThis['~suspense'].currentBoundaryId = previousBoundaryId
+    }
   }
 
   if (typeof type === 'function' && type._isAsyncComponent && type._originalType) {

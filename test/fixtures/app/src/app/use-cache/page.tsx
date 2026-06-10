@@ -7,9 +7,7 @@ const callLog: string[] = []
 async function getCachedData(label: string) {
   'use cache'
   callCount++
-  const value = `${label}:${callCount}`
-  callLog.push(value)
-  return value
+  return `${label}:${callCount}`
 }
 
 export default async function UseCachePage() {
@@ -18,8 +16,11 @@ export default async function UseCachePage() {
   renderCount++
 
   const result1 = await getCachedData('first')
+  callLog.push(result1)
   const result2 = await getCachedData('first')
+  callLog.push(result2)
   const result3 = await getCachedData('second')
+  callLog.push(result3)
 
   return (
     <div>

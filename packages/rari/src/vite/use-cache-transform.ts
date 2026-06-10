@@ -19,7 +19,8 @@ function getUseCacheTransformAddon(): any {
     return useCacheAddon
 
   const packageRoot = path.resolve(__dirname, '..')
-  const repoRoot = path.resolve(packageRoot, '..', '..', '..')
+  // eslint-disable-next-line node/prefer-global/process
+  const repoRoot = process.cwd()
 
   const possiblePaths = [
     path.join(packageRoot, 'target/release/use_cache_transform.node'),
