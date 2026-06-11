@@ -168,4 +168,31 @@ if (typeof globalThis !== 'undefined') {
   globalThis.renderToHtml = renderToHtml
   globalThis.escapeHtml = escapeHtml
   globalThis.kebabCase = kebabCase
+
+  if (!globalThis['~rari'])
+    globalThis['~rari'] = {}
+  if (!globalThis['~rari'].ssrModules)
+    globalThis['~rari'].ssrModules = {}
+
+  globalThis['~rari'].ssrRenderComponent = async function (modulePath, exportName, props) {
+    const mod = globalThis['~rari'].ssrModules[modulePath.replace(/\\/g, '/')]
+      || globalThis['~rari'].ssrModules[modulePath]
+    if (!mod)
+      return ''
+
+    const Component = exportName === 'default' ? (mod.default || mod) : mod[exportName]
+    if (typeof Component !== 'function')
+      return ''
+
+    try {
+      let element = Component(props)
+      if (element && typeof element.then === 'function')
+        element = await element
+
+      return await renderToHtml(element, 0)
+    }
+    catch {
+      return ''
+    }
+  }
 }

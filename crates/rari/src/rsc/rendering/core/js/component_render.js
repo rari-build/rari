@@ -106,7 +106,7 @@
 
     let htmlResult = null
     try {
-      htmlResult = renderToHTML(element)
+      htmlResult = await renderToHtml(element)
       htmlResult = sanitizeComponentOutput(htmlResult, '{component_id}')
     }
     catch (htmlError) {
@@ -162,7 +162,7 @@
 
           let htmlResult = null
           try {
-            htmlResult = renderToHTML(newElement)
+            htmlResult = await renderToHtml(newElement)
             htmlResult = sanitizeComponentOutput(htmlResult, '{component_id}')
           }
           catch (htmlError) {

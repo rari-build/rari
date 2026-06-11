@@ -1,11 +1,13 @@
 use crate::error::RariError;
 use crate::rsc::rendering::core::RscRenderer;
 use crate::rsc::utils::dependency_utils::extract_dependencies;
+use crate::runtime::JsExecutionRuntime;
 use crate::server::utils::component_utils::{
     has_use_client_directive, has_use_server_directive, wrap_server_action_module,
 };
 use crate::utils::path_url::path_to_file_url;
 use cow_utils::CowUtils;
+use std::sync::Arc;
 use tracing::error;
 
 const DIST_DIR: &str = "dist";
@@ -922,5 +924,74 @@ impl ComponentLoader {
             .register_component(component_id, &component_code)
             .await
             .map_err(|e| RariError::internal(format!("Failed to register component: {e}")))
+    }
+
+    pub async fn load_ssr_client_components(
+        runtime: &Arc<JsExecutionRuntime>,
+    ) -> Result<(), RariError> {
+        let manifest_path = std::path::Path::new("dist/ssr/manifest.json");
+        if !manifest_path.exists() {
+            return Ok(());
+        }
+
+        let manifest_content = std::fs::read_to_string(manifest_path)
+            .map_err(|e| RariError::io(format!("Failed to read SSR manifest: {e}")))?;
+
+        let manifest: serde_json::Value = serde_json::from_str(&manifest_content)
+            .map_err(|e| RariError::internal(format!("Failed to parse SSR manifest: {e}")))?;
+
+        let Some(entries) = manifest.as_object() else {
+            return Ok(());
+        };
+
+        for (module_path, info) in entries {
+            let bundle_path = info.get("bundlePath").and_then(|v| v.as_str()).unwrap_or_default();
+
+            let component_file = std::path::Path::new(DIST_DIR).join(bundle_path);
+            if !component_file.exists() {
+                continue;
+            }
+
+            let code = match std::fs::read_to_string(&component_file) {
+                Ok(c) => c,
+                Err(_) => continue,
+            };
+
+            let module_specifier = format!("file:///{}", bundle_path.cow_replace('\\', "/"));
+            if let Err(e) = runtime.add_module_to_loader_only(&module_specifier, code).await {
+                error!("Failed to add SSR module {}: {}", module_path, e);
+                continue;
+            }
+
+            let module_path_json = serde_json::to_string(module_path).unwrap_or_default();
+            let register_script = format!(
+                r#"(async function() {{
+                    try {{
+                        const mod = await import({specifier});
+                        if (!globalThis['~rari'] || !globalThis['~rari'].ssrModules) {{
+                            return false;
+                        }}
+                        globalThis['~rari'].ssrModules[{path}] = mod;
+                        return true;
+                    }} catch (e) {{
+                        return false;
+                    }}
+                }})()"#,
+                specifier = serde_json::to_string(&module_specifier).unwrap_or_default(),
+                path = module_path_json,
+            );
+
+            if let Err(e) = runtime
+                .execute_script(
+                    format!("ssr_load_{}.js", module_path.cow_replace('/', "_")),
+                    register_script,
+                )
+                .await
+            {
+                error!("Failed to load SSR module {}: {}", module_path, e);
+            }
+        }
+
+        Ok(())
     }
 }

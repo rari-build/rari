@@ -91,6 +91,8 @@ impl Server {
             ComponentLoader::load_server_actions_from_source(&mut renderer).await?;
         }
 
+        ComponentLoader::load_ssr_client_components(&renderer.runtime).await?;
+
         let app_router = {
             let manifest_path = "dist/server/routes.json";
 

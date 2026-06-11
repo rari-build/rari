@@ -7,7 +7,7 @@ import { ClientRouter } from 'rari/client'
 import { RouterProvider } from 'rari/router'
 import * as React from 'react'
 import { Suspense } from 'react'
-import { createRoot } from 'react-dom/client'
+import { createRoot, hydrateRoot } from 'react-dom/client'
 // @ts-expect-error - virtual module resolved by Vite
 import { AppRouterProvider } from 'virtual:app-router-provider'
 // @ts-expect-error - virtual module resolved by Vite
@@ -517,8 +517,13 @@ export async function renderApp(): Promise<void> {
     )
     /* eslint-enable react/jsx-no-children-prop */
 
-    const root = createRoot(rootElement)
-    root.render(wrappedContent)
+    if (hasServerRenderedContent) {
+      hydrateRoot(rootElement, wrappedContent)
+    }
+    else {
+      const root = createRoot(rootElement)
+      root.render(wrappedContent)
+    }
   }
   catch (error) {
     console.error('[rari] Error rendering app:', error)
