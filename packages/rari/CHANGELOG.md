@@ -1,3 +1,11 @@
+## [rari@0.14.9] - 2026-06-11
+
+### ⚙️ Miscellaneous Tasks
+
+- add version 0.0.0 to deploy and logger packages, downgrade rari to version 0.14.8 by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/v0.14.9...rari@0.14.9
 ## [0.14.9] - 2026-06-11
 
 ### 🚀 Features
