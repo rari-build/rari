@@ -239,6 +239,19 @@ impl RscHtmlRenderer {
         Self { runtime, template_cache: parking_lot::Mutex::new(None) }
     }
 
+    fn value_looks_like_rsc(value: &serde_json::Value) -> bool {
+        match value {
+            serde_json::Value::String(s) => s.starts_with('$'),
+            serde_json::Value::Array(arr) => arr
+                .first()
+                .map(|first| {
+                    first.as_str().map(|s| s.starts_with('$')).unwrap_or(false) || first.is_array()
+                })
+                .unwrap_or(false),
+            _ => false,
+        }
+    }
+
     async fn ssr_render_client_component(
         &self,
         module_path: &str,
@@ -926,15 +939,7 @@ impl RscHtmlRenderer {
                 let children_are_rsc = props
                     .as_object()
                     .and_then(|o| o.get("children"))
-                    .and_then(|c| c.as_array())
-                    .map(|arr| {
-                        arr.first()
-                            .map(|first| {
-                                first.as_str().map(|s| s.starts_with('$')).unwrap_or(false)
-                                    || first.is_array()
-                            })
-                            .unwrap_or(false)
-                    })
+                    .map(Self::value_looks_like_rsc)
                     .unwrap_or(false);
 
                 if !children_are_rsc
@@ -1722,15 +1727,7 @@ if (typeof window !== 'undefined') {{
     ) -> Result<String, RariError> {
         let children_are_rsc = props
             .and_then(|p| p.get("children"))
-            .and_then(|c| c.as_array())
-            .map(|arr| {
-                arr.first()
-                    .map(|first| {
-                        first.as_str().map(|s| s.starts_with('$')).unwrap_or(false)
-                            || first.is_array()
-                    })
-                    .unwrap_or(false)
-            })
+            .map(RscHtmlRenderer::value_looks_like_rsc)
             .unwrap_or(false);
 
         if !children_are_rsc
