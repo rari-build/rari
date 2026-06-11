@@ -879,10 +879,16 @@ impl RscHtmlRenderer {
                 || tag.contains('#')
                 || tag.contains('/');
             if is_client_component {
-                return Ok(format!(
-                    r#"<div data-client-component="{}" style="display: contents;"></div>"#,
-                    Self::escape_html_attribute(tag)
-                ));
+                if let Some(props_obj) = props.as_object()
+                    && let Some(children) = props_obj.get("children")
+                {
+                    let children_html =
+                        self.render_json_to_html(children, row_map, row_cache).await?;
+                    if !children_html.is_empty() {
+                        return Ok(children_html);
+                    }
+                }
+                return Ok(String::new());
             }
 
             let is_suspense_symbol = tag.starts_with('$')
