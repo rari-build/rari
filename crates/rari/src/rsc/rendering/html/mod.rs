@@ -247,13 +247,8 @@ impl RscHtmlRenderer {
     fn value_looks_like_rsc(value: &serde_json::Value) -> bool {
         match value {
             serde_json::Value::String(s) => Self::string_looks_like_rsc(s),
-            serde_json::Value::Array(arr) => arr
-                .first()
-                .map(|first| {
-                    first.as_str().map(Self::string_looks_like_rsc).unwrap_or(false)
-                        || first.is_array()
-                })
-                .unwrap_or(false),
+            serde_json::Value::Array(arr) => arr.iter().any(Self::value_looks_like_rsc),
+            serde_json::Value::Object(obj) => obj.values().any(Self::value_looks_like_rsc),
             _ => false,
         }
     }
@@ -942,13 +937,9 @@ impl RscHtmlRenderer {
                 || tag.contains('#')
                 || tag.contains('/');
             if is_client_component {
-                let children_are_rsc = props
-                    .as_object()
-                    .and_then(|o| o.get("children"))
-                    .map(Self::value_looks_like_rsc)
-                    .unwrap_or(false);
+                let props_are_rsc = Self::value_looks_like_rsc(props);
 
-                if !children_are_rsc
+                if !props_are_rsc
                     && let Some(stripped) =
                         tag.strip_prefix("$L").or_else(|| tag.strip_prefix("$@"))
                     && let Ok(module_row_id) = u32::from_str_radix(stripped, 16)
@@ -1766,12 +1757,10 @@ if (typeof window !== 'undefined') {{
         component_ref: &str,
         props: Option<&serde_json::Map<String, serde_json::Value>>,
     ) -> Result<String, RariError> {
-        let children_are_rsc = props
-            .and_then(|p| p.get("children"))
-            .map(RscHtmlRenderer::value_looks_like_rsc)
-            .unwrap_or(false);
+        let props_are_rsc =
+            props.is_some_and(|p| p.values().any(RscHtmlRenderer::value_looks_like_rsc));
 
-        if !children_are_rsc
+        if !props_are_rsc
             && let Some(stripped) =
                 component_ref.strip_prefix("$L").or_else(|| component_ref.strip_prefix("$@"))
             && let Ok(module_row_id) = u32::from_str_radix(stripped, 16)
