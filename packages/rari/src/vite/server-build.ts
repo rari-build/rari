@@ -1263,6 +1263,216 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     return manifest
   }
 
+  async buildSSRClientComponents(): Promise<void> {
+    const ssrOutDir = path.join(this.options.outDir, 'ssr')
+    await fs.promises.mkdir(ssrOutDir, { recursive: true })
+
+    const clientFiles: Array<{ filePath: string, code: string }> = []
+    const srcDir = path.join(this.projectRoot, 'src')
+
+    const scanForClientComponents = (dir: string) => {
+      if (!fs.existsSync(dir))
+        return
+      const entries = fs.readdirSync(dir, { withFileTypes: true })
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name)
+        if (entry.isDirectory()) {
+          if (entry.name === 'node_modules')
+            continue
+          scanForClientComponents(fullPath)
+        }
+        else if (entry.isFile() && TSX_EXT_REGEX.test(entry.name)) {
+          try {
+            const code = fs.readFileSync(fullPath, 'utf-8')
+            if (hasTopLevelUseClientDirective(code))
+              clientFiles.push({ filePath: fullPath, code })
+          }
+          catch {}
+        }
+      }
+    }
+
+    scanForClientComponents(srcDir)
+
+    if (clientFiles.length === 0)
+      return
+
+    const manifest: Record<string, { id: string, filePath: string, bundlePath: string, exports: string[] }> = {}
+    const concurrency = Math.min(8, Math.max(1, (await import('node:os')).cpus().length))
+    let active = 0
+    let index = 0
+    const errors: Error[] = []
+
+    await new Promise<void>((resolve) => {
+      const next = () => {
+        while (active < concurrency && index < clientFiles.length) {
+          const { filePath, code } = clientFiles[index++]
+          const componentId = path.relative(this.projectRoot, filePath).replace(BACKSLASH_REGEX, '/')
+          const bundleName = this.getComponentId(filePath)
+          const bundlePath = `ssr/${bundleName}.js`
+          const fullBundlePath = path.join(this.options.outDir, bundlePath)
+
+          active++
+          ;(async () => {
+            try {
+              const bundleDir = path.dirname(fullBundlePath)
+              await fs.promises.mkdir(bundleDir, { recursive: true })
+
+              await this.buildSSRSingleClient(filePath, fullBundlePath)
+
+              const exports = this.extractExportNames(code)
+              manifest[componentId] = {
+                id: componentId,
+                filePath,
+                bundlePath,
+                exports,
+              }
+            }
+            catch (error) {
+              console.warn(`[rari] SSR build failed for ${componentId}:`, error instanceof Error ? error.message : error)
+            }
+            finally {
+              active--
+              if (index >= clientFiles.length && active === 0)
+                resolve()
+              else
+                next()
+            }
+          })()
+        }
+
+        if (clientFiles.length === 0)
+          resolve()
+      }
+
+      next()
+    })
+
+    if (errors.length > 0)
+      throw errors[0]
+
+    const manifestPath = path.join(ssrOutDir, 'manifest.json')
+    await fs.promises.writeFile(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8')
+  }
+
+  private extractExportNames(code: string): string[] {
+    const exports: string[] = []
+    if (/export\s+default\b/.test(code))
+      exports.push('default')
+    const namedExportRegex = /export\s+(?:function|const|let|var|class)\s+(\w+)/g
+    for (const m of code.matchAll(namedExportRegex)) {
+      exports.push(m[1])
+    }
+
+    return exports.length > 0 ? exports : ['default']
+  }
+
+  private async buildSSRSingleClient(
+    inputPath: string,
+    outputPath: string,
+  ): Promise<{ code: string }> {
+    const originalCode = await fs.promises.readFile(inputPath, 'utf-8')
+    const strippedCode = originalCode.replace(/^['"]use client['"];?\s*/m, '')
+
+    const ext = path.extname(inputPath)
+    let loader: 'tsx' | 'jsx' | 'ts' | 'js'
+    if (ext === '.tsx')
+      loader = 'tsx'
+    else if (ext === '.ts')
+      loader = 'ts'
+    else if (ext === '.jsx')
+      loader = 'jsx'
+    else
+      loader = 'js'
+
+    const virtualModuleId = `\0ssr-virtual:${inputPath}`
+    const projectRoot = this.projectRoot
+
+    const VIRTUAL_REACT = '\0ssr-react'
+    const VIRTUAL_JSX_RUNTIME = '\0ssr-jsx-runtime'
+
+    const result = await build({
+      input: virtualModuleId,
+      platform: 'node',
+      write: false,
+      external: [
+        NODE_PROTOCOL_REGEX,
+        'react-dom',
+        /^rari/,
+      ],
+      output: {
+        format: 'esm',
+        minify: false,
+      },
+      moduleTypes: {
+        [`.${loader}`]: loader,
+      },
+      resolve: {
+        mainFields: ['module', 'main'],
+        conditionNames: ['import', 'module', 'default'],
+        extensions: ['.ts', '.tsx', '.js', '.jsx'],
+      },
+      transform: {
+        jsx: 'react-jsx',
+        define: {
+          'global': 'globalThis',
+          'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'production'),
+        },
+      },
+      plugins: [
+        {
+          name: 'ssr-client-virtual',
+          resolveId(id) {
+            if (id === virtualModuleId)
+              return id
+            if (id === 'react')
+              return VIRTUAL_REACT
+            if (id === 'react/jsx-runtime' || id === 'react/jsx-dev-runtime')
+              return VIRTUAL_JSX_RUNTIME
+
+            return null
+          },
+          load(id) {
+            if (id === virtualModuleId)
+              return { code: strippedCode, moduleType: loader }
+            if (id === VIRTUAL_REACT)
+              return { code: 'const React = globalThis.React; export default React; export const { createElement, Fragment, Suspense, createContext, useContext, useState, useEffect, useRef, useMemo, useCallback, useReducer, useId, useTransition, useActionState, useDeferredValue, useImperativeHandle, useLayoutEffect, useDebugValue, useSyncExternalStore, useOptimistic, use, forwardRef, memo, lazy, startTransition, Children, cloneElement, isValidElement, createRef, act, cache, Component, PureComponent } = React;', moduleType: 'js' }
+            if (id === VIRTUAL_JSX_RUNTIME)
+              return { code: 'const React = globalThis.React; export const jsx = React.createElement; export const jsxs = React.createElement; export const jsxDEV = React.createElement; export const Fragment = React.Fragment;', moduleType: 'js' }
+
+            return null
+          },
+        },
+        {
+          name: 'ssr-client-resolve',
+          resolveId(id, importer) {
+            if (id.startsWith('.') || id.startsWith('/') || id.startsWith('@/')) {
+              let resolved = id
+              if (id.startsWith('@/'))
+                resolved = path.join(projectRoot, 'src', id.slice(2))
+              else if (importer === virtualModuleId)
+                resolved = path.resolve(path.dirname(inputPath), id)
+              else if (importer)
+                resolved = path.resolve(path.dirname(importer.replace('\0ssr-virtual:', '')), id)
+
+              const found = resolveWithExtensions(resolved, ['.ts', '.tsx', '.js', '.jsx'])
+                || resolveIndexFile(resolved, ['.ts', '.tsx', '.js', '.jsx'])
+              return found || null
+            }
+
+            return null
+          },
+        },
+      ],
+    })
+
+    const output = result.output[0]
+    const code = typeof output === 'object' && 'code' in output ? output.code : ''
+
+    await fs.promises.writeFile(outputPath, code, 'utf-8')
+    return { code }
+  }
+
   private async buildSingleComponent(
     inputPath: string,
     outputPath: string,
@@ -1783,6 +1993,7 @@ export function createServerBuildPlugin(
     async closeBundle() {
       if (builder) {
         await builder.buildServerComponents()
+        await builder.buildSSRClientComponents()
 
         try {
           const { generateRobotsFile } = await import('../router/robots-generator')

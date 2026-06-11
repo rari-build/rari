@@ -20,6 +20,10 @@ pub enum RscElement {
     Promise {
         promise_id: String,
     },
+    ModuleImport {
+        module_path: String,
+        export_name: String,
+    },
     Reference(String),
     Text(String),
     Fragment {

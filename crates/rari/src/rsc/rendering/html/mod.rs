@@ -239,6 +239,35 @@ impl RscHtmlRenderer {
         Self { runtime, template_cache: parking_lot::Mutex::new(None) }
     }
 
+    async fn ssr_render_client_component(
+        &self,
+        module_path: &str,
+        export_name: &str,
+        props_json: &str,
+    ) -> Result<String, RariError> {
+        let script = format!(
+            r#"(async function() {{
+                const ssrRender = globalThis['~rari']?.ssrRenderComponent;
+                if (!ssrRender) return '';
+                try {{
+                    return await ssrRender({module_path}, {export_name}, {props_json});
+                }} catch (e) {{
+                    return '';
+                }}
+            }})()"#,
+            module_path = serde_json::to_string(module_path).unwrap_or_default(),
+            export_name = serde_json::to_string(export_name).unwrap_or_default(),
+            props_json = props_json,
+        );
+
+        let result = self.runtime.execute_script("ssr_render_client".to_string(), script).await?;
+
+        match result.as_str() {
+            Some(html) if !html.is_empty() => Ok(html.to_string()),
+            _ => Ok(String::new()),
+        }
+    }
+
     fn extract_script_tags(template: &str) -> String {
         use regex::Regex;
 
@@ -516,7 +545,20 @@ impl RscHtmlRenderer {
         let id = u32::from_str_radix(id_str, 16)
             .map_err(|e| RariError::internal(format!("Invalid row ID '{}': {}", id_str, e)))?;
 
-        if data_str.starts_with('I') {
+        if let Some(json_str) = data_str.strip_prefix('I') {
+            if let Ok(import_data) = serde_json::from_str::<serde_json::Value>(json_str) {
+                let module_path =
+                    import_data.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let export_name = import_data
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("default")
+                    .to_string();
+                return Ok(RscRow {
+                    id,
+                    data: RscElement::ModuleImport { module_path, export_name },
+                });
+            }
             return Ok(RscRow { id, data: RscElement::Text(data_str.to_string()) });
         }
 
@@ -857,6 +899,8 @@ impl RscHtmlRenderer {
                 }
 
                 RscElement::Promise { promise_id: _ } => Ok(String::new()),
+
+                RscElement::ModuleImport { .. } => Ok(String::new()),
             }
         })
     }
@@ -879,6 +923,34 @@ impl RscHtmlRenderer {
                 || tag.contains('#')
                 || tag.contains('/');
             if is_client_component {
+                let children_are_rsc = props
+                    .as_object()
+                    .and_then(|o| o.get("children"))
+                    .and_then(|c| c.as_array())
+                    .map(|arr| {
+                        arr.first()
+                            .map(|first| first.as_str() == Some("$") || first.is_array())
+                            .unwrap_or(false)
+                    })
+                    .unwrap_or(false);
+
+                if !children_are_rsc
+                    && let Some(stripped) =
+                        tag.strip_prefix("$L").or_else(|| tag.strip_prefix("$@"))
+                    && let Ok(module_row_id) = u32::from_str_radix(stripped, 16)
+                    && let Some(RscElement::ModuleImport { module_path, export_name }) =
+                        row_map.get(&module_row_id).copied()
+                {
+                    let props_json = serde_json::to_string(props).unwrap_or_default();
+                    if let Ok(html) = self
+                        .ssr_render_client_component(module_path, export_name, &props_json)
+                        .await
+                        && !html.is_empty()
+                    {
+                        return Ok(html);
+                    }
+                }
+
                 if let Some(props_obj) = props.as_object()
                     && let Some(children) = props_obj.get("children")
                 {
@@ -1086,6 +1158,8 @@ impl RscHtmlRenderer {
 
 pub struct RscToHtmlConverter {
     row_cache: FxHashMap<u32, String>,
+    module_imports: FxHashMap<u32, (String, String)>,
+    renderer: Arc<RscHtmlRenderer>,
     shell_sent: bool,
     asset_links: Option<String>,
     boundary_id_generator: BoundaryIdGenerator,
@@ -1099,9 +1173,11 @@ pub struct RscToHtmlConverter {
 }
 
 impl RscToHtmlConverter {
-    pub fn new(_renderer: Arc<RscHtmlRenderer>) -> Self {
+    pub fn new(renderer: Arc<RscHtmlRenderer>) -> Self {
         Self {
             row_cache: FxHashMap::default(),
+            module_imports: FxHashMap::default(),
+            renderer,
             shell_sent: false,
             asset_links: None,
             boundary_id_generator: BoundaryIdGenerator::new(),
@@ -1115,9 +1191,11 @@ impl RscToHtmlConverter {
         }
     }
 
-    pub fn with_assets(asset_links: String, _renderer: Arc<RscHtmlRenderer>) -> Self {
+    pub fn with_assets(asset_links: String, renderer: Arc<RscHtmlRenderer>) -> Self {
         Self {
             row_cache: FxHashMap::default(),
+            module_imports: FxHashMap::default(),
+            renderer,
             shell_sent: false,
             asset_links: Some(asset_links),
             boundary_id_generator: BoundaryIdGenerator::new(),
@@ -1134,10 +1212,12 @@ impl RscToHtmlConverter {
     pub fn with_custom_shell(
         custom_shell: String,
         body_scripts: Option<String>,
-        _renderer: Arc<RscHtmlRenderer>,
+        renderer: Arc<RscHtmlRenderer>,
     ) -> Self {
         Self {
             row_cache: FxHashMap::default(),
+            module_imports: FxHashMap::default(),
+            renderer,
             shell_sent: false,
             asset_links: None,
             boundary_id_generator: BoundaryIdGenerator::new(),
@@ -1345,35 +1425,6 @@ impl RscToHtmlConverter {
 </script>"#
     }
 
-    fn contains_client_reference(value: &serde_json::Value) -> bool {
-        match value {
-            serde_json::Value::Array(arr) => {
-                if arr.len() >= 4
-                    && arr[0] == "$"
-                    && let Some(id) = arr[1].as_str()
-                {
-                    if id.starts_with("$L")
-                        || id.starts_with("$@")
-                        || id.contains('#')
-                        || id.contains('/')
-                    {
-                        return true;
-                    }
-
-                    if id.starts_with('$')
-                        && id.len() > 1
-                        && id[1..].chars().all(|c| c.is_ascii_hexdigit())
-                    {
-                        return true;
-                    }
-                }
-                arr.iter().any(Self::contains_client_reference)
-            }
-            serde_json::Value::Object(obj) => obj.values().any(Self::contains_client_reference),
-            _ => false,
-        }
-    }
-
     fn generate_html_shell(&self) -> Vec<u8> {
         if let Some(custom_shell) = &self.custom_shell {
             let bridge_script = Self::streaming_bridge_script();
@@ -1512,7 +1563,21 @@ if (typeof window !== 'undefined') {{
             return Ok(Vec::new());
         }
 
-        if json_str.starts_with('I') || json_str.starts_with('S') || json_str.starts_with('E') {
+        if let Some(i_data) = json_str.strip_prefix('I') {
+            if let Ok(import_data) = serde_json::from_str::<serde_json::Value>(i_data) {
+                let module_path =
+                    import_data.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let export_name = import_data
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("default")
+                    .to_string();
+                self.module_imports.insert(row_id, (module_path, export_name));
+            }
+            return Ok(Vec::new());
+        }
+
+        if json_str.starts_with('S') || json_str.starts_with('E') {
             return Ok(Vec::new());
         }
 
@@ -1648,9 +1713,29 @@ if (typeof window !== 'undefined') {{
 
     async fn render_client_component_placeholder(
         &self,
-        _component_ref: &str,
+        component_ref: &str,
         props: Option<&serde_json::Map<String, serde_json::Value>>,
     ) -> Result<String, RariError> {
+        if let Some(stripped) =
+            component_ref.strip_prefix("$L").or_else(|| component_ref.strip_prefix("$@"))
+            && let Ok(module_row_id) = u32::from_str_radix(stripped, 16)
+            && let Some((module_path, export_name)) = self.module_imports.get(&module_row_id)
+        {
+            let props_json = if let Some(p) = props {
+                serde_json::to_string(&serde_json::Value::Object(p.clone())).unwrap_or_default()
+            } else {
+                "{}".to_string()
+            };
+            if let Ok(html) = self
+                .renderer
+                .ssr_render_client_component(module_path, export_name, &props_json)
+                .await
+                && !html.is_empty()
+            {
+                return Ok(html);
+            }
+        }
+
         if let Some(props) = props
             && let Some(children) = props.get("children")
         {
@@ -1874,16 +1959,10 @@ if (typeof window !== 'undefined') {{
                 escape_html(text)
             } else {
                 match serde_json::from_str::<serde_json::Value>(content_json) {
-                    Ok(content) => {
-                        if Self::contains_client_reference(&content) {
-                            String::new()
-                        } else {
-                            match self.rsc_element_to_html(&content).await {
-                                Ok(html) if !html.is_empty() => html,
-                                _ => String::new(),
-                            }
-                        }
-                    }
+                    Ok(content) => match self.rsc_element_to_html(&content).await {
+                        Ok(html) if !html.is_empty() => html,
+                        _ => String::new(),
+                    },
                     Err(_) => String::new(),
                 }
             };
