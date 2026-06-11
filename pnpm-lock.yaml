@@ -27,9 +27,9 @@ catalogs:
       specifier: ^1.5.1
       version: 1.5.1
   default:
-    lru-cache:
-      specifier: ^11.5.1
-      version: 11.5.1
+    quick-lru:
+      specifier: ^7.3.0
+      version: 7.3.0
     rari:
       specifier: ^0.14.12
       version: 0.14.12
@@ -230,12 +230,15 @@ importers:
 
   packages/rari:
     dependencies:
+      '@rari/use-cache-transform':
+        specifier: workspace:*
+        version: link:../use-cache-transform
       lightningcss:
         specifier: catalog:build
         version: 1.32.0
-      lru-cache:
+      quick-lru:
         specifier: 'catalog:'
-        version: 11.5.1
+        version: 7.3.0
       react:
         specifier: catalog:react
         version: 19.2.7
@@ -286,6 +289,8 @@ importers:
       rari-win32-x64:
         specifier: 0.14.12
         version: 0.14.12
+
+  packages/use-cache-transform: {}
 
   test/fixtures/app:
     dependencies:
@@ -3181,10 +3186,6 @@ packages:
   longest-streak@3.1.0:
     resolution: {integrity: sha512-9Ri+o0JYgehTaVBBDoMqIl8GXtbWg711O3srftcHhZ0dqnETqLaoIK0x17fUw9rFSlK/0NlsKe0Ahhyl5pXE2g==}
 
-  lru-cache@11.5.1:
-    resolution: {integrity: sha512-RPimw/7aMdv2oqRrxKwvZXcPfwBrn/JZ2xYcY9Hus/6LaS3VOAKVWKWgNLCFSiOm1ESXinjsDlidVU7JlnCN2A==}
-    engines: {node: 20 || >=22}
-
   magic-string@0.30.21:
     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
 
@@ -3571,6 +3572,10 @@ packages:
 
   query-selector-shadow-dom@1.0.1:
     resolution: {integrity: sha512-lT5yCqEBgfoMYpf3F2xQRK7zEr1rhIIZuceDK6+xRkJQ4NMbHTwXqk4NkwDwQMNqXgG9r9fyHnzwNVs6zV5KRw==}
+
+  quick-lru@7.3.0:
+    resolution: {integrity: sha512-k9lSsjl36EJdK7I06v7APZCbyGT2vMTsYSRX1Q2nbYmnkBqgUhRkAuzH08Ciotteu/PLJmIF2+tti7o3C/ts2g==}
+    engines: {node: '>=18'}
 
   rari-darwin-arm64@0.14.12:
     resolution: {integrity: sha512-wmmhoqtLJ6EvEOiW/V5V7uFgILmTqCnkXXfUcJxDYxU8IuvA7hSoVBEqSt8ZVurKYGwi6SOugUHtmPZDNgw3fQ==}
@@ -6758,8 +6763,6 @@ snapshots:
 
   longest-streak@3.1.0: {}
 
-  lru-cache@11.5.1: {}
-
   magic-string@0.30.21:
     dependencies:
       '@jridgewell/sourcemap-codec': 1.5.5
@@ -7579,6 +7582,8 @@ snapshots:
   quansync@0.2.11: {}
 
   query-selector-shadow-dom@1.0.1: {}
+
+  quick-lru@7.3.0: {}
 
   rari-darwin-arm64@0.14.12:
     optional: true

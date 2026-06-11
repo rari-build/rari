@@ -3,6 +3,9 @@ import { deserialize } from 'node:v8'
 import { $$cache__, encodeBoundArgs } from '@rari/runtime/cache-wrapper'
 import { describe, expect, it } from 'vite-plus/test'
 
+const CACHE_LIMIT = 1000
+const FILL_COUNT = 2 * CACHE_LIMIT + 500
+
 async function callCache<Args extends unknown[]>(
   kind: string,
   id: string,
@@ -115,7 +118,7 @@ describe('$$cache__', () => {
     expect(r2).toBe(10)
   })
 
-  it('evicts least recently used resolved entries after max size', async () => {
+  it('evicts least recently used resolved entries after exceeding the relaxed LRU ceiling', async () => {
     let callCount = 0
     const fn = (a: number) => {
       callCount++
@@ -123,12 +126,12 @@ describe('$$cache__', () => {
     }
     const id = 'evicts-resolved-entry'
 
-    for (let i = 0; i <= 1000; i++) {
+    for (let i = 0; i < FILL_COUNT; i++) {
       await callCache('default', id, 1, fn, [i])
     }
 
     await callCache('default', id, 1, fn, [0])
-    expect(callCount).toBe(1002)
+    expect(callCount).toBe(FILL_COUNT + 1)
   })
 })
 

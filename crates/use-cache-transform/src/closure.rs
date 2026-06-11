@@ -3,7 +3,6 @@ use rustc_hash::FxHashSet as HashSet;
 use deno_ast::swc::ast::*;
 use deno_ast::swc::ecma_visit::{Visit, VisitWith};
 
-/// Collect identifiers declared at the module level (imports, functions, vars)
 pub fn collect_module_level_idents(item: &ModuleItem) -> HashSet<Id> {
     let mut idents = HashSet::default();
 
@@ -28,6 +27,27 @@ pub fn collect_module_level_idents(item: &ModuleItem) -> HashSet<Id> {
         })) => {
             for decl in &var_decl.decls {
                 collect_var_decl_idents(&decl.name, &mut idents);
+            }
+        }
+        ModuleItem::Stmt(Stmt::Decl(Decl::Class(class_decl))) => {
+            idents.insert(class_decl.ident.to_id());
+        }
+        ModuleItem::ModuleDecl(ModuleDecl::ExportDecl(ExportDecl {
+            decl: Decl::Class(class_decl),
+            ..
+        })) => {
+            idents.insert(class_decl.ident.to_id());
+        }
+        ModuleItem::ModuleDecl(ModuleDecl::ExportDefaultDecl(ExportDefaultDecl {
+            decl, ..
+        })) => {
+            let ident = match decl {
+                DefaultDecl::Fn(fn_expr) => fn_expr.ident.as_ref(),
+                DefaultDecl::Class(class_expr) => class_expr.ident.as_ref(),
+                DefaultDecl::TsInterfaceDecl(_) => None,
+            };
+            if let Some(ident) = ident {
+                idents.insert(ident.to_id());
             }
         }
         ModuleItem::ModuleDecl(ModuleDecl::Import(import_decl)) => {
@@ -80,7 +100,6 @@ fn collect_var_decl_idents(pattern: &Pat, idents: &mut HashSet<Id>) {
     }
 }
 
-/// Walk a block/pattern to collect locally-declared identifiers into a scope set.
 fn collect_bindings_from_pat(pat: &Pat, scope: &mut HashSet<Id>) {
     match pat {
         Pat::Ident(bi) => {
@@ -108,13 +127,6 @@ fn collect_bindings_from_pat(pat: &Pat, scope: &mut HashSet<Id>) {
     }
 }
 
-/// Collect all identifier references in a function body that reference outer scope.
-/// `module_idents` = all identifiers declared at module level
-/// `fn_params` = function parameter identifiers
-///
-/// Uses scope tracking: walks the body tracking VarDecl, Function params, and block-scoped
-/// declarations, pushing/popping scopes so that identifiers shadowed by local bindings are
-/// not treated as module captures.
 pub fn collect_closure_idents(
     body: &BlockStmt,
     module_idents: &HashSet<Id>,
@@ -391,6 +403,69 @@ mod tests {
 
         let idents = collect_module_level_idents(&item);
         assert_eq!(idents.len(), 1);
+    }
+
+    #[test]
+    fn test_collect_module_idents_export_default_fn() {
+        let item = ModuleItem::ModuleDecl(ModuleDecl::ExportDefaultDecl(ExportDefaultDecl {
+            span: Default::default(),
+            decl: DefaultDecl::Fn(FnExpr {
+                ident: Some(ident("myFn")),
+                function: Box::new(make_function(vec![])),
+            }),
+        }));
+
+        let idents = collect_module_level_idents(&item);
+        assert_eq!(idents.len(), 1);
+        let id = idents.into_iter().next().expect("expected myFn identifier");
+        assert_eq!(id.0.to_string(), "myFn");
+    }
+
+    #[test]
+    fn test_collect_module_idents_class_decl() {
+        let item = ModuleItem::Stmt(Stmt::Decl(Decl::Class(ClassDecl {
+            ident: ident("Foo"),
+            declare: false,
+            class: Box::new(Class::default()),
+        })));
+
+        let idents = collect_module_level_idents(&item);
+        assert_eq!(idents.len(), 1);
+        let id = idents.into_iter().next().expect("expected Foo identifier");
+        assert_eq!(id.0.to_string(), "Foo");
+    }
+
+    #[test]
+    fn test_collect_module_idents_export_decl_class() {
+        let item = ModuleItem::ModuleDecl(ModuleDecl::ExportDecl(ExportDecl {
+            span: Default::default(),
+            decl: Decl::Class(ClassDecl {
+                ident: ident("Bar"),
+                declare: false,
+                class: Box::new(Class::default()),
+            }),
+        }));
+
+        let idents = collect_module_level_idents(&item);
+        assert_eq!(idents.len(), 1);
+        let id = idents.into_iter().next().expect("expected Bar identifier");
+        assert_eq!(id.0.to_string(), "Bar");
+    }
+
+    #[test]
+    fn test_collect_module_idents_export_default_class() {
+        let item = ModuleItem::ModuleDecl(ModuleDecl::ExportDefaultDecl(ExportDefaultDecl {
+            span: Default::default(),
+            decl: DefaultDecl::Class(ClassExpr {
+                ident: Some(ident("Baz")),
+                class: Box::new(Class::default()),
+            }),
+        }));
+
+        let idents = collect_module_level_idents(&item);
+        assert_eq!(idents.len(), 1);
+        let id = idents.into_iter().next().expect("expected Baz identifier");
+        assert_eq!(id.0.to_string(), "Baz");
     }
 
     #[test]

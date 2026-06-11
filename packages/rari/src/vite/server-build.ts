@@ -748,13 +748,6 @@ const ${importName} = (props) => {
 
           return null
         },
-        transform(code: string, id: string) {
-          if (!self.options.experimental?.useCache) {
-            return null
-          }
-
-          return transformUseCacheModule(code, id)
-        },
       },
       {
         name: 'resolve-client-server-boundaries',
@@ -1044,27 +1037,42 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
           if (source.startsWith('node:') || self.isNodeBuiltin(source))
             return { id: source, external: true }
 
-          if (source === 'rari' || source === 'rari/client')
-            return null
+          const externalPackages = [
+            'react',
+            'react-dom',
+            'react/jsx-runtime',
+            'react/jsx-dev-runtime',
+            'rari/image',
+          ]
 
-          const externalPackages: Record<string, string | null> = {
-            'react': null,
-            'react-dom': null,
-            'react/jsx-runtime': null,
-            'react/jsx-dev-runtime': null,
-            'rari/image': null,
+          if (externalPackages.includes(source))
+            return { id: source, external: true }
+
+          const externalPackageMappings: Record<string, string | null> = {
             'rari/runtime/cache-wrapper': 'node_modules/rari/dist/runtime/cache-wrapper.mjs',
             'react-server-dom-rari/server': 'node_modules/rari/dist/runtime/react-server-dom-shim.mjs',
           }
 
-          if (source in externalPackages) {
+          if (source in externalPackageMappings) {
             return { id: source, external: true }
           }
+
+          if (source === 'rari' || source === 'rari/client')
+            return null
 
           if (!source.startsWith('.') && !source.startsWith('/'))
             return { id: source, external: true }
 
           return null
+        },
+      },
+      {
+        name: 'use-cache-transform',
+        transform(code: string, id: string) {
+          if (!self.options.experimental?.useCache)
+            return null
+
+          return transformUseCacheModule(code, id)
         },
       },
     ]

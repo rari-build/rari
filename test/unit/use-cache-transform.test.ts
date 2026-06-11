@@ -231,6 +231,19 @@ async function fn(a, b, c) {
       expect(result.code).not.toContain('Array.prototype.slice.call(arguments, 0, 3)')
     })
 
+    it('reports inner-function arity (params + bound args) when capturing module-level variables', () => {
+      const src = `
+const prefix = 'test_';
+async function getData(id) {
+  "use cache";
+  return await db.query(prefix + id);
+}
+`
+      const result = useCacheAddon.transformUseCache(src, defaultOpts)
+
+      expect(result.code).toContain(', 2, $$RSC_SERVER_CACHE_0_getData_INNER,')
+    })
+
     it('passes all actual call arguments through the cache wrapper', () => {
       const src = `
 async function fn(a, ...rest) {

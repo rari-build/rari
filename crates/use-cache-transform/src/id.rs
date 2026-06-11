@@ -1,8 +1,5 @@
 use sha1::{Digest, Sha1};
 
-/// Generate a server reference ID matching Next.js format:
-/// SHA1(hash_salt + filename + ":" + export_name)
-/// Then append cache type bit, encode as hex
 pub fn generate_reference_id(
     hash_salt: &str,
     filename: &str,
@@ -17,7 +14,6 @@ pub fn generate_reference_id(
 
     let hash = hasher.finalize();
 
-    // Append type bit (1 for cache, 0 for action)
     let mut bytes = hash.to_vec();
     let type_byte = if is_cache { 0x01u8 } else { 0x00u8 };
     bytes.push(type_byte);
@@ -25,12 +21,10 @@ pub fn generate_reference_id(
     hex::encode(bytes)
 }
 
-/// Generate a unique export name for hoisted cache variables
 pub fn generate_cache_export_name(index: usize, export_name: &str) -> String {
     format!("$$RSC_SERVER_CACHE_{}_{}", index, sanitize_export_name(export_name))
 }
 
-/// Generate a unique name for the hoisted inner function
 pub fn generate_cache_inner_name(index: usize, export_name: &str) -> String {
     format!("$$RSC_SERVER_CACHE_{}_{}_INNER", index, sanitize_export_name(export_name))
 }

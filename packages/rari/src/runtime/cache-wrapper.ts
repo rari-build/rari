@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { serialize } from 'node:v8'
-import { LRUCache } from 'lru-cache'
+import QuickLRU from 'quick-lru'
 import { deterministicStringify } from './deterministic-stringify'
 
 export interface CacheEntry<V> {
@@ -14,9 +14,9 @@ type CacheableFunction<Args extends unknown[]> = (...args: Args) => unknown | Pr
 const CACHE_ENTRY_TTL_MS = 5 * 60 * 1000
 const MAX_RESOLVED_CACHE_ENTRIES = 1000
 
-const resolvedCache = new LRUCache<string, CacheEntry<unknown>>({
-  max: MAX_RESOLVED_CACHE_ENTRIES,
-  ttl: CACHE_ENTRY_TTL_MS,
+const resolvedCache = new QuickLRU<string, CacheEntry<unknown>>({
+  maxSize: MAX_RESOLVED_CACHE_ENTRIES,
+  maxAge: CACHE_ENTRY_TTL_MS,
 })
 const pendingCache = new Map<string, Promise<unknown>>()
 

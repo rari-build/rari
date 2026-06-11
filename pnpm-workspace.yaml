@@ -12,6 +12,11 @@ trustPolicy: no-downgrade
 packages:
   - examples/*
   - packages/*
+  - '!packages/rari-darwin-x64'
+  - '!packages/rari-linux-arm64'
+  - '!packages/rari-linux-x64'
+  - '!packages/rari-win32-arm64'
+  - '!packages/rari-win32-x64'
   - test/fixtures/*
   - web
 catalogs:
@@ -25,8 +30,8 @@ catalogs:
   cli:
     '@clack/prompts': ^1.5.1
   default:
+    quick-lru: ^7.3.0
     rari: ^0.14.12
-    lru-cache: ^11.5.1
   eslint:
     '@antfu/eslint-config': ^9.0.0
     '@eslint-react/eslint-plugin': ^5.9.0

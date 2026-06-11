@@ -250,7 +250,8 @@ pub fn create_cache_declarations(
     extra_items: &mut Vec<ModuleItem>,
     input: CacheDeclarationInput<'_>,
 ) {
-    let param_count = input.fn_decl.function.params.len();
+    let param_count =
+        input.fn_decl.function.params.len() + if input.closure_vars.is_empty() { 0 } else { 1 };
 
     extra_items.push(create_inner_function(input.fn_decl, input.closure_vars, input.inner_name));
     extra_items.push(create_name_define_statement(input.inner_name, input.export_name));

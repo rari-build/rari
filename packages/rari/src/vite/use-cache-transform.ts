@@ -1,56 +1,23 @@
-import fs from 'node:fs'
-import { createRequire } from 'node:module'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
-
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
+import type { NativeAddon } from '@rari/use-cache-transform'
+import nativeAddon, { transformUseCache } from '@rari/use-cache-transform'
 
 const USE_CACHE_FUNCTION_REGEX = /['"]use\s+cache(?::\s*[\w-]+)?['"]/
+const DIRECTIVE_PROLOGUE_REGEX = /^['"][^'"]+['"];?\s*$/
 
 function hasUseCacheFunction(code: string): boolean {
   return USE_CACHE_FUNCTION_REGEX.test(code)
 }
 
-let useCacheAddon: any = null
+let addon: NativeAddon | null = null
+let addonLoadAttempted = false
 
-function getUseCacheTransformAddon(): any {
-  if (useCacheAddon)
-    return useCacheAddon
-
-  const packageRoot = path.resolve(__dirname, '..')
-  // eslint-disable-next-line node/prefer-global/process
-  const repoRoot = process.cwd()
-
-  const possiblePaths = [
-    path.join(packageRoot, 'target/release/use_cache_transform.node'),
-    path.join(repoRoot, 'target/release/use_cache_transform.node'),
-    path.join(packageRoot, '../../target/release/use_cache_transform.node'),
-    path.join(packageRoot, 'target/debug/use_cache_transform.node'),
-    path.join(repoRoot, 'target/debug/use_cache_transform.node'),
-    path.join(packageRoot, '../../target/debug/use_cache_transform.node'),
-    path.join(repoRoot, 'packages/rari-linux-x64/bin/use_cache_transform.node'),
-    path.join(repoRoot, 'packages/rari-win32-x64/bin/use_cache_transform.node'),
-  ]
-
-  for (const addonPath of possiblePaths) {
-    if (fs.existsSync(addonPath)) {
-      try {
-        const nodeRequire = createRequire(import.meta.url)
-        useCacheAddon = nodeRequire(addonPath)
-
-        console.error(`[use-cache-transform] loaded addon from ${addonPath}`)
-
-        return useCacheAddon
-      }
-      catch (err) {
-        console.error(`[use-cache-transform] failed to load addon from ${addonPath}:`, err)
-      }
-    }
+function getAddon(): NativeAddon | null {
+  if (addonLoadAttempted) {
+    return addon
   }
-
-  console.error('[use-cache-transform] NO addon found in any of:', possiblePaths)
-  return null
+  addonLoadAttempted = true
+  addon = nativeAddon
+  return addon
 }
 
 function extractPrologueLines(code: string): string[] {
@@ -62,7 +29,7 @@ function extractPrologueLines(code: string): string[] {
       prologue.push(line)
       continue
     }
-    if (/^['"]/.test(trimmed) && /['"];\s*$/.test(trimmed)) {
+    if (DIRECTIVE_PROLOGUE_REGEX.test(trimmed)) {
       prologue.push(line)
     }
     else {
@@ -80,14 +47,14 @@ export function transformUseCacheModule(code: string, id: string): string | null
 
   console.error(`[use-cache-transform] found 'use cache' directive in ${id}`)
 
-  const addon = getUseCacheTransformAddon()
-  if (!addon) {
+  const native = getAddon()
+  if (!native) {
     console.error(`[use-cache-transform] NO ADDON — skipping transform for ${id}`)
     return null
   }
 
   try {
-    const result = addon.transformUseCache(code, {
+    const result = transformUseCache(code, {
       filename: id,
       hashSalt: 'rari-use-cache-v1',
       cacheKinds: ['default'],

@@ -19,7 +19,7 @@ env:
 permissions: {}
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.number || github.sha }}
+  group: ${{ github.workflow }}-${{ github.event.number || github.sha }}-v2
   cancel-in-progress: ${{ github.event_name != 'push' }}
 
 jobs:
@@ -222,22 +222,12 @@ jobs:
         if: runner.os != 'Windows'
         run: cargo build --bin rari
 
-      - name: Install @napi-rs/cli
-        run: npm install -g @napi-rs/cli
-
-      - name: Build use_cache_transform.node
-        run: |
-          napi build -p use-cache-transform --output-dir target/debug
-          mv target/debug/index.node target/debug/use_cache_transform.node
-      
       - name: Upload binary (Linux)
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: rari-binary-linux
-          path: |
-            target/debug/rari
-            target/debug/use_cache_transform.node
+          path: target/debug/rari
           if-no-files-found: error
           retention-days: 1
 
@@ -246,9 +236,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: rari-binary-windows
-          path: |
-            target/debug/rari.exe
-            target/debug/use_cache_transform.node
+          path: target/debug/rari.exe
           if-no-files-found: error
           retention-days: 1
 
@@ -257,6 +245,71 @@ jobs:
         run: gh run cancel ${{ github.run_id }} --repo ${{ github.repository }}
         env:
           GH_TOKEN: ${{ github.token }}
+
+  build-use-cache-transform-addon:
+    name: Build use_cache_transform.node (${{ matrix.os }})
+    needs: [changes]
+    if: (needs.changes.outputs.rust == 'true' || needs.changes.outputs.src == 'true') && (github.event_name != 'push' || github.ref_name != 'main')
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    permissions:
+      actions: write
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        exclude:
+          - os: ${{ github.event_name == 'merge_group' && 'windows-latest' || '' }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: nightly
+
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config
+
+      - name: Install @napi-rs/cli
+        run: npm install -g @napi-rs/cli
+
+      - name: Build use_cache_transform.node
+        shell: bash
+        run: |
+          case "${{ matrix.os }}" in
+            ubuntu-latest)
+              PLATFORM="linux-x64"
+              ;;
+            windows-latest)
+              PLATFORM="win32-x64"
+              ;;
+          esac
+          cargo run --release --bin prepare-binaries -- \
+            --addon \
+            --platform "$PLATFORM"
+
+      - name: Upload addon (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: use-cache-transform-linux-x64
+          path: .build/use-cache-transform/linux-x64/use_cache_transform.node
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload addon (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: use-cache-transform-win32-x64
+          path: .build/use-cache-transform/win32-x64/use_cache_transform.node
+          if-no-files-found: error
+          retention-days: 1
 
   build:
     needs: changes
@@ -277,7 +330,7 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --no-frozen-lockfile
 
       - name: Build packages
         run: |
@@ -335,7 +388,7 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --no-frozen-lockfile
 
       - name: Build packages
         run: |
@@ -366,6 +419,7 @@ jobs:
       - changes
       - build
       - build-rari-binary
+      - build-use-cache-transform-addon
     strategy:
       fail-fast: ${{ github.event_name == 'merge_group' }}
       matrix:
@@ -404,6 +458,20 @@ jobs:
           name: rari-binary-windows
           path: packages/rari-win32-x64/bin
 
+      - name: Download use_cache_transform addon (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: use-cache-transform-linux-x64
+          path: packages/use-cache-transform
+
+      - name: Download use_cache_transform addon (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: use-cache-transform-win32-x64
+          path: packages/use-cache-transform
+
       - name: Make binary executable (Linux)
         if: runner.os == 'Linux'
         run: chmod +x packages/rari-linux-x64/bin/rari
@@ -418,7 +486,7 @@ jobs:
             pnpm
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --no-frozen-lockfile
 
       - name: Install Playwright
         run: pnpm playwright install chromium --with-deps
@@ -452,6 +520,7 @@ jobs:
       - rust-check
       - build
       - build-rari-binary
+      - build-use-cache-transform-addon
       - lint-and-test
       - test-e2e
     steps:
@@ -464,6 +533,7 @@ jobs:
             "${{ needs.rust-check.result }}"
             "${{ needs.build.result }}"
             "${{ needs.build-rari-binary.result }}"
+            "${{ needs.build-use-cache-transform-addon.result }}"
             "${{ needs.lint-and-test.result }}"
             "${{ needs.test-e2e.result }}"
           )

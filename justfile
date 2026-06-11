@@ -81,6 +81,9 @@ build-create-rari-app: _ensure-node-deps
 build-web: _ensure-node-deps
     pnpm --filter @rari/web build
 
+build-addon-dev:
+    cargo run --release --bin prepare-binaries -- --addon --dev
+
 # --- Test commands ---
 
 # Run all tests (Rust + Node.js)

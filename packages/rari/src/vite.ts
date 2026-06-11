@@ -1,10 +1,5 @@
-import type { RariOptions } from './vite/index'
 import { rari as _rari } from './vite/index'
-
 import './fetch-cache'
-
-// conflict: Plugin signatures between vite and vite-plus, so we need to use `any` here
-type Plugin = any
 
 export type {
   ApiRouteHandlers,
@@ -91,6 +86,6 @@ export type {
 
 export { defineRariConfig, defineRariOptions } from './vite/index'
 
-export function rari(options?: RariOptions): Plugin[] {
+export function rari(options?: Parameters<typeof _rari>[0]): any[] {
   return _rari(options)
 }

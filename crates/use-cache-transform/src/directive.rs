@@ -65,9 +65,6 @@ pub fn extract_cache_kind(body: &BlockStmt) -> Option<String> {
     None
 }
 
-// Quick pre-check: scan for "use cache" or "use cache:<kind>" inside any quote type.
-// This is a fast O(n) scan that avoids an AST parse when the directive is absent.
-// Only matches exact quoted string expression directives, not identifiers or comments.
 pub fn detect_use_cache(source: &str) -> bool {
     let bytes = source.as_bytes();
     let mut i = 0;
@@ -83,11 +80,9 @@ pub fn detect_use_cache(source: &str) -> bool {
 
         if let Some(after_directive) = trimmed.strip_prefix("use cache") {
             let after_directive = after_directive.trim_start();
-            // Check that the string literal closes right after "use cache"
             if after_directive.starts_with(q) {
                 return true;
             }
-            // Check for "use cache:<kind>"
             if let Some(kind_rest) = after_directive.strip_prefix(':') {
                 let kind_rest = kind_rest.trim_start();
                 let kind_end = kind_rest
