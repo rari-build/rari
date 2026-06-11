@@ -1,6 +1,6 @@
 import type { Feed, FeedEntry } from '../types/metadata-route'
 import { Buffer } from 'node:buffer'
-import { existsSync, promises as fs } from 'node:fs'
+import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import {
   XML_AMPERSAND_REGEX,
@@ -9,6 +9,7 @@ import {
   XML_LT_REGEX,
   XML_QUOTE_REGEX,
 } from '../shared/regex-constants'
+import { resolveWithExtensionsAndIndex } from '../shared/utils/resolve'
 import { resolveAlias } from '../vite/alias-resolver'
 
 const VIRTUAL_FEED_ID = '\0virtual:feed'
@@ -41,15 +42,10 @@ function generateAuthorXml(author: FeedEntry['author']): string {
   if (typeof author === 'string')
     return `      <dc:creator>${escapeXml(author)}</dc:creator>`
 
-  const lines: string[] = []
-  lines.push('      <author>')
   if (author.email)
-    lines.push(`        <email>${escapeXml(author.email)}</email>`)
-  lines.push(`        <name>${escapeXml(author.name)}</name>`)
-  if (author.url)
-    lines.push(`        <uri>${escapeXml(author.url)}</uri>`)
-  lines.push('      </author>')
-  return lines.join('\n')
+    return `      <author>${escapeXml(`${author.email} (${author.name})`)}</author>`
+
+  return `      <dc:creator>${escapeXml(author.name)}</dc:creator>`
 }
 
 function generateItemXml(item: FeedEntry): string {
@@ -92,12 +88,15 @@ function generateItemXml(item: FeedEntry): string {
 
 export function generateFeedXml(feed: Feed): string {
   const hasContent = feed.items.some(item => item.content)
-  const hasStringAuthor = feed.items.some(item => typeof item.author === 'string')
+  const hasDcCreator = feed.items.some(item =>
+    typeof item.author === 'string'
+    || (typeof item.author === 'object' && item.author !== null && !item.author.email),
+  )
 
   const namespaces: string[] = []
   if (hasContent)
     namespaces.push('xmlns:content="http://purl.org/rss/1.0/modules/content/"')
-  if (hasStringAuthor)
+  if (hasDcCreator)
     namespaces.push('xmlns:dc="http://purl.org/dc/elements/1.1/"')
   namespaces.push('xmlns:atom="http://www.w3.org/2005/Atom"')
 
@@ -110,7 +109,7 @@ export function generateFeedXml(feed: Feed): string {
     `    <title>${escapeXml(feed.title)}</title>`,
     `    <link>${escapeXml(feed.link)}</link>`,
     `    <description>${escapeXml(feed.description)}</description>`,
-    `    <atom:link href="${escapeXml(`${feed.link}/feed.xml`)}" rel="self" type="application/rss+xml" />`,
+    `    <atom:link href="${escapeXml(`${feed.link.replace(/\/+$/, '')}/feed.xml`)}" rel="self" type="application/rss+xml" />`,
   ]
 
   if (feed.language)
@@ -200,15 +199,9 @@ function createFeedPlugin(feedFile: { path: string }, sourceCode: string, aliase
       if (Object.keys(aliases).length > 0) {
         const resolved = resolveAlias(id, aliases, projectRoot)
         if (resolved) {
-          const extensions = ['.ts', '.tsx', '.js', '.jsx', '.mjs']
-          for (const ext of extensions) {
-            const withExt = resolved + ext
-            try {
-              if (existsSync(withExt))
-                return withExt
-            }
-            catch {}
-          }
+          const found = resolveWithExtensionsAndIndex(resolved)
+          if (found)
+            return found
 
           return resolved
         }
@@ -217,15 +210,9 @@ function createFeedPlugin(feedFile: { path: string }, sourceCode: string, aliase
       if (id.startsWith('.')) {
         const base = (!importer || importer.startsWith('\0')) ? feedFile.path : importer
         const resolved = path.resolve(path.dirname(base), id)
-        const extensions = ['.ts', '.tsx', '.js', '.jsx', '.mjs']
-        for (const ext of extensions) {
-          const withExt = resolved + ext
-          try {
-            if (existsSync(withExt))
-              return withExt
-          }
-          catch {}
-        }
+        const found = resolveWithExtensionsAndIndex(resolved)
+        if (found)
+          return found
 
         return resolved
       }

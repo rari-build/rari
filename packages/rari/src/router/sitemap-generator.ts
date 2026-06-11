@@ -1,6 +1,6 @@
 import type { Sitemap, SitemapImage, SitemapVideo } from '../types/metadata-route'
 import { Buffer } from 'node:buffer'
-import { existsSync, promises as fs } from 'node:fs'
+import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import {
   XML_AMPERSAND_REGEX,
@@ -9,6 +9,7 @@ import {
   XML_LT_REGEX,
   XML_QUOTE_REGEX,
 } from '../shared/regex-constants'
+import { resolveWithExtensionsAndIndex } from '../shared/utils/resolve'
 import { resolveAlias } from '../vite/alias-resolver'
 
 const SANITIZE_ID_REGEX = /[^\w-]/g
@@ -258,15 +259,9 @@ function createSitemapPlugin(sitemapFile: SitemapFile, sourceCode: string, alias
       if (Object.keys(aliases).length > 0) {
         const resolved = resolveAlias(id, aliases, projectRoot)
         if (resolved) {
-          const extensions = ['.ts', '.tsx', '.js', '.jsx', '.mjs']
-          for (const ext of extensions) {
-            const withExt = resolved + ext
-            try {
-              if (existsSync(withExt))
-                return withExt
-            }
-            catch {}
-          }
+          const found = resolveWithExtensionsAndIndex(resolved)
+          if (found)
+            return found
 
           return resolved
         }
@@ -275,15 +270,9 @@ function createSitemapPlugin(sitemapFile: SitemapFile, sourceCode: string, alias
       if (id.startsWith('.')) {
         const base = (!importer || importer.startsWith('\0')) ? sitemapFile.path : importer
         const resolved = path.resolve(path.dirname(base), id)
-        const extensions = ['.ts', '.tsx', '.js', '.jsx', '.mjs']
-        for (const ext of extensions) {
-          const withExt = resolved + ext
-          try {
-            if (existsSync(withExt))
-              return withExt
-          }
-          catch {}
-        }
+        const found = resolveWithExtensionsAndIndex(resolved)
+        if (found)
+          return found
 
         return resolved
       }

@@ -14,8 +14,8 @@ import {
   TSX_EXT_REGEX,
 } from '../shared/regex-constants'
 import { resolveAlias } from './alias-resolver'
-import { getReadableComponentId, getComponentId as getSharedComponentId, getProjectRelativePath as getSharedProjectRelativePath, hashString as sharedHashString } from './component-id-utils'
-import { getDirectives, hasDefaultExport, hasTopLevelUseClientDirective, hasTopLevelUseServerDirective } from './directive-utils'
+import { getReadableComponentId, getComponentId as getSharedComponentId, getProjectRelativePath as getSharedProjectRelativePath, hashString as sharedHashString } from './component-ids'
+import { getDirectives, hasDefaultExport, hasTopLevelUseClientDirective, hasTopLevelUseServerDirective } from './directives'
 import { resolveIndexFile, resolveWithExtensions } from './file-resolver'
 
 const HTML_IMPORT_REGEX = /import\s*\(\s*["']([^"']+)["']\s*\)|import\s+["']([^"']+)["']/g
@@ -1514,10 +1514,14 @@ function registerClientReference(clientReference, id, exportName) {
       hasNodeImports,
     }
 
-    if (this.isServerAction(code))
+    if (this.isServerAction(code)) {
       this.serverActions.set(filePath, componentData)
-    else
+      this.serverComponents.delete(filePath)
+    }
+    else {
       this.serverComponents.set(filePath, componentData)
+      this.serverActions.delete(filePath)
+    }
 
     const relativeBundlePath = path.join(
       this.options.rscDir,
@@ -1823,6 +1827,10 @@ export function createServerBuildPlugin(
         return
 
       try {
+        const fileName = path.basename(file)
+        if (SPECIAL_FILE_REGEX.test(fileName) || fileName.endsWith('.d.ts'))
+          return
+
         const content = await fs.promises.readFile(file, 'utf-8')
         const isClient = hasTopLevelUseClientDirective(content)
         const isTracked = builder.hasComponent(file)
@@ -1837,7 +1845,11 @@ export function createServerBuildPlugin(
         if (isTracked) {
           await builder.rebuildComponent(file)
         }
-        else if (hasTopLevelUseServerDirective(content) || !isClient) {
+        else if (hasTopLevelUseServerDirective(content)) {
+          builder.addServerComponent(file, content)
+          await builder.rebuildComponent(file)
+        }
+        else if (builder.isServerComponent(file, content) && hasComponentExport(content)) {
           builder.addServerComponent(file, content)
           await builder.rebuildComponent(file)
         }

@@ -37,6 +37,20 @@ describe('generateFeedXml', () => {
       expect(result).toContain('<atom:link href="https://example.com/feed.xml" rel="self" type="application/rss+xml" />')
     })
 
+    it('should handle trailing slash in feed link for atom:link', () => {
+      const feed: Feed = {
+        title: 'Test',
+        description: 'Test',
+        link: 'https://example.com/',
+        items: [],
+      }
+
+      const result = generateFeedXml(feed)
+
+      expect(result).toContain('href="https://example.com/feed.xml"')
+      expect(result).not.toContain('https://example.com//feed.xml')
+    })
+
     it('should include optional channel fields', () => {
       const feed: Feed = {
         title: 'Test',
@@ -185,7 +199,7 @@ describe('generateFeedXml', () => {
       expect(result).toContain('<dc:creator>John Doe</dc:creator>')
     })
 
-    it('should handle object author', () => {
+    it('should handle object author with email using RSS 2.0 format', () => {
       const feed: Feed = {
         title: 'Test',
         description: 'Test',
@@ -201,11 +215,29 @@ describe('generateFeedXml', () => {
 
       const result = generateFeedXml(feed)
 
-      expect(result).toContain('<author>')
-      expect(result).toContain('<name>Jane Doe</name>')
-      expect(result).toContain('<email>jane@example.com</email>')
-      expect(result).toContain('<uri>https://jane.example.com</uri>')
-      expect(result).toContain('</author>')
+      expect(result).toContain('<author>jane@example.com (Jane Doe)</author>')
+      expect(result).not.toContain('<name>')
+      expect(result).not.toContain('<uri>')
+    })
+
+    it('should handle object author without email using dc:creator', () => {
+      const feed: Feed = {
+        title: 'Test',
+        description: 'Test',
+        link: 'https://example.com',
+        items: [
+          {
+            title: 'Test',
+            url: 'https://example.com/test',
+            author: { name: 'Jane Doe' },
+          },
+        ],
+      }
+
+      const result = generateFeedXml(feed)
+
+      expect(result).toContain('xmlns:dc="http://purl.org/dc/elements/1.1/"')
+      expect(result).toContain('<dc:creator>Jane Doe</dc:creator>')
     })
 
     it('should handle content:encoded with CDATA', () => {
@@ -327,7 +359,7 @@ describe('generateFeedXml', () => {
       expect(generateFeedXml(feedWithContent)).toContain('xmlns:content')
     })
 
-    it('should only include dc namespace when items have string author', () => {
+    it('should include dc namespace when items use dc:creator', () => {
       const feedWithoutAuthor: Feed = {
         title: 'Test',
         description: 'Test',
@@ -335,15 +367,31 @@ describe('generateFeedXml', () => {
         items: [{ title: 'No author', url: 'https://example.com/1' }],
       }
 
-      const feedWithAuthor: Feed = {
+      const feedWithStringAuthor: Feed = {
         title: 'Test',
         description: 'Test',
         link: 'https://example.com',
         items: [{ title: 'With author', url: 'https://example.com/1', author: 'John' }],
       }
 
+      const feedWithObjectAuthorNoEmail: Feed = {
+        title: 'Test',
+        description: 'Test',
+        link: 'https://example.com',
+        items: [{ title: 'With author', url: 'https://example.com/1', author: { name: 'John' } }],
+      }
+
+      const feedWithObjectAuthorWithEmail: Feed = {
+        title: 'Test',
+        description: 'Test',
+        link: 'https://example.com',
+        items: [{ title: 'With author', url: 'https://example.com/1', author: { name: 'John', email: 'john@example.com' } }],
+      }
+
       expect(generateFeedXml(feedWithoutAuthor)).not.toContain('xmlns:dc')
-      expect(generateFeedXml(feedWithAuthor)).toContain('xmlns:dc')
+      expect(generateFeedXml(feedWithStringAuthor)).toContain('xmlns:dc')
+      expect(generateFeedXml(feedWithObjectAuthorNoEmail)).toContain('xmlns:dc')
+      expect(generateFeedXml(feedWithObjectAuthorWithEmail)).not.toContain('xmlns:dc')
     })
   })
 })

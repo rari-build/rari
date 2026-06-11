@@ -1,4 +1,4 @@
-import { throwIfNotOk } from './shared/http-utils'
+import { throwIfNotOk } from './shared/utils/http'
 
 export interface RuntimeClient {
   initialize: () => Promise<void>
