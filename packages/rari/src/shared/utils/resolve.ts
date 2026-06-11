@@ -6,20 +6,14 @@ const RESOLVE_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx', '.mjs']
 export function resolveWithExtensionsAndIndex(resolved: string): string | null {
   for (const ext of RESOLVE_EXTENSIONS) {
     const withExt = resolved + ext
-    try {
-      if (existsSync(withExt))
-        return withExt
-    }
-    catch {}
+    if (existsSync(withExt))
+      return withExt
   }
 
   for (const ext of RESOLVE_EXTENSIONS) {
     const indexPath = path.join(resolved, `index${ext}`)
-    try {
-      if (existsSync(indexPath))
-        return indexPath
-    }
-    catch {}
+    if (existsSync(indexPath))
+      return indexPath
   }
 
   return null

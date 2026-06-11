@@ -1666,6 +1666,27 @@ export function hasComponentExport(code: string): boolean {
     || EXPORTED_CONST_FUNCTION_REGEX.test(code)
 }
 
+export function isEligibleServerComponent(
+  filePath: string,
+  code: string,
+  builder: ServerComponentBuilder,
+): boolean {
+  const fileName = path.basename(filePath)
+  if (SPECIAL_FILE_REGEX.test(fileName) || fileName.endsWith('.d.ts'))
+    return false
+
+  if (hasTopLevelUseClientDirective(code))
+    return false
+
+  if (hasTopLevelUseServerDirective(code))
+    return true
+
+  if (builder.isOnlyImportedByClientComponents(filePath))
+    return false
+
+  return builder.isServerComponent(filePath, code) && hasComponentExport(code)
+}
+
 export function scanDirectory(dir: string, builder: ServerComponentBuilder, isTopLevel = true) {
   if (isTopLevel)
     builder.buildImportGraph(dir)
@@ -1679,29 +1700,11 @@ export function scanDirectory(dir: string, builder: ServerComponentBuilder, isTo
       scanDirectory(fullPath, builder, false)
     }
     else if (entry.isFile() && TSX_EXT_REGEX.test(entry.name)) {
-      if (SPECIAL_FILE_REGEX.test(entry.name))
-        continue
-
-      if (entry.name.endsWith('.d.ts'))
-        continue
-
       try {
         const code = fs.readFileSync(fullPath, 'utf-8')
 
-        if (hasTopLevelUseServerDirective(code)) {
+        if (isEligibleServerComponent(fullPath, code, builder))
           builder.addServerComponent(fullPath, code)
-          continue
-        }
-
-        if (builder.isOnlyImportedByClientComponents(fullPath))
-          continue
-
-        if (builder.isServerComponent(fullPath, code)) {
-          if (!hasComponentExport(code))
-            continue
-
-          builder.addServerComponent(fullPath, code)
-        }
       }
       catch (error) {
         console.warn(
@@ -1827,32 +1830,21 @@ export function createServerBuildPlugin(
         return
 
       try {
-        const fileName = path.basename(file)
-        if (SPECIAL_FILE_REGEX.test(fileName) || fileName.endsWith('.d.ts'))
-          return
-
         const content = await fs.promises.readFile(file, 'utf-8')
-        const isClient = hasTopLevelUseClientDirective(content)
         const isTracked = builder.hasComponent(file)
+        const eligible = isEligibleServerComponent(file, content, builder)
 
-        if (isClient) {
+        if (!eligible) {
           if (isTracked)
             builder.removeComponent(file)
 
           return
         }
 
-        if (isTracked) {
-          await builder.rebuildComponent(file)
-        }
-        else if (hasTopLevelUseServerDirective(content)) {
+        if (!isTracked)
           builder.addServerComponent(file, content)
-          await builder.rebuildComponent(file)
-        }
-        else if (builder.isServerComponent(file, content) && hasComponentExport(content)) {
-          builder.addServerComponent(file, content)
-          await builder.rebuildComponent(file)
-        }
+
+        await builder.rebuildComponent(file)
       }
       catch (error) {
         console.error(`[rari] Build: Error rebuilding ${relativePath}:`, error)
