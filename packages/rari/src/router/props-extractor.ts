@@ -71,6 +71,11 @@ export interface MetadataResult {
   }
   viewport?: string
   canonical?: string
+  alternates?: {
+    canonical?: string
+    languages?: Record<string, string>
+    types?: Record<string, string>
+  }
 }
 
 export type StaticParamsResult = Array<Record<string, string | string[]>>
@@ -223,6 +228,7 @@ export function mergeMetadata(
     appleWebApp: mergeObjectField(parentMetadata.appleWebApp, childMetadata.appleWebApp),
     viewport: mergeSimpleField(parentMetadata.viewport, childMetadata.viewport),
     canonical: mergeSimpleField(parentMetadata.canonical, childMetadata.canonical),
+    alternates: mergeObjectField(parentMetadata.alternates, childMetadata.alternates),
   }
 }
 

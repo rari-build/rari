@@ -67,4 +67,9 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
   },
+  alternates: {
+    types: {
+      'application/rss+xml': 'https://rari.build/feed.xml',
+    },
+  },
 }

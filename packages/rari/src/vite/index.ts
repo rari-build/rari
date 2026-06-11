@@ -109,7 +109,13 @@ const DEFAULT_IMAGE_CONFIG = {
   maxCacheSize: DEFAULT_MAX_CACHE_SIZE,
 }
 
+const runtimeFileCache = new Map<string, string>()
+
 async function loadRuntimeFile(filename: string): Promise<string> {
+  const cached = runtimeFileCache.get(filename)
+  if (cached)
+    return cached
+
   const currentFileUrl = import.meta.url
   const currentFilePath = fileURLToPath(currentFileUrl)
   const currentDir = path.dirname(currentFilePath)
@@ -160,6 +166,7 @@ async function loadRuntimeFile(filename: string): Promise<string> {
         )
       }
 
+      runtimeFileCache.set(filename, content)
       return content
     }
     catch (err: any) {

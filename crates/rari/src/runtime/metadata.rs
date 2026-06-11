@@ -45,6 +45,7 @@ pub fn merge_metadata(parent: &Value, child: &Value) -> Value {
     merge_object_field(&mut merged, parent_obj, child_obj, "robots");
     merge_object_field(&mut merged, parent_obj, child_obj, "icons");
     merge_object_field(&mut merged, parent_obj, child_obj, "appleWebApp");
+    merge_object_field(&mut merged, parent_obj, child_obj, "alternates");
 
     Value::Object(merged)
 }

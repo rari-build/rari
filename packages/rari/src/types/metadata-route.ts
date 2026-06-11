@@ -62,4 +62,38 @@ export interface SitemapEntry {
 
 export type Sitemap = SitemapEntry[]
 
+export interface FeedEntry {
+  title: string
+  url: string
+  description?: string
+  content?: string
+  author?: string | { name: string, email?: string, url?: string }
+  pubDate?: string | Date
+  guid?: string
+  categories?: string[]
+  enclosure?: {
+    url: string
+    length?: number
+    type?: string
+  }
+}
+
+export interface Feed {
+  title: string
+  description: string
+  link: string
+  language?: string
+  copyright?: string
+  lastBuildDate?: string | Date
+  ttl?: number
+  image?: {
+    url: string
+    title: string
+    link: string
+    width?: number
+    height?: number
+  }
+  items: FeedEntry[]
+}
+
 export type { Robots as MetadataRoute }

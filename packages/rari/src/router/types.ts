@@ -146,6 +146,11 @@ export interface RouteMetadata {
     statusBarStyle?: 'default' | 'black' | 'black-translucent'
   }
   canonical?: string
+  alternates?: {
+    canonical?: string
+    languages?: Record<string, string>
+    types?: Record<string, string>
+  }
 }
 
 export type Metadata = RouteMetadata

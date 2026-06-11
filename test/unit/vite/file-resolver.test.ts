@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { resolveIndexFile, resolveWithExtensions } from '@rari/vite/file-resolver'
+import { clearFileResolverCache, resolveIndexFile, resolveWithExtensions } from '@rari/vite/file-resolver'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 
 vi.mock('node:fs')
@@ -8,6 +8,7 @@ vi.mock('node:fs')
 describe('file-resolver', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    clearFileResolverCache()
   })
 
   afterEach(() => {

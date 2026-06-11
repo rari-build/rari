@@ -238,6 +238,7 @@ export function updateGitignoreForProvider(cwd: string, providerName: string, pr
   else {
     const defaultGitignore = `# Dependencies
 node_modules
+.pnpm-store
 
 # Build outputs
 dist
