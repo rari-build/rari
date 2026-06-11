@@ -1718,11 +1718,25 @@ if (typeof window !== 'undefined') {{
                 {
                     let props_obj = props.as_object();
 
+                    let is_suspense_symbol = type_str.starts_with('$')
+                        && type_str.len() > 1
+                        && type_str[1..].chars().all(|c| c.is_ascii_hexdigit());
+
+                    let is_client_component = type_str.starts_with("$L")
+                        || type_str.starts_with("$@")
+                        || type_str.contains('#')
+                        || type_str.contains('/');
+
                     if type_str == "$Sreact.suspense"
                         || type_str == "react.suspense"
                         || type_str == "suspense"
+                        || is_suspense_symbol
                     {
                         return self.render_suspense_boundary(type_str, props_obj).await;
+                    }
+
+                    if is_client_component {
+                        return self.render_client_component_placeholder(type_str, props_obj).await;
                     }
 
                     return self.render_html_element(type_str, props_obj).await;
