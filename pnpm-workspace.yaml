@@ -6,12 +6,24 @@ minimumReleaseAgeExclude:
   - rari-linux-x64@0.14.8
   - rari-win32-arm64@0.14.8
   - rari-win32-x64@0.14.8
+  - '@rari/use-cache-transform-darwin-arm64@0.14.8'
+  - '@rari/use-cache-transform-darwin-x64@0.14.8'
+  - '@rari/use-cache-transform-linux-arm64@0.14.8'
+  - '@rari/use-cache-transform-linux-x64@0.14.8'
+  - '@rari/use-cache-transform-win32-arm64@0.14.8'
+  - '@rari/use-cache-transform-win32-x64@0.14.8'
   - rari@0.14.8
 shellEmulator: true
 trustPolicy: no-downgrade
 packages:
   - examples/*
   - packages/*
+  - packages/@rari/*
+  - '!packages/rari-darwin-x64'
+  - '!packages/rari-linux-arm64'
+  - '!packages/rari-linux-x64'
+  - '!packages/rari-win32-arm64'
+  - '!packages/rari-win32-x64'
   - test/fixtures/*
   - web
 catalogs:

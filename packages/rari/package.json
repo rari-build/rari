@@ -122,6 +122,7 @@
     "react-dom": "catalog:react"
   },
   "dependencies": {
+    "@rari/use-cache-transform": "workspace:*",
     "lightningcss": "catalog:build",
     "lru-cache": "catalog:",
 
