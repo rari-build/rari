@@ -1,7 +1,7 @@
-import type { SimpleProxyResult, SimpleRequest } from './shared/utils'
+import type { SimpleProxyResult, SimpleRequest } from './shared/types'
 import { getProxyExecutor } from './executor'
 import { RariRequest } from './RariRequest'
-import { processProxyResult } from './shared/utils'
+import { processProxyResult } from './shared/process-result'
 
 export async function executeProxy(simpleRequest: SimpleRequest): Promise<SimpleProxyResult> {
   const waitUntilPromises: Promise<unknown>[] = []
