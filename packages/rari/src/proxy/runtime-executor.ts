@@ -1,5 +1,5 @@
-import type { SimpleProxyResult, SimpleRequest } from './shared/utils'
-import { processProxyResult } from './shared/utils'
+import type { SimpleProxyResult, SimpleRequest } from './shared/types'
+import { processProxyResult } from './shared/process-result'
 
 declare global {
   interface GlobalThis {
