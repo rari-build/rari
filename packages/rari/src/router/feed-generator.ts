@@ -62,7 +62,7 @@ function generateItemXml(item: FeedEntry): string {
     lines.push(`      <description>${escapeXml(item.description)}</description>`)
 
   if (item.content)
-    lines.push(`      <content:encoded><![CDATA[${item.content}]]></content:encoded>`)
+    lines.push(`      <content:encoded><![CDATA[${item.content.replace(/\]\]>/g, ']]]]><![CDATA[>')}]]></content:encoded>`)
 
   const authorXml = generateAuthorXml(item.author)
   if (authorXml)
@@ -154,14 +154,13 @@ function determineModuleType(ext: string): 'js' | 'jsx' | 'ts' | 'tsx' {
       return 'tsx'
     case 'js':
     case 'mjs':
-    case 'cjs':
       return 'js'
     case 'jsx':
       return 'jsx'
     default:
       throw new Error(
         `Unsupported feed file extension: ".${ext}". `
-        + `Allowed extensions are: .ts, .tsx, .js, .jsx, .mjs, .cjs`,
+        + `Allowed extensions are: .ts, .tsx, .js, .jsx, .mjs`,
       )
   }
 }
@@ -169,7 +168,7 @@ function determineModuleType(ext: string): 'js' | 'jsx' | 'ts' | 'tsx' {
 /* v8 ignore start - file system operations, better tested in integration/e2e */
 export async function findFeedFile(
   appDir: string,
-  extensions: string[] = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'],
+  extensions: string[] = ['.ts', '.tsx', '.js', '.jsx', '.mjs'],
 ): Promise<{ type: 'static' | 'dynamic', path: string } | null> {
   const staticPath = path.join(appDir, 'feed.xml')
   try {
@@ -201,7 +200,7 @@ function createFeedPlugin(feedFile: { path: string }, sourceCode: string, aliase
       if (Object.keys(aliases).length > 0) {
         const resolved = resolveAlias(id, aliases, projectRoot)
         if (resolved) {
-          const extensions = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs']
+          const extensions = ['.ts', '.tsx', '.js', '.jsx', '.mjs']
           for (const ext of extensions) {
             const withExt = resolved + ext
             try {
@@ -216,8 +215,9 @@ function createFeedPlugin(feedFile: { path: string }, sourceCode: string, aliase
       }
 
       if (id.startsWith('.')) {
-        const resolved = path.resolve(path.dirname(importer ?? feedFile.path), id)
-        const extensions = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs']
+        const base = (!importer || importer.startsWith('\0')) ? feedFile.path : importer
+        const resolved = path.resolve(path.dirname(base), id)
+        const extensions = ['.ts', '.tsx', '.js', '.jsx', '.mjs']
         for (const ext of extensions) {
           const withExt = resolved + ext
           try {

@@ -201,7 +201,7 @@ export function generateSitemapXml(sitemap: Sitemap): string {
 /* v8 ignore start - file system operations, better tested in integration/e2e */
 export async function findSitemapFiles(
   appDir: string,
-  extensions: string[] = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.json'],
+  extensions: string[] = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.json'],
 ): Promise<SitemapFile[]> {
   const sitemapFiles: SitemapFile[] = []
 
@@ -235,7 +235,6 @@ function determineModuleType(ext: string): 'js' | 'jsx' | 'ts' | 'tsx' | 'json' 
       return 'tsx'
     case 'js':
     case 'mjs':
-    case 'cjs':
       return 'js'
     case 'jsx':
       return 'jsx'
@@ -244,7 +243,7 @@ function determineModuleType(ext: string): 'js' | 'jsx' | 'ts' | 'tsx' | 'json' 
     default:
       throw new Error(
         `Unsupported sitemap file extension: ".${ext}". `
-        + `Allowed extensions are: .ts, .tsx, .js, .jsx, .mjs, .cjs, .json`,
+        + `Allowed extensions are: .ts, .tsx, .js, .jsx, .mjs, .json`,
       )
   }
 }
@@ -259,7 +258,7 @@ function createSitemapPlugin(sitemapFile: SitemapFile, sourceCode: string, alias
       if (Object.keys(aliases).length > 0) {
         const resolved = resolveAlias(id, aliases, projectRoot)
         if (resolved) {
-          const extensions = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs']
+          const extensions = ['.ts', '.tsx', '.js', '.jsx', '.mjs']
           for (const ext of extensions) {
             const withExt = resolved + ext
             try {
@@ -274,8 +273,9 @@ function createSitemapPlugin(sitemapFile: SitemapFile, sourceCode: string, alias
       }
 
       if (id.startsWith('.')) {
-        const resolved = path.resolve(path.dirname(importer ?? sitemapFile.path), id)
-        const extensions = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs']
+        const base = (!importer || importer.startsWith('\0')) ? sitemapFile.path : importer
+        const resolved = path.resolve(path.dirname(base), id)
+        const extensions = ['.ts', '.tsx', '.js', '.jsx', '.mjs']
         for (const ext of extensions) {
           const withExt = resolved + ext
           try {

@@ -106,7 +106,9 @@ pub fn inject_metadata(
             ));
         }
 
-        if let Some(canonical) = &metadata.canonical {
+        let alternates_canonical = metadata.alternates.as_ref().and_then(|a| a.canonical.as_ref());
+        let effective_canonical = alternates_canonical.or(metadata.canonical.as_ref());
+        if let Some(canonical) = effective_canonical {
             meta_tags.push_str(&format!(
                 r#"    <link rel="canonical" href="{}" />
 "#,
@@ -410,13 +412,6 @@ pub fn inject_metadata(
         }
 
         if let Some(alternates) = &metadata.alternates {
-            if let Some(canonical) = &alternates.canonical {
-                meta_tags.push_str(&format!(
-                    r#"    <link rel="canonical" href="{}" />
-"#,
-                    escape_html(canonical)
-                ));
-            }
             if let Some(languages) = &alternates.languages {
                 for (lang, url) in languages {
                     meta_tags.push_str(&format!(
@@ -930,5 +925,44 @@ mod tests {
                 r#"<link rel="alternate" hreflang="es" href="https://example.com/es" />"#
             )
         );
+    }
+
+    #[test]
+    fn test_no_duplicate_canonical_when_both_set() {
+        let html = r#"<!DOCTYPE html>
+<html>
+<head>
+    <title>Test</title>
+</head>
+<body></body>
+</html>"#;
+
+        use crate::rsc::rendering::layout::types::AlternatesMetadata;
+
+        let metadata = PageMetadata {
+            title: Some("Test".to_string()),
+            description: None,
+            keywords: None,
+            open_graph: None,
+            twitter: None,
+            robots: None,
+            viewport: None,
+            canonical: Some("https://example.com/old".to_string()),
+            icons: None,
+            manifest: None,
+            theme_color: None,
+            apple_web_app: None,
+            alternates: Some(AlternatesMetadata {
+                canonical: Some("https://example.com/preferred".to_string()),
+                languages: None,
+                types: None,
+            }),
+        };
+
+        let result = inject_metadata(html, &metadata, None);
+
+        assert_eq!(result.matches(r#"rel="canonical""#).count(), 1);
+        assert!(result.contains(r#"href="https://example.com/preferred""#));
+        assert!(!result.contains(r#"href="https://example.com/old""#));
     }
 }

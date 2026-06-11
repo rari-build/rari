@@ -206,6 +206,26 @@ function mergeObjectField<T extends Record<string, any>>(
   return { ...parentField, ...childField } as T
 }
 
+function mergeAlternatesField(
+  parent: MetadataResult['alternates'],
+  child: MetadataResult['alternates'],
+): MetadataResult['alternates'] {
+  if (child === undefined)
+    return parent
+  if (parent === undefined)
+    return child
+
+  return {
+    canonical: child.canonical !== undefined ? child.canonical : parent.canonical,
+    languages: parent.languages || child.languages
+      ? { ...parent.languages, ...child.languages }
+      : undefined,
+    types: parent.types || child.types
+      ? { ...parent.types, ...child.types }
+      : undefined,
+  }
+}
+
 function mergeSimpleField<T>(parentField: T | undefined, childField: T | undefined): T | undefined {
   return childField !== undefined ? childField : parentField
 }
@@ -228,7 +248,7 @@ export function mergeMetadata(
     appleWebApp: mergeObjectField(parentMetadata.appleWebApp, childMetadata.appleWebApp),
     viewport: mergeSimpleField(parentMetadata.viewport, childMetadata.viewport),
     canonical: mergeSimpleField(parentMetadata.canonical, childMetadata.canonical),
-    alternates: mergeObjectField(parentMetadata.alternates, childMetadata.alternates),
+    alternates: mergeAlternatesField(parentMetadata.alternates, childMetadata.alternates),
   }
 }
 

@@ -174,6 +174,12 @@ export class ServerComponentBuilder {
     return this.serverComponents.has(filePath) || this.serverActions.has(filePath)
   }
 
+  removeComponent(filePath: string): void {
+    this.serverComponents.delete(filePath)
+    this.serverActions.delete(filePath)
+    this.directiveResultCache.delete(filePath)
+  }
+
   getImportGraph(): ReadonlyMap<string, ReadonlySet<string>> {
     const copy = new Map<string, Set<string>>()
     for (const [key, value] of this.fileImporters) {
@@ -1776,7 +1782,6 @@ export function createServerBuildPlugin(
           await generateRobotsFile({
             appDir: path.join(projectRoot, 'src', 'app'),
             outDir: path.join(projectRoot, 'dist'),
-            extensions: ['.ts', '.tsx', '.js', '.jsx'],
           })
         }
         catch (error) {
@@ -1788,7 +1793,6 @@ export function createServerBuildPlugin(
           await generateSitemapFiles({
             appDir: path.join(projectRoot, 'src', 'app'),
             outDir: path.join(projectRoot, 'dist'),
-            extensions: ['.ts', '.tsx', '.js', '.jsx'],
             aliases: resolvedAliases,
           })
         }
@@ -1801,7 +1805,6 @@ export function createServerBuildPlugin(
           await generateFeedFile({
             appDir: path.join(projectRoot, 'src', 'app'),
             outDir: path.join(projectRoot, 'dist'),
-            extensions: ['.ts', '.tsx', '.js', '.jsx'],
             aliases: resolvedAliases,
           })
         }
@@ -1821,14 +1824,20 @@ export function createServerBuildPlugin(
 
       try {
         const content = await fs.promises.readFile(file, 'utf-8')
-        if (hasTopLevelUseClientDirective(content))
-          return
-
+        const isClient = hasTopLevelUseClientDirective(content)
         const isTracked = builder.hasComponent(file)
+
+        if (isClient) {
+          if (isTracked)
+            builder.removeComponent(file)
+
+          return
+        }
+
         if (isTracked) {
           await builder.rebuildComponent(file)
         }
-        else if (hasTopLevelUseServerDirective(content) || !hasTopLevelUseClientDirective(content)) {
+        else if (hasTopLevelUseServerDirective(content) || !isClient) {
           builder.addServerComponent(file, content)
           await builder.rebuildComponent(file)
         }

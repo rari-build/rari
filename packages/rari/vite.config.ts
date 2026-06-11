@@ -31,18 +31,9 @@ export default defineConfig({
     deps: {
       neverBundle: [
         'lightningcss',
-        'postcss',
         'vite',
         'vite-plus',
-        'vitest',
-        '@vitest/browser',
-        '@vitest/expect',
-        '@vitest/runner',
-        '@voidzero-dev/vite-plus-test',
-        '@voidzero-dev/vite-plus-core',
         'rolldown',
-        '@rolldown/pluginutils',
-        '@oxc-project/types',
         'virtual:app-router-provider',
         'virtual:app-router-provider.tsx',
         'virtual:react-flight-client',
