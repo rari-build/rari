@@ -1,0 +1,45 @@
+{
+  "name": "{NAME}",
+  "version": "{VERSION}",
+  "description": "Native 'use cache' transform addon for {DESCRIPTION}",
+  "author": "Ryan Skinner",
+  "license": "MIT",
+  "os": [
+    "{OS}"
+  ],
+  "cpu": [
+    "{CPU}"
+  ],
+  "homepage": "https://github.com/rari-build/rari#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rari-build/rari.git",
+    "directory": "packages/{NAME}"
+  },
+  "bugs": {
+    "url": "https://github.com/rari-build/rari/issues"
+  },
+  "keywords": [
+    "rari",
+    "use-cache",
+    "transform",
+    "napi",
+    "napi-rs",
+    {KEYWORDS}
+    "rust",
+    "react",
+    "server-components"
+  ],
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "files": [
+    "LICENSE",
+    "README.md",
+    "index.js",
+    "index.d.ts",
+    "use_cache_transform.node"
+  ],
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

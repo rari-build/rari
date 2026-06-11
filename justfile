@@ -81,6 +81,9 @@ build-create-rari-app: _ensure-node-deps
 build-web: _ensure-node-deps
     pnpm --filter @rari/web build
 
+build-addon-dev:
+    node scripts/build-use-cache-transform.mjs
+
 # --- Test commands ---
 
 # Run all tests (Rust + Node.js)

@@ -1,0 +1,4 @@
+// CJS loader for the @rari/use-cache-transform platform-specific package.
+// This file is copied verbatim into each platform package at release time.
+
+module.exports = require('./use_cache_transform.node')
