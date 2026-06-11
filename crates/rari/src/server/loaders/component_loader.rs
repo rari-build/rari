@@ -968,9 +968,10 @@ impl ComponentLoader {
                 r#"(async function() {{
                     try {{
                         const mod = await import({specifier});
-                        if (globalThis['~rari'] && globalThis['~rari'].ssrModules) {{
-                            globalThis['~rari'].ssrModules[{path}] = mod;
+                        if (!globalThis['~rari'] || !globalThis['~rari'].ssrModules) {{
+                            return false;
                         }}
+                        globalThis['~rari'].ssrModules[{path}] = mod;
                         return true;
                     }} catch (e) {{
                         return false;

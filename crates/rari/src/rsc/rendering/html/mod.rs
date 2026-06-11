@@ -1716,8 +1716,19 @@ if (typeof window !== 'undefined') {{
         component_ref: &str,
         props: Option<&serde_json::Map<String, serde_json::Value>>,
     ) -> Result<String, RariError> {
-        if let Some(stripped) =
-            component_ref.strip_prefix("$L").or_else(|| component_ref.strip_prefix("$@"))
+        let children_are_rsc = props
+            .and_then(|p| p.get("children"))
+            .and_then(|c| c.as_array())
+            .map(|arr| {
+                arr.first()
+                    .map(|first| first.as_str() == Some("$") || first.is_array())
+                    .unwrap_or(false)
+            })
+            .unwrap_or(false);
+
+        if !children_are_rsc
+            && let Some(stripped) =
+                component_ref.strip_prefix("$L").or_else(|| component_ref.strip_prefix("$@"))
             && let Ok(module_row_id) = u32::from_str_radix(stripped, 16)
             && let Some((module_path, export_name)) = self.module_imports.get(&module_row_id)
         {

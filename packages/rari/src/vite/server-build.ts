@@ -1294,14 +1294,16 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
 
     scanForClientComponents(srcDir)
 
-    if (clientFiles.length === 0)
+    if (clientFiles.length === 0) {
+      const manifestPath = path.join(ssrOutDir, 'manifest.json')
+      await fs.promises.writeFile(manifestPath, '{}', 'utf-8')
       return
+    }
 
     const manifest: Record<string, { id: string, filePath: string, bundlePath: string, exports: string[] }> = {}
     const concurrency = Math.min(8, Math.max(1, (await import('node:os')).cpus().length))
     let active = 0
     let index = 0
-    const errors: Error[] = []
 
     await new Promise<void>((resolve) => {
       const next = () => {
@@ -1347,9 +1349,6 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
 
       next()
     })
-
-    if (errors.length > 0)
-      throw errors[0]
 
     const manifestPath = path.join(ssrOutDir, 'manifest.json')
     await fs.promises.writeFile(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8')
