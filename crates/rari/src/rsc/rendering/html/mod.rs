@@ -1259,6 +1259,22 @@ impl RscToHtmlConverter {
                     self.rsc_wire_format.push(rsc_line.trim().to_string());
                 }
 
+                let parts: Vec<&str> = rsc_line.trim().splitn(2, ':').collect();
+                if parts.len() == 2
+                    && let Ok(row_id) = u32::from_str_radix(parts[0], 16)
+                    && let Some(i_data) = parts[1].trim().strip_prefix('I')
+                    && let Ok(import_data) = serde_json::from_str::<serde_json::Value>(i_data)
+                {
+                    let module_path =
+                        import_data.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                    let export_name = import_data
+                        .get("name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("default")
+                        .to_string();
+                    self.module_imports.insert(row_id, (module_path, export_name));
+                }
+
                 Ok(Vec::new())
             }
 
