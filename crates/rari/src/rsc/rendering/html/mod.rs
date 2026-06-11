@@ -1,6 +1,7 @@
 use crate::error::{RariError, StreamingError};
 use crate::rsc::rendering::streaming::{RscChunkType, RscStreamChunk};
 use crate::rsc::types::RscElement;
+use crate::rsc::wire_format::escape::unescape_rsc_value;
 use crate::runtime::JsExecutionRuntime;
 use crate::server::routing::app_router::AppRouteMatch;
 use cow_utils::CowUtils;
@@ -239,13 +240,18 @@ impl RscHtmlRenderer {
         Self { runtime, template_cache: parking_lot::Mutex::new(None) }
     }
 
+    fn string_looks_like_rsc(s: &str) -> bool {
+        s.starts_with('$') && !s.starts_with("$$")
+    }
+
     fn value_looks_like_rsc(value: &serde_json::Value) -> bool {
         match value {
-            serde_json::Value::String(s) => s.starts_with('$'),
+            serde_json::Value::String(s) => Self::string_looks_like_rsc(s),
             serde_json::Value::Array(arr) => arr
                 .first()
                 .map(|first| {
-                    first.as_str().map(|s| s.starts_with('$')).unwrap_or(false) || first.is_array()
+                    first.as_str().map(Self::string_looks_like_rsc).unwrap_or(false)
+                        || first.is_array()
                 })
                 .unwrap_or(false),
             _ => false,
@@ -949,7 +955,8 @@ impl RscHtmlRenderer {
                     && let Some(RscElement::ModuleImport { module_path, export_name }) =
                         row_map.get(&module_row_id).copied()
                 {
-                    let props_json = serde_json::to_string(props).unwrap_or_default();
+                    let props_json =
+                        serde_json::to_string(&unescape_rsc_value(props)).unwrap_or_default();
                     if let Ok(html) = self
                         .ssr_render_client_component(module_path, export_name, &props_json)
                         .await
@@ -1639,6 +1646,10 @@ if (typeof window !== 'undefined') {{
     {
         Box::pin(async move {
             if let Some(s) = element.as_str() {
+                if s.starts_with("$$") {
+                    return Ok(escape_html(&s[1..]));
+                }
+
                 if let Some(stripped) = s.strip_prefix("$L").or_else(|| s.strip_prefix("$@"))
                     && let Ok(row_id) = u32::from_str_radix(stripped, 16)
                 {
@@ -1767,7 +1778,8 @@ if (typeof window !== 'undefined') {{
             && let Some((module_path, export_name)) = self.module_imports.get(&module_row_id)
         {
             let props_json = if let Some(p) = props {
-                serde_json::to_string(&serde_json::Value::Object(p.clone())).unwrap_or_default()
+                serde_json::to_string(&unescape_rsc_value(&serde_json::Value::Object(p.clone())))
+                    .unwrap_or_default()
             } else {
                 "{}".to_string()
             };
