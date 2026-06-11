@@ -83,7 +83,7 @@ export function generateRobotsTxt(robots: Robots): string {
 /* v8 ignore start - file system operations, better tested in integration/e2e */
 export async function findRobotsFile(
   appDir: string,
-  extensions: string[] = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'],
+  extensions: string[] = ['.ts', '.tsx', '.js', '.jsx', '.mjs'],
 ): Promise<{ type: 'static' | 'dynamic', path: string } | null> {
   const staticPath = path.join(appDir, 'robots.txt')
   try {
@@ -168,14 +168,13 @@ export async function generateRobotsFile(options: RobotsGeneratorOptions): Promi
                 break
               case 'js':
               case 'mjs':
-              case 'cjs':
                 moduleType = 'js'
                 break
               case 'jsx':
                 moduleType = 'jsx'
                 break
               default:
-                throw new Error(`Unsupported robots file extension: .${ext}. Supported extensions are: .ts, .tsx, .js, .jsx, .mjs, .cjs`)
+                throw new Error(`Unsupported robots file extension: .${ext}. Supported extensions are: .ts, .tsx, .js, .jsx, .mjs`)
             }
 
             return { code: sourceCode, moduleType }

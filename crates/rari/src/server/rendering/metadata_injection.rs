@@ -106,7 +106,9 @@ pub fn inject_metadata(
             ));
         }
 
-        if let Some(canonical) = &metadata.canonical {
+        let alternates_canonical = metadata.alternates.as_ref().and_then(|a| a.canonical.as_ref());
+        let effective_canonical = alternates_canonical.or(metadata.canonical.as_ref());
+        if let Some(canonical) = effective_canonical {
             meta_tags.push_str(&format!(
                 r#"    <link rel="canonical" href="{}" />
 "#,
@@ -409,6 +411,35 @@ pub fn inject_metadata(
             }
         }
 
+        if let Some(alternates) = &metadata.alternates {
+            if let Some(languages) = &alternates.languages {
+                for (lang, url) in languages {
+                    meta_tags.push_str(&format!(
+                        r#"    <link rel="alternate" hreflang="{}" href="{}" />
+"#,
+                        escape_html(lang),
+                        escape_html(url)
+                    ));
+                }
+            }
+            if let Some(types) = &alternates.types {
+                for (media_type, url) in types {
+                    let title = url
+                        .rsplit('/')
+                        .next()
+                        .and_then(|f| f.strip_suffix(".xml"))
+                        .unwrap_or("Feed");
+                    meta_tags.push_str(&format!(
+                        r#"    <link rel="alternate" type="{}" href="{}" title="{}" />
+"#,
+                        escape_html(media_type),
+                        escape_html(url),
+                        escape_html(title)
+                    ));
+                }
+            }
+        }
+
         if !meta_tags.is_empty() {
             result.insert_str(head_end, &meta_tags);
         }
@@ -438,6 +469,7 @@ mod tests {
     use crate::rsc::rendering::layout::types::{
         OpenGraphMetadata, RobotsMetadata, TwitterMetadata,
     };
+    use rustc_hash::FxHashMap;
 
     #[test]
     fn test_inject_basic_metadata() {
@@ -463,6 +495,7 @@ mod tests {
             manifest: None,
             theme_color: None,
             apple_web_app: None,
+            alternates: None,
         };
 
         let result = inject_metadata(html, &metadata, None);
@@ -512,6 +545,7 @@ mod tests {
             manifest: None,
             theme_color: None,
             apple_web_app: None,
+            alternates: None,
         };
 
         let result = inject_metadata(html, &metadata, None);
@@ -566,6 +600,7 @@ mod tests {
             manifest: None,
             theme_color: None,
             apple_web_app: None,
+            alternates: None,
         };
 
         let result = inject_metadata(html, &metadata, None);
@@ -609,6 +644,7 @@ mod tests {
             manifest: None,
             theme_color: None,
             apple_web_app: None,
+            alternates: None,
         };
 
         let result = inject_metadata(html, &metadata, None);
@@ -639,6 +675,7 @@ mod tests {
             manifest: None,
             theme_color: None,
             apple_web_app: None,
+            alternates: None,
         };
 
         let result = inject_metadata(html, &metadata, None);
@@ -672,6 +709,7 @@ mod tests {
             manifest: None,
             theme_color: None,
             apple_web_app: None,
+            alternates: None,
         };
 
         let result = inject_metadata(html, &metadata, None);
@@ -718,6 +756,7 @@ mod tests {
             manifest: None,
             theme_color: None,
             apple_web_app: None,
+            alternates: None,
         };
 
         let result = inject_metadata(html, &metadata, None);
@@ -749,6 +788,7 @@ mod tests {
             manifest: None,
             theme_color: None,
             apple_web_app: None,
+            alternates: None,
         };
 
         let result = inject_metadata(html, &metadata, None);
@@ -784,6 +824,7 @@ mod tests {
             manifest: None,
             theme_color: None,
             apple_web_app: None,
+            alternates: None,
         };
 
         let result = inject_metadata(html, &metadata, None);
@@ -791,5 +832,137 @@ mod tests {
         assert!(!result.contains(r#"<meta charset="UTF-8" />"#));
         assert!(!result.contains(r#"<meta name="viewport""#));
         assert!(result.contains("<title>Test</title>"));
+    }
+
+    #[test]
+    fn test_inject_alternates_rss_feed() {
+        let html = r#"<!DOCTYPE html>
+<html>
+<head>
+    <title>Test</title>
+</head>
+<body></body>
+</html>"#;
+
+        use crate::rsc::rendering::layout::types::AlternatesMetadata;
+
+        let mut types = FxHashMap::default();
+        types.insert("application/rss+xml".to_string(), "https://example.com/feed.xml".to_string());
+
+        let metadata = PageMetadata {
+            title: Some("Test".to_string()),
+            description: None,
+            keywords: None,
+            open_graph: None,
+            twitter: None,
+            robots: None,
+            viewport: None,
+            canonical: None,
+            icons: None,
+            manifest: None,
+            theme_color: None,
+            apple_web_app: None,
+            alternates: Some(AlternatesMetadata {
+                canonical: None,
+                languages: None,
+                types: Some(types),
+            }),
+        };
+
+        let result = inject_metadata(html, &metadata, None);
+
+        assert!(result.contains(
+            r#"<link rel="alternate" type="application/rss+xml" href="https://example.com/feed.xml" title="feed" />"#
+        ));
+    }
+
+    #[test]
+    fn test_inject_alternates_languages() {
+        let html = r#"<!DOCTYPE html>
+<html>
+<head>
+    <title>Test</title>
+</head>
+<body></body>
+</html>"#;
+
+        use crate::rsc::rendering::layout::types::AlternatesMetadata;
+
+        let mut languages = FxHashMap::default();
+        languages.insert("en".to_string(), "https://example.com/en".to_string());
+        languages.insert("es".to_string(), "https://example.com/es".to_string());
+
+        let metadata = PageMetadata {
+            title: Some("Test".to_string()),
+            description: None,
+            keywords: None,
+            open_graph: None,
+            twitter: None,
+            robots: None,
+            viewport: None,
+            canonical: None,
+            icons: None,
+            manifest: None,
+            theme_color: None,
+            apple_web_app: None,
+            alternates: Some(AlternatesMetadata {
+                canonical: Some("https://example.com".to_string()),
+                languages: Some(languages),
+                types: None,
+            }),
+        };
+
+        let result = inject_metadata(html, &metadata, None);
+
+        assert!(result.contains(r#"<link rel="canonical" href="https://example.com" />"#));
+        assert!(
+            result.contains(
+                r#"<link rel="alternate" hreflang="en" href="https://example.com/en" />"#
+            )
+        );
+        assert!(
+            result.contains(
+                r#"<link rel="alternate" hreflang="es" href="https://example.com/es" />"#
+            )
+        );
+    }
+
+    #[test]
+    fn test_no_duplicate_canonical_when_both_set() {
+        let html = r#"<!DOCTYPE html>
+<html>
+<head>
+    <title>Test</title>
+</head>
+<body></body>
+</html>"#;
+
+        use crate::rsc::rendering::layout::types::AlternatesMetadata;
+
+        let metadata = PageMetadata {
+            title: Some("Test".to_string()),
+            description: None,
+            keywords: None,
+            open_graph: None,
+            twitter: None,
+            robots: None,
+            viewport: None,
+            canonical: Some("https://example.com/old".to_string()),
+            icons: None,
+            manifest: None,
+            theme_color: None,
+            apple_web_app: None,
+            alternates: Some(AlternatesMetadata {
+                canonical: Some("https://example.com/preferred".to_string()),
+                languages: None,
+                types: None,
+            }),
+        };
+
+        let result = inject_metadata(html, &metadata, None);
+
+        assert_eq!(result.matches(r#"rel="canonical""#).count(), 1);
+        assert!(result.contains(r#"href="https://example.com/preferred""#));
+        assert!(!result.contains(r#"href="https://example.com/old""#));
     }
 }

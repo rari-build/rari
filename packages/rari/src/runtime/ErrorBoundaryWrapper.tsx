@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react'
 import * as React from 'react'
 import { Component } from 'react'
-import { clearTimer } from '../shared/timer-utils'
+import { clearTimer } from '../shared/utils/timer'
 
 interface ErrorBoundaryWrapperProps {
   errorComponentId: string

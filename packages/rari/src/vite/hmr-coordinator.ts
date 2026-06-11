@@ -3,8 +3,8 @@ import type { ServerComponentBuilder } from './server-build'
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
-import { throwIfNotOk } from '../shared/http-utils'
-import { hasTopLevelUseClientDirective } from './directive-utils'
+import { throwIfNotOk } from '../shared/utils/http'
+import { hasTopLevelUseClientDirective } from './directives'
 import { HMRErrorHandler } from './hmr-error-handler'
 
 export interface ComponentRebuildResult {

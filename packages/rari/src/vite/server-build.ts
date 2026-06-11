@@ -14,8 +14,8 @@ import {
   TSX_EXT_REGEX,
 } from '../shared/regex-constants'
 import { resolveAlias } from './alias-resolver'
-import { getReadableComponentId, getComponentId as getSharedComponentId, getProjectRelativePath as getSharedProjectRelativePath, hashString as sharedHashString } from './component-id-utils'
-import { getDirectives, hasDefaultExport, hasTopLevelUseClientDirective, hasTopLevelUseServerDirective } from './directive-utils'
+import { getReadableComponentId, getComponentId as getSharedComponentId, getProjectRelativePath as getSharedProjectRelativePath, hashString as sharedHashString } from './component-ids'
+import { getDirectives, hasDefaultExport, hasTopLevelUseClientDirective, hasTopLevelUseServerDirective } from './directives'
 import { resolveIndexFile, resolveWithExtensions } from './file-resolver'
 
 const HTML_IMPORT_REGEX = /import\s*\(\s*["']([^"']+)["']\s*\)|import\s+["']([^"']+)["']/g
@@ -26,7 +26,7 @@ const CLIENT_IMPORT_REGEX = /import\s+(?:(\w+)|\{([^}]+)\})\s+from\s+['"]([^'"]+
 const PROXY_FILE_REGEX = /^proxy\.(?:tsx?|jsx?|mts|mjs)$/
 const COMPONENTS_PATH_REGEX = /\/components\/(\w+)(?:\.tsx?|\.jsx?)?$/
 const COMPONENTS_PATH_ALT_REGEX = /[/\\]components[/\\](\w+)(?:\.tsx?|\.jsx?)?$/
-const SPECIAL_FILE_REGEX = /^(?:robots|sitemap)\.(?:tsx?|jsx?)$/
+const SPECIAL_FILE_REGEX = /^(?:robots|sitemap|feed)\.(?:tsx?|jsx?)$/
 const NODE_PROTOCOL_REGEX = /^node:/
 const NODE_BUILTINS = new Set([
   'fs',
@@ -55,6 +55,17 @@ const RARI_DIST_DIR = path.dirname(fileURLToPath(import.meta.url))
 const RARI_PACKAGE_ROOT = path.dirname(RARI_DIST_DIR)
 function isRariInternalPath(filePath: string): boolean {
   return filePath.startsWith(RARI_PACKAGE_ROOT)
+}
+
+let lightningcssTransform: typeof import('lightningcss').transform | null = null
+
+async function getLightningcssTransform() {
+  if (!lightningcssTransform) {
+    const mod = await import('lightningcss')
+    lightningcssTransform = mod.transform
+  }
+
+  return lightningcssTransform
 }
 
 interface BuiltComponent {
@@ -153,9 +164,20 @@ export class ServerComponentBuilder {
 
   private htmlOnlyImports = new Set<string>()
   private fileImporters = new Map<string, Set<string>>()
+  private directiveResultCache = new Map<string, { hasUseClient: boolean, hasUseServer: boolean, error: boolean }>()
 
   getComponentCount(): number {
     return this.serverComponents.size + this.serverActions.size
+  }
+
+  hasComponent(filePath: string): boolean {
+    return this.serverComponents.has(filePath) || this.serverActions.has(filePath)
+  }
+
+  removeComponent(filePath: string): void {
+    this.serverComponents.delete(filePath)
+    this.serverActions.delete(filePath)
+    this.directiveResultCache.delete(filePath)
   }
 
   getImportGraph(): ReadonlyMap<string, ReadonlySet<string>> {
@@ -287,6 +309,25 @@ export class ServerComponentBuilder {
     return this.htmlOnlyImports.has(filePath)
   }
 
+  private getDirectivesCached(filePath: string, source?: string): { hasUseClient: boolean, hasUseServer: boolean, error: boolean } {
+    if (!source) {
+      const cached = this.directiveResultCache.get(filePath)
+      if (cached)
+        return cached
+    }
+
+    try {
+      const code = source ?? fs.readFileSync(filePath, 'utf-8')
+      const directives = getDirectives(code)
+      const result = { hasUseClient: directives.hasUseClient, hasUseServer: directives.hasUseServer, error: false }
+      this.directiveResultCache.set(filePath, result)
+      return result
+    }
+    catch {
+      return { hasUseClient: false, hasUseServer: false, error: true }
+    }
+  }
+
   isServerComponent(filePath: string, source?: string): boolean {
     if (filePath.includes('node_modules'))
       return false
@@ -294,24 +335,15 @@ export class ServerComponentBuilder {
     if (this.isHtmlOnlyImport(filePath))
       return false
 
-    try {
-      const code = source ?? fs.readFileSync(filePath, 'utf-8')
-      const directives = getDirectives(code)
-      return !directives.hasUseClient && !directives.hasUseServer
-    }
-    catch {
+    const directives = this.getDirectivesCached(filePath, source)
+    if (directives.error)
       return false
-    }
+
+    return !directives.hasUseClient && !directives.hasUseServer
   }
 
   private isClientComponent(filePath: string, source?: string): boolean {
-    try {
-      const code = source ?? fs.readFileSync(filePath, 'utf-8')
-      return getDirectives(code).hasUseClient
-    }
-    catch {
-      return false
-    }
+    return this.getDirectivesCached(filePath, source).hasUseClient
   }
 
   buildImportGraph(srcDir: string) {
@@ -965,7 +997,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
           const filePath = id.slice(CSS_MODULE_PREFIX.length)
 
           try {
-            const { transform } = await import('lightningcss')
+            const transform = await getLightningcssTransform()
             const code = fs.readFileSync(filePath)
             const result = transform({
               filename: path.relative(this.projectRoot, filePath),
@@ -1097,6 +1129,72 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     return code
   }
 
+  private async buildComponentBatch(
+    entries: Array<[string, { filePath: string, dependencies: string[], hasNodeImports: boolean }]>,
+    manifest: ServerComponentManifest,
+    concurrency: number,
+  ): Promise<void> {
+    let active = 0
+    let index = 0
+    const errors: Error[] = []
+
+    await new Promise<void>((resolve) => {
+      const next = () => {
+        while (active < concurrency && index < entries.length) {
+          const [filePath, component] = entries[index++]
+          const relativePath = path.relative(this.projectRoot, filePath)
+          const componentId = this.getComponentId(filePath)
+          const bundlePath = path.join(this.options.rscDir, `${componentId}.js`)
+          const fullBundlePath = path.join(this.options.outDir, bundlePath)
+
+          active++
+          ;(async () => {
+            try {
+              const bundleDir = path.dirname(fullBundlePath)
+              await fs.promises.mkdir(bundleDir, { recursive: true })
+
+              const built = await this.buildSingleComponent(filePath, fullBundlePath)
+              const css = await this.writeComponentCssAsset(componentId, built.css)
+
+              const moduleSpecifier = pathToFileURL(path.resolve(this.projectRoot, fullBundlePath)).href
+
+              manifest.components[componentId] = {
+                id: componentId,
+                filePath,
+                relativePath,
+                bundlePath,
+                moduleSpecifier,
+                dependencies: component.dependencies,
+                hasNodeImports: component.hasNodeImports,
+                css,
+              }
+            }
+            catch (error) {
+              errors.push(error instanceof Error ? error : new Error(String(error)))
+            }
+            finally {
+              active--
+              if (index >= entries.length && active === 0) {
+                resolve()
+              }
+              else {
+                next()
+              }
+            }
+          })()
+        }
+
+        if (entries.length === 0)
+          resolve()
+      }
+
+      next()
+    })
+
+    if (errors.length > 0)
+      throw errors[0]
+  }
+
   async buildServerComponents(): Promise<ServerComponentManifest> {
     const serverOutDir = path.join(this.options.outDir, this.options.rscDir)
 
@@ -1107,89 +1205,20 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
       buildTime: new Date().toISOString(),
     }
 
-    for (const [filePath, component] of this.serverComponents) {
-      if (this.isPageComponent(filePath))
-        continue
+    const concurrency = Math.min(8, Math.max(1, (await import('node:os')).cpus().length))
 
-      const relativePath = path.relative(this.projectRoot, filePath)
-      const componentId = this.getComponentId(filePath)
-      const bundlePath = path.join(this.options.rscDir, `${componentId}.js`)
-      const fullBundlePath = path.join(this.options.outDir, bundlePath)
+    const nonPageComponents = [...this.serverComponents.entries()]
+      .filter(([filePath]) => !this.isPageComponent(filePath))
+    const pageComponents = [...this.serverComponents.entries()]
+      .filter(([filePath]) => this.isPageComponent(filePath))
+    const actions = [...this.serverActions.entries()]
 
-      const bundleDir = path.dirname(fullBundlePath)
-      await fs.promises.mkdir(bundleDir, { recursive: true })
+    await Promise.all([
+      this.buildComponentBatch(nonPageComponents, manifest, concurrency),
+      this.buildComponentBatch(actions, manifest, concurrency),
+    ])
 
-      const built = await this.buildSingleComponent(filePath, fullBundlePath)
-      const css = await this.writeComponentCssAsset(componentId, built.css)
-
-      const moduleSpecifier = pathToFileURL(path.resolve(this.projectRoot, fullBundlePath)).href
-
-      manifest.components[componentId] = {
-        id: componentId,
-        filePath,
-        relativePath,
-        bundlePath,
-        moduleSpecifier,
-        dependencies: component.dependencies,
-        hasNodeImports: component.hasNodeImports,
-        css,
-      }
-    }
-
-    for (const [filePath, component] of this.serverComponents) {
-      if (!this.isPageComponent(filePath))
-        continue
-
-      const relativePath = path.relative(this.projectRoot, filePath)
-      const componentId = this.getComponentId(filePath)
-      const bundlePath = path.join(this.options.rscDir, `${componentId}.js`)
-      const fullBundlePath = path.join(this.options.outDir, bundlePath)
-
-      const bundleDir = path.dirname(fullBundlePath)
-      await fs.promises.mkdir(bundleDir, { recursive: true })
-
-      const built = await this.buildSingleComponent(filePath, fullBundlePath)
-      const css = await this.writeComponentCssAsset(componentId, built.css)
-
-      const moduleSpecifier = pathToFileURL(path.resolve(this.projectRoot, fullBundlePath)).href
-
-      manifest.components[componentId] = {
-        id: componentId,
-        filePath,
-        relativePath,
-        bundlePath,
-        moduleSpecifier,
-        dependencies: component.dependencies,
-        hasNodeImports: component.hasNodeImports,
-        css,
-      }
-    }
-
-    for (const [filePath, action] of this.serverActions) {
-      const relativePath = path.relative(this.projectRoot, filePath)
-      const actionId = this.getComponentId(filePath)
-      const bundlePath = path.join(this.options.rscDir, `${actionId}.js`)
-      const fullBundlePath = path.join(this.options.outDir, bundlePath)
-
-      const bundleDir = path.dirname(fullBundlePath)
-      await fs.promises.mkdir(bundleDir, { recursive: true })
-
-      const built = await this.buildSingleComponent(filePath, fullBundlePath)
-      const css = await this.writeComponentCssAsset(actionId, built.css)
-
-      const moduleSpecifier = pathToFileURL(path.resolve(this.projectRoot, fullBundlePath)).href
-
-      manifest.components[actionId] = {
-        id: actionId,
-        filePath,
-        relativePath,
-        bundlePath,
-        moduleSpecifier,
-        dependencies: action.dependencies,
-        hasNodeImports: action.hasNodeImports,
-        css,
-      }
-    }
+    await this.buildComponentBatch(pageComponents, manifest, concurrency)
 
     const manifestPath = path.join(
       this.options.outDir,
@@ -1485,10 +1514,14 @@ function registerClientReference(clientReference, id, exportName) {
       hasNodeImports,
     }
 
-    if (this.isServerAction(code))
+    if (this.isServerAction(code)) {
       this.serverActions.set(filePath, componentData)
-    else
+      this.serverComponents.delete(filePath)
+    }
+    else {
       this.serverComponents.set(filePath, componentData)
+      this.serverActions.delete(filePath)
+    }
 
     const relativeBundlePath = path.join(
       this.options.rscDir,
@@ -1633,6 +1666,27 @@ export function hasComponentExport(code: string): boolean {
     || EXPORTED_CONST_FUNCTION_REGEX.test(code)
 }
 
+export function isEligibleServerComponent(
+  filePath: string,
+  code: string,
+  builder: ServerComponentBuilder,
+): boolean {
+  const fileName = path.basename(filePath)
+  if (SPECIAL_FILE_REGEX.test(fileName) || fileName.endsWith('.d.ts'))
+    return false
+
+  if (hasTopLevelUseClientDirective(code))
+    return false
+
+  if (hasTopLevelUseServerDirective(code))
+    return true
+
+  if (builder.isOnlyImportedByClientComponents(filePath))
+    return false
+
+  return builder.isServerComponent(filePath, code) && hasComponentExport(code)
+}
+
 export function scanDirectory(dir: string, builder: ServerComponentBuilder, isTopLevel = true) {
   if (isTopLevel)
     builder.buildImportGraph(dir)
@@ -1646,29 +1700,11 @@ export function scanDirectory(dir: string, builder: ServerComponentBuilder, isTo
       scanDirectory(fullPath, builder, false)
     }
     else if (entry.isFile() && TSX_EXT_REGEX.test(entry.name)) {
-      if (SPECIAL_FILE_REGEX.test(entry.name))
-        continue
-
-      if (entry.name.endsWith('.d.ts'))
-        continue
-
       try {
         const code = fs.readFileSync(fullPath, 'utf-8')
 
-        if (hasTopLevelUseServerDirective(code)) {
+        if (isEligibleServerComponent(fullPath, code, builder))
           builder.addServerComponent(fullPath, code)
-          continue
-        }
-
-        if (builder.isOnlyImportedByClientComponents(fullPath))
-          continue
-
-        if (builder.isServerComponent(fullPath, code)) {
-          if (!hasComponentExport(code))
-            continue
-
-          builder.addServerComponent(fullPath, code)
-        }
       }
       catch (error) {
         console.warn(
@@ -1753,7 +1789,6 @@ export function createServerBuildPlugin(
           await generateRobotsFile({
             appDir: path.join(projectRoot, 'src', 'app'),
             outDir: path.join(projectRoot, 'dist'),
-            extensions: ['.ts', '.tsx', '.js', '.jsx'],
           })
         }
         catch (error) {
@@ -1765,12 +1800,23 @@ export function createServerBuildPlugin(
           await generateSitemapFiles({
             appDir: path.join(projectRoot, 'src', 'app'),
             outDir: path.join(projectRoot, 'dist'),
-            extensions: ['.ts', '.tsx', '.js', '.jsx'],
             aliases: resolvedAliases,
           })
         }
         catch (error) {
           console.warn('[rari] Failed to generate sitemap:', error)
+        }
+
+        try {
+          const { generateFeedFile } = await import('../router/feed-generator')
+          await generateFeedFile({
+            appDir: path.join(projectRoot, 'src', 'app'),
+            outDir: path.join(projectRoot, 'dist'),
+            aliases: resolvedAliases,
+          })
+        }
+        catch (error) {
+          console.warn('[rari] Failed to generate feed:', error)
         }
       }
     },
@@ -1785,10 +1831,20 @@ export function createServerBuildPlugin(
 
       try {
         const content = await fs.promises.readFile(file, 'utf-8')
-        if (hasTopLevelUseClientDirective(content))
-          return
+        const isTracked = builder.hasComponent(file)
+        const eligible = isEligibleServerComponent(file, content, builder)
 
-        await builder.buildServerComponents()
+        if (!eligible) {
+          if (isTracked)
+            builder.removeComponent(file)
+
+          return
+        }
+
+        if (!isTracked)
+          builder.addServerComponent(file, content)
+
+        await builder.rebuildComponent(file)
       }
       catch (error) {
         console.error(`[rari] Build: Error rebuilding ${relativePath}:`, error)

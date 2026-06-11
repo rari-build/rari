@@ -37,6 +37,8 @@ pub struct PageMetadata {
     pub viewport: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub canonical: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub alternates: Option<AlternatesMetadata>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -142,6 +144,16 @@ pub struct ThemeColorDescriptor {
     pub color: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub media: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AlternatesMetadata {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub canonical: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub languages: Option<FxHashMap<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub types: Option<FxHashMap<String, String>>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

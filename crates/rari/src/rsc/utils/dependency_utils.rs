@@ -1,21 +1,19 @@
-use crate::error::RariError;
 use smallvec::SmallVec;
+use std::sync::OnceLock;
 
 pub type DependencyList = SmallVec<[String; 4]>;
 
-fn compile_regex(pattern: &str, context: &str) -> Result<regex::Regex, RariError> {
-    regex::Regex::new(pattern)
-        .map_err(|_| RariError::js_execution(format!("Failed to compile {context} regex")))
+static IMPORT_REGEX: OnceLock<regex::Regex> = OnceLock::new();
+
+fn get_import_regex() -> &'static regex::Regex {
+    IMPORT_REGEX.get_or_init(|| {
+        regex::Regex::new(r#"(?:import|from)\s*((?:['"])(.*?)(?:['"]))"#)
+            .expect("Failed to compile dependency extraction regex")
+    })
 }
 
 pub fn extract_dependencies(code: &str) -> DependencyList {
-    let import_regex = match compile_regex(
-        r#"(?:import|from)\s*((?:['"])(.*?)(?:['"]))"#,
-        "dependency extraction",
-    ) {
-        Ok(regex) => regex,
-        Err(_) => return SmallVec::new(),
-    };
+    let import_regex = get_import_regex();
     let mut dependencies = SmallVec::new();
 
     for captures in import_regex.captures_iter(code) {

@@ -16,7 +16,7 @@ packages:
   - web
 catalogs:
   analytics:
-    posthog-js: ^1.382.0
+    posthog-js: ^1.384.1
   build:
     lightningcss: ^1.32.0
     rolldown: ^1.1.0
@@ -24,14 +24,14 @@ catalogs:
     vite-plus: ^0.1.24
   cli:
     '@clack/prompts': ^1.5.1
-  default:
-    rari: ^0.14.8
+  # default:
+  # rari: ^0.14.8
   eslint:
     '@antfu/eslint-config': ^9.0.0
-    '@eslint-react/eslint-plugin': ^5.8.16
+    '@eslint-react/eslint-plugin': ^5.8.17
     eslint: ^10.4.1
     eslint-plugin-de-morgan: ^2.1.2
-    eslint-plugin-oxlint: ^1.68.0
+    eslint-plugin-oxlint: ^1.69.0
     eslint-plugin-react-refresh: ^0.5.2
     knip: ^6.16.1
   mdx:
@@ -44,7 +44,7 @@ catalogs:
     mermaid: ^11.15.0
     remark-gfm: ^4.0.1
   monitoring:
-    '@sentry/react': ^10.56.0
+    '@sentry/react': ^10.57.0
   react:
     '@types/react': ^19.2.17
     '@types/react-dom': ^19.2.3
@@ -58,6 +58,6 @@ catalogs:
     '@vitest/coverage-v8': ^4.1.8
   typescript:
     '@types/node': ^25.9.2
-    '@typescript/native-preview': ^7.0.0-dev.20260607.1
+    '@typescript/native-preview': ^7.0.0-dev.20260610.1
 allowBuilds:
   core-js: true
