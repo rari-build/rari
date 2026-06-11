@@ -929,7 +929,10 @@ impl RscHtmlRenderer {
                     .and_then(|c| c.as_array())
                     .map(|arr| {
                         arr.first()
-                            .map(|first| first.as_str() == Some("$") || first.is_array())
+                            .map(|first| {
+                                first.as_str().map(|s| s.starts_with('$')).unwrap_or(false)
+                                    || first.is_array()
+                            })
                             .unwrap_or(false)
                     })
                     .unwrap_or(false);
@@ -1662,6 +1665,7 @@ if (typeof window !== 'undefined') {{
                         && element_type[1..].chars().all(|c| c.is_ascii_hexdigit());
 
                     let is_client_component = element_type.starts_with("$L")
+                        || element_type.starts_with("$@")
                         || element_type.contains('#')
                         || element_type.contains('/');
 
@@ -1721,7 +1725,10 @@ if (typeof window !== 'undefined') {{
             .and_then(|c| c.as_array())
             .map(|arr| {
                 arr.first()
-                    .map(|first| first.as_str() == Some("$") || first.is_array())
+                    .map(|first| {
+                        first.as_str().map(|s| s.starts_with('$')).unwrap_or(false)
+                            || first.is_array()
+                    })
                     .unwrap_or(false)
             })
             .unwrap_or(false);
