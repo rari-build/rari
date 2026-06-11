@@ -1,12 +1,11 @@
 catalogMode: prefer
 minimumReleaseAgeExclude:
-  - rari-darwin-arm64@0.14.8
-  - rari-darwin-x64@0.14.8
-  - rari-linux-arm64@0.14.8
-  - rari-linux-x64@0.14.8
-  - rari-win32-arm64@0.14.8
-  - rari-win32-x64@0.14.8
-  - rari@0.14.8
+  - rari-darwin-arm64@0.14.9
+  - rari-darwin-x64@0.14.9
+  - rari-linux-arm64@0.14.9
+  - rari-linux-x64@0.14.9
+  - rari-win32-arm64@0.14.9
+  - rari-win32-x64@0.14.9
 shellEmulator: true
 trustPolicy: no-downgrade
 packages:
