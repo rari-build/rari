@@ -94,8 +94,11 @@ const Children = {
 const isValidElement = (obj) => obj != null && typeof obj === 'object' && '$$typeof' in obj;
 const cloneElement = (element, props, ...children) => ({
   ...element,
-  props: { ...element.props, ...props },
-  children: children.length ? children.flat() : element.children,
+  props: {
+    ...element.props,
+    ...props,
+    children: children.length ? children.flat() : (props?.children ?? element.props?.children),
+  },
 });
 
 const cache = (fn) => {
