@@ -1074,6 +1074,12 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
                 RARI_ROUTER_STUB.to_string()
             } else if specifier_str.contains("/react-dom") {
                 RARI_REACT_DOM_STUB.to_string()
+            } else if specifier_str.contains("/headers") {
+                RARI_HEADERS_STUB.to_string()
+            } else if specifier_str.contains("/image") {
+                RARI_IMAGE_STUB.to_string()
+            } else if specifier_str.contains("/client") {
+                RARI_CLIENT_STUB.to_string()
             } else {
                 RARI_DEFAULT_STUB.to_string()
             };
