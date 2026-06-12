@@ -1,3 +1,32 @@
+## [0.14.11] - 2026-06-12
+
+### 🚀 Features
+
+- *(ssr)* implement server-side rendering for client components by @skiniks
+- *(ssr)* add support for module imports in RSC rendering by @skiniks
+- *(ssr)* enhance server-side rendering with improved error handling and component stubs by @skiniks
+- *(module-loader)* add stubs for headers, image, and client components by @skiniks
+
+### 🐛 Bug Fixes
+
+- *(ssr)* render client component children to HTML instead of empty placeholders by @skiniks
+- *(ssr)* enhance component loading and rendering logic by @skiniks
+- *(ssr)* refine component type checks in rendering logic by @skiniks
+- *(ssr)* enhance rendering logic for suspense and client components by @skiniks
+- *(ssr)* improve RSC value handling in rendering logic by @skiniks
+- *(ssr)* streamline RSC value checks in rendering logic by @skiniks
+- *(rendering)* refine RSC string validation logic to support new prefixes by @skiniks
+- *(rendering)* update cloneElement logic to handle children props correctly by @skiniks
+
+### 🚜 Refactor
+
+- *(ssr)* centralize RSC children type checks in rendering logic by @skiniks
+- *(proxy)* reorganize proxy utilities and introduce new header processing functions by @skiniks
+- *(rendering)* simplify suspense handling in RSC logic by @skiniks
+- *(module-loader)* streamline stub selection logic for module loading by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.14.9...v0.14.11
 ## [rari@0.14.9] - 2026-06-11
 
 ### ⚙️ Miscellaneous Tasks
