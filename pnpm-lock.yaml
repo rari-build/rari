@@ -26,6 +26,10 @@ catalogs:
     '@clack/prompts':
       specifier: ^1.5.1
       version: 1.5.1
+  default:
+    rari:
+      specifier: ^0.14.11
+      version: 0.14.11
   eslint:
     '@antfu/eslint-config':
       specifier: ^9.0.0
@@ -338,8 +342,8 @@ importers:
         specifier: catalog:analytics
         version: 1.386.2
       rari:
-        specifier: workspace:*
-        version: link:../packages/rari
+        specifier: 'catalog:'
+        version: 0.14.11(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       react:
         specifier: catalog:react
         version: 19.2.7
@@ -3593,6 +3597,14 @@ packages:
     cpu: [x64]
     os: [win32]
     hasBin: true
+
+  rari@0.14.11:
+    resolution: {integrity: sha512-4rAFRvHfaxZbaaTZbiNUXLRVWpostJ8FXcccHgRkdwROaTeDlJHPE5kOu/GZKXTynzXna5RcgEFtfYAFNFE1fQ==}
+    engines: {node: '>=22.12.0'}
+    hasBin: true
+    peerDependencies:
+      react: ^19.2.7
+      react-dom: ^19.2.7
 
   react-dom@19.2.7:
     resolution: {integrity: sha512-t0BRVXvbiE/o20Hfw669rLbMCDWtYZLvmJigy2f0MxsXF+71pxhR3xOkspmsO8h3ZlNzyibAmtCa3l4lYKk6gQ==}
@@ -7461,6 +7473,20 @@ snapshots:
 
   rari-win32-x64@0.14.11:
     optional: true
+
+  rari@0.14.11(react-dom@19.2.7(react@19.2.7))(react@19.2.7):
+    dependencies:
+      lightningcss: 1.32.0
+      react: 19.2.7
+      react-dom: 19.2.7(react@19.2.7)
+      rolldown: 1.1.0
+    optionalDependencies:
+      rari-darwin-arm64: 0.14.11
+      rari-darwin-x64: 0.14.11
+      rari-linux-arm64: 0.14.11
+      rari-linux-x64: 0.14.11
+      rari-win32-arm64: 0.14.11
+      rari-win32-x64: 0.14.11
 
   react-dom@19.2.7(react@19.2.7):
     dependencies:
