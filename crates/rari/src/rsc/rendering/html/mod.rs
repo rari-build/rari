@@ -969,13 +969,10 @@ impl RscHtmlRenderer {
                 return Ok(String::new());
             }
 
-            let is_suspense_symbol = tag.starts_with('$')
-                && tag.len() > 1
-                && tag[1..].chars().all(|c| c.is_ascii_hexdigit());
             if tag == "$Sreact.suspense"
                 || tag == "react.suspense"
                 || tag == "suspense"
-                || is_suspense_symbol
+                || tag.starts_with("$S")
             {
                 if let Some(props_obj) = props.as_object() {
                     let children = props_obj.get("children");
@@ -1683,10 +1680,6 @@ if (typeof window !== 'undefined') {{
                     let element_type = arr[1].as_str().unwrap_or("div");
                     let props = arr[3].as_object();
 
-                    let is_suspense_symbol = element_type.starts_with('$')
-                        && element_type.len() > 1
-                        && element_type[1..].chars().all(|c| c.is_ascii_hexdigit());
-
                     let is_client_component = element_type.starts_with("$L")
                         || element_type.starts_with("$@")
                         || element_type.contains('#')
@@ -1694,7 +1687,8 @@ if (typeof window !== 'undefined') {{
 
                     if element_type == "$Sreact.suspense"
                         || element_type == "react.suspense"
-                        || is_suspense_symbol
+                        || element_type == "suspense"
+                        || element_type.starts_with("$S")
                     {
                         return self.render_suspense_boundary(element_type, props).await;
                     }
@@ -1720,10 +1714,6 @@ if (typeof window !== 'undefined') {{
                 {
                     let props_obj = props.as_object();
 
-                    let is_suspense_symbol = type_str.starts_with('$')
-                        && type_str.len() > 1
-                        && type_str[1..].chars().all(|c| c.is_ascii_hexdigit());
-
                     let is_client_component = type_str.starts_with("$L")
                         || type_str.starts_with("$@")
                         || type_str.contains('#')
@@ -1732,7 +1722,7 @@ if (typeof window !== 'undefined') {{
                     if type_str == "$Sreact.suspense"
                         || type_str == "react.suspense"
                         || type_str == "suspense"
-                        || is_suspense_symbol
+                        || type_str.starts_with("$S")
                     {
                         return self.render_suspense_boundary(type_str, props_obj).await;
                     }
