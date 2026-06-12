@@ -16,7 +16,7 @@ packages:
   - web
 catalogs:
   analytics:
-    posthog-js: ^1.384.1
+    posthog-js: ^1.386.1
   build:
     lightningcss: ^1.32.0
     rolldown: ^1.1.0

@@ -5,6 +5,7 @@ use crate::runtime::module_loader::{
     config::{InternerStats, PerformanceStats, ResourceStats, RuntimeConfig, RuntimeMetrics},
     interner::get_string_interner,
     loader_stubs::*,
+    rari_stubs::*,
     react_stubs::*,
     resolver::ModuleResolver,
     storage::OrderedStorage,
@@ -35,6 +36,7 @@ type ExtensionTranspilerFn = dyn Fn(FastString, FastString) -> ExtensionTranspil
 const NODE_MODULES_PATH: &str = "/node_modules/";
 const RARI_COMPONENT_PATH: &str = "/rari_component/";
 const REACT_STUB_PATH: &str = "/react_stub/";
+const RARI_STUB_PATH: &str = "/rari_stub/";
 const FILE_PROTOCOL: &str = "file://";
 const NODE_PREFIX: &str = "node:";
 const FUNCTIONS_MODULE: &str = "functions";
@@ -1067,6 +1069,26 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
             ))));
         }
 
+        if specifier_str.contains(RARI_STUB_PATH) {
+            let module_name =
+                specifier_str.rsplit(RARI_STUB_PATH).next().unwrap_or("").trim_end_matches(".js");
+            let stub_content = match module_name {
+                "router" => RARI_ROUTER_STUB.to_string(),
+                "react-dom" => RARI_REACT_DOM_STUB.to_string(),
+                "headers" => RARI_HEADERS_STUB.to_string(),
+                "image" => RARI_IMAGE_STUB.to_string(),
+                "client" => RARI_CLIENT_STUB.to_string(),
+                _ => RARI_DEFAULT_STUB.to_string(),
+            };
+
+            return Some(ModuleLoadResponse::Sync(Ok(ModuleSource::new(
+                ModuleType::JavaScript,
+                ModuleSourceCode::String(stub_content.into()),
+                module_specifier,
+                None,
+            ))));
+        }
+
         if specifier_str.contains(NODE_MODULES_PATH) {
             let parts: Vec<&str> = specifier_str.split(NODE_MODULES_PATH).collect();
             let module_path = parts.get(1).unwrap_or(&"unknown");
@@ -1654,6 +1676,25 @@ impl ModuleLoader for RariModuleLoader {
                         "file:///react_stub/react.js".to_string()
                     };
                 return self.resolve(&react_url, referrer, kind);
+            }
+
+            if specifier == "react-dom" || specifier.starts_with("react-dom/") {
+                let is_ssr_context = referrer.contains("/ssr/");
+                if is_ssr_context {
+                    return self.resolve("file:///rari_stub/react-dom.js", referrer, kind);
+                }
+            }
+
+            if specifier == "rari" || specifier.starts_with("rari/") {
+                let is_ssr_context = referrer.contains("/ssr/");
+                if is_ssr_context {
+                    let subpath = specifier.strip_prefix("rari").unwrap_or("");
+                    let rari_url = format!(
+                        "file:///rari_stub{}.js",
+                        if subpath.is_empty() { "/index" } else { subpath }
+                    );
+                    return self.resolve(&rari_url, referrer, kind);
+                }
             }
 
             if let Some(resolved_path) = self.resolve_from_node_modules(specifier, referrer) {

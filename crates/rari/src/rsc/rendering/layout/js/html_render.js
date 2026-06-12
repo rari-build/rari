@@ -168,4 +168,43 @@ if (typeof globalThis !== 'undefined') {
   globalThis.renderToHtml = renderToHtml
   globalThis.escapeHtml = escapeHtml
   globalThis.kebabCase = kebabCase
+
+  if (!globalThis['~rari'])
+    globalThis['~rari'] = {}
+  if (!globalThis['~rari'].ssrModules)
+    globalThis['~rari'].ssrModules = {}
+
+  globalThis['~rari'].ssrRenderComponent = async function (modulePath, exportName, props) {
+    const mod = globalThis['~rari'].ssrModules[modulePath.replace(/\\/g, '/')]
+      || globalThis['~rari'].ssrModules[modulePath]
+    if (!mod) {
+      if (globalThis.__RARI_DEV__)
+        console.warn(`[rari] SSR: Module not loaded: ${modulePath}`)
+
+      return ''
+    }
+
+    const Component = exportName === 'default' ? (mod.default || mod) : mod[exportName]
+    if (typeof Component !== 'function') {
+      if (globalThis.__RARI_DEV__)
+        console.warn(`[rari] SSR: Export '${exportName}' is not a function in ${modulePath} (got ${typeof Component})`)
+
+      return ''
+    }
+
+    try {
+      let element = Component(props)
+      if (element && typeof element.then === 'function')
+        element = await element
+
+      return await renderToHtml(element, 0)
+    }
+    catch (error) {
+      if (globalThis.__RARI_DEV__) {
+        console.warn(`[rari] SSR: Render fallback for ${modulePath}:${exportName}:`, error?.message || error)
+      }
+
+      return ''
+    }
+  }
 }

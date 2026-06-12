@@ -1,6 +1,7 @@
 use crate::error::{RariError, StreamingError};
 use crate::rsc::rendering::streaming::{RscChunkType, RscStreamChunk};
 use crate::rsc::types::RscElement;
+use crate::rsc::wire_format::escape::unescape_rsc_value;
 use crate::runtime::JsExecutionRuntime;
 use crate::server::routing::app_router::AppRouteMatch;
 use cow_utils::CowUtils;
@@ -237,6 +238,52 @@ pub struct RscHtmlRenderer {
 impl RscHtmlRenderer {
     pub fn new(runtime: Arc<JsExecutionRuntime>) -> Self {
         Self { runtime, template_cache: parking_lot::Mutex::new(None) }
+    }
+
+    fn string_looks_like_rsc(s: &str) -> bool {
+        if let Some(rest) = s.strip_prefix("$L").or_else(|| s.strip_prefix("$@")) {
+            !rest.is_empty() && rest.chars().all(|c| c.is_ascii_hexdigit())
+        } else {
+            false
+        }
+    }
+
+    fn value_looks_like_rsc(value: &serde_json::Value) -> bool {
+        match value {
+            serde_json::Value::String(s) => Self::string_looks_like_rsc(s),
+            serde_json::Value::Array(arr) => arr.iter().any(Self::value_looks_like_rsc),
+            serde_json::Value::Object(obj) => obj.values().any(Self::value_looks_like_rsc),
+            _ => false,
+        }
+    }
+
+    async fn ssr_render_client_component(
+        &self,
+        module_path: &str,
+        export_name: &str,
+        props_json: &str,
+    ) -> Result<String, RariError> {
+        let script = format!(
+            r#"(async function() {{
+                const ssrRender = globalThis['~rari']?.ssrRenderComponent;
+                if (!ssrRender) return '';
+                try {{
+                    return await ssrRender({module_path}, {export_name}, {props_json});
+                }} catch (e) {{
+                    return '';
+                }}
+            }})()"#,
+            module_path = serde_json::to_string(module_path).unwrap_or_default(),
+            export_name = serde_json::to_string(export_name).unwrap_or_default(),
+            props_json = props_json,
+        );
+
+        let result = self.runtime.execute_script("ssr_render_client".to_string(), script).await?;
+
+        match result.as_str() {
+            Some(html) if !html.is_empty() => Ok(html.to_string()),
+            _ => Ok(String::new()),
+        }
     }
 
     fn extract_script_tags(template: &str) -> String {
@@ -516,7 +563,20 @@ impl RscHtmlRenderer {
         let id = u32::from_str_radix(id_str, 16)
             .map_err(|e| RariError::internal(format!("Invalid row ID '{}': {}", id_str, e)))?;
 
-        if data_str.starts_with('I') {
+        if let Some(json_str) = data_str.strip_prefix('I') {
+            if let Ok(import_data) = serde_json::from_str::<serde_json::Value>(json_str) {
+                let module_path =
+                    import_data.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let export_name = import_data
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("default")
+                    .to_string();
+                return Ok(RscRow {
+                    id,
+                    data: RscElement::ModuleImport { module_path, export_name },
+                });
+            }
             return Ok(RscRow { id, data: RscElement::Text(data_str.to_string()) });
         }
 
@@ -857,6 +917,8 @@ impl RscHtmlRenderer {
                 }
 
                 RscElement::Promise { promise_id: _ } => Ok(String::new()),
+
+                RscElement::ModuleImport { .. } => Ok(String::new()),
             }
         })
     }
@@ -879,19 +941,42 @@ impl RscHtmlRenderer {
                 || tag.contains('#')
                 || tag.contains('/');
             if is_client_component {
-                return Ok(format!(
-                    r#"<div data-client-component="{}" style="display: contents;"></div>"#,
-                    Self::escape_html_attribute(tag)
-                ));
+                let props_are_rsc = Self::value_looks_like_rsc(props);
+
+                if !props_are_rsc
+                    && let Some(stripped) =
+                        tag.strip_prefix("$L").or_else(|| tag.strip_prefix("$@"))
+                    && let Ok(module_row_id) = u32::from_str_radix(stripped, 16)
+                    && let Some(RscElement::ModuleImport { module_path, export_name }) =
+                        row_map.get(&module_row_id).copied()
+                {
+                    let props_json =
+                        serde_json::to_string(&unescape_rsc_value(props)).unwrap_or_default();
+                    if let Ok(html) = self
+                        .ssr_render_client_component(module_path, export_name, &props_json)
+                        .await
+                        && !html.is_empty()
+                    {
+                        return Ok(html);
+                    }
+                }
+
+                if let Some(props_obj) = props.as_object()
+                    && let Some(children) = props_obj.get("children")
+                {
+                    let children_html =
+                        self.render_json_to_html(children, row_map, row_cache).await?;
+                    if !children_html.is_empty() {
+                        return Ok(children_html);
+                    }
+                }
+                return Ok(String::new());
             }
 
-            let is_suspense_symbol = tag.starts_with('$')
-                && tag.len() > 1
-                && tag[1..].chars().all(|c| c.is_ascii_hexdigit());
             if tag == "$Sreact.suspense"
                 || tag == "react.suspense"
                 || tag == "suspense"
-                || is_suspense_symbol
+                || tag.starts_with("$S")
             {
                 if let Some(props_obj) = props.as_object() {
                     let children = props_obj.get("children");
@@ -1080,6 +1165,8 @@ impl RscHtmlRenderer {
 
 pub struct RscToHtmlConverter {
     row_cache: FxHashMap<u32, String>,
+    module_imports: FxHashMap<u32, (String, String)>,
+    renderer: Arc<RscHtmlRenderer>,
     shell_sent: bool,
     asset_links: Option<String>,
     boundary_id_generator: BoundaryIdGenerator,
@@ -1093,9 +1180,11 @@ pub struct RscToHtmlConverter {
 }
 
 impl RscToHtmlConverter {
-    pub fn new(_renderer: Arc<RscHtmlRenderer>) -> Self {
+    pub fn new(renderer: Arc<RscHtmlRenderer>) -> Self {
         Self {
             row_cache: FxHashMap::default(),
+            module_imports: FxHashMap::default(),
+            renderer,
             shell_sent: false,
             asset_links: None,
             boundary_id_generator: BoundaryIdGenerator::new(),
@@ -1109,9 +1198,11 @@ impl RscToHtmlConverter {
         }
     }
 
-    pub fn with_assets(asset_links: String, _renderer: Arc<RscHtmlRenderer>) -> Self {
+    pub fn with_assets(asset_links: String, renderer: Arc<RscHtmlRenderer>) -> Self {
         Self {
             row_cache: FxHashMap::default(),
+            module_imports: FxHashMap::default(),
+            renderer,
             shell_sent: false,
             asset_links: Some(asset_links),
             boundary_id_generator: BoundaryIdGenerator::new(),
@@ -1128,10 +1219,12 @@ impl RscToHtmlConverter {
     pub fn with_custom_shell(
         custom_shell: String,
         body_scripts: Option<String>,
-        _renderer: Arc<RscHtmlRenderer>,
+        renderer: Arc<RscHtmlRenderer>,
     ) -> Self {
         Self {
             row_cache: FxHashMap::default(),
+            module_imports: FxHashMap::default(),
+            renderer,
             shell_sent: false,
             asset_links: None,
             boundary_id_generator: BoundaryIdGenerator::new(),
@@ -1163,6 +1256,22 @@ impl RscToHtmlConverter {
 
                 if !self.payload_embedding_disabled {
                     self.rsc_wire_format.push(rsc_line.trim().to_string());
+                }
+
+                let parts: Vec<&str> = rsc_line.trim().splitn(2, ':').collect();
+                if parts.len() == 2
+                    && let Ok(row_id) = u32::from_str_radix(parts[0], 16)
+                    && let Some(i_data) = parts[1].trim().strip_prefix('I')
+                    && let Ok(import_data) = serde_json::from_str::<serde_json::Value>(i_data)
+                {
+                    let module_path =
+                        import_data.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                    let export_name = import_data
+                        .get("name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("default")
+                        .to_string();
+                    self.module_imports.insert(row_id, (module_path, export_name));
                 }
 
                 Ok(Vec::new())
@@ -1339,35 +1448,6 @@ impl RscToHtmlConverter {
 </script>"#
     }
 
-    fn contains_client_reference(value: &serde_json::Value) -> bool {
-        match value {
-            serde_json::Value::Array(arr) => {
-                if arr.len() >= 4
-                    && arr[0] == "$"
-                    && let Some(id) = arr[1].as_str()
-                {
-                    if id.starts_with("$L")
-                        || id.starts_with("$@")
-                        || id.contains('#')
-                        || id.contains('/')
-                    {
-                        return true;
-                    }
-
-                    if id.starts_with('$')
-                        && id.len() > 1
-                        && id[1..].chars().all(|c| c.is_ascii_hexdigit())
-                    {
-                        return true;
-                    }
-                }
-                arr.iter().any(Self::contains_client_reference)
-            }
-            serde_json::Value::Object(obj) => obj.values().any(Self::contains_client_reference),
-            _ => false,
-        }
-    }
-
     fn generate_html_shell(&self) -> Vec<u8> {
         if let Some(custom_shell) = &self.custom_shell {
             let bridge_script = Self::streaming_bridge_script();
@@ -1506,7 +1586,21 @@ if (typeof window !== 'undefined') {{
             return Ok(Vec::new());
         }
 
-        if json_str.starts_with('I') || json_str.starts_with('S') || json_str.starts_with('E') {
+        if let Some(i_data) = json_str.strip_prefix('I') {
+            if let Ok(import_data) = serde_json::from_str::<serde_json::Value>(i_data) {
+                let module_path =
+                    import_data.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let export_name = import_data
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("default")
+                    .to_string();
+                self.module_imports.insert(row_id, (module_path, export_name));
+            }
+            return Ok(Vec::new());
+        }
+
+        if json_str.starts_with('S') || json_str.starts_with('E') {
             return Ok(Vec::new());
         }
 
@@ -1544,6 +1638,10 @@ if (typeof window !== 'undefined') {{
     {
         Box::pin(async move {
             if let Some(s) = element.as_str() {
+                if s.starts_with("$$") {
+                    return Ok(escape_html(&s[1..]));
+                }
+
                 if let Some(stripped) = s.strip_prefix("$L").or_else(|| s.strip_prefix("$@"))
                     && let Ok(row_id) = u32::from_str_radix(stripped, 16)
                 {
@@ -1586,17 +1684,15 @@ if (typeof window !== 'undefined') {{
                     let element_type = arr[1].as_str().unwrap_or("div");
                     let props = arr[3].as_object();
 
-                    let is_suspense_symbol = element_type.starts_with('$')
-                        && element_type.len() > 1
-                        && element_type[1..].chars().all(|c| c.is_ascii_hexdigit());
-
                     let is_client_component = element_type.starts_with("$L")
+                        || element_type.starts_with("$@")
                         || element_type.contains('#')
                         || element_type.contains('/');
 
                     if element_type == "$Sreact.suspense"
                         || element_type == "react.suspense"
-                        || is_suspense_symbol
+                        || element_type == "suspense"
+                        || element_type.starts_with("$S")
                     {
                         return self.render_suspense_boundary(element_type, props).await;
                     }
@@ -1622,11 +1718,21 @@ if (typeof window !== 'undefined') {{
                 {
                     let props_obj = props.as_object();
 
+                    let is_client_component = type_str.starts_with("$L")
+                        || type_str.starts_with("$@")
+                        || type_str.contains('#')
+                        || type_str.contains('/');
+
                     if type_str == "$Sreact.suspense"
                         || type_str == "react.suspense"
                         || type_str == "suspense"
+                        || type_str.starts_with("$S")
                     {
                         return self.render_suspense_boundary(type_str, props_obj).await;
+                    }
+
+                    if is_client_component {
+                        return self.render_client_component_placeholder(type_str, props_obj).await;
                     }
 
                     return self.render_html_element(type_str, props_obj).await;
@@ -1642,9 +1748,34 @@ if (typeof window !== 'undefined') {{
 
     async fn render_client_component_placeholder(
         &self,
-        _component_ref: &str,
+        component_ref: &str,
         props: Option<&serde_json::Map<String, serde_json::Value>>,
     ) -> Result<String, RariError> {
+        let props_are_rsc =
+            props.is_some_and(|p| p.values().any(RscHtmlRenderer::value_looks_like_rsc));
+
+        if !props_are_rsc
+            && let Some(stripped) =
+                component_ref.strip_prefix("$L").or_else(|| component_ref.strip_prefix("$@"))
+            && let Ok(module_row_id) = u32::from_str_radix(stripped, 16)
+            && let Some((module_path, export_name)) = self.module_imports.get(&module_row_id)
+        {
+            let props_json = if let Some(p) = props {
+                serde_json::to_string(&unescape_rsc_value(&serde_json::Value::Object(p.clone())))
+                    .unwrap_or_default()
+            } else {
+                "{}".to_string()
+            };
+            if let Ok(html) = self
+                .renderer
+                .ssr_render_client_component(module_path, export_name, &props_json)
+                .await
+                && !html.is_empty()
+            {
+                return Ok(html);
+            }
+        }
+
         if let Some(props) = props
             && let Some(children) = props.get("children")
         {
@@ -1868,16 +1999,10 @@ if (typeof window !== 'undefined') {{
                 escape_html(text)
             } else {
                 match serde_json::from_str::<serde_json::Value>(content_json) {
-                    Ok(content) => {
-                        if Self::contains_client_reference(&content) {
-                            String::new()
-                        } else {
-                            match self.rsc_element_to_html(&content).await {
-                                Ok(html) if !html.is_empty() => html,
-                                _ => String::new(),
-                            }
-                        }
-                    }
+                    Ok(content) => match self.rsc_element_to_html(&content).await {
+                        Ok(html) if !html.is_empty() => html,
+                        _ => String::new(),
+                    },
                     Err(_) => String::new(),
                 }
             };

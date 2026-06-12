@@ -1,34 +1,5 @@
-export interface SimpleRequest {
-  url: string
-  method: string
-  headers: Record<string, string>
-}
-
-export interface SimpleProxyResult {
-  continue: boolean
-  redirect?: {
-    destination: string
-    permanent: boolean
-  }
-  rewrite?: string
-  requestHeaders?: Record<string, string | string[]>
-  responseHeaders?: Record<string, string | string[]>
-  response?: {
-    status: number
-    headers: Record<string, string | string[]>
-    body?: string
-  }
-}
-
-export interface ResponseLike {
-  status?: number
-  headers?: {
-    get?: (name: string) => string | null
-    forEach?: (callback: (value: string, key: string) => void) => void
-  }
-  text?: () => Promise<string>
-  body?: any
-}
+import type { ResponseLike, SimpleProxyResult } from './types'
+import { collectAllHeaders, extractProxyHeaders } from './headers'
 
 export function checkForRewrite(result: ResponseLike | null): SimpleProxyResult | null {
   if (!result)
@@ -65,44 +36,6 @@ export function checkForRedirect(result: ResponseLike | null): SimpleProxyResult
   return null
 }
 
-function mergeHeader(
-  headers: Record<string, string | string[]>,
-  key: string,
-  value: string,
-): void {
-  if (Object.hasOwn(headers, key)) {
-    const existing = headers[key]
-    headers[key] = Array.isArray(existing) ? [...existing, value] : [existing, value]
-  }
-  else {
-    headers[key] = value
-  }
-}
-
-export function extractProxyHeaders(headers: ResponseLike['headers']): { requestHeaders?: Record<string, string | string[]>, responseHeaders?: Record<string, string | string[]> } {
-  const requestHeaders: Record<string, string | string[]> = {}
-  const responseHeaders: Record<string, string | string[]> = {}
-
-  if (headers?.forEach) {
-    headers.forEach((value: string, key: string) => {
-      const lowerKey = key.toLowerCase()
-
-      if (lowerKey.startsWith('x-rari-proxy-request-')) {
-        const headerName = lowerKey.replace('x-rari-proxy-request-', '')
-        mergeHeader(requestHeaders, headerName, value)
-      }
-      else if (!lowerKey.startsWith('x-rari-proxy-')) {
-        mergeHeader(responseHeaders, lowerKey, value)
-      }
-    })
-  }
-
-  return {
-    requestHeaders: Object.keys(requestHeaders).length > 0 ? requestHeaders : undefined,
-    responseHeaders: Object.keys(responseHeaders).length > 0 ? responseHeaders : undefined,
-  }
-}
-
 export function handleContinueWithHeaders(result: ResponseLike): SimpleProxyResult {
   const { requestHeaders, responseHeaders } = extractProxyHeaders(result.headers)
   return {
@@ -113,14 +46,7 @@ export function handleContinueWithHeaders(result: ResponseLike): SimpleProxyResu
 }
 
 export async function handleDirectResponse(result: ResponseLike): Promise<SimpleProxyResult> {
-  const headers: Record<string, string | string[]> = {}
-
-  if (result.headers?.forEach) {
-    result.headers.forEach((value: string, key: string) => {
-      const lowerKey = key.toLowerCase()
-      mergeHeader(headers, lowerKey, value)
-    })
-  }
+  const headers = collectAllHeaders(result.headers)
 
   let body: string | undefined
   try {
