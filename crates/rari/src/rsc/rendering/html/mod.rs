@@ -241,7 +241,11 @@ impl RscHtmlRenderer {
     }
 
     fn string_looks_like_rsc(s: &str) -> bool {
-        s.starts_with('$') && !s.starts_with("$$")
+        if let Some(rest) = s.strip_prefix("$L").or_else(|| s.strip_prefix("$@")) {
+            !rest.is_empty() && rest.chars().all(|c| c.is_ascii_hexdigit())
+        } else {
+            false
+        }
     }
 
     fn value_looks_like_rsc(value: &serde_json::Value) -> bool {
