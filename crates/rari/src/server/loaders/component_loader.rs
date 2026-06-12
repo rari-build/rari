@@ -969,11 +969,13 @@ impl ComponentLoader {
                     try {{
                         const mod = await import({specifier});
                         if (!globalThis['~rari'] || !globalThis['~rari'].ssrModules) {{
+                            console.error('[rari] SSR: globalThis[~rari].ssrModules not initialized');
                             return false;
                         }}
                         globalThis['~rari'].ssrModules[{path}] = mod;
                         return true;
                     }} catch (e) {{
+                        console.error('[rari] SSR: Failed to import module ' + {path} + ':', e?.message || e);
                         return false;
                     }}
                 }})()"#,

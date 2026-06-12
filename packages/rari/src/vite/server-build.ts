@@ -1387,16 +1387,15 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     const virtualModuleId = `\0ssr-virtual:${inputPath}`
     const projectRoot = this.projectRoot
 
-    const VIRTUAL_REACT = '\0ssr-react'
-    const VIRTUAL_JSX_RUNTIME = '\0ssr-jsx-runtime'
-
     const result = await build({
       input: virtualModuleId,
       platform: 'node',
       write: false,
       external: [
         NODE_PROTOCOL_REGEX,
+        'react',
         'react-dom',
+        /^react\//,
         /^rari/,
       ],
       output: {
@@ -1424,20 +1423,12 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
           resolveId(id) {
             if (id === virtualModuleId)
               return id
-            if (id === 'react')
-              return VIRTUAL_REACT
-            if (id === 'react/jsx-runtime' || id === 'react/jsx-dev-runtime')
-              return VIRTUAL_JSX_RUNTIME
 
             return null
           },
           load(id) {
             if (id === virtualModuleId)
               return { code: strippedCode, moduleType: loader }
-            if (id === VIRTUAL_REACT)
-              return { code: 'const React = globalThis.React; export default React; export const { createElement, Fragment, Suspense, createContext, useContext, useState, useEffect, useRef, useMemo, useCallback, useReducer, useId, useTransition, useActionState, useDeferredValue, useImperativeHandle, useLayoutEffect, useDebugValue, useSyncExternalStore, useOptimistic, use, forwardRef, memo, lazy, startTransition, Children, cloneElement, isValidElement, createRef, act, cache, Component, PureComponent } = React;', moduleType: 'js' }
-            if (id === VIRTUAL_JSX_RUNTIME)
-              return { code: 'const React = globalThis.React; export const jsx = React.createElement; export const jsxs = React.createElement; export const jsxDEV = React.createElement; export const Fragment = React.Fragment;', moduleType: 'js' }
 
             return null
           },

@@ -3,6 +3,7 @@ pub mod config;
 pub mod core;
 pub mod interner;
 pub mod loader_stubs;
+pub mod rari_stubs;
 pub mod react_stubs;
 pub mod resolver;
 pub mod storage;

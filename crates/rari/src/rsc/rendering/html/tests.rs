@@ -1601,3 +1601,97 @@ async fn test_hexadecimal_row_id_references() {
     assert!(html.contains("Row 10"), "Should render content from row 10 (hex 'a'): {}", html);
     assert!(html.contains("Row 31"), "Should render content from row 31 (hex '1f'): {}", html);
 }
+
+#[tokio::test]
+async fn test_ssr_render_client_component_basic() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime.clone());
+
+    let html_render_script = include_str!("../../rendering/layout/js/html_render.js");
+    runtime
+        .execute_script("html_render".to_string(), html_render_script.to_string())
+        .await
+        .expect("Failed to load html_render.js");
+
+    let register_script = r#"
+        if (!globalThis['~rari']) globalThis['~rari'] = {};
+        if (!globalThis['~rari'].ssrModules) globalThis['~rari'].ssrModules = {};
+        globalThis['~rari'].ssrModules['src/components/Hello.tsx'] = {
+            default: function Hello(props) {
+                return { type: 'div', props: { className: 'hello', children: 'Hello ' + (props.name || 'World') } };
+            }
+        };
+    "#;
+    runtime
+        .execute_script("register_test_component".to_string(), register_script.to_string())
+        .await
+        .expect("Failed to register test component");
+
+    let html = renderer
+        .ssr_render_client_component("src/components/Hello.tsx", "default", r#"{"name":"SSR"}"#)
+        .await
+        .expect("SSR render should not error");
+
+    assert!(!html.is_empty(), "SSR should produce non-empty HTML");
+    assert!(html.contains("Hello SSR"), "Should contain rendered text: {}", html);
+    assert!(html.contains("class=\"hello\""), "Should have className mapped to class: {}", html);
+}
+
+#[tokio::test]
+async fn test_ssr_render_client_component_missing_module() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let html = renderer
+        .ssr_render_client_component("src/components/Missing.tsx", "default", "{}")
+        .await
+        .expect("SSR render should not error even for missing modules");
+
+    assert!(html.is_empty(), "Missing module should produce empty HTML");
+}
+
+#[tokio::test]
+async fn test_ssr_render_client_component_with_children() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime.clone());
+
+    let html_render_script = include_str!("../../rendering/layout/js/html_render.js");
+    runtime
+        .execute_script("html_render".to_string(), html_render_script.to_string())
+        .await
+        .expect("Failed to load html_render.js");
+
+    let register_script = r#"
+        if (!globalThis['~rari']) globalThis['~rari'] = {};
+        if (!globalThis['~rari'].ssrModules) globalThis['~rari'].ssrModules = {};
+        globalThis['~rari'].ssrModules['src/components/Wrapper.tsx'] = {
+            default: function Wrapper(props) {
+                return {
+                    type: 'nav',
+                    props: {
+                        className: 'sidebar',
+                        children: [
+                            { type: 'a', props: { href: '/home', children: 'Home' } },
+                            { type: 'a', props: { href: '/about', children: 'About' } }
+                        ]
+                    }
+                };
+            }
+        };
+    "#;
+    runtime
+        .execute_script("register_wrapper".to_string(), register_script.to_string())
+        .await
+        .expect("Failed to register wrapper component");
+
+    let html = renderer
+        .ssr_render_client_component("src/components/Wrapper.tsx", "default", "{}")
+        .await
+        .expect("SSR render should not error");
+
+    assert!(html.contains("<nav"), "Should have nav element: {}", html);
+    assert!(html.contains("class=\"sidebar\""), "Should have sidebar class: {}", html);
+    assert!(html.contains("Home"), "Should render child links: {}", html);
+    assert!(html.contains("About"), "Should render child links: {}", html);
+    assert!(html.contains("href=\"/home\""), "Should have href attributes: {}", html);
+}
