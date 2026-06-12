@@ -1070,18 +1070,15 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
         }
 
         if specifier_str.contains(RARI_STUB_PATH) {
-            let stub_content = if specifier_str.contains("/router") {
-                RARI_ROUTER_STUB.to_string()
-            } else if specifier_str.contains("/react-dom") {
-                RARI_REACT_DOM_STUB.to_string()
-            } else if specifier_str.contains("/headers") {
-                RARI_HEADERS_STUB.to_string()
-            } else if specifier_str.contains("/image") {
-                RARI_IMAGE_STUB.to_string()
-            } else if specifier_str.contains("/client") {
-                RARI_CLIENT_STUB.to_string()
-            } else {
-                RARI_DEFAULT_STUB.to_string()
+            let module_name =
+                specifier_str.rsplit(RARI_STUB_PATH).next().unwrap_or("").trim_end_matches(".js");
+            let stub_content = match module_name {
+                "router" => RARI_ROUTER_STUB.to_string(),
+                "react-dom" => RARI_REACT_DOM_STUB.to_string(),
+                "headers" => RARI_HEADERS_STUB.to_string(),
+                "image" => RARI_IMAGE_STUB.to_string(),
+                "client" => RARI_CLIENT_STUB.to_string(),
+                _ => RARI_DEFAULT_STUB.to_string(),
             };
 
             return Some(ModuleLoadResponse::Sync(Ok(ModuleSource::new(
