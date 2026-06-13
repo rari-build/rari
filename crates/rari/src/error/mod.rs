@@ -92,21 +92,21 @@ impl PartialEq for ErrorMetadata {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum RariError {
-    NotFound(String, Option<ErrorMetadata>),
-    Validation(String, Option<ErrorMetadata>),
-    Internal(String, Option<ErrorMetadata>),
-    BadRequest(String, Option<ErrorMetadata>),
-    Forbidden(String, Option<ErrorMetadata>),
-    Serialization(String, Option<ErrorMetadata>),
-    Deserialization(String, Option<ErrorMetadata>),
-    State(String, Option<ErrorMetadata>),
-    Network(String, Option<ErrorMetadata>),
-    Timeout(String, Option<ErrorMetadata>),
-    ServerError(String, Option<ErrorMetadata>),
-    JsExecution(String, Option<ErrorMetadata>),
-    JsRuntime(String, Option<ErrorMetadata>),
-    IoError(String, Option<ErrorMetadata>),
-    ModuleReload(Box<ModuleReloadError>, Option<ErrorMetadata>),
+    NotFound(String, Option<Box<ErrorMetadata>>),
+    Validation(String, Option<Box<ErrorMetadata>>),
+    Internal(String, Option<Box<ErrorMetadata>>),
+    BadRequest(String, Option<Box<ErrorMetadata>>),
+    Forbidden(String, Option<Box<ErrorMetadata>>),
+    Serialization(String, Option<Box<ErrorMetadata>>),
+    Deserialization(String, Option<Box<ErrorMetadata>>),
+    State(String, Option<Box<ErrorMetadata>>),
+    Network(String, Option<Box<ErrorMetadata>>),
+    Timeout(String, Option<Box<ErrorMetadata>>),
+    ServerError(String, Option<Box<ErrorMetadata>>),
+    JsExecution(String, Option<Box<ErrorMetadata>>),
+    JsRuntime(String, Option<Box<ErrorMetadata>>),
+    IoError(String, Option<Box<ErrorMetadata>>),
+    ModuleReload(Box<ModuleReloadError>, Option<Box<ErrorMetadata>>),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -368,25 +368,25 @@ impl RariError {
 
     fn metadata(&self) -> Option<&ErrorMetadata> {
         match self {
-            Self::NotFound(_, meta) => meta.as_ref(),
-            Self::Validation(_, meta) => meta.as_ref(),
-            Self::Internal(_, meta) => meta.as_ref(),
-            Self::BadRequest(_, meta) => meta.as_ref(),
-            Self::Serialization(_, meta) => meta.as_ref(),
-            Self::Deserialization(_, meta) => meta.as_ref(),
-            Self::State(_, meta) => meta.as_ref(),
-            Self::Network(_, meta) => meta.as_ref(),
-            Self::Timeout(_, meta) => meta.as_ref(),
-            Self::ServerError(_, meta) => meta.as_ref(),
-            Self::JsExecution(_, meta) => meta.as_ref(),
-            Self::JsRuntime(_, meta) => meta.as_ref(),
-            Self::IoError(_, meta) => meta.as_ref(),
-            Self::ModuleReload(_, meta) => meta.as_ref(),
-            Self::Forbidden(_, meta) => meta.as_ref(),
+            Self::NotFound(_, meta) => meta.as_deref(),
+            Self::Validation(_, meta) => meta.as_deref(),
+            Self::Internal(_, meta) => meta.as_deref(),
+            Self::BadRequest(_, meta) => meta.as_deref(),
+            Self::Serialization(_, meta) => meta.as_deref(),
+            Self::Deserialization(_, meta) => meta.as_deref(),
+            Self::State(_, meta) => meta.as_deref(),
+            Self::Network(_, meta) => meta.as_deref(),
+            Self::Timeout(_, meta) => meta.as_deref(),
+            Self::ServerError(_, meta) => meta.as_deref(),
+            Self::JsExecution(_, meta) => meta.as_deref(),
+            Self::JsRuntime(_, meta) => meta.as_deref(),
+            Self::IoError(_, meta) => meta.as_deref(),
+            Self::ModuleReload(_, meta) => meta.as_deref(),
+            Self::Forbidden(_, meta) => meta.as_deref(),
         }
     }
 
-    fn metadata_mut(&mut self) -> &mut Option<ErrorMetadata> {
+    fn metadata_mut(&mut self) -> &mut Option<Box<ErrorMetadata>> {
         match self {
             Self::NotFound(_, meta) => meta,
             Self::Validation(_, meta) => meta,
@@ -586,7 +586,7 @@ impl RariError {
     pub fn with_source(mut self, source: Box<dyn std::error::Error + Send + Sync>) -> Self {
         let code = self.code().to_string();
         let metadata = self.metadata_mut();
-        let mut new_meta = metadata.clone().unwrap_or_else(|| ErrorMetadata {
+        let mut new_meta = metadata.take().map(|b| *b).unwrap_or_else(|| ErrorMetadata {
             code,
             details: Some(FxHashMap::default()),
             source: None,
@@ -594,7 +594,7 @@ impl RariError {
         });
         new_meta.source = Some(source.to_string());
         new_meta.error_source = Some(source);
-        *metadata = Some(new_meta);
+        *metadata = Some(Box::new(new_meta));
         self
     }
 
@@ -607,12 +607,12 @@ impl RariError {
         let code = self.code().to_string();
         let metadata = self.metadata_mut();
         if metadata.is_none() {
-            *metadata = Some(ErrorMetadata {
+            *metadata = Some(Box::new(ErrorMetadata {
                 code,
                 details: Some(FxHashMap::default()),
                 source: None,
                 error_source: None,
-            });
+            }));
         }
 
         if let Some(meta) = metadata {
@@ -645,12 +645,12 @@ impl From<std::io::Error> for RariError {
     fn from(error: std::io::Error) -> Self {
         Self::IoError(
             error.to_string(),
-            Some(ErrorMetadata {
+            Some(Box::new(ErrorMetadata {
                 code: "IO_ERROR".to_string(),
                 details: None,
                 source: Some("std::io::Error".to_string()),
                 error_source: None,
-            }),
+            })),
         )
     }
 }
@@ -677,12 +677,12 @@ impl From<serde_json::Error> for RariError {
     fn from(error: serde_json::Error) -> Self {
         Self::Serialization(
             error.to_string(),
-            Some(ErrorMetadata {
+            Some(Box::new(ErrorMetadata {
                 code: "JSON_ERROR".to_string(),
                 details: None,
                 source: Some("serde_json".to_string()),
                 error_source: None,
-            }),
+            })),
         )
     }
 }
@@ -758,12 +758,12 @@ impl From<StreamingError> for RariError {
 
         RariError::Internal(
             message,
-            Some(ErrorMetadata {
+            Some(Box::new(ErrorMetadata {
                 code: "STREAMING_ERROR".to_string(),
                 details: Some(details),
                 source: Some("streaming_ssr".to_string()),
                 error_source: None,
-            }),
+            })),
         )
     }
 }
@@ -843,12 +843,12 @@ impl From<LoadingStateError> for RariError {
 
         RariError::Internal(
             message,
-            Some(ErrorMetadata {
+            Some(Box::new(ErrorMetadata {
                 code: "LOADING_STATE_ERROR".to_string(),
                 details: Some(details),
                 source: Some("loading_state".to_string()),
                 error_source: None,
-            }),
+            })),
         )
     }
 }
