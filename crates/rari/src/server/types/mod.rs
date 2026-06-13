@@ -7,6 +7,7 @@ use std::sync::Arc;
 pub mod request;
 
 use crate::rsc::rendering::layout::LayoutHtmlCache;
+use crate::server::cache::handler::CacheHandler;
 use crate::server::cache::response;
 use crate::server::config;
 use crate::server::og::OgImageGenerator;
@@ -31,6 +32,8 @@ pub struct ServerState {
     pub og_generator: Option<Arc<OgImageGenerator>>,
     pub project_root: PathBuf,
     pub image_optimizer: Option<Arc<crate::server::image::ImageOptimizer>>,
+    pub cache_registry: Arc<crate::server::cache::handler::CacheHandlerRegistry>,
+    pub image_handler: Arc<dyn CacheHandler>,
 }
 
 #[derive(Debug, Deserialize)]

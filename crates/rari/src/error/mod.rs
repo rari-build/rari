@@ -106,6 +106,7 @@ pub enum RariError {
     JsExecution(String, Option<Box<ErrorMetadata>>),
     JsRuntime(String, Option<Box<ErrorMetadata>>),
     IoError(String, Option<Box<ErrorMetadata>>),
+    Cache(String, Option<Box<ErrorMetadata>>),
     ModuleReload(Box<ModuleReloadError>, Option<Box<ErrorMetadata>>),
 }
 
@@ -167,6 +168,7 @@ impl std::fmt::Display for RariError {
             Self::JsExecution(msg, _) => write!(f, "JavaScript execution error: {msg}"),
             Self::JsRuntime(msg, _) => write!(f, "JavaScript runtime error: {msg}"),
             Self::IoError(msg, _) => write!(f, "I/O error: {msg}"),
+            Self::Cache(msg, _) => write!(f, "Cache error: {msg}"),
             Self::ModuleReload(err, _) => write!(f, "Module reload error: {err}"),
         }
     }
@@ -342,6 +344,7 @@ impl RariError {
             Self::JsExecution(msg, _) => msg.clone(),
             Self::JsRuntime(msg, _) => msg.clone(),
             Self::IoError(msg, _) => msg.clone(),
+            Self::Cache(msg, _) => msg.clone(),
             Self::ModuleReload(err, _) => err.message().to_string(),
         }
     }
@@ -362,6 +365,7 @@ impl RariError {
             Self::JsExecution(_, _) => "JS_EXECUTION_ERROR",
             Self::JsRuntime(_, _) => "JS_RUNTIME_ERROR",
             Self::IoError(_, _) => "IO_ERROR",
+            Self::Cache(_, _) => "CACHE_ERROR",
             Self::ModuleReload(err, _) => err.code(),
         }
     }
@@ -381,6 +385,7 @@ impl RariError {
             Self::JsExecution(_, meta) => meta.as_deref(),
             Self::JsRuntime(_, meta) => meta.as_deref(),
             Self::IoError(_, meta) => meta.as_deref(),
+            Self::Cache(_, meta) => meta.as_deref(),
             Self::ModuleReload(_, meta) => meta.as_deref(),
             Self::Forbidden(_, meta) => meta.as_deref(),
         }
@@ -401,6 +406,7 @@ impl RariError {
             Self::JsExecution(_, meta) => meta,
             Self::JsRuntime(_, meta) => meta,
             Self::IoError(_, meta) => meta,
+            Self::Cache(_, meta) => meta,
             Self::ModuleReload(_, meta) => meta,
             Self::Forbidden(_, meta) => meta,
         }
@@ -440,6 +446,10 @@ impl RariError {
 
     pub fn network(message: impl Into<String>) -> Self {
         Self::Network(message.into(), None)
+    }
+
+    pub fn cache(message: impl Into<String>) -> Self {
+        Self::Cache(message.into(), None)
     }
 
     pub fn timeout(message: impl Into<String>) -> Self {
@@ -870,6 +880,7 @@ impl RariError {
             Self::JsExecution(_, _) => 500,
             Self::JsRuntime(_, _) => 500,
             Self::IoError(_, _) => 500,
+            Self::Cache(_, _) => 500,
             Self::ModuleReload(_, _) => 500,
         }
     }
@@ -893,6 +904,7 @@ impl RariError {
                 Self::JsExecution(_, _) => "Server error".to_string(),
                 Self::JsRuntime(_, _) => "Server error".to_string(),
                 Self::IoError(_, _) => "Internal server error".to_string(),
+                Self::Cache(_, _) => "Internal server error".to_string(),
                 Self::ModuleReload(_, _) => "Internal server error".to_string(),
             }
         }
