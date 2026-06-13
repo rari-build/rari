@@ -1,6 +1,8 @@
 import process from 'node:process'
 import { defineConfig, devices } from '@playwright/test'
 
+import { getRariLogPath } from './test/e2e/shared/helpers'
+
 export default defineConfig({
   testDir: './test/e2e',
   fullyParallel: true,
@@ -17,10 +19,14 @@ export default defineConfig({
   },
 
   webServer: {
-    command: 'pnpm --filter @test/app build && pnpm --filter @test/app start',
+    command: `pnpm --filter @test/app build && pnpm --filter @test/app start > "${getRariLogPath()}" 2>&1`,
     url: `http://localhost:${process.env.PORT || 3000}`,
     reuseExistingServer: !process.env.CI,
     timeout: 120000,
+    env: {
+      RUST_LOG: 'debug',
+      RARI_REVALIDATE_SECRET: 'e2e-test-secret',
+    },
   },
 
   projects: [

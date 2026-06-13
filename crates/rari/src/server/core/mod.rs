@@ -2,6 +2,7 @@ use crate::error::RariError;
 use crate::rsc::rendering::core::ResourceLimits;
 use crate::runtime::utils::DistPathResolver;
 use crate::server::actions::{handle_form_action, handle_server_action};
+use crate::server::cache::handler::CacheHandlerRegistry;
 use crate::server::cache::response;
 use crate::server::config::Config;
 use crate::server::handlers::api::{api_cors_preflight, handle_api_route};
@@ -184,6 +185,7 @@ impl Server {
             og_generator,
             project_root,
             image_optimizer: None,
+            cache_registry: Arc::new(CacheHandlerRegistry::from_env()),
         };
 
         if config.is_production() {

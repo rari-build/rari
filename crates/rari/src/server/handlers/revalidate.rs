@@ -57,13 +57,24 @@ pub async fn revalidate_by_path(
                 }
             }
 
-            state.layout_html_cache.clear();
+            let res = if let Err(e) = state.layout_html_cache.clear().await {
+                tracing::warn!(error = %e, path = %path, "layout_html_cache.clear failed");
+                RevalidateResponse {
+                    revalidated: false,
+                    message: Some(format!(
+                        "Revalidation partially failed: layout cache clear error: {}",
+                        e
+                    )),
+                }
+            } else {
+                RevalidateResponse {
+                    revalidated: true,
+                    message: Some(format!("Revalidated path: {}", path)),
+                }
+            };
 
             #[allow(clippy::disallowed_methods)]
-            Ok(Json(RevalidateResponse {
-                revalidated: true,
-                message: Some(format!("Revalidated path: {}", path)),
-            }))
+            Ok(Json(res))
         }
         RevalidateRequest::Tag { tag, secret } => {
             match secret {
@@ -78,11 +89,23 @@ pub async fn revalidate_by_path(
 
             state.response_cache.invalidate_by_tag(tag).await;
 
-            #[allow(clippy::disallowed_methods)]
-            Ok(Json(RevalidateResponse {
-                revalidated: true,
-                message: Some(format!("Revalidated tag: {}", tag)),
-            }))
+            let res = if let Err(e) = state.layout_html_cache.clear().await {
+                tracing::warn!(error = %e, tag = %tag, "layout_html_cache.clear failed");
+                RevalidateResponse {
+                    revalidated: false,
+                    message: Some(format!(
+                        "Revalidation partially failed: layout cache clear error: {}",
+                        e
+                    )),
+                }
+            } else {
+                RevalidateResponse {
+                    revalidated: true,
+                    message: Some(format!("Revalidated tag: {}", tag)),
+                }
+            };
+
+            Ok(Json(res))
         }
     }
 }

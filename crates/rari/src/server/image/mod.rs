@@ -1,4 +1,4 @@
-mod cache;
+pub(crate) mod cache;
 mod config;
 mod optimizer;
 mod types;
