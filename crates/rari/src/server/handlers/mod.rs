@@ -1,8 +1,8 @@
-pub mod api_handler;
-pub mod app_handler;
-pub mod hmr_handlers;
-pub mod og_handler;
-pub mod revalidate_handlers;
-pub mod route_info_handler;
-pub mod rsc_handlers;
-pub mod static_handlers;
+pub mod api;
+pub mod app;
+pub mod hmr;
+pub mod og;
+pub mod revalidate;
+pub mod route_info;
+pub mod rsc;
+pub mod r#static;

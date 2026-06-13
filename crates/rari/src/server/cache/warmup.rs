@@ -1,6 +1,6 @@
 use crate::rsc::rendering::layout::{LayoutRenderContext, LayoutRenderer};
 use crate::server::ServerState;
-use crate::server::cache::response_cache;
+use crate::server::cache::response;
 use crate::server::routing::types::ParamValue;
 use futures::stream::{self, StreamExt};
 use rustc_hash::FxHashMap;
@@ -87,17 +87,16 @@ async fn warm_route(
         .await
         .map_err(|e| format!("Render failed: {}", e))?;
 
-    let cache_key =
-        response_cache::ResponseCache::generate_cache_key_with_mode(path, None, Some("rsc"));
+    let cache_key = response::ResponseCache::generate_cache_key_with_mode(path, None, Some("rsc"));
 
     let cache_control = state.config.get_cache_control_for_route(path);
-    let cache_policy = response_cache::RouteCachePolicy::from_cache_control(cache_control, path);
+    let cache_policy = response::RouteCachePolicy::from_cache_control(cache_control, path);
 
     if cache_policy.enabled && state.response_cache.config.enabled {
-        let cached_response = response_cache::CachedResponse {
+        let cached_response = response::CachedResponse {
             body: bytes::Bytes::from(rsc_wire_format),
             headers: axum::http::HeaderMap::new(),
-            metadata: response_cache::CacheMetadata {
+            metadata: response::CacheMetadata {
                 cached_at: Instant::now(),
                 ttl: cache_policy.ttl,
                 etag: None,

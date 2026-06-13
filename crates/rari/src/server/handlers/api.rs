@@ -1,6 +1,6 @@
 use crate::server::ServerState;
-use crate::server::handlers::static_handlers::cors_preflight_response;
-use crate::server::utils::http_utils::{add_api_cors_headers, add_api_security_headers};
+use crate::server::handlers::r#static::cors_preflight_response;
+use crate::server::utils::http::{add_api_cors_headers, add_api_security_headers};
 use axum::{
     body::Body,
     extract::State,

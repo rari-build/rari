@@ -1,6 +1,6 @@
+use super::config::BatchStats;
+use super::interner::get_string_interner;
 use crate::error::RariError;
-use crate::runtime::module_loader::config::BatchStats;
-use crate::runtime::module_loader::interner::get_string_interner;
 use dashmap::DashMap;
 use parking_lot::Mutex;
 use smallvec::{SmallVec, smallvec};

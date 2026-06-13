@@ -7,7 +7,7 @@ use std::sync::Arc;
 pub mod request;
 
 use crate::rsc::rendering::layout::LayoutHtmlCache;
-use crate::server::cache::response_cache;
+use crate::server::cache::response;
 use crate::server::config;
 use crate::server::og::OgImageGenerator;
 use crate::server::routing;
@@ -24,10 +24,10 @@ pub struct ServerState {
     pub page_cache_configs: Arc<tokio::sync::RwLock<FxHashMap<String, FxHashMap<String, String>>>>,
     pub app_router: Option<Arc<routing::AppRouter>>,
     pub api_route_handler: Option<Arc<routing::ApiRouteHandler>>,
-    pub module_reload_manager: Arc<crate::runtime::module_reload::ModuleReloadManager>,
+    pub module_reload_manager: Arc<crate::runtime::module::reload::ModuleReloadManager>,
     pub html_cache: Arc<dashmap::DashMap<String, String>>,
     pub layout_html_cache: Arc<LayoutHtmlCache>,
-    pub response_cache: Arc<response_cache::ResponseCache>,
+    pub response_cache: Arc<response::ResponseCache>,
     pub og_generator: Option<Arc<OgImageGenerator>>,
     pub project_root: PathBuf,
     pub image_optimizer: Option<Arc<crate::server::image::ImageOptimizer>>,

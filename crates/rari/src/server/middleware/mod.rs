@@ -1,3 +1,3 @@
-pub mod proxy_middleware;
+pub mod proxy;
+pub mod request;
 pub mod request_context;
-pub mod request_middleware;

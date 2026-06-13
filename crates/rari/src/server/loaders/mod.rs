@@ -1,2 +1,2 @@
-pub mod cache_loader;
-pub mod component_loader;
+pub mod cache;
+pub mod component;

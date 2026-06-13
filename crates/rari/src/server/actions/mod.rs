@@ -168,7 +168,7 @@ fn check_origin(headers: &HeaderMap, allowed_origins: &[String]) -> Result<(), S
     }
 
     if let Some(origin) = headers.get("origin").and_then(|v| v.to_str().ok()) {
-        if !crate::server::utils::http_utils::is_origin_allowed(origin, allowed_origins) {
+        if !crate::server::utils::http::is_origin_allowed(origin, allowed_origins) {
             error!("Invalid origin: {}", origin);
             return Err(StatusCode::FORBIDDEN);
         }
@@ -184,8 +184,7 @@ fn check_origin(headers: &HeaderMap, allowed_origins: &[String]) -> Result<(), S
                 } else {
                     format!("{}://{}:{}", scheme, host, port)
                 };
-            if crate::server::utils::http_utils::is_origin_allowed(&referer_origin, allowed_origins)
-            {
+            if crate::server::utils::http::is_origin_allowed(&referer_origin, allowed_origins) {
                 return Ok(());
             }
             error!("Invalid referer origin: {}", referer_origin);
@@ -500,7 +499,7 @@ pub async fn handle_form_action(
                             "{}://{}:{}",
                             referer_tuple.0, referer_tuple.1, referer_tuple.2
                         );
-                        let allowed = crate::server::utils::http_utils::is_origin_allowed(
+                        let allowed = crate::server::utils::http::is_origin_allowed(
                             &referer_origin,
                             &allowed_origins,
                         );

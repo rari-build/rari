@@ -11,10 +11,10 @@ use tracing::error;
 
 use crate::error::RariError;
 use crate::rsc::components::ComponentRegistry;
+use crate::rsc::flight::serializer::RscSerializer;
 use crate::rsc::rendering::core::loader::{RscJsLoader, RscModuleOperation};
 use crate::rsc::rendering::streaming::{RscStream, StreamingRenderer};
-use crate::rsc::utils::dependency_utils::{extract_dependencies, hash_string};
-use crate::rsc::wire_format::serializer::RscSerializer;
+use crate::rsc::utils::dependencies::{extract_dependencies, hash_string};
 use crate::runtime::JsExecutionRuntime;
 
 use super::constants::*;
@@ -1009,7 +1009,7 @@ globalThis['~errors'].batch.push({{
         };
 
         let client_element =
-            crate::rsc::wire_format::serializer::SerializedReactElement::create_client_component(
+            crate::rsc::flight::serializer::SerializedReactElement::create_client_component(
                 component_id,
                 props_map,
             );
@@ -1296,7 +1296,7 @@ globalThis['~errors'].batch.push({{
                 })?;
 
                 let dependencies =
-                    crate::rsc::utils::dependency_utils::extract_dependencies(&component_code);
+                    crate::rsc::utils::dependencies::extract_dependencies(&component_code);
 
                 {
                     let mut registry = self.component_registry.lock();

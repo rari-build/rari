@@ -1,6 +1,4 @@
-use crate::error::RariError;
-use crate::rsc::utils::dependency_utils::DependencyList;
-use crate::runtime::module_loader::{
+use super::{
     cache::ModuleCaching,
     config::{InternerStats, PerformanceStats, ResourceStats, RuntimeConfig, RuntimeMetrics},
     interner::get_string_interner,
@@ -11,6 +9,8 @@ use crate::runtime::module_loader::{
     storage::OrderedStorage,
     transpiler::*,
 };
+use crate::error::RariError;
+use crate::rsc::utils::dependencies::DependencyList;
 use crate::utils::path_url::path_to_file_url;
 use cow_utils::CowUtils;
 use dashmap::DashMap;
@@ -179,7 +179,7 @@ impl RariModuleLoader {
     }
 
     fn estimate_memory_usage(
-        cache_stats: &crate::runtime::module_loader::config::CacheStats,
+        cache_stats: &super::config::CacheStats,
         interner_size: usize,
     ) -> usize {
         let cache_mb = cache_stats.memory_bytes / (1024 * 1024);

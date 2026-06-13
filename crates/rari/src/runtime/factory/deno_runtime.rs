@@ -1,10 +1,10 @@
 use crate::error::RariError;
-use crate::runtime::module_loader::RariModuleLoader;
-use crate::runtime::runtime_factory::constants::*;
-use crate::runtime::runtime_factory::executor::{execute_script, execute_script_for_streaming};
-use crate::runtime::runtime_factory::interface::{AsyncBatchResult, JsRuntimeInterface};
-use crate::runtime::runtime_factory::runtime_builder::create_deno_runtime;
-use crate::runtime::runtime_factory::v8_utils::get_module_namespace_as_json;
+use crate::runtime::factory::constants::*;
+use crate::runtime::factory::executor::{execute_script, execute_script_for_streaming};
+use crate::runtime::factory::interface::{AsyncBatchResult, JsRuntimeInterface};
+use crate::runtime::factory::runtime_builder::create_deno_runtime;
+use crate::runtime::factory::v8_utils::get_module_namespace_as_json;
+use crate::runtime::module::loader::RariModuleLoader;
 use deno_core::{ModuleSpecifier, PollEventLoopOptions};
 use rustc_hash::FxHashMap;
 use serde_json::Value as JsonValue;
@@ -144,7 +144,7 @@ impl DenoRuntime {
                                 }
                                 event_loop_result = tokio::time::timeout(
                                     std::time::Duration::from_millis(50),
-                                    crate::runtime::runtime_factory::v8_utils::run_event_loop_with_error_handling(
+                                    crate::runtime::factory::v8_utils::run_event_loop_with_error_handling(
                                         &mut deno_runtime, "concurrent batch"
                                     ),
                                 ) => {
@@ -593,7 +593,7 @@ fn check_pending_batches(
     deno_runtime: &mut deno_core::JsRuntime,
     pending_batches: &mut [PendingBatch],
 ) {
-    use crate::runtime::runtime_factory::v8_utils::v8_to_json;
+    use crate::runtime::factory::v8_utils::v8_to_json;
     use crate::with_scope;
 
     for batch in pending_batches.iter_mut() {

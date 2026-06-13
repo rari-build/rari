@@ -1,7 +1,5 @@
-use crate::server::utils::component_utils::{
-    get_dist_path_for_component, wrap_server_action_module,
-};
-use crate::server::utils::http_utils::merge_vary_with_accept;
+use crate::server::utils::component::{get_dist_path_for_component, wrap_server_action_module};
+use crate::server::utils::http::merge_vary_with_accept;
 use crate::server::{RegisterClientRequest, RegisterRequest, RenderRequest, ServerState};
 use axum::{
     body::Body,
@@ -423,7 +421,7 @@ pub async fn reload_component_from_dist(
 
         renderer.clear_script_cache();
 
-        let dependencies = crate::rsc::utils::dependency_utils::extract_dependencies(&dist_code);
+        let dependencies = crate::rsc::utils::dependencies::extract_dependencies(&dist_code);
 
         {
             let mut registry = renderer.component_registry.lock();

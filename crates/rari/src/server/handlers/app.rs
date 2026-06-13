@@ -2,15 +2,15 @@ use crate::rsc::rendering::html::{RscHtmlRenderer, RscToHtmlConverter};
 use crate::rsc::rendering::layout::types::PageMetadata;
 use crate::rsc::rendering::layout::{LayoutRenderContext, LayoutRenderer};
 use crate::server::ServerState;
-use crate::server::cache::response_cache;
+use crate::server::cache::response;
 use crate::server::compression::CompressionEncoding;
 use crate::server::config::Config;
-use crate::server::rendering::html_utils::{
+use crate::server::rendering::metadata_injection::inject_metadata;
+use crate::server::rendering::utils::{
     extract_asset_links_from_index_html, inject_assets_into_html, inject_vite_client,
 };
-use crate::server::rendering::metadata_injection::inject_metadata;
 use crate::server::routing::app_router::AppRouteMatch;
-use crate::server::utils::http_utils::{
+use crate::server::utils::http::{
     extract_headers, extract_search_params, get_content_type, merge_vary_with_accept,
 };
 use crate::utils::path_url::path_to_file_url;
@@ -546,7 +546,7 @@ async fn render_streaming_response(
     accept_encoding: Option<&str>,
 ) -> Result<Response, StatusCode> {
     use crate::server::compression::compress_stream;
-    use crate::server::rendering::html_utils::extract_body_scripts_from_index_html;
+    use crate::server::rendering::utils::extract_body_scripts_from_index_html;
 
     let asset_links = extract_asset_links_from_index_html().await;
     let body_scripts = extract_body_scripts_from_index_html().await;
@@ -973,7 +973,7 @@ pub async fn handle_app_route(
                 .await;
                 return result;
             }
-            let cache_key = response_cache::ResponseCache::generate_cache_key_with_mode(
+            let cache_key = response::ResponseCache::generate_cache_key_with_mode(
                 path,
                 if query_params_for_cache.is_empty() {
                     None
@@ -1043,13 +1043,13 @@ pub async fn handle_app_route(
 
                     let cache_control = state.config.get_cache_control_for_route(path);
                     let cache_policy =
-                        response_cache::RouteCachePolicy::from_cache_control(cache_control, path);
+                        response::RouteCachePolicy::from_cache_control(cache_control, path);
 
                     if cache_policy.enabled && state.response_cache.config.enabled {
-                        let cached_response = response_cache::CachedResponse {
+                        let cached_response = response::CachedResponse {
                             body: bytes::Bytes::from(rsc_wire_format.clone()),
                             headers: cache_headers,
-                            metadata: response_cache::CacheMetadata {
+                            metadata: response::CacheMetadata {
                                 cached_at: std::time::Instant::now(),
                                 ttl: cache_policy.ttl,
                                 etag: None,
@@ -1074,7 +1074,7 @@ pub async fn handle_app_route(
             }
         }
         RenderMode::Ssr => {
-            let cache_key = response_cache::ResponseCache::generate_cache_key(
+            let cache_key = response::ResponseCache::generate_cache_key(
                 path,
                 if query_params_for_cache.is_empty() {
                     None
@@ -1194,9 +1194,9 @@ pub async fn handle_app_route(
                         parts.headers.get("cache-control").and_then(|v| v.to_str().ok());
 
                     let cache_policy = if let Some(cc) = cache_control_value {
-                        response_cache::RouteCachePolicy::from_cache_control(cc, path)
+                        response::RouteCachePolicy::from_cache_control(cc, path)
                     } else {
-                        let mut policy = response_cache::RouteCachePolicy {
+                        let mut policy = response::RouteCachePolicy {
                             ttl: state.response_cache.config.default_ttl,
                             ..Default::default()
                         };
@@ -1244,7 +1244,7 @@ pub async fn handle_app_route(
                                 }
                             };
 
-                        let etag = response_cache::ResponseCache::generate_etag(&raw_body);
+                        let etag = response::ResponseCache::generate_etag(&raw_body);
                         let mut response_headers = axum::http::HeaderMap::new();
                         for (key, value) in parts.headers.iter() {
                             if key.as_str() != "content-encoding"
@@ -1254,10 +1254,10 @@ pub async fn handle_app_route(
                             }
                         }
 
-                        let cached_response = response_cache::CachedResponse {
+                        let cached_response = response::CachedResponse {
                             body: raw_body,
                             headers: response_headers,
-                            metadata: response_cache::CacheMetadata {
+                            metadata: response::CacheMetadata {
                                 cached_at: std::time::Instant::now(),
                                 ttl: cache_policy.ttl,
                                 etag: Some(etag.clone()),
@@ -1328,7 +1328,7 @@ pub async fn handle_app_route(
                         &state,
                     );
 
-                    let etag = response_cache::ResponseCache::generate_etag(final_html.as_bytes());
+                    let etag = response::ResponseCache::generate_etag(final_html.as_bytes());
 
                     (final_html, etag)
                 }
@@ -1378,9 +1378,8 @@ pub async fn handle_app_route(
                     };
 
                     let body_scripts =
-                        crate::server::rendering::html_utils::extract_body_scripts_from_index_html(
-                        )
-                        .await;
+                        crate::server::rendering::utils::extract_body_scripts_from_index_html()
+                            .await;
                     let mut converter = RscToHtmlConverter::with_custom_shell(
                         base_shell,
                         body_scripts,
@@ -1410,7 +1409,7 @@ pub async fn handle_app_route(
                     }
 
                     let final_html = buffered_html;
-                    let etag = response_cache::ResponseCache::generate_etag(final_html.as_bytes());
+                    let etag = response::ResponseCache::generate_etag(final_html.as_bytes());
 
                     (final_html, etag)
                 }
@@ -1438,13 +1437,13 @@ pub async fn handle_app_route(
             }
 
             let cache_policy =
-                response_cache::RouteCachePolicy::from_cache_control(cache_control_value, path);
+                response::RouteCachePolicy::from_cache_control(cache_control_value, path);
 
             if cache_policy.enabled {
-                let cached_response = response_cache::CachedResponse {
+                let cached_response = response::CachedResponse {
                     body: bytes::Bytes::from(final_html.clone()),
                     headers: response_headers,
-                    metadata: response_cache::CacheMetadata {
+                    metadata: response::CacheMetadata {
                         cached_at: std::time::Instant::now(),
                         ttl: cache_policy.ttl,
                         etag: Some(etag),

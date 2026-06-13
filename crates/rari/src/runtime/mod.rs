@@ -10,10 +10,9 @@ use tracing::error;
 
 pub mod bridge;
 pub mod ext;
-pub mod module_loader;
-pub mod module_reload;
+pub mod factory;
+pub mod module;
 pub mod ops;
-pub mod runtime_factory;
 pub mod utils;
 
 mod metadata;
@@ -21,7 +20,7 @@ mod metadata;
 pub type TokioRuntime = tokio::runtime::Handle;
 
 pub struct JsExecutionRuntime {
-    runtime: Arc<Box<dyn runtime_factory::JsRuntimeInterface>>,
+    runtime: Arc<Box<dyn factory::JsRuntimeInterface>>,
     timeout_ms: u64,
 }
 
@@ -50,9 +49,9 @@ fn is_esm_code(code: &str) -> bool {
 impl JsExecutionRuntime {
     pub fn new(env_vars: Option<rustc_hash::FxHashMap<String, String>>) -> Self {
         let runtime = if let Some(env_vars) = env_vars {
-            runtime_factory::create_lazy_runtime_with_env(env_vars)
+            factory::create_lazy_runtime_with_env(env_vars)
         } else {
-            runtime_factory::create_lazy_runtime()
+            factory::create_lazy_runtime()
         };
 
         Self { runtime: Arc::new(runtime), timeout_ms: 30000 }

@@ -1,4 +1,4 @@
-use crate::runtime::module_reload::ModuleReloadRequest;
+use super::request::ModuleReloadRequest;
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;

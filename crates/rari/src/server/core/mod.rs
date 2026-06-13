@@ -2,23 +2,23 @@ use crate::error::RariError;
 use crate::rsc::rendering::core::ResourceLimits;
 use crate::runtime::utils::DistPathResolver;
 use crate::server::actions::{handle_form_action, handle_server_action};
-use crate::server::cache::response_cache;
+use crate::server::cache::response;
 use crate::server::config::Config;
-use crate::server::handlers::api_handler::{api_cors_preflight, handle_api_route};
-use crate::server::handlers::app_handler::handle_app_route;
-use crate::server::handlers::hmr_handlers::handle_hmr_action;
-use crate::server::handlers::revalidate_handlers::revalidate_by_path;
-use crate::server::handlers::route_info_handler::get_route_info;
-use crate::server::handlers::rsc_handlers::{
+use crate::server::handlers::api::{api_cors_preflight, handle_api_route};
+use crate::server::handlers::app::handle_app_route;
+use crate::server::handlers::hmr::handle_hmr_action;
+use crate::server::handlers::revalidate::revalidate_by_path;
+use crate::server::handlers::route_info::get_route_info;
+use crate::server::handlers::rsc::{
     health_check, register_client_component, register_component, stream_component,
 };
-use crate::server::handlers::static_handlers::{
+use crate::server::handlers::r#static::{
     cors_preflight_ok, root_handler, serve_static_asset, static_or_spa_handler,
 };
-use crate::server::loaders::cache_loader::CacheLoader;
-use crate::server::loaders::component_loader::ComponentLoader;
-use crate::server::middleware::proxy_middleware::ProxyLayer;
-use crate::server::middleware::request_middleware::{cors_middleware, security_headers_middleware};
+use crate::server::loaders::cache::CacheLoader;
+use crate::server::loaders::component::ComponentLoader;
+use crate::server::middleware::proxy::ProxyLayer;
+use crate::server::middleware::request::{cors_middleware, security_headers_middleware};
 use crate::server::routing::{api_routes, app_router};
 use crate::server::types::ServerState;
 use crate::server::vite::proxy::{
@@ -120,7 +120,7 @@ impl Server {
             }
         };
 
-        let reload_config = crate::runtime::module_reload::ReloadConfig {
+        let reload_config = crate::runtime::module::reload::ReloadConfig {
             enabled: config.hmr_reload_enabled(),
             max_retry_attempts: config.rsc.hmr_max_retry_attempts,
             reload_timeout_ms: config.rsc.hmr_reload_timeout_ms,
@@ -128,7 +128,7 @@ impl Server {
             debounce_delay_ms: config.rsc.hmr_debounce_delay_ms,
         };
         let mut module_reload_manager =
-            crate::runtime::module_reload::ModuleReloadManager::new(reload_config);
+            crate::runtime::module::reload::ModuleReloadManager::new(reload_config);
 
         module_reload_manager.set_runtime(Arc::clone(&renderer.runtime));
         module_reload_manager.set_component_registry(Arc::clone(&renderer.component_registry));
@@ -148,8 +148,8 @@ impl Server {
 
         let renderer_arc = Arc::new(tokio::sync::Mutex::new(renderer));
 
-        let cache_config = response_cache::CacheConfig::from_env(config.is_production());
-        let response_cache = Arc::new(response_cache::ResponseCache::new(cache_config));
+        let cache_config = response::CacheConfig::from_env(config.is_production());
+        let response_cache = Arc::new(response::ResponseCache::new(cache_config));
 
         let og_generator = {
             let runtime = js_runtime.clone();
@@ -204,8 +204,7 @@ impl Server {
             config.images = image_config;
         }
 
-        if let Err(e) = crate::server::middleware::proxy_middleware::initialize_proxy(&state).await
-        {
+        if let Err(e) = crate::server::middleware::proxy::initialize_proxy(&state).await {
             error!("Failed to initialize proxy: {}", e);
         }
 
@@ -260,8 +259,8 @@ impl Server {
         router = router.merge(image_router);
 
         let og_router = Router::new()
-            .route("/_rari/og/", get(crate::server::handlers::og_handler::og_image_handler_root))
-            .route("/_rari/og/{*path}", get(crate::server::handlers::og_handler::og_image_handler))
+            .route("/_rari/og/", get(crate::server::handlers::og::og_image_handler_root))
+            .route("/_rari/og/{*path}", get(crate::server::handlers::og::og_image_handler))
             .with_state(state.clone());
 
         router = router.merge(og_router);

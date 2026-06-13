@@ -1,10 +1,10 @@
 use crate::error::RariError;
-use crate::runtime::module_loader::RariModuleLoader;
-use crate::runtime::ops::StreamOpState;
-use crate::runtime::runtime_factory::constants::{
+use crate::runtime::factory::constants::{
     API_HANDLER_INIT_SCRIPT, COMPONENT_LOADER_INIT_SCRIPT, COOKIES_INIT_SCRIPT,
     ENV_INJECTION_SCRIPT, METADATA_COLLECTOR_INIT_SCRIPT, MODULE_CHECK_SCRIPT,
 };
+use crate::runtime::module::loader::RariModuleLoader;
+use crate::runtime::ops::StreamOpState;
 use cow_utils::CowUtils;
 use deno_core::{Extension, JsRuntime, RuntimeOptions};
 use rustc_hash::FxHashMap;
