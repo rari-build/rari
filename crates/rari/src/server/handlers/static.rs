@@ -1,6 +1,6 @@
 use crate::server::ServerState;
 use crate::server::config::Config;
-use crate::server::utils::http_utils::get_content_type;
+use crate::server::utils::http::get_content_type;
 use axum::{
     body::Body,
     extract::{Path, State},

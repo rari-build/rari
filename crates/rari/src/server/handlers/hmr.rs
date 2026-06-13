@@ -1,9 +1,9 @@
 use crate::server::ServerState;
 use crate::server::config::Config;
-use crate::server::handlers::rsc_handlers::{
+use crate::server::handlers::rsc::{
     immediate_component_reregistration, reload_component_from_dist,
 };
-use crate::server::utils::component_utils::extract_component_id;
+use crate::server::utils::component::extract_component_id;
 use axum::{extract::State, http::StatusCode, response::Json};
 use cow_utils::CowUtils;
 use serde::{Deserialize, Serialize};
@@ -73,7 +73,7 @@ pub async fn handle_hmr_action(
 }
 
 async fn invalidate_component_cache(
-    cache: &crate::server::cache::response_cache::ResponseCache,
+    cache: &crate::server::cache::response::ResponseCache,
     component_id: &str,
 ) {
     let cache_key_prefix = format!("/_rari/stream/{}", component_id);
@@ -563,7 +563,7 @@ async fn handle_reload_component(
                 registry.remove_component(&component_id);
 
                 let dependencies =
-                    crate::rsc::utils::dependency_utils::extract_dependencies(&bundle_code);
+                    crate::rsc::utils::dependencies::extract_dependencies(&bundle_code);
 
                 match registry.register_component(
                     &component_id,

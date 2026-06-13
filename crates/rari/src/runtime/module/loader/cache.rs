@@ -1,5 +1,5 @@
+use super::config::CacheStats;
 use crate::error::RariError;
-use crate::runtime::module_loader::config::CacheStats;
 use dashmap::DashMap;
 use lru::LruCache;
 use parking_lot::Mutex;

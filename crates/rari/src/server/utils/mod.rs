@@ -1,3 +1,3 @@
-pub mod component_utils;
-pub mod http_utils;
+pub mod component;
+pub mod http;
 pub mod path_validation;

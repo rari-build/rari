@@ -1,1 +1,1 @@
-pub mod dependency_utils;
+pub mod dependencies;

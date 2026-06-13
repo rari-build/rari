@@ -1,10 +1,10 @@
 use crate::error::RariError;
-use crate::runtime::module_loader::RariModuleLoader;
-use crate::runtime::ops::StreamOpState;
-use crate::runtime::runtime_factory::constants::*;
-use crate::runtime::runtime_factory::v8_utils::{
+use crate::runtime::factory::constants::*;
+use crate::runtime::factory::v8_utils::{
     is_promise, run_event_loop_with_error_handling, run_event_loop_with_promise_timeout, v8_to_json,
 };
+use crate::runtime::module::loader::RariModuleLoader;
+use crate::runtime::ops::StreamOpState;
 use crate::with_scope;
 use deno_core::{JsRuntime, PollEventLoopOptions};
 use serde_json::Value as JsonValue;

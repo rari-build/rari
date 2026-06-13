@@ -1,2 +1,2 @@
-pub mod response_cache;
+pub mod response;
 pub mod warmup;

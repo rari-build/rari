@@ -1,7 +1,7 @@
 use crate::error::RariError;
+use crate::rsc::flight::escape::escape_rsc_value;
 use crate::rsc::rendering::streaming::types::RscWireFormatTag;
 use crate::rsc::types::tree::RSCTree;
-use crate::rsc::wire_format::escape::escape_rsc_value;
 use cow_utils::CowUtils;
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
