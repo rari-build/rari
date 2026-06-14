@@ -43,6 +43,10 @@ pub struct ImageOptimizer {
 impl ImageOptimizer {
     pub fn new(config: ImageConfig, project_path: &Path) -> Self {
         let cache = Arc::new(ImageCache::new(config.max_cache_size, project_path));
+        Self::with_cache(config, project_path, cache)
+    }
+
+    pub fn with_cache(config: ImageConfig, project_path: &Path, cache: Arc<ImageCache>) -> Self {
         let http_client = Client::builder()
             .redirect(reqwest::redirect::Policy::none())
             .timeout(Duration::from_secs(30))

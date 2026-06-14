@@ -31,6 +31,7 @@ pub struct ServerState {
     pub og_generator: Option<Arc<OgImageGenerator>>,
     pub project_root: PathBuf,
     pub image_optimizer: Option<Arc<crate::server::image::ImageOptimizer>>,
+    pub cache_registry: Arc<crate::server::cache::handler::CacheHandlerRegistry>,
 }
 
 #[derive(Debug, Deserialize)]

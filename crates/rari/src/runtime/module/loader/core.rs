@@ -1,5 +1,5 @@
 use super::{
-    cache::ModuleCaching,
+    cache::{DEFAULT_TTL_SECS, ModuleCaching},
     config::{InternerStats, PerformanceStats, ResourceStats, RuntimeConfig, RuntimeMetrics},
     interner::get_string_interner,
     loader_stubs::*,
@@ -107,7 +107,31 @@ impl RariModuleLoader {
         Self {
             storage: OrderedStorage::new(),
             module_resolver: ModuleResolver::new(),
-            module_caching: ModuleCaching::new(config.cache_size_limit),
+            module_caching: ModuleCaching::new(config.cache_size_limit, DEFAULT_TTL_SECS),
+            component_specifiers: DashMap::new(),
+            total_modules_loaded: AtomicUsize::new(0),
+            total_load_time_ms: AtomicU64::new(0),
+            peak_load_time_ms: AtomicU64::new(0),
+            operations_count: AtomicUsize::new(0),
+            start_time: std::time::Instant::now(),
+        }
+    }
+
+    /// Construct a `RariModuleLoader` with a pre-configured
+    /// `ModuleCaching` (i.e. a `CacheHandler` resolved from the per-layer
+    /// `CacheLayerConfig` and `CacheHandlerRegistry`). This is currently
+    /// unused by `core/mod.rs` because `JsExecutionRuntime` doesn't
+    /// accept cache config; the runtime restart loop uses
+    /// `RariModuleLoader::new()` and relies on the env-var-driven
+    /// `CacheHandlerRegistry::from_env()` for handler selection.
+    /// Kept as part of the public API for external users who want
+    /// pluggable module caching.
+    #[allow(dead_code)]
+    pub fn with_module_caching(caching: ModuleCaching) -> Self {
+        Self {
+            storage: OrderedStorage::new(),
+            module_resolver: ModuleResolver::new(),
+            module_caching: caching,
             component_specifiers: DashMap::new(),
             total_modules_loaded: AtomicUsize::new(0),
             total_load_time_ms: AtomicU64::new(0),
@@ -210,25 +234,18 @@ impl RariModuleLoader {
         self.operations_count.fetch_add(1, Ordering::Relaxed);
     }
 
-    pub fn add_module(&self, specifier: &str, original_path: &str, code: String) {
+    pub async fn add_module(&self, specifier: &str, original_path: &str, code: String) {
         if let Err(_batch_error) = self.storage.add_module_interned(specifier, &code) {
             self.add_module_internal(specifier, original_path, code.clone());
         }
 
         if specifier.contains(RARI_INTERNAL_PATH) {
-            let cache_key = get_string_interner().intern(specifier);
             #[allow(clippy::disallowed_methods)]
-            if let Err(_e) = self.module_caching.insert(
-                cache_key.to_string(),
-                serde_json::json!({
-                    "status": "module_added",
-                    "specifier": specifier,
-                    "timestamp": std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_millis()
-                }),
-            ) {}
+            if let Err(e) =
+                self.module_caching.insert(original_path.to_string(), serde_json::Value::Null).await
+            {
+                tracing::warn!(path = %original_path, error = %e, "module cache insert failed");
+            }
         }
     }
 

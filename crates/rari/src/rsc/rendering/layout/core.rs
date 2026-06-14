@@ -1,20 +1,27 @@
 use crate::error::RariError;
 use crate::rsc::rendering::core::RscRenderer;
 use crate::rsc::rendering::streaming::RscStream;
-use crate::server::config::Config;
+use crate::server::cache::handler::{
+    CacheError, CacheHandler, CacheHandlerRegistry, MemoryCacheHandler, MemoryConfig,
+};
+
+const LAYOUT_KEY_PREFIX: &str = "layout:";
+use crate::server::config::{CacheLayerConfig, Config};
 use crate::server::routing::app_router::AppRouteMatch;
 use crate::utils::path_url::path_to_file_url;
 use cow_utils::CowUtils;
-use dashmap::DashMap;
 use serde_json::Value;
 use std::sync::Arc;
 use tokio::sync::mpsc;
+use tracing::debug;
 use tracing::error;
+use tracing::warn;
 
 use super::{constants::*, error_messages, types::*, utils};
 
 pub struct LayoutHtmlCache {
-    cache: DashMap<u64, String>,
+    handler: Arc<dyn CacheHandler>,
+    default_ttl_secs: u64,
 }
 
 impl Default for LayoutHtmlCache {
@@ -25,19 +32,69 @@ impl Default for LayoutHtmlCache {
 
 impl LayoutHtmlCache {
     pub fn new() -> Self {
-        Self { cache: DashMap::new() }
+        Self::with_ttl(
+            Arc::new(MemoryCacheHandler::with_config(MemoryConfig {
+                max_entries: 5000,
+                default_ttl: 3600,
+            })),
+            3600,
+        )
     }
 
-    fn get(&self, key: u64) -> Option<String> {
-        self.cache.get(&key).map(|v| v.clone())
+    pub fn from_config(layer: &CacheLayerConfig, registry: &CacheHandlerRegistry) -> Self {
+        let handler = registry.get(&layer.handler).unwrap_or_else(|| {
+            warn!(handler = %layer.handler, "unknown cache handler, falling back to memory");
+            registry
+                .get("memory")
+                .expect("memory handler is pre-registered by CacheHandlerRegistry::new()")
+        });
+        Self::with_ttl(handler, layer.default_ttl_secs)
     }
 
-    fn insert(&self, key: u64, html: String) {
-        self.cache.insert(key, html);
+    pub fn with_handler(handler: Arc<dyn CacheHandler>) -> Self {
+        Self::with_ttl(handler, 3600)
     }
 
-    pub fn clear(&self) {
-        self.cache.clear();
+    pub fn with_ttl(handler: Arc<dyn CacheHandler>, default_ttl_secs: u64) -> Self {
+        Self { handler, default_ttl_secs }
+    }
+
+    fn namespaced(key: u64) -> String {
+        format!("{LAYOUT_KEY_PREFIX}{key}")
+    }
+
+    pub async fn get(&self, key: u64) -> Option<String> {
+        let ns_key = Self::namespaced(key);
+        let bytes = match self.handler.get(&ns_key).await {
+            Ok(Some(b)) => b,
+            Ok(None) => return None,
+            Err(e) => {
+                debug!(key = %ns_key, error = %e, "layout cache get failed");
+                return None;
+            }
+        };
+        match String::from_utf8(bytes) {
+            Ok(s) => Some(s),
+            Err(e) => {
+                debug!(key = %ns_key, error = %e, "layout cache value not valid utf-8");
+                None
+            }
+        }
+    }
+
+    pub async fn insert(&self, key: u64, html: String) -> Result<(), CacheError> {
+        self.handler.set(&Self::namespaced(key), html.into_bytes(), self.default_ttl_secs).await?;
+        Ok(())
+    }
+
+    pub async fn clear(&self) -> Result<(), CacheError> {
+        let keys = self.handler.get_all_keys();
+        for key in keys {
+            if key.starts_with(LAYOUT_KEY_PREFIX) {
+                self.handler.invalidate(&key).await?;
+            }
+        }
+        Ok(())
     }
 }
 
@@ -60,6 +117,13 @@ impl LayoutRenderer {
 
     pub fn create_shared_cache() -> Arc<LayoutHtmlCache> {
         Arc::new(LayoutHtmlCache::new())
+    }
+
+    pub fn create_shared_cache_from_config(
+        layer: &crate::server::config::CacheLayerConfig,
+        registry: &crate::server::cache::handler::CacheHandlerRegistry,
+    ) -> Arc<LayoutHtmlCache> {
+        Arc::new(LayoutHtmlCache::from_config(layer, registry))
     }
 
     async fn enable_streaming_and_inject_lazy_resolver(
@@ -153,8 +217,9 @@ impl LayoutRenderer {
             return Ok(RenderResult::Static(html));
         }
 
-        if can_use_html_cache {
-            self.html_cache.insert(cache_key, html.clone());
+        if can_use_html_cache && let Err(e) = self.html_cache.insert(cache_key, html.clone()).await
+        {
+            tracing::debug!("layout_html_cache.insert failed: {}", e);
         }
         Ok(RenderResult::Static(html))
     }
@@ -339,7 +404,7 @@ impl LayoutRenderer {
     ) -> Result<RenderResult, RariError> {
         let cache_key = utils::generate_cache_key(route_match, context);
 
-        if !return_rsc_on_fallback && let Some(cached_html) = self.html_cache.get(cache_key) {
+        if !return_rsc_on_fallback && let Some(cached_html) = self.html_cache.get(cache_key).await {
             return Ok(RenderResult::Static(cached_html));
         }
 
@@ -406,8 +471,10 @@ if (typeof window !== 'undefined') {
                 format!("{}{}\n{}", html, payload_script, completion_script)
             };
 
-            if route_match.not_found.is_none() {
-                self.html_cache.insert(cache_key, html.clone());
+            if route_match.not_found.is_none()
+                && let Err(e) = self.html_cache.insert(cache_key, html.clone()).await
+            {
+                tracing::debug!("layout_html_cache.insert failed: {}", e);
             }
 
             return Ok(RenderResult::Static(html));
@@ -1112,5 +1179,59 @@ if (typeof window !== 'undefined') {
         component_code: &str,
     ) -> Result<(), RariError> {
         self.renderer.lock().await.register_component(component_id, component_code).await
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::disallowed_methods)]
+mod tests {
+    use super::*;
+    use crate::server::cache::handler::NoOpCacheHandler;
+
+    #[tokio::test]
+    async fn test_layout_handler_round_trip() {
+        let cache = LayoutHtmlCache::new();
+        let html = "<!DOCTYPE html><html><body>hi</body></html>".to_string();
+
+        cache.insert(42, html.clone()).await.expect("insert");
+        let got = cache.get(42).await.expect("get");
+        assert_eq!(got, html);
+
+        assert!(cache.get(9999).await.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_layout_clear() {
+        let cache = LayoutHtmlCache::new();
+        cache.insert(1, "one".to_string()).await.expect("insert");
+        cache.insert(2, "two".to_string()).await.expect("insert");
+        cache.insert(3, "three".to_string()).await.expect("insert");
+
+        assert!(cache.get(1).await.is_some());
+        assert!(cache.get(2).await.is_some());
+        assert!(cache.get(3).await.is_some());
+
+        cache.clear().await.expect("clear");
+
+        assert!(cache.get(1).await.is_none());
+        assert!(cache.get(2).await.is_none());
+        assert!(cache.get(3).await.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_layout_with_noop_handler() {
+        let cache = LayoutHtmlCache::with_handler(Arc::new(NoOpCacheHandler));
+
+        cache.insert(1, "x".to_string()).await.expect("insert is no-op but Ok");
+        assert!(cache.get(1).await.is_none());
+        cache.clear().await.expect("clear is no-op but Ok");
+    }
+
+    #[tokio::test]
+    async fn test_layout_custom_ttl_passes_through() {
+        let handler = Arc::new(MemoryCacheHandler::default());
+        let cache = LayoutHtmlCache::with_ttl(handler, 60);
+        cache.insert(7, "alive".to_string()).await.expect("insert");
+        assert!(cache.get(7).await.is_some());
     }
 }

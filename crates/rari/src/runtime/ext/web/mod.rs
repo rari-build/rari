@@ -112,6 +112,12 @@ impl ExtensionTrait<()> for deno_tls::deno_tls {
 }
 
 pub fn extensions(options: WebOptions, is_snapshot: bool) -> Vec<Extension> {
+    // init_fetch is built with is_snapshot=false even in the runtime
+    // path so its esm entry point runs and installs cachedFetch via
+    // applyToGlobal. The other init_* extensions keep is_snapshot as
+    // passed (for_warmup strips their esm to avoid double-running
+    // applyToGlobal side effects on top of V8-built-in globals).
+    let fetch_is_snapshot = false;
     vec![
         deno_web::deno_web::build(options.clone(), is_snapshot),
         deno_telemetry::deno_telemetry::build((), is_snapshot),
@@ -121,6 +127,6 @@ pub fn extensions(options: WebOptions, is_snapshot: bool) -> Vec<Extension> {
         init_web::build(options.clone(), is_snapshot),
         init_telemetry::build((), is_snapshot),
         init_net::build(options.clone(), is_snapshot),
-        init_fetch::build(options, is_snapshot),
+        init_fetch::build(options, fetch_is_snapshot),
     ]
 }

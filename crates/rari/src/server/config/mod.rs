@@ -64,6 +64,23 @@ pub struct RedirectConfig {
     pub allow_subdomains: bool,
 }
 
+/// Per-layer configuration for the pluggable cache-handler system.
+/// Each cache (response, image, og, layout, module, fetch) reads
+/// `handler` (the registered handler name), `max_entries` (LRU
+/// ceiling), and `default_ttl_secs` (entry lifetime).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CacheLayerConfig {
+    pub handler: String,
+    pub max_entries: usize,
+    pub default_ttl_secs: u64,
+}
+
+impl Default for CacheLayerConfig {
+    fn default() -> Self {
+        Self { handler: "memory".to_string(), max_entries: 1000, default_ttl_secs: 60 }
+    }
+}
+
 impl Default for RedirectConfig {
     fn default() -> Self {
         Self { allowed_hosts: vec![], allow_relative: true, allow_subdomains: false }
