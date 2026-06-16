@@ -25,7 +25,7 @@ concurrency:
 jobs:
   changes:
     if: github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-rari-linux-amd64
     permissions:
       contents: read
       pull-requests: read
@@ -68,7 +68,7 @@ jobs:
     if: |
       needs.changes.outputs.rust == 'true' ||
       (needs.changes.outputs.src == 'true' && (github.event_name != 'push' || github.ref_name != 'main'))
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-rari-linux-amd64
     timeout-minutes: 30
     permissions:
       actions: write
@@ -120,7 +120,7 @@ jobs:
   rust-check:
     needs: [changes, build-snapshot]
     if: needs.changes.outputs.rust == 'true'
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-rari-linux-amd64
     timeout-minutes: 15
     permissions:
       actions: write
@@ -177,7 +177,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [namespace-profile-rari-linux-amd64, windows-latest]
         exclude:
           - os: ${{ github.event_name == 'merge_group' && 'windows-latest' || '' }}
     steps:
@@ -249,7 +249,7 @@ jobs:
   build:
     needs: changes
     if: needs.changes.outputs.src == 'true' || needs.changes.outputs.rust == 'true'
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-rari-linux-amd64
     timeout-minutes: 10
     permissions:
       actions: write
@@ -307,7 +307,7 @@ jobs:
   lint-and-test:
     needs: changes
     if: needs.changes.outputs.src == 'true' || needs.changes.outputs.rust == 'true'
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-rari-linux-amd64
     timeout-minutes: 15
     permissions:
       actions: write
@@ -357,7 +357,7 @@ jobs:
     strategy:
       fail-fast: ${{ github.event_name == 'merge_group' }}
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [namespace-profile-rari-linux-amd64, windows-latest]
         node: ['lts/*']
         exclude:
           - os: ${{ github.event_name == 'merge_group' && 'windows-latest' || '' }}
@@ -413,7 +413,7 @@ jobs:
 
   ci-ok:
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-rari-linux-amd64
     needs:
       - changes
       - build-snapshot

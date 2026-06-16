@@ -20,7 +20,7 @@ jobs:
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
-            os: ubuntu-22.04
+            os: namespace-profile-rari-linux-amd64
             name: rari-linux-x64
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-22.04-arm
@@ -138,7 +138,7 @@ jobs:
 
   npm-release-platform:
     needs: build-binaries
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-rari-linux-amd64
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: read
@@ -341,7 +341,7 @@ jobs:
           echo "Successfully published ${PACKAGE_NAME}"
 
   npm-release-package:
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-rari-linux-amd64
     if: startsWith(github.ref, 'refs/tags/rari@') || startsWith(github.ref, 'refs/tags/create-rari-app@')
     permissions:
       contents: read
