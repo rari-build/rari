@@ -1,3 +1,11 @@
+## [0.14.12] - 2026-06-16
+
+### 🚀 Features
+
+- *(cli)* add clean command to rari CLI (#218) by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/v0.14.11...v0.14.12
 ## [0.14.9] - 2026-06-11
 
 ### 🚀 Features
