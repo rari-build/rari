@@ -470,11 +470,11 @@ pub fn op_set_cookie(
 ) -> Result<(), JsErrorBox> {
     use crate::server::middleware::request_context::{PendingCookie, PendingCookieKey};
 
-    if !crate::server::actions::is_valid_cookie_name(&args.name) {
+    if !crate::rsc::actions::is_valid_cookie_name(&args.name) {
         return Err(JsErrorBox::type_error(format!("Invalid cookie name: '{}'", args.name)));
     }
 
-    if !crate::server::actions::is_valid_cookie_value(&args.value) {
+    if !crate::rsc::actions::is_valid_cookie_value(&args.value) {
         return Err(JsErrorBox::type_error(format!(
             "Invalid cookie value for '{}': contains invalid characters",
             args.name
@@ -482,7 +482,7 @@ pub fn op_set_cookie(
     }
 
     if let Some(ref path) = args.path
-        && !crate::server::actions::is_valid_attr_value(path)
+        && !crate::rsc::actions::is_valid_attr_value(path)
     {
         return Err(JsErrorBox::type_error(format!(
             "Invalid cookie path for '{}': '{}'",
@@ -491,7 +491,7 @@ pub fn op_set_cookie(
     }
 
     if let Some(ref domain) = args.domain
-        && !crate::server::actions::is_valid_attr_value(domain)
+        && !crate::rsc::actions::is_valid_attr_value(domain)
     {
         return Err(JsErrorBox::type_error(format!(
             "Invalid cookie domain for '{}': '{}'",
