@@ -107,7 +107,7 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "build": "pnpm clean && pnpm typecheck && vp pack",
+    "build": "pnpm --silent clean && pnpm typecheck && vp pack",
     "clean": "node --eval \"import('node:fs').then(fs => fs.rmSync('dist', { recursive: true, force: true }))\"",
     "lint": "vp lint",
     "lint:fix": "vp lint --fix",
