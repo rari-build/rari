@@ -110,7 +110,7 @@ base64 = "0.22.1"
 rkyv = "0.8.16"
 
 # === HTTP Client & Server ===
-http = "1.4.1"
+http = "1.4.2"
 reqwest = { version = "0.13.4", default-features = false, features = [
   "stream",
   "rustls",
@@ -121,7 +121,7 @@ axum = { version = "0.8.9", features = [
   "macros"
 ] }
 tower = { version = "0.5.3", default-features = false, features = [ "util" ] }
-tower-http = { version = "0.6.11", features = [
+tower-http = { version = "0.7.0", features = [
   "fs",
   "compression-full"
 ] }
@@ -136,11 +136,11 @@ bytes = "1.11.1"
 cow-utils = { workspace = true }
 dashmap = "6.2.1"
 parking_lot = "0.12.5"
-smallvec = "1.15.1"
+smallvec = "1.15.2"
 regex = { workspace = true }
 rustc-hash = { workspace = true }
 lru = "0.18.0"
-uuid = { version = "1.23.2", features = [ "v4" ] }
+uuid = { version = "1.23.3", features = [ "v4" ] }
 thiserror = "2.0.18"
 
 # === Image Processing & Layout ===
@@ -156,7 +156,7 @@ webp = "0.3.1"
 # Layout and text rendering
 taffy = "0.10.1"
 parley = "0.10.0"
-swash = "0.2.7"
+swash = "0.2.9"
 zeno = "0.3.3"
 wuff = "0.2.5"
 resvg = "0.47.0"
