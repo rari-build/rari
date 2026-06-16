@@ -23,13 +23,13 @@ jobs:
             os: namespace-profile-rari-linux-amd64
             name: rari-linux-x64
           - target: aarch64-unknown-linux-gnu
-            os: ubuntu-22.04-arm
+            os: namespace-profile-rari-linux-arm64
             name: rari-linux-arm64
           - target: x86_64-apple-darwin
-            os: macos-15-intel
+            os: namespace-profile-rari-macos-arm64
             name: rari-darwin-x64
           - target: aarch64-apple-darwin
-            os: macos-15
+            os: namespace-profile-rari-macos-arm64
             name: rari-darwin-arm64
           - target: x86_64-pc-windows-msvc
             os: windows-latest
