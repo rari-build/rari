@@ -14,7 +14,7 @@
     "start": "rari start",
     "deploy:railway": "rari deploy railway",
     "deploy:render": "rari deploy render",
-    "clean": "node --eval \"import('node:fs').then(fs => fs.rmSync('dist', { recursive: true, force: true }))\"",
+    "clean": "rari clean",
     "typecheck": "tsgo"
   },
   "dependencies": {

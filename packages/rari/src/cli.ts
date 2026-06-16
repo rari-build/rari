@@ -217,15 +217,7 @@ function getDeploymentConfig() {
 }
 
 async function runViteBuild() {
-  const { existsSync, rmSync } = await import('node:fs')
-  const { resolve } = await import('node:path')
-
-  const distPath = resolve(process.cwd(), 'dist')
-
-  if (existsSync(distPath)) {
-    logInfo('Cleaning dist folder...')
-    rmSync(distPath, { recursive: true, force: true })
-  }
+  await cleanDistFolder()
 
   logInfo('Type checking...')
   const typecheckProcess = crossPlatformSpawn('npx', ['tsgo'], {
@@ -458,6 +450,22 @@ async function deployToRender() {
   await createRenderDeployment()
 }
 
+async function cleanDistFolder() {
+  const { existsSync, rmSync } = await import('node:fs')
+  const { resolve } = await import('node:path')
+
+  const distPath = resolve(process.cwd(), 'dist')
+
+  if (existsSync(distPath)) {
+    logInfo('Cleaning dist folder...')
+    rmSync(distPath, { recursive: true, force: true })
+    logSuccess('Cleaned dist folder')
+  }
+  else {
+    logInfo('No dist folder to clean')
+  }
+}
+
 async function main() {
   switch (command) {
     case undefined:
@@ -470,6 +478,7 @@ ${styleText('bold', 'Usage:')}
   ${styleText('cyan', 'rari dev')}                 Start the development server with Vite
   ${styleText('cyan', 'rari build')}               Build for production
   ${styleText('cyan', 'rari start')}               Start the rari server (defaults to production)
+  ${styleText('cyan', 'rari clean')}               Remove the dist folder
   ${styleText('cyan', 'rari deploy railway')}      Setup Railway deployment
   ${styleText('cyan', 'rari deploy render')}       Setup Render deployment
   ${styleText('cyan', 'rari help')}                Show this help message
@@ -486,6 +495,9 @@ ${styleText('bold', 'Examples:')}
 
   ${styleText('gray', '# Build for production')}
   ${styleText('cyan', 'rari build')}
+
+  ${styleText('gray', '# Clean dist folder')}
+  ${styleText('cyan', 'rari clean')}
 
   ${styleText('gray', '# Start production server (default)')}
   ${styleText('cyan', 'rari start')}
@@ -540,6 +552,10 @@ ${styleText('bold', 'Notes:')}
 
     case 'start':
       await startRustServer()
+      break
+
+    case 'clean':
+      await cleanDistFolder()
       break
 
     case 'deploy':
