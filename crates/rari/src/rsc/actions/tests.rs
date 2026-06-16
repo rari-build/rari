@@ -4,7 +4,7 @@
 #[allow(clippy::bool_assert_comparison)]
 #[allow(clippy::approx_constant)]
 mod tests {
-    use crate::server::actions::{
+    use crate::rsc::actions::{
         ValidationConfig, is_dangerous_property, validate_and_sanitize_args,
     };
     use serde_json::json;
@@ -465,7 +465,7 @@ mod tests {
         assert!(obj.contains_key("timestamp"));
     }
 
-    use crate::server::actions::validate_redirect_url;
+    use crate::rsc::actions::validate_redirect_url;
     use crate::server::config::RedirectConfig;
 
     #[test]
@@ -660,7 +660,7 @@ mod tests {
 
     #[test]
     fn test_is_reserved_export_name_then() {
-        use crate::server::actions::is_reserved_export_name;
+        use crate::rsc::actions::is_reserved_export_name;
 
         assert!(is_reserved_export_name("then"));
         assert!(is_reserved_export_name("catch"));
@@ -669,7 +669,7 @@ mod tests {
 
     #[test]
     fn test_is_reserved_export_name_object_methods() {
-        use crate::server::actions::is_reserved_export_name;
+        use crate::rsc::actions::is_reserved_export_name;
 
         assert!(is_reserved_export_name("toString"));
         assert!(is_reserved_export_name("valueOf"));
@@ -679,7 +679,7 @@ mod tests {
 
     #[test]
     fn test_is_reserved_export_name_symbols() {
-        use crate::server::actions::is_reserved_export_name;
+        use crate::rsc::actions::is_reserved_export_name;
 
         assert!(is_reserved_export_name("Symbol"));
         assert!(is_reserved_export_name("@@iterator"));
@@ -688,7 +688,7 @@ mod tests {
 
     #[test]
     fn test_is_reserved_export_name_allows_valid_names() {
-        use crate::server::actions::is_reserved_export_name;
+        use crate::rsc::actions::is_reserved_export_name;
 
         assert!(!is_reserved_export_name("getData"));
         assert!(!is_reserved_export_name("submitForm"));
@@ -701,7 +701,7 @@ mod tests {
 
     #[test]
     fn test_is_reserved_export_name_case_sensitive() {
-        use crate::server::actions::is_reserved_export_name;
+        use crate::rsc::actions::is_reserved_export_name;
 
         assert!(is_reserved_export_name("then"));
         assert!(!is_reserved_export_name("Then"));
@@ -713,7 +713,7 @@ mod tests {
 
     #[test]
     fn test_is_reserved_export_name_similar_names() {
-        use crate::server::actions::is_reserved_export_name;
+        use crate::rsc::actions::is_reserved_export_name;
 
         assert!(!is_reserved_export_name("thenDo"));
         assert!(!is_reserved_export_name("catchError"));
@@ -824,7 +824,7 @@ mod tests {
             partitioned: false,
         };
 
-        let result = crate::server::actions::build_set_cookie_header(&cookie);
+        let result = crate::rsc::actions::build_set_cookie_header(&cookie);
         assert!(result.is_err(), "Cookie value with double-quote should be rejected");
     }
 
@@ -844,7 +844,7 @@ mod tests {
             partitioned: false,
         };
 
-        let result = crate::server::actions::build_set_cookie_header(&cookie);
+        let result = crate::rsc::actions::build_set_cookie_header(&cookie);
         assert!(result.is_err(), "Cookie value with backslash should be rejected");
     }
 
@@ -864,7 +864,7 @@ mod tests {
             partitioned: false,
         };
 
-        let result = crate::server::actions::build_set_cookie_header(&cookie);
+        let result = crate::rsc::actions::build_set_cookie_header(&cookie);
         assert!(result.is_err(), "Cookie value with space should be rejected");
     }
 
@@ -884,7 +884,7 @@ mod tests {
             partitioned: false,
         };
 
-        let result = crate::server::actions::build_set_cookie_header(&cookie);
+        let result = crate::rsc::actions::build_set_cookie_header(&cookie);
         assert!(result.is_ok(), "Cookie value with valid RFC 6265 characters should be accepted");
     }
 
@@ -904,7 +904,7 @@ mod tests {
             partitioned: false,
         };
 
-        let result = crate::server::actions::build_set_cookie_header(&cookie);
+        let result = crate::rsc::actions::build_set_cookie_header(&cookie);
         assert!(result.is_err(), "Cookie value with control characters should be rejected");
     }
 
@@ -924,7 +924,7 @@ mod tests {
             partitioned: false,
         };
 
-        let result = crate::server::actions::build_set_cookie_header(&cookie);
+        let result = crate::rsc::actions::build_set_cookie_header(&cookie);
         assert!(result.is_err(), "Cookie value with DEL character (0x7F) should be rejected");
     }
 
@@ -944,13 +944,13 @@ mod tests {
             partitioned: false,
         };
 
-        let result = crate::server::actions::build_set_cookie_header(&cookie);
+        let result = crate::rsc::actions::build_set_cookie_header(&cookie);
         assert!(result.is_ok(), "Cookie value with exclamation mark (0x21) should be accepted");
     }
 
     #[test]
     fn test_origin_comparison_with_default_https_port() {
-        use crate::server::actions::check_origin;
+        use crate::rsc::actions::check_origin;
         use axum::http::HeaderMap;
 
         let mut headers = HeaderMap::new();
@@ -967,7 +967,7 @@ mod tests {
 
     #[test]
     fn test_origin_comparison_with_default_http_port() {
-        use crate::server::actions::check_origin;
+        use crate::rsc::actions::check_origin;
         use axum::http::HeaderMap;
 
         let mut headers = HeaderMap::new();
@@ -984,7 +984,7 @@ mod tests {
 
     #[test]
     fn test_origin_comparison_with_explicit_port_in_host() {
-        use crate::server::actions::check_origin;
+        use crate::rsc::actions::check_origin;
         use axum::http::HeaderMap;
 
         let mut headers = HeaderMap::new();
@@ -1001,7 +1001,7 @@ mod tests {
 
     #[test]
     fn test_origin_comparison_port_mismatch() {
-        use crate::server::actions::check_origin;
+        use crate::rsc::actions::check_origin;
         use axum::http::HeaderMap;
 
         let mut headers = HeaderMap::new();
@@ -1015,7 +1015,7 @@ mod tests {
 
     #[test]
     fn test_referer_comparison_with_default_port() {
-        use crate::server::actions::check_origin;
+        use crate::rsc::actions::check_origin;
         use axum::http::HeaderMap;
 
         let mut headers = HeaderMap::new();
