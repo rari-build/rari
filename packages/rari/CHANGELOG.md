@@ -1,3 +1,17 @@
+## [0.14.12] - 2026-06-16
+
+### 🚀 Features
+
+- *(cli)* add clean command to rari CLI (#218) by @skiniks
+
+### 🚜 Refactor
+
+- *(rsc)* reorganize module structure and rename wire_format to flight by @skiniks
+- *(error)* change error metadata type from Option<ErrorMetadata> to Option<Box<ErrorMetadata>> by @skiniks
+- *(actions)* move server actions to rsc module by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.14.11...v0.14.12
 ## [0.14.11] - 2026-06-12
 
 ### 🚀 Features
