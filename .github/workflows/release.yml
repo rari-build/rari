@@ -32,11 +32,11 @@ jobs:
             os: namespace-profile-rari-macos-arm64
             name: rari-darwin-arm64
           - target: x86_64-pc-windows-msvc
-            os: windows-latest
+            os: namespace-profile-rari-windows-amd64
             name: rari-win32-x64.exe
             vcpkg_triplet: x64-windows
           - target: aarch64-pc-windows-msvc
-            os: windows-11-arm
+            os: namespace-profile-rari-windows-amd64
             name: rari-win32-arm64.exe
             vcpkg_triplet: arm64-windows
 

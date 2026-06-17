@@ -177,9 +177,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [namespace-profile-rari-linux-amd64, windows-latest]
+        os: [namespace-profile-rari-linux-amd64, namespace-profile-rari-windows-amd64]
         exclude:
-          - os: ${{ github.event_name == 'merge_group' && 'windows-latest' || '' }}
+          - os: ${{ github.event_name == 'merge_group' && 'namespace-profile-rari-windows-amd64' || '' }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
@@ -357,10 +357,10 @@ jobs:
     strategy:
       fail-fast: ${{ github.event_name == 'merge_group' }}
       matrix:
-        os: [namespace-profile-rari-linux-amd64, windows-latest]
+        os: [namespace-profile-rari-linux-amd64, namespace-profile-rari-windows-amd64]
         node: ['lts/*']
         exclude:
-          - os: ${{ github.event_name == 'merge_group' && 'windows-latest' || '' }}
+          - os: ${{ github.event_name == 'merge_group' && 'namespace-profile-rari-windows-amd64' || '' }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
