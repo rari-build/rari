@@ -3,6 +3,7 @@ import type { ComponentType, SVGProps } from 'react'
 import ArrowNarrowRight from '@/components/icons/ArrowNarrowRight'
 import Check from '@/components/icons/Check'
 import Cloudflare from '@/components/icons/sponsors/Cloudflare'
+import Namespace from '@/components/icons/sponsors/Namespace'
 import Neon from '@/components/icons/sponsors/Neon'
 import Sanity from '@/components/icons/sponsors/Sanity'
 import Sentry from '@/components/icons/sponsors/Sentry'
@@ -161,6 +162,13 @@ interface InfrastructurePartner {
 
 const infrastructurePartners: InfrastructurePartner[] = [
   neonPartner,
+  {
+    href: 'https://namespace.so',
+    label: 'Namespace - High-Performance Cloud Infrastructure',
+    Icon: Namespace,
+    color: '#1C32FF',
+    description: 'CI/CD runners & managed dev environments',
+  },
   {
     href: 'https://cloudflare.com',
     label: 'Cloudflare - CDN & Infrastructure',
@@ -378,7 +386,7 @@ export default function SponsorsPage() {
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 [&>*:nth-child(5)]:lg:col-start-2 [&>*:nth-child(5)]:lg:col-end-4 [&>*:nth-child(5)]:justify-self-center [&>*:nth-child(5)]:lg:max-w-[250px]">
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {infrastructurePartners.map((partner) => {
               const { href, label, Icon, color, secondaryColor, description } = partner
               return (
@@ -410,55 +418,6 @@ export default function SponsorsPage() {
                 </a>
               )
             })}
-          </div>
-        </div>
-      </div>
-
-      <div className={container.section}>
-        <div className={container.marketing}>
-          <div className="text-center mb-16">
-            <h2 className="text-3xl lg:text-5xl font-bold text-[#f0f6fc] mb-4">
-              Financial
-              {' '}
-              <span className="text-transparent bg-clip-text bg-linear-to-r from-[#fd7e14] to-[#e8590c]">sponsors</span>
-            </h2>
-          </div>
-
-          <div className="space-y-8">
-            <div>
-              <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4 text-center">Kickstart</h3>
-              <div className="relative bg-linear-to-br from-[#161b22] to-[#0d1117] border border-[#30363d] rounded-xl p-8">
-                <div className="flex items-center justify-center">
-                  <a
-                    href={neonPartner.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="group relative"
-                    aria-label={neonPartner.label}
-                  >
-                    <neonPartner.Icon className="relative h-10 w-auto transition-transform duration-300 group-hover:scale-105" />
-                  </a>
-                </div>
-              </div>
-            </div>
-
-            <div className="relative">
-              <div className="absolute -inset-0.5 bg-linear-to-r from-[#fd7e14] to-[#e8590c] rounded-2xl blur opacity-20" />
-              <div className="relative bg-linear-to-br from-[#161b22] to-[#0d1117] border border-[#30363d] rounded-2xl p-8 lg:p-12 text-center">
-                <p className="text-xl text-gray-400 mb-8">
-                  Join Neon in supporting rari!
-                </p>
-                <a
-                  href={SPONSOR_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="group relative px-8 py-4 bg-linear-to-r from-[#fd7e14] to-[#e8590c] text-gray-900 rounded-lg font-semibold text-lg transition-transform duration-200 hover:scale-105 inline-flex items-center justify-center gap-2"
-                >
-                  Become a sponsor
-                  <ArrowNarrowRight className="w-5 h-5" />
-                </a>
-              </div>
-            </div>
           </div>
         </div>
       </div>

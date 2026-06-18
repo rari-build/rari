@@ -111,6 +111,18 @@ rari is made possible by the support of these companies:
 
 **[Neon](https://get.neon.com/KDQudHN)** - Serverless Postgres. Autoscaling, branching, and scale to zero.
 
+<div>
+  <a href="https://namespace.so" target="_blank">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset=".github/assets/namespace-dark.svg">
+      <source media="(prefers-color-scheme: light)" srcset=".github/assets/namespace-light.svg">
+      <img width="250px" alt="Namespace - High-Performance Cloud Infrastructure" src=".github/assets/namespace-dark.svg">
+    </picture>
+  </a>
+</div>
+
+**[Namespace](https://namespace.so)** - High-performance cloud infrastructure. CI/CD runners, remote Docker builders, and managed dev environments on bare-metal hardware.
+
 ---
 
 Interested in sponsoring rari? [Get in touch](https://github.com/rari-build/rari/discussions) or support us on [GitHub Sponsors](https://github.com/sponsors/skiniks).
