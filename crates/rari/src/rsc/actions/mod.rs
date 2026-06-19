@@ -917,6 +917,7 @@ pub fn build_set_cookie_header(
 }
 
 #[cfg(test)]
+#[allow(clippy::disallowed_methods)]
 mod tests {
     use super::*;
     use crate::server::config::RedirectConfig;
