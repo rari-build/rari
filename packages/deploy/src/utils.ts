@@ -224,6 +224,15 @@ function extractMinimumVersion(range: string): { major: number, minor: number, p
     }
   }
 
+  match = cleaned.match(WILDCARD_REGEX)
+  if (match) {
+    return {
+      major: Number.parseInt(match[1], 10),
+      minor: 0,
+      patch: 0,
+    }
+  }
+
   match = cleaned.match(MAJOR_ONLY_REGEX)
   if (match) {
     return {
