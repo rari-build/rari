@@ -7,6 +7,24 @@ minimumReleaseAgeExclude:
   - rari-win32-arm64@0.14.12
   - rari-win32-x64@0.14.12
   - rari@0.14.12
+  - '@typescript/native-preview-darwin-arm64@7.0.0-dev.20260618.1'
+  - '@typescript/native-preview-darwin-x64@7.0.0-dev.20260618.1'
+  - '@typescript/native-preview-linux-arm64@7.0.0-dev.20260618.1'
+  - '@typescript/native-preview-linux-arm@7.0.0-dev.20260618.1'
+  - '@typescript/native-preview-linux-x64@7.0.0-dev.20260618.1'
+  - '@typescript/native-preview-win32-arm64@7.0.0-dev.20260618.1'
+  - '@typescript/native-preview-win32-x64@7.0.0-dev.20260618.1'
+  - '@typescript/native-preview@7.0.0-dev.20260618.1'
+  - '@voidzero-dev/vite-plus-core@0.2.1'
+  - '@voidzero-dev/vite-plus-darwin-arm64@0.2.1'
+  - '@voidzero-dev/vite-plus-darwin-x64@0.2.1'
+  - '@voidzero-dev/vite-plus-linux-arm64-gnu@0.2.1'
+  - '@voidzero-dev/vite-plus-linux-arm64-musl@0.2.1'
+  - '@voidzero-dev/vite-plus-linux-x64-gnu@0.2.1'
+  - '@voidzero-dev/vite-plus-linux-x64-musl@0.2.1'
+  - '@voidzero-dev/vite-plus-win32-arm64-msvc@0.2.1'
+  - '@voidzero-dev/vite-plus-win32-x64-msvc@0.2.1'
+  - vite-plus@0.2.1
 shellEmulator: true
 trustPolicy: no-downgrade
 packages:
@@ -16,12 +34,12 @@ packages:
   - web
 catalogs:
   analytics:
-    posthog-js: ^1.386.8
+    posthog-js: ^1.390.2
   build:
     lightningcss: ^1.32.0
     rolldown: ^1.1.1
     vite: ^8.0.16
-    vite-plus: ^0.1.24
+    vite-plus: ^0.2.1
   cli:
     '@clack/prompts': ^1.5.1
   default:
@@ -33,7 +51,7 @@ catalogs:
     eslint-plugin-de-morgan: ^2.1.2
     eslint-plugin-oxlint: ^1.70.0
     eslint-plugin-react-refresh: ^0.5.3
-    knip: ^6.16.1
+    knip: ^6.17.1
   mdx:
     '@mdx-js/mdx': ^3.1.1
     '@shikijs/core': ^4.2.0
@@ -58,6 +76,6 @@ catalogs:
     '@vitest/coverage-v8': ^4.1.9
   typescript:
     '@types/node': ^25.9.3
-    '@typescript/native-preview': ^7.0.0-dev.20260615.1
+    '@typescript/native-preview': ^7.0.0-dev.20260618.1
 allowBuilds:
   core-js: true
