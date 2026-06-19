@@ -10,8 +10,8 @@ pub use types::{ResourceLimits, ResourceMetrics, ResourceTracker};
 
 #[cfg(test)]
 #[allow(clippy::disallowed_methods)]
+#[allow(clippy::module_inception)]
 mod tests {
-    #![allow(clippy::module_inception)]
     use smallvec::SmallVec;
     use std::sync::Arc;
 
