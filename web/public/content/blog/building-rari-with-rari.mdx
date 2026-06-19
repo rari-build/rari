@@ -254,7 +254,7 @@ graph TB
 
 ### The CLI and build toolchain
 
-rari requires Node.js ≥ 22.12.0, but not for the runtime. Node.js powers the orchestration layer: the `rari` CLI and the build toolchain. When you run `npm start`, the Node.js CLI spawns the Rust binary and exits. The Rust binary handles all HTTP requests with its embedded V8 engine.
+rari requires Node.js ≥ 22.18.0, but not for the runtime. Node.js powers the orchestration layer: the `rari` CLI and the build toolchain. When you run `npm start`, the Node.js CLI spawns the Rust binary and exits. The Rust binary handles all HTTP requests with its embedded V8 engine.
 
 You need npm/pnpm/bun/yarn to get started, but the production runtime is pure Rust + V8.
 
