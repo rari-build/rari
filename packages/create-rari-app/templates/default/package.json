@@ -6,7 +6,7 @@
   "packageManager": "pnpm@11.8.0",
   "description": "A Runtime Accelerated Rendering Infrastructure (rari) application",
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=22.18.0"
   },
   "scripts": {
     "build": "rari build",

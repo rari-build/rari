@@ -120,7 +120,7 @@ function extractMajorAndCompare(versionRange: string, minMajor: number): boolean
   return false
 }
 
-export const MIN_NODE_VERSION = '>=22.12.0'
+export const MIN_NODE_VERSION = '>=22.18.0'
 
 export function ensureMinimumNodeEngine(packageJson: any, minVersion: string = MIN_NODE_VERSION): boolean {
   packageJson.engines = packageJson.engines || {}
