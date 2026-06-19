@@ -1,7 +1,7 @@
 use crate::error::{RariError, StreamingError};
+use crate::rsc::RscElement;
 use crate::rsc::flight::escape::unescape_rsc_value;
 use crate::rsc::rendering::streaming::{RscChunkType, RscStreamChunk};
-use crate::rsc::types::RscElement;
 use crate::runtime::JsExecutionRuntime;
 use crate::server::routing::app_router::AppRouteMatch;
 use cow_utils::CowUtils;
