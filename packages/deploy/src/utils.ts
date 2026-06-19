@@ -19,7 +19,6 @@ const MAJOR_MINOR_REGEX = /^(?:>=?|<=?|[=~^])?\s*(\d+)\.(\d+)/
 const WILDCARD_REGEX = /^(\d+)\.(?:x|\*)/i
 const MAJOR_ONLY_REGEX = /^(?:>=?|[=~^])\s*(\d+)(?:\s|$)/
 const NUMBER_ONLY_REGEX = /^(\d+)$/
-const EXTRACT_MAJOR_REGEX = /(\d+)/
 
 export function isNodeVersionSufficient(versionRange: string, minMajor: number = MIN_SUPPORTED_NODE_MAJOR): boolean {
   const cleaned = versionRange.trim()
@@ -125,11 +124,8 @@ export const MIN_NODE_VERSION = '>=22.18.0'
 export function ensureMinimumNodeEngine(packageJson: any, minVersion: string = MIN_NODE_VERSION): boolean {
   packageJson.engines = packageJson.engines || {}
 
-  const minMajorMatch = minVersion.match(EXTRACT_MAJOR_REGEX)
-  const minMajor = minMajorMatch ? Number.parseInt(minMajorMatch[1], 10) : MIN_SUPPORTED_NODE_MAJOR
-
   if (packageJson.engines.node) {
-    if (!isNodeVersionSufficient(packageJson.engines.node, minMajor)) {
+    if (!satisfiesMinimumVersion(packageJson.engines.node, minVersion)) {
       logWarn(`Current engines.node value "${packageJson.engines.node}" may not meet the required minimum of ${minVersion}`)
       logWarn(`Updating to ${minVersion} for deployment compatibility`)
       packageJson.engines.node = minVersion
@@ -142,6 +138,119 @@ export function ensureMinimumNodeEngine(packageJson: any, minVersion: string = M
   }
 
   return false
+}
+
+function satisfiesMinimumVersion(existingRange: string, requiredRange: string): boolean {
+  const existingMin = extractMinimumVersion(existingRange)
+  const requiredMin = extractMinimumVersion(requiredRange)
+
+  if (!existingMin || !requiredMin)
+    return false
+
+  return compareVersions(existingMin, requiredMin) >= 0
+}
+
+function extractMinimumVersion(range: string): { major: number, minor: number, patch: number } | null {
+  const cleaned = range.trim()
+
+  if (cleaned.includes('||')) {
+    const orParts = cleaned.split('||').map(part => part.trim())
+    const versions = orParts.map(part => extractMinimumVersion(part)).filter(v => v !== null)
+    if (versions.length === 0)
+      return null
+
+    return versions.reduce((min, curr) => compareVersions(curr!, min!) < 0 ? curr : min)!
+  }
+
+  const andParts = cleaned.split(AND_SPLIT_REGEX).filter(part => part && part !== '&&')
+  if (andParts.length > 1) {
+    const lowerBounds = andParts
+      .map(part => part.match(LOWER_BOUND_REGEX))
+      .filter(match => match !== null)
+      .map(match => extractMinimumVersion(match![0]))
+      .filter(v => v !== null)
+
+    if (lowerBounds.length === 0)
+      return null
+
+    return lowerBounds.reduce((max, curr) => compareVersions(curr!, max!) > 0 ? curr : max)!
+  }
+
+  let match: RegExpMatchArray | null = null
+
+  match = cleaned.match(SEMVER_RANGE_REGEX)
+  if (match) {
+    return {
+      major: Number.parseInt(match[1], 10),
+      minor: Number.parseInt(match[2], 10),
+      patch: Number.parseInt(match[3], 10),
+    }
+  }
+
+  match = cleaned.match(EXACT_SEMVER_REGEX)
+  if (match) {
+    return {
+      major: Number.parseInt(match[1], 10),
+      minor: Number.parseInt(match[2], 10),
+      patch: Number.parseInt(match[3], 10),
+    }
+  }
+
+  match = cleaned.match(CARET_RANGE_REGEX)
+  if (match) {
+    return {
+      major: Number.parseInt(match[1], 10),
+      minor: Number.parseInt(match[2], 10),
+      patch: Number.parseInt(match[3], 10),
+    }
+  }
+
+  match = cleaned.match(TILDE_RANGE_REGEX)
+  if (match) {
+    return {
+      major: Number.parseInt(match[1], 10),
+      minor: Number.parseInt(match[2], 10),
+      patch: Number.parseInt(match[3], 10),
+    }
+  }
+
+  match = cleaned.match(MAJOR_MINOR_REGEX)
+  if (match) {
+    return {
+      major: Number.parseInt(match[1], 10),
+      minor: Number.parseInt(match[2], 10),
+      patch: 0,
+    }
+  }
+
+  match = cleaned.match(MAJOR_ONLY_REGEX)
+  if (match) {
+    return {
+      major: Number.parseInt(match[1], 10),
+      minor: 0,
+      patch: 0,
+    }
+  }
+
+  match = cleaned.match(NUMBER_ONLY_REGEX)
+  if (match) {
+    return {
+      major: Number.parseInt(match[1], 10),
+      minor: 0,
+      patch: 0,
+    }
+  }
+
+  return null
+}
+
+function compareVersions(a: { major: number, minor: number, patch: number }, b: { major: number, minor: number, patch: number }): number {
+  if (a.major !== b.major)
+    return a.major - b.major
+  if (a.minor !== b.minor)
+    return a.minor - b.minor
+
+  return a.patch - b.patch
 }
 
 export function getRariVersion(cwd: string = process.cwd()): string {
