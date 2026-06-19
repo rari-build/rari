@@ -165,9 +165,8 @@ function extractMinimumVersion(range: string): { major: number, minor: number, p
   const andParts = cleaned.split(AND_SPLIT_REGEX).filter(part => part && part !== '&&')
   if (andParts.length > 1) {
     const lowerBounds = andParts
-      .map(part => part.match(LOWER_BOUND_REGEX))
-      .filter(match => match !== null)
-      .map(match => extractMinimumVersion(match![0]))
+      .filter(part => LOWER_BOUND_REGEX.test(part))
+      .map(part => extractMinimumVersion(part))
       .filter(v => v !== null)
 
     if (lowerBounds.length === 0)
