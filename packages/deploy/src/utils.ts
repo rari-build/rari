@@ -153,13 +153,15 @@ function satisfiesMinimumVersion(existingRange: string, requiredRange: string): 
 function extractMinimumVersion(range: string): { major: number, minor: number, patch: number } | null {
   const cleaned = range.trim()
 
+  const isNonNull = <T>(v: T | null): v is NonNullable<T> => v !== null
+
   if (cleaned.includes('||')) {
     const orParts = cleaned.split('||').map(part => part.trim())
-    const versions = orParts.map(part => extractMinimumVersion(part)).filter(v => v !== null)
+    const versions = orParts.map(part => extractMinimumVersion(part)).filter(isNonNull)
     if (versions.length === 0)
       return null
 
-    return versions.reduce((min, curr) => compareVersions(curr!, min!) < 0 ? curr : min)!
+    return versions.reduce((min, curr) => compareVersions(curr, min) < 0 ? curr : min)
   }
 
   const andParts = cleaned.split(AND_SPLIT_REGEX).filter(part => part && part !== '&&')
@@ -167,12 +169,12 @@ function extractMinimumVersion(range: string): { major: number, minor: number, p
     const lowerBounds = andParts
       .filter(part => LOWER_BOUND_REGEX.test(part))
       .map(part => extractMinimumVersion(part))
-      .filter(v => v !== null)
+      .filter(isNonNull)
 
     if (lowerBounds.length === 0)
       return null
 
-    return lowerBounds.reduce((max, curr) => compareVersions(curr!, max!) > 0 ? curr : max)!
+    return lowerBounds.reduce((max, curr) => compareVersions(curr, max) > 0 ? curr : max)
   }
 
   let match: RegExpMatchArray | null = null
