@@ -1,5 +1,5 @@
 use crate::error::RariError;
-use crate::rsc::types::{RscElement, SuspenseBoundary};
+use crate::rsc::{RscElement, SuspenseBoundary};
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde_json::Value as JsonValue;
 
@@ -643,89 +643,89 @@ mod tests {
             panic!("Expected Reference element for Iterator");
         }
     }
-}
 
-#[test]
-fn test_parse_blob_reference() {
-    let rsc = r#"0:"$B1""#;
+    #[test]
+    fn test_parse_blob_reference() {
+        let rsc = r#"0:"$B1""#;
 
-    let mut parser = RscWireFormatParser::new(rsc);
-    assert!(parser.parse().is_ok());
-
-    let elements = parser.elements();
-    if let Some(RscElement::Reference(ref_str)) = elements.get(&0) {
-        assert_eq!(ref_str, "$B1");
-    } else {
-        panic!("Expected Reference element for Blob");
-    }
-}
-
-#[test]
-fn test_parse_typedarray_reference() {
-    let rsc = r#"0:"$a""#;
-
-    let mut parser = RscWireFormatParser::new(rsc);
-    assert!(parser.parse().is_ok());
-
-    let elements = parser.elements();
-    if let Some(RscElement::Reference(ref_str)) = elements.get(&0) {
-        assert_eq!(ref_str, "$a");
-    } else {
-        panic!("Expected Reference element for TypedArray");
-    }
-}
-
-#[test]
-fn test_parse_stream_reference() {
-    let rsc = r#"0:"$5""#;
-
-    let mut parser = RscWireFormatParser::new(rsc);
-    assert!(parser.parse().is_ok());
-
-    let elements = parser.elements();
-    if let Some(RscElement::Reference(ref_str)) = elements.get(&0) {
-        assert_eq!(ref_str, "$5");
-    } else {
-        panic!("Expected Reference element for Stream");
-    }
-}
-
-#[test]
-fn test_parse_binary_in_component() {
-    let rsc = r#"0:["$","div",null,{"buffer":"$B2","data":"$3"}]"#;
-
-    let mut parser = RscWireFormatParser::new(rsc);
-    assert!(parser.parse().is_ok());
-
-    let elements = parser.elements();
-    if let Some(RscElement::Component { tag, props, .. }) = elements.get(&0) {
-        assert_eq!(tag, "div");
-        assert_eq!(props.get("buffer").and_then(|v| v.as_str()), Some("$B2"));
-        assert_eq!(props.get("data").and_then(|v| v.as_str()), Some("$3"));
-    } else {
-        panic!("Expected Component element");
-    }
-}
-
-#[test]
-fn test_parse_all_binary_markers() {
-    let markers = vec![
-        ("$B1", "Blob"),
-        ("$a", "TypedArray by-value"),
-        ("$5", "Stream by-value"),
-        ("$1f", "Hex ID reference"),
-    ];
-
-    for (marker, description) in markers {
-        let rsc = format!(r#"0:"{}""#, marker);
-        let mut parser = RscWireFormatParser::new(&rsc);
-        assert!(parser.parse().is_ok(), "Failed to parse {}", description);
+        let mut parser = RscWireFormatParser::new(rsc);
+        assert!(parser.parse().is_ok());
 
         let elements = parser.elements();
         if let Some(RscElement::Reference(ref_str)) = elements.get(&0) {
-            assert_eq!(ref_str, marker, "Marker mismatch for {}", description);
+            assert_eq!(ref_str, "$B1");
         } else {
-            panic!("Expected Reference element for {}", description);
+            panic!("Expected Reference element for Blob");
+        }
+    }
+
+    #[test]
+    fn test_parse_typedarray_reference() {
+        let rsc = r#"0:"$a""#;
+
+        let mut parser = RscWireFormatParser::new(rsc);
+        assert!(parser.parse().is_ok());
+
+        let elements = parser.elements();
+        if let Some(RscElement::Reference(ref_str)) = elements.get(&0) {
+            assert_eq!(ref_str, "$a");
+        } else {
+            panic!("Expected Reference element for TypedArray");
+        }
+    }
+
+    #[test]
+    fn test_parse_stream_reference() {
+        let rsc = r#"0:"$5""#;
+
+        let mut parser = RscWireFormatParser::new(rsc);
+        assert!(parser.parse().is_ok());
+
+        let elements = parser.elements();
+        if let Some(RscElement::Reference(ref_str)) = elements.get(&0) {
+            assert_eq!(ref_str, "$5");
+        } else {
+            panic!("Expected Reference element for Stream");
+        }
+    }
+
+    #[test]
+    fn test_parse_binary_in_component() {
+        let rsc = r#"0:["$","div",null,{"buffer":"$B2","data":"$3"}]"#;
+
+        let mut parser = RscWireFormatParser::new(rsc);
+        assert!(parser.parse().is_ok());
+
+        let elements = parser.elements();
+        if let Some(RscElement::Component { tag, props, .. }) = elements.get(&0) {
+            assert_eq!(tag, "div");
+            assert_eq!(props.get("buffer").and_then(|v| v.as_str()), Some("$B2"));
+            assert_eq!(props.get("data").and_then(|v| v.as_str()), Some("$3"));
+        } else {
+            panic!("Expected Component element");
+        }
+    }
+
+    #[test]
+    fn test_parse_all_binary_markers() {
+        let markers = vec![
+            ("$B1", "Blob"),
+            ("$a", "TypedArray by-value"),
+            ("$5", "Stream by-value"),
+            ("$1f", "Hex ID reference"),
+        ];
+
+        for (marker, description) in markers {
+            let rsc = format!(r#"0:"{}""#, marker);
+            let mut parser = RscWireFormatParser::new(&rsc);
+            assert!(parser.parse().is_ok(), "Failed to parse {}", description);
+
+            let elements = parser.elements();
+            if let Some(RscElement::Reference(ref_str)) = elements.get(&0) {
+                assert_eq!(ref_str, marker, "Marker mismatch for {}", description);
+            } else {
+                panic!("Expected Reference element for {}", description);
+            }
         }
     }
 }

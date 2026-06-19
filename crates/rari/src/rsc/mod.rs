@@ -7,6 +7,44 @@ pub mod utils;
 
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
+
+#[derive(Debug, Clone)]
+pub enum RscElement {
+    Component {
+        tag: String,
+        key: Option<String>,
+        props: FxHashMap<String, JsonValue>,
+    },
+    Suspense {
+        fallback_ref: String,
+        children_ref: String,
+        boundary_id: String,
+        props: FxHashMap<String, JsonValue>,
+    },
+    Promise {
+        promise_id: String,
+    },
+    ModuleImport {
+        module_path: String,
+        export_name: String,
+    },
+    Reference(String),
+    Text(String),
+    Fragment {
+        children: Vec<RscElement>,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub struct SuspenseBoundary {
+    pub boundary_id: String,
+    pub fallback_ref: String,
+    pub children_ref: String,
+    pub has_promise: bool,
+    pub promise_ids: Vec<String>,
+    pub row_id: u32,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ComponentValue {
@@ -32,5 +70,4 @@ pub use rendering::streaming::{RscStream, RscStreamChunk};
 pub use types::elements::ReactElement as LoadingReactElement;
 pub use types::elements::ReactElement;
 pub use types::tree::{RSCRenderDebug, RSCRenderResult, RSCTree};
-pub use types::{RscElement as ParsedRscElement, SuspenseBoundary};
 pub use utils::dependencies::extract_dependencies;
