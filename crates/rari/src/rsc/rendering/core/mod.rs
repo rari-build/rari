@@ -46,9 +46,14 @@ mod tests {
                     .to_string(),
                 SmallVec::new(),
             );
+            registry.mark_component_loaded("TestComponent");
         }
 
-        assert!(renderer.initialized);
+        let render_result = renderer.render_to_string("TestComponent", None).await;
+
+        assert!(render_result.is_ok(), "render_to_string should succeed");
+        let output = render_result.unwrap();
+        assert!(!output.is_empty(), "Rendered output should not be empty");
     }
 
     #[tokio::test]
@@ -83,9 +88,8 @@ mod tests {
 
         assert!(renderer.initialized);
 
-        if let Ok(output) = render_result {
-            assert!(output.contains("<"), "Output should contain some HTML content");
-        }
+        let output = render_result.expect("Rendering should succeed");
+        assert!(output.contains("<"), "Output should contain some HTML content");
     }
 
     #[tokio::test]
@@ -93,18 +97,7 @@ mod tests {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
         let mut renderer = RscRenderer::new(runtime);
 
-        let init_result = renderer.initialize().await;
-        assert!(init_result.is_ok(), "Failed to initialize renderer: {:?}", init_result.err());
-
-        let component_id = "TestStreamComponent";
-        renderer
-            .runtime
-            .execute_script(
-                "register_mock_component.js".to_string(),
-                format!("globalThis.{component_id} = function() {{ return {{}}; }};"),
-            )
-            .await
-            .expect("Failed to execute script");
+        renderer.initialize().await.expect("Failed to initialize renderer");
 
         assert!(renderer.initialized);
     }
