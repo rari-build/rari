@@ -1022,4 +1022,20 @@ mod tests {
             "Production mode should use long cache for server components"
         );
     }
+
+    #[test]
+    fn test_cache_control_for_route_production_configured_and_fallback() {
+        // All page-response builders route Cache-Control through this single
+        // resolver, so its behavior is the contract they share. Under
+        // production, a configured route wins; an unconfigured route falls back
+        // to the production server-components default.
+        let mut config = Config::new(Mode::Production);
+        config.caching.routes.insert("/products".to_string(), "public, max-age=600".to_string());
+
+        assert_eq!(config.get_cache_control_for_route("/products"), "public, max-age=600");
+        assert_eq!(
+            config.get_cache_control_for_route("/unconfigured"),
+            "public, max-age=31536000, stale-while-revalidate=86400"
+        );
+    }
 }
