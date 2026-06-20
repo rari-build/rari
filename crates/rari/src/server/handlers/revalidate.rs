@@ -57,13 +57,25 @@ pub async fn revalidate_by_path(
                 }
             }
 
-            state.layout_html_cache.clear();
+            let res = match state.layout_html_cache.clear().await {
+                Ok(()) => RevalidateResponse {
+                    revalidated: true,
+                    message: Some(format!("Revalidated path: {}", path)),
+                },
+                Err(e) => {
+                    tracing::error!(error = %e, path = %path, "layout_html_cache.clear failed");
+                    RevalidateResponse {
+                        revalidated: false,
+                        message: Some(format!(
+                            "Revalidation failed: layout cache clear error: {}",
+                            e
+                        )),
+                    }
+                }
+            };
 
             #[allow(clippy::disallowed_methods)]
-            Ok(Json(RevalidateResponse {
-                revalidated: true,
-                message: Some(format!("Revalidated path: {}", path)),
-            }))
+            Ok(Json(res))
         }
         RevalidateRequest::Tag { tag, secret } => {
             match secret {
@@ -78,11 +90,24 @@ pub async fn revalidate_by_path(
 
             state.response_cache.invalidate_by_tag(tag).await;
 
-            #[allow(clippy::disallowed_methods)]
-            Ok(Json(RevalidateResponse {
-                revalidated: true,
-                message: Some(format!("Revalidated tag: {}", tag)),
-            }))
+            let res = match state.layout_html_cache.invalidate_by_tag(tag).await {
+                Ok(()) => RevalidateResponse {
+                    revalidated: true,
+                    message: Some(format!("Revalidated tag: {}", tag)),
+                },
+                Err(e) => {
+                    tracing::error!(error = %e, tag = %tag, "layout_html_cache.invalidate_by_tag failed");
+                    RevalidateResponse {
+                        revalidated: false,
+                        message: Some(format!(
+                            "Revalidation failed: layout cache invalidate_by_tag error: {}",
+                            e
+                        )),
+                    }
+                }
+            };
+
+            Ok(Json(res))
         }
     }
 }

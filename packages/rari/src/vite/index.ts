@@ -1,5 +1,6 @@
 import type { CSSModulesOptions, Plugin, UserConfig } from 'vite-plus'
 import type { ProxyPluginOptions } from '../proxy/vite-plugin'
+import type { ServerCacheConfig } from '../types/server-config'
 import type { ServerBuildOptions } from './server-build'
 import { Buffer } from 'node:buffer'
 import { spawn } from 'node:child_process'
@@ -97,6 +98,7 @@ interface RariOptions {
   cacheControl?: {
     routes: Record<string, string>
   }
+  cache?: ServerCacheConfig
   experimental?: {
     useCache?: boolean
   }
@@ -1228,6 +1230,7 @@ const ${componentName} = registerClientReference(
             alias: resolvedAlias,
             csp: options.csp,
             cacheControl: options.cacheControl,
+            cache: options.cache,
             experimental: options.experimental,
           })
 
@@ -1482,6 +1485,7 @@ const ${componentName} = registerClientReference(
             alias: resolvedAlias,
             csp: options.csp,
             cacheControl: options.cacheControl,
+            cache: options.cache,
             experimental: options.experimental,
           })
 
@@ -2122,6 +2126,7 @@ import * as React from 'react';\n${content}`
     ...options.serverBuild,
     csp: options.csp,
     cacheControl: options.cacheControl,
+    cache: options.cache,
     experimental: options.experimental,
   })
 

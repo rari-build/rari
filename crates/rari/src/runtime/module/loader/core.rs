@@ -1,5 +1,5 @@
 use super::{
-    cache::ModuleCaching,
+    cache::{DEFAULT_TTL_SECS, ModuleCaching},
     config::{InternerStats, PerformanceStats, ResourceStats, RuntimeConfig, RuntimeMetrics},
     interner::get_string_interner,
     loader_stubs::*,
@@ -11,6 +11,7 @@ use super::{
 };
 use crate::error::RariError;
 use crate::rsc::utils::dependencies::DependencyList;
+use crate::server::cache::handler::CacheHandlerRegistry;
 use crate::utils::path_url::path_to_file_url;
 use cow_utils::CowUtils;
 use dashmap::DashMap;
@@ -104,10 +105,38 @@ impl RariModuleLoader {
     }
 
     pub fn with_config(config: RuntimeConfig) -> Self {
+        Self::with_config_and_registry(config, &CacheHandlerRegistry::default_with_memory())
+    }
+
+    pub fn with_config_and_registry(
+        config: RuntimeConfig,
+        registry: &CacheHandlerRegistry,
+    ) -> Self {
+        let layer = crate::server::config::CacheLayerConfig {
+            handler: config.module_cache_handler.clone(),
+            max_entries: config.cache_size_limit,
+            default_ttl_secs: DEFAULT_TTL_SECS,
+        };
+        let module_caching = ModuleCaching::from_config(&layer, registry);
         Self {
             storage: OrderedStorage::new(),
             module_resolver: ModuleResolver::new(),
-            module_caching: ModuleCaching::new(config.cache_size_limit),
+            module_caching,
+            component_specifiers: DashMap::new(),
+            total_modules_loaded: AtomicUsize::new(0),
+            total_load_time_ms: AtomicU64::new(0),
+            peak_load_time_ms: AtomicU64::new(0),
+            operations_count: AtomicUsize::new(0),
+            start_time: std::time::Instant::now(),
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn with_module_caching(caching: ModuleCaching) -> Self {
+        Self {
+            storage: OrderedStorage::new(),
+            module_resolver: ModuleResolver::new(),
+            module_caching: caching,
             component_specifiers: DashMap::new(),
             total_modules_loaded: AtomicUsize::new(0),
             total_load_time_ms: AtomicU64::new(0),
@@ -210,25 +239,18 @@ impl RariModuleLoader {
         self.operations_count.fetch_add(1, Ordering::Relaxed);
     }
 
-    pub fn add_module(&self, specifier: &str, original_path: &str, code: String) {
+    pub async fn add_module(&self, specifier: &str, original_path: &str, code: String) {
         if let Err(_batch_error) = self.storage.add_module_interned(specifier, &code) {
             self.add_module_internal(specifier, original_path, code.clone());
         }
 
         if specifier.contains(RARI_INTERNAL_PATH) {
-            let cache_key = get_string_interner().intern(specifier);
             #[allow(clippy::disallowed_methods)]
-            if let Err(_e) = self.module_caching.insert(
-                cache_key.to_string(),
-                serde_json::json!({
-                    "status": "module_added",
-                    "specifier": specifier,
-                    "timestamp": std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_millis()
-                }),
-            ) {}
+            if let Err(e) =
+                self.module_caching.insert(original_path.to_string(), serde_json::Value::Null).await
+            {
+                tracing::warn!(path = %original_path, error = %e, "module cache insert failed");
+            }
         }
     }
 

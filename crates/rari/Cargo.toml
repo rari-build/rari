@@ -132,7 +132,7 @@ tokio-tungstenite = "0.29.0"
 tungstenite = "0.29.0"
 
 # === Utilities ===
-bytes = "1.11.1"
+bytes = { version = "1.11.1", features = [ "serde" ] }
 cow-utils = { workspace = true }
 dashmap = "6.2.1"
 parking_lot = "0.12.5"

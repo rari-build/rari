@@ -64,6 +64,56 @@ pub struct RedirectConfig {
     pub allow_subdomains: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CacheLayerConfig {
+    pub handler: String,
+    pub max_entries: usize,
+    pub default_ttl_secs: u64,
+}
+
+impl Default for CacheLayerConfig {
+    fn default() -> Self {
+        Self { handler: "memory".to_string(), max_entries: 1000, default_ttl_secs: 60 }
+    }
+}
+
+pub const CACHE_LAYER_RESPONSE: &str = "response";
+pub const CACHE_LAYER_IMAGE: &str = "image";
+pub const CACHE_LAYER_OG: &str = "og";
+pub const CACHE_LAYER_LAYOUT: &str = "layout";
+pub const CACHE_LAYER_MODULE: &str = "module";
+pub const CACHE_LAYER_FETCH: &str = "fetch";
+
+pub fn default_cache_layers() -> FxHashMap<String, CacheLayerConfig> {
+    let mut layers = FxHashMap::default();
+    layers.insert(CACHE_LAYER_RESPONSE.to_string(), CacheLayerConfig::default());
+    layers.insert(CACHE_LAYER_IMAGE.to_string(), CacheLayerConfig::default());
+    layers.insert(CACHE_LAYER_OG.to_string(), CacheLayerConfig::default());
+    layers.insert(CACHE_LAYER_LAYOUT.to_string(), CacheLayerConfig::default());
+    layers.insert(CACHE_LAYER_MODULE.to_string(), CacheLayerConfig::default());
+    layers.insert(CACHE_LAYER_FETCH.to_string(), CacheLayerConfig::default());
+    layers
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CacheConfig {
+    #[serde(default = "default_cache_layers")]
+    pub layers: FxHashMap<String, CacheLayerConfig>,
+}
+
+impl Default for CacheConfig {
+    fn default() -> Self {
+        Self { layers: default_cache_layers() }
+    }
+}
+
+impl CacheConfig {
+    pub fn layer(&self, name: &str) -> CacheLayerConfig {
+        self.layers.get(name).cloned().unwrap_or_default()
+    }
+}
+
 impl Default for RedirectConfig {
     fn default() -> Self {
         Self { allowed_hosts: vec![], allow_relative: true, allow_subdomains: false }
@@ -315,6 +365,8 @@ pub struct Config {
     pub csp: CspConfig,
     #[serde(default)]
     pub images: crate::server::image::ImageConfig,
+    #[serde(default)]
+    pub cache: CacheConfig,
 }
 
 impl Config {
@@ -577,6 +629,33 @@ impl Config {
                             route,
                             cache_value
                         );
+                    }
+                }
+            }
+
+            if let Some(cache_data) = config_data.get("cache")
+                && let Some(layers_data) = cache_data.get("layers").and_then(|v| v.as_object())
+            {
+                for (layer_name, layer_value) in layers_data {
+                    if !layer_value.is_object() {
+                        tracing::warn!(
+                            "Invalid cache.layers.{} value type: expected object, got {:?}",
+                            layer_name,
+                            layer_value
+                        );
+                        continue;
+                    }
+                    match serde_json::from_value::<CacheLayerConfig>(layer_value.clone()) {
+                        Ok(layer) => {
+                            config.cache.layers.insert(layer_name.clone(), layer);
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                "Failed to parse cache.layers.{}: {}. Using default.",
+                                layer_name,
+                                e
+                            );
+                        }
                     }
                 }
             }
@@ -1021,5 +1100,112 @@ mod tests {
             "public, max-age=31536000, stale-while-revalidate=86400",
             "Production mode should use long cache for server components"
         );
+    }
+
+    #[test]
+    fn test_cache_layer_config_default() {
+        let layer = CacheLayerConfig::default();
+        assert_eq!(layer.handler, "memory");
+        assert_eq!(layer.max_entries, 1000);
+        assert_eq!(layer.default_ttl_secs, 60);
+    }
+
+    #[test]
+    fn test_cache_config_defaults_all_six_layers() {
+        let cache = CacheConfig::default();
+        for name in [
+            CACHE_LAYER_RESPONSE,
+            CACHE_LAYER_IMAGE,
+            CACHE_LAYER_OG,
+            CACHE_LAYER_LAYOUT,
+            CACHE_LAYER_MODULE,
+            CACHE_LAYER_FETCH,
+        ] {
+            assert!(cache.layers.contains_key(name), "missing default layer {name}");
+        }
+        assert_eq!(cache.layers.len(), 6);
+    }
+
+    #[test]
+    fn test_cache_config_layer_fallback() {
+        let cache = CacheConfig::default();
+        let layer = cache.layer("nonexistent");
+        assert_eq!(layer.handler, "memory");
+        assert_eq!(layer.max_entries, 1000);
+        assert_eq!(layer.default_ttl_secs, 60);
+    }
+
+    #[test]
+    fn test_config_includes_default_cache() {
+        let config = Config::default();
+        assert_eq!(config.cache.layers.len(), 6);
+        assert_eq!(config.cache.layer(CACHE_LAYER_RESPONSE).handler, "memory");
+    }
+
+    #[test]
+    fn test_config_from_env_parses_cache_layers() {
+        use std::io::Write;
+
+        let temp_dir =
+            std::env::temp_dir().join(format!("rari_test_cache_layers_{}", std::process::id()));
+        let dist_server_dir = temp_dir.join("dist").join("server");
+        std::fs::create_dir_all(&dist_server_dir).unwrap();
+
+        let config_json = serde_json::json!({
+            "cache": {
+                "layers": {
+                    "response": { "handler": "memory", "maxEntries": 2000, "defaultTtlSecs": 120 },
+                    "image":    { "handler": "memory", "maxEntries": 500,  "defaultTtlSecs": 3600 },
+                    "og":       { "handler": "memory", "maxEntries": 200,  "defaultTtlSecs": 86400 },
+                    "bogus":    { "handler": "noop",  "maxEntries": 1,     "defaultTtlSecs": 0 },
+                    "malformed": "not-an-object"
+                }
+            }
+        });
+
+        let config_path = dist_server_dir.join("config.json");
+        let mut file = std::fs::File::create(&config_path).unwrap();
+        file.write_all(config_json.to_string().as_bytes()).unwrap();
+
+        let result = Config::from_env_with_base(Some(&temp_dir));
+        let _ = std::fs::remove_dir_all(&temp_dir);
+
+        let config = result.unwrap();
+
+        let response = config.cache.layer(CACHE_LAYER_RESPONSE);
+        assert_eq!(response.handler, "memory");
+        assert_eq!(response.max_entries, 2000);
+        assert_eq!(response.default_ttl_secs, 120);
+
+        let image = config.cache.layer(CACHE_LAYER_IMAGE);
+        assert_eq!(image.max_entries, 500);
+        assert_eq!(image.default_ttl_secs, 3600);
+
+        let og = config.cache.layer(CACHE_LAYER_OG);
+        assert_eq!(og.max_entries, 200);
+        assert_eq!(og.default_ttl_secs, 86400);
+
+        assert!(config.cache.layers.contains_key("bogus"));
+
+        let layout = config.cache.layer(CACHE_LAYER_LAYOUT);
+        assert_eq!(layout.handler, "memory");
+        assert_eq!(layout.max_entries, 1000);
+    }
+
+    #[test]
+    fn test_cache_layer_config_serialization() {
+        let layer = CacheLayerConfig {
+            handler: "memory".to_string(),
+            max_entries: 500,
+            default_ttl_secs: 60,
+        };
+        let json = serde_json::to_value(&layer).unwrap();
+        assert_eq!(json["handler"], "memory");
+        assert_eq!(json["maxEntries"], 500);
+        assert_eq!(json["defaultTtlSecs"], 60);
+
+        let round_trip: CacheLayerConfig = serde_json::from_value(json).unwrap();
+        assert_eq!(round_trip.max_entries, 500);
+        assert_eq!(round_trip.default_ttl_secs, 60);
     }
 }

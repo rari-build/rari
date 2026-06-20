@@ -1,5 +1,5 @@
 import type { Plugin } from 'vite-plus'
-import type { ServerCacheControlConfig, ServerConfig, ServerCSPConfig } from '../types/server-config'
+import type { ServerCacheConfig, ServerCacheControlConfig, ServerConfig, ServerCSPConfig } from '../types/server-config'
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
@@ -116,6 +116,7 @@ export interface ServerBuildOptions {
   define?: Record<string, string>
   csp?: ServerCSPConfig
   cacheControl?: ServerCacheControlConfig
+  cache?: ServerCacheConfig
   experimental?: {
     useCache?: boolean
   }
@@ -128,10 +129,11 @@ export interface ComponentRebuildResult {
   error?: string
 }
 
-type ResolvedServerBuildOptions = Required<Omit<ServerBuildOptions, 'csp' | 'cacheControl' | 'define' | 'serverConfigPath' | 'experimental'>> & {
+type ResolvedServerBuildOptions = Required<Omit<ServerBuildOptions, 'csp' | 'cacheControl' | 'cache' | 'define' | 'serverConfigPath' | 'experimental'>> & {
   serverConfigPath: string
   csp?: ServerBuildOptions['csp']
   cacheControl?: ServerBuildOptions['cacheControl']
+  cache?: ServerBuildOptions['cache']
   define?: ServerBuildOptions['define']
   experimental?: ServerBuildOptions['experimental']
 }
@@ -1260,6 +1262,8 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
       serverConfig.csp = this.options.csp
     if (this.options.cacheControl)
       serverConfig.cacheControl = this.options.cacheControl
+    if (this.options.cache)
+      serverConfig.cache = this.options.cache
 
     const serverConfigPath = path.join(
       this.options.outDir,

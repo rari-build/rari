@@ -195,6 +195,15 @@ fn check_origin(headers: &HeaderMap, allowed_origins: &[String]) -> Result<(), S
     Err(StatusCode::FORBIDDEN)
 }
 
+async fn clear_layout_html_cache(state: &ServerState) {
+    if let Err(e) = state.layout_html_cache.clear().await {
+        tracing::warn!(
+            error = %e,
+            "layout_html_cache.clear failed during action; stale layout entries may persist until next revalidate"
+        );
+    }
+}
+
 pub async fn handle_server_action(
     State(state): State<ServerState>,
     headers: HeaderMap,
@@ -334,7 +343,7 @@ pub async fn handle_server_action(
 
                 state.response_cache.invalidate_by_tag(&redirect_path).await;
                 state.html_cache.remove(&redirect_path);
-                state.layout_html_cache.clear();
+                clear_layout_html_cache(&state).await;
             }
 
             let response =
@@ -446,7 +455,7 @@ pub async fn handle_form_action(
 
                 state.response_cache.invalidate_by_tag(&redirect_path).await;
                 state.html_cache.remove(&redirect_path);
-                state.layout_html_cache.clear();
+                clear_layout_html_cache(&state).await;
 
                 let mut redirect_response = Response::builder()
                     .status(StatusCode::SEE_OTHER)
@@ -527,7 +536,7 @@ pub async fn handle_form_action(
             if let Some(redirect_path) = redirect_path_opt {
                 state.response_cache.invalidate_by_tag(&redirect_path).await;
                 state.html_cache.remove(&redirect_path);
-                state.layout_html_cache.clear();
+                clear_layout_html_cache(&state).await;
             }
 
             let mut redirect_response = Response::builder()
