@@ -10,7 +10,7 @@ use std::os::unix::fs::PermissionsExt;
 
 #[derive(Parser, Debug)]
 #[command(name = "prepare-binaries")]
-#[command(about = "Prepare Rari binaries (and use_cache_transform addon) for platform packages", long_about = None)]
+#[command(about = "Prepare Rari binaries (and rari-use-cache-transform addon) for platform packages", long_about = None)]
 struct Args {
     #[arg(long)]
     all: bool,
@@ -20,7 +20,7 @@ struct Args {
 
     #[arg(
         long,
-        help = "Build the use_cache_transform native addon in addition to the main binary"
+        help = "Build the rari-use-cache-transform native addon in addition to the main binary"
     )]
     addon: bool,
 
@@ -40,7 +40,6 @@ struct Target {
     platform: &'static str,
     binary_name: &'static str,
     package_dir: &'static str,
-    napi_triple: &'static str,
     addon_package_dir: &'static str,
 }
 
@@ -50,7 +49,6 @@ const TARGETS: &[Target] = &[
         platform: "linux-x64",
         binary_name: "rari",
         package_dir: "packages/rari-linux-x64",
-        napi_triple: "linux-x64-gnu",
         addon_package_dir: "packages/use-cache-transform-linux-x64",
     },
     Target {
@@ -58,7 +56,6 @@ const TARGETS: &[Target] = &[
         platform: "linux-arm64",
         binary_name: "rari",
         package_dir: "packages/rari-linux-arm64",
-        napi_triple: "linux-arm64-gnu",
         addon_package_dir: "packages/use-cache-transform-linux-arm64",
     },
     Target {
@@ -66,7 +63,6 @@ const TARGETS: &[Target] = &[
         platform: "darwin-x64",
         binary_name: "rari",
         package_dir: "packages/rari-darwin-x64",
-        napi_triple: "darwin-x64",
         addon_package_dir: "packages/use-cache-transform-darwin-x64",
     },
     Target {
@@ -74,7 +70,6 @@ const TARGETS: &[Target] = &[
         platform: "darwin-arm64",
         binary_name: "rari",
         package_dir: "packages/rari-darwin-arm64",
-        napi_triple: "darwin-arm64",
         addon_package_dir: "packages/use-cache-transform-darwin-arm64",
     },
     Target {
@@ -82,7 +77,6 @@ const TARGETS: &[Target] = &[
         platform: "win32-x64",
         binary_name: "rari.exe",
         package_dir: "packages/rari-win32-x64",
-        napi_triple: "win32-x64-msvc",
         addon_package_dir: "packages/use-cache-transform-win32-x64",
     },
     Target {
@@ -90,16 +84,13 @@ const TARGETS: &[Target] = &[
         platform: "win32-arm64",
         binary_name: "rari.exe",
         package_dir: "packages/rari-win32-arm64",
-        napi_triple: "win32-arm64-msvc",
         addon_package_dir: "packages/use-cache-transform-win32-arm64",
     },
 ];
 
-const ADDON_MANIFEST: &str = "crates/use-cache-transform/Cargo.toml";
-const ADDON_BUILD_DIR: &str = ".build/use-cache-transform";
+const ADDON_BUILD_DIR: &str = ".build/rari-use-cache-transform";
 const ADDON_CANONICAL_PACKAGE_DIR: &str = "packages/use-cache-transform";
-const ADDON_NAPI_PACKAGE_NAME: &str = "@rari/use-cache-transform";
-const ADDON_OUTPUT_FILE: &str = "use_cache_transform.node";
+const ADDON_OUTPUT_FILE: &str = "rari_use_cache_transform.node";
 
 fn log(message: &str) {
     println!("{} {}", "➜".cyan(), message);
@@ -316,7 +307,9 @@ fn validate_binary(target_info: &Target, project_root: &Path, dev_mode: bool) ->
 }
 
 fn addon_napi_output_path(target_info: &Target, project_root: &Path) -> PathBuf {
-    project_root.join(ADDON_BUILD_DIR).join(format!("index.{}.node", target_info.napi_triple))
+    project_root
+        .join(ADDON_BUILD_DIR)
+        .join(format!("rari-use-cache-transform.{}.node", target_info.platform))
 }
 
 fn addon_stable_output_path(target_info: &Target, project_root: &Path) -> PathBuf {
@@ -333,42 +326,61 @@ fn addon_canonical_package_path(project_root: &Path) -> PathBuf {
 
 async fn build_addon(target_info: &Target, project_root: &Path, dev_mode: bool) -> Result<bool> {
     log(&format!(
-        "Building use_cache_transform addon for {} ({})",
+        "Building rari-use-cache-transform addon for {} ({})",
         target_info.platform,
         if dev_mode { "debug" } else { "release" }
     ));
 
-    let manifest_path = project_root.join(ADDON_MANIFEST);
+    let manifest_dir = project_root.join("crates/rari-use-cache-transform");
     let out_dir = project_root.join(ADDON_BUILD_DIR);
     fs::create_dir_all(&out_dir).context("Failed to create addon build dir")?;
+
+    let abs_out_dir = out_dir.canonicalize().unwrap_or(out_dir.clone());
+
+    let current_platform = get_current_platform_target();
+    let is_current_platform = current_platform.is_some_and(|t| t.platform == target_info.platform);
 
     let mut args: Vec<String> = vec![
         "build".to_string(),
         "--platform".to_string(),
-        "--js-package-name".to_string(),
-        ADDON_NAPI_PACKAGE_NAME.to_string(),
-        "--manifest-path".to_string(),
-        manifest_path.to_string_lossy().to_string(),
-        "--output-dir".to_string(),
-        out_dir.to_string_lossy().to_string(),
-        "--strip".to_string(),
+        "--cwd".to_string(),
+        manifest_dir.to_string_lossy().to_string(),
     ];
     if !dev_mode {
         args.push("--release".to_string());
     }
-    args.push("--".to_string());
-    args.push("--target".to_string());
-    args.push(target_info.target.to_string());
+    args.push("--strip".to_string());
+    args.push("--no-js".to_string());
 
-    log(&format!("running: napi {}", args.join(" ")));
+    if !is_current_platform {
+        args.push("--target".to_string());
+        args.push(target_info.target.to_string());
+    }
 
-    let program = if cfg!(windows) { "napi.cmd" } else { "napi" };
-    let output = Command::new(program)
+    args.push("--output-dir".to_string());
+    args.push(abs_out_dir.to_string_lossy().to_string());
+
+    log(&format!("running: pnpm exec napi {}", args.join(" ")));
+
+    let mut cmd = Command::new("pnpm");
+    cmd.arg("exec")
+        .arg("napi")
         .args(&args)
         .current_dir(project_root)
-        .output()
-        .await
-        .context("Failed to execute napi build")?;
+        .env("CARGO_CFG_TARGET_ARCH", std::env::consts::ARCH)
+        .env("CARGO_CFG_TARGET_OS", std::env::consts::OS)
+        .env(
+            "CARGO_CFG_TARGET_ENV",
+            if cfg!(target_env = "gnu") {
+                "gnu"
+            } else if cfg!(target_env = "msvc") {
+                "msvc"
+            } else {
+                ""
+            },
+        );
+
+    let output = cmd.output().await.context("Failed to execute napi build")?;
 
     if !output.status.success() {
         log_error(&format!("Failed to build addon for {}", target_info.platform));
@@ -407,6 +419,16 @@ async fn build_addon(target_info: &Target, project_root: &Path, dev_mode: bool) 
                 let _ = fs::remove_file(&p);
             }
         }
+    }
+
+    if is_current_platform {
+        let build_type = if dev_mode { "debug" } else { "release" };
+        let target_dir = project_root.join("target").join(build_type);
+        fs::create_dir_all(&target_dir).context("Failed to create target directory")?;
+
+        let test_dest = target_dir.join(ADDON_OUTPUT_FILE);
+        fs::copy(&stable, &test_dest).context("Failed to copy addon to target dir for tests")?;
+        log_success(&format!("Copied addon to {} for local testing", test_dest.display()));
     }
 
     log_success(&format!("Built addon for {}", target_info.platform));
@@ -505,7 +527,8 @@ async fn main() -> Result<()> {
 
     println!(
         "{}",
-        "🔧 Preparing Rari platform artifacts (binary and/or use_cache_transform addon)".bold()
+        "🔧 Preparing Rari platform artifacts (binary and/or rari-use-cache-transform addon)"
+            .bold()
     );
     println!();
 
@@ -618,7 +641,7 @@ async fn main() -> Result<()> {
 
     // ---- Addon ----
     if do_build_addon {
-        log("Building use_cache_transform addon...");
+        log("Building rari-use-cache-transform addon...");
         for target_info in &targets_to_build {
             let success = build_addon(target_info, &project_root, args.dev).await?;
             if success {

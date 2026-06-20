@@ -20,6 +20,7 @@
   "devDependencies": {
     "@antfu/eslint-config": "catalog:eslint",
     "@eslint-react/eslint-plugin": "catalog:eslint",
+    "@napi-rs/cli": "catalog:build",
     "@playwright/test": "catalog:testing",
     "@types/node": "catalog:typescript",
     "@typescript/native-preview": "catalog:typescript",

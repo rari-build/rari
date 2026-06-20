@@ -1,6 +1,5 @@
 [package]
-name = "use-cache-transform"
-version = "0.1.0"
+name = "rari-use-cache-transform"
 edition = { workspace = true }
 license = { workspace = true }
 description = "napi-rs native addon for 'use cache' directive transformation using SWC"
@@ -10,19 +9,19 @@ publish = false
 crate-type = [ "cdylib" ]
 
 [dependencies]
-napi = { version = "2", features = [
+napi = { version = "3.9.3", features = [
   "napi6",
   "serde-json",
 ] }
-napi-derive = "2"
+napi-derive = "3.5.6"
 deno_ast = { workspace = true, features = [
   "codegen",
   "visit",
   "transforms",
 ] }
-sha1 = "0.10"
+sha1 = "0.11.0"
 hex = { workspace = true }
 rustc-hash = { workspace = true }
 
 [build-dependencies]
-napi-build = "2"
+napi-build = "2.3.2"

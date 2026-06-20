@@ -13,10 +13,10 @@ try {
   const ext = process.platform === 'win32' ? '.dll' : process.platform === 'darwin' ? '.dylib' : '.so'
 
   const candidates = [
-    path.join(repoRoot, 'target/release/use_cache_transform.node'),
-    path.join(repoRoot, 'target/release/libuse_cache_transform', ext),
-    path.join(repoRoot, 'target/debug/use_cache_transform.node'),
-    path.join(repoRoot, 'target/debug/libuse_cache_transform', ext),
+    path.join(repoRoot, 'target/release/rari_use_cache_transform.node'),
+    path.join(repoRoot, `target/release/librari_use_cache_transform${ext}`),
+    path.join(repoRoot, 'target/debug/rari_use_cache_transform.node'),
+    path.join(repoRoot, `target/debug/librari_use_cache_transform${ext}`),
   ]
 
   for (const addonPath of candidates) {

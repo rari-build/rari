@@ -247,7 +247,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
   build-use-cache-transform-addon:
-    name: Build use_cache_transform.node (${{ matrix.os }})
+    name: Build rari_use_cache_transform.node (${{ matrix.os }})
     needs: [changes]
     if: (needs.changes.outputs.rust == 'true' || needs.changes.outputs.src == 'true') && (github.event_name != 'push' || github.ref_name != 'main')
     runs-on: ${{ matrix.os }}
@@ -275,10 +275,18 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y pkg-config
 
-      - name: Install @napi-rs/cli
-        run: npm install -g @napi-rs/cli
+      - name: Setup Node.js
+        uses: actions/setup-node@0a44ba7841725637a19e28fa30b79a866c81b0a6 # v4.0.4
+        with:
+          node-version: 22
 
-      - name: Build use_cache_transform.node
+      - name: Install pnpm
+        uses: pnpm/action-setup@fe02b34f77f8bc703788d5817da081398fad5dd2 # v4.0.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build rari_use_cache_transform.node
         shell: bash
         run: |
           case "${{ matrix.os }}" in
@@ -298,7 +306,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: use-cache-transform-linux-x64
-          path: .build/use-cache-transform/linux-x64/use_cache_transform.node
+          path: packages/use-cache-transform-linux-x64/rari_use_cache_transform.node
           if-no-files-found: error
           retention-days: 1
 
@@ -307,7 +315,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: use-cache-transform-win32-x64
-          path: .build/use-cache-transform/win32-x64/use_cache_transform.node
+          path: packages/use-cache-transform-win32-x64/rari_use_cache_transform.node
           if-no-files-found: error
           retention-days: 1
 
@@ -458,14 +466,14 @@ jobs:
           name: rari-binary-windows
           path: packages/rari-win32-x64/bin
 
-      - name: Download use_cache_transform addon (Linux)
+      - name: Download rari_use_cache_transform addon (Linux)
         if: runner.os == 'Linux'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: use-cache-transform-linux-x64
           path: packages/use-cache-transform
 
-      - name: Download use_cache_transform addon (Windows)
+      - name: Download rari_use_cache_transform addon (Windows)
         if: runner.os == 'Windows'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:

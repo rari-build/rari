@@ -27,7 +27,7 @@ if (!platformPkg) {
 }
 
 async function loadAddon() {
-  const localNode = resolve(__dirname, 'use_cache_transform.node')
+  const localNode = resolve(__dirname, 'rari_use_cache_transform.node')
   if (existsSync(localNode)) {
     return require(localNode)
   }
