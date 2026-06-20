@@ -286,20 +286,30 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build rari_use_cache.node
-        shell: bash
+      - name: Build rari_use_cache.node (Linux)
+        if: runner.os == 'Linux'
         run: |
-          case "${{ matrix.os }}" in
-            ubuntu-latest)
-              PLATFORM="linux-x64"
-              ;;
-            windows-latest)
-              PLATFORM="win32-x64"
-              ;;
-          esac
-          cargo run --release --bin prepare-binaries -- \
-            --addon \
-            --platform "$PLATFORM"
+          cd crates/rari-use-cache
+          pnpm exec napi build --release --strip --platform
+
+      - name: Build rari_use_cache.node (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cd crates/rari-use-cache
+          pnpm exec napi build --release --strip --platform
+
+      - name: Copy addon to platform package (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p packages/use-cache-linux-x64
+          cp crates/rari-use-cache/*.linux-x64-gnu.node packages/use-cache-linux-x64/rari_use_cache.node
+
+      - name: Copy addon to platform package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path packages/use-cache-win32-x64
+          Copy-Item crates/rari-use-cache/*.win32-x64-msvc.node packages/use-cache-win32-x64/rari_use_cache.node
 
       - name: Upload addon (Linux)
         if: runner.os == 'Linux'
@@ -320,7 +330,7 @@ jobs:
           retention-days: 1
 
   build:
-    needs: changes
+    needs: [changes, build-use-cache-addon]
     if: needs.changes.outputs.src == 'true' || needs.changes.outputs.rust == 'true'
     runs-on: namespace-profile-rari-linux-amd64
     timeout-minutes: 10
@@ -339,6 +349,12 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
+
+      - name: Download use-cache addon
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: use-cache-linux-x64
+          path: packages/use-cache
 
       - name: Build packages
         run: |
@@ -381,7 +397,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
   lint-and-test:
-    needs: changes
+    needs: [changes, build-use-cache-addon]
     if: needs.changes.outputs.src == 'true' || needs.changes.outputs.rust == 'true'
     runs-on: namespace-profile-rari-linux-amd64
     timeout-minutes: 15
@@ -401,8 +417,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
 
+      - name: Download use-cache addon
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: use-cache-linux-x64
+          path: packages/use-cache
+
       - name: Build packages
         run: |
+          pnpm --filter=@rari/use-cache run build
           pnpm --filter=@rari/logger run build
           pnpm --filter=@rari/deploy run build
           pnpm --filter=rari run build
