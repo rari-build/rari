@@ -18,14 +18,17 @@ const PLATFORM_PACKAGES: Record<string, string> = {
 
 const key = `${process.platform}-${process.arch}` as keyof typeof PLATFORM_PACKAGES
 const platformPkg = PLATFORM_PACKAGES[key]
-if (!platformPkg) {
-  throw new Error(
-    `@rari/use-cache: unsupported platform ${key}. `
-    + `Supported: ${Object.keys(PLATFORM_PACKAGES).join(', ')}.`,
-  )
-}
 
 async function loadAddon() {
+  if (!platformPkg) {
+    console.warn(
+      `[use-cache] Unsupported platform ${key}. `
+      + `Supported: ${Object.keys(PLATFORM_PACKAGES).join(', ')}. `
+      + `Native transforms will not be available.`,
+    )
+    return null
+  }
+
   const localNode = resolve(__dirname, '..', 'rari_use_cache.node')
   if (existsSync(localNode)) {
     return require(localNode)
@@ -36,7 +39,7 @@ async function loadAddon() {
     return platformModule.default
   }
   catch (err) {
-    if (err && typeof err === 'object' && 'code' in err && err.code === 'MODULE_NOT_FOUND')
+    if (err && typeof err === 'object' && 'code' in err && err.code === 'ERR_MODULE_NOT_FOUND')
       return null
     console.error(`[use-cache] Failed to load native addon from ${platformPkg}:`, err)
     throw err
