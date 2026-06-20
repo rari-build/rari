@@ -30,9 +30,6 @@ catalogs:
       specifier: ^1.5.1
       version: 1.5.1
   default:
-    quick-lru:
-      specifier: ^7.3.0
-      version: 7.3.0
     rari:
       specifier: ^0.14.12
       version: 0.14.12
@@ -100,6 +97,10 @@ catalogs:
     react-dom:
       specifier: ^19.2.7
       version: 19.2.7
+  runtime:
+    quick-lru:
+      specifier: ^7.3.0
+      version: 7.3.0
   tailwind:
     '@tailwindcss/vite':
       specifier: ^4.3.1
@@ -296,7 +297,7 @@ importers:
   packages/use-cache-transform:
     dependencies:
       quick-lru:
-        specifier: 'catalog:'
+        specifier: catalog:runtime
         version: 7.3.0
     devDependencies:
       '@types/node':

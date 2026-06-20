@@ -55,7 +55,7 @@
     "typecheck": "tsgo"
   },
   "dependencies": {
-    "quick-lru": "catalog:"
+    "quick-lru": "catalog:runtime"
   },
   "devDependencies": {
     "@types/node": "catalog:typescript",
