@@ -2,8 +2,11 @@ use crate::error::RariError;
 use crate::rsc::actions::{handle_form_action, handle_server_action};
 use crate::rsc::rendering::core::ResourceLimits;
 use crate::runtime::utils::DistPathResolver;
+use crate::server::cache::handler::CacheHandlerRegistry;
 use crate::server::cache::response;
-use crate::server::config::Config;
+use crate::server::config::{
+    CACHE_LAYER_IMAGE, CACHE_LAYER_LAYOUT, CACHE_LAYER_OG, CACHE_LAYER_RESPONSE, Config,
+};
 use crate::server::handlers::api::{api_cors_preflight, handle_api_route};
 use crate::server::handlers::app::handle_app_route;
 use crate::server::handlers::hmr::handle_hmr_action;
@@ -148,15 +151,27 @@ impl Server {
 
         let renderer_arc = Arc::new(tokio::sync::Mutex::new(renderer));
 
+        let cache_registry = Arc::new(CacheHandlerRegistry::from_env());
+
+        let response_layer = config.cache.layer(CACHE_LAYER_RESPONSE);
+        let response_handler = cache_registry.resolve(&response_layer.handler);
         let cache_config = response::CacheConfig::from_env(config.is_production());
-        let response_cache = Arc::new(response::ResponseCache::new(cache_config));
+        let response_cache =
+            Arc::new(response::ResponseCache::new_with_handler(cache_config, response_handler));
+
+        let image_layer = config.cache.layer(CACHE_LAYER_IMAGE);
+        let image_handler = cache_registry.resolve(&image_layer.handler);
+
+        let og_layer = config.cache.layer(CACHE_LAYER_OG);
+        let og_handler = cache_registry.resolve(&og_layer.handler);
 
         let og_generator = {
             let runtime = js_runtime.clone();
-            let generator = Arc::new(crate::server::og::OgImageGenerator::with_capacity(
+            let og_cache = crate::server::og::OgImageCache::with_handler(og_handler, &project_root);
+            let generator = Arc::new(crate::server::og::OgImageGenerator::with_capacity_and_cache(
                 runtime,
                 project_root.clone(),
-                100,
+                og_cache,
             ));
 
             let manifest_path = "dist/server/routes.json";
@@ -166,6 +181,8 @@ impl Server {
 
             Some(generator)
         };
+
+        let layout_layer = config.cache.layer(CACHE_LAYER_LAYOUT);
 
         let state = ServerState {
             renderer: renderer_arc,
@@ -179,11 +196,17 @@ impl Server {
             api_route_handler,
             module_reload_manager,
             html_cache: Arc::new(dashmap::DashMap::new()),
-            layout_html_cache: crate::rsc::rendering::layout::LayoutRenderer::create_shared_cache(),
+            layout_html_cache:
+                crate::rsc::rendering::layout::LayoutRenderer::create_shared_cache_from_config(
+                    &layout_layer,
+                    &cache_registry,
+                ),
             response_cache,
             og_generator,
             project_root,
             image_optimizer: None,
+            cache_registry: Arc::clone(&cache_registry),
+            image_handler,
         };
 
         if config.is_production() {
@@ -227,9 +250,15 @@ impl Server {
         let small_body_limit = DefaultBodyLimit::max(100 * 1024);
         let medium_body_limit = DefaultBodyLimit::max(1024 * 1024);
 
-        let image_optimizer = Arc::new(crate::server::image::ImageOptimizer::new(
+        let image_cache = Arc::new(crate::server::image::ImageCache::with_handler(
+            state.image_handler.clone(),
+            config.images.max_cache_size,
+            &state.project_root,
+        ));
+        let image_optimizer = Arc::new(crate::server::image::ImageOptimizer::with_cache(
             config.images.clone(),
             &state.project_root,
+            image_cache,
         ));
 
         state.image_optimizer = Some(Arc::clone(&image_optimizer));

@@ -41,7 +41,7 @@ pub async fn execute_script(
     script_name: &str,
     script_code: &str,
 ) -> Result<JsonValue, RariError> {
-    if let Some(cached_result) = module_loader.module_caching.get(script_name) {
+    if let Some(cached_result) = module_loader.module_caching.get(script_name).await {
         return Ok(cached_result);
     }
 
@@ -70,7 +70,7 @@ async fn execute_as_module(
 ) -> Result<JsonValue, RariError> {
     let specifier_str = module_loader.create_specifier(script_name, "rari_internal");
 
-    module_loader.add_module(&specifier_str, script_name, script_code.to_string());
+    module_loader.add_module(&specifier_str, script_name, script_code.to_string()).await;
 
     let specifier = deno_core::resolve_url(&specifier_str).map_err(|url_err| {
         RariError::js_execution(format!(
@@ -327,7 +327,7 @@ async fn retry_as_module(
     let specifier_str = module_loader.create_specifier(script_name, "rari_internal");
     let module_code = module_loader.transform_to_esmodule(script_code, script_name);
 
-    module_loader.add_module(&specifier_str, script_name, module_code);
+    module_loader.add_module(&specifier_str, script_name, module_code).await;
 
     let specifier = deno_core::resolve_url(&specifier_str).map_err(|url_err| {
         RariError::js_execution(format!(
@@ -385,7 +385,7 @@ pub async fn execute_script_for_streaming(
     let specifier_str = module_loader.create_specifier(script_name, "rari_internal_streaming");
     let module_code = module_loader.transform_to_esmodule(script_code, script_name);
 
-    module_loader.add_module(&specifier_str, script_name, module_code);
+    module_loader.add_module(&specifier_str, script_name, module_code).await;
 
     let specifier = deno_core::resolve_url(&specifier_str).map_err(|e| {
         RariError::js_execution(format!(

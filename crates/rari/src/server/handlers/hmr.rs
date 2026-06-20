@@ -226,7 +226,27 @@ async fn handle_register(state: ServerState, file_path: String) -> Result<Json<V
             }
         }
 
-        state.layout_html_cache.clear();
+        if let Err(e) = state.layout_html_cache.clear().await {
+            tracing::warn!(
+                component_id = component_id,
+                file_path = file_path,
+                error = %e,
+                "Failed to clear layout_html_cache during HMR reload"
+            );
+            #[allow(clippy::disallowed_methods)]
+            return Ok(Json(serde_json::json!({
+                "success": false,
+                "file_path": file_path,
+                "component_id": component_id,
+                "reloaded": false,
+                "preserved_last_good": true,
+                "error": {
+                    "stage": "layout_cache_clear",
+                    "message": e.to_string(),
+                    "suggestion": "Layout cache clear failed during HMR. Last known good version is still available. Try a manual page refresh."
+                }
+            })));
+        }
 
         serde_json::json!({
             "success": true,
