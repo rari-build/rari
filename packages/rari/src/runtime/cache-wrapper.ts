@@ -1,2 +1,2 @@
-export { $$cache__, encodeBoundArgs } from '@rari/use-cache-transform/runtime/cache-wrapper'
-export type { CacheEntry } from '@rari/use-cache-transform/runtime/cache-wrapper'
+export { $$cache__, deterministicStringify, encodeBoundArgs } from '@rari/use-cache-transform'
+export type { CacheEntry } from '@rari/use-cache-transform'

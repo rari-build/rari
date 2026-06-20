@@ -13,8 +13,8 @@
         "test/unit/vite/__mocks__/rolldown.ts"
       ],
       "ignoreDependencies": [
-        "@typescript/native-preview", // Used by TypeScript tooling
-        "@vitest/coverage-v8" // Used by vitest for coverage
+        "@vitest/coverage-v8", // Used by vitest for coverage
+        "@napi-rs/cli" // Used via pnpm exec in prepare-binaries tool
       ]
     },
     "packages/rari": {
@@ -46,6 +46,14 @@
       ]
     },
     "packages/deploy": {
+      "entry": [
+        "src/**/*.ts"
+      ],
+      "project": [
+        "src/**/*.ts"
+      ]
+    },
+    "packages/use-cache-transform": {
       "entry": [
         "src/**/*.ts"
       ],

@@ -1,4 +1,4 @@
-import { deterministicStringify } from '@rari/runtime/deterministic-stringify'
+import { deterministicStringify } from '@rari/runtime/cache-wrapper'
 import { describe, expect, it } from 'vite-plus/test'
 
 describe('deterministicStringify', () => {
