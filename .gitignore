@@ -5,6 +5,9 @@ packages/*/bin
 packages/rari-darwin-*/
 packages/rari-linux-*/
 packages/rari-win32-*/
+packages/use-cache-darwin-*/
+packages/use-cache-linux-*/
+packages/use-cache-win32-*/
 .pnpm-store/
 .build
 .cache

@@ -304,7 +304,7 @@ fn validate_binary(target_info: &Target, project_root: &Path, dev_mode: bool) ->
 }
 
 fn addon_napi_output_path(target_info: &Target, project_root: &Path) -> PathBuf {
-    project_root.join(ADDON_BUILD_DIR).join(format!("rari_use_cache.{}.node", target_info.platform))
+    project_root.join(ADDON_BUILD_DIR).join(format!("rari-use-cache.{}.node", target_info.platform))
 }
 
 fn addon_stable_output_path(target_info: &Target, project_root: &Path) -> PathBuf {

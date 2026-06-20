@@ -7,9 +7,9 @@
   "license": "MIT",
   "homepage": "https://github.com/rari-build/rari#readme",
   "repository": {
+    "directory": "packages/use-cache",
     "type": "git",
-    "url": "https://github.com/rari-build/rari.git",
-    "directory": "packages/use-cache"
+    "url": "git+https://github.com/rari-build/rari.git"
   },
   "bugs": {
     "url": "https://github.com/rari-build/rari/issues"

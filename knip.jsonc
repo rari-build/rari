@@ -13,8 +13,7 @@
         "test/unit/vite/__mocks__/rolldown.ts"
       ],
       "ignoreDependencies": [
-        "@vitest/coverage-v8", // Used by vitest for coverage
-        "@napi-rs/cli" // Used via pnpm exec in prepare-binaries tool
+        "@vitest/coverage-v8" // Used by vitest for coverage
       ]
     },
     "packages/rari": {
@@ -59,9 +58,6 @@
       ],
       "project": [
         "src/**/*.ts"
-      ],
-      "ignore": [
-        "vite.config.ts" // Used by vite-plus for building
       ]
     },
     "examples/app-router-example": {
