@@ -202,7 +202,7 @@ jobs:
       - name: Cache Rust
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
-          shared-key: "e2e-${{ runner.os }}"
+          shared-key: 'e2e-${{ runner.os }}'
 
       - name: Download snapshot
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -246,8 +246,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
-  build-use-cache-transform-addon:
-    name: Build rari_use_cache_transform.node (${{ matrix.os }})
+  build-use-cache-addon:
+    name: Build rari_use_cache.node (${{ matrix.os }})
     needs: [changes]
     if: (needs.changes.outputs.rust == 'true' || needs.changes.outputs.src == 'true') && (github.event_name != 'push' || github.ref_name != 'main')
     runs-on: ${{ matrix.os }}
@@ -286,7 +286,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build rari_use_cache_transform.node
+      - name: Build rari_use_cache.node
         shell: bash
         run: |
           case "${{ matrix.os }}" in
@@ -305,8 +305,8 @@ jobs:
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: use-cache-transform-linux-x64
-          path: packages/use-cache-transform-linux-x64/rari_use_cache_transform.node
+          name: use-cache-linux-x64
+          path: packages/use-cache-linux-x64/rari_use_cache.node
           if-no-files-found: error
           retention-days: 1
 
@@ -314,8 +314,8 @@ jobs:
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: use-cache-transform-win32-x64
-          path: packages/use-cache-transform-win32-x64/rari_use_cache_transform.node
+          name: use-cache-win32-x64
+          path: packages/use-cache-win32-x64/rari_use_cache.node
           if-no-files-found: error
           retention-days: 1
 
@@ -427,7 +427,7 @@ jobs:
       - changes
       - build
       - build-rari-binary
-      - build-use-cache-transform-addon
+      - build-use-cache-addon
     strategy:
       fail-fast: ${{ github.event_name == 'merge_group' }}
       matrix:
@@ -466,19 +466,19 @@ jobs:
           name: rari-binary-windows
           path: packages/rari-win32-x64/bin
 
-      - name: Download rari_use_cache_transform addon (Linux)
+      - name: Download rari_use_cache addon (Linux)
         if: runner.os == 'Linux'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: use-cache-transform-linux-x64
-          path: packages/use-cache-transform
+          name: use-cache-linux-x64
+          path: packages/use-cache
 
-      - name: Download rari_use_cache_transform addon (Windows)
+      - name: Download rari_use_cache addon (Windows)
         if: runner.os == 'Windows'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: use-cache-transform-win32-x64
-          path: packages/use-cache-transform
+          name: use-cache-win32-x64
+          path: packages/use-cache
 
       - name: Make binary executable (Linux)
         if: runner.os == 'Linux'
@@ -528,7 +528,7 @@ jobs:
       - rust-check
       - build
       - build-rari-binary
-      - build-use-cache-transform-addon
+      - build-use-cache-addon
       - lint-and-test
       - test-e2e
     steps:
@@ -541,7 +541,7 @@ jobs:
             "${{ needs.rust-check.result }}"
             "${{ needs.build.result }}"
             "${{ needs.build-rari-binary.result }}"
-            "${{ needs.build-use-cache-transform-addon.result }}"
+            "${{ needs.build-use-cache-addon.result }}"
             "${{ needs.lint-and-test.result }}"
             "${{ needs.test-e2e.result }}"
           )
