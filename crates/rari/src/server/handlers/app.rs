@@ -509,11 +509,13 @@ pub async fn render_synchronous(
                     wrap_html_with_metadata(html_with_assets, context.metadata.as_ref(), &state);
 
                 let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
+                let cache_control = state.config.get_cache_control_for_route(&context.pathname);
 
                 Ok(Response::builder()
                     .status(status_code)
                     .header("content-type", "text/html; charset=utf-8")
                     .header("x-render-mode", "synchronous")
+                    .header("cache-control", cache_control)
                     .header("vary", "Accept")
                     .body(Body::from(final_html))
                     .expect("Valid HTML response"))
@@ -708,6 +710,7 @@ pub async fn render_streaming_with_layout(
                 wrap_html_with_metadata(html_with_assets, context.metadata.as_ref(), &state);
 
             let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
+            let cache_control = state.config.get_cache_control_for_route(&context.pathname);
 
             let encoding = CompressionEncoding::from_accept_encoding(accept_encoding);
             let (body_bytes, actual_encoding) =
@@ -717,6 +720,7 @@ pub async fn render_streaming_with_layout(
                 .status(status_code)
                 .header("content-type", "text/html; charset=utf-8")
                 .header("x-render-mode", "static")
+                .header("cache-control", cache_control)
                 .header("vary", "Accept, Accept-Encoding");
 
             if let Some(encoding_header) = actual_encoding.as_header_value() {
