@@ -8,7 +8,7 @@ export async function getUseCacheTransform(): Promise<UseCacheTransform | null> 
 
   try {
     const module = await import('@rari/use-cache')
-    useCacheTransform = module.transformUseCacheModule
+    useCacheTransform = module.transformUseCacheModule ?? null
     return useCacheTransform
   }
   catch {
