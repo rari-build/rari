@@ -357,23 +357,33 @@ async fn build_addon(target_info: &Target, project_root: &Path, dev_mode: bool) 
 
     log(&format!("running: pnpm exec napi {}", args.join(" ")));
 
+    let target_parts: Vec<&str> = target_info.target.split('-').collect();
+    let target_arch = target_parts.first().unwrap_or(&"unknown");
+    let target_os = if target_info.target.contains("darwin") {
+        "macos"
+    } else if target_info.target.contains("linux") {
+        "linux"
+    } else if target_info.target.contains("windows") {
+        "windows"
+    } else {
+        "unknown"
+    };
+    let target_env = if target_info.target.contains("gnu") {
+        "gnu"
+    } else if target_info.target.contains("msvc") {
+        "msvc"
+    } else {
+        ""
+    };
+
     let mut cmd = Command::new("pnpm");
     cmd.arg("exec")
         .arg("napi")
         .args(&args)
         .current_dir(project_root)
-        .env("CARGO_CFG_TARGET_ARCH", std::env::consts::ARCH)
-        .env("CARGO_CFG_TARGET_OS", std::env::consts::OS)
-        .env(
-            "CARGO_CFG_TARGET_ENV",
-            if cfg!(target_env = "gnu") {
-                "gnu"
-            } else if cfg!(target_env = "msvc") {
-                "msvc"
-            } else {
-                ""
-            },
-        );
+        .env("CARGO_CFG_TARGET_ARCH", target_arch)
+        .env("CARGO_CFG_TARGET_OS", target_os)
+        .env("CARGO_CFG_TARGET_ENV", target_env);
 
     let output = cmd.output().await.context("Failed to execute napi build")?;
 

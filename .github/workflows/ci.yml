@@ -33,7 +33,7 @@ jobs:
       src: ${{ steps.filter.outputs.src }}
       rust: ${{ steps.filter.outputs.rust }}
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
 
@@ -74,7 +74,7 @@ jobs:
       actions: write
       contents: read
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
@@ -126,7 +126,7 @@ jobs:
       actions: write
       contents: read
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
@@ -181,7 +181,7 @@ jobs:
         exclude:
           - os: ${{ github.event_name == 'merge_group' && 'namespace-profile-rari-windows-amd64' || '' }}
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
@@ -262,7 +262,7 @@ jobs:
         exclude:
           - os: ${{ github.event_name == 'merge_group' && 'windows-latest' || '' }}
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
@@ -276,12 +276,12 @@ jobs:
           sudo apt-get install -y pkg-config
 
       - name: Setup Node.js
-        uses: actions/setup-node@0a44ba7841725637a19e28fa30b79a866c81b0a6 # v4.0.4
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: 22
 
       - name: Install pnpm
-        uses: pnpm/action-setup@fe02b34f77f8bc703788d5817da081398fad5dd2 # v4.0.0
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -328,7 +328,7 @@ jobs:
       actions: write
       contents: read
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
 
@@ -342,6 +342,7 @@ jobs:
 
       - name: Build packages
         run: |
+          pnpm --filter=@rari/use-cache run build
           pnpm --filter=@rari/logger run build
           pnpm --filter=@rari/deploy run build
           pnpm --filter=rari run build
@@ -354,6 +355,7 @@ jobs:
 
       - name: Verify dist outputs
         run: |
+          test -d packages/use-cache/dist
           test -d packages/logger/dist
           test -d packages/deploy/dist
           test -d packages/rari/dist
@@ -366,6 +368,7 @@ jobs:
           retention-days: 3
           name: dist
           path: |
+            packages/use-cache/dist
             packages/logger/dist
             packages/deploy/dist
             packages/rari/dist
@@ -386,7 +389,7 @@ jobs:
       actions: write
       contents: read
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
 
@@ -437,7 +440,7 @@ jobs:
           - os: ${{ github.event_name == 'merge_group' && 'namespace-profile-rari-windows-amd64' || '' }}
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
 

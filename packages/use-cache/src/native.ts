@@ -35,8 +35,11 @@ async function loadAddon() {
     const platformModule = await import(platformPkg)
     return platformModule.default
   }
-  catch {
-    return null
+  catch (err) {
+    if (err && typeof err === 'object' && 'code' in err && err.code === 'MODULE_NOT_FOUND')
+      return null
+    console.error(`[use-cache] Failed to load native addon from ${platformPkg}:`, err)
+    throw err
   }
 }
 

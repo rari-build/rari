@@ -66,8 +66,8 @@ export function transformUseCacheModule(
   try {
     const result = transformUseCache(code, {
       filename: id,
-      hashSalt: options.hashSalt || 'rari-use-cache-v1',
-      cacheKinds: options.cacheKinds || ['default'],
+      hashSalt: options.hashSalt ?? 'rari-use-cache-v1',
+      cacheKinds: options.cacheKinds ?? ['default'],
     })
 
     if (result.code === code) {
