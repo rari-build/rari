@@ -236,15 +236,9 @@ importers:
 
   packages/rari:
     dependencies:
-      '@rari/use-cache-transform':
-        specifier: workspace:*
-        version: link:../use-cache-transform
       lightningcss:
         specifier: catalog:build
         version: 1.32.0
-      quick-lru:
-        specifier: 'catalog:'
-        version: 7.3.0
       react:
         specifier: catalog:react
         version: 19.2.7
@@ -277,6 +271,9 @@ importers:
         specifier: catalog:build
         version: 0.2.1(@opentelemetry/api@1.9.0)(@types/node@25.9.3)(@vitest/coverage-v8@4.1.9)(jiti@2.7.0)(typescript@5.9.3)(vite@8.0.16(@types/node@25.9.3)(jiti@2.7.0)(yaml@2.9.0))(yaml@2.9.0)
     optionalDependencies:
+      '@rari/use-cache-transform':
+        specifier: workspace:*
+        version: link:../use-cache-transform
       rari-darwin-arm64:
         specifier: 0.14.12
         version: 0.14.12
@@ -296,7 +293,18 @@ importers:
         specifier: 0.14.12
         version: 0.14.12
 
-  packages/use-cache-transform: {}
+  packages/use-cache-transform:
+    dependencies:
+      quick-lru:
+        specifier: 'catalog:'
+        version: 7.3.0
+    devDependencies:
+      '@types/node':
+        specifier: catalog:typescript
+        version: 25.9.3
+      vite-plus:
+        specifier: catalog:build
+        version: 0.2.1(@opentelemetry/api@1.9.0)(@types/node@25.9.3)(@vitest/coverage-v8@4.1.9)(jiti@2.7.0)(typescript@5.9.3)(vite@8.0.16(@types/node@25.9.3)(jiti@2.7.0)(yaml@2.9.0))(yaml@2.9.0)
 
   test/fixtures/app:
     dependencies:

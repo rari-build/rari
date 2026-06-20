@@ -3,16 +3,15 @@ export function deterministicStringify(
   seen: WeakSet<object> = new WeakSet(),
   ancestors: WeakSet<object> = new WeakSet(),
 ): string {
-  if (obj === null) {
+  if (obj === null)
     return 'null'
-  }
-  if (obj === undefined) {
-    return 'undefined'
-  }
 
-  if (typeof obj === 'bigint') {
+  if (obj === undefined)
+    return 'undefined'
+
+  if (typeof obj === 'bigint')
     return `${obj.toString()}n`
-  }
+
   if (typeof obj === 'symbol') {
     const key = Symbol.keyFor(obj)
     if (key !== undefined)
@@ -20,16 +19,16 @@ export function deterministicStringify(
 
     return `Symbol(${JSON.stringify(obj.description ?? '')})`
   }
-  if (typeof obj === 'function') {
-    return `Function(${JSON.stringify(obj.toString())})`
-  }
-  if (typeof obj !== 'object') {
-    return JSON.stringify(obj)
-  }
 
-  if (ancestors.has(obj)) {
+  if (typeof obj === 'function')
+    return `Function(${JSON.stringify(obj.toString())})`
+
+  if (typeof obj !== 'object')
+    return JSON.stringify(obj)
+
+  if (ancestors.has(obj))
     return '[Circular]'
-  }
+
   ancestors.add(obj)
   seen.add(obj)
 

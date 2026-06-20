@@ -544,7 +544,7 @@ pluginDescribe('use-cache-transform Vite plugin integration', () => {
     cleanFixtures()
   })
 
-  it('transforms use cache and returns code with imports', () => {
+  it('transforms use cache and returns code with imports', async () => {
     const source = `
 async function getData(id) {
   "use cache";
@@ -554,7 +554,7 @@ async function getData(id) {
     const filePath = fixturePath('basic.tsx')
     writeFixture(path.basename(filePath), source)
     const p = mainPlugin.transform as any
-    const result = p.call(
+    const result = await p.call(
       { environment: { name: 'rsc' } },
       source,
       filePath,
@@ -570,12 +570,12 @@ async function getData(id) {
     expect(result).not.toContain('"use cache"')
   })
 
-  it('falls back when no use cache directive present', () => {
+  it('falls back when no use cache directive present', async () => {
     const source = 'const x = 1;\nexport function hello() { return 42; }'
     const filePath = fixturePath('no-cache.tsx')
     writeFixture(path.basename(filePath), source)
     const p = mainPlugin.transform as any
-    const result = p.call(
+    const result = await p.call(
       { environment: { name: 'rsc' } },
       source,
       filePath,
@@ -588,7 +588,7 @@ async function getData(id) {
     expect(result).toContain('const x = 1')
   })
 
-  it('applies use cache transform for files outside src/ (fallback path)', () => {
+  it('applies use cache transform for files outside src/ (fallback path)', async () => {
     const source = `
 async function getData() {
   "use cache";
@@ -603,7 +603,7 @@ async function getData() {
     const p = mainPlugin.transform as any
     let result
     try {
-      result = p.call(
+      result = await p.call(
         { environment: { name: 'rsc' } },
         source,
         filePath,
@@ -616,7 +616,7 @@ async function getData() {
     }
   })
 
-  it('handles file with use cache followed by use server at module level', () => {
+  it('handles file with use cache followed by use server at module level', async () => {
     const source = `
 "use server";
 
@@ -632,7 +632,7 @@ export async function action() {
     const filePath = fixturePath('mixed.tsx')
     writeFixture(path.basename(filePath), source)
     const p = mainPlugin.transform as any
-    const result = p.call(
+    const result = await p.call(
       { environment: { name: 'rsc' } },
       source,
       filePath,
@@ -644,7 +644,7 @@ export async function action() {
     expect(result).toContain('registerServerReference')
   })
 
-  it('processes file with multiple use cache functions', () => {
+  it('processes file with multiple use cache functions', async () => {
     const source = `
 async function getData(id) {
   "use cache";
@@ -658,7 +658,7 @@ async function fetchUser(name) {
     const filePath = fixturePath('multiple.tsx')
     writeFixture(path.basename(filePath), source)
     const p = mainPlugin.transform as any
-    const result = p.call(
+    const result = await p.call(
       { environment: { name: 'rsc' } },
       source,
       filePath,
@@ -669,7 +669,7 @@ async function fetchUser(name) {
     expect(result).toContain('$$RSC_SERVER_CACHE_1_fetchUser_INNER')
   })
 
-  it('skips use cache transform for client environment', () => {
+  it('skips use cache transform for client environment', async () => {
     const source = `
 "use client";
 
@@ -684,7 +684,7 @@ export default getData;
     writeFixture(path.basename(filePath), source)
 
     const p = mainPlugin.transform as any
-    const result = p.call(
+    const result = await p.call(
       { environment: { name: 'client' } },
       source,
       filePath,
@@ -697,7 +697,7 @@ export default getData;
     expect(result).toContain('export default getData')
   })
 
-  it('non-TSX/JS files are skipped', () => {
+  it('non-TSX/JS files are skipped', async () => {
     const source = `
 async function getData() {
   "use cache";
@@ -705,7 +705,7 @@ async function getData() {
 }
 `
     const p = mainPlugin.transform as any
-    const result = p.call(
+    const result = await p.call(
       { environment: { name: 'rsc' } },
       source,
       '/test/plain.css',

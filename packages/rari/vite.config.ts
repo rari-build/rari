@@ -43,9 +43,6 @@ export default defineConfig({
         'rari/client',
         'rari/router',
       ],
-      alwaysBundle: [
-        'quick-lru',
-      ],
     },
   },
 })

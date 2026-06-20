@@ -7,8 +7,7 @@ import { fileURLToPath } from 'node:url'
 const require = createRequire(import.meta.url)
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
-/** @type {Record<string, string>} */
-const PLATFORM_PACKAGES = {
+const PLATFORM_PACKAGES: Record<string, string> = {
   'darwin-arm64': '@rari/use-cache-transform-darwin-arm64',
   'darwin-x64': '@rari/use-cache-transform-darwin-x64',
   'linux-arm64': '@rari/use-cache-transform-linux-arm64',
@@ -17,7 +16,7 @@ const PLATFORM_PACKAGES = {
   'win32-x64': '@rari/use-cache-transform-win32-x64',
 }
 
-const key = `${process.platform}-${process.arch}`
+const key = `${process.platform}-${process.arch}` as keyof typeof PLATFORM_PACKAGES
 const platformPkg = PLATFORM_PACKAGES[key]
 if (!platformPkg) {
   throw new Error(
@@ -27,7 +26,7 @@ if (!platformPkg) {
 }
 
 async function loadAddon() {
-  const localNode = resolve(__dirname, 'rari_use_cache_transform.node')
+  const localNode = resolve(__dirname, '..', 'rari_use_cache_transform.node')
   if (existsSync(localNode)) {
     return require(localNode)
   }
@@ -44,7 +43,28 @@ async function loadAddon() {
 // eslint-disable-next-line antfu/no-top-level-await
 const nativeBinding = await loadAddon()
 
-export function detectUseCache(source) {
+export interface TransformOptions {
+  filename: string
+  hashSalt?: string
+  cacheKinds?: string[]
+}
+
+export interface TransformResult {
+  code: string
+  needsReactCache: boolean
+  needsCacheWrapper: boolean
+  needsRegisterRef: boolean
+}
+
+export interface NativeAddon {
+  detectUseCache: (source: string) => boolean
+  transformUseCache: (
+    source: string,
+    options: TransformOptions,
+  ) => TransformResult
+}
+
+export function detectUseCache(source: string): boolean {
   if (!nativeBinding) {
     return false
   }
@@ -52,7 +72,10 @@ export function detectUseCache(source) {
   return nativeBinding.detectUseCache(source)
 }
 
-export function transformUseCache(source, options) {
+export function transformUseCache(
+  source: string,
+  options: TransformOptions,
+): TransformResult {
   if (!nativeBinding) {
     return {
       code: source,

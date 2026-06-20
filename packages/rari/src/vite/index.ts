@@ -25,7 +25,7 @@ import { resolveIndexFile, resolveWithExtensions } from './file-resolver'
 import { HMRCoordinator } from './hmr-coordinator'
 import { scanForImageUsage } from './image-scanner'
 import { createServerBuildPlugin, RARI_CSS_MODULES_PATTERN, scanDirectory, ServerComponentBuilder } from './server-build'
-import { transformUseCacheModule } from './use-cache-transform'
+import { getUseCacheTransform } from './use-cache-loader'
 
 const DIST_NOT_BUILT_ERROR = '[rari] Runtime dist not built. Run `pnpm build` in the rari package first.'
 
@@ -967,16 +967,19 @@ if (import.meta.hot) {
       }
     },
 
-    transform(code, id) {
+    async transform(code, id) {
       if (!TSX_EXT_REGEX.test(id))
         return null
 
       let wasUseCacheTransformed = false
       if (options.experimental?.useCache) {
-        const useCacheResult = transformUseCacheModule(code, id)
-        if (useCacheResult) {
-          code = useCacheResult
-          wasUseCacheTransformed = true
+        const transform = await getUseCacheTransform()
+        if (transform) {
+          const useCacheResult = transform(code, id)
+          if (useCacheResult) {
+            code = useCacheResult
+            wasUseCacheTransformed = true
+          }
         }
       }
 

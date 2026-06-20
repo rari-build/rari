@@ -26,21 +26,39 @@
   ],
   "exports": {
     ".": {
-      "types": "./index.d.ts",
-      "import": "./index.js",
-      "default": "./index.js"
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.mjs"
+    },
+    "./runtime/cache-wrapper": {
+      "types": "./dist/runtime/cache-wrapper.d.mts",
+      "import": "./dist/runtime/cache-wrapper.mjs",
+      "default": "./dist/runtime/cache-wrapper.mjs"
     }
   },
-  "main": "./index.js",
-  "module": "./index.js",
-  "types": "./index.d.ts",
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
   "files": [
     "LICENSE",
     "README.md",
-    "index.d.ts",
-    "index.js"
+    "dist"
   ],
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=22.18.0"
+  },
+  "scripts": {
+    "build": "pnpm --silent clean && pnpm typecheck && vp pack",
+    "clean": "node --eval \"import('node:fs').then(fs => fs.rmSync('dist', { recursive: true, force: true }))\"",
+    "lint": "vp lint",
+    "lint:fix": "vp lint --fix",
+    "typecheck": "tsgo"
+  },
+  "dependencies": {
+    "quick-lru": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:typescript",
+    "vite-plus": "catalog:build"
   }
 }
