@@ -25,6 +25,7 @@ import { resolveIndexFile, resolveWithExtensions } from './file-resolver'
 import { HMRCoordinator } from './hmr-coordinator'
 import { scanForImageUsage } from './image-scanner'
 import { createServerBuildPlugin, RARI_CSS_MODULES_PATTERN, scanDirectory, ServerComponentBuilder } from './server-build'
+import { transformUseCacheModule } from './use-cache-transform'
 
 const DIST_NOT_BUILT_ERROR = '[rari] Runtime dist not built. Run `pnpm build` in the rari package first.'
 
@@ -98,6 +99,9 @@ interface RariOptions {
     routes: Record<string, string>
   }
   cache?: ServerCacheConfig
+  experimental?: {
+    useCache?: boolean
+  }
 }
 
 const DEFAULT_IMAGE_CONFIG = {
@@ -357,8 +361,9 @@ export function rari(options: RariOptions = {}): Plugin[] {
     if (filePath.includes('node_modules') || isRariInternalFile(filePath))
       return false
 
-    if (getHtmlEntryImports().has(filePath))
+    if (getHtmlEntryImports().has(filePath)) {
       return false
+    }
 
     let pathForFsOperations
     try {
@@ -372,8 +377,9 @@ export function rari(options: RariOptions = {}): Plugin[] {
       const code = fs.readFileSync(pathForFsOperations, 'utf-8')
       const directives = getDirectives(code)
 
-      if (directives.hasUseServer)
+      if (directives.hasUseServer) {
         return false
+      }
 
       return !directives.hasUseClient
     }
@@ -967,6 +973,15 @@ if (import.meta.hot) {
       if (!TSX_EXT_REGEX.test(id))
         return null
 
+      let wasUseCacheTransformed = false
+      if (options.experimental?.useCache) {
+        const useCacheResult = transformUseCacheModule(code, id)
+        if (useCacheResult) {
+          code = useCacheResult
+          wasUseCacheTransformed = true
+        }
+      }
+
       const environment = (this as any).environment
 
       if (hasTopLevelUseClientDirective(code)) {
@@ -1192,6 +1207,9 @@ const ${componentName} = registerClientReference(
         return modifiedCode
       }
 
+      if (wasUseCacheTransformed)
+        return code
+
       return null
     },
 
@@ -1213,6 +1231,7 @@ const ${componentName} = registerClientReference(
             csp: options.csp,
             cacheControl: options.cacheControl,
             cache: options.cache,
+            experimental: options.experimental,
           })
 
           serverComponentBuilder = builder
@@ -1467,6 +1486,7 @@ const ${componentName} = registerClientReference(
             csp: options.csp,
             cacheControl: options.cacheControl,
             cache: options.cache,
+            experimental: options.experimental,
           })
 
           builder.addServerComponent(filePath)
@@ -1720,6 +1740,8 @@ const ${componentName} = registerClientReference(
         return 'virtual:error-boundary-wrapper.tsx'
       if (id === './LoadingErrorBoundary' || id === './LoadingErrorBoundary.tsx')
         return 'virtual:loading-error-boundary.tsx'
+      if (id === './DefaultLoadingIndicator' || id === './DefaultLoadingIndicator.tsx')
+        return 'virtual:default-loading-indicator.tsx'
       if (id === 'react-server-dom-rari/server')
         return id
 
@@ -1923,6 +1945,14 @@ for (const [path, config] of Object.entries(lazyComponentRegistry)) {
         throw new Error(DIST_NOT_BUILT_ERROR)
       }
 
+      if (id === 'virtual:default-loading-indicator.tsx') {
+        const runtimeFile = resolveRuntimeDistFile('DefaultLoadingIndicator.mjs')
+        if (runtimeFile)
+          return fs.readFileSync(runtimeFile, 'utf-8')
+
+        throw new Error(DIST_NOT_BUILT_ERROR)
+      }
+
       if (id === 'virtual:loading-error-boundary.tsx') {
         const runtimeFile = resolveRuntimeDistFile('LoadingErrorBoundary.mjs')
         if (runtimeFile)
@@ -2097,6 +2127,7 @@ import * as React from 'react';\n${content}`
     csp: options.csp,
     cacheControl: options.cacheControl,
     cache: options.cache,
+    experimental: options.experimental,
   })
 
   const plugins: Plugin[] = [mainPlugin, serverBuildPlugin]

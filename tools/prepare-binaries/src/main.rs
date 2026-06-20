@@ -10,13 +10,28 @@ use std::os::unix::fs::PermissionsExt;
 
 #[derive(Parser, Debug)]
 #[command(name = "prepare-binaries")]
-#[command(about = "Prepare Rari binaries for platform packages", long_about = None)]
+#[command(about = "Prepare Rari binaries (and use_cache_transform addon) for platform packages", long_about = None)]
 struct Args {
     #[arg(long)]
     all: bool,
 
     #[arg(long, help = "Build in debug mode (faster, for development)")]
     dev: bool,
+
+    #[arg(
+        long,
+        help = "Build the use_cache_transform native addon in addition to the main binary"
+    )]
+    addon: bool,
+
+    #[arg(
+        long,
+        help = "Build the main rari binary (default when neither --bin nor --addon is set)"
+    )]
+    bin: bool,
+
+    #[arg(long, value_name = "PLATFORM", help = "Restrict to a single platform (e.g. linux-x64)")]
+    platform: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -25,6 +40,8 @@ struct Target {
     platform: &'static str,
     binary_name: &'static str,
     package_dir: &'static str,
+    napi_triple: &'static str,
+    addon_package_dir: &'static str,
 }
 
 const TARGETS: &[Target] = &[
@@ -33,38 +50,56 @@ const TARGETS: &[Target] = &[
         platform: "linux-x64",
         binary_name: "rari",
         package_dir: "packages/rari-linux-x64",
+        napi_triple: "linux-x64-gnu",
+        addon_package_dir: "packages/use-cache-transform-linux-x64",
     },
     Target {
         target: "aarch64-unknown-linux-gnu",
         platform: "linux-arm64",
         binary_name: "rari",
         package_dir: "packages/rari-linux-arm64",
+        napi_triple: "linux-arm64-gnu",
+        addon_package_dir: "packages/use-cache-transform-linux-arm64",
     },
     Target {
         target: "x86_64-apple-darwin",
         platform: "darwin-x64",
         binary_name: "rari",
         package_dir: "packages/rari-darwin-x64",
+        napi_triple: "darwin-x64",
+        addon_package_dir: "packages/use-cache-transform-darwin-x64",
     },
     Target {
         target: "aarch64-apple-darwin",
         platform: "darwin-arm64",
         binary_name: "rari",
         package_dir: "packages/rari-darwin-arm64",
+        napi_triple: "darwin-arm64",
+        addon_package_dir: "packages/use-cache-transform-darwin-arm64",
     },
     Target {
         target: "x86_64-pc-windows-msvc",
         platform: "win32-x64",
         binary_name: "rari.exe",
         package_dir: "packages/rari-win32-x64",
+        napi_triple: "win32-x64-msvc",
+        addon_package_dir: "packages/use-cache-transform-win32-x64",
     },
     Target {
         target: "aarch64-pc-windows-msvc",
         platform: "win32-arm64",
         binary_name: "rari.exe",
         package_dir: "packages/rari-win32-arm64",
+        napi_triple: "win32-arm64-msvc",
+        addon_package_dir: "packages/use-cache-transform-win32-arm64",
     },
 ];
+
+const ADDON_MANIFEST: &str = "crates/use-cache-transform/Cargo.toml";
+const ADDON_BUILD_DIR: &str = ".build/use-cache-transform";
+const ADDON_CANONICAL_PACKAGE_DIR: &str = "packages/use-cache-transform";
+const ADDON_NAPI_PACKAGE_NAME: &str = "@rari/use-cache-transform";
+const ADDON_OUTPUT_FILE: &str = "use_cache_transform.node";
 
 fn log(message: &str) {
     println!("{} {}", "➜".cyan(), message);
@@ -280,6 +315,154 @@ fn validate_binary(target_info: &Target, project_root: &Path, dev_mode: bool) ->
     Ok(true)
 }
 
+fn addon_napi_output_path(target_info: &Target, project_root: &Path) -> PathBuf {
+    project_root.join(ADDON_BUILD_DIR).join(format!("index.{}.node", target_info.napi_triple))
+}
+
+fn addon_stable_output_path(target_info: &Target, project_root: &Path) -> PathBuf {
+    project_root.join(ADDON_BUILD_DIR).join(target_info.platform).join(ADDON_OUTPUT_FILE)
+}
+
+fn addon_platform_package_path(target_info: &Target, project_root: &Path) -> PathBuf {
+    project_root.join(target_info.addon_package_dir).join(ADDON_OUTPUT_FILE)
+}
+
+fn addon_canonical_package_path(project_root: &Path) -> PathBuf {
+    project_root.join(ADDON_CANONICAL_PACKAGE_DIR).join(ADDON_OUTPUT_FILE)
+}
+
+async fn build_addon(target_info: &Target, project_root: &Path, dev_mode: bool) -> Result<bool> {
+    log(&format!(
+        "Building use_cache_transform addon for {} ({})",
+        target_info.platform,
+        if dev_mode { "debug" } else { "release" }
+    ));
+
+    let manifest_path = project_root.join(ADDON_MANIFEST);
+    let out_dir = project_root.join(ADDON_BUILD_DIR);
+    fs::create_dir_all(&out_dir).context("Failed to create addon build dir")?;
+
+    let mut args: Vec<String> = vec![
+        "build".to_string(),
+        "--platform".to_string(),
+        "--js-package-name".to_string(),
+        ADDON_NAPI_PACKAGE_NAME.to_string(),
+        "--manifest-path".to_string(),
+        manifest_path.to_string_lossy().to_string(),
+        "--output-dir".to_string(),
+        out_dir.to_string_lossy().to_string(),
+        "--strip".to_string(),
+    ];
+    if !dev_mode {
+        args.push("--release".to_string());
+    }
+    args.push("--".to_string());
+    args.push("--target".to_string());
+    args.push(target_info.target.to_string());
+
+    log(&format!("running: napi {}", args.join(" ")));
+
+    let program = if cfg!(windows) { "napi.cmd" } else { "napi" };
+    let output = Command::new(program)
+        .args(&args)
+        .current_dir(project_root)
+        .output()
+        .await
+        .context("Failed to execute napi build")?;
+
+    if !output.status.success() {
+        log_error(&format!("Failed to build addon for {}", target_info.platform));
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        if !stderr.is_empty() {
+            log_error(&format!("stderr: {}", stderr));
+        }
+        if !stdout.is_empty() {
+            log_error(&format!("stdout: {}", stdout));
+        }
+        return Ok(false);
+    }
+
+    let src = addon_napi_output_path(target_info, project_root);
+    if !src.exists() {
+        log_error(&format!("expected addon artifact not found: {}", src.display()));
+        return Ok(false);
+    }
+
+    let stable = addon_stable_output_path(target_info, project_root);
+    if let Some(parent) = stable.parent() {
+        fs::create_dir_all(parent).context("Failed to create per-platform addon build dir")?;
+    }
+    if src != stable {
+        if stable.exists() {
+            fs::remove_file(&stable).context("Failed to remove stale addon artifact")?;
+        }
+        fs::rename(&src, &stable).context("Failed to rename addon artifact")?;
+    }
+
+    if let Some(parent) = stable.parent() {
+        for sibling in ["index.js", "index.d.ts"] {
+            let p = parent.join(sibling);
+            if p.exists() {
+                let _ = fs::remove_file(&p);
+            }
+        }
+    }
+
+    log_success(&format!("Built addon for {}", target_info.platform));
+    Ok(true)
+}
+
+fn copy_addon_to_platform_package(
+    target_info: &Target,
+    project_root: &Path,
+    dev_mode: bool,
+) -> Result<bool> {
+    let src = addon_stable_output_path(target_info, project_root);
+    if !src.exists() {
+        log_error(&format!("Addon artifact not found: {}", src.display()));
+        return Ok(false);
+    }
+
+    let dest = addon_platform_package_path(target_info, project_root);
+    if let Some(parent) = dest.parent() {
+        fs::create_dir_all(parent).context("Failed to create addon package dir")?;
+    }
+    fs::copy(&src, &dest).context("Failed to copy addon artifact")?;
+    log_success(&format!("Copied addon to: {}", dest.display()));
+
+    let _ = dev_mode;
+    Ok(true)
+}
+
+fn copy_addon_canonical(target_info: &Target, project_root: &Path) -> Result<bool> {
+    let src = addon_stable_output_path(target_info, project_root);
+    if !src.exists() {
+        log_error(&format!("Addon artifact not found: {}", src.display()));
+        return Ok(false);
+    }
+
+    let dest = addon_canonical_package_path(project_root);
+    if let Some(parent) = dest.parent() {
+        fs::create_dir_all(parent).context("Failed to create canonical addon package dir")?;
+    }
+    fs::copy(&src, &dest).context("Failed to copy addon to canonical location")?;
+    log_success(&format!("Copied addon to canonical dev location: {}", dest.display()));
+    Ok(true)
+}
+
+fn validate_addon(target_info: &Target, project_root: &Path) -> Result<bool> {
+    let dest = addon_platform_package_path(target_info, project_root);
+    if !dest.exists() {
+        log_error(&format!("Addon not found: {}", dest.display()));
+        return Ok(false);
+    }
+    let metadata = fs::metadata(&dest)?;
+    let size_kb = metadata.len() as f64 / 1024.0;
+    log_success(&format!("Addon validated: {} ({:.2} KB)", dest.display(), size_kb));
+    Ok(true)
+}
+
 async fn install_linux_cross_compiler() -> Result<()> {
     if std::env::consts::OS != "linux" {
         return Ok(());
@@ -311,16 +494,39 @@ async fn install_linux_cross_compiler() -> Result<()> {
 async fn main() -> Result<()> {
     let args = Args::parse();
 
-    println!("{}\n", "🔧 Preparing Rari binaries for platform packages".bold());
+    let do_build_bin = args.bin || !args.addon;
+    let do_build_addon = args.addon || !args.bin;
+
+    if !do_build_bin && !do_build_addon {
+        anyhow::bail!(
+            "Nothing to build: both --no-bin and --no-addon semantics engaged (pass --bin and/or --addon)"
+        );
+    }
+
+    println!(
+        "{}",
+        "🔧 Preparing Rari platform artifacts (binary and/or use_cache_transform addon)".bold()
+    );
+    println!();
 
     let project_root = PathBuf::from(".");
 
-    let targets_to_build: Vec<&Target> = if args.all {
+    let mut targets_to_build: Vec<&Target> = if args.all {
         log("Building for all platforms (cross-compilation mode)");
         TARGETS.iter().collect()
+    } else if let Some(name) = &args.platform {
+        let t = TARGETS.iter().find(|t| t.platform == *name).with_context(|| {
+            format!(
+                "Unknown platform '{}'. Supported: {}",
+                name,
+                TARGETS.iter().map(|t| t.platform).collect::<Vec<_>>().join(", ")
+            )
+        })?;
+        log(&format!("Building for explicit platform only: {}", t.platform.cyan()));
+        vec![t]
     } else {
         let current_target = get_current_platform_target().context(
-            "Unable to determine current platform target. Supported platforms: macOS (x64/ARM64), Linux (x64/ARM64), Windows (x64/ARM64)",
+            "Unable to determine current platform target. Supported platforms: macOS (x64/ARM64), Linux (x64/ARM64), Windows (x64/ARM64). Use --platform <name> to override.",
         )?;
         log(&format!("Building for current platform only: {}", current_target.platform.cyan()));
         println!(
@@ -330,6 +536,13 @@ async fn main() -> Result<()> {
         vec![current_target]
     };
 
+    if args.all && args.platform.is_some() {
+        log_warning("--platform overrides --all: only the requested platform will be built");
+    }
+    targets_to_build
+        .retain(|t| !args.all || args.platform.as_deref().is_none_or(|p| p == t.platform));
+    let _ = args.all;
+
     if args.dev {
         log_warning("Building in debug mode (faster, but larger binaries)");
         println!("{}", "Use release mode for production builds".dimmed());
@@ -337,109 +550,188 @@ async fn main() -> Result<()> {
 
     println!();
 
-    check_rust_installed().await?;
+    if do_build_bin {
+        check_rust_installed().await?;
 
-    if args.all {
-        install_linux_cross_compiler().await?;
-    }
-
-    log("Installing Rust targets...");
-    for target_info in &targets_to_build {
-        install_target(target_info.target).await?;
-    }
-
-    println!();
-
-    log("Building binaries...");
-    let mut success_count = 0;
-    let mut failure_count = 0;
-
-    for target_info in &targets_to_build {
-        let success = build_binary(target_info.target, &project_root, args.dev).await?;
-        if success {
-            success_count += 1;
-        } else {
-            failure_count += 1;
-            if !args.all {
-                log_error("Failed to build binary for current platform");
-                log_error("This may indicate a Rust compilation issue");
-                std::process::exit(1);
-            }
+        if args.all && do_build_bin {
+            install_linux_cross_compiler().await?;
+        }
+        log("Installing Rust targets...");
+        for target_info in &targets_to_build {
+            install_target(target_info.target).await?;
         }
     }
 
     println!();
 
-    log("Copying binaries to platform packages...");
-    for target_info in &targets_to_build {
-        let build_type = if args.dev { "debug" } else { "release" };
-        let binary_path = project_root
-            .join("target")
-            .join(target_info.target)
-            .join(build_type)
-            .join(target_info.binary_name);
+    let mut bin_success = 0usize;
+    let mut bin_failure = 0usize;
+    let mut addon_success = 0usize;
+    let mut addon_failure = 0usize;
 
-        if binary_path.exists() {
-            let success = copy_binary_to_platform_package(target_info, &project_root, args.dev)?;
-            if !success {
-                failure_count += 1;
+    // ---- Binary ----
+    if do_build_bin {
+        log("Building binaries...");
+        for target_info in &targets_to_build {
+            let success = build_binary(target_info.target, &project_root, args.dev).await?;
+            if success {
+                bin_success += 1;
+            } else {
+                bin_failure += 1;
+                if !args.all {
+                    log_error("Failed to build binary for current platform");
+                    log_error("This may indicate a Rust compilation issue");
+                    std::process::exit(1);
+                }
             }
         }
+
+        println!();
+
+        log("Copying binaries to platform packages...");
+        for target_info in &targets_to_build {
+            let build_type = if args.dev { "debug" } else { "release" };
+            let binary_path = project_root
+                .join("target")
+                .join(target_info.target)
+                .join(build_type)
+                .join(target_info.binary_name);
+
+            if binary_path.exists() {
+                let success =
+                    copy_binary_to_platform_package(target_info, &project_root, args.dev)?;
+                if !success {
+                    bin_failure += 1;
+                }
+            }
+        }
+
+        println!();
+
+        log("Validating binaries...");
+        for target_info in &targets_to_build {
+            validate_binary(target_info, &project_root, args.dev)?;
+        }
+
+        println!();
     }
 
-    println!();
+    // ---- Addon ----
+    if do_build_addon {
+        log("Building use_cache_transform addon...");
+        for target_info in &targets_to_build {
+            let success = build_addon(target_info, &project_root, args.dev).await?;
+            if success {
+                addon_success += 1;
+            } else {
+                addon_failure += 1;
+                if !args.all {
+                    log_error(&format!(
+                        "Failed to build addon for current platform ({})",
+                        target_info.platform
+                    ));
+                    std::process::exit(1);
+                }
+            }
+        }
 
-    log("Validating binaries...");
-    for target_info in &targets_to_build {
-        validate_binary(target_info, &project_root, args.dev)?;
+        println!();
+
+        log("Copying addon to platform packages...");
+        for target_info in &targets_to_build {
+            let src = addon_stable_output_path(target_info, &project_root);
+            if src.exists() {
+                let success = copy_addon_to_platform_package(target_info, &project_root, args.dev)?;
+                if !success {
+                    addon_failure += 1;
+                }
+            } else {
+                log_warning(&format!(
+                    "Addon artifact missing for {}, skipping copy to platform package",
+                    target_info.platform
+                ));
+            }
+        }
+
+        println!();
+
+        log("Validating addons...");
+        for target_info in &targets_to_build {
+            let _ = validate_addon(target_info, &project_root);
+        }
+
+        if !args.all
+            && args.platform.is_none()
+            && let Some(target_info) = targets_to_build.first()
+        {
+            println!();
+            log("Copying addon to canonical dev package location...");
+            copy_addon_canonical(target_info, &project_root)?;
+        }
+
+        println!();
     }
-
-    println!();
 
     let total_attempted = targets_to_build.len();
 
-    if failure_count == 0 {
-        log_success(&format!("✨ Successfully prepared {} platform binaries!", success_count));
+    let any_failure = bin_failure > 0 || addon_failure > 0;
+    if !any_failure {
+        if do_build_bin {
+            log_success(&format!("✨ Successfully prepared {} platform binaries!", bin_success));
+        }
+        if do_build_addon {
+            log_success(&format!("✨ Successfully prepared {} platform addons!", addon_success));
+        }
         println!();
         println!("{}", "Platform packages ready:".bold());
         for target_info in &targets_to_build {
-            println!("  • {} → {}", target_info.platform.cyan(), target_info.package_dir);
+            if do_build_bin {
+                println!("  • {} → {}", target_info.platform.cyan(), target_info.package_dir);
+            }
+            if do_build_addon {
+                println!("  • {} → {}", target_info.platform.cyan(), target_info.addon_package_dir);
+            }
         }
         println!();
         println!("{}", "Next steps:".dimmed());
         if !args.all {
-            println!("{}", "  1. Test the binary locally".dimmed());
+            println!("{}", "  1. Test the artifacts locally".dimmed());
             println!("{}", "  2. Use GitHub Actions for full cross-platform builds".dimmed());
             println!(
                 "{}",
                 "  3. Or run with --all flag (requires cross-compilation setup)".dimmed()
             );
         } else {
-            println!("{}", "  1. Test the binaries locally".dimmed());
+            println!("{}", "  1. Test the artifacts locally".dimmed());
             println!("{}", "  2. Run the release script: pnpm run release".dimmed());
             println!("{}", "  3. Or publish individual packages".dimmed());
         }
     } else {
-        if success_count > 0 {
+        if bin_success > 0 || addon_success > 0 {
             log_warning(&format!(
-                "Partial success: {}/{} binaries built",
-                success_count, total_attempted
+                "Partial success: {} bin(s), {} addon(s) of {} target(s)",
+                bin_success, addon_success, total_attempted
             ));
             println!();
             println!("{}", "Successfully built:".bold());
             for target_info in &targets_to_build {
-                let build_type = if args.dev { "debug" } else { "release" };
-                let binary_path = project_root
-                    .join("target")
-                    .join(target_info.target)
-                    .join(build_type)
-                    .join(target_info.binary_name);
-                if binary_path.exists() {
-                    println!("  • {}", target_info.platform.green());
+                if do_build_bin {
+                    let build_type = if args.dev { "debug" } else { "release" };
+                    let binary_path = project_root
+                        .join("target")
+                        .join(target_info.target)
+                        .join(build_type)
+                        .join(target_info.binary_name);
+                    if binary_path.exists() {
+                        println!("  • {} (binary)", target_info.platform.green());
+                    }
+                }
+                if do_build_addon && addon_stable_output_path(target_info, &project_root).exists() {
+                    println!("  • {} (addon)", target_info.platform.green());
                 }
             }
         } else {
-            log_error("Failed to prepare any platform binaries");
+            log_error("Failed to prepare any platform artifacts");
         }
 
         println!();
@@ -453,9 +745,12 @@ async fn main() -> Result<()> {
         } else {
             println!("  • Ensure Rust is installed: https://rustup.rs/");
             println!("  • Check that all required dependencies are installed");
+            println!(
+                "  • For addon builds: ensure @napi-rs/cli is installed (npm i -g @napi-rs/cli)"
+            );
         }
 
-        if !args.all && failure_count > 0 {
+        if !args.all && any_failure {
             std::process::exit(1);
         }
     }

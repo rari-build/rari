@@ -5,7 +5,11 @@ import { defineConfig } from 'vite'
 
 export default defineConfig({
   plugins: [
-    rari(),
+    rari({
+      experimental: {
+        useCache: true,
+      },
+    }),
     tailwindcss(),
   ],
   resolve: {
