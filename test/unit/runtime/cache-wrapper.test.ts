@@ -1,6 +1,6 @@
 import { Buffer } from 'node:buffer'
 import { deserialize } from 'node:v8'
-import { $$cache__, encodeBoundArgs } from '@rari/runtime/cache-wrapper'
+import { $$cache__, encodeBoundArgs } from '@rari/use-cache/runtime/cache-wrapper'
 import { describe, expect, it } from 'vite-plus/test'
 
 const CACHE_LIMIT = 1000
