@@ -361,9 +361,8 @@ export function rari(options: RariOptions = {}): Plugin[] {
     if (filePath.includes('node_modules') || isRariInternalFile(filePath))
       return false
 
-    if (getHtmlEntryImports().has(filePath)) {
+    if (getHtmlEntryImports().has(filePath))
       return false
-    }
 
     let pathForFsOperations
     try {
@@ -377,9 +376,8 @@ export function rari(options: RariOptions = {}): Plugin[] {
       const code = fs.readFileSync(pathForFsOperations, 'utf-8')
       const directives = getDirectives(code)
 
-      if (directives.hasUseServer) {
+      if (directives.hasUseServer)
         return false
-      }
 
       return !directives.hasUseClient
     }
@@ -1740,8 +1738,6 @@ const ${componentName} = registerClientReference(
         return 'virtual:error-boundary-wrapper.tsx'
       if (id === './LoadingErrorBoundary' || id === './LoadingErrorBoundary.tsx')
         return 'virtual:loading-error-boundary.tsx'
-      if (id === './DefaultLoadingIndicator' || id === './DefaultLoadingIndicator.tsx')
-        return 'virtual:default-loading-indicator.tsx'
       if (id === 'react-server-dom-rari/server')
         return id
 
@@ -1939,14 +1935,6 @@ for (const [path, config] of Object.entries(lazyComponentRegistry)) {
 
       if (id === 'virtual:app-router-provider.tsx') {
         const runtimeFile = resolveRuntimeDistFile('AppRouterProvider.mjs')
-        if (runtimeFile)
-          return fs.readFileSync(runtimeFile, 'utf-8')
-
-        throw new Error(DIST_NOT_BUILT_ERROR)
-      }
-
-      if (id === 'virtual:default-loading-indicator.tsx') {
-        const runtimeFile = resolveRuntimeDistFile('DefaultLoadingIndicator.mjs')
         if (runtimeFile)
           return fs.readFileSync(runtimeFile, 'utf-8')
 
