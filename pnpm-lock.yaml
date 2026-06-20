@@ -237,6 +237,9 @@ importers:
 
   packages/rari:
     dependencies:
+      '@rari/use-cache':
+        specifier: workspace:*
+        version: link:../use-cache
       lightningcss:
         specifier: catalog:build
         version: 1.32.0
@@ -272,9 +275,6 @@ importers:
         specifier: catalog:build
         version: 0.2.1(@opentelemetry/api@1.9.0)(@types/node@25.9.3)(@vitest/coverage-v8@4.1.9)(jiti@2.7.0)(typescript@5.9.3)(vite@8.0.16(@types/node@25.9.3)(jiti@2.7.0)(yaml@2.9.0))(yaml@2.9.0)
     optionalDependencies:
-      '@rari/use-cache':
-        specifier: workspace:*
-        version: link:../use-cache
       rari-darwin-arm64:
         specifier: 0.14.12
         version: 0.14.12

@@ -122,11 +122,11 @@
     "react-dom": "catalog:react"
   },
   "dependencies": {
+    "@rari/use-cache": "workspace:*",
     "lightningcss": "catalog:build",
     "rolldown": "catalog:build"
   },
   "optionalDependencies": {
-    "@rari/use-cache": "workspace:*",
     "rari-darwin-arm64": "0.14.12",
     "rari-darwin-x64": "0.14.12",
     "rari-linux-arm64": "0.14.12",
