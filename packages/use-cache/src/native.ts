@@ -8,25 +8,25 @@ const require = createRequire(import.meta.url)
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
 const PLATFORM_PACKAGES: Record<string, string> = {
-  'darwin-arm64': '@rari/use-cache-transform-darwin-arm64',
-  'darwin-x64': '@rari/use-cache-transform-darwin-x64',
-  'linux-arm64': '@rari/use-cache-transform-linux-arm64',
-  'linux-x64': '@rari/use-cache-transform-linux-x64',
-  'win32-arm64': '@rari/use-cache-transform-win32-arm64',
-  'win32-x64': '@rari/use-cache-transform-win32-x64',
+  'darwin-arm64': '@rari/use-cache-darwin-arm64',
+  'darwin-x64': '@rari/use-cache-darwin-x64',
+  'linux-arm64': '@rari/use-cache-linux-arm64',
+  'linux-x64': '@rari/use-cache-linux-x64',
+  'win32-arm64': '@rari/use-cache-win32-arm64',
+  'win32-x64': '@rari/use-cache-win32-x64',
 }
 
 const key = `${process.platform}-${process.arch}` as keyof typeof PLATFORM_PACKAGES
 const platformPkg = PLATFORM_PACKAGES[key]
 if (!platformPkg) {
   throw new Error(
-    `@rari/use-cache-transform: unsupported platform ${key}. `
+    `@rari/use-cache: unsupported platform ${key}. `
     + `Supported: ${Object.keys(PLATFORM_PACKAGES).join(', ')}.`,
   )
 }
 
 async function loadAddon() {
-  const localNode = resolve(__dirname, '..', 'rari_use_cache_transform.node')
+  const localNode = resolve(__dirname, '..', 'rari_use_cache.node')
   if (existsSync(localNode)) {
     return require(localNode)
   }

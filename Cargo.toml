@@ -1,7 +1,7 @@
 [workspace]
 members = [
   "crates/rari",
-  "crates/rari-use-cache-transform",
+  "crates/rari-use-cache",
   "tools/prepare-binaries",
   "tools/release",
   "tools/snapshot",

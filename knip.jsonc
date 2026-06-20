@@ -53,12 +53,15 @@
         "src/**/*.ts"
       ]
     },
-    "packages/use-cache-transform": {
+    "packages/use-cache": {
       "entry": [
         "src/**/*.ts"
       ],
       "project": [
         "src/**/*.ts"
+      ],
+      "ignore": [
+        "vite.config.ts" // Used by vite-plus for building
       ]
     },
     "examples/app-router-example": {

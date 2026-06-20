@@ -7331,7 +7331,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rari-use-cache-transform"
+name = "rari-use-cache"
 version = "0.0.0"
 dependencies = [
  "deno_ast",

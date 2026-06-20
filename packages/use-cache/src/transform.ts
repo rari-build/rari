@@ -19,7 +19,7 @@ function getAddon(): NativeAddon | null {
   addon = nativeAddon
 
   if (!addon)
-    console.warn('[use-cache-transform] Native addon not available — transforms will be skipped')
+    console.warn('[use-cache] Native addon not available — transforms will be skipped')
 
   return addon
 }
@@ -55,11 +55,11 @@ export function transformUseCacheModule(
   if (!hasUseCacheFunction(code))
     return null
 
-  console.error(`[use-cache-transform] found 'use cache' directive in ${id}`)
+  console.error(`[use-cache] found 'use cache' directive in ${id}`)
 
   const native = getAddon()
   if (!native) {
-    console.error(`[use-cache-transform] NO ADDON — skipping transform for ${id}`)
+    console.error(`[use-cache] NO ADDON — skipping transform for ${id}`)
     return null
   }
 
@@ -71,11 +71,11 @@ export function transformUseCacheModule(
     })
 
     if (result.code === code) {
-      console.error(`[use-cache-transform] addon returned unchanged code for ${id}`)
+      console.error(`[use-cache] addon returned unchanged code for ${id}`)
       return null
     }
 
-    console.error(`[use-cache-transform] transformed ${id} (needsCacheWrapper=${result.needsCacheWrapper}, needsRegisterRef=${result.needsRegisterRef})`)
+    console.error(`[use-cache] transformed ${id} (needsCacheWrapper=${result.needsCacheWrapper}, needsRegisterRef=${result.needsRegisterRef})`)
 
     const imports = []
     if (result.needsReactCache)
@@ -99,7 +99,7 @@ export function transformUseCacheModule(
     return `${importBlock}${result.code}`
   }
   catch (err) {
-    console.error(`[use-cache-transform] addon threw for ${id}:`, err)
+    console.error(`[use-cache] addon threw for ${id}:`, err)
     throw new Error(
       `Failed to transform 'use cache' directive in ${id}: ${err instanceof Error ? err.message : String(err)}`,
     )

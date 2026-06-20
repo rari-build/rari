@@ -1069,7 +1069,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
         },
       },
       {
-        name: 'use-cache-transform',
+        name: 'use-cache',
         async transform(code: string, id: string) {
           if (!self.options.experimental?.useCache)
             return null

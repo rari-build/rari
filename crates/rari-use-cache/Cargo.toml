@@ -1,5 +1,5 @@
 [package]
-name = "rari-use-cache-transform"
+name = "rari-use-cache"
 edition = { workspace = true }
 license = { workspace = true }
 description = "napi-rs native addon for 'use cache' directive transformation using SWC"

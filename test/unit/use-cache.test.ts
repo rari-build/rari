@@ -13,10 +13,10 @@ try {
   const ext = process.platform === 'win32' ? '.dll' : process.platform === 'darwin' ? '.dylib' : '.so'
 
   const candidates = [
-    path.join(repoRoot, 'target/release/rari_use_cache_transform.node'),
-    path.join(repoRoot, `target/release/librari_use_cache_transform${ext}`),
-    path.join(repoRoot, 'target/debug/rari_use_cache_transform.node'),
-    path.join(repoRoot, `target/debug/librari_use_cache_transform${ext}`),
+    path.join(repoRoot, 'target/release/rari_use_cache.node'),
+    path.join(repoRoot, `target/release/librari_use_cache${ext}`),
+    path.join(repoRoot, 'target/debug/rari_use_cache.node'),
+    path.join(repoRoot, `target/debug/librari_use_cache${ext}`),
   ]
 
   for (const addonPath of candidates) {
@@ -57,7 +57,7 @@ function fixturePath(name: string): string {
 
 const addonDescribe = useCacheAddon ? describe : describe.skip
 
-addonDescribe('use-cache-transform addon', () => {
+addonDescribe('use-cache addon', () => {
   describe('detectUseCache', () => {
     it('returns true for double-quoted use cache directive', () => {
       expect(useCacheAddon.detectUseCache('"use cache";')).toBe(true)
@@ -531,7 +531,7 @@ async function getData(input) {
 
 const pluginDescribe = useCacheAddon ? describe : describe.skip
 
-pluginDescribe('use-cache-transform Vite plugin integration', () => {
+pluginDescribe('use-cache Vite plugin integration', () => {
   let mainPlugin: any
 
   beforeAll(() => {
