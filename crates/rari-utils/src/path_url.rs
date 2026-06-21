@@ -1,11 +1,40 @@
 use cow_utils::CowUtils;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+fn normalize_path(path: &Path) -> PathBuf {
+    let mut components = Vec::new();
+
+    for component in path.components() {
+        use std::path::Component;
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                if let Some(last) = components.last()
+                    && matches!(last, Component::Normal(_))
+                {
+                    components.pop();
+                    continue;
+                }
+                components.push(component);
+            }
+            _ => {
+                components.push(component);
+            }
+        }
+    }
+
+    components.iter().collect()
+}
 
 pub fn path_to_file_url(path: &Path) -> String {
     let absolute_path = if path.is_absolute() {
-        path.to_path_buf()
+        normalize_path(path)
     } else {
-        std::env::current_dir().map(|cwd| cwd.join(path)).unwrap_or_else(|_| path.to_path_buf())
+        let joined = std::env::current_dir()
+            .map(|cwd| cwd.join(path))
+            .unwrap_or_else(|_| path.to_path_buf());
+
+        normalize_path(&joined)
     };
 
     url::Url::from_file_path(&absolute_path).map(|url| url.to_string()).unwrap_or_else(|_| {
@@ -86,5 +115,28 @@ mod tests {
         let url_relative = path_to_file_url(&relative);
 
         assert_eq!(url_relative, path_to_file_url(&relative));
+    }
+
+    #[test]
+    fn test_dot_segments_are_normalized() {
+        use std::path::PathBuf;
+
+        let cwd = std::env::current_dir().unwrap();
+
+        let relative = PathBuf::from("a/../file.js");
+        let joined = cwd.join(&relative);
+        let joined_str = joined.to_string_lossy();
+
+        println!("Joined path: {}", joined_str);
+
+        let url = path_to_file_url(&relative);
+        println!("Generated URL: {}", url);
+
+        if url.contains("..") {
+            panic!(
+                "URL contains unnormalized '..' segments: {}. This will break Deno module cache!",
+                url
+            );
+        }
     }
 }
