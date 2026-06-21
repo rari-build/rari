@@ -634,10 +634,24 @@ jobs:
       - name: Publish platform package
         run: |
           PACKAGE_DIR="packages/use-cache-${{ matrix.platform }}"
+          VERSION="${GITHUB_REF#refs/tags/use-cache-binaries@}"
+
           cd "${PACKAGE_DIR}"
           npm pkg fix
-          echo "Publishing @rari/use-cache-${{ matrix.platform }}..."
-          npm publish --access public
+
+          IS_PRERELEASE=$(node -e "
+            const v = '${VERSION}';
+            process.stdout.write(v.includes('-') ? 'true' : 'false');
+          ")
+
+          if [[ "${IS_PRERELEASE}" == "true" ]]; then
+            echo "Publishing @rari/use-cache-${{ matrix.platform }} with tag 'next'..."
+            npm publish --access public --tag next
+          else
+            echo "Publishing @rari/use-cache-${{ matrix.platform }} with tag 'latest'..."
+            npm publish --access public
+          fi
+
           echo "Successfully published @rari/use-cache-${{ matrix.platform }}"
 
   npm-release-use-cache:

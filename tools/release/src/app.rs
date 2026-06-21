@@ -270,7 +270,8 @@ impl App {
                 }
                 PublishStep::GeneratingChangelog => {
                     let unit_name = unit.name();
-                    let generates_changelog = matches!(unit_name, "rari" | "create-rari-app");
+                    let generates_changelog =
+                        matches!(unit_name, "rari" | "create-rari-app" | "@rari/use-cache");
 
                     if generates_changelog {
                         if self.dry_run {
@@ -320,8 +321,10 @@ impl App {
                                 git::add_and_commit(&message, paths[0]).await?;
                             }
 
-                            let generates_changelog =
-                                matches!(unit.name(), "rari" | "create-rari-app");
+                            let generates_changelog = matches!(
+                                unit.name(),
+                                "rari" | "create-rari-app" | "@rari/use-cache"
+                            );
                             let mut files_to_add = Vec::new();
                             if generates_changelog {
                                 let changelog_path = unit.paths()[0].join("CHANGELOG.md");
