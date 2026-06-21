@@ -80,7 +80,13 @@ pub struct CacheLayerConfig {
 
 impl Default for CacheLayerConfig {
     fn default() -> Self {
-        Self { handler: "memory".to_string(), url: None, max_entries: 1000, default_ttl_secs: 60 }
+        Self {
+            handler: "memory".to_string(),
+            url: None,
+            max_entries: 1000,
+            url: None,
+            default_ttl_secs: 60,
+        }
     }
 }
 

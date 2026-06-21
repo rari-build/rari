@@ -1,5 +1,9 @@
 export { detectUseCache, transformUseCache } from './native'
 export type { NativeAddon, TransformOptions, TransformResult } from './native'
 
+export { $$cache__, encodeBoundArgs } from './runtime/cache-wrapper'
+
+export { deterministicStringify } from './runtime/deterministic-stringify'
+
 export { transformUseCacheModule } from './transform'
 export type { UseCacheTransformOptions } from './transform'

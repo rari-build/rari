@@ -5,6 +5,7 @@ packages:
   - examples/*
   - packages/*
   - test/fixtures/*
+  - test/e2e
   - web
 catalogs:
   analytics:

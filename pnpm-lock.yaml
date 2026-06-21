@@ -326,17 +326,13 @@ importers:
         specifier: workspace:*
         version: link:../use-cache-win32-x64
 
-  packages/use-cache-darwin-arm64: {}
-
-  packages/use-cache-darwin-x64: {}
-
-  packages/use-cache-linux-arm64: {}
-
-  packages/use-cache-linux-x64: {}
-
-  packages/use-cache-win32-arm64: {}
-
   packages/use-cache-win32-x64: {}
+
+  test/e2e:
+    devDependencies:
+      '@playwright/test':
+        specifier: catalog:testing
+        version: 1.61.0
 
   test/fixtures/app:
     dependencies:

@@ -12,6 +12,10 @@ readme = { workspace = true }
 keywords = { workspace = true }
 categories = { workspace = true }
 
+[features]
+default = [ "redis" ]
+redis = [ "dep:redis" ]
+
 [lib]
 crate-type = [ "rlib" ]
 
