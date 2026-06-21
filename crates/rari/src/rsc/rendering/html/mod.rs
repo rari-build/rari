@@ -151,11 +151,7 @@ fn serialize_style_object(style_obj: &serde_json::Map<String, serde_json::Value>
             let kebab_key = k.chars().fold(String::new(), |mut acc, c| {
                 if c.is_uppercase() {
                     acc.push('-');
-                    acc.push(
-                        c.to_lowercase()
-                            .next()
-                            .expect("to_lowercase() always returns at least one character"),
-                    );
+                    acc.push(c.to_ascii_lowercase());
                 } else {
                     acc.push(c);
                 }

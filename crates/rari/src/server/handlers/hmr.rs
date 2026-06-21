@@ -211,8 +211,8 @@ async fn handle_register(state: ServerState, file_path: String) -> Result<Json<V
         invalidate_component_cache(&state.response_cache, &component_id).await;
 
         let route_cache_patterns: Vec<String> = vec![
-            file_path.replace("src/app/", "/").replace("/page.tsx", ""),
-            file_path.replace("src/app/", "/").replace("/page.ts", ""),
+            file_path.cow_replace("src/app/", "/").cow_replace("/page.tsx", "").into_owned(),
+            file_path.cow_replace("src/app/", "/").cow_replace("/page.ts", "").into_owned(),
         ]
         .into_iter()
         .filter(|p| p.len() > 1)

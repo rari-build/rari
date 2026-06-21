@@ -242,7 +242,7 @@ fn camel_to_kebab(s: &str) -> String {
             for ch in s.chars() {
                 if ch.is_uppercase() && !out.is_empty() {
                     out.push('-');
-                    out.push(ch.to_lowercase().next().unwrap_or(ch));
+                    out.push(ch.to_ascii_lowercase());
                 } else {
                     out.push(ch);
                 }
