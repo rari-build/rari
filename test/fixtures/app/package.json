@@ -13,6 +13,9 @@
     "react": "catalog:react",
     "react-dom": "catalog:react"
   },
+  "optionalDependencies": {
+    "@rari/use-cache": "workspace:*"
+  },
   "devDependencies": {
     "@tailwindcss/vite": "catalog:tailwind",
     "@types/react": "catalog:react",

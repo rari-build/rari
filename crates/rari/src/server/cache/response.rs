@@ -840,7 +840,6 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_namespace_isolates_response_cache_from_og_and_image_layers() {
         use crate::server::og::OgImageCache;
-        use std::path::Path;
 
         let shared: Arc<dyn CacheHandler> =
             Arc::new(MemoryCacheHandler::with_config(MemoryConfig {
@@ -852,7 +851,8 @@ mod tests {
             CacheConfig { max_entries: 32, default_ttl: 60, enabled: true },
             shared.clone(),
         );
-        let og_cache = OgImageCache::with_handler(shared.clone(), Path::new("."));
+        let test_dir = std::env::temp_dir().join("rari-test-cache-namespace");
+        let og_cache = OgImageCache::with_handler(shared.clone(), &test_dir);
 
         response_cache.set("/about".to_string(), create_test_response("response-body", 60)).await;
         let og_payload = vec![0x52, 0x49, 0x46, 0x46];

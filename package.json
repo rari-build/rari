@@ -22,7 +22,6 @@
     "@eslint-react/eslint-plugin": "catalog:eslint",
     "@napi-rs/cli": "catalog:build",
     "@playwright/test": "catalog:testing",
-    "@rari/use-cache": "workspace:*",
     "@types/node": "catalog:typescript",
     "@typescript/native-preview": "catalog:typescript",
     "@vitest/coverage-v8": "catalog:testing",

@@ -303,6 +303,13 @@ jobs:
         run: |
           mkdir -p packages/use-cache-linux-x64
           cp crates/rari-use-cache/*.linux-x64-gnu.node packages/use-cache-linux-x64/rari_use_cache.node
+          cp .github/templates/js/use-cache-platform.js packages/use-cache-linux-x64/index.js
+          sed -e 's/{NAME}/use-cache-linux-x64/g' \
+              -e 's/{VERSION}/0.0.0/g' \
+              -e 's/{DESCRIPTION}/linux-x64/g' \
+              -e 's/{OS}/linux/g' \
+              -e 's/{CPU}/x64/g' \
+              .github/templates/package-json/use-cache-platform.json > packages/use-cache-linux-x64/package.json
 
       - name: Copy addon to platform package (Windows)
         if: runner.os == 'Windows'
@@ -310,13 +317,24 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path packages/use-cache-win32-x64
           Copy-Item crates/rari-use-cache/*.win32-x64-msvc.node packages/use-cache-win32-x64/rari_use_cache.node
+          Copy-Item .github/templates/js/use-cache-platform.js packages/use-cache-win32-x64/index.js
+          (Get-Content .github/templates/package-json/use-cache-platform.json) `
+            -replace '\{NAME\}', 'use-cache-win32-x64' `
+            -replace '\{VERSION\}', '0.0.0' `
+            -replace '\{DESCRIPTION\}', 'win32-x64' `
+            -replace '\{OS\}', 'win32' `
+            -replace '\{CPU\}', 'x64' |
+            Out-File -FilePath packages/use-cache-win32-x64/package.json -Encoding UTF8
 
       - name: Upload addon (Linux)
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: use-cache-linux-x64
-          path: packages/use-cache-linux-x64/rari_use_cache.node
+          path: |
+            packages/use-cache-linux-x64/rari_use_cache.node
+            packages/use-cache-linux-x64/index.js
+            packages/use-cache-linux-x64/package.json
           if-no-files-found: error
           retention-days: 1
 
@@ -325,7 +343,10 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: use-cache-win32-x64
-          path: packages/use-cache-win32-x64/rari_use_cache.node
+          path: |
+            packages/use-cache-win32-x64/rari_use_cache.node
+            packages/use-cache-win32-x64/index.js
+            packages/use-cache-win32-x64/package.json
           if-no-files-found: error
           retention-days: 1
 
@@ -354,7 +375,7 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: use-cache-linux-x64
-          path: packages/use-cache
+          path: packages/use-cache-linux-x64
 
       - name: Build packages
         run: |
@@ -421,7 +442,7 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: use-cache-linux-x64
-          path: packages/use-cache
+          path: packages/use-cache-linux-x64
 
       - name: Build packages
         run: |
@@ -497,14 +518,14 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: use-cache-linux-x64
-          path: packages/use-cache
+          path: packages/use-cache-linux-x64
 
       - name: Download rari_use_cache addon (Windows)
         if: runner.os == 'Windows'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: use-cache-win32-x64
-          path: packages/use-cache
+          path: packages/use-cache-win32-x64
 
       - name: Make binary executable (Linux)
         if: runner.os == 'Linux'

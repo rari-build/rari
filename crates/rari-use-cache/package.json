@@ -1,5 +1,5 @@
 {
-  "name": "@rari/use-cache",
+  "name": "@rari/use-cache-binaries",
   "version": "0.0.0",
   "private": true,
   "napi": {

@@ -2,6 +2,7 @@ use std::fmt::Write;
 use std::path::PathBuf;
 use std::rc::Rc;
 
+use cow_utils::CowUtils;
 use deno_core::{ModuleCodeString, ModuleName, SourceMapData};
 use deno_error::JsErrorBox;
 use rustc_hash::FxHashSet;
@@ -159,7 +160,6 @@ fn maybe_transpile(specifier: &str, source: &str) -> String {
         .text
 }
 
-#[allow(clippy::disallowed_methods)]
-fn escape_for_raw_string(s: &str) -> String {
-    s.replace("\"###", "\"####")
+fn escape_for_raw_string(s: &str) -> std::borrow::Cow<'_, str> {
+    s.cow_replace("\"###", "\"####")
 }

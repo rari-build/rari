@@ -261,7 +261,7 @@ jobs:
               ;;
           esac
 
-          cp .github/templates/package.json.platform "${PACKAGE_DIR}/package.json"
+          cp .github/templates/package-json/platform.json "${PACKAGE_DIR}/package.json"
           sed -i "s|{NAME}|${PACKAGE_NAME}|g" "${PACKAGE_DIR}/package.json"
           sed -i "s|{VERSION}|${VERSION}|g" "${PACKAGE_DIR}/package.json"
           sed -i "s|{DESCRIPTION}|${DESCRIPTION}|g" "${PACKAGE_DIR}/package.json"
@@ -328,7 +328,7 @@ jobs:
               ;;
           esac
 
-          cp .github/templates/README.platform.md "${PACKAGE_DIR}/README.md"
+          cp .github/templates/readme/platform.md "${PACKAGE_DIR}/README.md"
           sed -i "s|\${PACKAGE_NAME}|${PACKAGE_NAME}|g" "${PACKAGE_DIR}/README.md"
           sed -i "s|\${PLATFORM_NAME}|${PLATFORM_NAME}|g" "${PACKAGE_DIR}/README.md"
           sed -i "s|\${OS_NAME}|${OS_NAME}|g" "${PACKAGE_DIR}/README.md"
@@ -396,11 +396,11 @@ jobs:
           cp LICENSE "${PACKAGE_DIR}/LICENSE"
 
           if [[ "${{ steps.pkg.outputs.name }}" == "rari" ]]; then
-            cp .github/templates/README.rari.md "${PACKAGE_DIR}/README.md"
+            cp .github/templates/readme/rari.md "${PACKAGE_DIR}/README.md"
           fi
 
           if [[ "${{ steps.pkg.outputs.name }}" == "create-rari-app" ]]; then
-            cp .github/templates/README.create-rari-app.md "${PACKAGE_DIR}/README.md"
+            cp .github/templates/readme/create-rari-app.md "${PACKAGE_DIR}/README.md"
           fi
 
       - name: Publish to npm

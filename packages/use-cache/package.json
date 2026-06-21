@@ -62,6 +62,14 @@
   "dependencies": {
     "quick-lru": "catalog:runtime"
   },
+  "optionalDependencies": {
+    "@rari/use-cache-darwin-arm64": "workspace:*",
+    "@rari/use-cache-darwin-x64": "workspace:*",
+    "@rari/use-cache-linux-arm64": "workspace:*",
+    "@rari/use-cache-linux-x64": "workspace:*",
+    "@rari/use-cache-win32-arm64": "workspace:*",
+    "@rari/use-cache-win32-x64": "workspace:*"
+  },
   "devDependencies": {
     "@types/node": "catalog:typescript",
     "vite-plus": "catalog:build"

@@ -203,19 +203,19 @@ changelog-latest:
 # Usage: just release
 # With OTP: NPM_OTP=123456 just release
 release:
-    GITHUB_TOKEN=$(gh auth token) cargo run --release --manifest-path tools/release/Cargo.toml --bin release
+    GITHUB_TOKEN=$(gh auth token) cargo run --release --manifest-path tools/release/Cargo.toml
 
 # Dry run release process
 release-dry:
-    GITHUB_TOKEN=$(gh auth token) cargo run --release --manifest-path tools/release/Cargo.toml --bin release -- --dry-run
+    GITHUB_TOKEN=$(gh auth token) cargo run --release --manifest-path tools/release/Cargo.toml -- --dry-run
 
 # Prepare binaries for release
 prepare-binaries:
-    cargo run --release --manifest-path tools/prepare-binaries/Cargo.toml --bin prepare-binaries
+    cargo run --release --manifest-path tools/prepare-binaries/Cargo.toml
 
 # Prepare binaries for development (fast debug build)
 prepare-binaries-dev:
-    cargo run --manifest-path tools/prepare-binaries/Cargo.toml --bin prepare-binaries -- --dev
+    cargo run --manifest-path tools/prepare-binaries/Cargo.toml -- --dev
 
 # --- Utility commands ---
 

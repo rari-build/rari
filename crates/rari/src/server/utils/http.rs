@@ -12,7 +12,7 @@ pub fn extract_headers(headers: &axum::http::HeaderMap) -> FxHashMap<String, Str
     let mut header_map = FxHashMap::default();
     for (name, value) in headers {
         if let Ok(value_str) = value.to_str() {
-            header_map.insert(name.to_string(), value_str.to_string());
+            header_map.insert(name.as_str().to_owned(), value_str.to_owned());
         }
     }
     header_map
@@ -22,8 +22,8 @@ pub fn merge_vary_with_accept(existing_vary: Option<&HeaderValue>) -> String {
     let mut seen = FxHashSet::default();
     let mut vary_values = Vec::new();
 
-    seen.insert("accept".to_string());
-    vary_values.push("Accept".to_string());
+    seen.insert("accept".to_owned());
+    vary_values.push("Accept");
 
     if let Some(vary_header) = existing_vary
         && let Ok(vary_str) = vary_header.to_str()
@@ -31,12 +31,12 @@ pub fn merge_vary_with_accept(existing_vary: Option<&HeaderValue>) -> String {
         for value in vary_str.split(',') {
             let trimmed = value.trim();
             if trimmed == "*" {
-                return "*".to_string();
+                return "*".to_owned();
             }
             if !trimmed.is_empty() {
                 let normalized = trimmed.cow_to_ascii_lowercase().into_owned();
                 if seen.insert(normalized) {
-                    vary_values.push(trimmed.to_string());
+                    vary_values.push(trimmed);
                 }
             }
         }

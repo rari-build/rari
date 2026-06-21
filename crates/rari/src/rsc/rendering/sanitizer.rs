@@ -3,22 +3,18 @@ use std::sync::OnceLock;
 
 pub fn sanitize_component_output(html: &str) -> String {
     if html.is_empty() {
-        return html.to_string();
+        return String::new();
     }
-
-    let mut result = html.to_string();
 
     static PRE_JSON_REGEX: OnceLock<Regex> = OnceLock::new();
     let pre_json_regex = PRE_JSON_REGEX
         .get_or_init(|| Regex::new(r#"<pre>\\?\{.*?\\?\}</pre>"#).expect("Valid regex pattern"));
-    result = pre_json_regex.replace_all(&result, "").to_string();
+    let result = pre_json_regex.replace_all(html, "");
 
     static ID_JSON_REGEX: OnceLock<Regex> = OnceLock::new();
     let id_json_regex = ID_JSON_REGEX
         .get_or_init(|| Regex::new(r#"\\?\{"id":.*?\\?\}"#).expect("Valid regex pattern"));
-    result = id_json_regex.replace_all(&result, "").to_string();
-
-    result
+    id_json_regex.replace_all(&result, "").into_owned()
 }
 
 #[cfg(test)]

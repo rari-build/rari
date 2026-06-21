@@ -1,10 +1,17 @@
 {
-  "name": "{NAME}",
+  "name": "@rari/{NAME}",
   "type": "module",
   "version": "{VERSION}",
-  "description": "Runtime Accelerated Rendering Infrastructure ({DESCRIPTION})",
+  "description": "Native 'use cache' transform addon for rari ({DESCRIPTION})",
   "author": "Ryan Skinner",
   "license": "MIT",
+  "main": "./index.js",
+  "exports": {
+    ".": {
+      "import": "./index.js",
+      "default": "./index.js"
+    }
+  },
   "os": [
     "{OS}"
   ],
@@ -22,21 +29,19 @@
   },
   "keywords": [
     "rari",
-    "binary",
-    {KEYWORDS}
+    "use-cache",
+    "napi",
     "rust",
     "react",
     "server-components"
   ],
-  "bin": {
-    "rari": "{BIN_PATH}"
-  },
   "files": [
     "LICENSE",
     "README.md",
-    "{BIN_FILE}"
+    "index.js",
+    "rari_use_cache.node"
   ],
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=22.18.0"
   }
 }

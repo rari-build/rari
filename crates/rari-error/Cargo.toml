@@ -15,5 +15,5 @@ deno_error = { workspace = true }
 rustc-hash = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-tokio = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true }

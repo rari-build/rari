@@ -204,15 +204,6 @@ async fn main() -> Result<()> {
             let _ = validate_addon(target_info, &project_root);
         }
 
-        if !args.all
-            && args.platform.is_none()
-            && let Some(target_info) = targets_to_build.first()
-        {
-            println!();
-            log("Copying addon to canonical dev package location...");
-            copy_addon_canonical(target_info, &project_root)?;
-        }
-
         println!();
     }
 

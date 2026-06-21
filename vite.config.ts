@@ -10,8 +10,26 @@ export default defineConfig({
       '@rari/use-cache/runtime/deterministic-stringify': fileURLToPath(
         new URL('./packages/use-cache/dist/runtime/deterministic-stringify.mjs', import.meta.url),
       ),
+      '@rari/use-cache-darwin-arm64': fileURLToPath(
+        new URL('./packages/use-cache-darwin-arm64', import.meta.url),
+      ),
+      '@rari/use-cache-darwin-x64': fileURLToPath(
+        new URL('./packages/use-cache-darwin-x64', import.meta.url),
+      ),
+      '@rari/use-cache-linux-arm64': fileURLToPath(
+        new URL('./packages/use-cache-linux-arm64', import.meta.url),
+      ),
+      '@rari/use-cache-linux-x64': fileURLToPath(
+        new URL('./packages/use-cache-linux-x64', import.meta.url),
+      ),
+      '@rari/use-cache-win32-arm64': fileURLToPath(
+        new URL('./packages/use-cache-win32-arm64', import.meta.url),
+      ),
+      '@rari/use-cache-win32-x64': fileURLToPath(
+        new URL('./packages/use-cache-win32-x64', import.meta.url),
+      ),
       '@rari/use-cache': fileURLToPath(
-        new URL('./packages/use-cache', import.meta.url),
+        new URL('./packages/use-cache/src', import.meta.url),
       ),
       '@rari': fileURLToPath(new URL('./packages/rari/src', import.meta.url)),
     },

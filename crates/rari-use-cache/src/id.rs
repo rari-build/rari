@@ -22,11 +22,26 @@ pub fn generate_reference_id(
 }
 
 pub fn generate_cache_export_name(index: usize, export_name: &str) -> String {
-    format!("$$RSC_SERVER_CACHE_{}_{}", index, sanitize_export_name(export_name))
+    let sanitized = sanitize_export_name(export_name);
+    let index_str = index.to_string();
+    let mut result = String::with_capacity(20 + index_str.len() + sanitized.len());
+    result.push_str("$$RSC_SERVER_CACHE_");
+    result.push_str(&index_str);
+    result.push('_');
+    result.push_str(&sanitized);
+    result
 }
 
 pub fn generate_cache_inner_name(index: usize, export_name: &str) -> String {
-    format!("$$RSC_SERVER_CACHE_{}_{}_INNER", index, sanitize_export_name(export_name))
+    let sanitized = sanitize_export_name(export_name);
+    let index_str = index.to_string();
+    let mut result = String::with_capacity(26 + index_str.len() + sanitized.len());
+    result.push_str("$$RSC_SERVER_CACHE_");
+    result.push_str(&index_str);
+    result.push('_');
+    result.push_str(&sanitized);
+    result.push_str("_INNER");
+    result
 }
 
 fn sanitize_export_name(name: &str) -> String {
