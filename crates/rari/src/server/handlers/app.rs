@@ -259,8 +259,6 @@ async fn inject_og_image_into_metadata(
     {
         let og_image_url = format!("{}/_rari/og{}", base_url, route_path);
 
-        use {OpenGraphImage, OpenGraphImageDescriptor};
-
         let og_image = if og_entry.width.is_some() || og_entry.height.is_some() {
             OpenGraphImage::Detailed(OpenGraphImageDescriptor {
                 url: og_image_url.clone(),
@@ -290,7 +288,6 @@ async fn inject_og_image_into_metadata(
                 images.insert(0, og_image_url);
             }
         } else {
-            use TwitterMetadata;
             metadata.twitter = Some(TwitterMetadata {
                 card: Some("summary_large_image".to_string()),
                 site: None,
