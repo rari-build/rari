@@ -8,7 +8,6 @@ use tracing::error;
 
 pub mod ext;
 pub mod factory;
-pub mod http_adapter;
 pub mod module;
 pub mod ops;
 pub mod utils;

@@ -1,14 +1,13 @@
 use crate::runtime::JsExecutionRuntime;
-use crate::runtime::http_adapter::HttpAdapter;
 use crate::server::routing::types::RouteSegment;
 use axum::body::Body;
-use axum::http::{HeaderMap, Request, Response};
+use axum::http::{HeaderMap, Request, Response, StatusCode};
 use cow_utils::CowUtils;
 use dashmap::DashMap;
 use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use serde_json::Value as JsonValue;
+use serde_json::{Value as JsonValue, json};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -534,7 +533,23 @@ impl ApiRouteHandler {
         body: &str,
         params: &FxHashMap<String, String>,
     ) -> Result<JsonValue, RariError> {
-        HttpAdapter::to_json(method, uri, headers, body, params)
+        let mut headers_map = FxHashMap::default();
+        for (name, value) in headers.iter() {
+            if let Ok(value_str) = value.to_str() {
+                headers_map.insert(name.to_string(), value_str.to_string());
+            }
+        }
+
+        #[allow(clippy::disallowed_methods)]
+        let request_obj = json!({
+            "method": method,
+            "url": uri,
+            "headers": headers_map,
+            "body": body,
+            "params": params,
+        });
+
+        Ok(request_obj)
     }
 
     async fn execute_handler_from_namespace(
@@ -564,6 +579,119 @@ impl ApiRouteHandler {
     }
 
     async fn create_response(&self, result: JsonValue) -> Result<Response<Body>, RariError> {
-        HttpAdapter::from_json(result)
+        if result.is_object() && result.get("status").is_some() {
+            let status = result.get("status").and_then(|v| v.as_u64()).unwrap_or(200) as u16;
+            let status_code =
+                StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+            let body_str = result.get("body").and_then(|v| v.as_str()).unwrap_or("").to_string();
+
+            let mut response = Response::builder().status(status_code);
+
+            if let Some(headers_obj) = result.get("headers").and_then(|v| v.as_object()) {
+                for (key, value) in headers_obj {
+                    if let Some(value_str) = value.as_str() {
+                        response = response.header(key, value_str);
+                    }
+                }
+            }
+
+            response
+                .body(Body::from(body_str))
+                .map_err(|e| RariError::internal(format!("Failed to build response: {e}")))
+        } else {
+            let body = serde_json::to_string(&result).map_err(|e| {
+                RariError::serialization(format!("Failed to serialize response: {e}"))
+            })?;
+
+            Response::builder()
+                .status(StatusCode::OK)
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .map_err(|e| RariError::internal(format!("Failed to build response: {e}")))
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::HeaderValue;
+
+    #[test]
+    fn test_create_request_object_basic() {
+        let runtime = Arc::new(JsExecutionRuntime::default());
+        let manifest = ApiRouteManifest { api_routes: vec![] };
+        let handler = ApiRouteHandler::new(runtime, manifest);
+
+        let mut headers = HeaderMap::new();
+        headers.insert("content-type", HeaderValue::from_static("application/json"));
+        headers.insert("user-agent", HeaderValue::from_static("test-agent"));
+
+        let params = FxHashMap::default();
+
+        let result =
+            handler.create_request_object("GET", "/api/test", &headers, "", &params).unwrap();
+
+        assert_eq!(result["method"], "GET");
+        assert_eq!(result["url"], "/api/test");
+        assert_eq!(result["headers"]["content-type"], "application/json");
+        assert_eq!(result["headers"]["user-agent"], "test-agent");
+    }
+
+    #[test]
+    fn test_create_request_object_with_params() {
+        let runtime = Arc::new(JsExecutionRuntime::default());
+        let manifest = ApiRouteManifest { api_routes: vec![] };
+        let handler = ApiRouteHandler::new(runtime, manifest);
+
+        let headers = HeaderMap::new();
+        let mut params = FxHashMap::default();
+        params.insert("id".to_string(), "123".to_string());
+        params.insert("name".to_string(), "test".to_string());
+
+        let result =
+            handler.create_request_object("GET", "/api/users/123", &headers, "", &params).unwrap();
+
+        assert_eq!(result["params"]["id"], "123");
+        assert_eq!(result["params"]["name"], "test");
+    }
+
+    #[tokio::test]
+    async fn test_create_response_with_status() {
+        let runtime = Arc::new(JsExecutionRuntime::default());
+        let manifest = ApiRouteManifest { api_routes: vec![] };
+        let handler = ApiRouteHandler::new(runtime, manifest);
+
+        let response_json = json!({
+            "status": 201,
+            "headers": {
+                "content-type": "application/json",
+                "x-custom": "value"
+            },
+            "body": r#"{"success":true}"#
+        });
+
+        let response = handler.create_response(response_json).await.unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+        assert_eq!(response.headers().get("content-type").unwrap(), "application/json");
+        assert_eq!(response.headers().get("x-custom").unwrap(), "value");
+    }
+
+    #[tokio::test]
+    async fn test_create_response_plain_json() {
+        let runtime = Arc::new(JsExecutionRuntime::default());
+        let manifest = ApiRouteManifest { api_routes: vec![] };
+        let handler = ApiRouteHandler::new(runtime, manifest);
+
+        let plain_json = json!({
+            "message": "Hello",
+            "count": 42
+        });
+
+        let response = handler.create_response(plain_json).await.unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers().get("content-type").unwrap(), "application/json");
     }
 }
