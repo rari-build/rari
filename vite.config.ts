@@ -7,6 +7,9 @@ export default defineConfig({
       '@rari/use-cache/runtime/cache-wrapper': fileURLToPath(
         new URL('./packages/use-cache/dist/runtime/cache-wrapper.mjs', import.meta.url),
       ),
+      '@rari/use-cache/runtime/deterministic-stringify': fileURLToPath(
+        new URL('./packages/use-cache/dist/runtime/deterministic-stringify.mjs', import.meta.url),
+      ),
       '@rari/use-cache': fileURLToPath(
         new URL('./packages/use-cache', import.meta.url),
       ),

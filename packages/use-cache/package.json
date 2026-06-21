@@ -34,6 +34,11 @@
       "types": "./dist/runtime/cache-wrapper.d.mts",
       "import": "./dist/runtime/cache-wrapper.mjs",
       "default": "./dist/runtime/cache-wrapper.mjs"
+    },
+    "./runtime/deterministic-stringify": {
+      "types": "./dist/runtime/deterministic-stringify.d.mts",
+      "import": "./dist/runtime/deterministic-stringify.mjs",
+      "default": "./dist/runtime/deterministic-stringify.mjs"
     }
   },
   "main": "./dist/index.mjs",
