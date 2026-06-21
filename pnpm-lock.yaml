@@ -310,8 +310,33 @@ importers:
       '@rari/use-cache-darwin-arm64':
         specifier: workspace:*
         version: link:../use-cache-darwin-arm64
+      '@rari/use-cache-darwin-x64':
+        specifier: workspace:*
+        version: link:../use-cache-darwin-x64
+      '@rari/use-cache-linux-arm64':
+        specifier: workspace:*
+        version: link:../use-cache-linux-arm64
+      '@rari/use-cache-linux-x64':
+        specifier: workspace:*
+        version: link:../use-cache-linux-x64
+      '@rari/use-cache-win32-arm64':
+        specifier: workspace:*
+        version: link:../use-cache-win32-arm64
+      '@rari/use-cache-win32-x64':
+        specifier: workspace:*
+        version: link:../use-cache-win32-x64
 
   packages/use-cache-darwin-arm64: {}
+
+  packages/use-cache-darwin-x64: {}
+
+  packages/use-cache-linux-arm64: {}
+
+  packages/use-cache-linux-x64: {}
+
+  packages/use-cache-win32-arm64: {}
+
+  packages/use-cache-win32-x64: {}
 
   test/fixtures/app:
     dependencies:
