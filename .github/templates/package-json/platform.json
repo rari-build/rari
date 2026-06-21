@@ -13,9 +13,9 @@
   ],
   "homepage": "https://github.com/rari-build/rari#readme",
   "repository": {
+    "directory": "packages/{NAME}",
     "type": "git",
-    "url": "git+https://github.com/rari-build/rari.git",
-    "directory": "packages/{NAME}"
+    "url": "git+https://github.com/rari-build/rari.git"
   },
   "bugs": {
     "url": "https://github.com/rari-build/rari/issues"
