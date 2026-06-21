@@ -579,8 +579,23 @@ impl ApiRouteHandler {
     }
 
     async fn create_response(&self, result: JsonValue) -> Result<Response<Body>, RariError> {
-        if result.is_object() && result.get("status").is_some() {
-            let status = result.get("status").and_then(|v| v.as_u64()).unwrap_or(200) as u16;
+        let is_http_envelope = if let Some(status_val) = result.get("status") {
+            if let Some(status_num) = status_val.as_u64() {
+                (100..=599).contains(&status_num)
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+
+        if is_http_envelope {
+            let status = result
+                .get("status")
+                .and_then(|v| v.as_u64())
+                .and_then(|n| u16::try_from(n).ok())
+                .unwrap_or(500);
+
             let status_code =
                 StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
             let body_str = result.get("body").and_then(|v| v.as_str()).unwrap_or("").to_string();
