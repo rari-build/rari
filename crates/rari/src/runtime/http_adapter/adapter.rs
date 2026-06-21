@@ -4,9 +4,9 @@ use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use serde_json::{Value as JsonValue, json};
 
-pub struct RequestBridge;
+pub struct HttpAdapter;
 
-impl RequestBridge {
+impl HttpAdapter {
     pub fn to_json(
         method: &str,
         uri: &str,
@@ -122,7 +122,7 @@ mod tests {
 
         let params = FxHashMap::default();
 
-        let result = RequestBridge::to_json("GET", "/api/test", &headers, "", &params).unwrap();
+        let result = HttpAdapter::to_json("GET", "/api/test", &headers, "", &params).unwrap();
 
         assert_eq!(result["method"], "GET");
         assert_eq!(result["url"], "/api/test");
@@ -137,8 +137,7 @@ mod tests {
         params.insert("id".to_string(), "123".to_string());
         params.insert("name".to_string(), "test".to_string());
 
-        let result =
-            RequestBridge::to_json("GET", "/api/users/123", &headers, "", &params).unwrap();
+        let result = HttpAdapter::to_json("GET", "/api/users/123", &headers, "", &params).unwrap();
 
         assert_eq!(result["params"]["id"], "123");
         assert_eq!(result["params"]["name"], "test");
@@ -155,7 +154,7 @@ mod tests {
             "body": r#"{"success":true}"#
         });
 
-        let response = RequestBridge::from_json(response_json).unwrap();
+        let response = HttpAdapter::from_json(response_json).unwrap();
 
         assert_eq!(response.status(), StatusCode::CREATED);
         assert_eq!(response.headers().get("content-type").unwrap(), "application/json");
@@ -169,7 +168,7 @@ mod tests {
             "count": 42
         });
 
-        let response = RequestBridge::from_json(plain_json).unwrap();
+        let response = HttpAdapter::from_json(plain_json).unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(response.headers().get("content-type").unwrap(), "application/json");
@@ -179,13 +178,13 @@ mod tests {
     fn test_is_json_content_type() {
         let mut headers = HeaderMap::new();
         headers.insert("content-type", HeaderValue::from_static("application/json"));
-        assert!(RequestBridge::is_json_content_type(&headers));
+        assert!(HttpAdapter::is_json_content_type(&headers));
 
         headers.insert("content-type", HeaderValue::from_static("application/json; charset=utf-8"));
-        assert!(RequestBridge::is_json_content_type(&headers));
+        assert!(HttpAdapter::is_json_content_type(&headers));
 
         headers.insert("content-type", HeaderValue::from_static("text/plain"));
-        assert!(!RequestBridge::is_json_content_type(&headers));
+        assert!(!HttpAdapter::is_json_content_type(&headers));
     }
 
     #[test]
@@ -193,12 +192,12 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers
             .insert("content-type", HeaderValue::from_static("application/x-www-form-urlencoded"));
-        assert!(RequestBridge::is_form_content_type(&headers));
+        assert!(HttpAdapter::is_form_content_type(&headers));
 
         headers.insert("content-type", HeaderValue::from_static("multipart/form-data"));
-        assert!(RequestBridge::is_form_content_type(&headers));
+        assert!(HttpAdapter::is_form_content_type(&headers));
 
         headers.insert("content-type", HeaderValue::from_static("application/json"));
-        assert!(!RequestBridge::is_form_content_type(&headers));
+        assert!(!HttpAdapter::is_form_content_type(&headers));
     }
 }

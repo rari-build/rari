@@ -6,17 +6,19 @@ use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use tracing::error;
 
-pub mod bridge;
 pub mod ext;
 pub mod factory;
+pub mod http_adapter;
 pub mod module;
 pub mod ops;
 pub mod utils;
 
 mod metadata;
 
+use factory::JsRuntimeInterface;
+
 pub struct JsExecutionRuntime {
-    runtime: Arc<Box<dyn factory::JsRuntimeInterface>>,
+    runtime: Arc<factory::DenoRuntime>,
     timeout_ms: u64,
 }
 
@@ -45,12 +47,12 @@ fn is_esm_code(code: &str) -> bool {
 impl JsExecutionRuntime {
     pub fn new(env_vars: Option<rustc_hash::FxHashMap<String, String>>) -> Self {
         let runtime = if let Some(env_vars) = env_vars {
-            factory::create_lazy_runtime_with_env(env_vars)
+            factory::create_runtime_with_env(env_vars)
         } else {
-            factory::create_lazy_runtime()
+            factory::create_runtime()
         };
 
-        Self { runtime: Arc::new(runtime), timeout_ms: 30000 }
+        Self { runtime, timeout_ms: 30000 }
     }
 
     pub async fn execute_script(
@@ -292,7 +294,7 @@ impl JsExecutionRuntime {
                     }}
                 }}
 
-                if (globalThis['~rsc'].functions && globalThis['~rsc'].functions[componentId]) {{
+                if (globalThis['~rsc']?.functions?.[componentId]) {{
                     delete globalThis['~rsc'].functions[componentId];
                     deleted = true;
                 }}
@@ -317,7 +319,7 @@ impl JsExecutionRuntime {
                     }}
                 }}
 
-                if (globalThis['~rsc'].modules && globalThis['~rsc'].modules[componentId]) {{
+                if (globalThis['~rsc']?.modules?.[componentId]) {{
                     delete globalThis['~rsc'].modules[componentId];
                     deleted = true;
                 }}
@@ -331,7 +333,7 @@ impl JsExecutionRuntime {
                     }}
                 }}
 
-                if (globalThis['~rsc'].components && globalThis['~rsc'].components[componentId]) {{
+                if (globalThis['~rsc']?.components?.[componentId]) {{
                     delete globalThis['~rsc'].components[componentId];
                     deleted = true;
                 }}

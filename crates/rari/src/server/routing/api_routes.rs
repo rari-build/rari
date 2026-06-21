@@ -1,5 +1,5 @@
 use crate::runtime::JsExecutionRuntime;
-use crate::runtime::bridge::RequestBridge;
+use crate::runtime::http_adapter::HttpAdapter;
 use crate::server::routing::types::RouteSegment;
 use axum::body::Body;
 use axum::http::{HeaderMap, Request, Response};
@@ -534,7 +534,7 @@ impl ApiRouteHandler {
         body: &str,
         params: &FxHashMap<String, String>,
     ) -> Result<JsonValue, RariError> {
-        RequestBridge::to_json(method, uri, headers, body, params)
+        HttpAdapter::to_json(method, uri, headers, body, params)
     }
 
     async fn execute_handler_from_namespace(
@@ -564,6 +564,6 @@ impl ApiRouteHandler {
     }
 
     async fn create_response(&self, result: JsonValue) -> Result<Response<Body>, RariError> {
-        RequestBridge::from_json(result)
+        HttpAdapter::from_json(result)
     }
 }
