@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use cow_utils::CowUtils;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tokio::process::Command;
@@ -185,40 +186,41 @@ pub fn addon_stable_output_path_public(target_info: &Target, project_root: &Path
     addon_stable_output_path(target_info, project_root)
 }
 
-fn generate_platform_package_files(_target_info: &Target, package_dir: &Path) -> Result<()> {
+fn generate_platform_package_files(target_info: &Target, package_dir: &Path) -> Result<()> {
     let package_name = package_dir.file_name().unwrap_or_default().to_string_lossy();
 
-    let package_json = format!(
-        r#"{{
-  "name": "@rari/{package_name}",
-  "version": "0.0.0-dev",
-  "type": "module",
-  "main": "./index.js",
-  "exports": {{
-    ".": {{
-      "import": "./index.js",
-      "default": "./index.js"
-    }}
-  }},
-  "files": [
-    "rari_use_cache.node",
-    "index.js"
-  ]
-}}
-"#
-    );
+    let (os, cpu) = match target_info.platform {
+        "darwin-arm64" => ("darwin", "arm64"),
+        "darwin-x64" => ("darwin", "x64"),
+        "linux-arm64" => ("linux", "arm64"),
+        "linux-x64" => ("linux", "x64"),
+        "win32-arm64" => ("win32", "arm64"),
+        "win32-x64" => ("win32", "x64"),
+        _ => ("unknown", "unknown"),
+    };
 
-    let index_js = r#"import { createRequire } from 'node:module'
-import { fileURLToPath } from 'node:url'
-import { dirname, join } from 'node:path'
+    let project_root = package_dir
+        .parent()
+        .and_then(|p| p.parent())
+        .context("Failed to determine project root")?;
 
-const require = createRequire(import.meta.url)
-const __dirname = dirname(fileURLToPath(import.meta.url))
+    let template_package_json_path =
+        project_root.join(".github/templates/package-json/use-cache-platform.json");
+    let template_index_js_path = project_root.join(".github/templates/js/use-cache-platform.js");
 
-const addon = require(join(__dirname, 'rari_use_cache.node'))
+    let package_json_template = fs::read_to_string(&template_package_json_path)
+        .context("Failed to read package.json template")?;
 
-export default addon
-"#;
+    let package_json = package_json_template
+        .cow_replace("{NAME}", &package_name)
+        .cow_replace("{VERSION}", "0.0.0-dev")
+        .cow_replace("{DESCRIPTION}", target_info.platform)
+        .cow_replace("{OS}", os)
+        .cow_replace("{CPU}", cpu)
+        .into_owned();
+
+    let index_js =
+        fs::read_to_string(&template_index_js_path).context("Failed to read index.js template")?;
 
     fs::write(package_dir.join("package.json"), package_json)
         .context("Failed to write platform package.json")?;

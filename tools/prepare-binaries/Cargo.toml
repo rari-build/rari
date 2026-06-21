@@ -9,4 +9,5 @@ publish = false
 anyhow = { workspace = true }
 clap = { workspace = true }
 colored = { workspace = true }
+cow-utils = { workspace = true }
 tokio = { workspace = true }
