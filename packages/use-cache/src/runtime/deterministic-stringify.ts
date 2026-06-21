@@ -14,6 +14,7 @@ export function deterministicStringify(
 
   if (typeof obj === 'symbol') {
     const key = Symbol.keyFor(obj)
+
     if (key !== undefined)
       return `Symbol.for(${JSON.stringify(key)})`
 

@@ -39,9 +39,8 @@ export function $$cache__<Args extends unknown[]>(
     return existing.value
 
   const pending = pendingCache.get(key)
-  if (pending) {
+  if (pending)
     throw pending
-  }
 
   const entry: CacheEntry<unknown> = { resolved: false }
   const promise = Promise.resolve()

@@ -30,9 +30,8 @@ async function loadAddon() {
   }
 
   const localNode = resolve(__dirname, '..', 'rari_use_cache.node')
-  if (existsSync(localNode)) {
+  if (existsSync(localNode))
     return require(localNode)
-  }
 
   try {
     const platformModule = await import(platformPkg)
@@ -71,9 +70,8 @@ export interface NativeAddon {
 }
 
 export function detectUseCache(source: string): boolean {
-  if (!nativeBinding) {
+  if (!nativeBinding)
     return false
-  }
 
   return nativeBinding.detectUseCache(source)
 }
