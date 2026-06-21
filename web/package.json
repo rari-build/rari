@@ -16,7 +16,7 @@
     "clean": "rari clean",
     "lint": "vp lint",
     "lint:fix": "vp lint --fix",
-    "typecheck": "tsgo"
+    "typecheck": "tsc"
   },
   "dependencies": {
     "@mdx-js/mdx": "catalog:mdx",
@@ -28,7 +28,7 @@
     "@shikijs/types": "catalog:mdx",
     "mermaid": "catalog:mdx",
     "posthog-js": "catalog:analytics",
-    "rari": "catalog:",
+    "rari": "workspace:*",
     "react": "catalog:react",
     "react-dom": "catalog:react",
     "remark-gfm": "catalog:mdx"

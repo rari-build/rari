@@ -220,7 +220,7 @@ async function runViteBuild() {
   await cleanDistFolder()
 
   logInfo('Type checking...')
-  const typecheckProcess = crossPlatformSpawn('npx', ['tsgo'], {
+  const typecheckProcess = crossPlatformSpawn('npx', ['tsc'], {
     stdio: 'inherit',
     cwd: process.cwd(),
   })

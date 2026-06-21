@@ -53,6 +53,6 @@ catalogs:
     '@vitest/coverage-v8': ^4.1.9
   typescript:
     '@types/node': ^26.0.0
-    '@typescript/native-preview': ^7.0.0-dev.20260619.1
+    '@typescript/native-preview': npm:typescript@~7.0.1-rc
 allowBuilds:
   core-js: true

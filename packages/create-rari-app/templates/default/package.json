@@ -15,7 +15,7 @@
     "deploy:railway": "rari deploy railway",
     "deploy:render": "rari deploy render",
     "clean": "rari clean",
-    "typecheck": "tsgo"
+    "typecheck": "tsc"
   },
   "dependencies": {
     "rari": "latest",
@@ -27,7 +27,7 @@
     "@types/node": "^25.9.3",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
-    "@typescript/native-preview": "^7.0.0-dev.20260618.1",
+    "@typescript/native-preview": "npm:typescript@~7.0.1-rc",
     "tailwindcss": "^4.3.1",
     "vite-plus": "^0.2.1"
   }

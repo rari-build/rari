@@ -6,7 +6,7 @@
     "dev": "rari dev",
     "build": "rari build",
     "start": "rari start",
-    "typecheck": "tsgo"
+    "typecheck": "tsc"
   },
   "dependencies": {
     "rari": "workspace:*",
