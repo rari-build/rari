@@ -113,18 +113,8 @@ mod tests {
 
     #[test]
     fn test_dot_segments_are_normalized() {
-        use std::path::PathBuf;
-
-        let cwd = std::env::current_dir().expect("Failed to get current directory in test");
-
         let relative = PathBuf::from("a/../file.js");
-        let joined = cwd.join(&relative);
-        let joined_str = joined.to_string_lossy();
-
-        println!("Joined path: {}", joined_str);
-
         let url = path_to_file_url(&relative);
-        println!("Generated URL: {}", url);
 
         if url.contains("..") {
             panic!(
