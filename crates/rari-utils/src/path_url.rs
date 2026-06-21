@@ -94,6 +94,7 @@ mod tests {
         let path = PathBuf::from("a/../file.js");
         let url = path_to_file_url(&path);
         assert!(url.starts_with("file:///"));
+        assert!(url.contains("file.js"));
 
         let url2 = path_to_file_url(&path);
         assert_eq!(url, url2);
@@ -104,17 +105,10 @@ mod tests {
         let path = PathBuf::from("./a/b/../c/./file.js");
         let url = path_to_file_url(&path);
         assert!(url.starts_with("file:///"));
+        assert!(url.contains("file.js"));
 
         let url2 = path_to_file_url(&path);
         assert_eq!(url, url2);
-    }
-
-    #[test]
-    fn test_relative_vs_absolute_identity() {
-        let relative = PathBuf::from("./file.js");
-        let url_relative = path_to_file_url(&relative);
-
-        assert_eq!(url_relative, path_to_file_url(&relative));
     }
 
     #[test]
