@@ -115,7 +115,7 @@ mod tests {
     fn test_dot_segments_are_normalized() {
         use std::path::PathBuf;
 
-        let cwd = std::env::current_dir().unwrap();
+        let cwd = std::env::current_dir().expect("Failed to get current directory in test");
 
         let relative = PathBuf::from("a/../file.js");
         let joined = cwd.join(&relative);
