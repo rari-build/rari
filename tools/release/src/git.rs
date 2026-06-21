@@ -3,7 +3,13 @@ use std::path::Path;
 use tokio::process::Command;
 
 fn tag_pattern_for(package_name: &str) -> String {
-    if package_name == "rari-binaries" { "v*".to_string() } else { format!("{}@*", package_name) }
+    if package_name == "rari-binaries" {
+        "v*".to_string()
+    } else if package_name == "@rari/use-cache-binaries" {
+        "use-cache-binaries@*".to_string()
+    } else {
+        format!("{}@*", package_name)
+    }
 }
 
 pub async fn get_recent_commits(package_path: &Path, limit: usize) -> Result<Vec<String>> {
@@ -64,6 +70,38 @@ pub async fn get_commits_since_tag(package_name: &str, package_path: &Path) -> R
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 anyhow::bail!(
                     "Failed to get git log for rari-binaries (range: {}):\nstdout: {}\nstderr: {}",
+                    range,
+                    stdout,
+                    stderr
+                );
+            }
+
+            Ok(String::from_utf8_lossy(&output.stdout).lines().map(String::from).collect())
+        } else if package_name == "@rari/use-cache-binaries" {
+            let output = Command::new("git")
+                .args([
+                    "log",
+                    &range,
+                    "--oneline",
+                    "--grep=^release:",
+                    "--invert-grep",
+                    "--",
+                    "crates/rari-use-cache/",
+                    "packages/use-cache-darwin-arm64/",
+                    "packages/use-cache-darwin-x64/",
+                    "packages/use-cache-linux-arm64/",
+                    "packages/use-cache-linux-x64/",
+                    "packages/use-cache-win32-arm64/",
+                    "packages/use-cache-win32-x64/",
+                ])
+                .output()
+                .await?;
+
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                anyhow::bail!(
+                    "Failed to get git log for @rari/use-cache-binaries (range: {}):\nstdout: {}\nstderr: {}",
                     range,
                     stdout,
                     stderr

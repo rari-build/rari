@@ -6,6 +6,8 @@ on:
       - 'v*'
       - 'rari@*'
       - 'create-rari-app@*'
+      - '@rari/use-cache@*'
+      - 'use-cache-binaries@*'
   workflow_dispatch:
 
 permissions:
@@ -407,12 +409,311 @@ jobs:
         run: |
           cd "packages/${{ steps.pkg.outputs.name }}"
 
-          IS_PRERELEASE=$(node -e "
-            const v = '${{ steps.pkg.outputs.version }}';
-            process.stdout.write(v.includes('-') ? 'true' : 'false');
-          ")
+          VERSION="${{ steps.pkg.outputs.version }}"
+          if [[ "${VERSION}" == *"-"* ]]; then
+            IS_PRERELEASE="true"
+          else
+            IS_PRERELEASE="false"
+          fi
 
           # pnpm pack resolves catalog: and workspace: protocols
+          TARBALL=$(pnpm pack | tail -1)
+          echo "Packed: ${TARBALL}"
+
+          if [[ "${IS_PRERELEASE}" == "true" ]]; then
+            echo "Publishing with tag 'next'..."
+            npm publish "${TARBALL}" --access public --tag next
+          else
+            echo "Publishing with tag 'latest'..."
+            npm publish "${TARBALL}" --access public
+          fi
+
+  build-use-cache-addons:
+    name: Build use-cache addon for ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    if: startsWith(github.ref, 'refs/tags/use-cache-binaries@') || github.event_name == 'workflow_dispatch'
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: namespace-profile-rari-linux-amd64
+            platform: linux-x64
+          - target: aarch64-unknown-linux-gnu
+            os: namespace-profile-rari-linux-arm64
+            platform: linux-arm64
+          - target: x86_64-apple-darwin
+            os: namespace-profile-rari-macos-arm64
+            platform: darwin-x64
+          - target: aarch64-apple-darwin
+            os: namespace-profile-rari-macos-arm64
+            platform: darwin-arm64
+          - target: x86_64-pc-windows-msvc
+            os: namespace-profile-rari-windows-amd64
+            platform: win32-x64
+          - target: aarch64-pc-windows-msvc
+            os: namespace-profile-rari-windows-amd64
+            platform: win32-arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: nightly
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo registry
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.cargo/registry/cache
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-registry-
+
+      - name: Cache cargo index
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.cargo/registry/index
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-index-
+
+      - name: Cache cargo build
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: target
+          key: ${{ runner.os }}-${{ matrix.target }}-addon-build-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.target }}-addon-build-
+
+      - name: Build addon
+        run: |
+          cargo build --release --target ${{ matrix.target }} --package rari-use-cache
+        env:
+          AWS_LC_SYS_PREBUILT_NASM: 1
+
+      - name: Prepare addon artifact
+        run: |
+          mkdir -p addon-output
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            cp target/${{ matrix.target }}/release/rari_use_cache.dll addon-output/rari_use_cache.node
+          elif [[ "${{ runner.os }}" == "macOS" ]]; then
+            cp target/${{ matrix.target }}/release/librari_use_cache.dylib addon-output/rari_use_cache.node
+          else
+            cp target/${{ matrix.target }}/release/librari_use_cache.so addon-output/rari_use_cache.node
+          fi
+        shell: bash
+
+      - name: Upload addon artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: use-cache-addon-${{ matrix.platform }}
+          path: addon-output/rari_use_cache.node
+
+  npm-release-use-cache-platform:
+    needs: build-use-cache-addons
+    runs-on: namespace-profile-rari-linux-amd64
+    if: startsWith(github.ref, 'refs/tags/use-cache-binaries@')
+    permissions:
+      contents: read
+      id-token: write
+
+    strategy:
+      matrix:
+        platform:
+          - linux-x64
+          - linux-arm64
+          - darwin-x64
+          - darwin-arm64
+          - win32-x64
+          - win32-arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22.14.0
+          package-manager-cache: false
+
+      - name: Upgrade npm
+        run: npm install -g npm@latest
+
+      - name: Download platform addon
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: use-cache-addon-${{ matrix.platform }}
+          path: platform-addon
+
+      - name: Prepare platform package
+        run: |
+          PACKAGE_NAME="@rari/use-cache-${{ matrix.platform }}"
+          PACKAGE_DIR="packages/use-cache-${{ matrix.platform }}"
+          VERSION="${GITHUB_REF#refs/tags/use-cache-binaries@}"
+
+          mkdir -p "${PACKAGE_DIR}"
+
+          cp platform-addon/rari_use_cache.node "${PACKAGE_DIR}/rari_use_cache.node"
+          ls -la "${PACKAGE_DIR}/"
+
+          case "${{ matrix.platform }}" in
+            darwin-arm64)
+              OS="darwin"
+              CPU="arm64"
+              PLATFORM_NAME="macOS ARM64 (Apple Silicon)"
+              OS_NAME="macOS"
+              ARCH="ARM64"
+              DESCRIPTION="Apple Silicon Macs (M1, M2, M3, M4)"
+              ;;
+            darwin-x64)
+              OS="darwin"
+              CPU="x64"
+              PLATFORM_NAME="macOS x64 (Intel)"
+              OS_NAME="macOS"
+              ARCH="x64"
+              DESCRIPTION="Intel-based Macs"
+              ;;
+            linux-arm64)
+              OS="linux"
+              CPU="arm64"
+              PLATFORM_NAME="Linux ARM64"
+              OS_NAME="Linux"
+              ARCH="ARM64"
+              DESCRIPTION="ARM64/aarch64 Linux systems"
+              ;;
+            linux-x64)
+              OS="linux"
+              CPU="x64"
+              PLATFORM_NAME="Linux x64"
+              OS_NAME="Linux"
+              ARCH="x64"
+              DESCRIPTION="x86_64 Linux systems"
+              ;;
+            win32-x64)
+              OS="win32"
+              CPU="x64"
+              PLATFORM_NAME="Windows x64"
+              OS_NAME="Windows"
+              ARCH="x64"
+              DESCRIPTION="x86_64 Windows systems"
+              ;;
+            win32-arm64)
+              OS="win32"
+              CPU="arm64"
+              PLATFORM_NAME="Windows ARM64"
+              OS_NAME="Windows"
+              ARCH="ARM64"
+              DESCRIPTION="ARM64 Windows systems"
+              ;;
+          esac
+
+          cp .github/templates/package-json/use-cache-platform.json "${PACKAGE_DIR}/package.json"
+          sed -i "s|{VERSION}|${VERSION}|g" "${PACKAGE_DIR}/package.json"
+          sed -i "s|{PLATFORM}|${{ matrix.platform }}|g" "${PACKAGE_DIR}/package.json"
+          sed -i "s|{OS}|${OS}|g" "${PACKAGE_DIR}/package.json"
+          sed -i "s|{CPU}|${CPU}|g" "${PACKAGE_DIR}/package.json"
+
+          node --input-type=module -e "import { readFileSync, writeFileSync } from 'fs'; const f = '${PACKAGE_DIR}/package.json'; writeFileSync(f, JSON.stringify(JSON.parse(readFileSync(f, 'utf8')), null, 2) + '\n');"
+
+          cp .github/templates/js/use-cache-platform.js "${PACKAGE_DIR}/index.js"
+          sed -i "s|{PLATFORM}|${{ matrix.platform }}|g" "${PACKAGE_DIR}/index.js"
+
+          cp LICENSE "${PACKAGE_DIR}/LICENSE"
+
+          cp .github/templates/readme/use-cache-platform.md "${PACKAGE_DIR}/README.md"
+          sed -i "s|\${PACKAGE_NAME}|use-cache-${{ matrix.platform }}|g" "${PACKAGE_DIR}/README.md"
+          sed -i "s|\${PLATFORM_NAME}|${PLATFORM_NAME}|g" "${PACKAGE_DIR}/README.md"
+          sed -i "s|\${OS_NAME}|${OS_NAME}|g" "${PACKAGE_DIR}/README.md"
+          sed -i "s|\${ARCH}|${ARCH}|g" "${PACKAGE_DIR}/README.md"
+          sed -i "s|\${DESCRIPTION}|${DESCRIPTION}|g" "${PACKAGE_DIR}/README.md"
+
+          echo "✓ Generated package files for ${PACKAGE_NAME}@${VERSION}"
+
+      - name: Publish platform package
+        run: |
+          PACKAGE_DIR="packages/use-cache-${{ matrix.platform }}"
+          VERSION="${GITHUB_REF#refs/tags/use-cache-binaries@}"
+
+          cd "${PACKAGE_DIR}"
+          npm pkg fix
+
+          if [[ "${VERSION}" == *"-"* ]]; then
+            IS_PRERELEASE="true"
+          else
+            IS_PRERELEASE="false"
+          fi
+
+          if [[ "${IS_PRERELEASE}" == "true" ]]; then
+            echo "Publishing @rari/use-cache-${{ matrix.platform }} with tag 'next'..."
+            npm publish --access public --tag next
+          else
+            echo "Publishing @rari/use-cache-${{ matrix.platform }} with tag 'latest'..."
+            npm publish --access public
+          fi
+
+          echo "Successfully published @rari/use-cache-${{ matrix.platform }}"
+
+  npm-release-use-cache:
+    runs-on: namespace-profile-rari-linux-amd64
+    if: startsWith(github.ref, 'refs/tags/@rari/use-cache@')
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Determine package version
+        id: pkg
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          VERSION="${TAG#@rari/use-cache@}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "📦 Publishing @rari/use-cache@${VERSION}"
+
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22.14.0
+          package-manager-cache: false
+
+      - name: Upgrade npm
+        run: npm install -g npm@latest
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          npm_config_trust_lockfile: 'true'
+
+      - name: Build package
+        run: pnpm --filter "@rari/use-cache" build
+
+      - name: Generate LICENSE
+        run: |
+          PACKAGE_DIR="packages/use-cache"
+          cp LICENSE "${PACKAGE_DIR}/LICENSE"
+
+      - name: Publish to npm
+        run: |
+          cd "packages/use-cache"
+
+          VERSION="${{ steps.pkg.outputs.version }}"
+          if [[ "${VERSION}" == *"-"* ]]; then
+            IS_PRERELEASE="true"
+          else
+            IS_PRERELEASE="false"
+          fi
+
           TARBALL=$(pnpm pack | tail -1)
           echo "Packed: ${TARBALL}"
 

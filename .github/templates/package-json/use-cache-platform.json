@@ -1,8 +1,8 @@
 {
-  "name": "@rari/{NAME}",
+  "name": "@rari/use-cache-{PLATFORM}",
   "type": "module",
   "version": "{VERSION}",
-  "description": "Native 'use cache' transform addon for rari ({DESCRIPTION})",
+  "description": "Native 'use cache' transform addon for rari ({PLATFORM})",
   "author": "Ryan Skinner",
   "license": "MIT",
   "main": "./index.js",
@@ -20,7 +20,7 @@
   ],
   "homepage": "https://github.com/rari-build/rari#readme",
   "repository": {
-    "directory": "packages/{NAME}",
+    "directory": "packages/use-cache-{PLATFORM}",
     "type": "git",
     "url": "git+https://github.com/rari-build/rari.git"
   },

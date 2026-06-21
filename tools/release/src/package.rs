@@ -197,6 +197,11 @@ impl ReleasedPackage {
     pub fn create_github_release_url(&self, owner: &str, repo: &str) -> String {
         let (title_text, tag_text) = if self.name == "rari-binaries" {
             (format!("v{}", self.version), format!("v{}", self.version))
+        } else if self.name == "@rari/use-cache-binaries" {
+            (
+                format!("use-cache-binaries@{}", self.version),
+                format!("use-cache-binaries@{}", self.version),
+            )
         } else {
             (format!("{}@{}", self.name, self.version), self.tag.clone())
         };
