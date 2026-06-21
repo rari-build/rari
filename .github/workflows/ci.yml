@@ -33,7 +33,7 @@ jobs:
       src: ${{ steps.filter.outputs.src }}
       rust: ${{ steps.filter.outputs.rust }}
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
 
@@ -74,7 +74,7 @@ jobs:
       actions: write
       contents: read
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
@@ -126,7 +126,7 @@ jobs:
       actions: write
       contents: read
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
@@ -181,7 +181,7 @@ jobs:
         exclude:
           - os: ${{ github.event_name == 'merge_group' && 'namespace-profile-rari-windows-amd64' || '' }}
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
@@ -202,7 +202,7 @@ jobs:
       - name: Cache Rust
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
-          shared-key: "e2e-${{ runner.os }}"
+          shared-key: 'e2e-${{ runner.os }}'
 
       - name: Download snapshot
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -246,8 +246,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
-  build-use-cache-transform-addon:
-    name: Build use_cache_transform.node (${{ matrix.os }})
+  build-use-cache-addon:
+    name: Build rari_use_cache.node (${{ matrix.os }})
     needs: [changes]
     if: (needs.changes.outputs.rust == 'true' || needs.changes.outputs.src == 'true') && (github.event_name != 'push' || github.ref_name != 'main')
     runs-on: ${{ matrix.os }}
@@ -262,7 +262,7 @@ jobs:
         exclude:
           - os: ${{ github.event_name == 'merge_group' && 'windows-latest' || '' }}
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
@@ -275,30 +275,48 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y pkg-config
 
-      - name: Install @napi-rs/cli
-        run: npm install -g @napi-rs/cli
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22
 
-      - name: Build use_cache_transform.node
-        shell: bash
+      - name: Install pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build rari_use_cache.node (Linux)
+        if: runner.os == 'Linux'
         run: |
-          case "${{ matrix.os }}" in
-            ubuntu-latest)
-              PLATFORM="linux-x64"
-              ;;
-            windows-latest)
-              PLATFORM="win32-x64"
-              ;;
-          esac
-          cargo run --release --bin prepare-binaries -- \
-            --addon \
-            --platform "$PLATFORM"
+          cd crates/rari-use-cache
+          pnpm exec napi build --release --strip --platform
+
+      - name: Build rari_use_cache.node (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cd crates/rari-use-cache
+          pnpm exec napi build --release --strip --platform
+
+      - name: Copy addon to platform package (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p packages/use-cache-linux-x64
+          cp crates/rari-use-cache/*.linux-x64-gnu.node packages/use-cache-linux-x64/rari_use_cache.node
+
+      - name: Copy addon to platform package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path packages/use-cache-win32-x64
+          Copy-Item crates/rari-use-cache/*.win32-x64-msvc.node packages/use-cache-win32-x64/rari_use_cache.node
 
       - name: Upload addon (Linux)
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: use-cache-transform-linux-x64
-          path: .build/use-cache-transform/linux-x64/use_cache_transform.node
+          name: use-cache-linux-x64
+          path: packages/use-cache-linux-x64/rari_use_cache.node
           if-no-files-found: error
           retention-days: 1
 
@@ -306,13 +324,13 @@ jobs:
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: use-cache-transform-win32-x64
-          path: .build/use-cache-transform/win32-x64/use_cache_transform.node
+          name: use-cache-win32-x64
+          path: packages/use-cache-win32-x64/rari_use_cache.node
           if-no-files-found: error
           retention-days: 1
 
   build:
-    needs: changes
+    needs: [changes, build-use-cache-addon]
     if: needs.changes.outputs.src == 'true' || needs.changes.outputs.rust == 'true'
     runs-on: namespace-profile-rari-linux-amd64
     timeout-minutes: 10
@@ -320,7 +338,7 @@ jobs:
       actions: write
       contents: read
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
 
@@ -332,8 +350,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
 
+      - name: Download use-cache addon
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: use-cache-linux-x64
+          path: packages/use-cache
+
       - name: Build packages
         run: |
+          pnpm --filter=@rari/use-cache run build
           pnpm --filter=@rari/logger run build
           pnpm --filter=@rari/deploy run build
           pnpm --filter=rari run build
@@ -346,6 +371,7 @@ jobs:
 
       - name: Verify dist outputs
         run: |
+          test -d packages/use-cache/dist
           test -d packages/logger/dist
           test -d packages/deploy/dist
           test -d packages/rari/dist
@@ -358,6 +384,7 @@ jobs:
           retention-days: 3
           name: dist
           path: |
+            packages/use-cache/dist
             packages/logger/dist
             packages/deploy/dist
             packages/rari/dist
@@ -370,7 +397,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
   lint-and-test:
-    needs: changes
+    needs: [changes, build-use-cache-addon]
     if: needs.changes.outputs.src == 'true' || needs.changes.outputs.rust == 'true'
     runs-on: namespace-profile-rari-linux-amd64
     timeout-minutes: 15
@@ -378,7 +405,7 @@ jobs:
       actions: write
       contents: read
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
 
@@ -390,8 +417,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
 
+      - name: Download use-cache addon
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: use-cache-linux-x64
+          path: packages/use-cache
+
       - name: Build packages
         run: |
+          pnpm --filter=@rari/use-cache run build
           pnpm --filter=@rari/logger run build
           pnpm --filter=@rari/deploy run build
           pnpm --filter=rari run build
@@ -419,7 +453,7 @@ jobs:
       - changes
       - build
       - build-rari-binary
-      - build-use-cache-transform-addon
+      - build-use-cache-addon
     strategy:
       fail-fast: ${{ github.event_name == 'merge_group' }}
       matrix:
@@ -429,7 +463,7 @@ jobs:
           - os: ${{ github.event_name == 'merge_group' && 'namespace-profile-rari-windows-amd64' || '' }}
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
 
@@ -458,19 +492,19 @@ jobs:
           name: rari-binary-windows
           path: packages/rari-win32-x64/bin
 
-      - name: Download use_cache_transform addon (Linux)
+      - name: Download rari_use_cache addon (Linux)
         if: runner.os == 'Linux'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: use-cache-transform-linux-x64
-          path: packages/use-cache-transform
+          name: use-cache-linux-x64
+          path: packages/use-cache
 
-      - name: Download use_cache_transform addon (Windows)
+      - name: Download rari_use_cache addon (Windows)
         if: runner.os == 'Windows'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: use-cache-transform-win32-x64
-          path: packages/use-cache-transform
+          name: use-cache-win32-x64
+          path: packages/use-cache
 
       - name: Make binary executable (Linux)
         if: runner.os == 'Linux'
@@ -520,7 +554,7 @@ jobs:
       - rust-check
       - build
       - build-rari-binary
-      - build-use-cache-transform-addon
+      - build-use-cache-addon
       - lint-and-test
       - test-e2e
     steps:
@@ -533,7 +567,7 @@ jobs:
             "${{ needs.rust-check.result }}"
             "${{ needs.build.result }}"
             "${{ needs.build-rari-binary.result }}"
-            "${{ needs.build-use-cache-transform-addon.result }}"
+            "${{ needs.build-use-cache-addon.result }}"
             "${{ needs.lint-and-test.result }}"
             "${{ needs.test-e2e.result }}"
           )

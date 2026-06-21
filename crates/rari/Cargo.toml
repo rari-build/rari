@@ -21,12 +21,6 @@ readme = "../../README.md"
 homepage = "https://github.com/rari-build/rari"
 documentation = "https://github.com/rari-build/rari/tree/main/web"
 
-[package.metadata.cargo-machete]
-ignored = [
-  "num-bigint-dig",
-  "windows-sys"
-]
-
 [lib]
 crate-type = [ "rlib" ]
 doctest = false
@@ -76,7 +70,6 @@ deno_node_crypto = "0.21.0"
 deno_node_sqlite = "0.21.0"
 deno_resolver = "0.82.0"
 node_resolver = "0.89.0"
-num-bigint-dig = "=0.8.2"
 
 # === FFI & NAPI ===
 deno_ffi = "0.238.0"
@@ -132,7 +125,7 @@ tokio-tungstenite = "0.29.0"
 tungstenite = "0.29.0"
 
 # === Utilities ===
-bytes = { version = "1.11.1", features = [ "serde" ] }
+bytes = { version = "1.12.0", features = [ "serde" ] }
 cow-utils = { workspace = true }
 dashmap = "6.2.1"
 parking_lot = "0.12.5"
@@ -154,7 +147,7 @@ image = { version = "0.25.10", default-features = false, features = [
 webp = "0.3.1"
 
 # Layout and text rendering
-taffy = "0.10.1"
+taffy = "0.11.0"
 parley = "0.10.0"
 swash = "0.2.9"
 zeno = "0.3.3"
@@ -194,7 +187,7 @@ rustls = { version = "=0.23.40", default-features = false, features = [
   "std",
   "aws_lc_rs",
 ] }
-sha2 = "0.11.0"
+sha2 = { workspace = true }
 hex = { workspace = true }
 
 [dev-dependencies]

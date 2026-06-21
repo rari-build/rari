@@ -4,8 +4,11 @@ import { defineConfig } from 'vite-plus'
 export default defineConfig({
   resolve: {
     alias: {
-      '@rari/use-cache-transform': fileURLToPath(
-        new URL('./packages/use-cache-transform', import.meta.url),
+      '@rari/use-cache/runtime/cache-wrapper': fileURLToPath(
+        new URL('./packages/use-cache/dist/runtime/cache-wrapper.mjs', import.meta.url),
+      ),
+      '@rari/use-cache': fileURLToPath(
+        new URL('./packages/use-cache', import.meta.url),
       ),
       '@rari': fileURLToPath(new URL('./packages/rari/src', import.meta.url)),
     },

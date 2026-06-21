@@ -172,23 +172,23 @@ impl LayoutEngine {
 
         taffy_style.align_items =
             style.get("alignItems").map(|align_items| match align_items.as_str() {
-                "flex-start" | "start" => AlignItems::FlexStart,
-                "flex-end" | "end" => AlignItems::FlexEnd,
-                "center" => AlignItems::Center,
-                "baseline" => AlignItems::Baseline,
-                "stretch" => AlignItems::Stretch,
-                _ => AlignItems::Stretch,
+                "flex-start" | "start" => AlignItems::FLEX_START,
+                "flex-end" | "end" => AlignItems::FLEX_END,
+                "center" => AlignItems::CENTER,
+                "baseline" => AlignItems::BASELINE,
+                "stretch" => AlignItems::STRETCH,
+                _ => AlignItems::STRETCH,
             });
 
         if let Some(justify_content) = style.get("justifyContent") {
             taffy_style.justify_content = Some(match justify_content.as_str() {
-                "flex-start" | "start" => JustifyContent::FlexStart,
-                "flex-end" | "end" => JustifyContent::FlexEnd,
-                "center" => JustifyContent::Center,
-                "space-between" => JustifyContent::SpaceBetween,
-                "space-around" => JustifyContent::SpaceAround,
-                "space-evenly" => JustifyContent::SpaceEvenly,
-                _ => JustifyContent::FlexStart,
+                "flex-start" | "start" => JustifyContent::FLEX_START,
+                "flex-end" | "end" => JustifyContent::FLEX_END,
+                "center" => JustifyContent::CENTER,
+                "space-between" => JustifyContent::SPACE_BETWEEN,
+                "space-around" => JustifyContent::SPACE_AROUND,
+                "space-evenly" => JustifyContent::SPACE_EVENLY,
+                _ => JustifyContent::FLEX_START,
             });
         }
 

@@ -72,10 +72,6 @@
       "types": "./dist/runtime/actions.d.mts",
       "default": "./dist/runtime/actions.mjs"
     },
-    "./runtime/cache-wrapper": {
-      "types": "./dist/runtime/cache-wrapper.d.mts",
-      "default": "./dist/runtime/cache-wrapper.mjs"
-    },
     "./runtime/entry-client": {
       "types": "./dist/runtime/entry-client.d.mts",
       "default": "./dist/runtime/entry-client.mjs"
@@ -122,13 +118,11 @@
     "react-dom": "catalog:react"
   },
   "dependencies": {
-    "@rari/use-cache-transform": "workspace:*",
     "lightningcss": "catalog:build",
-    "quick-lru": "catalog:",
-
     "rolldown": "catalog:build"
   },
   "optionalDependencies": {
+    "@rari/use-cache": "workspace:*",
     "rari-darwin-arm64": "0.14.12",
     "rari-darwin-x64": "0.14.12",
     "rari-linux-arm64": "0.14.12",
@@ -140,7 +134,6 @@
     "@rari/deploy": "workspace:*",
     "@rari/logger": "workspace:*",
     "@types/node": "catalog:typescript",
-
     "@types/react": "catalog:react",
     "@types/react-dom": "catalog:react",
     "@typescript/native-preview": "catalog:typescript",

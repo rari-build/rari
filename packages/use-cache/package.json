@@ -1,0 +1,64 @@
+{
+  "name": "@rari/use-cache",
+  "type": "module",
+  "version": "0.14.12",
+  "description": "Native 'use cache' directive transform addon for rari",
+  "author": "Ryan Skinner",
+  "license": "MIT",
+  "homepage": "https://github.com/rari-build/rari#readme",
+  "repository": {
+    "directory": "packages/use-cache",
+    "type": "git",
+    "url": "git+https://github.com/rari-build/rari.git"
+  },
+  "bugs": {
+    "url": "https://github.com/rari-build/rari/issues"
+  },
+  "keywords": [
+    "rari",
+    "use-cache",
+    "transform",
+    "napi",
+    "napi-rs",
+    "rust",
+    "react",
+    "server-components"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.mjs"
+    },
+    "./runtime/cache-wrapper": {
+      "types": "./dist/runtime/cache-wrapper.d.mts",
+      "import": "./dist/runtime/cache-wrapper.mjs",
+      "default": "./dist/runtime/cache-wrapper.mjs"
+    }
+  },
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "files": [
+    "LICENSE",
+    "README.md",
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "scripts": {
+    "build": "pnpm --silent clean && pnpm typecheck && vp pack",
+    "clean": "node --eval \"import('node:fs').then(fs => fs.rmSync('dist', { recursive: true, force: true }))\"",
+    "lint": "vp lint",
+    "lint:fix": "vp lint --fix",
+    "typecheck": "tsgo"
+  },
+  "dependencies": {
+    "quick-lru": "catalog:runtime"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:typescript",
+    "vite-plus": "catalog:build"
+  }
+}

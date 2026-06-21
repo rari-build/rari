@@ -1,16 +1,19 @@
+mod common;
+mod rari_binary;
+mod use_cache_addon;
+
 use anyhow::{Context, Result};
 use clap::Parser;
 use colored::Colorize;
-use std::fs;
-use std::path::{Path, PathBuf};
-use tokio::process::Command;
+use std::path::PathBuf;
 
-#[cfg(unix)]
-use std::os::unix::fs::PermissionsExt;
+use common::*;
+use rari_binary::*;
+use use_cache_addon::*;
 
 #[derive(Parser, Debug)]
 #[command(name = "prepare-binaries")]
-#[command(about = "Prepare Rari binaries (and use_cache_transform addon) for platform packages", long_about = None)]
+#[command(about = "Prepare rari binaries (and rari-use-cache addon) for platform packages", long_about = None)]
 struct Args {
     #[arg(long)]
     all: bool,
@@ -18,10 +21,7 @@ struct Args {
     #[arg(long, help = "Build in debug mode (faster, for development)")]
     dev: bool,
 
-    #[arg(
-        long,
-        help = "Build the use_cache_transform native addon in addition to the main binary"
-    )]
+    #[arg(long, help = "Build the rari-use-cache native addon in addition to the main binary")]
     addon: bool,
 
     #[arg(
@@ -32,462 +32,6 @@ struct Args {
 
     #[arg(long, value_name = "PLATFORM", help = "Restrict to a single platform (e.g. linux-x64)")]
     platform: Option<String>,
-}
-
-#[derive(Debug, Clone)]
-struct Target {
-    target: &'static str,
-    platform: &'static str,
-    binary_name: &'static str,
-    package_dir: &'static str,
-    napi_triple: &'static str,
-    addon_package_dir: &'static str,
-}
-
-const TARGETS: &[Target] = &[
-    Target {
-        target: "x86_64-unknown-linux-gnu",
-        platform: "linux-x64",
-        binary_name: "rari",
-        package_dir: "packages/rari-linux-x64",
-        napi_triple: "linux-x64-gnu",
-        addon_package_dir: "packages/use-cache-transform-linux-x64",
-    },
-    Target {
-        target: "aarch64-unknown-linux-gnu",
-        platform: "linux-arm64",
-        binary_name: "rari",
-        package_dir: "packages/rari-linux-arm64",
-        napi_triple: "linux-arm64-gnu",
-        addon_package_dir: "packages/use-cache-transform-linux-arm64",
-    },
-    Target {
-        target: "x86_64-apple-darwin",
-        platform: "darwin-x64",
-        binary_name: "rari",
-        package_dir: "packages/rari-darwin-x64",
-        napi_triple: "darwin-x64",
-        addon_package_dir: "packages/use-cache-transform-darwin-x64",
-    },
-    Target {
-        target: "aarch64-apple-darwin",
-        platform: "darwin-arm64",
-        binary_name: "rari",
-        package_dir: "packages/rari-darwin-arm64",
-        napi_triple: "darwin-arm64",
-        addon_package_dir: "packages/use-cache-transform-darwin-arm64",
-    },
-    Target {
-        target: "x86_64-pc-windows-msvc",
-        platform: "win32-x64",
-        binary_name: "rari.exe",
-        package_dir: "packages/rari-win32-x64",
-        napi_triple: "win32-x64-msvc",
-        addon_package_dir: "packages/use-cache-transform-win32-x64",
-    },
-    Target {
-        target: "aarch64-pc-windows-msvc",
-        platform: "win32-arm64",
-        binary_name: "rari.exe",
-        package_dir: "packages/rari-win32-arm64",
-        napi_triple: "win32-arm64-msvc",
-        addon_package_dir: "packages/use-cache-transform-win32-arm64",
-    },
-];
-
-const ADDON_MANIFEST: &str = "crates/use-cache-transform/Cargo.toml";
-const ADDON_BUILD_DIR: &str = ".build/use-cache-transform";
-const ADDON_CANONICAL_PACKAGE_DIR: &str = "packages/use-cache-transform";
-const ADDON_NAPI_PACKAGE_NAME: &str = "@rari/use-cache-transform";
-const ADDON_OUTPUT_FILE: &str = "use_cache_transform.node";
-
-fn log(message: &str) {
-    println!("{} {}", "➜".cyan(), message);
-}
-
-fn log_success(message: &str) {
-    println!("{} {}", "✓".green(), message);
-}
-
-fn log_error(message: &str) {
-    eprintln!("{} {}", "✗".red(), message);
-}
-
-fn log_warning(message: &str) {
-    println!("{} {}", "⚠".yellow(), message);
-}
-
-fn get_current_platform_target() -> Option<&'static Target> {
-    let os = std::env::consts::OS;
-    let arch = std::env::consts::ARCH;
-
-    TARGETS.iter().find(|target| {
-        let parts: Vec<&str> = target.platform.split('-').collect();
-        if parts.len() != 2 {
-            return false;
-        }
-        let (target_os, target_arch) = (parts[0], parts[1]);
-
-        let os_match = match os {
-            "macos" => target_os == "darwin",
-            "linux" => target_os == "linux",
-            "windows" => target_os == "win32",
-            _ => false,
-        };
-
-        let arch_match = match arch {
-            "x86_64" => target_arch == "x64",
-            "aarch64" => target_arch == "arm64",
-            _ => false,
-        };
-
-        os_match && arch_match
-    })
-}
-
-async fn check_rust_installed() -> Result<()> {
-    let output = Command::new("cargo")
-        .arg("--version")
-        .output()
-        .await
-        .context("Failed to check cargo version")?;
-
-    if output.status.success() {
-        log_success("Rust/Cargo is installed");
-        Ok(())
-    } else {
-        log_error("Rust/Cargo is not installed");
-        log_error("Please install Rust: https://rustup.rs/");
-        anyhow::bail!("Rust not installed");
-    }
-}
-
-async fn install_target(target: &str) -> Result<()> {
-    log(&format!("Installing Rust target: {}", target));
-
-    let output = Command::new("rustup")
-        .args(["target", "add", target])
-        .output()
-        .await
-        .context("Failed to install target")?;
-
-    if output.status.success() {
-        log_success(&format!("Installed target: {}", target));
-        Ok(())
-    } else {
-        log_warning(&format!("Failed to install target {}", target));
-        log_warning("You may need to install additional system dependencies");
-        Ok(())
-    }
-}
-
-async fn build_binary(target: &str, project_root: &Path, dev_mode: bool) -> Result<bool> {
-    let build_type = if dev_mode { "debug" } else { "release" };
-    log(&format!("Building binary for {} ({})", target, build_type));
-
-    let mut cmd = Command::new("cargo");
-    cmd.arg("build");
-
-    if !dev_mode {
-        cmd.arg("--release");
-    }
-
-    cmd.args(["--target", target, "--bin", "rari"]).current_dir(project_root);
-
-    if target == "aarch64-unknown-linux-gnu" {
-        cmd.env("CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER", "aarch64-linux-gnu-gcc");
-    }
-
-    let output = cmd.output().await.context("Failed to execute cargo build")?;
-
-    if output.status.success() {
-        log_success(&format!("Built binary for {}", target));
-        Ok(true)
-    } else {
-        log_error(&format!("Failed to build binary for {}", target));
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        log_error(&format!("Error: {}", stderr));
-        Ok(false)
-    }
-}
-
-fn copy_binary_to_platform_package(
-    target_info: &Target,
-    project_root: &Path,
-    dev_mode: bool,
-) -> Result<bool> {
-    let build_type = if dev_mode { "debug" } else { "release" };
-    let source_path = project_root
-        .join("target")
-        .join(target_info.target)
-        .join(build_type)
-        .join(target_info.binary_name);
-
-    let dest_dir = project_root.join(target_info.package_dir).join("bin");
-    let dest_path = dest_dir.join(target_info.binary_name);
-
-    if !source_path.exists() {
-        log_error(&format!("Binary not found: {}", source_path.display()));
-        return Ok(false);
-    }
-
-    if !dest_dir.exists() {
-        fs::create_dir_all(&dest_dir).context("Failed to create destination directory")?;
-        log(&format!("Created directory: {}", dest_dir.display()));
-    }
-
-    fs::copy(&source_path, &dest_path).context("Failed to copy binary")?;
-
-    #[cfg(unix)]
-    if !target_info.platform.starts_with("win32") {
-        let mut perms = fs::metadata(&dest_path)?.permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&dest_path, perms)?;
-
-        if target_info.platform.starts_with("darwin") {
-            if std::env::consts::OS != "macos" {
-                log_warning("Skipping codesign: host OS is not macOS");
-            } else {
-                match dest_path.to_str() {
-                    Some(path_str) => {
-                        let sign_result = std::process::Command::new("codesign")
-                            .args(["-s", "-", path_str])
-                            .output();
-                        match sign_result {
-                            Ok(output) if output.status.success() => {
-                                log_success(&format!("Ad-hoc signed: {}", dest_path.display()));
-                            }
-                            Ok(output) => {
-                                log_warning(&format!(
-                                    "codesign failed: {}",
-                                    String::from_utf8_lossy(&output.stderr)
-                                ));
-                            }
-                            Err(e) => {
-                                log_warning(&format!("codesign not available: {}", e));
-                            }
-                        }
-                    }
-                    None => {
-                        log_warning(&format!(
-                            "Skipping codesign: path contains invalid UTF-8: {}",
-                            dest_path.display()
-                        ));
-                    }
-                }
-            }
-        }
-    }
-
-    log_success(&format!("Copied binary to: {}", dest_path.display()));
-    Ok(true)
-}
-
-fn validate_binary(target_info: &Target, project_root: &Path, dev_mode: bool) -> Result<bool> {
-    let binary_path =
-        project_root.join(target_info.package_dir).join("bin").join(target_info.binary_name);
-
-    if !binary_path.exists() {
-        log_error(&format!("Binary not found: {}", binary_path.display()));
-        return Ok(false);
-    }
-
-    #[cfg(unix)]
-    if !target_info.platform.starts_with("win32") {
-        let metadata = fs::metadata(&binary_path)?;
-        let permissions = metadata.permissions();
-        if permissions.mode() & 0o111 == 0 {
-            log_error(&format!("Binary is not executable: {}", binary_path.display()));
-            return Ok(false);
-        }
-    }
-
-    let metadata = fs::metadata(&binary_path)?;
-    let size_mb = metadata.len() as f64 / 1024.0 / 1024.0;
-    let build_type = if dev_mode { "debug" } else { "release" };
-
-    log_success(&format!(
-        "Binary validated: {} ({:.2} MB, {})",
-        binary_path.display(),
-        size_mb,
-        build_type
-    ));
-    Ok(true)
-}
-
-fn addon_napi_output_path(target_info: &Target, project_root: &Path) -> PathBuf {
-    project_root.join(ADDON_BUILD_DIR).join(format!("index.{}.node", target_info.napi_triple))
-}
-
-fn addon_stable_output_path(target_info: &Target, project_root: &Path) -> PathBuf {
-    project_root.join(ADDON_BUILD_DIR).join(target_info.platform).join(ADDON_OUTPUT_FILE)
-}
-
-fn addon_platform_package_path(target_info: &Target, project_root: &Path) -> PathBuf {
-    project_root.join(target_info.addon_package_dir).join(ADDON_OUTPUT_FILE)
-}
-
-fn addon_canonical_package_path(project_root: &Path) -> PathBuf {
-    project_root.join(ADDON_CANONICAL_PACKAGE_DIR).join(ADDON_OUTPUT_FILE)
-}
-
-async fn build_addon(target_info: &Target, project_root: &Path, dev_mode: bool) -> Result<bool> {
-    log(&format!(
-        "Building use_cache_transform addon for {} ({})",
-        target_info.platform,
-        if dev_mode { "debug" } else { "release" }
-    ));
-
-    let manifest_path = project_root.join(ADDON_MANIFEST);
-    let out_dir = project_root.join(ADDON_BUILD_DIR);
-    fs::create_dir_all(&out_dir).context("Failed to create addon build dir")?;
-
-    let mut args: Vec<String> = vec![
-        "build".to_string(),
-        "--platform".to_string(),
-        "--js-package-name".to_string(),
-        ADDON_NAPI_PACKAGE_NAME.to_string(),
-        "--manifest-path".to_string(),
-        manifest_path.to_string_lossy().to_string(),
-        "--output-dir".to_string(),
-        out_dir.to_string_lossy().to_string(),
-        "--strip".to_string(),
-    ];
-    if !dev_mode {
-        args.push("--release".to_string());
-    }
-    args.push("--".to_string());
-    args.push("--target".to_string());
-    args.push(target_info.target.to_string());
-
-    log(&format!("running: napi {}", args.join(" ")));
-
-    let program = if cfg!(windows) { "napi.cmd" } else { "napi" };
-    let output = Command::new(program)
-        .args(&args)
-        .current_dir(project_root)
-        .output()
-        .await
-        .context("Failed to execute napi build")?;
-
-    if !output.status.success() {
-        log_error(&format!("Failed to build addon for {}", target_info.platform));
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        if !stderr.is_empty() {
-            log_error(&format!("stderr: {}", stderr));
-        }
-        if !stdout.is_empty() {
-            log_error(&format!("stdout: {}", stdout));
-        }
-        return Ok(false);
-    }
-
-    let src = addon_napi_output_path(target_info, project_root);
-    if !src.exists() {
-        log_error(&format!("expected addon artifact not found: {}", src.display()));
-        return Ok(false);
-    }
-
-    let stable = addon_stable_output_path(target_info, project_root);
-    if let Some(parent) = stable.parent() {
-        fs::create_dir_all(parent).context("Failed to create per-platform addon build dir")?;
-    }
-    if src != stable {
-        if stable.exists() {
-            fs::remove_file(&stable).context("Failed to remove stale addon artifact")?;
-        }
-        fs::rename(&src, &stable).context("Failed to rename addon artifact")?;
-    }
-
-    if let Some(parent) = stable.parent() {
-        for sibling in ["index.js", "index.d.ts"] {
-            let p = parent.join(sibling);
-            if p.exists() {
-                let _ = fs::remove_file(&p);
-            }
-        }
-    }
-
-    log_success(&format!("Built addon for {}", target_info.platform));
-    Ok(true)
-}
-
-fn copy_addon_to_platform_package(
-    target_info: &Target,
-    project_root: &Path,
-    dev_mode: bool,
-) -> Result<bool> {
-    let src = addon_stable_output_path(target_info, project_root);
-    if !src.exists() {
-        log_error(&format!("Addon artifact not found: {}", src.display()));
-        return Ok(false);
-    }
-
-    let dest = addon_platform_package_path(target_info, project_root);
-    if let Some(parent) = dest.parent() {
-        fs::create_dir_all(parent).context("Failed to create addon package dir")?;
-    }
-    fs::copy(&src, &dest).context("Failed to copy addon artifact")?;
-    log_success(&format!("Copied addon to: {}", dest.display()));
-
-    let _ = dev_mode;
-    Ok(true)
-}
-
-fn copy_addon_canonical(target_info: &Target, project_root: &Path) -> Result<bool> {
-    let src = addon_stable_output_path(target_info, project_root);
-    if !src.exists() {
-        log_error(&format!("Addon artifact not found: {}", src.display()));
-        return Ok(false);
-    }
-
-    let dest = addon_canonical_package_path(project_root);
-    if let Some(parent) = dest.parent() {
-        fs::create_dir_all(parent).context("Failed to create canonical addon package dir")?;
-    }
-    fs::copy(&src, &dest).context("Failed to copy addon to canonical location")?;
-    log_success(&format!("Copied addon to canonical dev location: {}", dest.display()));
-    Ok(true)
-}
-
-fn validate_addon(target_info: &Target, project_root: &Path) -> Result<bool> {
-    let dest = addon_platform_package_path(target_info, project_root);
-    if !dest.exists() {
-        log_error(&format!("Addon not found: {}", dest.display()));
-        return Ok(false);
-    }
-    let metadata = fs::metadata(&dest)?;
-    let size_kb = metadata.len() as f64 / 1024.0;
-    log_success(&format!("Addon validated: {} ({:.2} KB)", dest.display(), size_kb));
-    Ok(true)
-}
-
-async fn install_linux_cross_compiler() -> Result<()> {
-    if std::env::consts::OS != "linux" {
-        return Ok(());
-    }
-
-    log("Installing Linux ARM64 cross-compiler...");
-
-    let output = Command::new("sh")
-        .args(["-c", "sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu"])
-        .output()
-        .await;
-
-    match output {
-        Ok(output) if output.status.success() => {
-            log_success("Installed Linux ARM64 cross-compiler");
-        }
-        _ => {
-            log_warning("Failed to install Linux ARM64 cross-compiler");
-            log_warning(
-                "You may need to install it manually: sudo apt-get install gcc-aarch64-linux-gnu",
-            );
-        }
-    }
-
-    Ok(())
 }
 
 #[tokio::main]
@@ -505,7 +49,7 @@ async fn main() -> Result<()> {
 
     println!(
         "{}",
-        "🔧 Preparing Rari platform artifacts (binary and/or use_cache_transform addon)".bold()
+        "🔧 Preparing rari platform artifacts (binary and/or rari-use-cache addon)".bold()
     );
     println!();
 
@@ -618,7 +162,7 @@ async fn main() -> Result<()> {
 
     // ---- Addon ----
     if do_build_addon {
-        log("Building use_cache_transform addon...");
+        log("Building rari-use-cache addon...");
         for target_info in &targets_to_build {
             let success = build_addon(target_info, &project_root, args.dev).await?;
             if success {
@@ -639,7 +183,7 @@ async fn main() -> Result<()> {
 
         log("Copying addon to platform packages...");
         for target_info in &targets_to_build {
-            let src = addon_stable_output_path(target_info, &project_root);
+            let src = addon_stable_output_path_public(target_info, &project_root);
             if src.exists() {
                 let success = copy_addon_to_platform_package(target_info, &project_root, args.dev)?;
                 if !success {
@@ -726,7 +270,9 @@ async fn main() -> Result<()> {
                         println!("  • {} (binary)", target_info.platform.green());
                     }
                 }
-                if do_build_addon && addon_stable_output_path(target_info, &project_root).exists() {
+                if do_build_addon
+                    && addon_stable_output_path_public(target_info, &project_root).exists()
+                {
                     println!("  • {} (addon)", target_info.platform.green());
                 }
             }

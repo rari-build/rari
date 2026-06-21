@@ -902,9 +902,9 @@ checksum = "8f1fe948ff07f4bd06c30984e69f5b4899c516a3ef74f34df92a2df2ab535495"
 
 [[package]]
 name = "bytes"
-version = "1.11.1"
+version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e748733b7cbc798e1434b6ac524f0c1ff2ab456fe201501e6497c8417a4fc33"
+checksum = "8ae3f5d315924270530207e2a68396c3cc547f6dca3fbdca317cfb1a51edb593"
 dependencies = [
  "serde",
 ]
@@ -1219,18 +1219,18 @@ checksum = "a6ef517f0926dd24a1582492c791b6a4818a4d94e789a334894aa15b0d12f55c"
 
 [[package]]
 name = "convert_case"
-version = "0.6.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec182b0ca2f35d8fc196cf3404988fd8b8c739a4d270ff118a398feb0cbec1ca"
+checksum = "633458d4ef8c78b72454de2d54fd6ab2e60f9e02be22f3c6104cdc8a4e0fceb9"
 dependencies = [
  "unicode-segmentation",
 ]
 
 [[package]]
 name = "convert_case"
-version = "0.10.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "633458d4ef8c78b72454de2d54fd6ab2e60f9e02be22f3c6104cdc8a4e0fceb9"
+checksum = "affbf0190ed2caf063e3def54ff444b449371d55c58e513a95ab98eca50adb49"
 dependencies = [
  "unicode-segmentation",
 ]
@@ -1596,13 +1596,9 @@ dependencies = [
 
 [[package]]
 name = "ctor"
-version = "0.2.9"
+version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32a2785755761f3ddc1492979ce1e48d2c00d09311c39e4466429188f3dd6501"
-dependencies = [
- "quote",
- "syn 2.0.118",
-]
+checksum = "01334b89b69ff726750c5ce5073fc8bd860e99aa9a8fc5ca11b04730e3aee97a"
 
 [[package]]
 name = "ctr"
@@ -5383,6 +5379,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "libloading"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "754ca22de805bb5744484a5b151a9e1a8e837d5dc232c2d7d8c2e3492edc8b60"
+dependencies = [
+ "cfg-if",
+ "windows-link",
+]
+
+[[package]]
 name = "libm"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5747,15 +5753,17 @@ dependencies = [
 
 [[package]]
 name = "napi"
-version = "2.16.17"
+version = "3.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "55740c4ae1d8696773c78fdafd5d0e5fe9bc9f1b071c7ba493ba5c413a9184f3"
+checksum = "fbd9f9295f3ff5921e78a71222c3361a8216f7760b1a99a6ad4e8441de18bbb9"
 dependencies = [
  "bitflags 2.13.0",
  "ctor",
- "napi-derive",
+ "futures",
+ "napi-build",
  "napi-sys",
- "once_cell",
+ "nohash-hasher",
+ "rustc-hash 2.1.2",
  "serde",
  "serde_json",
 ]
@@ -5768,12 +5776,12 @@ checksum = "c9c366d2c8c60b86fa632df75f745509b52f9128f91a6bad4c796e44abb505e1"
 
 [[package]]
 name = "napi-derive"
-version = "2.16.13"
+version = "3.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7cbe2585d8ac223f7d34f13701434b9d5f4eb9c332cccce8dee57ea18ab8ab0c"
+checksum = "89b3f766e04667e6da0e181e2da4f85475d5a6513b7cf6a80bea184e224a5b42"
 dependencies = [
- "cfg-if",
- "convert_case 0.6.0",
+ "convert_case 0.11.0",
+ "ctor",
  "napi-derive-backend",
  "proc-macro2",
  "quote",
@@ -5782,26 +5790,24 @@ dependencies = [
 
 [[package]]
 name = "napi-derive-backend"
-version = "1.0.75"
+version = "5.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1639aaa9eeb76e91c6ae66da8ce3e89e921cd3885e99ec85f4abacae72fc91bf"
+checksum = "0d5af30503edf933ce7377cf6d4c877a62b0f1107ea05585f1b5e430e88d5baf"
 dependencies = [
- "convert_case 0.6.0",
- "once_cell",
+ "convert_case 0.11.0",
  "proc-macro2",
  "quote",
- "regex",
  "semver",
  "syn 2.0.118",
 ]
 
 [[package]]
 name = "napi-sys"
-version = "2.4.0"
+version = "3.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "427802e8ec3a734331fec1035594a210ce1ff4dc5bc1950530920ab717964ea3"
+checksum = "1f5bcdf71abd3a50d00b49c1c2c75251cb3c913777d6139cd37dabc093a5e400"
 dependencies = [
- "libloading 0.8.9",
+ "libloading 0.9.0",
 ]
 
 [[package]]
@@ -5937,6 +5943,12 @@ dependencies = [
  "serde_json",
  "url",
 ]
+
+[[package]]
+name = "nohash-hasher"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2bf50223579dc7cdcfb3bfcacf7069ff68243f8c363f62ffa99cf000a6b9c451"
 
 [[package]]
 name = "nom"
@@ -7242,7 +7254,6 @@ dependencies = [
  "lru",
  "nix 0.30.1",
  "node_resolver",
- "num-bigint-dig",
  "parking_lot",
  "parley",
  "regex",
@@ -7319,15 +7330,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "rari-use-cache"
+version = "0.0.0"
+dependencies = [
+ "deno_ast",
+ "hex",
+ "napi",
+ "napi-build",
+ "napi-derive",
+ "rustc-hash 2.1.2",
+ "sha2 0.11.0",
+]
+
+[[package]]
 name = "ratatui"
-version = "0.30.1"
+version = "0.30.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1695748e3a735b34968c887ceea5a380b43545903868ae8f5b666593100f6b68"
+checksum = "3274ba0a2c5e1bcad2a2005d20f4dc59dad26b2eb0940fb094500dba4099d57d"
 dependencies = [
  "instability",
  "ratatui-core",
  "ratatui-crossterm",
  "ratatui-macros",
+ "ratatui-termina",
  "ratatui-termwiz",
  "ratatui-widgets",
  "serde",
@@ -7335,15 +7360,14 @@ dependencies = [
 
 [[package]]
 name = "ratatui-core"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42d3603f354bba8c595fa47860e60142d7372b7210c27044c6a7d0e1a4336b44"
+checksum = "cbb175c433c8e28a809d1f5773a2ae96e68c0ce40db865cbab1020bf33ae479c"
 dependencies = [
  "bitflags 2.13.0",
  "compact_str 0.9.1",
  "critical-section",
  "hashbrown 0.17.1",
- "indoc",
  "itertools 0.14.0",
  "kasuari",
  "lru",
@@ -7358,9 +7382,9 @@ dependencies = [
 
 [[package]]
 name = "ratatui-crossterm"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b2867bedcbd6a690ca4f8672a687b730ec07660c79844517b084311b529980c"
+checksum = "567584a3b0e6a8203c23de40b4861497266725eb5363dbfd18a1edd603cca9f0"
 dependencies = [
  "cfg-if",
  "crossterm",
@@ -7370,19 +7394,30 @@ dependencies = [
 
 [[package]]
 name = "ratatui-macros"
-version = "0.7.1"
+version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80fac59720679490d89d200df411faa249be728681adcabed3d047ae72c48f1d"
+checksum = "ed7dc68daa7498a43e4d68e0eb078427e10c38fbcfbb1e42d955f1fa2140d814"
 dependencies = [
  "ratatui-core",
  "ratatui-widgets",
 ]
 
 [[package]]
-name = "ratatui-termwiz"
-version = "0.1.1"
+name = "ratatui-termina"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "386b8ff8f74ed749509391c56d549761a2fcdb408e1f42e467286bcb7dac8967"
+checksum = "c0bf912d9e66f057a759d92e386a280ea886b352ab757d6ac4d653c7ed2c43c2"
+dependencies = [
+ "instability",
+ "ratatui-core",
+ "termina",
+]
+
+[[package]]
+name = "ratatui-termwiz"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "faf03e0380b7744054d6cb74224fe3adf062a029754933f575ca1e3b4c2ce977"
 dependencies = [
  "ratatui-core",
  "termwiz",
@@ -7390,9 +7425,9 @@ dependencies = [
 
 [[package]]
 name = "ratatui-widgets"
-version = "0.3.1"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ef4f17dd7ac3abf5adc2b920a03c61eee4bfe6a88fa5191936895525371d79c"
+checksum = "66e3d19bcc9130ca376277d93b60767ff121ace3be06f5f95f81dd68956407d1"
 dependencies = [
  "bitflags 2.13.0",
  "hashbrown 0.17.1",
@@ -9198,9 +9233,9 @@ dependencies = [
 
 [[package]]
 name = "taffy"
-version = "0.10.1"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aea22054047c16c3f34d3ac473a2170be1424b1115b2a3adcf28cfb067c88859"
+checksum = "dfde4e2f8595f222ceaae1fb16b4963952e9b33e358869dc4cd6316b0e0790cd"
 dependencies = [
  "arrayvec",
  "grid",
@@ -9280,6 +9315,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06794f8f6c5c898b3275aebefa6b8a1cb24cd2c6c79397ab15774837a0bc5755"
 dependencies = [
  "winapi-util",
+]
+
+[[package]]
+name = "termina"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9048a889effe34a5cddee0af7f53285198b16dca3be510858d38dfdb3e62a04e"
+dependencies = [
+ "bitflags 2.13.0",
+ "parking_lot",
+ "rustix 1.1.4",
+ "signal-hook",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -10008,19 +10056,6 @@ dependencies = [
  "regex",
  "serde",
  "url",
-]
-
-[[package]]
-name = "use-cache-transform"
-version = "0.1.0"
-dependencies = [
- "deno_ast",
- "hex",
- "napi",
- "napi-build",
- "napi-derive",
- "rustc-hash 2.1.2",
- "sha1",
 ]
 
 [[package]]

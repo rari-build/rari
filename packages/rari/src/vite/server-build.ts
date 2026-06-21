@@ -17,7 +17,7 @@ import { resolveAlias } from './alias-resolver'
 import { getReadableComponentId, getComponentId as getSharedComponentId, getProjectRelativePath as getSharedProjectRelativePath, hashString as sharedHashString } from './component-ids'
 import { getDirectives, hasDefaultExport, hasTopLevelUseClientDirective, hasTopLevelUseServerDirective } from './directives'
 import { resolveIndexFile, resolveWithExtensions } from './file-resolver'
-import { transformUseCacheModule } from './use-cache-transform'
+import { getUseCacheTransform } from './use-cache-loader'
 
 const HTML_IMPORT_REGEX = /import\s*\(\s*["']([^"']+)["']\s*\)|import\s+["']([^"']+)["']/g
 const CODE_IMPORT_REGEX = /from\s+['"]([^'"]+)['"]|import\s*\(\s*['"]([^'"]+)['"]\s*\)|import\s+['"]([^'"]+)['"]/g
@@ -1069,12 +1069,17 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
         },
       },
       {
-        name: 'use-cache-transform',
-        transform(code: string, id: string) {
+        name: 'use-cache',
+        async transform(code: string, id: string) {
           if (!self.options.experimental?.useCache)
             return null
 
-          return transformUseCacheModule(code, id)
+          const transform = await getUseCacheTransform()
+          if (!transform) {
+            return null
+          }
+
+          return transform(code, id)
         },
       },
     ]

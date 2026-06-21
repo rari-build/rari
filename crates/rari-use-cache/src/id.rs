@@ -1,4 +1,4 @@
-use sha1::{Digest, Sha1};
+use sha2::{Digest, Sha256};
 
 pub fn generate_reference_id(
     hash_salt: &str,
@@ -6,7 +6,7 @@ pub fn generate_reference_id(
     export_name: &str,
     is_cache: bool,
 ) -> String {
-    let mut hasher = Sha1::new();
+    let mut hasher = Sha256::new();
     hasher.update(hash_salt.as_bytes());
     hasher.update(filename.as_bytes());
     hasher.update(b":");
@@ -40,8 +40,8 @@ mod tests {
     #[test]
     fn test_generate_reference_id_is_hex() {
         let id = generate_reference_id("salt", "file.tsx", "getData", true);
-        // SHA1 = 40 hex chars + 2 for type byte = 42 hex chars
-        assert_eq!(id.len(), 42);
+        // SHA256 = 64 hex chars + 2 for type byte = 66 hex chars
+        assert_eq!(id.len(), 66);
         assert!(id.chars().all(|c| c.is_ascii_hexdigit()));
     }
 

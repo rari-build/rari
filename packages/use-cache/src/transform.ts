@@ -1,5 +1,5 @@
-import type { NativeAddon } from '@rari/use-cache-transform'
-import nativeAddon, { transformUseCache } from '@rari/use-cache-transform'
+import type { NativeAddon } from './native'
+import nativeAddon, { transformUseCache } from './native'
 
 const USE_CACHE_FUNCTION_REGEX = /['"]use\s+cache(?::\s*[\w-]+)?['"]/
 const DIRECTIVE_PROLOGUE_REGEX = /^['"][^'"]+['"];?\s*$/
@@ -12,11 +12,15 @@ let addon: NativeAddon | null = null
 let addonLoadAttempted = false
 
 function getAddon(): NativeAddon | null {
-  if (addonLoadAttempted) {
+  if (addonLoadAttempted)
     return addon
-  }
+
   addonLoadAttempted = true
   addon = nativeAddon
+
+  if (!addon)
+    console.warn('[use-cache] Native addon not available — transforms will be skipped')
+
   return addon
 }
 
@@ -29,56 +33,59 @@ function extractPrologueLines(code: string): string[] {
       prologue.push(line)
       continue
     }
-    if (DIRECTIVE_PROLOGUE_REGEX.test(trimmed)) {
+    if (DIRECTIVE_PROLOGUE_REGEX.test(trimmed))
       prologue.push(line)
-    }
-    else {
+    else
       break
-    }
   }
 
   return prologue
 }
 
-export function transformUseCacheModule(code: string, id: string): string | null {
-  if (!hasUseCacheFunction(code)) {
-    return null
-  }
+export interface UseCacheTransformOptions {
+  hashSalt?: string
+  cacheKinds?: string[]
+}
 
-  console.error(`[use-cache-transform] found 'use cache' directive in ${id}`)
+export function transformUseCacheModule(
+  code: string,
+  id: string,
+  options: UseCacheTransformOptions = {},
+): string | null {
+  if (!hasUseCacheFunction(code))
+    return null
+
+  console.error(`[use-cache] found 'use cache' directive in ${id}`)
 
   const native = getAddon()
   if (!native) {
-    console.error(`[use-cache-transform] NO ADDON — skipping transform for ${id}`)
+    console.error(`[use-cache] NO ADDON — skipping transform for ${id}`)
     return null
   }
 
   try {
     const result = transformUseCache(code, {
       filename: id,
-      hashSalt: 'rari-use-cache-v1',
-      cacheKinds: ['default'],
+      hashSalt: options.hashSalt ?? 'rari-use-cache-v1',
+      cacheKinds: options.cacheKinds ?? ['default'],
     })
 
     if (result.code === code) {
-      console.error(`[use-cache-transform] addon returned unchanged code for ${id}`)
+      console.error(`[use-cache] addon returned unchanged code for ${id}`)
       return null
     }
 
-    console.error(`[use-cache-transform] transformed ${id} (needsCacheWrapper=${result.needsCacheWrapper}, needsRegisterRef=${result.needsRegisterRef})`)
+    console.error(`[use-cache] transformed ${id} (needsCacheWrapper=${result.needsCacheWrapper}, needsRegisterRef=${result.needsRegisterRef})`)
 
     const imports = []
-    if (result.needsReactCache) {
+    if (result.needsReactCache)
       imports.push(`import { cache as $$reactCache__ } from 'react'`)
-    }
 
-    if (result.needsCacheWrapper) {
-      imports.push(`import { $$cache__, encodeBoundArgs } from 'rari/runtime/cache-wrapper'`)
-    }
+    if (result.needsCacheWrapper)
+      imports.push(`import { $$cache__, encodeBoundArgs } from '@rari/use-cache/runtime/cache-wrapper'`)
 
-    if (result.needsRegisterRef) {
+    if (result.needsRegisterRef)
       imports.push(`import { registerServerReference } from 'rari/runtime/react-server-dom-shim'`)
-    }
 
     const prologueLines = extractPrologueLines(result.code)
     const importBlock = imports.length ? `${imports.join(';\n')};\n` : ''
@@ -92,7 +99,7 @@ export function transformUseCacheModule(code: string, id: string): string | null
     return `${importBlock}${result.code}`
   }
   catch (err) {
-    console.error(`[use-cache-transform] addon threw for ${id}:`, err)
+    console.error(`[use-cache] addon threw for ${id}:`, err)
     throw new Error(
       `Failed to transform 'use cache' directive in ${id}: ${err instanceof Error ? err.message : String(err)}`,
     )

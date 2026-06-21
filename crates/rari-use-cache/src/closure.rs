@@ -1,10 +1,10 @@
-use rustc_hash::FxHashSet as HashSet;
+use rustc_hash::FxHashSet;
 
 use deno_ast::swc::ast::*;
 use deno_ast::swc::ecma_visit::{Visit, VisitWith};
 
-pub fn collect_module_level_idents(item: &ModuleItem) -> HashSet<Id> {
-    let mut idents = HashSet::default();
+pub fn collect_module_level_idents(item: &ModuleItem) -> FxHashSet<Id> {
+    let mut idents = FxHashSet::default();
 
     match item {
         ModuleItem::Stmt(Stmt::Decl(Decl::Fn(FnDecl { ident, .. }))) => {
@@ -71,7 +71,7 @@ pub fn collect_module_level_idents(item: &ModuleItem) -> HashSet<Id> {
     idents
 }
 
-fn collect_var_decl_idents(pattern: &Pat, idents: &mut HashSet<Id>) {
+fn collect_var_decl_idents(pattern: &Pat, idents: &mut FxHashSet<Id>) {
     match pattern {
         Pat::Ident(ident) => {
             idents.insert(ident.to_id());
@@ -100,7 +100,7 @@ fn collect_var_decl_idents(pattern: &Pat, idents: &mut HashSet<Id>) {
     }
 }
 
-fn collect_bindings_from_pat(pat: &Pat, scope: &mut HashSet<Id>) {
+fn collect_bindings_from_pat(pat: &Pat, scope: &mut FxHashSet<Id>) {
     match pat {
         Pat::Ident(bi) => {
             scope.insert(bi.id.to_id());
@@ -129,15 +129,15 @@ fn collect_bindings_from_pat(pat: &Pat, scope: &mut HashSet<Id>) {
 
 pub fn collect_closure_idents(
     body: &BlockStmt,
-    module_idents: &HashSet<Id>,
-    fn_params: &HashSet<Id>,
+    module_idents: &FxHashSet<Id>,
+    fn_params: &FxHashSet<Id>,
     fn_ident: Option<&Ident>,
 ) -> Vec<String> {
     struct ClosureCollector {
-        module_idents: HashSet<Id>,
-        fn_params: HashSet<Id>,
-        function_scope_stack: Vec<HashSet<Id>>,
-        scope_stack: Vec<HashSet<Id>>,
+        module_idents: FxHashSet<Id>,
+        fn_params: FxHashSet<Id>,
+        function_scope_stack: Vec<FxHashSet<Id>>,
+        scope_stack: Vec<FxHashSet<Id>>,
         found: Vec<String>,
     }
 
@@ -202,7 +202,7 @@ pub fn collect_closure_idents(
         }
 
         fn visit_block_stmt(&mut self, block: &BlockStmt) {
-            self.scope_stack.push(HashSet::default());
+            self.scope_stack.push(FxHashSet::default());
             block.visit_children_with(self);
             self.scope_stack.pop();
         }
@@ -220,7 +220,7 @@ pub fn collect_closure_idents(
         }
 
         fn visit_function(&mut self, f: &Function) {
-            let mut new_function_scope = HashSet::default();
+            let mut new_function_scope = FxHashSet::default();
             for param in &f.params {
                 collect_bindings_from_pat(&param.pat, &mut new_function_scope);
             }
@@ -230,7 +230,7 @@ pub fn collect_closure_idents(
         }
 
         fn visit_arrow_expr(&mut self, a: &ArrowExpr) {
-            let mut new_function_scope = HashSet::default();
+            let mut new_function_scope = FxHashSet::default();
             for param in &a.params {
                 collect_bindings_from_pat(param, &mut new_function_scope);
             }
@@ -240,7 +240,7 @@ pub fn collect_closure_idents(
         }
 
         fn visit_catch_clause(&mut self, clause: &CatchClause) {
-            let mut new_scope = HashSet::default();
+            let mut new_scope = FxHashSet::default();
             if let Some(param) = &clause.param {
                 collect_bindings_from_pat(param, &mut new_scope);
             }
@@ -250,19 +250,19 @@ pub fn collect_closure_idents(
         }
 
         fn visit_for_stmt(&mut self, stmt: &ForStmt) {
-            self.scope_stack.push(HashSet::default());
+            self.scope_stack.push(FxHashSet::default());
             stmt.visit_children_with(self);
             self.scope_stack.pop();
         }
 
         fn visit_for_in_stmt(&mut self, stmt: &ForInStmt) {
-            self.scope_stack.push(HashSet::default());
+            self.scope_stack.push(FxHashSet::default());
             stmt.visit_children_with(self);
             self.scope_stack.pop();
         }
 
         fn visit_for_of_stmt(&mut self, stmt: &ForOfStmt) {
-            self.scope_stack.push(HashSet::default());
+            self.scope_stack.push(FxHashSet::default());
             stmt.visit_children_with(self);
             self.scope_stack.pop();
         }
@@ -276,7 +276,7 @@ pub fn collect_closure_idents(
     let mut collector = ClosureCollector {
         module_idents: module_idents.clone(),
         fn_params: fn_params.clone(),
-        function_scope_stack: vec![HashSet::default()],
+        function_scope_stack: vec![FxHashSet::default()],
         scope_stack: vec![outer_scope],
         found: Vec::new(),
     };
@@ -288,15 +288,15 @@ pub fn collect_closure_idents(
     collector.found
 }
 
-pub fn collect_fn_params(f: &Function) -> HashSet<Id> {
-    let mut params = HashSet::default();
+pub fn collect_fn_params(f: &Function) -> FxHashSet<Id> {
+    let mut params = FxHashSet::default();
     for param in &f.params {
         collect_pat_idents(&param.pat, &mut params);
     }
     params
 }
 
-fn collect_pat_idents(pattern: &Pat, idents: &mut HashSet<Id>) {
+fn collect_pat_idents(pattern: &Pat, idents: &mut FxHashSet<Id>) {
     match pattern {
         Pat::Ident(ident) => {
             idents.insert(ident.to_id());

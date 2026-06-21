@@ -13,10 +13,10 @@ try {
   const ext = process.platform === 'win32' ? '.dll' : process.platform === 'darwin' ? '.dylib' : '.so'
 
   const candidates = [
-    path.join(repoRoot, 'target/release/use_cache_transform.node'),
-    path.join(repoRoot, 'target/release/libuse_cache_transform', ext),
-    path.join(repoRoot, 'target/debug/use_cache_transform.node'),
-    path.join(repoRoot, 'target/debug/libuse_cache_transform', ext),
+    path.join(repoRoot, 'target/release/rari_use_cache.node'),
+    path.join(repoRoot, `target/release/librari_use_cache${ext}`),
+    path.join(repoRoot, 'target/debug/rari_use_cache.node'),
+    path.join(repoRoot, `target/debug/librari_use_cache${ext}`),
   ]
 
   for (const addonPath of candidates) {
@@ -57,7 +57,7 @@ function fixturePath(name: string): string {
 
 const addonDescribe = useCacheAddon ? describe : describe.skip
 
-addonDescribe('use-cache-transform addon', () => {
+addonDescribe('use-cache addon', () => {
   describe('detectUseCache', () => {
     it('returns true for double-quoted use cache directive', () => {
       expect(useCacheAddon.detectUseCache('"use cache";')).toBe(true)
@@ -325,7 +325,7 @@ async function getData(id) {
       expect(result.code).toContain('$$ACTION_BOUND_ARGS)=>async (...args)=>')
       expect(result.code).toContain('encodeBoundArgs(')
       expect(result.code).not.toContain('async function getData([$$ACTION_ARG_0], id)')
-      expect(result.code).toMatch(/"[\da-f]{42}"/)
+      expect(result.code).toMatch(/"[\da-f]{66}"/)
     })
 
     it('does not capture body-level bindings that shadow module bindings', () => {
@@ -531,7 +531,7 @@ async function getData(input) {
 
 const pluginDescribe = useCacheAddon ? describe : describe.skip
 
-pluginDescribe('use-cache-transform Vite plugin integration', () => {
+pluginDescribe('use-cache Vite plugin integration', () => {
   let mainPlugin: any
 
   beforeAll(() => {
@@ -544,7 +544,7 @@ pluginDescribe('use-cache-transform Vite plugin integration', () => {
     cleanFixtures()
   })
 
-  it('transforms use cache and returns code with imports', () => {
+  it('transforms use cache and returns code with imports', async () => {
     const source = `
 async function getData(id) {
   "use cache";
@@ -554,7 +554,7 @@ async function getData(id) {
     const filePath = fixturePath('basic.tsx')
     writeFixture(path.basename(filePath), source)
     const p = mainPlugin.transform as any
-    const result = p.call(
+    const result = await p.call(
       { environment: { name: 'rsc' } },
       source,
       filePath,
@@ -562,7 +562,7 @@ async function getData(id) {
 
     expect(result).not.toBeNull()
     expect(result).not.toContain('import { cache as $$reactCache__ } from \'react\'')
-    expect(result).toContain('import { $$cache__, encodeBoundArgs } from \'rari/runtime/cache-wrapper\'')
+    expect(result).toContain('import { $$cache__, encodeBoundArgs } from \'@rari/use-cache/runtime/cache-wrapper\'')
     expect(result).toContain('import { registerServerReference } from \'rari/runtime/react-server-dom-shim\'')
     expect(result).not.toContain('$$reactCache__')
     expect(result).toContain('$$cache__')
@@ -570,12 +570,12 @@ async function getData(id) {
     expect(result).not.toContain('"use cache"')
   })
 
-  it('falls back when no use cache directive present', () => {
+  it('falls back when no use cache directive present', async () => {
     const source = 'const x = 1;\nexport function hello() { return 42; }'
     const filePath = fixturePath('no-cache.tsx')
     writeFixture(path.basename(filePath), source)
     const p = mainPlugin.transform as any
-    const result = p.call(
+    const result = await p.call(
       { environment: { name: 'rsc' } },
       source,
       filePath,
@@ -588,7 +588,7 @@ async function getData(id) {
     expect(result).toContain('const x = 1')
   })
 
-  it('applies use cache transform for files outside src/ (fallback path)', () => {
+  it('applies use cache transform for files outside src/ (fallback path)', async () => {
     const source = `
 async function getData() {
   "use cache";
@@ -603,7 +603,7 @@ async function getData() {
     const p = mainPlugin.transform as any
     let result
     try {
-      result = p.call(
+      result = await p.call(
         { environment: { name: 'rsc' } },
         source,
         filePath,
@@ -616,7 +616,7 @@ async function getData() {
     }
   })
 
-  it('handles file with use cache followed by use server at module level', () => {
+  it('handles file with use cache followed by use server at module level', async () => {
     const source = `
 "use server";
 
@@ -632,7 +632,7 @@ export async function action() {
     const filePath = fixturePath('mixed.tsx')
     writeFixture(path.basename(filePath), source)
     const p = mainPlugin.transform as any
-    const result = p.call(
+    const result = await p.call(
       { environment: { name: 'rsc' } },
       source,
       filePath,
@@ -644,7 +644,7 @@ export async function action() {
     expect(result).toContain('registerServerReference')
   })
 
-  it('processes file with multiple use cache functions', () => {
+  it('processes file with multiple use cache functions', async () => {
     const source = `
 async function getData(id) {
   "use cache";
@@ -658,7 +658,7 @@ async function fetchUser(name) {
     const filePath = fixturePath('multiple.tsx')
     writeFixture(path.basename(filePath), source)
     const p = mainPlugin.transform as any
-    const result = p.call(
+    const result = await p.call(
       { environment: { name: 'rsc' } },
       source,
       filePath,
@@ -669,7 +669,7 @@ async function fetchUser(name) {
     expect(result).toContain('$$RSC_SERVER_CACHE_1_fetchUser_INNER')
   })
 
-  it('skips use cache transform for client environment', () => {
+  it('skips use cache transform for client environment', async () => {
     const source = `
 "use client";
 
@@ -684,7 +684,7 @@ export default getData;
     writeFixture(path.basename(filePath), source)
 
     const p = mainPlugin.transform as any
-    const result = p.call(
+    const result = await p.call(
       { environment: { name: 'client' } },
       source,
       filePath,
@@ -697,7 +697,7 @@ export default getData;
     expect(result).toContain('export default getData')
   })
 
-  it('non-TSX/JS files are skipped', () => {
+  it('non-TSX/JS files are skipped', async () => {
     const source = `
 async function getData() {
   "use cache";
@@ -705,7 +705,7 @@ async function getData() {
 }
 `
     const p = mainPlugin.transform as any
-    const result = p.call(
+    const result = await p.call(
       { environment: { name: 'rsc' } },
       source,
       '/test/plain.css',
