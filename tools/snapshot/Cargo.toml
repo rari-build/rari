@@ -5,10 +5,6 @@ edition = { workspace = true }
 license = { workspace = true }
 publish = false
 
-[[bin]]
-name = "build-snapshot"
-path = "src/main.rs"
-
 [dependencies]
 deno_ast = { workspace = true }
 deno_core = { workspace = true }
