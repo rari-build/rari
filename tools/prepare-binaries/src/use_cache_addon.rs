@@ -6,7 +6,6 @@ use tokio::process::Command;
 use crate::common::{Target, get_current_platform_target, log, log_error, log_success};
 
 const ADDON_BUILD_DIR: &str = ".build/rari-use-cache";
-const ADDON_CANONICAL_PACKAGE_DIR: &str = "packages/use-cache";
 const ADDON_OUTPUT_FILE: &str = "rari_use_cache.node";
 
 fn addon_napi_output_path(target_info: &Target, project_root: &Path) -> PathBuf {
@@ -19,10 +18,6 @@ fn addon_stable_output_path(target_info: &Target, project_root: &Path) -> PathBu
 
 fn addon_platform_package_path(target_info: &Target, project_root: &Path) -> PathBuf {
     project_root.join(target_info.addon_package_dir).join(ADDON_OUTPUT_FILE)
-}
-
-fn addon_canonical_package_path(project_root: &Path) -> PathBuf {
-    project_root.join(ADDON_CANONICAL_PACKAGE_DIR).join(ADDON_OUTPUT_FILE)
 }
 
 pub async fn build_addon(
@@ -153,7 +148,7 @@ pub async fn build_addon(
 pub fn copy_addon_to_platform_package(
     target_info: &Target,
     project_root: &Path,
-    dev_mode: bool,
+    _dev_mode: bool,
 ) -> Result<bool> {
     let src = addon_stable_output_path(target_info, project_root);
     if !src.exists() {
@@ -168,23 +163,9 @@ pub fn copy_addon_to_platform_package(
     fs::copy(&src, &dest).context("Failed to copy addon artifact")?;
     log_success(&format!("Copied addon to: {}", dest.display()));
 
-    let _ = dev_mode;
-    Ok(true)
-}
+    let package_dir = project_root.join(target_info.addon_package_dir);
+    generate_platform_package_files(target_info, &package_dir)?;
 
-pub fn copy_addon_canonical(target_info: &Target, project_root: &Path) -> Result<bool> {
-    let src = addon_stable_output_path(target_info, project_root);
-    if !src.exists() {
-        log_error(&format!("Addon artifact not found: {}", src.display()));
-        return Ok(false);
-    }
-
-    let dest = addon_canonical_package_path(project_root);
-    if let Some(parent) = dest.parent() {
-        fs::create_dir_all(parent).context("Failed to create canonical addon package dir")?;
-    }
-    fs::copy(&src, &dest).context("Failed to copy addon to canonical location")?;
-    log_success(&format!("Copied addon to canonical dev location: {}", dest.display()));
     Ok(true)
 }
 
@@ -202,4 +183,48 @@ pub fn validate_addon(target_info: &Target, project_root: &Path) -> Result<bool>
 
 pub fn addon_stable_output_path_public(target_info: &Target, project_root: &Path) -> PathBuf {
     addon_stable_output_path(target_info, project_root)
+}
+
+fn generate_platform_package_files(_target_info: &Target, package_dir: &Path) -> Result<()> {
+    let package_name = package_dir.file_name().unwrap_or_default().to_string_lossy();
+
+    let package_json = format!(
+        r#"{{
+  "name": "@rari/{package_name}",
+  "version": "0.0.0-dev",
+  "type": "module",
+  "main": "./index.js",
+  "exports": {{
+    ".": {{
+      "import": "./index.js",
+      "default": "./index.js"
+    }}
+  }},
+  "files": [
+    "rari_use_cache.node",
+    "index.js"
+  ]
+}}
+"#
+    );
+
+    let index_js = r#"import { createRequire } from 'node:module'
+import { fileURLToPath } from 'node:url'
+import { dirname, join } from 'node:path'
+
+const require = createRequire(import.meta.url)
+const __dirname = dirname(fileURLToPath(import.meta.url))
+
+const addon = require(join(__dirname, 'rari_use_cache.node'))
+
+export default addon
+"#;
+
+    fs::write(package_dir.join("package.json"), package_json)
+        .context("Failed to write platform package.json")?;
+    fs::write(package_dir.join("index.js"), index_js)
+        .context("Failed to write platform index.js")?;
+
+    log_success(&format!("Generated package files for {}", package_name));
+    Ok(())
 }

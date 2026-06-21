@@ -1,4 +1,4 @@
-use crate::server::http_client::get_http_client;
+use crate::server::utils::client::get_http_client;
 use deno_core::{OpDecl, OpState, op2};
 use deno_error::JsErrorBox;
 use serde::Deserialize;

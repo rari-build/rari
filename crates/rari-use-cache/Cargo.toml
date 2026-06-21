@@ -10,15 +10,15 @@ publish = false
 crate-type = [ "cdylib" ]
 
 [dependencies]
+deno_ast = { workspace = true }
+hex = { workspace = true }
 napi = { version = "3.9.3", features = [
   "napi6",
   "serde-json",
 ] }
 napi-derive = "3.5.6"
-deno_ast = { workspace = true }
-sha2 = { workspace = true }
-hex = { workspace = true }
 rustc-hash = { workspace = true }
+sha2 = { workspace = true }
 
 [build-dependencies]
 napi-build = "2.3.2"

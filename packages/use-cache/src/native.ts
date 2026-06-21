@@ -1,11 +1,4 @@
-import { existsSync } from 'node:fs'
-import { createRequire } from 'node:module'
-import { dirname, resolve } from 'node:path'
 import process from 'node:process'
-import { fileURLToPath } from 'node:url'
-
-const require = createRequire(import.meta.url)
-const __dirname = dirname(fileURLToPath(import.meta.url))
 
 const PLATFORM_PACKAGES: Record<string, string> = {
   'darwin-arm64': '@rari/use-cache-darwin-arm64',
@@ -28,10 +21,6 @@ async function loadAddon() {
     )
     return null
   }
-
-  const localNode = resolve(__dirname, '..', 'rari_use_cache.node')
-  if (existsSync(localNode))
-    return require(localNode)
 
   try {
     const platformModule = await import(platformPkg)

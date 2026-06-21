@@ -139,9 +139,6 @@ importers:
       '@playwright/test':
         specifier: catalog:testing
         version: 1.61.0
-      '@rari/use-cache':
-        specifier: workspace:*
-        version: link:packages/use-cache
       '@types/node':
         specifier: catalog:typescript
         version: 26.0.0
@@ -309,6 +306,12 @@ importers:
       vite-plus:
         specifier: catalog:build
         version: 0.2.1(@opentelemetry/api@1.9.0)(@types/node@26.0.0)(@vitest/coverage-v8@4.1.9)(jiti@2.7.0)(typescript@5.9.3)(vite@8.0.16(@types/node@26.0.0)(jiti@2.7.0)(yaml@2.9.0))(yaml@2.9.0)
+    optionalDependencies:
+      '@rari/use-cache-darwin-arm64':
+        specifier: workspace:*
+        version: link:../use-cache-darwin-arm64
+
+  packages/use-cache-darwin-arm64: {}
 
   test/fixtures/app:
     dependencies:
@@ -340,6 +343,10 @@ importers:
       vite:
         specifier: catalog:build
         version: 8.0.16(@types/node@26.0.0)(jiti@2.7.0)(yaml@2.9.0)
+    optionalDependencies:
+      '@rari/use-cache':
+        specifier: workspace:*
+        version: link:../../../packages/use-cache
 
   web:
     dependencies:

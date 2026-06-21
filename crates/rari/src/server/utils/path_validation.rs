@@ -114,78 +114,81 @@ pub fn validate_component_path(file_path: &str) -> Result<(), RariError> {
 mod tests {
     use super::*;
     use std::fs;
-    use tempfile::TempDir;
+
+    fn test_temp_dir(name: &str) -> std::path::PathBuf {
+        std::env::temp_dir().join(format!("rari-test-path-validation-{}", name))
+    }
 
     #[test]
     fn test_rejects_parent_directory_traversal() {
-        let temp_dir = TempDir::new().unwrap();
-        let base = temp_dir.path();
+        let base = test_temp_dir("parent-traversal");
+        fs::create_dir_all(&base).unwrap();
 
-        let result = validate_safe_path(base, "../etc/passwd");
+        let result = validate_safe_path(&base, "../etc/passwd");
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("'..'"));
     }
 
     #[test]
     fn test_rejects_multiple_parent_traversal() {
-        let temp_dir = TempDir::new().unwrap();
-        let base = temp_dir.path();
+        let base = test_temp_dir("multiple-parent");
+        fs::create_dir_all(&base).unwrap();
 
-        let result = validate_safe_path(base, "../../etc/passwd");
+        let result = validate_safe_path(&base, "../../etc/passwd");
         assert!(result.is_err());
     }
 
     #[test]
     fn test_rejects_hidden_traversal() {
-        let temp_dir = TempDir::new().unwrap();
-        let base = temp_dir.path();
+        let base = test_temp_dir("hidden-traversal");
+        fs::create_dir_all(&base).unwrap();
 
-        let result = validate_safe_path(base, "foo/../../../etc/passwd");
+        let result = validate_safe_path(&base, "foo/../../../etc/passwd");
         assert!(result.is_err());
     }
 
     #[test]
     fn test_rejects_double_slash() {
-        let temp_dir = TempDir::new().unwrap();
-        let base = temp_dir.path();
+        let base = test_temp_dir("double-slash");
+        fs::create_dir_all(&base).unwrap();
 
-        let result = validate_safe_path(base, "foo//bar");
+        let result = validate_safe_path(&base, "foo//bar");
         assert!(result.is_err());
     }
 
     #[test]
     fn test_rejects_null_byte() {
-        let temp_dir = TempDir::new().unwrap();
-        let base = temp_dir.path();
+        let base = test_temp_dir("null-byte");
+        fs::create_dir_all(&base).unwrap();
 
-        let result = validate_safe_path(base, "foo\0bar");
+        let result = validate_safe_path(&base, "foo\0bar");
         assert!(result.is_err());
     }
 
     #[test]
     fn test_accepts_valid_path() {
-        let temp_dir = TempDir::new().unwrap();
-        let base = temp_dir.path();
+        let base = test_temp_dir("valid-path");
+        fs::create_dir_all(&base).unwrap();
 
         let test_file = base.join("test.txt");
         fs::write(&test_file, "test content").unwrap();
 
-        let result = validate_safe_path(base, "test.txt");
+        let result = validate_safe_path(&base, "test.txt");
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), test_file.canonicalize().unwrap());
     }
 
     #[test]
     fn test_accepts_nested_valid_path() {
-        let temp_dir = TempDir::new().unwrap();
-        let base = temp_dir.path();
+        let base = test_temp_dir("nested-path");
+        fs::create_dir_all(&base).unwrap();
 
         let nested_dir = base.join("foo").join("bar");
         fs::create_dir_all(&nested_dir).unwrap();
         let test_file = nested_dir.join("test.txt");
         fs::write(&test_file, "test content").unwrap();
 
-        let result = validate_safe_path(base, "foo/bar/test.txt");
+        let result = validate_safe_path(&base, "foo/bar/test.txt");
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), test_file.canonicalize().unwrap());
     }
@@ -193,18 +196,19 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn test_rejects_symlink_escape() {
-        let temp_dir = TempDir::new().unwrap();
-        let base = temp_dir.path();
+        let base = test_temp_dir("symlink-escape");
+        fs::create_dir_all(&base).unwrap();
 
-        let outside_dir = TempDir::new().unwrap();
-        let outside_file = outside_dir.path().join("secret.txt");
+        let outside_dir = test_temp_dir("symlink-outside");
+        fs::create_dir_all(&outside_dir).unwrap();
+        let outside_file = outside_dir.join("secret.txt");
         fs::write(&outside_file, "secret").unwrap();
 
         {
             use std::os::unix::fs::symlink;
             let link_path = base.join("escape");
-            if symlink(outside_dir.path(), &link_path).is_ok() {
-                let result = validate_safe_path(base, "escape/secret.txt");
+            if symlink(&outside_dir, &link_path).is_ok() {
+                let result = validate_safe_path(&base, "escape/secret.txt");
                 assert!(result.is_err());
             }
         }
@@ -230,22 +234,22 @@ mod tests {
 
     #[test]
     fn test_handles_leading_slash() {
-        let temp_dir = TempDir::new().unwrap();
-        let base = temp_dir.path();
+        let base = test_temp_dir("leading-slash");
+        fs::create_dir_all(&base).unwrap();
 
         let test_file = base.join("test.txt");
         fs::write(&test_file, "test content").unwrap();
 
-        let result = validate_safe_path(base, "/test.txt");
+        let result = validate_safe_path(&base, "/test.txt");
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_rejects_nonexistent_path() {
-        let temp_dir = TempDir::new().unwrap();
-        let base = temp_dir.path();
+        let base = test_temp_dir("nonexistent");
+        fs::create_dir_all(&base).unwrap();
 
-        let result = validate_safe_path(base, "nonexistent.txt");
+        let result = validate_safe_path(&base, "nonexistent.txt");
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
     }

@@ -23,16 +23,8 @@ documentation = "https://github.com/rari-build/rari/tree/main/web"
 
 [lib]
 crate-type = [ "rlib" ]
-doctest = false
-
-[[bin]]
-name = "rari"
-path = "src/bin/rari.rs"
 
 [dependencies]
-# === Error Handling ===
-rari-error = { workspace = true }
-
 # === Core Runtime Dependencies ===
 deno_core = { workspace = true }
 deno_error = { workspace = true }
@@ -77,6 +69,10 @@ node_resolver = "0.89.0"
 # === FFI & NAPI ===
 deno_ffi = "0.238.0"
 deno_napi = "0.182.0"
+
+# === Error Handling ===
+rari-error = { workspace = true }
+thiserror = { workspace = true }
 
 # === Async & Concurrency ===
 async-stream = "0.3.6"
@@ -138,7 +134,6 @@ regex = { workspace = true }
 rustc-hash = { workspace = true }
 lru = "0.18.0"
 uuid = { version = "1.23.3", features = [ "v4" ] }
-thiserror = { workspace = true }
 
 # === Image Processing & Layout ===
 image = { version = "0.25.10", default-features = false, features = [
@@ -193,7 +188,3 @@ rustls = { version = "=0.23.40", default-features = false, features = [
 ] }
 sha2 = { workspace = true }
 hex = { workspace = true }
-
-[dev-dependencies]
-tracing-test = "0.2.6"
-tempfile = "3.27.0"

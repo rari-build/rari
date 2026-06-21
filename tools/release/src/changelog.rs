@@ -39,8 +39,10 @@ pub async fn generate(tag: &str, package_name: &str, package_path: &Path) -> Res
 pub async fn generate_release_notes(
     tag: &str,
     package_name: &str,
-    _previous_tag: Option<&str>,
+    previous_tag: Option<&str>,
 ) -> Result<String> {
+    let range = previous_tag.map(|prev| format!("{}..{}", prev, tag));
+
     for flag in ["--current", "--latest"] {
         let mut args = vec![flag.to_string()];
 
@@ -65,6 +67,10 @@ pub async fn generate_release_notes(
             args.push("packages/create-rari-app/**".to_string());
             args.push("--tag-pattern".to_string());
             args.push("^create-rari-app@".to_string());
+        }
+
+        if let Some(ref r) = range {
+            args.push(r.clone());
         }
 
         let output = Command::new("git-cliff").args(&args).output().await?;
