@@ -1,6 +1,5 @@
 use crate::rsc::actions::{handle_form_action, handle_server_action};
 use crate::rsc::rendering::core::ResourceLimits;
-use crate::runtime::utils::DistPathResolver;
 use crate::server::cache::handler::CacheHandlerRegistry;
 use crate::server::cache::response;
 use crate::server::config::{
@@ -123,26 +122,6 @@ impl Server {
             }
         };
 
-        let reload_config = crate::runtime::module::reload::ReloadConfig {
-            enabled: config.hmr_reload_enabled(),
-            max_retry_attempts: config.rsc.hmr_max_retry_attempts,
-            reload_timeout_ms: config.rsc.hmr_reload_timeout_ms,
-            parallel_reloads: config.rsc.hmr_parallel_reloads,
-            debounce_delay_ms: config.rsc.hmr_debounce_delay_ms,
-        };
-        let mut module_reload_manager =
-            crate::runtime::module::reload::ModuleReloadManager::new(reload_config);
-
-        module_reload_manager.set_runtime(Arc::clone(&renderer.runtime));
-        module_reload_manager.set_component_registry(Arc::clone(&renderer.component_registry));
-
-        let project_root =
-            std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-        let dist_path_resolver = Arc::new(DistPathResolver::new(project_root.clone()));
-        module_reload_manager.set_dist_path_resolver(dist_path_resolver);
-
-        let module_reload_manager = Arc::new(module_reload_manager);
-
         let ssr_renderer = {
             let runtime = renderer.runtime.clone();
             let ssr = crate::rsc::RscHtmlRenderer::new(runtime);
@@ -150,6 +129,9 @@ impl Server {
         };
 
         let renderer_arc = Arc::new(tokio::sync::Mutex::new(renderer));
+
+        let project_root =
+            std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
 
         let cache_registry = Arc::new(CacheHandlerRegistry::from_env());
 
@@ -194,7 +176,6 @@ impl Server {
             page_cache_configs: Arc::new(tokio::sync::RwLock::new(FxHashMap::default())),
             app_router,
             api_route_handler,
-            module_reload_manager,
             html_cache: Arc::new(dashmap::DashMap::new()),
             layout_html_cache:
                 crate::rsc::rendering::layout::LayoutRenderer::create_shared_cache_from_config(

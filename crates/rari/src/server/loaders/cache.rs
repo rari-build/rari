@@ -115,41 +115,4 @@ impl CacheLoader {
 
         None
     }
-
-    pub fn find_matching_cache_config<'a>(
-        page_configs: &'a FxHashMap<String, FxHashMap<String, String>>,
-        route_path: &str,
-    ) -> Option<&'a FxHashMap<String, String>> {
-        if let Some(config) = page_configs.get(route_path) {
-            return Some(config);
-        }
-
-        for (pattern, config) in page_configs {
-            if Self::matches_route_pattern(pattern, route_path) {
-                return Some(config);
-            }
-        }
-
-        None
-    }
-
-    fn matches_route_pattern(pattern: &str, path: &str) -> bool {
-        if pattern == path {
-            return true;
-        }
-
-        if let Some(prefix) = pattern.strip_suffix("/*") {
-            return path.starts_with(prefix)
-                && (path.len() == prefix.len() || path.chars().nth(prefix.len()) == Some('/'));
-        }
-
-        if pattern.contains('*') {
-            let regex_pattern = pattern.cow_replace('*', ".*").cow_replace('/', "\\/").into_owned();
-            if let Ok(regex) = regex::Regex::new(&format!("^{}$", regex_pattern)) {
-                return regex.is_match(path);
-            }
-        }
-
-        false
-    }
 }

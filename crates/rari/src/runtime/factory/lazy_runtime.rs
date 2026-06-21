@@ -116,33 +116,6 @@ impl JsRuntimeInterface for LazyRuntime {
         })
     }
 
-    fn execute_script_for_streaming(
-        &self,
-        script_name: String,
-        script_code: String,
-        chunk_sender: mpsc::Sender<Result<Vec<u8>, String>>,
-    ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>> {
-        let inner = self.inner.clone();
-        let env_vars = self.env_vars.clone();
-
-        Box::pin(async move {
-            let initialized_result = {
-                let this = LazyRuntime::new(inner.clone(), env_vars);
-                this.ensure_initialized().await
-            };
-
-            initialized_result?;
-
-            let runtime = inner.lock().await;
-
-            if let Some(runtime) = &*runtime {
-                runtime.execute_script_for_streaming(script_name, script_code, chunk_sender).await
-            } else {
-                Err(RariError::js_execution("Runtime not initialized".to_string()))
-            }
-        })
-    }
-
     fn add_module_to_loader(
         &self,
         specifier: &str,

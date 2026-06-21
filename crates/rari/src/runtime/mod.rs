@@ -1,10 +1,9 @@
 use cow_utils::CowUtils;
-use rari_error::{Error, RariError};
+use rari_error::RariError;
 use regex::Regex;
 use serde_json::{Value, json};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
-use tokio::sync::mpsc;
 use tracing::error;
 
 pub mod bridge;
@@ -15,8 +14,6 @@ pub mod ops;
 pub mod utils;
 
 mod metadata;
-
-pub type TokioRuntime = tokio::runtime::Handle;
 
 pub struct JsExecutionRuntime {
     runtime: Arc<Box<dyn factory::JsRuntimeInterface>>,
@@ -54,35 +51,6 @@ impl JsExecutionRuntime {
         };
 
         Self { runtime: Arc::new(runtime), timeout_ms: 30000 }
-    }
-
-    pub fn with_timeout(mut self, timeout_ms: u64) -> Self {
-        self.timeout_ms = timeout_ms;
-        self
-    }
-
-    pub fn tokio_runtime(&self) -> TokioRuntime {
-        tokio::runtime::Handle::current()
-    }
-
-    pub async fn call_function_async<T>(
-        &mut self,
-        name: &str,
-        args: &impl serde::ser::Serialize,
-    ) -> Result<T, Error>
-    where
-        T: serde::de::DeserializeOwned,
-    {
-        let args_json = serde_json::to_value(args).map_err(|e| Error::JsonDecode(e.to_string()))?;
-
-        let args_vec = if let Value::Array(arr) = args_json { arr } else { vec![args_json] };
-
-        let result = self
-            .execute_function(name, args_vec)
-            .await
-            .map_err(|e| Error::Runtime(e.to_string()))?;
-
-        serde_json::from_value(result).map_err(|e| Error::JsonDecode(e.to_string()))
     }
 
     pub async fn execute_script(
@@ -280,16 +248,6 @@ impl JsExecutionRuntime {
         }
     }
 
-    pub async fn load_and_evaluate_module(
-        &self,
-        module_specifier: &str,
-    ) -> Result<Value, RariError> {
-        let module_id = self.load_es_module(module_specifier).await?;
-
-        self.evaluate_module(module_id).await?;
-        self.get_module_namespace(module_id).await
-    }
-
     pub async fn get_module_namespace(
         &self,
         module_id: deno_core::ModuleId,
@@ -306,37 +264,6 @@ impl JsExecutionRuntime {
             Err(_) => Err(RariError::timeout(format!(
                 "Getting module namespace timed out after {} ms",
                 self.timeout_ms
-            ))),
-        }
-    }
-
-    pub async fn execute_script_for_streaming(
-        &self,
-        script_name: String,
-        script_code: String,
-        chunk_sender: mpsc::Sender<Result<Vec<u8>, String>>,
-    ) -> Result<(), RariError> {
-        let callback_setup = r#"
-            (function() {
-                return { success: true };
-            })();
-        "#;
-
-        let combined_script = format!("{callback_setup}\n\n{script_code}");
-
-        let runtime = self.runtime.clone();
-        let script_name_clone = script_name.clone();
-
-        match tokio::time::timeout(
-            Duration::from_millis(self.timeout_ms),
-            runtime.execute_script_for_streaming(script_name_clone, combined_script, chunk_sender),
-        )
-        .await
-        {
-            Ok(result) => result,
-            Err(_) => Err(RariError::timeout(format!(
-                "Streaming script execution timed out after {} ms for {}",
-                self.timeout_ms, script_name
             ))),
         }
     }
@@ -437,26 +364,6 @@ impl JsExecutionRuntime {
                 )))
             }
         }
-    }
-
-    pub async fn load_component(
-        &self,
-        component_id: &str,
-        bundle_path: &std::path::Path,
-    ) -> Result<(), RariError> {
-        if !bundle_path.exists() {
-            let error_msg = format!("Component bundle file not found: {:?}", bundle_path);
-            tracing::error!("{}", error_msg);
-            return Err(RariError::not_found(error_msg));
-        }
-
-        let component_code = tokio::fs::read_to_string(bundle_path).await.map_err(|e| {
-            let error_msg = format!("Failed to read component bundle file: {}", e);
-            tracing::error!("{}", error_msg);
-            RariError::io(error_msg)
-        })?;
-
-        self.load_component_code(component_id, &component_code).await
     }
 
     pub async fn load_component_code(
