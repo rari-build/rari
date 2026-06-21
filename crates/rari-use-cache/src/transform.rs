@@ -1,4 +1,4 @@
-use rustc_hash::FxHashSet as HashSet;
+use rustc_hash::FxHashSet;
 
 use deno_ast::swc::ast::*;
 use deno_ast::swc::codegen::{Emitter, text_writer::JsWriter};
@@ -22,7 +22,7 @@ struct TransformVisitor {
     cache_kinds: Vec<String>,
     index: usize,
     has_cache_fns: bool,
-    module_idents: HashSet<Id>,
+    module_idents: FxHashSet<Id>,
     needs_react_cache: bool,
     needs_cache_wrapper: bool,
     needs_register_ref: bool,
@@ -36,7 +36,7 @@ impl TransformVisitor {
             cache_kinds: cache_kinds.to_vec(),
             index: 0,
             has_cache_fns: false,
-            module_idents: HashSet::default(),
+            module_idents: FxHashSet::default(),
             needs_react_cache: false,
             needs_cache_wrapper: false,
             needs_register_ref: false,
