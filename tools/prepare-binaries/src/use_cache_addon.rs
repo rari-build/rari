@@ -165,7 +165,7 @@ pub fn copy_addon_to_platform_package(
     log_success(&format!("Copied addon to: {}", dest.display()));
 
     let package_dir = project_root.join(target_info.addon_package_dir);
-    generate_platform_package_files(target_info, &package_dir)?;
+    generate_platform_package_files(target_info, &package_dir, project_root)?;
 
     Ok(true)
 }
@@ -186,7 +186,11 @@ pub fn addon_stable_output_path_public(target_info: &Target, project_root: &Path
     addon_stable_output_path(target_info, project_root)
 }
 
-fn generate_platform_package_files(target_info: &Target, package_dir: &Path) -> Result<()> {
+fn generate_platform_package_files(
+    target_info: &Target,
+    package_dir: &Path,
+    project_root: &Path,
+) -> Result<()> {
     let package_name = package_dir.file_name().unwrap_or_default().to_string_lossy();
 
     let (os, cpu) = match target_info.platform {
@@ -196,13 +200,13 @@ fn generate_platform_package_files(target_info: &Target, package_dir: &Path) -> 
         "linux-x64" => ("linux", "x64"),
         "win32-arm64" => ("win32", "arm64"),
         "win32-x64" => ("win32", "x64"),
-        _ => ("unknown", "unknown"),
+        _ => {
+            return Err(anyhow::anyhow!(
+                "Unrecognized platform '{}'. Expected one of: darwin-arm64, darwin-x64, linux-arm64, linux-x64, win32-arm64, win32-x64",
+                target_info.platform
+            ));
+        }
     };
-
-    let project_root = package_dir
-        .parent()
-        .and_then(|p| p.parent())
-        .context("Failed to determine project root")?;
 
     let template_package_json_path =
         project_root.join(".github/templates/package-json/use-cache-platform.json");

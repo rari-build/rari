@@ -240,7 +240,7 @@ fn camel_to_kebab(s: &str) -> String {
         _ => {
             let mut out = String::with_capacity(s.len() + 4);
             for ch in s.chars() {
-                if ch.is_uppercase() && !out.is_empty() {
+                if ch.is_ascii_uppercase() && !out.is_empty() {
                     out.push('-');
                     out.push(ch.to_ascii_lowercase());
                 } else {

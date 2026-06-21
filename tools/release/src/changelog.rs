@@ -43,8 +43,14 @@ pub async fn generate_release_notes(
 ) -> Result<String> {
     let range = previous_tag.map(|prev| format!("{}..{}", prev, tag));
 
-    for flag in ["--current", "--latest"] {
-        let mut args = vec![flag.to_string()];
+    let flags: Vec<&str> = if range.is_some() { vec![""] } else { vec!["--current", "--latest"] };
+
+    for flag in flags {
+        let mut args = Vec::new();
+
+        if !flag.is_empty() {
+            args.push(flag.to_string());
+        }
 
         if package_name == "rari-binaries" {
             args.push("--include-path".to_string());

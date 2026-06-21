@@ -139,6 +139,7 @@ pub fn collect_closure_idents(
         function_scope_stack: Vec<FxHashSet<Id>>,
         scope_stack: Vec<FxHashSet<Id>>,
         found: Vec<String>,
+        seen: FxHashSet<String>,
     }
 
     impl ClosureCollector {
@@ -195,7 +196,7 @@ pub fn collect_closure_idents(
             }
             if self.module_idents.contains(&id) {
                 let name = ident.sym.to_string();
-                if !self.found.contains(&name) {
+                if self.seen.insert(name.clone()) {
                     self.found.push(name);
                 }
             }
@@ -279,6 +280,7 @@ pub fn collect_closure_idents(
         function_scope_stack: vec![FxHashSet::default()],
         scope_stack: vec![outer_scope],
         found: Vec::new(),
+        seen: FxHashSet::default(),
     };
 
     for stmt in &body.stmts {

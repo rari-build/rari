@@ -148,8 +148,8 @@ fn serialize_style_object(style_obj: &serde_json::Map<String, serde_json::Value>
     let style_parts: Vec<String> = style_obj
         .iter()
         .filter_map(|(k, v)| {
-            let kebab_key = k.chars().fold(String::new(), |mut acc, c| {
-                if c.is_uppercase() {
+            let kebab_key = k.chars().fold(String::with_capacity(k.len() + 4), |mut acc, c| {
+                if c.is_ascii_uppercase() {
                     acc.push('-');
                     acc.push(c.to_ascii_lowercase());
                 } else {
@@ -159,32 +159,39 @@ fn serialize_style_object(style_obj: &serde_json::Map<String, serde_json::Value>
             });
 
             let value_str = if let Some(s) = v.as_str() {
-                Some(s.to_string())
+                Some(s.to_owned())
             } else if v.is_null() || v.as_bool().is_some() {
                 None
             } else if let Some(u) = v.as_u64() {
                 if UNITLESS_PROPERTIES.contains(&kebab_key.as_str()) {
                     Some(u.to_string())
                 } else {
-                    Some(format!("{}px", u))
+                    let mut result = String::with_capacity(u.to_string().len() + 2);
+                    result.push_str(&u.to_string());
+                    result.push_str("px");
+                    Some(result)
                 }
             } else if let Some(i) = v.as_i64() {
                 if UNITLESS_PROPERTIES.contains(&kebab_key.as_str()) {
                     Some(i.to_string())
                 } else {
-                    Some(format!("{}px", i))
+                    let mut result = String::with_capacity(i.to_string().len() + 2);
+                    result.push_str(&i.to_string());
+                    result.push_str("px");
+                    Some(result)
                 }
             } else if let Some(f) = v.as_f64() {
                 if f.is_finite() {
-                    let formatted = format!("{:.10}", f)
-                        .trim_end_matches('0')
-                        .trim_end_matches('.')
-                        .to_string();
+                    let temp = format!("{:.10}", f);
+                    let formatted = temp.trim_end_matches('0').trim_end_matches('.');
 
                     if UNITLESS_PROPERTIES.contains(&kebab_key.as_str()) {
-                        Some(formatted)
+                        Some(formatted.to_owned())
                     } else {
-                        Some(format!("{}px", formatted))
+                        let mut result = String::with_capacity(formatted.len() + 2);
+                        result.push_str(formatted);
+                        result.push_str("px");
+                        Some(result)
                     }
                 } else {
                     None
@@ -194,7 +201,13 @@ fn serialize_style_object(style_obj: &serde_json::Map<String, serde_json::Value>
             } else {
                 Some(v.to_string())
             };
-            value_str.map(|val| format!("{}:{}", kebab_key, val))
+            value_str.map(|val| {
+                let mut result = String::with_capacity(kebab_key.len() + val.len() + 1);
+                result.push_str(&kebab_key);
+                result.push(':');
+                result.push_str(&val);
+                result
+            })
         })
         .collect();
     style_parts.join(";")
@@ -453,7 +466,8 @@ impl RscHtmlRenderer {
 
         let mut push_css = |links: &[String]| {
             for css in links {
-                if seen.insert(css.clone()) {
+                if !seen.contains(css.as_str()) {
+                    seen.insert(css.clone());
                     css_links.push(css.clone());
                 }
             }
@@ -513,7 +527,8 @@ impl RscHtmlRenderer {
     }
 
     pub fn parse_rsc_wire_format(&self, rsc_data: &str) -> Result<Vec<RscRow>, RariError> {
-        let mut rows = Vec::new();
+        let estimated_lines = rsc_data.len() / 50;
+        let mut rows = Vec::with_capacity(estimated_lines.max(8));
 
         for line in rsc_data.lines() {
             let line = line.trim();
@@ -1016,10 +1031,9 @@ impl RscHtmlRenderer {
                     if key == "style" && value.is_object() {
                         if let Some(style_obj) = value.as_object() {
                             let style_str = serialize_style_object(style_obj);
-                            html.push_str(&format!(
-                                r#" style="{}""#,
-                                Self::escape_html_attribute(&style_str)
-                            ));
+                            html.push_str(r#" style=""#);
+                            html.push_str(&Self::escape_html_attribute(&style_str));
+                            html.push('"');
                         }
                         continue;
                     }
@@ -1031,20 +1045,24 @@ impl RscHtmlRenderer {
                                 html.push_str(attr_name);
                             }
                         } else {
-                            html.push_str(&format!(
-                                r#" {}="{}""#,
-                                attr_name,
-                                if b { "true" } else { "false" }
-                            ));
+                            html.push(' ');
+                            html.push_str(attr_name);
+                            html.push_str(r#"=""#);
+                            html.push_str(if b { "true" } else { "false" });
+                            html.push('"');
                         }
                     } else if let Some(s) = value.as_str() {
-                        html.push_str(&format!(
-                            r#" {}="{}""#,
-                            attr_name,
-                            Self::escape_html_attribute(s)
-                        ));
+                        html.push(' ');
+                        html.push_str(attr_name);
+                        html.push_str(r#"=""#);
+                        html.push_str(&Self::escape_html_attribute(s));
+                        html.push('"');
                     } else if value.is_number() {
-                        html.push_str(&format!(r#" {}="{}""#, attr_name, value));
+                        html.push(' ');
+                        html.push_str(attr_name);
+                        html.push_str(r#"=""#);
+                        html.push_str(&value.to_string());
+                        html.push('"');
                     }
                 }
             }
