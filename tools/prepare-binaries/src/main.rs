@@ -13,7 +13,7 @@ use use_cache_addon::*;
 
 #[derive(Parser, Debug)]
 #[command(name = "prepare-binaries")]
-#[command(about = "Prepare Rari binaries (and rari-use-cache addon) for platform packages", long_about = None)]
+#[command(about = "Prepare rari binaries (and rari-use-cache addon) for platform packages", long_about = None)]
 struct Args {
     #[arg(long)]
     all: bool,
@@ -49,7 +49,7 @@ async fn main() -> Result<()> {
 
     println!(
         "{}",
-        "🔧 Preparing Rari platform artifacts (binary and/or rari-use-cache addon)".bold()
+        "🔧 Preparing rari platform artifacts (binary and/or rari-use-cache addon)".bold()
     );
     println!();
 
