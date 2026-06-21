@@ -409,10 +409,12 @@ jobs:
         run: |
           cd "packages/${{ steps.pkg.outputs.name }}"
 
-          IS_PRERELEASE=$(node -e "
-            const v = '${{ steps.pkg.outputs.version }}';
-            process.stdout.write(v.includes('-') ? 'true' : 'false');
-          ")
+          VERSION="${{ steps.pkg.outputs.version }}"
+          if [[ "${VERSION}" == *"-"* ]]; then
+            IS_PRERELEASE="true"
+          else
+            IS_PRERELEASE="false"
+          fi
 
           # pnpm pack resolves catalog: and workspace: protocols
           TARBALL=$(pnpm pack | tail -1)
@@ -639,10 +641,11 @@ jobs:
           cd "${PACKAGE_DIR}"
           npm pkg fix
 
-          IS_PRERELEASE=$(node -e "
-            const v = '${VERSION}';
-            process.stdout.write(v.includes('-') ? 'true' : 'false');
-          ")
+          if [[ "${VERSION}" == *"-"* ]]; then
+            IS_PRERELEASE="true"
+          else
+            IS_PRERELEASE="false"
+          fi
 
           if [[ "${IS_PRERELEASE}" == "true" ]]; then
             echo "Publishing @rari/use-cache-${{ matrix.platform }} with tag 'next'..."
@@ -704,10 +707,12 @@ jobs:
         run: |
           cd "packages/use-cache"
 
-          IS_PRERELEASE=$(node -e "
-            const v = '${{ steps.pkg.outputs.version }}';
-            process.stdout.write(v.includes('-') ? 'true' : 'false');
-          ")
+          VERSION="${{ steps.pkg.outputs.version }}"
+          if [[ "${VERSION}" == *"-"* ]]; then
+            IS_PRERELEASE="true"
+          else
+            IS_PRERELEASE="false"
+          fi
 
           TARBALL=$(pnpm pack | tail -1)
           echo "Packed: ${TARBALL}"
