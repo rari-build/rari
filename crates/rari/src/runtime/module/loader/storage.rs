@@ -1,8 +1,8 @@
 use super::config::BatchStats;
 use super::interner::get_string_interner;
-use crate::error::RariError;
 use dashmap::DashMap;
 use parking_lot::Mutex;
+use rari_error::RariError;
 use smallvec::{SmallVec, smallvec};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};

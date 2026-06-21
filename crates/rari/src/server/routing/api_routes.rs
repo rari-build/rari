@@ -1,4 +1,3 @@
-use crate::error::RariError;
 use crate::runtime::JsExecutionRuntime;
 use crate::runtime::bridge::RequestBridge;
 use crate::server::routing::types::RouteSegment;
@@ -6,6 +5,7 @@ use axum::body::Body;
 use axum::http::{HeaderMap, Request, Response};
 use cow_utils::CowUtils;
 use dashmap::DashMap;
+use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;

@@ -1,4 +1,3 @@
-use crate::error::RariError;
 use crate::rsc::actions::{handle_form_action, handle_server_action};
 use crate::rsc::rendering::core::ResourceLimits;
 use crate::runtime::utils::DistPathResolver;
@@ -34,6 +33,7 @@ use axum::{
     routing::{any, get, post},
 };
 use colored::Colorize;
+use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;

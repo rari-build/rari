@@ -1,6 +1,6 @@
-use crate::error::RariError;
 use crate::runtime::factory::deno_runtime::DenoRuntime;
 use crate::runtime::factory::interface::{AsyncBatchResult, JsRuntimeInterface};
+use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use serde_json::Value as JsonValue;
 use std::future::Future;

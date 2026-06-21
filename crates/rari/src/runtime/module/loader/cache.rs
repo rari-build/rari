@@ -1,9 +1,9 @@
 use super::config::CacheStats;
-use crate::error::RariError;
 use crate::server::cache::handler::CacheHandler;
 use crate::server::cache::{CacheHandlerRegistry, MemoryCacheHandler, MemoryConfig};
 use crate::server::config::CacheLayerConfig;
 use dashmap::DashMap;
+use rari_error::RariError;
 use serde_json::Value as JsonValue;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};

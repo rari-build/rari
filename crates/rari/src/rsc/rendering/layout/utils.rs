@@ -1,8 +1,8 @@
-use crate::error::RariError;
 use crate::server::routing::app_router::AppRouteMatch;
 use crate::server::routing::types::ParamValue;
 use crate::server::utils::component::{readable_component_id, short_hash};
 use cow_utils::CowUtils;
+use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use serde_json::Value;
 use std::collections::hash_map::DefaultHasher;

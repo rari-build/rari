@@ -1,4 +1,3 @@
-use crate::error::RariError;
 use crate::server::config::Config;
 use axum::{
     body::Body,
@@ -11,6 +10,7 @@ use axum::{
 };
 use futures::StreamExt as FuturesStreamExt;
 use futures_util::SinkExt;
+use rari_error::RariError;
 use reqwest::Client;
 use rustc_hash::FxHashMap;
 use tokio_tungstenite::{connect_async, tungstenite::Message};

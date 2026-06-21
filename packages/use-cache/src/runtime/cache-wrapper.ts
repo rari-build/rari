@@ -71,5 +71,3 @@ export function encodeBoundArgs(
 ): string {
   return serialize([refId, ...args]).toString('base64')
 }
-
-export { deterministicStringify }

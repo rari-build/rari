@@ -1,9 +1,9 @@
 use std::path::{Path, PathBuf};
 
 #[cfg(test)]
-use crate::utils::path_url::path_to_file_url;
-#[cfg(test)]
 use cow_utils::CowUtils;
+#[cfg(test)]
+use rari_utils::path_url::path_to_file_url;
 
 pub struct DistPathResolver {
     project_root: PathBuf,

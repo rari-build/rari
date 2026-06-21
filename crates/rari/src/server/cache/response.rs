@@ -480,12 +480,11 @@ mod header_map_serde {
 #[allow(clippy::disallowed_methods)]
 mod tests {
     use super::*;
+    use crate::server::cache::handler::{CacheError, SetOutcome};
     use parking_lot::Mutex as PMutex;
     use rustc_hash::FxHashMap;
     use std::sync::Arc;
     use std::time::Duration;
-
-    use crate::server::cache::handler::SetOutcome;
 
     fn create_test_response(body: &str, ttl: u64) -> CachedResponse {
         CachedResponse {
@@ -771,10 +770,7 @@ mod tests {
 
     #[async_trait::async_trait]
     impl CacheHandler for StubHandler {
-        async fn get(
-            &self,
-            key: &str,
-        ) -> Result<Option<Vec<u8>>, crate::server::cache::handler::CacheError> {
+        async fn get(&self, key: &str) -> Result<Option<Vec<u8>>, CacheError> {
             Ok(self.map.lock().get(key).cloned())
         }
         async fn set(
@@ -782,7 +778,7 @@ mod tests {
             key: &str,
             value: Vec<u8>,
             _ttl_secs: u64,
-        ) -> Result<SetOutcome, crate::server::cache::handler::CacheError> {
+        ) -> Result<SetOutcome, CacheError> {
             self.set_calls.lock().push(key.to_string());
             let replaced = self.map.lock().insert(key.to_string(), value).is_some();
             Ok(SetOutcome { replaced, evicted: 0, evicted_bytes: 0 })
@@ -793,23 +789,17 @@ mod tests {
             value: Vec<u8>,
             ttl_secs: u64,
             _tags: &[String],
-        ) -> Result<SetOutcome, crate::server::cache::handler::CacheError> {
+        ) -> Result<SetOutcome, CacheError> {
             self.set(key, value, ttl_secs).await
         }
-        async fn invalidate(
-            &self,
-            key: &str,
-        ) -> Result<bool, crate::server::cache::handler::CacheError> {
+        async fn invalidate(&self, key: &str) -> Result<bool, CacheError> {
             Ok(self.map.lock().remove(key).is_some())
         }
-        async fn invalidate_by_tag(
-            &self,
-            _tag: &str,
-        ) -> Result<(), crate::server::cache::handler::CacheError> {
+        async fn invalidate_by_tag(&self, _tag: &str) -> Result<(), CacheError> {
             self.map.lock().clear();
             Ok(())
         }
-        async fn clear(&self) -> Result<(), crate::server::cache::handler::CacheError> {
+        async fn clear(&self) -> Result<(), CacheError> {
             self.map.lock().clear();
             Ok(())
         }

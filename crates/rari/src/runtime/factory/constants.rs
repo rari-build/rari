@@ -1,4 +1,4 @@
-use crate::error::RariError;
+use rari_error::RariError;
 use serde_json::Value as JsonValue;
 
 pub const CHANNEL_CAPACITY: usize = 32;

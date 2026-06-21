@@ -30,6 +30,9 @@ name = "rari"
 path = "src/bin/rari.rs"
 
 [dependencies]
+# === Error Handling ===
+rari-error = { workspace = true }
+
 # === Core Runtime Dependencies ===
 deno_core = { workspace = true }
 deno_error = { workspace = true }
@@ -125,6 +128,7 @@ tokio-tungstenite = "0.29.0"
 tungstenite = "0.29.0"
 
 # === Utilities ===
+rari-utils = { workspace = true }
 bytes = { version = "1.12.0", features = [ "serde" ] }
 cow-utils = { workspace = true }
 dashmap = "6.2.1"
@@ -134,7 +138,7 @@ regex = { workspace = true }
 rustc-hash = { workspace = true }
 lru = "0.18.0"
 uuid = { version = "1.23.3", features = [ "v4" ] }
-thiserror = "2.0.18"
+thiserror = { workspace = true }
 
 # === Image Processing & Layout ===
 image = { version = "0.25.10", default-features = false, features = [

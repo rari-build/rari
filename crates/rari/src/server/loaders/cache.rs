@@ -1,6 +1,6 @@
-use crate::error::RariError;
 use crate::server::ServerState;
 use cow_utils::CowUtils;
+use rari_error::RariError;
 use regex::Regex;
 use rustc_hash::FxHashMap;
 use tracing::error;

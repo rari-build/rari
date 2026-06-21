@@ -1,10 +1,10 @@
 use clap::{Arg, Command};
-use rari::error::RariError;
 use rari::server::{
     Server,
     config::{Config, Mode},
     image::ImageOptimizer,
 };
+use rari_error::RariError;
 
 use rustls::crypto::CryptoProvider;
 use tracing::error;

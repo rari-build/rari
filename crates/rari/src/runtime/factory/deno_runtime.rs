@@ -1,4 +1,3 @@
-use crate::error::RariError;
 use crate::runtime::factory::constants::*;
 use crate::runtime::factory::executor::{execute_script, execute_script_for_streaming};
 use crate::runtime::factory::interface::{AsyncBatchResult, JsRuntimeInterface};
@@ -6,6 +5,7 @@ use crate::runtime::factory::runtime_builder::create_deno_runtime;
 use crate::runtime::factory::v8_utils::get_module_namespace_as_json;
 use crate::runtime::module::loader::RariModuleLoader;
 use deno_core::{ModuleSpecifier, PollEventLoopOptions};
+use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use serde_json::Value as JsonValue;
 use std::future::Future;

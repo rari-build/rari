@@ -1,6 +1,5 @@
-use crate::error::RariError;
 use cow_utils::CowUtils;
-use deno_error::JsErrorBox as JsError;
+use rari_error::{Error, RariError};
 use regex::Regex;
 use serde_json::{Value, json};
 use std::sync::{Arc, OnceLock};
@@ -70,21 +69,20 @@ impl JsExecutionRuntime {
         &mut self,
         name: &str,
         args: &impl serde::ser::Serialize,
-    ) -> Result<T, crate::error::Error>
+    ) -> Result<T, Error>
     where
         T: serde::de::DeserializeOwned,
     {
-        let args_json = serde_json::to_value(args)
-            .map_err(|e| crate::error::Error::JsonDecode(e.to_string()))?;
+        let args_json = serde_json::to_value(args).map_err(|e| Error::JsonDecode(e.to_string()))?;
 
         let args_vec = if let Value::Array(arr) = args_json { arr } else { vec![args_json] };
 
         let result = self
             .execute_function(name, args_vec)
             .await
-            .map_err(|e| crate::error::Error::Runtime(e.to_string()))?;
+            .map_err(|e| Error::Runtime(e.to_string()))?;
 
-        serde_json::from_value(result).map_err(|e| crate::error::Error::JsonDecode(e.to_string()))
+        serde_json::from_value(result).map_err(|e| Error::JsonDecode(e.to_string()))
     }
 
     pub async fn execute_script(
@@ -691,17 +689,5 @@ impl JsExecutionRuntime {
     {
         self.set_request_context(request_context).await?;
         operation.await
-    }
-}
-
-impl From<crate::error::RariError> for JsError {
-    fn from(err: crate::error::RariError) -> Self {
-        Self::generic(err.to_string())
-    }
-}
-
-impl From<deno_core::v8::DataError> for crate::error::RariError {
-    fn from(err: deno_core::v8::DataError) -> Self {
-        crate::error::RariError::JsRuntime(format!("V8 Data Error: {err}"), None)
     }
 }

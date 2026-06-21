@@ -1,8 +1,8 @@
-use crate::error::RariError;
 #[cfg(test)]
 use crate::server::routing::types::RouteSegmentType;
 use crate::server::routing::types::{ParamValue, RouteSegment};
 use cow_utils::CowUtils;
+use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;

@@ -1,10 +1,10 @@
-use crate::error::RariError;
 use crate::server::http_client::get_http_client;
 use axum::http::HeaderMap;
 use bytes::Bytes;
 use dashmap::DashMap;
 use lru::LruCache;
 use parking_lot::Mutex;
+use rari_error::RariError;
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde_json::Value as JsonValue;
 use std::num::NonZeroUsize;

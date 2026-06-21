@@ -1,6 +1,6 @@
-use crate::error::RariError;
 use axum::body::Body;
 use axum::http::{HeaderMap, Response, StatusCode};
+use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use serde_json::{Value as JsonValue, json};
 

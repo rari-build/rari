@@ -1,8 +1,8 @@
 use super::{DebounceManager, ModuleReloadRequest, ReloadConfig};
-use crate::error::{ModuleReloadError, RariError};
 use crate::rsc::components::ComponentRegistry;
 use crate::runtime::JsExecutionRuntime;
 use crate::runtime::utils::DistPathResolver;
+use rari_error::{ModuleReloadError, RariError};
 use std::collections::VecDeque;
 use std::path::Path;
 use std::sync::Arc;

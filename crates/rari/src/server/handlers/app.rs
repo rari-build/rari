@@ -1,6 +1,9 @@
 use crate::rsc::rendering::html::{RscHtmlRenderer, RscToHtmlConverter};
-use crate::rsc::rendering::layout::types::PageMetadata;
-use crate::rsc::rendering::layout::{LayoutRenderContext, LayoutRenderer};
+use crate::rsc::rendering::layout::{
+    LayoutRenderContext, LayoutRenderer, OpenGraphImage, OpenGraphImageDescriptor,
+    OpenGraphMetadata, PageMetadata, RenderResult, TwitterMetadata, create_layout_context,
+};
+use crate::rsc::rendering::streaming::stream::RscStream;
 use crate::server::ServerState;
 use crate::server::cache::response;
 use crate::server::compression::CompressionEncoding;
@@ -13,7 +16,6 @@ use crate::server::routing::app_router::AppRouteMatch;
 use crate::server::utils::http::{
     extract_headers, extract_search_params, get_content_type, merge_vary_with_accept,
 };
-use crate::utils::path_url::path_to_file_url;
 use axum::{
     body::Body,
     extract::{Query, State},
@@ -21,6 +23,7 @@ use axum::{
     response::Response,
 };
 use cow_utils::CowUtils;
+use rari_utils::path_url::path_to_file_url;
 use rustc_hash::FxHashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -241,7 +244,7 @@ async fn inject_og_image_into_metadata(
             og.url = Some(current_url.clone());
         }
     } else {
-        metadata.open_graph = Some(crate::rsc::rendering::layout::types::OpenGraphMetadata {
+        metadata.open_graph = Some(OpenGraphMetadata {
             title: None,
             description: None,
             url: Some(current_url.clone()),
@@ -255,8 +258,6 @@ async fn inject_og_image_into_metadata(
         && let Some(og_entry) = og_generator.find_og_image_for_route(route_path).await
     {
         let og_image_url = format!("{}/_rari/og{}", base_url, route_path);
-
-        use crate::rsc::rendering::layout::types::{OpenGraphImage, OpenGraphImageDescriptor};
 
         let og_image = if og_entry.width.is_some() || og_entry.height.is_some() {
             OpenGraphImage::Detailed(OpenGraphImageDescriptor {
@@ -287,7 +288,6 @@ async fn inject_og_image_into_metadata(
                 images.insert(0, og_image_url);
             }
         } else {
-            use crate::rsc::rendering::layout::types::TwitterMetadata;
             metadata.twitter = Some(TwitterMetadata {
                 card: Some("summary_large_image".to_string()),
                 site: None,
@@ -323,7 +323,7 @@ fn get_base_url_from_context(
 pub async fn render_with_fallback(
     state: Arc<ServerState>,
     route_match: crate::server::routing::AppRouteMatch,
-    context: crate::rsc::rendering::layout::LayoutRenderContext,
+    context: LayoutRenderContext,
     accept_encoding: Option<&str>,
 ) -> Result<Response, StatusCode> {
     let layout_renderer =
@@ -349,7 +349,7 @@ pub async fn render_with_fallback(
 pub async fn render_rsc_navigation_streaming(
     state: Arc<ServerState>,
     route_match: crate::server::routing::AppRouteMatch,
-    context: crate::rsc::rendering::layout::LayoutRenderContext,
+    context: LayoutRenderContext,
     accept_encoding: Option<&str>,
 ) -> Result<Response, StatusCode> {
     let layout_renderer =
@@ -376,7 +376,7 @@ pub async fn render_rsc_navigation_streaming(
     };
 
     match render_result {
-        crate::rsc::rendering::layout::RenderResult::Streaming(rsc_stream) => {
+        RenderResult::Streaming(rsc_stream) => {
             render_rsc_streaming_response(
                 state,
                 route_match,
@@ -387,7 +387,7 @@ pub async fn render_rsc_navigation_streaming(
             )
             .await
         }
-        crate::rsc::rendering::layout::RenderResult::Static(rsc_wire_format) => {
+        RenderResult::Static(rsc_wire_format) => {
             let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
 
             let sorted_wire_format = sort_rsc_rows(&rsc_wire_format);
@@ -419,8 +419,8 @@ pub async fn render_rsc_navigation_streaming(
 async fn render_rsc_streaming_response(
     state: Arc<ServerState>,
     _route_match: crate::server::routing::AppRouteMatch,
-    context: crate::rsc::rendering::layout::LayoutRenderContext,
-    mut rsc_stream: crate::rsc::rendering::streaming::stream::RscStream,
+    context: LayoutRenderContext,
+    mut rsc_stream: RscStream,
     is_not_found: bool,
     accept_encoding: Option<&str>,
 ) -> Result<Response, StatusCode> {
@@ -478,7 +478,7 @@ async fn render_rsc_streaming_response(
 pub async fn render_synchronous(
     state: Arc<ServerState>,
     route_match: crate::server::routing::AppRouteMatch,
-    context: crate::rsc::rendering::layout::LayoutRenderContext,
+    context: LayoutRenderContext,
     accept_encoding: Option<&str>,
 ) -> Result<Response, StatusCode> {
     let layout_renderer =
@@ -495,7 +495,7 @@ pub async fn render_synchronous(
         .await
     {
         Ok(render_result) => match render_result {
-            crate::rsc::rendering::layout::RenderResult::Static(html_content) => {
+            RenderResult::Static(html_content) => {
                 let html_with_assets =
                     match inject_assets_into_html(&html_content, &state.config).await {
                         Ok(html) => html,
@@ -520,7 +520,7 @@ pub async fn render_synchronous(
                     .body(Body::from(final_html))
                     .expect("Valid HTML response"))
             }
-            crate::rsc::rendering::layout::RenderResult::Streaming(stream) => {
+            RenderResult::Streaming(stream) => {
                 render_streaming_response(
                     state,
                     route_match,
@@ -542,8 +542,8 @@ pub async fn render_synchronous(
 async fn render_streaming_response(
     state: Arc<ServerState>,
     _route_match: crate::server::routing::AppRouteMatch,
-    context: crate::rsc::rendering::layout::LayoutRenderContext,
-    mut rsc_stream: crate::rsc::rendering::streaming::stream::RscStream,
+    context: LayoutRenderContext,
+    mut rsc_stream: RscStream,
     is_not_found: bool,
     accept_encoding: Option<&str>,
 ) -> Result<Response, StatusCode> {
@@ -661,7 +661,7 @@ async fn render_streaming_response(
 pub async fn render_streaming_with_layout(
     state: Arc<ServerState>,
     route_match: crate::server::routing::AppRouteMatch,
-    context: crate::rsc::rendering::layout::LayoutRenderContext,
+    context: LayoutRenderContext,
     layout_renderer: &LayoutRenderer,
     accept_encoding: Option<&str>,
 ) -> Result<Response, StatusCode> {
@@ -694,8 +694,8 @@ pub async fn render_streaming_with_layout(
     };
 
     let rsc_stream = match render_result {
-        crate::rsc::rendering::layout::RenderResult::Streaming(stream) => stream,
-        crate::rsc::rendering::layout::RenderResult::Static(html) => {
+        RenderResult::Streaming(stream) => stream,
+        RenderResult::Static(html) => {
             use crate::server::compression::compress_body;
 
             let html_with_assets = match inject_assets_into_html(&html, &state.config).await {
@@ -937,7 +937,7 @@ pub async fn handle_app_route(
 
     let request_headers = extract_headers(&headers);
 
-    let mut context = crate::rsc::rendering::layout::create_layout_context(
+    let mut context = create_layout_context(
         route_match.params.clone(),
         search_params.clone(),
         request_headers,
@@ -1316,7 +1316,7 @@ pub async fn handle_app_route(
             };
 
             let (final_html, etag) = match render_result {
-                crate::rsc::rendering::layout::RenderResult::Static(html_content) => {
+                RenderResult::Static(html_content) => {
                     let html_with_assets =
                         match inject_assets_into_html(&html_content, &state.config).await {
                             Ok(html) => html,
@@ -1336,7 +1336,7 @@ pub async fn handle_app_route(
 
                     (final_html, etag)
                 }
-                crate::rsc::rendering::layout::RenderResult::Streaming(stream) => {
+                RenderResult::Streaming(stream) => {
                     let asset_links = extract_asset_links_from_index_html().await;
 
                     let html_renderer = {

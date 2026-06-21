@@ -1,4 +1,3 @@
-use crate::error::RariError;
 use crate::server::ServerState;
 use axum::{
     body::Bytes,
@@ -7,6 +6,7 @@ use axum::{
     response::{IntoResponse, Json, Response},
 };
 use cow_utils::CowUtils;
+use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;

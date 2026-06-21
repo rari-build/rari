@@ -1,4 +1,3 @@
-use crate::error::RariError;
 use crate::runtime::factory::constants::{
     API_HANDLER_INIT_SCRIPT, COMPONENT_LOADER_INIT_SCRIPT, COOKIES_INIT_SCRIPT,
     ENV_INJECTION_SCRIPT, METADATA_COLLECTOR_INIT_SCRIPT, MODULE_CHECK_SCRIPT,
@@ -7,6 +6,7 @@ use crate::runtime::module::loader::RariModuleLoader;
 use crate::runtime::ops::StreamOpState;
 use cow_utils::CowUtils;
 use deno_core::{Extension, JsRuntime, RuntimeOptions};
+use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use std::borrow::Cow;
 use std::rc::Rc;
