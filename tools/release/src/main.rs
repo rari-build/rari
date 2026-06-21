@@ -125,10 +125,17 @@ async fn run_non_interactive(
     let binary_version = rari_pkg.current_version.clone();
     let binary_group = PackageGroup::new_virtual("rari-binaries".to_string(), binary_version);
 
+    let use_cache_pkg = Package::load("@rari/use-cache", "packages/use-cache").await?;
+    let use_cache_binary_version = use_cache_pkg.current_version.clone();
+    let use_cache_binary_group =
+        PackageGroup::new_virtual("@rari/use-cache-binaries".to_string(), use_cache_binary_version);
+
     let mut release_units = vec![
         ReleaseUnit::Single(rari_pkg),
         ReleaseUnit::Single(Package::load("create-rari-app", "packages/create-rari-app").await?),
         ReleaseUnit::Virtual(binary_group),
+        ReleaseUnit::Single(use_cache_pkg),
+        ReleaseUnit::Virtual(use_cache_binary_group),
     ];
 
     if let Some(only_list) = &only {
@@ -206,7 +213,8 @@ async fn run_non_interactive(
             println!("  {} Updated version", "✓".green());
         }
 
-        let generates_changelog = matches!(unit_name, "rari" | "create-rari-app");
+        let generates_changelog =
+            matches!(unit_name, "rari" | "create-rari-app" | "@rari/use-cache");
         if dry_run {
             if generates_changelog {
                 println!("  {} Would generate changelog...", "[DRY RUN]".yellow());
@@ -229,6 +237,8 @@ async fn run_non_interactive(
         let message = format!("release: {}@{}", unit_name, new_version);
         let tag = if unit_name == "rari-binaries" {
             format!("v{}", new_version)
+        } else if unit_name == "@rari/use-cache-binaries" {
+            format!("use-cache-binaries@{}", new_version)
         } else {
             format!("{}@{}", unit_name, new_version)
         };
@@ -246,7 +256,8 @@ async fn run_non_interactive(
                 crate::git::add_and_commit(&message, paths[0]).await?;
             }
 
-            let generates_changelog = matches!(unit_name, "rari" | "create-rari-app");
+            let generates_changelog =
+                matches!(unit_name, "rari" | "create-rari-app" | "@rari/use-cache");
             let mut files_to_add = Vec::new();
             if generates_changelog && let Some(first_path) = unit.paths().first() {
                 let changelog_path = first_path.join("CHANGELOG.md");
