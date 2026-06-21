@@ -31,7 +31,6 @@
     "rari",
     "use-cache",
     "napi",
-    {KEYWORDS}
     "rust",
     "react",
     "server-components"

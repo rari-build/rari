@@ -197,21 +197,22 @@ mod tests {
     #[test]
     fn test_rejects_symlink_escape() {
         let base = test_temp_dir("symlink-escape");
+        let _ = fs::remove_dir_all(&base);
         fs::create_dir_all(&base).unwrap();
 
         let outside_dir = test_temp_dir("symlink-outside");
+        let _ = fs::remove_dir_all(&outside_dir);
         fs::create_dir_all(&outside_dir).unwrap();
         let outside_file = outside_dir.join("secret.txt");
         fs::write(&outside_file, "secret").unwrap();
 
-        {
-            use std::os::unix::fs::symlink;
-            let link_path = base.join("escape");
-            if symlink(&outside_dir, &link_path).is_ok() {
-                let result = validate_safe_path(&base, "escape/secret.txt");
-                assert!(result.is_err());
-            }
-        }
+        use std::os::unix::fs::symlink;
+        let link_path = base.join("escape");
+        let _ = fs::remove_file(&link_path);
+        symlink(&outside_dir, &link_path).expect("Failed to create symlink for security test");
+
+        let result = validate_safe_path(&base, "escape/secret.txt");
+        assert!(result.is_err(), "Security failure: symlink escape was not rejected");
     }
 
     #[test]
