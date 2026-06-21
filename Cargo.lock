@@ -7256,6 +7256,8 @@ dependencies = [
  "node_resolver",
  "parking_lot",
  "parley",
+ "rari-error",
+ "rari-utils",
  "regex",
  "reqwest",
  "resvg",
@@ -7287,6 +7289,19 @@ dependencies = [
  "windows-sys 0.59.0",
  "wuff",
  "zeno",
+]
+
+[[package]]
+name = "rari-error"
+version = "0.0.0"
+dependencies = [
+ "deno_core",
+ "deno_error",
+ "rustc-hash 2.1.2",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
 ]
 
 [[package]]
@@ -7340,6 +7355,14 @@ dependencies = [
  "napi-derive",
  "rustc-hash 2.1.2",
  "sha2 0.11.0",
+]
+
+[[package]]
+name = "rari-utils"
+version = "0.0.0"
+dependencies = [
+ "cow-utils",
+ "url",
 ]
 
 [[package]]

@@ -1,5 +1,5 @@
-use crate::error::RariError;
 use cow_utils::CowUtils;
+use rari_error::RariError;
 use std::path::{Path, PathBuf};
 
 pub fn validate_safe_path(base: &Path, requested: &str) -> Result<PathBuf, RariError> {

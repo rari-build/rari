@@ -5,9 +5,7 @@ pub fn path_to_file_url(path: &Path) -> String {
     let absolute_path = if path.is_absolute() {
         path.to_path_buf()
     } else {
-        path.canonicalize().unwrap_or_else(|_| {
-            std::env::current_dir().map(|cwd| cwd.join(path)).unwrap_or_else(|_| path.to_path_buf())
-        })
+        std::env::current_dir().map(|cwd| cwd.join(path)).unwrap_or_else(|_| path.to_path_buf())
     };
 
     url::Url::from_file_path(&absolute_path).map(|url| url.to_string()).unwrap_or_else(|_| {

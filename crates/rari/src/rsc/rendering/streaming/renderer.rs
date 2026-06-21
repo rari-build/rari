@@ -4,8 +4,8 @@ use std::sync::Arc;
 use tokio::sync::{Mutex, mpsc};
 use tracing::{error, info, warn};
 
-use crate::error::RariError;
 use crate::runtime::JsExecutionRuntime;
+use rari_error::RariError;
 
 use super::constants::*;
 use super::promise_resolver::BackgroundPromiseResolver;

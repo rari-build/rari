@@ -1,15 +1,19 @@
-use crate::error::{RariError, StreamingError};
 use crate::rsc::RscElement;
 use crate::rsc::flight::escape::unescape_rsc_value;
 use crate::rsc::rendering::streaming::{RscChunkType, RscStreamChunk};
 use crate::runtime::JsExecutionRuntime;
+use crate::server::config::Config;
 use crate::server::routing::app_router::AppRouteMatch;
 use cow_utils::CowUtils;
+use rari_error::{RariError, StreamingError};
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde_json::Value as JsonValue;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use tracing::error;
+
+#[cfg(test)]
+use crate::server::config::Mode;
 
 const SELF_CLOSING_TAGS: &[&str] = &[
     "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source",
@@ -657,7 +661,7 @@ impl RscHtmlRenderer {
     pub async fn render_to_html(
         &self,
         rsc_wire_format: &str,
-        config: &crate::server::config::Config,
+        config: &Config,
     ) -> Result<String, RariError> {
         self.render_to_html_inner(rsc_wire_format, config, None).await
     }
@@ -665,7 +669,7 @@ impl RscHtmlRenderer {
     pub async fn render_to_html_for_route(
         &self,
         rsc_wire_format: &str,
-        config: &crate::server::config::Config,
+        config: &Config,
         route_match: &AppRouteMatch,
     ) -> Result<String, RariError> {
         self.render_to_html_inner(rsc_wire_format, config, Some(route_match)).await
@@ -674,7 +678,7 @@ impl RscHtmlRenderer {
     async fn render_to_html_inner(
         &self,
         rsc_wire_format: &str,
-        config: &crate::server::config::Config,
+        config: &Config,
         route_match: Option<&AppRouteMatch>,
     ) -> Result<String, RariError> {
         if !config.rsc_html.enabled {
@@ -2553,7 +2557,7 @@ mod tests {
 
         let rsc_wire_format = r#"0:["$","div",null,{"children":"Hello World"}]"#;
 
-        let config = crate::server::config::Config::new(crate::server::config::Mode::Development);
+        let config = Config::new(Mode::Development);
 
         let result = renderer.render_to_html(rsc_wire_format, &config).await;
         assert!(result.is_ok());
@@ -2574,7 +2578,7 @@ mod tests {
         let rsc_wire_format = r#"1:["$","h1",null,{"children":"Title"}]
 2:["$","div",null,{"className":"container","children":"$@1"}]"#;
 
-        let config = crate::server::config::Config::new(crate::server::config::Mode::Development);
+        let config = Config::new(Mode::Development);
 
         let result = renderer.render_to_html(rsc_wire_format, &config).await;
         assert!(result.is_ok());
@@ -2593,8 +2597,7 @@ mod tests {
 
         let rsc_wire_format = r#"0:["$","div",null,{"children":"Test"}]"#;
 
-        let mut config =
-            crate::server::config::Config::new(crate::server::config::Mode::Development);
+        let mut config = Config::new(Mode::Development);
         config.rsc_html.cache_template = false;
 
         let result = renderer.render_to_html(rsc_wire_format, &config).await;
@@ -2608,8 +2611,7 @@ mod tests {
 
         let rsc_wire_format = r#"0:["$","div",null,{"children":"Test"}]"#;
 
-        let mut config =
-            crate::server::config::Config::new(crate::server::config::Mode::Development);
+        let mut config = Config::new(Mode::Development);
         config.rsc_html.timeout_ms = 0;
         config.rsc_html.cache_template = false;
 
@@ -2624,8 +2626,7 @@ mod tests {
 
         let rsc_wire_format = "invalid:format:here";
 
-        let mut config =
-            crate::server::config::Config::new(crate::server::config::Mode::Development);
+        let mut config = Config::new(Mode::Development);
         config.rsc_html.cache_template = false;
 
         let result = renderer.render_to_html(rsc_wire_format, &config).await;
@@ -2647,7 +2648,7 @@ mod tests {
 
         let rsc_wire_format = r#"0:["$","p",null,{"children":"Content"}]"#;
 
-        let config = crate::server::config::Config::new(crate::server::config::Mode::Development);
+        let config = Config::new(Mode::Development);
 
         let result = renderer.render_to_html(rsc_wire_format, &config).await;
         assert!(result.is_ok());
@@ -2667,7 +2668,7 @@ mod tests {
 
         let rsc_wire_format = r#"0:["$","div",null,{"children":"Test"}]"#;
 
-        let config = crate::server::config::Config::new(crate::server::config::Mode::Development);
+        let config = Config::new(Mode::Development);
 
         let result1 = renderer.render_to_html(rsc_wire_format, &config).await;
         assert!(result1.is_ok());
@@ -2690,8 +2691,7 @@ mod tests {
 
         let rsc_wire_format = r#"0:["$","div",null,{"children":"Test"}]"#;
 
-        let mut config =
-            crate::server::config::Config::new(crate::server::config::Mode::Development);
+        let mut config = Config::new(Mode::Development);
         config.rsc_html.enabled = false;
 
         let result = renderer.render_to_html(rsc_wire_format, &config).await;
@@ -2708,8 +2708,7 @@ mod tests {
 
         let rsc_wire_format = r#"0:["$","div",null,{"children":"Test"}]"#;
 
-        let mut config =
-            crate::server::config::Config::new(crate::server::config::Mode::Development);
+        let mut config = Config::new(Mode::Development);
         config.rsc_html.timeout_ms = 10000;
 
         let result = renderer.render_to_html(rsc_wire_format, &config).await;
@@ -2723,8 +2722,7 @@ mod tests {
 
         let rsc_wire_format = r#"0:["$","div",null,{"children":"Test"}]"#;
 
-        let mut dev_config =
-            crate::server::config::Config::new(crate::server::config::Mode::Development);
+        let mut dev_config = Config::new(Mode::Development);
         dev_config.rsc_html.cache_template = false;
 
         let dev_result = renderer.render_to_html(rsc_wire_format, &dev_config).await;

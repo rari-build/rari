@@ -1,5 +1,5 @@
-use crate::error::RariError;
 use deno_core::{JsRuntime, PollEventLoopOptions, v8};
+use rari_error::RariError;
 use serde_json::Value as JsonValue;
 
 #[macro_export]

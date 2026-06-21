@@ -1,4 +1,5 @@
 use axum::http::StatusCode;
+use rari_error::RariError;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -128,35 +129,31 @@ impl fmt::Display for ApiRouteError {
 
 impl std::error::Error for ApiRouteError {}
 
-impl From<ApiRouteError> for crate::error::RariError {
+impl From<ApiRouteError> for RariError {
     fn from(error: ApiRouteError) -> Self {
         match error {
-            ApiRouteError::NotFound { message, .. } => crate::error::RariError::not_found(message)
-                .with_property("error_type", "api_route_not_found"),
+            ApiRouteError::NotFound { message, .. } => {
+                RariError::not_found(message).with_property("error_type", "api_route_not_found")
+            }
             ApiRouteError::MethodNotAllowed { message, allowed_methods, .. } => {
-                crate::error::RariError::bad_request(message)
+                RariError::bad_request(message)
                     .with_property("error_type", "method_not_allowed")
                     .with_property("allowed_methods", &allowed_methods.join(","))
             }
             ApiRouteError::HandlerError { message, .. } => {
-                crate::error::RariError::js_execution(message)
-                    .with_property("error_type", "handler_error")
+                RariError::js_execution(message).with_property("error_type", "handler_error")
             }
             ApiRouteError::InvalidResponse { message, .. } => {
-                crate::error::RariError::internal(message)
-                    .with_property("error_type", "invalid_response")
+                RariError::internal(message).with_property("error_type", "invalid_response")
             }
             ApiRouteError::HandlerFileNotFound { message, .. } => {
-                crate::error::RariError::not_found(message)
-                    .with_property("error_type", "handler_file_not_found")
+                RariError::not_found(message).with_property("error_type", "handler_file_not_found")
             }
             ApiRouteError::HandlerLoadError { message, .. } => {
-                crate::error::RariError::internal(message)
-                    .with_property("error_type", "handler_load_error")
+                RariError::internal(message).with_property("error_type", "handler_load_error")
             }
             ApiRouteError::BodyParseError { message, .. } => {
-                crate::error::RariError::bad_request(message)
-                    .with_property("error_type", "body_parse_error")
+                RariError::bad_request(message).with_property("error_type", "body_parse_error")
             }
         }
     }

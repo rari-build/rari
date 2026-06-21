@@ -1,8 +1,8 @@
-use crate::error::RariError;
 use crate::rsc::flight::escape::escape_rsc_value;
 use crate::rsc::rendering::streaming::types::RscWireFormatTag;
 use crate::rsc::types::tree::RSCTree;
 use cow_utils::CowUtils;
+use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
 use serde_json::Value;
@@ -1508,8 +1508,8 @@ impl SerializedReactElement {
 #[allow(clippy::module_inception)]
 mod tests {
     use super::*;
-    use crate::error::RariError;
     use crate::rsc::ServerComponentExecutor;
+    use rari_error::RariError;
     use rustc_hash::FxHashMap;
     use serde_json::Value;
     use serde_json::json;

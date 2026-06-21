@@ -4,7 +4,7 @@ use axum::response::{IntoResponse, Response};
 use futures::{Stream, StreamExt};
 use std::pin::Pin;
 
-use crate::error::RariError;
+use rari_error::RariError;
 
 pub struct StreamingHtmlResponse {
     stream: Pin<Box<dyn Stream<Item = Result<Vec<u8>, RariError>> + Send>>,

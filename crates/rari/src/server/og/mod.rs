@@ -9,12 +9,12 @@ pub use cache::OgImageCache;
 pub use generator::OgImageGenerator;
 pub use types::{OgImageParams, OgImageResult};
 
-use crate::error::RariError;
 use axum::{
     extract::{Path, State},
     http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
+use rari_error::RariError;
 use std::sync::Arc;
 
 pub async fn handle_og_image_request(

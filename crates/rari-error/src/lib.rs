@@ -1,8 +1,10 @@
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use thiserror::Error as ThisError;
+use thiserror::Error;
 
-#[derive(ThisError, Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub use deno_error::JsErrorBox;
+
+#[derive(Error, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum Error {
     #[error("{0} has no entrypoint. Register one, or add a default to the runtime")]
     MissingEntrypoint(String),
@@ -917,6 +919,18 @@ impl RariError {
             "code": self.code(),
             "status": self.status_code(),
         })
+    }
+}
+
+impl From<RariError> for JsErrorBox {
+    fn from(err: RariError) -> Self {
+        JsErrorBox::generic(err.to_string())
+    }
+}
+
+impl From<deno_core::v8::DataError> for RariError {
+    fn from(err: deno_core::v8::DataError) -> Self {
+        RariError::JsRuntime(format!("V8 Data Error: {err}"), None)
     }
 }
 

@@ -9,13 +9,13 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::time::{sleep, timeout};
 use tracing::error;
 
-use crate::error::RariError;
 use crate::rsc::components::ComponentRegistry;
 use crate::rsc::flight::serializer::RscSerializer;
 use crate::rsc::rendering::core::loader::{RscJsLoader, RscModuleOperation};
 use crate::rsc::rendering::streaming::{RscStream, StreamingRenderer};
 use crate::rsc::utils::dependencies::{extract_dependencies, hash_string};
 use crate::runtime::JsExecutionRuntime;
+use rari_error::RariError;
 
 use super::constants::*;
 use super::types::{ResourceLimits, ResourceMetrics, ResourceTracker};

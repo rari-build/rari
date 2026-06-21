@@ -7,7 +7,7 @@ use tower::{Layer, Service};
 use tracing::error;
 
 use crate::server::types::ServerState;
-use crate::utils::path_url::path_to_file_url;
+use rari_utils::path_url::path_to_file_url;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ProxyResult {
