@@ -325,7 +325,7 @@ async function getData(id) {
       expect(result.code).toContain('$$ACTION_BOUND_ARGS)=>async (...args)=>')
       expect(result.code).toContain('encodeBoundArgs(')
       expect(result.code).not.toContain('async function getData([$$ACTION_ARG_0], id)')
-      expect(result.code).toMatch(/"[\da-f]{42}"/)
+      expect(result.code).toMatch(/"[\da-f]{66}"/)
     })
 
     it('does not capture body-level bindings that shadow module bindings', () => {

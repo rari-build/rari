@@ -492,7 +492,7 @@ dependencies = [
  "serde_json",
  "serde_path_to_error",
  "serde_urlencoded",
- "sha1 0.10.6",
+ "sha1",
  "sync_wrapper",
  "tokio",
  "tokio-tungstenite",
@@ -1980,7 +1980,7 @@ dependencies = [
  "rsa",
  "serde",
  "serde_bytes",
- "sha1 0.10.6",
+ "sha1",
  "sha2 0.10.9",
  "sha3",
  "signature 2.2.0",
@@ -2483,7 +2483,7 @@ dependencies = [
  "rsa",
  "sec1 0.7.3",
  "serde",
- "sha1 0.10.6",
+ "sha1",
  "sha2 0.10.9",
  "sha3",
  "sm3",
@@ -3668,7 +3668,7 @@ dependencies = [
  "hyper-util",
  "pin-project",
  "rand 0.8.5",
- "sha1 0.10.6",
+ "sha1",
  "simdutf8",
  "thiserror 1.0.69",
  "tokio",
@@ -6407,7 +6407,7 @@ dependencies = [
  "hmac",
  "lazy_static",
  "rc2",
- "sha1 0.10.6",
+ "sha1",
  "yasna",
 ]
 
@@ -7339,7 +7339,7 @@ dependencies = [
  "napi-build",
  "napi-derive",
  "rustc-hash 2.1.2",
- "sha1 0.11.0",
+ "sha2 0.11.0",
 ]
 
 [[package]]
@@ -8301,17 +8301,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sha1"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aacc4cc499359472b4abe1bf11d0b12e688af9a805fa5e3016f9a386dc2d0214"
-dependencies = [
- "cfg-if",
- "cpufeatures 0.3.0",
- "digest 0.11.3",
-]
-
-[[package]]
 name = "sha2"
 version = "0.10.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9018,7 +9007,7 @@ dependencies = [
  "once_cell",
  "rustc-hash 2.1.2",
  "serde",
- "sha1 0.10.6",
+ "sha1",
  "string_enum",
  "swc_atoms",
  "swc_common",
@@ -9896,7 +9885,7 @@ dependencies = [
  "httparse",
  "log",
  "rand 0.9.4",
- "sha1 0.10.6",
+ "sha1",
  "thiserror 2.0.18",
 ]
 
