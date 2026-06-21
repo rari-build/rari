@@ -14,6 +14,7 @@ export interface ServerCacheControlConfig {
 
 export interface ServerCacheLayerConfig {
   handler?: string
+  url?: string
   maxEntries?: number
   defaultTtlSecs?: number
 }
@@ -22,8 +23,13 @@ export interface ServerCacheConfig {
   layers?: Record<string, ServerCacheLayerConfig>
 }
 
+export interface ServerUseCacheConfig {
+  remote?: ServerCacheLayerConfig
+}
+
 export interface ServerConfig {
   csp?: ServerCSPConfig
   cacheControl?: ServerCacheControlConfig
   cache?: ServerCacheConfig
+  useCache?: ServerUseCacheConfig
 }

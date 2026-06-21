@@ -12,6 +12,10 @@ readme = { workspace = true }
 keywords = { workspace = true }
 categories = { workspace = true }
 
+[features]
+default = [ "redis" ]
+redis = [ "dep:redis" ]
+
 [lib]
 crate-type = [ "rlib" ]
 
@@ -125,6 +129,7 @@ regex = { workspace = true }
 rustc-hash = { workspace = true }
 lru = "0.18.0"
 uuid = { version = "1.23.3", features = [ "v4" ] }
+redis = { version = "^0.32.7", default-features = false, features = [ "tokio-comp" ], optional = true }
 
 # === Image Processing & Layout ===
 image = { version = "0.25.10", default-features = false, features = [

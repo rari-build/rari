@@ -24,7 +24,7 @@ function getAddon(): NativeAddon | null {
   return addon
 }
 
-function extractPrologueLines(code: string): string[] {
+function extractPrologueLines(code: string) {
   const lines = code.split('\n')
   const prologue: string[] = []
   for (const line of lines) {

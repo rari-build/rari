@@ -69,9 +69,10 @@ pub struct RedirectConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", default)]
 pub struct CacheLayerConfig {
     pub handler: String,
+    pub url: Option<String>,
     pub max_entries: usize,
     pub default_ttl_secs: u64,
 }
@@ -80,6 +81,7 @@ impl Default for CacheLayerConfig {
     fn default() -> Self {
         Self {
             handler: "memory".to_string(),
+            url: None,
             max_entries: 1000,
             default_ttl_secs: 60,
         }
@@ -125,6 +127,13 @@ impl CacheConfig {
     pub fn layer(&self, name: &str) -> CacheLayerConfig {
         self.layers.get(name).cloned().unwrap_or_default()
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct UseCacheConfig {
+    #[serde(default)]
+    pub remote: Option<CacheLayerConfig>,
 }
 
 impl Default for RedirectConfig {
@@ -393,6 +402,8 @@ pub struct Config {
     pub images: crate::server::image::ImageConfig,
     #[serde(default)]
     pub cache: CacheConfig,
+    #[serde(default, rename = "useCache")]
+    pub use_cache: UseCacheConfig,
 }
 
 impl Config {
@@ -667,6 +678,31 @@ impl Config {
                                 e
                             );
                         }
+                    }
+                }
+            }
+
+            if let Some(use_cache_data) = config_data.get("useCache")
+                && let Some(remote_value) = use_cache_data.get("remote")
+            {
+                match serde_json::from_value::<CacheLayerConfig>(remote_value.clone()) {
+                    Ok(layer) => {
+                        let missing_url = layer
+                            .url
+                            .as_deref()
+                            .map(str::trim)
+                            .filter(|v| !v.is_empty())
+                            .is_none();
+                        if layer.handler == "redis" && missing_url {
+                            tracing::warn!(
+                                "Invalid useCache.remote: handler=redis requires a non-empty url. Ignoring remote cache config."
+                            );
+                        } else {
+                            config.use_cache.remote = Some(layer);
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to parse useCache.remote: {}. Using default.", e);
                     }
                 }
             }
@@ -1278,6 +1314,7 @@ mod tests {
     fn test_cache_layer_config_serialization() {
         let layer = CacheLayerConfig {
             handler: "memory".to_string(),
+            url: None,
             max_entries: 500,
             default_ttl_secs: 60,
         };

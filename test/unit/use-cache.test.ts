@@ -94,7 +94,6 @@ addonDescribe('use-cache addon', () => {
     const defaultOpts = {
       filename: 'test.js',
       hashSalt: 'rari-use-cache-v1',
-      cacheKinds: ['default'],
     }
 
     it('transforms async function with use cache directive', () => {
@@ -425,18 +424,6 @@ export default async function(id) {
       expect(result.code).toContain('export default $$RSC_SERVER_CACHE_DEFAULT_EXPORT')
     })
 
-    it('uses default cache kind when options list is empty', () => {
-      const src = `
-async function getData() {
-  "use cache";
-  return 42;
-}
-`
-      const result = useCacheAddon.transformUseCache(src, { ...defaultOpts, cacheKinds: [] })
-
-      expect(result.code).toContain('$$cache__("default"')
-    })
-
     it('stops directive scanning at non-string statements', () => {
       const src = `
 async function getData() {
@@ -712,5 +699,72 @@ async function getData() {
     )
 
     expect(result).toBeNull()
+  })
+
+  it('transforms use cache: remote with default cache kinds', async () => {
+    const source = `
+async function getData(id) {
+  "use cache: remote";
+  return await db.query(id);
+}
+`
+    const filePath = fixturePath('remote.tsx')
+    writeFixture(path.basename(filePath), source)
+    const p = mainPlugin.transform as any
+    const result = await p.call(
+      { environment: { name: 'rsc' } },
+      source,
+      filePath,
+    )
+
+    expect(result).not.toBeNull()
+    expect(result).toContain('$$cache__')
+    expect(result).toContain('"remote"')
+    expect(result).not.toContain('"use cache: remote"')
+  })
+
+  it('transforms use cache: remote with single-quoted directive', async () => {
+    const source = `
+async function getData() {
+  'use cache: remote';
+  return 42;
+}
+`
+    const filePath = fixturePath('remote-single-quote.tsx')
+    writeFixture(path.basename(filePath), source)
+    const p = mainPlugin.transform as any
+    const result = await p.call(
+      { environment: { name: 'rsc' } },
+      source,
+      filePath,
+    )
+
+    expect(result).not.toBeNull()
+    expect(result).toContain('"remote"')
+  })
+
+  it('transforms bare use cache as default kind alongside use cache: remote in same module', async () => {
+    const source = `
+async function bareCached() {
+  "use cache";
+  return 1;
+}
+async function remoteCached() {
+  "use cache: remote";
+  return 2;
+}
+`
+    const filePath = fixturePath('mixed-default-and-remote.tsx')
+    writeFixture(path.basename(filePath), source)
+    const p = mainPlugin.transform as any
+    const result = await p.call(
+      { environment: { name: 'rsc' } },
+      source,
+      filePath,
+    )
+
+    expect(result).not.toBeNull()
+    expect(result).toContain('$$cache__("default"')
+    expect(result).toContain('$$cache__("remote"')
   })
 })

@@ -1,5 +1,5 @@
 import type { Plugin } from 'vite-plus'
-import type { ServerCacheConfig, ServerCacheControlConfig, ServerConfig, ServerCSPConfig } from '../types/server-config'
+import type { ServerCacheConfig, ServerCacheControlConfig, ServerCacheLayerConfig, ServerConfig, ServerCSPConfig } from '../types/server-config'
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
@@ -119,6 +119,7 @@ export interface ServerBuildOptions {
   cache?: ServerCacheConfig
   experimental?: {
     useCache?: boolean
+    useCacheRemote?: ServerCacheLayerConfig
   }
 }
 
@@ -1269,6 +1270,11 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
       serverConfig.cacheControl = this.options.cacheControl
     if (this.options.cache)
       serverConfig.cache = this.options.cache
+    if (this.options.experimental?.useCacheRemote) {
+      serverConfig.useCache = {
+        remote: this.options.experimental.useCacheRemote,
+      }
+    }
 
     const serverConfigPath = path.join(
       this.options.outDir,

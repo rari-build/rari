@@ -1,7 +1,7 @@
 use deno_core::Extension;
 use deno_fs::{FileSystemRc, sync::MaybeArc};
 
-trait ExtensionTrait<A> {
+pub trait ExtensionTrait<A> {
     fn init(options: A) -> Extension;
 
     fn for_warmup(mut ext: Extension) -> Extension {

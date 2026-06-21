@@ -109,6 +109,7 @@ impl RariModuleLoader {
     ) -> Self {
         let layer = crate::server::config::CacheLayerConfig {
             handler: config.module_cache_handler.clone(),
+            url: None,
             max_entries: config.cache_size_limit,
             default_ttl_secs: DEFAULT_TTL_SECS,
         };

@@ -13,7 +13,6 @@ use napi::bindgen_prelude::*;
 pub struct TransformOptions {
     pub filename: String,
     pub hash_salt: Option<String>,
-    pub cache_kinds: Option<Vec<String>>,
 }
 
 #[napi(object)]
@@ -34,11 +33,8 @@ pub fn transform_use_cache(source: String, options: TransformOptions) -> Result<
     let hash_salt = options
         .hash_salt
         .unwrap_or_else(|| "rari-use-cache-v1".to_string());
-    let cache_kinds = options
-        .cache_kinds
-        .unwrap_or_else(|| vec!["default".to_string()]);
 
-    let result = transform::transform_source(&source, &options.filename, &hash_salt, &cache_kinds)
+    let result = transform::transform_source(&source, &options.filename, &hash_salt)
         .map_err(Error::from_reason)?;
 
     Ok(TransformResult {

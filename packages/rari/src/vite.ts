@@ -80,11 +80,17 @@ export { rariRouter } from './router/vite-plugin'
 export type { Robots, RobotsRule, Sitemap, SitemapEntry, SitemapImage, SitemapVideo } from './types/metadata-route'
 
 export type {
+  ServerCacheConfig,
+  ServerCacheControlConfig,
+  ServerCacheLayerConfig,
   ServerConfig,
   ServerCSPConfig,
+  ServerUseCacheConfig,
 } from './types/server-config'
 
 export { defineRariConfig, defineRariOptions } from './vite/index'
+
+export type { RariOptions, RouterPluginOptions } from './vite/index'
 
 export function rari(options?: Parameters<typeof _rari>[0]): any[] {
   return _rari(options)
