@@ -201,7 +201,7 @@ impl RariRuntime {
 }
 
 async fn handle_load_es_module(
-    deno_runtime: &mut deno_core::JsRuntime,
+    js_runtime: &mut deno_core::JsRuntime,
     module_loader: &std::rc::Rc<RariModuleLoader>,
     component_id: &str,
     result_tx: oneshot::Sender<Result<deno_core::ModuleId, RariError>>,
@@ -219,15 +219,15 @@ async fn handle_load_es_module(
                     {
                         match ModuleSpecifier::parse(&versioned_specifier) {
                             Ok(versioned_module_specifier) => {
-                                deno_runtime.load_side_es_module(&versioned_module_specifier).await
+                                js_runtime.load_side_es_module(&versioned_module_specifier).await
                             }
-                            Err(_) => deno_runtime.load_side_es_module(&module_specifier).await,
+                            Err(_) => js_runtime.load_side_es_module(&module_specifier).await,
                         }
                     } else {
-                        deno_runtime.load_side_es_module(&module_specifier).await
+                        js_runtime.load_side_es_module(&module_specifier).await
                     }
                 } else {
-                    deno_runtime.load_side_es_module(&module_specifier).await
+                    js_runtime.load_side_es_module(&module_specifier).await
                 };
 
                 let module_load_result = module_load_result.map_err(|e| {
@@ -255,7 +255,7 @@ async fn handle_load_es_module(
 }
 
 async fn handle_evaluate_module(
-    deno_runtime: &mut deno_core::JsRuntime,
+    js_runtime: &mut deno_core::JsRuntime,
     module_loader: &std::rc::Rc<RariModuleLoader>,
     module_id: deno_core::ModuleId,
     result_tx: oneshot::Sender<Result<JsonValue, RariError>>,
@@ -264,21 +264,21 @@ async fn handle_evaluate_module(
     let module_registered = module_loader.is_already_evaluated(&module_id.to_string());
 
     let result = if module_registered {
-        match get_module_namespace_as_json(deno_runtime, module_id) {
+        match get_module_namespace_as_json(js_runtime, module_id) {
             Ok(json_result) => Ok(json_result),
             Err(_) => Ok(create_already_evaluated_response("get_module_namespace")),
         }
     } else {
-        match deno_runtime.mod_evaluate(module_id).await {
+        match js_runtime.mod_evaluate(module_id).await {
             Ok(_) => {
                 module_loader.mark_module_evaluated(&module_id.to_string());
-                get_module_namespace_as_json(deno_runtime, module_id)
+                get_module_namespace_as_json(js_runtime, module_id)
             }
             Err(e) => {
                 if e.to_string().contains(MODULE_ALREADY_EVALUATED_ERROR) {
                     module_loader.mark_module_evaluated(&module_id.to_string());
 
-                    match get_module_namespace_as_json(deno_runtime, module_id) {
+                    match get_module_namespace_as_json(js_runtime, module_id) {
                         Ok(json_result) => Ok(json_result),
                         Err(_) => Ok(create_already_evaluated_response("get_module_namespace")),
                     }
@@ -303,7 +303,7 @@ async fn handle_evaluate_module(
 }
 
 async fn handle_get_module_namespace(
-    deno_runtime: &mut deno_core::JsRuntime,
+    js_runtime: &mut deno_core::JsRuntime,
     module_loader: &std::rc::Rc<RariModuleLoader>,
     module_id: deno_core::ModuleId,
     result_tx: oneshot::Sender<Result<JsonValue, RariError>>,
@@ -312,23 +312,21 @@ async fn handle_get_module_namespace(
 
     if module_evaluated {
         let json_result =
-            get_module_namespace_as_json(deno_runtime, module_id as deno_core::ModuleId);
+            get_module_namespace_as_json(js_runtime, module_id as deno_core::ModuleId);
         let _ = result_tx.send(json_result);
     } else {
-        match deno_runtime.mod_evaluate(module_id as deno_core::ModuleId).await {
+        match js_runtime.mod_evaluate(module_id as deno_core::ModuleId).await {
             Ok(_) => {
                 module_loader.mark_module_evaluated(&module_id.to_string());
                 let json_result =
-                    get_module_namespace_as_json(deno_runtime, module_id as deno_core::ModuleId);
+                    get_module_namespace_as_json(js_runtime, module_id as deno_core::ModuleId);
                 let _ = result_tx.send(json_result);
             }
             Err(e) => {
                 if e.to_string().contains(MODULE_ALREADY_EVALUATED_ERROR) {
                     module_loader.mark_module_evaluated(&module_id.to_string());
-                    let json_result = get_module_namespace_as_json(
-                        deno_runtime,
-                        module_id as deno_core::ModuleId,
-                    );
+                    let json_result =
+                        get_module_namespace_as_json(js_runtime, module_id as deno_core::ModuleId);
                     let _ = result_tx.send(json_result);
                 } else {
                     let _ = result_tx.send(Err(RariError::js_execution(format!(
@@ -343,7 +341,7 @@ async fn handle_get_module_namespace(
 
 async fn handle_js_request(
     request: JsRequest,
-    deno_runtime: &mut deno_core::JsRuntime,
+    js_runtime: &mut deno_core::JsRuntime,
     module_loader: &std::rc::Rc<RariModuleLoader>,
     continue_processing: &mut bool,
     pending_batches: &mut Vec<PendingBatch>,
@@ -352,7 +350,7 @@ async fn handle_js_request(
     match request {
         JsRequest::ExecuteScript { script_name, script_code, result_tx } => {
             let result =
-                execute_script(deno_runtime, module_loader, &script_name, &script_code).await;
+                execute_script(js_runtime, module_loader, &script_name, &script_code).await;
             if let Err(e) = &result
                 && is_runtime_restart_needed(e)
             {
@@ -377,7 +375,7 @@ async fn handle_js_request(
                 .collect();
 
             if let Some(pending_batch) =
-                setup_concurrent_batch(deno_runtime, batch, batch_id_counter).await
+                setup_concurrent_batch(js_runtime, batch, batch_id_counter).await
             {
                 pending_batches.push(pending_batch);
             }
@@ -393,11 +391,11 @@ async fn handle_js_request(
             }
         }
         JsRequest::LoadEsModule { component_id, result_tx } => {
-            handle_load_es_module(deno_runtime, module_loader, &component_id, result_tx).await?;
+            handle_load_es_module(js_runtime, module_loader, &component_id, result_tx).await?;
         }
         JsRequest::EvaluateModule { module_id, result_tx } => {
             handle_evaluate_module(
-                deno_runtime,
+                js_runtime,
                 module_loader,
                 module_id,
                 result_tx,
@@ -406,7 +404,7 @@ async fn handle_js_request(
             .await?;
         }
         JsRequest::GetModuleNamespace { module_id, result_tx } => {
-            handle_get_module_namespace(deno_runtime, module_loader, module_id, result_tx).await?;
+            handle_get_module_namespace(js_runtime, module_loader, module_id, result_tx).await?;
         }
         JsRequest::AddModuleToLoaderOnly { specifier, code, result_tx } => {
             module_loader.set_module_code(specifier.clone(), code.clone());
@@ -428,16 +426,16 @@ async fn handle_js_request(
             let _ = result_tx.send(Ok(()));
         }
         JsRequest::SetRequestContext { request_context, result_tx } => {
-            deno_runtime.op_state().borrow_mut().put(request_context);
+            js_runtime.op_state().borrow_mut().put(request_context);
             let _ = result_tx.send(Ok(()));
         }
         JsRequest::ClearRequestContext { result_tx } => {
-            deno_runtime.op_state().borrow_mut().try_take::<std::sync::Arc<crate::server::middleware::request_context::RequestContext>>();
+            js_runtime.op_state().borrow_mut().try_take::<std::sync::Arc<crate::server::middleware::request_context::RequestContext>>();
             let _ = result_tx.send(Ok(()));
         }
         JsRequest::ClearRequestContextIfMatches { expected_context, result_tx } => {
             let should_clear = {
-                let op_state = deno_runtime.op_state();
+                let op_state = js_runtime.op_state();
                 let borrowed = op_state.borrow();
                 if let Some(current_context) = borrowed.try_borrow::<std::sync::Arc<crate::server::middleware::request_context::RequestContext>>() {
                     std::sync::Arc::ptr_eq(current_context, &expected_context)
@@ -447,7 +445,7 @@ async fn handle_js_request(
             };
 
             if should_clear {
-                deno_runtime.op_state().borrow_mut().try_take::<std::sync::Arc<crate::server::middleware::request_context::RequestContext>>();
+                js_runtime.op_state().borrow_mut().try_take::<std::sync::Arc<crate::server::middleware::request_context::RequestContext>>();
             }
             let _ = result_tx.send(Ok(()));
         }
@@ -456,7 +454,7 @@ async fn handle_js_request(
 }
 
 async fn setup_concurrent_batch(
-    deno_runtime: &mut deno_core::JsRuntime,
+    js_runtime: &mut deno_core::JsRuntime,
     batch: Vec<ScriptBatchItem>,
     batch_id_counter: &mut u64,
 ) -> Option<PendingBatch> {
@@ -466,10 +464,10 @@ async fn setup_concurrent_batch(
     let mut pending: Vec<PendingScript> = Vec::with_capacity(batch.len());
 
     for (script_name, script_code, tx) in batch {
-        match deno_runtime.execute_script(script_name.clone(), script_code.clone()) {
+        match js_runtime.execute_script(script_name.clone(), script_code.clone()) {
             Ok(v8_val) => {
                 let slot_key = format!("__rari_b{}_{}__", batch_id, pending.len());
-                let store_result = with_scope!(deno_runtime, |scope| {
+                let store_result = with_scope!(js_runtime, |scope| {
                     let local_val = deno_core::v8::Local::new(scope, &v8_val);
                     let context = scope.get_current_context();
                     let global = context.global(scope);
@@ -532,10 +530,10 @@ async fn setup_concurrent_batch(
             }})()"#,
             slot_key, slot_key, slot_key, slot_key, slot_key
         );
-        if let Err(e) = deno_runtime.execute_script(format!("setup_concurrent_{i}"), setup) {
+        if let Err(e) = js_runtime.execute_script(format!("setup_concurrent_{i}"), setup) {
             eprintln!("[rari] Failed to setup concurrent tracking for slot {i}: {e}");
             let cleanup = format!("delete globalThis['{}']", slot_key);
-            let _ = deno_runtime.execute_script(format!("cleanup_setup_{i}"), cleanup);
+            let _ = js_runtime.execute_script(format!("cleanup_setup_{i}"), cleanup);
 
             *sent_item = true;
 
@@ -561,7 +559,7 @@ async fn setup_concurrent_batch(
 }
 
 fn check_pending_batches(
-    deno_runtime: &mut deno_core::JsRuntime,
+    js_runtime: &mut deno_core::JsRuntime,
     pending_batches: &mut [PendingBatch],
 ) {
     for batch in pending_batches.iter_mut() {
@@ -579,7 +577,7 @@ fn check_pending_batches(
                 slot_key
             );
 
-            let check_result = deno_runtime.execute_script(format!("check_slot_{i}"), check);
+            let check_result = js_runtime.execute_script(format!("check_slot_{i}"), check);
 
             if let Err(e) = check_result {
                 let cleanup = format!(
@@ -593,7 +591,7 @@ fn check_pending_batches(
                     }})()"#,
                     slot_key, slot_key, slot_key, slot_key
                 );
-                let _ = deno_runtime.execute_script(format!("cleanup_check_error_{i}"), cleanup);
+                let _ = js_runtime.execute_script(format!("cleanup_check_error_{i}"), cleanup);
 
                 if let Some(tx) = batch.senders[i].take() {
                     let _ = tx.send(Err(RariError::js_execution(format!(
@@ -607,7 +605,7 @@ fn check_pending_batches(
             }
 
             let check_value = check_result.expect("check_result is Ok after error check");
-            let is_done = with_scope!(deno_runtime, |scope| {
+            let is_done = with_scope!(js_runtime, |scope| {
                 let local = deno_core::v8::Local::new(scope, check_value);
                 !local.is_null_or_undefined()
             });
@@ -626,11 +624,11 @@ fn check_pending_batches(
                     }})()"#,
                     slot_key, slot_key, slot_key
                 );
-                let result = match deno_runtime
+                let result = match js_runtime
                     .execute_script(format!("extract_concurrent_{i}"), extract)
                 {
                     Ok(extracted) => {
-                        let json_result = with_scope!(deno_runtime, |scope| {
+                        let json_result = with_scope!(js_runtime, |scope| {
                             let local = deno_core::v8::Local::new(scope, extracted);
                             v8_to_json(scope, local)
                         });
@@ -659,7 +657,7 @@ fn check_pending_batches(
                                         }})()"#,
                                     slot_key, slot_key, slot_key, slot_key
                                 );
-                                let _ = deno_runtime
+                                let _ = js_runtime
                                     .execute_script(format!("cleanup_extract_shape_{i}"), cleanup);
                                 Err(RariError::internal(
                                     "Concurrent extraction wrapper was not an object".to_string(),
@@ -677,7 +675,7 @@ fn check_pending_batches(
                                         }})()"#,
                                     slot_key, slot_key, slot_key, slot_key
                                 );
-                                let _ = deno_runtime
+                                let _ = js_runtime
                                     .execute_script(format!("cleanup_extract_json_{i}"), cleanup);
                                 Err(e)
                             }
@@ -695,7 +693,7 @@ fn check_pending_batches(
                                 }})()"#,
                             slot_key, slot_key, slot_key, slot_key
                         );
-                        let _ = deno_runtime
+                        let _ = js_runtime
                             .execute_script(format!("cleanup_extract_error_{i}"), cleanup);
                         Err(RariError::js_execution(format!(
                             "Failed to extract result for '{}': {}",
@@ -727,7 +725,7 @@ fn check_pending_batches(
                         }})()"#,
                         slot_key, slot_key, slot_key, slot_key
                     );
-                    let _ = deno_runtime.execute_script(format!("cleanup_timeout_{i}"), cleanup);
+                    let _ = js_runtime.execute_script(format!("cleanup_timeout_{i}"), cleanup);
 
                     if let Some(tx) = batch.senders[i].take() {
                         let _ = tx.send(Err(RariError::timeout(format!(
