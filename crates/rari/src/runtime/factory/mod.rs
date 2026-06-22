@@ -1,9 +1,8 @@
-pub(crate) mod constants;
 mod executor;
 mod interface;
 mod runtime;
 mod runtime_builder;
-mod v8_utils;
+pub(crate) mod utils;
 
 pub use interface::JsRuntimeInterface;
 pub use runtime::RariRuntime;

@@ -1,4 +1,4 @@
-use crate::runtime::factory::constants::{
+use crate::runtime::factory::utils::constants::{
     API_HANDLER_INIT_SCRIPT, COMPONENT_LOADER_INIT_SCRIPT, COOKIES_INIT_SCRIPT,
     ENV_INJECTION_SCRIPT, METADATA_COLLECTOR_INIT_SCRIPT, MODULE_CHECK_SCRIPT,
 };

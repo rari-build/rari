@@ -1,11 +1,9 @@
 use super::{
     cache::{DEFAULT_TTL_SECS, ModuleCaching},
     config::RuntimeConfig,
-    loader_stubs::*,
-    rari_stubs::*,
-    react_stubs::*,
     resolver::ModuleResolver,
     storage::ModuleStorage,
+    stubs::*,
     transpiler::*,
 };
 use crate::rsc::utils::dependencies::DependencyList;

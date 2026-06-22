@@ -1,5 +1,5 @@
-use crate::runtime::factory::constants::*;
-use crate::runtime::factory::v8_utils::{
+use crate::runtime::factory::utils::constants::*;
+use crate::runtime::factory::utils::v8::{
     is_promise, run_event_loop_with_error_handling, run_event_loop_with_promise_timeout, v8_to_json,
 };
 use crate::runtime::module::loader::RariModuleLoader;

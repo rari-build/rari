@@ -1,11 +1,9 @@
 pub mod cache;
 pub mod config;
 pub mod core;
-pub mod loader_stubs;
-pub mod rari_stubs;
-pub mod react_stubs;
 pub mod resolver;
 pub mod storage;
+pub mod stubs;
 pub mod transpiler;
 
 pub use cache::ModuleCaching;

@@ -1,8 +1,8 @@
-use crate::runtime::factory::constants::*;
 use crate::runtime::factory::executor::execute_script;
 use crate::runtime::factory::interface::{AsyncBatchResult, JsRuntimeInterface};
 use crate::runtime::factory::runtime_builder::build_js_runtime;
-use crate::runtime::factory::v8_utils::{get_module_namespace_as_json, v8_to_json};
+use crate::runtime::factory::utils::constants::*;
+use crate::runtime::factory::utils::v8::{get_module_namespace_as_json, v8_to_json};
 use crate::runtime::module::loader::RariModuleLoader;
 use crate::with_scope;
 use deno_core::{ModuleSpecifier, PollEventLoopOptions};
@@ -139,7 +139,7 @@ impl RariRuntime {
                                 }
                                 event_loop_result = tokio::time::timeout(
                                     std::time::Duration::from_millis(50),
-                                    crate::runtime::factory::v8_utils::run_event_loop_with_error_handling(
+                                    crate::runtime::factory::utils::v8::run_event_loop_with_error_handling(
                                         &mut js_runtime, "concurrent batch"
                                     ),
                                 ) => {
