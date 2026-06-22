@@ -1,7 +1,7 @@
 use crate::runtime::factory::constants::*;
 use crate::runtime::factory::executor::execute_script;
 use crate::runtime::factory::interface::{AsyncBatchResult, JsRuntimeInterface};
-use crate::runtime::factory::runtime_builder::create_deno_runtime;
+use crate::runtime::factory::runtime_builder::build_js_runtime;
 use crate::runtime::factory::v8_utils::{get_module_namespace_as_json, v8_to_json};
 use crate::runtime::module::loader::RariModuleLoader;
 use crate::with_scope;
@@ -80,11 +80,11 @@ enum JsRequest {
     },
 }
 
-pub struct DenoRuntime {
+pub struct RariRuntime {
     request_sender: mpsc::Sender<JsRequest>,
 }
 
-impl DenoRuntime {
+impl RariRuntime {
     pub fn new(env_vars: Option<FxHashMap<String, String>>) -> Self {
         let (request_sender, mut request_receiver) = mpsc::channel(CHANNEL_CAPACITY);
 
@@ -96,8 +96,8 @@ impl DenoRuntime {
 
             runtime.block_on(async {
                 loop {
-                    let (mut deno_runtime, module_loader) =
-                        match create_deno_runtime(env_vars.clone()) {
+                    let (mut js_runtime, module_loader) =
+                        match build_js_runtime(env_vars.clone()) {
                             Ok(rt) => rt,
                             Err(_) => {
                                 tokio::time::sleep(std::time::Duration::from_millis(
@@ -121,7 +121,7 @@ impl DenoRuntime {
                                         Some(req) => {
                                             let result = handle_js_request(
                                                 req,
-                                                &mut deno_runtime,
+                                                &mut js_runtime,
                                                 &module_loader,
                                                 &mut continue_processing,
                                                 &mut pending_batches,
@@ -140,7 +140,7 @@ impl DenoRuntime {
                                 event_loop_result = tokio::time::timeout(
                                     std::time::Duration::from_millis(50),
                                     crate::runtime::factory::v8_utils::run_event_loop_with_error_handling(
-                                        &mut deno_runtime, "concurrent batch"
+                                        &mut js_runtime, "concurrent batch"
                                     ),
                                 ) => {
                                     if let Ok(Err(e)) = event_loop_result {
@@ -157,14 +157,14 @@ impl DenoRuntime {
                                 }
                             }
 
-                            check_pending_batches(&mut deno_runtime, &mut pending_batches);
+                            check_pending_batches(&mut js_runtime, &mut pending_batches);
                             pending_batches.retain(|b| b.remaining > 0 && b.start.elapsed() < b.timeout);
                         } else {
                             match request_receiver.recv().await {
                                 Some(req) => {
                                     let result = handle_js_request(
                                         req,
-                                        &mut deno_runtime,
+                                        &mut js_runtime,
                                         &module_loader,
                                         &mut continue_processing,
                                         &mut pending_batches,
@@ -183,7 +183,7 @@ impl DenoRuntime {
 
                         let _ = tokio::time::timeout(
                             std::time::Duration::from_millis(10),
-                            deno_runtime.run_event_loop(PollEventLoopOptions::default()),
+                            js_runtime.run_event_loop(PollEventLoopOptions::default()),
                         ).await;
                     }
 
@@ -771,7 +771,7 @@ fn extract_component_id_from_specifier(specifier: &str) -> String {
     }
 }
 
-impl JsRuntimeInterface for DenoRuntime {
+impl JsRuntimeInterface for RariRuntime {
     fn execute_script(
         &self,
         script_name: String,

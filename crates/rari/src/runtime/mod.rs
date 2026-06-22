@@ -16,7 +16,7 @@ use crate::server::rendering::metadata::{finalize_metadata, merge_metadata};
 use factory::JsRuntimeInterface;
 
 pub struct JsExecutionRuntime {
-    runtime: Arc<factory::DenoRuntime>,
+    runtime: Arc<factory::RariRuntime>,
     timeout_ms: u64,
 }
 
