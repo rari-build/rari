@@ -1,20 +1,19 @@
-pub(crate) mod constants;
-mod deno_runtime;
 mod executor;
 mod interface;
+mod runtime;
 mod runtime_builder;
-mod v8_utils;
+pub(crate) mod utils;
 
-pub use deno_runtime::DenoRuntime;
 pub use interface::JsRuntimeInterface;
+pub use runtime::RariRuntime;
 
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
 
-pub fn create_runtime() -> Arc<DenoRuntime> {
-    Arc::new(DenoRuntime::new(None))
+pub fn create_runtime() -> Arc<RariRuntime> {
+    Arc::new(RariRuntime::new(None))
 }
 
-pub fn create_runtime_with_env(env_vars: FxHashMap<String, String>) -> Arc<DenoRuntime> {
-    Arc::new(DenoRuntime::new(Some(env_vars)))
+pub fn create_runtime_with_env(env_vars: FxHashMap<String, String>) -> Arc<RariRuntime> {
+    Arc::new(RariRuntime::new(Some(env_vars)))
 }

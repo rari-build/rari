@@ -1,4 +1,4 @@
-use crate::runtime::factory::constants::{
+use crate::runtime::factory::utils::constants::{
     API_HANDLER_INIT_SCRIPT, COMPONENT_LOADER_INIT_SCRIPT, COOKIES_INIT_SCRIPT,
     ENV_INJECTION_SCRIPT, METADATA_COLLECTOR_INIT_SCRIPT, MODULE_CHECK_SCRIPT,
 };
@@ -14,7 +14,7 @@ use std::rc::Rc;
 static RUNTIME_SNAPSHOT: &[u8] = include_bytes!("../../../snapshots/RARI_SNAPSHOT.bin");
 include!("../../../snapshots/residual_lazy_sources.rs");
 
-pub fn create_deno_runtime(
+pub fn build_js_runtime(
     env_vars: Option<FxHashMap<String, String>>,
 ) -> Result<(JsRuntime, Rc<RariModuleLoader>), RariError> {
     let module_loader = Rc::new(RariModuleLoader::new());
