@@ -1,25 +1,16 @@
 [package]
 name = "rari"
 version = "0.14.12"
-authors = { workspace = true }
 edition = { workspace = true }
+authors = { workspace = true }
 license = { workspace = true }
+description = { workspace = true }
+homepage = { workspace = true }
 repository = { workspace = true }
-description = "rari: Runtime Accelerated Rendering Infrastructure - A high-performance React Server Components framework powered by Rust"
-keywords = [
-  "react",
-  "server-components",
-  "rsc",
-  "ssr",
-  "framework"
-]
-categories = [
-  "web-programming",
-  "web-programming::http-server"
-]
-readme = "../../README.md"
-homepage = "https://github.com/rari-build/rari"
-documentation = "https://github.com/rari-build/rari/tree/main/web"
+documentation = { workspace = true }
+readme = { workspace = true }
+keywords = { workspace = true }
+categories = { workspace = true }
 
 [lib]
 crate-type = [ "rlib" ]
@@ -156,7 +147,7 @@ resvg = "0.47.0"
 # === System Integration ===
 hyper-util = { version = "0.1.20", features = [
   "tokio",
-  "client-legacy",
+  "client-legacy"
 ] }
 libc = "0.2.182"
 nix = { version = "=0.30.1", features = [ "term" ] }

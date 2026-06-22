@@ -11,10 +11,25 @@ members = [
 resolver = "2"
 
 [workspace.package]
-authors = [ "Ryan Skinner" ]
 edition = "2024"
+authors = [ "Ryan Skinner" ]
 license = "MIT"
+description = "rari: Runtime Accelerated Rendering Infrastructure - A high-performance React Server Components framework powered by Rust"
+homepage = "https://github.com/rari-build/rari"
 repository = "https://github.com/rari-build/rari"
+documentation = "https://github.com/rari-build/rari/tree/main/web"
+readme = "README.md"
+keywords = [
+  "react",
+  "server-components",
+  "rsc",
+  "ssr",
+  "framework"
+]
+categories = [
+  "web-programming",
+  "web-programming::http-server"
+]
 
 [workspace.lints.clippy]
 # Restriction rules for better code quality
