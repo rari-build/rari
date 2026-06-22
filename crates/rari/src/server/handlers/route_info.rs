@@ -1,8 +1,8 @@
 use axum::{Json, extract::State, http::StatusCode};
 use serde::{Deserialize, Serialize};
 
+use crate::server::core::types::ServerState;
 use crate::server::routing::types::RouteSegment;
-use crate::server::types::ServerState;
 
 #[derive(Debug, Deserialize)]
 pub struct RouteInfoRequest {

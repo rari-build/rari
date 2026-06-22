@@ -1,4 +1,5 @@
-use crate::server::utils::client::get_http_client;
+use crate::server::core::utils::client::get_http_client;
+use crate::server::middleware::request_context::{PendingCookie, PendingCookieKey};
 use deno_core::{OpDecl, OpState, op2};
 use deno_error::JsErrorBox;
 use serde::Deserialize;
@@ -468,8 +469,6 @@ pub fn op_set_cookie(
     state: Rc<RefCell<OpState>>,
     #[serde] args: SetCookieArgs,
 ) -> Result<(), JsErrorBox> {
-    use crate::server::middleware::request_context::{PendingCookie, PendingCookieKey};
-
     if !crate::rsc::actions::is_valid_cookie_name(&args.name) {
         return Err(JsErrorBox::type_error(format!("Invalid cookie name: '{}'", args.name)));
     }
@@ -527,7 +526,6 @@ pub fn op_set_cookie(
 
 #[op2(fast)]
 pub fn op_delete_cookie(state: Rc<RefCell<OpState>>, #[string] name: String) {
-    use crate::server::middleware::request_context::{PendingCookie, PendingCookieKey};
     let op_state_ref = state.borrow();
     if let Some(ctx) =
         op_state_ref.try_borrow::<Arc<crate::server::middleware::request_context::RequestContext>>()
@@ -582,6 +580,36 @@ pub fn op_delete_cookie(state: Rc<RefCell<OpState>>, #[string] name: String) {
     }
 }
 
+#[op2]
+#[serde]
+pub fn op_cache_get(
+    state: Rc<RefCell<OpState>>,
+    #[string] cache_key: String,
+) -> Option<serde_json::Value> {
+    let op_state_ref = state.borrow();
+    if let Some(ctx) =
+        op_state_ref.try_borrow::<Arc<crate::server::middleware::request_context::RequestContext>>()
+    {
+        ctx.function_cache.get(&cache_key).map(|entry| entry.value().clone())
+    } else {
+        None
+    }
+}
+
+#[op2]
+pub fn op_cache_set(
+    state: Rc<RefCell<OpState>>,
+    #[string] cache_key: String,
+    #[serde] value: serde_json::Value,
+) {
+    let op_state_ref = state.borrow();
+    if let Some(ctx) =
+        op_state_ref.try_borrow::<Arc<crate::server::middleware::request_context::RequestContext>>()
+    {
+        ctx.function_cache.insert(cache_key, value);
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::disallowed_methods)]
 mod tests {
@@ -624,35 +652,5 @@ mod tests {
         assert!(error_op.contains("\"type\":\"error\""));
         assert!(error_op.contains("\"message\":\"Test error\""));
         assert!(error_op.contains("\"stack\":\"stack trace\""));
-    }
-}
-
-#[op2]
-#[serde]
-pub fn op_cache_get(
-    state: Rc<RefCell<OpState>>,
-    #[string] cache_key: String,
-) -> Option<serde_json::Value> {
-    let op_state_ref = state.borrow();
-    if let Some(ctx) =
-        op_state_ref.try_borrow::<Arc<crate::server::middleware::request_context::RequestContext>>()
-    {
-        ctx.function_cache.get(&cache_key).map(|entry| entry.value().clone())
-    } else {
-        None
-    }
-}
-
-#[op2]
-pub fn op_cache_set(
-    state: Rc<RefCell<OpState>>,
-    #[string] cache_key: String,
-    #[serde] value: serde_json::Value,
-) {
-    let op_state_ref = state.borrow();
-    if let Some(ctx) =
-        op_state_ref.try_borrow::<Arc<crate::server::middleware::request_context::RequestContext>>()
-    {
-        ctx.function_cache.insert(cache_key, value);
     }
 }

@@ -1,6 +1,7 @@
 use crate::server::ServerState;
 use crate::server::config::Config;
-use crate::server::utils::http::get_content_type;
+use crate::server::core::utils::http::get_content_type;
+use crate::server::core::utils::path_validation::validate_safe_path;
 use axum::{
     body::Body,
     extract::{Path, State},
@@ -44,8 +45,6 @@ pub async fn static_or_spa_handler(
     State(_state): State<ServerState>,
     Path(path): Path<String>,
 ) -> Result<Response, StatusCode> {
-    use crate::server::utils::path_validation::validate_safe_path;
-
     const BLOCKED_FILES: &[&str] = &["server/manifest.json", "server/routes.json", "server/"];
 
     for blocked in BLOCKED_FILES {
@@ -129,8 +128,6 @@ pub async fn serve_static_asset(
     State(state): State<ServerState>,
     Path(asset_path): Path<String>,
 ) -> Result<Response, StatusCode> {
-    use crate::server::utils::path_validation::validate_safe_path;
-
     if asset_path.contains("server/manifest.json")
         || asset_path.contains("server/routes.json")
         || asset_path.starts_with("../")

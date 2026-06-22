@@ -82,7 +82,7 @@ build-web: _ensure-node-deps
     pnpm --filter @rari/web build
 
 build-addon-dev:
-    cargo run --release --bin prepare-binaries -- --addon --dev
+    cargo run --manifest-path tools/prepare-binaries/Cargo.toml -- --addon --dev
 
 # --- Test commands ---
 

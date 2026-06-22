@@ -6,16 +6,19 @@ use crate::rsc::rendering::layout::{
 use crate::rsc::rendering::streaming::stream::RscStream;
 use crate::server::ServerState;
 use crate::server::cache::response;
-use crate::server::compression::CompressionEncoding;
+use crate::server::compression::{CompressionEncoding, compress_stream};
 use crate::server::config::Config;
-use crate::server::rendering::metadata_injection::inject_metadata;
-use crate::server::rendering::utils::{
-    extract_asset_links_from_index_html, inject_assets_into_html, inject_vite_client,
-};
-use crate::server::routing::app_router::AppRouteMatch;
-use crate::server::utils::http::{
+use crate::server::core::types::request::{RenderMode, RequestTypeDetector};
+use crate::server::core::utils::http::{
     extract_headers, extract_search_params, get_content_type, merge_vary_with_accept,
 };
+use crate::server::core::utils::path_validation::validate_safe_path;
+use crate::server::rendering::metadata_injection::inject_metadata;
+use crate::server::rendering::utils::{
+    extract_asset_links_from_index_html, extract_body_scripts_from_index_html,
+    inject_assets_into_html, inject_vite_client,
+};
+use crate::server::routing::app_router::AppRouteMatch;
 use axum::{
     body::Body,
     extract::{Query, State},
@@ -424,8 +427,6 @@ async fn render_rsc_streaming_response(
     is_not_found: bool,
     accept_encoding: Option<&str>,
 ) -> Result<Response, StatusCode> {
-    use crate::server::compression::compress_stream;
-
     let should_continue = Arc::new(std::sync::atomic::AtomicBool::new(true));
     let should_continue_clone = should_continue.clone();
 
@@ -547,9 +548,6 @@ async fn render_streaming_response(
     is_not_found: bool,
     accept_encoding: Option<&str>,
 ) -> Result<Response, StatusCode> {
-    use crate::server::compression::compress_stream;
-    use crate::server::rendering::utils::extract_body_scripts_from_index_html;
-
     let asset_links = extract_asset_links_from_index_html().await;
     let body_scripts = extract_body_scripts_from_index_html().await;
 
@@ -855,8 +853,6 @@ pub async fn handle_app_route(
     Query(query_params): Query<FxHashMap<String, String>>,
     headers: axum::http::HeaderMap,
 ) -> Result<Response, StatusCode> {
-    use crate::server::types::request::{RenderMode, RequestTypeDetector};
-
     let path = uri.path();
 
     fn should_use_streaming(
@@ -880,8 +876,6 @@ pub async fn handle_app_route(
                     return Err(StatusCode::NOT_FOUND);
                 }
             }
-
-            use crate::server::utils::path_validation::validate_safe_path;
 
             if let Ok(file_path) =
                 validate_safe_path(state.config.public_dir(), path_without_leading_slash)

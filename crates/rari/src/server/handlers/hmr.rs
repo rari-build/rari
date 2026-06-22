@@ -1,9 +1,12 @@
 use crate::server::ServerState;
 use crate::server::config::Config;
+use crate::server::core::utils::component::extract_component_id;
+use crate::server::core::utils::path_validation::{
+    normalize_component_path, validate_component_path, validate_safe_path,
+};
 use crate::server::handlers::rsc::{
     immediate_component_reregistration, reload_component_from_dist,
 };
-use crate::server::utils::component::extract_component_id;
 use axum::{extract::State, http::StatusCode, response::Json};
 use cow_utils::CowUtils;
 use serde::{Deserialize, Serialize};
@@ -87,10 +90,6 @@ async fn invalidate_component_cache(
 }
 
 async fn handle_register(state: ServerState, file_path: String) -> Result<Json<Value>, StatusCode> {
-    use crate::server::utils::path_validation::{
-        normalize_component_path, validate_component_path,
-    };
-
     let file_path = normalize_component_path(&file_path);
 
     if let Err(e) = validate_component_path(&file_path) {
@@ -495,8 +494,6 @@ async fn handle_reload_component(
     component_id: String,
     bundle_path: String,
 ) -> Result<Json<Value>, StatusCode> {
-    use crate::server::utils::path_validation::validate_safe_path;
-
     let project_root = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
 
     let bundle_full_path = match validate_safe_path(&project_root, &bundle_path) {

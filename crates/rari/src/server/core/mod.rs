@@ -1,3 +1,6 @@
+pub mod types;
+pub mod utils;
+
 use crate::rsc::actions::{handle_form_action, handle_server_action};
 use crate::rsc::rendering::core::ResourceLimits;
 use crate::server::cache::handler::CacheHandlerRegistry;
@@ -21,8 +24,7 @@ use crate::server::loaders::component::ComponentLoader;
 use crate::server::middleware::proxy::ProxyLayer;
 use crate::server::middleware::request::{cors_middleware, security_headers_middleware};
 use crate::server::routing::{api_routes, app_router};
-use crate::server::types::ServerState;
-use crate::server::vite::proxy::{
+use crate::server::vite::{
     check_vite_server_health, vite_reverse_proxy, vite_src_proxy, vite_websocket_proxy,
 };
 use axum::extract::DefaultBodyLimit;
@@ -40,6 +42,7 @@ use tokio::net::TcpListener;
 use tower_http::compression::CompressionLayer;
 use tower_http::services::ServeDir;
 use tracing::{debug, error};
+use types::ServerState;
 
 #[derive(Clone, Copy, Debug)]
 struct NotStreamingResponse;

@@ -12,8 +12,7 @@ pub mod module;
 pub mod ops;
 pub mod utils;
 
-mod metadata;
-
+use crate::server::rendering::metadata::{finalize_metadata, merge_metadata};
 use factory::JsRuntimeInterface;
 
 pub struct JsExecutionRuntime {
@@ -123,10 +122,10 @@ impl JsExecutionRuntime {
 
         let mut merged_metadata = json!({});
         for metadata_item in metadata_array {
-            merged_metadata = metadata::merge_metadata(&merged_metadata, metadata_item);
+            merged_metadata = merge_metadata(&merged_metadata, metadata_item);
         }
 
-        metadata::finalize_metadata(&mut merged_metadata);
+        finalize_metadata(&mut merged_metadata);
 
         Ok(merged_metadata)
     }

@@ -1,5 +1,10 @@
-use crate::server::utils::component::{get_dist_path_for_component, wrap_server_action_module};
-use crate::server::utils::http::merge_vary_with_accept;
+use crate::server::core::utils::component::{
+    get_dist_path_for_component, wrap_server_action_module,
+};
+use crate::server::core::utils::http::merge_vary_with_accept;
+use crate::server::core::utils::path_validation::{
+    normalize_component_path, validate_component_path,
+};
 use crate::server::{RegisterClientRequest, RegisterRequest, RenderRequest, ServerState};
 use axum::{
     body::Body,
@@ -167,10 +172,6 @@ pub async fn reload_component_from_dist(
     file_path: &str,
     component_id: &str,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    use crate::server::utils::path_validation::{
-        normalize_component_path, validate_component_path,
-    };
-
     let normalized_path = normalize_component_path(file_path);
 
     if let Err(e) = validate_component_path(&normalized_path) {
@@ -555,10 +556,6 @@ pub async fn immediate_component_reregistration(
     state: &ServerState,
     file_path: &str,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    use crate::server::utils::path_validation::{
-        normalize_component_path, validate_component_path,
-    };
-
     let normalized_path = normalize_component_path(file_path);
 
     if let Err(e) = validate_component_path(&normalized_path) {
