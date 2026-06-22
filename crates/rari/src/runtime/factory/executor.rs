@@ -3,13 +3,11 @@ use crate::runtime::factory::v8_utils::{
     is_promise, run_event_loop_with_error_handling, run_event_loop_with_promise_timeout, v8_to_json,
 };
 use crate::runtime::module::loader::RariModuleLoader;
-use crate::runtime::ops::StreamOpState;
 use crate::with_scope;
-use deno_core::{JsRuntime, PollEventLoopOptions};
+use deno_core::JsRuntime;
 use rari_error::RariError;
 use serde_json::Value as JsonValue;
 use std::rc::Rc;
-use tokio::sync::mpsc;
 use tracing::error;
 
 pub fn has_export_statement(code: &str) -> bool {
@@ -361,51 +359,4 @@ async fn retry_as_module(
         .await?;
 
     Ok(JsonValue::Null)
-}
-
-pub async fn execute_script_for_streaming(
-    runtime: &mut JsRuntime,
-    module_loader: &Rc<RariModuleLoader>,
-    script_name: &str,
-    script_code: &str,
-    chunk_sender: mpsc::Sender<Result<Vec<u8>, String>>,
-) -> Result<(), RariError> {
-    {
-        let op_state_rc = runtime.op_state();
-        let mut op_state = op_state_rc.borrow_mut();
-        if let Some(stream_state) = op_state.try_borrow_mut::<StreamOpState>() {
-            stream_state.chunk_sender = Some(chunk_sender);
-        } else {
-            return Err(RariError::js_runtime(
-                "StreamOpState not available in runtime".to_string(),
-            ));
-        }
-    }
-
-    let specifier_str = module_loader.create_specifier(script_name, "rari_internal_streaming");
-    let module_code = module_loader.transform_to_esmodule(script_code, script_name);
-
-    module_loader.add_module(&specifier_str, script_name, module_code).await;
-
-    let specifier = deno_core::resolve_url(&specifier_str).map_err(|e| {
-        RariError::js_execution(format!(
-            "Failed to create module specifier for streaming '{script_name}': {e}"
-        ))
-    })?;
-
-    let module_id: usize = runtime.load_side_es_module(&specifier).await.map_err(|e| {
-        RariError::js_execution(format!("Failed to load streaming module '{script_name}': {e}"))
-    })?;
-
-    runtime.mod_evaluate(module_id).await.map_err(|e| {
-        RariError::js_execution(format!("Failed to evaluate streaming module '{script_name}': {e}"))
-    })?;
-
-    runtime.run_event_loop(PollEventLoopOptions::default()).await.map_err(|e| {
-        RariError::js_execution(format!(
-            "Event loop error after streaming module '{script_name}': {e}"
-        ))
-    })?;
-
-    Ok(())
 }

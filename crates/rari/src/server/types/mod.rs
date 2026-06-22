@@ -25,7 +25,6 @@ pub struct ServerState {
     pub page_cache_configs: Arc<tokio::sync::RwLock<FxHashMap<String, FxHashMap<String, String>>>>,
     pub app_router: Option<Arc<routing::AppRouter>>,
     pub api_route_handler: Option<Arc<routing::ApiRouteHandler>>,
-    pub module_reload_manager: Arc<crate::runtime::module::reload::ModuleReloadManager>,
     pub html_cache: Arc<dashmap::DashMap<String, String>>,
     pub layout_html_cache: Arc<LayoutHtmlCache>,
     pub response_cache: Arc<response::ResponseCache>,

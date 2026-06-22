@@ -1,12 +1,11 @@
 use super::{
     cache::{DEFAULT_TTL_SECS, ModuleCaching},
-    config::{InternerStats, PerformanceStats, ResourceStats, RuntimeConfig, RuntimeMetrics},
-    interner::get_string_interner,
+    config::RuntimeConfig,
     loader_stubs::*,
     rari_stubs::*,
     react_stubs::*,
     resolver::ModuleResolver,
-    storage::OrderedStorage,
+    storage::ModuleStorage,
     transpiler::*,
 };
 use crate::rsc::utils::dependencies::DependencyList;
@@ -19,7 +18,6 @@ use deno_core::{
 };
 use deno_error::JsErrorBox;
 use parking_lot::RwLock;
-use rari_error::RariError;
 use rari_utils::path_url::path_to_file_url;
 use regex::Regex;
 use rustc_hash::FxHashMap;
@@ -27,7 +25,6 @@ use std::borrow::Cow;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock};
 use tokio::time::Instant;
 
@@ -88,15 +85,10 @@ fn file_url_to_path(url: &str) -> Option<PathBuf> {
 
 #[derive(Debug)]
 pub struct RariModuleLoader {
-    storage: OrderedStorage,
+    storage: ModuleStorage,
     module_resolver: ModuleResolver,
     pub module_caching: ModuleCaching,
     pub component_specifiers: DashMap<String, String>,
-    total_modules_loaded: AtomicUsize,
-    total_load_time_ms: AtomicU64,
-    peak_load_time_ms: AtomicU64,
-    operations_count: AtomicUsize,
-    start_time: std::time::Instant,
 }
 
 impl RariModuleLoader {
@@ -119,130 +111,15 @@ impl RariModuleLoader {
         };
         let module_caching = ModuleCaching::from_config(&layer, registry);
         Self {
-            storage: OrderedStorage::new(),
+            storage: ModuleStorage::new(),
             module_resolver: ModuleResolver::new(),
             module_caching,
             component_specifiers: DashMap::new(),
-            total_modules_loaded: AtomicUsize::new(0),
-            total_load_time_ms: AtomicU64::new(0),
-            peak_load_time_ms: AtomicU64::new(0),
-            operations_count: AtomicUsize::new(0),
-            start_time: std::time::Instant::now(),
         }
-    }
-
-    #[allow(dead_code)]
-    pub fn with_module_caching(caching: ModuleCaching) -> Self {
-        Self {
-            storage: OrderedStorage::new(),
-            module_resolver: ModuleResolver::new(),
-            module_caching: caching,
-            component_specifiers: DashMap::new(),
-            total_modules_loaded: AtomicUsize::new(0),
-            total_load_time_ms: AtomicU64::new(0),
-            peak_load_time_ms: AtomicU64::new(0),
-            operations_count: AtomicUsize::new(0),
-            start_time: std::time::Instant::now(),
-        }
-    }
-
-    pub fn get_metrics(&self) -> RuntimeMetrics {
-        let cache_stats = self.module_caching.get_cache_stats();
-        let (hits, misses) = get_string_interner().stats();
-
-        let total_modules = self.total_modules_loaded.load(Ordering::Relaxed);
-        let total_time_ms = self.total_load_time_ms.load(Ordering::Relaxed);
-        let peak_time_ms = self.peak_load_time_ms.load(Ordering::Relaxed);
-        let ops_count = self.operations_count.load(Ordering::Relaxed);
-        let elapsed_secs = self.start_time.elapsed().as_secs_f64();
-
-        RuntimeMetrics {
-            cache_stats: cache_stats.clone(),
-            batch_stats: self.storage.get_batch_stats(),
-            interner_stats: InternerStats {
-                total_strings_interned: hits + misses,
-                memory_saved_bytes: Self::calculate_memory_savings(hits, misses),
-                hit_rate_percentage: if hits + misses > 0 {
-                    (hits as f64 / (hits + misses) as f64) * 100.0
-                } else {
-                    0.0
-                },
-                cache_size: hits + misses,
-            },
-            performance_stats: PerformanceStats {
-                average_module_load_time_ms: if total_modules > 0 {
-                    total_time_ms as f64 / total_modules as f64
-                } else {
-                    0.0
-                },
-                peak_module_load_time_ms: peak_time_ms,
-                total_modules_loaded: total_modules,
-                cache_hit_rate_percentage: if cache_stats.hits + cache_stats.misses > 0 {
-                    (cache_stats.hits as f64 / (cache_stats.hits + cache_stats.misses) as f64)
-                        * 100.0
-                } else {
-                    0.0
-                },
-                operations_per_second: if elapsed_secs > 0.0 {
-                    ops_count as f64 / elapsed_secs
-                } else {
-                    0.0
-                },
-            },
-            resource_stats: ResourceStats {
-                memory_usage_mb: Self::estimate_memory_usage(&cache_stats, hits + misses),
-                active_threads: Self::count_active_threads(),
-                pending_operations: 0,
-                file_cache_size: get_async_file_manager().file_cache.read().len(),
-            },
-            collected_at: std::time::Instant::now(),
-        }
-    }
-
-    pub fn flush_all_batches(&self) -> Result<(), RariError> {
-        self.storage.flush_pending_batch()
-    }
-
-    fn calculate_memory_savings(hits: usize, _misses: usize) -> usize {
-        hits * 24
-    }
-
-    fn estimate_memory_usage(
-        cache_stats: &super::config::CacheStats,
-        interner_size: usize,
-    ) -> usize {
-        let cache_mb = cache_stats.memory_bytes / (1024 * 1024);
-        let interner_mb = (interner_size * 24) / (1024 * 1024);
-        cache_mb + interner_mb
-    }
-
-    fn count_active_threads() -> usize {
-        4
-    }
-
-    pub fn record_module_load(&self, duration_ms: u64) {
-        self.total_modules_loaded.fetch_add(1, Ordering::Relaxed);
-        self.total_load_time_ms.fetch_add(duration_ms, Ordering::Relaxed);
-
-        let current_peak = self.peak_load_time_ms.load(Ordering::Relaxed);
-        if duration_ms > current_peak {
-            let _ = self.peak_load_time_ms.compare_exchange_weak(
-                current_peak,
-                duration_ms,
-                Ordering::Relaxed,
-                Ordering::Relaxed,
-            );
-        }
-    }
-
-    pub fn record_operation(&self) {
-        self.operations_count.fetch_add(1, Ordering::Relaxed);
     }
 
     pub async fn add_module(&self, specifier: &str, original_path: &str, code: String) {
-        if let Err(_batch_error) = self.storage.add_module_interned(specifier, &code) {
-            self.add_module_internal(specifier, original_path, code.clone());
-        }
+        self.add_module_internal(specifier, original_path, code.clone());
 
         if specifier.contains(RARI_INTERNAL_PATH) {
             #[allow(clippy::disallowed_methods)]
@@ -258,8 +135,18 @@ impl RariModuleLoader {
         let is_update = self.storage.contains_module_code(specifier);
         let specifier_owned = specifier.to_string();
 
+        let version_key = if specifier.contains(RARI_COMPONENT_PATH) {
+            let component_id = specifier
+                .strip_prefix(&format!("file://{RARI_COMPONENT_PATH}"))
+                .and_then(|s| s.strip_suffix(".js"))
+                .unwrap_or("");
+            format!("version_{}", component_id)
+        } else {
+            specifier_owned.clone()
+        };
+
         if is_update {
-            let current_version = self.storage.get_version(specifier).unwrap_or(0) + 1;
+            let current_version = self.storage.get_version(&version_key).unwrap_or(0) + 1;
             let versioned_specifier = format!("{specifier}{VERSION_QUERY_PARAM}{current_version}");
 
             self.storage.set_module_code(specifier_owned.clone(), code.clone());
@@ -268,11 +155,11 @@ impl RariModuleLoader {
             self.storage.set_module_meta(format!("registered_{specifier_owned}"), true);
             self.storage.set_module_meta(format!("registered_{versioned_specifier}"), true);
             self.storage.set_module_meta(format!("hmr_{specifier_owned}"), true);
-            self.storage.set_version(specifier_owned, current_version);
+            self.storage.set_version(version_key, current_version);
         } else {
             self.storage.set_module_code(specifier_owned.clone(), code.clone());
             self.storage.set_module_meta(format!("registered_{specifier_owned}"), true);
-            self.storage.set_version(specifier_owned, 1);
+            self.storage.set_version(version_key, 1);
         }
 
         let dependencies = self.register_dependencies(original_path, &code);
@@ -1534,8 +1421,6 @@ impl ModuleLoader for RariModuleLoader {
         referrer: &str,
         kind: ResolutionKind,
     ) -> Result<ModuleSpecifier, JsErrorBox> {
-        self.record_operation();
-
         if matches!(kind, ResolutionKind::DynamicImport)
             && referrer.contains("node_modules")
             && let Some(package_start) = referrer.rfind("node_modules/")
@@ -1736,14 +1621,10 @@ impl ModuleLoader for RariModuleLoader {
         maybe_referrer: Option<&ModuleLoadReferrer>,
         options: ModuleLoadOptions,
     ) -> ModuleLoadResponse {
-        let load_start = std::time::Instant::now();
         let specifier_str = module_specifier.to_string();
         let is_dyn_import = options.is_dynamic_import;
 
         if let Some(response) = self.handle_cached_module(&specifier_str, module_specifier) {
-            let load_duration = load_start.elapsed().as_millis() as u64;
-            self.record_module_load(load_duration);
-            self.record_operation();
             return response;
         }
 
@@ -1753,53 +1634,32 @@ impl ModuleLoader for RariModuleLoader {
             maybe_referrer_spec.as_ref(),
             is_dyn_import,
         ) {
-            let load_duration = load_start.elapsed().as_millis() as u64;
-            self.record_module_load(load_duration);
-            self.record_operation();
             return response;
         }
 
         if let Some(response) = self.handle_version_query(&specifier_str, module_specifier) {
-            let load_duration = load_start.elapsed().as_millis() as u64;
-            self.record_module_load(load_duration);
-            self.record_operation();
             return response;
         }
 
         if let Some(response) = self.handle_rari_internal_modules(&specifier_str, module_specifier)
         {
-            let load_duration = load_start.elapsed().as_millis() as u64;
-            self.record_module_load(load_duration);
-            self.record_operation();
             return response;
         }
 
         if let Some(response) = self.handle_file_protocol_modules(&specifier_str, module_specifier)
         {
-            let load_duration = load_start.elapsed().as_millis() as u64;
-            self.record_module_load(load_duration);
-            self.record_operation();
             return response;
         }
 
         if let Some(response) = self.handle_node_modules(&specifier_str, module_specifier) {
-            let load_duration = load_start.elapsed().as_millis() as u64;
-            self.record_module_load(load_duration);
-            self.record_operation();
             return response;
         }
 
         if let Some(response) = self.handle_rari_component_modules(&specifier_str, module_specifier)
         {
-            let load_duration = load_start.elapsed().as_millis() as u64;
-            self.record_module_load(load_duration);
-            self.record_operation();
             return response;
         }
 
-        let load_duration = load_start.elapsed().as_millis() as u64;
-        self.record_module_load(load_duration);
-        self.record_operation();
         ModuleLoadResponse::Sync(Err(JsErrorBox::generic("Module not found")))
     }
 }

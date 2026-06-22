@@ -2,20 +2,19 @@ pub(crate) mod constants;
 mod deno_runtime;
 mod executor;
 mod interface;
-mod lazy_runtime;
 mod runtime_builder;
 mod v8_utils;
 
 pub use deno_runtime::DenoRuntime;
 pub use interface::JsRuntimeInterface;
-pub use lazy_runtime::{create_lazy_runtime, create_lazy_runtime_with_env};
 
-use crate::runtime::module::loader::config::RuntimeConfig;
+use rustc_hash::FxHashMap;
+use std::sync::Arc;
 
-pub fn create_runtime() -> Box<dyn JsRuntimeInterface> {
-    create_runtime_with_config(RuntimeConfig::default())
+pub fn create_runtime() -> Arc<DenoRuntime> {
+    Arc::new(DenoRuntime::new(None))
 }
 
-pub fn create_runtime_with_config(_config: RuntimeConfig) -> Box<dyn JsRuntimeInterface> {
-    Box::new(DenoRuntime::new(None))
+pub fn create_runtime_with_env(env_vars: FxHashMap<String, String>) -> Arc<DenoRuntime> {
+    Arc::new(DenoRuntime::new(Some(env_vars)))
 }

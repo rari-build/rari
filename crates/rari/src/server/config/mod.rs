@@ -319,10 +319,6 @@ pub struct RscConfig {
     pub script_execution_timeout_ms: u64,
     pub enable_hot_reload: bool,
     pub hmr_reload_enabled: bool,
-    pub hmr_max_retry_attempts: usize,
-    pub hmr_reload_timeout_ms: u64,
-    pub hmr_parallel_reloads: bool,
-    pub hmr_debounce_delay_ms: u64,
 }
 
 impl Default for RscConfig {
@@ -335,10 +331,6 @@ impl Default for RscConfig {
             script_execution_timeout_ms: 3000,
             enable_hot_reload: true,
             hmr_reload_enabled: true,
-            hmr_max_retry_attempts: 3,
-            hmr_reload_timeout_ms: 5000,
-            hmr_parallel_reloads: true,
-            hmr_debounce_delay_ms: 150,
         }
     }
 }
@@ -453,30 +445,6 @@ impl Config {
             config.rsc.hmr_reload_enabled = disable_hmr.cow_to_lowercase() != "true"
                 && disable_hmr != "1"
                 && disable_hmr.cow_to_lowercase() != "yes";
-        }
-
-        if let Ok(max_retry_str) = std::env::var("RARI_HMR_MAX_RETRY_ATTEMPTS") {
-            config.rsc.hmr_max_retry_attempts = max_retry_str
-                .parse()
-                .map_err(|_| ConfigError::Config("RARI_HMR_MAX_RETRY_ATTEMPTS".to_string()))?;
-        }
-
-        if let Ok(timeout_str) = std::env::var("RARI_HMR_RELOAD_TIMEOUT_MS") {
-            config.rsc.hmr_reload_timeout_ms = timeout_str
-                .parse()
-                .map_err(|_| ConfigError::Config("RARI_HMR_RELOAD_TIMEOUT_MS".to_string()))?;
-        }
-
-        if let Ok(parallel_str) = std::env::var("RARI_HMR_PARALLEL_RELOADS") {
-            config.rsc.hmr_parallel_reloads = parallel_str.cow_to_lowercase() == "true"
-                || parallel_str == "1"
-                || parallel_str.cow_to_lowercase() == "yes";
-        }
-
-        if let Ok(debounce_str) = std::env::var("RARI_HMR_DEBOUNCE_DELAY_MS") {
-            config.rsc.hmr_debounce_delay_ms = debounce_str
-                .parse()
-                .map_err(|_| ConfigError::Config("RARI_HMR_DEBOUNCE_DELAY_MS".to_string()))?;
         }
 
         if let Ok(rsc_html_enabled_str) = std::env::var("RARI_RSC_HTML_ENABLED") {

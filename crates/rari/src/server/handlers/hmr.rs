@@ -110,8 +110,6 @@ async fn handle_register(state: ServerState, file_path: String) -> Result<Json<V
         }
     };
 
-    let path = std::path::Path::new(&file_path);
-
     {
         let renderer = state.renderer.lock().await;
         {
@@ -187,24 +185,7 @@ async fn handle_register(state: ServerState, file_path: String) -> Result<Json<V
         })));
     }
 
-    let mut reloaded = reload_result.is_ok();
-    let mut module_reload_error: Option<String> = None;
-
-    if state.config.hmr_reload_enabled() {
-        match state.module_reload_manager.reload_module_debounced(&component_id, path).await {
-            Ok(()) => {
-                reloaded = true;
-            }
-            Err(e) => {
-                error!(
-                    component_id = component_id,
-                    error = %e,
-                    "Failed to schedule module reload, preserving last known good version"
-                );
-                module_reload_error = Some(e.to_string());
-            }
-        }
-    }
+    let reloaded = reload_result.is_ok();
 
     #[allow(clippy::disallowed_methods)]
     let response = if reloaded {
@@ -255,7 +236,7 @@ async fn handle_register(state: ServerState, file_path: String) -> Result<Json<V
             "reloaded": true,
             "error": null
         })
-    } else if reload_error_details.is_some() || module_reload_error.is_some() {
+    } else if reload_error_details.is_some() {
         serde_json::json!({
             "success": true,
             "file_path": file_path,
@@ -264,7 +245,6 @@ async fn handle_register(state: ServerState, file_path: String) -> Result<Json<V
             "preserved_last_good": true,
             "error": {
                 "dist_reload": reload_error_details,
-                "module_reload": module_reload_error,
                 "suggestion": "Component reload encountered errors. Last known good version is still available. Check console for details or try a manual page refresh."
             }
         })

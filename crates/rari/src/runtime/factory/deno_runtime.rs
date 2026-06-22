@@ -1,5 +1,5 @@
 use crate::runtime::factory::constants::*;
-use crate::runtime::factory::executor::{execute_script, execute_script_for_streaming};
+use crate::runtime::factory::executor::execute_script;
 use crate::runtime::factory::interface::{AsyncBatchResult, JsRuntimeInterface};
 use crate::runtime::factory::runtime_builder::create_deno_runtime;
 use crate::runtime::factory::v8_utils::get_module_namespace_as_json;
@@ -39,12 +39,6 @@ enum JsRequest {
     ExecuteScriptBatch {
         scripts: Vec<(String, String)>,
         result_tx: BatchResultSender,
-    },
-    ExecuteScriptForStreaming {
-        script_name: String,
-        script_code: String,
-        result_tx: oneshot::Sender<Result<JsonValue, RariError>>,
-        chunk_sender: mpsc::Sender<Result<Vec<u8>, String>>,
     },
     AddModuleToLoader {
         component_id: String,
@@ -386,28 +380,6 @@ async fn handle_js_request(
             {
                 pending_batches.push(pending_batch);
             }
-        }
-        JsRequest::ExecuteScriptForStreaming {
-            script_name,
-            script_code,
-            result_tx,
-            chunk_sender,
-        } => {
-            let sender_for_op_state = chunk_sender.clone();
-            deno_runtime.op_state().borrow_mut().put(crate::runtime::ops::StreamOpState {
-                chunk_sender: Some(sender_for_op_state),
-                current_stream_id: None,
-                row_counter: 0,
-            });
-            let result = execute_script_for_streaming(
-                deno_runtime,
-                module_loader,
-                &script_name,
-                &script_code,
-                chunk_sender,
-            )
-            .await;
-            let _ = result_tx.send(result.map(|_| JsonValue::Null));
         }
         JsRequest::AddModuleToLoader { component_id, result_tx } => {
             let specifier_opt = module_loader.get_component_specifier(&component_id);
@@ -913,34 +885,6 @@ impl JsRuntimeInterface for DenoRuntime {
             response_receiver
                 .await
                 .map_err(|_| RariError::js_runtime(JS_EXECUTOR_FAILED_ERROR.to_string()))?
-        })
-    }
-
-    fn execute_script_for_streaming(
-        &self,
-        script_name: String,
-        script_code: String,
-        chunk_sender: mpsc::Sender<Result<Vec<u8>, String>>,
-    ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>> {
-        let request_sender = self.request_sender.clone();
-
-        Box::pin(async move {
-            let (response_sender, response_receiver) = oneshot::channel();
-
-            request_sender
-                .send(JsRequest::ExecuteScriptForStreaming {
-                    script_name,
-                    script_code,
-                    result_tx: response_sender,
-                    chunk_sender,
-                })
-                .await
-                .map_err(|_| RariError::js_runtime(JS_EXECUTOR_CHANNEL_CLOSED_ERROR.to_string()))?;
-
-            response_receiver
-                .await
-                .map_err(|_| RariError::js_runtime(JS_EXECUTOR_FAILED_ERROR.to_string()))?
-                .map(|_| ())
         })
     }
 

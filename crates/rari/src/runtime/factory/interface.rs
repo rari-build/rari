@@ -22,13 +22,6 @@ pub trait JsRuntimeInterface: Send + Sync {
         args: Vec<JsonValue>,
     ) -> Pin<Box<dyn Future<Output = Result<JsonValue, RariError>> + Send + 'static>>;
 
-    fn execute_script_for_streaming(
-        &self,
-        script_name: String,
-        script_code: String,
-        chunk_sender: mpsc::Sender<Result<Vec<u8>, String>>,
-    ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>>;
-
     fn add_module_to_loader(
         &self,
         specifier: &str,
