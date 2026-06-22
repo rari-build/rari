@@ -2,27 +2,31 @@ use crate::server::config::Config;
 use axum::{
     body::Body,
     extract::{
-        Path, Query,
+        Request,
         ws::{Message as WsMessage, WebSocket, WebSocketUpgrade},
     },
-    http::{HeaderName, HeaderValue, StatusCode},
+    http::{HeaderName, HeaderValue, StatusCode, Uri},
     response::{IntoResponse, Response},
 };
 use futures::StreamExt as FuturesStreamExt;
 use futures_util::SinkExt;
 use rari_error::RariError;
 use reqwest::Client;
-use rustc_hash::FxHashMap;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use tracing::error;
 use tungstenite::{client::IntoClientRequest, http::Request as HttpRequest};
 
 const VITE_WS_PROTOCOL: &str = "vite-hmr";
 
-pub async fn vite_src_proxy(
-    Path(path): Path<String>,
-    query: Query<FxHashMap<String, String>>,
-) -> impl IntoResponse {
+fn create_client() -> Client {
+    Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .build()
+        .expect("Failed to create HTTP client")
+}
+
+pub async fn vite_src_proxy(req: Request) -> impl IntoResponse {
     let config = match Config::get() {
         Some(config) => config,
         None => {
@@ -34,24 +38,30 @@ pub async fn vite_src_proxy(
         }
     };
 
-    let client = Client::new();
+    let client = create_client();
     let vite_base_url = format!("http://{}", config.vite_address());
 
-    let query_string = if query.0.is_empty() {
-        String::new()
-    } else {
-        let query_params = query
-            .0
-            .iter()
-            .map(|(k, v)| format!("{}={}", urlencoding::encode(k), urlencoding::encode(v)))
-            .collect::<Vec<_>>()
-            .join("&");
-        format!("?{query_params}")
+    let path_and_query =
+        req.uri().path_and_query().map(|pq| pq.as_str()).unwrap_or(req.uri().path());
+
+    let path_without_prefix = path_and_query.strip_prefix("/src").unwrap_or(path_and_query);
+    let target_url = format!("{vite_base_url}/src{path_without_prefix}");
+
+    let method = req.method().clone();
+    let headers = req.headers().clone();
+
+    let body_bytes = match axum::body::to_bytes(req.into_body(), usize::MAX).await {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            error!("Failed to read request body: {}", e);
+            return create_error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to read request body",
+            );
+        }
     };
 
-    let target_url = format!("{vite_base_url}/src/{path}{query_string}");
-
-    match client.get(&target_url).send().await {
+    match client.request(method, &target_url).headers(headers).body(body_bytes).send().await {
         Ok(response) => {
             let status = response.status();
             let mut response_builder = Response::builder().status(status);
@@ -96,10 +106,7 @@ pub async fn vite_src_proxy(
     }
 }
 
-pub async fn vite_reverse_proxy(
-    Path(path): Path<String>,
-    query: Query<FxHashMap<String, String>>,
-) -> impl IntoResponse {
+pub async fn vite_reverse_proxy(req: Request) -> impl IntoResponse {
     let config = match Config::get() {
         Some(config) => config,
         None => {
@@ -111,24 +118,30 @@ pub async fn vite_reverse_proxy(
         }
     };
 
-    let client = Client::new();
+    let client = create_client();
     let vite_base_url = format!("http://{}", config.vite_address());
 
-    let query_string = if query.0.is_empty() {
-        String::new()
-    } else {
-        let query_params = query
-            .0
-            .iter()
-            .map(|(k, v)| format!("{}={}", urlencoding::encode(k), urlencoding::encode(v)))
-            .collect::<Vec<_>>()
-            .join("&");
-        format!("?{query_params}")
+    let path_and_query =
+        req.uri().path_and_query().map(|pq| pq.as_str()).unwrap_or(req.uri().path());
+
+    let path_without_prefix = path_and_query.strip_prefix("/vite-server").unwrap_or(path_and_query);
+    let target_url = format!("{vite_base_url}/vite-server{path_without_prefix}");
+
+    let method = req.method().clone();
+    let headers = req.headers().clone();
+
+    let body_bytes = match axum::body::to_bytes(req.into_body(), usize::MAX).await {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            error!("Failed to read request body: {}", e);
+            return create_error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to read request body",
+            );
+        }
     };
 
-    let target_url = format!("{vite_base_url}/vite-server/{path}{query_string}");
-
-    match client.get(&target_url).send().await {
+    match client.request(method, &target_url).headers(headers).body(body_bytes).send().await {
         Ok(response) => {
             let status = response.status();
             let mut response_builder = Response::builder().status(status);
@@ -173,11 +186,11 @@ pub async fn vite_reverse_proxy(
     }
 }
 
-pub async fn vite_websocket_proxy(ws: WebSocketUpgrade) -> impl IntoResponse {
-    ws.protocols([VITE_WS_PROTOCOL]).on_upgrade(handle_websocket)
+pub async fn vite_websocket_proxy(ws: WebSocketUpgrade, uri: Uri) -> impl IntoResponse {
+    ws.protocols([VITE_WS_PROTOCOL]).on_upgrade(move |socket| handle_websocket(socket, uri))
 }
 
-async fn handle_websocket(mut client_socket: WebSocket) {
+async fn handle_websocket(mut client_socket: WebSocket, uri: Uri) {
     if let Err(e) = client_socket.send(WsMessage::Ping("rari-vite-proxy".into())).await {
         error!("Failed to send initial ping to client: {}", e);
         return;
@@ -192,7 +205,8 @@ async fn handle_websocket(mut client_socket: WebSocket) {
         }
     };
 
-    let vite_ws_url = format!("ws://{}/vite-server/", config.vite_address());
+    let path_and_query = uri.path_and_query().map(|pq| pq.as_str()).unwrap_or("/");
+    let vite_ws_url = format!("ws://{}/vite-server{}", config.vite_address(), path_and_query);
 
     let vite_ws_request = match HttpRequest::builder()
         .uri(&vite_ws_url)
@@ -232,7 +246,7 @@ async fn handle_websocket(mut client_socket: WebSocket) {
     let (mut vite_sender, mut vite_receiver) = vite_socket.split();
     let (mut client_sender, mut client_receiver) = client_socket.split();
 
-    let client_to_vite = tokio::spawn(async move {
+    let mut client_to_vite = tokio::spawn(async move {
         while let Some(msg) = client_receiver.next().await {
             let msg = match msg {
                 Ok(msg) => msg,
@@ -252,7 +266,7 @@ async fn handle_websocket(mut client_socket: WebSocket) {
         }
     });
 
-    let vite_to_client = tokio::spawn(async move {
+    let mut vite_to_client = tokio::spawn(async move {
         while let Some(msg) = vite_receiver.next().await {
             let msg = match msg {
                 Ok(msg) => msg,
@@ -273,8 +287,12 @@ async fn handle_websocket(mut client_socket: WebSocket) {
     });
 
     tokio::select! {
-        _ = client_to_vite => {}
-        _ = vite_to_client => {}
+        _ = &mut client_to_vite => {
+            vite_to_client.abort();
+        }
+        _ = &mut vite_to_client => {
+            client_to_vite.abort();
+        }
     }
 }
 
