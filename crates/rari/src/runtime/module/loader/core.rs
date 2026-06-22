@@ -135,8 +135,18 @@ impl RariModuleLoader {
         let is_update = self.storage.contains_module_code(specifier);
         let specifier_owned = specifier.to_string();
 
+        let version_key = if specifier.contains(RARI_COMPONENT_PATH) {
+            let component_id = specifier
+                .strip_prefix(&format!("file://{RARI_COMPONENT_PATH}"))
+                .and_then(|s| s.strip_suffix(".js"))
+                .unwrap_or("");
+            format!("version_{}", component_id)
+        } else {
+            specifier_owned.clone()
+        };
+
         if is_update {
-            let current_version = self.storage.get_version(specifier).unwrap_or(0) + 1;
+            let current_version = self.storage.get_version(&version_key).unwrap_or(0) + 1;
             let versioned_specifier = format!("{specifier}{VERSION_QUERY_PARAM}{current_version}");
 
             self.storage.set_module_code(specifier_owned.clone(), code.clone());
@@ -145,11 +155,11 @@ impl RariModuleLoader {
             self.storage.set_module_meta(format!("registered_{specifier_owned}"), true);
             self.storage.set_module_meta(format!("registered_{versioned_specifier}"), true);
             self.storage.set_module_meta(format!("hmr_{specifier_owned}"), true);
-            self.storage.set_version(specifier_owned, current_version);
+            self.storage.set_version(version_key, current_version);
         } else {
             self.storage.set_module_code(specifier_owned.clone(), code.clone());
             self.storage.set_module_meta(format!("registered_{specifier_owned}"), true);
-            self.storage.set_version(specifier_owned, 1);
+            self.storage.set_version(version_key, 1);
         }
 
         let dependencies = self.register_dependencies(original_path, &code);
