@@ -47,19 +47,37 @@ if (!globalThis.process) {
         return 'x64'
       }
     })(),
-    version: 'v20.0.0',
+    version: 'v__NODE_VERSION__',
     versions: {
-      node: '20.0.0',
-      v8: '11.0.0',
-      uv: '1.0.0',
-      zlib: '1.0.0',
-      modules: '108',
+      node: '__NODE_VERSION__',
+      v8: '__V8_VERSION__',
     },
     argv: ['node'],
-    execPath: '/usr/bin/node',
+    execPath: (() => {
+      try {
+        return globalThis.Deno?.execPath?.() || '/usr/bin/node'
+      }
+      catch {
+        return '/usr/bin/node'
+      }
+    })(),
     execArgv: [],
-    pid: 1,
-    ppid: 0,
+    pid: (() => {
+      try {
+        return globalThis.Deno?.pid ?? 1
+      }
+      catch {
+        return 1
+      }
+    })(),
+    ppid: (() => {
+      try {
+        return globalThis.Deno?.ppid ?? 0
+      }
+      catch {
+        return 0
+      }
+    })(),
     title: 'node',
     exit: (code = 0) => {
       if (globalThis.Deno?.exit)

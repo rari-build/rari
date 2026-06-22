@@ -1,7 +1,7 @@
 [package]
 name = "rari-use-cache"
-authors = { workspace = true }
 edition = { workspace = true }
+authors = { workspace = true }
 license = { workspace = true }
 repository = { workspace = true }
 publish = false

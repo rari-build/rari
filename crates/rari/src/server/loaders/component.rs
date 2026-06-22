@@ -1,7 +1,7 @@
 use crate::rsc::rendering::core::RscRenderer;
 use crate::rsc::utils::dependencies::extract_dependencies;
 use crate::runtime::JsExecutionRuntime;
-use crate::server::utils::component::{
+use crate::server::core::utils::component::{
     has_use_client_directive, has_use_server_directive, wrap_server_action_module,
 };
 use cow_utils::CowUtils;

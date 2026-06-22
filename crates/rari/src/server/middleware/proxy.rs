@@ -6,7 +6,7 @@ use std::task::{Context, Poll};
 use tower::{Layer, Service};
 use tracing::error;
 
-use crate::server::types::ServerState;
+use crate::server::core::types::ServerState;
 use rari_utils::path_url::path_to_file_url;
 
 #[derive(Debug, Serialize, Deserialize)]

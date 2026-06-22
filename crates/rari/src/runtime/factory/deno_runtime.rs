@@ -2,8 +2,9 @@ use crate::runtime::factory::constants::*;
 use crate::runtime::factory::executor::execute_script;
 use crate::runtime::factory::interface::{AsyncBatchResult, JsRuntimeInterface};
 use crate::runtime::factory::runtime_builder::create_deno_runtime;
-use crate::runtime::factory::v8_utils::get_module_namespace_as_json;
+use crate::runtime::factory::v8_utils::{get_module_namespace_as_json, v8_to_json};
 use crate::runtime::module::loader::RariModuleLoader;
+use crate::with_scope;
 use deno_core::{ModuleSpecifier, PollEventLoopOptions};
 use rari_error::RariError;
 use rustc_hash::FxHashMap;
@@ -459,8 +460,6 @@ async fn setup_concurrent_batch(
     batch: Vec<ScriptBatchItem>,
     batch_id_counter: &mut u64,
 ) -> Option<PendingBatch> {
-    use crate::with_scope;
-
     *batch_id_counter += 1;
     let batch_id = *batch_id_counter;
 
@@ -565,9 +564,6 @@ fn check_pending_batches(
     deno_runtime: &mut deno_core::JsRuntime,
     pending_batches: &mut [PendingBatch],
 ) {
-    use crate::runtime::factory::v8_utils::v8_to_json;
-    use crate::with_scope;
-
     for batch in pending_batches.iter_mut() {
         for i in 0..batch.sent.len() {
             if batch.sent[i] {

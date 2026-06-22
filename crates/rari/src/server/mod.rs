@@ -9,9 +9,7 @@ pub mod middleware;
 pub mod og;
 pub mod rendering;
 pub mod routing;
-pub mod types;
-pub mod utils;
 pub mod vite;
 
 pub use core::Server;
-pub use types::*;
+pub use core::types::*;
