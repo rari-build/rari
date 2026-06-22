@@ -206,7 +206,8 @@ async fn handle_websocket(mut client_socket: WebSocket, uri: Uri) {
     };
 
     let path_and_query = uri.path_and_query().map(|pq| pq.as_str()).unwrap_or("/");
-    let vite_ws_url = format!("ws://{}/vite-server{}", config.vite_address(), path_and_query);
+    let path_without_prefix = path_and_query.strip_prefix("/vite-server").unwrap_or(path_and_query);
+    let vite_ws_url = format!("ws://{}/vite-server{}", config.vite_address(), path_without_prefix);
 
     let vite_ws_request = match HttpRequest::builder()
         .uri(&vite_ws_url)
