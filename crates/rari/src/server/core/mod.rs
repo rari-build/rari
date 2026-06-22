@@ -289,6 +289,7 @@ impl Server {
                 .route("/_rari/hmr", post(handle_hmr_action))
                 .route("/_rari/hmr", axum::routing::options(cors_preflight_ok))
                 .layer(medium_body_limit)
+                .route("/vite-server", get(vite_websocket_proxy))
                 .route("/vite-server/", get(vite_websocket_proxy))
                 .route("/vite-server/{*path}", any(vite_reverse_proxy))
                 .route("/src/{*path}", any(vite_src_proxy));
