@@ -80,7 +80,6 @@ pub fn extensions(options: &ExtensionOptions, is_snapshot: bool) -> Vec<Extensio
     let mut extensions = Vec::new();
 
     extensions.extend(rari::extensions(is_snapshot));
-    extensions.extend(rari::redis_cache_extensions(is_snapshot));
     extensions.extend(promise_manager::extensions(is_snapshot));
     extensions.extend(rsc_modules::extensions(is_snapshot));
     extensions.extend(server_functions::extensions(is_snapshot));

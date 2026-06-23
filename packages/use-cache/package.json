@@ -35,6 +35,21 @@
       "import": "./dist/runtime/cache-wrapper.mjs",
       "default": "./dist/runtime/cache-wrapper.mjs"
     },
+    "./runtime/cache-storage-redb": {
+      "types": "./dist/runtime/cache-storage-redb.d.mts",
+      "import": "./dist/runtime/cache-storage-redb.mjs",
+      "default": "./dist/runtime/cache-storage-redb.mjs"
+    },
+    "./runtime/cache-storage-remote-ops": {
+      "types": "./dist/runtime/cache-storage-remote-ops.d.mts",
+      "import": "./dist/runtime/cache-storage-remote-ops.mjs",
+      "default": "./dist/runtime/cache-storage-remote-ops.mjs"
+    },
+    "./runtime/cache-storage-test": {
+      "types": "./dist/runtime/cache-storage-test.d.mts",
+      "import": "./dist/runtime/cache-storage-test.mjs",
+      "default": "./dist/runtime/cache-storage-test.mjs"
+    },
     "./runtime/deterministic-stringify": {
       "types": "./dist/runtime/deterministic-stringify.d.mts",
       "import": "./dist/runtime/deterministic-stringify.mjs",
