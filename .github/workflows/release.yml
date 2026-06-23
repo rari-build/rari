@@ -14,11 +14,58 @@ permissions:
   contents: write
 
 jobs:
+  build-snapshot:
+    name: Build V8 snapshot
+    runs-on: namespace-profile-rari-linux-amd64
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: nightly
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libfontconfig1-dev mold
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          shared-key: release-snapshot-linux
+
+      - name: Create snapshot placeholder
+        run: |
+          mkdir -p crates/rari/snapshots
+          touch crates/rari/snapshots/RARI_SNAPSHOT.bin
+          echo 'pub static RESIDUAL_LAZY_ESM_SOURCES: &[(&str, &str)] = &[];' > crates/rari/snapshots/residual_lazy_sources.rs
+          echo 'pub static RESIDUAL_LAZY_JS_SOURCES: &[(&str, &str)] = &[];' >> crates/rari/snapshots/residual_lazy_sources.rs
+
+      - name: Generate V8 snapshot
+        run: cargo run --release --manifest-path tools/snapshot/Cargo.toml -- crates/rari/snapshots
+        env:
+          RUSTFLAGS: -C link-arg=-fuse-ld=mold
+
+      - name: Upload snapshot
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: v8-snapshot
+          path: |
+            crates/rari/snapshots/RARI_SNAPSHOT.bin
+            crates/rari/snapshots/residual_lazy_sources.rs
+          if-no-files-found: error
+          retention-days: 7
+
   build-binaries:
     name: Build ${{ matrix.target }}
+    needs: build-snapshot
     runs-on: ${{ matrix.os }}
-    if: startsWith(github.ref, 'refs/tags/v')  || github.event_name == 'workflow_dispatch'
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     strategy:
+      fail-fast: false
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
@@ -49,8 +96,7 @@ jobs:
             platform: win32-arm64
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
@@ -58,72 +104,52 @@ jobs:
           toolchain: nightly
           targets: ${{ matrix.target }}
 
-      - name: Install cross-compilation tools (Linux)
+      - name: Install system dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y pkg-config libfontconfig1-dev
+          sudo apt-get install -y pkg-config libfontconfig1-dev mold
 
-      - name: Install dependencies (macOS)
+      - name: Install system dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
           brew list pkg-config &>/dev/null || brew install pkg-config
           brew list fontconfig &>/dev/null || brew install fontconfig
 
-      - name: Install dependencies (Windows)
+      - name: Install system dependencies (Windows)
         if: runner.os == 'Windows'
-        run: |
-          vcpkg install fontconfig:${{ matrix.vcpkg_triplet }}
+        run: vcpkg install fontconfig:${{ matrix.vcpkg_triplet }}
         shell: pwsh
 
-      - name: Cache cargo registry
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
-          path: ~/.cargo/registry/cache
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-registry-
+          shared-key: release-binary-${{ matrix.target }}
 
-      - name: Cache cargo index
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      - name: Download V8 snapshot
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          path: ~/.cargo/registry/index
-          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-index-
+          name: v8-snapshot
+          path: crates/rari/snapshots
 
-      - name: Cache cargo build
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-        with:
-          path: target
-          key: ${{ runner.os }}-${{ matrix.target }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ matrix.target }}-cargo-build-
+      - name: Build binary (Linux)
+        if: runner.os == 'Linux'
+        run: cargo build --release --target ${{ matrix.target }} --bin rari
+        env:
+          RUSTFLAGS: -C link-arg=-fuse-ld=mold
+
+      - name: Build binary (macOS)
+        if: runner.os == 'macOS'
+        run: cargo build --release --target ${{ matrix.target }} --bin rari
 
       - name: Build binary (Windows)
         if: runner.os == 'Windows'
         shell: bash
-        run: |
-          mkdir -p crates/rari/snapshots
-          touch crates/rari/snapshots/RARI_SNAPSHOT.bin
-          echo 'pub static RESIDUAL_LAZY_ESM_SOURCES: &[(&str, &str)] = &[];' > crates/rari/snapshots/residual_lazy_sources.rs
-          echo 'pub static RESIDUAL_LAZY_JS_SOURCES: &[(&str, &str)] = &[];' >> crates/rari/snapshots/residual_lazy_sources.rs
-          cargo run --release --manifest-path tools/snapshot/Cargo.toml -- crates/rari/snapshots
-          cargo build --release --target ${{ matrix.target }} --bin rari
+        run: cargo build --release --target ${{ matrix.target }} --bin rari
         env:
           AWS_LC_SYS_PREBUILT_NASM: 1
           PKG_CONFIG_PATH: C:\vcpkg\installed\${{ matrix.vcpkg_triplet }}\lib\pkgconfig
           VCPKG_ROOT: C:\vcpkg
-
-      - name: Build binary (Unix)
-        if: runner.os != 'Windows'
-        run: |
-          mkdir -p crates/rari/snapshots
-          touch crates/rari/snapshots/RARI_SNAPSHOT.bin
-          echo 'pub static RESIDUAL_LAZY_ESM_SOURCES: &[(&str, &str)] = &[];' > crates/rari/snapshots/residual_lazy_sources.rs
-          echo 'pub static RESIDUAL_LAZY_JS_SOURCES: &[(&str, &str)] = &[];' >> crates/rari/snapshots/residual_lazy_sources.rs
-          cargo run --release --manifest-path tools/snapshot/Cargo.toml -- crates/rari/snapshots
-          cargo build --release --target ${{ matrix.target }} --bin rari
 
       - name: Prepare binary (Unix)
         if: runner.os != 'Windows'
@@ -143,6 +169,8 @@ jobs:
         with:
           name: ${{ matrix.name }}
           path: binaries/${{ matrix.name }}
+          if-no-files-found: error
+          retention-days: 7
 
   npm-release-platform:
     needs: build-binaries
@@ -169,8 +197,7 @@ jobs:
             binary: rari-win32-arm64.exe
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Setup Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
@@ -214,130 +241,76 @@ jobs:
 
           case "${{ matrix.platform }}" in
             darwin-arm64)
-              OS="darwin"
-              CPU="arm64"
-              DESCRIPTION="macOS ARM64 binary"
+              OS="darwin"; CPU="arm64"; DESCRIPTION="macOS ARM64 binary"
               KEYWORDS='"darwin", "arm64", "macos", "apple-silicon",'
-              BIN_PATH="./bin/rari"
-              BIN_FILE="bin/rari"
+              BIN_PATH="./bin/rari"; BIN_FILE="bin/rari"
               ;;
             darwin-x64)
-              OS="darwin"
-              CPU="x64"
-              DESCRIPTION="macOS x64 binary"
+              OS="darwin"; CPU="x64"; DESCRIPTION="macOS x64 binary"
               KEYWORDS='"darwin", "x64", "macos", "intel",'
-              BIN_PATH="./bin/rari"
-              BIN_FILE="bin/rari"
+              BIN_PATH="./bin/rari"; BIN_FILE="bin/rari"
               ;;
             linux-arm64)
-              OS="linux"
-              CPU="arm64"
-              DESCRIPTION="Linux ARM64 binary"
+              OS="linux"; CPU="arm64"; DESCRIPTION="Linux ARM64 binary"
               KEYWORDS='"linux", "arm64",'
-              BIN_PATH="./bin/rari"
-              BIN_FILE="bin/rari"
+              BIN_PATH="./bin/rari"; BIN_FILE="bin/rari"
               ;;
             linux-x64)
-              OS="linux"
-              CPU="x64"
-              DESCRIPTION="Linux x64 binary"
+              OS="linux"; CPU="x64"; DESCRIPTION="Linux x64 binary"
               KEYWORDS='"linux", "x64",'
-              BIN_PATH="./bin/rari"
-              BIN_FILE="bin/rari"
+              BIN_PATH="./bin/rari"; BIN_FILE="bin/rari"
               ;;
             win32-x64)
-              OS="win32"
-              CPU="x64"
-              DESCRIPTION="Windows x64 binary"
+              OS="win32"; CPU="x64"; DESCRIPTION="Windows x64 binary"
               KEYWORDS='"win32", "windows", "x64",'
-              BIN_PATH="./bin/rari.exe"
-              BIN_FILE="bin/rari.exe"
+              BIN_PATH="./bin/rari.exe"; BIN_FILE="bin/rari.exe"
               ;;
             win32-arm64)
-              OS="win32"
-              CPU="arm64"
-              DESCRIPTION="Windows ARM64 binary"
+              OS="win32"; CPU="arm64"; DESCRIPTION="Windows ARM64 binary"
               KEYWORDS='"win32", "windows", "arm64",'
-              BIN_PATH="./bin/rari.exe"
-              BIN_FILE="bin/rari.exe"
+              BIN_PATH="./bin/rari.exe"; BIN_FILE="bin/rari.exe"
               ;;
           esac
 
           cp .github/templates/package-json/platform.json "${PACKAGE_DIR}/package.json"
-          sed -i "s|{NAME}|${PACKAGE_NAME}|g" "${PACKAGE_DIR}/package.json"
-          sed -i "s|{VERSION}|${VERSION}|g" "${PACKAGE_DIR}/package.json"
-          sed -i "s|{DESCRIPTION}|${DESCRIPTION}|g" "${PACKAGE_DIR}/package.json"
-          sed -i "s|{OS}|${OS}|g" "${PACKAGE_DIR}/package.json"
-          sed -i "s|{CPU}|${CPU}|g" "${PACKAGE_DIR}/package.json"
-          sed -i "s|{KEYWORDS}|${KEYWORDS}|g" "${PACKAGE_DIR}/package.json"
-          sed -i "s|{BIN_PATH}|${BIN_PATH}|g" "${PACKAGE_DIR}/package.json"
-          sed -i "s|{BIN_FILE}|${BIN_FILE}|g" "${PACKAGE_DIR}/package.json"
+          sed -i "s|{NAME}|${PACKAGE_NAME}|g"             "${PACKAGE_DIR}/package.json"
+          sed -i "s|{VERSION}|${VERSION}|g"               "${PACKAGE_DIR}/package.json"
+          sed -i "s|{DESCRIPTION}|${DESCRIPTION}|g"       "${PACKAGE_DIR}/package.json"
+          sed -i "s|{OS}|${OS}|g"                         "${PACKAGE_DIR}/package.json"
+          sed -i "s|{CPU}|${CPU}|g"                       "${PACKAGE_DIR}/package.json"
+          sed -i "s|{KEYWORDS}|${KEYWORDS}|g"             "${PACKAGE_DIR}/package.json"
+          sed -i "s|{BIN_PATH}|${BIN_PATH}|g"             "${PACKAGE_DIR}/package.json"
+          sed -i "s|{BIN_FILE}|${BIN_FILE}|g"             "${PACKAGE_DIR}/package.json"
 
-          node --input-type=module -e "import { readFileSync, writeFileSync } from 'fs'; const f = '${PACKAGE_DIR}/package.json'; writeFileSync(f, JSON.stringify(JSON.parse(readFileSync(f, 'utf8')), null, 2) + '\n');"
-
+          node --input-type=module -e "
+            import { readFileSync, writeFileSync } from 'fs';
+            const f = '${PACKAGE_DIR}/package.json';
+            writeFileSync(f, JSON.stringify(JSON.parse(readFileSync(f, 'utf8')), null, 2) + '\n');
+          "
           echo "✓ Generated package.json for ${PACKAGE_NAME}@${VERSION}"
 
-      - name: Copy LICENSE
+      - name: Copy LICENSE and generate README
         run: |
           PACKAGE_NAME="rari-${{ matrix.platform }}"
           PACKAGE_DIR="packages/${PACKAGE_NAME}"
 
           cp LICENSE "${PACKAGE_DIR}/LICENSE"
-          echo "✓ Copied LICENSE to ${PACKAGE_NAME}"
 
-      - name: Generate README
-        run: |
-          PACKAGE_NAME="rari-${{ matrix.platform }}"
-          PACKAGE_DIR="packages/${PACKAGE_NAME}"
-
-          # Set platform-specific info
           case "${{ matrix.platform }}" in
-            darwin-arm64)
-              PLATFORM_NAME="macOS ARM64 (Apple Silicon)"
-              OS_NAME="macOS"
-              ARCH="ARM64"
-              DESCRIPTION="Apple Silicon Macs (M1, M2, M3, M4)"
-              ;;
-            darwin-x64)
-              PLATFORM_NAME="macOS x64 (Intel)"
-              OS_NAME="macOS"
-              ARCH="x64"
-              DESCRIPTION="Intel-based Macs"
-              ;;
-            linux-arm64)
-              PLATFORM_NAME="Linux ARM64"
-              OS_NAME="Linux"
-              ARCH="ARM64"
-              DESCRIPTION="ARM64/aarch64 Linux systems"
-              ;;
-            linux-x64)
-              PLATFORM_NAME="Linux x64"
-              OS_NAME="Linux"
-              ARCH="x64"
-              DESCRIPTION="x86_64 Linux systems"
-              ;;
-            win32-x64)
-              PLATFORM_NAME="Windows x64"
-              OS_NAME="Windows"
-              ARCH="x64"
-              DESCRIPTION="x86_64 Windows systems"
-              ;;
-            win32-arm64)
-              PLATFORM_NAME="Windows ARM64"
-              OS_NAME="Windows"
-              ARCH="ARM64"
-              DESCRIPTION="ARM64 Windows systems"
-              ;;
+            darwin-arm64) PLATFORM_NAME="macOS ARM64 (Apple Silicon)"; OS_NAME="macOS"; ARCH="ARM64"; DESCRIPTION="Apple Silicon Macs (M1, M2, M3, M4)" ;;
+            darwin-x64)   PLATFORM_NAME="macOS x64 (Intel)";           OS_NAME="macOS"; ARCH="x64";  DESCRIPTION="Intel-based Macs" ;;
+            linux-arm64)  PLATFORM_NAME="Linux ARM64";                  OS_NAME="Linux"; ARCH="ARM64"; DESCRIPTION="ARM64/aarch64 Linux systems" ;;
+            linux-x64)    PLATFORM_NAME="Linux x64";                    OS_NAME="Linux"; ARCH="x64";  DESCRIPTION="x86_64 Linux systems" ;;
+            win32-x64)    PLATFORM_NAME="Windows x64";                  OS_NAME="Windows"; ARCH="x64";  DESCRIPTION="x86_64 Windows systems" ;;
+            win32-arm64)  PLATFORM_NAME="Windows ARM64";                OS_NAME="Windows"; ARCH="ARM64"; DESCRIPTION="ARM64 Windows systems" ;;
           esac
 
           cp .github/templates/readme/platform.md "${PACKAGE_DIR}/README.md"
-          sed -i "s|\${PACKAGE_NAME}|${PACKAGE_NAME}|g" "${PACKAGE_DIR}/README.md"
+          sed -i "s|\${PACKAGE_NAME}|${PACKAGE_NAME}|g"   "${PACKAGE_DIR}/README.md"
           sed -i "s|\${PLATFORM_NAME}|${PLATFORM_NAME}|g" "${PACKAGE_DIR}/README.md"
-          sed -i "s|\${OS_NAME}|${OS_NAME}|g" "${PACKAGE_DIR}/README.md"
-          sed -i "s|\${ARCH}|${ARCH}|g" "${PACKAGE_DIR}/README.md"
-          sed -i "s|\${DESCRIPTION}|${DESCRIPTION}|g" "${PACKAGE_DIR}/README.md"
-
-          echo "Generated README for ${PACKAGE_NAME}"
+          sed -i "s|\${OS_NAME}|${OS_NAME}|g"             "${PACKAGE_DIR}/README.md"
+          sed -i "s|\${ARCH}|${ARCH}|g"                   "${PACKAGE_DIR}/README.md"
+          sed -i "s|\${DESCRIPTION}|${DESCRIPTION}|g"     "${PACKAGE_DIR}/README.md"
 
       - name: Publish platform package
         run: |
@@ -346,7 +319,7 @@ jobs:
           npm pkg fix
           echo "Publishing ${PACKAGE_NAME}..."
           npm publish --access public
-          echo "Successfully published ${PACKAGE_NAME}"
+          echo "✓ Published ${PACKAGE_NAME}"
 
   npm-release-package:
     runs-on: namespace-profile-rari-linux-amd64
@@ -362,13 +335,12 @@ jobs:
           TAG="${GITHUB_REF#refs/tags/}"
           PACKAGE_NAME="${TAG%%@*}"
           VERSION="${TAG#*@}"
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "name=${PACKAGE_NAME}" >> "$GITHUB_OUTPUT"
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}"             >> "$GITHUB_OUTPUT"
+          echo "name=${PACKAGE_NAME}"   >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}"     >> "$GITHUB_OUTPUT"
           echo "📦 Publishing ${PACKAGE_NAME}@${VERSION}"
 
-      - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ github.ref }}
 
@@ -381,8 +353,7 @@ jobs:
       - name: Upgrade npm
         run: npm install -g npm@latest
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -390,9 +361,9 @@ jobs:
           npm_config_trust_lockfile: 'true'
 
       - name: Build package
-        run: pnpm --filter "${{ steps.pkg.outputs.name }}..." build
+        run: pnpm --filter "${{ steps.pkg.outputs.name }}" build
 
-      - name: Generate README and LICENSE
+      - name: Copy LICENSE and README
         run: |
           PACKAGE_DIR="packages/${{ steps.pkg.outputs.name }}"
           cp LICENSE "${PACKAGE_DIR}/LICENSE"
@@ -410,17 +381,10 @@ jobs:
           cd "packages/${{ steps.pkg.outputs.name }}"
 
           VERSION="${{ steps.pkg.outputs.version }}"
-          if [[ "${VERSION}" == *"-"* ]]; then
-            IS_PRERELEASE="true"
-          else
-            IS_PRERELEASE="false"
-          fi
-
-          # pnpm pack resolves catalog: and workspace: protocols
           TARBALL=$(pnpm pack | tail -1)
           echo "Packed: ${TARBALL}"
 
-          if [[ "${IS_PRERELEASE}" == "true" ]]; then
+          if [[ "${VERSION}" == *"-"* ]]; then
             echo "Publishing with tag 'next'..."
             npm publish "${TARBALL}" --access public --tag next
           else
@@ -433,6 +397,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     if: startsWith(github.ref, 'refs/tags/use-cache-binaries@') || github.event_name == 'workflow_dispatch'
     strategy:
+      fail-fast: false
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
@@ -455,8 +420,7 @@ jobs:
             platform: win32-arm64
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
@@ -464,53 +428,75 @@ jobs:
           toolchain: nightly
           targets: ${{ matrix.target }}
 
-      - name: Cache cargo registry
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-        with:
-          path: ~/.cargo/registry/cache
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-registry-
-
-      - name: Cache cargo index
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-        with:
-          path: ~/.cargo/registry/index
-          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-index-
-
-      - name: Cache cargo build
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-        with:
-          path: target
-          key: ${{ runner.os }}-${{ matrix.target }}-addon-build-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ matrix.target }}-addon-build-
-
-      - name: Build addon
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
         run: |
-          cargo build --release --target ${{ matrix.target }} --package rari-use-cache
+          sudo apt-get update
+          sudo apt-get install -y pkg-config mold
+
+      - name: Install system dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew list pkg-config &>/dev/null || brew install pkg-config
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22
+
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+
+      - name: Cache pnpm store
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.pnpm-store
+          key: pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          shared-key: release-addon-${{ matrix.target }}
+          workspaces: crates/rari-use-cache
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build addon (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          cd crates/rari-use-cache
+          pnpm exec napi build --release --strip --platform --target ${{ matrix.target }}
+        env:
+          RUSTFLAGS: -C link-arg=-fuse-ld=mold
+
+      - name: Build addon (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          cd crates/rari-use-cache
+          pnpm exec napi build --release --strip --platform --target ${{ matrix.target }}
+
+      - name: Build addon (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cd crates/rari-use-cache
+          pnpm exec napi build --release --strip --platform --target ${{ matrix.target }}
         env:
           AWS_LC_SYS_PREBUILT_NASM: 1
 
-      - name: Prepare addon artifact
+      - name: Collect addon artifact
+        shell: bash
         run: |
           mkdir -p addon-output
-          if [[ "${{ runner.os }}" == "Windows" ]]; then
-            cp target/${{ matrix.target }}/release/rari_use_cache.dll addon-output/rari_use_cache.node
-          elif [[ "${{ runner.os }}" == "macOS" ]]; then
-            cp target/${{ matrix.target }}/release/librari_use_cache.dylib addon-output/rari_use_cache.node
-          else
-            cp target/${{ matrix.target }}/release/librari_use_cache.so addon-output/rari_use_cache.node
-          fi
-        shell: bash
+          find crates/rari-use-cache -name "*.node" -exec cp {} addon-output/rari_use_cache.node \;
+          ls -la addon-output/
 
       - name: Upload addon artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: use-cache-addon-${{ matrix.platform }}
           path: addon-output/rari_use_cache.node
+          if-no-files-found: error
+          retention-days: 7
 
   npm-release-use-cache-platform:
     needs: build-use-cache-addons
@@ -531,8 +517,7 @@ jobs:
           - win32-arm64
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Setup Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
@@ -556,68 +541,28 @@ jobs:
           VERSION="${GITHUB_REF#refs/tags/use-cache-binaries@}"
 
           mkdir -p "${PACKAGE_DIR}"
-
           cp platform-addon/rari_use_cache.node "${PACKAGE_DIR}/rari_use_cache.node"
-          ls -la "${PACKAGE_DIR}/"
 
           case "${{ matrix.platform }}" in
-            darwin-arm64)
-              OS="darwin"
-              CPU="arm64"
-              PLATFORM_NAME="macOS ARM64 (Apple Silicon)"
-              OS_NAME="macOS"
-              ARCH="ARM64"
-              DESCRIPTION="Apple Silicon Macs (M1, M2, M3, M4)"
-              ;;
-            darwin-x64)
-              OS="darwin"
-              CPU="x64"
-              PLATFORM_NAME="macOS x64 (Intel)"
-              OS_NAME="macOS"
-              ARCH="x64"
-              DESCRIPTION="Intel-based Macs"
-              ;;
-            linux-arm64)
-              OS="linux"
-              CPU="arm64"
-              PLATFORM_NAME="Linux ARM64"
-              OS_NAME="Linux"
-              ARCH="ARM64"
-              DESCRIPTION="ARM64/aarch64 Linux systems"
-              ;;
-            linux-x64)
-              OS="linux"
-              CPU="x64"
-              PLATFORM_NAME="Linux x64"
-              OS_NAME="Linux"
-              ARCH="x64"
-              DESCRIPTION="x86_64 Linux systems"
-              ;;
-            win32-x64)
-              OS="win32"
-              CPU="x64"
-              PLATFORM_NAME="Windows x64"
-              OS_NAME="Windows"
-              ARCH="x64"
-              DESCRIPTION="x86_64 Windows systems"
-              ;;
-            win32-arm64)
-              OS="win32"
-              CPU="arm64"
-              PLATFORM_NAME="Windows ARM64"
-              OS_NAME="Windows"
-              ARCH="ARM64"
-              DESCRIPTION="ARM64 Windows systems"
-              ;;
+            darwin-arm64) OS="darwin"; CPU="arm64"; PLATFORM_NAME="macOS ARM64 (Apple Silicon)"; OS_NAME="macOS";   ARCH="ARM64"; DESCRIPTION="Apple Silicon Macs (M1, M2, M3, M4)" ;;
+            darwin-x64)   OS="darwin"; CPU="x64";   PLATFORM_NAME="macOS x64 (Intel)";           OS_NAME="macOS";   ARCH="x64";   DESCRIPTION="Intel-based Macs" ;;
+            linux-arm64)  OS="linux";  CPU="arm64"; PLATFORM_NAME="Linux ARM64";                  OS_NAME="Linux";   ARCH="ARM64"; DESCRIPTION="ARM64/aarch64 Linux systems" ;;
+            linux-x64)    OS="linux";  CPU="x64";   PLATFORM_NAME="Linux x64";                    OS_NAME="Linux";   ARCH="x64";   DESCRIPTION="x86_64 Linux systems" ;;
+            win32-x64)    OS="win32";  CPU="x64";   PLATFORM_NAME="Windows x64";                  OS_NAME="Windows"; ARCH="x64";   DESCRIPTION="x86_64 Windows systems" ;;
+            win32-arm64)  OS="win32";  CPU="arm64"; PLATFORM_NAME="Windows ARM64";                OS_NAME="Windows"; ARCH="ARM64"; DESCRIPTION="ARM64 Windows systems" ;;
           esac
 
           cp .github/templates/package-json/use-cache-platform.json "${PACKAGE_DIR}/package.json"
-          sed -i "s|{VERSION}|${VERSION}|g" "${PACKAGE_DIR}/package.json"
+          sed -i "s|{VERSION}|${VERSION}|g"              "${PACKAGE_DIR}/package.json"
           sed -i "s|{PLATFORM}|${{ matrix.platform }}|g" "${PACKAGE_DIR}/package.json"
-          sed -i "s|{OS}|${OS}|g" "${PACKAGE_DIR}/package.json"
-          sed -i "s|{CPU}|${CPU}|g" "${PACKAGE_DIR}/package.json"
+          sed -i "s|{OS}|${OS}|g"                        "${PACKAGE_DIR}/package.json"
+          sed -i "s|{CPU}|${CPU}|g"                      "${PACKAGE_DIR}/package.json"
 
-          node --input-type=module -e "import { readFileSync, writeFileSync } from 'fs'; const f = '${PACKAGE_DIR}/package.json'; writeFileSync(f, JSON.stringify(JSON.parse(readFileSync(f, 'utf8')), null, 2) + '\n');"
+          node --input-type=module -e "
+            import { readFileSync, writeFileSync } from 'fs';
+            const f = '${PACKAGE_DIR}/package.json';
+            writeFileSync(f, JSON.stringify(JSON.parse(readFileSync(f, 'utf8')), null, 2) + '\n');
+          "
 
           cp .github/templates/js/use-cache-platform.js "${PACKAGE_DIR}/index.js"
           sed -i "s|{PLATFORM}|${{ matrix.platform }}|g" "${PACKAGE_DIR}/index.js"
@@ -626,10 +571,10 @@ jobs:
 
           cp .github/templates/readme/use-cache-platform.md "${PACKAGE_DIR}/README.md"
           sed -i "s|\${PACKAGE_NAME}|use-cache-${{ matrix.platform }}|g" "${PACKAGE_DIR}/README.md"
-          sed -i "s|\${PLATFORM_NAME}|${PLATFORM_NAME}|g" "${PACKAGE_DIR}/README.md"
-          sed -i "s|\${OS_NAME}|${OS_NAME}|g" "${PACKAGE_DIR}/README.md"
-          sed -i "s|\${ARCH}|${ARCH}|g" "${PACKAGE_DIR}/README.md"
-          sed -i "s|\${DESCRIPTION}|${DESCRIPTION}|g" "${PACKAGE_DIR}/README.md"
+          sed -i "s|\${PLATFORM_NAME}|${PLATFORM_NAME}|g"                "${PACKAGE_DIR}/README.md"
+          sed -i "s|\${OS_NAME}|${OS_NAME}|g"                            "${PACKAGE_DIR}/README.md"
+          sed -i "s|\${ARCH}|${ARCH}|g"                                  "${PACKAGE_DIR}/README.md"
+          sed -i "s|\${DESCRIPTION}|${DESCRIPTION}|g"                    "${PACKAGE_DIR}/README.md"
 
           echo "✓ Generated package files for ${PACKAGE_NAME}@${VERSION}"
 
@@ -642,12 +587,6 @@ jobs:
           npm pkg fix
 
           if [[ "${VERSION}" == *"-"* ]]; then
-            IS_PRERELEASE="true"
-          else
-            IS_PRERELEASE="false"
-          fi
-
-          if [[ "${IS_PRERELEASE}" == "true" ]]; then
             echo "Publishing @rari/use-cache-${{ matrix.platform }} with tag 'next'..."
             npm publish --access public --tag next
           else
@@ -655,7 +594,7 @@ jobs:
             npm publish --access public
           fi
 
-          echo "Successfully published @rari/use-cache-${{ matrix.platform }}"
+          echo "✓ Published @rari/use-cache-${{ matrix.platform }}"
 
   npm-release-use-cache:
     runs-on: namespace-profile-rari-linux-amd64
@@ -673,8 +612,7 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "📦 Publishing @rari/use-cache@${VERSION}"
 
-      - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ github.ref }}
 
@@ -687,8 +625,7 @@ jobs:
       - name: Upgrade npm
         run: npm install -g npm@latest
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -698,26 +635,18 @@ jobs:
       - name: Build package
         run: pnpm --filter "@rari/use-cache" build
 
-      - name: Generate LICENSE
-        run: |
-          PACKAGE_DIR="packages/use-cache"
-          cp LICENSE "${PACKAGE_DIR}/LICENSE"
+      - name: Copy LICENSE
+        run: cp LICENSE packages/use-cache/LICENSE
 
       - name: Publish to npm
         run: |
           cd "packages/use-cache"
 
           VERSION="${{ steps.pkg.outputs.version }}"
-          if [[ "${VERSION}" == *"-"* ]]; then
-            IS_PRERELEASE="true"
-          else
-            IS_PRERELEASE="false"
-          fi
-
           TARBALL=$(pnpm pack | tail -1)
           echo "Packed: ${TARBALL}"
 
-          if [[ "${IS_PRERELEASE}" == "true" ]]; then
+          if [[ "${VERSION}" == *"-"* ]]; then
             echo "Publishing with tag 'next'..."
             npm publish "${TARBALL}" --access public --tag next
           else
