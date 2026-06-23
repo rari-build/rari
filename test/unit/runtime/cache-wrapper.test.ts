@@ -3,6 +3,41 @@ import { deserialize } from 'node:v8'
 import { $$cache__, encodeBoundArgs } from '@rari/use-cache/runtime/cache-wrapper'
 import { describe, expect, it } from 'vite-plus/test'
 
+interface RemoteCacheOps {
+  op_cache_remote_get: (key: string) => Promise<string | null>
+  op_cache_remote_set: (key: string, value: string, ttlMs: number) => Promise<void>
+}
+
+interface DenoLike {
+  core: {
+    ops: RemoteCacheOps
+  }
+}
+
+interface MockBackend {
+  read: (key: string) => string | null
+  write: (key: string, value: string, ttlMs: number) => void
+}
+
+function installOpsMock(backend: MockBackend) {
+  (globalThis as { Deno?: DenoLike }).Deno = {
+    core: {
+      ops: {
+        async op_cache_remote_get(key: string) {
+          return backend.read(key)
+        },
+        async op_cache_remote_set(key: string, value: string, ttlMs: number) {
+          backend.write(key, value, ttlMs)
+        },
+      },
+    },
+  }
+}
+
+function uninstallOpsMock(): void {
+  delete (globalThis as { Deno?: DenoLike }).Deno
+}
+
 const CACHE_LIMIT = 1000
 const FILL_COUNT = 2 * CACHE_LIMIT + 500
 
@@ -23,7 +58,21 @@ async function callCache<Args extends unknown[]>(
   }
 }
 
+function makeInMemoryBackend(): MockBackend {
+  const store = new Map<string, string>()
+  return {
+    read: key => store.get(key) ?? null,
+    write: (key, value) => {
+      store.set(key, value)
+    },
+  }
+}
+
 describe('$$cache__', () => {
+  afterEach(() => {
+    uninstallOpsMock()
+  })
+
   it('caches identical calls', async () => {
     let callCount = 0
     const fn = (a: number, b: number) => {
@@ -89,12 +138,13 @@ describe('$$cache__', () => {
     await callCache('default', id, 1, fn, [
       1n,
       new Date('2024-01-01T00:00:00.000Z'),
-      new Map([['a', new Set([2, 1])]]),
+      new Map([['a', new Set([1, 2])]]),
       /abc/gi,
       circular,
       Symbol.for('cache-key'),
       function keyFn() {},
     ])
+
     await callCache('default', id, 1, fn, [
       1n,
       new Date('2024-01-01T00:00:00.000Z'),
@@ -104,7 +154,6 @@ describe('$$cache__', () => {
       Symbol.for('cache-key'),
       function keyFn() {},
     ])
-
     expect(callCount).toBe(1)
   })
 
@@ -132,6 +181,43 @@ describe('$$cache__', () => {
 
     await callCache('default', id, 1, fn, [0])
     expect(callCount).toBe(FILL_COUNT + 1)
+  })
+
+  it('falls back to memory storage when Deno.core.ops is missing for kind=remote', async () => {
+    uninstallOpsMock()
+
+    let calls = 0
+    const fn = (a: number) => {
+      calls++
+      return a + 1
+    }
+
+    const result = await callCache('remote', 'remote-fallback-no-ops', 1, fn, [5])
+    expect(result).toBe(6)
+    expect(calls).toBe(1)
+
+    const second = await callCache('remote', 'remote-fallback-no-ops', 1, fn, [5])
+    expect(second).toBe(6)
+    expect(calls).toBe(1)
+  })
+
+  it('reads from mock backend on cache hit', async () => {
+    const backend = makeInMemoryBackend()
+    installOpsMock(backend)
+
+    let calls = 0
+    const fn = (a: number) => {
+      calls++
+      return a * 10
+    }
+
+    const r1 = await callCache('remote', 'hit-test', 1, fn, [3])
+    expect(r1).toBe(30)
+    expect(calls).toBe(1)
+
+    const r2 = await callCache('remote', 'hit-test', 1, fn, [3])
+    expect(r2).toBe(30)
+    expect(calls).toBe(1)
   })
 })
 

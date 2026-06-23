@@ -8,6 +8,10 @@ export default defineConfig({
     rari({
       experimental: {
         useCache: true,
+        useCacheRemote: {
+          handler: 'redis',
+          url: 'redis://localhost:6379/15',
+        },
       },
     }),
     tailwindcss(),

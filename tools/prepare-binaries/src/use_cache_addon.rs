@@ -92,8 +92,9 @@ pub async fn build_addon(
     } else {
         ""
     };
+    let cmd_str = if cfg!(windows) { "pnpm.cmd" } else { "pnpm" };
 
-    let mut cmd = Command::new("pnpm");
+    let mut cmd = Command::new(cmd_str);
     cmd.arg("exec")
         .arg("napi")
         .args(&args)

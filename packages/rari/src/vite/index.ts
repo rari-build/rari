@@ -1,6 +1,6 @@
 import type { CSSModulesOptions, Plugin, UserConfig } from 'vite-plus'
 import type { ProxyPluginOptions } from '../proxy/vite-plugin'
-import type { ServerCacheConfig } from '../types/server-config'
+import type { ServerCacheConfig, ServerCacheLayerConfig } from '../types/server-config'
 import type { ServerBuildOptions } from './server-build'
 import { Buffer } from 'node:buffer'
 import { spawn } from 'node:child_process'
@@ -56,12 +56,12 @@ const JSX_TEST_REGEX = /\bJSX\b/
 const IMPORT_SPECIFIERS_REGEX = /\{([^}]*)\}/
 const USE_CLIENT_DIRECTIVE_LINE_REGEX = /^['"]use client['"];?\s*\n/
 
-interface RouterPluginOptions {
+export interface RouterPluginOptions {
   appDir?: string
   extensions?: string[]
 }
 
-interface RariOptions {
+export interface RariOptions {
   projectRoot?: string
   serverBuild?: ServerBuildOptions
   serverHandler?: boolean
@@ -101,6 +101,7 @@ interface RariOptions {
   cache?: ServerCacheConfig
   experimental?: {
     useCache?: boolean
+    useCacheRemote?: ServerCacheLayerConfig
   }
 }
 

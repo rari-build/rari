@@ -6,7 +6,9 @@ use tokio::process::Command;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
-use crate::common::{Target, log, log_error, log_success, log_warning};
+#[cfg(unix)]
+use crate::common::log_warning;
+use crate::common::{Target, log, log_error, log_success};
 
 pub async fn build_binary(target: &str, project_root: &Path, dev_mode: bool) -> Result<bool> {
     let build_type = if dev_mode { "debug" } else { "release" };

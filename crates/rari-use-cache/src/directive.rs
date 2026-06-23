@@ -169,6 +169,31 @@ mod tests {
     }
 
     #[test]
+    fn test_detect_use_cache_remote_kind() {
+        assert!(detect_use_cache("\"use cache: remote\""));
+        assert!(detect_use_cache("'use cache: remote'"));
+        assert!(detect_use_cache("`use cache: remote`"));
+    }
+
+    #[test]
+    fn test_extract_remote_cache_kind_from_ast() {
+        let body = BlockStmt {
+            span: Default::default(),
+            ctxt: Default::default(),
+            stmts: vec![Stmt::Expr(ExprStmt {
+                span: Default::default(),
+                expr: Box::new(Expr::Lit(Lit::Str(Str {
+                    span: Default::default(),
+                    value: "use cache: remote".into(),
+                    raw: None,
+                }))),
+            })],
+        };
+        assert!(has_use_cache_directive(&body));
+        assert_eq!(extract_cache_kind(&body), Some("remote".to_string()));
+    }
+
+    #[test]
     fn test_non_directive_statement_stops_search() {
         let body = BlockStmt {
             span: Default::default(),

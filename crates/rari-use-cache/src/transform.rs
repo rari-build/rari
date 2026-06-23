@@ -27,7 +27,6 @@ pub struct TransformOutput {
 struct TransformVisitor {
     filename: String,
     hash_salt: String,
-    cache_kinds: Vec<String>,
     index: usize,
     has_cache_fns: bool,
     module_idents: FxHashSet<Id>,
@@ -37,11 +36,10 @@ struct TransformVisitor {
 }
 
 impl TransformVisitor {
-    fn new(filename: &str, hash_salt: &str, cache_kinds: &[String]) -> Self {
+    fn new(filename: &str, hash_salt: &str) -> Self {
         TransformVisitor {
             filename: filename.to_string(),
             hash_salt: hash_salt.to_string(),
-            cache_kinds: cache_kinds.to_vec(),
             index: 0,
             has_cache_fns: false,
             module_idents: FxHashSet::default(),
@@ -159,13 +157,8 @@ impl TransformVisitor {
         }
 
         self.has_cache_fns = true;
-        let cache_kind = directive::extract_cache_kind(body).unwrap_or_else(|| {
-            if self.cache_kinds.is_empty() {
-                "default".to_string()
-            } else {
-                self.cache_kinds[0].clone()
-            }
-        });
+        let cache_kind =
+            directive::extract_cache_kind(body).unwrap_or_else(|| "default".to_string());
 
         let fn_params = closure::collect_fn_params(&fn_decl.function);
         let closure_vars = closure::collect_closure_idents(
@@ -245,7 +238,6 @@ pub fn transform_source(
     source: &str,
     filename: &str,
     hash_salt: &str,
-    cache_kinds: &[String],
 ) -> Result<TransformOutput, String> {
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         GLOBALS.set(&Globals::default(), || {
@@ -269,7 +261,7 @@ pub fn transform_source(
                 .parse_module()
                 .map_err(|e| format!("Parse error: {e:?}"))?;
 
-            let mut visitor = TransformVisitor::new(filename, hash_salt, cache_kinds);
+            let mut visitor = TransformVisitor::new(filename, hash_salt);
             visitor.visit_mut_module(&mut module);
 
             if !visitor.has_cache_fns {
