@@ -7,17 +7,14 @@ let redisStorage: CacheStorage | undefined
 
 export function getStorage(kind: string): CacheStorage {
   if (kind === 'remote') {
-    if (!redisStorage && hasRedisOps()) {
+    if (!redisStorage && hasRedisOps())
       redisStorage = new RedisCacheStorage()
-    }
-    if (redisStorage) {
+    if (redisStorage)
       return redisStorage
-    }
   }
 
-  if (!memoryStorage) {
+  if (!memoryStorage)
     memoryStorage = new MemoryCacheStorage()
-  }
 
   return memoryStorage
 }

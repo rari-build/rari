@@ -1,3 +1,5 @@
+#![allow(clippy::exhaustive_structs)]
+
 use deno_core::{Extension, OpState, extension, op2};
 use deno_error::JsErrorBox;
 use redis::AsyncCommands;
@@ -71,20 +73,18 @@ impl RedisCacheState {
                 .await
                 .map_err(|_| {
                     RedisCacheError::Connect(redis::RedisError::from((
-                        redis::ErrorKind::IoError,
+                        redis::ErrorKind::Io,
                         "redis connect timeout",
                     )))
                 })??;
-        *connection = Some(new_connection);
+        *connection = Some(new_connection.clone());
 
-        Ok(connection
-            .as_ref()
-            .expect("redis connection was just initialized")
-            .clone())
+        Ok(new_connection)
     }
 }
 
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum RedisCacheError {
     #[error("redis cache state is not initialized")]
     StateMissing,
@@ -95,7 +95,7 @@ pub enum RedisCacheError {
 }
 
 fn ttl_ms_to_secs(ttl_ms: u32) -> u64 {
-    (ttl_ms as u64)
+    u64::from(ttl_ms)
         .saturating_add(MS_PER_SEC - 1)
         .saturating_div(MS_PER_SEC)
         .max(1)

@@ -74,6 +74,7 @@ pub struct RedirectConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
+#[non_exhaustive]
 pub struct CacheLayerConfig {
     pub handler: String,
     pub url: Option<String>,
@@ -136,6 +137,7 @@ impl CacheConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
+#[non_exhaustive]
 pub struct UseCacheConfig {
     #[serde(default)]
     pub remote: Option<CacheLayerConfig>,
@@ -716,8 +718,8 @@ impl Config {
                             .url
                             .as_deref()
                             .map(str::trim)
-                            .filter(|v| !v.is_empty())
-                            .is_none();
+                            .as_ref()
+                            .is_none_or(|v| v.is_empty());
                         if layer.handler == "redis" && missing_url {
                             tracing::warn!(
                                 "Invalid useCache.remote: handler=redis requires a non-empty url. Ignoring remote cache config."

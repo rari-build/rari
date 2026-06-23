@@ -10,7 +10,6 @@ pub mod ext;
 pub mod factory;
 pub mod module;
 pub mod ops;
-#[cfg(feature = "redis")]
 pub mod redis_cache;
 pub mod utils;
 
