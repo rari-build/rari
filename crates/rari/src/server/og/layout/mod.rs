@@ -196,6 +196,7 @@ impl LayoutEngine {
                 "center" => JustifyContent::CENTER,
                 "space-between" => JustifyContent::SPACE_BETWEEN,
                 "space-around" => JustifyContent::SPACE_AROUND,
+                "space-evenly" => JustifyContent::SPACE_EVENLY,
                 _ => JustifyContent::FLEX_START,
             });
         }
