@@ -1,0 +1,20 @@
+[target.x86_64-apple-darwin]
+rustflags = [
+  "-C",
+  "link-arg=-fuse-ld=/opt/homebrew/bin/ld64.lld"
+]
+
+[target.aarch64-apple-darwin]
+rustflags = [
+  "-C",
+  "link-arg=-fuse-ld=/opt/homebrew/bin/ld64.lld"
+]
+
+[build]
+pipelining = true
+
+[alias]
+c = "clippy --all-targets --all-features"
+ta = "test --all-features"
+rari = "build --bin rari"
+snapshot = "run --manifest-path tools/snapshot/Cargo.toml --"
