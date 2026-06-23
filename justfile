@@ -209,12 +209,13 @@ release:
 release-dry:
     GITHUB_TOKEN=$(gh auth token) cargo run --release --manifest-path tools/release/Cargo.toml -- --dry-run
 
-# Prepare binaries for current platform
+# Prepare binaries for current platform (release build)
 prepare-binaries:
-    cargo run --manifest-path tools/prepare-binaries/Cargo.toml -- --dev
+    cargo run --release --manifest-path tools/prepare-binaries/Cargo.toml
 
-# Alias for prepare-binaries
-prepare-binaries-dev: prepare-binaries
+# Prepare binaries for development (fast debug build)
+prepare-binaries-dev:
+    cargo run --manifest-path tools/prepare-binaries/Cargo.toml -- --dev
 
 # --- Utility commands ---
 
