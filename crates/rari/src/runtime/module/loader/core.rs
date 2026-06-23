@@ -1555,7 +1555,7 @@ impl ModuleLoader for RariModuleLoader {
                         ""
                     };
 
-                    fn append_source_ext(path: &str) -> String {
+                    fn append_extension_only(path: &str) -> (String, &str) {
                         let (base_path, suffix) = if let Some(query_pos) = path.find('?') {
                             (&path[..query_pos], &path[query_pos..])
                         } else if let Some(hash_pos) = path.find('#') {
@@ -1576,19 +1576,26 @@ impl ModuleLoader for RariModuleLoader {
                             format!("{base_path}.ts")
                         };
 
-                        format!("{base_with_ext}{suffix}")
+                        (base_with_ext, suffix)
                     }
 
                     let resolved_path = if specifier.starts_with("../") {
                         let remaining = specifier.strip_prefix("../").unwrap_or(specifier);
                         let source_path = Path::new(source_dir);
                         let parent_dir = source_path.parent().unwrap_or_else(|| Path::new(""));
-                        let remaining_with_ext = append_source_ext(remaining);
-                        path_to_file_url(&parent_dir.join(remaining_with_ext))
+
+                        let (base_with_ext, suffix) = append_extension_only(remaining);
+                        let mut file_url = path_to_file_url(&parent_dir.join(base_with_ext));
+                        file_url.push_str(suffix);
+                        file_url
                     } else {
                         let remaining = specifier.strip_prefix("./").unwrap_or(specifier);
-                        let remaining_with_ext = append_source_ext(remaining);
-                        path_to_file_url(&Path::new(source_dir).join(remaining_with_ext))
+
+                        let (base_with_ext, suffix) = append_extension_only(remaining);
+                        let mut file_url =
+                            path_to_file_url(&Path::new(source_dir).join(base_with_ext));
+                        file_url.push_str(suffix);
+                        file_url
                     };
 
                     let url = ModuleSpecifier::parse(&resolved_path)

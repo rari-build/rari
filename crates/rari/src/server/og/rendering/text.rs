@@ -134,12 +134,18 @@ impl ImageRenderer {
     fn parse_text_align(&self, style: &rustc_hash::FxHashMap<String, String>) -> Alignment {
         style
             .get("textAlign")
-            .map(|ta| match ta.as_str() {
-                "left" | "start" => Alignment::Start,
-                "right" | "end" => Alignment::End,
-                "center" => Alignment::Center,
-                "justify" => Alignment::Justify,
-                _ => Alignment::Start,
+            .map(|ta| {
+                #[expect(
+                    clippy::match_same_arms,
+                    reason = "Default alignment is intentionally Start for unrecognized values"
+                )]
+                match ta.as_str() {
+                    "left" | "start" => Alignment::Start,
+                    "right" | "end" => Alignment::End,
+                    "center" => Alignment::Center,
+                    "justify" => Alignment::Justify,
+                    _ => Alignment::Start,
+                }
             })
             .unwrap_or(Alignment::Start)
     }
