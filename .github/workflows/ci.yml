@@ -32,6 +32,7 @@ jobs:
     outputs:
       src: ${{ steps.filter.outputs.src }}
       rust: ${{ steps.filter.outputs.rust }}
+      use_cache_crate: ${{ steps.filter.outputs.use_cache_crate }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -61,13 +62,17 @@ jobs:
               - 'rust-toolchain.toml'
               - '.clippy.toml'
               - '.rustfmt.toml'
+            use_cache_crate:
+              - '.github/workflows/ci.yml'
+              - 'crates/rari-use-cache/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'rust-toolchain.toml'
 
   build-snapshot:
     name: Build V8 snapshot
     needs: changes
-    if: |
-      needs.changes.outputs.rust == 'true' ||
-      (needs.changes.outputs.src == 'true' && (github.event_name != 'push' || github.ref_name != 'main'))
+    if: needs.changes.outputs.rust == 'true'
     runs-on: namespace-profile-rari-linux-amd64
     timeout-minutes: 30
     permissions:
@@ -81,15 +86,15 @@ jobs:
         with:
           toolchain: nightly
 
-      - name: Install dependencies
+      - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y pkg-config libfontconfig1-dev
+          sudo apt-get install -y pkg-config libfontconfig1-dev mold
 
       - name: Cache Rust
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
-          shared-key: snapshot
+          shared-key: rust-linux
 
       - name: Create snapshot placeholder
         run: |
@@ -100,6 +105,8 @@ jobs:
 
       - name: Generate V8 snapshot
         run: cargo run --manifest-path tools/snapshot/Cargo.toml -- crates/rari/snapshots
+        env:
+          RUSTFLAGS: -C link-arg=-fuse-ld=mold
 
       - name: Upload snapshot
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -134,15 +141,15 @@ jobs:
           toolchain: nightly
           components: rustfmt, clippy
 
-      - name: Install dependencies
+      - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y pkg-config libfontconfig1-dev
+          sudo apt-get install -y pkg-config libfontconfig1-dev mold
 
       - name: Cache Rust
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
-          shared-key: rust-check
+          shared-key: rust-linux
 
       - name: Download snapshot
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -155,9 +162,13 @@ jobs:
 
       - name: Run clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
+        env:
+          RUSTFLAGS: -C link-arg=-fuse-ld=mold
 
       - name: Test Rust
         run: cargo test --all-features
+        env:
+          RUSTFLAGS: -C link-arg=-fuse-ld=mold
 
       - name: Cancel workflow on failure
         if: failure() && github.event_name == 'merge_group'
@@ -168,7 +179,10 @@ jobs:
   build-rari-binary:
     name: Build rari binary (${{ matrix.os }})
     needs: [changes, build-snapshot]
-    if: (needs.changes.outputs.rust == 'true' || needs.changes.outputs.src == 'true') && (github.event_name != 'push' || github.ref_name != 'main')
+    if: >-
+      (needs.changes.outputs.rust == 'true' || needs.changes.outputs.src == 'true') &&
+      (github.event_name != 'push' || github.ref_name != 'main') &&
+      (needs.build-snapshot.result == 'success' || needs.build-snapshot.result == 'skipped')
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
     permissions:
@@ -188,13 +202,13 @@ jobs:
         with:
           toolchain: nightly
 
-      - name: Install dependencies (Linux)
+      - name: Install system dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y pkg-config libfontconfig1-dev
+          sudo apt-get install -y pkg-config libfontconfig1-dev mold
 
-      - name: Install dependencies (Windows)
+      - name: Install system dependencies (Windows)
         if: runner.os == 'Windows'
         run: vcpkg install fontconfig:x64-windows
         shell: pwsh
@@ -202,9 +216,10 @@ jobs:
       - name: Cache Rust
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
-          shared-key: 'e2e-${{ runner.os }}'
+          shared-key: rust-${{ runner.os }}
 
       - name: Download snapshot
+        if: needs.build-snapshot.result == 'success'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: v8-snapshot
@@ -218,9 +233,11 @@ jobs:
           PKG_CONFIG_PATH: C:\vcpkg\installed\x64-windows\lib\pkgconfig
           VCPKG_ROOT: C:\vcpkg
 
-      - name: Build rari binary (Unix)
+      - name: Build rari binary (Linux)
         if: runner.os != 'Windows'
         run: cargo build --bin rari
+        env:
+          RUSTFLAGS: -C link-arg=-fuse-ld=mold
 
       - name: Upload binary (Linux)
         if: runner.os == 'Linux'
@@ -249,7 +266,7 @@ jobs:
   build-use-cache-addon:
     name: Build rari_use_cache.node (${{ matrix.os }})
     needs: [changes]
-    if: (needs.changes.outputs.rust == 'true' || needs.changes.outputs.src == 'true') && (github.event_name != 'push' || github.ref_name != 'main')
+    if: needs.changes.outputs.use_cache_crate == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     permissions:
@@ -269,11 +286,11 @@ jobs:
         with:
           toolchain: nightly
 
-      - name: Install dependencies (Linux)
+      - name: Install system dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y pkg-config
+          sudo apt-get install -y pkg-config mold
 
       - name: Setup Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
@@ -283,6 +300,19 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
 
+      - name: Cache pnpm store
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.pnpm-store
+          key: pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
+
+      - name: Cache Rust (use-cache crate only)
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          shared-key: use-cache-${{ runner.os }}
+          workspaces: crates/rari-use-cache
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -291,6 +321,8 @@ jobs:
         run: |
           cd crates/rari-use-cache
           pnpm exec napi build --release --strip --platform
+        env:
+          RUSTFLAGS: -C link-arg=-fuse-ld=mold
 
       - name: Build rari_use_cache.node (Windows)
         if: runner.os == 'Windows'
@@ -336,6 +368,13 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+      - name: Cache addon (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: packages/use-cache-linux-x64
+          key: use-cache-linux-x64-${{ hashFiles('crates/rari-use-cache/**', 'Cargo.lock') }}
+
       - name: Upload addon (Windows)
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -348,8 +387,15 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+      - name: Cache addon (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: packages/use-cache-win32-x64
+          key: use-cache-win32-x64-${{ hashFiles('crates/rari-use-cache/**', 'Cargo.lock') }}
+
   build:
-    needs: [changes, build-use-cache-addon]
+    needs: [changes]
     if: needs.changes.outputs.src == 'true' || needs.changes.outputs.rust == 'true'
     runs-on: namespace-profile-rari-linux-amd64
     timeout-minutes: 10
@@ -367,13 +413,24 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm install --frozen-lockfile
+
+      - name: Restore use-cache addon from cache
+        id: cache-addon
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: packages/use-cache-linux-x64
+          key: use-cache-linux-x64-${{ hashFiles('crates/rari-use-cache/**', 'Cargo.lock') }}
+          restore-keys: |
+            use-cache-linux-x64-
 
       - name: Download use-cache addon
+        if: steps.cache-addon.outputs.cache-hit != 'true'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: use-cache-linux-x64
           path: packages/use-cache-linux-x64
+          if-no-files-found: ignore
 
       - name: Build packages
         run: |
@@ -396,18 +453,18 @@ jobs:
           test -d packages/rari/dist
           test -d packages/create-rari-app/dist
 
-      - name: Cache dist
+      - name: Upload dist artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           if-no-files-found: error
           retention-days: 3
           name: dist
           path: |
-            packages/use-cache/dist
-            packages/logger/dist
-            packages/deploy/dist
-            packages/rari/dist
-            packages/create-rari-app/dist
+            packages/use-cache/dist/**
+            packages/logger/dist/**
+            packages/deploy/dist/**
+            packages/rari/dist/**
+            packages/create-rari-app/dist/**
 
       - name: Cancel workflow on failure
         if: failure() && github.event_name == 'merge_group'
@@ -416,7 +473,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
   lint-and-test:
-    needs: [changes, build-use-cache-addon]
+    needs: [changes, build]
     if: needs.changes.outputs.src == 'true' || needs.changes.outputs.rust == 'true'
     runs-on: namespace-profile-rari-linux-amd64
     timeout-minutes: 15
@@ -434,21 +491,30 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm install --frozen-lockfile
+
+      - name: Download dist artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dist
+          path: .
+
+      - name: Restore use-cache addon from cache
+        id: cache-addon
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: packages/use-cache-linux-x64
+          key: use-cache-linux-x64-${{ hashFiles('crates/rari-use-cache/**', 'Cargo.lock') }}
+          restore-keys: |
+            use-cache-linux-x64-
 
       - name: Download use-cache addon
+        if: steps.cache-addon.outputs.cache-hit != 'true'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: use-cache-linux-x64
           path: packages/use-cache-linux-x64
-
-      - name: Build packages
-        run: |
-          pnpm --filter=@rari/use-cache run build
-          pnpm --filter=@rari/logger run build
-          pnpm --filter=@rari/deploy run build
-          pnpm --filter=rari run build
-          pnpm --filter=create-rari-app run build
+          if-no-files-found: ignore
 
       - name: Lint
         run: pnpm lint
@@ -472,7 +538,6 @@ jobs:
       - changes
       - build
       - build-rari-binary
-      - build-use-cache-addon
     strategy:
       fail-fast: ${{ github.event_name == 'merge_group' }}
       matrix:
@@ -495,7 +560,7 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: dist
-          path: packages
+          path: .
 
       - name: Download rari binary (Linux)
         if: runner.os == 'Linux'
@@ -511,19 +576,41 @@ jobs:
           name: rari-binary-windows
           path: packages/rari-win32-x64/bin
 
-      - name: Download rari_use_cache addon (Linux)
+      - name: Restore use-cache addon from cache (Linux)
         if: runner.os == 'Linux'
+        id: cache-addon-linux
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: packages/use-cache-linux-x64
+          key: use-cache-linux-x64-${{ hashFiles('crates/rari-use-cache/**', 'Cargo.lock') }}
+          restore-keys: |
+            use-cache-linux-x64-
+
+      - name: Restore use-cache addon from cache (Windows)
+        if: runner.os == 'Windows'
+        id: cache-addon-windows
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: packages/use-cache-win32-x64
+          key: use-cache-win32-x64-${{ hashFiles('crates/rari-use-cache/**', 'Cargo.lock') }}
+          restore-keys: |
+            use-cache-win32-x64-
+
+      - name: Download rari_use_cache addon (Linux)
+        if: runner.os == 'Linux' && steps.cache-addon-linux.outputs.cache-hit != 'true'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: use-cache-linux-x64
           path: packages/use-cache-linux-x64
+          if-no-files-found: ignore
 
       - name: Download rari_use_cache addon (Windows)
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && steps.cache-addon-windows.outputs.cache-hit != 'true'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: use-cache-win32-x64
           path: packages/use-cache-win32-x64
+          if-no-files-found: ignore
 
       - name: Make binary executable (Linux)
         if: runner.os == 'Linux'
@@ -538,8 +625,16 @@ jobs:
             apt
             pnpm
 
+      - name: Cache Playwright browsers (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~\AppData\Local\ms-playwright
+          key: playwright-win-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: playwright-win-
+
       - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Install Playwright
         run: pnpm playwright install chromium --with-deps
@@ -579,7 +674,6 @@ jobs:
     steps:
       - name: Check required jobs
         run: |
-          # Fail if any needed job was not successful (skipped counts as success)
           results=(
             "${{ needs.changes.result }}"
             "${{ needs.build-snapshot.result }}"
@@ -590,10 +684,12 @@ jobs:
             "${{ needs.lint-and-test.result }}"
             "${{ needs.test-e2e.result }}"
           )
+
           for result in "${results[@]}"; do
             if [[ "$result" == "failure" || "$result" == "cancelled" ]]; then
               echo "One or more required jobs failed or were cancelled: $result"
               exit 1
             fi
           done
+
           echo "All required jobs passed or were skipped."
