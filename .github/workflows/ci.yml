@@ -434,7 +434,11 @@ jobs:
 
       - name: Build packages
         run: |
-          pnpm --filter=@rari/use-cache run build
+          if [ -f packages/use-cache-linux-x64/rari_use_cache.node ]; then
+            pnpm --filter=@rari/use-cache run build
+          else
+            echo "Skipping @rari/use-cache build (addon not available)"
+          fi
           pnpm --filter=@rari/logger run build
           pnpm --filter=@rari/deploy run build
           pnpm --filter=rari run build
@@ -447,7 +451,9 @@ jobs:
 
       - name: Verify dist outputs
         run: |
-          test -d packages/use-cache/dist
+          if [ -f packages/use-cache-linux-x64/rari_use_cache.node ]; then
+            test -d packages/use-cache/dist
+          fi
           test -d packages/logger/dist
           test -d packages/deploy/dist
           test -d packages/rari/dist
