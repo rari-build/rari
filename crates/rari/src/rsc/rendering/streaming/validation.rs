@@ -18,7 +18,7 @@ pub fn validate_suspense_boundaries(rsc_data: &serde_json::Value) -> Result<(), 
             {
                 let fallback_str = serde_json::to_string(fallback).unwrap_or_default();
 
-                if !fallback_refs.insert(fallback_str.clone()) {
+                if !fallback_refs.insert(fallback_str) {
                     let boundary_id = props
                         .get("~boundaryId")
                         .and_then(|v| v.as_str())
@@ -42,10 +42,8 @@ pub fn validate_suspense_boundaries(rsc_data: &serde_json::Value) -> Result<(), 
     check_for_duplicates(rsc_data, &mut fallback_refs, &mut duplicate_fallbacks);
 
     if !duplicate_fallbacks.is_empty() {
-        let error_msg = format!(
-            "Duplicate fallback content detected for boundaries: {:?}",
-            duplicate_fallbacks
-        );
+        let error_msg =
+            format!("Duplicate fallback content detected for boundaries: {duplicate_fallbacks:?}");
         tracing::error!("{}", error_msg);
         return Err(error_msg);
     }

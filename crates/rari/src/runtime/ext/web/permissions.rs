@@ -128,6 +128,10 @@ impl WebPermissions for DefaultWebPermissions {
 }
 
 #[derive(Clone, Default, Debug)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "Permission flags are intentionally boolean"
+)]
 struct AllowlistWebPermissionsSet {
     pub hrtime: bool,
     pub exec: bool,

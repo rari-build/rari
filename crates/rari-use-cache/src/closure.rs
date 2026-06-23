@@ -1,27 +1,25 @@
 use rustc_hash::FxHashSet;
 
-use deno_ast::swc::ast::*;
+use deno_ast::swc::ast::{
+    ArrowExpr, BlockStmt, CatchClause, Decl, DefaultDecl, ExportDecl, ExportDefaultDecl, FnDecl,
+    ForInStmt, ForOfStmt, ForStmt, Function, Id, Ident, ImportSpecifier, ModuleDecl, ModuleItem,
+    ObjectPatProp, Pat, Stmt, VarDecl, VarDeclKind,
+};
 use deno_ast::swc::ecma_visit::{Visit, VisitWith};
 
 pub fn collect_module_level_idents(item: &ModuleItem) -> FxHashSet<Id> {
     let mut idents = FxHashSet::default();
 
     match item {
-        ModuleItem::Stmt(Stmt::Decl(Decl::Fn(FnDecl { ident, .. }))) => {
-            idents.insert(ident.to_id());
-        }
-        ModuleItem::ModuleDecl(ModuleDecl::ExportDecl(ExportDecl {
+        ModuleItem::Stmt(Stmt::Decl(Decl::Fn(FnDecl { ident, .. })))
+        | ModuleItem::ModuleDecl(ModuleDecl::ExportDecl(ExportDecl {
             decl: Decl::Fn(FnDecl { ident, .. }),
             ..
         })) => {
             idents.insert(ident.to_id());
         }
-        ModuleItem::Stmt(Stmt::Decl(Decl::Var(var_decl))) => {
-            for decl in &var_decl.decls {
-                collect_var_decl_idents(&decl.name, &mut idents);
-            }
-        }
-        ModuleItem::ModuleDecl(ModuleDecl::ExportDecl(ExportDecl {
+        ModuleItem::Stmt(Stmt::Decl(Decl::Var(var_decl)))
+        | ModuleItem::ModuleDecl(ModuleDecl::ExportDecl(ExportDecl {
             decl: Decl::Var(var_decl),
             ..
         })) => {
@@ -29,10 +27,8 @@ pub fn collect_module_level_idents(item: &ModuleItem) -> FxHashSet<Id> {
                 collect_var_decl_idents(&decl.name, &mut idents);
             }
         }
-        ModuleItem::Stmt(Stmt::Decl(Decl::Class(class_decl))) => {
-            idents.insert(class_decl.ident.to_id());
-        }
-        ModuleItem::ModuleDecl(ModuleDecl::ExportDecl(ExportDecl {
+        ModuleItem::Stmt(Stmt::Decl(Decl::Class(class_decl)))
+        | ModuleItem::ModuleDecl(ModuleDecl::ExportDecl(ExportDecl {
             decl: Decl::Class(class_decl),
             ..
         })) => {
@@ -127,6 +123,11 @@ fn collect_bindings_from_pat(pat: &Pat, scope: &mut FxHashSet<Id>) {
     }
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "AST visitor pattern requires comprehensive match arms"
+)]
+#[expect(clippy::implicit_hasher)]
 pub fn collect_closure_idents(
     body: &BlockStmt,
     module_idents: &FxHashSet<Id>,
@@ -335,7 +336,15 @@ fn collect_pat_idents(pattern: &Pat, idents: &mut FxHashSet<Id>) {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::default_trait_access)]
+    #![allow(clippy::expect_used)]
     use super::*;
+    use deno_ast::swc::ast::{
+        AssignPatProp, BindingIdent, Class, ClassDecl, ClassExpr, Decl, DefaultDecl, ExportDecl,
+        ExportDefaultDecl, FnDecl, FnExpr, Function, Ident, ImportDecl, ImportDefaultSpecifier,
+        ImportPhase, ImportSpecifier, ModuleDecl, ModuleItem, ObjectPat, ObjectPatProp, Param, Pat,
+        RestPat, Stmt, Str,
+    };
     use deno_ast::swc::common::{Span, SyntaxContext};
 
     fn ident(name: &str) -> Ident {

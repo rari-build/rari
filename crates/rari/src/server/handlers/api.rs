@@ -38,6 +38,10 @@ pub async fn api_cors_preflight(
         && let Some(methods) = api_handler.get_supported_methods(path)
     {
         let mut builder = Response::builder().status(StatusCode::NO_CONTENT);
+        #[expect(
+            clippy::expect_used,
+            reason = "Response::builder() always initializes headers"
+        )]
         let headers = builder
             .headers_mut()
             .expect("Response builder should have headers");
@@ -53,7 +57,7 @@ pub async fn api_cors_preflight(
             cors_config.max_age,
         );
 
-        let mut all_methods = methods.clone();
+        let mut all_methods = methods;
         if !all_methods.contains(&"OPTIONS".to_string()) {
             all_methods.push("OPTIONS".to_string());
         }
@@ -63,6 +67,7 @@ pub async fn api_cors_preflight(
             headers.insert("Access-Control-Allow-Methods", methods_value);
         }
 
+        #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
         return builder
             .body(Body::empty())
             .expect("Valid preflight response");
@@ -84,7 +89,7 @@ pub async fn handle_api_route(
         .headers()
         .get("origin")
         .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string());
+        .map(std::string::ToString::to_string);
     let cors_config = state.config.cors_config();
 
     let api_handler = match &state.api_route_handler {
@@ -108,13 +113,13 @@ pub async fn handle_api_route(
                     .get_property("allowed_methods")
                     .unwrap_or("")
                     .split(',')
-                    .map(|s| s.to_string())
+                    .map(std::string::ToString::to_string)
                     .collect::<Vec<_>>();
 
                 let api_error = ApiRouteError::MethodNotAllowed {
-                    path: path.to_string(),
-                    method: method.to_string(),
-                    allowed_methods: allowed_methods.clone(),
+                    path: path.clone(),
+                    method: method.clone(),
+                    allowed_methods,
                     message: e.message(),
                 };
 
@@ -132,8 +137,8 @@ pub async fn handle_api_route(
             }
 
             let api_error = ApiRouteError::NotFound {
-                path: path.to_string(),
-                message: format!("No API route found for path: {}", path),
+                path: path.clone(),
+                message: format!("No API route found for path: {path}"),
             };
 
             let mut response = api_error.to_http_response(is_development);
@@ -182,20 +187,20 @@ pub async fn handle_api_route(
             let api_error = if e.code() == "JS_EXECUTION_ERROR" {
                 ApiRouteError::HandlerError {
                     path: route_match.route.path.clone(),
-                    method: method.to_string(),
+                    method: method.clone(),
                     message: e.message(),
                     stack: None,
                 }
             } else if e.code() == "BAD_REQUEST" {
                 ApiRouteError::BodyParseError {
                     path: route_match.route.path.clone(),
-                    method: method.to_string(),
+                    method: method.clone(),
                     message: e.message(),
                 }
             } else {
                 ApiRouteError::HandlerError {
                     path: route_match.route.path.clone(),
-                    method: method.to_string(),
+                    method: method.clone(),
                     message: e.message(),
                     stack: None,
                 }

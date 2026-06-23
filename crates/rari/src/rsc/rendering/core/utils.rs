@@ -1,4 +1,5 @@
 use regex::Regex;
+use std::fmt::Write;
 
 pub fn transform_imports_for_hmr(source: &str) -> String {
     let react_named_imports_regex =
@@ -36,7 +37,7 @@ pub fn transform_imports_for_hmr(source: &str) -> String {
                 && let Some(named_imports_match) = captures.get(1)
             {
                 let named_imports = named_imports_match.as_str();
-                let imports: Vec<&str> = named_imports.split(',').map(|s| s.trim()).collect();
+                let imports: Vec<&str> = named_imports.split(',').map(str::trim).collect();
 
                 result.push_str(
                     "if (typeof React === 'undefined') { var React = globalThis.React; }\n",
@@ -50,16 +51,16 @@ pub fn transform_imports_for_hmr(source: &str) -> String {
                             if parts.len() == 2 {
                                 let original_name = parts[0].trim();
                                 let alias_name = parts[1].trim();
-                                result.push_str(&format!(
-                                        "if (typeof {} === 'undefined') {{ var {} = globalThis.React?.{} || globalThis.{} || (function(props) {{ return props?.children || null; }}); }}\n",
-                                        alias_name, alias_name, original_name, alias_name
-                                    ));
+                                let _ = writeln!(
+                                    result,
+                                    "if (typeof {alias_name} === 'undefined') {{ var {alias_name} = globalThis.React?.{original_name} || globalThis.{alias_name} || (function(props) {{ return props?.children || null; }}); }}"
+                                );
                             }
                         } else {
-                            result.push_str(&format!(
-                                    "if (typeof {} === 'undefined') {{ var {} = globalThis.React?.{} || globalThis.{} || (function(props) {{ return props?.children || null; }}); }}\n",
-                                    import_name, import_name, import_name, import_name
-                                ));
+                            let _ = writeln!(
+                                result,
+                                "if (typeof {import_name} === 'undefined') {{ var {import_name} = globalThis.React?.{import_name} || globalThis.{import_name} || (function(props) {{ return props?.children || null; }}); }}"
+                            );
                         }
                     }
                 }
@@ -77,7 +78,7 @@ pub fn transform_imports_for_hmr(source: &str) -> String {
                 && let Some(named_imports_match) = captures.get(1)
             {
                 let named_imports = named_imports_match.as_str();
-                let imports: Vec<&str> = named_imports.split(',').map(|s| s.trim()).collect();
+                let imports: Vec<&str> = named_imports.split(',').map(str::trim).collect();
 
                 for import in imports {
                     let import_name = import.trim();
@@ -87,16 +88,16 @@ pub fn transform_imports_for_hmr(source: &str) -> String {
                             if parts.len() == 2 {
                                 let original_name = parts[0].trim();
                                 let alias_name = parts[1].trim();
-                                result.push_str(&format!(
-                                        "if (typeof {} === 'undefined') {{ var {} = (globalThis['~rsc'].functions && globalThis['~rsc'].functions.{} && globalThis['~rsc'].functions.{}.['~rsc_original']) ? globalThis['~rsc'].functions.{}.['~rsc_original'] : (globalThis['~rsc'].functions && globalThis['~rsc'].functions.{}) || globalThis.{} || (function(...args) {{ return Promise.resolve(null); }}); }}\n",
-                                        alias_name, alias_name, original_name, original_name, original_name, original_name, alias_name
-                                    ));
+                                let _ = writeln!(
+                                    result,
+                                    "if (typeof {alias_name} === 'undefined') {{ var {alias_name} = (globalThis['~rsc'].functions && globalThis['~rsc'].functions.{original_name} && globalThis['~rsc'].functions.{original_name}['~rsc_original']) ? globalThis['~rsc'].functions.{original_name}['~rsc_original'] : (globalThis['~rsc'].functions && globalThis['~rsc'].functions.{original_name}) || globalThis.{alias_name} || (function(...args) {{ return Promise.resolve(null); }}); }}"
+                                );
                             }
                         } else {
-                            result.push_str(&format!(
-                                    "if (typeof {} === 'undefined') {{ var {} = (globalThis['~rsc'].functions && globalThis['~rsc'].functions.{} && globalThis['~rsc'].functions.{}.['~rsc_original']) ? globalThis['~rsc'].functions.{}.['~rsc_original'] : (globalThis['~rsc'].functions && globalThis['~rsc'].functions.{}) || globalThis.{} || (function(...args) {{ return Promise.resolve(null); }}); }}\n",
-                                    import_name, import_name, import_name, import_name, import_name, import_name, import_name
-                                ));
+                            let _ = writeln!(
+                                result,
+                                "if (typeof {import_name} === 'undefined') {{ var {import_name} = (globalThis['~rsc'].functions && globalThis['~rsc'].functions.{import_name} && globalThis['~rsc'].functions.{import_name}['~rsc_original']) ? globalThis['~rsc'].functions.{import_name}['~rsc_original'] : (globalThis['~rsc'].functions && globalThis['~rsc'].functions.{import_name}) || globalThis.{import_name} || (function(...args) {{ return Promise.resolve(null); }}); }}"
+                            );
                         }
                     }
                 }
@@ -107,10 +108,10 @@ pub fn transform_imports_for_hmr(source: &str) -> String {
                 && let Some(import_name_match) = captures.get(1)
             {
                 let import_name = import_name_match.as_str();
-                result.push_str(&format!(
-                        "if (typeof {} === 'undefined') {{ var {} = globalThis.{} || (function(...args) {{ return Promise.resolve(null); }}); }}\n",
-                        import_name, import_name, import_name
-                    ));
+                let _ = writeln!(
+                    result,
+                    "if (typeof {import_name} === 'undefined') {{ var {import_name} = globalThis.{import_name} || (function(...args) {{ return Promise.resolve(null); }}); }}"
+                );
                 continue;
             }
 

@@ -36,6 +36,7 @@ fn escape_js_string(s: &str) -> String {
 
 fn is_esm_code(code: &str) -> bool {
     static ESM_REGEX: OnceLock<Regex> = OnceLock::new();
+    #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
     let regex = ESM_REGEX
         .get_or_init(|| Regex::new(r"(?m)^\s*export[\s{]").expect("Valid ESM detection regex"));
 
@@ -61,7 +62,7 @@ impl JsExecutionRuntime {
         script_name: String,
         script_code: String,
     ) -> Result<Value, RariError> {
-        let runtime = self.runtime.clone();
+        let runtime = Arc::clone(&self.runtime);
         let script_name_clone = script_name.clone();
         let script_code_clone = script_code.clone();
 
@@ -93,7 +94,6 @@ impl JsExecutionRuntime {
         params: rustc_hash::FxHashMap<String, crate::server::routing::types::ParamValue>,
         search_params: rustc_hash::FxHashMap<String, Vec<String>>,
     ) -> Result<Value, RariError> {
-        #[allow(clippy::disallowed_methods)]
         let data = json!({
             "layoutPaths": layout_paths,
             "pagePath": page_path,
@@ -105,16 +105,15 @@ impl JsExecutionRuntime {
             serde_json::to_string(&data).map_err(|e| RariError::serialization(e.to_string()))?;
 
         let script = format!(
-            r#"(function() {{
-                const data = {};
+            r"(function() {{
+                const data = {data_json};
                 return globalThis['~rari'].metadataCollector.collect(
                     data.layoutPaths,
                     data.pagePath,
                     data.params,
                     data.searchParams
                 );
-            }})()"#,
-            data_json
+            }})()"
         );
 
         let metadata_list = self
@@ -140,7 +139,7 @@ impl JsExecutionRuntime {
         function_name: &str,
         args: Vec<Value>,
     ) -> Result<Value, RariError> {
-        let runtime = self.runtime.clone();
+        let runtime = Arc::clone(&self.runtime);
         let function_name = function_name.to_string();
 
         match tokio::time::timeout(
@@ -158,7 +157,7 @@ impl JsExecutionRuntime {
     }
 
     pub async fn load_es_module(&self, specifier: &str) -> Result<deno_core::ModuleId, RariError> {
-        let runtime = self.runtime.clone();
+        let runtime = Arc::clone(&self.runtime);
         let specifier = specifier.to_string();
 
         match tokio::time::timeout(
@@ -179,7 +178,7 @@ impl JsExecutionRuntime {
         &self,
         module_id: deno_core::ModuleId,
     ) -> Result<Value, RariError> {
-        let runtime = self.runtime.clone();
+        let runtime = Arc::clone(&self.runtime);
 
         match tokio::time::timeout(
             Duration::from_millis(self.timeout_ms),
@@ -196,7 +195,7 @@ impl JsExecutionRuntime {
     }
 
     pub async fn add_module_to_loader(&self, specifier: &str) -> Result<(), RariError> {
-        let runtime = self.runtime.clone();
+        let runtime = Arc::clone(&self.runtime);
         let specifier = specifier.to_string();
 
         match tokio::time::timeout(
@@ -218,7 +217,7 @@ impl JsExecutionRuntime {
         specifier: &str,
         code: String,
     ) -> Result<(), RariError> {
-        let runtime = self.runtime.clone();
+        let runtime = Arc::clone(&self.runtime);
         let specifier = specifier.to_string();
 
         match tokio::time::timeout(
@@ -236,7 +235,7 @@ impl JsExecutionRuntime {
     }
 
     pub async fn clear_module_loader_caches(&self, component_id: &str) -> Result<(), RariError> {
-        let runtime = self.runtime.clone();
+        let runtime = Arc::clone(&self.runtime);
         let component_id = component_id.to_string();
 
         match tokio::time::timeout(
@@ -257,7 +256,7 @@ impl JsExecutionRuntime {
         &self,
         module_id: deno_core::ModuleId,
     ) -> Result<Value, RariError> {
-        let runtime = self.runtime.clone();
+        let runtime = Arc::clone(&self.runtime);
 
         match tokio::time::timeout(
             Duration::from_millis(self.timeout_ms),
@@ -279,7 +278,7 @@ impl JsExecutionRuntime {
         let script = format!(
             r#"
             (function() {{
-                const componentId = "{escaped_id}";
+                const componentId = "{escaped_component_id}";
                 let deleted = false;
 
                 if (globalThis[componentId]) {{
@@ -352,8 +351,7 @@ impl JsExecutionRuntime {
 
                 return {{ success: true, deleted: deleted }};
             }})()
-            "#,
-            escaped_id = escaped_component_id
+            "#
         );
 
         match self
@@ -367,8 +365,7 @@ impl JsExecutionRuntime {
             Err(e) => {
                 tracing::error!("Failed to invalidate component {}: {}", component_id, e);
                 Err(RariError::js_runtime(format!(
-                    "Failed to invalidate component {}: {}",
-                    component_id, e
+                    "Failed to invalidate component {component_id}: {e}"
                 )))
             }
         }
@@ -387,10 +384,7 @@ impl JsExecutionRuntime {
                 .unwrap_or_default()
                 .as_millis();
 
-            let hmr_specifier = format!(
-                "file:///rari_hmr/server/{}.js?v={}",
-                component_id, timestamp
-            );
+            let hmr_specifier = format!("file:///rari_hmr/server/{component_id}.js?v={timestamp}");
 
             if let Err(e) = self.clear_module_loader_caches(component_id).await {
                 tracing::warn!(
@@ -403,22 +397,20 @@ impl JsExecutionRuntime {
             self.add_module_to_loader_only(&hmr_specifier, component_code.to_string())
                 .await
                 .map_err(|e| {
-                    let error_msg = format!(
-                        "Failed to add component module to loader for {}: {}",
-                        component_id, e
-                    );
+                    let error_msg =
+                        format!("Failed to add component module to loader for {component_id}: {e}");
                     tracing::error!("{}", error_msg);
                     RariError::js_execution(error_msg)
                 })?;
 
             let module_id = self.load_es_module(component_id).await.map_err(|e| {
-                let error_msg = format!("Failed to load ES module for {}: {}", component_id, e);
+                let error_msg = format!("Failed to load ES module for {component_id}: {e}");
                 tracing::error!("{}", error_msg);
                 RariError::js_execution(error_msg)
             })?;
 
             self.evaluate_module(module_id).await.map_err(|e| {
-                let error_msg = format!("Failed to evaluate ES module for {}: {}", component_id, e);
+                let error_msg = format!("Failed to evaluate ES module for {component_id}: {e}");
                 tracing::error!("{}", error_msg);
                 RariError::js_execution(error_msg)
             })?;
@@ -429,8 +421,8 @@ impl JsExecutionRuntime {
             let registration_script = format!(
                 r#"(async function() {{
                     try {{
-                        const moduleNamespace = await import("{}");
-                        const componentId = "{}";
+                        const moduleNamespace = await import("{escaped_hmr_specifier}");
+                        const componentId = "{escaped_component_id}";
 
                         if (!globalThis['~rsc']) globalThis['~rsc'] = {{}};
                         if (!globalThis['~rsc'].modules) globalThis['~rsc'].modules = {{}};
@@ -460,11 +452,10 @@ impl JsExecutionRuntime {
 
                         return {{ success: true }};
                     }} catch (error) {{
-                        console.error('[rari] Failed to register component {}:', error);
+                        console.error('[rari] Failed to register component {escaped_component_id}:', error);
                         return {{ success: false, error: error.message }};
                     }}
-                }})()"#,
-                escaped_hmr_specifier, escaped_component_id, escaped_component_id
+                }})()"#
             );
 
             let result = self
@@ -477,17 +468,15 @@ impl JsExecutionRuntime {
                 )
                 .await
                 .map_err(|e| {
-                    let error_msg = format!(
-                        "Failed to register component {} to globalThis: {}",
-                        component_id, e
-                    );
+                    let error_msg =
+                        format!("Failed to register component {component_id} to globalThis: {e}");
                     tracing::error!("{}", error_msg);
                     RariError::js_execution(error_msg)
                 })?;
 
             let success = result
                 .get("success")
-                .and_then(|v| v.as_bool())
+                .and_then(serde_json::Value::as_bool)
                 .unwrap_or(false);
 
             if !success {
@@ -501,8 +490,7 @@ impl JsExecutionRuntime {
                     error_msg
                 );
                 return Err(RariError::js_execution(format!(
-                    "Component registration failed for {}: {}",
-                    component_id, error_msg
+                    "Component registration failed for {component_id}: {error_msg}"
                 )));
             }
 
@@ -515,10 +503,8 @@ impl JsExecutionRuntime {
             {
                 Ok(_) => Ok(()),
                 Err(e) => {
-                    let error_msg = format!(
-                        "Failed to execute component code for {}: {}",
-                        component_id, e
-                    );
+                    let error_msg =
+                        format!("Failed to execute component code for {component_id}: {e}");
                     tracing::error!("{}", error_msg);
                     Err(RariError::js_execution(error_msg))
                 }
@@ -530,7 +516,7 @@ impl JsExecutionRuntime {
         &self,
         request_context: std::sync::Arc<crate::server::middleware::request_context::RequestContext>,
     ) -> Result<(), RariError> {
-        let runtime = self.runtime.clone();
+        let runtime = Arc::clone(&self.runtime);
 
         match tokio::time::timeout(
             Duration::from_millis(self.timeout_ms),
@@ -547,7 +533,7 @@ impl JsExecutionRuntime {
     }
 
     pub async fn clear_request_context(&self) -> Result<(), RariError> {
-        let runtime = self.runtime.clone();
+        let runtime = Arc::clone(&self.runtime);
 
         match tokio::time::timeout(
             Duration::from_millis(self.timeout_ms),
@@ -569,7 +555,7 @@ impl JsExecutionRuntime {
             crate::server::middleware::request_context::RequestContext,
         >,
     ) -> Result<(), RariError> {
-        let runtime = self.runtime.clone();
+        let runtime = Arc::clone(&self.runtime);
 
         match tokio::time::timeout(
             Duration::from_millis(self.timeout_ms),

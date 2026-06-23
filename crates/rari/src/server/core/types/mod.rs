@@ -14,6 +14,7 @@ use crate::server::og::OgImageGenerator;
 use crate::server::routing;
 
 #[derive(Clone)]
+#[non_exhaustive]
 pub struct ServerState {
     pub renderer: Arc<tokio::sync::Mutex<crate::rsc::RscRenderer>>,
     pub ssr_renderer: Arc<crate::rsc::RscHtmlRenderer>,
@@ -36,6 +37,7 @@ pub struct ServerState {
 }
 
 #[derive(Debug, Deserialize)]
+#[non_exhaustive]
 pub struct RenderRequest {
     pub component_id: String,
     pub props: Option<Value>,
@@ -43,6 +45,7 @@ pub struct RenderRequest {
 }
 
 #[derive(Debug, Serialize)]
+#[non_exhaustive]
 pub struct RenderResponse {
     pub success: bool,
     pub data: Option<String>,
@@ -52,6 +55,7 @@ pub struct RenderResponse {
 }
 
 #[derive(Debug, Deserialize)]
+#[non_exhaustive]
 pub struct RegisterRequest {
     pub component_id: String,
     pub component_code: String,
@@ -59,6 +63,7 @@ pub struct RegisterRequest {
 }
 
 #[derive(Debug, Deserialize)]
+#[non_exhaustive]
 pub struct RegisterClientRequest {
     pub component_id: String,
     pub file_path: String,
@@ -66,17 +71,20 @@ pub struct RegisterClientRequest {
 }
 
 #[derive(Debug, Deserialize)]
+#[non_exhaustive]
 pub struct HmrRegisterRequest {
     pub file_path: String,
 }
 
 #[derive(Debug, Deserialize)]
+#[non_exhaustive]
 pub struct ReloadComponentRequest {
     pub component_id: String,
     pub bundle_path: String,
 }
 
 #[derive(Debug, Serialize)]
+#[non_exhaustive]
 pub struct ReloadComponentResponse {
     pub success: bool,
     pub message: String,

@@ -1,8 +1,11 @@
+#![allow(clippy::unused_async_trait_impl)]
+
 use cow_utils::CowUtils;
 use dashmap::DashMap;
 use parking_lot::Mutex;
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde_json::Value as JsonValue;
+use std::fmt::Write;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -17,7 +20,13 @@ use crate::rsc::utils::dependencies::{extract_dependencies, hash_string};
 use crate::runtime::JsExecutionRuntime;
 use rari_error::RariError;
 
-use super::constants::*;
+use super::constants::{
+    BATCH_ERROR_COLLECTION_SCRIPT, CACHE_CLEANUP_INTERVAL, COMPONENT_AVAILABILITY_CHECK_DELAY_MS,
+    COMPONENT_EVAL_SETUP_SCRIPT, EXTENSION_CHECKS_SCRIPT, JSX_RUNTIME_SETUP_SCRIPT, MAX_RETRIES,
+    MEMORY_PRESSURE_THRESHOLD, MODULE_REGISTRATION_SCRIPT, PROMISE_MANAGER_CHECK_SCRIPT,
+    REGISTRY_PROXY_SETUP_SCRIPT, RESOLVE_SERVER_FUNCTIONS_SCRIPT, RETRY_BASE_DELAY_MS,
+    SERVER_ACTION_INVOCATION_SCRIPT, SERVER_FUNCTION_RESOLVER_SCRIPT, V8_CACHE_CLEAR_SCRIPT,
+};
 use super::types::{ResourceLimits, ResourceMetrics, ResourceTracker};
 use super::utils::transform_imports_for_hmr;
 
@@ -92,6 +101,7 @@ impl RscRenderer {
         Ok(())
     }
 
+    #[must_use]
     pub fn with_timeout(mut self, timeout_ms: u64) -> Self {
         self.timeout_ms = timeout_ms;
         self
@@ -212,7 +222,7 @@ globalThis['~errors'].batch.push({{
         result: JsonValue,
         _script_count: usize,
     ) -> Result<JsonValue, RariError> {
-        if let Some(success) = result.get("success").and_then(|s| s.as_bool())
+        if let Some(success) = result.get("success").and_then(serde_json::Value::as_bool)
             && !success
             && let Some(errors) = result.get("errors").and_then(|e| e.as_array())
         {
@@ -525,7 +535,7 @@ globalThis['~errors'].batch.push({{
         self.runtime
             .execute_script(
                 "init_global_registries.js".to_string(),
-                init_registry_script.to_string(),
+                init_registry_script.clone(),
             )
             .await?;
 
@@ -626,7 +636,7 @@ globalThis['~errors'].batch.push({{
 
         let success = result
             .get("success")
-            .and_then(|v| v.as_bool())
+            .and_then(serde_json::Value::as_bool)
             .unwrap_or(false);
 
         if success {
@@ -636,12 +646,12 @@ globalThis['~errors'].batch.push({{
         let error_details = result
             .get("details")
             .and_then(|v| v.as_str())
-            .map(|s| s.to_string())
+            .map(std::string::ToString::to_string)
             .unwrap_or_else(|| {
                 result
                     .get("error")
                     .and_then(|v| v.as_str())
-                    .map(|s| s.to_string())
+                    .map(std::string::ToString::to_string)
                     .unwrap_or_else(|| "No error details available".to_string())
             });
 
@@ -654,7 +664,10 @@ globalThis['~errors'].batch.push({{
         let registry = self.component_registry.lock();
         registry.get_component(component_id).is_some()
     }
-
+    #[expect(
+        clippy::unused_async_trait_impl,
+        reason = "Async required by trait implementation"
+    )]
     pub async fn is_client_reference(&self, component_id: &str) -> bool {
         let registry = self.component_registry.lock();
         let is_client_ref = registry.is_client_reference(component_id);
@@ -1023,50 +1036,59 @@ globalThis['~errors'].batch.push({{
                     .fetch_add(render_duration.as_millis() as u64, Ordering::Relaxed);
 
                 if html == "<div></div>" || html.trim() == "" || html == "<div/>" {
+                    #[expect(
+                        clippy::expect_used,
+                        reason = "System time is always after UNIX_EPOCH"
+                    )]
+                    let server_time = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .expect("System time is before UNIX_EPOCH")
+                        .as_secs();
+
                     return Ok(format!(
-                        r#"<div data-component-id='{}' data-diagnostic='true'>
-                            <h2>Component: {}</h2>
+                        r"<div data-component-id='{component_id}' data-diagnostic='true'>
+                            <h2>Component: {component_id}</h2>
                             <p>This component rendered with no content.</p>
                             <p>This may indicate the component doesn't return JSX or has a rendering issue.</p>
-                            <p>Server time: {}</p>
-                        </div>"#,
-                        component_id,
-                        component_id,
-                        SystemTime::now()
-                            .duration_since(UNIX_EPOCH)
-                            .expect("System time is before UNIX_EPOCH")
-                            .as_secs()
+                            <p>Server time: {server_time}</p>
+                        </div>"
                     ));
                 }
 
                 Ok(html)
             }
-            Err(e) => Ok(format!(
-                r#"<div>
-                        <h2>Error Rendering {}</h2>
-                        <p>There was an error rendering this component: {}</p>
-                        <p>Server time: {}</p>
-                    </div>"#,
-                component_id,
-                e,
-                SystemTime::now()
+            Err(e) => {
+                #[expect(clippy::expect_used, reason = "System time is always after UNIX_EPOCH")]
+                let server_time = SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .expect("System time is before UNIX_EPOCH")
-                    .as_secs()
-            )),
+                    .as_secs();
+
+                Ok(format!(
+                    r"<div>
+                        <h2>Error Rendering {component_id}</h2>
+                        <p>There was an error rendering this component: {e}</p>
+                        <p>Server time: {server_time}</p>
+                    </div>"
+                ))
+            }
         }
     }
 
+    #[expect(
+        clippy::unused_async_trait_impl,
+        reason = "Async required by trait implementation"
+    )]
     async fn handle_client_reference(
         &mut self,
         component_id: &str,
         props: Option<&str>,
     ) -> Result<String, RariError> {
         let props_map = if let Some(props_str) = props {
-            if !props_str.trim().is_empty() {
-                serde_json::from_str::<FxHashMap<String, JsonValue>>(props_str).ok()
-            } else {
+            if props_str.trim().is_empty() {
                 None
+            } else {
+                serde_json::from_str::<FxHashMap<String, JsonValue>>(props_str).ok()
             }
         } else {
             None
@@ -1102,11 +1124,11 @@ globalThis['~errors'].batch.push({{
 
         let sanitization_rules = [
             (r#"\{"id".*?\}"#, ""),
-            (r#"<pre>\{.*?\}</pre>"#, ""),
+            (r"<pre>\{.*?\}</pre>", ""),
             (r#"\[(\{".*?},?)+\]"#, "[]"),
         ];
 
-        for (pattern, replacement) in sanitization_rules.iter() {
+        for (pattern, replacement) in &sanitization_rules {
             if let Ok(regex) = regex::Regex::new(pattern)
                 && regex.is_match(&sanitized_html)
             {
@@ -1120,7 +1142,7 @@ globalThis['~errors'].batch.push({{
             format!(r#"<div[^>]*?data-rsc-component=["']{component_id}["'][^>]*?>(.*?)</div>"#),
         ];
 
-        for marker in boundary_markers.iter() {
+        for marker in &boundary_markers {
             if let Ok(regex) = regex::Regex::new(marker)
                 && regex.is_match(&sanitized_html)
             {
@@ -1136,7 +1158,7 @@ globalThis['~errors'].batch.push({{
             (r#"=".*?\[.*?\{.*?\}.*?\].*?""#, true),
         ];
 
-        for (pattern, _) in leakage_indicators.iter() {
+        for (pattern, _) in &leakage_indicators {
             if let Ok(regex) = regex::Regex::new(pattern)
                 && regex.is_match(&sanitized_html)
             {
@@ -1150,19 +1172,19 @@ globalThis['~errors'].batch.push({{
                 sanitized_html = regex.replace_all(&sanitized_html, "><").to_string();
             }
 
-            if let Ok(regex) = regex::Regex::new(r#"<pre>.*?\{.*?\}.*?</pre>"#) {
+            if let Ok(regex) = regex::Regex::new(r"<pre>.*?\{.*?\}.*?</pre>") {
                 sanitized_html = regex.replace_all(&sanitized_html, "").to_string();
             }
         }
 
         let calculation_patterns = [(
-            r#"([a-zA-Z ]+: [0-9]+ \+ [0-9]+ =)\s*(\d+)([^0-9])"#,
+            r"([a-zA-Z ]+: [0-9]+ \+ [0-9]+ =)\s*(\d+)([^0-9])",
             |captures: &regex::Captures| {
                 format!("{}{}{}", &captures[1], &captures[2], &captures[3])
             },
         )];
 
-        for (pattern, replacement) in calculation_patterns.iter() {
+        for (pattern, replacement) in &calculation_patterns {
             if let Ok(regex) = regex::Regex::new(pattern)
                 && regex.is_match(&sanitized_html)
             {
@@ -1180,7 +1202,7 @@ globalThis['~errors'].batch.push({{
         args: &[JsonValue],
     ) -> Result<JsonValue, RariError> {
         let args_json = serde_json::to_string(args)
-            .map_err(|e| RariError::serialization(format!("Failed to serialize args: {}", e)))?;
+            .map_err(|e| RariError::serialization(format!("Failed to serialize args: {e}")))?;
 
         let script = SERVER_ACTION_INVOCATION_SCRIPT
             .cow_replace("{function_name}", export_name)
@@ -1197,9 +1219,7 @@ globalThis['~errors'].batch.push({{
                 script,
             )
             .await
-            .map_err(|e| {
-                RariError::js_execution(format!("Server function execution failed: {}", e))
-            })
+            .map_err(|e| RariError::js_execution(format!("Server function execution failed: {e}")))
     }
 
     pub async fn render_with_streaming(
@@ -1272,8 +1292,7 @@ globalThis['~errors'].batch.push({{
 
         Err(last_error.unwrap_or_else(|| {
             RariError::internal(format!(
-                "Failed to render component {} after {} attempts with unknown error",
-                component_id, max_retries
+                "Failed to render component {component_id} after {max_retries} attempts with unknown error"
             ))
         }))
     }
@@ -1340,7 +1359,7 @@ globalThis['~errors'].batch.push({{
         self.runtime
             .execute_script(
                 "init_global_registries.js".to_string(),
-                init_registry_script.to_string(),
+                init_registry_script.clone(),
             )
             .await?;
 
@@ -1360,7 +1379,7 @@ globalThis['~errors'].batch.push({{
         if !is_registered {
             let component_path = component_id.strip_prefix("app/").unwrap_or(component_id);
             let dist_path =
-                std::path::Path::new("dist/server").join(format!("{}.js", component_path));
+                std::path::Path::new("dist/server").join(format!("{component_path}.js"));
 
             if dist_path.exists() {
                 let component_code = tokio::fs::read_to_string(&dist_path).await.map_err(|e| {
@@ -1384,14 +1403,13 @@ globalThis['~errors'].batch.push({{
                             dependencies.into_iter().collect(),
                         )
                         .map_err(|e| {
-                            RariError::internal(format!("Failed to register component: {}", e))
+                            RariError::internal(format!("Failed to register component: {e}"))
                         })?;
                 }
             } else {
                 tracing::error!("Component file not found: {}", dist_path.display());
                 return Err(RariError::not_found(format!(
-                    "Component not registered and file not found: {}",
-                    component_id
+                    "Component not registered and file not found: {component_id}"
                 )));
             }
         }
@@ -1436,14 +1454,12 @@ globalThis['~errors'].batch.push({{
                 .await
                 .map_err(|e| {
                     RariError::js_execution(format!(
-                        "Failed to load ES module for component '{}' (specifier: '{}'): {}",
-                        component_id, module_specifier_js, e
+                        "Failed to load ES module for component '{component_id}' (specifier: '{module_specifier_js}'): {e}"
                     ))
                 })?;
             self.runtime.evaluate_module(module_id).await.map_err(|e| {
                 RariError::js_execution(format!(
-                    "Failed to evaluate ES module '{}': {}",
-                    module_specifier_js, e
+                    "Failed to evaluate ES module '{module_specifier_js}': {e}"
                 ))
             })?;
             let module_namespace =
@@ -1452,8 +1468,7 @@ globalThis['~errors'].batch.push({{
                     .await
                     .map_err(|e| {
                         RariError::js_execution(format!(
-                            "Failed to get module namespace for component '{}' (module_id: {}): {}",
-                            component_id, module_id, e
+                            "Failed to get module namespace for component '{component_id}' (module_id: {module_id}): {e}"
                         ))
                     })?;
 
@@ -1542,16 +1557,16 @@ globalThis['~errors'].batch.push({{
             let import_transformed_source = transform_imports_for_hmr(&transformed_source_safe);
             eval_safe_source.push_str(&import_transformed_source);
 
-            eval_safe_source.push_str(&format!(
-                r#"
+            let _ = write!(
+                eval_safe_source,
+                r"
 
 globalThis.{component_id} = {component_id};
 if (!globalThis['~rsc']) globalThis['~rsc'] = {{}};
 globalThis['~rsc'].functions = globalThis['~rsc'].functions || {{}};
 globalThis['~rsc'].functions['{component_id}'] = {component_id};
-"#,
-                component_id = component_id
-            ));
+"
+            );
 
             let execution_result = self
                 .runtime

@@ -53,6 +53,10 @@ impl ImageRenderer {
         let options = resvg::usvg::Options {
             default_size: resvg::usvg::Size::from_wh(width as f32, height as f32).unwrap_or_else(
                 || {
+                    #[expect(
+                        clippy::expect_used,
+                        reason = "Hardcoded size (100x100) is guaranteed valid"
+                    )]
                     resvg::usvg::Size::from_wh(100.0, 100.0)
                         .expect("hardcoded fallback size is always valid")
                 },
@@ -91,11 +95,11 @@ impl ImageRenderer {
                 let (r, g, b) = if a == 255 {
                     (data[idx], data[idx + 1], data[idx + 2])
                 } else {
-                    let af = a as f32 / 255.0;
+                    let af = f32::from(a) / 255.0;
                     (
-                        (data[idx] as f32 / af).min(255.0) as u8,
-                        (data[idx + 1] as f32 / af).min(255.0) as u8,
-                        (data[idx + 2] as f32 / af).min(255.0) as u8,
+                        (f32::from(data[idx]) / af).min(255.0) as u8,
+                        (f32::from(data[idx + 1]) / af).min(255.0) as u8,
+                        (f32::from(data[idx + 2]) / af).min(255.0) as u8,
                     )
                 };
 

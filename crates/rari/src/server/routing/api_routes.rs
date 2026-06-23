@@ -1,3 +1,5 @@
+#![allow(clippy::unused_async_trait_impl)]
+
 use crate::runtime::JsExecutionRuntime;
 use crate::server::routing::types::RouteSegment;
 use axum::body::Body;
@@ -26,6 +28,7 @@ fn parse_decoded_path_segments(path: &str) -> Vec<String> {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct ApiRouteEntry {
     pub path: String,
     #[serde(rename = "filePath")]
@@ -44,12 +47,14 @@ pub struct ApiRouteEntry {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct ApiRouteManifest {
     #[serde(rename = "apiRoutes", default)]
     pub api_routes: Vec<ApiRouteEntry>,
 }
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct ApiRouteMatch {
     pub route: ApiRouteEntry,
     pub params: FxHashMap<String, String>,
@@ -160,8 +165,7 @@ impl ApiRouteHandler {
         }
 
         Err(RariError::not_found(format!(
-            "No API route found for path: {}",
-            path
+            "No API route found for path: {path}"
         )))
     }
 
@@ -243,7 +247,7 @@ impl ApiRouteHandler {
         let path = path.split('#').next().unwrap_or(path);
 
         if path.is_empty() || !path.starts_with('/') {
-            format!("/{}", path)
+            format!("/{path}")
         } else {
             path.to_string()
         }
@@ -331,6 +335,10 @@ impl ApiRouteHandler {
         Self::resolve_dist_path(&route.file_path)
     }
 
+    #[expect(
+        clippy::unnecessary_wraps,
+        reason = "Result return type maintains API consistency"
+    )]
     fn resolve_dist_path(file_path: &str) -> Result<std::path::PathBuf, RariError> {
         let mut normalized_path = String::new();
         let mut chars = file_path.chars().peekable();
@@ -353,9 +361,8 @@ impl ApiRouteHandler {
                                         chars.next();
                                         normalized_path.push_str("__");
                                         break;
-                                    } else {
-                                        normalized_path.push(ch);
                                     }
+                                    normalized_path.push(ch);
                                 }
                             }
                         }
@@ -371,9 +378,8 @@ impl ApiRouteHandler {
                                 if ch == ']' {
                                     normalized_path.push('_');
                                     break;
-                                } else {
-                                    normalized_path.push(ch);
                                 }
+                                normalized_path.push(ch);
                             }
                         }
                     }
@@ -383,9 +389,8 @@ impl ApiRouteHandler {
                         if ch == ']' {
                             normalized_path.push('_');
                             break;
-                        } else {
-                            normalized_path.push(ch);
                         }
+                        normalized_path.push(ch);
                     }
                 }
             } else {
@@ -463,7 +468,7 @@ impl ApiRouteHandler {
                     ))
                 })?;
                 let module_specifier = url::Url::from_file_path(&canonical_path)
-                    .map_err(|_| {
+                    .map_err(|()| {
                         RariError::configuration(format!(
                             "Failed to create file URL from path: {}",
                             canonical_path.display()
@@ -566,7 +571,10 @@ impl ApiRouteHandler {
             })
             .await
     }
-
+    #[expect(
+        clippy::unnecessary_wraps,
+        reason = "Result return type maintains API consistency"
+    )]
     fn create_request_object(
         &self,
         method: &str,
@@ -576,13 +584,12 @@ impl ApiRouteHandler {
         params: &FxHashMap<String, String>,
     ) -> Result<JsonValue, RariError> {
         let mut headers_map = FxHashMap::default();
-        for (name, value) in headers.iter() {
+        for (name, value) in headers {
             if let Ok(value_str) = value.to_str() {
                 headers_map.insert(name.to_string(), value_str.to_string());
             }
         }
 
-        #[allow(clippy::disallowed_methods)]
         let request_obj = json!({
             "method": method,
             "url": uri,
@@ -617,11 +624,15 @@ impl ApiRouteHandler {
         let script_name = with_underscores.cow_replace(':', "_");
 
         self.runtime
-            .execute_script(format!("api_route_call_{}", script_name), script)
+            .execute_script(format!("api_route_call_{script_name}"), script)
             .await
             .map_err(|e| RariError::js_execution(format!("Failed to execute handler: {e}")))
     }
 
+    #[expect(
+        clippy::unused_async_trait_impl,
+        reason = "Async required by trait implementation"
+    )]
     async fn create_response(&self, result: JsonValue) -> Result<Response<Body>, RariError> {
         let is_http_envelope = if let Some(status_val) = result.get("status") {
             if let Some(status_num) = status_val.as_u64() {
@@ -636,7 +647,7 @@ impl ApiRouteHandler {
         if is_http_envelope {
             let status = result
                 .get("status")
-                .and_then(|v| v.as_u64())
+                .and_then(serde_json::Value::as_u64)
                 .and_then(|n| u16::try_from(n).ok())
                 .unwrap_or(500);
 

@@ -42,6 +42,10 @@ pub fn build_js_runtime(
     });
 
     let options = RuntimeOptions {
+        #[expect(
+            clippy::clone_on_ref_ptr,
+            reason = "Trait object coercion: Rc<RariModuleLoader> -> Rc<dyn ModuleLoader>"
+        )]
         module_loader: Some(module_loader.clone()),
         extensions,
         extension_transpiler: Some(module_loader.as_extension_transpiler()),

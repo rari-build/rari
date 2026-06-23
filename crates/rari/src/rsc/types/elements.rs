@@ -2,6 +2,7 @@ use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct ReactElement {
     #[serde(rename = "type", alias = "tag")]
     pub tag: String,

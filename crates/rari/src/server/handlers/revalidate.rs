@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
+#[non_exhaustive]
 pub enum RevalidateRequest {
     Path {
         path: String,
@@ -18,6 +19,7 @@ pub enum RevalidateRequest {
 }
 
 #[derive(Debug, Serialize)]
+#[non_exhaustive]
 pub struct RevalidateResponse {
     pub revalidated: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -48,7 +50,7 @@ pub async fn revalidate_by_path(
 
             state.response_cache.invalidate(path).await;
 
-            let path_pattern = format!("{}?", path);
+            let path_pattern = format!("{path}?");
             let all_keys = state.response_cache.get_all_keys();
 
             for key in all_keys {
@@ -60,21 +62,19 @@ pub async fn revalidate_by_path(
             let res = match state.layout_html_cache.clear().await {
                 Ok(()) => RevalidateResponse {
                     revalidated: true,
-                    message: Some(format!("Revalidated path: {}", path)),
+                    message: Some(format!("Revalidated path: {path}")),
                 },
                 Err(e) => {
                     tracing::error!(error = %e, path = %path, "layout_html_cache.clear failed");
                     RevalidateResponse {
                         revalidated: false,
                         message: Some(format!(
-                            "Revalidation failed: layout cache clear error: {}",
-                            e
+                            "Revalidation failed: layout cache clear error: {e}"
                         )),
                     }
                 }
             };
 
-            #[allow(clippy::disallowed_methods)]
             Ok(Json(res))
         }
         RevalidateRequest::Tag { tag, secret } => {
@@ -93,15 +93,14 @@ pub async fn revalidate_by_path(
             let res = match state.layout_html_cache.invalidate_by_tag(tag).await {
                 Ok(()) => RevalidateResponse {
                     revalidated: true,
-                    message: Some(format!("Revalidated tag: {}", tag)),
+                    message: Some(format!("Revalidated tag: {tag}")),
                 },
                 Err(e) => {
                     tracing::error!(error = %e, tag = %tag, "layout_html_cache.invalidate_by_tag failed");
                     RevalidateResponse {
                         revalidated: false,
                         message: Some(format!(
-                            "Revalidation failed: layout cache invalidate_by_tag error: {}",
-                            e
+                            "Revalidation failed: layout cache invalidate_by_tag error: {e}"
                         )),
                     }
                 }

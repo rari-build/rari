@@ -1,4 +1,4 @@
-pub const JSX_RUNTIME_STUB: &str = r#"
+pub const JSX_RUNTIME_STUB: &str = r"
 export function jsx(type, props, key) {
   const element = {
     $$typeof: Symbol.for('react.transitional.element'),
@@ -23,9 +23,9 @@ export function Fragment(props) {
 }
 
 export default { jsx, jsxs, Fragment };
-"#;
+";
 
-pub const REACT_STUB: &str = r#"
+pub const REACT_STUB: &str = r"
 const createElement = (type, props, ...children) => {
   if (typeof type === 'string') {
     return { type, props: props || {}, children: children.flat() };
@@ -215,4 +215,4 @@ export default {
   cloneElement,
   cache
 };
-"#;
+";

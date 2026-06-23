@@ -1,5 +1,6 @@
 use axum::{body::Body, extract::Request, http::StatusCode, response::Response};
 use futures_util::future::BoxFuture;
+use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::task::{Context, Poll};
@@ -7,7 +8,7 @@ use tower::{Layer, Service};
 use tracing::error;
 
 use crate::server::core::types::ServerState;
-use rari_utils::path_url::path_to_file_url;
+use rari_utils::path_to_file_url;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ProxyResult {
@@ -62,9 +63,8 @@ async fn execute_proxy(
         .cloned()
         .unwrap_or_else(|| "localhost".to_string());
 
-    let url = format!("{}://{}{}", scheme, host, uri);
+    let url = format!("{scheme}://{host}{uri}");
 
-    #[allow(clippy::disallowed_methods)]
     let request_data = serde_json::json!({
         "url": url,
         "method": method,
@@ -294,22 +294,43 @@ pub async fn initialize_proxy(state: &ServerState) -> Result<(), Box<dyn std::er
     let init_script = format!(
         r#"(async function() {{
             try {{
-                const {{ initializeProxyExecutor }} = await import("{}");
-                const success = await initializeProxyExecutor("{}", "{}");
+                const {{ initializeProxyExecutor }} = await import("{executor_specifier}");
+                const success = await initializeProxyExecutor("{proxy_specifier}", "{rari_request_specifier}");
                 return {{ success }};
             }} catch (error) {{
                 console.error("[rari] Proxy: Failed to initialize:", error);
                 return {{ success: false, error: error.message }};
             }}
-        }})()"#,
-        executor_specifier, proxy_specifier, rari_request_specifier
+        }})()"#
     );
 
     match runtime
         .execute_script("initialize_proxy_executor".to_string(), init_script)
         .await
     {
-        Ok(_) => Ok(()),
+        Ok(result) => {
+            if let Some(success) = result.get("success").and_then(serde_json::Value::as_bool) {
+                if success {
+                    Ok(())
+                } else {
+                    let error_msg = result
+                        .get("error")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("Unknown error during proxy initialization");
+                    error!("Proxy initialization failed: {error_msg}");
+                    Err(
+                        RariError::js_runtime(format!("Proxy initialization failed: {error_msg}"))
+                            .into(),
+                    )
+                }
+            } else {
+                error!("Proxy initialization returned invalid result format");
+                Err(
+                    RariError::js_runtime("Proxy initialization returned invalid result format")
+                        .into(),
+                )
+            }
+        }
         Err(e) => {
             error!("Failed to register proxy function: {}", e);
             Err(e.into())

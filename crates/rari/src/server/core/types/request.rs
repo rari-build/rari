@@ -1,11 +1,13 @@
 use axum::http::HeaderMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum RenderMode {
     Ssr,
     RscNavigation,
 }
 
+#[non_exhaustive]
 pub struct RequestTypeDetector;
 
 impl RequestTypeDetector {

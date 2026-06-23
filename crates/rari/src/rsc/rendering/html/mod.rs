@@ -1,3 +1,5 @@
+#![allow(clippy::format_collect, clippy::unused_async_trait_impl)]
+
 use crate::rsc::RscElement;
 use crate::rsc::flight::escape::unescape_rsc_value;
 use crate::rsc::rendering::streaming::{RscChunkType, RscStreamChunk};
@@ -8,6 +10,7 @@ use cow_utils::CowUtils;
 use rari_error::{RariError, StreamingError};
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde_json::Value as JsonValue;
+use std::fmt::Write;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use tracing::error;
@@ -186,7 +189,7 @@ fn serialize_style_object(style_obj: &serde_json::Map<String, serde_json::Value>
                 }
             } else if let Some(f) = v.as_f64() {
                 if f.is_finite() {
-                    let temp = format!("{:.10}", f);
+                    let temp = format!("{f:.10}");
                     let formatted = temp.trim_end_matches('0').trim_end_matches('.');
 
                     if UNITLESS_PROPERTIES.contains(&kebab_key.as_str()) {
@@ -231,7 +234,7 @@ impl BoundaryIdGenerator {
 
     pub fn next(&self) -> String {
         let id = self.counter.fetch_add(1, Ordering::SeqCst);
-        format!("B:{}", id)
+        format!("B:{id}")
     }
 }
 
@@ -242,6 +245,7 @@ impl Default for BoundaryIdGenerator {
 }
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct RscRow {
     pub id: u32,
     pub data: RscElement,
@@ -284,7 +288,7 @@ impl RscHtmlRenderer {
         props_json: &str,
     ) -> Result<String, RariError> {
         let script = format!(
-            r#"(async function() {{
+            r"(async function() {{
                 const ssrRender = globalThis['~rari']?.ssrRenderComponent;
                 if (!ssrRender) return '';
                 try {{
@@ -292,7 +296,7 @@ impl RscHtmlRenderer {
                 }} catch (e) {{
                     return '';
                 }}
-            }})()"#,
+            }})()",
             module_path = serde_json::to_string(module_path).unwrap_or_default(),
             export_name = serde_json::to_string(export_name).unwrap_or_default(),
             props_json = props_json,
@@ -312,10 +316,16 @@ impl RscHtmlRenderer {
     fn extract_script_tags(template: &str) -> String {
         use regex::Regex;
 
-        #[allow(clippy::disallowed_methods)]
-        let script_regex = Regex::new(r#"(?s)<script[^>]*>.*?</script>|<script[^>]*/>"#).unwrap();
-        #[allow(clippy::disallowed_methods)]
-        let link_regex = Regex::new(r#"<link[^>]*/?>"#).unwrap();
+        #[expect(
+            clippy::unwrap_used,
+            reason = "Hardcoded regex pattern is guaranteed to be valid"
+        )]
+        let script_regex = Regex::new(r"(?s)<script[^>]*>.*?</script>|<script[^>]*/>").unwrap();
+        #[expect(
+            clippy::unwrap_used,
+            reason = "Hardcoded regex pattern is guaranteed to be valid"
+        )]
+        let link_regex = Regex::new(r"<link[^>]*/?>").unwrap();
 
         let mut tags = Vec::new();
 
@@ -408,8 +418,7 @@ impl RscHtmlRenderer {
         format!(
             r#"<script type="module" src="/@vite/client"></script>
 <script type="module" src="/src/main.tsx"></script>
-{}"#,
-            html
+{html}"#
         )
     }
 
@@ -467,7 +476,7 @@ impl RscHtmlRenderer {
 
         let root_div_regex =
             Regex::new(r#"<div\s+id=["']root["'](?:\s+[^>]*)?\s*(?:/>|>\s*</div>)"#)
-                .map_err(|e| RariError::internal(format!("Failed to create regex: {}", e)))?;
+                .map_err(|e| RariError::internal(format!("Failed to create regex: {e}")))?;
 
         if !root_div_regex.is_match(template) {
             return Err(RariError::internal(
@@ -475,7 +484,7 @@ impl RscHtmlRenderer {
             ));
         }
 
-        let replacement = format!(r#"<div id="root">{}</div>"#, html_content);
+        let replacement = format!(r#"<div id="root">{html_content}</div>"#);
 
         let result = root_div_regex.replace(template, replacement.as_str());
 
@@ -544,7 +553,7 @@ impl RscHtmlRenderer {
             result.push_str(&template[head_end..]);
             result
         } else {
-            format!("{}{}", link_block, template)
+            format!("{link_block}{template}")
         }
     }
 
@@ -590,8 +599,7 @@ impl RscHtmlRenderer {
     fn parse_rsc_line(&self, line: &str) -> Result<RscRow, RariError> {
         let colon_pos = line.find(':').ok_or_else(|| {
             RariError::internal(format!(
-                "Invalid RSC line format: missing colon in '{}'",
-                line
+                "Invalid RSC line format: missing colon in '{line}'"
             ))
         })?;
 
@@ -599,7 +607,7 @@ impl RscHtmlRenderer {
         let data_str = &data_str[1..];
 
         let id = u32::from_str_radix(id_str, 16)
-            .map_err(|e| RariError::internal(format!("Invalid row ID '{}': {}", id_str, e)))?;
+            .map_err(|e| RariError::internal(format!("Invalid row ID '{id_str}': {e}")))?;
 
         if let Some(json_str) = data_str.strip_prefix('I') {
             if let Ok(import_data) = serde_json::from_str::<serde_json::Value>(json_str) {
@@ -628,7 +636,7 @@ impl RscHtmlRenderer {
         }
 
         let json_value: JsonValue = serde_json::from_str(data_str)
-            .map_err(|e| RariError::internal(format!("Invalid JSON in RSC line: {}", e)))?;
+            .map_err(|e| RariError::internal(format!("Invalid JSON in RSC line: {e}")))?;
 
         let data = self.parse_rsc_element(&json_value)?;
 
@@ -693,7 +701,7 @@ impl RscHtmlRenderer {
             .ok_or_else(|| RariError::internal("React element tag must be a string".to_string()))?
             .to_string();
 
-        let key = arr[2].as_str().map(|s| s.to_string());
+        let key = arr[2].as_str().map(std::string::ToString::to_string);
 
         let props_value = &arr[3];
         let props = if let JsonValue::Object(obj) = props_value {
@@ -746,13 +754,13 @@ impl RscHtmlRenderer {
 
         let render_future = async {
             let rsc_rows = self.parse_rsc_wire_format(rsc_wire_format).map_err(|e| {
-                RariError::internal(format!("Failed to parse RSC wire format: {}", e))
+                RariError::internal(format!("Failed to parse RSC wire format: {e}"))
             })?;
 
             let html_content = self
                 .render_rsc_to_html_string(&rsc_rows)
                 .await
-                .map_err(|e| RariError::internal(format!("Failed to render RSC to HTML: {}", e)))?;
+                .map_err(|e| RariError::internal(format!("Failed to render RSC to HTML: {e}")))?;
 
             let is_complete_document = html_content.trim_start().starts_with("<!DOCTYPE")
                 || html_content
@@ -761,16 +769,16 @@ impl RscHtmlRenderer {
                     .starts_with("<html");
 
             if is_complete_document {
-                let script_tags = if !is_dev_mode {
+                let script_tags = if is_dev_mode {
+                    String::new()
+                } else {
                     let template = self
                         .load_template(cache_template, is_dev_mode)
                         .await
                         .map_err(|e| {
-                            RariError::internal(format!("Failed to load HTML template: {}", e))
+                            RariError::internal(format!("Failed to load HTML template: {e}"))
                         })?;
                     Self::extract_script_tags(&template)
-                } else {
-                    String::new()
                 };
 
                 let mut final_html = html_content.clone();
@@ -778,14 +786,14 @@ impl RscHtmlRenderer {
                 if !script_tags.is_empty()
                     && let Some(body_end) = final_html.rfind("</body>")
                 {
-                    final_html.insert_str(body_end, &format!("\n{}\n", script_tags));
+                    final_html.insert_str(body_end, &format!("\n{script_tags}\n"));
                 }
 
                 final_html = Self::inject_css_links(&final_html, &css_links);
 
                 let trimmed_lower = final_html.trim_start().cow_to_lowercase();
                 if !trimmed_lower.starts_with("<!doctype") {
-                    final_html = format!("<!DOCTYPE html>\n{}", final_html);
+                    final_html = format!("<!DOCTYPE html>\n{final_html}");
                 }
 
                 return Ok::<String, RariError>(final_html);
@@ -794,14 +802,14 @@ impl RscHtmlRenderer {
             let template = self
                 .load_template(cache_template, is_dev_mode)
                 .await
-                .map_err(|e| RariError::internal(format!("Failed to load HTML template: {}", e)))?;
+                .map_err(|e| RariError::internal(format!("Failed to load HTML template: {e}")))?;
 
             let template = Self::inject_css_links(&template, &css_links);
 
             let final_html = self
                 .inject_into_template(&html_content, &template)
                 .map_err(|e| {
-                    RariError::internal(format!("Failed to inject HTML into template: {}", e))
+                    RariError::internal(format!("Failed to inject HTML into template: {e}"))
                 })?;
 
             Ok::<String, RariError>(final_html)
@@ -814,8 +822,7 @@ impl RscHtmlRenderer {
                 Ok(result) => result,
                 Err(_) => {
                     return Err(RariError::timeout(format!(
-                        "RSC-to-HTML rendering timed out after {}ms",
-                        timeout_ms
+                        "RSC-to-HTML rendering timed out after {timeout_ms}ms"
                     )));
                 }
             }
@@ -826,7 +833,7 @@ impl RscHtmlRenderer {
         match result {
             Ok(html) => Ok(html),
             Err(e) => {
-                eprintln!("RSC-to-HTML rendering failed: {}, falling back to shell", e);
+                eprintln!("RSC-to-HTML rendering failed: {e}, falling back to shell");
 
                 let fallback_template = self.load_template(cache_template, is_dev_mode).await?;
                 Ok(Self::inject_css_links(&fallback_template, &css_links))
@@ -862,11 +869,10 @@ impl RscHtmlRenderer {
             .or_else(|| ref_str.strip_prefix("$"))
         {
             u32::from_str_radix(stripped, 16)
-                .map_err(|_| RariError::internal(format!("Invalid row reference: {}", ref_str)))
+                .map_err(|_| RariError::internal(format!("Invalid row reference: {ref_str}")))
         } else {
             Err(RariError::internal(format!(
-                "Invalid reference format: {}",
-                ref_str
+                "Invalid reference format: {ref_str}"
             )))
         }
     }
@@ -885,7 +891,7 @@ impl RscHtmlRenderer {
 
             let element = row_map
                 .get(&row_id)
-                .ok_or_else(|| RariError::internal(format!("Missing row {}", row_id)))?;
+                .ok_or_else(|| RariError::internal(format!("Missing row {row_id}")))?;
 
             let html = self.render_rsc_element(element, row_map, row_cache).await?;
 
@@ -983,9 +989,9 @@ impl RscHtmlRenderer {
                     Ok(String::new())
                 }
 
-                RscElement::Promise { promise_id: _ } => Ok(String::new()),
-
-                RscElement::ModuleImport { .. } => Ok(String::new()),
+                RscElement::Promise { promise_id: _ } | RscElement::ModuleImport { .. } => {
+                    Ok(String::new())
+                }
             }
         })
     }
@@ -1000,7 +1006,7 @@ impl RscHtmlRenderer {
     {
         Box::pin(async move {
             if tag.contains('<') || tag.contains('>') || tag.contains('"') || tag.contains('\'') {
-                return Err(RariError::internal(format!("Invalid tag name: {}", tag)));
+                return Err(RariError::internal(format!("Invalid tag name: {tag}")));
             }
 
             let is_client_component = tag.starts_with("$L")
@@ -1061,7 +1067,7 @@ impl RscHtmlRenderer {
                 .chars()
                 .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ':')
             {
-                return Err(RariError::internal(format!("Invalid tag name: {}", tag)));
+                return Err(RariError::internal(format!("Invalid tag name: {tag}")));
             }
 
             let mut html = String::with_capacity(256);
@@ -1362,7 +1368,15 @@ impl RscToHtmlConverter {
             }
 
             RscChunkType::InitialShell => {
-                let html = if !self.shell_sent {
+                let html = if self.shell_sent {
+                    match self.parse_and_render_rsc(&chunk.data, chunk.row_id).await {
+                        Ok(rsc_html) => rsc_html,
+                        Err(e) => {
+                            error!("Error parsing RSC: {}", e);
+                            Vec::new()
+                        }
+                    }
+                } else {
                     self.shell_sent = true;
                     let mut output = self.generate_html_shell();
 
@@ -1376,14 +1390,6 @@ impl RscToHtmlConverter {
                     }
 
                     output
-                } else {
-                    match self.parse_and_render_rsc(&chunk.data, chunk.row_id).await {
-                        Ok(rsc_html) => rsc_html,
-                        Err(e) => {
-                            error!("Error parsing RSC: {}", e);
-                            Vec::new()
-                        }
-                    }
                 };
                 Ok(html)
             }
@@ -1436,7 +1442,6 @@ impl RscToHtmlConverter {
                         "Error loading content".to_string()
                     };
 
-                    #[allow(clippy::disallowed_methods)]
                     let placeholder_payload = serde_json::json!([
                         "$",
                         "div",
@@ -1518,7 +1523,7 @@ impl RscToHtmlConverter {
     }
 
     fn streaming_bridge_script() -> &'static str {
-        r#"<script>
+        r"<script>
 (function(){
   if(window['~rari']&&window['~rari'].streamingBridgeInstalled)return;
   if(!window['~rari'])window['~rari']={};
@@ -1530,7 +1535,7 @@ impl RscToHtmlConverter {
     window.dispatchEvent(new CustomEvent('rari:rsc-row',{detail:{rscRow:detail.rscRow,navigationId:navigationId}}));
   });
 })();
-</script>"#
+</script>"
     }
 
     fn generate_html_shell(&self) -> Vec<u8> {
@@ -1547,10 +1552,10 @@ impl RscToHtmlConverter {
                         &custom_shell[insert_pos..]
                     )
                 } else {
-                    format!("{}{}", custom_shell, bridge_script)
+                    format!("{custom_shell}{bridge_script}")
                 }
             } else {
-                format!("{}{}", custom_shell, bridge_script)
+                format!("{custom_shell}{bridge_script}")
             };
 
             return custom_shell_with_bridge.as_bytes().to_vec();
@@ -1566,7 +1571,7 @@ impl RscToHtmlConverter {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>rari App</title>
-    {}
+    {asset_tags}
     <style>
         .rari-loading {{
             animation: rari-pulse 1.5s ease-in-out infinite;
@@ -1578,9 +1583,8 @@ impl RscToHtmlConverter {
     </style>
 </head>
 <body>
-{}
-<div id="root">"#,
-            asset_tags, bridge_script
+{bridge_script}
+<div id="root">"#
         )
         .as_bytes()
         .to_vec()
@@ -1606,9 +1610,8 @@ impl RscToHtmlConverter {
 
         let mut rsc_payload = rows_with_ids
             .iter()
-            .map(|(_, row)| format!("{}\n", row))
-            .collect::<Vec<_>>()
-            .join("");
+            .map(|(_, row)| format!("{row}\n"))
+            .collect::<String>();
 
         let has_row_0 = rows_with_ids.iter().any(|(id, _)| *id == 0);
 
@@ -1619,25 +1622,23 @@ impl RscToHtmlConverter {
                 .max_by_key(|(id, _)| *id)
             && *max_id > 0
         {
-            let row_0 = format!("0:\"${:x}\"\n", max_id);
+            let row_0 = format!("0:\"${max_id:x}\"\n");
             rsc_payload.insert_str(0, &row_0);
         }
 
         let escaped_payload = rsc_payload.cow_replace("</", "<\\/");
 
-        let rsc_script = if !rsc_payload.is_empty() {
-            format!(
-                r#"<script id="__RARI_RSC_PAYLOAD__" type="text/x-component">{}</script>
-"#,
-                escaped_payload
-            )
-        } else {
+        let rsc_script = if rsc_payload.is_empty() {
             String::new()
+        } else {
+            format!(
+                r#"<script id="__RARI_RSC_PAYLOAD__" type="text/x-component">{escaped_payload}</script>"#
+            )
         };
 
         format!(
-            r#"{}
-{}
+            r"{rsc_script}
+{body_scripts}
 <script>
 if (typeof window !== 'undefined') {{
     if (!window['~rari']) window['~rari'] = {{}};
@@ -1648,8 +1649,7 @@ if (typeof window !== 'undefined') {{
 }}
 </script>
 </body>
-</html>"#,
-            rsc_script, body_scripts
+</html>"
         )
         .as_bytes()
         .to_vec()
@@ -1716,7 +1716,7 @@ if (typeof window !== 'undefined') {{
         }
 
         let rsc_data: serde_json::Value = serde_json::from_str(json_str)
-            .map_err(|e| RariError::internal(format!("Invalid RSC JSON: {}", e)))?;
+            .map_err(|e| RariError::internal(format!("Invalid RSC JSON: {e}")))?;
 
         let html = self.rsc_element_to_html(&rsc_data).await?;
 
@@ -1748,7 +1748,7 @@ if (typeof window !== 'undefined') {{
                     && s[1..].chars().all(|c| c.is_ascii_hexdigit())
                 {
                     let row_id: u32 = u32::from_str_radix(&s[1..], 16).map_err(|_| {
-                        RariError::internal(format!("Invalid chunk reference: {}", s))
+                        RariError::internal(format!("Invalid chunk reference: {s}"))
                     })?;
                     let cached = self.row_cache.get(&row_id).cloned().unwrap_or_default();
                     return Ok(cached);
@@ -1798,14 +1798,14 @@ if (typeof window !== 'undefined') {{
                     }
 
                     return self.render_html_element(element_type, props).await;
-                } else {
-                    let mut html = String::new();
-                    for child in arr {
-                        let child_html = self.rsc_element_to_html(child).await?;
-                        html.push_str(&child_html);
-                    }
-                    return Ok(html);
                 }
+
+                let mut html = String::new();
+                for child in arr {
+                    let child_html = self.rsc_element_to_html(child).await?;
+                    html.push_str(&child_html);
+                }
+                return Ok(html);
             }
 
             if let Some(obj) = element.as_object() {
@@ -1965,10 +1965,10 @@ if (typeof window !== 'undefined') {{
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ':')
         {
-            return Err(RariError::internal(format!("Invalid tag name: {}", tag)));
+            return Err(RariError::internal(format!("Invalid tag name: {tag}")));
         }
 
-        let mut html = format!("<{}", tag);
+        let mut html = format!("<{tag}");
 
         if let Some(props) = props {
             for (key, value) in props {
@@ -1993,10 +1993,13 @@ if (typeof window !== 'undefined') {{
                 if key == "style" && value.is_object() {
                     if let Some(style_obj) = value.as_object() {
                         let style_str = serialize_style_object(style_obj);
-                        html.push_str(&format!(
+                        #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+                        write!(
+                            html,
                             " style=\"{}\"",
                             RscHtmlRenderer::escape_html_attribute(&style_str)
-                        ));
+                        )
+                        .unwrap();
                     }
                     continue;
                 }
@@ -2004,33 +2007,43 @@ if (typeof window !== 'undefined') {{
                 if let Some(b) = value.as_bool() {
                     if is_boolean_html_attribute(attr_name) {
                         if b {
-                            html.push_str(&format!(" {}", attr_name));
+                            #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+                            write!(&mut html, " {attr_name}").unwrap();
                         }
                     } else {
-                        html.push_str(&format!(
+                        #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+                        write!(
+                            html,
                             " {}=\"{}\"",
                             attr_name,
                             if b { "true" } else { "false" }
-                        ));
+                        )
+                        .unwrap();
                     }
                     continue;
                 }
 
                 if let Some(s) = value.as_str() {
-                    html.push_str(&format!(
+                    #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+                    write!(
+                        html,
                         " {}=\"{}\"",
                         attr_name,
                         RscHtmlRenderer::escape_html_attribute(s)
-                    ));
+                    )
+                    .unwrap();
                     continue;
                 }
 
                 if value.is_number() {
-                    html.push_str(&format!(
+                    #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+                    write!(
+                        html,
                         " {}=\"{}\"",
                         attr_name,
                         RscHtmlRenderer::escape_html_attribute(&value.to_string())
-                    ));
+                    )
+                    .unwrap();
                 }
             }
         }
@@ -2050,7 +2063,8 @@ if (typeof window !== 'undefined') {{
             html.push_str(&children_html);
         }
 
-        html.push_str(&format!("</{}>", tag));
+        #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+        write!(&mut html, "</{tag}>").unwrap();
 
         Ok(html)
     }
@@ -2066,8 +2080,7 @@ if (typeof window !== 'undefined') {{
             None => {
                 let escaped_row = RscHtmlRenderer::escape_js_string(rsc_line.as_ref());
                 let script = format!(
-                    r#"<script>(function(){{if(!window['~rari'])window['~rari']={{}};if(!window['~rari'].streaming)window['~rari'].streaming={{}};if(!window['~rari'].streaming.bufferedRows)window['~rari'].streaming.bufferedRows=[];window['~rari'].streaming.bufferedRows.push('{}');window.dispatchEvent(new CustomEvent('rari:html-stream-row',{{detail:{{rscRow:'{}'}}}}));}})();</script>"#,
-                    escaped_row, escaped_row
+                    r"<script>(function(){{if(!window['~rari'])window['~rari']={{}};if(!window['~rari'].streaming)window['~rari'].streaming={{}};if(!window['~rari'].streaming.bufferedRows)window['~rari'].streaming.bufferedRows=[];window['~rari'].streaming.bufferedRows.push('{escaped_row}');window.dispatchEvent(new CustomEvent('rari:html-stream-row',{{detail:{{rscRow:'{escaped_row}'}}}}));}})();</script>"
                 );
                 return Ok(script.into_bytes());
             }
@@ -2101,19 +2114,20 @@ if (typeof window !== 'undefined') {{
             );
 
             let content_json = parts[1];
-            let rendered_html = if let Some(text) = content_json.strip_prefix('T') {
-                escape_html(text)
-            } else {
-                match serde_json::from_str::<serde_json::Value>(content_json) {
-                    Ok(content) => match self.rsc_element_to_html(&content).await {
-                        Ok(html) if !html.is_empty() => html,
-                        _ => String::new(),
-                    },
-                    Err(_) => String::new(),
-                }
-            };
+            let (rendered_html, render_successful) =
+                if let Some(text) = content_json.strip_prefix('T') {
+                    (escape_html(text), true)
+                } else {
+                    match serde_json::from_str::<serde_json::Value>(content_json) {
+                        Ok(content) => match self.rsc_element_to_html(&content).await {
+                            Ok(html) => (html, true),
+                            Err(_) => (String::new(), false),
+                        },
+                        Err(_) => (String::new(), false),
+                    }
+                };
 
-            if !rendered_html.is_empty() {
+            if render_successful && !rendered_html.is_empty() {
                 format!(
                     "<div hidden id=\"{content_id}\">{rendered_html}</div>\n<script>$RC=window.$RC||function(b,c){{var t=document.getElementById(b);var s=document.getElementById(c);if(t&&s){{var p=t.parentNode;var f=document.createDocumentFragment();Array.from(s.childNodes).forEach(function(n){{f.appendChild(n)}});var d=t.nextSibling;while(d&&!(d.nodeType===8&&d.data==='/$')){{var next=d.nextSibling;d.remove();d=next;}}if(d)d.remove();p.insertBefore(f,t.nextSibling);t.remove();s.remove();}}}};$RC(\"{react_id}\",\"{content_id}\")</script>",
                 )
@@ -2132,7 +2146,7 @@ if (typeof window !== 'undefined') {{
             escaped_row,
         );
 
-        let output = format!("{}{}", rsc_buffer_script, dom_swap_html);
+        let output = format!("{rsc_buffer_script}{dom_swap_html}");
 
         Ok(output.into_bytes())
     }
@@ -2187,8 +2201,7 @@ if (typeof window !== 'undefined') {{
             let content_id = format!("E:{}", react_boundary_id.trim_start_matches("B:"));
 
             let error_update = format!(
-                r#"<div hidden id="{}">{}</div><script>$RC=window.$RC||function(b,c){{const t=document.getElementById(b);const s=document.getElementById(c);if(t&&s){{const p=t.parentNode;Array.from(s.childNodes).forEach(n=>p.insertBefore(n,t));t.remove();s.remove();}}}};$RC("{}","{}");</script>"#,
-                content_id, error_html, react_boundary_id, content_id
+                r#"<div hidden id="{content_id}">{error_html}</div><script>$RC=window.$RC||function(b,c){{const t=document.getElementById(b);const s=document.getElementById(c);if(t&&s){{const p=t.parentNode;const f=document.createDocumentFragment();Array.from(s.childNodes).forEach(n=>f.appendChild(n));let d=t.nextSibling;while(d&&!(d.nodeType===8&&d.data==='/$')){{const next=d.nextSibling;d.remove();d=next;}}if(d)d.remove();p.insertBefore(f,t.nextSibling);t.remove();s.remove();}}}};$RC("{react_boundary_id}","{content_id}");</script>"#
             );
 
             Ok(error_update.into_bytes())

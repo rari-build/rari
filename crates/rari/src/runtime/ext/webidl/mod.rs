@@ -14,7 +14,7 @@ impl ExtensionTrait<()> for init_webidl {
     }
 }
 
-#[allow(unused)]
+#[expect(unused)]
 pub fn extensions(is_snapshot: bool) -> Vec<Extension> {
     vec![
         deno_webidl::deno_webidl::init(),

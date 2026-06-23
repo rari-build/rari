@@ -10,7 +10,7 @@ use crate::common::{Target, log, log_error, log_success, log_warning};
 
 pub async fn build_binary(target: &str, project_root: &Path, dev_mode: bool) -> Result<bool> {
     let build_type = if dev_mode { "debug" } else { "release" };
-    log(&format!("Building binary for {} ({})", target, build_type));
+    log(&format!("Building binary for {target} ({build_type})"));
 
     let mut cmd = Command::new("cargo");
     cmd.arg("build");
@@ -35,12 +35,12 @@ pub async fn build_binary(target: &str, project_root: &Path, dev_mode: bool) -> 
         .context("Failed to execute cargo build")?;
 
     if output.status.success() {
-        log_success(&format!("Built binary for {}", target));
+        log_success(&format!("Built binary for {target}"));
         Ok(true)
     } else {
-        log_error(&format!("Failed to build binary for {}", target));
+        log_error(&format!("Failed to build binary for {target}"));
         let stderr = String::from_utf8_lossy(&output.stderr);
-        log_error(&format!("Error: {}", stderr));
+        log_error(&format!("Error: {stderr}"));
         Ok(false)
     }
 }
@@ -79,9 +79,7 @@ pub fn copy_binary_to_platform_package(
         fs::set_permissions(&dest_path, perms)?;
 
         if target_info.platform.starts_with("darwin") {
-            if std::env::consts::OS != "macos" {
-                log_warning("Skipping codesign: host OS is not macOS");
-            } else {
+            if std::env::consts::OS == "macos" {
                 match dest_path.to_str() {
                     Some(path_str) => {
                         let sign_result = std::process::Command::new("codesign")
@@ -98,7 +96,7 @@ pub fn copy_binary_to_platform_package(
                                 ));
                             }
                             Err(e) => {
-                                log_warning(&format!("codesign not available: {}", e));
+                                log_warning(&format!("codesign not available: {e}"));
                             }
                         }
                     }
@@ -109,6 +107,8 @@ pub fn copy_binary_to_platform_package(
                         ));
                     }
                 }
+            } else {
+                log_warning("Skipping codesign: host OS is not macOS");
             }
         }
     }
@@ -117,6 +117,10 @@ pub fn copy_binary_to_platform_package(
     Ok(true)
 }
 
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "File size in bytes to MB conversion, precision loss acceptable for display"
+)]
 pub fn validate_binary(target_info: &Target, project_root: &Path, dev_mode: bool) -> Result<bool> {
     let binary_path = project_root
         .join(target_info.package_dir)

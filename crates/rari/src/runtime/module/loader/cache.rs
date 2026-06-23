@@ -54,7 +54,6 @@ impl ModuleCaching {
         }
     }
 
-    #[allow(dead_code)]
     pub fn from_config(layer: &CacheLayerConfig, registry: &CacheHandlerRegistry) -> Self {
         let handler = registry.resolve(&layer.handler);
         Self::with_handler(layer.max_entries, layer.default_ttl_secs, handler)
@@ -63,8 +62,7 @@ impl ModuleCaching {
     pub async fn get(&self, key: &str) -> Option<JsonValue> {
         let bytes = match self.handler.get(key).await {
             Ok(Some(b)) => b,
-            Ok(None) => return None,
-            Err(_) => return None,
+            Ok(None) | Err(_) => return None,
         };
         match serde_json::from_slice(&bytes) {
             Ok(v) => Some(v),

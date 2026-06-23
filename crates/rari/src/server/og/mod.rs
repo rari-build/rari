@@ -43,6 +43,7 @@ pub async fn handle_og_image_request(
 
     response.headers_mut().insert(
         "x-cache",
+        #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
         x_cache
             .parse()
             .expect("x-cache header value should be valid ASCII"),
@@ -52,6 +53,7 @@ pub async fn handle_og_image_request(
 }
 
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum OgImageError {
     #[error("OG image component not found for route: {0}")]
     ComponentNotFound(String),

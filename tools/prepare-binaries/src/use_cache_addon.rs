@@ -28,6 +28,10 @@ fn addon_platform_package_path(target_info: &Target, project_root: &Path) -> Pat
         .join(ADDON_OUTPUT_FILE)
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "Addon build orchestration requires comprehensive error handling and validation steps"
+)]
 pub async fn build_addon(
     target_info: &Target,
     project_root: &Path,
@@ -108,10 +112,10 @@ pub async fn build_addon(
         let stderr = String::from_utf8_lossy(&output.stderr);
         let stdout = String::from_utf8_lossy(&output.stdout);
         if !stderr.is_empty() {
-            log_error(&format!("stderr: {}", stderr));
+            log_error(&format!("stderr: {stderr}"));
         }
         if !stdout.is_empty() {
-            log_error(&format!("stdout: {}", stdout));
+            log_error(&format!("stdout: {stdout}"));
         }
         return Ok(false);
     }
@@ -186,6 +190,10 @@ pub fn copy_addon_to_platform_package(
     Ok(true)
 }
 
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "File size in bytes to KB conversion, precision loss acceptable for display"
+)]
 pub fn validate_addon(target_info: &Target, project_root: &Path) -> Result<bool> {
     let dest = addon_platform_package_path(target_info, project_root);
     if !dest.exists() {
@@ -254,6 +262,6 @@ fn generate_platform_package_files(
     fs::write(package_dir.join("index.js"), index_js)
         .context("Failed to write platform index.js")?;
 
-    log_success(&format!("Generated package files for {}", package_name));
+    log_success(&format!("Generated package files for {package_name}"));
     Ok(())
 }

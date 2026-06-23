@@ -179,3 +179,6 @@ rustls = { version = "=0.23.40", default-features = false, features = [
 ] }
 sha2 = { workspace = true }
 hex = { workspace = true }
+
+[lints]
+workspace = true

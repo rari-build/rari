@@ -19,6 +19,7 @@ use tungstenite::{client::IntoClientRequest, http::Request as HttpRequest};
 const VITE_WS_PROTOCOL: &str = "vite-hmr";
 
 fn create_client() -> Client {
+    #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
     Client::builder()
         .timeout(std::time::Duration::from_secs(30))
         .connect_timeout(std::time::Duration::from_secs(10))
@@ -44,7 +45,7 @@ pub async fn vite_src_proxy(req: Request) -> impl IntoResponse {
     let path_and_query = req
         .uri()
         .path_and_query()
-        .map(|pq| pq.as_str())
+        .map(http::uri::PathAndQuery::as_str)
         .unwrap_or(req.uri().path());
 
     let path_without_prefix = path_and_query
@@ -135,7 +136,7 @@ pub async fn vite_reverse_proxy(req: Request) -> impl IntoResponse {
     let path_and_query = req
         .uri()
         .path_and_query()
-        .map(|pq| pq.as_str())
+        .map(http::uri::PathAndQuery::as_str)
         .unwrap_or(req.uri().path());
 
     let path_without_prefix = path_and_query
@@ -231,7 +232,10 @@ async fn handle_websocket(mut client_socket: WebSocket, uri: Uri) {
         }
     };
 
-    let path_and_query = uri.path_and_query().map(|pq| pq.as_str()).unwrap_or("/");
+    let path_and_query = uri
+        .path_and_query()
+        .map(http::uri::PathAndQuery::as_str)
+        .unwrap_or("/");
     let path_without_prefix = path_and_query
         .strip_prefix("/vite-server")
         .unwrap_or(path_and_query);
@@ -241,6 +245,7 @@ async fn handle_websocket(mut client_socket: WebSocket, uri: Uri) {
         path_without_prefix
     );
 
+    #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
     let vite_ws_request = match HttpRequest::builder()
         .uri(&vite_ws_url)
         .header("Sec-WebSocket-Protocol", VITE_WS_PROTOCOL)
@@ -261,7 +266,6 @@ async fn handle_websocket(mut client_socket: WebSocket, uri: Uri) {
         Err(e) => {
             error!("Failed to connect to Vite WebSocket server: {}", e);
 
-            #[allow(clippy::disallowed_methods)]
             let error_msg = serde_json::json!({
                 "type": "error",
                 "message": format!("Failed to connect to Vite dev server: {}", e)
@@ -329,6 +333,10 @@ async fn handle_websocket(mut client_socket: WebSocket, uri: Uri) {
     }
 }
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "Option return type maintains API consistency"
+)]
 fn convert_axum_to_tungstenite_message(msg: WsMessage) -> Option<Message> {
     match msg {
         WsMessage::Text(text) => Some(Message::Text(text.to_string().into())),
@@ -351,7 +359,6 @@ fn convert_tungstenite_to_axum_message(msg: Message) -> Option<WsMessage> {
 }
 
 fn create_error_response(status: StatusCode, message: &str) -> Response<Body> {
-    #[allow(clippy::disallowed_methods)]
     let error_body = serde_json::json!({
         "error": message,
         "status": status.as_u16()
@@ -362,6 +369,10 @@ fn create_error_response(status: StatusCode, message: &str) -> Response<Body> {
         .header("content-type", "application/json")
         .body(Body::from(error_body.to_string()))
         .unwrap_or_else(|_| {
+            #[expect(
+                clippy::expect_used,
+                reason = "Response::builder() with valid components never fails"
+            )]
             Response::builder()
                 .status(StatusCode::INTERNAL_SERVER_ERROR)
                 .body(Body::from("Internal server error"))
@@ -385,10 +396,9 @@ pub async fn check_vite_server_health() -> Result<(), RariError> {
             Ok(response) => {
                 if response.status().is_success() {
                     return Ok(());
-                } else {
-                    last_status = Some(response.status());
-                    last_error = None;
                 }
+                last_status = Some(response.status());
+                last_error = None;
             }
             Err(e) => {
                 last_error = Some(e.to_string());
@@ -402,9 +412,9 @@ pub async fn check_vite_server_health() -> Result<(), RariError> {
     }
 
     let error_detail = if let Some(status) = last_status {
-        format!("health check failed with status {}", status)
+        format!("health check failed with status {status}")
     } else if let Some(error) = last_error {
-        format!("connection error: {}", error)
+        format!("connection error: {error}")
     } else {
         "health check failed".to_string()
     };

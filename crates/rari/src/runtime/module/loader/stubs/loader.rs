@@ -53,15 +53,16 @@ export default {{
 "#;
 
 pub fn create_generic_module_stub(module_path: &str) -> String {
+    let escaped_path = module_path.replace('\\', "\\\\").replace('\'', "\\'");
     format!(
-        r#"
+        r"
 // Generic fallback stub for node module: {module_path}
 
 export default {{
-  name: '{module_path}',
+  name: '{escaped_path}',
   isStub: true
 }};
-"#
+"
     )
 }
 

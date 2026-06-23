@@ -1,9 +1,15 @@
+#![expect(
+    clippy::unnecessary_wraps,
+    reason = "Parser methods return Result for API consistency with other parse methods that can error"
+)]
+
 use crate::rsc::{RscElement, SuspenseBoundary};
 use rari_error::RariError;
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde_json::Value as JsonValue;
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct PromiseRef {
     pub promise_id: String,
     pub boundary_id: String,
@@ -11,6 +17,7 @@ pub struct PromiseRef {
 }
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct StreamingState {
     pub initial_html: String,
     pub boundaries: Vec<SuspenseBoundary>,
@@ -26,7 +33,10 @@ pub struct RscWireFormatParser {
 impl RscWireFormatParser {
     pub fn new(rsc_output: &str) -> Self {
         Self {
-            lines: rsc_output.lines().map(|s| s.to_string()).collect(),
+            lines: rsc_output
+                .lines()
+                .map(std::string::ToString::to_string)
+                .collect(),
             elements: FxHashMap::default(),
         }
     }
@@ -48,8 +58,7 @@ impl RscWireFormatParser {
     fn parse_line(&self, line: &str) -> Result<(u32, RscElement), RariError> {
         let colon_pos = line.find(':').ok_or_else(|| {
             RariError::internal(format!(
-                "Invalid RSC line format: missing colon in '{}'",
-                line
+                "Invalid RSC line format: missing colon in '{line}'"
             ))
         })?;
 
@@ -57,14 +66,14 @@ impl RscWireFormatParser {
         let data_str = &data_str[1..];
 
         let row_id = u32::from_str_radix(id_str, 16)
-            .map_err(|e| RariError::internal(format!("Invalid row ID '{}': {}", id_str, e)))?;
+            .map_err(|e| RariError::internal(format!("Invalid row ID '{id_str}': {e}")))?;
 
         if data_str.starts_with('I') {
             return Ok((row_id, RscElement::Text(String::new())));
         }
 
         let json_value: JsonValue = serde_json::from_str(data_str)
-            .map_err(|e| RariError::internal(format!("Invalid JSON in RSC line: {}", e)))?;
+            .map_err(|e| RariError::internal(format!("Invalid JSON in RSC line: {e}")))?;
 
         let element = self.parse_json_element(&json_value)?;
 
@@ -88,9 +97,9 @@ impl RscWireFormatParser {
                     } else if s == "$-0" {
                         return Ok(RscElement::Text("-0".to_string()));
                     } else if let Some(date_str) = s.strip_prefix("$D") {
-                        return Ok(RscElement::Text(format!("Date({})", date_str)));
+                        return Ok(RscElement::Text(format!("Date({date_str})")));
                     } else if let Some(bigint_str) = s.strip_prefix("$n") {
-                        return Ok(RscElement::Text(format!("{}n", bigint_str)));
+                        return Ok(RscElement::Text(format!("{bigint_str}n")));
                     } else if s.starts_with("$Q")
                         || s.starts_with("$W")
                         || s.starts_with("$K")
@@ -101,7 +110,7 @@ impl RscWireFormatParser {
                         || s.starts_with("$Y")
                         || s.starts_with("$i")
                         || s.starts_with("$B")
-                        || (s.starts_with("$") && s.len() > 1)
+                        || (s.starts_with('$') && s.len() > 1)
                     {
                         return Ok(RscElement::Reference(s.clone()));
                     }
@@ -152,7 +161,7 @@ impl RscWireFormatParser {
             .ok_or_else(|| RariError::internal("React element tag must be a string".to_string()))?
             .to_string();
 
-        let key = arr[2].as_str().map(|s| s.to_string());
+        let key = arr[2].as_str().map(std::string::ToString::to_string);
 
         let props_value = &arr[3];
         let props = if let JsonValue::Object(obj) = props_value {
@@ -206,7 +215,7 @@ impl RscWireFormatParser {
         let boundary_id = props
             .get("~boundaryId")
             .and_then(|v| v.as_str())
-            .map(|s| s.to_string())
+            .map(std::string::ToString::to_string)
             .or_else(|| key.clone())
             .unwrap_or_else(|| format!("boundary_{}", uuid::Uuid::new_v4()));
 
@@ -225,7 +234,7 @@ impl RscWireFormatParser {
         let promise_id = props
             .get("id")
             .and_then(|v| v.as_str())
-            .map(|s| s.to_string())
+            .map(std::string::ToString::to_string)
             .unwrap_or_else(|| format!("promise_{}", uuid::Uuid::new_v4()));
 
         Ok(RscElement::Promise { promise_id })
@@ -266,7 +275,7 @@ impl RscWireFormatParser {
                 let promise_ref = PromiseRef {
                     promise_id: promise_id.clone(),
                     boundary_id: String::new(),
-                    element_ref: format!("$L{:x}", row_id),
+                    element_ref: format!("$L{row_id:x}"),
                 };
 
                 promises.push(promise_ref);
@@ -276,6 +285,7 @@ impl RscWireFormatParser {
         promises
     }
 
+    #[expect(clippy::assigning_clones)]
     pub fn link_promises_to_boundaries(
         &self,
         mut boundaries: Vec<SuspenseBoundary>,

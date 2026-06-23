@@ -88,7 +88,7 @@ impl ImageRenderer {
         Ok(())
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     fn draw_rect_border(
         &self,
         image: &mut RgbaImage,
@@ -155,7 +155,7 @@ impl ImageRenderer {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     fn draw_rounded_border_masked(
         &self,
         image: &mut RgbaImage,
@@ -229,13 +229,13 @@ impl ImageRenderer {
         fg: image::Rgba<u8>,
         mask_alpha: u8,
     ) -> image::Rgba<u8> {
-        let alpha = (fg[3] as f32 / 255.0) * (mask_alpha as f32 / 255.0);
+        let alpha = (f32::from(fg[3]) / 255.0) * (f32::from(mask_alpha) / 255.0);
         let inv_alpha = 1.0 - alpha;
 
         image::Rgba([
-            ((fg[0] as f32 * alpha + bg[0] as f32 * inv_alpha) as u8),
-            ((fg[1] as f32 * alpha + bg[1] as f32 * inv_alpha) as u8),
-            ((fg[2] as f32 * alpha + bg[2] as f32 * inv_alpha) as u8),
+            ((f32::from(fg[0]) * alpha + f32::from(bg[0]) * inv_alpha) as u8),
+            ((f32::from(fg[1]) * alpha + f32::from(bg[1]) * inv_alpha) as u8),
+            ((f32::from(fg[2]) * alpha + f32::from(bg[2]) * inv_alpha) as u8),
             255,
         ])
     }

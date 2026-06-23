@@ -7335,7 +7335,6 @@ dependencies = [
 name = "rari-snapshot"
 version = "0.0.0"
 dependencies = [
- "cow-utils",
  "deno_ast",
  "deno_core",
  "deno_error",

@@ -7,7 +7,7 @@ type CleanupCallback = Box<dyn FnOnce() + Send + 'static>;
 
 pub struct RscStream {
     receiver: mpsc::Receiver<RscStreamChunk>,
-    _request_context_guard:
+    request_context_guard:
         Option<std::sync::Arc<crate::server::middleware::request_context::RequestContext>>,
     cleanup: Option<CleanupCallback>,
 }
@@ -16,19 +16,21 @@ impl RscStream {
     pub fn new(receiver: mpsc::Receiver<RscStreamChunk>) -> Self {
         Self {
             receiver,
-            _request_context_guard: None,
+            request_context_guard: None,
             cleanup: None,
         }
     }
 
+    #[must_use]
     pub fn with_request_context(
         mut self,
         request_context: std::sync::Arc<crate::server::middleware::request_context::RequestContext>,
     ) -> Self {
-        self._request_context_guard = Some(request_context);
+        self.request_context_guard = Some(request_context);
         self
     }
 
+    #[must_use]
     pub fn with_cleanup<F>(mut self, cleanup: F) -> Self
     where
         F: FnOnce() + Send + 'static,
@@ -42,7 +44,7 @@ impl RscStream {
                         "Panic in existing cleanup handler: {:?}",
                         e.downcast_ref::<&str>()
                             .copied()
-                            .or_else(|| e.downcast_ref::<String>().map(|s| s.as_str()))
+                            .or_else(|| e.downcast_ref::<String>().map(std::string::String::as_str))
                             .unwrap_or("unknown panic")
                     );
                 }
@@ -54,7 +56,7 @@ impl RscStream {
                         "Panic in cleanup handler: {:?}",
                         e.downcast_ref::<&str>()
                             .copied()
-                            .or_else(|| e.downcast_ref::<String>().map(|s| s.as_str()))
+                            .or_else(|| e.downcast_ref::<String>().map(std::string::String::as_str))
                             .unwrap_or("unknown panic")
                     );
                 }

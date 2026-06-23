@@ -116,7 +116,7 @@ pub fn render_version_selection(frame: &mut Frame, app: &App, unit: &ReleaseUnit
         .recent_commits
         .iter()
         .take(5)
-        .map(|c| Line::from(format!("* {}", c)))
+        .map(|c| Line::from(format!("* {c}")))
         .collect();
     let commits_widget = Paragraph::new(commits).block(
         Block::default()
@@ -212,6 +212,14 @@ pub fn render_custom_version(frame: &mut Frame, app: &App, unit: &ReleaseUnit, i
     }
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "Progress percentage 0-100 fits in u16"
+)]
+#[expect(
+    clippy::cast_sign_loss,
+    reason = "Progress percentage is always positive 0.0-1.0"
+)]
 pub fn render_publishing(frame: &mut Frame, app: &App, unit: &ReleaseUnit, version: &str) {
     let area = frame.area();
     let chunks = Layout::default()
@@ -348,6 +356,10 @@ pub fn render_post_publish(frame: &mut Frame, app: &App, has_more_packages: bool
     frame.render_widget(help, chunks[2]);
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "TUI rendering with detailed status sections requires comprehensive layout"
+)]
 pub fn render_post_release(
     frame: &mut Frame,
     app: &App,

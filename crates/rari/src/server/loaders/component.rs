@@ -6,12 +6,13 @@ use crate::server::core::utils::component::{
 };
 use cow_utils::CowUtils;
 use rari_error::RariError;
-use rari_utils::path_url::path_to_file_url;
+use rari_utils::path_to_file_url;
 use std::sync::Arc;
 use tracing::error;
 
 const DIST_DIR: &str = "dist";
 
+#[non_exhaustive]
 pub struct ComponentLoader;
 
 impl ComponentLoader {
@@ -25,7 +26,7 @@ impl ComponentLoader {
         let components = Self::parse_manifest_components(&manifest)?;
 
         let mut sorted_components: Vec<_> = components.iter().collect();
-        sorted_components.sort_by_key(|(id, _)| if id.starts_with("components/") { 0 } else { 1 });
+        sorted_components.sort_by_key(|(id, _)| i32::from(!id.starts_with("components/")));
 
         for (component_id, component_info) in sorted_components {
             if component_id == "proxy" || component_id.ends_with("/proxy") {
@@ -100,7 +101,7 @@ impl ComponentLoader {
                                     let action_registration_script = format!(
                                         r#"(async function() {{
                                             try {{
-                                                const moduleNamespace = await import({});
+                                                const moduleNamespace = await import({specifier_json});
                                                 if (!globalThis['~serverFunctions']) {{
                                                     globalThis['~serverFunctions'] = {{}};
                                                 }}
@@ -112,18 +113,17 @@ impl ComponentLoader {
                                                 }}
                                                 for (const [key, value] of Object.entries(moduleNamespace)) {{
                                                     if (typeof value === 'function') {{
-                                                        const moduleKey = {} + ':' + key;
+                                                        const moduleKey = {component_id_json} + ':' + key;
                                                         globalThis['~serverFunctions'].all[moduleKey] = value;
                                                         globalThis['~serverFunctions'].exported[moduleKey] = value;
                                                     }}
                                                 }}
                                                 return {{ success: true }};
                                             }} catch (error) {{
-                                                console.error("Failed to register server action " + {}, error);
+                                                console.error("Failed to register server action " + {component_id_json}, error);
                                                 return {{ success: false, error: error.message }};
                                             }}
-                                        }})()"#,
-                                        specifier_json, component_id_json, component_id_json
+                                        }})()"#
                                     );
 
                                     match renderer
@@ -138,8 +138,9 @@ impl ComponentLoader {
                                         .await
                                     {
                                         Ok(result) => {
-                                            if let Some(success) =
-                                                result.get("success").and_then(|v| v.as_bool())
+                                            if let Some(success) = result
+                                                .get("success")
+                                                .and_then(serde_json::Value::as_bool)
                                                 && !success
                                             {
                                                 error!(
@@ -161,8 +162,7 @@ impl ComponentLoader {
                                 if !is_server_action {
                                     let skip_global_binding = component_id.starts_with("lib/");
                                     let registration_script = format!(
-                                        r#"globalThis['~rari'].componentLoader.registerComponent({}, {}, {})"#,
-                                        specifier_json, component_id_json, skip_global_binding
+                                        r"globalThis['~rari'].componentLoader.registerComponent({specifier_json}, {component_id_json}, {skip_global_binding})"
                                     );
 
                                     match renderer
@@ -177,8 +177,9 @@ impl ComponentLoader {
                                         .await
                                     {
                                         Ok(result) => {
-                                            if let Some(success) =
-                                                result.get("success").and_then(|v| v.as_bool())
+                                            if let Some(success) = result
+                                                .get("success")
+                                                .and_then(serde_json::Value::as_bool)
                                                 && !success
                                             {
                                                 error!(
@@ -278,7 +279,7 @@ impl ComponentLoader {
 
                         let dist_path = std::path::Path::new("dist")
                             .join("server")
-                            .join(format!("{}.js", action_id));
+                            .join(format!("{action_id}.js"));
 
                         if dist_path.exists() {
                             match std::fs::read_to_string(&dist_path) {
@@ -311,7 +312,7 @@ impl ComponentLoader {
                                                     let module_specifier_json = serde_json::to_string(&module_specifier)
                                                         .map_err(|e| {
                                                             error!("Failed to serialize module_specifier for {}: {}", action_id, e);
-                                                            RariError::internal(format!("Failed to serialize module_specifier: {}", e))
+                                                            RariError::internal(format!("Failed to serialize module_specifier: {e}"))
                                                         })?;
                                                     let action_id_json = serde_json::to_string(
                                                         &action_id,
@@ -322,15 +323,14 @@ impl ComponentLoader {
                                                             action_id, e
                                                         );
                                                         RariError::internal(format!(
-                                                            "Failed to serialize action_id: {}",
-                                                            e
+                                                            "Failed to serialize action_id: {e}"
                                                         ))
                                                     })?;
 
                                                     let registration_script = format!(
                                                         r#"(async function() {{
                                                             try {{
-                                                                const moduleNamespace = await import({});
+                                                                const moduleNamespace = await import({module_specifier_json});
                                                                 if (!globalThis['~serverFunctions']) {{
                                                                     globalThis['~serverFunctions'] = {{}};
                                                                 }}
@@ -342,20 +342,17 @@ impl ComponentLoader {
                                                                 }}
                                                                 for (const [key, value] of Object.entries(moduleNamespace)) {{
                                                                     if (typeof value === 'function') {{
-                                                                        const moduleKey = {} + ':' + key;
+                                                                        const moduleKey = {action_id_json} + ':' + key;
                                                                         globalThis['~serverFunctions'].all[moduleKey] = value;
                                                                         globalThis['~serverFunctions'].exported[moduleKey] = value;
                                                                     }}
                                                                 }}
                                                                 return {{ success: true }};
                                                             }} catch (error) {{
-                                                                console.error("Failed to register server action " + {}, error);
+                                                                console.error("Failed to register server action " + {action_id_json}, error);
                                                                 return {{ success: false, error: error.message }};
                                                             }}
-                                                        }})()"#,
-                                                        module_specifier_json,
-                                                        action_id_json,
-                                                        action_id_json
+                                                        }})()"#
                                                     );
 
                                                     match renderer
@@ -370,9 +367,10 @@ impl ComponentLoader {
                                                         .await
                                                     {
                                                         Ok(result) => {
-                                                            if let Some(success) = result
-                                                                .get("success")
-                                                                .and_then(|v| v.as_bool())
+                                                            if let Some(success) =
+                                                                result.get("success").and_then(
+                                                                    serde_json::Value::as_bool,
+                                                                )
                                                                 && !success
                                                             {
                                                                 if let Some(error_msg) = result
@@ -494,7 +492,7 @@ impl ComponentLoader {
                             .cow_replace('\\', "/")
                             .into_owned();
 
-                        let canonical_path = path.canonicalize().unwrap_or(path.to_path_buf());
+                        let canonical_path = path.canonicalize().unwrap_or(path.clone());
                         let module_specifier = path_to_file_url(&canonical_path);
 
                         let esm_load_result = renderer
@@ -522,8 +520,7 @@ impl ComponentLoader {
                                                 relative_str, e
                                             );
                                             RariError::internal(format!(
-                                                "Failed to serialize module_specifier: {}",
-                                                e
+                                                "Failed to serialize module_specifier: {e}"
                                             ))
                                         })?;
                                         let relative_str_json =
@@ -533,15 +530,14 @@ impl ComponentLoader {
                                                     relative_str, e
                                                 );
                                                 RariError::internal(format!(
-                                                    "Failed to serialize relative_str: {}",
-                                                    e
+                                                    "Failed to serialize relative_str: {e}"
                                                 ))
                                             })?;
 
                                         let registration_script = format!(
                                             r#"(async function() {{
                                                 try {{
-                                                    const moduleNamespace = await import({});
+                                                    const moduleNamespace = await import({module_specifier_json});
                                                     if (!globalThis['~serverFunctions']) {{
                                                         globalThis['~serverFunctions'] = {{}};
                                                     }}
@@ -553,20 +549,17 @@ impl ComponentLoader {
                                                     }}
                                                     for (const [key, value] of Object.entries(moduleNamespace)) {{
                                                         if (typeof value === 'function') {{
-                                                            const moduleKey = {} + ':' + key;
+                                                            const moduleKey = {relative_str_json} + ':' + key;
                                                             globalThis['~serverFunctions'].all[moduleKey] = value;
                                                             globalThis['~serverFunctions'].exported[moduleKey] = value;
                                                         }}
                                                     }}
                                                     return {{ success: true }};
                                                 }} catch (error) {{
-                                                    console.error("Failed to register server action " + {}, error);
+                                                    console.error("Failed to register server action " + {relative_str_json}, error);
                                                     return {{ success: false, error: error.message }};
                                                 }}
-                                            }})()"#,
-                                            module_specifier_json,
-                                            relative_str_json,
-                                            relative_str_json
+                                            }})()"#
                                         );
 
                                         match renderer
@@ -581,8 +574,9 @@ impl ComponentLoader {
                                             .await
                                         {
                                             Ok(result) => {
-                                                if let Some(success) =
-                                                    result.get("success").and_then(|v| v.as_bool())
+                                                if let Some(success) = result
+                                                    .get("success")
+                                                    .and_then(serde_json::Value::as_bool)
                                                     && !success
                                                 {
                                                     if let Some(error_msg) =
@@ -665,7 +659,7 @@ impl ComponentLoader {
                         );
                     }
 
-                    let canonical_path = path.canonicalize().unwrap_or(path.to_path_buf());
+                    let canonical_path = path.canonicalize().unwrap_or(path.clone());
                     let module_specifier = path_to_file_url(&canonical_path);
 
                     let esm_load_result = renderer
@@ -690,8 +684,7 @@ impl ComponentLoader {
                                                 component_id, e
                                             );
                                             RariError::internal(format!(
-                                                "Failed to serialize module_specifier: {}",
-                                                e
+                                                "Failed to serialize module_specifier: {e}"
                                             ))
                                         })?;
                                     let component_id_json = serde_json::to_string(&component_id)
@@ -701,15 +694,11 @@ impl ComponentLoader {
                                                 component_id, e
                                             );
                                             RariError::internal(format!(
-                                                "Failed to serialize component_id: {}",
-                                                e
+                                                "Failed to serialize component_id: {e}"
                                             ))
                                         })?;
                                     let registration_script = format!(
-                                        r#"globalThis['~rari'].componentLoader.registerComponent({}, {}, {})"#,
-                                        module_specifier_json,
-                                        component_id_json,
-                                        skip_global_binding
+                                        r"globalThis['~rari'].componentLoader.registerComponent({module_specifier_json}, {component_id_json}, {skip_global_binding})"
                                     );
 
                                     match renderer
@@ -726,7 +715,7 @@ impl ComponentLoader {
                                         Ok(result) => {
                                             let registration_succeeded = result
                                                 .get("success")
-                                                .and_then(|v| v.as_bool())
+                                                .and_then(serde_json::Value::as_bool)
                                                 .unwrap_or(false);
 
                                             if !registration_succeeded {
@@ -750,34 +739,28 @@ impl ComponentLoader {
                                                 });
                                                 let mark_client_script = if skip_global_binding {
                                                     format!(
-                                                        r#"(function() {{
-                                                            const module = globalThis['~rsc']?.modules?.[{}];
+                                                        r"(function() {{
+                                                            const module = globalThis['~rsc']?.modules?.[{component_id_json}];
                                                             if (module) {{
                                                                 const comp = module.default || Object.values(module).find(v => typeof v === 'function');
                                                                 if (comp && typeof comp === 'function') {{
                                                                     comp['~isClientComponent'] = true;
-                                                                    comp['~clientComponentId'] = {};
+                                                                    comp['~clientComponentId'] = {component_id_json};
                                                                 }}
                                                             }}
-                                                            return {{ componentId: {}, isClient: true }};
-                                                        }})()"#,
-                                                        component_id_json,
-                                                        component_id_json,
-                                                        component_id_json
+                                                            return {{ componentId: {component_id_json}, isClient: true }};
+                                                        }})()"
                                                     )
                                                 } else {
                                                     format!(
-                                                        r#"(function() {{
-                                                            const comp = globalThis[{}];
+                                                        r"(function() {{
+                                                            const comp = globalThis[{component_id_json}];
                                                             if (comp && typeof comp === 'function') {{
                                                                 comp['~isClientComponent'] = true;
-                                                                comp['~clientComponentId'] = {};
+                                                                comp['~clientComponentId'] = {component_id_json};
                                                             }}
-                                                            return {{ componentId: {}, isClient: true }};
-                                                        }})()"#,
-                                                        component_id_json,
-                                                        component_id_json,
-                                                        component_id_json
+                                                            return {{ componentId: {component_id_json}, isClient: true }};
+                                                        }})()"
                                                     )
                                                 };
 
@@ -838,30 +821,28 @@ impl ComponentLoader {
 
                                     let mark_client_script = if skip_global_binding {
                                         format!(
-                                            r#"(function() {{
-                                                const module = globalThis['~rsc']?.modules?.[{}];
+                                            r"(function() {{
+                                                const module = globalThis['~rsc']?.modules?.[{component_id_json}];
                                                 if (module) {{
                                                     const comp = module.default || Object.values(module).find(v => typeof v === 'function');
                                                     if (comp && typeof comp === 'function') {{
                                                         comp['~isClientComponent'] = true;
-                                                        comp['~clientComponentId'] = {};
+                                                        comp['~clientComponentId'] = {component_id_json};
                                                     }}
                                                 }}
-                                                return {{ componentId: {}, isClient: true }};
-                                            }})()"#,
-                                            component_id_json, component_id_json, component_id_json
+                                                return {{ componentId: {component_id_json}, isClient: true }};
+                                            }})()"
                                         )
                                     } else {
                                         format!(
-                                            r#"(function() {{
-                                                const comp = globalThis[{}];
+                                            r"(function() {{
+                                                const comp = globalThis[{component_id_json}];
                                                 if (comp && typeof comp === 'function') {{
                                                     comp['~isClientComponent'] = true;
-                                                    comp['~clientComponentId'] = {};
+                                                    comp['~clientComponentId'] = {component_id_json};
                                                 }}
-                                                return {{ componentId: {}, isClient: true }};
-                                            }})()"#,
-                                            component_id_json, component_id_json, component_id_json
+                                                return {{ componentId: {component_id_json}, isClient: true }};
+                                            }})()"
                                         )
                                     };
 
@@ -989,7 +970,7 @@ impl ComponentLoader {
 
             let module_path_json = serde_json::to_string(module_path).unwrap_or_default();
             let register_script = format!(
-                r#"(async function() {{
+                r"(async function() {{
                     try {{
                         const mod = await import({specifier});
                         if (!globalThis['~rari'] || !globalThis['~rari'].ssrModules) {{
@@ -1002,7 +983,7 @@ impl ComponentLoader {
                         console.error('[rari] SSR: Failed to import module ' + {path} + ':', e?.message || e);
                         return false;
                     }}
-                }})()"#,
+                }})()",
                 specifier = serde_json::to_string(&module_specifier).unwrap_or_default(),
                 path = module_path_json,
             );

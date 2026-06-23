@@ -1,3 +1,5 @@
+#![allow(clippy::unnecessary_debug_formatting)]
+
 use super::{
     ImageError,
     cache::{self, ImageCache},
@@ -23,6 +25,7 @@ const AVIF_ENCODING_SPEED: u8 = 6;
 const DEFAULT_CONCURRENCY: usize = 4;
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct PreloadImage {
     pub url: String,
     pub width: u32,
@@ -47,6 +50,7 @@ impl ImageOptimizer {
     }
 
     pub fn with_cache(config: ImageConfig, project_path: &Path, cache: Arc<ImageCache>) -> Self {
+        #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
         let http_client = Client::builder()
             .redirect(reqwest::redirect::Policy::none())
             .timeout(Duration::from_secs(30))
@@ -86,7 +90,7 @@ impl ImageOptimizer {
         let preload_images = self
             .preload_images
             .read()
-            .unwrap_or_else(|poison| poison.into_inner());
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         preload_images
             .iter()
             .map(|img| {
@@ -105,7 +109,7 @@ impl ImageOptimizer {
         let mut preload_images = self
             .preload_images
             .write()
-            .unwrap_or_else(|poison| poison.into_inner());
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         preload_images.clear();
     }
 
@@ -145,8 +149,7 @@ impl ImageOptimizer {
                     e
                 );
                 return Err(ImageError::ProcessingError(format!(
-                    "Failed to check public directory: {}",
-                    e
+                    "Failed to check public directory: {e}"
                 )));
             }
             Ok(true) => {}
@@ -160,20 +163,18 @@ impl ImageOptimizer {
         while let Some(current_dir) = dirs_to_scan.pop() {
             let mut entries = tokio::fs::read_dir(&current_dir).await.map_err(|e| {
                 ImageError::ProcessingError(format!(
-                    "Failed to read directory {:?}: {}",
-                    current_dir, e
+                    "Failed to read directory {current_dir:?}: {e}"
                 ))
             })?;
 
             while let Some(entry) = entries.next_entry().await.map_err(|e| {
-                ImageError::ProcessingError(format!("Failed to read directory entry: {}", e))
+                ImageError::ProcessingError(format!("Failed to read directory entry: {e}"))
             })? {
                 let path = entry.path();
 
                 let file_type = entry.file_type().await.map_err(|e| {
                     ImageError::ProcessingError(format!(
-                        "Failed to read file type for {:?}: {}",
-                        path, e
+                        "Failed to read file type for {path:?}: {e}"
                     ))
                 })?;
 
@@ -181,6 +182,10 @@ impl ImageOptimizer {
                     continue;
                 }
 
+                #[expect(
+                    clippy::filetype_is_file,
+                    reason = "We specifically want only regular files, not FIFOs, sockets, or devices"
+                )]
                 if file_type.is_dir() {
                     dirs_to_scan.push(path);
                 } else if file_type.is_file() {
@@ -334,7 +339,7 @@ impl ImageOptimizer {
                 let mut preload_images = self
                     .preload_images
                     .write()
-                    .unwrap_or_else(|poison| poison.into_inner());
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 preload_images.extend(preload_list);
                 tracing::debug!("Registered {} images for preloading", preload_images.len());
             }
@@ -356,7 +361,7 @@ impl ImageOptimizer {
             let mut preload_images = self
                 .preload_images
                 .write()
-                .unwrap_or_else(|poison| poison.into_inner());
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             preload_images.extend(preload_list);
             tracing::debug!("Registered {} images for preloading", preload_images.len());
         }
@@ -579,8 +584,7 @@ impl ImageOptimizer {
             && w > MAX_OUTPUT_WIDTH
         {
             return Err(ImageError::InvalidParams(format!(
-                "Width {} exceeds maximum allowed ({})",
-                w, MAX_OUTPUT_WIDTH
+                "Width {w} exceeds maximum allowed ({MAX_OUTPUT_WIDTH})"
             )));
         }
 
@@ -608,7 +612,7 @@ impl ImageOptimizer {
         }
 
         let _permit = self.processing_semaphore.acquire().await.map_err(|e| {
-            ImageError::ProcessingError(format!("Failed to acquire processing permit: {}", e))
+            ImageError::ProcessingError(format!("Failed to acquire processing permit: {e}"))
         })?;
 
         if let Some(cached) = self.cache.get(&cache_key).await {
@@ -633,9 +637,7 @@ impl ImageOptimizer {
             Self::process_image_blocking(source, &params_clone, &config_clone)
         })
         .await
-        .map_err(|e| {
-            ImageError::ProcessingError(format!("Image processing task failed: {}", e))
-        })??;
+        .map_err(|e| ImageError::ProcessingError(format!("Image processing task failed: {e}")))??;
 
         self.cache
             .put(
@@ -670,8 +672,7 @@ impl ImageOptimizer {
         if url_str.starts_with('/') {
             if self.config.local_patterns.is_empty() {
                 return Err(ImageError::UnauthorizedDomain(format!(
-                    "Local path not allowed: {}. Configure localPatterns in your image config to allow local paths.",
-                    url_str
+                    "Local path not allowed: {url_str}. Configure localPatterns in your image config to allow local paths."
                 )));
             }
 
@@ -684,8 +685,7 @@ impl ImageOptimizer {
             }
             if !allowed {
                 return Err(ImageError::UnauthorizedDomain(format!(
-                    "Local path not allowed: {}. Configure localPatterns in your image config to allow local paths.",
-                    url_str
+                    "Local path not allowed: {url_str}. Configure localPatterns in your image config to allow local paths."
                 )));
             }
             return Ok(());
@@ -784,7 +784,7 @@ impl ImageOptimizer {
 
         if let Some(ref search) = pattern.search {
             if let Some(query) = url.query() {
-                let full_query = format!("?{}", query);
+                let full_query = format!("?{query}");
                 if &full_query != search {
                     return false;
                 }
@@ -806,21 +806,20 @@ impl ImageOptimizer {
 
     fn validate_remote_url(&self, url: &str) -> Result<(), ImageError> {
         let parsed = Url::parse(url)
-            .map_err(|e| ImageError::InvalidUrl(format!("Invalid URL '{}': {}", url, e)))?;
+            .map_err(|e| ImageError::InvalidUrl(format!("Invalid URL '{url}': {e}")))?;
 
         match parsed.scheme() {
             "http" | "https" => {}
             other => {
                 return Err(ImageError::InvalidUrl(format!(
-                    "Unsupported URL scheme '{}'",
-                    other
+                    "Unsupported URL scheme '{other}'"
                 )));
             }
         }
 
         let host = parsed
             .host_str()
-            .ok_or_else(|| ImageError::InvalidUrl(format!("URL '{}' is missing a host", url)))?;
+            .ok_or_else(|| ImageError::InvalidUrl(format!("URL '{url}' is missing a host")))?;
 
         let host_lower = host.cow_to_ascii_lowercase();
 
@@ -831,8 +830,7 @@ impl ImageOptimizer {
             || host_lower.starts_with("127.")
         {
             return Err(ImageError::UnauthorizedDomain(format!(
-                "Loopback host '{}' is not allowed",
-                host
+                "Loopback host '{host}' is not allowed"
             )));
         }
 
@@ -849,8 +847,7 @@ impl ImageOptimizer {
                         || octets[0] == 0
                     {
                         return Err(ImageError::UnauthorizedDomain(format!(
-                            "Private or reserved IP address '{}' is not allowed",
-                            host
+                            "Private or reserved IP address '{host}' is not allowed"
                         )));
                     }
                 }
@@ -871,8 +868,7 @@ impl ImageOptimizer {
                         let octets = ipv4.octets();
                         if is_private_ipv4(octets) {
                             return Err(ImageError::UnauthorizedDomain(format!(
-                                "Private or reserved IPv6 address '{}' is not allowed",
-                                host
+                                "Private or reserved IPv6 address '{host}' is not allowed"
                             )));
                         }
                     } else if segments[0] == 0x2002 {
@@ -884,8 +880,7 @@ impl ImageOptimizer {
                         ];
                         if is_private_ipv4(octets) {
                             return Err(ImageError::UnauthorizedDomain(format!(
-                                "Private or reserved IPv6 address '{}' is not allowed",
-                                host
+                                "Private or reserved IPv6 address '{host}' is not allowed"
                             )));
                         }
                     } else if segments[0] == 0x2001 && segments[1] == 0x0000 {
@@ -897,8 +892,7 @@ impl ImageOptimizer {
                         ];
                         if is_private_ipv4(server_octets) {
                             return Err(ImageError::UnauthorizedDomain(format!(
-                                "Private or reserved IPv6 address '{}' is not allowed",
-                                host
+                                "Private or reserved IPv6 address '{host}' is not allowed"
                             )));
                         }
 
@@ -910,8 +904,7 @@ impl ImageOptimizer {
                         ];
                         if is_private_ipv4(client_octets) {
                             return Err(ImageError::UnauthorizedDomain(format!(
-                                "Private or reserved IPv6 address '{}' is not allowed",
-                                host
+                                "Private or reserved IPv6 address '{host}' is not allowed"
                             )));
                         }
                     } else if ip.is_loopback()
@@ -919,8 +912,7 @@ impl ImageOptimizer {
                         || (segments[0] & 0xffc0) == 0xfe80
                     {
                         return Err(ImageError::UnauthorizedDomain(format!(
-                            "Private or reserved IPv6 address '{}' is not allowed",
-                            host
+                            "Private or reserved IPv6 address '{host}' is not allowed"
                         )));
                     }
                 }
@@ -932,8 +924,7 @@ impl ImageOptimizer {
                         || domain_lower == "metadata.google.internal"
                     {
                         return Err(ImageError::UnauthorizedDomain(format!(
-                            "Internal domain '{}' is not allowed",
-                            host
+                            "Internal domain '{host}' is not allowed"
                         )));
                     }
                 }
@@ -942,8 +933,7 @@ impl ImageOptimizer {
 
         if self.config.remote_patterns.is_empty() {
             return Err(ImageError::UnauthorizedDomain(format!(
-                "No remote image domains are configured; rejecting host '{}'",
-                host
+                "No remote image domains are configured; rejecting host '{host}'"
             )));
         }
 
@@ -957,8 +947,7 @@ impl ImageOptimizer {
 
         if !allowed {
             return Err(ImageError::UnauthorizedDomain(format!(
-                "Host '{}' is not allowed for remote images",
-                host
+                "Host '{host}' is not allowed for remote images"
             )));
         }
 
@@ -980,7 +969,7 @@ impl ImageOptimizer {
             let file_path = public_path.join(url.trim_start_matches('/'));
 
             let canonical_public = public_path.canonicalize().map_err(|e| {
-                ImageError::FetchError(format!("Failed to canonicalize public directory: {}", e))
+                ImageError::FetchError(format!("Failed to canonicalize public directory: {e}"))
             })?;
             let canonical_file = file_path.canonicalize().map_err(|e| {
                 ImageError::FetchError(format!(
@@ -992,8 +981,7 @@ impl ImageOptimizer {
 
             if !canonical_file.starts_with(&canonical_public) {
                 return Err(ImageError::InvalidUrl(format!(
-                    "Path traversal detected: {} escapes public directory",
-                    url
+                    "Path traversal detected: {url} escapes public directory"
                 )));
             }
 
@@ -1058,11 +1046,9 @@ impl ImageOptimizer {
                     location.to_string()
                 } else {
                     let base = Url::parse(&current_url)
-                        .map_err(|e| ImageError::InvalidUrl(format!("Invalid base URL: {}", e)))?;
+                        .map_err(|e| ImageError::InvalidUrl(format!("Invalid base URL: {e}")))?;
                     base.join(location)
-                        .map_err(|e| {
-                            ImageError::InvalidUrl(format!("Invalid redirect URL: {}", e))
-                        })?
+                        .map_err(|e| ImageError::InvalidUrl(format!("Invalid redirect URL: {e}")))?
                         .to_string()
                 };
 
@@ -1088,8 +1074,7 @@ impl ImageOptimizer {
                 && content_length as usize > MAX_SOURCE_IMAGE_SIZE
             {
                 return Err(ImageError::InvalidParams(format!(
-                    "Image too large: {} bytes (max {} bytes)",
-                    content_length, MAX_SOURCE_IMAGE_SIZE
+                    "Image too large: {content_length} bytes (max {MAX_SOURCE_IMAGE_SIZE} bytes)"
                 )));
             }
 
@@ -1105,8 +1090,7 @@ impl ImageOptimizer {
                 let chunk = chunk.map_err(|e| ImageError::FetchError(e.to_string()))?;
                 if bytes.len() + chunk.len() > MAX_SOURCE_IMAGE_SIZE {
                     return Err(ImageError::InvalidParams(format!(
-                        "Image too large (max {} bytes)",
-                        MAX_SOURCE_IMAGE_SIZE
+                        "Image too large (max {MAX_SOURCE_IMAGE_SIZE} bytes)"
                     )));
                 }
                 bytes.extend_from_slice(&chunk);
@@ -1118,11 +1102,9 @@ impl ImageOptimizer {
 
     fn determine_format_from_param(format_str: Option<&str>) -> ImageFormat {
         match format_str {
-            Some("avif") => ImageFormat::Avif,
             Some("webp") => ImageFormat::WebP,
-            Some("jpeg") | Some("jpg") => ImageFormat::Jpeg,
+            Some("jpeg" | "jpg") => ImageFormat::Jpeg,
             Some("png") => ImageFormat::Png,
-            Some("gif") => ImageFormat::Gif,
             _ => ImageFormat::Avif,
         }
     }
@@ -1133,7 +1115,7 @@ impl ImageOptimizer {
         _config: &ImageConfig,
     ) -> Result<OptimizedImage, ImageError> {
         let img = image::load_from_memory(&source)
-            .map_err(|e| ImageError::ProcessingError(format!("Failed to decode image: {}", e)))?;
+            .map_err(|e| ImageError::ProcessingError(format!("Failed to decode image: {e}")))?;
 
         if img.width() > MAX_OUTPUT_WIDTH * 2 || img.height() > MAX_OUTPUT_HEIGHT * 2 {
             return Err(ImageError::InvalidParams(format!(
@@ -1193,7 +1175,7 @@ impl ImageOptimizer {
         let encoder =
             AvifEncoder::new_with_speed_quality(&mut cursor, AVIF_ENCODING_SPEED, quality);
         img.write_with_encoder(encoder)
-            .map_err(|e| ImageError::ProcessingError(format!("AVIF encoding failed: {}", e)))?;
+            .map_err(|e| ImageError::ProcessingError(format!("AVIF encoding failed: {e}")))?;
 
         Ok(buffer)
     }
@@ -1201,9 +1183,9 @@ impl ImageOptimizer {
     fn encode_webp(img: &DynamicImage, quality: u8) -> Result<Vec<u8>, ImageError> {
         let mut buffer = Vec::new();
         let encoder = webp::Encoder::from_image(img)
-            .map_err(|e| ImageError::ProcessingError(format!("WebP encoding failed: {}", e)))?;
+            .map_err(|e| ImageError::ProcessingError(format!("WebP encoding failed: {e}")))?;
 
-        let encoded = encoder.encode(quality as f32);
+        let encoded = encoder.encode(f32::from(quality));
         buffer.extend_from_slice(&encoded);
 
         Ok(buffer)
@@ -1218,7 +1200,7 @@ impl ImageOptimizer {
 
         let encoder = JpegEncoder::new_with_quality(&mut cursor, quality);
         img.write_with_encoder(encoder)
-            .map_err(|e| ImageError::ProcessingError(format!("JPEG encoding failed: {}", e)))?;
+            .map_err(|e| ImageError::ProcessingError(format!("JPEG encoding failed: {e}")))?;
 
         Ok(buffer)
     }
@@ -1232,7 +1214,7 @@ impl ImageOptimizer {
 
         let encoder = PngEncoder::new(&mut cursor);
         img.write_with_encoder(encoder)
-            .map_err(|e| ImageError::ProcessingError(format!("PNG encoding failed: {}", e)))?;
+            .map_err(|e| ImageError::ProcessingError(format!("PNG encoding failed: {e}")))?;
 
         Ok(buffer)
     }

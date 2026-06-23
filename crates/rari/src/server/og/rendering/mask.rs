@@ -123,6 +123,10 @@ pub(super) fn build_rounded_rect_path(
     path
 }
 
+#[expect(
+    clippy::inline_always,
+    reason = "Performance-critical function requires inlining"
+)]
 #[inline(always)]
 pub(super) fn mask_index(x: u32, y: u32, width: u32) -> usize {
     (y * width + x) as usize

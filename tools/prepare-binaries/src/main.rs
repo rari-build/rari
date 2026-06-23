@@ -1,3 +1,5 @@
+#![expect(clippy::print_stdout)]
+
 mod common;
 mod rari_binary;
 mod use_cache_addon;
@@ -7,13 +9,22 @@ use clap::Parser;
 use colored::Colorize;
 use std::path::PathBuf;
 
-use common::*;
-use rari_binary::*;
-use use_cache_addon::*;
+use common::{
+    TARGETS, Target, check_rust_installed, get_current_platform_target,
+    install_linux_cross_compiler, install_target, log, log_error, log_success, log_warning,
+};
+use rari_binary::{build_binary, copy_binary_to_platform_package, validate_binary};
+use use_cache_addon::{
+    addon_stable_output_path_public, build_addon, copy_addon_to_platform_package, validate_addon,
+};
 
 #[derive(Parser, Debug)]
 #[command(name = "prepare-binaries")]
 #[command(about = "Prepare rari binaries (and rari-use-cache addon) for platform packages", long_about = None)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "CLI flags are naturally boolean and independently meaningful"
+)]
 struct Args {
     #[arg(long)]
     all: bool,
@@ -42,6 +53,10 @@ struct Args {
 }
 
 #[tokio::main]
+#[expect(
+    clippy::too_many_lines,
+    reason = "Main orchestration function coordinates build, validation, and packaging steps"
+)]
 async fn main() -> Result<()> {
     let args = Args::parse();
 
@@ -230,62 +245,10 @@ async fn main() -> Result<()> {
     let total_attempted = targets_to_build.len();
 
     let any_failure = bin_failure > 0 || addon_failure > 0;
-    if !any_failure {
-        if do_build_bin {
-            log_success(&format!(
-                "✨ Successfully prepared {} platform binaries!",
-                bin_success
-            ));
-        }
-        if do_build_addon {
-            log_success(&format!(
-                "✨ Successfully prepared {} platform addons!",
-                addon_success
-            ));
-        }
-        println!();
-        println!("{}", "Platform packages ready:".bold());
-        for target_info in &targets_to_build {
-            if do_build_bin {
-                println!(
-                    "  • {} → {}",
-                    target_info.platform.cyan(),
-                    target_info.package_dir
-                );
-            }
-            if do_build_addon {
-                println!(
-                    "  • {} → {}",
-                    target_info.platform.cyan(),
-                    target_info.addon_package_dir
-                );
-            }
-        }
-        println!();
-        println!("{}", "Next steps:".dimmed());
-        if !args.all {
-            println!("{}", "  1. Test the artifacts locally".dimmed());
-            println!(
-                "{}",
-                "  2. Use GitHub Actions for full cross-platform builds".dimmed()
-            );
-            println!(
-                "{}",
-                "  3. Or run with --all flag (requires cross-compilation setup)".dimmed()
-            );
-        } else {
-            println!("{}", "  1. Test the artifacts locally".dimmed());
-            println!(
-                "{}",
-                "  2. Run the release script: pnpm run release".dimmed()
-            );
-            println!("{}", "  3. Or publish individual packages".dimmed());
-        }
-    } else {
+    if any_failure {
         if bin_success > 0 || addon_success > 0 {
             log_warning(&format!(
-                "Partial success: {} bin(s), {} addon(s) of {} target(s)",
-                bin_success, addon_success, total_attempted
+                "Partial success: {bin_success} bin(s), {addon_success} addon(s) of {total_attempted} target(s)"
             ));
             println!();
             println!("{}", "Successfully built:".bold());
@@ -329,6 +292,55 @@ async fn main() -> Result<()> {
 
         if !args.all && any_failure {
             std::process::exit(1);
+        }
+    } else {
+        if do_build_bin {
+            log_success(&format!(
+                "✨ Successfully prepared {bin_success} platform binaries!"
+            ));
+        }
+        if do_build_addon {
+            log_success(&format!(
+                "✨ Successfully prepared {addon_success} platform addons!"
+            ));
+        }
+        println!();
+        println!("{}", "Platform packages ready:".bold());
+        for target_info in &targets_to_build {
+            if do_build_bin {
+                println!(
+                    "  • {} → {}",
+                    target_info.platform.cyan(),
+                    target_info.package_dir
+                );
+            }
+            if do_build_addon {
+                println!(
+                    "  • {} → {}",
+                    target_info.platform.cyan(),
+                    target_info.addon_package_dir
+                );
+            }
+        }
+        println!();
+        println!("{}", "Next steps:".dimmed());
+        if args.all {
+            println!("{}", "  1. Test the artifacts locally".dimmed());
+            println!(
+                "{}",
+                "  2. Run the release script: pnpm run release".dimmed()
+            );
+            println!("{}", "  3. Or publish individual packages".dimmed());
+        } else {
+            println!("{}", "  1. Test the artifacts locally".dimmed());
+            println!(
+                "{}",
+                "  2. Use GitHub Actions for full cross-platform builds".dimmed()
+            );
+            println!(
+                "{}",
+                "  3. Or run with --all flag (requires cross-compilation setup)".dimmed()
+            );
         }
     }
 
