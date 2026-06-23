@@ -1632,8 +1632,7 @@ impl RscToHtmlConverter {
             String::new()
         } else {
             format!(
-                r#"<script id="__RARI_RSC_PAYLOAD__" type="text/x-component">{escaped_payload}</script>
-        "#
+                r#"<script id="__RARI_RSC_PAYLOAD__" type="text/x-component">{escaped_payload}</script>"#
             )
         };
 

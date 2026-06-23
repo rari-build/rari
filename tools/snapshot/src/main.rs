@@ -4,7 +4,6 @@ use std::fmt::Write;
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use cow_utils::CowUtils;
 use deno_core::{ModuleCodeString, ModuleName, SourceMapData};
 use deno_error::JsErrorBox;
 use rustc_hash::FxHashSet;
@@ -126,10 +125,10 @@ fn main() {
         "pub static RESIDUAL_LAZY_ESM_SOURCES: &[(&str, &str)] = &[",
     );
     for (specifier, source) in &residual_esm {
-        let escaped = escape_for_raw_string(source);
+        let raw_string = format_raw_string(source);
         write_line(
             &mut generated,
-            &format!("    (\"{specifier}\", r###\"{escaped}\"###),"),
+            &format!("    (\"{specifier}\", {raw_string}),"),
         );
     }
     write_line(&mut generated, "];\n");
@@ -139,10 +138,10 @@ fn main() {
         "pub static RESIDUAL_LAZY_JS_SOURCES: &[(&str, &str)] = &[",
     );
     for (specifier, source) in &residual_js {
-        let escaped = escape_for_raw_string(source);
+        let raw_string = format_raw_string(source);
         write_line(
             &mut generated,
-            &format!("    (\"{specifier}\", r###\"{escaped}\"###),"),
+            &format!("    (\"{specifier}\", {raw_string}),"),
         );
     }
     write_line(&mut generated, "];");
@@ -211,6 +210,36 @@ fn maybe_transpile(specifier: &str, source: &str) -> String {
         .text
 }
 
-fn escape_for_raw_string(s: &str) -> std::borrow::Cow<'_, str> {
-    s.cow_replace("\"###", "\"####")
+fn min_hashes_needed(s: &str) -> usize {
+    let mut max_hashes = 0;
+    let mut current_hashes = 0;
+    let mut after_quote = false;
+
+    for ch in s.chars() {
+        if ch == '"' {
+            after_quote = true;
+            current_hashes = 0;
+        } else if after_quote && ch == '#' {
+            current_hashes += 1;
+            max_hashes = max_hashes.max(current_hashes);
+        } else {
+            after_quote = false;
+            current_hashes = 0;
+        }
+    }
+
+    max_hashes + 1
+}
+
+fn format_raw_string(s: &str) -> String {
+    let hashes_needed = min_hashes_needed(s);
+
+    let hashes_to_use = if hashes_needed == 1 && !s.contains('"') {
+        0
+    } else {
+        hashes_needed
+    };
+
+    let hashes = "#".repeat(hashes_to_use);
+    format!("r{hashes}\"{s}\"{hashes}")
 }

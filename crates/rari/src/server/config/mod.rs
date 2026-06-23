@@ -278,18 +278,19 @@ impl From<&CacheControlConfig> for CompiledCacheControlConfig {
 
         routes.sort_by(|(a, _), (b, _)| {
             #[expect(
-                clippy::unnested_or_patterns,
-                reason = "Multiple lines for readability"
+                clippy::match_same_arms,
+                reason = "Explicit ordering is clearer than merged patterns for documentation"
             )]
             match (a, b) {
-                (RoutePattern::Exact(_), RoutePattern::Exact(_))
-                | (RoutePattern::Prefix(_), RoutePattern::Regex(_))
-                | (RoutePattern::Regex(_), RoutePattern::Regex(_)) => std::cmp::Ordering::Equal,
+                (RoutePattern::Exact(_), RoutePattern::Exact(_)) => std::cmp::Ordering::Equal,
                 (RoutePattern::Exact(_), _) => std::cmp::Ordering::Less,
+                (_, RoutePattern::Exact(_)) => std::cmp::Ordering::Greater,
                 (RoutePattern::Prefix(a_prefix), RoutePattern::Prefix(b_prefix)) => {
                     b_prefix.len().cmp(&a_prefix.len())
                 }
-                _ => std::cmp::Ordering::Greater,
+                (RoutePattern::Prefix(_), RoutePattern::Regex(_)) => std::cmp::Ordering::Less,
+                (RoutePattern::Regex(_), RoutePattern::Prefix(_)) => std::cmp::Ordering::Greater,
+                (RoutePattern::Regex(_), RoutePattern::Regex(_)) => std::cmp::Ordering::Equal,
             }
         });
 
