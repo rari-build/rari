@@ -135,8 +135,10 @@ impl ImageRenderer {
         style
             .get("textAlign")
             .map(|ta| match ta.as_str() {
+                "left" | "start" => Alignment::Start,
                 "right" | "end" => Alignment::End,
                 "center" => Alignment::Center,
+                "justify" => Alignment::Justify,
                 _ => Alignment::Start,
             })
             .unwrap_or(Alignment::Start)
