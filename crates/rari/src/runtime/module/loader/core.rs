@@ -1555,59 +1555,39 @@ impl ModuleLoader for RariModuleLoader {
                         ""
                     };
 
+                    fn append_source_ext(path: &str) -> String {
+                        let (base_path, suffix) = if let Some(query_pos) = path.find('?') {
+                            (&path[..query_pos], &path[query_pos..])
+                        } else if let Some(hash_pos) = path.find('#') {
+                            (&path[..hash_pos], &path[hash_pos..])
+                        } else {
+                            (path, "")
+                        };
+
+                        let base_with_ext = if base_path.ends_with(".ts")
+                            || base_path.ends_with(".js")
+                            || base_path.ends_with(".tsx")
+                            || base_path.ends_with(".jsx")
+                            || base_path.ends_with(".mjs")
+                            || base_path.ends_with(".cjs")
+                        {
+                            base_path.to_string()
+                        } else {
+                            format!("{base_path}.ts")
+                        };
+
+                        format!("{base_with_ext}{suffix}")
+                    }
+
                     let resolved_path = if specifier.starts_with("../") {
                         let remaining = specifier.strip_prefix("../").unwrap_or(specifier);
                         let source_path = Path::new(source_dir);
                         let parent_dir = source_path.parent().unwrap_or_else(|| Path::new(""));
-
-                        let (base_path, suffix) = if let Some(query_pos) = remaining.find('?') {
-                            (&remaining[..query_pos], &remaining[query_pos..])
-                        } else if let Some(hash_pos) = remaining.find('#') {
-                            (&remaining[..hash_pos], &remaining[hash_pos..])
-                        } else {
-                            (remaining, "")
-                        };
-
-                        let base_with_ext = if base_path.ends_with(".ts")
-                            || base_path.ends_with(".js")
-                            || base_path.ends_with(".tsx")
-                            || base_path.ends_with(".jsx")
-                            || base_path.ends_with(".mjs")
-                            || base_path.ends_with(".cjs")
-                        {
-                            base_path.to_string()
-                        } else {
-                            format!("{base_path}.ts")
-                        };
-
-                        let remaining_with_ext = format!("{base_with_ext}{suffix}");
-
+                        let remaining_with_ext = append_source_ext(remaining);
                         path_to_file_url(&parent_dir.join(remaining_with_ext))
                     } else {
                         let remaining = specifier.strip_prefix("./").unwrap_or(specifier);
-
-                        let (base_path, suffix) = if let Some(query_pos) = remaining.find('?') {
-                            (&remaining[..query_pos], &remaining[query_pos..])
-                        } else if let Some(hash_pos) = remaining.find('#') {
-                            (&remaining[..hash_pos], &remaining[hash_pos..])
-                        } else {
-                            (remaining, "")
-                        };
-
-                        let base_with_ext = if base_path.ends_with(".ts")
-                            || base_path.ends_with(".js")
-                            || base_path.ends_with(".tsx")
-                            || base_path.ends_with(".jsx")
-                            || base_path.ends_with(".mjs")
-                            || base_path.ends_with(".cjs")
-                        {
-                            base_path.to_string()
-                        } else {
-                            format!("{base_path}.ts")
-                        };
-
-                        let remaining_with_ext = format!("{base_with_ext}{suffix}");
-
+                        let remaining_with_ext = append_source_ext(remaining);
                         path_to_file_url(&Path::new(source_dir).join(remaining_with_ext))
                     };
 

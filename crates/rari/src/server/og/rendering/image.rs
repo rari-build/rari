@@ -272,7 +272,7 @@ impl ImageRenderer {
             .build()
             .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
 
-        let mut response = client
+        let response = client
             .get(url)
             .send()
             .map_err(|e| format!("Failed to fetch image from {url}: {e}"))?;
@@ -284,6 +284,7 @@ impl ImageRenderer {
         const MAX_IMAGE_SIZE: usize = 10 * 1024 * 1024;
         let mut buffer = Vec::new();
         response
+            .take((MAX_IMAGE_SIZE + 1) as u64)
             .read_to_end(&mut buffer)
             .map_err(|e| format!("Failed to read image data: {e}"))?;
 
