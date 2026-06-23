@@ -395,8 +395,10 @@ jobs:
           key: use-cache-win32-x64-${{ hashFiles('crates/rari-use-cache/**', 'Cargo.lock') }}
 
   build:
-    needs: [changes]
-    if: needs.changes.outputs.src == 'true' || needs.changes.outputs.rust == 'true'
+    needs: [changes, build-use-cache-addon]
+    if: |
+      (needs.changes.outputs.src == 'true' || needs.changes.outputs.rust == 'true') &&
+      always() && !cancelled() && !failure()
     runs-on: namespace-profile-rari-linux-amd64
     timeout-minutes: 10
     permissions:
@@ -431,7 +433,6 @@ jobs:
         with:
           name: use-cache-linux-x64
           path: packages/use-cache-linux-x64
-          if-no-files-found: ignore
 
       - name: Build packages
         run: |
