@@ -288,7 +288,7 @@ impl ImageRenderer {
             .read_to_end(&mut buffer)
             .map_err(|e| format!("Failed to read image data: {e}"))?;
 
-        if buffer.len() >= MAX_IMAGE_SIZE {
+        if buffer.len() > MAX_IMAGE_SIZE {
             return Err("Image too large (max 10MB)".to_string());
         }
 

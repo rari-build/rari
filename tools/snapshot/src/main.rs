@@ -1,4 +1,4 @@
-#![allow(clippy::too_many_lines, clippy::cast_precision_loss, clippy::panic)]
+#![allow(clippy::too_many_lines, clippy::cast_precision_loss)]
 
 use std::fmt::Write;
 use std::path::PathBuf;
@@ -125,10 +125,11 @@ fn main() {
         "pub static RESIDUAL_LAZY_ESM_SOURCES: &[(&str, &str)] = &[",
     );
     for (specifier, source) in &residual_esm {
-        let raw_string = format_raw_string(source);
+        let specifier_raw = format_raw_string(specifier);
+        let source_raw = format_raw_string(source);
         write_line(
             &mut generated,
-            &format!("    (\"{specifier}\", {raw_string}),"),
+            &format!("    ({specifier_raw}, {source_raw}),"),
         );
     }
     write_line(&mut generated, "];\n");
@@ -138,10 +139,11 @@ fn main() {
         "pub static RESIDUAL_LAZY_JS_SOURCES: &[(&str, &str)] = &[",
     );
     for (specifier, source) in &residual_js {
-        let raw_string = format_raw_string(source);
+        let specifier_raw = format_raw_string(specifier);
+        let source_raw = format_raw_string(source);
         write_line(
             &mut generated,
-            &format!("    (\"{specifier}\", {raw_string}),"),
+            &format!("    ({specifier_raw}, {source_raw}),"),
         );
     }
     write_line(&mut generated, "];");
@@ -183,6 +185,10 @@ fn maybe_transpile(specifier: &str, source: &str) -> String {
         url::Url::parse(&format!("file:///{specifier}")).expect("invalid specifier")
     });
 
+    #[expect(
+        clippy::panic,
+        reason = "Build tool - parse failures should terminate snapshot generation"
+    )]
     let parsed = deno_ast::parse_module(deno_ast::ParseParams {
         specifier: specifier_url,
         text: source.into(),
@@ -193,7 +199,11 @@ fn maybe_transpile(specifier: &str, source: &str) -> String {
     })
     .unwrap_or_else(|e| panic!("Failed to parse '{specifier}': {e}"));
 
-    parsed
+    #[expect(
+        clippy::panic,
+        reason = "Build tool - transpile failures should terminate snapshot generation"
+    )]
+    let transpiled = parsed
         .transpile(
             &deno_ast::TranspileOptions {
                 imports_not_used_as_values: deno_ast::ImportsNotUsedAsValues::Remove,
@@ -205,9 +215,9 @@ fn maybe_transpile(specifier: &str, source: &str) -> String {
                 ..Default::default()
             },
         )
-        .unwrap_or_else(|e| panic!("Failed to transpile '{specifier}': {e}"))
-        .into_source()
-        .text
+        .unwrap_or_else(|e| panic!("Failed to transpile '{specifier}': {e}"));
+
+    transpiled.into_source().text
 }
 
 fn min_hashes_needed(s: &str) -> usize {

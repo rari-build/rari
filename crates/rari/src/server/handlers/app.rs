@@ -1,5 +1,3 @@
-#![allow(clippy::implicit_hasher)]
-
 use crate::rsc::rendering::html::{RscHtmlRenderer, RscToHtmlConverter};
 use crate::rsc::rendering::layout::{
     LayoutRenderContext, LayoutRenderer, OpenGraphImage, OpenGraphImageDescriptor,
@@ -972,6 +970,10 @@ pub async fn render_fallback_html(
 }
 
 #[axum::debug_handler]
+#[expect(
+    clippy::implicit_hasher,
+    reason = "FxHashMap is the specific hasher needed for query params"
+)]
 pub async fn handle_app_route(
     State(state): State<ServerState>,
     uri: axum::http::Uri,

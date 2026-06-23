@@ -182,9 +182,13 @@ impl ImageOptimizer {
                     continue;
                 }
 
+                #[expect(
+                    clippy::filetype_is_file,
+                    reason = "We specifically want only regular files, not FIFOs, sockets, or devices"
+                )]
                 if file_type.is_dir() {
                     dirs_to_scan.push(path);
-                } else if !file_type.is_symlink() {
+                } else if file_type.is_file() {
                     let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
 
                     if !matches!(
@@ -1101,6 +1105,7 @@ impl ImageOptimizer {
             Some("webp") => ImageFormat::WebP,
             Some("jpeg" | "jpg") => ImageFormat::Jpeg,
             Some("png") => ImageFormat::Png,
+            Some("gif") => ImageFormat::Gif,
             _ => ImageFormat::Avif,
         }
     }

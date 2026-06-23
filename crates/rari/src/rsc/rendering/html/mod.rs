@@ -2114,24 +2114,25 @@ if (typeof window !== 'undefined') {{
             );
 
             let content_json = parts[1];
-            let rendered_html = if let Some(text) = content_json.strip_prefix('T') {
-                escape_html(text)
-            } else {
-                match serde_json::from_str::<serde_json::Value>(content_json) {
-                    Ok(content) => match self.rsc_element_to_html(&content).await {
-                        Ok(html) if !html.is_empty() => html,
-                        _ => String::new(),
-                    },
-                    Err(_) => String::new(),
-                }
-            };
+            let (rendered_html, render_successful) =
+                if let Some(text) = content_json.strip_prefix('T') {
+                    (escape_html(text), true)
+                } else {
+                    match serde_json::from_str::<serde_json::Value>(content_json) {
+                        Ok(content) => match self.rsc_element_to_html(&content).await {
+                            Ok(html) => (html, true),
+                            Err(_) => (String::new(), false),
+                        },
+                        Err(_) => (String::new(), false),
+                    }
+                };
 
-            if rendered_html.is_empty() {
-                String::new()
-            } else {
+            if render_successful {
                 format!(
                     "<div hidden id=\"{content_id}\">{rendered_html}</div>\n<script>$RC=window.$RC||function(b,c){{var t=document.getElementById(b);var s=document.getElementById(c);if(t&&s){{var p=t.parentNode;var f=document.createDocumentFragment();Array.from(s.childNodes).forEach(function(n){{f.appendChild(n)}});var d=t.nextSibling;while(d&&!(d.nodeType===8&&d.data==='/$')){{var next=d.nextSibling;d.remove();d=next;}}if(d)d.remove();p.insertBefore(f,t.nextSibling);t.remove();s.remove();}}}};$RC(\"{react_id}\",\"{content_id}\")</script>",
                 )
+            } else {
+                String::new()
             }
         } else {
             String::new()
@@ -2200,7 +2201,7 @@ if (typeof window !== 'undefined') {{
             let content_id = format!("E:{}", react_boundary_id.trim_start_matches("B:"));
 
             let error_update = format!(
-                r#"<div hidden id="{content_id}">{error_html}</div><script>$RC=window.$RC||function(b,c){{const t=document.getElementById(b);const s=document.getElementById(c);if(t&&s){{const p=t.parentNode;Array.from(s.childNodes).forEach(n=>p.insertBefore(n,t));t.remove();s.remove();}}}};$RC("{react_boundary_id}","{content_id}");</script>"#
+                r#"<div hidden id="{content_id}">{error_html}</div><script>$RC=window.$RC||function(b,c){{const t=document.getElementById(b);const s=document.getElementById(c);if(t&&s){{const p=t.parentNode;const f=document.createDocumentFragment();Array.from(s.childNodes).forEach(n=>f.appendChild(n));let d=t.nextSibling;while(d&&!(d.nodeType===8&&d.data==='/$')){{const next=d.nextSibling;d.remove();d=next;}}if(d)d.remove();p.insertBefore(f,t.nextSibling);t.remove();s.remove();}}}};$RC("{react_boundary_id}","{content_id}");</script>"#
             );
 
             Ok(error_update.into_bytes())

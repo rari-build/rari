@@ -1,5 +1,3 @@
-#![allow(clippy::match_wildcard_for_single_variants, clippy::float_cmp)]
-
 use super::super::layout::ComputedLayout;
 use super::super::types::JsxChild;
 use super::renderer::ImageRenderer;
@@ -91,7 +89,7 @@ impl ImageRenderer {
             .iter()
             .filter_map(|child| match child {
                 JsxChild::Text(text) => Some(text.as_str()),
-                _ => None,
+                JsxChild::Element(_) => None,
             })
             .collect::<Vec<_>>()
             .join("")
@@ -219,7 +217,7 @@ impl ImageRenderer {
             for item in line.items() {
                 let glyph_run = match item {
                     parley::PositionedLayoutItem::GlyphRun(gr) => gr,
-                    _ => continue,
+                    parley::PositionedLayoutItem::InlineBox(_) => continue,
                 };
 
                 let run = glyph_run.run();
@@ -276,6 +274,7 @@ impl ImageRenderer {
             }
         }
 
+        #[expect(clippy::float_cmp, reason = "Sentinel value check for f32::MAX")]
         if line_start_x == f32::MAX {
             return Ok(());
         }

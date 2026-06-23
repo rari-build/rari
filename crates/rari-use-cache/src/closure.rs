@@ -127,10 +127,7 @@ fn collect_bindings_from_pat(pat: &Pat, scope: &mut FxHashSet<Id>) {
     clippy::too_many_lines,
     reason = "AST visitor pattern requires comprehensive match arms"
 )]
-#[expect(
-    clippy::implicit_hasher,
-    reason = "FxHashSet is required for compatibility with deno_ast types"
-)]
+#[expect(clippy::implicit_hasher)]
 pub fn collect_closure_idents(
     body: &BlockStmt,
     module_idents: &FxHashSet<Id>,

@@ -591,7 +591,9 @@ async fn setup_concurrent_batch(
         );
         if let Err(e) = js_runtime.execute_script(format!("setup_concurrent_{i}"), setup) {
             eprintln!("[rari] Failed to setup concurrent tracking for slot {i}: {e}");
-            let cleanup = format!("delete globalThis['{slot_key}']");
+            let cleanup = format!(
+                "delete globalThis['{slot_key}']; delete globalThis['~rari_concurrent']['{slot_key}']"
+            );
             let _ = js_runtime.execute_script(format!("cleanup_setup_{i}"), cleanup);
 
             *sent_item = true;
@@ -908,6 +910,7 @@ impl JsRuntimeInterface for RariRuntime {
                 args_json.as_bytes(),
             );
 
+            let escaped_function_name = function_name.replace('\\', "\\\\").replace('"', "\\\"");
             let script = format!(
                 r#"
                 (function() {{
@@ -920,11 +923,11 @@ impl JsRuntimeInterface for RariRuntime {
                     const argsJson = new TextDecoder('utf-8').decode(argsBytes);
                     const args = JSON.parse(argsJson);
 
-                    if (typeof globalThis["{function_name}"] !== 'function') {{
-                        throw new Error("Function not found: {function_name}");
+                    if (typeof globalThis["{escaped_function_name}"] !== 'function') {{
+                        throw new Error("Function not found: {escaped_function_name}");
                     }}
 
-                    return globalThis["{function_name}"](...args);
+                    return globalThis["{escaped_function_name}"](...args);
                 }})();
                 "#
             );

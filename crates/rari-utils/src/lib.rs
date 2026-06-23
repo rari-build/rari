@@ -13,9 +13,10 @@ fn normalize_path(path: &Path) -> PathBuf {
                     && matches!(last, Component::Normal(_))
                 {
                     components.pop();
-                    continue;
+                } else if matches!(components.first(), Some(Component::RootDir)) {
+                } else {
+                    components.push(component);
                 }
-                components.push(component);
             }
             _ => {
                 components.push(component);

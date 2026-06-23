@@ -2,7 +2,7 @@ avoid-breaking-exported-api = false
 disallowed-types = [
   { path = "std::collections::HashMap", reason = "Use `rustc_hash::FxHashMap` instead, which is typically faster for most use cases." },
   { path = "std::collections::HashSet", reason = "Use `rustc_hash::FxHashSet` instead, which is typically faster for most use cases." },
-  { path = "std::collections::BTreeMap", reason = "Use `rustc_hash::FxHashMap` instead, which is typically faster for most use cases." },
+  { path = "std::collections::BTreeMap", reason = "Use `rustc_hash::FxHashMap` instead for better performance when ordered iteration and range operations are not needed. If you require sorted keys or range queries, BTreeMap is the appropriate choice." },
 ]
 disallowed-methods = [
   { path = "str::to_ascii_lowercase", reason = "To avoid unecessary allocation, use `cow_utils::CowUtils::cow_to_ascii_lowercase` instead." },

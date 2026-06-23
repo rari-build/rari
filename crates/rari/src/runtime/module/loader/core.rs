@@ -640,15 +640,13 @@ export default {{}};
                         && let Some(referrer_dir) = referrer_path.parent()
                     {
                         let resolved = referrer_dir.join(specifier_str);
-                        if let Ok(canonical) = resolved.canonicalize() {
-                            return if canonical.exists() {
-                                None
-                            } else {
-                                Some(ModuleLoadResponse::Sync(Err(JsErrorBox::generic(
-                                    "Module not found",
-                                ))))
-                            };
-                        }
+                        return if resolved.canonicalize().is_ok() {
+                            None
+                        } else {
+                            Some(ModuleLoadResponse::Sync(Err(JsErrorBox::generic(
+                                "Module not found",
+                            ))))
+                        };
                     }
                     return None;
                 } else {
@@ -1562,7 +1560,13 @@ impl ModuleLoader for RariModuleLoader {
                         let source_path = Path::new(source_dir);
                         let parent_dir = source_path.parent().unwrap_or_else(|| Path::new(""));
 
-                        let remaining_with_ext = if remaining.contains('.') {
+                        let remaining_with_ext = if remaining.ends_with(".ts")
+                            || remaining.ends_with(".js")
+                            || remaining.ends_with(".tsx")
+                            || remaining.ends_with(".jsx")
+                            || remaining.ends_with(".mjs")
+                            || remaining.ends_with(".cjs")
+                        {
                             remaining.to_string()
                         } else {
                             format!("{remaining}.ts")
@@ -1572,7 +1576,13 @@ impl ModuleLoader for RariModuleLoader {
                     } else {
                         let remaining = specifier.strip_prefix("./").unwrap_or(specifier);
 
-                        let remaining_with_ext = if remaining.contains('.') {
+                        let remaining_with_ext = if remaining.ends_with(".ts")
+                            || remaining.ends_with(".js")
+                            || remaining.ends_with(".tsx")
+                            || remaining.ends_with(".jsx")
+                            || remaining.ends_with(".mjs")
+                            || remaining.ends_with(".cjs")
+                        {
                             remaining.to_string()
                         } else {
                             format!("{remaining}.ts")

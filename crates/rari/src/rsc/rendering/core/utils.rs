@@ -90,13 +90,13 @@ pub fn transform_imports_for_hmr(source: &str) -> String {
                                 let alias_name = parts[1].trim();
                                 let _ = writeln!(
                                     result,
-                                    "if (typeof {alias_name} === 'undefined') {{ var {alias_name} = (globalThis['~rsc'].functions && globalThis['~rsc'].functions.{original_name} && globalThis['~rsc'].functions.{original_name}.['~rsc_original']) ? globalThis['~rsc'].functions.{original_name}.['~rsc_original'] : (globalThis['~rsc'].functions && globalThis['~rsc'].functions.{original_name}) || globalThis.{alias_name} || (function(...args) {{ return Promise.resolve(null); }}); }}"
+                                    "if (typeof {alias_name} === 'undefined') {{ var {alias_name} = (globalThis['~rsc'].functions && globalThis['~rsc'].functions.{original_name} && globalThis['~rsc'].functions.{original_name}['~rsc_original']) ? globalThis['~rsc'].functions.{original_name}['~rsc_original'] : (globalThis['~rsc'].functions && globalThis['~rsc'].functions.{original_name}) || globalThis.{alias_name} || (function(...args) {{ return Promise.resolve(null); }}); }}"
                                 );
                             }
                         } else {
                             let _ = writeln!(
                                 result,
-                                "if (typeof {import_name} === 'undefined') {{ var {import_name} = (globalThis['~rsc'].functions && globalThis['~rsc'].functions.{import_name} && globalThis['~rsc'].functions.{import_name}.['~rsc_original']) ? globalThis['~rsc'].functions.{import_name}.['~rsc_original'] : (globalThis['~rsc'].functions && globalThis['~rsc'].functions.{import_name}) || globalThis.{import_name} || (function(...args) {{ return Promise.resolve(null); }}); }}"
+                                "if (typeof {import_name} === 'undefined') {{ var {import_name} = (globalThis['~rsc'].functions && globalThis['~rsc'].functions.{import_name} && globalThis['~rsc'].functions.{import_name}['~rsc_original']) ? globalThis['~rsc'].functions.{import_name}['~rsc_original'] : (globalThis['~rsc'].functions && globalThis['~rsc'].functions.{import_name}) || globalThis.{import_name} || (function(...args) {{ return Promise.resolve(null); }}); }}"
                             );
                         }
                     }

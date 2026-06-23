@@ -250,12 +250,7 @@ pub fn op_read_line_prompt(
     #[string] prompt_text: &str,
     #[string] default_value: &str,
 ) -> Result<Option<String>, JsReadlineError> {
-    #[expect(
-        clippy::expect_used,
-        reason = "Editor initialization in controlled environment"
-    )]
-    let mut editor =
-        Editor::<(), rustyline::history::DefaultHistory>::new().expect("Failed to create editor.");
+    let mut editor = Editor::<(), rustyline::history::DefaultHistory>::new()?;
 
     editor.set_keyseq_timeout(Some(1));
     editor.bind_sequence(KeyEvent(KeyCode::Esc, Modifiers::empty()), Cmd::Interrupt);
