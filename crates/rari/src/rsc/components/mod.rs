@@ -74,8 +74,10 @@ impl ComponentRegistry {
         dependencies: ComponentDependencies,
     ) -> Result<(), String> {
         let component_id = Self::normalize_id(id).into_owned();
-        let dependencies: ComponentDependencies =
-            dependencies.into_iter().map(|dep| Self::normalize_id(&dep).into_owned()).collect();
+        let dependencies: ComponentDependencies = dependencies
+            .into_iter()
+            .map(|dep| Self::normalize_id(&dep).into_owned())
+            .collect();
         let deps_set: FxHashSet<String> = dependencies.iter().cloned().collect();
 
         if let Some(existing) = self.components.get(&component_id)
@@ -116,7 +118,8 @@ impl ComponentRegistry {
             },
         );
 
-        self.dependency_graph.insert(component_id.clone(), deps_set.clone());
+        self.dependency_graph
+            .insert(component_id.clone(), deps_set.clone());
 
         for dep in deps_set {
             self.reverse_dependency_graph
@@ -159,12 +162,16 @@ impl ComponentRegistry {
     #[cfg(test)]
     pub fn has_been_initially_loaded(&self, id: &str) -> bool {
         let normalized_id = Self::normalize_id(id);
-        self.components.get(normalized_id.as_ref()).is_some_and(|c| c.initially_loaded)
+        self.components
+            .get(normalized_id.as_ref())
+            .is_some_and(|c| c.initially_loaded)
     }
 
     pub fn is_component_loaded(&self, id: &str) -> bool {
         let normalized_id = Self::normalize_id(id);
-        self.components.get(normalized_id.as_ref()).is_some_and(|c| c.is_loaded)
+        self.components
+            .get(normalized_id.as_ref())
+            .is_some_and(|c| c.is_loaded)
     }
 
     pub fn get_component(&self, id: &str) -> Option<&TransformedComponent> {
@@ -253,7 +260,9 @@ impl ComponentRegistry {
     #[cfg(test)]
     pub fn get_dependencies(&self, component_id: &str) -> Option<ComponentDependencies> {
         let normalized_id = Self::normalize_id(component_id);
-        self.dependency_graph.get(normalized_id.as_ref()).map(|deps| deps.iter().cloned().collect())
+        self.dependency_graph
+            .get(normalized_id.as_ref())
+            .map(|deps| deps.iter().cloned().collect())
     }
 
     #[cfg(test)]
@@ -276,7 +285,8 @@ impl ComponentRegistry {
             component.module_specifier = Some(specifier.clone());
             component.is_loaded = true;
 
-            self.specifier_to_id.insert(specifier, normalized_id.into_owned());
+            self.specifier_to_id
+                .insert(specifier, normalized_id.into_owned());
         }
     }
 
@@ -292,17 +302,24 @@ impl ComponentRegistry {
     #[cfg(test)]
     pub fn get_module_id(&self, id: &str) -> Option<usize> {
         let normalized_id = Self::normalize_id(id);
-        self.components.get(normalized_id.as_ref()).and_then(|c| c.module_id)
+        self.components
+            .get(normalized_id.as_ref())
+            .and_then(|c| c.module_id)
     }
 
     #[cfg(test)]
     pub fn get_module_specifier(&self, id: &str) -> Option<&str> {
         let normalized_id = Self::normalize_id(id);
-        self.components.get(normalized_id.as_ref()).and_then(|c| c.module_specifier.as_deref())
+        self.components
+            .get(normalized_id.as_ref())
+            .and_then(|c| c.module_specifier.as_deref())
     }
 
     pub fn get_by_specifier(&self, specifier: &str) -> Option<TransformedComponent> {
-        self.specifier_to_id.get(specifier).and_then(|id| self.components.get(id)).cloned()
+        self.specifier_to_id
+            .get(specifier)
+            .and_then(|id| self.components.get(id))
+            .cloned()
     }
 
     pub fn create_module_specifier(&self, component_id: &str) -> String {
@@ -328,7 +345,10 @@ impl ComponentRegistry {
     #[cfg(test)]
     pub fn is_module_stale(&self, id: &str) -> bool {
         let normalized_id = Self::normalize_id(id);
-        self.components.get(normalized_id.as_ref()).map(|c| c.is_stale).unwrap_or(false)
+        self.components
+            .get(normalized_id.as_ref())
+            .map(|c| c.is_stale)
+            .unwrap_or(false)
     }
 
     pub fn get_stale_modules(&self) -> Vec<String> {
@@ -350,7 +370,9 @@ impl ComponentRegistry {
 
     pub fn get_module_reload_timestamp(&self, id: &str) -> Option<Instant> {
         let normalized_id = Self::normalize_id(id);
-        self.components.get(normalized_id.as_ref()).and_then(|c| c.last_reload_timestamp)
+        self.components
+            .get(normalized_id.as_ref())
+            .and_then(|c| c.last_reload_timestamp)
     }
 
     pub fn register_client_reference(&mut self, id: &str, file_path: &str, export_name: &str) {
@@ -366,7 +388,10 @@ impl ComponentRegistry {
 
     pub fn is_client_reference(&self, id: &str) -> bool {
         let normalized_id = Self::normalize_id(id);
-        self.components.get(normalized_id.as_ref()).map(|c| c.is_client_reference).unwrap_or(false)
+        self.components
+            .get(normalized_id.as_ref())
+            .map(|c| c.is_client_reference)
+            .unwrap_or(false)
     }
 
     #[cfg(test)]
@@ -464,7 +489,9 @@ mod tests {
 
     #[test]
     fn test_component_prop() {
-        let prop = ComponentProp { value: "test value".to_string() };
+        let prop = ComponentProp {
+            value: "test value".to_string(),
+        };
         assert_eq!(prop.value, "test value");
     }
 
@@ -482,8 +509,9 @@ mod tests {
             )
             .expect("Failed to register test component");
 
-        let component =
-            registry.get_component("TestComponent").expect("TestComponent should be registered");
+        let component = registry
+            .get_component("TestComponent")
+            .expect("TestComponent should be registered");
         assert_eq!(component.id, "TestComponent");
         assert_eq!(
             component.transformed_source,
@@ -516,13 +544,21 @@ mod tests {
             .expect("Failed to register ComponentB");
 
         registry
-            .register_component("ComponentC", "source C", "transformed C".to_string(), smallvec![])
+            .register_component(
+                "ComponentC",
+                "source C",
+                "transformed C".to_string(),
+                smallvec![],
+            )
             .expect("Failed to register ComponentC");
 
         let order = registry.get_unloaded_components_in_order();
 
         assert!(
-            order.iter().position(|id| id == "ComponentC").expect("ComponentC should be in order")
+            order
+                .iter()
+                .position(|id| id == "ComponentC")
+                .expect("ComponentC should be in order")
                 < order
                     .iter()
                     .position(|id| id == "ComponentB")
@@ -530,7 +566,10 @@ mod tests {
         );
 
         assert!(
-            order.iter().position(|id| id == "ComponentB").expect("ComponentB should be in order")
+            order
+                .iter()
+                .position(|id| id == "ComponentB")
+                .expect("ComponentB should be in order")
                 < order
                     .iter()
                     .position(|id| id == "ComponentA")
@@ -581,10 +620,19 @@ mod tests {
     fn test_normalize_component_id() {
         let registry = ComponentRegistry::new();
 
-        assert_eq!(registry.normalize_component_id("./component.tsx"), "component");
-        assert_eq!(registry.normalize_component_id("../utils/helper.js"), "helper");
+        assert_eq!(
+            registry.normalize_component_id("./component.tsx"),
+            "component"
+        );
+        assert_eq!(
+            registry.normalize_component_id("../utils/helper.js"),
+            "helper"
+        );
         assert_eq!(registry.normalize_component_id("Button"), "Button");
-        assert_eq!(registry.normalize_component_id("components/Button.jsx"), "components/Button");
+        assert_eq!(
+            registry.normalize_component_id("components/Button.jsx"),
+            "components/Button"
+        );
     }
 
     #[test]
@@ -660,7 +708,10 @@ mod tests {
                 "ComponentA",
                 "source A",
                 "transformed A".to_string(),
-                smallvec!["utils\\ComponentB".to_string(), "lib/ComponentC".to_string()],
+                smallvec![
+                    "utils\\ComponentB".to_string(),
+                    "lib/ComponentC".to_string()
+                ],
             )
             .expect("Failed to register ComponentA");
 
@@ -713,7 +764,10 @@ mod tests {
         assert!(registry.has_module_info("components\\Button"));
         assert_eq!(registry.get_module_id("components/Button"), Some(42));
         assert_eq!(registry.get_module_id("components\\Button"), Some(42));
-        assert_eq!(registry.get_module_specifier("components/Button"), Some("file:///button.js"));
+        assert_eq!(
+            registry.get_module_specifier("components/Button"),
+            Some("file:///button.js")
+        );
     }
 
     #[test]
@@ -721,7 +775,12 @@ mod tests {
         let mut registry = ComponentRegistry::new();
 
         registry
-            .register_component("ui\\Button", "source", "transformed".to_string(), smallvec![])
+            .register_component(
+                "ui\\Button",
+                "source",
+                "transformed".to_string(),
+                smallvec![],
+            )
             .expect("Failed to register component");
 
         registry.register_client_reference("ui\\Button", "src\\components\\Button.tsx", "default");

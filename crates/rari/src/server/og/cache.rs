@@ -31,7 +31,9 @@ impl OgImageCache {
     }
 
     fn resolve_cache_dir(project_path: &Path) -> PathBuf {
-        let is_production = std::env::var("NODE_ENV").map(|v| v == "production").unwrap_or(false);
+        let is_production = std::env::var("NODE_ENV")
+            .map(|v| v == "production")
+            .unwrap_or(false);
 
         if is_production {
             PathBuf::from("/tmp/rari-og-cache")
@@ -66,7 +68,11 @@ impl OgImageCache {
 
         let path = self.cache_filename(key);
         if let Ok(data) = tokio::fs::read(&path).await {
-            if let Err(e) = self.handler.set(&Self::ns(key), data.clone(), OG_TTL_SECS).await {
+            if let Err(e) = self
+                .handler
+                .set(&Self::ns(key), data.clone(), OG_TTL_SECS)
+                .await
+            {
                 tracing::debug!("OG image cache write-through to handler failed: {}", e);
             }
             return Some(data);
@@ -85,7 +91,9 @@ impl OgImageCache {
         let path = self.cache_filename(&key);
         tokio::fs::write(&path, &value).await?;
 
-        self.handler.set(&Self::ns(&key), value, OG_TTL_SECS).await?;
+        self.handler
+            .set(&Self::ns(&key), value, OG_TTL_SECS)
+            .await?;
         Ok(())
     }
 
@@ -136,7 +144,12 @@ impl OgImageCache {
                 }
             };
 
-            if entry.path().extension().map(|e| e == "webp").unwrap_or(false) {
+            if entry
+                .path()
+                .extension()
+                .map(|e| e == "webp")
+                .unwrap_or(false)
+            {
                 let path = entry.path();
                 if let Err(e) = tokio::fs::remove_file(&path).await
                     && first_err.is_none()
@@ -146,7 +159,11 @@ impl OgImageCache {
             }
         }
 
-        if let Some(e) = first_err { Err(e) } else { Ok(()) }
+        if let Some(e) = first_err {
+            Err(e)
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -177,7 +194,10 @@ mod tests {
         let cache = fresh_cache("basic", 5);
         let data = vec![1, 2, 3, 4, 5];
 
-        cache.insert("/test/route".to_string(), data.clone()).await.expect("insert");
+        cache
+            .insert("/test/route".to_string(), data.clone())
+            .await
+            .expect("insert");
         assert_eq!(cache.get("/test/route").await, Some(data));
         cache.clear().await.expect("clear");
     }
@@ -187,8 +207,14 @@ mod tests {
         let cache = fresh_cache("remove", 5);
         let data = vec![1, 2, 3, 4, 5];
 
-        cache.insert("/test/route".to_string(), data.clone()).await.expect("insert");
-        assert_eq!(cache.remove("/test/route").await.expect("remove"), Some(data));
+        cache
+            .insert("/test/route".to_string(), data.clone())
+            .await
+            .expect("insert");
+        assert_eq!(
+            cache.remove("/test/route").await.expect("remove"),
+            Some(data)
+        );
         assert!(cache.get("/test/route").await.is_none());
     }
 
@@ -197,8 +223,14 @@ mod tests {
         let cache = fresh_cache("persistence", 1);
         let data = vec![10, 20, 30, 40, 50];
 
-        cache.insert("/route1".to_string(), data.clone()).await.expect("insert");
-        cache.insert("/route2".to_string(), vec![1, 2, 3]).await.expect("insert");
+        cache
+            .insert("/route1".to_string(), data.clone())
+            .await
+            .expect("insert");
+        cache
+            .insert("/route2".to_string(), vec![1, 2, 3])
+            .await
+            .expect("insert");
 
         assert_eq!(cache.get("/route1").await, Some(data));
         cache.clear().await.expect("clear");
@@ -209,7 +241,10 @@ mod tests {
         let cache = fresh_cache("handler-round-trip", 8);
         let payload = b"webp-bytes".to_vec();
 
-        cache.insert("k1".to_string(), payload.clone()).await.expect("insert");
+        cache
+            .insert("k1".to_string(), payload.clone())
+            .await
+            .expect("insert");
         assert_eq!(cache.get("k1").await, Some(payload));
         cache.clear().await.expect("clear");
     }
@@ -220,17 +255,29 @@ mod tests {
         let _ = std::fs::remove_dir_all(&project_path);
 
         let handler_a = Arc::new(MemoryCacheHandler::with_config(
-            crate::server::cache::handler::MemoryConfig { max_entries: 8, default_ttl: 0 },
+            crate::server::cache::handler::MemoryConfig {
+                max_entries: 8,
+                default_ttl: 0,
+            },
         ));
         let cache_a = OgImageCache::with_handler(handler_a, &project_path);
 
         let payload = vec![0xDE, 0xAD, 0xBE, 0xEF];
-        cache_a.insert("/persistent".to_string(), payload.clone()).await.expect("insert");
-        cache_a.get("/persistent").await.expect("cache_a in-memory hit");
+        cache_a
+            .insert("/persistent".to_string(), payload.clone())
+            .await
+            .expect("insert");
+        cache_a
+            .get("/persistent")
+            .await
+            .expect("cache_a in-memory hit");
         drop(cache_a);
 
         let handler_b = Arc::new(MemoryCacheHandler::with_config(
-            crate::server::cache::handler::MemoryConfig { max_entries: 8, default_ttl: 0 },
+            crate::server::cache::handler::MemoryConfig {
+                max_entries: 8,
+                default_ttl: 0,
+            },
         ));
         let cache_b = OgImageCache::with_handler(
             Arc::clone(&handler_b) as Arc<dyn CacheHandler>,
@@ -238,10 +285,18 @@ mod tests {
         );
 
         let from_disk = cache_b.get("/persistent").await;
-        assert_eq!(from_disk, Some(payload.clone()), "expected disk-fallback hit");
+        assert_eq!(
+            from_disk,
+            Some(payload.clone()),
+            "expected disk-fallback hit"
+        );
 
         let in_new_handler = handler_b.get("og:/persistent").await.unwrap();
-        assert_eq!(in_new_handler, Some(payload.clone()), "write-through to new handler missing");
+        assert_eq!(
+            in_new_handler,
+            Some(payload.clone()),
+            "write-through to new handler missing"
+        );
 
         cache_b.clear().await.expect("clear");
         let _ = std::fs::remove_dir_all(&project_path);

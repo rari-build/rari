@@ -64,7 +64,10 @@ pub fn create_client_component_id(file_path: &str) -> String {
 
 pub fn get_component_id(file_path: &str) -> String {
     let path = std::path::Path::new(file_path);
-    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("Unknown");
+    let stem = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("Unknown");
 
     let mut chars = stem.chars();
     match chars.next() {
@@ -103,5 +106,11 @@ pub fn create_layout_context(
     headers: FxHashMap<String, String>,
     pathname: String,
 ) -> LayoutRenderContext {
-    LayoutRenderContext { params, search_params, headers, pathname, metadata: None }
+    LayoutRenderContext {
+        params,
+        search_params,
+        headers,
+        pathname,
+        metadata: None,
+    }
 }

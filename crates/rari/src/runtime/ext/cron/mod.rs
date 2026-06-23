@@ -20,5 +20,8 @@ impl ExtensionTrait<()> for deno_cron::deno_cron {
 }
 
 pub fn extensions(is_snapshot: bool) -> Vec<Extension> {
-    vec![deno_cron::deno_cron::build((), is_snapshot), init_cron::build((), is_snapshot)]
+    vec![
+        deno_cron::deno_cron::build((), is_snapshot),
+        init_cron::build((), is_snapshot),
+    ]
 }

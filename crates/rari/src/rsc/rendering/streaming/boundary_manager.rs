@@ -111,6 +111,9 @@ impl SuspenseBoundaryManager {
     }
 
     pub async fn has_rendered_skeleton(&self, boundary_id: &str) -> bool {
-        self.rendered_skeleton_ids.lock().await.contains(boundary_id)
+        self.rendered_skeleton_ids
+            .lock()
+            .await
+            .contains(boundary_id)
     }
 }

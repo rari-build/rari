@@ -62,7 +62,11 @@ pub struct CjsCodeAnalyzer {
 
 impl CjsCodeAnalyzer {
     pub fn new(fs: deno_fs::FileSystemRc, cjs_tracker: Arc<Resolver>) -> Self {
-        Self { fs, cache: std::cell::RefCell::new(FxHashMap::default()), cjs_tracker }
+        Self {
+            fs,
+            cache: std::cell::RefCell::new(FxHashMap::default()),
+            cjs_tracker,
+        }
     }
 
     async fn inner_cjs_analysis(
@@ -122,7 +126,9 @@ impl CjsCodeAnalyzer {
         .await
         .expect("task panicked")?;
 
-        self.cache.borrow_mut().insert(specifier.as_str().to_string(), analysis.clone());
+        self.cache
+            .borrow_mut()
+            .insert(specifier.as_str().to_string(), analysis.clone());
         Ok(analysis)
     }
 
@@ -193,7 +199,9 @@ impl node_resolver::analyze::CjsCodeAnalyzer for CjsCodeAnalyzer {
             }
         };
 
-        let analysis = self.inner_cjs_analysis(specifier, &source, esm_analysis_mode).await?;
+        let analysis = self
+            .inner_cjs_analysis(specifier, &source, esm_analysis_mode)
+            .await?;
 
         match analysis {
             CjsAnalysis::Esm => Ok(ExtNodeCjsAnalysis::Esm(source, None)),

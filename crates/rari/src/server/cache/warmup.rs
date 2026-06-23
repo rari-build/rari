@@ -27,7 +27,10 @@ pub async fn warm_cache(state: &ServerState) {
         return;
     }
 
-    info!("[rari] Cache warmup: Pre-rendering {} routes...", paths.len());
+    info!(
+        "[rari] Cache warmup: Pre-rendering {} routes...",
+        paths.len()
+    );
     let start = Instant::now();
 
     let success_count = Arc::new(AtomicUsize::new(0));
@@ -65,8 +68,9 @@ async fn warm_route(
     app_router: &Arc<crate::server::routing::app_router::AppRouter>,
     path: &str,
 ) -> Result<(), String> {
-    let route_match =
-        app_router.match_route(path).map_err(|e| format!("Route match failed: {}", e))?;
+    let route_match = app_router
+        .match_route(path)
+        .map_err(|e| format!("Route match failed: {}", e))?;
 
     if route_match.loading.is_some() {
         return Ok(());
@@ -77,10 +81,11 @@ async fn warm_route(
     let layout_renderer =
         LayoutRenderer::with_shared_cache(state.renderer.clone(), state.layout_html_cache.clone());
 
-    let request_context =
-        Arc::new(crate::server::middleware::request_context::RequestContext::new(
+    let request_context = Arc::new(
+        crate::server::middleware::request_context::RequestContext::new(
             route_match.route.path.clone(),
-        ));
+        ),
+    );
 
     let rsc_wire_format = layout_renderer
         .render_route_by_mode(&route_match, &context, Some(request_context))

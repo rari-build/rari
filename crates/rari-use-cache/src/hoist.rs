@@ -6,7 +6,10 @@ fn id(name: &str) -> Ident {
 }
 
 fn id_name(name: &str) -> IdentName {
-    IdentName { span: DUMMY_SP, sym: name.into() }
+    IdentName {
+        span: DUMMY_SP,
+        sym: name.into(),
+    }
 }
 
 fn ident_expr(name: &str) -> Box<Expr> {
@@ -14,11 +17,19 @@ fn ident_expr(name: &str) -> Box<Expr> {
 }
 
 fn str_lit(s: &str) -> Str {
-    Str { span: DUMMY_SP, value: s.into(), raw: None }
+    Str {
+        span: DUMMY_SP,
+        value: s.into(),
+        raw: None,
+    }
 }
 
 fn num(n: f64) -> Number {
-    Number { span: DUMMY_SP, value: n, raw: None }
+    Number {
+        span: DUMMY_SP,
+        value: n,
+        raw: None,
+    }
 }
 
 fn null_expr() -> Box<Expr> {
@@ -50,7 +61,11 @@ fn strip_directives_from_body(body: &BlockStmt) -> BlockStmt {
         stmts.push(stmt.clone());
     }
 
-    BlockStmt { span: body.span, ctxt: body.ctxt, stmts }
+    BlockStmt {
+        span: body.span,
+        ctxt: body.ctxt,
+        stmts,
+    }
 }
 
 fn create_inner_function(
@@ -63,15 +78,26 @@ fn create_inner_function(
         new_params.push(Param {
             span: DUMMY_SP,
             decorators: vec![],
-            pat: Pat::Ident(BindingIdent { id: id("$$ACTION_BOUND_ARGS"), type_ann: None }),
+            pat: Pat::Ident(BindingIdent {
+                id: id("$$ACTION_BOUND_ARGS"),
+                type_ann: None,
+            }),
         });
     }
     new_params.extend(fn_decl.function.params.clone());
 
-    let clean_body = fn_decl.function.body.as_ref().map(strip_directives_from_body);
+    let clean_body = fn_decl
+        .function
+        .body
+        .as_ref()
+        .map(strip_directives_from_body);
 
     let fn_expr = Expr::Fn(FnExpr {
-        ident: Some(Ident::new(fn_decl.ident.sym.clone(), DUMMY_SP, Default::default())),
+        ident: Some(Ident::new(
+            fn_decl.ident.sym.clone(),
+            DUMMY_SP,
+            Default::default(),
+        )),
         function: Box::new(Function {
             span: DUMMY_SP,
             ctxt: Default::default(),
@@ -92,7 +118,10 @@ fn create_inner_function(
         declare: false,
         decls: vec![VarDeclarator {
             span: DUMMY_SP,
-            name: Pat::Ident(BindingIdent { id: id(inner_name), type_ann: None }),
+            name: Pat::Ident(BindingIdent {
+                id: id(inner_name),
+                type_ann: None,
+            }),
             init: Some(Box::new(fn_expr)),
             definite: false,
         }],
@@ -111,9 +140,18 @@ fn create_name_define_statement(inner_name: &str, export_name: &str) -> ModuleIt
                 prop: MemberProp::Ident(id_name("defineProperty")),
             }))),
             args: vec![
-                ExprOrSpread { spread: None, expr: ident_expr(inner_name) },
-                ExprOrSpread { spread: None, expr: Box::new(Expr::Lit(Lit::Str(str_lit("name")))) },
-                ExprOrSpread { spread: None, expr: create_value_descriptor(export_name) },
+                ExprOrSpread {
+                    spread: None,
+                    expr: ident_expr(inner_name),
+                },
+                ExprOrSpread {
+                    spread: None,
+                    expr: Box::new(Expr::Lit(Lit::Str(str_lit("name")))),
+                },
+                ExprOrSpread {
+                    spread: None,
+                    expr: create_value_descriptor(export_name),
+                },
             ],
             type_args: None,
         })),
@@ -166,8 +204,14 @@ fn create_cache_wrapper(
                                 spread: None,
                                 expr: Box::new(Expr::Lit(Lit::Num(num(param_count as f64)))),
                             },
-                            ExprOrSpread { spread: None, expr: ident_expr(inner_name) },
-                            ExprOrSpread { spread: None, expr: create_args_slice_expr() },
+                            ExprOrSpread {
+                                spread: None,
+                                expr: ident_expr(inner_name),
+                            },
+                            ExprOrSpread {
+                                spread: None,
+                                expr: create_args_slice_expr(),
+                            },
                         ],
                         type_args: None,
                     }))),
@@ -187,7 +231,10 @@ fn create_cache_wrapper(
         declare: false,
         decls: vec![VarDeclarator {
             span: DUMMY_SP,
-            name: Pat::Ident(BindingIdent { id: id(cache_name), type_ann: None }),
+            name: Pat::Ident(BindingIdent {
+                id: id(cache_name),
+                type_ann: None,
+            }),
             init: Some(Box::new(inner_fn)),
             definite: false,
         }],
@@ -214,7 +261,10 @@ fn create_args_slice_expr() -> Box<Expr> {
         span: DUMMY_SP,
         ctxt: Default::default(),
         callee: Callee::Expr(Box::new(call_callee)),
-        args: vec![ExprOrSpread { spread: None, expr: ident_expr("arguments") }],
+        args: vec![ExprOrSpread {
+            spread: None,
+            expr: ident_expr("arguments"),
+        }],
         type_args: None,
     }))
 }
@@ -227,9 +277,18 @@ fn create_register_ref_statement(cache_name: &str, ref_id: &str) -> ModuleItem {
             ctxt: Default::default(),
             callee: Callee::Expr(ident_expr("registerServerReference")),
             args: vec![
-                ExprOrSpread { spread: None, expr: ident_expr(cache_name) },
-                ExprOrSpread { spread: None, expr: Box::new(Expr::Lit(Lit::Str(str_lit(ref_id)))) },
-                ExprOrSpread { spread: None, expr: null_expr() },
+                ExprOrSpread {
+                    spread: None,
+                    expr: ident_expr(cache_name),
+                },
+                ExprOrSpread {
+                    spread: None,
+                    expr: Box::new(Expr::Lit(Lit::Str(str_lit(ref_id)))),
+                },
+                ExprOrSpread {
+                    spread: None,
+                    expr: null_expr(),
+                },
             ],
             type_args: None,
         })),
@@ -253,8 +312,15 @@ pub fn create_cache_declarations(
     let param_count =
         input.fn_decl.function.params.len() + if input.closure_vars.is_empty() { 0 } else { 1 };
 
-    extra_items.push(create_inner_function(input.fn_decl, input.closure_vars, input.inner_name));
-    extra_items.push(create_name_define_statement(input.inner_name, input.export_name));
+    extra_items.push(create_inner_function(
+        input.fn_decl,
+        input.closure_vars,
+        input.inner_name,
+    ));
+    extra_items.push(create_name_define_statement(
+        input.inner_name,
+        input.export_name,
+    ));
     extra_items.push(create_cache_wrapper(
         input.cache_name,
         input.inner_name,
@@ -262,7 +328,10 @@ pub fn create_cache_declarations(
         input.cache_kind,
         param_count,
     ));
-    extra_items.push(create_register_ref_statement(input.cache_name, input.ref_id));
+    extra_items.push(create_register_ref_statement(
+        input.cache_name,
+        input.ref_id,
+    ));
 }
 
 /// Build the `apply` call argument array: `[$$ACTION_BOUND_ARGS, ...args]` or `[...args]`.
@@ -270,15 +339,24 @@ fn build_apply_args_array(closure_vars_empty: bool) -> ArrayLit {
     if closure_vars_empty {
         ArrayLit {
             span: DUMMY_SP,
-            elems: vec![Some(ExprOrSpread { spread: Some(DUMMY_SP), expr: ident_expr("args") })],
+            elems: vec![Some(ExprOrSpread {
+                spread: Some(DUMMY_SP),
+                expr: ident_expr("args"),
+            })],
         }
     } else {
         let mut elems: Vec<Option<ExprOrSpread>> = vec![Some(ExprOrSpread {
             spread: None,
             expr: Box::new(Expr::Ident(id("$$ACTION_BOUND_ARGS"))),
         })];
-        elems.push(Some(ExprOrSpread { spread: Some(DUMMY_SP), expr: ident_expr("args") }));
-        ArrayLit { span: DUMMY_SP, elems }
+        elems.push(Some(ExprOrSpread {
+            spread: Some(DUMMY_SP),
+            expr: ident_expr("args"),
+        }));
+        ArrayLit {
+            span: DUMMY_SP,
+            elems,
+        }
     }
 }
 
@@ -294,8 +372,14 @@ fn build_try_body(cache_name: &str, apply_args_arr: ArrayLit) -> Stmt {
                 prop: MemberProp::Ident(id_name("apply")),
             }))),
             args: vec![
-                ExprOrSpread { spread: None, expr: null_expr() },
-                ExprOrSpread { spread: None, expr: Box::new(Expr::Array(apply_args_arr.clone())) },
+                ExprOrSpread {
+                    spread: None,
+                    expr: null_expr(),
+                },
+                ExprOrSpread {
+                    spread: None,
+                    expr: Box::new(Expr::Array(apply_args_arr.clone())),
+                },
             ],
             type_args: None,
         })
@@ -313,7 +397,10 @@ fn build_try_body(cache_name: &str, apply_args_arr: ArrayLit) -> Stmt {
         },
         handler: Some(CatchClause {
             span: DUMMY_SP,
-            param: Some(Pat::Ident(BindingIdent { id: id("e"), type_ann: None })),
+            param: Some(Pat::Ident(BindingIdent {
+                id: id("e"),
+                type_ann: None,
+            })),
             body: BlockStmt {
                 span: DUMMY_SP,
                 ctxt: Default::default(),
@@ -353,7 +440,10 @@ fn build_try_body(cache_name: &str, apply_args_arr: ArrayLit) -> Stmt {
                         })),
                         alt: None,
                     }),
-                    Stmt::Throw(ThrowStmt { span: DUMMY_SP, arg: ident_expr("e") }),
+                    Stmt::Throw(ThrowStmt {
+                        span: DUMMY_SP,
+                        arg: ident_expr("e"),
+                    }),
                 ],
             },
         }),
@@ -379,7 +469,10 @@ fn build_rest_args_param() -> Param {
         pat: Pat::Rest(RestPat {
             span: DUMMY_SP,
             dot3_token: DUMMY_SP,
-            arg: Box::new(Pat::Ident(BindingIdent { id: id("args"), type_ann: None })),
+            arg: Box::new(Pat::Ident(BindingIdent {
+                id: id("args"),
+                type_ann: None,
+            })),
             type_ann: None,
         }),
     }
@@ -428,7 +521,10 @@ pub fn create_bound_replacement(
             expr: Box::new(Expr::Lit(Lit::Str(str_lit(ref_id)))),
         }];
         for var_name in closure_vars {
-            enc_args.push(ExprOrSpread { spread: None, expr: ident_expr(var_name) });
+            enc_args.push(ExprOrSpread {
+                spread: None,
+                expr: ident_expr(var_name),
+            });
         }
         let bound_arg_call = Expr::Call(CallExpr {
             span: DUMMY_SP,
@@ -445,7 +541,10 @@ pub fn create_bound_replacement(
             params: vec![Pat::Rest(RestPat {
                 span: DUMMY_SP,
                 dot3_token: DUMMY_SP,
-                arg: Box::new(Pat::Ident(BindingIdent { id: id("args"), type_ann: None })),
+                arg: Box::new(Pat::Ident(BindingIdent {
+                    id: id("args"),
+                    type_ann: None,
+                })),
                 type_ann: None,
             })],
             body: Box::new(BlockStmtOrExpr::BlockStmt(inner_body)),
@@ -478,7 +577,10 @@ pub fn create_bound_replacement(
                 span: DUMMY_SP,
                 expr: Box::new(outer_arrow),
             }))),
-            args: vec![ExprOrSpread { spread: None, expr: Box::new(bound_arg_call) }],
+            args: vec![ExprOrSpread {
+                spread: None,
+                expr: Box::new(bound_arg_call),
+            }],
             type_args: None,
         }))
     };
@@ -490,7 +592,10 @@ pub fn create_bound_replacement(
         declare: false,
         decls: vec![VarDeclarator {
             span: DUMMY_SP,
-            name: Pat::Ident(BindingIdent { id: id(export_name), type_ann: None }),
+            name: Pat::Ident(BindingIdent {
+                id: id(export_name),
+                type_ann: None,
+            }),
             init: Some(final_init),
             definite: false,
         }],

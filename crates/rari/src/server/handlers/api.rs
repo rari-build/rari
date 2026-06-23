@@ -17,7 +17,13 @@ fn add_cors_headers(
     allow_credentials: bool,
     max_age: u32,
 ) {
-    add_api_cors_headers(response_headers, origin, allowed_origins, allow_credentials, max_age);
+    add_api_cors_headers(
+        response_headers,
+        origin,
+        allowed_origins,
+        allow_credentials,
+        max_age,
+    );
 }
 
 #[axum::debug_handler]
@@ -32,7 +38,9 @@ pub async fn api_cors_preflight(
         && let Some(methods) = api_handler.get_supported_methods(path)
     {
         let mut builder = Response::builder().status(StatusCode::NO_CONTENT);
-        let headers = builder.headers_mut().expect("Response builder should have headers");
+        let headers = builder
+            .headers_mut()
+            .expect("Response builder should have headers");
 
         let origin = request_headers.get("origin").and_then(|v| v.to_str().ok());
         let cors_config = state.config.cors_config();
@@ -55,7 +63,9 @@ pub async fn api_cors_preflight(
             headers.insert("Access-Control-Allow-Methods", methods_value);
         }
 
-        return builder.body(Body::empty()).expect("Valid preflight response");
+        return builder
+            .body(Body::empty())
+            .expect("Valid preflight response");
     }
 
     cors_preflight_response()
@@ -70,7 +80,11 @@ pub async fn handle_api_route(
     let method = req.method().to_string();
     let is_development = state.config.is_development();
 
-    let origin = req.headers().get("origin").and_then(|v| v.to_str().ok()).map(|s| s.to_string());
+    let origin = req
+        .headers()
+        .get("origin")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
     let cors_config = state.config.cors_config();
 
     let api_handler = match &state.api_route_handler {
@@ -136,7 +150,10 @@ pub async fn handle_api_route(
         }
     };
 
-    match api_handler.execute_handler(&route_match, req, is_development).await {
+    match api_handler
+        .execute_handler(&route_match, req, is_development)
+        .await
+    {
         Ok(mut response) => {
             let headers = response.headers_mut();
             if is_development {

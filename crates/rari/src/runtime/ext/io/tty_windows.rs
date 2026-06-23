@@ -19,7 +19,10 @@ use std::sync::Arc;
 use windows_sys::Win32::Foundation::FALSE;
 use windows_sys::Win32::System::Console as wincon;
 
-deno_core::extension!(deno_tty, ops = [op_set_raw, op_console_size, op_read_line_prompt],);
+deno_core::extension!(
+    deno_tty,
+    ops = [op_set_raw, op_console_size, op_read_line_prompt],
+);
 
 #[derive(Debug, deno_error::JsError)]
 pub enum TtyError {
@@ -102,8 +105,11 @@ fn op_set_raw(state: &mut OpState, rid: u32, is_raw: bool, cbreak: bool) -> Resu
         return Err(TtyError::Io(Error::last_os_error()));
     }
 
-    let new_mode =
-        if is_raw { mode_raw_input_on(original_mode) } else { mode_raw_input_off(original_mode) };
+    let new_mode = if is_raw {
+        mode_raw_input_on(original_mode)
+    } else {
+        mode_raw_input_off(original_mode)
+    };
 
     let stdin_state = state.borrow::<Arc<Mutex<WinTtyState>>>();
     let mut stdin_state = stdin_state.lock();
@@ -144,7 +150,11 @@ fn op_set_raw(state: &mut OpState, rid: u32, is_raw: bool, cbreak: bool) -> Resu
 
                 /* Save screen state before sending the VK_RETURN event */
                 let handle = CreateFileW(
-                    "conout$".encode_utf16().chain(Some(0)).collect::<Vec<_>>().as_ptr(),
+                    "conout$"
+                        .encode_utf16()
+                        .chain(Some(0))
+                        .collect::<Vec<_>>()
+                        .as_ptr(),
                     GENERIC_READ | GENERIC_WRITE,
                     FILE_SHARE_READ | FILE_SHARE_WRITE,
                     std::ptr::null(),
@@ -227,12 +237,14 @@ fn console_size_from_fd(
         // calculate the size of the visible window
         // * use over/under-flow protections b/c MSDN docs only imply that srWindow components are all non-negative
         // * ref: <https://docs.microsoft.com/en-us/windows/console/console-screen-buffer-info-str> @@ <https://archive.is/sfjnm>
-        let cols =
-            std::cmp::max(bufinfo.srWindow.Right as i32 - bufinfo.srWindow.Left as i32 + 1, 0)
-                as u32;
-        let rows =
-            std::cmp::max(bufinfo.srWindow.Bottom as i32 - bufinfo.srWindow.Top as i32 + 1, 0)
-                as u32;
+        let cols = std::cmp::max(
+            bufinfo.srWindow.Right as i32 - bufinfo.srWindow.Left as i32 + 1,
+            0,
+        ) as u32;
+        let rows = std::cmp::max(
+            bufinfo.srWindow.Bottom as i32 - bufinfo.srWindow.Top as i32 + 1,
+            0,
+        ) as u32;
 
         Ok(ConsoleSize { cols, rows })
     }

@@ -53,7 +53,11 @@ pub struct CorsConfig {
 
 impl Default for CorsConfig {
     fn default() -> Self {
-        Self { allowed_origins: vec![], allow_credentials: true, max_age: 86400 }
+        Self {
+            allowed_origins: vec![],
+            allow_credentials: true,
+            max_age: 86400,
+        }
     }
 }
 
@@ -74,7 +78,11 @@ pub struct CacheLayerConfig {
 
 impl Default for CacheLayerConfig {
     fn default() -> Self {
-        Self { handler: "memory".to_string(), max_entries: 1000, default_ttl_secs: 60 }
+        Self {
+            handler: "memory".to_string(),
+            max_entries: 1000,
+            default_ttl_secs: 60,
+        }
     }
 }
 
@@ -87,7 +95,10 @@ pub const CACHE_LAYER_FETCH: &str = "fetch";
 
 pub fn default_cache_layers() -> FxHashMap<String, CacheLayerConfig> {
     let mut layers = FxHashMap::default();
-    layers.insert(CACHE_LAYER_RESPONSE.to_string(), CacheLayerConfig::default());
+    layers.insert(
+        CACHE_LAYER_RESPONSE.to_string(),
+        CacheLayerConfig::default(),
+    );
     layers.insert(CACHE_LAYER_IMAGE.to_string(), CacheLayerConfig::default());
     layers.insert(CACHE_LAYER_OG.to_string(), CacheLayerConfig::default());
     layers.insert(CACHE_LAYER_LAYOUT.to_string(), CacheLayerConfig::default());
@@ -104,7 +115,9 @@ pub struct CacheConfig {
 
 impl Default for CacheConfig {
     fn default() -> Self {
-        Self { layers: default_cache_layers() }
+        Self {
+            layers: default_cache_layers(),
+        }
     }
 }
 
@@ -116,7 +129,11 @@ impl CacheConfig {
 
 impl Default for RedirectConfig {
     fn default() -> Self {
-        Self { allowed_hosts: vec![], allow_relative: true, allow_subdomains: false }
+        Self {
+            allowed_hosts: vec![],
+            allow_relative: true,
+            allow_subdomains: false,
+        }
     }
 }
 
@@ -142,7 +159,11 @@ impl Default for CspConfig {
             default_src: vec!["'self'".to_string()],
             script_src: vec!["'self'".to_string()],
             style_src: vec!["'self'".to_string()],
-            img_src: vec!["'self'".to_string(), "data:".to_string(), "https:".to_string()],
+            img_src: vec![
+                "'self'".to_string(),
+                "data:".to_string(),
+                "https:".to_string(),
+            ],
             font_src: vec!["'self'".to_string(), "data:".to_string()],
             connect_src: vec!["'self'".to_string(), "ws:".to_string(), "wss:".to_string()],
             worker_src: vec!["'self'".to_string()],
@@ -280,7 +301,12 @@ pub struct RscHtmlConfig {
 
 impl Default for RscHtmlConfig {
     fn default() -> Self {
-        Self { enabled: true, timeout_ms: 5000, cache_template: true, pretty_print: false }
+        Self {
+            enabled: true,
+            timeout_ms: 5000,
+            cache_template: true,
+            pretty_print: false,
+        }
     }
 }
 
@@ -293,7 +319,11 @@ pub struct LoadingConfig {
 
 impl Default for LoadingConfig {
     fn default() -> Self {
-        Self { enabled: true, min_display_time_ms: 200, cache_loading_components: true }
+        Self {
+            enabled: true,
+            min_display_time_ms: 200,
+            cache_loading_components: true,
+        }
     }
 }
 
@@ -306,7 +336,11 @@ pub struct StreamingConfig {
 
 impl Default for StreamingConfig {
     fn default() -> Self {
-        Self { enabled: true, buffer_size: 64, resolution_timeout_ms: 5000 }
+        Self {
+            enabled: true,
+            buffer_size: 64,
+            resolution_timeout_ms: 5000,
+        }
     }
 }
 
@@ -424,8 +458,9 @@ impl Config {
         }
 
         if let Ok(vite_port_str) = std::env::var("RARI_VITE_PORT") {
-            config.vite.port =
-                vite_port_str.parse().map_err(|_| ConfigError::VitePort(vite_port_str))?;
+            config.vite.port = vite_port_str
+                .parse()
+                .map_err(|_| ConfigError::VitePort(vite_port_str))?;
         }
 
         if let Ok(public_dir) = std::env::var("RARI_PUBLIC_DIR") {
@@ -437,8 +472,9 @@ impl Config {
         }
 
         if let Ok(timeout_str) = std::env::var("RARI_SCRIPT_EXECUTION_TIMEOUT_MS") {
-            config.rsc.script_execution_timeout_ms =
-                timeout_str.parse().map_err(|_| ConfigError::Timeout(timeout_str.clone()))?;
+            config.rsc.script_execution_timeout_ms = timeout_str
+                .parse()
+                .map_err(|_| ConfigError::Timeout(timeout_str.clone()))?;
         }
 
         if let Ok(disable_hmr) = std::env::var("DISABLE_HMR_RELOAD") {
@@ -540,12 +576,16 @@ impl Config {
                         .collect();
                 }
                 if let Some(img_src) = csp_data.get("imgSrc").and_then(|v| v.as_array()) {
-                    config.csp.img_src =
-                        img_src.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
+                    config.csp.img_src = img_src
+                        .iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect();
                 }
                 if let Some(font_src) = csp_data.get("fontSrc").and_then(|v| v.as_array()) {
-                    config.csp.font_src =
-                        font_src.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
+                    config.csp.font_src = font_src
+                        .iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect();
                 }
                 if let Some(connect_src) = csp_data.get("connectSrc").and_then(|v| v.as_array()) {
                     config.csp.connect_src = connect_src
@@ -583,7 +623,10 @@ impl Config {
                 for (route, cache_value) in routes {
                     if let Some(cache_str) = cache_value.as_str() {
                         if HeaderValue::from_str(cache_str).is_ok() {
-                            config.caching.routes.insert(route.clone(), cache_str.to_string());
+                            config
+                                .caching
+                                .routes
+                                .insert(route.clone(), cache_str.to_string());
                         } else {
                             tracing::warn!(
                                 "Invalid cache-control header value for route '{}': '{}' (contains invalid characters)",
@@ -697,7 +740,11 @@ impl Config {
                 vec![format!("http://{}:{}", self.server.host, self.server.port)]
             };
 
-            CorsConfig { allowed_origins, allow_credentials: true, max_age: 86400 }
+            CorsConfig {
+                allowed_origins,
+                allow_credentials: true,
+                max_age: 86400,
+            }
         }
     }
 
@@ -732,8 +779,11 @@ impl Config {
         }
 
         if self.is_development() {
-            let mut allowed_hosts =
-                vec!["localhost".to_string(), "127.0.0.1".to_string(), self.server.host.clone()];
+            let mut allowed_hosts = vec![
+                "localhost".to_string(),
+                "127.0.0.1".to_string(),
+                self.server.host.clone(),
+            ];
 
             if let Some(origin) = &self.server.origin
                 && let Ok(url) = url::Url::parse(origin)
@@ -742,11 +792,19 @@ impl Config {
                 allowed_hosts.push(host.to_string());
             }
 
-            RedirectConfig { allowed_hosts, allow_relative: true, allow_subdomains: false }
+            RedirectConfig {
+                allowed_hosts,
+                allow_relative: true,
+                allow_subdomains: false,
+            }
         } else {
             let allowed_hosts = if let Some(origin) = &self.server.origin {
                 if let Ok(url) = url::Url::parse(origin) {
-                    if let Some(host) = url.host_str() { vec![host.to_string()] } else { vec![] }
+                    if let Some(host) = url.host_str() {
+                        vec![host.to_string()]
+                    } else {
+                        vec![]
+                    }
                 } else {
                     vec![]
                 }
@@ -754,7 +812,11 @@ impl Config {
                 vec![self.server.host.clone()]
             };
 
-            RedirectConfig { allowed_hosts, allow_relative: true, allow_subdomains: false }
+            RedirectConfig {
+                allowed_hosts,
+                allow_relative: true,
+                allow_subdomains: false,
+            }
         }
     }
 
@@ -897,7 +959,10 @@ mod tests {
     #[test]
     fn test_cache_control_exact_match() {
         let mut config = Config::default();
-        config.caching.routes.insert("/api/users".to_string(), "no-cache".to_string());
+        config
+            .caching
+            .routes
+            .insert("/api/users".to_string(), "no-cache".to_string());
 
         let cache_control = config.get_cache_control_for_route("/api/users");
         assert_eq!(cache_control, "no-cache");
@@ -906,7 +971,10 @@ mod tests {
     #[test]
     fn test_cache_control_glob_pattern() {
         let mut config = Config::default();
-        config.caching.routes.insert("/api/*".to_string(), "no-cache".to_string());
+        config
+            .caching
+            .routes
+            .insert("/api/*".to_string(), "no-cache".to_string());
 
         let cache_control = config.get_cache_control_for_route("/api/users");
         assert_eq!(cache_control, "no-cache");
@@ -920,14 +988,23 @@ mod tests {
         let config = Config::default();
 
         let cache_control = config.get_cache_control_for_route("/some/random/path");
-        assert_eq!(cache_control, "public, max-age=31536000, stale-while-revalidate=86400");
+        assert_eq!(
+            cache_control,
+            "public, max-age=31536000, stale-while-revalidate=86400"
+        );
     }
 
     #[test]
     fn test_cache_control_pattern_priority() {
         let mut config = Config::default();
-        config.caching.routes.insert("/api/*".to_string(), "no-cache".to_string());
-        config.caching.routes.insert("/api/public".to_string(), "public, max-age=3600".to_string());
+        config
+            .caching
+            .routes
+            .insert("/api/*".to_string(), "no-cache".to_string());
+        config.caching.routes.insert(
+            "/api/public".to_string(),
+            "public, max-age=3600".to_string(),
+        );
 
         let cache_control = config.get_cache_control_for_route("/api/public");
         assert_eq!(cache_control, "public, max-age=3600");
@@ -977,7 +1054,10 @@ mod tests {
         let deserialized: CacheControlConfig = serde_json::from_str(&serialized).unwrap();
 
         assert_eq!(cache_config.static_files, deserialized.static_files);
-        assert_eq!(cache_config.server_components, deserialized.server_components);
+        assert_eq!(
+            cache_config.server_components,
+            deserialized.server_components
+        );
         assert_eq!(cache_config.routes.len(), deserialized.routes.len());
     }
 
@@ -999,15 +1079,21 @@ mod tests {
 
     #[test]
     fn test_streaming_config_serialization() {
-        let streaming_config =
-            StreamingConfig { enabled: false, buffer_size: 128, resolution_timeout_ms: 10000 };
+        let streaming_config = StreamingConfig {
+            enabled: false,
+            buffer_size: 128,
+            resolution_timeout_ms: 10000,
+        };
 
         let serialized = serde_json::to_string(&streaming_config).unwrap();
         let deserialized: StreamingConfig = serde_json::from_str(&serialized).unwrap();
 
         assert_eq!(streaming_config.enabled, deserialized.enabled);
         assert_eq!(streaming_config.buffer_size, deserialized.buffer_size);
-        assert_eq!(streaming_config.resolution_timeout_ms, deserialized.resolution_timeout_ms);
+        assert_eq!(
+            streaming_config.resolution_timeout_ms,
+            deserialized.resolution_timeout_ms
+        );
     }
 
     #[test]
@@ -1042,7 +1128,10 @@ mod tests {
             config.caching.routes.contains_key("/valid"),
             "Valid cache-control route should be accepted"
         );
-        assert_eq!(config.caching.routes.get("/valid").unwrap(), "public, max-age=3600");
+        assert_eq!(
+            config.caching.routes.get("/valid").unwrap(),
+            "public, max-age=3600"
+        );
 
         assert!(
             !config.caching.routes.contains_key("/invalid-newline"),
@@ -1077,9 +1166,15 @@ mod tests {
         // production, a configured route wins; an unconfigured route falls back
         // to the production server-components default.
         let mut config = Config::new(Mode::Production);
-        config.caching.routes.insert("/products".to_string(), "public, max-age=600".to_string());
+        config
+            .caching
+            .routes
+            .insert("/products".to_string(), "public, max-age=600".to_string());
 
-        assert_eq!(config.get_cache_control_for_route("/products"), "public, max-age=600");
+        assert_eq!(
+            config.get_cache_control_for_route("/products"),
+            "public, max-age=600"
+        );
         assert_eq!(
             config.get_cache_control_for_route("/unconfigured"),
             "public, max-age=31536000, stale-while-revalidate=86400"
@@ -1105,7 +1200,10 @@ mod tests {
             CACHE_LAYER_MODULE,
             CACHE_LAYER_FETCH,
         ] {
-            assert!(cache.layers.contains_key(name), "missing default layer {name}");
+            assert!(
+                cache.layers.contains_key(name),
+                "missing default layer {name}"
+            );
         }
         assert_eq!(cache.layers.len(), 6);
     }

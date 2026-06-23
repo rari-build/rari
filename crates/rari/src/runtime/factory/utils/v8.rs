@@ -24,7 +24,9 @@ pub fn get_module_namespace_as_json(
             let local_value: v8::Local<v8::Value> = local_namespace.into();
             v8_to_json(scope, local_value)
         }
-        Err(e) => Err(RariError::js_execution(format!("Failed to get module namespace: {e}"))),
+        Err(e) => Err(RariError::js_execution(format!(
+            "Failed to get module namespace: {e}"
+        ))),
     }
 }
 
@@ -32,7 +34,10 @@ pub async fn run_event_loop_with_error_handling(
     runtime: &mut JsRuntime,
     context: &str,
 ) -> Result<(), RariError> {
-    match runtime.run_event_loop(PollEventLoopOptions::default()).await {
+    match runtime
+        .run_event_loop(PollEventLoopOptions::default())
+        .await
+    {
         Ok(()) => Ok(()),
         Err(e) => {
             let error_str = e.to_string();
@@ -46,7 +51,9 @@ pub async fn run_event_loop_with_error_handling(
                     "Critical runtime error in {context}: {error_str}"
                 )))
             } else {
-                Err(RariError::js_execution(format!("Event loop error in {context}: {error_str}")))
+                Err(RariError::js_execution(format!(
+                    "Event loop error in {context}: {error_str}"
+                )))
             }
         }
     }
@@ -61,8 +68,14 @@ fn extract_promise_metadata<'s>(
     }
 
     let mut metadata = serde_json::Map::new();
-    metadata.insert("~promisePlaceholder".to_string(), serde_json::Value::Bool(true));
-    metadata.insert("type".to_string(), serde_json::Value::String("Promise".to_string()));
+    metadata.insert(
+        "~promisePlaceholder".to_string(),
+        serde_json::Value::Bool(true),
+    );
+    metadata.insert(
+        "type".to_string(),
+        serde_json::Value::String("Promise".to_string()),
+    );
 
     if let Ok(obj) = v8::Local::<v8::Object>::try_from(value) {
         if let Some(boundary_key) = v8::String::new(scope, "~boundaryId")
@@ -70,7 +83,10 @@ fn extract_promise_metadata<'s>(
             && let Some(boundary_str) = boundary_val.to_string(scope)
         {
             let boundary_id = boundary_str.to_rust_string_lossy(scope.as_ref());
-            metadata.insert("~boundaryId".to_string(), serde_json::Value::String(boundary_id));
+            metadata.insert(
+                "~boundaryId".to_string(),
+                serde_json::Value::String(boundary_id),
+            );
         }
 
         if let Some(promise_key) = v8::String::new(scope, "promiseId")
@@ -78,7 +94,10 @@ fn extract_promise_metadata<'s>(
             && let Some(promise_str) = promise_val.to_string(scope)
         {
             let promise_id = promise_str.to_rust_string_lossy(scope.as_ref());
-            metadata.insert("promiseId".to_string(), serde_json::Value::String(promise_id));
+            metadata.insert(
+                "promiseId".to_string(),
+                serde_json::Value::String(promise_id),
+            );
         }
     }
 
@@ -166,7 +185,9 @@ fn extract_composition_result_manually<'s>(
 
             let args = [value];
             let result = stringify_fn.call(scope, json_obj.into(), &args)?;
-            let json_string = result.to_string(scope)?.to_rust_string_lossy(scope.as_ref());
+            let json_string = result
+                .to_string(scope)?
+                .to_rust_string_lossy(scope.as_ref());
 
             serde_json::from_str(&json_string).ok()
         };
@@ -206,7 +227,9 @@ fn extract_composition_result_manually_from_panic<'s>(
 
             let args = [value];
             let result = stringify_fn.call(scope, json_obj.into(), &args)?;
-            let json_string = result.to_string(scope)?.to_rust_string_lossy(scope.as_ref());
+            let json_string = result
+                .to_string(scope)?
+                .to_rust_string_lossy(scope.as_ref());
 
             serde_json::from_str(&json_string).ok()
         };
@@ -226,13 +249,19 @@ fn extract_composition_result_manually_from_panic<'s>(
     );
 
     let mut error_obj = serde_json::Map::new();
-    error_obj.insert("~serializationError".to_string(), serde_json::Value::Bool(true));
+    error_obj.insert(
+        "~serializationError".to_string(),
+        serde_json::Value::Bool(true),
+    );
     error_obj.insert(
         "error".to_string(),
         serde_json::Value::String("V8 value could not be serialized".to_string()),
     );
     error_obj.insert("type".to_string(), serde_json::Value::String(v8_type_str));
-    error_obj.insert("details".to_string(), serde_json::Value::String(fallback_msg));
+    error_obj.insert(
+        "details".to_string(),
+        serde_json::Value::String(fallback_msg),
+    );
     Ok(serde_json::Value::Object(error_obj))
 }
 

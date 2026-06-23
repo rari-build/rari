@@ -9,7 +9,10 @@ pub struct ModuleResolver {
 
 impl ModuleResolver {
     pub fn new() -> Self {
-        Self { resolved_packages: DashMap::new(), package_type_cache: DashMap::new() }
+        Self {
+            resolved_packages: DashMap::new(),
+            package_type_cache: DashMap::new(),
+        }
     }
 
     pub fn cache_package_resolution(&self, package_name: String, resolved_path: String) {
@@ -17,7 +20,9 @@ impl ModuleResolver {
     }
 
     pub fn get_cached_package(&self, package_name: &str) -> Option<String> {
-        self.resolved_packages.get(package_name).map(|entry| entry.value().clone())
+        self.resolved_packages
+            .get(package_name)
+            .map(|entry| entry.value().clone())
     }
 
     #[cfg(test)]
@@ -39,7 +44,9 @@ impl ModuleResolver {
     }
 
     pub fn get_cached_package_type(&self, dir: &Path) -> Option<String> {
-        self.package_type_cache.get(dir).map(|entry| entry.value().clone())
+        self.package_type_cache
+            .get(dir)
+            .map(|entry| entry.value().clone())
     }
 
     pub fn cache_package_type(&self, dir: PathBuf, package_type: String) {
@@ -47,7 +54,9 @@ impl ModuleResolver {
     }
 
     pub fn contains_path(&self, path: &str) -> bool {
-        self.resolved_packages.iter().any(|entry| path.contains(entry.value()))
+        self.resolved_packages
+            .iter()
+            .any(|entry| path.contains(entry.value()))
     }
 
     pub fn get_package_base(&self, referrer: &str) -> Option<String> {
@@ -80,7 +89,10 @@ mod tests {
 
         resolver.cache_package_resolution("react".to_string(), "/node_modules/react".to_string());
 
-        assert_eq!(resolver.get_cached_package("react"), Some("/node_modules/react".to_string()));
+        assert_eq!(
+            resolver.get_cached_package("react"),
+            Some("/node_modules/react".to_string())
+        );
         assert_eq!(resolver.cache_size(), 1);
     }
 

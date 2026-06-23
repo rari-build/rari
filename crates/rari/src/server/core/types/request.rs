@@ -52,7 +52,10 @@ mod tests {
     #[test]
     fn test_detect_rsc_navigation_mode_with_multiple_types() {
         let mut headers = HeaderMap::new();
-        headers.insert("accept", HeaderValue::from_static("text/x-component, application/json"));
+        headers.insert(
+            "accept",
+            HeaderValue::from_static("text/x-component, application/json"),
+        );
 
         let mode = RequestTypeDetector::detect_render_mode(&headers);
         assert_eq!(mode, RenderMode::RscNavigation);
@@ -82,7 +85,9 @@ mod tests {
 
     #[test]
     fn test_needs_rsc_wire_format_for_rsc_navigation() {
-        assert!(RequestTypeDetector::needs_rsc_wire_format(RenderMode::RscNavigation));
+        assert!(RequestTypeDetector::needs_rsc_wire_format(
+            RenderMode::RscNavigation
+        ));
     }
 
     #[test]

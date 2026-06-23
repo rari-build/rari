@@ -18,7 +18,11 @@ impl ImageRenderer {
 
         let source_image = self.load_image(src)?;
 
-        let object_fit = layout.style.get("objectFit").map(|s| s.as_str()).unwrap_or("fill");
+        let object_fit = layout
+            .style
+            .get("objectFit")
+            .map(|s| s.as_str())
+            .unwrap_or("fill");
 
         let border_radius = self.parse_border_radius(&layout.style);
 
@@ -137,10 +141,16 @@ impl ImageRenderer {
                 Ok((resized, offset_x, offset_y))
             }
             "none" => {
-                let offset_x =
-                    if src_width < target_w { ((target_w - src_width) / 2.0) as u32 } else { 0 };
-                let offset_y =
-                    if src_height < target_h { ((target_h - src_height) / 2.0) as u32 } else { 0 };
+                let offset_x = if src_width < target_w {
+                    ((target_w - src_width) / 2.0) as u32
+                } else {
+                    0
+                };
+                let offset_y = if src_height < target_h {
+                    ((target_h - src_height) / 2.0) as u32
+                } else {
+                    0
+                };
 
                 if src_width > target_w || src_height > target_h {
                     let crop_x = if src_width > target_w {

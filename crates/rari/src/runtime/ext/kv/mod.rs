@@ -21,13 +21,21 @@ impl ExtensionTrait<KvStore> for deno_kv::deno_kv {
 }
 
 pub fn extensions(store: KvStore, is_snapshot: bool) -> Vec<Extension> {
-    vec![deno_kv::deno_kv::build(store, is_snapshot), init_kv::build((), is_snapshot)]
+    vec![
+        deno_kv::deno_kv::build(store, is_snapshot),
+        init_kv::build((), is_snapshot),
+    ]
 }
 
 #[derive(Clone)]
 enum KvStoreBuilder {
-    Local { path: Option<PathBuf>, rng_seed: Option<u64> },
-    Remote { http_options: deno_kv::remote::HttpOptions },
+    Local {
+        path: Option<PathBuf>,
+        rng_seed: Option<u64>,
+    },
+    Remote {
+        http_options: deno_kv::remote::HttpOptions,
+    },
 }
 
 #[derive(Clone, Copy)]

@@ -5,7 +5,10 @@ use rustc_hash::{FxHashMap, FxHashSet};
 pub fn extract_search_params(
     query_params: FxHashMap<String, String>,
 ) -> FxHashMap<String, Vec<String>> {
-    query_params.into_iter().map(|(k, v)| (k, vec![v])).collect()
+    query_params
+        .into_iter()
+        .map(|(k, v)| (k, vec![v]))
+        .collect()
 }
 
 pub fn extract_headers(headers: &axum::http::HeaderMap) -> FxHashMap<String, String> {
@@ -108,8 +111,11 @@ pub fn is_origin_allowed(origin: &str, allowed_origins: &[String]) -> bool {
         {
             let is_schemeless = !allowed.contains("://");
 
-            let normalized_pattern =
-                if is_schemeless { format!("https://{}", allowed) } else { allowed.clone() };
+            let normalized_pattern = if is_schemeless {
+                format!("https://{}", allowed)
+            } else {
+                allowed.clone()
+            };
 
             let test_pattern =
                 cow_utils::CowUtils::cow_replace(normalized_pattern.as_str(), "*.", "test.");
@@ -171,7 +177,10 @@ pub fn add_api_cors_headers(
         }
 
         if allow_credentials && !headers.contains_key("Access-Control-Allow-Credentials") {
-            headers.insert("Access-Control-Allow-Credentials", HeaderValue::from_static("true"));
+            headers.insert(
+                "Access-Control-Allow-Credentials",
+                HeaderValue::from_static("true"),
+            );
         }
     }
 
@@ -204,7 +213,10 @@ pub fn add_api_cors_headers(
 
 pub fn add_api_security_headers(headers: &mut axum::http::HeaderMap) {
     if !headers.contains_key("X-Content-Type-Options") {
-        headers.insert("X-Content-Type-Options", HeaderValue::from_static("nosniff"));
+        headers.insert(
+            "X-Content-Type-Options",
+            HeaderValue::from_static("nosniff"),
+        );
     }
 
     if !headers.contains_key("X-Frame-Options") {
@@ -212,7 +224,10 @@ pub fn add_api_security_headers(headers: &mut axum::http::HeaderMap) {
     }
 
     if !headers.contains_key("X-XSS-Protection") {
-        headers.insert("X-XSS-Protection", HeaderValue::from_static("1; mode=block"));
+        headers.insert(
+            "X-XSS-Protection",
+            HeaderValue::from_static("1; mode=block"),
+        );
     }
 
     if !headers.contains_key("Strict-Transport-Security") {
@@ -297,10 +312,22 @@ mod tests {
         let mut headers = axum::http::HeaderMap::new();
         let allowed = vec!["https://example.com".to_string()];
 
-        add_api_cors_headers(&mut headers, Some("https://example.com"), &allowed, true, 86400);
+        add_api_cors_headers(
+            &mut headers,
+            Some("https://example.com"),
+            &allowed,
+            true,
+            86400,
+        );
 
-        assert_eq!(headers.get("Access-Control-Allow-Origin").unwrap(), "https://example.com");
-        assert_eq!(headers.get("Access-Control-Allow-Credentials").unwrap(), "true");
+        assert_eq!(
+            headers.get("Access-Control-Allow-Origin").unwrap(),
+            "https://example.com"
+        );
+        assert_eq!(
+            headers.get("Access-Control-Allow-Credentials").unwrap(),
+            "true"
+        );
         assert_eq!(headers.get("Access-Control-Max-Age").unwrap(), "86400");
         assert!(headers.contains_key("Access-Control-Allow-Methods"));
         assert!(headers.contains_key("Access-Control-Allow-Headers"));
@@ -312,7 +339,13 @@ mod tests {
         let mut headers = axum::http::HeaderMap::new();
         let allowed = vec!["https://example.com".to_string()];
 
-        add_api_cors_headers(&mut headers, Some("https://evil.com"), &allowed, true, 86400);
+        add_api_cors_headers(
+            &mut headers,
+            Some("https://evil.com"),
+            &allowed,
+            true,
+            86400,
+        );
 
         assert!(!headers.contains_key("Access-Control-Allow-Origin"));
         assert!(!headers.contains_key("Access-Control-Allow-Credentials"));
@@ -340,9 +373,18 @@ mod tests {
         let mut headers = axum::http::HeaderMap::new();
         let allowed = vec!["https://example.com".to_string()];
 
-        add_api_cors_headers(&mut headers, Some("https://example.com"), &allowed, false, 86400);
+        add_api_cors_headers(
+            &mut headers,
+            Some("https://example.com"),
+            &allowed,
+            false,
+            86400,
+        );
 
-        assert_eq!(headers.get("Access-Control-Allow-Origin").unwrap(), "https://example.com");
+        assert_eq!(
+            headers.get("Access-Control-Allow-Origin").unwrap(),
+            "https://example.com"
+        );
 
         assert!(!headers.contains_key("Access-Control-Allow-Credentials"));
     }
@@ -357,9 +399,18 @@ mod tests {
 
         let allowed = vec!["https://example.com".to_string()];
 
-        add_api_cors_headers(&mut headers, Some("https://example.com"), &allowed, true, 86400);
+        add_api_cors_headers(
+            &mut headers,
+            Some("https://example.com"),
+            &allowed,
+            true,
+            86400,
+        );
 
-        assert_eq!(headers.get("Access-Control-Allow-Origin").unwrap(), "https://existing.com");
+        assert_eq!(
+            headers.get("Access-Control-Allow-Origin").unwrap(),
+            "https://existing.com"
+        );
     }
 
     #[test]
@@ -367,18 +418,32 @@ mod tests {
         let allowed_https = vec!["https://*.example.com:8080".to_string()];
         let allowed_http = vec!["http://*.example.com:3000".to_string()];
 
-        assert!(is_origin_allowed("https://app.example.com:8080", &allowed_https));
-        assert!(is_origin_allowed("http://api.example.com:3000", &allowed_http));
+        assert!(is_origin_allowed(
+            "https://app.example.com:8080",
+            &allowed_https
+        ));
+        assert!(is_origin_allowed(
+            "http://api.example.com:3000",
+            &allowed_http
+        ));
 
-        assert!(!is_origin_allowed("http://app.example.com:8080", &allowed_https));
+        assert!(!is_origin_allowed(
+            "http://app.example.com:8080",
+            &allowed_https
+        ));
 
-        assert!(!is_origin_allowed("https://app.example.com:3000", &allowed_https));
+        assert!(!is_origin_allowed(
+            "https://app.example.com:3000",
+            &allowed_https
+        ));
     }
 
     #[test]
     fn test_localhost_variations() {
-        let allowed =
-            vec!["http://localhost:3000".to_string(), "http://127.0.0.1:3000".to_string()];
+        let allowed = vec![
+            "http://localhost:3000".to_string(),
+            "http://127.0.0.1:3000".to_string(),
+        ];
 
         assert!(is_origin_allowed("http://localhost:3000", &allowed));
         assert!(is_origin_allowed("http://127.0.0.1:3000", &allowed));

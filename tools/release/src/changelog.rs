@@ -46,7 +46,11 @@ pub async fn generate_release_notes(
 ) -> Result<String> {
     let range = previous_tag.map(|prev| format!("{}..{}", prev, tag));
 
-    let flags: Vec<&str> = if range.is_some() { vec![""] } else { vec!["--current", "--latest"] };
+    let flags: Vec<&str> = if range.is_some() {
+        vec![""]
+    } else {
+        vec!["--current", "--latest"]
+    };
 
     for flag in flags {
         let mut args = Vec::new();

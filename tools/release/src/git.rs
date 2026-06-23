@@ -25,7 +25,10 @@ pub async fn get_recent_commits(package_path: &Path, limit: usize) -> Result<Vec
         .output()
         .await?;
 
-    let commits = String::from_utf8_lossy(&output.stdout).lines().map(String::from).collect();
+    let commits = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(String::from)
+        .collect();
 
     Ok(commits)
 }
@@ -76,7 +79,10 @@ pub async fn get_commits_since_tag(package_name: &str, package_path: &Path) -> R
                 );
             }
 
-            Ok(String::from_utf8_lossy(&output.stdout).lines().map(String::from).collect())
+            Ok(String::from_utf8_lossy(&output.stdout)
+                .lines()
+                .map(String::from)
+                .collect())
         } else if package_name == "@rari/use-cache-binaries" {
             let output = Command::new("git")
                 .args([
@@ -108,7 +114,10 @@ pub async fn get_commits_since_tag(package_name: &str, package_path: &Path) -> R
                 );
             }
 
-            Ok(String::from_utf8_lossy(&output.stdout).lines().map(String::from).collect())
+            Ok(String::from_utf8_lossy(&output.stdout)
+                .lines()
+                .map(String::from)
+                .collect())
         } else {
             let path_str = package_path.display().to_string();
             let output = Command::new("git")
@@ -128,7 +137,10 @@ pub async fn get_commits_since_tag(package_name: &str, package_path: &Path) -> R
                 );
             }
 
-            Ok(String::from_utf8_lossy(&output.stdout).lines().map(String::from).collect())
+            Ok(String::from_utf8_lossy(&output.stdout)
+                .lines()
+                .map(String::from)
+                .collect())
         }
     } else {
         get_recent_commits(package_path, 10).await
@@ -153,20 +165,33 @@ pub async fn get_previous_tag(
 
     let tags = String::from_utf8_lossy(&tag_output.stdout);
 
-    Ok(tags.lines().find(|tag| current_tag.is_none_or(|current| tag != &current)).map(String::from))
+    Ok(tags
+        .lines()
+        .find(|tag| current_tag.is_none_or(|current| tag != &current))
+        .map(String::from))
 }
 
 pub async fn add_and_commit(message: &str, cwd: &Path) -> Result<()> {
-    Command::new("git").args(["add", "."]).current_dir(cwd).output().await?;
+    Command::new("git")
+        .args(["add", "."])
+        .current_dir(cwd)
+        .output()
+        .await?;
 
-    Command::new("git").args(["commit", "-m", message]).current_dir(cwd).output().await?;
+    Command::new("git")
+        .args(["commit", "-m", message])
+        .current_dir(cwd)
+        .output()
+        .await?;
 
     Ok(())
 }
 
 pub async fn add_file(file_path: &Path) -> Result<()> {
-    let output =
-        Command::new("git").args(["add", &file_path.display().to_string()]).output().await?;
+    let output = Command::new("git")
+        .args(["add", &file_path.display().to_string()])
+        .output()
+        .await?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -183,12 +208,19 @@ pub async fn add_file(file_path: &Path) -> Result<()> {
 }
 
 pub async fn amend_commit() -> Result<()> {
-    let output = Command::new("git").args(["commit", "--amend", "--no-edit"]).output().await?;
+    let output = Command::new("git")
+        .args(["commit", "--amend", "--no-edit"])
+        .output()
+        .await?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let stdout = String::from_utf8_lossy(&output.stdout);
-        anyhow::bail!("Failed to amend commit:\nstdout: {}\nstderr: {}", stdout, stderr);
+        anyhow::bail!(
+            "Failed to amend commit:\nstdout: {}\nstderr: {}",
+            stdout,
+            stderr
+        );
     }
 
     Ok(())
@@ -196,7 +228,11 @@ pub async fn amend_commit() -> Result<()> {
 
 pub async fn add_and_commit_multiple(message: &str, paths: &[&Path]) -> Result<()> {
     for path in paths {
-        let output = Command::new("git").args(["add", "."]).current_dir(path).output().await?;
+        let output = Command::new("git")
+            .args(["add", "."])
+            .current_dir(path)
+            .output()
+            .await?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -210,7 +246,10 @@ pub async fn add_and_commit_multiple(message: &str, paths: &[&Path]) -> Result<(
         }
     }
 
-    let output = Command::new("git").args(["commit", "-m", message]).output().await?;
+    let output = Command::new("git")
+        .args(["commit", "-m", message])
+        .output()
+        .await?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -238,23 +277,36 @@ pub async fn push_changes() -> Result<()> {
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let stdout = String::from_utf8_lossy(&output.stdout);
-        anyhow::bail!("Failed to push commits:\nstdout: {}\nstderr: {}", stdout, stderr);
+        anyhow::bail!(
+            "Failed to push commits:\nstdout: {}\nstderr: {}",
+            stdout,
+            stderr
+        );
     }
 
-    let output = Command::new("git").args(["push", "--tags"]).output().await?;
+    let output = Command::new("git")
+        .args(["push", "--tags"])
+        .output()
+        .await?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let stdout = String::from_utf8_lossy(&output.stdout);
-        anyhow::bail!("Failed to push tags:\nstdout: {}\nstderr: {}", stdout, stderr);
+        anyhow::bail!(
+            "Failed to push tags:\nstdout: {}\nstderr: {}",
+            stdout,
+            stderr
+        );
     }
 
     Ok(())
 }
 
 pub async fn get_repo_info() -> Result<(String, String)> {
-    let output =
-        Command::new("git").args(["config", "--get", "remote.origin.url"]).output().await?;
+    let output = Command::new("git")
+        .args(["config", "--get", "remote.origin.url"])
+        .output()
+        .await?;
 
     if !output.status.success() {
         anyhow::bail!("Failed to get git remote URL");
@@ -263,9 +315,15 @@ pub async fn get_repo_info() -> Result<(String, String)> {
     let url = String::from_utf8_lossy(&output.stdout).trim().to_string();
 
     let parts: Vec<&str> = if url.starts_with("git@") {
-        url.trim_start_matches("git@github.com:").trim_end_matches(".git").split('/').collect()
+        url.trim_start_matches("git@github.com:")
+            .trim_end_matches(".git")
+            .split('/')
+            .collect()
     } else {
-        url.trim_start_matches("https://github.com/").trim_end_matches(".git").split('/').collect()
+        url.trim_start_matches("https://github.com/")
+            .trim_end_matches(".git")
+            .split('/')
+            .collect()
     };
 
     if parts.len() >= 2 {

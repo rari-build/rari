@@ -144,7 +144,10 @@ pub async fn install_linux_cross_compiler() -> Result<()> {
     log("Installing Linux ARM64 cross-compiler...");
 
     let output = Command::new("sh")
-        .args(["-c", "sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu"])
+        .args([
+            "-c",
+            "sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu",
+        ])
         .output()
         .await;
 

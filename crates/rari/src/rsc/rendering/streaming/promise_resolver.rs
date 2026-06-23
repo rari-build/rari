@@ -130,7 +130,10 @@ fn replace_lazy_markers(value: &mut serde_json::Value, promise_to_row: &FxHashMa
 
             if is_lazy && let Some(promise_id) = promise_id {
                 let Some(row_id) = promise_to_row.get(promise_id) else {
-                    warn!("Lazy marker missing from promise_to_row in streaming: {}", promise_id);
+                    warn!(
+                        "Lazy marker missing from promise_to_row in streaming: {}",
+                        promise_id
+                    );
                     *value = serde_json::Value::Null;
                     return;
                 };
@@ -168,7 +171,10 @@ fn nested_pending_promises(
             Some(PendingSuspensePromise {
                 id: promise_id.to_string(),
                 boundary_id,
-                component_path: p["componentPath"].as_str().unwrap_or("AsyncComponent").to_string(),
+                component_path: p["componentPath"]
+                    .as_str()
+                    .unwrap_or("AsyncComponent")
+                    .to_string(),
                 promise_handle: promise_id.to_string(),
                 render_generation,
             })

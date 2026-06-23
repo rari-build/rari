@@ -362,12 +362,18 @@ mod tests {
             Param {
                 span: Default::default(),
                 decorators: vec![],
-                pat: Pat::Ident(BindingIdent { id: ident("a"), type_ann: None }),
+                pat: Pat::Ident(BindingIdent {
+                    id: ident("a"),
+                    type_ann: None,
+                }),
             },
             Param {
                 span: Default::default(),
                 decorators: vec![],
-                pat: Pat::Ident(BindingIdent { id: ident("b"), type_ann: None }),
+                pat: Pat::Ident(BindingIdent {
+                    id: ident("b"),
+                    type_ann: None,
+                }),
             },
         ]);
 
@@ -383,7 +389,11 @@ mod tests {
                 span: Default::default(),
                 local: ident("React"),
             })],
-            src: Box::new(Str { span: Default::default(), value: "react".into(), raw: None }),
+            src: Box::new(Str {
+                span: Default::default(),
+                value: "react".into(),
+                raw: None,
+            }),
             with: None,
             phase: ImportPhase::Evaluation,
             type_only: false,
@@ -391,7 +401,10 @@ mod tests {
 
         let idents = collect_module_level_idents(&item);
         assert_eq!(idents.len(), 1);
-        let id = idents.into_iter().next().expect("expected imported React identifier");
+        let id = idents
+            .into_iter()
+            .next()
+            .expect("expected imported React identifier");
         assert_eq!(id.0.to_string(), "React");
     }
 
@@ -492,7 +505,10 @@ mod tests {
                 decorators: vec![],
                 pat: Pat::Rest(RestPat {
                     span: Default::default(),
-                    arg: Box::new(Pat::Ident(BindingIdent { id: ident("rest"), type_ann: None })),
+                    arg: Box::new(Pat::Ident(BindingIdent {
+                        id: ident("rest"),
+                        type_ann: None,
+                    })),
                     type_ann: None,
                     dot3_token: Default::default(),
                 }),

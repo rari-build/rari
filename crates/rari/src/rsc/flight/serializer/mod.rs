@@ -32,7 +32,13 @@ pub struct ModuleReference {
 
 impl ModuleReference {
     pub fn new(id: String, path: String, reference_type: ModuleReferenceType) -> Self {
-        Self { id, path, reference_type, exports: SmallVec::new(), metadata: FxHashMap::default() }
+        Self {
+            id,
+            path,
+            reference_type,
+            exports: SmallVec::new(),
+            metadata: FxHashMap::default(),
+        }
     }
 
     pub fn with_export(mut self, export: String) -> Self {
@@ -178,7 +184,8 @@ impl RscSerializer {
         .with_metadata("chunk", &chunk_name);
 
         if !self.module_map.contains_key(&normalized_component_id) {
-            self.module_registration_order.push(normalized_component_id.clone());
+            self.module_registration_order
+                .push(normalized_component_id.clone());
         }
 
         self.module_map.insert(normalized_component_id, module_ref);
@@ -286,8 +293,9 @@ impl RscSerializer {
 
                 for search in &searches {
                     if self.output_lines[i].contains(search) {
-                        self.output_lines[i] =
-                            self.output_lines[i].cow_replace(search, &replace).into_owned();
+                        self.output_lines[i] = self.output_lines[i]
+                            .cow_replace(search, &replace)
+                            .into_owned();
                     }
                 }
             }
@@ -336,7 +344,10 @@ impl RscSerializer {
                     self.register_client_component(id, file_path, export_name);
                 }
             }
-            RSCTree::ServerElement { children: Some(children), .. } => {
+            RSCTree::ServerElement {
+                children: Some(children),
+                ..
+            } => {
                 for child in children {
                     self.collect_client_components_from_rsc_tree(child);
                 }
@@ -363,17 +374,22 @@ impl RscSerializer {
             RSCTree::ClientReference { id, key, props } => {
                 self.serialize_client_reference_rsc(id, key.as_deref(), props)
             }
-            RSCTree::ServerElement { tag, props, children, key } => {
-                self.serialize_server_element_rsc(tag, props, children, key.as_deref())
-            }
+            RSCTree::ServerElement {
+                tag,
+                props,
+                children,
+                key,
+            } => self.serialize_server_element_rsc(tag, props, children, key.as_deref()),
             RSCTree::Text(content) => serde_json::to_string(content).unwrap_or_default(),
             RSCTree::Fragment { children, .. } => self.serialize_fragment_rsc(children),
             RSCTree::Array(elements) => self.serialize_array_rsc(elements),
             RSCTree::Null => "null".to_string(),
             RSCTree::Primitive(value) => serde_json::to_string(value).unwrap_or_default(),
-            RSCTree::Error { message, component_name, .. } => {
-                self.serialize_error_rsc(message, component_name)
-            }
+            RSCTree::Error {
+                message,
+                component_name,
+                ..
+            } => self.serialize_error_rsc(message, component_name),
         }
     }
 
@@ -403,7 +419,9 @@ impl RscSerializer {
                 );
 
                 let props_value = Value::Object(
-                    error_props.into_iter().collect::<serde_json::Map<String, Value>>(),
+                    error_props
+                        .into_iter()
+                        .collect::<serde_json::Map<String, Value>>(),
                 );
                 let escaped_props = escape_rsc_value(&props_value);
                 let props_json =
@@ -447,8 +465,11 @@ impl RscSerializer {
             })
             .collect();
 
-        let props_value =
-            Value::Object(processed_props.into_iter().collect::<serde_json::Map<String, Value>>());
+        let props_value = Value::Object(
+            processed_props
+                .into_iter()
+                .collect::<serde_json::Map<String, Value>>(),
+        );
         let escaped_props = escape_rsc_value(&props_value);
         let props_json = serde_json::to_string(&escaped_props).unwrap_or_else(|_| "{}".to_string());
 
@@ -472,8 +493,10 @@ impl RscSerializer {
         }
 
         if let Some(obj) = value.as_object() {
-            let processed: serde_json::Map<String, Value> =
-                obj.iter().map(|(k, v)| (k.clone(), self.process_prop_value(v))).collect();
+            let processed: serde_json::Map<String, Value> = obj
+                .iter()
+                .map(|(k, v)| (k.clone(), self.process_prop_value(v)))
+                .collect();
             return Value::Object(processed);
         }
 
@@ -541,7 +564,8 @@ impl RscSerializer {
                             element_props.insert("children".to_string(), Value::Null);
                         }
                     } else {
-                        self.seen_lazy_promise_ids.insert(lazy_info.promise_id.clone());
+                        self.seen_lazy_promise_ids
+                            .insert(lazy_info.promise_id.clone());
 
                         let lazy_row_id = self.get_next_row_id();
 
@@ -583,8 +607,11 @@ impl RscSerializer {
                 .unwrap_or_else(|| "null".to_string())
         };
 
-        let props_value =
-            Value::Object(element_props.into_iter().collect::<serde_json::Map<String, Value>>());
+        let props_value = Value::Object(
+            element_props
+                .into_iter()
+                .collect::<serde_json::Map<String, Value>>(),
+        );
         let escaped_props = escape_rsc_value(&props_value);
         let props_json = serde_json::to_string(&escaped_props).unwrap_or_else(|_| "{}".to_string());
 
@@ -599,7 +626,11 @@ impl RscSerializer {
             let component_id = obj.get("~rari_component_id")?.as_str()?.to_string();
             let loading_id = obj.get("~rari_loading_id")?.as_str()?.to_string();
 
-            return Some(LazyMarker { promise_id, component_id, loading_id });
+            return Some(LazyMarker {
+                promise_id,
+                component_id,
+                loading_id,
+            });
         }
         None
     }
@@ -653,7 +684,11 @@ impl RscSerializer {
     fn emit_module_import_line(&mut self, component_id: &str, module_ref: &ModuleReference) {
         let module_id = self.get_next_row_id();
 
-        let export_name = module_ref.exports.first().map(|s| s.as_str()).unwrap_or("default");
+        let export_name = module_ref
+            .exports
+            .first()
+            .map(|s| s.as_str())
+            .unwrap_or("default");
 
         let module_data = serde_json::json!({
             "id": module_ref.path,
@@ -665,7 +700,8 @@ impl RscSerializer {
             RscWireFormatTag::ModuleImport.format_row(module_id, &module_data.to_string());
         self.output_lines.push(import_line.trim_end().to_string());
 
-        self.serialized_modules.insert(component_id.to_string(), format!("$L{:x}", module_id));
+        self.serialized_modules
+            .insert(component_id.to_string(), format!("$L{:x}", module_id));
     }
 
     fn serialize_element_to_standard_format(&mut self, element: &SerializedReactElement) -> String {
@@ -706,7 +742,9 @@ impl RscSerializer {
             None => Value::Null,
         };
 
-        let key_value = key.map(|k| Value::String(k.to_string())).unwrap_or(Value::Null);
+        let key_value = key
+            .map(|k| Value::String(k.to_string()))
+            .unwrap_or(Value::Null);
 
         Value::Array(vec![
             Value::String("$".to_string()),
@@ -733,7 +771,10 @@ impl RscSerializer {
             Value::Object({
                 let mut style = serde_json::Map::new();
                 style.insert("color".to_string(), Value::String("red".to_string()));
-                style.insert("border".to_string(), Value::String("1px solid red".to_string()));
+                style.insert(
+                    "border".to_string(),
+                    Value::String("1px solid red".to_string()),
+                );
                 style.insert("padding".to_string(), Value::String("10px".to_string()));
                 style.insert("margin".to_string(), Value::String("10px".to_string()));
                 style
@@ -764,8 +805,10 @@ impl RscSerializer {
     ) -> String {
         let normalized_component_id = component_id.cow_replace('\\', "/");
 
-        if let Some(module_reference) =
-            self.serialized_modules.get(normalized_component_id.as_ref()).cloned()
+        if let Some(module_reference) = self
+            .serialized_modules
+            .get(normalized_component_id.as_ref())
+            .cloned()
         {
             let element = self.create_react_element_json(&module_reference, props, None);
             self.serialize_react_element_to_string(
@@ -855,8 +898,10 @@ impl RscSerializer {
         props: Option<&FxHashMap<String, Value>>,
     ) -> String {
         let mut placeholder_props = serde_json::Map::new();
-        placeholder_props
-            .insert("children".to_string(), Value::String(format!("Component: {component_name}")));
+        placeholder_props.insert(
+            "children".to_string(),
+            Value::String(format!("Component: {component_name}")),
+        );
 
         if let Some(props_map) = props {
             let serialized_props = self.serialize_props(props_map);
@@ -879,8 +924,10 @@ impl RscSerializer {
     }
 
     fn serialize_fragment_standard(&self, props: Option<&FxHashMap<String, Value>>) -> String {
-        let children =
-            props.and_then(|p| p.get("children")).cloned().unwrap_or(Value::Array(vec![]));
+        let children = props
+            .and_then(|p| p.get("children"))
+            .cloned()
+            .unwrap_or(Value::Array(vec![]));
 
         serde_json::to_string(&children).unwrap_or_else(|_| "[]".to_string())
     }
@@ -916,7 +963,10 @@ impl RscSerializer {
                 validation_errors.len()
             );
             for error in &validation_errors {
-                error!("[rari] RSC: Validation error: {} - {}", error.field_path, error.message);
+                error!(
+                    "[rari] RSC: Validation error: {} - {}",
+                    error.field_path, error.message
+                );
             }
         }
 
@@ -1007,7 +1057,9 @@ impl RscSerializer {
             }
 
             Value::Array(arr) => Value::Array(
-                arr.iter().map(|v| self.process_special_values_with_outlining(v)).collect(),
+                arr.iter()
+                    .map(|v| self.process_special_values_with_outlining(v))
+                    .collect(),
             ),
 
             Value::String(s) if s == "$undefined" => value.clone(),
@@ -1108,8 +1160,10 @@ impl RscSerializer {
     fn outline_typedarray(&mut self, typedarray_data: &Value) -> Value {
         let chunk_id = self.get_next_row_id();
 
-        let type_name =
-            typedarray_data.get("type").and_then(|v| v.as_str()).unwrap_or("Uint8Array");
+        let type_name = typedarray_data
+            .get("type")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Uint8Array");
 
         let data = typedarray_data.get("data").and_then(|v| v.as_array());
 
@@ -1131,8 +1185,10 @@ impl RscSerializer {
                 _ => "o",
             };
 
-            let bytes: Vec<u8> =
-                data_array.iter().filter_map(|v| v.as_u64().map(|n| n as u8)).collect();
+            let bytes: Vec<u8> = data_array
+                .iter()
+                .filter_map(|v| v.as_u64().map(|n| n as u8))
+                .collect();
 
             let base64_data = base64_encode(&bytes);
             let chunk_line = format!("{:x}:{}{:x},{}", chunk_id, tag, bytes.len(), base64_data);
@@ -1148,14 +1204,18 @@ impl RscSerializer {
     fn outline_blob(&mut self, blob_data: &Value) -> Value {
         let chunk_id = self.get_next_row_id();
 
-        let blob_type =
-            blob_data.get("type").and_then(|v| v.as_str()).unwrap_or("application/octet-stream");
+        let blob_type = blob_data
+            .get("type")
+            .and_then(|v| v.as_str())
+            .unwrap_or("application/octet-stream");
 
         let data = blob_data.get("data").and_then(|v| v.as_array());
 
         if let Some(data_array) = data {
-            let bytes: Vec<u8> =
-                data_array.iter().filter_map(|v| v.as_u64().map(|n| n as u8)).collect();
+            let bytes: Vec<u8> = data_array
+                .iter()
+                .filter_map(|v| v.as_u64().map(|n| n as u8))
+                .collect();
 
             let base64_data = base64_encode(&bytes);
             let blob_model = serde_json::json!([blob_type, base64_data]);
@@ -1172,8 +1232,10 @@ impl RscSerializer {
     fn outline_stream(&mut self, stream_data: &Value) -> Value {
         let chunk_id = self.get_next_row_id();
 
-        let is_byte_stream =
-            stream_data.get("byteStream").and_then(|v| v.as_bool()).unwrap_or(false);
+        let is_byte_stream = stream_data
+            .get("byteStream")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
 
         let chunks = stream_data.get("chunks").and_then(|v| v.as_array());
 
@@ -1359,8 +1421,11 @@ impl RscSerializer {
                 .get("children")
                 .ok_or_else(|| RariError::internal("Suspense missing children prop"))?;
 
-            let boundary_id =
-                element.props.get("~boundaryId").and_then(|v| v.as_str()).unwrap_or("default");
+            let boundary_id = element
+                .props
+                .get("~boundaryId")
+                .and_then(|v| v.as_str())
+                .unwrap_or("default");
 
             let fallback_element: crate::rsc::types::elements::ReactElement =
                 serde_json::from_value(fallback.clone()).map_err(|e| {
@@ -1674,8 +1739,10 @@ mod tests {
         let mut serializer = RscSerializer::new();
 
         let mut props_with_function = FxHashMap::default();
-        props_with_function
-            .insert("onClick".to_string(), json!("function handleClick() { return true; }"));
+        props_with_function.insert(
+            "onClick".to_string(),
+            json!("function handleClick() { return true; }"),
+        );
         props_with_function.insert("valid_prop".to_string(), json!("valid value"));
 
         let element =
@@ -1743,9 +1810,9 @@ mod tests {
                     Ok(json!(["$", "h1", null, {"children": "Server rendered content"}]))
                 }
                 "HTMLComponent" => Ok(json!("<p>HTML from server</p>")),
-                "FailingComponent" => {
-                    Err(RariError::js_execution("Component execution failed".to_string()))
-                }
+                "FailingComponent" => Err(RariError::js_execution(
+                    "Component execution failed".to_string(),
+                )),
                 _ => Ok(
                     json!({"type": "div", "props": {"children": format!("Component: {}", component_name)}}),
                 ),
@@ -1832,21 +1899,42 @@ mod tests {
         let children = LoadingReactElement::with_props("div", children_props);
 
         let mut suspense_props = FxHashMap::default();
-        suspense_props.insert("fallback".to_string(), serde_json::to_value(&fallback).unwrap());
-        suspense_props.insert("children".to_string(), serde_json::to_value(&children).unwrap());
+        suspense_props.insert(
+            "fallback".to_string(),
+            serde_json::to_value(&fallback).unwrap(),
+        );
+        suspense_props.insert(
+            "children".to_string(),
+            serde_json::to_value(&children).unwrap(),
+        );
         suspense_props.insert("~boundaryId".to_string(), json!("test-boundary"));
 
         let suspense = LoadingReactElement::with_props("react.suspense", suspense_props);
 
         let result = serializer.serialize_element(&suspense).unwrap();
 
-        assert!(result.starts_with("$L"), "Should return a reference to the Suspense boundary");
+        assert!(
+            result.starts_with("$L"),
+            "Should return a reference to the Suspense boundary"
+        );
 
         let output = serializer.output_lines.join("\n");
-        assert!(output.contains("react.suspense"), "Should contain Suspense tag");
-        assert!(output.contains("test-boundary"), "Should contain boundary ID");
-        assert!(output.contains("Loading..."), "Should contain fallback content");
-        assert!(output.contains("Content loaded"), "Should contain children content");
+        assert!(
+            output.contains("react.suspense"),
+            "Should contain Suspense tag"
+        );
+        assert!(
+            output.contains("test-boundary"),
+            "Should contain boundary ID"
+        );
+        assert!(
+            output.contains("Loading..."),
+            "Should contain fallback content"
+        );
+        assert!(
+            output.contains("Content loaded"),
+            "Should contain children content"
+        );
     }
 
     #[test]
@@ -1866,8 +1954,14 @@ mod tests {
         assert!(result.starts_with("$L"), "Should return a reference");
 
         let output = serializer.output_lines.join("\n");
-        assert!(output.contains(r#"["$","div""#), "Should contain div element");
-        assert!(output.contains("test-class"), "Should contain className prop");
+        assert!(
+            output.contains(r#"["$","div""#),
+            "Should contain div element"
+        );
+        assert!(
+            output.contains("test-class"),
+            "Should contain className prop"
+        );
         assert!(output.contains("Hello World"), "Should contain children");
         assert!(output.contains("test-key"), "Should contain key");
     }
@@ -1892,8 +1986,14 @@ mod tests {
         assert_eq!(result, "$La", "Reference should use hexadecimal format");
 
         let output = serializer.output_lines.join("\n");
-        assert!(output.contains("a:["), "Wire format row should use hex ID 'a'");
-        assert!(output.contains("Test Content"), "Should contain the element content");
+        assert!(
+            output.contains("a:["),
+            "Wire format row should use hex ID 'a'"
+        );
+        assert!(
+            output.contains("Test Content"),
+            "Should contain the element content"
+        );
 
         let element2 = LoadingReactElement::with_props("div", FxHashMap::default());
         let result2 = serializer.serialize_element(&element2).unwrap();
@@ -1911,16 +2011,29 @@ mod tests {
     fn test_emit_suspense_boundary_with_refs() {
         let mut serializer = RscSerializer::new();
 
-        let result =
-            serializer.emit_suspense_boundary_with_refs("$L1", "$L2", "boundary-123").unwrap();
+        let result = serializer
+            .emit_suspense_boundary_with_refs("$L1", "$L2", "boundary-123")
+            .unwrap();
 
         assert!(result.starts_with("$L"), "Should return a reference");
 
         let output = serializer.output_lines.join("\n");
-        assert!(output.contains("react.suspense"), "Should contain Suspense tag");
-        assert!(output.contains(r#""fallback":"$L1""#), "Should reference fallback");
-        assert!(output.contains(r#""children":"$L2""#), "Should reference children");
-        assert!(output.contains("boundary-123"), "Should contain boundary ID");
+        assert!(
+            output.contains("react.suspense"),
+            "Should contain Suspense tag"
+        );
+        assert!(
+            output.contains(r#""fallback":"$L1""#),
+            "Should reference fallback"
+        );
+        assert!(
+            output.contains(r#""children":"$L2""#),
+            "Should reference children"
+        );
+        assert!(
+            output.contains("boundary-123"),
+            "Should contain boundary ID"
+        );
     }
 
     #[test]
@@ -1939,7 +2052,10 @@ mod tests {
 
         assert_eq!(processed, "$Q0");
 
-        assert!(!serializer.output_lines.is_empty(), "Expected output lines to be emitted");
+        assert!(
+            !serializer.output_lines.is_empty(),
+            "Expected output lines to be emitted"
+        );
         assert_eq!(serializer.output_lines.len(), 1);
 
         let chunk = &serializer.output_lines[0];
@@ -2013,7 +2129,12 @@ mod tests {
 
         assert!(processed["map"].as_str().unwrap().starts_with("$Q"));
         assert!(processed["set"].as_str().unwrap().starts_with("$W"));
-        assert!(processed["nested"]["formdata"].as_str().unwrap().starts_with("$K"));
+        assert!(
+            processed["nested"]["formdata"]
+                .as_str()
+                .unwrap()
+                .starts_with("$K")
+        );
     }
 
     #[test]
@@ -2247,8 +2368,14 @@ mod tests {
 
         let suspense = LoadingReactElement::with_props("react.suspense", {
             let mut props = FxHashMap::default();
-            props.insert("fallback".to_string(), serde_json::to_value(&fallback).unwrap());
-            props.insert("children".to_string(), serde_json::to_value(&children).unwrap());
+            props.insert(
+                "fallback".to_string(),
+                serde_json::to_value(&fallback).unwrap(),
+            );
+            props.insert(
+                "children".to_string(),
+                serde_json::to_value(&children).unwrap(),
+            );
             props.insert("~boundaryId".to_string(), json!("article-boundary"));
             props
         });
@@ -2260,16 +2387,40 @@ mod tests {
         let lines: Vec<&str> = output.lines().collect();
         assert_eq!(lines.len(), 3, "Should have 3 rows in wire format");
 
-        assert!(lines[0].contains(r#"["$","div""#), "First row should be fallback div");
-        assert!(lines[0].contains("loading-spinner"), "Should contain fallback className");
+        assert!(
+            lines[0].contains(r#"["$","div""#),
+            "First row should be fallback div"
+        );
+        assert!(
+            lines[0].contains("loading-spinner"),
+            "Should contain fallback className"
+        );
 
-        assert!(lines[1].contains(r#"["$","article""#), "Second row should be children article");
-        assert!(lines[1].contains("content"), "Should contain children className");
+        assert!(
+            lines[1].contains(r#"["$","article""#),
+            "Second row should be children article"
+        );
+        assert!(
+            lines[1].contains("content"),
+            "Should contain children className"
+        );
 
-        assert!(lines[2].contains("react.suspense"), "Third row should be Suspense boundary");
-        assert!(lines[2].contains("$L0"), "Should reference fallback with $L0");
-        assert!(lines[2].contains("$L1"), "Should reference children with $L1");
-        assert!(lines[2].contains("article-boundary"), "Should contain boundary ID");
+        assert!(
+            lines[2].contains("react.suspense"),
+            "Third row should be Suspense boundary"
+        );
+        assert!(
+            lines[2].contains("$L0"),
+            "Should reference fallback with $L0"
+        );
+        assert!(
+            lines[2].contains("$L1"),
+            "Should reference children with $L1"
+        );
+        assert!(
+            lines[2].contains("article-boundary"),
+            "Should contain boundary ID"
+        );
     }
 
     #[test]
@@ -2423,7 +2574,10 @@ mod tests {
 
         assert!(result.contains("$B"), "Should contain Blob reference");
 
-        assert!(result.contains("application/octet-stream"), "Should use default blob type");
+        assert!(
+            result.contains("application/octet-stream"),
+            "Should use default blob type"
+        );
     }
 
     #[test]
@@ -2451,7 +2605,10 @@ mod tests {
 
         assert!(result.contains(":R"), "Should contain stream start marker");
 
-        assert!(result.contains(":C"), "Should contain stream complete marker");
+        assert!(
+            result.contains(":C"),
+            "Should contain stream complete marker"
+        );
 
         assert!(result.contains("[1,2,3]"), "Should contain first chunk");
         assert!(result.contains("[4,5,6]"), "Should contain second chunk");
@@ -2481,9 +2638,15 @@ mod tests {
 
         assert!(result.contains("$"), "Should contain by-value reference");
 
-        assert!(result.contains(":r"), "Should contain byte stream start marker");
+        assert!(
+            result.contains(":r"),
+            "Should contain byte stream start marker"
+        );
 
-        assert!(result.contains(":C"), "Should contain stream complete marker");
+        assert!(
+            result.contains(":C"),
+            "Should contain stream complete marker"
+        );
     }
 
     #[test]
@@ -2580,7 +2743,10 @@ mod tests {
         let result = serializer.serialize_to_rsc_format(&element);
 
         assert!(result.contains(":R"), "Should contain stream start marker");
-        assert!(result.contains(":C"), "Should contain stream complete marker");
+        assert!(
+            result.contains(":C"),
+            "Should contain stream complete marker"
+        );
     }
 
     #[test]

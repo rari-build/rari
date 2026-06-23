@@ -249,14 +249,24 @@ impl ImageRenderer {
             if let Some(width_str) = parts.first()
                 && let Ok(width) = width_str.trim_end_matches("px").parse::<f32>()
             {
-                return BorderWidth { top: width, right: width, bottom: width, left: width };
+                return BorderWidth {
+                    top: width,
+                    right: width,
+                    bottom: width,
+                    left: width,
+                };
             }
         }
 
         if let Some(width_str) = style.get("borderWidth")
             && let Ok(width) = width_str.trim_end_matches("px").parse::<f32>()
         {
-            return BorderWidth { top: width, right: width, bottom: width, left: width };
+            return BorderWidth {
+                top: width,
+                right: width,
+                bottom: width,
+                left: width,
+            };
         }
 
         BorderWidth {

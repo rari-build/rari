@@ -71,7 +71,10 @@ impl Default for FontContext {
 impl FontContext {
     pub fn new() -> Self {
         let inner = ParleyFontContext {
-            collection: Collection::new(CollectionOptions { system_fonts: false, shared: false }),
+            collection: Collection::new(CollectionOptions {
+                system_fonts: false,
+                shared: false,
+            }),
             source_cache: Default::default(),
         };
 
@@ -147,7 +150,10 @@ mod tests {
         let mut font_ctx = ctx.inner.clone();
         let mut layout_cx: LayoutContext<[u8; 4]> = LayoutContext::new();
 
-        let root_style = TextStyle { font_size: 32.0, ..Default::default() };
+        let root_style = TextStyle {
+            font_size: 32.0,
+            ..Default::default()
+        };
 
         let mut builder = layout_cx.tree_builder(&mut font_ctx, 1.0, true, &root_style);
         builder.push_text("Hello 🎉 World");
@@ -179,7 +185,10 @@ mod tests {
         let mut font_ctx = ctx.inner.clone();
         let mut layout_cx: LayoutContext<[u8; 4]> = LayoutContext::new();
 
-        let root_style = TextStyle { font_size: 32.0, ..Default::default() };
+        let root_style = TextStyle {
+            font_size: 32.0,
+            ..Default::default()
+        };
 
         let mut builder = layout_cx.tree_builder(&mut font_ctx, 1.0, true, &root_style);
         builder.push_text("🎉");
@@ -196,7 +205,10 @@ mod tests {
                         FontRef::from_index(run.font().data.as_ref(), run.font().index as usize)
                             .expect("Invalid font index");
 
-                    println!("Font has {} color palettes", font_ref.color_palettes().count());
+                    println!(
+                        "Font has {} color palettes",
+                        font_ref.color_palettes().count()
+                    );
 
                     let mut scaler = scale_context
                         .builder(font_ref)
@@ -233,11 +245,26 @@ mod tests {
 
     #[test]
     fn test_guess_font_format() {
-        assert!(matches!(guess_font_format(b"wOF2...."), Ok(FontFormat::Woff2)));
-        assert!(matches!(guess_font_format(b"wOFF...."), Ok(FontFormat::Woff)));
-        assert!(matches!(guess_font_format(&[0x00, 0x01, 0x00, 0x00]), Ok(FontFormat::Ttf)));
+        assert!(matches!(
+            guess_font_format(b"wOF2...."),
+            Ok(FontFormat::Woff2)
+        ));
+        assert!(matches!(
+            guess_font_format(b"wOFF...."),
+            Ok(FontFormat::Woff)
+        ));
+        assert!(matches!(
+            guess_font_format(&[0x00, 0x01, 0x00, 0x00]),
+            Ok(FontFormat::Ttf)
+        ));
         assert!(matches!(guess_font_format(b"OTTO"), Ok(FontFormat::Otf)));
-        assert!(matches!(guess_font_format(b"invalid"), Err(FontError::UnsupportedFormat)));
-        assert!(matches!(guess_font_format(b"abc"), Err(FontError::UnsupportedFormat)));
+        assert!(matches!(
+            guess_font_format(b"invalid"),
+            Err(FontError::UnsupportedFormat)
+        ));
+        assert!(matches!(
+            guess_font_format(b"abc"),
+            Err(FontError::UnsupportedFormat)
+        ));
     }
 }

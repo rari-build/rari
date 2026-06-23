@@ -22,10 +22,16 @@ pub fn create_wrapped_html_error_message(
 
     msg.push_str("📍 AFFECTED FILES:\n");
     msg.push_str(&format!("   Route:        {}\n", route_match.route.path));
-    msg.push_str(&format!("   Page:         {}\n", route_match.route.file_path));
+    msg.push_str(&format!(
+        "   Page:         {}\n",
+        route_match.route.file_path
+    ));
 
     if let Some(layout_path) = root_layout_path {
-        msg.push_str(&format!("   Root Layout:  {} ← CHECK THIS FILE\n", layout_path));
+        msg.push_str(&format!(
+            "   Root Layout:  {} ← CHECK THIS FILE\n",
+            layout_path
+        ));
     }
 
     msg.push_str("\n🔧 HOW TO FIX (Step-by-Step):\n");
@@ -67,7 +73,11 @@ pub fn create_wrapped_html_error_message(
         msg.push_str("   Your current component tree for this route:\n\n");
         for (idx, layout) in route_match.layouts.iter().enumerate() {
             let indent = "   ".repeat(idx + 1);
-            let marker = if layout.is_root { " ← ROOT LAYOUT (check this!)" } else { "" };
+            let marker = if layout.is_root {
+                " ← ROOT LAYOUT (check this!)"
+            } else {
+                ""
+            };
             msg.push_str(&format!("   {}└─ {}{}\n", indent, layout.file_path, marker));
         }
         msg.push_str(&format!(

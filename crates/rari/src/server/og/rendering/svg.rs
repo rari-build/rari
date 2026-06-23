@@ -423,7 +423,11 @@ mod tests {
 
         let options = resvg::usvg::Options::default();
         let result = resvg::usvg::Tree::from_str(&svg, &options);
-        assert!(result.is_ok(), "usvg failed to parse Rari logo: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "usvg failed to parse Rari logo: {:?}",
+            result.err()
+        );
     }
 
     #[test]
@@ -466,6 +470,10 @@ mod tests {
 
         let options = resvg::usvg::Options::default();
         let result = resvg::usvg::Tree::from_str(&svg, &options);
-        assert!(result.is_ok(), "usvg failed to parse gradient SVG: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "usvg failed to parse gradient SVG: {:?}",
+            result.err()
+        );
     }
 }

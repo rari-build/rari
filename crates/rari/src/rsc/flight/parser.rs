@@ -47,7 +47,10 @@ impl RscWireFormatParser {
 
     fn parse_line(&self, line: &str) -> Result<(u32, RscElement), RariError> {
         let colon_pos = line.find(':').ok_or_else(|| {
-            RariError::internal(format!("Invalid RSC line format: missing colon in '{}'", line))
+            RariError::internal(format!(
+                "Invalid RSC line format: missing colon in '{}'",
+                line
+            ))
         })?;
 
         let (id_str, data_str) = line.split_at(colon_pos);
@@ -110,7 +113,9 @@ impl RscWireFormatParser {
 
             JsonValue::Array(arr) => {
                 if arr.is_empty() {
-                    return Err(RariError::internal("Empty array in RSC element".to_string()));
+                    return Err(RariError::internal(
+                        "Empty array in RSC element".to_string(),
+                    ));
                 }
 
                 if let Some(JsonValue::String(marker)) = arr.first()
@@ -119,16 +124,18 @@ impl RscWireFormatParser {
                     return self.parse_react_element(arr);
                 }
 
-                Ok(RscElement::Text(serde_json::to_string(value).unwrap_or_default()))
+                Ok(RscElement::Text(
+                    serde_json::to_string(value).unwrap_or_default(),
+                ))
             }
 
             JsonValue::Number(n) => Ok(RscElement::Text(n.to_string())),
             JsonValue::Bool(b) => Ok(RscElement::Text(b.to_string())),
             JsonValue::Null => Ok(RscElement::Text(String::new())),
 
-            JsonValue::Object(_) => {
-                Ok(RscElement::Text(serde_json::to_string(value).unwrap_or_default()))
-            }
+            JsonValue::Object(_) => Ok(RscElement::Text(
+                serde_json::to_string(value).unwrap_or_default(),
+            )),
         }
     }
 
@@ -203,7 +210,12 @@ impl RscWireFormatParser {
             .or_else(|| key.clone())
             .unwrap_or_else(|| format!("boundary_{}", uuid::Uuid::new_v4()));
 
-        Ok(RscElement::Suspense { fallback_ref, children_ref, boundary_id, props })
+        Ok(RscElement::Suspense {
+            fallback_ref,
+            children_ref,
+            boundary_id,
+            props,
+        })
     }
 
     fn parse_promise_element(
@@ -223,7 +235,13 @@ impl RscWireFormatParser {
         let mut boundaries = Vec::new();
 
         for (row_id, element) in &self.elements {
-            if let RscElement::Suspense { fallback_ref, children_ref, boundary_id, .. } = element {
+            if let RscElement::Suspense {
+                fallback_ref,
+                children_ref,
+                boundary_id,
+                ..
+            } = element
+            {
                 let boundary = SuspenseBoundary {
                     boundary_id: boundary_id.clone(),
                     fallback_ref: fallback_ref.clone(),
@@ -297,7 +315,10 @@ mod tests {
 
         if let Some(RscElement::Component { tag, props, .. }) = elements.get(&0) {
             assert_eq!(tag, "div");
-            assert_eq!(props.get("className").and_then(|v| v.as_str()), Some("container"));
+            assert_eq!(
+                props.get("className").and_then(|v| v.as_str()),
+                Some("container")
+            );
         } else {
             panic!("Expected Component element");
         }

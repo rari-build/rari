@@ -100,11 +100,17 @@ impl ExtensionTrait<()> for deno_permissions {
 }
 
 use deno_runtime::ops::worker_host::{CreateWebWorkerCb, deno_worker_host};
-impl ExtensionTrait<(&ExtensionOptions, Option<CrossIsolateStore<SharedRef<BackingStore>>>)>
-    for deno_worker_host
+impl
+    ExtensionTrait<(
+        &ExtensionOptions,
+        Option<CrossIsolateStore<SharedRef<BackingStore>>>,
+    )> for deno_worker_host
 {
     fn init(
-        options: (&ExtensionOptions, Option<CrossIsolateStore<SharedRef<BackingStore>>>),
+        options: (
+            &ExtensionOptions,
+            Option<CrossIsolateStore<SharedRef<BackingStore>>>,
+        ),
     ) -> Extension {
         let options = WebWorkerCallbackOptions::new(options.0, options.1);
         let callback = create_web_worker_callback(options);

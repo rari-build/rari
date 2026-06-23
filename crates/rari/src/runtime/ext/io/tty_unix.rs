@@ -19,7 +19,10 @@ use std::cell::RefCell;
 use std::io::Error;
 use std::rc::Rc;
 
-deno_core::extension!(deno_tty, ops = [op_set_raw, op_console_size, op_read_line_prompt],);
+deno_core::extension!(
+    deno_tty,
+    ops = [op_set_raw, op_console_size, op_read_line_prompt],
+);
 
 #[derive(Default, Clone)]
 pub struct TtyModeStore(Rc<RefCell<FxHashMap<ResourceId, termios::Termios>>>);
@@ -226,7 +229,10 @@ fn console_size_from_fd(fd: std::os::unix::prelude::RawFd) -> Result<ConsoleSize
         if libc::ioctl(fd, libc::TIOCGWINSZ, &mut size as *mut _) != 0 {
             return Err(Error::last_os_error());
         }
-        Ok(ConsoleSize { cols: size.ws_col as u32, rows: size.ws_row as u32 })
+        Ok(ConsoleSize {
+            cols: size.ws_col as u32,
+            rows: size.ws_row as u32,
+        })
     }
 }
 

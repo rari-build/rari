@@ -52,9 +52,15 @@ async fn execute_proxy(
     let renderer = state.renderer.lock().await;
     let runtime = &renderer.runtime;
 
-    let scheme = headers.get("x-forwarded-proto").cloned().unwrap_or_else(|| "http".to_string());
+    let scheme = headers
+        .get("x-forwarded-proto")
+        .cloned()
+        .unwrap_or_else(|| "http".to_string());
 
-    let host = headers.get("host").cloned().unwrap_or_else(|| "localhost".to_string());
+    let host = headers
+        .get("host")
+        .cloned()
+        .unwrap_or_else(|| "localhost".to_string());
 
     let url = format!("{}://{}{}", scheme, host, uri);
 
@@ -65,7 +71,9 @@ async fn execute_proxy(
         "headers": headers,
     });
 
-    let result_json = runtime.execute_function("~rariExecuteProxy", vec![request_data]).await?;
+    let result_json = runtime
+        .execute_function("~rariExecuteProxy", vec![request_data])
+        .await?;
 
     let proxy_result: ProxyResult = serde_json::from_value(result_json)?;
 
@@ -87,7 +95,10 @@ impl<S> Layer<S> for ProxyLayer {
     type Service = ProxyMiddleware<S>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        ProxyMiddleware { inner, state: self.state.clone() }
+        ProxyMiddleware {
+            inner,
+            state: self.state.clone(),
+        }
     }
 }
 
@@ -257,8 +268,11 @@ pub async fn initialize_proxy(state: &ServerState) -> Result<(), Box<dyn std::er
         return Ok(());
     }
 
-    let executor_absolute =
-        if let Ok(canonical) = executor_path.canonicalize() { canonical } else { executor_path };
+    let executor_absolute = if let Ok(canonical) = executor_path.canonicalize() {
+        canonical
+    } else {
+        executor_path
+    };
     let executor_specifier = path_to_file_url(&executor_absolute);
 
     let rari_request_path = rari_pkg_dir.join("dist/proxy/RariRequest.mjs");
@@ -291,7 +305,10 @@ pub async fn initialize_proxy(state: &ServerState) -> Result<(), Box<dyn std::er
         executor_specifier, proxy_specifier, rari_request_specifier
     );
 
-    match runtime.execute_script("initialize_proxy_executor".to_string(), init_script).await {
+    match runtime
+        .execute_script("initialize_proxy_executor".to_string(), init_script)
+        .await
+    {
         Ok(_) => Ok(()),
         Err(e) => {
             error!("Failed to register proxy function: {}", e);

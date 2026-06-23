@@ -37,7 +37,9 @@ pub struct LinearGradient {
 
 impl LinearGradient {
     pub fn parse(gradient_str: &str) -> Option<Self> {
-        let inner = gradient_str.strip_prefix("linear-gradient(")?.strip_suffix(")")?;
+        let inner = gradient_str
+            .strip_prefix("linear-gradient(")?
+            .strip_suffix(")")?;
 
         let parts = Self::split_gradient_parts(inner);
         if parts.is_empty() {
@@ -57,8 +59,10 @@ impl LinearGradient {
             (180.0, 0)
         };
 
-        let stops: Vec<ColorStop> =
-            parts[color_start_idx..].iter().filter_map(|s| Self::parse_color_stop(s)).collect();
+        let stops: Vec<ColorStop> = parts[color_start_idx..]
+            .iter()
+            .filter_map(|s| Self::parse_color_stop(s))
+            .collect();
 
         if stops.is_empty() {
             return None;
@@ -115,13 +119,29 @@ impl LinearGradient {
         }
 
         if let Some(deg_str) = angle_str.strip_suffix("deg") {
-            deg_str.trim().parse::<f32>().ok().map(|v| v.rem_euclid(360.0))
+            deg_str
+                .trim()
+                .parse::<f32>()
+                .ok()
+                .map(|v| v.rem_euclid(360.0))
         } else if let Some(grad_str) = angle_str.strip_suffix("grad") {
-            grad_str.trim().parse::<f32>().ok().map(|v| (v / 400.0 * 360.0).rem_euclid(360.0))
+            grad_str
+                .trim()
+                .parse::<f32>()
+                .ok()
+                .map(|v| (v / 400.0 * 360.0).rem_euclid(360.0))
         } else if let Some(turn_str) = angle_str.strip_suffix("turn") {
-            turn_str.trim().parse::<f32>().ok().map(|v| (v * 360.0).rem_euclid(360.0))
+            turn_str
+                .trim()
+                .parse::<f32>()
+                .ok()
+                .map(|v| (v * 360.0).rem_euclid(360.0))
         } else if let Some(rad_str) = angle_str.strip_suffix("rad") {
-            rad_str.trim().parse::<f32>().ok().map(|v| v.to_degrees().rem_euclid(360.0))
+            rad_str
+                .trim()
+                .parse::<f32>()
+                .ok()
+                .map(|v| v.to_degrees().rem_euclid(360.0))
         } else {
             angle_str.parse::<f32>().ok().map(|v| v.rem_euclid(360.0))
         }
@@ -135,7 +155,11 @@ impl LinearGradient {
 
         let color = Self::parse_color(parts[0])?;
 
-        let position = if parts.len() > 1 { Self::parse_position(parts[1]) } else { None };
+        let position = if parts.len() > 1 {
+            Self::parse_position(parts[1])
+        } else {
+            None
+        };
 
         Some(ColorStop { color, position })
     }
@@ -146,7 +170,10 @@ impl LinearGradient {
         } else if let Some(px_str) = pos_str.strip_suffix("px") {
             px_str.parse::<f32>().ok().map(StopPosition::Px)
         } else {
-            pos_str.parse::<f32>().ok().map(|v| StopPosition::Normalized(v.clamp(0.0, 1.0)))
+            pos_str
+                .parse::<f32>()
+                .ok()
+                .map(|v| StopPosition::Normalized(v.clamp(0.0, 1.0)))
         }
     }
 
@@ -236,14 +263,20 @@ impl LinearGradient {
         }
 
         if self.stops.len() == 1 {
-            return vec![ResolvedStop { color: self.stops[0].color, position: axis_length / 2.0 }];
+            return vec![ResolvedStop {
+                color: self.stops[0].color,
+                position: axis_length / 2.0,
+            }];
         }
 
         let mut resolved: Vec<ResolvedStop> = Vec::with_capacity(self.stops.len());
 
         for stop in &self.stops {
             let position = stop.position.map(|p| p.to_px(axis_length)).unwrap_or(-1.0);
-            resolved.push(ResolvedStop { color: stop.color, position });
+            resolved.push(ResolvedStop {
+                color: stop.color,
+                position,
+            });
         }
 
         if resolved[0].position < 0.0 {
@@ -347,7 +380,14 @@ impl LinearGradient {
         let max_extent = ((width * dir_x.abs()) + (height * dir_y.abs())) / 2.0;
         let axis_length = 2.0 * max_extent;
 
-        GradientParams { dir_x, dir_y, cx, cy, max_extent, axis_length }
+        GradientParams {
+            dir_x,
+            dir_y,
+            cx,
+            cy,
+            max_extent,
+            axis_length,
+        }
     }
 }
 
@@ -446,9 +486,18 @@ mod tests {
         let grad = LinearGradient {
             angle_deg: 0.0,
             stops: vec![
-                ColorStop { color: Rgba([255, 0, 0, 255]), position: None },
-                ColorStop { color: Rgba([0, 255, 0, 255]), position: None },
-                ColorStop { color: Rgba([0, 0, 255, 255]), position: None },
+                ColorStop {
+                    color: Rgba([255, 0, 0, 255]),
+                    position: None,
+                },
+                ColorStop {
+                    color: Rgba([0, 255, 0, 255]),
+                    position: None,
+                },
+                ColorStop {
+                    color: Rgba([0, 0, 255, 255]),
+                    position: None,
+                },
             ],
         };
 
@@ -485,8 +534,14 @@ mod tests {
         let grad = LinearGradient {
             angle_deg: 0.0,
             stops: vec![
-                ColorStop { color: Rgba([255, 0, 0, 255]), position: Some(StopPosition::Px(0.0)) },
-                ColorStop { color: Rgba([0, 255, 0, 255]), position: Some(StopPosition::Px(50.0)) },
+                ColorStop {
+                    color: Rgba([255, 0, 0, 255]),
+                    position: Some(StopPosition::Px(0.0)),
+                },
+                ColorStop {
+                    color: Rgba([0, 255, 0, 255]),
+                    position: Some(StopPosition::Px(50.0)),
+                },
                 ColorStop {
                     color: Rgba([0, 0, 255, 255]),
                     position: Some(StopPosition::Px(100.0)),
@@ -510,7 +565,10 @@ mod tests {
                     color: Rgba([255, 0, 0, 255]),
                     position: Some(StopPosition::Percentage(0.0)),
                 },
-                ColorStop { color: Rgba([0, 255, 0, 255]), position: Some(StopPosition::Px(50.0)) },
+                ColorStop {
+                    color: Rgba([0, 255, 0, 255]),
+                    position: Some(StopPosition::Px(50.0)),
+                },
                 ColorStop {
                     color: Rgba([0, 0, 255, 255]),
                     position: Some(StopPosition::Percentage(100.0)),

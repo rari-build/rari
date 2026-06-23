@@ -43,7 +43,11 @@ impl ImageRenderer {
         layout: &ComputedLayout,
         image: &mut RgbaImage,
     ) -> Result<(), String> {
-        if let Some(bg) = layout.style.get("background").or(layout.style.get("backgroundColor")) {
+        if let Some(bg) = layout
+            .style
+            .get("background")
+            .or(layout.style.get("backgroundColor"))
+        {
             self.render_background(layout, bg, image, &mut self.mask_memory.clone())?;
         }
 
@@ -83,7 +87,10 @@ impl ImageRenderer {
     }
 
     fn has_text_content(&self, element: &super::super::types::JsxElement) -> bool {
-        element.children.iter().any(|child| matches!(child, JsxChild::Text(_)))
+        element
+            .children
+            .iter()
+            .any(|child| matches!(child, JsxChild::Text(_)))
     }
 
     pub(super) fn parse_font_weight(&self, style: &FxHashMap<String, String>) -> u16 {

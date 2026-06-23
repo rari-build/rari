@@ -41,9 +41,12 @@ pub async fn handle_og_image_request(
     )
         .into_response();
 
-    response
-        .headers_mut()
-        .insert("x-cache", x_cache.parse().expect("x-cache header value should be valid ASCII"));
+    response.headers_mut().insert(
+        "x-cache",
+        x_cache
+            .parse()
+            .expect("x-cache header value should be valid ASCII"),
+    );
 
     Ok(response)
 }
@@ -76,9 +79,10 @@ impl IntoResponse for OgImageError {
             OgImageError::ExecutionError(_) | OgImageError::GenerationError(_) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, self.to_string())
             }
-            OgImageError::InternalError(_) => {
-                (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error".to_string())
-            }
+            OgImageError::InternalError(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Internal server error".to_string(),
+            ),
         };
 
         (status, message).into_response()

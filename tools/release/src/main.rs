@@ -127,8 +127,10 @@ async fn run_non_interactive(
 
     let use_cache_pkg = Package::load("@rari/use-cache", "packages/use-cache").await?;
     let use_cache_binary_version = use_cache_pkg.current_version.clone();
-    let use_cache_binary_group =
-        PackageGroup::new_virtual("@rari/use-cache-binaries".to_string(), use_cache_binary_version);
+    let use_cache_binary_group = PackageGroup::new_virtual(
+        "@rari/use-cache-binaries".to_string(),
+        use_cache_binary_version,
+    );
 
     let mut release_units = vec![
         ReleaseUnit::Single(rari_pkg),
@@ -141,7 +143,10 @@ async fn run_non_interactive(
     if let Some(only_list) = &only {
         release_units.retain(|unit| only_list.contains(&unit.name().to_string()));
         if release_units.is_empty() {
-            anyhow::bail!("No matching packages for selection: {}", only_list.join(", "));
+            anyhow::bail!(
+                "No matching packages for selection: {}",
+                only_list.join(", ")
+            );
         }
     }
 
@@ -183,10 +188,18 @@ async fn run_non_interactive(
             );
         };
 
-        println!("  {} {} → {}", "Version:".bold(), unit.current_version(), new_version.green());
+        println!(
+            "  {} {} → {}",
+            "Version:".bold(),
+            unit.current_version(),
+            new_version.green()
+        );
 
-        let first_path =
-            unit.paths().first().map(|p| p.as_path()).unwrap_or(std::path::Path::new("."));
+        let first_path = unit
+            .paths()
+            .first()
+            .map(|p| p.as_path())
+            .unwrap_or(std::path::Path::new("."));
         let commits = crate::git::get_commits_since_tag(unit_name, first_path).await?;
         let previous_tag = crate::git::get_previous_tag(unit_name, None).await?;
         if !commits.is_empty() {
@@ -206,7 +219,11 @@ async fn run_non_interactive(
         println!();
 
         if dry_run {
-            println!("  {} Would update version to {}...", "[DRY RUN]".yellow(), new_version);
+            println!(
+                "  {} Would update version to {}...",
+                "[DRY RUN]".yellow(),
+                new_version
+            );
         } else {
             println!("  {} Updating version...", "→".cyan());
             unit.update_version(&new_version).await?;
@@ -282,8 +299,9 @@ async fn run_non_interactive(
         }
 
         for pkg in &packages {
-            let is_prerelease =
-                semver::Version::parse(&new_version).map(|v| !v.pre.is_empty()).unwrap_or(false);
+            let is_prerelease = semver::Version::parse(&new_version)
+                .map(|v| !v.pre.is_empty())
+                .unwrap_or(false);
             let npm_tag = if is_prerelease { "next" } else { "latest" };
 
             if dry_run {
@@ -326,9 +344,15 @@ async fn run_non_interactive(
 
     if no_push {
         println!("{}", "⚠️  Skipping git push (--no-push flag set)".yellow());
-        println!("{}", "   Run 'git push && git push --tags' manually when ready".yellow());
+        println!(
+            "{}",
+            "   Run 'git push && git push --tags' manually when ready".yellow()
+        );
     } else if dry_run {
-        println!("{} Would push commits and tags to remote", "[DRY RUN]".yellow());
+        println!(
+            "{} Would push commits and tags to remote",
+            "[DRY RUN]".yellow()
+        );
     } else {
         println!("{} Pushing commits and tags to remote...", "→".cyan());
         crate::git::push_changes().await?;
@@ -336,7 +360,10 @@ async fn run_non_interactive(
     }
     println!();
 
-    println!("{}", "✨ All packages released successfully!".green().bold());
+    println!(
+        "{}",
+        "✨ All packages released successfully!".green().bold()
+    );
 
     if !dry_run && !released_packages.is_empty() {
         println!();
@@ -356,7 +383,10 @@ async fn run_non_interactive(
                 }
 
                 println!();
-                print!("{} Open GitHub release pages in browser? [y/N]: ", "?".cyan());
+                print!(
+                    "{} Open GitHub release pages in browser? [y/N]: ",
+                    "?".cyan()
+                );
                 io::stdout().flush()?;
 
                 let mut input = String::new();
@@ -382,7 +412,11 @@ async fn run_non_interactive(
                 }
             }
             Err(e) => {
-                println!("  {} Could not determine GitHub repository: {}", "⚠".yellow(), e);
+                println!(
+                    "  {} Could not determine GitHub repository: {}",
+                    "⚠".yellow(),
+                    e
+                );
             }
         }
     }

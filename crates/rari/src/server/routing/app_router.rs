@@ -11,7 +11,11 @@ use urlencoding::decode;
 fn parse_decoded_path_segments(path: &str) -> Vec<String> {
     path.split('/')
         .filter(|s| !s.is_empty())
-        .map(|s| decode(s).unwrap_or_else(|_| s.to_string().into()).into_owned())
+        .map(|s| {
+            decode(s)
+                .unwrap_or_else(|_| s.to_string().into())
+                .into_owned()
+        })
         .collect()
 }
 
@@ -20,7 +24,11 @@ pub struct AppRouteEntry {
     pub path: String,
     #[serde(rename = "filePath")]
     pub file_path: String,
-    #[serde(rename = "componentId", default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "componentId",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub component_id: Option<String>,
     #[serde(default)]
     pub css: Vec<String>,
@@ -28,7 +36,11 @@ pub struct AppRouteEntry {
     pub params: Vec<String>,
     #[serde(rename = "isDynamic")]
     pub is_dynamic: bool,
-    #[serde(rename = "staticParams", default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "staticParams",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub static_params: Option<Vec<FxHashMap<String, serde_json::Value>>>,
 }
 
@@ -37,7 +49,11 @@ pub struct LayoutEntry {
     pub path: String,
     #[serde(rename = "filePath")]
     pub file_path: String,
-    #[serde(rename = "componentId", default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "componentId",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub component_id: Option<String>,
     #[serde(default)]
     pub css: Vec<String>,
@@ -45,7 +61,11 @@ pub struct LayoutEntry {
     pub parent_path: Option<String>,
     #[serde(rename = "isRoot", default)]
     pub is_root: bool,
-    #[serde(rename = "additionalPaths", default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "additionalPaths",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub additional_paths: Option<Vec<String>>,
 }
 
@@ -54,13 +74,21 @@ pub struct TemplateEntry {
     pub path: String,
     #[serde(rename = "filePath")]
     pub file_path: String,
-    #[serde(rename = "componentId", default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "componentId",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub component_id: Option<String>,
     #[serde(default)]
     pub css: Vec<String>,
     #[serde(rename = "parentPath", skip_serializing_if = "Option::is_none")]
     pub parent_path: Option<String>,
-    #[serde(rename = "additionalPaths", default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "additionalPaths",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub additional_paths: Option<Vec<String>>,
 }
 
@@ -69,11 +97,19 @@ pub struct LoadingEntry {
     pub path: String,
     #[serde(rename = "filePath")]
     pub file_path: String,
-    #[serde(rename = "componentId", default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "componentId",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub component_id: Option<String>,
     #[serde(default)]
     pub css: Vec<String>,
-    #[serde(rename = "additionalPaths", default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "additionalPaths",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub additional_paths: Option<Vec<String>>,
 }
 
@@ -82,11 +118,19 @@ pub struct ErrorEntry {
     pub path: String,
     #[serde(rename = "filePath")]
     pub file_path: String,
-    #[serde(rename = "componentId", default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "componentId",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub component_id: Option<String>,
     #[serde(default)]
     pub css: Vec<String>,
-    #[serde(rename = "additionalPaths", default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "additionalPaths",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub additional_paths: Option<Vec<String>>,
 }
 
@@ -95,11 +139,19 @@ pub struct NotFoundEntry {
     pub path: String,
     #[serde(rename = "filePath")]
     pub file_path: String,
-    #[serde(rename = "componentId", default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "componentId",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub component_id: Option<String>,
     #[serde(default)]
     pub css: Vec<String>,
-    #[serde(rename = "additionalPaths", default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "additionalPaths",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub additional_paths: Option<Vec<String>>,
 }
 
@@ -134,7 +186,9 @@ pub struct AppRouter {
 
 impl AppRouter {
     pub fn new(manifest: AppRouteManifest) -> Self {
-        Self { manifest: Arc::new(manifest) }
+        Self {
+            manifest: Arc::new(manifest),
+        }
     }
 
     pub async fn from_file(path: &str) -> Result<Self, RariError> {
@@ -173,7 +227,10 @@ impl AppRouter {
             }
         }
 
-        Err(RariError::not_found(format!("No route found for path: {}", path)))
+        Err(RariError::not_found(format!(
+            "No route found for path: {}",
+            path
+        )))
     }
 
     pub fn create_not_found_match(&self, path: &str) -> Option<AppRouteMatch> {
@@ -214,7 +271,11 @@ impl AppRouter {
         route: &AppRouteEntry,
         path: &str,
     ) -> Option<FxHashMap<String, ParamValue>> {
-        let route_segments = route.path.split('/').filter(|s| !s.is_empty()).collect::<Vec<_>>();
+        let route_segments = route
+            .path
+            .split('/')
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>();
         let path_segments = parse_decoded_path_segments(path);
 
         let mut params = FxHashMap::default();
@@ -272,7 +333,11 @@ impl AppRouter {
             route_idx += 1;
         }
 
-        if path_idx == path_segments.len() { Some(params) } else { None }
+        if path_idx == path_segments.len() {
+            Some(params)
+        } else {
+            None
+        }
     }
 
     fn matches_path_or_additional(
@@ -282,13 +347,18 @@ impl AppRouter {
     ) -> bool {
         path == current_path
             || additional_paths.as_ref().is_some_and(|paths| {
-                paths.iter().any(|additional_path| additional_path == current_path)
+                paths
+                    .iter()
+                    .any(|additional_path| additional_path == current_path)
             })
     }
 
     fn normalized_dir(file_path: &str) -> String {
         let normalized = file_path.cow_replace('\\', "/").into_owned();
-        normalized.rsplit_once('/').map(|(dir, _)| dir.to_string()).unwrap_or_default()
+        normalized
+            .rsplit_once('/')
+            .map(|(dir, _)| dir.to_string())
+            .unwrap_or_default()
     }
 
     fn is_boundary_ancestor(boundary_file_path: &str, route_file_path: &str) -> bool {
@@ -303,7 +373,11 @@ impl AppRouter {
 
     fn file_path_depth(file_path: &str) -> usize {
         let dir = Self::normalized_dir(file_path);
-        if dir.is_empty() { 0 } else { dir.split('/').count() }
+        if dir.is_empty() {
+            0
+        } else {
+            dir.split('/').count()
+        }
     }
 
     fn nearest_boundary_by_path<T, PathFn, AdditionalPathsFn, FilePathFn>(
@@ -322,8 +396,11 @@ impl AppRouter {
         let segments: Vec<&str> = route_path.split('/').filter(|s| !s.is_empty()).collect();
 
         (0..=segments.len()).rev().find_map(|i| {
-            let current_path =
-                if i == 0 { "/".to_string() } else { format!("/{}", segments[..i].join("/")) };
+            let current_path = if i == 0 {
+                "/".to_string()
+            } else {
+                format!("/{}", segments[..i].join("/"))
+            };
 
             entries
                 .iter()
@@ -397,8 +474,11 @@ impl AppRouter {
         let segments: Vec<&str> = route_path.split('/').filter(|s| !s.is_empty()).collect();
 
         for i in 0..=segments.len() {
-            let current_path =
-                if i == 0 { "/".to_string() } else { format!("/{}", segments[..i].join("/")) };
+            let current_path = if i == 0 {
+                "/".to_string()
+            } else {
+                format!("/{}", segments[..i].join("/"))
+            };
 
             let mut matching_layouts: Vec<_> = self
                 .manifest
@@ -439,8 +519,11 @@ impl AppRouter {
         let segments: Vec<&str> = route_path.split('/').filter(|s| !s.is_empty()).collect();
 
         for i in 0..=segments.len() {
-            let current_path =
-                if i == 0 { "/".to_string() } else { format!("/{}", segments[..i].join("/")) };
+            let current_path = if i == 0 {
+                "/".to_string()
+            } else {
+                format!("/{}", segments[..i].join("/"))
+            };
 
             let mut matching: Vec<_> = self
                 .manifest
@@ -797,7 +880,10 @@ mod tests {
         let slug_vec = matched.params.get("slug").and_then(|p| p.as_vec());
         assert_eq!(
             slug_vec,
-            Some(&vec!["getting-started".to_string(), "installation".to_string()])
+            Some(&vec![
+                "getting-started".to_string(),
+                "installation".to_string()
+            ])
         );
     }
 
@@ -817,9 +903,15 @@ mod tests {
         let layouts = router.resolve_layouts("/blog/[slug]");
 
         assert_eq!(layouts.len(), 2);
-        assert!(layouts[0].is_root, "Root layout (/) should have is_root = true");
+        assert!(
+            layouts[0].is_root,
+            "Root layout (/) should have is_root = true"
+        );
         assert_eq!(layouts[0].path, "/");
-        assert!(!layouts[1].is_root, "Nested layout (/blog) should have is_root = false");
+        assert!(
+            !layouts[1].is_root,
+            "Nested layout (/blog) should have is_root = false"
+        );
         assert_eq!(layouts[1].path, "/blog");
     }
 
@@ -895,7 +987,10 @@ mod tests {
         let result = router.match_route("/");
         assert!(result.is_ok(), "Root path '/' should match");
         let matched = result.unwrap();
-        assert_eq!(matched.route.path, "/", "Should match root route, not [slug]");
+        assert_eq!(
+            matched.route.path, "/",
+            "Should match root route, not [slug]"
+        );
 
         let result = router.match_route("/about");
         assert!(result.is_ok());
@@ -1020,16 +1115,26 @@ mod tests {
         let router = AppRouter::new(manifest);
 
         let pricing = router.match_route("/pricing").unwrap();
-        let pricing_layouts: Vec<_> =
-            pricing.layouts.iter().map(|layout| layout.file_path.as_str()).collect();
+        let pricing_layouts: Vec<_> = pricing
+            .layouts
+            .iter()
+            .map(|layout| layout.file_path.as_str())
+            .collect();
         assert_eq!(pricing_layouts, vec!["layout.tsx", "(_public)/layout.tsx"]);
 
         let forgot = router.match_route("/forgot").unwrap();
-        let forgot_layouts: Vec<_> =
-            forgot.layouts.iter().map(|layout| layout.file_path.as_str()).collect();
+        let forgot_layouts: Vec<_> = forgot
+            .layouts
+            .iter()
+            .map(|layout| layout.file_path.as_str())
+            .collect();
         assert_eq!(
             forgot_layouts,
-            vec!["layout.tsx", "(auth)/layout.tsx", "(auth)/(flow)/layout.tsx"]
+            vec![
+                "layout.tsx",
+                "(auth)/layout.tsx",
+                "(auth)/(flow)/layout.tsx"
+            ]
         );
     }
 
@@ -1185,7 +1290,10 @@ mod tests {
         let router = AppRouter::new(manifest);
 
         let matched = router.match_route("/forgot").unwrap();
-        assert_eq!(matched.loading.unwrap().file_path, "(auth)/(flow)/loading.tsx");
+        assert_eq!(
+            matched.loading.unwrap().file_path,
+            "(auth)/(flow)/loading.tsx"
+        );
         assert_eq!(matched.error.unwrap().file_path, "(auth)/(flow)/error.tsx");
 
         let not_found = router.find_not_found("/forgot").unwrap();
@@ -1227,10 +1335,16 @@ mod tests {
         let router = AppRouter::new(manifest);
 
         let matched = router.create_not_found_match("/forgot").unwrap();
-        let layout_paths: Vec<_> =
-            matched.layouts.iter().map(|layout| layout.file_path.as_str()).collect();
+        let layout_paths: Vec<_> = matched
+            .layouts
+            .iter()
+            .map(|layout| layout.file_path.as_str())
+            .collect();
 
-        assert_eq!(layout_paths, vec!["(auth)/layout.tsx", "(auth)/(flow)/layout.tsx"]);
+        assert_eq!(
+            layout_paths,
+            vec!["(auth)/layout.tsx", "(auth)/(flow)/layout.tsx"]
+        );
     }
 
     #[test]
@@ -1272,9 +1386,15 @@ mod tests {
 
         let matched = router.create_not_found_match("/pricing").unwrap();
         assert_eq!(matched.pathname, "/pricing");
-        assert_eq!(matched.not_found.unwrap().file_path, "(marketing)/not-found.tsx");
+        assert_eq!(
+            matched.not_found.unwrap().file_path,
+            "(marketing)/not-found.tsx"
+        );
         assert_eq!(matched.layouts[0].file_path, "(marketing)/layout.tsx");
-        assert_eq!(matched.loading.unwrap().file_path, "(marketing)/loading.tsx");
+        assert_eq!(
+            matched.loading.unwrap().file_path,
+            "(marketing)/loading.tsx"
+        );
         assert_eq!(matched.error.unwrap().file_path, "(marketing)/error.tsx");
     }
 
@@ -1292,8 +1412,10 @@ mod tests {
     #[test]
     fn test_resolve_templates_chain() {
         let mut manifest = create_test_manifest();
-        manifest.templates =
-            vec![template_entry("/", "template.tsx"), template_entry("/blog", "blog/template.tsx")];
+        manifest.templates = vec![
+            template_entry("/", "template.tsx"),
+            template_entry("/blog", "blog/template.tsx"),
+        ];
         let router = AppRouter::new(manifest);
 
         let templates = router.resolve_templates("/blog/hello-world");
@@ -1352,8 +1474,10 @@ mod tests {
     #[test]
     fn test_match_route_populates_templates() {
         let mut manifest = create_test_manifest();
-        manifest.templates =
-            vec![template_entry("/", "template.tsx"), template_entry("/blog", "blog/template.tsx")];
+        manifest.templates = vec![
+            template_entry("/", "template.tsx"),
+            template_entry("/blog", "blog/template.tsx"),
+        ];
         let router = AppRouter::new(manifest);
 
         let matched = router.match_route("/blog/hello-world").unwrap();

@@ -27,7 +27,8 @@ impl MaskMemory {
         bounds.max = bounds.max.ceil();
 
         self.buffer.clear();
-        self.buffer.resize((bounds.width() as usize) * (bounds.height() as usize), 0);
+        self.buffer
+            .resize((bounds.width() as usize) * (bounds.height() as usize), 0);
 
         let placement = Mask::with_scratch(paths, &mut self.scratch)
             .style(style)

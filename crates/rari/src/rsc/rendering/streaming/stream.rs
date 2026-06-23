@@ -14,7 +14,11 @@ pub struct RscStream {
 
 impl RscStream {
     pub fn new(receiver: mpsc::Receiver<RscStreamChunk>) -> Self {
-        Self { receiver, _request_context_guard: None, cleanup: None }
+        Self {
+            receiver,
+            _request_context_guard: None,
+            cleanup: None,
+        }
     }
 
     pub fn with_request_context(

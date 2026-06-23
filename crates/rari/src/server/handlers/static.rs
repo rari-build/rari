@@ -100,7 +100,11 @@ pub async fn static_or_spa_handler(
         }
     }
 
-    let route_path = if path.is_empty() { "/" } else { &format!("/{}", path) };
+    let route_path = if path.is_empty() {
+        "/"
+    } else {
+        &format!("/{}", path)
+    };
 
     let index_path = config.public_dir().join("index.html");
     if index_path.exists() {
@@ -170,7 +174,9 @@ pub fn cors_preflight_response() -> Response {
     use axum::http::HeaderValue;
 
     let mut builder = Response::builder().status(StatusCode::NO_CONTENT);
-    let headers = builder.headers_mut().expect("Response builder should have headers");
+    let headers = builder
+        .headers_mut()
+        .expect("Response builder should have headers");
     headers.insert("Access-Control-Allow-Origin", HeaderValue::from_static("*"));
     headers.insert(
         "Access-Control-Allow-Methods",
@@ -183,7 +189,9 @@ pub fn cors_preflight_response() -> Response {
         ),
     );
     headers.insert("Access-Control-Max-Age", HeaderValue::from_static("86400"));
-    builder.body(Body::empty()).expect("Valid preflight response")
+    builder
+        .body(Body::empty())
+        .expect("Valid preflight response")
 }
 
 #[axum::debug_handler]

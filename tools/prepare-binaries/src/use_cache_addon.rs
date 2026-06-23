@@ -10,15 +10,22 @@ const ADDON_BUILD_DIR: &str = ".build/rari-use-cache";
 const ADDON_OUTPUT_FILE: &str = "rari_use_cache.node";
 
 fn addon_napi_output_path(target_info: &Target, project_root: &Path) -> PathBuf {
-    project_root.join(ADDON_BUILD_DIR).join(format!("rari-use-cache.{}.node", target_info.platform))
+    project_root
+        .join(ADDON_BUILD_DIR)
+        .join(format!("rari-use-cache.{}.node", target_info.platform))
 }
 
 fn addon_stable_output_path(target_info: &Target, project_root: &Path) -> PathBuf {
-    project_root.join(ADDON_BUILD_DIR).join(target_info.platform).join(ADDON_OUTPUT_FILE)
+    project_root
+        .join(ADDON_BUILD_DIR)
+        .join(target_info.platform)
+        .join(ADDON_OUTPUT_FILE)
 }
 
 fn addon_platform_package_path(target_info: &Target, project_root: &Path) -> PathBuf {
-    project_root.join(target_info.addon_package_dir).join(ADDON_OUTPUT_FILE)
+    project_root
+        .join(target_info.addon_package_dir)
+        .join(ADDON_OUTPUT_FILE)
 }
 
 pub async fn build_addon(
@@ -94,7 +101,10 @@ pub async fn build_addon(
     let output = cmd.output().await.context("Failed to execute napi build")?;
 
     if !output.status.success() {
-        log_error(&format!("Failed to build addon for {}", target_info.platform));
+        log_error(&format!(
+            "Failed to build addon for {}",
+            target_info.platform
+        ));
         let stderr = String::from_utf8_lossy(&output.stderr);
         let stdout = String::from_utf8_lossy(&output.stdout);
         if !stderr.is_empty() {
@@ -108,7 +118,10 @@ pub async fn build_addon(
 
     let src = addon_napi_output_path(target_info, project_root);
     if !src.exists() {
-        log_error(&format!("expected addon artifact not found: {}", src.display()));
+        log_error(&format!(
+            "expected addon artifact not found: {}",
+            src.display()
+        ));
         return Ok(false);
     }
 
@@ -139,7 +152,10 @@ pub async fn build_addon(
 
         let test_dest = target_dir.join(ADDON_OUTPUT_FILE);
         fs::copy(&stable, &test_dest).context("Failed to copy addon to target dir for tests")?;
-        log_success(&format!("Copied addon to {} for local testing", test_dest.display()));
+        log_success(&format!(
+            "Copied addon to {} for local testing",
+            test_dest.display()
+        ));
     }
 
     log_success(&format!("Built addon for {}", target_info.platform));
@@ -178,7 +194,11 @@ pub fn validate_addon(target_info: &Target, project_root: &Path) -> Result<bool>
     }
     let metadata = fs::metadata(&dest)?;
     let size_kb = metadata.len() as f64 / 1024.0;
-    log_success(&format!("Addon validated: {} ({:.2} KB)", dest.display(), size_kb));
+    log_success(&format!(
+        "Addon validated: {} ({:.2} KB)",
+        dest.display(),
+        size_kb
+    ));
     Ok(true)
 }
 
@@ -191,7 +211,10 @@ fn generate_platform_package_files(
     package_dir: &Path,
     project_root: &Path,
 ) -> Result<()> {
-    let package_name = package_dir.file_name().unwrap_or_default().to_string_lossy();
+    let package_name = package_dir
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy();
 
     let (os, cpu) = match target_info.platform {
         "darwin-arm64" => ("darwin", "arm64"),

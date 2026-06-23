@@ -40,11 +40,17 @@ impl ImageRenderer {
             return Ok(());
         }
 
-        let font_size =
-            layout.style.get("fontSize").and_then(|s| s.parse::<f32>().ok()).unwrap_or(16.0);
+        let font_size = layout
+            .style
+            .get("fontSize")
+            .and_then(|s| s.parse::<f32>().ok())
+            .unwrap_or(16.0);
 
-        let color =
-            layout.style.get("color").map(|c| self.parse_color(c)).unwrap_or(Rgba([0, 0, 0, 255]));
+        let color = layout
+            .style
+            .get("color")
+            .map(|c| self.parse_color(c))
+            .unwrap_or(Rgba([0, 0, 0, 255]));
 
         let font_weight = self.parse_font_weight(&layout.style);
 
@@ -377,7 +383,12 @@ impl ImageRenderer {
                 };
 
                 let color_value = palette.get(color_index);
-                let color = Rgba([color_value[0], color_value[1], color_value[2], color_value[3]]);
+                let color = Rgba([
+                    color_value[0],
+                    color_value[1],
+                    color_value[2],
+                    color_value[3],
+                ]);
 
                 let path_commands: Vec<Command> = layer
                     .path()

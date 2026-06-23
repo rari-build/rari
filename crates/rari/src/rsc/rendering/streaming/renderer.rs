@@ -72,13 +72,20 @@ impl StreamingRenderer {
             Arc::clone(&self.promise_to_row),
         )));
 
-        let partial_result = self.render_partial_from_composition(composition_script).await?;
+        let partial_result = self
+            .render_partial_from_composition(composition_script)
+            .await?;
 
         let boundary_positions: Arc<Mutex<FxHashMap<String, Vec<usize>>>> = Arc::new(Mutex::new(
-            partial_result.boundaries.iter().map(|b| (b.id.clone(), Vec::new())).collect(),
+            partial_result
+                .boundaries
+                .iter()
+                .map(|b| (b.id.clone(), Vec::new()))
+                .collect(),
         ));
 
-        self.send_initial_shell(&chunk_sender, &partial_result).await?;
+        self.send_initial_shell(&chunk_sender, &partial_result)
+            .await?;
         {
             let mut shared_counter = self.shared_row_counter.lock().await;
             *shared_counter = self.row_counter;
@@ -208,7 +215,8 @@ impl StreamingRenderer {
             has_suspense: !boundaries.is_empty(),
         };
 
-        self.send_initial_shell(&chunk_sender, &partial_result).await?;
+        self.send_initial_shell(&chunk_sender, &partial_result)
+            .await?;
         {
             let mut shared_counter = self.shared_row_counter.lock().await;
             *shared_counter = self.row_counter;
@@ -293,7 +301,10 @@ impl StreamingRenderer {
     ) -> Result<RscStream, RariError> {
         let render_generation = self
             .runtime
-            .execute_script("<streaming_init>".to_string(), STREAMING_INIT_SCRIPT.to_string())
+            .execute_script(
+                "<streaming_init>".to_string(),
+                STREAMING_INIT_SCRIPT.to_string(),
+            )
             .await
             .map_err(|e| RariError::internal(format!("Streaming init failed: {e}")))?
             .as_u64()
@@ -315,10 +326,12 @@ impl StreamingRenderer {
             Arc::clone(&self.promise_to_row),
         )));
 
-        let partial_result =
-            self.parse_rsc_wire_format(&rsc_wire_format, render_generation).await?;
+        let partial_result = self
+            .parse_rsc_wire_format(&rsc_wire_format, render_generation)
+            .await?;
 
-        self.send_initial_shell(&chunk_sender, &partial_result).await?;
+        self.send_initial_shell(&chunk_sender, &partial_result)
+            .await?;
         {
             let mut shared_counter = self.shared_row_counter.lock().await;
             *shared_counter = self.row_counter;
@@ -465,7 +478,8 @@ impl StreamingRenderer {
 
         let partial_result = self.render_partial(component_id, props).await?;
 
-        self.send_initial_shell(&chunk_sender, &partial_result).await?;
+        self.send_initial_shell(&chunk_sender, &partial_result)
+            .await?;
         {
             let mut shared_counter = self.shared_row_counter.lock().await;
             *shared_counter = self.row_counter;
@@ -540,7 +554,9 @@ impl StreamingRenderer {
 
         if let Some(available) = react_init_result.get("available").and_then(|v| v.as_bool()) {
             if !available {
-                return Err(RariError::internal("Failed to initialize React in streaming context"));
+                return Err(RariError::internal(
+                    "Failed to initialize React in streaming context",
+                ));
             }
         } else {
             return Err(RariError::internal("Failed to check React initialization"));
@@ -548,7 +564,10 @@ impl StreamingRenderer {
 
         let render_generation = self
             .runtime
-            .execute_script("<streaming_init>".to_string(), STREAMING_INIT_SCRIPT.to_string())
+            .execute_script(
+                "<streaming_init>".to_string(),
+                STREAMING_INIT_SCRIPT.to_string(),
+            )
             .await
             .map_err(|e| RariError::internal(format!("Streaming init failed: {e}")))?
             .as_u64()
@@ -693,7 +712,9 @@ impl StreamingRenderer {
         let mut pending_counts: FxHashMap<String, usize> = FxHashMap::default();
         if let Some(pending) = result_data["pending_promises"].as_array() {
             for p in pending {
-                let bid = p["boundaryId"].as_str().or_else(|| p["~boundaryId"].as_str());
+                let bid = p["boundaryId"]
+                    .as_str()
+                    .or_else(|| p["~boundaryId"].as_str());
                 if let Some(bid) = bid {
                     *pending_counts.entry(bid.to_string()).or_insert(0) += 1;
                 }
@@ -714,29 +735,36 @@ impl StreamingRenderer {
                 let parent_path = b["parentPath"]
                     .as_array()
                     .map(|arr| {
-                        arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect()
+                        arr.iter()
+                            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                            .collect()
                     })
                     .unwrap_or_else(Vec::new);
 
                 let is_in_content_area = b["isInContentArea"].as_bool().unwrap_or(false);
 
                 let position_hints =
-                    b.get("positionHints").and_then(|h| h.as_object()).map(|hints| PositionHints {
-                        in_content_area: hints
-                            .get("inContentArea")
-                            .and_then(|v| v.as_bool())
-                            .unwrap_or(false),
-                        dom_path: hints
-                            .get("domPath")
-                            .and_then(|v| v.as_array())
-                            .map(|arr| {
-                                arr.iter()
-                                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                                    .collect()
-                            })
-                            .unwrap_or_else(Vec::new),
-                        is_stable: hints.get("isStable").and_then(|v| v.as_bool()).unwrap_or(false),
-                    });
+                    b.get("positionHints")
+                        .and_then(|h| h.as_object())
+                        .map(|hints| PositionHints {
+                            in_content_area: hints
+                                .get("inContentArea")
+                                .and_then(|v| v.as_bool())
+                                .unwrap_or(false),
+                            dom_path: hints
+                                .get("domPath")
+                                .and_then(|v| v.as_array())
+                                .map(|arr| {
+                                    arr.iter()
+                                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                                        .collect()
+                                })
+                                .unwrap_or_else(Vec::new),
+                            is_stable: hints
+                                .get("isStable")
+                                .and_then(|v| v.as_bool())
+                                .unwrap_or(false),
+                        });
 
                 Some(SuspenseBoundaryInfo {
                     id,
@@ -767,7 +795,10 @@ impl StreamingRenderer {
                 PendingSuspensePromise {
                     id: promise_id.to_string(),
                     boundary_id,
-                    component_path: p["componentPath"].as_str().unwrap_or(component_id).to_string(),
+                    component_path: p["componentPath"]
+                        .as_str()
+                        .unwrap_or(component_id)
+                        .to_string(),
                     promise_handle: promise_id.to_string(),
                     render_generation,
                 }
@@ -819,7 +850,10 @@ impl StreamingRenderer {
 
         let render_generation = self
             .runtime
-            .execute_script("<streaming_init>".to_string(), STREAMING_INIT_SCRIPT.to_string())
+            .execute_script(
+                "<streaming_init>".to_string(),
+                STREAMING_INIT_SCRIPT.to_string(),
+            )
             .await
             .map_err(|e| {
                 error!("Streaming initialization script failed: {}", e);
@@ -862,7 +896,9 @@ impl StreamingRenderer {
 
         if !result_data["success"].as_bool().unwrap_or(false) {
             let error_msg = result_data["error"].as_str().unwrap_or("Unknown error");
-            let error_stack = result_data["error_stack"].as_str().unwrap_or("No stack available");
+            let error_stack = result_data["error_stack"]
+                .as_str()
+                .unwrap_or("No stack available");
 
             error!("Composition script execution failed: {}", error_msg);
             error!("Error stack trace: {}", error_stack);
@@ -897,29 +933,36 @@ impl StreamingRenderer {
                 let parent_path = b["parentPath"]
                     .as_array()
                     .map(|arr| {
-                        arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect()
+                        arr.iter()
+                            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                            .collect()
                     })
                     .unwrap_or_else(Vec::new);
 
                 let is_in_content_area = b["isInContentArea"].as_bool().unwrap_or(false);
 
                 let position_hints =
-                    b.get("positionHints").and_then(|h| h.as_object()).map(|hints| PositionHints {
-                        in_content_area: hints
-                            .get("inContentArea")
-                            .and_then(|v| v.as_bool())
-                            .unwrap_or(false),
-                        dom_path: hints
-                            .get("domPath")
-                            .and_then(|v| v.as_array())
-                            .map(|arr| {
-                                arr.iter()
-                                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                                    .collect()
-                            })
-                            .unwrap_or_else(Vec::new),
-                        is_stable: hints.get("isStable").and_then(|v| v.as_bool()).unwrap_or(false),
-                    });
+                    b.get("positionHints")
+                        .and_then(|h| h.as_object())
+                        .map(|hints| PositionHints {
+                            in_content_area: hints
+                                .get("inContentArea")
+                                .and_then(|v| v.as_bool())
+                                .unwrap_or(false),
+                            dom_path: hints
+                                .get("domPath")
+                                .and_then(|v| v.as_array())
+                                .map(|arr| {
+                                    arr.iter()
+                                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                                        .collect()
+                                })
+                                .unwrap_or_else(Vec::new),
+                            is_stable: hints
+                                .get("isStable")
+                                .and_then(|v| v.as_bool())
+                                .unwrap_or(false),
+                        });
 
                 Some(SuspenseBoundaryInfo {
                     id,
@@ -1109,8 +1152,10 @@ impl StreamingRenderer {
                         && let Some(boundary_id) = props.get("~boundaryId").and_then(|v| v.as_str())
                         && boundary_ids.contains(boundary_id)
                     {
-                        let fallback_content =
-                            props.get("fallback").cloned().unwrap_or(serde_json::Value::Null);
+                        let fallback_content = props
+                            .get("fallback")
+                            .cloned()
+                            .unwrap_or(serde_json::Value::Null);
 
                         let position = boundary_positions.get(boundary_id);
                         let is_in_content_area =
@@ -1163,7 +1208,13 @@ impl StreamingRenderer {
         }
 
         let mut parent_path = Vec::new();
-        traverse(rsc_data, &boundary_ids, &boundary_positions, &mut result, &mut parent_path);
+        traverse(
+            rsc_data,
+            &boundary_ids,
+            &boundary_positions,
+            &mut result,
+            &mut parent_path,
+        );
 
         result
     }
@@ -1256,7 +1307,10 @@ impl StreamingRenderer {
             };
 
             if let Err(e) = sender.send(import_chunk).await {
-                tracing::debug!("Failed to send import row chunk (client disconnected): {}", e);
+                tracing::debug!(
+                    "Failed to send import row chunk (client disconnected): {}",
+                    e
+                );
             }
         }
 
@@ -1433,7 +1487,10 @@ impl StreamingRenderer {
         }
 
         if let Some(obj) = json.as_object() {
-            let is_lazy = obj.get("~rari_lazy").and_then(|v| v.as_bool()).unwrap_or(false);
+            let is_lazy = obj
+                .get("~rari_lazy")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
 
             if is_lazy {
                 let Some(promise_id) = obj.get("~rari_promise_id").and_then(|v| v.as_str()) else {
@@ -1444,11 +1501,17 @@ impl StreamingRenderer {
                     return Ok(serde_json::Value::String(format!("${:x}", promise_row_id)));
                 }
 
-                warn!("Lazy marker missing from boundary_lazy_refs: {}", promise_id);
+                warn!(
+                    "Lazy marker missing from boundary_lazy_refs: {}",
+                    promise_id
+                );
                 return Ok(serde_json::Value::Null);
             }
 
-            let is_rsc_element = obj.get("~rsc_element").and_then(|v| v.as_bool()).unwrap_or(false);
+            let is_rsc_element = obj
+                .get("~rsc_element")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
 
             if is_rsc_element
                 && let (Some(element_type), Some(props)) = (obj.get("type"), obj.get("props"))
@@ -1575,7 +1638,9 @@ impl StreamingRenderer {
 
         for boundary in &partial_result.boundaries {
             if boundary.id.is_empty() {
-                return Err(RariError::internal("Boundary ID cannot be empty".to_string()));
+                return Err(RariError::internal(
+                    "Boundary ID cannot be empty".to_string(),
+                ));
             }
         }
 
@@ -1617,7 +1682,9 @@ mod tests {
             }
         ]);
 
-        let converted = renderer.json_to_rsc_element(&input, Some(9), &lazy_refs).unwrap();
+        let converted = renderer
+            .json_to_rsc_element(&input, Some(9), &lazy_refs)
+            .unwrap();
 
         assert_eq!(
             converted,
@@ -1663,7 +1730,9 @@ mod tests {
             }
         });
 
-        let converted = renderer.json_to_rsc_element(&input, None, &lazy_refs).unwrap();
+        let converted = renderer
+            .json_to_rsc_element(&input, None, &lazy_refs)
+            .unwrap();
 
         assert_eq!(
             converted,
@@ -1692,7 +1761,9 @@ mod tests {
             "props": { "children": "hello" }
         });
 
-        let converted = renderer.json_to_rsc_element(&input, None, &lazy_refs).unwrap();
+        let converted = renderer
+            .json_to_rsc_element(&input, None, &lazy_refs)
+            .unwrap();
 
         assert_eq!(
             converted,

@@ -129,10 +129,16 @@ mod tests {
         });
 
         let result = validate_suspense_boundaries(&rsc_data);
-        assert!(result.is_err(), "Validation should fail with duplicate fallbacks");
+        assert!(
+            result.is_err(),
+            "Validation should fail with duplicate fallbacks"
+        );
 
         let error_msg = result.unwrap_err();
-        assert!(error_msg.contains("boundary-2"), "Error should mention the duplicate boundary");
+        assert!(
+            error_msg.contains("boundary-2"),
+            "Error should mention the duplicate boundary"
+        );
     }
 
     #[test]
@@ -202,6 +208,9 @@ mod tests {
         });
 
         let result = validate_suspense_boundaries(&rsc_data);
-        assert!(result.is_ok(), "Validation should pass with multiple unique boundaries");
+        assert!(
+            result.is_ok(),
+            "Validation should pass with multiple unique boundaries"
+        );
     }
 }

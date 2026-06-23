@@ -17,11 +17,13 @@ pub fn readable_component_id(project_relative_path: &str) -> String {
         .strip_prefix("src/")
         .unwrap_or(without_extension)
         .chars()
-        .map(
-            |c| {
-                if c.is_ascii_alphanumeric() || c == '/' || c == '-' || c == '_' { c } else { '_' }
-            },
-        )
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '/' || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect()
 }
 
@@ -94,7 +96,10 @@ pub fn wrap_server_action_module(code: &str, module_id: &str) -> String {
         return code.to_string();
     }
 
-    let module_key = format!("__module_loaded_{}", module_id.cow_replace(&['/', '-'][..], "_"));
+    let module_key = format!(
+        "__module_loaded_{}",
+        module_id.cow_replace(&['/', '-'][..], "_")
+    );
 
     format!(
         r#"
@@ -129,8 +134,10 @@ pub fn extract_component_id(
         }
     };
 
-    let project_relative_path =
-        project_relative_path.to_str().ok_or("Invalid path encoding")?.cow_replace('\\', "/");
+    let project_relative_path = project_relative_path
+        .to_str()
+        .ok_or("Invalid path encoding")?
+        .cow_replace('\\', "/");
 
     Ok(format!(
         "{}_{}",
@@ -144,8 +151,9 @@ pub fn get_dist_path_for_component(
 ) -> Result<std::path::PathBuf, Box<dyn std::error::Error + Send + Sync>> {
     let component_id = extract_component_id(file_path)?;
 
-    let dist_path =
-        std::path::Path::new("dist").join("server").join(format!("{}.js", component_id));
+    let dist_path = std::path::Path::new("dist")
+        .join("server")
+        .join(format!("{}.js", component_id));
 
     Ok(dist_path)
 }

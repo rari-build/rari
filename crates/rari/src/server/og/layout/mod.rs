@@ -92,7 +92,11 @@ impl LayoutEngine {
         let has_text = self.has_text_content(element);
         let taffy_style = self.style_to_taffy(&style);
 
-        let node_data = NodeData { element: element.clone(), style: style.clone(), has_text };
+        let node_data = NodeData {
+            element: element.clone(),
+            style: style.clone(),
+            has_text,
+        };
 
         if is_svg_element(&element.element_type) {
             let node = self
@@ -131,7 +135,10 @@ impl LayoutEngine {
     }
 
     fn has_text_content(&self, element: &JsxElement) -> bool {
-        element.children.iter().any(|child| matches!(child, JsxChild::Text(_)))
+        element
+            .children
+            .iter()
+            .any(|child| matches!(child, JsxChild::Text(_)))
     }
 
     fn parse_style(&self, props: &Value) -> FxHashMap<String, String> {
@@ -171,14 +178,16 @@ impl LayoutEngine {
         }
 
         taffy_style.align_items =
-            style.get("alignItems").map(|align_items| match align_items.as_str() {
-                "flex-start" | "start" => AlignItems::FLEX_START,
-                "flex-end" | "end" => AlignItems::FLEX_END,
-                "center" => AlignItems::CENTER,
-                "baseline" => AlignItems::BASELINE,
-                "stretch" => AlignItems::STRETCH,
-                _ => AlignItems::STRETCH,
-            });
+            style
+                .get("alignItems")
+                .map(|align_items| match align_items.as_str() {
+                    "flex-start" | "start" => AlignItems::FLEX_START,
+                    "flex-end" | "end" => AlignItems::FLEX_END,
+                    "center" => AlignItems::CENTER,
+                    "baseline" => AlignItems::BASELINE,
+                    "stretch" => AlignItems::STRETCH,
+                    _ => AlignItems::STRETCH,
+                });
 
         if let Some(justify_content) = style.get("justifyContent") {
             taffy_style.justify_content = Some(match justify_content.as_str() {
@@ -244,7 +253,10 @@ impl LayoutEngine {
 
         if let Some(gap) = style.get("gap") {
             let gap_value = self.parse_length_percentage(gap);
-            taffy_style.gap = Size { width: gap_value, height: gap_value };
+            taffy_style.gap = Size {
+                width: gap_value,
+                height: gap_value,
+            };
         }
         if let Some(row_gap) = style.get("rowGap") {
             taffy_style.gap.height = self.parse_length_percentage(row_gap);
@@ -298,25 +310,45 @@ impl LayoutEngine {
         match parts.len() {
             1 => {
                 let p = self.parse_length_percentage(parts[0]);
-                Rect { left: p, right: p, top: p, bottom: p }
+                Rect {
+                    left: p,
+                    right: p,
+                    top: p,
+                    bottom: p,
+                }
             }
             2 => {
                 let vertical = self.parse_length_percentage(parts[0]);
                 let horizontal = self.parse_length_percentage(parts[1]);
-                Rect { left: horizontal, right: horizontal, top: vertical, bottom: vertical }
+                Rect {
+                    left: horizontal,
+                    right: horizontal,
+                    top: vertical,
+                    bottom: vertical,
+                }
             }
             3 => {
                 let top = self.parse_length_percentage(parts[0]);
                 let horizontal = self.parse_length_percentage(parts[1]);
                 let bottom = self.parse_length_percentage(parts[2]);
-                Rect { left: horizontal, right: horizontal, top, bottom }
+                Rect {
+                    left: horizontal,
+                    right: horizontal,
+                    top,
+                    bottom,
+                }
             }
             4 => {
                 let top = self.parse_length_percentage(parts[0]);
                 let right = self.parse_length_percentage(parts[1]);
                 let bottom = self.parse_length_percentage(parts[2]);
                 let left = self.parse_length_percentage(parts[3]);
-                Rect { left, right, top, bottom }
+                Rect {
+                    left,
+                    right,
+                    top,
+                    bottom,
+                }
             }
             _ => Rect {
                 left: LengthPercentage::length(0.0),
@@ -333,25 +365,45 @@ impl LayoutEngine {
         match parts.len() {
             1 => {
                 let m = self.parse_length_percentage_auto(parts[0]);
-                Rect { left: m, right: m, top: m, bottom: m }
+                Rect {
+                    left: m,
+                    right: m,
+                    top: m,
+                    bottom: m,
+                }
             }
             2 => {
                 let vertical = self.parse_length_percentage_auto(parts[0]);
                 let horizontal = self.parse_length_percentage_auto(parts[1]);
-                Rect { left: horizontal, right: horizontal, top: vertical, bottom: vertical }
+                Rect {
+                    left: horizontal,
+                    right: horizontal,
+                    top: vertical,
+                    bottom: vertical,
+                }
             }
             3 => {
                 let top = self.parse_length_percentage_auto(parts[0]);
                 let horizontal = self.parse_length_percentage_auto(parts[1]);
                 let bottom = self.parse_length_percentage_auto(parts[2]);
-                Rect { left: horizontal, right: horizontal, top, bottom }
+                Rect {
+                    left: horizontal,
+                    right: horizontal,
+                    top,
+                    bottom,
+                }
             }
             4 => {
                 let top = self.parse_length_percentage_auto(parts[0]);
                 let right = self.parse_length_percentage_auto(parts[1]);
                 let bottom = self.parse_length_percentage_auto(parts[2]);
                 let left = self.parse_length_percentage_auto(parts[3]);
-                Rect { left, right, top, bottom }
+                Rect {
+                    left,
+                    right,
+                    top,
+                    bottom,
+                }
             }
             _ => Rect {
                 left: LengthPercentageAuto::length(0.0),
@@ -368,16 +420,20 @@ impl LayoutEngine {
         parent_x: f32,
         parent_y: f32,
     ) -> Result<ComputedLayout, String> {
-        let layout =
-            self.taffy.layout(node).map_err(|e| format!("Failed to get layout: {:?}", e))?;
+        let layout = self
+            .taffy
+            .layout(node)
+            .map_err(|e| format!("Failed to get layout: {:?}", e))?;
         let node_data = self.taffy.get_node_context(node).ok_or("No node data")?;
 
         let x = parent_x + layout.location.x;
         let y = parent_y + layout.location.y;
 
         let mut children = Vec::new();
-        for child_id in
-            self.taffy.children(node).map_err(|e| format!("Failed to get children: {:?}", e))?
+        for child_id in self
+            .taffy
+            .children(node)
+            .map_err(|e| format!("Failed to get children: {:?}", e))?
         {
             children.push(self.extract_layout(child_id, x, y)?);
         }
@@ -421,7 +477,10 @@ fn measure_node(
                     .or_else(|| v.as_f64().map(|n| n as f32))
             })
             .or_else(|| {
-                node_data.style.get("width").and_then(|s| s.trim_end_matches("px").parse().ok())
+                node_data
+                    .style
+                    .get("width")
+                    .and_then(|s| s.trim_end_matches("px").parse().ok())
             })
             .unwrap_or(0.0);
         let h = node_data
@@ -434,7 +493,10 @@ fn measure_node(
                     .or_else(|| v.as_f64().map(|n| n as f32))
             })
             .or_else(|| {
-                node_data.style.get("height").and_then(|s| s.trim_end_matches("px").parse().ok())
+                node_data
+                    .style
+                    .get("height")
+                    .and_then(|s| s.trim_end_matches("px").parse().ok())
             })
             .unwrap_or(0.0);
         return Size {
@@ -462,8 +524,11 @@ fn measure_node(
         return Size::ZERO;
     }
 
-    let font_size =
-        node_data.style.get("fontSize").and_then(|s| s.parse::<f32>().ok()).unwrap_or(16.0);
+    let font_size = node_data
+        .style
+        .get("fontSize")
+        .and_then(|s| s.parse::<f32>().ok())
+        .unwrap_or(16.0);
 
     let font_weight = node_data
         .style
@@ -490,8 +555,13 @@ fn measure_node(
         AvailableSpace::MinContent => Some(0.0),
     });
 
-    let (text_width, text_height) =
-        measure_text_with_parley(&context.font_context, &text, font_size, font_weight, max_width);
+    let (text_width, text_height) = measure_text_with_parley(
+        &context.font_context,
+        &text,
+        font_size,
+        font_weight,
+        max_width,
+    );
 
     Size {
         width: known_dimensions.width.unwrap_or(text_width),
@@ -510,19 +580,41 @@ fn measure_image(
 
     let src = node_data.element.props.get("src").and_then(|v| v.as_str());
     let intrinsic_size = if let Some(src) = src {
-        load_image_dimensions(src).unwrap_or(Size { width: 0.0, height: 0.0 })
+        load_image_dimensions(src).unwrap_or(Size {
+            width: 0.0,
+            height: 0.0,
+        })
     } else {
-        Size { width: 0.0, height: 0.0 }
+        Size {
+            width: 0.0,
+            height: 0.0,
+        }
     };
 
-    let width_prop =
-        node_data.element.props.get("width").and_then(|v| v.as_f64()).map(|v| v as f32);
+    let width_prop = node_data
+        .element
+        .props
+        .get("width")
+        .and_then(|v| v.as_f64())
+        .map(|v| v as f32);
 
-    let height_prop =
-        node_data.element.props.get("height").and_then(|v| v.as_f64()).map(|v| v as f32);
+    let height_prop = node_data
+        .element
+        .props
+        .get("height")
+        .and_then(|v| v.as_f64())
+        .map(|v| v as f32);
 
-    let width_is_100_percent = node_data.style.get("width").map(|w| w == "100%").unwrap_or(false);
-    let height_is_100_percent = node_data.style.get("height").map(|h| h == "100%").unwrap_or(false);
+    let width_is_100_percent = node_data
+        .style
+        .get("width")
+        .map(|w| w == "100%")
+        .unwrap_or(false);
+    let height_is_100_percent = node_data
+        .style
+        .get("height")
+        .map(|h| h == "100%")
+        .unwrap_or(false);
 
     let final_width = known_dimensions
         .width
@@ -537,7 +629,11 @@ fn measure_image(
             }
         })
         .or(width_prop)
-        .or(if intrinsic_size.width > 0.0 { Some(intrinsic_size.width) } else { None })
+        .or(if intrinsic_size.width > 0.0 {
+            Some(intrinsic_size.width)
+        } else {
+            None
+        })
         .unwrap_or(0.0);
 
     let final_height = known_dimensions
@@ -553,7 +649,11 @@ fn measure_image(
             }
         })
         .or(height_prop)
-        .or(if intrinsic_size.height > 0.0 { Some(intrinsic_size.height) } else { None })
+        .or(if intrinsic_size.height > 0.0 {
+            Some(intrinsic_size.height)
+        } else {
+            None
+        })
         .unwrap_or(0.0);
 
     if final_width > 0.0
@@ -562,7 +662,10 @@ fn measure_image(
         && intrinsic_size.width > 0.0
     {
         let aspect_ratio = intrinsic_size.width / intrinsic_size.height;
-        return Size { width: final_width, height: final_width / aspect_ratio };
+        return Size {
+            width: final_width,
+            height: final_width / aspect_ratio,
+        };
     }
 
     if final_height > 0.0
@@ -571,10 +674,16 @@ fn measure_image(
         && intrinsic_size.height > 0.0
     {
         let aspect_ratio = intrinsic_size.width / intrinsic_size.height;
-        return Size { width: final_height * aspect_ratio, height: final_height };
+        return Size {
+            width: final_height * aspect_ratio,
+            height: final_height,
+        };
     }
 
-    Size { width: final_width, height: final_height }
+    Size {
+        width: final_width,
+        height: final_height,
+    }
 }
 
 fn load_image_dimensions(src: &str) -> Option<Size<f32>> {
@@ -593,10 +702,16 @@ fn load_image_dimensions(src: &str) -> Option<Size<f32>> {
 
         const MAX_IMAGE_SIZE: usize = 10 * 1024 * 1024;
         let mut buffer = Vec::new();
-        response.take(MAX_IMAGE_SIZE as u64).read_to_end(&mut buffer).ok()?;
+        response
+            .take(MAX_IMAGE_SIZE as u64)
+            .read_to_end(&mut buffer)
+            .ok()?;
 
         let img = image::load_from_memory(&buffer).ok()?;
-        Some(Size { width: img.width() as f32, height: img.height() as f32 })
+        Some(Size {
+            width: img.width() as f32,
+            height: img.height() as f32,
+        })
     } else if src.starts_with("data:") {
         use base64::{Engine as _, engine::general_purpose};
         let parts: Vec<&str> = src.splitn(2, ',').collect();
@@ -610,13 +725,19 @@ fn load_image_dimensions(src: &str) -> Option<Size<f32>> {
         if header.contains("base64") {
             let decoded = general_purpose::STANDARD.decode(data).ok()?;
             let img = image::load_from_memory(&decoded).ok()?;
-            Some(Size { width: img.width() as f32, height: img.height() as f32 })
+            Some(Size {
+                width: img.width() as f32,
+                height: img.height() as f32,
+            })
         } else {
             None
         }
     } else {
         let img = image::open(src).ok()?;
-        Some(Size { width: img.width() as f32, height: img.height() as f32 })
+        Some(Size {
+            width: img.width() as f32,
+            height: img.height() as f32,
+        })
     }
 }
 

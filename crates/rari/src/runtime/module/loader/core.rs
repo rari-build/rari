@@ -49,7 +49,9 @@ struct AsyncFileManager {
 
 impl AsyncFileManager {
     fn new() -> Self {
-        Self { file_cache: Arc::new(RwLock::new(FxHashMap::default())) }
+        Self {
+            file_cache: Arc::new(RwLock::new(FxHashMap::default())),
+        }
     }
 }
 
@@ -71,14 +73,17 @@ fn file_url_to_path(url: &str) -> Option<PathBuf> {
         return None;
     }
 
-    ModuleSpecifier::parse(url).ok().and_then(|spec| spec.to_file_path().ok()).or_else(|| {
-        url.strip_prefix(FILE_PROTOCOL).map(|path_str| {
-            #[cfg(windows)]
-            let path_str = path_str.strip_prefix('/').unwrap_or(path_str);
+    ModuleSpecifier::parse(url)
+        .ok()
+        .and_then(|spec| spec.to_file_path().ok())
+        .or_else(|| {
+            url.strip_prefix(FILE_PROTOCOL).map(|path_str| {
+                #[cfg(windows)]
+                let path_str = path_str.strip_prefix('/').unwrap_or(path_str);
 
-            PathBuf::from(path_str)
+                PathBuf::from(path_str)
+            })
         })
-    })
 }
 
 #[derive(Debug)]
@@ -121,8 +126,10 @@ impl RariModuleLoader {
 
         if specifier.contains(RARI_INTERNAL_PATH) {
             #[allow(clippy::disallowed_methods)]
-            if let Err(e) =
-                self.module_caching.insert(original_path.to_string(), serde_json::Value::Null).await
+            if let Err(e) = self
+                .module_caching
+                .insert(original_path.to_string(), serde_json::Value::Null)
+                .await
             {
                 tracing::warn!(path = %original_path, error = %e, "module cache insert failed");
             }
@@ -147,16 +154,23 @@ impl RariModuleLoader {
             let current_version = self.storage.get_version(&version_key).unwrap_or(0) + 1;
             let versioned_specifier = format!("{specifier}{VERSION_QUERY_PARAM}{current_version}");
 
-            self.storage.set_module_code(specifier_owned.clone(), code.clone());
-            self.storage.set_module_code(versioned_specifier.clone(), code.clone());
+            self.storage
+                .set_module_code(specifier_owned.clone(), code.clone());
+            self.storage
+                .set_module_code(versioned_specifier.clone(), code.clone());
 
-            self.storage.set_module_meta(format!("registered_{specifier_owned}"), true);
-            self.storage.set_module_meta(format!("registered_{versioned_specifier}"), true);
-            self.storage.set_module_meta(format!("hmr_{specifier_owned}"), true);
+            self.storage
+                .set_module_meta(format!("registered_{specifier_owned}"), true);
+            self.storage
+                .set_module_meta(format!("registered_{versioned_specifier}"), true);
+            self.storage
+                .set_module_meta(format!("hmr_{specifier_owned}"), true);
             self.storage.set_version(version_key, current_version);
         } else {
-            self.storage.set_module_code(specifier_owned.clone(), code.clone());
-            self.storage.set_module_meta(format!("registered_{specifier_owned}"), true);
+            self.storage
+                .set_module_code(specifier_owned.clone(), code.clone());
+            self.storage
+                .set_module_meta(format!("registered_{specifier_owned}"), true);
             self.storage.set_version(version_key, 1);
         }
 
@@ -164,8 +178,11 @@ impl RariModuleLoader {
 
         if !dependencies.is_empty() {
             for dep in &dependencies {
-                let module_name =
-                    if dep.contains('/') { dep.split('/').next_back().unwrap_or(dep) } else { dep };
+                let module_name = if dep.contains('/') {
+                    dep.split('/').next_back().unwrap_or(dep)
+                } else {
+                    dep
+                };
 
                 let simplified_name = if module_name.contains('.') {
                     module_name.split('.').next().unwrap_or(module_name)
@@ -188,7 +205,8 @@ export default {{}};
 "#
                     );
 
-                    self.storage.set_module_code(stub_specifier.clone(), stub_code);
+                    self.storage
+                        .set_module_code(stub_specifier.clone(), stub_code);
                 }
             }
         }
@@ -234,22 +252,30 @@ export default {{}};
     }
 
     pub fn is_already_evaluated(&self, module_id: &str) -> bool {
-        self.storage.get_module_meta(&format!("registered_{module_id}")).unwrap_or(false)
+        self.storage
+            .get_module_meta(&format!("registered_{module_id}"))
+            .unwrap_or(false)
     }
 
     pub fn mark_module_evaluated(&self, module_id: &str) {
-        self.storage.set_module_meta(format!("registered_{module_id}"), true);
+        self.storage
+            .set_module_meta(format!("registered_{module_id}"), true);
     }
 
     pub fn is_hmr_module(&self, specifier: &str) -> bool {
-        self.storage.get_module_meta(&format!("hmr_{specifier}")).unwrap_or(false)
+        self.storage
+            .get_module_meta(&format!("hmr_{specifier}"))
+            .unwrap_or(false)
     }
 
     pub fn get_versioned_specifier(&self, component_id: &str) -> Option<String> {
         let base_specifier = self.get_component_specifier(component_id)?;
 
         if let Some(version) = self.storage.get_version(&format!("version_{component_id}")) {
-            Some(format!("{}{VERSION_QUERY_PARAM}{}", base_specifier, version))
+            Some(format!(
+                "{}{VERSION_QUERY_PARAM}{}",
+                base_specifier, version
+            ))
         } else {
             Some(base_specifier)
         }
@@ -270,21 +296,30 @@ export default {{}};
             self.component_specifiers.remove(component_id);
         }
 
-        self.storage.set_module_meta(format!("hmr_{component_specifier}"), false);
-        self.storage.set_module_meta(format!("registered_{component_id}"), false);
-        self.storage.set_version(format!("version_{component_id}"), 0);
+        self.storage
+            .set_module_meta(format!("hmr_{component_specifier}"), false);
+        self.storage
+            .set_module_meta(format!("registered_{component_id}"), false);
+        self.storage
+            .set_version(format!("version_{component_id}"), 0);
 
         let file_cache = get_async_file_manager().file_cache.clone();
         let mut cache = file_cache.write();
-        let keys_to_remove: Vec<String> =
-            cache.keys().filter(|key| key.contains(component_id)).cloned().collect();
+        let keys_to_remove: Vec<String> = cache
+            .keys()
+            .filter(|key| key.contains(component_id))
+            .cloned()
+            .collect();
         for key in keys_to_remove {
             cache.remove(&key);
         }
     }
 
     pub fn create_specifier(&self, name: &str, prefix: &str) -> String {
-        let clean_name = name.cow_replace(".js", "").cow_replace("/", "_").into_owned();
+        let clean_name = name
+            .cow_replace(".js", "")
+            .cow_replace("/", "_")
+            .into_owned();
         format!("file:///{prefix}/{clean_name}.js")
     }
 
@@ -440,8 +475,10 @@ export default {{}};
             {
                 std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
             } else {
-                let dir_path =
-                    clean_referrer_path.parent().map(|p| p.to_path_buf()).unwrap_or_else(|| {
+                let dir_path = clean_referrer_path
+                    .parent()
+                    .map(|p| p.to_path_buf())
+                    .unwrap_or_else(|| {
                         std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
                     });
                 dir_path.canonicalize().unwrap_or(dir_path)
@@ -514,7 +551,10 @@ export default {{}};
     fn resolve_relative_up(&self, specifier: &str, package_base: &str) -> String {
         let remaining = specifier.strip_prefix("../").unwrap_or(specifier);
         let parent_dir = if package_base.contains('/') {
-            package_base.rsplit_once('/').map(|(dir, _)| dir).unwrap_or("")
+            package_base
+                .rsplit_once('/')
+                .map(|(dir, _)| dir)
+                .unwrap_or("")
         } else {
             ""
         };
@@ -628,8 +668,11 @@ export default {{}};
         module_specifier: &ModuleSpecifier,
     ) -> Option<ModuleLoadResponse> {
         if specifier_str.contains(VERSION_QUERY_PARAM) {
-            let base_specifier =
-                specifier_str.split('?').next().unwrap_or(specifier_str).to_string();
+            let base_specifier = specifier_str
+                .split('?')
+                .next()
+                .unwrap_or(specifier_str)
+                .to_string();
 
             if let Some(code) = self.storage.get_module_code(specifier_str) {
                 return Some(ModuleLoadResponse::Sync(Ok(ModuleSource::new(
@@ -749,7 +792,8 @@ export default {{}};
                     "commonjs".to_string()
                 };
 
-                self.module_resolver.cache_package_type(current_dir, package_type.clone());
+                self.module_resolver
+                    .cache_package_type(current_dir, package_type.clone());
                 return Some(package_type);
             }
             if !current_dir.pop() {
@@ -965,8 +1009,11 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
             let is_jsx_runtime = specifier_str.contains("jsx-runtime.js")
                 || specifier_str.contains("jsx-dev-runtime.js");
 
-            let stub_content =
-                if is_jsx_runtime { JSX_RUNTIME_STUB.to_string() } else { REACT_STUB.to_string() };
+            let stub_content = if is_jsx_runtime {
+                JSX_RUNTIME_STUB.to_string()
+            } else {
+                REACT_STUB.to_string()
+            };
 
             return Some(ModuleLoadResponse::Sync(Ok(ModuleSource::new(
                 ModuleType::JavaScript,
@@ -977,8 +1024,11 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
         }
 
         if specifier_str.contains(RARI_STUB_PATH) {
-            let module_name =
-                specifier_str.rsplit(RARI_STUB_PATH).next().unwrap_or("").trim_end_matches(".js");
+            let module_name = specifier_str
+                .rsplit(RARI_STUB_PATH)
+                .next()
+                .unwrap_or("")
+                .trim_end_matches(".js");
             let stub_content = match module_name {
                 "router" => RARI_ROUTER_STUB.to_string(),
                 "react-dom" => RARI_REACT_DOM_STUB.to_string(),
@@ -1006,7 +1056,9 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
                 let file_path = if resolved_path.starts_with(FILE_PROTOCOL) {
                     file_url_to_path(&resolved_path).unwrap_or_else(|| {
                         PathBuf::from(
-                            resolved_path.strip_prefix(FILE_PROTOCOL).unwrap_or(&resolved_path),
+                            resolved_path
+                                .strip_prefix(FILE_PROTOCOL)
+                                .unwrap_or(&resolved_path),
                         )
                     })
                 } else {
@@ -1280,7 +1332,10 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
         let json: serde_json::Value = serde_json::from_str(content)?;
 
         Ok(PackageInfo {
-            module: json.get("module").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            module: json
+                .get("module")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
             exports: json.get("exports").cloned(),
         })
     }
@@ -1495,7 +1550,10 @@ impl ModuleLoader for RariModuleLoader {
 
                 if let Some(source_path) = source_path {
                     let source_dir = if source_path.contains('/') {
-                        source_path.rsplit_once('/').map(|(dir, _)| dir).unwrap_or("")
+                        source_path
+                            .rsplit_once('/')
+                            .map(|(dir, _)| dir)
+                            .unwrap_or("")
                     } else {
                         ""
                     };
@@ -1596,7 +1654,11 @@ impl ModuleLoader for RariModuleLoader {
                     let subpath = specifier.strip_prefix("rari").unwrap_or("");
                     let rari_url = format!(
                         "file:///rari_stub{}.js",
-                        if subpath.is_empty() { "/index" } else { subpath }
+                        if subpath.is_empty() {
+                            "/index"
+                        } else {
+                            subpath
+                        }
                     );
                     return self.resolve(&rari_url, referrer, kind);
                 }

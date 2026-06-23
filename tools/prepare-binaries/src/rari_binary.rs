@@ -19,13 +19,20 @@ pub async fn build_binary(target: &str, project_root: &Path, dev_mode: bool) -> 
         cmd.arg("--release");
     }
 
-    cmd.args(["--target", target, "--bin", "rari"]).current_dir(project_root);
+    cmd.args(["--target", target, "--bin", "rari"])
+        .current_dir(project_root);
 
     if target == "aarch64-unknown-linux-gnu" {
-        cmd.env("CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER", "aarch64-linux-gnu-gcc");
+        cmd.env(
+            "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER",
+            "aarch64-linux-gnu-gcc",
+        );
     }
 
-    let output = cmd.output().await.context("Failed to execute cargo build")?;
+    let output = cmd
+        .output()
+        .await
+        .context("Failed to execute cargo build")?;
 
     if output.status.success() {
         log_success(&format!("Built binary for {}", target));
@@ -111,8 +118,10 @@ pub fn copy_binary_to_platform_package(
 }
 
 pub fn validate_binary(target_info: &Target, project_root: &Path, dev_mode: bool) -> Result<bool> {
-    let binary_path =
-        project_root.join(target_info.package_dir).join("bin").join(target_info.binary_name);
+    let binary_path = project_root
+        .join(target_info.package_dir)
+        .join("bin")
+        .join(target_info.binary_name);
 
     if !binary_path.exists() {
         log_error(&format!("Binary not found: {}", binary_path.display()));
@@ -124,7 +133,10 @@ pub fn validate_binary(target_info: &Target, project_root: &Path, dev_mode: bool
         let metadata = fs::metadata(&binary_path)?;
         let permissions = metadata.permissions();
         if permissions.mode() & 0o111 == 0 {
-            log_error(&format!("Binary is not executable: {}", binary_path.display()));
+            log_error(&format!(
+                "Binary is not executable: {}",
+                binary_path.display()
+            ));
             return Ok(false);
         }
     }

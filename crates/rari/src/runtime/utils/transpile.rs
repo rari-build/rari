@@ -98,8 +98,9 @@ pub fn maybe_transpile_source(
         .map_err(|e| JsErrorBox::from_err(JsTranspileError(e)))?
         .into_source();
 
-    let maybe_source_map: Option<SourceMapData> =
-        transpiled_source.source_map.map(|sm| sm.into_bytes().into());
+    let maybe_source_map: Option<SourceMapData> = transpiled_source
+        .source_map
+        .map(|sm| sm.into_bytes().into());
     let source_text = transpiled_source.text;
     Ok((source_text.into(), maybe_source_map))
 }

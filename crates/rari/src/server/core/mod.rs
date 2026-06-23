@@ -141,8 +141,10 @@ impl Server {
         let response_layer = config.cache.layer(CACHE_LAYER_RESPONSE);
         let response_handler = cache_registry.resolve(&response_layer.handler);
         let cache_config = response::CacheConfig::from_env(config.is_production());
-        let response_cache =
-            Arc::new(response::ResponseCache::new_with_handler(cache_config, response_handler));
+        let response_cache = Arc::new(response::ResponseCache::new_with_handler(
+            cache_config,
+            response_handler,
+        ));
 
         let image_layer = config.cache.layer(CACHE_LAYER_IMAGE);
         let image_handler = cache_registry.resolve(&image_layer.handler);
@@ -153,11 +155,13 @@ impl Server {
         let og_generator = {
             let runtime = js_runtime.clone();
             let og_cache = crate::server::og::OgImageCache::with_handler(og_handler, &project_root);
-            let generator = Arc::new(crate::server::og::OgImageGenerator::with_capacity_and_cache(
-                runtime,
-                project_root.clone(),
-                og_cache,
-            ));
+            let generator = Arc::new(
+                crate::server::og::OgImageGenerator::with_capacity_and_cache(
+                    runtime,
+                    project_root.clone(),
+                    og_cache,
+                ),
+            );
 
             let manifest_path = "dist/server/routes.json";
             if let Err(e) = generator.load_manifest(manifest_path).await {
@@ -227,7 +231,12 @@ impl Server {
             .local_addr()
             .map_err(|e| RariError::network(format!("Failed to get local address: {e}")))?;
 
-        Ok(Self { router, config, listener, address: socket_addr })
+        Ok(Self {
+            router,
+            config,
+            listener,
+            address: socket_addr,
+        })
     }
 
     async fn build_router(config: &Config, mut state: ServerState) -> Result<Router, RariError> {
@@ -247,7 +256,9 @@ impl Server {
 
         state.image_optimizer = Some(Arc::clone(&image_optimizer));
 
-        let image_state = crate::server::image::ImageState { optimizer: image_optimizer };
+        let image_state = crate::server::image::ImageState {
+            optimizer: image_optimizer,
+        };
 
         let revalidation_router = Router::new()
             .route("/_rari/revalidate", post(revalidate_by_path))
@@ -266,14 +277,23 @@ impl Server {
             .merge(revalidation_router);
 
         let image_router = Router::new()
-            .route("/_rari/image", get(crate::server::image::handle_image_request))
+            .route(
+                "/_rari/image",
+                get(crate::server::image::handle_image_request),
+            )
             .with_state(image_state);
 
         router = router.merge(image_router);
 
         let og_router = Router::new()
-            .route("/_rari/og/", get(crate::server::handlers::og::og_image_handler_root))
-            .route("/_rari/og/{*path}", get(crate::server::handlers::og::og_image_handler))
+            .route(
+                "/_rari/og/",
+                get(crate::server::handlers::og::og_image_handler_root),
+            )
+            .route(
+                "/_rari/og/{*path}",
+                get(crate::server::handlers::og::og_image_handler),
+            )
             .with_state(state.clone());
 
         router = router.merge(og_router);
@@ -320,8 +340,9 @@ impl Server {
                 .route("/{*path}", get(handle_app_route))
                 .route("/{*path}", axum::routing::options(cors_preflight_ok));
         } else if config.is_production() {
-            router =
-                router.route("/", get(root_handler)).route("/{*path}", get(static_or_spa_handler));
+            router = router
+                .route("/", get(root_handler))
+                .route("/{*path}", get(static_or_spa_handler));
         } else {
             let static_service =
                 ServeDir::new(config.public_dir()).append_index_html_on_directories(true);
@@ -349,9 +370,13 @@ impl Server {
     pub async fn start(self) -> Result<(), RariError> {
         self.display_startup_message();
 
-        axum::serve(self.listener, self.router.into_make_service_with_connect_info::<SocketAddr>())
-            .await
-            .map_err(|e| RariError::network(format!("Server error: {e}")))?;
+        axum::serve(
+            self.listener,
+            self.router
+                .into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await
+        .map_err(|e| RariError::network(format!("Server error: {e}")))?;
 
         Ok(())
     }

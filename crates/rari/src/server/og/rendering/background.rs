@@ -27,7 +27,13 @@ impl ImageRenderer {
         let mask_data: Option<(Vec<u8>, u32, u32, i32, i32)> = if has_radius {
             let path = build_rounded_rect_path(box_width, box_height, &border_radius, 0.0, 0.0);
             let (mask, placement) = mask_memory.render(&path);
-            Some((mask.to_vec(), placement.width, placement.height, placement.left, placement.top))
+            Some((
+                mask.to_vec(),
+                placement.width,
+                placement.height,
+                placement.left,
+                placement.top,
+            ))
         } else {
             None
         };

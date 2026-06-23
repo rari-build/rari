@@ -34,7 +34,9 @@ pub async fn handle_image_request(
         ImageFormat::Gif => "image/gif",
     };
 
-    let is_production = std::env::var("NODE_ENV").map(|v| v == "production").unwrap_or(false);
+    let is_production = std::env::var("NODE_ENV")
+        .map(|v| v == "production")
+        .unwrap_or(false);
 
     let cache_header = if is_production {
         "public, max-age=31536000, immutable"
@@ -46,14 +48,20 @@ pub async fn handle_image_request(
 
     let mut response = (
         StatusCode::OK,
-        [(header::CONTENT_TYPE, content_type), (header::CACHE_CONTROL, cache_header)],
+        [
+            (header::CONTENT_TYPE, content_type),
+            (header::CACHE_CONTROL, cache_header),
+        ],
         optimized.data,
     )
         .into_response();
 
-    response
-        .headers_mut()
-        .insert("x-cache", x_cache.parse().expect("x-cache header value should be valid ASCII"));
+    response.headers_mut().insert(
+        "x-cache",
+        x_cache
+            .parse()
+            .expect("x-cache header value should be valid ASCII"),
+    );
 
     Ok(response)
 }

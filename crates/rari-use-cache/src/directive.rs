@@ -26,7 +26,10 @@ impl Visit for UseCacheDirective {
 }
 
 pub fn has_use_cache_directive(body: &BlockStmt) -> bool {
-    let mut visitor = UseCacheDirective { found: false, cache_kind: None };
+    let mut visitor = UseCacheDirective {
+        found: false,
+        cache_kind: None,
+    };
     for stmt in &body.stmts {
         visitor.visit_stmt(stmt);
         if visitor.found {
@@ -46,7 +49,10 @@ pub fn has_use_cache_directive(body: &BlockStmt) -> bool {
 }
 
 pub fn extract_cache_kind(body: &BlockStmt) -> Option<String> {
-    let mut visitor = UseCacheDirective { found: false, cache_kind: None };
+    let mut visitor = UseCacheDirective {
+        found: false,
+        cache_kind: None,
+    };
     for stmt in &body.stmts {
         visitor.visit_stmt(stmt);
         if visitor.found {
@@ -121,7 +127,11 @@ mod tests {
 
     #[test]
     fn test_detect_no_directive() {
-        let body = BlockStmt { span: Default::default(), ctxt: Default::default(), stmts: vec![] };
+        let body = BlockStmt {
+            span: Default::default(),
+            ctxt: Default::default(),
+            stmts: vec![],
+        };
         assert!(!has_use_cache_directive(&body));
     }
 
@@ -140,7 +150,10 @@ mod tests {
             })],
         };
         assert!(has_use_cache_directive(&body));
-        assert_eq!(extract_cache_kind(&body), Some("stale-while-revalidate".to_string()));
+        assert_eq!(
+            extract_cache_kind(&body),
+            Some("stale-while-revalidate".to_string())
+        );
     }
 
     #[test]

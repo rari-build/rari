@@ -22,5 +22,8 @@ impl ExtensionTrait<FileSystemRc> for deno_fs::deno_fs {
 }
 
 pub fn extensions(fs: FileSystemRc, is_snapshot: bool) -> Vec<Extension> {
-    vec![deno_fs::deno_fs::build(fs, is_snapshot), init_fs::build((), is_snapshot)]
+    vec![
+        deno_fs::deno_fs::build(fs, is_snapshot),
+        init_fs::build((), is_snapshot),
+    ]
 }

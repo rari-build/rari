@@ -85,18 +85,25 @@ fn sort_rsc_rows(wire_format: &str) -> String {
 
     rows_with_ids.sort_by_key(|(id, _)| *id);
 
-    let mut sorted =
-        rows_with_ids.iter().map(|(_, row)| row.as_str()).collect::<Vec<_>>().join("\n");
+    let mut sorted = rows_with_ids
+        .iter()
+        .map(|(_, row)| row.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
 
     if !sorted.is_empty() && !sorted.ends_with('\n') {
         sorted.push('\n');
     }
 
-    let has_row_0 = rows_with_ids.iter().any(|(id, row)| *id == 0 && row.starts_with("0:"));
+    let has_row_0 = rows_with_ids
+        .iter()
+        .any(|(id, row)| *id == 0 && row.starts_with("0:"));
 
     if !has_row_0
-        && let Some((max_id, _)) =
-            rows_with_ids.iter().filter(|(id, _)| *id != u32::MAX).max_by_key(|(id, _)| *id)
+        && let Some((max_id, _)) = rows_with_ids
+            .iter()
+            .filter(|(id, _)| *id != u32::MAX)
+            .max_by_key(|(id, _)| *id)
         && *max_id > 0
     {
         let row_0 = format!("0:\"${:x}\"\n", max_id);
@@ -160,22 +167,24 @@ async fn collect_page_metadata(
                 (path, "")
             };
 
-            let converted_base =
-                base.chars()
-                    .map(|c| {
-                        if c.is_alphanumeric() || c == '/' || c == '-' || c == '_' {
-                            c
-                        } else {
-                            '_'
-                        }
-                    })
-                    .collect::<String>();
+            let converted_base = base
+                .chars()
+                .map(|c| {
+                    if c.is_alphanumeric() || c == '/' || c == '-' || c == '_' {
+                        c
+                    } else {
+                        '_'
+                    }
+                })
+                .collect::<String>();
 
             format!("{}{}", converted_base, ext)
         }
 
-        let js_filename =
-            file_path.cow_replace(".tsx", ".js").cow_replace(".ts", ".js").into_owned();
+        let js_filename = file_path
+            .cow_replace(".tsx", ".js")
+            .cow_replace(".ts", ".js")
+            .into_owned();
         let dist_filename = convert_route_path_to_dist_path(&js_filename);
         base_path.join("app").join(&dist_filename)
     }
@@ -184,9 +193,16 @@ async fn collect_page_metadata(
         .layouts
         .iter()
         .filter_map(|layout| {
-            let file_path =
-                component_dist_path(&base_path, &layout.file_path, layout.component_id.as_deref());
-            if file_path.exists() { Some(path_to_file_url(&file_path)) } else { None }
+            let file_path = component_dist_path(
+                &base_path,
+                &layout.file_path,
+                layout.component_id.as_deref(),
+            );
+            if file_path.exists() {
+                Some(path_to_file_url(&file_path))
+            } else {
+                None
+            }
         })
         .collect();
 
@@ -313,7 +329,13 @@ fn get_base_url_from_context(
             .get("x-forwarded-proto")
             .or_else(|| context.headers.get("x-forwarded-protocol"))
             .map(|s| s.as_str())
-            .unwrap_or_else(|| if config.is_production() { "https" } else { "http" });
+            .unwrap_or_else(|| {
+                if config.is_production() {
+                    "https"
+                } else {
+                    "http"
+                }
+            });
 
         format!("{}://{}", protocol, host)
     } else if config.is_production() {
@@ -343,7 +365,10 @@ pub async fn render_with_fallback(
     {
         Ok(response) => Ok(response),
         Err(e) => {
-            error!("Streaming render failed, falling back to synchronous: {}", e);
+            error!(
+                "Streaming render failed, falling back to synchronous: {}",
+                e
+            );
             render_synchronous(state, route_match, context, accept_encoding).await
         }
     }
@@ -359,10 +384,11 @@ pub async fn render_rsc_navigation_streaming(
         LayoutRenderer::with_shared_cache(state.renderer.clone(), state.layout_html_cache.clone());
     let is_not_found = route_match.not_found.is_some();
 
-    let request_context =
-        std::sync::Arc::new(crate::server::middleware::request_context::RequestContext::new(
+    let request_context = std::sync::Arc::new(
+        crate::server::middleware::request_context::RequestContext::new(
             route_match.route.path.clone(),
-        ));
+        ),
+    );
 
     let render_result = match layout_renderer
         .render_route_with_streaming(&route_match, &context, Some(request_context.clone()), true)
@@ -391,7 +417,11 @@ pub async fn render_rsc_navigation_streaming(
             .await
         }
         RenderResult::Static(rsc_wire_format) => {
-            let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
+            let status_code = if is_not_found {
+                StatusCode::NOT_FOUND
+            } else {
+                StatusCode::OK
+            };
 
             let sorted_wire_format = sort_rsc_rows(&rsc_wire_format);
 
@@ -414,7 +444,9 @@ pub async fn render_rsc_navigation_streaming(
                     response_builder.header("x-rari-metadata", encoded_metadata.as_ref());
             }
 
-            Ok(response_builder.body(Body::from(final_payload)).expect("Valid RSC response"))
+            Ok(response_builder
+                .body(Body::from(final_payload))
+                .expect("Valid RSC response"))
         }
     }
 }
@@ -449,7 +481,11 @@ async fn render_rsc_streaming_response(
     let encoding = CompressionEncoding::from_accept_encoding(accept_encoding);
     let compressed_stream = compress_stream(rsc_wire_stream, encoding);
 
-    let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
+    let status_code = if is_not_found {
+        StatusCode::NOT_FOUND
+    } else {
+        StatusCode::OK
+    };
     let cache_control = state.config.get_cache_control_for_route(&context.pathname);
 
     let mut response_builder = Response::builder()
@@ -473,7 +509,9 @@ async fn render_rsc_streaming_response(
     }
 
     let body = Body::from_stream(compressed_stream);
-    Ok(response_builder.body(body).expect("Valid RSC streaming response"))
+    Ok(response_builder
+        .body(body)
+        .expect("Valid RSC streaming response"))
 }
 
 pub async fn render_synchronous(
@@ -484,10 +522,11 @@ pub async fn render_synchronous(
 ) -> Result<Response, StatusCode> {
     let layout_renderer =
         LayoutRenderer::with_shared_cache(state.renderer.clone(), state.layout_html_cache.clone());
-    let request_context =
-        std::sync::Arc::new(crate::server::middleware::request_context::RequestContext::new(
+    let request_context = std::sync::Arc::new(
+        crate::server::middleware::request_context::RequestContext::new(
             route_match.route.path.clone(),
-        ));
+        ),
+    );
 
     let is_not_found = route_match.not_found.is_some();
 
@@ -509,7 +548,11 @@ pub async fn render_synchronous(
                 let final_html =
                     wrap_html_with_metadata(html_with_assets, context.metadata.as_ref(), &state);
 
-                let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
+                let status_code = if is_not_found {
+                    StatusCode::NOT_FOUND
+                } else {
+                    StatusCode::OK
+                };
                 let cache_control = state.config.get_cache_control_for_route(&context.pathname);
 
                 Ok(Response::builder()
@@ -595,11 +638,9 @@ async fn render_streaming_response(
         base_shell
     };
 
-    let converter = Arc::new(tokio::sync::Mutex::new(RscToHtmlConverter::with_custom_shell(
-        base_shell,
-        body_scripts,
-        html_renderer,
-    )));
+    let converter = Arc::new(tokio::sync::Mutex::new(
+        RscToHtmlConverter::with_custom_shell(base_shell, body_scripts, html_renderer),
+    ));
 
     let should_continue = Arc::new(std::sync::atomic::AtomicBool::new(true));
     let should_continue_clone = should_continue.clone();
@@ -637,7 +678,11 @@ async fn render_streaming_response(
     let encoding = CompressionEncoding::from_accept_encoding(accept_encoding);
     let compressed_stream = compress_stream(html_stream, encoding);
 
-    let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
+    let status_code = if is_not_found {
+        StatusCode::NOT_FOUND
+    } else {
+        StatusCode::OK
+    };
     let cache_control = state.config.get_cache_control_for_route(&context.pathname);
 
     let mut response_builder = Response::builder()
@@ -653,7 +698,9 @@ async fn render_streaming_response(
     }
 
     let body = Body::from_stream(compressed_stream);
-    Ok(response_builder.body(body).expect("Valid streaming response"))
+    Ok(response_builder
+        .body(body)
+        .expect("Valid streaming response"))
 }
 
 pub async fn render_streaming_with_layout(
@@ -666,10 +713,11 @@ pub async fn render_streaming_with_layout(
     let layout_count = route_match.layouts.len();
     let is_not_found = route_match.not_found.is_some();
 
-    let request_context =
-        std::sync::Arc::new(crate::server::middleware::request_context::RequestContext::new(
+    let request_context = std::sync::Arc::new(
+        crate::server::middleware::request_context::RequestContext::new(
             route_match.route.path.clone(),
-        ));
+        ),
+    );
 
     let render_result = match layout_renderer
         .render_route_with_streaming(&route_match, &context, Some(request_context), false)
@@ -677,14 +725,20 @@ pub async fn render_streaming_with_layout(
     {
         Ok(result) => result,
         Err(e) => {
-            error!("Failed to render route for streaming '{}': {}", route_match.route.path, e);
+            error!(
+                "Failed to render route for streaming '{}': {}",
+                route_match.route.path, e
+            );
             error!(
                 "Route rendering failure context - Route: {}, Page component: {}, Layout count: {}",
                 route_match.route.path, route_match.route.file_path, layout_count
             );
 
             for (idx, layout) in route_match.layouts.iter().enumerate() {
-                error!("  Layout {}: {} (is_root: {})", idx, layout.file_path, layout.is_root);
+                error!(
+                    "  Layout {}: {} (is_root: {})",
+                    idx, layout.file_path, layout.is_root
+                );
             }
 
             return render_synchronous(state, route_match, context, accept_encoding).await;
@@ -707,7 +761,11 @@ pub async fn render_streaming_with_layout(
             let final_html =
                 wrap_html_with_metadata(html_with_assets, context.metadata.as_ref(), &state);
 
-            let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
+            let status_code = if is_not_found {
+                StatusCode::NOT_FOUND
+            } else {
+                StatusCode::OK
+            };
             let cache_control = state.config.get_cache_control_for_route(&context.pathname);
 
             let encoding = CompressionEncoding::from_accept_encoding(accept_encoding);
@@ -725,7 +783,9 @@ pub async fn render_streaming_with_layout(
                 response_builder = response_builder.header("content-encoding", encoding_header);
             }
 
-            return Ok(response_builder.body(Body::from(body_bytes)).expect("Valid HTML response"));
+            return Ok(response_builder
+                .body(Body::from(body_bytes))
+                .expect("Valid HTML response"));
         }
     };
 
@@ -747,7 +807,11 @@ pub async fn render_fallback_html(
 ) -> Result<Response, StatusCode> {
     let index_path = if state.config.is_development() {
         let root_index = std::path::PathBuf::from("index.html");
-        if root_index.exists() { root_index } else { state.config.public_dir().join("index.html") }
+        if root_index.exists() {
+            root_index
+        } else {
+            state.config.public_dir().join("index.html")
+        }
     } else {
         state.config.public_dir().join("index.html")
     };
@@ -773,10 +837,16 @@ pub async fn render_fallback_html(
             };
 
             if state.config.is_production() {
-                state.html_cache.insert(path.to_string(), final_html.clone());
+                state
+                    .html_cache
+                    .insert(path.to_string(), final_html.clone());
             }
 
-            let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
+            let status_code = if is_not_found {
+                StatusCode::NOT_FOUND
+            } else {
+                StatusCode::OK
+            };
 
             return Ok(Response::builder()
                 .status(status_code)
@@ -808,7 +878,11 @@ pub async fn render_fallback_html(
             vite_port, vite_port
         );
 
-        let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
+        let status_code = if is_not_found {
+            StatusCode::NOT_FOUND
+        } else {
+            StatusCode::OK
+        };
 
         return Ok(Response::builder()
             .status(status_code)
@@ -836,7 +910,11 @@ pub async fn render_fallback_html(
 </body>
 </html>"#;
 
-    let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
+    let status_code = if is_not_found {
+        StatusCode::NOT_FOUND
+    } else {
+        StatusCode::OK
+    };
 
     Ok(Response::builder()
         .status(status_code)
@@ -859,7 +937,11 @@ pub async fn handle_app_route(
         route_match: &crate::server::routing::AppRouteMatch,
         config: &Config,
     ) -> bool {
-        if route_match.not_found.is_some() { false } else { config.rsc.enable_streaming }
+        if route_match.not_found.is_some() {
+            false
+        } else {
+            config.rsc.enable_streaming
+        }
     }
 
     if path.len() > 1 {
@@ -942,7 +1024,10 @@ pub async fn handle_app_route(
         LayoutRenderer::with_shared_cache(state.renderer.clone(), state.layout_html_cache.clone());
 
     if route_match.not_found.is_none() && route_match.route.is_dynamic {
-        match layout_renderer.check_page_not_found(&route_match, &context).await {
+        match layout_renderer
+            .check_page_not_found(&route_match, &context)
+            .await
+        {
             Ok(true) => {
                 if let Some(not_found_entry) = app_router.find_not_found(&route_match.route.path) {
                     route_match.not_found = Some(not_found_entry);
@@ -1130,7 +1215,10 @@ pub async fn handle_app_route(
                                 }
                                 CompressionEncoding::Identity => {}
                             }
-                            state.response_cache.update_in_place(&cache_key, updated).await;
+                            state
+                                .response_cache
+                                .update_in_place(&cache_key, updated)
+                                .await;
                         }
                         (compressed, actual_enc)
                     };
@@ -1188,8 +1276,10 @@ pub async fn handle_app_route(
                         .await
                         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-                    let cache_control_value =
-                        parts.headers.get("cache-control").and_then(|v| v.to_str().ok());
+                    let cache_control_value = parts
+                        .headers
+                        .get("cache-control")
+                        .and_then(|v| v.to_str().ok());
 
                     let cache_policy = if let Some(cc) = cache_control_value {
                         response::RouteCachePolicy::from_cache_control(cc, path)
@@ -1266,7 +1356,10 @@ pub async fn handle_app_route(
                             compressed_gzip,
                         };
 
-                        state.response_cache.set(cache_key.clone(), cached_response).await;
+                        state
+                            .response_cache
+                            .set(cache_key.clone(), cached_response)
+                            .await;
 
                         let merged_vary = merge_vary_with_accept(parts.headers.get("vary"));
 
@@ -1455,7 +1548,9 @@ pub async fn handle_app_route(
                 state.response_cache.set(cache_key, cached_response).await;
             }
 
-            Ok(response_builder.body(Body::from(final_html)).expect("Valid HTML response"))
+            Ok(response_builder
+                .body(Body::from(final_html))
+                .expect("Valid HTML response"))
         }
     }
 }

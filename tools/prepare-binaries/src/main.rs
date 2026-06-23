@@ -21,7 +21,10 @@ struct Args {
     #[arg(long, help = "Build in debug mode (faster, for development)")]
     dev: bool,
 
-    #[arg(long, help = "Build the rari-use-cache native addon in addition to the main binary")]
+    #[arg(
+        long,
+        help = "Build the rari-use-cache native addon in addition to the main binary"
+    )]
     addon: bool,
 
     #[arg(
@@ -30,7 +33,11 @@ struct Args {
     )]
     bin: bool,
 
-    #[arg(long, value_name = "PLATFORM", help = "Restrict to a single platform (e.g. linux-x64)")]
+    #[arg(
+        long,
+        value_name = "PLATFORM",
+        help = "Restrict to a single platform (e.g. linux-x64)"
+    )]
     platform: Option<String>,
 }
 
@@ -59,20 +66,33 @@ async fn main() -> Result<()> {
         log("Building for all platforms (cross-compilation mode)");
         TARGETS.iter().collect()
     } else if let Some(name) = &args.platform {
-        let t = TARGETS.iter().find(|t| t.platform == *name).with_context(|| {
-            format!(
-                "Unknown platform '{}'. Supported: {}",
-                name,
-                TARGETS.iter().map(|t| t.platform).collect::<Vec<_>>().join(", ")
-            )
-        })?;
-        log(&format!("Building for explicit platform only: {}", t.platform.cyan()));
+        let t = TARGETS
+            .iter()
+            .find(|t| t.platform == *name)
+            .with_context(|| {
+                format!(
+                    "Unknown platform '{}'. Supported: {}",
+                    name,
+                    TARGETS
+                        .iter()
+                        .map(|t| t.platform)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            })?;
+        log(&format!(
+            "Building for explicit platform only: {}",
+            t.platform.cyan()
+        ));
         vec![t]
     } else {
         let current_target = get_current_platform_target().context(
             "Unable to determine current platform target. Supported platforms: macOS (x64/ARM64), Linux (x64/ARM64), Windows (x64/ARM64). Use --platform <name> to override.",
         )?;
-        log(&format!("Building for current platform only: {}", current_target.platform.cyan()));
+        log(&format!(
+            "Building for current platform only: {}",
+            current_target.platform.cyan()
+        ));
         println!(
             "{}",
             "Use --all flag to build for all platforms (requires cross-compilation tools)".dimmed()
@@ -212,33 +232,53 @@ async fn main() -> Result<()> {
     let any_failure = bin_failure > 0 || addon_failure > 0;
     if !any_failure {
         if do_build_bin {
-            log_success(&format!("✨ Successfully prepared {} platform binaries!", bin_success));
+            log_success(&format!(
+                "✨ Successfully prepared {} platform binaries!",
+                bin_success
+            ));
         }
         if do_build_addon {
-            log_success(&format!("✨ Successfully prepared {} platform addons!", addon_success));
+            log_success(&format!(
+                "✨ Successfully prepared {} platform addons!",
+                addon_success
+            ));
         }
         println!();
         println!("{}", "Platform packages ready:".bold());
         for target_info in &targets_to_build {
             if do_build_bin {
-                println!("  • {} → {}", target_info.platform.cyan(), target_info.package_dir);
+                println!(
+                    "  • {} → {}",
+                    target_info.platform.cyan(),
+                    target_info.package_dir
+                );
             }
             if do_build_addon {
-                println!("  • {} → {}", target_info.platform.cyan(), target_info.addon_package_dir);
+                println!(
+                    "  • {} → {}",
+                    target_info.platform.cyan(),
+                    target_info.addon_package_dir
+                );
             }
         }
         println!();
         println!("{}", "Next steps:".dimmed());
         if !args.all {
             println!("{}", "  1. Test the artifacts locally".dimmed());
-            println!("{}", "  2. Use GitHub Actions for full cross-platform builds".dimmed());
+            println!(
+                "{}",
+                "  2. Use GitHub Actions for full cross-platform builds".dimmed()
+            );
             println!(
                 "{}",
                 "  3. Or run with --all flag (requires cross-compilation setup)".dimmed()
             );
         } else {
             println!("{}", "  1. Test the artifacts locally".dimmed());
-            println!("{}", "  2. Run the release script: pnpm run release".dimmed());
+            println!(
+                "{}",
+                "  2. Run the release script: pnpm run release".dimmed()
+            );
             println!("{}", "  3. Or publish individual packages".dimmed());
         }
     } else {

@@ -67,8 +67,10 @@ pub fn inject_metadata(
         }
 
         if !result.contains(r#"<meta name="viewport""#) {
-            let viewport_content =
-                metadata.viewport.as_deref().unwrap_or("width=device-width, initial-scale=1.0");
+            let viewport_content = metadata
+                .viewport
+                .as_deref()
+                .unwrap_or("width=device-width, initial-scale=1.0");
             critical_tags.push_str(&format!(
                 r#"
     <meta name="viewport" content="{}" />"#,
@@ -97,8 +99,11 @@ pub fn inject_metadata(
         if let Some(keywords) = &metadata.keywords
             && !keywords.is_empty()
         {
-            let keywords_str =
-                keywords.iter().map(|k| escape_html(k)).collect::<Vec<_>>().join(", ");
+            let keywords_str = keywords
+                .iter()
+                .map(|k| escape_html(k))
+                .collect::<Vec<_>>()
+                .join(", ");
             meta_tags.push_str(&format!(
                 r#"    <meta name="keywords" content="{}" />
 "#,
@@ -106,7 +111,10 @@ pub fn inject_metadata(
             ));
         }
 
-        let alternates_canonical = metadata.alternates.as_ref().and_then(|a| a.canonical.as_ref());
+        let alternates_canonical = metadata
+            .alternates
+            .as_ref()
+            .and_then(|a| a.canonical.as_ref());
         let effective_canonical = alternates_canonical.or(metadata.canonical.as_ref());
         if let Some(canonical) = effective_canonical {
             meta_tags.push_str(&format!(
@@ -338,8 +346,11 @@ pub fn inject_metadata(
             if let Some(other_list) = &icons.other {
                 for icon in other_list {
                     let rel = icon.rel.as_deref().unwrap_or("icon");
-                    let mut attrs =
-                        format!(r#"rel="{}" href="{}""#, escape_html(rel), escape_html(&icon.url));
+                    let mut attrs = format!(
+                        r#"rel="{}" href="{}""#,
+                        escape_html(rel),
+                        escape_html(&icon.url)
+                    );
                     if let Some(icon_type) = &icon.icon_type {
                         attrs.push_str(&format!(r#" type="{}""#, escape_html(icon_type)));
                     }
@@ -719,16 +730,26 @@ mod tests {
             r#"<meta name="viewport" content="width=device-width, initial-scale=1.0" />"#
         ));
 
-        let charset_pos =
-            result.find(r#"<meta charset="UTF-8" />"#).expect("charset meta tag should be present");
+        let charset_pos = result
+            .find(r#"<meta charset="UTF-8" />"#)
+            .expect("charset meta tag should be present");
         let viewport_pos = result
             .find(r#"<meta name="viewport" content="width=device-width, initial-scale=1.0" />"#)
             .expect("viewport meta tag should be present");
         let title_pos = result.find("<title>").expect("title tag should be present");
 
-        assert!(charset_pos < title_pos, "charset meta tag should appear before title");
-        assert!(viewport_pos < title_pos, "viewport meta tag should appear before title");
-        assert!(charset_pos < viewport_pos, "charset should appear before viewport");
+        assert!(
+            charset_pos < title_pos,
+            "charset meta tag should appear before title"
+        );
+        assert!(
+            viewport_pos < title_pos,
+            "viewport meta tag should appear before title"
+        );
+        assert!(
+            charset_pos < viewport_pos,
+            "charset should appear before viewport"
+        );
     }
 
     #[test]
@@ -847,7 +868,10 @@ mod tests {
         use crate::rsc::rendering::layout::types::AlternatesMetadata;
 
         let mut types = FxHashMap::default();
-        types.insert("application/rss+xml".to_string(), "https://example.com/feed.xml".to_string());
+        types.insert(
+            "application/rss+xml".to_string(),
+            "https://example.com/feed.xml".to_string(),
+        );
 
         let metadata = PageMetadata {
             title: Some("Test".to_string()),

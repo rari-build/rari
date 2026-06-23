@@ -83,7 +83,10 @@ mod tests {
         let json = serde_json::to_value(&map).unwrap();
         assert!(json.is_object());
         assert_eq!(json.get("slug").and_then(|v| v.as_str()), Some("hello"));
-        assert_eq!(json.get("path").and_then(|v| v.as_array()).map(|a| a.len()), Some(2));
+        assert_eq!(
+            json.get("path").and_then(|v| v.as_array()).map(|a| a.len()),
+            Some(2)
+        );
     }
 
     #[test]

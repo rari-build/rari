@@ -14,7 +14,11 @@ trait ExtensionTrait<A> {
 
     fn build(options: A, is_snapshot: bool) -> Extension {
         let ext: Extension = Self::init(options);
-        if is_snapshot { Self::for_warmup(ext) } else { ext }
+        if is_snapshot {
+            Self::for_warmup(ext)
+        } else {
+            ext
+        }
     }
 }
 
@@ -88,8 +92,10 @@ pub fn extensions(options: &ExtensionOptions, is_snapshot: bool) -> Vec<Extensio
     extensions.extend(crypto::extensions(options.crypto_seed, is_snapshot));
     extensions.extend(fs::extensions(options.filesystem.clone(), is_snapshot));
     extensions.extend(io::extensions(options.io_pipes.clone(), is_snapshot));
-    extensions
-        .extend(webstorage::extensions(options.webstorage_origin_storage_dir.clone(), is_snapshot));
+    extensions.extend(webstorage::extensions(
+        options.webstorage_origin_storage_dir.clone(),
+        is_snapshot,
+    ));
     extensions.extend(websocket::extensions(options.web.clone(), is_snapshot));
     extensions.extend(http::extensions((), is_snapshot));
     extensions.extend(fetch::extensions(is_snapshot, None));

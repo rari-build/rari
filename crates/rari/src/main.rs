@@ -262,11 +262,15 @@ async fn load_configuration(matches: &clap::ArgMatches) -> Result<Config, RariEr
 #[allow(clippy::result_large_err)]
 fn validate_configuration(config: &Config) -> Result<(), RariError> {
     if config.server.port == 0 {
-        return Err(RariError::configuration("Server port cannot be 0".to_string()));
+        return Err(RariError::configuration(
+            "Server port cannot be 0".to_string(),
+        ));
     }
 
     if config.vite.port == 0 {
-        return Err(RariError::configuration("Vite port cannot be 0".to_string()));
+        return Err(RariError::configuration(
+            "Vite port cannot be 0".to_string(),
+        ));
     }
 
     if config.server.port == config.vite.port {
@@ -276,7 +280,9 @@ fn validate_configuration(config: &Config) -> Result<(), RariError> {
     }
 
     if config.server.host.is_empty() {
-        return Err(RariError::configuration("Server host cannot be empty".to_string()));
+        return Err(RariError::configuration(
+            "Server host cannot be empty".to_string(),
+        ));
     }
 
     Ok(())

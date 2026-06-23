@@ -53,7 +53,8 @@ fn fix_accept_encoding_for_deno(
     use http::header::{ACCEPT_ENCODING, HeaderValue};
 
     if !req.headers().contains_key(ACCEPT_ENCODING) {
-        req.headers_mut().insert(ACCEPT_ENCODING, HeaderValue::from_static("gzip, deflate"));
+        req.headers_mut()
+            .insert(ACCEPT_ENCODING, HeaderValue::from_static("gzip, deflate"));
     }
 
     Ok(())

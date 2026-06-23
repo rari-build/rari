@@ -13,7 +13,11 @@ use std::future::Future;
 use std::pin::Pin;
 use tokio::sync::{mpsc, oneshot};
 
-type ScriptBatchItem = (String, String, oneshot::Sender<Result<JsonValue, RariError>>);
+type ScriptBatchItem = (
+    String,
+    String,
+    oneshot::Sender<Result<JsonValue, RariError>>,
+);
 type BatchResultSender = mpsc::UnboundedSender<(usize, Result<JsonValue, RariError>)>;
 type PendingScript = (
     oneshot::Sender<Result<JsonValue, RariError>>,
@@ -219,7 +223,9 @@ async fn handle_load_es_module(
                     {
                         match ModuleSpecifier::parse(&versioned_specifier) {
                             Ok(versioned_module_specifier) => {
-                                js_runtime.load_side_es_module(&versioned_module_specifier).await
+                                js_runtime
+                                    .load_side_es_module(&versioned_module_specifier)
+                                    .await
                             }
                             Err(_) => js_runtime.load_side_es_module(&module_specifier).await,
                         }
@@ -315,7 +321,10 @@ async fn handle_get_module_namespace(
             get_module_namespace_as_json(js_runtime, module_id as deno_core::ModuleId);
         let _ = result_tx.send(json_result);
     } else {
-        match js_runtime.mod_evaluate(module_id as deno_core::ModuleId).await {
+        match js_runtime
+            .mod_evaluate(module_id as deno_core::ModuleId)
+            .await
+        {
             Ok(_) => {
                 module_loader.mark_module_evaluated(&module_id.to_string());
                 let json_result =
@@ -348,7 +357,11 @@ async fn handle_js_request(
     batch_id_counter: &mut u64,
 ) -> Result<(), RariError> {
     match request {
-        JsRequest::ExecuteScript { script_name, script_code, result_tx } => {
+        JsRequest::ExecuteScript {
+            script_name,
+            script_code,
+            result_tx,
+        } => {
             let result =
                 execute_script(js_runtime, module_loader, &script_name, &script_code).await;
             if let Err(e) = &result
@@ -380,7 +393,10 @@ async fn handle_js_request(
                 pending_batches.push(pending_batch);
             }
         }
-        JsRequest::AddModuleToLoader { component_id, result_tx } => {
+        JsRequest::AddModuleToLoader {
+            component_id,
+            result_tx,
+        } => {
             let specifier_opt = module_loader.get_component_specifier(&component_id);
             if specifier_opt.is_some() {
                 let _ = result_tx.send(Ok(()));
@@ -390,10 +406,16 @@ async fn handle_js_request(
                 ))));
             }
         }
-        JsRequest::LoadEsModule { component_id, result_tx } => {
+        JsRequest::LoadEsModule {
+            component_id,
+            result_tx,
+        } => {
             handle_load_es_module(js_runtime, module_loader, &component_id, result_tx).await?;
         }
-        JsRequest::EvaluateModule { module_id, result_tx } => {
+        JsRequest::EvaluateModule {
+            module_id,
+            result_tx,
+        } => {
             handle_evaluate_module(
                 js_runtime,
                 module_loader,
@@ -403,29 +425,46 @@ async fn handle_js_request(
             )
             .await?;
         }
-        JsRequest::GetModuleNamespace { module_id, result_tx } => {
+        JsRequest::GetModuleNamespace {
+            module_id,
+            result_tx,
+        } => {
             handle_get_module_namespace(js_runtime, module_loader, module_id, result_tx).await?;
         }
-        JsRequest::AddModuleToLoaderOnly { specifier, code, result_tx } => {
+        JsRequest::AddModuleToLoaderOnly {
+            specifier,
+            code,
+            result_tx,
+        } => {
             module_loader.set_module_code(specifier.clone(), code.clone());
             let component_id = extract_component_id_from_specifier(&specifier);
             let is_hmr_specifier = specifier.contains("/rari_hmr/");
-            let existing_specifier =
-                module_loader.component_specifiers.get(&component_id).map(|entry| entry.clone());
+            let existing_specifier = module_loader
+                .component_specifiers
+                .get(&component_id)
+                .map(|entry| entry.clone());
             let has_existing_hmr_mapping = existing_specifier
                 .as_ref()
                 .map(|spec| spec.contains("/rari_hmr/"))
                 .unwrap_or(false);
             if is_hmr_specifier || !has_existing_hmr_mapping {
-                module_loader.component_specifiers.insert(component_id.clone(), specifier.clone());
+                module_loader
+                    .component_specifiers
+                    .insert(component_id.clone(), specifier.clone());
             }
             let _ = result_tx.send(Ok(()));
         }
-        JsRequest::ClearModuleLoaderCaches { component_id, result_tx } => {
+        JsRequest::ClearModuleLoaderCaches {
+            component_id,
+            result_tx,
+        } => {
             module_loader.clear_component_caches(&component_id);
             let _ = result_tx.send(Ok(()));
         }
-        JsRequest::SetRequestContext { request_context, result_tx } => {
+        JsRequest::SetRequestContext {
+            request_context,
+            result_tx,
+        } => {
             js_runtime.op_state().borrow_mut().put(request_context);
             let _ = result_tx.send(Ok(()));
         }
@@ -433,7 +472,10 @@ async fn handle_js_request(
             js_runtime.op_state().borrow_mut().try_take::<std::sync::Arc<crate::server::middleware::request_context::RequestContext>>();
             let _ = result_tx.send(Ok(()));
         }
-        JsRequest::ClearRequestContextIfMatches { expected_context, result_tx } => {
+        JsRequest::ClearRequestContextIfMatches {
+            expected_context,
+            result_tx,
+        } => {
             let should_clear = {
                 let op_state = js_runtime.op_state();
                 let borrowed = op_state.borrow();
@@ -475,7 +517,9 @@ async fn setup_concurrent_batch(
                         global.set(scope, key_str.into(), local_val);
                         Ok::<(), RariError>(())
                     } else {
-                        Err(RariError::internal("Failed to create V8 key string".to_string()))
+                        Err(RariError::internal(
+                            "Failed to create V8 key string".to_string(),
+                        ))
                     }
                 });
                 if store_result.is_err() {
@@ -508,8 +552,10 @@ async fn setup_concurrent_batch(
     let mut sent = vec![false; pending.len()];
     let mut remaining = pending.len();
 
-    let (mut senders, names): (Vec<_>, Vec<_>) =
-        pending.into_iter().map(|(tx, name, _)| (Some(tx), name)).unzip();
+    let (mut senders, names): (Vec<_>, Vec<_>) = pending
+        .into_iter()
+        .map(|(tx, name, _)| (Some(tx), name))
+        .unzip();
 
     for (i, sent_item) in sent.iter_mut().enumerate().take(senders.len()) {
         let slot_key = format!("__rari_b{}_{}__", batch_id, i);
@@ -744,7 +790,12 @@ fn check_pending_batches(
 fn extract_component_id_from_specifier(specifier: &str) -> String {
     if let Some(server_idx) = specifier.rfind("/server/") {
         let after_server = &specifier[server_idx + 8..];
-        after_server.split('?').next().unwrap_or(after_server).trim_end_matches(".js").to_string()
+        after_server
+            .split('?')
+            .next()
+            .unwrap_or(after_server)
+            .trim_end_matches(".js")
+            .to_string()
     } else if let Some(component_idx) = specifier.rfind("/rari_component/") {
         let after_component = &specifier[component_idx + 16..];
         after_component
@@ -755,7 +806,12 @@ fn extract_component_id_from_specifier(specifier: &str) -> String {
             .to_string()
     } else if let Some(hmr_idx) = specifier.rfind("/rari_hmr/server/") {
         let after_hmr = &specifier[hmr_idx + 17..];
-        after_hmr.split('?').next().unwrap_or(after_hmr).trim_end_matches(".js").to_string()
+        after_hmr
+            .split('?')
+            .next()
+            .unwrap_or(after_hmr)
+            .trim_end_matches(".js")
+            .to_string()
     } else {
         specifier
             .split('/')
@@ -811,7 +867,9 @@ impl JsRuntimeInterface for RariRuntime {
                 for i in 0..script_count {
                     let _ = err_tx.send((
                         i,
-                        Err(RariError::js_runtime(JS_EXECUTOR_CHANNEL_CLOSED_ERROR.to_string())),
+                        Err(RariError::js_runtime(
+                            JS_EXECUTOR_CHANNEL_CLOSED_ERROR.to_string(),
+                        )),
                     ));
                 }
                 return err_rx;
@@ -940,7 +998,10 @@ impl JsRuntimeInterface for RariRuntime {
             let (response_sender, response_receiver) = oneshot::channel();
 
             request_sender
-                .send(JsRequest::EvaluateModule { module_id, result_tx: response_sender })
+                .send(JsRequest::EvaluateModule {
+                    module_id,
+                    result_tx: response_sender,
+                })
                 .await
                 .map_err(|_| RariError::js_runtime(JS_EXECUTOR_CHANNEL_CLOSED_ERROR.to_string()))?;
 
@@ -960,7 +1021,10 @@ impl JsRuntimeInterface for RariRuntime {
             let (response_sender, response_receiver) = oneshot::channel();
 
             request_sender
-                .send(JsRequest::GetModuleNamespace { module_id, result_tx: response_sender })
+                .send(JsRequest::GetModuleNamespace {
+                    module_id,
+                    result_tx: response_sender,
+                })
                 .await
                 .map_err(|_| RariError::js_runtime(JS_EXECUTOR_CHANNEL_CLOSED_ERROR.to_string()))?;
 
@@ -1031,7 +1095,10 @@ impl JsRuntimeInterface for RariRuntime {
         Box::pin(async move {
             let (response_sender, response_receiver) = oneshot::channel();
             request_sender
-                .send(JsRequest::SetRequestContext { request_context, result_tx: response_sender })
+                .send(JsRequest::SetRequestContext {
+                    request_context,
+                    result_tx: response_sender,
+                })
                 .await
                 .map_err(|_| {
                     RariError::js_runtime(
@@ -1052,7 +1119,9 @@ impl JsRuntimeInterface for RariRuntime {
         Box::pin(async move {
             let (response_sender, response_receiver) = oneshot::channel();
             request_sender
-                .send(JsRequest::ClearRequestContext { result_tx: response_sender })
+                .send(JsRequest::ClearRequestContext {
+                    result_tx: response_sender,
+                })
                 .await
                 .map_err(|_| {
                     RariError::js_runtime(
