@@ -10,8 +10,8 @@ use colored::Colorize;
 use std::path::PathBuf;
 
 use common::{
-    TARGETS, Target, check_rust_installed, get_current_platform_target,
-    install_linux_cross_compiler, install_target, log, log_error, log_success, log_warning,
+    check_rust_installed, get_current_platform_target, install_target, log, log_error, log_success,
+    log_warning,
 };
 use rari_binary::{build_binary, copy_binary_to_platform_package, validate_binary};
 use use_cache_addon::{
@@ -20,15 +20,8 @@ use use_cache_addon::{
 
 #[derive(Parser, Debug)]
 #[command(name = "prepare-binaries")]
-#[command(about = "Prepare rari binaries (and rari-use-cache addon) for platform packages", long_about = None)]
-#[expect(
-    clippy::struct_excessive_bools,
-    reason = "CLI flags are naturally boolean and independently meaningful"
-)]
+#[command(about = "Prepare rari binaries and rari-use-cache addon for the current platform", long_about = None)]
 struct Args {
-    #[arg(long)]
-    all: bool,
-
     #[arg(long, help = "Build in debug mode (faster, for development)")]
     dev: bool,
 
@@ -43,13 +36,6 @@ struct Args {
         help = "Build the main rari binary (default when neither --bin nor --addon is set)"
     )]
     bin: bool,
-
-    #[arg(
-        long,
-        value_name = "PLATFORM",
-        help = "Restrict to a single platform (e.g. linux-x64)"
-    )]
-    platform: Option<String>,
 }
 
 #[tokio::main]
@@ -71,56 +57,17 @@ async fn main() -> Result<()> {
 
     println!(
         "{}",
-        "🔧 Preparing rari platform artifacts (binary and/or rari-use-cache addon)".bold()
+        "🔧 Preparing rari artifacts for current platform".bold()
     );
     println!();
 
     let project_root = PathBuf::from(".");
 
-    let mut targets_to_build: Vec<&Target> = if args.all {
-        log("Building for all platforms (cross-compilation mode)");
-        TARGETS.iter().collect()
-    } else if let Some(name) = &args.platform {
-        let t = TARGETS
-            .iter()
-            .find(|t| t.platform == *name)
-            .with_context(|| {
-                format!(
-                    "Unknown platform '{}'. Supported: {}",
-                    name,
-                    TARGETS
-                        .iter()
-                        .map(|t| t.platform)
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
-            })?;
-        log(&format!(
-            "Building for explicit platform only: {}",
-            t.platform.cyan()
-        ));
-        vec![t]
-    } else {
-        let current_target = get_current_platform_target().context(
-            "Unable to determine current platform target. Supported platforms: macOS (x64/ARM64), Linux (x64/ARM64), Windows (x64/ARM64). Use --platform <name> to override.",
-        )?;
-        log(&format!(
-            "Building for current platform only: {}",
-            current_target.platform.cyan()
-        ));
-        println!(
-            "{}",
-            "Use --all flag to build for all platforms (requires cross-compilation tools)".dimmed()
-        );
-        vec![current_target]
-    };
+    let current_target = get_current_platform_target().context(
+        "Unable to determine current platform target. Supported platforms: macOS (x64/ARM64), Linux (x64/ARM64), Windows (x64/ARM64).",
+    )?;
 
-    if args.all && args.platform.is_some() {
-        log_warning("--platform overrides --all: only the requested platform will be built");
-    }
-    targets_to_build
-        .retain(|t| !args.all || args.platform.as_deref().is_none_or(|p| p == t.platform));
-    let _ = args.all;
+    log(&format!("Building for: {}", current_target.platform.cyan()));
 
     if args.dev {
         log_warning("Building in debug mode (faster, but larger binaries)");
@@ -132,65 +79,46 @@ async fn main() -> Result<()> {
     if do_build_bin {
         check_rust_installed().await?;
 
-        if args.all && do_build_bin {
-            install_linux_cross_compiler().await?;
-        }
-        log("Installing Rust targets...");
-        for target_info in &targets_to_build {
-            install_target(target_info.target).await?;
-        }
+        log(&format!(
+            "Installing Rust target: {}",
+            current_target.target
+        ));
+        install_target(current_target.target).await?;
     }
 
     println!();
 
-    let mut bin_success = 0usize;
-    let mut bin_failure = 0usize;
-    let mut addon_success = 0usize;
-    let mut addon_failure = 0usize;
-
     // ---- Binary ----
     if do_build_bin {
-        log("Building binaries...");
-        for target_info in &targets_to_build {
-            let success = build_binary(target_info.target, &project_root, args.dev).await?;
-            if success {
-                bin_success += 1;
-            } else {
-                bin_failure += 1;
-                if !args.all {
-                    log_error("Failed to build binary for current platform");
-                    log_error("This may indicate a Rust compilation issue");
-                    std::process::exit(1);
-                }
-            }
+        log("Building binary...");
+        let success = build_binary(current_target.target, &project_root, args.dev).await?;
+        if !success {
+            log_error("Failed to build binary for current platform");
+            log_error("This may indicate a Rust compilation issue");
+            std::process::exit(1);
         }
 
         println!();
 
-        log("Copying binaries to platform packages...");
-        for target_info in &targets_to_build {
-            let build_type = if args.dev { "debug" } else { "release" };
-            let binary_path = project_root
-                .join("target")
-                .join(target_info.target)
-                .join(build_type)
-                .join(target_info.binary_name);
+        log("Copying binary to platform package...");
+        let build_type = if args.dev { "debug" } else { "release" };
+        let binary_path = project_root
+            .join("target")
+            .join(current_target.target)
+            .join(build_type)
+            .join(current_target.binary_name);
 
-            if binary_path.exists() {
-                let success =
-                    copy_binary_to_platform_package(target_info, &project_root, args.dev)?;
-                if !success {
-                    bin_failure += 1;
-                }
-            }
+        if !binary_path.exists() {
+            log_error(&format!("Binary not found: {}", binary_path.display()));
+            std::process::exit(1);
         }
+
+        copy_binary_to_platform_package(current_target, &project_root, args.dev)?;
 
         println!();
 
-        log("Validating binaries...");
-        for target_info in &targets_to_build {
-            validate_binary(target_info, &project_root, args.dev)?;
-        }
+        log("Validating binary...");
+        validate_binary(current_target, &project_root, args.dev)?;
 
         println!();
     }
@@ -198,151 +126,61 @@ async fn main() -> Result<()> {
     // ---- Addon ----
     if do_build_addon {
         log("Building rari-use-cache addon...");
-        for target_info in &targets_to_build {
-            let success = build_addon(target_info, &project_root, args.dev).await?;
-            if success {
-                addon_success += 1;
-            } else {
-                addon_failure += 1;
-                if !args.all {
-                    log_error(&format!(
-                        "Failed to build addon for current platform ({})",
-                        target_info.platform
-                    ));
-                    std::process::exit(1);
-                }
-            }
-        }
-
-        println!();
-
-        log("Copying addon to platform packages...");
-        for target_info in &targets_to_build {
-            let src = addon_stable_output_path_public(target_info, &project_root);
-            if src.exists() {
-                let success = copy_addon_to_platform_package(target_info, &project_root, args.dev)?;
-                if !success {
-                    addon_failure += 1;
-                }
-            } else {
-                log_warning(&format!(
-                    "Addon artifact missing for {}, skipping copy to platform package",
-                    target_info.platform
-                ));
-            }
-        }
-
-        println!();
-
-        log("Validating addons...");
-        for target_info in &targets_to_build {
-            let _ = validate_addon(target_info, &project_root);
-        }
-
-        println!();
-    }
-
-    let total_attempted = targets_to_build.len();
-
-    let any_failure = bin_failure > 0 || addon_failure > 0;
-    if any_failure {
-        if bin_success > 0 || addon_success > 0 {
-            log_warning(&format!(
-                "Partial success: {bin_success} bin(s), {addon_success} addon(s) of {total_attempted} target(s)"
+        let success = build_addon(current_target, &project_root, args.dev).await?;
+        if !success {
+            log_error(&format!(
+                "Failed to build addon for current platform ({})",
+                current_target.platform
             ));
-            println!();
-            println!("{}", "Successfully built:".bold());
-            for target_info in &targets_to_build {
-                if do_build_bin {
-                    let build_type = if args.dev { "debug" } else { "release" };
-                    let binary_path = project_root
-                        .join("target")
-                        .join(target_info.target)
-                        .join(build_type)
-                        .join(target_info.binary_name);
-                    if binary_path.exists() {
-                        println!("  • {} (binary)", target_info.platform.green());
-                    }
-                }
-                if do_build_addon
-                    && addon_stable_output_path_public(target_info, &project_root).exists()
-                {
-                    println!("  • {} (addon)", target_info.platform.green());
-                }
-            }
-        } else {
-            log_error("Failed to prepare any platform artifacts");
-        }
-
-        println!();
-        println!("{}", "Troubleshooting:".bold());
-        if args.all {
-            println!("  • Cross-compilation requires additional tools:");
-            println!("    - Linux: Install gcc-*-linux-gnu packages");
-            println!("    - Windows: Install mingw-w64 toolchain");
-            println!("    - Use GitHub Actions for reliable cross-platform builds");
-            println!("  • Or build for current platform only (remove --all flag)");
-        } else {
-            println!("  • Ensure Rust is installed: https://rustup.rs/");
-            println!("  • Check that all required dependencies are installed");
-            println!(
-                "  • For addon builds: ensure @napi-rs/cli is installed (npm i -g @napi-rs/cli)"
-            );
-        }
-
-        if !args.all && any_failure {
             std::process::exit(1);
         }
-    } else {
-        if do_build_bin {
-            log_success(&format!(
-                "✨ Successfully prepared {bin_success} platform binaries!"
-            ));
-        }
-        if do_build_addon {
-            log_success(&format!(
-                "✨ Successfully prepared {addon_success} platform addons!"
-            ));
-        }
+
         println!();
-        println!("{}", "Platform packages ready:".bold());
-        for target_info in &targets_to_build {
-            if do_build_bin {
-                println!(
-                    "  • {} → {}",
-                    target_info.platform.cyan(),
-                    target_info.package_dir
-                );
-            }
-            if do_build_addon {
-                println!(
-                    "  • {} → {}",
-                    target_info.platform.cyan(),
-                    target_info.addon_package_dir
-                );
-            }
+
+        log("Copying addon to platform package...");
+        let src = addon_stable_output_path_public(current_target, &project_root);
+        if !src.exists() {
+            log_error(&format!("Addon artifact missing: {}", src.display()));
+            std::process::exit(1);
         }
+
+        copy_addon_to_platform_package(current_target, &project_root, args.dev)?;
+
         println!();
-        println!("{}", "Next steps:".dimmed());
-        if args.all {
-            println!("{}", "  1. Test the artifacts locally".dimmed());
-            println!(
-                "{}",
-                "  2. Run the release script: pnpm run release".dimmed()
-            );
-            println!("{}", "  3. Or publish individual packages".dimmed());
-        } else {
-            println!("{}", "  1. Test the artifacts locally".dimmed());
-            println!(
-                "{}",
-                "  2. Use GitHub Actions for full cross-platform builds".dimmed()
-            );
-            println!(
-                "{}",
-                "  3. Or run with --all flag (requires cross-compilation setup)".dimmed()
-            );
-        }
+
+        log("Validating addon...");
+        validate_addon(current_target, &project_root)?;
+
+        println!();
     }
+
+    if do_build_bin {
+        log_success("✨ Successfully prepared binary!");
+    }
+    if do_build_addon {
+        log_success("✨ Successfully prepared addon!");
+    }
+
+    println!();
+    println!("{}", "Platform package ready:".bold());
+    if do_build_bin {
+        println!("  • Binary → {}", current_target.package_dir.cyan());
+    }
+    if do_build_addon {
+        println!("  • Addon → {}", current_target.addon_package_dir.cyan());
+    }
+
+    println!();
+    println!("{}", "Next steps:".dimmed());
+    println!("{}", "  1. Test the artifacts locally".dimmed());
+    println!(
+        "{}",
+        "  2. Use GitHub Actions for cross-platform builds".dimmed()
+    );
+    println!(
+        "{}",
+        "  3. Run the release script: pnpm run release".dimmed()
+    );
 
     Ok(())
 }
