@@ -141,6 +141,8 @@ jobs:
       - name: Build binary (macOS)
         if: runner.os == 'macOS'
         run: cargo build --release --target ${{ matrix.target }} --bin rari
+        env:
+          RUSTFLAGS: '' # Override .cargo/config.toml to use default linker
 
       - name: Build binary (Windows)
         if: runner.os == 'Windows'
