@@ -10,7 +10,7 @@ use crate::common::{Target, log, log_error, log_success, log_warning};
 
 pub async fn build_binary(target: &str, project_root: &Path, dev_mode: bool) -> Result<bool> {
     let build_type = if dev_mode { "debug" } else { "release" };
-    log(&format!("Building binary for {target} ({build_type})"));
+    log(&format!("Building binary ({build_type})"));
 
     let mut cmd = Command::new("cargo");
     cmd.arg("build");
@@ -22,23 +22,16 @@ pub async fn build_binary(target: &str, project_root: &Path, dev_mode: bool) -> 
     cmd.args(["--target", target, "--bin", "rari"])
         .current_dir(project_root);
 
-    if target == "aarch64-unknown-linux-gnu" {
-        cmd.env(
-            "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER",
-            "aarch64-linux-gnu-gcc",
-        );
-    }
-
     let output = cmd
         .output()
         .await
         .context("Failed to execute cargo build")?;
 
     if output.status.success() {
-        log_success(&format!("Built binary for {target}"));
+        log_success("Built binary");
         Ok(true)
     } else {
-        log_error(&format!("Failed to build binary for {target}"));
+        log_error("Failed to build binary");
         let stderr = String::from_utf8_lossy(&output.stderr);
         log_error(&format!("Error: {stderr}"));
         Ok(false)
@@ -78,37 +71,26 @@ pub fn copy_binary_to_platform_package(
         perms.set_mode(0o755);
         fs::set_permissions(&dest_path, perms)?;
 
-        if target_info.platform.starts_with("darwin") {
-            if std::env::consts::OS == "macos" {
-                match dest_path.to_str() {
-                    Some(path_str) => {
-                        let sign_result = std::process::Command::new("codesign")
-                            .args(["-s", "-", path_str])
-                            .output();
-                        match sign_result {
-                            Ok(output) if output.status.success() => {
-                                log_success(&format!("Ad-hoc signed: {}", dest_path.display()));
-                            }
-                            Ok(output) => {
-                                log_warning(&format!(
-                                    "codesign failed: {}",
-                                    String::from_utf8_lossy(&output.stderr)
-                                ));
-                            }
-                            Err(e) => {
-                                log_warning(&format!("codesign not available: {e}"));
-                            }
-                        }
-                    }
-                    None => {
-                        log_warning(&format!(
-                            "Skipping codesign: path contains invalid UTF-8: {}",
-                            dest_path.display()
-                        ));
-                    }
+        #[cfg(target_os = "macos")]
+        if target_info.platform.starts_with("darwin")
+            && let Some(path_str) = dest_path.to_str()
+        {
+            let sign_result = std::process::Command::new("codesign")
+                .args(["-s", "-", path_str])
+                .output();
+            match sign_result {
+                Ok(output) if output.status.success() => {
+                    log_success(&format!("Ad-hoc signed: {}", dest_path.display()));
                 }
-            } else {
-                log_warning("Skipping codesign: host OS is not macOS");
+                Ok(output) => {
+                    log_warning(&format!(
+                        "codesign failed: {}",
+                        String::from_utf8_lossy(&output.stderr)
+                    ));
+                }
+                Err(e) => {
+                    log_warning(&format!("codesign not available: {e}"));
+                }
             }
         }
     }
