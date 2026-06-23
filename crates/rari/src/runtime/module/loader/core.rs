@@ -1560,33 +1560,53 @@ impl ModuleLoader for RariModuleLoader {
                         let source_path = Path::new(source_dir);
                         let parent_dir = source_path.parent().unwrap_or_else(|| Path::new(""));
 
-                        let remaining_with_ext = if remaining.ends_with(".ts")
-                            || remaining.ends_with(".js")
-                            || remaining.ends_with(".tsx")
-                            || remaining.ends_with(".jsx")
-                            || remaining.ends_with(".mjs")
-                            || remaining.ends_with(".cjs")
-                        {
-                            remaining.to_string()
+                        let (base_path, suffix) = if let Some(query_pos) = remaining.find('?') {
+                            (&remaining[..query_pos], &remaining[query_pos..])
+                        } else if let Some(hash_pos) = remaining.find('#') {
+                            (&remaining[..hash_pos], &remaining[hash_pos..])
                         } else {
-                            format!("{remaining}.ts")
+                            (remaining, "")
                         };
+
+                        let base_with_ext = if base_path.ends_with(".ts")
+                            || base_path.ends_with(".js")
+                            || base_path.ends_with(".tsx")
+                            || base_path.ends_with(".jsx")
+                            || base_path.ends_with(".mjs")
+                            || base_path.ends_with(".cjs")
+                        {
+                            base_path.to_string()
+                        } else {
+                            format!("{base_path}.ts")
+                        };
+
+                        let remaining_with_ext = format!("{base_with_ext}{suffix}");
 
                         path_to_file_url(&parent_dir.join(remaining_with_ext))
                     } else {
                         let remaining = specifier.strip_prefix("./").unwrap_or(specifier);
 
-                        let remaining_with_ext = if remaining.ends_with(".ts")
-                            || remaining.ends_with(".js")
-                            || remaining.ends_with(".tsx")
-                            || remaining.ends_with(".jsx")
-                            || remaining.ends_with(".mjs")
-                            || remaining.ends_with(".cjs")
-                        {
-                            remaining.to_string()
+                        let (base_path, suffix) = if let Some(query_pos) = remaining.find('?') {
+                            (&remaining[..query_pos], &remaining[query_pos..])
+                        } else if let Some(hash_pos) = remaining.find('#') {
+                            (&remaining[..hash_pos], &remaining[hash_pos..])
                         } else {
-                            format!("{remaining}.ts")
+                            (remaining, "")
                         };
+
+                        let base_with_ext = if base_path.ends_with(".ts")
+                            || base_path.ends_with(".js")
+                            || base_path.ends_with(".tsx")
+                            || base_path.ends_with(".jsx")
+                            || base_path.ends_with(".mjs")
+                            || base_path.ends_with(".cjs")
+                        {
+                            base_path.to_string()
+                        } else {
+                            format!("{base_path}.ts")
+                        };
+
+                        let remaining_with_ext = format!("{base_with_ext}{suffix}");
 
                         path_to_file_url(&Path::new(source_dir).join(remaining_with_ext))
                     };

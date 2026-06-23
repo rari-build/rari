@@ -1,5 +1,6 @@
 use axum::{body::Body, extract::Request, http::StatusCode, response::Response};
 use futures_util::future::BoxFuture;
+use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::task::{Context, Poll};
@@ -307,7 +308,29 @@ pub async fn initialize_proxy(state: &ServerState) -> Result<(), Box<dyn std::er
         .execute_script("initialize_proxy_executor".to_string(), init_script)
         .await
     {
-        Ok(_) => Ok(()),
+        Ok(result) => {
+            if let Some(success) = result.get("success").and_then(serde_json::Value::as_bool) {
+                if success {
+                    Ok(())
+                } else {
+                    let error_msg = result
+                        .get("error")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("Unknown error during proxy initialization");
+                    error!("Proxy initialization failed: {error_msg}");
+                    Err(
+                        RariError::js_runtime(format!("Proxy initialization failed: {error_msg}"))
+                            .into(),
+                    )
+                }
+            } else {
+                error!("Proxy initialization returned invalid result format");
+                Err(
+                    RariError::js_runtime("Proxy initialization returned invalid result format")
+                        .into(),
+                )
+            }
+        }
         Err(e) => {
             error!("Failed to register proxy function: {}", e);
             Err(e.into())

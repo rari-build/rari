@@ -1105,7 +1105,6 @@ impl ImageOptimizer {
             Some("webp") => ImageFormat::WebP,
             Some("jpeg" | "jpg") => ImageFormat::Jpeg,
             Some("png") => ImageFormat::Png,
-            Some("gif") => ImageFormat::Gif,
             _ => ImageFormat::Avif,
         }
     }
