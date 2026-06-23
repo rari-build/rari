@@ -396,9 +396,7 @@ jobs:
 
   build:
     needs: [changes, build-use-cache-addon]
-    if: |
-      (needs.changes.outputs.src == 'true' || needs.changes.outputs.rust == 'true') &&
-      always() && !cancelled() && !failure()
+    if: needs.changes.outputs.src == 'true' || needs.changes.outputs.rust == 'true'
     runs-on: namespace-profile-rari-linux-amd64
     timeout-minutes: 10
     permissions:
