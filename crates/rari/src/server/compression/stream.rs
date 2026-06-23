@@ -5,6 +5,7 @@ use tokio::io::AsyncWriteExt;
 use tracing::error;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum CompressionEncoding {
     Zstd,
     Brotli,

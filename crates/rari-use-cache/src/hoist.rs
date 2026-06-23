@@ -1,8 +1,14 @@
-use deno_ast::swc::ast::*;
-use deno_ast::swc::common::DUMMY_SP;
+use deno_ast::swc::ast::{
+    ArrayLit, ArrowExpr, AwaitExpr, BinExpr, BinaryOp, BindingIdent, BlockStmt, BlockStmtOrExpr,
+    CallExpr, Callee, CatchClause, Decl, Expr, ExprOrSpread, ExprStmt, FnDecl, FnExpr, Function,
+    Ident, IdentName, IfStmt, KeyValueProp, Lit, MemberExpr, MemberProp, ModuleItem, Null, Number,
+    ObjectLit, Param, ParenExpr, Pat, Prop, PropName, PropOrSpread, RestPat, ReturnStmt, Stmt, Str,
+    ThrowStmt, TryStmt, UnaryExpr, UnaryOp, VarDecl, VarDeclKind, VarDeclarator,
+};
+use deno_ast::swc::common::{DUMMY_SP, SyntaxContext};
 
 fn id(name: &str) -> Ident {
-    Ident::new(name.into(), DUMMY_SP, Default::default())
+    Ident::new(name.into(), DUMMY_SP, SyntaxContext::default())
 }
 
 fn id_name(name: &str) -> IdentName {
@@ -12,6 +18,10 @@ fn id_name(name: &str) -> IdentName {
     }
 }
 
+#[expect(
+    clippy::unnecessary_box_returns,
+    reason = "Consistent with deno_ast's AST building patterns"
+)]
 fn ident_expr(name: &str) -> Box<Expr> {
     Box::new(Expr::Ident(id(name)))
 }
@@ -32,6 +42,10 @@ fn num(n: f64) -> Number {
     }
 }
 
+#[expect(
+    clippy::unnecessary_box_returns,
+    reason = "Consistent with deno_ast's AST building patterns"
+)]
 fn null_expr() -> Box<Expr> {
     Box::new(Expr::Lit(Lit::Null(Null { span: DUMMY_SP })))
 }
@@ -96,11 +110,11 @@ fn create_inner_function(
         ident: Some(Ident::new(
             fn_decl.ident.sym.clone(),
             DUMMY_SP,
-            Default::default(),
+            SyntaxContext::default(),
         )),
         function: Box::new(Function {
             span: DUMMY_SP,
-            ctxt: Default::default(),
+            ctxt: SyntaxContext::default(),
             decorators: fn_decl.function.decorators.clone(),
             params: new_params,
             body: clean_body,
@@ -113,7 +127,7 @@ fn create_inner_function(
 
     ModuleItem::Stmt(Stmt::Decl(Decl::Var(Box::new(VarDecl {
         span: DUMMY_SP,
-        ctxt: Default::default(),
+        ctxt: SyntaxContext::default(),
         kind: VarDeclKind::Const,
         declare: false,
         decls: vec![VarDeclarator {
@@ -133,7 +147,7 @@ fn create_name_define_statement(inner_name: &str, export_name: &str) -> ModuleIt
         span: DUMMY_SP,
         expr: Box::new(Expr::Call(CallExpr {
             span: DUMMY_SP,
-            ctxt: Default::default(),
+            ctxt: SyntaxContext::default(),
             callee: Callee::Expr(Box::new(Expr::Member(MemberExpr {
                 span: DUMMY_SP,
                 obj: Box::new(Expr::Ident(id("Object"))),
@@ -158,6 +172,10 @@ fn create_name_define_statement(inner_name: &str, export_name: &str) -> ModuleIt
     }))
 }
 
+#[expect(
+    clippy::unnecessary_box_returns,
+    reason = "Consistent with deno_ast's AST building patterns"
+)]
 fn create_value_descriptor(value: &str) -> Box<Expr> {
     Box::new(Expr::Object(ObjectLit {
         span: DUMMY_SP,
@@ -168,6 +186,10 @@ fn create_value_descriptor(value: &str) -> Box<Expr> {
     }))
 }
 
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "param_count represents function parameters, typically <10, well within f64 precision"
+)]
 fn create_cache_wrapper(
     cache_name: &str,
     inner_name: &str,
@@ -179,17 +201,17 @@ fn create_cache_wrapper(
         ident: None,
         function: Box::new(Function {
             span: DUMMY_SP,
-            ctxt: Default::default(),
+            ctxt: SyntaxContext::default(),
             decorators: vec![],
             params: vec![],
             body: Some(BlockStmt {
                 span: DUMMY_SP,
-                ctxt: Default::default(),
+                ctxt: SyntaxContext::default(),
                 stmts: vec![Stmt::Return(ReturnStmt {
                     span: DUMMY_SP,
                     arg: Some(Box::new(Expr::Call(CallExpr {
                         span: DUMMY_SP,
-                        ctxt: Default::default(),
+                        ctxt: SyntaxContext::default(),
                         callee: Callee::Expr(ident_expr("$$cache__")),
                         args: vec![
                             ExprOrSpread {
@@ -226,7 +248,7 @@ fn create_cache_wrapper(
 
     ModuleItem::Stmt(Stmt::Decl(Decl::Var(Box::new(VarDecl {
         span: DUMMY_SP,
-        ctxt: Default::default(),
+        ctxt: SyntaxContext::default(),
         kind: VarDeclKind::Var,
         declare: false,
         decls: vec![VarDeclarator {
@@ -241,6 +263,10 @@ fn create_cache_wrapper(
     }))))
 }
 
+#[expect(
+    clippy::unnecessary_box_returns,
+    reason = "Consistent with deno_ast's AST building patterns"
+)]
 fn create_args_slice_expr() -> Box<Expr> {
     // Array.prototype.slice.call(arguments)
     let callee = Expr::Member(MemberExpr {
@@ -259,7 +285,7 @@ fn create_args_slice_expr() -> Box<Expr> {
     });
     Box::new(Expr::Call(CallExpr {
         span: DUMMY_SP,
-        ctxt: Default::default(),
+        ctxt: SyntaxContext::default(),
         callee: Callee::Expr(Box::new(call_callee)),
         args: vec![ExprOrSpread {
             spread: None,
@@ -274,7 +300,7 @@ fn create_register_ref_statement(cache_name: &str, ref_id: &str) -> ModuleItem {
         span: DUMMY_SP,
         expr: Box::new(Expr::Call(CallExpr {
             span: DUMMY_SP,
-            ctxt: Default::default(),
+            ctxt: SyntaxContext::default(),
             callee: Callee::Expr(ident_expr("registerServerReference")),
             args: vec![
                 ExprOrSpread {
@@ -295,6 +321,7 @@ fn create_register_ref_statement(cache_name: &str, ref_id: &str) -> ModuleItem {
     }))
 }
 
+#[non_exhaustive]
 pub struct CacheDeclarationInput<'a> {
     pub fn_decl: &'a FnDecl,
     pub export_name: &'a str,
@@ -305,12 +332,16 @@ pub struct CacheDeclarationInput<'a> {
     pub inner_name: &'a str,
 }
 
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "Struct is used as a parameter pack, ownership not needed but consistent API"
+)]
 pub fn create_cache_declarations(
     extra_items: &mut Vec<ModuleItem>,
     input: CacheDeclarationInput<'_>,
 ) {
     let param_count =
-        input.fn_decl.function.params.len() + if input.closure_vars.is_empty() { 0 } else { 1 };
+        input.fn_decl.function.params.len() + usize::from(!input.closure_vars.is_empty());
 
     extra_items.push(create_inner_function(
         input.fn_decl,
@@ -361,11 +392,15 @@ fn build_apply_args_array(closure_vars_empty: bool) -> ArrayLit {
 }
 
 /// Build the `try { return cacheName.apply(null, [...]); } catch (e) { if (e?.then) return await e; throw e; }` body.
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "ArrayLit is constructed inline and ownership transfer is cleaner"
+)]
 fn build_try_body(cache_name: &str, apply_args_arr: ArrayLit) -> Stmt {
     let apply_call = || {
         Expr::Call(CallExpr {
             span: DUMMY_SP,
-            ctxt: Default::default(),
+            ctxt: SyntaxContext::default(),
             callee: Callee::Expr(Box::new(Expr::Member(MemberExpr {
                 span: DUMMY_SP,
                 obj: ident_expr(cache_name),
@@ -389,7 +424,7 @@ fn build_try_body(cache_name: &str, apply_args_arr: ArrayLit) -> Stmt {
         span: DUMMY_SP,
         block: BlockStmt {
             span: DUMMY_SP,
-            ctxt: Default::default(),
+            ctxt: SyntaxContext::default(),
             stmts: vec![Stmt::Return(ReturnStmt {
                 span: DUMMY_SP,
                 arg: Some(Box::new(apply_call())),
@@ -403,7 +438,7 @@ fn build_try_body(cache_name: &str, apply_args_arr: ArrayLit) -> Stmt {
             })),
             body: BlockStmt {
                 span: DUMMY_SP,
-                ctxt: Default::default(),
+                ctxt: SyntaxContext::default(),
                 stmts: vec![
                     Stmt::If(IfStmt {
                         span: DUMMY_SP,
@@ -456,7 +491,7 @@ fn build_inner_body(cache_name: &str, has_bound_args: bool) -> BlockStmt {
     let apply_args_arr = build_apply_args_array(!has_bound_args);
     BlockStmt {
         span: DUMMY_SP,
-        ctxt: Default::default(),
+        ctxt: SyntaxContext::default(),
         stmts: vec![build_try_body(cache_name, apply_args_arr)],
     }
 }
@@ -493,23 +528,7 @@ pub fn create_bound_replacement(
     let has_bound_args = !closure_vars.is_empty();
     let inner_body = build_inner_body(cache_name, has_bound_args);
 
-    let final_init: Box<Expr> = if !has_bound_args {
-        // No closure captures — simple async function.
-        Box::new(Expr::Fn(FnExpr {
-            ident: None,
-            function: Box::new(Function {
-                span: DUMMY_SP,
-                ctxt: Default::default(),
-                decorators: vec![],
-                params: vec![build_rest_args_param()],
-                body: Some(inner_body),
-                is_async: true,
-                is_generator: false,
-                type_params: None,
-                return_type: None,
-            }),
-        }))
-    } else {
+    let final_init: Box<Expr> = if has_bound_args {
         // Closure captures present — wrap in an arrow that pre-binds the
         // encoded closure args, then returns an async function for the user args.
         //
@@ -528,7 +547,7 @@ pub fn create_bound_replacement(
         }
         let bound_arg_call = Expr::Call(CallExpr {
             span: DUMMY_SP,
-            ctxt: Default::default(),
+            ctxt: SyntaxContext::default(),
             callee: Callee::Expr(ident_expr("encodeBoundArgs")),
             args: enc_args,
             type_args: None,
@@ -537,7 +556,7 @@ pub fn create_bound_replacement(
         // Inner async arrow: async (...args) => { ... }
         let inner_async = Expr::Arrow(ArrowExpr {
             span: DUMMY_SP,
-            ctxt: Default::default(),
+            ctxt: SyntaxContext::default(),
             params: vec![Pat::Rest(RestPat {
                 span: DUMMY_SP,
                 dot3_token: DUMMY_SP,
@@ -557,7 +576,7 @@ pub fn create_bound_replacement(
         // Outer arrow: $$ACTION_BOUND_ARGS => inner_async
         let outer_arrow = Expr::Arrow(ArrowExpr {
             span: DUMMY_SP,
-            ctxt: Default::default(),
+            ctxt: SyntaxContext::default(),
             params: vec![Pat::Ident(BindingIdent {
                 id: id("$$ACTION_BOUND_ARGS"),
                 type_ann: None,
@@ -572,7 +591,7 @@ pub fn create_bound_replacement(
         // IIFE: (outer_arrow)(encodeBoundArgs(...))
         Box::new(Expr::Call(CallExpr {
             span: DUMMY_SP,
-            ctxt: Default::default(),
+            ctxt: SyntaxContext::default(),
             callee: Callee::Expr(Box::new(Expr::Paren(ParenExpr {
                 span: DUMMY_SP,
                 expr: Box::new(outer_arrow),
@@ -583,11 +602,27 @@ pub fn create_bound_replacement(
             }],
             type_args: None,
         }))
+    } else {
+        // No closure captures — simple async function.
+        Box::new(Expr::Fn(FnExpr {
+            ident: None,
+            function: Box::new(Function {
+                span: DUMMY_SP,
+                ctxt: SyntaxContext::default(),
+                decorators: vec![],
+                params: vec![build_rest_args_param()],
+                body: Some(inner_body),
+                is_async: true,
+                is_generator: false,
+                type_params: None,
+                return_type: None,
+            }),
+        }))
     };
 
     ModuleItem::Stmt(Stmt::Decl(Decl::Var(Box::new(VarDecl {
         span: DUMMY_SP,
-        ctxt: Default::default(),
+        ctxt: SyntaxContext::default(),
         kind: VarDeclKind::Var,
         declare: false,
         decls: vec![VarDeclarator {

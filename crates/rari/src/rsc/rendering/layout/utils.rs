@@ -1,3 +1,5 @@
+#![allow(clippy::string_add, clippy::implicit_hasher)]
+
 use crate::server::core::utils::component::{readable_component_id, short_hash};
 use crate::server::routing::app_router::AppRouteMatch;
 use crate::server::routing::types::ParamValue;
@@ -37,9 +39,9 @@ fn normalize_route_component_path(file_path: &str) -> String {
     if normalized.starts_with("src/") {
         normalized
     } else if normalized.starts_with("app/") {
-        format!("src/{}", normalized)
+        format!("src/{normalized}")
     } else {
-        format!("src/app/{}", normalized)
+        format!("src/app/{normalized}")
     }
 }
 
@@ -92,7 +94,6 @@ pub fn create_page_props(
         serde_json::to_value(&context.search_params)?
     };
 
-    #[allow(clippy::disallowed_methods)]
     let result = serde_json::json!({
         "params": params_value,
         "searchParams": search_params_value

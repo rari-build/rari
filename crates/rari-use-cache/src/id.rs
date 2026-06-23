@@ -15,7 +15,7 @@ pub fn generate_reference_id(
     let hash = hasher.finalize();
 
     let mut bytes = hash.to_vec();
-    let type_byte = if is_cache { 0x01u8 } else { 0x00u8 };
+    let type_byte = u8::from(is_cache);
     bytes.push(type_byte);
 
     hex::encode(bytes)

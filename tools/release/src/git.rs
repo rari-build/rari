@@ -8,7 +8,7 @@ fn tag_pattern_for(package_name: &str) -> String {
     } else if package_name == "@rari/use-cache-binaries" {
         "use-cache-binaries@*".to_string()
     } else {
-        format!("{}@*", package_name)
+        format!("{package_name}@*")
     }
 }
 
@@ -43,14 +43,14 @@ pub async fn get_commits_since_tag(package_name: &str, package_path: &Path) -> R
 
     if !tag_output.status.success() {
         let stderr = String::from_utf8_lossy(&tag_output.stderr);
-        anyhow::bail!("Failed to list tags: {}", stderr);
+        anyhow::bail!("Failed to list tags: {stderr}");
     }
 
     let tags = String::from_utf8_lossy(&tag_output.stdout);
     let latest_tag = tags.lines().next();
 
     if let Some(tag) = latest_tag {
-        let range = format!("{}..HEAD", tag);
+        let range = format!("{tag}..HEAD");
 
         if package_name == "rari-binaries" {
             let output = Command::new("git")
@@ -72,10 +72,7 @@ pub async fn get_commits_since_tag(package_name: &str, package_path: &Path) -> R
                 let stderr = String::from_utf8_lossy(&output.stderr);
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 anyhow::bail!(
-                    "Failed to get git log for rari-binaries (range: {}):\nstdout: {}\nstderr: {}",
-                    range,
-                    stdout,
-                    stderr
+                    "Failed to get git log for rari-binaries (range: {range}):\nstdout: {stdout}\nstderr: {stderr}"
                 );
             }
 
@@ -107,10 +104,7 @@ pub async fn get_commits_since_tag(package_name: &str, package_path: &Path) -> R
                 let stderr = String::from_utf8_lossy(&output.stderr);
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 anyhow::bail!(
-                    "Failed to get git log for @rari/use-cache-binaries (range: {}):\nstdout: {}\nstderr: {}",
-                    range,
-                    stdout,
-                    stderr
+                    "Failed to get git log for @rari/use-cache-binaries (range: {range}):\nstdout: {stdout}\nstderr: {stderr}"
                 );
             }
 
@@ -129,11 +123,7 @@ pub async fn get_commits_since_tag(package_name: &str, package_path: &Path) -> R
                 let stderr = String::from_utf8_lossy(&output.stderr);
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 anyhow::bail!(
-                    "Failed to get git log for {} (range: {}):\nstdout: {}\nstderr: {}",
-                    package_name,
-                    range,
-                    stdout,
-                    stderr
+                    "Failed to get git log for {package_name} (range: {range}):\nstdout: {stdout}\nstderr: {stderr}"
                 );
             }
 
@@ -160,7 +150,7 @@ pub async fn get_previous_tag(
 
     if !tag_output.status.success() {
         let stderr = String::from_utf8_lossy(&tag_output.stderr);
-        anyhow::bail!("Failed to list tags: {}", stderr);
+        anyhow::bail!("Failed to list tags: {stderr}");
     }
 
     let tags = String::from_utf8_lossy(&tag_output.stdout);
@@ -216,11 +206,7 @@ pub async fn amend_commit() -> Result<()> {
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let stdout = String::from_utf8_lossy(&output.stdout);
-        anyhow::bail!(
-            "Failed to amend commit:\nstdout: {}\nstderr: {}",
-            stdout,
-            stderr
-        );
+        anyhow::bail!("Failed to amend commit:\nstdout: {stdout}\nstderr: {stderr}");
     }
 
     Ok(())
@@ -255,10 +241,7 @@ pub async fn add_and_commit_multiple(message: &str, paths: &[&Path]) -> Result<(
         let stderr = String::from_utf8_lossy(&output.stderr);
         let stdout = String::from_utf8_lossy(&output.stdout);
         anyhow::bail!(
-            "Failed to git commit with message '{}':\nstdout: {}\nstderr: {}",
-            message,
-            stdout,
-            stderr
+            "Failed to git commit with message '{message}':\nstdout: {stdout}\nstderr: {stderr}"
         );
     }
 
@@ -277,11 +260,7 @@ pub async fn push_changes() -> Result<()> {
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let stdout = String::from_utf8_lossy(&output.stdout);
-        anyhow::bail!(
-            "Failed to push commits:\nstdout: {}\nstderr: {}",
-            stdout,
-            stderr
-        );
+        anyhow::bail!("Failed to push commits:\nstdout: {stdout}\nstderr: {stderr}");
     }
 
     let output = Command::new("git")
@@ -292,11 +271,7 @@ pub async fn push_changes() -> Result<()> {
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let stdout = String::from_utf8_lossy(&output.stdout);
-        anyhow::bail!(
-            "Failed to push tags:\nstdout: {}\nstderr: {}",
-            stdout,
-            stderr
-        );
+        anyhow::bail!("Failed to push tags:\nstdout: {stdout}\nstderr: {stderr}");
     }
 
     Ok(())
@@ -329,6 +304,6 @@ pub async fn get_repo_info() -> Result<(String, String)> {
     if parts.len() >= 2 {
         Ok((parts[0].to_string(), parts[1].to_string()))
     } else {
-        anyhow::bail!("Could not parse GitHub repository from URL: {}", url);
+        anyhow::bail!("Could not parse GitHub repository from URL: {url}");
     }
 }

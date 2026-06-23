@@ -5,7 +5,6 @@ use rari::server::{
     image::ImageOptimizer,
 };
 use rari_error::RariError;
-
 use rustls::crypto::CryptoProvider;
 use tracing::error;
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
@@ -89,7 +88,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     CryptoProvider::install_default(rustls::crypto::aws_lc_rs::default_provider())
         .map_err(|_| "Failed to install rustls crypto provider")?;
 
-    let config = load_configuration(&matches).await?;
+    let config = load_configuration(&matches)?;
 
     let server = Server::new(config).await.map_err(|e| {
         error!("Failed to create server: {}", e);
@@ -101,14 +100,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     tokio::select! {
         result = server.start() => {
             match result {
-                Ok(_) => {}
+                Ok(()) => {}
                 Err(e) => {
                     error!("Server error: {}", e);
                     return Err(e.into());
                 }
             }
         }
-        _ = shutdown_signal => {}
+        () = shutdown_signal => {}
     }
 
     Ok(())
@@ -166,7 +165,6 @@ async fn run_optimize_images(
     }
 }
 
-#[allow(clippy::result_large_err)]
 fn init_logging_for_subcommand(matches: &clap::ArgMatches) -> Result<(), RariError> {
     let verbose = matches.get_flag("verbose");
 
@@ -192,7 +190,6 @@ fn init_logging_for_subcommand(matches: &clap::ArgMatches) -> Result<(), RariErr
     Ok(())
 }
 
-#[allow(clippy::result_large_err)]
 fn init_logging(matches: &clap::ArgMatches) -> Result<(), RariError> {
     let verbose = matches.get_flag("verbose");
     let quiet = matches.get_flag("quiet");
@@ -225,7 +222,7 @@ fn init_logging(matches: &clap::ArgMatches) -> Result<(), RariError> {
     Ok(())
 }
 
-async fn load_configuration(matches: &clap::ArgMatches) -> Result<Config, RariError> {
+fn load_configuration(matches: &clap::ArgMatches) -> Result<Config, RariError> {
     let mode_str = matches
         .get_one::<String>("mode")
         .ok_or_else(|| RariError::configuration("Mode argument is required".to_string()))?;
@@ -247,7 +244,7 @@ async fn load_configuration(matches: &clap::ArgMatches) -> Result<Config, RariEr
     config.mode = mode;
 
     if let Some(host) = matches.get_one::<String>("host") {
-        config.server.host = host.to_string();
+        config.server.host.clone_from(host);
     }
 
     if let Some(&port) = matches.get_one::<u16>("port") {
@@ -259,7 +256,6 @@ async fn load_configuration(matches: &clap::ArgMatches) -> Result<Config, RariEr
     Ok(config)
 }
 
-#[allow(clippy::result_large_err)]
 fn validate_configuration(config: &Config) -> Result<(), RariError> {
     if config.server.port == 0 {
         return Err(RariError::configuration(
@@ -293,9 +289,17 @@ async fn setup_shutdown_signal() {
     {
         use tokio::signal::unix::{SignalKind, signal};
 
+        #[expect(
+            clippy::expect_used,
+            reason = "Signal handler initialization always succeeds on Unix"
+        )]
         let mut sigterm =
             signal(SignalKind::terminate()).expect("Failed to create SIGTERM handler");
 
+        #[expect(
+            clippy::expect_used,
+            reason = "Signal handler initialization always succeeds on Unix"
+        )]
         let mut sigint = signal(SignalKind::interrupt()).expect("Failed to create SIGINT handler");
 
         tokio::select! {

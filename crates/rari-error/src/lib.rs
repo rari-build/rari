@@ -4,6 +4,7 @@ use thiserror::Error;
 
 pub use deno_error::JsErrorBox;
 
+#[non_exhaustive]
 #[derive(Error, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum Error {
     #[error("{0} has no entrypoint. Register one, or add a default to the runtime")]
@@ -66,6 +67,7 @@ impl From<&str> for Error {
     }
 }
 
+#[non_exhaustive]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ErrorMetadata {
     pub code: String,
@@ -92,6 +94,7 @@ impl PartialEq for ErrorMetadata {
     }
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum RariError {
     NotFound(String, Option<Box<ErrorMetadata>>),
@@ -144,21 +147,21 @@ impl std::error::Error for RariError {
 impl RariError {
     pub fn message(&self) -> String {
         match self {
-            Self::NotFound(msg, _) => msg.clone(),
-            Self::Validation(msg, _) => msg.clone(),
-            Self::Internal(msg, _) => msg.clone(),
-            Self::BadRequest(msg, _) => msg.clone(),
-            Self::Forbidden(msg, _) => msg.clone(),
-            Self::Serialization(msg, _) => msg.clone(),
-            Self::Deserialization(msg, _) => msg.clone(),
-            Self::State(msg, _) => msg.clone(),
-            Self::Network(msg, _) => msg.clone(),
-            Self::Timeout(msg, _) => msg.clone(),
-            Self::ServerError(msg, _) => msg.clone(),
-            Self::JsExecution(msg, _) => msg.clone(),
-            Self::JsRuntime(msg, _) => msg.clone(),
-            Self::IoError(msg, _) => msg.clone(),
-            Self::Cache(msg, _) => msg.clone(),
+            Self::NotFound(msg, _)
+            | Self::Validation(msg, _)
+            | Self::Internal(msg, _)
+            | Self::BadRequest(msg, _)
+            | Self::Forbidden(msg, _)
+            | Self::Serialization(msg, _)
+            | Self::Deserialization(msg, _)
+            | Self::State(msg, _)
+            | Self::Network(msg, _)
+            | Self::Timeout(msg, _)
+            | Self::ServerError(msg, _)
+            | Self::JsExecution(msg, _)
+            | Self::JsRuntime(msg, _)
+            | Self::IoError(msg, _)
+            | Self::Cache(msg, _) => msg.clone(),
         }
     }
 
@@ -184,41 +187,41 @@ impl RariError {
 
     fn metadata(&self) -> Option<&ErrorMetadata> {
         match self {
-            Self::NotFound(_, meta) => meta.as_deref(),
-            Self::Validation(_, meta) => meta.as_deref(),
-            Self::Internal(_, meta) => meta.as_deref(),
-            Self::BadRequest(_, meta) => meta.as_deref(),
-            Self::Serialization(_, meta) => meta.as_deref(),
-            Self::Deserialization(_, meta) => meta.as_deref(),
-            Self::State(_, meta) => meta.as_deref(),
-            Self::Network(_, meta) => meta.as_deref(),
-            Self::Timeout(_, meta) => meta.as_deref(),
-            Self::ServerError(_, meta) => meta.as_deref(),
-            Self::JsExecution(_, meta) => meta.as_deref(),
-            Self::JsRuntime(_, meta) => meta.as_deref(),
-            Self::IoError(_, meta) => meta.as_deref(),
-            Self::Cache(_, meta) => meta.as_deref(),
-            Self::Forbidden(_, meta) => meta.as_deref(),
+            Self::NotFound(_, meta)
+            | Self::Validation(_, meta)
+            | Self::Internal(_, meta)
+            | Self::BadRequest(_, meta)
+            | Self::Serialization(_, meta)
+            | Self::Deserialization(_, meta)
+            | Self::State(_, meta)
+            | Self::Network(_, meta)
+            | Self::Timeout(_, meta)
+            | Self::ServerError(_, meta)
+            | Self::JsExecution(_, meta)
+            | Self::JsRuntime(_, meta)
+            | Self::IoError(_, meta)
+            | Self::Cache(_, meta)
+            | Self::Forbidden(_, meta) => meta.as_deref(),
         }
     }
 
     fn metadata_mut(&mut self) -> &mut Option<Box<ErrorMetadata>> {
         match self {
-            Self::NotFound(_, meta) => meta,
-            Self::Validation(_, meta) => meta,
-            Self::Internal(_, meta) => meta,
-            Self::BadRequest(_, meta) => meta,
-            Self::Serialization(_, meta) => meta,
-            Self::Deserialization(_, meta) => meta,
-            Self::State(_, meta) => meta,
-            Self::Network(_, meta) => meta,
-            Self::Timeout(_, meta) => meta,
-            Self::ServerError(_, meta) => meta,
-            Self::JsExecution(_, meta) => meta,
-            Self::JsRuntime(_, meta) => meta,
-            Self::IoError(_, meta) => meta,
-            Self::Cache(_, meta) => meta,
-            Self::Forbidden(_, meta) => meta,
+            Self::NotFound(_, meta)
+            | Self::Validation(_, meta)
+            | Self::Internal(_, meta)
+            | Self::BadRequest(_, meta)
+            | Self::Serialization(_, meta)
+            | Self::Deserialization(_, meta)
+            | Self::State(_, meta)
+            | Self::Network(_, meta)
+            | Self::Timeout(_, meta)
+            | Self::ServerError(_, meta)
+            | Self::JsExecution(_, meta)
+            | Self::JsRuntime(_, meta)
+            | Self::IoError(_, meta)
+            | Self::Cache(_, meta)
+            | Self::Forbidden(_, meta) => meta,
         }
     }
 
@@ -299,6 +302,7 @@ impl RariError {
         Self::ServerError(message.into(), None)
     }
 
+    #[must_use]
     pub fn with_source(mut self, source: Box<dyn std::error::Error + Send + Sync>) -> Self {
         let code = self.code().to_string();
         let metadata = self.metadata_mut();
@@ -317,6 +321,7 @@ impl RariError {
         self
     }
 
+    #[must_use]
     pub fn with_property(mut self, key: &str, value: &str) -> Self {
         self.set_property(key, value);
         self
@@ -406,6 +411,7 @@ impl From<serde_json::Error> for RariError {
     }
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum StreamingError {
     StreamInitError {
@@ -433,9 +439,9 @@ impl std::fmt::Display for StreamingError {
                 message,
                 component_id,
             } => {
-                write!(f, "Failed to initialize streaming: {}", message)?;
+                write!(f, "Failed to initialize streaming: {message}")?;
                 if let Some(id) = component_id {
-                    write!(f, " (component: {})", id)?;
+                    write!(f, " (component: {id})")?;
                 }
                 Ok(())
             }
@@ -443,9 +449,9 @@ impl std::fmt::Display for StreamingError {
                 message,
                 chunk_type,
             } => {
-                write!(f, "Error converting chunk to HTML: {}", message)?;
+                write!(f, "Error converting chunk to HTML: {message}")?;
                 if let Some(ct) = chunk_type {
-                    write!(f, " (chunk type: {})", ct)?;
+                    write!(f, " (chunk type: {ct})")?;
                 }
                 Ok(())
             }
@@ -456,12 +462,11 @@ impl std::fmt::Display for StreamingError {
             } => {
                 write!(
                     f,
-                    "Suspense boundary '{}' timed out after {}ms: {}",
-                    boundary_id, timeout_ms, message
+                    "Suspense boundary '{boundary_id}' timed out after {timeout_ms}ms: {message}"
                 )
             }
             Self::ClientDisconnected { message } => {
-                write!(f, "Client disconnected during streaming: {}", message)
+                write!(f, "Client disconnected during streaming: {message}")
             }
         }
     }
@@ -516,6 +521,7 @@ impl From<StreamingError> for RariError {
     }
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum LoadingStateError {
     LoadingNotFound {
@@ -542,7 +548,7 @@ impl std::fmt::Display for LoadingStateError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::LoadingNotFound { path, message } => {
-                write!(f, "Loading component not found at '{}': {}", path, message)
+                write!(f, "Loading component not found at '{path}': {message}")
             }
             Self::RenderError {
                 path,
@@ -551,11 +557,10 @@ impl std::fmt::Display for LoadingStateError {
             } => {
                 write!(
                     f,
-                    "Failed to render loading component at '{}': {}",
-                    path, message
+                    "Failed to render loading component at '{path}': {message}"
                 )?;
                 if let Some(src) = source {
-                    write!(f, " (source: {})", src)?;
+                    write!(f, " (source: {src})")?;
                 }
                 Ok(())
             }
@@ -563,9 +568,9 @@ impl std::fmt::Display for LoadingStateError {
                 message,
                 boundary_id,
             } => {
-                write!(f, "Suspense boundary error: {}", message)?;
+                write!(f, "Suspense boundary error: {message}")?;
                 if let Some(id) = boundary_id {
-                    write!(f, " (boundary ID: {})", id)?;
+                    write!(f, " (boundary ID: {id})")?;
                 }
                 Ok(())
             }
@@ -576,11 +581,10 @@ impl std::fmt::Display for LoadingStateError {
             } => {
                 write!(
                     f,
-                    "Invalid loading component output from '{}': {}",
-                    path, message
+                    "Invalid loading component output from '{path}': {message}"
                 )?;
                 if let Some(d) = details {
-                    write!(f, " ({})", d)?;
+                    write!(f, " ({d})")?;
                 }
                 Ok(())
             }
@@ -642,20 +646,18 @@ impl RariError {
     pub fn status_code(&self) -> u16 {
         match self {
             Self::NotFound(_, _) => 404,
-            Self::Validation(_, _) => 400,
-            Self::BadRequest(_, _) => 400,
+            Self::Validation(_, _) | Self::BadRequest(_, _) | Self::Deserialization(_, _) => 400,
             Self::Forbidden(_, _) => 403,
             Self::Timeout(_, _) => 408,
-            Self::Internal(_, _) => 500,
-            Self::Serialization(_, _) => 500,
-            Self::Deserialization(_, _) => 400,
-            Self::State(_, _) => 500,
             Self::Network(_, _) => 502,
-            Self::ServerError(_, _) => 500,
-            Self::JsExecution(_, _) => 500,
-            Self::JsRuntime(_, _) => 500,
-            Self::IoError(_, _) => 500,
-            Self::Cache(_, _) => 500,
+            Self::Internal(_, _)
+            | Self::Serialization(_, _)
+            | Self::State(_, _)
+            | Self::ServerError(_, _)
+            | Self::JsExecution(_, _)
+            | Self::JsRuntime(_, _)
+            | Self::IoError(_, _)
+            | Self::Cache(_, _) => 500,
         }
     }
 
@@ -669,21 +671,20 @@ impl RariError {
                 Self::BadRequest(_, _) => "Bad request".to_string(),
                 Self::Forbidden(_, _) => "Access forbidden".to_string(),
                 Self::Timeout(_, _) => "Request timeout".to_string(),
-                Self::Internal(_, _) => "Internal server error".to_string(),
-                Self::Serialization(_, _) => "Internal server error".to_string(),
                 Self::Deserialization(_, _) => "Invalid request format".to_string(),
-                Self::State(_, _) => "Internal server error".to_string(),
                 Self::Network(_, _) => "Network error".to_string(),
-                Self::ServerError(_, _) => "Server error".to_string(),
-                Self::JsExecution(_, _) => "Server error".to_string(),
-                Self::JsRuntime(_, _) => "Server error".to_string(),
-                Self::IoError(_, _) => "Internal server error".to_string(),
-                Self::Cache(_, _) => "Internal server error".to_string(),
+                Self::Internal(_, _)
+                | Self::Serialization(_, _)
+                | Self::State(_, _)
+                | Self::IoError(_, _)
+                | Self::Cache(_, _) => "Internal server error".to_string(),
+                Self::ServerError(_, _) | Self::JsExecution(_, _) | Self::JsRuntime(_, _) => {
+                    "Server error".to_string()
+                }
             }
         }
     }
 
-    #[allow(clippy::disallowed_methods)]
     pub fn to_json_response(&self, is_development: bool) -> serde_json::Value {
         serde_json::json!({
             "error": self.safe_message(is_development),
@@ -708,6 +709,7 @@ impl From<deno_core::v8::DataError> for RariError {
 #[cfg(test)]
 mod tests {
     #![allow(clippy::disallowed_methods)]
+    #![allow(clippy::unwrap_used)]
     use super::*;
 
     #[test]

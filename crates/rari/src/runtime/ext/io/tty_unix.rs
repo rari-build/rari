@@ -52,7 +52,7 @@ pub enum TtyError {
     #[class(inherit)]
     Nix(JsNixError),
     #[class(inherit)]
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     Other(JsErrorBox),
 }
 
@@ -113,7 +113,7 @@ fn op_set_raw(state: &mut OpState, rid: u32, is_raw: bool, cbreak: bool) -> Resu
             static ORIG_TERMIOS: OnceLock<Option<termios>> = OnceLock::new();
             ORIG_TERMIOS.get_or_init(|| {
                 let mut termios = std::mem::zeroed::<termios>();
-                if tcgetattr(libc::STDIN_FILENO, &mut termios) == 0 {
+                if tcgetattr(libc::STDIN_FILENO, &raw mut termios) == 0 {
                     extern "C" fn reset_stdio() {
                         // SAFETY: Reset the stdio state.
                         unsafe {
@@ -215,7 +215,7 @@ pub struct ConsoleSize {
     pub rows: u32,
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub fn console_size(std_file: &std::fs::File) -> Result<ConsoleSize, std::io::Error> {
     use std::os::unix::io::AsRawFd;
     let fd = std_file.as_raw_fd();
@@ -226,12 +226,12 @@ fn console_size_from_fd(fd: std::os::unix::prelude::RawFd) -> Result<ConsoleSize
     // SAFETY: libc calls
     unsafe {
         let mut size: libc::winsize = std::mem::zeroed();
-        if libc::ioctl(fd, libc::TIOCGWINSZ, &mut size as *mut _) != 0 {
+        if libc::ioctl(fd, libc::TIOCGWINSZ, &raw mut size) != 0 {
             return Err(Error::last_os_error());
         }
         Ok(ConsoleSize {
-            cols: size.ws_col as u32,
-            rows: size.ws_row as u32,
+            cols: u32::from(size.ws_col),
+            rows: u32::from(size.ws_row),
         })
     }
 }
@@ -239,8 +239,6 @@ fn console_size_from_fd(fd: std::os::unix::prelude::RawFd) -> Result<ConsoleSize
 deno_error::js_error_wrapper!(ReadlineError, JsReadlineError, |err| {
     match err {
         ReadlineError::Io(e) => e.get_class(),
-        ReadlineError::Eof => GENERIC_ERROR.into(),
-        ReadlineError::Interrupted => GENERIC_ERROR.into(),
         ReadlineError::Errno(e) => JsNixError(*e).get_class(),
         _ => GENERIC_ERROR.into(),
     }
@@ -252,6 +250,10 @@ pub fn op_read_line_prompt(
     #[string] prompt_text: &str,
     #[string] default_value: &str,
 ) -> Result<Option<String>, JsReadlineError> {
+    #[expect(
+        clippy::expect_used,
+        reason = "Editor initialization in controlled environment"
+    )]
     let mut editor =
         Editor::<(), rustyline::history::DefaultHistory>::new().expect("Failed to create editor.");
 

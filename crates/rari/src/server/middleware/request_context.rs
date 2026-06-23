@@ -14,6 +14,7 @@ use tokio::sync::Mutex as TokioMutex;
 use uuid::Uuid;
 
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct PendingCookie {
     pub name: String,
     pub value: String,
@@ -29,6 +30,7 @@ pub struct PendingCookie {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct PendingCookieKey {
     pub name: String,
     pub path: Option<String>,
@@ -39,13 +41,14 @@ impl PendingCookieKey {
     pub fn new(name: &str, path: Option<&str>, domain: Option<&str>) -> Self {
         Self {
             name: name.to_string(),
-            path: path.map(|s| s.to_string()),
-            domain: domain.map(|s| s.to_string()),
+            path: path.map(std::string::ToString::to_string),
+            domain: domain.map(std::string::ToString::to_string),
         }
     }
 }
 
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct CachedFetchResult {
     pub body: Bytes,
     pub status: u16,
@@ -61,6 +64,10 @@ const MAX_CACHE_ENTRIES: usize = 1000;
 
 static GLOBAL_FETCH_CACHE: LazyLock<Arc<Mutex<LruCache<String, CachedFetchResult>>>> =
     LazyLock::new(|| {
+        #[expect(
+            clippy::expect_used,
+            reason = "MAX_CACHE_ENTRIES const is 1000, guaranteed non-zero"
+        )]
         Arc::new(Mutex::new(LruCache::new(
             NonZeroUsize::new(MAX_CACHE_ENTRIES).expect("MAX_CACHE_ENTRIES must be non-zero"),
         )))
@@ -94,6 +101,7 @@ impl RequestContext {
         }
     }
 
+    #[must_use]
     pub fn with_cookies(mut self, cookie_header: Option<String>) -> Self {
         self.cookie_header = cookie_header;
         self
@@ -152,13 +160,13 @@ impl RequestContext {
                         let hash = hasher.finalize();
                         format!("{}=h:{}", k, hex::encode(&hash[..8]))
                     } else {
-                        format!("{}={}", k, v)
+                        format!("{k}={v}")
                     }
                 })
                 .collect::<Vec<_>>()
                 .join("&");
 
-            format!("{}?{}", url, opts_str)
+            format!("{url}?{opts_str}")
         }
     }
 
@@ -184,7 +192,7 @@ impl RequestContext {
 
                 let elapsed_ms = cached.cached_at.elapsed().as_millis();
 
-                if elapsed_ms < ttl_ms as u128 {
+                if elapsed_ms < u128::from(ttl_ms) {
                     let mut result = cached.clone();
                     result.was_cached = true;
                     result.tags = Self::merge_and_sort_tags(result.tags, tags);
@@ -225,7 +233,7 @@ impl RequestContext {
             cache_key: String,
         }
 
-        impl<'a> Drop for CleanupGuard<'a> {
+        impl Drop for CleanupGuard<'_> {
             fn drop(&mut self) {
                 self.in_flight_fetches.remove(&self.cache_key);
             }
@@ -260,7 +268,7 @@ impl RequestContext {
         options: &FxHashMap<String, String>,
     ) -> Result<CachedFetchResult, RariError> {
         let client = get_http_client()
-            .map_err(|e| RariError::network(format!("HTTP client initialization failed: {}", e)))?;
+            .map_err(|e| RariError::network(format!("HTTP client initialization failed: {e}")))?;
         let mut request = client.get(url);
 
         if let Some(headers_str) = options.get("headers")
@@ -281,14 +289,14 @@ impl RequestContext {
         let response = request
             .send()
             .await
-            .map_err(|e| RariError::network(format!("Fetch failed for {}: {}", url, e)))?;
+            .map_err(|e| RariError::network(format!("Fetch failed for {url}: {e}")))?;
 
         let status = response.status().as_u16();
         let headers = response.headers().clone();
         let body = response
             .bytes()
             .await
-            .map_err(|e| RariError::network(format!("Failed to read response body: {}", e)))?;
+            .map_err(|e| RariError::network(format!("Failed to read response body: {e}")))?;
 
         Ok(CachedFetchResult {
             body,

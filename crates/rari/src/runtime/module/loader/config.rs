@@ -1,4 +1,5 @@
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct RuntimeConfig {
     pub cache_size_limit: usize,
     pub module_cache_handler: String,

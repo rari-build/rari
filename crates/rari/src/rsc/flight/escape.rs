@@ -45,7 +45,7 @@ pub fn escape_rsc_string(value: &str) -> String {
             return value.to_string();
         }
 
-        return format!("${}", value);
+        return format!("${value}");
     }
 
     value.to_string()

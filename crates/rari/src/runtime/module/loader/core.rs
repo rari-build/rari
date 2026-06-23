@@ -1,10 +1,16 @@
+#![allow(clippy::self_only_used_in_recursion)]
+
 use super::{
     cache::{DEFAULT_TTL_SECS, ModuleCaching},
     config::RuntimeConfig,
     resolver::ModuleResolver,
     storage::ModuleStorage,
-    stubs::*,
-    transpiler::*,
+    stubs::{
+        FALLBACK_MODULE_TEMPLATE, JSX_RUNTIME_STUB, LOADER_STUB_TEMPLATE, RARI_CLIENT_STUB,
+        RARI_DEFAULT_STUB, RARI_HEADERS_STUB, RARI_IMAGE_STUB, RARI_REACT_DOM_STUB,
+        RARI_ROUTER_STUB, REACT_STUB, create_component_stub, create_generic_module_stub,
+    },
+    transpiler::{needs_jsx_transpilation, needs_typescript_transpilation},
 };
 use crate::rsc::utils::dependencies::DependencyList;
 use crate::server::cache::handler::CacheHandlerRegistry;
@@ -16,7 +22,7 @@ use deno_core::{
 };
 use deno_error::JsErrorBox;
 use parking_lot::RwLock;
-use rari_utils::path_url::path_to_file_url;
+use rari_utils::path_to_file_url;
 use regex::Regex;
 use rustc_hash::FxHashMap;
 use std::borrow::Cow;
@@ -60,6 +66,7 @@ static ASYNC_FILE_MANAGER: OnceLock<AsyncFileManager> = OnceLock::new();
 
 fn get_import_regex() -> &'static regex::Regex {
     IMPORT_REGEX.get_or_init(|| {
+        #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
         regex::Regex::new(r#"(?:import|from)\s+(['"])(.*?)(['"])"#).expect("Invalid import regex")
     })
 }
@@ -125,7 +132,6 @@ impl RariModuleLoader {
         self.add_module_internal(specifier, original_path, code.clone());
 
         if specifier.contains(RARI_INTERNAL_PATH) {
-            #[allow(clippy::disallowed_methods)]
             if let Err(e) = self
                 .module_caching
                 .insert(original_path.to_string(), serde_json::Value::Null)
@@ -145,7 +151,7 @@ impl RariModuleLoader {
                 .strip_prefix(&format!("file://{RARI_COMPONENT_PATH}"))
                 .and_then(|s| s.strip_suffix(".js"))
                 .unwrap_or("");
-            format!("version_{}", component_id)
+            format!("version_{component_id}")
         } else {
             specifier_owned.clone()
         };
@@ -221,7 +227,7 @@ export default {{}};
                 && let Some(import_path) = captures.get(2)
             {
                 let import_path_str = import_path.as_str().to_string();
-                if import_path_str.contains("/") || import_path_str.contains(".") {
+                if import_path_str.contains('/') || import_path_str.contains('.') {
                     dependencies.push(import_path_str);
                 }
             }
@@ -272,10 +278,7 @@ export default {{}};
         let base_specifier = self.get_component_specifier(component_id)?;
 
         if let Some(version) = self.storage.get_version(&format!("version_{component_id}")) {
-            Some(format!(
-                "{}{VERSION_QUERY_PARAM}{}",
-                base_specifier, version
-            ))
+            Some(format!("{base_specifier}{VERSION_QUERY_PARAM}{version}"))
         } else {
             Some(base_specifier)
         }
@@ -303,7 +306,7 @@ export default {{}};
         self.storage
             .set_version(format!("version_{component_id}"), 0);
 
-        let file_cache = get_async_file_manager().file_cache.clone();
+        let file_cache = Arc::clone(&get_async_file_manager().file_cache);
         let mut cache = file_cache.write();
         let keys_to_remove: Vec<String> = cache
             .keys()
@@ -461,7 +464,9 @@ export default {{}};
         package_specifier: &str,
         referrer_path: &str,
     ) -> Option<String> {
-        let start_dir = if !referrer_path.is_empty() {
+        let start_dir = if referrer_path.is_empty() {
+            std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+        } else {
             let clean_referrer_path = if referrer_path.starts_with(FILE_PROTOCOL) {
                 file_url_to_path(referrer_path).unwrap_or_else(|| PathBuf::from(referrer_path))
             } else {
@@ -477,14 +482,12 @@ export default {{}};
             } else {
                 let dir_path = clean_referrer_path
                     .parent()
-                    .map(|p| p.to_path_buf())
+                    .map(std::path::Path::to_path_buf)
                     .unwrap_or_else(|| {
                         std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
                     });
                 dir_path.canonicalize().unwrap_or(dir_path)
             }
-        } else {
-            std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
         };
 
         let result = self.resolve_from_node_modules_with_dir(package_specifier, &start_dir);
@@ -577,7 +580,7 @@ export default {{}};
             let (final_code, module_type) = if needs_typescript_transpilation(specifier_str) {
                 match crate::runtime::utils::transpile::maybe_transpile_source(
                     specifier_str.to_string().into(),
-                    code.to_string().into(),
+                    code.into(),
                 ) {
                     Ok((transpiled_code, _source_map)) => {
                         (transpiled_code.to_string(), ModuleType::JavaScript)
@@ -591,7 +594,7 @@ export default {{}};
             } else if needs_jsx_transpilation(specifier_str) {
                 match crate::runtime::utils::transpile::maybe_transpile_source(
                     specifier_str.to_string().into(),
-                    code.to_string().into(),
+                    code.into(),
                 ) {
                     Ok((transpiled_code, _source_map)) => {
                         (transpiled_code.to_string(), ModuleType::JavaScript)
@@ -638,12 +641,12 @@ export default {{}};
                     {
                         let resolved = referrer_dir.join(specifier_str);
                         if let Ok(canonical) = resolved.canonicalize() {
-                            return if !canonical.exists() {
+                            return if canonical.exists() {
+                                None
+                            } else {
                                 Some(ModuleLoadResponse::Sync(Err(JsErrorBox::generic(
                                     "Module not found",
                                 ))))
-                            } else {
-                                None
                             };
                         }
                     }
@@ -741,6 +744,7 @@ export default {{}};
     fn is_cjs_module(&self, content: &str, file_path: &str) -> bool {
         static REQUIRE_REGEX: OnceLock<Regex> = OnceLock::new();
         let require_regex = REQUIRE_REGEX.get_or_init(|| {
+            #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
             Regex::new(r#"require\s*\(\s*['"]"#).expect("Failed to compile require regex pattern")
         });
 
@@ -813,7 +817,7 @@ export default {{}};
         let file_path_js = serde_json::to_string(file_path).unwrap_or_else(|_| "\"\"".to_string());
 
         format!(
-            r#"
+            r"
 // CJS-to-ESM wrapper for: {file_path}
 const __cjs_module__ = {{ exports: {{}} }};
 const __cjs_exports__ = __cjs_module__.exports;
@@ -946,11 +950,7 @@ const __exportProxy__ = new Proxy(__result__, {{
 const __keys__ = Object.keys(__result__);
 
 export {{ __exportProxy__ as __cjsExports__, __keys__ }};
-"#,
-            file_path = file_path,
-            file_dir_js = file_dir_js,
-            file_path_js = file_path_js,
-            content = content
+"
         )
     }
 
@@ -962,7 +962,7 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
         if specifier_str.starts_with(FILE_PROTOCOL) {
             let file_path = match module_specifier.to_file_path() {
                 Ok(path) => path,
-                Err(_) => return None,
+                Err(()) => return None,
             };
 
             let file_path_str = file_path.to_string_lossy();
@@ -1108,7 +1108,7 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
                 ))));
             }
 
-            for entry in self.component_specifiers.iter() {
+            for entry in &self.component_specifiers {
                 let component_id = entry.key();
                 let specifier = entry.value();
                 if (component_id == component_name.as_ref()
@@ -1125,7 +1125,7 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
             }
 
             if component_name.contains(FUNCTIONS_MODULE) {
-                for entry in self.component_specifiers.iter() {
+                for entry in &self.component_specifiers {
                     let component_id = entry.key();
                     let specifier = entry.value();
                     if component_id == FUNCTIONS_MODULE
@@ -1294,7 +1294,6 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
         None
     }
 
-    #[allow(clippy::only_used_in_recursion)]
     fn resolve_export_value(
         &self,
         export_value: &serde_json::Value,
@@ -1335,7 +1334,7 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
             module: json
                 .get("module")
                 .and_then(|v| v.as_str())
-                .map(|s| s.to_string()),
+                .map(std::string::ToString::to_string),
             exports: json.get("exports").cloned(),
         })
     }
@@ -1563,20 +1562,20 @@ impl ModuleLoader for RariModuleLoader {
                         let source_path = Path::new(source_dir);
                         let parent_dir = source_path.parent().unwrap_or_else(|| Path::new(""));
 
-                        let remaining_with_ext = if !remaining.contains('.') {
-                            format!("{remaining}.ts")
-                        } else {
+                        let remaining_with_ext = if remaining.contains('.') {
                             remaining.to_string()
+                        } else {
+                            format!("{remaining}.ts")
                         };
 
                         path_to_file_url(&parent_dir.join(remaining_with_ext))
                     } else {
                         let remaining = specifier.strip_prefix("./").unwrap_or(specifier);
 
-                        let remaining_with_ext = if !remaining.contains('.') {
-                            format!("{remaining}.ts")
-                        } else {
+                        let remaining_with_ext = if remaining.contains('.') {
                             remaining.to_string()
+                        } else {
+                            format!("{remaining}.ts")
                         };
 
                         path_to_file_url(&Path::new(source_dir).join(remaining_with_ext))
@@ -1626,7 +1625,7 @@ impl ModuleLoader for RariModuleLoader {
             return self.resolve(&component_specifier, referrer, kind);
         }
 
-        if !specifier.contains("://") && !specifier.starts_with("/") {
+        if !specifier.contains("://") && !specifier.starts_with('/') {
             if specifier == "react" || specifier.starts_with("react/") {
                 let react_url =
                     if specifier == "react/jsx-runtime" || specifier == "react/jsx-runtime.js" {

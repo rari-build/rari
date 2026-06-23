@@ -1,6 +1,6 @@
 use parley::{
     FontContext as ParleyFontContext, GenericFamily,
-    fontique::{Blob, Collection, CollectionOptions, FallbackKey, Script, ScriptExt},
+    fontique::{Blob, Collection, CollectionOptions, FallbackKey, Script, ScriptExt, SourceCache},
 };
 use std::borrow::Cow;
 use std::sync::Arc;
@@ -32,12 +32,12 @@ pub fn load_font(source: &[u8]) -> Result<Cow<'_, [u8]>, FontError> {
         FontFormat::Ttf | FontFormat::Otf => Ok(Cow::Borrowed(source)),
         FontFormat::Woff2 => {
             let ttf =
-                wuff::decompress_woff2(source).map_err(|e| FontError::Woff2(format!("{:?}", e)))?;
+                wuff::decompress_woff2(source).map_err(|e| FontError::Woff2(format!("{e:?}")))?;
             Ok(Cow::Owned(ttf))
         }
         FontFormat::Woff => {
             let ttf =
-                wuff::decompress_woff1(source).map_err(|e| FontError::Woff2(format!("{:?}", e)))?;
+                wuff::decompress_woff1(source).map_err(|e| FontError::Woff2(format!("{e:?}")))?;
             Ok(Cow::Owned(ttf))
         }
     }
@@ -75,17 +75,17 @@ impl FontContext {
                 system_fonts: false,
                 shared: false,
             }),
-            source_cache: Default::default(),
+            source_cache: SourceCache::default(),
         };
 
         let mut ctx = Self { inner };
 
         if let Err(e) = ctx.load_twemoji() {
-            eprintln!("Warning: Failed to load Twemoji font: {:?}", e);
+            eprintln!("Warning: Failed to load Twemoji font: {e:?}");
         }
 
         if let Err(e) = ctx.load_default_font() {
-            eprintln!("Warning: Failed to load default font: {:?}", e);
+            eprintln!("Warning: Failed to load default font: {e:?}");
         }
 
         ctx

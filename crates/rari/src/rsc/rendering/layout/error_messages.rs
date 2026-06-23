@@ -1,4 +1,5 @@
 use crate::server::routing::app_router::AppRouteMatch;
+use std::fmt::Write;
 
 pub fn create_wrapped_html_error_message(
     route_match: &AppRouteMatch,
@@ -21,23 +22,21 @@ pub fn create_wrapped_html_error_message(
     msg.push_str("console warnings.\n\n");
 
     msg.push_str("📍 AFFECTED FILES:\n");
-    msg.push_str(&format!("   Route:        {}\n", route_match.route.path));
-    msg.push_str(&format!(
-        "   Page:         {}\n",
-        route_match.route.file_path
-    ));
+    #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+    writeln!(&mut msg, "   Route:        {}", route_match.route.path).unwrap();
+    #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+    writeln!(&mut msg, "   Page:         {}", route_match.route.file_path).unwrap();
 
     if let Some(layout_path) = root_layout_path {
-        msg.push_str(&format!(
-            "   Root Layout:  {} ← CHECK THIS FILE\n",
-            layout_path
-        ));
+        #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+        writeln!(msg, "   Root Layout:  {layout_path} ← CHECK THIS FILE").unwrap();
     }
 
     msg.push_str("\n🔧 HOW TO FIX (Step-by-Step):\n");
     msg.push_str("   Step 1: Open your root layout file");
     if let Some(layout_path) = root_layout_path {
-        msg.push_str(&format!(" ({})", layout_path));
+        #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+        write!(&mut msg, " ({layout_path})").unwrap();
     }
     msg.push('\n');
     msg.push_str("   Step 2: Find the component's return statement\n");
@@ -78,13 +77,17 @@ pub fn create_wrapped_html_error_message(
             } else {
                 ""
             };
-            msg.push_str(&format!("   {}└─ {}{}\n", indent, layout.file_path, marker));
+            #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+            writeln!(&mut msg, "   {}└─ {}{}", indent, layout.file_path, marker).unwrap();
         }
-        msg.push_str(&format!(
-            "   {}└─ {} (page component)\n",
+        #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+        writeln!(
+            msg,
+            "   {}└─ {} (page component)",
             "   ".repeat(route_match.layouts.len() + 1),
             route_match.route.file_path
-        ));
+        )
+        .unwrap();
         msg.push('\n');
     }
 

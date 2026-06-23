@@ -42,12 +42,13 @@ enum RscStreamOperation {
     #[serde(rename = "complete")]
     Complete {
         #[serde(default)]
-        #[allow(unused)]
+        #[expect(unused)]
         final_row_id: Option<String>,
     },
 }
 
 #[derive(Default)]
+#[non_exhaustive]
 pub struct StreamOpState {
     pub chunk_sender: Option<mpsc::Sender<Result<Vec<u8>, String>>>,
     pub current_stream_id: Option<String>,
@@ -68,7 +69,7 @@ fn parse_hex_row_id(row_id: &str, context: &str) -> Result<u32, JsErrorBox> {
             "op_send_chunk_to_rust: invalid row_id '{}' for {}",
             row_id, context
         );
-        return Err(JsErrorBox::generic(format!("Invalid row_id: {}", row_id)));
+        return Err(JsErrorBox::generic(format!("Invalid row_id: {row_id}")));
     }
 
     u32::from_str_radix(row_id, 16).map_err(|e| {
@@ -76,10 +77,11 @@ fn parse_hex_row_id(row_id: &str, context: &str) -> Result<u32, JsErrorBox> {
             "op_send_chunk_to_rust: invalid row_id '{}' for {}: {}",
             row_id, context, e
         );
-        JsErrorBox::generic(format!("Invalid row_id: {}", row_id))
+        JsErrorBox::generic(format!("Invalid row_id: {row_id}"))
     })
 }
 
+#[allow(clippy::allow_attributes)]
 #[allow(clippy::disallowed_methods)]
 #[op2]
 pub async fn op_send_chunk_to_rust(
@@ -109,7 +111,7 @@ pub async fn op_send_chunk_to_rust(
             RscStreamOperation::Complete { .. } | RscStreamOperation::Error { .. } => {
                 stream_op_state.chunk_sender.take()
             }
-            _ => stream_op_state.chunk_sender.as_ref().cloned(),
+            _ => stream_op_state.chunk_sender.clone(),
         }
     };
 
@@ -132,7 +134,7 @@ pub async fn op_send_chunk_to_rust(
             });
 
             let row_id_num = parse_hex_row_id(&row_id, "module reference")?;
-            let rsc_row = format!("{:x}:M{}", row_id_num, module_data);
+            let rsc_row = format!("{row_id_num:x}:M{module_data}");
 
             if sender.send(Ok(rsc_row.into_bytes())).await.is_err() {
                 error!("op_send_chunk_to_rust: receiver dropped for module reference.");
@@ -140,7 +142,7 @@ pub async fn op_send_chunk_to_rust(
         }
         (Some(sender), RscStreamOperation::ReactElement { row_id, element }) => {
             let row_id_num = parse_hex_row_id(&row_id, "React element")?;
-            let rsc_row = format!("{:x}:J{}", row_id_num, element);
+            let rsc_row = format!("{row_id_num:x}:J{element}");
 
             if sender.send(Ok(rsc_row.into_bytes())).await.is_err() {
                 error!("op_send_chunk_to_rust: receiver dropped for React element.");
@@ -148,7 +150,7 @@ pub async fn op_send_chunk_to_rust(
         }
         (Some(sender), RscStreamOperation::Symbol { row_id, symbol_ref }) => {
             let row_id_num = parse_hex_row_id(&row_id, "symbol reference")?;
-            let rsc_row = format!("{:x}:S\"{}\"", row_id_num, symbol_ref);
+            let rsc_row = format!("{row_id_num:x}:S\"{symbol_ref}\"");
 
             if sender.send(Ok(rsc_row.into_bytes())).await.is_err() {
                 error!("op_send_chunk_to_rust: receiver dropped for symbol reference.");
@@ -177,7 +179,7 @@ pub async fn op_send_chunk_to_rust(
             });
 
             let row_id_num = parse_hex_row_id(&row_id, "error message")?;
-            let rsc_row = format!("{:x}:E{}", row_id_num, error_data);
+            let rsc_row = format!("{row_id_num:x}:E{error_data}");
 
             if sender.send(Ok(rsc_row.into_bytes())).await.is_err() {
                 error!("op_send_chunk_to_rust: receiver dropped for error message.");
@@ -193,7 +195,6 @@ pub async fn op_send_chunk_to_rust(
     Ok(())
 }
 
-#[allow(clippy::disallowed_methods)]
 #[cfg(test)]
 pub fn create_module_operation(
     row_id: &str,
@@ -212,7 +213,6 @@ pub fn create_module_operation(
     .to_string()
 }
 
-#[allow(clippy::disallowed_methods)]
 #[cfg(test)]
 pub fn create_element_operation(row_id: &str, element: &serde_json::Value) -> String {
     serde_json::json!({
@@ -297,12 +297,12 @@ fn http_status_text(status: u16) -> &'static str {
 
 fn headers_to_json(headers: &axum::http::HeaderMap) -> serde_json::Map<String, serde_json::Value> {
     let mut headers_obj = serde_json::Map::new();
-    for (name, value) in headers.iter() {
+    for (name, value) in headers {
         if let Ok(value_str) = value.to_str() {
             let key = name.as_str().to_string();
             if let Some(existing) = headers_obj.get_mut(&key) {
                 if let Some(s) = existing.as_str() {
-                    *existing = serde_json::Value::String(format!("{}, {}", s, value_str));
+                    *existing = serde_json::Value::String(format!("{s}, {value_str}"));
                 }
             } else {
                 headers_obj.insert(key, serde_json::Value::String(value_str.to_string()));
@@ -312,6 +312,7 @@ fn headers_to_json(headers: &axum::http::HeaderMap) -> serde_json::Map<String, s
     headers_obj
 }
 
+#[allow(clippy::allow_attributes)]
 #[allow(clippy::disallowed_methods)]
 #[op2]
 #[serde]
@@ -321,7 +322,7 @@ pub async fn op_fetch_with_cache(
     #[string] options_json: String,
 ) -> Result<serde_json::Value, JsErrorBox> {
     let options: rustc_hash::FxHashMap<String, String> = serde_json::from_str(&options_json)
-        .map_err(|e| JsErrorBox::generic(format!("Invalid options JSON: {}", e)))?;
+        .map_err(|e| JsErrorBox::generic(format!("Invalid options JSON: {e}")))?;
 
     let request_context = {
         let op_state_ref = state.borrow();
@@ -409,7 +410,7 @@ async fn perform_simple_fetch(
     let response = request
         .send()
         .await
-        .map_err(|e| format!("Request failed: {}", e))?;
+        .map_err(|e| format!("Request failed: {e}"))?;
 
     let status = response.status().as_u16();
     let headers = response.headers().clone();
@@ -418,7 +419,7 @@ async fn perform_simple_fetch(
     let body = response
         .text()
         .await
-        .map_err(|e| format!("Failed to read response: {}", e))?;
+        .map_err(|e| format!("Failed to read response: {e}"))?;
 
     Ok((status, body, headers_obj))
 }
@@ -482,7 +483,7 @@ pub fn op_get_cookies(state: Rc<RefCell<OpState>>) -> String {
 
     cookies
         .iter()
-        .map(|(k, v)| format!("{}={}", k, v))
+        .map(|(k, v)| format!("{k}={v}"))
         .collect::<Vec<_>>()
         .join("; ")
 }

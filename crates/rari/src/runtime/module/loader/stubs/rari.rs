@@ -1,4 +1,4 @@
-pub const RARI_ROUTER_STUB: &str = r#"
+pub const RARI_ROUTER_STUB: &str = r"
 export function useRouter() {
   return {
     pathname: '',
@@ -18,9 +18,9 @@ export function useParams() { return {}; }
 export function useSearchParams() { return new URLSearchParams(); }
 
 export default { useRouter, usePathname, useParams, useSearchParams };
-"#;
+";
 
-pub const RARI_REACT_DOM_STUB: &str = r#"
+pub const RARI_REACT_DOM_STUB: &str = r"
 export function createPortal(children) { return children; }
 export function flushSync(fn) { return fn(); }
 export function hydrateRoot() { return { render() {}, unmount() {} }; }
@@ -38,9 +38,9 @@ export function preinit() {}
 export function preload() {}
 export const version = '19.0.0';
 export default {};
-"#;
+";
 
-pub const RARI_HEADERS_STUB: &str = r#"
+pub const RARI_HEADERS_STUB: &str = r"
 export async function cookies() {
   return {
     get() { return undefined; },
@@ -51,9 +51,9 @@ export async function cookies() {
   };
 }
 export default { cookies };
-"#;
+";
 
-pub const RARI_IMAGE_STUB: &str = r#"
+pub const RARI_IMAGE_STUB: &str = r"
 export function Image(props) {
   const { src, alt, width, height, className, style, ...rest } = props || {};
   return {
@@ -68,9 +68,9 @@ export const DEFAULT_QUALITY_LEVELS = { low: 25, medium: 50, high: 75, max: 100 
 export const DEFAULT_MAX_CACHE_SIZE = 50 * 1024 * 1024;
 export const DEFAULT_MINIMUM_CACHE_TTL = 60;
 export default Image;
-"#;
+";
 
-pub const RARI_CLIENT_STUB: &str = r#"
+pub const RARI_CLIENT_STUB: &str = r"
 export function ClientRouter() { return null; }
 export function NavigationErrorHandler() { return null; }
 export function StatePreserver() { return null; }
@@ -82,8 +82,8 @@ export function extractServerPropsWithCache() { return {}; }
 export function extractStaticParams() { return []; }
 export function hasServerSideDataFetching() { return false; }
 export default {};
-"#;
+";
 
-pub const RARI_DEFAULT_STUB: &str = r#"
+pub const RARI_DEFAULT_STUB: &str = r"
 export default {};
-"#;
+";

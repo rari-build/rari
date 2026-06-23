@@ -86,7 +86,7 @@ impl Server {
         let env_vars: rustc_hash::FxHashMap<String, String> = std::env::vars().collect();
         let js_runtime = Arc::new(crate::runtime::JsExecutionRuntime::new(Some(env_vars)));
         let mut renderer =
-            crate::rsc::RscRenderer::with_resource_limits(js_runtime.clone(), resource_limits);
+            crate::rsc::RscRenderer::with_resource_limits(Arc::clone(&js_runtime), resource_limits);
         renderer.initialize().await?;
 
         if config.is_production() {
@@ -117,8 +117,11 @@ impl Server {
         let api_route_handler = {
             let manifest_path = "dist/server/routes.json";
 
-            match api_routes::ApiRouteHandler::from_file(renderer.runtime.clone(), manifest_path)
-                .await
+            match api_routes::ApiRouteHandler::from_file(
+                Arc::clone(&renderer.runtime),
+                manifest_path,
+            )
+            .await
             {
                 Ok(handler) => Some(Arc::new(handler)),
                 Err(_) => None,
@@ -126,7 +129,7 @@ impl Server {
         };
 
         let ssr_renderer = {
-            let runtime = renderer.runtime.clone();
+            let runtime = Arc::clone(&renderer.runtime);
             let ssr = crate::rsc::RscHtmlRenderer::new(runtime);
             Arc::new(ssr)
         };
@@ -153,7 +156,7 @@ impl Server {
         let og_handler = cache_registry.resolve(&og_layer.handler);
 
         let og_generator = {
-            let runtime = js_runtime.clone();
+            let runtime = Arc::clone(&js_runtime);
             let og_cache = crate::server::og::OgImageCache::with_handler(og_handler, &project_root);
             let generator = Arc::new(
                 crate::server::og::OgImageGenerator::with_capacity_and_cache(
@@ -244,7 +247,7 @@ impl Server {
         let medium_body_limit = DefaultBodyLimit::max(1024 * 1024);
 
         let image_cache = Arc::new(crate::server::image::ImageCache::with_handler(
-            state.image_handler.clone(),
+            Arc::clone(&state.image_handler),
             config.images.max_cache_size,
             &state.project_root,
         ));
@@ -385,11 +388,14 @@ impl Server {
         let server_url = format!("http://{}", self.address);
 
         if self.config.is_production() {
-            println!("  {} {}", "Mode:".bold(), "Production".green());
-            println!("  {} {}", "Server:".bold(), server_url.cyan().underline());
+            #[expect(clippy::print_stdout, reason = "Server startup information output")]
+            {
+                println!("  {} {}", "Mode:".bold(), "Production".green());
+                println!("  {} {}", "Server:".bold(), server_url.cyan().underline());
 
-            if let Some(origin) = &self.config.server.origin {
-                println!("  {} {}", "Origin:".bold(), origin.cyan());
+                if let Some(origin) = &self.config.server.origin {
+                    println!("  {} {}", "Origin:".bold(), origin.cyan());
+                }
             }
         }
     }

@@ -13,3 +13,6 @@ deno_error = { workspace = true }
 rari = { workspace = true }
 rustc-hash = { workspace = true }
 url = { workspace = true }
+
+[lints]
+workspace = true

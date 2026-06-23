@@ -1,9 +1,11 @@
+#![allow(clippy::match_wildcard_for_single_variants, clippy::float_cmp)]
+
 use super::super::layout::ComputedLayout;
 use super::super::types::JsxChild;
 use super::renderer::ImageRenderer;
 use cow_utils::CowUtils;
 use image::{Rgba, RgbaImage};
-use parley::{Alignment, LayoutContext};
+use parley::{Alignment, AlignmentOptions, LayoutContext};
 use swash::{
     FontRef,
     scale::{ScaleContext, StrikeWith},
@@ -135,10 +137,8 @@ impl ImageRenderer {
         style
             .get("textAlign")
             .map(|ta| match ta.as_str() {
-                "left" | "start" => Alignment::Start,
                 "right" | "end" => Alignment::End,
                 "center" => Alignment::Center,
-                "justify" => Alignment::Justify,
                 _ => Alignment::Start,
             })
             .unwrap_or(Alignment::Start)
@@ -194,7 +194,7 @@ impl ImageRenderer {
 
         let root_style = TextStyle {
             font_size: params.font_size,
-            font_weight: parley::style::FontWeight::new(params.font_weight as f32),
+            font_weight: parley::style::FontWeight::new(f32::from(params.font_weight)),
             line_height: line_height_parley,
             ..Default::default()
         };
@@ -207,7 +207,7 @@ impl ImageRenderer {
         let (mut layout, _text) = builder.build();
         layout.break_all_lines(params.max_width);
 
-        layout.align(params.text_align, Default::default());
+        layout.align(params.text_align, AlignmentOptions::default());
 
         let mut scale_context = ScaleContext::new();
 

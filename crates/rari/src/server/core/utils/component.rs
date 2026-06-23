@@ -102,14 +102,12 @@ pub fn wrap_server_action_module(code: &str, module_id: &str) -> String {
     );
 
     format!(
-        r#"
+        r"
 if (!globalThis.{module_key}) {{
     globalThis.{module_key} = true;
     {code}
 }}
-"#,
-        module_key = module_key,
-        code = code
+"
     )
 }
 
@@ -123,7 +121,7 @@ pub fn extract_component_id(
         if let Some(src_idx) = components.iter().rposition(|c| c.as_os_str() == "src") {
             components[src_idx..].iter().collect()
         } else {
-            return Err(format!("Path does not contain 'src' directory: {}", file_path).into());
+            return Err(format!("Path does not contain 'src' directory: {file_path}").into());
         }
     } else {
         let normalized = file_path.cow_replace('\\', "/");
@@ -153,7 +151,7 @@ pub fn get_dist_path_for_component(
 
     let dist_path = std::path::Path::new("dist")
         .join("server")
-        .join(format!("{}.js", component_id));
+        .join(format!("{component_id}.js"));
 
     Ok(dist_path)
 }

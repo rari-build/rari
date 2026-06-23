@@ -22,3 +22,6 @@ sha2 = { workspace = true }
 
 [build-dependencies]
 napi-build = "2.3.2"
+
+[lints]
+workspace = true

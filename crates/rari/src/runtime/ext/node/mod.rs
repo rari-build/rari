@@ -35,7 +35,7 @@ impl ExtensionTrait<Arc<Resolver>> for deno_node::deno_node {
 }
 
 pub fn extensions(resolver: Arc<Resolver>, is_snapshot: bool) -> Vec<Extension> {
-    let node_ext = deno_node::deno_node::build(resolver.clone(), is_snapshot);
+    let node_ext = deno_node::deno_node::build(resolver, is_snapshot);
 
     let init_ext = init_node::build((), is_snapshot);
 

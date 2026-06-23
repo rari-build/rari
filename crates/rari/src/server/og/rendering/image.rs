@@ -21,7 +21,7 @@ impl ImageRenderer {
         let object_fit = layout
             .style
             .get("objectFit")
-            .map(|s| s.as_str())
+            .map(std::string::String::as_str)
             .unwrap_or("fill");
 
         let border_radius = self.parse_border_radius(&layout.style);
@@ -259,7 +259,7 @@ impl ImageRenderer {
             self.load_data_url(src)
         } else {
             Ok(image::open(src)
-                .map_err(|e| format!("Failed to load image {}: {}", src, e))?
+                .map_err(|e| format!("Failed to load image {src}: {e}"))?
                 .to_rgba8())
         }
     }
@@ -270,12 +270,12 @@ impl ImageRenderer {
         let client = reqwest::blocking::Client::builder()
             .timeout(std::time::Duration::from_secs(10))
             .build()
-            .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+            .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
 
         let response = client
             .get(url)
             .send()
-            .map_err(|e| format!("Failed to fetch image from {}: {}", url, e))?;
+            .map_err(|e| format!("Failed to fetch image from {url}: {e}"))?;
 
         if !response.status().is_success() {
             return Err(format!("Failed to fetch image: HTTP {}", response.status()));
@@ -286,14 +286,14 @@ impl ImageRenderer {
         response
             .take(MAX_IMAGE_SIZE as u64)
             .read_to_end(&mut buffer)
-            .map_err(|e| format!("Failed to read image data: {}", e))?;
+            .map_err(|e| format!("Failed to read image data: {e}"))?;
 
         if buffer.len() >= MAX_IMAGE_SIZE {
             return Err("Image too large (max 10MB)".to_string());
         }
 
         Ok(image::load_from_memory(&buffer)
-            .map_err(|e| format!("Failed to decode image: {}", e))?
+            .map_err(|e| format!("Failed to decode image: {e}"))?
             .to_rgba8())
     }
 
@@ -310,10 +310,10 @@ impl ImageRenderer {
             use base64::{Engine as _, engine::general_purpose};
             let decoded = general_purpose::STANDARD
                 .decode(data)
-                .map_err(|e| format!("Failed to decode base64: {}", e))?;
+                .map_err(|e| format!("Failed to decode base64: {e}"))?;
 
             Ok(image::load_from_memory(&decoded)
-                .map_err(|e| format!("Failed to decode image: {}", e))?
+                .map_err(|e| format!("Failed to decode image: {e}"))?
                 .to_rgba8())
         } else {
             Err("Only base64 data URLs are supported".to_string())

@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub enum RscElement {
     Component {
         tag: String,
@@ -37,6 +38,7 @@ pub enum RscElement {
 }
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct SuspenseBoundary {
     pub boundary_id: String,
     pub fallback_ref: String,
@@ -47,6 +49,7 @@ pub struct SuspenseBoundary {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum ComponentValue {
     String(String),
     Number(f64),

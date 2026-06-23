@@ -1,3 +1,5 @@
+#![allow(clippy::implicit_hasher)]
+
 mod executor;
 mod interface;
 mod runtime;

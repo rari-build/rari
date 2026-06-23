@@ -1,3 +1,5 @@
+#![allow(clippy::implicit_hasher)]
+
 use crate::rsc::rendering::html::{RscHtmlRenderer, RscToHtmlConverter};
 use crate::rsc::rendering::layout::{
     LayoutRenderContext, LayoutRenderer, OpenGraphImage, OpenGraphImageDescriptor,
@@ -26,7 +28,7 @@ use axum::{
     response::Response,
 };
 use cow_utils::CowUtils;
-use rari_utils::path_url::path_to_file_url;
+use rari_utils::path_to_file_url;
 use rustc_hash::FxHashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -106,7 +108,7 @@ fn sort_rsc_rows(wire_format: &str) -> String {
             .max_by_key(|(id, _)| *id)
         && *max_id > 0
     {
-        let row_0 = format!("0:\"${:x}\"\n", max_id);
+        let row_0 = format!("0:\"${max_id:x}\"\n");
         sorted.insert_str(0, &row_0);
     }
 
@@ -178,7 +180,7 @@ async fn collect_page_metadata(
                 })
                 .collect::<String>();
 
-            format!("{}{}", converted_base, ext)
+            format!("{converted_base}{ext}")
         }
 
         let js_filename = file_path
@@ -219,7 +221,7 @@ async fn collect_page_metadata(
     let page_path = path_to_file_url(&page_file_path);
 
     let renderer = state.renderer.lock().await;
-    let runtime = renderer.runtime.clone();
+    let runtime = Arc::clone(&renderer.runtime);
     drop(renderer);
 
     match runtime
@@ -256,7 +258,7 @@ async fn inject_og_image_into_metadata(
     context: &LayoutRenderContext,
 ) {
     let base_url = get_base_url_from_context(context, &state.config);
-    let current_url = format!("{}{}", base_url, route_path);
+    let current_url = format!("{base_url}{route_path}");
 
     if let Some(ref mut og) = metadata.open_graph {
         if og.url.is_none() {
@@ -276,7 +278,7 @@ async fn inject_og_image_into_metadata(
     if let Some(og_generator) = &state.og_generator
         && let Some(og_entry) = og_generator.find_og_image_for_route(route_path).await
     {
-        let og_image_url = format!("{}/_rari/og{}", base_url, route_path);
+        let og_image_url = format!("{base_url}/_rari/og{route_path}");
 
         let og_image = if og_entry.width.is_some() || og_entry.height.is_some() {
             OpenGraphImage::Detailed(OpenGraphImageDescriptor {
@@ -328,7 +330,7 @@ fn get_base_url_from_context(
             .headers
             .get("x-forwarded-proto")
             .or_else(|| context.headers.get("x-forwarded-protocol"))
-            .map(|s| s.as_str())
+            .map(std::string::String::as_str)
             .unwrap_or_else(|| {
                 if config.is_production() {
                     "https"
@@ -337,7 +339,7 @@ fn get_base_url_from_context(
                 }
             });
 
-        format!("{}://{}", protocol, host)
+        format!("{protocol}://{host}")
     } else if config.is_production() {
         "https://localhost".to_string()
     } else {
@@ -351,11 +353,13 @@ pub async fn render_with_fallback(
     context: LayoutRenderContext,
     accept_encoding: Option<&str>,
 ) -> Result<Response, StatusCode> {
-    let layout_renderer =
-        LayoutRenderer::with_shared_cache(state.renderer.clone(), state.layout_html_cache.clone());
+    let layout_renderer = LayoutRenderer::with_shared_cache(
+        Arc::clone(&state.renderer),
+        Arc::clone(&state.layout_html_cache),
+    );
 
     match render_streaming_with_layout(
-        state.clone(),
+        Arc::clone(&state),
         route_match.clone(),
         context.clone(),
         &layout_renderer,
@@ -380,8 +384,10 @@ pub async fn render_rsc_navigation_streaming(
     context: LayoutRenderContext,
     accept_encoding: Option<&str>,
 ) -> Result<Response, StatusCode> {
-    let layout_renderer =
-        LayoutRenderer::with_shared_cache(state.renderer.clone(), state.layout_html_cache.clone());
+    let layout_renderer = LayoutRenderer::with_shared_cache(
+        Arc::clone(&state.renderer),
+        Arc::clone(&state.layout_html_cache),
+    );
     let is_not_found = route_match.not_found.is_some();
 
     let request_context = std::sync::Arc::new(
@@ -391,7 +397,12 @@ pub async fn render_rsc_navigation_streaming(
     );
 
     let render_result = match layout_renderer
-        .render_route_with_streaming(&route_match, &context, Some(request_context.clone()), true)
+        .render_route_with_streaming(
+            &route_match,
+            &context,
+            Some(Arc::clone(&request_context)),
+            true,
+        )
         .await
     {
         Ok(result) => result,
@@ -428,7 +439,7 @@ pub async fn render_rsc_navigation_streaming(
             let final_payload = if sorted_wire_format.ends_with('\n') {
                 sorted_wire_format
             } else {
-                format!("{}\n", sorted_wire_format)
+                format!("{sorted_wire_format}\n")
             };
 
             let mut response_builder = Response::builder()
@@ -444,6 +455,10 @@ pub async fn render_rsc_navigation_streaming(
                     response_builder.header("x-rari-metadata", encoded_metadata.as_ref());
             }
 
+            #[expect(
+                clippy::expect_used,
+                reason = "Response::builder() with valid components never fails"
+            )]
             Ok(response_builder
                 .body(Body::from(final_payload))
                 .expect("Valid RSC response"))
@@ -460,7 +475,7 @@ async fn render_rsc_streaming_response(
     accept_encoding: Option<&str>,
 ) -> Result<Response, StatusCode> {
     let should_continue = Arc::new(std::sync::atomic::AtomicBool::new(true));
-    let should_continue_clone = should_continue.clone();
+    let should_continue_clone = should_continue;
 
     let rsc_wire_stream = async_stream::stream! {
         while should_continue_clone.load(std::sync::atomic::Ordering::Relaxed) {
@@ -509,6 +524,10 @@ async fn render_rsc_streaming_response(
     }
 
     let body = Body::from_stream(compressed_stream);
+    #[expect(
+        clippy::expect_used,
+        reason = "Response::builder() with valid components never fails"
+    )]
     Ok(response_builder
         .body(body)
         .expect("Valid RSC streaming response"))
@@ -520,8 +539,10 @@ pub async fn render_synchronous(
     context: LayoutRenderContext,
     accept_encoding: Option<&str>,
 ) -> Result<Response, StatusCode> {
-    let layout_renderer =
-        LayoutRenderer::with_shared_cache(state.renderer.clone(), state.layout_html_cache.clone());
+    let layout_renderer = LayoutRenderer::with_shared_cache(
+        Arc::clone(&state.renderer),
+        Arc::clone(&state.layout_html_cache),
+    );
     let request_context = std::sync::Arc::new(
         crate::server::middleware::request_context::RequestContext::new(
             route_match.route.path.clone(),
@@ -555,6 +576,10 @@ pub async fn render_synchronous(
                 };
                 let cache_control = state.config.get_cache_control_for_route(&context.pathname);
 
+                #[expect(
+                    clippy::expect_used,
+                    reason = "Response::builder() with valid components never fails"
+                )]
                 Ok(Response::builder()
                     .status(status_code)
                     .header("content-type", "text/html; charset=utf-8")
@@ -605,7 +630,7 @@ async fn render_streaming_response(
         .metadata
         .as_ref()
         .and_then(|m| m.title.as_ref())
-        .map(|t| t.as_str())
+        .map(std::string::String::as_str)
         .unwrap_or("rari App");
 
     let base_shell = format!(
@@ -614,8 +639,8 @@ async fn render_streaming_response(
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{}</title>
-    {}
+    <title>{title}</title>
+    {asset_tags}
     <style>
         .rari-loading {{
             animation: rari-pulse 1.5s ease-in-out infinite;
@@ -628,8 +653,7 @@ async fn render_streaming_response(
 </head>
 <body>
 <div id="root">
-"#,
-        title, asset_tags
+"#
     );
 
     let base_shell = if let Some(ref metadata) = context.metadata {
@@ -643,7 +667,7 @@ async fn render_streaming_response(
     ));
 
     let should_continue = Arc::new(std::sync::atomic::AtomicBool::new(true));
-    let should_continue_clone = should_continue.clone();
+    let should_continue_clone = should_continue;
 
     let html_stream = async_stream::stream! {
         while should_continue_clone.load(std::sync::atomic::Ordering::Relaxed) {
@@ -698,6 +722,10 @@ async fn render_streaming_response(
     }
 
     let body = Body::from_stream(compressed_stream);
+    #[expect(
+        clippy::expect_used,
+        reason = "Response::builder() with valid components never fails"
+    )]
     Ok(response_builder
         .body(body)
         .expect("Valid streaming response"))
@@ -783,6 +811,10 @@ pub async fn render_streaming_with_layout(
                 response_builder = response_builder.header("content-encoding", encoding_header);
             }
 
+            #[expect(
+                clippy::expect_used,
+                reason = "Response::builder() with valid components never fails"
+            )]
             return Ok(response_builder
                 .body(Body::from(body_bytes))
                 .expect("Valid HTML response"));
@@ -821,6 +853,10 @@ pub async fn render_fallback_html(
             && let Some(cached_html) = state.html_cache.get(path)
         {
             let html = cached_html.clone();
+            #[expect(
+                clippy::expect_used,
+                reason = "Response::builder() with valid components never fails"
+            )]
             return Ok(Response::builder()
                 .status(StatusCode::OK)
                 .header("content-type", "text/html; charset=utf-8")
@@ -848,6 +884,10 @@ pub async fn render_fallback_html(
                 StatusCode::OK
             };
 
+            #[expect(
+                clippy::expect_used,
+                reason = "Response::builder() with valid components never fails"
+            )]
             return Ok(Response::builder()
                 .status(status_code)
                 .header("content-type", "text/html; charset=utf-8")
@@ -869,13 +909,12 @@ pub async fn render_fallback_html(
 </head>
 <body>
   <div id="root"></div>
-  <script type="module" src="http://localhost:{}/@vite/client"></script>
+  <script type="module" src="http://localhost:{vite_port}/@vite/client"></script>
   <script type="module">
-    import 'http://localhost:{}/@id/virtual:rari-entry-client';
+    import 'http://localhost:{vite_port}/@id/virtual:rari-entry-client';
   </script>
 </body>
-</html>"#,
-            vite_port, vite_port
+</html>"#
         );
 
         let status_code = if is_not_found {
@@ -884,6 +923,10 @@ pub async fn render_fallback_html(
             StatusCode::OK
         };
 
+        #[expect(
+            clippy::expect_used,
+            reason = "Response::builder() with valid components never fails"
+        )]
         return Ok(Response::builder()
             .status(status_code)
             .header("content-type", "text/html; charset=utf-8")
@@ -916,6 +959,10 @@ pub async fn render_fallback_html(
         StatusCode::OK
     };
 
+    #[expect(
+        clippy::expect_used,
+        reason = "Response::builder() with valid components never fails"
+    )]
     Ok(Response::builder()
         .status(status_code)
         .header("content-type", "text/html; charset=utf-8")
@@ -968,6 +1015,10 @@ pub async fn handle_app_route(
                     Ok(content) => {
                         let content_type = get_content_type(path_without_leading_slash);
                         let cache_control = &state.config.caching.static_files;
+                        #[expect(
+                            clippy::expect_used,
+                            reason = "Response::builder() with valid components never fails"
+                        )]
                         return Ok(Response::builder()
                             .header("content-type", content_type)
                             .header("cache-control", cache_control)
@@ -1020,8 +1071,10 @@ pub async fn handle_app_route(
         route_match.pathname.clone(),
     );
 
-    let layout_renderer =
-        LayoutRenderer::with_shared_cache(state.renderer.clone(), state.layout_html_cache.clone());
+    let layout_renderer = LayoutRenderer::with_shared_cache(
+        Arc::clone(&state.renderer),
+        Arc::clone(&state.layout_html_cache),
+    );
 
     if route_match.not_found.is_none() && route_match.route.is_dynamic {
         match layout_renderer
@@ -1081,12 +1134,16 @@ pub async fn handle_app_route(
                     .header("vary", merged_vary)
                     .header("x-cache", "HIT");
 
-                for (key, value) in cached.headers.iter() {
+                for (key, value) in &cached.headers {
                     if key.as_str() != "vary" {
                         response_builder = response_builder.header(key, value);
                     }
                 }
 
+                #[expect(
+                    clippy::expect_used,
+                    reason = "Response::builder() with valid components never fails"
+                )]
                 return Ok(response_builder
                     .body(Body::from(cached.body))
                     .expect("Valid cached RSC response"));
@@ -1095,7 +1152,7 @@ pub async fn handle_app_route(
             context.metadata = collect_page_metadata(&state, &route_match, &context).await;
 
             match layout_renderer
-                .render_route_by_mode(&route_match, &context, Some(request_context.clone()))
+                .render_route_by_mode(&route_match, &context, Some(Arc::clone(&request_context)))
                 .await
             {
                 Ok(rsc_wire_format) => {
@@ -1146,6 +1203,10 @@ pub async fn handle_app_route(
                         state.response_cache.set(cache_key, cached_response).await;
                     }
 
+                    #[expect(
+                        clippy::expect_used,
+                        reason = "Response::builder() with valid components never fails"
+                    )]
                     Ok(response_builder
                         .body(Body::from(rsc_wire_format))
                         .expect("Valid RSC response"))
@@ -1174,6 +1235,10 @@ pub async fn handle_app_route(
                 {
                     let merged_vary = merge_vary_with_accept(cached.headers.get("vary"));
 
+                    #[expect(
+                        clippy::expect_used,
+                        reason = "Response::builder() with valid components never fails"
+                    )]
                     return Ok(Response::builder()
                         .status(StatusCode::NOT_MODIFIED)
                         .header("etag", cached_etag)
@@ -1205,13 +1270,13 @@ pub async fn handle_app_route(
                             let mut updated = cached.clone();
                             match actual_enc {
                                 CompressionEncoding::Zstd => {
-                                    updated.compressed_zstd = Some(compressed.clone())
+                                    updated.compressed_zstd = Some(compressed.clone());
                                 }
                                 CompressionEncoding::Brotli => {
-                                    updated.compressed_br = Some(compressed.clone())
+                                    updated.compressed_br = Some(compressed.clone());
                                 }
                                 CompressionEncoding::Gzip => {
-                                    updated.compressed_gzip = Some(compressed.clone())
+                                    updated.compressed_gzip = Some(compressed.clone());
                                 }
                                 CompressionEncoding::Identity => {}
                             }
@@ -1237,7 +1302,7 @@ pub async fn handle_app_route(
                     response_builder = response_builder.header("etag", etag);
                 }
 
-                for (key, value) in cached.headers.iter() {
+                for (key, value) in &cached.headers {
                     if key.as_str() != "vary"
                         && key.as_str() != "content-encoding"
                         && key.as_str() != "content-length"
@@ -1248,6 +1313,10 @@ pub async fn handle_app_route(
                     }
                 }
 
+                #[expect(
+                    clippy::expect_used,
+                    reason = "Response::builder() with valid components never fails"
+                )]
                 return Ok(response_builder
                     .body(Body::from(body_bytes))
                     .expect("Valid cached response"));
@@ -1334,7 +1403,7 @@ pub async fn handle_app_route(
 
                         let etag = response::ResponseCache::generate_etag(&raw_body);
                         let mut response_headers = axum::http::HeaderMap::new();
-                        for (key, value) in parts.headers.iter() {
+                        for (key, value) in &parts.headers {
                             if key.as_str() != "content-encoding"
                                 && key.as_str() != "content-length"
                             {
@@ -1365,12 +1434,16 @@ pub async fn handle_app_route(
 
                         let mut response_builder = Response::builder().status(parts.status);
 
-                        for (key, value) in parts.headers.iter() {
+                        for (key, value) in &parts.headers {
                             if key.as_str() != "vary" {
                                 response_builder = response_builder.header(key, value);
                             }
                         }
 
+                        #[expect(
+                            clippy::expect_used,
+                            reason = "Response::builder() with valid components never fails"
+                        )]
                         return Ok(response_builder
                             .header("etag", etag)
                             .header("vary", merged_vary)
@@ -1389,7 +1462,7 @@ pub async fn handle_app_route(
                 .render_route_with_streaming(
                     &route_match,
                     &context,
-                    Some(request_context.clone()),
+                    Some(Arc::clone(&request_context)),
                     false,
                 )
                 .await
@@ -1435,7 +1508,7 @@ pub async fn handle_app_route(
                         .metadata
                         .as_ref()
                         .and_then(|m| m.title.as_ref())
-                        .map(|t| t.as_str())
+                        .map(std::string::String::as_str)
                         .unwrap_or("rari App");
 
                     let asset_tags = asset_links.as_deref().unwrap_or("");
@@ -1445,8 +1518,8 @@ pub async fn handle_app_route(
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{}</title>
-    {}
+    <title>{title}</title>
+    {asset_tags}
     <style>
         .rari-loading {{
             animation: rari-pulse 1.5s ease-in-out infinite;
@@ -1458,8 +1531,7 @@ pub async fn handle_app_route(
     </style>
 </head>
 <body>
-<div id="root">"#,
-                        title, asset_tags
+<div id="root">"#
                     );
 
                     let base_shell = if let Some(ref metadata) = context.metadata {
@@ -1548,6 +1620,10 @@ pub async fn handle_app_route(
                 state.response_cache.set(cache_key, cached_response).await;
             }
 
+            #[expect(
+                clippy::expect_used,
+                reason = "Response::builder() with valid components never fails"
+            )]
             Ok(response_builder
                 .body(Body::from(final_html))
                 .expect("Valid HTML response"))

@@ -1,3 +1,5 @@
+#![allow(clippy::exhaustive_structs)]
+
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -28,6 +30,10 @@ pub struct ImageCache {
 
 impl ImageCache {
     pub fn new(max_memory_size: usize, project_path: &Path) -> Self {
+        #[expect(
+            clippy::expect_used,
+            reason = "Value is clamped to >= 20, guaranteed non-zero"
+        )]
         let capacity = std::num::NonZeroUsize::new((max_memory_size / 1024 / 50).max(20))
             .expect("capacity is always at least 20");
         let handler =
@@ -84,7 +90,7 @@ impl ImageCache {
         key.hash(&mut hasher);
         let hash = hasher.finish();
 
-        self.cache_dir.join(format!("{:x}.cache", hash))
+        self.cache_dir.join(format!("{hash:x}.cache"))
     }
 
     pub async fn get(&self, key: &str) -> Option<Arc<CachedImage>> {

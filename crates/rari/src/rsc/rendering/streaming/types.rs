@@ -1,6 +1,7 @@
 use serde::Serialize;
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct PartialRenderResult {
     pub initial_content: serde_json::Value,
     pub pending_promises: Vec<PendingSuspensePromise>,
@@ -9,6 +10,7 @@ pub struct PartialRenderResult {
 }
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct PendingSuspensePromise {
     pub id: String,
     pub boundary_id: String,
@@ -18,6 +20,7 @@ pub struct PendingSuspensePromise {
 }
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct SuspenseBoundaryInfo {
     pub id: String,
     pub fallback_content: serde_json::Value,
@@ -31,6 +34,7 @@ pub struct SuspenseBoundaryInfo {
 }
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct PositionHints {
     pub in_content_area: bool,
     pub dom_path: Vec<String>,
@@ -38,6 +42,7 @@ pub struct PositionHints {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[non_exhaustive]
 pub struct BoundaryUpdate {
     pub boundary_id: String,
     pub content: serde_json::Value,
@@ -49,6 +54,7 @@ pub struct BoundaryUpdate {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[non_exhaustive]
 pub struct BoundaryError {
     pub boundary_id: String,
     pub error_message: String,
@@ -56,6 +62,7 @@ pub struct BoundaryError {
 }
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct RscStreamChunk {
     pub data: Vec<u8>,
     pub chunk_type: RscChunkType,
@@ -65,6 +72,7 @@ pub struct RscStreamChunk {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum RscChunkType {
     ModuleImport,
     InitialShell,
@@ -74,6 +82,7 @@ pub enum RscChunkType {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum RscWireFormatTag {
     ModuleImport,
     Model,
@@ -101,8 +110,8 @@ impl RscWireFormatTag {
 
     pub fn format_row(&self, row_id: u32, data: &str) -> String {
         match self.tag_char() {
-            Some(tag) => format!("{:x}:{}{}\n", row_id, tag, data),
-            None => format!("{:x}:{}\n", row_id, data),
+            Some(tag) => format!("{row_id:x}:{tag}{data}\n"),
+            None => format!("{row_id:x}:{data}\n"),
         }
     }
 }

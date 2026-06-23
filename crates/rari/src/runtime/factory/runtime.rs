@@ -1,7 +1,12 @@
 use crate::runtime::factory::executor::execute_script;
 use crate::runtime::factory::interface::{AsyncBatchResult, JsRuntimeInterface};
 use crate::runtime::factory::runtime_builder::build_js_runtime;
-use crate::runtime::factory::utils::constants::*;
+use crate::runtime::factory::utils::constants::{
+    CHANNEL_CAPACITY, JS_EXECUTOR_CHANNEL_CLOSED_ERROR, JS_EXECUTOR_FAILED_ERROR,
+    MODULE_ALREADY_EVALUATED_ERROR, RUNTIME_QUICK_RESTART_DELAY_MS, RUNTIME_RESTART_DELAY_MS,
+    create_already_evaluated_response, create_graceful_error, is_critical_error,
+    is_runtime_restart_needed,
+};
 use crate::runtime::factory::utils::v8::{get_module_namespace_as_json, v8_to_json};
 use crate::runtime::module::loader::RariModuleLoader;
 use crate::with_scope;
@@ -93,6 +98,7 @@ impl RariRuntime {
         let (request_sender, mut request_receiver) = mpsc::channel(CHANNEL_CAPACITY);
 
         std::thread::spawn(move || {
+            #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
             let runtime = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
@@ -117,7 +123,27 @@ impl RariRuntime {
                     let mut batch_id_counter: u64 = 0;
 
                     while continue_processing {
-                        if !pending_batches.is_empty() {
+                        if pending_batches.is_empty() {
+                            match request_receiver.recv().await {
+                                Some(req) => {
+                                    let result = handle_js_request(
+                                        req,
+                                        &mut js_runtime,
+                                        &module_loader,
+                                        &mut continue_processing,
+                                        &mut pending_batches,
+                                        &mut batch_id_counter,
+                                    ).await;
+                                    if let Err(e) = result {
+                                        eprintln!("[rari] Error processing request: {e}");
+                                        break;
+                                    }
+                                }
+                                None => {
+                                    continue_processing = false;
+                                }
+                            }
+                        } else {
                             tokio::select! {
                                 biased;
                                 request = request_receiver.recv() => {
@@ -163,26 +189,6 @@ impl RariRuntime {
 
                             check_pending_batches(&mut js_runtime, &mut pending_batches);
                             pending_batches.retain(|b| b.remaining > 0 && b.start.elapsed() < b.timeout);
-                        } else {
-                            match request_receiver.recv().await {
-                                Some(req) => {
-                                    let result = handle_js_request(
-                                        req,
-                                        &mut js_runtime,
-                                        &module_loader,
-                                        &mut continue_processing,
-                                        &mut pending_batches,
-                                        &mut batch_id_counter,
-                                    ).await;
-                                    if let Err(e) = result {
-                                        eprintln!("[rari] Error processing request: {e}");
-                                        break;
-                                    }
-                                }
-                                None => {
-                                    continue_processing = false;
-                                }
-                            }
                         }
 
                         let _ = tokio::time::timeout(
@@ -191,7 +197,10 @@ impl RariRuntime {
                         ).await;
                     }
 
-                    println!("[rari] Restarting JS runtime due to error or forced restart");
+                    #[expect(clippy::print_stdout, reason = "Runtime restart notification for debugging")]
+                    {
+                        println!("[rari] Restarting JS runtime due to error or forced restart");
+                    }
                     tokio::time::sleep(std::time::Duration::from_millis(
                         RUNTIME_QUICK_RESTART_DELAY_MS,
                     ))
@@ -276,7 +285,7 @@ async fn handle_evaluate_module(
         }
     } else {
         match js_runtime.mod_evaluate(module_id).await {
-            Ok(_) => {
+            Ok(()) => {
                 module_loader.mark_module_evaluated(&module_id.to_string());
                 get_module_namespace_as_json(js_runtime, module_id)
             }
@@ -300,7 +309,13 @@ async fn handle_evaluate_module(
     if let Err(e) = &result
         && is_critical_error(e)
     {
-        println!("[rari] Critical error detected in module evaluation: {e}");
+        #[expect(
+            clippy::print_stdout,
+            reason = "Critical error logging before shutdown"
+        )]
+        {
+            println!("[rari] Critical error detected in module evaluation: {e}");
+        }
         *continue_processing = false;
     }
 
@@ -325,7 +340,7 @@ async fn handle_get_module_namespace(
             .mod_evaluate(module_id as deno_core::ModuleId)
             .await
         {
-            Ok(_) => {
+            Ok(()) => {
                 module_loader.mark_module_evaluated(&module_id.to_string());
                 let json_result =
                     get_module_namespace_as_json(js_runtime, module_id as deno_core::ModuleId);
@@ -436,7 +451,7 @@ async fn handle_js_request(
             code,
             result_tx,
         } => {
-            module_loader.set_module_code(specifier.clone(), code.clone());
+            module_loader.set_module_code(specifier.clone(), code);
             let component_id = extract_component_id_from_specifier(&specifier);
             let is_hmr_specifier = specifier.contains("/rari_hmr/");
             let existing_specifier = module_loader
@@ -450,7 +465,7 @@ async fn handle_js_request(
             if is_hmr_specifier || !has_existing_hmr_mapping {
                 module_loader
                     .component_specifiers
-                    .insert(component_id.clone(), specifier.clone());
+                    .insert(component_id, specifier);
             }
             let _ = result_tx.send(Ok(()));
         }
@@ -532,8 +547,7 @@ async fn setup_concurrent_batch(
             }
             Err(e) => {
                 let err = RariError::js_execution(format!(
-                    "Failed to execute script '{}': {}",
-                    script_name, e
+                    "Failed to execute script '{script_name}': {e}"
                 ));
                 let _ = tx.send(Err(err));
             }
@@ -558,27 +572,26 @@ async fn setup_concurrent_batch(
         .unzip();
 
     for (i, sent_item) in sent.iter_mut().enumerate().take(senders.len()) {
-        let slot_key = format!("__rari_b{}_{}__", batch_id, i);
+        let slot_key = format!("__rari_b{batch_id}_{i}__");
         let setup = format!(
-            r#"(function() {{
+            r"(function() {{
                 if (!globalThis['~rari_concurrent']) globalThis['~rari_concurrent'] = {{}};
-                const val = globalThis['{}'];
+                const val = globalThis['{slot_key}'];
                 if (val && typeof val.then === 'function') {{
-                    globalThis['~rari_concurrent']['{}'] = {{ done: false, result: null, error: null }};
+                    globalThis['~rari_concurrent']['{slot_key}'] = {{ done: false, result: null, error: null }};
                     val.then(function(r) {{
-                        globalThis['~rari_concurrent']['{}'] = {{ done: true, result: r, error: null }};
+                        globalThis['~rari_concurrent']['{slot_key}'] = {{ done: true, result: r, error: null }};
                     }}).catch(function(e) {{
-                        globalThis['~rari_concurrent']['{}'] = {{ done: true, result: null, error: String(e) }};
+                        globalThis['~rari_concurrent']['{slot_key}'] = {{ done: true, result: null, error: String(e) }};
                     }});
                 }} else {{
-                    globalThis['~rari_concurrent']['{}'] = {{ done: true, result: val, error: null }};
+                    globalThis['~rari_concurrent']['{slot_key}'] = {{ done: true, result: val, error: null }};
                 }}
-            }})()"#,
-            slot_key, slot_key, slot_key, slot_key, slot_key
+            }})()"
         );
         if let Err(e) = js_runtime.execute_script(format!("setup_concurrent_{i}"), setup) {
             eprintln!("[rari] Failed to setup concurrent tracking for slot {i}: {e}");
-            let cleanup = format!("delete globalThis['{}']", slot_key);
+            let cleanup = format!("delete globalThis['{slot_key}']");
             let _ = js_runtime.execute_script(format!("cleanup_setup_{i}"), cleanup);
 
             *sent_item = true;
@@ -616,26 +629,24 @@ fn check_pending_batches(
 
             let slot_key = format!("__rari_b{}_{}__", batch.batch_id, i);
             let check = format!(
-                r#"(function() {{
-                    const e = globalThis['~rari_concurrent'] && globalThis['~rari_concurrent']['{}'];
+                r"(function() {{
+                    const e = globalThis['~rari_concurrent'] && globalThis['~rari_concurrent']['{slot_key}'];
                     return e && e.done ? e : null;
-                }})()"#,
-                slot_key
+                }})()"
             );
 
             let check_result = js_runtime.execute_script(format!("check_slot_{i}"), check);
 
             if let Err(e) = check_result {
                 let cleanup = format!(
-                    r#"(function() {{
-                        if (globalThis['~rari_concurrent'] && globalThis['~rari_concurrent']['{}']) {{
-                            delete globalThis['~rari_concurrent']['{}'];
+                    r"(function() {{
+                        if (globalThis['~rari_concurrent'] && globalThis['~rari_concurrent']['{slot_key}']) {{
+                            delete globalThis['~rari_concurrent']['{slot_key}'];
                         }}
-                        if (globalThis['{}']) {{
-                            delete globalThis['{}'];
+                        if (globalThis['{slot_key}']) {{
+                            delete globalThis['{slot_key}'];
                         }}
-                    }})()"#,
-                    slot_key, slot_key, slot_key, slot_key
+                    }})()"
                 );
                 let _ = js_runtime.execute_script(format!("cleanup_check_error_{i}"), cleanup);
 
@@ -650,6 +661,7 @@ fn check_pending_batches(
                 continue;
             }
 
+            #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
             let check_value = check_result.expect("check_result is Ok after error check");
             let is_done = with_scope!(js_runtime, |scope| {
                 let local = deno_core::v8::Local::new(scope, check_value);
@@ -658,17 +670,16 @@ fn check_pending_batches(
 
             if is_done {
                 let extract = format!(
-                    r#"(function() {{
-                        const entry = globalThis['~rari_concurrent']['{}'];
-                        delete globalThis['~rari_concurrent']['{}'];
-                        delete globalThis['{}'];
+                    r"(function() {{
+                        const entry = globalThis['~rari_concurrent']['{slot_key}'];
+                        delete globalThis['~rari_concurrent']['{slot_key}'];
+                        delete globalThis['{slot_key}'];
                         return {{
                             ok: entry.error === null,
                             value: entry.result,
                             error: entry.error
                         }};
-                    }})()"#,
-                    slot_key, slot_key, slot_key
+                    }})()"
                 );
                 let result = match js_runtime
                     .execute_script(format!("extract_concurrent_{i}"), extract)
@@ -693,15 +704,14 @@ fn check_pending_batches(
                             }
                             Ok(_) => {
                                 let cleanup = format!(
-                                    r#"(function() {{
-                                            if (globalThis['~rari_concurrent'] && globalThis['~rari_concurrent']['{}']) {{
-                                                delete globalThis['~rari_concurrent']['{}'];
+                                    r"(function() {{
+                                            if (globalThis['~rari_concurrent'] && globalThis['~rari_concurrent']['{slot_key}']) {{
+                                                delete globalThis['~rari_concurrent']['{slot_key}'];
                                             }}
-                                            if (globalThis['{}']) {{
-                                                delete globalThis['{}'];
+                                            if (globalThis['{slot_key}']) {{
+                                                delete globalThis['{slot_key}'];
                                             }}
-                                        }})()"#,
-                                    slot_key, slot_key, slot_key, slot_key
+                                        }})()"
                                 );
                                 let _ = js_runtime
                                     .execute_script(format!("cleanup_extract_shape_{i}"), cleanup);
@@ -711,15 +721,14 @@ fn check_pending_batches(
                             }
                             Err(e) => {
                                 let cleanup = format!(
-                                    r#"(function() {{
-                                            if (globalThis['~rari_concurrent'] && globalThis['~rari_concurrent']['{}']) {{
-                                                delete globalThis['~rari_concurrent']['{}'];
+                                    r"(function() {{
+                                            if (globalThis['~rari_concurrent'] && globalThis['~rari_concurrent']['{slot_key}']) {{
+                                                delete globalThis['~rari_concurrent']['{slot_key}'];
                                             }}
-                                            if (globalThis['{}']) {{
-                                                delete globalThis['{}'];
+                                            if (globalThis['{slot_key}']) {{
+                                                delete globalThis['{slot_key}'];
                                             }}
-                                        }})()"#,
-                                    slot_key, slot_key, slot_key, slot_key
+                                        }})()"
                                 );
                                 let _ = js_runtime
                                     .execute_script(format!("cleanup_extract_json_{i}"), cleanup);
@@ -729,15 +738,14 @@ fn check_pending_batches(
                     }
                     Err(e) => {
                         let cleanup = format!(
-                            r#"(function() {{
-                                    if (globalThis['~rari_concurrent'] && globalThis['~rari_concurrent']['{}']) {{
-                                        delete globalThis['~rari_concurrent']['{}'];
+                            r"(function() {{
+                                    if (globalThis['~rari_concurrent'] && globalThis['~rari_concurrent']['{slot_key}']) {{
+                                        delete globalThis['~rari_concurrent']['{slot_key}'];
                                     }}
-                                    if (globalThis['{}']) {{
-                                        delete globalThis['{}'];
+                                    if (globalThis['{slot_key}']) {{
+                                        delete globalThis['{slot_key}'];
                                     }}
-                                }})()"#,
-                            slot_key, slot_key, slot_key, slot_key
+                                }})()"
                         );
                         let _ = js_runtime
                             .execute_script(format!("cleanup_extract_error_{i}"), cleanup);
@@ -761,15 +769,14 @@ fn check_pending_batches(
                 if !batch.sent[i] {
                     let slot_key = format!("__rari_b{}_{}__", batch.batch_id, i);
                     let cleanup = format!(
-                        r#"(function() {{
-                            if (globalThis['~rari_concurrent'] && globalThis['~rari_concurrent']['{}']) {{
-                                delete globalThis['~rari_concurrent']['{}'];
+                        r"(function() {{
+                            if (globalThis['~rari_concurrent'] && globalThis['~rari_concurrent']['{slot_key}']) {{
+                                delete globalThis['~rari_concurrent']['{slot_key}'];
                             }}
-                            if (globalThis['{}']) {{
-                                delete globalThis['{}'];
+                            if (globalThis['{slot_key}']) {{
+                                delete globalThis['{slot_key}'];
                             }}
-                        }})()"#,
-                        slot_key, slot_key, slot_key, slot_key
+                        }})()"
                     );
                     let _ = js_runtime.execute_script(format!("cleanup_timeout_{i}"), cleanup);
 
@@ -904,7 +911,7 @@ impl JsRuntimeInterface for RariRuntime {
             let script = format!(
                 r#"
                 (function() {{
-                    const argsBase64 = "{}";
+                    const argsBase64 = "{args_base64}";
                     const argsBinary = atob(argsBase64);
                     const argsBytes = new Uint8Array(argsBinary.length);
                     for (let i = 0; i < argsBinary.length; i++) {{
@@ -913,21 +920,20 @@ impl JsRuntimeInterface for RariRuntime {
                     const argsJson = new TextDecoder('utf-8').decode(argsBytes);
                     const args = JSON.parse(argsJson);
 
-                    if (typeof globalThis["{}"] !== 'function') {{
-                        throw new Error("Function not found: {}");
+                    if (typeof globalThis["{function_name}"] !== 'function') {{
+                        throw new Error("Function not found: {function_name}");
                     }}
 
-                    return globalThis["{}"](...args);
+                    return globalThis["{function_name}"](...args);
                 }})();
-                "#,
-                args_base64, function_name, function_name, function_name
+                "#
             );
 
             let (response_sender, response_receiver) = oneshot::channel();
 
             request_sender
                 .send(JsRequest::ExecuteScript {
-                    script_name: format!("exec_func_{}_{}.js", function_name, unique_id),
+                    script_name: format!("exec_func_{function_name}_{unique_id}.js"),
                     script_code: script,
                     result_tx: response_sender,
                 })

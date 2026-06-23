@@ -1,6 +1,7 @@
 use crate::rsc::rendering::html::escape_html;
 use crate::rsc::rendering::layout::types::PageMetadata;
 use crate::server::image::ImageOptimizer;
+use std::fmt::Write;
 
 pub fn inject_metadata(
     html: &str,
@@ -59,7 +60,7 @@ pub fn inject_metadata(
         let insert_pos = head_start + head_open_end + 1;
         let mut critical_tags = String::new();
 
-        if !result.contains(r#"<meta charset"#) {
+        if !result.contains(r"<meta charset") {
             critical_tags.push_str(
                 r#"
     <meta charset="UTF-8" />"#,
@@ -71,21 +72,27 @@ pub fn inject_metadata(
                 .viewport
                 .as_deref()
                 .unwrap_or("width=device-width, initial-scale=1.0");
-            critical_tags.push_str(&format!(
+            #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+            write!(
+                critical_tags,
                 r#"
     <meta name="viewport" content="{}" />"#,
                 escape_html(viewport_content)
-            ));
+            )
+            .unwrap();
         }
 
         if let Some(title) = &metadata.title
             && !result.contains("<title>")
         {
-            critical_tags.push_str(&format!(
-                r#"
-    <title>{}</title>"#,
+            #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+            write!(
+                critical_tags,
+                r"
+    <title>{}</title>",
                 escape_html(title)
-            ));
+            )
+            .unwrap();
         }
 
         if !critical_tags.is_empty() {
@@ -104,11 +111,12 @@ pub fn inject_metadata(
                 .map(|k| escape_html(k))
                 .collect::<Vec<_>>()
                 .join(", ");
-            meta_tags.push_str(&format!(
-                r#"    <meta name="keywords" content="{}" />
-"#,
-                keywords_str
-            ));
+            #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+            writeln!(
+                meta_tags,
+                r#"    <meta name="keywords" content="{keywords_str}" />"#
+            )
+            .unwrap();
         }
 
         let alternates_canonical = metadata
@@ -117,11 +125,13 @@ pub fn inject_metadata(
             .and_then(|a| a.canonical.as_ref());
         let effective_canonical = alternates_canonical.or(metadata.canonical.as_ref());
         if let Some(canonical) = effective_canonical {
-            meta_tags.push_str(&format!(
-                r#"    <link rel="canonical" href="{}" />
-"#,
+            #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+            writeln!(
+                meta_tags,
+                r#"    <link rel="canonical" href="{}" />"#,
                 escape_html(canonical)
-            ));
+            )
+            .unwrap();
         }
 
         if let Some(robots) = &metadata.robots {
@@ -138,49 +148,61 @@ pub fn inject_metadata(
                 robots_content.push("nocache");
             }
             if !robots_content.is_empty() {
-                meta_tags.push_str(&format!(
-                    r#"    <meta name="robots" content="{}" />
-"#,
+                #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+                writeln!(
+                    meta_tags,
+                    r#"    <meta name="robots" content="{}" />"#,
                     robots_content.join(", ")
-                ));
+                )
+                .unwrap();
             }
         }
 
         if let Some(og) = &metadata.open_graph {
             if let Some(og_title) = &og.title {
-                meta_tags.push_str(&format!(
-                    r#"    <meta property="og:title" content="{}" />
-"#,
+                #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+                writeln!(
+                    meta_tags,
+                    r#"    <meta property="og:title" content="{}" />"#,
                     escape_html(og_title)
-                ));
+                )
+                .unwrap();
             }
             if let Some(og_description) = &og.description {
-                meta_tags.push_str(&format!(
-                    r#"    <meta property="og:description" content="{}" />
-"#,
+                #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+                writeln!(
+                    meta_tags,
+                    r#"    <meta property="og:description" content="{}" />"#,
                     escape_html(og_description)
-                ));
+                )
+                .unwrap();
             }
             if let Some(og_url) = &og.url {
-                meta_tags.push_str(&format!(
-                    r#"    <meta property="og:url" content="{}" />
-"#,
+                #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+                writeln!(
+                    meta_tags,
+                    r#"    <meta property="og:url" content="{}" />"#,
                     escape_html(og_url)
-                ));
+                )
+                .unwrap();
             }
             if let Some(og_site_name) = &og.site_name {
-                meta_tags.push_str(&format!(
-                    r#"    <meta property="og:site_name" content="{}" />
-"#,
+                #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+                writeln!(
+                    meta_tags,
+                    r#"    <meta property="og:site_name" content="{}" />"#,
                     escape_html(og_site_name)
-                ));
+                )
+                .unwrap();
             }
             if let Some(og_type) = &og.og_type {
-                meta_tags.push_str(&format!(
-                    r#"    <meta property="og:type" content="{}" />
-"#,
+                #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+                writeln!(
+                    meta_tags,
+                    r#"    <meta property="og:type" content="{}" />"#,
                     escape_html(og_type)
-                ));
+                )
+                .unwrap();
             }
             if let Some(images) = &og.images {
                 for image in images {
@@ -189,33 +211,39 @@ pub fn inject_metadata(
                         OpenGraphImage::Simple(url) => url.as_str(),
                         OpenGraphImage::Detailed(desc) => desc.url.as_str(),
                     };
-                    meta_tags.push_str(&format!(
-                        r#"    <meta property="og:image" content="{}" />
-"#,
+                    #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+                    writeln!(
+                        meta_tags,
+                        r#"    <meta property="og:image" content="{}" />"#,
                         escape_html(image_url)
-                    ));
+                    )
+                    .unwrap();
 
                     if let OpenGraphImage::Detailed(desc) = image {
                         if let Some(width) = desc.width {
-                            meta_tags.push_str(&format!(
-                                r#"    <meta property="og:image:width" content="{}" />
-"#,
-                                width
-                            ));
+                            #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+                            writeln!(
+                                meta_tags,
+                                r#"    <meta property="og:image:width" content="{width}" />"#
+                            )
+                            .unwrap();
                         }
                         if let Some(height) = desc.height {
-                            meta_tags.push_str(&format!(
-                                r#"    <meta property="og:image:height" content="{}" />
-"#,
-                                height
-                            ));
+                            #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+                            writeln!(
+                                meta_tags,
+                                r#"    <meta property="og:image:height" content="{height}" />"#
+                            )
+                            .unwrap();
                         }
                         if let Some(alt) = &desc.alt {
-                            meta_tags.push_str(&format!(
-                                r#"    <meta property="og:image:alt" content="{}" />
-"#,
+                            #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+                            writeln!(
+                                meta_tags,
+                                r#"    <meta property="og:image:alt" content="{}" />"#,
                                 escape_html(alt)
-                            ));
+                            )
+                            .unwrap();
                         }
                     }
                 }
@@ -224,47 +252,59 @@ pub fn inject_metadata(
 
         if let Some(twitter) = &metadata.twitter {
             if let Some(card) = &twitter.card {
-                meta_tags.push_str(&format!(
-                    r#"    <meta name="twitter:card" content="{}" />
-"#,
+                #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+                writeln!(
+                    meta_tags,
+                    r#"    <meta name="twitter:card" content="{}" />"#,
                     escape_html(card)
-                ));
+                )
+                .unwrap();
             }
             if let Some(site) = &twitter.site {
-                meta_tags.push_str(&format!(
-                    r#"    <meta name="twitter:site" content="{}" />
-"#,
+                #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+                writeln!(
+                    meta_tags,
+                    r#"    <meta name="twitter:site" content="{}" />"#,
                     escape_html(site)
-                ));
+                )
+                .unwrap();
             }
             if let Some(creator) = &twitter.creator {
-                meta_tags.push_str(&format!(
-                    r#"    <meta name="twitter:creator" content="{}" />
-"#,
+                #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+                writeln!(
+                    meta_tags,
+                    r#"    <meta name="twitter:creator" content="{}" />"#,
                     escape_html(creator)
-                ));
+                )
+                .unwrap();
             }
             if let Some(twitter_title) = &twitter.title {
-                meta_tags.push_str(&format!(
-                    r#"    <meta name="twitter:title" content="{}" />
-"#,
+                #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+                writeln!(
+                    meta_tags,
+                    r#"    <meta name="twitter:title" content="{}" />"#,
                     escape_html(twitter_title)
-                ));
+                )
+                .unwrap();
             }
             if let Some(twitter_description) = &twitter.description {
-                meta_tags.push_str(&format!(
-                    r#"    <meta name="twitter:description" content="{}" />
-"#,
+                #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+                writeln!(
+                    meta_tags,
+                    r#"    <meta name="twitter:description" content="{}" />"#,
                     escape_html(twitter_description)
-                ));
+                )
+                .unwrap();
             }
             if let Some(images) = &twitter.images {
                 for image in images {
-                    meta_tags.push_str(&format!(
-                        r#"    <meta name="twitter:image" content="{}" />
-"#,
+                    #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+                    writeln!(
+                        meta_tags,
+                        r#"    <meta name="twitter:image" content="{}" />"#,
                         escape_html(image)
-                    ));
+                    )
+                    .unwrap();
                 }
             }
         }
@@ -274,19 +314,23 @@ pub fn inject_metadata(
                 use crate::rsc::rendering::layout::types::IconValue;
                 match icon_value {
                     IconValue::Single(url) => {
-                        meta_tags.push_str(&format!(
-                            r#"    <link rel="icon" href="{}" />
-"#,
+                        #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+                        writeln!(
+                            meta_tags,
+                            r#"    <link rel="icon" href="{}" />"#,
                             escape_html(url)
-                        ));
+                        )
+                        .unwrap();
                     }
                     IconValue::Multiple(urls) => {
                         for url in urls {
-                            meta_tags.push_str(&format!(
-                                r#"    <link rel="icon" href="{}" />
-"#,
+                            #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+                            writeln!(
+                                meta_tags,
+                                r#"    <link rel="icon" href="{}" />"#,
                                 escape_html(url)
-                            ));
+                            )
+                            .unwrap();
                         }
                     }
                     IconValue::Detailed(icon_list) => {
@@ -298,12 +342,22 @@ pub fn inject_metadata(
                                 escape_html(&icon.url)
                             );
                             if let Some(icon_type) = &icon.icon_type {
-                                attrs.push_str(&format!(r#" type="{}""#, escape_html(icon_type)));
+                                #[expect(
+                                    clippy::unwrap_used,
+                                    reason = "write! to String never fails"
+                                )]
+                                write!(&mut attrs, r#" type="{}""#, escape_html(icon_type))
+                                    .unwrap();
                             }
                             if let Some(sizes) = &icon.sizes {
-                                attrs.push_str(&format!(r#" sizes="{}""#, escape_html(sizes)));
+                                #[expect(
+                                    clippy::unwrap_used,
+                                    reason = "write! to String never fails"
+                                )]
+                                write!(&mut attrs, r#" sizes="{}""#, escape_html(sizes)).unwrap();
                             }
-                            meta_tags.push_str(&format!("    <link {} />\n", attrs));
+                            #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+                            writeln!(&mut meta_tags, "    <link {attrs} />").unwrap();
                         }
                     }
                 }
@@ -312,19 +366,23 @@ pub fn inject_metadata(
                 use crate::rsc::rendering::layout::types::IconValue;
                 match apple_value {
                     IconValue::Single(url) => {
-                        meta_tags.push_str(&format!(
-                            r#"    <link rel="apple-touch-icon" href="{}" />
-"#,
+                        #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+                        writeln!(
+                            meta_tags,
+                            r#"    <link rel="apple-touch-icon" href="{}" />"#,
                             escape_html(url)
-                        ));
+                        )
+                        .unwrap();
                     }
                     IconValue::Multiple(urls) => {
                         for url in urls {
-                            meta_tags.push_str(&format!(
-                                r#"    <link rel="apple-touch-icon" href="{}" />
-"#,
+                            #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+                            writeln!(
+                                meta_tags,
+                                r#"    <link rel="apple-touch-icon" href="{}" />"#,
                                 escape_html(url)
-                            ));
+                            )
+                            .unwrap();
                         }
                     }
                     IconValue::Detailed(apple_list) => {
@@ -336,9 +394,14 @@ pub fn inject_metadata(
                                 escape_html(&icon.url)
                             );
                             if let Some(sizes) = &icon.sizes {
-                                attrs.push_str(&format!(r#" sizes="{}""#, escape_html(sizes)));
+                                #[expect(
+                                    clippy::unwrap_used,
+                                    reason = "write! to String never fails"
+                                )]
+                                write!(&mut attrs, r#" sizes="{}""#, escape_html(sizes)).unwrap();
                             }
-                            meta_tags.push_str(&format!("    <link {} />\n", attrs));
+                            #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+                            writeln!(&mut meta_tags, "    <link {attrs} />").unwrap();
                         }
                     }
                 }
@@ -352,36 +415,44 @@ pub fn inject_metadata(
                         escape_html(&icon.url)
                     );
                     if let Some(icon_type) = &icon.icon_type {
-                        attrs.push_str(&format!(r#" type="{}""#, escape_html(icon_type)));
+                        #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+                        write!(&mut attrs, r#" type="{}""#, escape_html(icon_type)).unwrap();
                     }
                     if let Some(sizes) = &icon.sizes {
-                        attrs.push_str(&format!(r#" sizes="{}""#, escape_html(sizes)));
+                        #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+                        write!(&mut attrs, r#" sizes="{}""#, escape_html(sizes)).unwrap();
                     }
                     if let Some(color) = &icon.color {
-                        attrs.push_str(&format!(r#" color="{}""#, escape_html(color)));
+                        #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+                        write!(&mut attrs, r#" color="{}""#, escape_html(color)).unwrap();
                     }
-                    meta_tags.push_str(&format!("    <link {} />\n", attrs));
+                    #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+                    writeln!(&mut meta_tags, "    <link {attrs} />").unwrap();
                 }
             }
         }
 
         if let Some(manifest) = &metadata.manifest {
-            meta_tags.push_str(&format!(
-                r#"    <link rel="manifest" href="{}" />
-"#,
+            #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+            writeln!(
+                meta_tags,
+                r#"    <link rel="manifest" href="{}" />"#,
                 escape_html(manifest)
-            ));
+            )
+            .unwrap();
         }
 
         if let Some(theme_color) = &metadata.theme_color {
             use crate::rsc::rendering::layout::types::ThemeColorMetadata;
             match theme_color {
                 ThemeColorMetadata::Simple(color) => {
-                    meta_tags.push_str(&format!(
-                        r#"    <meta name="theme-color" content="{}" />
-"#,
+                    #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+                    writeln!(
+                        meta_tags,
+                        r#"    <meta name="theme-color" content="{}" />"#,
                         escape_html(color)
-                    ));
+                    )
+                    .unwrap();
                 }
                 ThemeColorMetadata::Detailed(colors) => {
                     for color_desc in colors {
@@ -390,9 +461,11 @@ pub fn inject_metadata(
                             escape_html(&color_desc.color)
                         );
                         if let Some(media) = &color_desc.media {
-                            attrs.push_str(&format!(r#" media="{}""#, escape_html(media)));
+                            #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+                            write!(&mut attrs, r#" media="{}""#, escape_html(media)).unwrap();
                         }
-                        meta_tags.push_str(&format!("    <meta {} />\n", attrs));
+                        #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+                        writeln!(&mut meta_tags, "    <meta {attrs} />").unwrap();
                     }
                 }
             }
@@ -400,37 +473,45 @@ pub fn inject_metadata(
 
         if let Some(apple_web_app) = &metadata.apple_web_app {
             if let Some(title) = &apple_web_app.title {
-                meta_tags.push_str(&format!(
-                    r#"    <meta name="apple-mobile-web-app-title" content="{}" />
-"#,
+                #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+                writeln!(
+                    meta_tags,
+                    r#"    <meta name="apple-mobile-web-app-title" content="{}" />"#,
                     escape_html(title)
-                ));
+                )
+                .unwrap();
             }
             if let Some(status_bar_style) = &apple_web_app.status_bar_style {
-                meta_tags.push_str(&format!(
-                    r#"    <meta name="apple-mobile-web-app-status-bar-style" content="{}" />
-"#,
+                #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+                writeln!(
+                    meta_tags,
+                    r#"    <meta name="apple-mobile-web-app-status-bar-style" content="{}" />"#,
                     escape_html(status_bar_style)
-                ));
+                )
+                .unwrap();
             }
             if let Some(capable) = apple_web_app.capable {
-                meta_tags.push_str(&format!(
-                    r#"    <meta name="mobile-web-app-capable" content="{}" />
-"#,
+                #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+                writeln!(
+                    meta_tags,
+                    r#"    <meta name="mobile-web-app-capable" content="{}" />"#,
                     if capable { "yes" } else { "no" }
-                ));
+                )
+                .unwrap();
             }
         }
 
         if let Some(alternates) = &metadata.alternates {
             if let Some(languages) = &alternates.languages {
                 for (lang, url) in languages {
-                    meta_tags.push_str(&format!(
-                        r#"    <link rel="alternate" hreflang="{}" href="{}" />
-"#,
+                    #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+                    writeln!(
+                        meta_tags,
+                        r#"    <link rel="alternate" hreflang="{}" href="{}" />"#,
                         escape_html(lang),
                         escape_html(url)
-                    ));
+                    )
+                    .unwrap();
                 }
             }
             if let Some(types) = &alternates.types {
@@ -440,13 +521,15 @@ pub fn inject_metadata(
                         .next()
                         .and_then(|f| f.strip_suffix(".xml"))
                         .unwrap_or("Feed");
-                    meta_tags.push_str(&format!(
-                        r#"    <link rel="alternate" type="{}" href="{}" title="{}" />
-"#,
+                    #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+                    writeln!(
+                        meta_tags,
+                        r#"    <link rel="alternate" type="{}" href="{}" title="{}" />"#,
                         escape_html(media_type),
                         escape_html(url),
                         escape_html(title)
-                    ));
+                    )
+                    .unwrap();
                 }
             }
         }

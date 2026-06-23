@@ -3,6 +3,7 @@ use crate::server::routing::types::ParamValue;
 use rustc_hash::FxHashMap;
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct LayoutRenderContext {
     pub params: FxHashMap<String, ParamValue>,
     pub search_params: FxHashMap<String, Vec<String>>,
@@ -12,6 +13,7 @@ pub struct LayoutRenderContext {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct PageMetadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
@@ -42,6 +44,7 @@ pub struct PageMetadata {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct OpenGraphMetadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
@@ -59,12 +62,14 @@ pub struct OpenGraphMetadata {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(untagged)]
+#[non_exhaustive]
 pub enum OpenGraphImage {
     Simple(String),
     Detailed(OpenGraphImageDescriptor),
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct OpenGraphImageDescriptor {
     pub url: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -76,6 +81,7 @@ pub struct OpenGraphImageDescriptor {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct TwitterMetadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub card: Option<String>,
@@ -92,6 +98,7 @@ pub struct TwitterMetadata {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct RobotsMetadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub index: Option<bool>,
@@ -102,6 +109,7 @@ pub struct RobotsMetadata {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct IconsMetadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub icon: Option<IconValue>,
@@ -113,6 +121,7 @@ pub struct IconsMetadata {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(untagged)]
+#[non_exhaustive]
 pub enum IconValue {
     Single(String),
     Multiple(Vec<String>),
@@ -120,6 +129,7 @@ pub enum IconValue {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct IconDescriptor {
     pub url: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -134,12 +144,14 @@ pub struct IconDescriptor {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(untagged)]
+#[non_exhaustive]
 pub enum ThemeColorMetadata {
     Simple(String),
     Detailed(Vec<ThemeColorDescriptor>),
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct ThemeColorDescriptor {
     pub color: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -147,6 +159,7 @@ pub struct ThemeColorDescriptor {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct AlternatesMetadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub canonical: Option<String>,
@@ -157,6 +170,7 @@ pub struct AlternatesMetadata {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct AppleWebAppMetadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
@@ -167,24 +181,28 @@ pub struct AppleWebAppMetadata {
 }
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct BoundaryInfo {
     pub id: String,
     pub has_fallback: bool,
 }
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct SuspenseDetectionResult {
     pub has_suspense: bool,
     pub boundary_count: usize,
     pub boundaries: Vec<BoundaryInfo>,
 }
 
+#[non_exhaustive]
 pub enum RenderResult {
     Static(String),
     Streaming(RscStream),
 }
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct BoundaryPosition {
     pub boundary_id: String,
     pub parent_path: Vec<usize>,
@@ -193,6 +211,7 @@ pub struct BoundaryPosition {
 }
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct LayoutStructure {
     pub has_navigation: bool,
     pub navigation_position: Option<usize>,

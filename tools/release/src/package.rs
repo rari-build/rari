@@ -1,5 +1,6 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+use std::fmt::Write;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -107,7 +108,7 @@ impl Package {
         let old_version = &pkg_json.version;
 
         let version_pattern = format!(r#""version": "{}""#, regex::escape(old_version));
-        let version_replacement = format!(r#""version": "{}""#, new_version);
+        let version_replacement = format!(r#""version": "{new_version}""#);
 
         let re = regex::Regex::new(&version_pattern)?;
         let updated = re.replace(&content, version_replacement.as_str());
@@ -142,20 +143,20 @@ impl ReleaseType {
             Self::Minor => semver::Version::new(v.major, v.minor + 1, 0).to_string(),
             Self::Major => semver::Version::new(v.major + 1, 0, 0).to_string(),
             Self::Prepatch => {
-                let mut new = v.clone();
+                let mut new = v;
                 new.patch += 1;
                 new.pre = semver::Prerelease::new("0").ok()?;
                 new.to_string()
             }
             Self::Preminor => {
-                let mut new = v.clone();
+                let mut new = v;
                 new.minor += 1;
                 new.patch = 0;
                 new.pre = semver::Prerelease::new("0").ok()?;
                 new.to_string()
             }
             Self::Premajor => {
-                let mut new = v.clone();
+                let mut new = v;
                 new.major += 1;
                 new.minor = 0;
                 new.patch = 0;
@@ -163,7 +164,7 @@ impl ReleaseType {
                 new.to_string()
             }
             Self::Prerelease => {
-                let mut new = v.clone();
+                let mut new = v;
                 if new.pre.is_empty() {
                     new.patch += 1;
                     new.pre = semver::Prerelease::new("0").ok()?;
@@ -179,10 +180,14 @@ impl ReleaseType {
         })
     }
 
+    #[expect(
+        clippy::trivially_copy_pass_by_ref,
+        reason = "Consistent API with other methods in this impl block"
+    )]
     pub fn label(&self, current: &str) -> String {
         match (*self).to_version(current) {
-            Some(v) if *self != Self::Custom => format!("{:?} ({})", self, v),
-            _ => format!("{:?}", self),
+            Some(v) if *self != Self::Custom => format!("{self:?} ({v})"),
+            _ => format!("{self:?}"),
         }
     }
 
@@ -221,17 +226,17 @@ impl ReleasedPackage {
         if !body.contains("**Full Changelog**")
             && let Some(prev_tag) = &self.previous_tag
         {
-            body.push_str(&format!(
-                "\n\n**Full Changelog**: https://github.com/{}/{}/compare/{}...{}",
-                owner, repo, prev_tag, tag_text
-            ));
+            #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+            write!(
+                &mut body,
+                "\n\n**Full Changelog**: https://github.com/{owner}/{repo}/compare/{prev_tag}...{tag_text}"
+            ).unwrap();
         }
 
         let body_encoded = urlencoding::encode(&body);
 
         format!(
-            "https://github.com/{}/{}/releases/new?tag={}&title={}&body={}",
-            owner, repo, tag, title, body_encoded
+            "https://github.com/{owner}/{repo}/releases/new?tag={tag}&title={title}&body={body_encoded}"
         )
     }
 }

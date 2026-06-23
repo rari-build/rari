@@ -1,3 +1,8 @@
+#![expect(
+    clippy::unnecessary_wraps,
+    reason = "Serializer methods return Result for API consistency and future error handling"
+)]
+
 use crate::rsc::flight::escape::escape_rsc_value;
 use crate::rsc::rendering::streaming::types::RscWireFormatTag;
 use crate::rsc::types::tree::RSCTree;
@@ -17,11 +22,13 @@ fn base64_encode(bytes: &[u8]) -> String {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum ModuleReferenceType {
     ClientComponent,
 }
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct ModuleReference {
     pub id: String,
     pub path: String,
@@ -41,11 +48,13 @@ impl ModuleReference {
         }
     }
 
+    #[must_use]
     pub fn with_export(mut self, export: String) -> Self {
         self.exports.push(export);
         self
     }
 
+    #[must_use]
     pub fn with_metadata(mut self, key: &str, value: &str) -> Self {
         self.metadata.insert(key.to_string(), value.to_string());
         self
@@ -53,6 +62,7 @@ impl ModuleReference {
 }
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct PropValidationError {
     pub field_path: String,
     pub error_type: PropValidationErrorType,
@@ -60,6 +70,7 @@ pub struct PropValidationError {
 }
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub enum PropValidationErrorType {
     NonSerializable,
     CircularReference,
@@ -80,6 +91,7 @@ pub struct RscSerializer {
 }
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct LazyPromiseInfo {
     pub promise_id: String,
     pub lazy_row_id: u32,
@@ -88,6 +100,7 @@ pub struct LazyPromiseInfo {
 }
 
 #[derive(Debug, Clone)]
+#[expect(clippy::struct_field_names, reason = "All fields are IDs by design")]
 struct LazyMarker {
     promise_id: String,
     component_id: String,
@@ -103,6 +116,7 @@ pub trait ServerComponentExecutor: Send + Sync {
 }
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct SerializedReactElement {
     pub element_type: ElementType,
     pub props: Option<FxHashMap<String, Value>>,
@@ -111,6 +125,7 @@ pub struct SerializedReactElement {
 }
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub enum ElementType {
     HtmlTag(String),
     ClientComponent(String),
@@ -140,6 +155,7 @@ impl RscSerializer {
         }
     }
 
+    #[must_use]
     pub fn with_server_component_executor(
         mut self,
         executor: Box<dyn ServerComponentExecutor>,
@@ -209,10 +225,10 @@ impl RscSerializer {
 
         let element_id = self.get_next_row_id();
         let element_data = self.serialize_element_to_standard_format(element);
-        let element_line = format!("{:x}:{}", element_id, element_data);
+        let element_line = format!("{element_id:x}:{element_data}");
         self.output_lines.push(element_line);
 
-        let root_ref = format!("0:\"${:x}\"", element_id);
+        let root_ref = format!("0:\"${element_id:x}\"");
         self.output_lines.insert(0, root_ref);
 
         self.output_lines.join("\n")
@@ -230,10 +246,10 @@ impl RscSerializer {
 
         let element_id = self.get_next_row_id();
         let element_data = self.serialize_rsc_tree_to_format(tree);
-        let element_line = format!("{:x}:{}", element_id, element_data);
+        let element_line = format!("{element_id:x}:{element_data}");
         self.output_lines.push(element_line);
 
-        let root_ref = format!("0:\"${:x}\"", element_id);
+        let root_ref = format!("0:\"${element_id:x}\"");
         self.output_lines.insert(0, root_ref);
 
         self.output_lines.join("\n")
@@ -261,7 +277,7 @@ impl RscSerializer {
 
         let suspense_symbol_row_id = if has_suspense {
             let row_id = self.get_next_row_id();
-            let symbol_line = format!("{:x}:\"$Sreact.suspense\"", row_id);
+            let symbol_line = format!("{row_id:x}:\"$Sreact.suspense\"");
             self.output_lines.push(symbol_line);
             self.suspense_symbol_row_id = Some(row_id);
             Some(row_id)
@@ -273,18 +289,18 @@ impl RscSerializer {
 
         let element_id = self.get_next_row_id();
         let element_data = self.serialize_rsc_tree_to_format(&rsc_tree);
-        let element_line = format!("{:x}:{}", element_id, element_data);
+        let element_line = format!("{element_id:x}:{element_data}");
         self.output_lines.push(element_line);
 
         if !is_lazy_resolution {
-            let root_ref = format!("0:\"${:x}\"", element_id);
+            let root_ref = format!("0:\"${element_id:x}\"");
             self.output_lines.insert(0, root_ref);
         }
 
         if let Some(row_id) = suspense_symbol_row_id {
             let searches = vec!["\"$Sreact.suspense\"", "\"react.suspense\""];
-            let replace = format!("\"${:x}\"", row_id);
-            let symbol_declaration = format!("{:x}:\"$Sreact.suspense\"", row_id);
+            let replace = format!("\"${row_id:x}\"");
+            let symbol_declaration = format!("{row_id:x}:\"$Sreact.suspense\"");
 
             for i in 1..self.output_lines.len() {
                 if self.output_lines[i] == symbol_declaration {
@@ -347,13 +363,8 @@ impl RscSerializer {
             RSCTree::ServerElement {
                 children: Some(children),
                 ..
-            } => {
-                for child in children {
-                    self.collect_client_components_from_rsc_tree(child);
-                }
             }
-            RSCTree::ServerElement { children: None, .. } => {}
-            RSCTree::Fragment { children, .. } => {
+            | RSCTree::Fragment { children, .. } => {
                 for child in children {
                     self.collect_client_components_from_rsc_tree(child);
                 }
@@ -364,7 +375,7 @@ impl RscSerializer {
                 }
             }
             RSCTree::Primitive(Value::Object(obj))
-                if obj.get("~rari_lazy").and_then(|v| v.as_bool()) == Some(true) => {}
+                if obj.get("~rari_lazy").and_then(serde_json::Value::as_bool) == Some(true) => {}
             _ => {}
         }
     }
@@ -536,6 +547,10 @@ impl RscSerializer {
         Some(id.to_string())
     }
 
+    #[expect(
+        clippy::ref_option,
+        reason = "Function signature matches trait requirements"
+    )]
     fn serialize_server_element_rsc(
         &mut self,
         tag: &str,
@@ -573,12 +588,12 @@ impl RscSerializer {
                             promise_id: lazy_info.promise_id.clone(),
                             lazy_row_id,
                             component_id: lazy_info.component_id.clone(),
-                            loading_id: lazy_info.loading_id.clone(),
+                            loading_id: lazy_info.loading_id,
                         });
 
                         element_props.insert(
                             "children".to_string(),
-                            Value::String(format!("${:x}", lazy_row_id)),
+                            Value::String(format!("${lazy_row_id:x}")),
                         );
                     }
                 } else {
@@ -620,7 +635,7 @@ impl RscSerializer {
 
     fn extract_lazy_marker(&self, tree: &RSCTree) -> Option<LazyMarker> {
         if let RSCTree::Primitive(Value::Object(obj)) = tree
-            && obj.get("~rari_lazy").and_then(|v| v.as_bool()) == Some(true)
+            && obj.get("~rari_lazy").and_then(serde_json::Value::as_bool) == Some(true)
         {
             let promise_id = obj.get("~rari_promise_id")?.as_str()?.to_string();
             let component_id = obj.get("~rari_component_id")?.as_str()?.to_string();
@@ -680,14 +695,13 @@ impl RscSerializer {
         }
     }
 
-    #[allow(clippy::disallowed_methods)]
     fn emit_module_import_line(&mut self, component_id: &str, module_ref: &ModuleReference) {
         let module_id = self.get_next_row_id();
 
         let export_name = module_ref
             .exports
             .first()
-            .map(|s| s.as_str())
+            .map(std::string::String::as_str)
             .unwrap_or("default");
 
         let module_data = serde_json::json!({
@@ -701,7 +715,7 @@ impl RscSerializer {
         self.output_lines.push(import_line.trim_end().to_string());
 
         self.serialized_modules
-            .insert(component_id.to_string(), format!("$L{:x}", module_id));
+            .insert(component_id.to_string(), format!("$L{module_id:x}"));
     }
 
     fn serialize_element_to_standard_format(&mut self, element: &SerializedReactElement) -> String {
@@ -822,7 +836,6 @@ impl RscSerializer {
         }
     }
 
-    #[allow(clippy::disallowed_methods)]
     fn serialize_server_component_standard(
         &mut self,
         component_name: &str,
@@ -982,9 +995,8 @@ impl RscSerializer {
                     } else if f.is_infinite() {
                         if f.is_sign_positive() {
                             return Value::String("$Infinity".to_string());
-                        } else {
-                            return Value::String("$-Infinity".to_string());
                         }
+                        return Value::String("$-Infinity".to_string());
                     } else if f == 0.0 && f.is_sign_negative() {
                         return Value::String("$-0".to_string());
                     }
@@ -994,11 +1006,11 @@ impl RscSerializer {
 
             Value::Object(obj) => {
                 if let Some(date_str) = obj.get("$date").and_then(|v| v.as_str()) {
-                    return Value::String(format!("$D{}", date_str));
+                    return Value::String(format!("$D{date_str}"));
                 }
 
                 if let Some(bigint_str) = obj.get("$bigint").and_then(|v| v.as_str()) {
-                    return Value::String(format!("$n{}", bigint_str));
+                    return Value::String(format!("$n{bigint_str}"));
                 }
 
                 if let Some(map_entries) = obj.get("$map") {
@@ -1022,11 +1034,11 @@ impl RscSerializer {
                 }
 
                 if let Some(temp_ref) = obj.get("$temp").and_then(|v| v.as_str()) {
-                    return Value::String(format!("$T{}", temp_ref));
+                    return Value::String(format!("$T{temp_ref}"));
                 }
 
                 if let Some(symbol_name) = obj.get("$symbol").and_then(|v| v.as_str()) {
-                    return Value::String(format!("$S{}", symbol_name));
+                    return Value::String(format!("$S{symbol_name}"));
                 }
 
                 if let Some(deferred_data) = obj.get("$deferred") {
@@ -1075,10 +1087,10 @@ impl RscSerializer {
 
         let entries_json =
             serde_json::to_string(&processed_entries).unwrap_or_else(|_| "[]".to_string());
-        let chunk_line = format!("{:x}:{}", chunk_id, entries_json);
+        let chunk_line = format!("{chunk_id:x}:{entries_json}");
         self.output_lines.push(chunk_line);
 
-        Value::String(format!("$Q{:x}", chunk_id))
+        Value::String(format!("$Q{chunk_id:x}"))
     }
 
     fn outline_set(&mut self, entries: &Value) -> Value {
@@ -1088,10 +1100,10 @@ impl RscSerializer {
 
         let entries_json =
             serde_json::to_string(&processed_entries).unwrap_or_else(|_| "[]".to_string());
-        let chunk_line = format!("{:x}:{}", chunk_id, entries_json);
+        let chunk_line = format!("{chunk_id:x}:{entries_json}");
         self.output_lines.push(chunk_line);
 
-        Value::String(format!("$W{:x}", chunk_id))
+        Value::String(format!("$W{chunk_id:x}"))
     }
 
     fn outline_formdata(&mut self, entries: &Value) -> Value {
@@ -1101,10 +1113,10 @@ impl RscSerializer {
 
         let entries_json =
             serde_json::to_string(&processed_entries).unwrap_or_else(|_| "[]".to_string());
-        let chunk_line = format!("{:x}:{}", chunk_id, entries_json);
+        let chunk_line = format!("{chunk_id:x}:{entries_json}");
         self.output_lines.push(chunk_line);
 
-        Value::String(format!("$K{:x}", chunk_id))
+        Value::String(format!("$K{chunk_id:x}"))
     }
 
     fn outline_promise(&mut self, promise_data: &Value) -> Value {
@@ -1114,10 +1126,10 @@ impl RscSerializer {
 
         let data_json =
             serde_json::to_string(&processed_data).unwrap_or_else(|_| "null".to_string());
-        let chunk_line = format!("{:x}:{}", chunk_id, data_json);
+        let chunk_line = format!("{chunk_id:x}:{data_json}");
         self.output_lines.push(chunk_line);
 
-        Value::String(format!("$@{:x}", chunk_id))
+        Value::String(format!("$@{chunk_id:x}"))
     }
 
     fn outline_server_function(&mut self, function_data: &Value) -> Value {
@@ -1126,10 +1138,10 @@ impl RscSerializer {
         let processed_data = self.process_special_values_with_outlining(function_data);
 
         let data_json = serde_json::to_string(&processed_data).unwrap_or_else(|_| "{}".to_string());
-        let chunk_line = format!("{:x}:{}", chunk_id, data_json);
+        let chunk_line = format!("{chunk_id:x}:{data_json}");
         self.output_lines.push(chunk_line);
 
-        Value::String(format!("$F{:x}", chunk_id))
+        Value::String(format!("$F{chunk_id:x}"))
     }
 
     fn outline_deferred(&mut self, deferred_data: &Value) -> Value {
@@ -1139,10 +1151,10 @@ impl RscSerializer {
 
         let data_json =
             serde_json::to_string(&processed_data).unwrap_or_else(|_| "null".to_string());
-        let chunk_line = format!("{:x}:{}", chunk_id, data_json);
+        let chunk_line = format!("{chunk_id:x}:{data_json}");
         self.output_lines.push(chunk_line);
 
-        Value::String(format!("$Y{:x}", chunk_id))
+        Value::String(format!("$Y{chunk_id:x}"))
     }
 
     fn outline_iterator(&mut self, iterator_data: &Value) -> Value {
@@ -1151,10 +1163,10 @@ impl RscSerializer {
         let processed_data = self.process_special_values_with_outlining(iterator_data);
 
         let data_json = serde_json::to_string(&processed_data).unwrap_or_else(|_| "[]".to_string());
-        let chunk_line = format!("{:x}:{}", chunk_id, data_json);
+        let chunk_line = format!("{chunk_id:x}:{data_json}");
         self.output_lines.push(chunk_line);
 
-        Value::String(format!("$i{:x}", chunk_id))
+        Value::String(format!("$i{chunk_id:x}"))
     }
 
     fn outline_typedarray(&mut self, typedarray_data: &Value) -> Value {
@@ -1171,7 +1183,6 @@ impl RscSerializer {
             let tag = match type_name {
                 "ArrayBuffer" => "A",
                 "Int8Array" => "O",
-                "Uint8Array" => "o",
                 "Uint8ClampedArray" => "U",
                 "Int16Array" => "S",
                 "Uint16Array" => "s",
@@ -1194,13 +1205,12 @@ impl RscSerializer {
             let chunk_line = format!("{:x}:{}{:x},{}", chunk_id, tag, bytes.len(), base64_data);
             self.output_lines.push(chunk_line);
 
-            Value::String(format!("${:x}", chunk_id))
+            Value::String(format!("${chunk_id:x}"))
         } else {
             Value::Null
         }
     }
 
-    #[allow(clippy::disallowed_methods)]
     fn outline_blob(&mut self, blob_data: &Value) -> Value {
         let chunk_id = self.get_next_row_id();
 
@@ -1220,10 +1230,10 @@ impl RscSerializer {
             let base64_data = base64_encode(&bytes);
             let blob_model = serde_json::json!([blob_type, base64_data]);
             let blob_json = serde_json::to_string(&blob_model).unwrap_or_else(|_| "[]".to_string());
-            let chunk_line = format!("{:x}:{}", chunk_id, blob_json);
+            let chunk_line = format!("{chunk_id:x}:{blob_json}");
             self.output_lines.push(chunk_line);
 
-            Value::String(format!("$B{:x}", chunk_id))
+            Value::String(format!("$B{chunk_id:x}"))
         } else {
             Value::Null
         }
@@ -1234,34 +1244,34 @@ impl RscSerializer {
 
         let is_byte_stream = stream_data
             .get("byteStream")
-            .and_then(|v| v.as_bool())
+            .and_then(serde_json::Value::as_bool)
             .unwrap_or(false);
 
         let chunks = stream_data.get("chunks").and_then(|v| v.as_array());
 
         if let Some(chunks_array) = chunks {
             let start_tag = if is_byte_stream { "r" } else { "R" };
-            let start_line = format!("{:x}:{}", chunk_id, start_tag);
+            let start_line = format!("{chunk_id:x}:{start_tag}");
             self.output_lines.push(start_line);
 
             for chunk in chunks_array {
                 let processed_chunk = self.process_special_values_with_outlining(chunk);
                 let chunk_json = serde_json::to_string(&processed_chunk).unwrap_or_default();
-                let chunk_line = format!("{:x}:{}", chunk_id, chunk_json);
+                let chunk_line = format!("{chunk_id:x}:{chunk_json}");
                 self.output_lines.push(chunk_line);
             }
 
-            let complete_line = format!("{:x}:C", chunk_id);
+            let complete_line = format!("{chunk_id:x}:C");
             self.output_lines.push(complete_line);
 
-            Value::String(format!("${:x}", chunk_id))
+            Value::String(format!("${chunk_id:x}"))
         } else {
             Value::Null
         }
     }
 
     fn is_likely_function_string(s: &str) -> bool {
-        if s.contains("<") || s.contains("&lt;") {
+        if s.contains('<') || s.contains("&lt;") {
             return false;
         }
 
@@ -1269,9 +1279,9 @@ impl RscSerializer {
             return false;
         }
 
-        (s.starts_with("function") && s.contains("(") && s.contains(")"))
-            || (s.starts_with("(") && s.contains("=>") && s.len() < 100)
-            || (s.starts_with("async function") && s.contains("("))
+        (s.starts_with("function") && s.contains('(') && s.contains(')'))
+            || (s.starts_with('(') && s.contains("=>") && s.len() < 100)
+            || (s.starts_with("async function") && s.contains('('))
     }
 
     fn validate_and_serialize_prop(
@@ -1280,7 +1290,7 @@ impl RscSerializer {
         visited: &mut FxHashSet<*const Value>,
         errors: &mut Vec<PropValidationError>,
     ) -> Result<Value, PropValidationError> {
-        let value_ptr = value as *const Value;
+        let value_ptr = std::ptr::from_ref::<Value>(value);
         if visited.contains(&value_ptr) {
             let error = PropValidationError {
                 field_path: field_path.to_string(),
@@ -1371,7 +1381,6 @@ impl RscSerializer {
         }
     }
 
-    #[allow(clippy::disallowed_methods)]
     pub fn emit_suspense_boundary(
         &mut self,
         fallback: &SerializedReactElement,
@@ -1389,7 +1398,7 @@ impl RscSerializer {
             }
         ]);
 
-        let boundary_line = format!("{:x}:{}", boundary_row_id, boundary_data);
+        let boundary_line = format!("{boundary_row_id:x}:{boundary_data}");
         self.output_lines.push(boundary_line);
 
         boundary_id.to_string()
@@ -1429,12 +1438,12 @@ impl RscSerializer {
 
             let fallback_element: crate::rsc::types::elements::ReactElement =
                 serde_json::from_value(fallback.clone()).map_err(|e| {
-                    RariError::internal(format!("Failed to parse Suspense fallback: {}", e))
+                    RariError::internal(format!("Failed to parse Suspense fallback: {e}"))
                 })?;
 
             let children_element: crate::rsc::types::elements::ReactElement =
                 serde_json::from_value(children.clone()).map_err(|e| {
-                    RariError::internal(format!("Failed to parse Suspense children: {}", e))
+                    RariError::internal(format!("Failed to parse Suspense children: {e}"))
                 })?;
 
             let fallback_ref = self.serialize_element(&fallback_element)?;
@@ -1462,10 +1471,10 @@ impl RscSerializer {
 
         let element_data = format!(r#"["$","{}",{},{}]"#, element.tag, key_json, props_json);
 
-        let element_line = format!("{:x}:{}", element_id, element_data);
+        let element_line = format!("{element_id:x}:{element_data}");
         self.output_lines.push(element_line);
 
-        Ok(format!("$L{:x}", element_id))
+        Ok(format!("$L{element_id:x}"))
     }
 
     pub fn emit_suspense_boundary_with_refs(
@@ -1476,7 +1485,6 @@ impl RscSerializer {
     ) -> Result<String, RariError> {
         let boundary_row_id = self.get_next_row_id();
 
-        #[allow(clippy::disallowed_methods)]
         let boundary_data = serde_json::json!([
             "$",
             "$Sreact.suspense",
@@ -1492,14 +1500,13 @@ impl RscSerializer {
             "{:x}:{}",
             boundary_row_id,
             serde_json::to_string(&boundary_data).map_err(|e| RariError::internal(format!(
-                "Failed to serialize Suspense boundary: {}",
-                e
+                "Failed to serialize Suspense boundary: {e}"
             )))?
         );
 
         self.output_lines.push(boundary_line);
 
-        Ok(format!("$L{:x}", boundary_row_id))
+        Ok(format!("$L{boundary_row_id:x}"))
     }
 }
 
@@ -1796,7 +1803,6 @@ mod tests {
         assert!(!result.contains("Object [object"));
     }
 
-    #[allow(dead_code)]
     struct MockServerComponentExecutor;
 
     impl ServerComponentExecutor for MockServerComponentExecutor {

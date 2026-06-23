@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_lines, clippy::cast_precision_loss, clippy::panic)]
+
 use std::fmt::Write;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -18,12 +20,16 @@ fn main() {
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("crates/rari/snapshots"));
 
+    #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
     std::fs::create_dir_all(&output_dir).expect("Failed to create output directory");
 
     let snapshot_path = output_dir.join("RARI_SNAPSHOT.bin");
     let residual_path = output_dir.join("residual_lazy_sources.rs");
 
-    println!("Building V8 snapshot...");
+    #[expect(clippy::print_stdout, reason = "CLI tool - stdout output is expected")]
+    {
+        println!("Building V8 snapshot...");
+    }
 
     let ext_options = rari::runtime::ext::ExtensionOptions::default();
     let extensions = rari::runtime::ext::extensions(&ext_options, false);
@@ -32,6 +38,7 @@ fn main() {
         rari::runtime::utils::transpile::maybe_transpile_source(name, source)
     });
 
+    #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
     let output = deno_core::snapshot::create_snapshot(
         deno_core::snapshot::CreateSnapshotOptions {
             cargo_manifest_dir: env!("CARGO_MANIFEST_DIR"),
@@ -45,23 +52,30 @@ fn main() {
     )
     .expect("Failed to create V8 snapshot");
 
+    #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
     std::fs::write(&snapshot_path, &output.output).expect("Failed to write snapshot file");
-    println!(
-        "Snapshot written to {} ({:.2} MB)",
-        snapshot_path.display(),
-        output.output.len() as f64 / 1024.0 / 1024.0
-    );
+    #[expect(clippy::print_stdout, reason = "CLI tool - stdout output is expected")]
+    {
+        println!(
+            "Snapshot written to {} ({:.2} MB)",
+            snapshot_path.display(),
+            output.output.len() as f64 / 1024.0 / 1024.0
+        );
+    }
 
     let consumed: FxHashSet<&str> = output
         .consumed_lazy_specifiers
         .iter()
-        .map(|s| s.as_str())
+        .map(std::string::String::as_str)
         .collect();
 
-    println!(
-        "Consumed {} lazy specifiers during snapshot creation",
-        consumed.len()
-    );
+    #[expect(clippy::print_stdout, reason = "CLI tool - stdout output is expected")]
+    {
+        println!(
+            "Consumed {} lazy specifiers during snapshot creation",
+            consumed.len()
+        );
+    }
 
     let ext_options = rari::runtime::ext::ExtensionOptions::default();
     let extensions = rari::runtime::ext::extensions(&ext_options, false);
@@ -88,11 +102,14 @@ fn main() {
         }
     }
 
-    println!(
-        "Residual lazy sources: {} ESM, {} JS",
-        residual_esm.len(),
-        residual_js.len()
-    );
+    #[expect(clippy::print_stdout, reason = "CLI tool - stdout output is expected")]
+    {
+        println!(
+            "Residual lazy sources: {} ESM, {} JS",
+            residual_esm.len(),
+            residual_js.len()
+        );
+    }
 
     let mut generated = String::new();
     write_line(
@@ -130,15 +147,20 @@ fn main() {
     }
     write_line(&mut generated, "];");
 
+    #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
     std::fs::write(&residual_path, &generated).expect("Failed to write residual sources");
-    println!("Residual sources written to {}", residual_path.display());
-    println!(
-        "Files loaded during snapshot: {}",
-        output.files_loaded_during_snapshot.len()
-    );
+    #[expect(clippy::print_stdout, reason = "CLI tool - stdout output is expected")]
+    {
+        println!("Residual sources written to {}", residual_path.display());
+        println!(
+            "Files loaded during snapshot: {}",
+            output.files_loaded_during_snapshot.len()
+        );
+    }
 }
 
 fn write_line(buf: &mut String, line: &str) {
+    #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
     writeln!(buf, "{line}").expect("Failed to write to string buffer");
 }
 
@@ -158,6 +180,7 @@ fn maybe_transpile(specifier: &str, source: &str) -> String {
     }
 
     let specifier_url = url::Url::parse(specifier).unwrap_or_else(|_| {
+        #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
         url::Url::parse(&format!("file:///{specifier}")).expect("invalid specifier")
     });
 

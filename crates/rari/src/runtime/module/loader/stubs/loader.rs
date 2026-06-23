@@ -54,14 +54,14 @@ export default {{
 
 pub fn create_generic_module_stub(module_path: &str) -> String {
     format!(
-        r#"
+        r"
 // Generic fallback stub for node module: {module_path}
 
 export default {{
   name: '{module_path}',
   isStub: true
 }};
-"#
+"
     )
 }
 

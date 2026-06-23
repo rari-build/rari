@@ -18,10 +18,10 @@ use dashmap::DashMap;
 use lru::LruCache;
 use parking_lot::Mutex;
 
-#[allow(unused_imports)]
 pub use async_trait::async_trait;
 
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum CacheError {
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
@@ -72,6 +72,7 @@ pub trait CacheHandler: Send + Sync + fmt::Debug {
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct SetOutcome {
     pub replaced: bool,
     pub evicted: usize,
@@ -86,6 +87,7 @@ struct MemEntry {
 }
 
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct MemoryConfig {
     pub max_entries: usize,
     pub default_ttl: u64,
@@ -95,7 +97,7 @@ impl Default for MemoryConfig {
     fn default() -> Self {
         Self {
             max_entries: 1000,
-            default_ttl: 31536000,
+            default_ttl: 31_536_000,
         }
     }
 }
@@ -110,6 +112,10 @@ pub struct MemoryCacheHandler {
 
 impl MemoryCacheHandler {
     pub fn with_config(config: MemoryConfig) -> Self {
+        #[expect(
+            clippy::expect_used,
+            reason = "Value is clamped to >= 1, guaranteed non-zero"
+        )]
         let max_entries =
             std::num::NonZeroUsize::new(config.max_entries.max(1)).expect("clamped to >= 1");
         tracing::debug!(
@@ -390,6 +396,7 @@ impl CacheHandler for MemoryCacheHandler {
 }
 
 #[derive(Debug, Default, Clone, Copy)]
+#[non_exhaustive]
 pub struct NoOpCacheHandler;
 
 #[async_trait::async_trait]

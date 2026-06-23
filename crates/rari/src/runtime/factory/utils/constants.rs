@@ -11,7 +11,7 @@ pub const JS_EXECUTOR_CHANNEL_CLOSED_ERROR: &str = "JS executor channel closed";
 pub const RUNTIME_RESTART_MESSAGE: &str =
     "Runtime is being restarted for stability. Please retry your request.";
 
-pub const ENV_INJECTION_SCRIPT: &str = r#"
+pub const ENV_INJECTION_SCRIPT: &str = r"
 (() => {
     if (!globalThis.process.env) {
         globalThis.process.env = {};
@@ -22,16 +22,16 @@ pub const ENV_INJECTION_SCRIPT: &str = r#"
 
     return Object.keys(envVars).length;
 })();
-"#;
+";
 
-pub const MODULE_CHECK_SCRIPT: &str = r#"
+pub const MODULE_CHECK_SCRIPT: &str = r"
 (function() {
     if (!globalThis.RscModuleManager) {
         return { available: false, extension: 'rsc_modules' };
     }
     return { available: true, extension: 'rsc_modules' };
 })()
-"#;
+";
 
 pub const API_HANDLER_INIT_SCRIPT: &str = include_str!("js/api_handler.js");
 
@@ -114,7 +114,6 @@ pub fn create_graceful_error() -> RariError {
     RariError::js_runtime(RUNTIME_RESTART_MESSAGE.to_string())
 }
 
-#[allow(clippy::disallowed_methods)]
 pub fn create_already_evaluated_response(component_name: &str) -> JsonValue {
     serde_json::json!({
         "status": "already_evaluated",
@@ -122,7 +121,6 @@ pub fn create_already_evaluated_response(component_name: &str) -> JsonValue {
     })
 }
 
-#[allow(clippy::disallowed_methods)]
 pub fn create_already_loaded_response(component_name: &str) -> JsonValue {
     serde_json::json!({
         "status": "already_loaded",

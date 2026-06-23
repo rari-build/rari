@@ -34,6 +34,10 @@ const TYPESCRIPT_VERSION: &str = "5.8.3";
 #[derive(Debug)]
 pub struct Resolver {
     in_pkg_checker: DenoInNpmPackageChecker,
+    #[expect(
+        clippy::struct_field_names,
+        reason = "Field name is intentionally descriptive"
+    )]
     folder_resolver: NpmPackageFolderResolverImpl,
     fs: Arc<dyn FileSystem + Send + Sync>,
 
@@ -49,7 +53,7 @@ impl Resolver {
     pub fn new(base_dir: Option<PathBuf>, fs: Arc<dyn FileSystem + Send + Sync>) -> Self {
         let folder_resolver = NpmPackageFolderResolverImpl::new(base_dir);
         let in_pkg_checker = DenoInNpmPackageChecker::Byonm(ByonmInNpmPackageChecker);
-        let require_loader = RequireLoader(fs.clone());
+        let require_loader = RequireLoader(Arc::clone(&fs));
 
         Self {
             in_pkg_checker,
@@ -75,6 +79,10 @@ impl Resolver {
                 is_browser_platform: false,
                 bundle_mode: false,
                 typescript_version: Some(
+                    #[expect(
+                        clippy::expect_used,
+                        reason = "Infallible operation with valid inputs"
+                    )]
                     deno_semver::Version::parse_standard(TYPESCRIPT_VERSION)
                         .expect("failed to parse typescript version"),
                 ),
@@ -92,7 +100,7 @@ impl Resolver {
         use super::cjs_translator::CjsCodeAnalyzer;
         use node_resolver::analyze::CjsModuleExportAnalyzer;
 
-        let cjs = CjsCodeAnalyzer::new(self.filesystem(), self.clone());
+        let cjs = CjsCodeAnalyzer::new(self.filesystem(), Arc::clone(self));
 
         let module_export_analyzer = CjsModuleExportAnalyzer::new(
             cjs,
@@ -227,7 +235,7 @@ impl Resolver {
     }
 
     pub fn filesystem(&self) -> Arc<dyn FileSystem + Send + Sync> {
-        self.fs.clone()
+        Arc::clone(&self.fs)
     }
 
     pub fn init_services(
@@ -264,10 +272,14 @@ impl NpmPackageFolderResolverImpl {
         ));
 
         let options = ByonmNpmResolverCreateOptions {
+            #[expect(
+                clippy::clone_on_ref_ptr,
+                reason = "Trait object coercion: Arc<NodeResolutionCacheImpl> -> Arc<dyn NodeResolutionCache>"
+            )]
             sys: NodeResolutionSys::new(RealSys, Some(resolution_cache.clone())),
             root_node_modules_dir: base_dir.clone(),
-            pkg_json_resolver: pjson.clone(),
-            search_stop_dir: base.clone(),
+            pkg_json_resolver: Arc::clone(&pjson),
+            search_stop_dir: base,
         };
 
         let byonm = ByonmNpmResolver::new(options);
@@ -285,11 +297,11 @@ impl NpmPackageFolderResolverImpl {
     }
 
     pub fn pjson_resolver(&self) -> Arc<PackageJsonResolver<RealSys>> {
-        self.pjson.clone()
+        Arc::clone(&self.pjson)
     }
 
     pub fn resolution_cache(&self) -> Arc<NodeResolutionCacheImpl> {
-        self.resolution_cache.clone()
+        Arc::clone(&self.resolution_cache)
     }
 
     pub fn base_dir(&self) -> Option<&Path> {
@@ -440,7 +452,7 @@ impl NodeResolutionCacheInner {
         }
     }
 
-    #[allow(clippy::option_option)]
+    #[expect(clippy::option_option)]
     fn get_file_type(&self, path: &Path) -> Option<Option<sys_traits::FileType>> {
         self.cache.get(path).map(|(_, t)| *t)
     }
@@ -523,6 +535,6 @@ impl NodeRequireLoader for RequireLoader {
 }
 impl Clone for RequireLoader {
     fn clone(&self) -> Self {
-        Self(self.0.clone())
+        Self(Arc::clone(&self.0))
     }
 }

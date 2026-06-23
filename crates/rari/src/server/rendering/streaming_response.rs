@@ -36,7 +36,7 @@ impl StreamingHtmlResponse {
 impl IntoResponse for StreamingHtmlResponse {
     fn into_response(self) -> Response {
         let client_connected = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
-        let client_connected_clone = client_connected.clone();
+        let client_connected_clone = client_connected;
 
         let stream = self.stream.map(move |chunk| {
             if !client_connected_clone.load(std::sync::atomic::Ordering::Relaxed) {
@@ -60,6 +60,10 @@ impl IntoResponse for StreamingHtmlResponse {
             }
         });
 
+        #[expect(
+            clippy::expect_used,
+            reason = "Response::builder() with valid components never fails"
+        )]
         Response::builder()
             .status(self.status_code)
             .header("content-type", "text/html; charset=utf-8")

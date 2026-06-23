@@ -1,5 +1,7 @@
 // Copyright 2018-2025 the Deno authors. MIT license.
 
+#![allow(clippy::exhaustive_structs)]
+
 use std::borrow::Cow;
 use std::path::Path;
 
@@ -57,11 +59,8 @@ pub fn maybe_transpile_source(
     };
 
     match media_type {
-        MediaType::TypeScript => {}
-        MediaType::Tsx => {}
-        MediaType::Jsx => {}
-        MediaType::JavaScript => return Ok((source, None)),
-        MediaType::Mjs => return Ok((source, None)),
+        MediaType::TypeScript | MediaType::Tsx | MediaType::Jsx => {}
+        MediaType::JavaScript | MediaType::Mjs => return Ok((source, None)),
         _ => {
             return Err(JsErrorBox::from_err(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
@@ -71,6 +70,7 @@ pub fn maybe_transpile_source(
     }
 
     let parsed = deno_ast::parse_module(ParseParams {
+        #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
         specifier: deno_core::url::Url::parse(&name).expect("invalid module name url"),
         text: source.into(),
         media_type,

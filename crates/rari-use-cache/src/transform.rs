@@ -1,14 +1,18 @@
 use rustc_hash::FxHashSet;
 
-use deno_ast::swc::ast::*;
+use deno_ast::swc::ast::{
+    Decl, DefaultDecl, ExportDecl, ExportDefaultDecl, ExportDefaultExpr, Expr, FnDecl, Id, Ident,
+    Module, ModuleDecl, ModuleItem, Stmt,
+};
 use deno_ast::swc::codegen::{Emitter, text_writer::JsWriter};
 use deno_ast::swc::common::sync::Lrc;
-use deno_ast::swc::common::{DUMMY_SP, FileName, GLOBALS, Globals, SourceMap};
+use deno_ast::swc::common::{DUMMY_SP, FileName, GLOBALS, Globals, SourceMap, SyntaxContext};
 use deno_ast::swc::ecma_visit::VisitMut;
 use deno_ast::swc::parser::{Parser, StringInput, Syntax, TsSyntax};
 
 use crate::{closure, directive, hoist, id};
 
+#[non_exhaustive]
 pub struct TransformOutput {
     pub code: String,
     pub needs_react_cache: bool,
@@ -16,6 +20,10 @@ pub struct TransformOutput {
     pub needs_register_ref: bool,
 }
 
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "Boolean flags track independent transform states, grouping into enum would be less clear"
+)]
 struct TransformVisitor {
     filename: String,
     hash_salt: String,
@@ -78,6 +86,10 @@ impl VisitMut for TransformVisitor {
 }
 
 impl TransformVisitor {
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Function handles complex AST pattern matching for various export patterns"
+    )]
     fn maybe_transform_item(
         &mut self,
         item: &ModuleItem,
@@ -116,7 +128,7 @@ impl TransformVisitor {
                         Ident::new(
                             "$$RSC_SERVER_CACHE_DEFAULT_EXPORT".into(),
                             DUMMY_SP,
-                            Default::default(),
+                            SyntaxContext::default(),
                         )
                     });
                     let reference_export_name = fn_expr
@@ -206,7 +218,7 @@ impl TransformVisitor {
                     expr: Box::new(Expr::Ident(Ident::new(
                         local_binding_name.into(),
                         DUMMY_SP,
-                        Default::default(),
+                        SyntaxContext::default(),
                     ))),
                 },
             )))
@@ -224,6 +236,11 @@ impl TransformVisitor {
     }
 }
 
+/// Transforms source code to add cache functionality.
+///
+/// # Errors
+///
+/// Returns an error if parsing fails or code generation fails.
 pub fn transform_source(
     source: &str,
     filename: &str,
@@ -250,7 +267,7 @@ pub fn transform_source(
 
             let mut module: Module = parser
                 .parse_module()
-                .map_err(|e| format!("Parse error: {:?}", e))?;
+                .map_err(|e| format!("Parse error: {e:?}"))?;
 
             let mut visitor = TransformVisitor::new(filename, hash_salt, cache_kinds);
             visitor.visit_mut_module(&mut module);
@@ -267,16 +284,16 @@ pub fn transform_source(
             let mut code_buf = Vec::new();
             {
                 let mut emitter = Emitter {
-                    cfg: Default::default(),
-                    cm: cm.clone(),
+                    cfg: deno_ast::swc::codegen::Config::default(),
+                    cm: std::rc::Rc::clone(&cm),
                     comments: None,
-                    wr: JsWriter::new(cm.clone(), "\n", &mut code_buf, None),
+                    wr: JsWriter::new(std::rc::Rc::clone(&cm), "\n", &mut code_buf, None),
                 };
                 emitter
                     .emit_module(&module)
-                    .map_err(|e| format!("Codegen error: {:?}", e))?;
+                    .map_err(|e| format!("Codegen error: {e:?}"))?;
             }
-            let code = String::from_utf8(code_buf).map_err(|e| format!("UTF-8 error: {:?}", e))?;
+            let code = String::from_utf8(code_buf).map_err(|e| format!("UTF-8 error: {e:?}"))?;
 
             Ok(TransformOutput {
                 code,
@@ -297,7 +314,7 @@ pub fn transform_source(
             } else {
                 "Unknown panic during transformation".to_string()
             };
-            Err(format!("Panic: {}", msg))
+            Err(format!("Panic: {msg}"))
         }
     }
 }

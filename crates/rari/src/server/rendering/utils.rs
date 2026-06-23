@@ -1,6 +1,9 @@
+#![allow(clippy::needless_continue)]
+
 use crate::server::config::Config;
 use axum::http::StatusCode;
 use cow_utils::CowUtils;
+use std::fmt::Write;
 use tracing::error;
 
 pub async fn extract_asset_links_from_index_html() -> Option<String> {
@@ -197,7 +200,7 @@ pub async fn inject_assets_into_html(html: &str, config: &Config) -> Result<Stri
                 let recovered_html = if html.trim_start().starts_with("<!DOCTYPE") {
                     html.to_string()
                 } else {
-                    format!("<!DOCTYPE html>\n{}", html)
+                    format!("<!DOCTYPE html>\n{html}")
                 };
 
                 return Ok(recovered_html);
@@ -240,7 +243,7 @@ async fn inject_assets_into_complete_document(
             if trimmed_lower.starts_with("<!doctype") {
                 return Ok(html.to_string());
             }
-            return Ok(format!("<!DOCTYPE html>\n{}", html));
+            return Ok(format!("<!DOCTYPE html>\n{html}"));
         }
     };
 
@@ -305,7 +308,7 @@ async fn inject_assets_into_complete_document(
         if trimmed_lower.starts_with("<!doctype") {
             return Ok(html.to_string());
         }
-        return Ok(format!("<!DOCTYPE html>\n{}", html));
+        return Ok(format!("<!DOCTYPE html>\n{html}"));
     }
 
     let mut stylesheets = Vec::new();
@@ -324,34 +327,34 @@ async fn inject_assets_into_complete_document(
     if !head_content.is_empty() {
         let head_content_html = head_content.join("\n    ");
         if let Some(head_end) = final_html.find("</head>") {
-            final_html.insert_str(head_end, &format!("    {}\n  ", head_content_html));
+            final_html.insert_str(head_end, &format!("    {head_content_html}\n  "));
         }
     }
 
     if !stylesheets.is_empty() {
         let stylesheets_html = stylesheets.join("\n    ");
         if let Some(head_end) = final_html.find("</head>") {
-            final_html.insert_str(head_end, &format!("    {}\n  ", stylesheets_html));
+            final_html.insert_str(head_end, &format!("    {stylesheets_html}\n  "));
         }
     }
 
     if !scripts.is_empty() {
         let scripts_html = scripts.join("\n    ");
         if let Some(body_end) = final_html.rfind("</body>") {
-            final_html.insert_str(body_end, &format!("\n    {}\n  ", scripts_html));
+            final_html.insert_str(body_end, &format!("\n    {scripts_html}\n  "));
         }
     }
 
     if !body_content.is_empty() {
         let body_content_html = body_content.join("\n    ");
         if let Some(body_end) = final_html.rfind("</body>") {
-            final_html.insert_str(body_end, &format!("\n    {}\n  ", body_content_html));
+            final_html.insert_str(body_end, &format!("\n    {body_content_html}\n  "));
         }
     }
 
     let trimmed_lower = final_html.trim_start().cow_to_lowercase();
     if !trimmed_lower.starts_with("<!doctype") {
-        final_html = format!("<!DOCTYPE html>\n{}", final_html);
+        final_html = format!("<!DOCTYPE html>\n{final_html}");
     }
 
     let has_root_after = final_html.contains(r#"id="root""#);
@@ -362,7 +365,7 @@ async fn inject_assets_into_complete_document(
         if trimmed_lower.starts_with("<!doctype") {
             return Ok(html.to_string());
         }
-        return Ok(format!("<!DOCTYPE html>\n{}", html));
+        return Ok(format!("<!DOCTYPE html>\n{html}"));
     }
 
     Ok(final_html)
@@ -457,10 +460,9 @@ async fn inject_content_into_template(
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 </head>
 <body>
-  <div id="root">{}</div>
+  <div id="root">{content}</div>
 </body>
-</html>"#,
-                content
+</html>"#
             ));
         }
     };
@@ -482,7 +484,7 @@ async fn inject_content_into_template(
                 template
                     .cow_replace(
                         r#"<div id="root"></div>"#,
-                        &format!(r#"<div id="root">{}</div>"#, content),
+                        &format!(r#"<div id="root">{content}</div>"#),
                     )
                     .into_owned()
             }
@@ -490,13 +492,13 @@ async fn inject_content_into_template(
             template
                 .cow_replace(
                     r#"<div id="root"></div>"#,
-                    &format!(r#"<div id="root">{}</div>"#, content),
+                    &format!(r#"<div id="root">{content}</div>"#),
                 )
                 .into_owned()
         }
     } else if let Some(body_end) = template.rfind("</body>") {
         let mut result = template.clone();
-        result.insert_str(body_end, &format!(r#"<div id="root">{}</div>"#, content));
+        result.insert_str(body_end, &format!(r#"<div id="root">{content}</div>"#));
         result
     } else {
         format!(
@@ -507,10 +509,9 @@ async fn inject_content_into_template(
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     </head>
     <body>
-      <div id="root">{}</div>
+      <div id="root">{content}</div>
     </body>
-    </html>"#,
-            content
+    </html>"#
         )
     };
 
@@ -526,10 +527,9 @@ async fn inject_content_into_template(
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 </head>
 <body>
-  <div id="root">{}</div>
+  <div id="root">{content}</div>
 </body>
-</html>"#,
-            content
+</html>"#
         );
 
         return Ok(recovered_html);
@@ -546,14 +546,16 @@ pub fn inject_vite_client(html: &str, vite_port: u16) -> String {
     if let Some(head_end) = html.find("</head>") {
         let mut result = String::new();
         result.push_str(&html[..head_end]);
-        result.push_str(&format!(
-            r#"  <script type="module" src="http://localhost:{}/@vite/client"></script>
+        #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+        write!(
+            result,
+            r#"  <script type="module" src="http://localhost:{vite_port}/@vite/client"></script>
   <script type="module">
-    import 'http://localhost:{}/@id/virtual:rari-entry-client';
+    import 'http://localhost:{vite_port}/@id/virtual:rari-entry-client';
   </script>
-"#,
-            vite_port, vite_port
-        ));
+"#
+        )
+        .unwrap();
         result.push_str(&html[head_end..]);
         return result;
     }
@@ -561,24 +563,25 @@ pub fn inject_vite_client(html: &str, vite_port: u16) -> String {
     if let Some(body_end) = html.find("</body>") {
         let mut result = String::new();
         result.push_str(&html[..body_end]);
-        result.push_str(&format!(
-            r#"  <script type="module" src="http://localhost:{}/@vite/client"></script>
+        #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+        write!(
+            result,
+            r#"  <script type="module" src="http://localhost:{vite_port}/@vite/client"></script>
   <script type="module">
-    import 'http://localhost:{}/@id/virtual:rari-entry-client';
+    import 'http://localhost:{vite_port}/@id/virtual:rari-entry-client';
   </script>
-"#,
-            vite_port, vite_port
-        ));
+"#
+        )
+        .unwrap();
         result.push_str(&html[body_end..]);
         return result;
     }
 
     format!(
-        r#"<script type="module" src="http://localhost:{}/@vite/client"></script>
+        r#"<script type="module" src="http://localhost:{vite_port}/@vite/client"></script>
 <script type="module">
-  import 'http://localhost:{}/@id/virtual:rari-entry-client';
+  import 'http://localhost:{vite_port}/@id/virtual:rari-entry-client';
 </script>
-{}"#,
-        vite_port, vite_port, html
+{html}"#
     )
 }

@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct OgImageParams {
     pub width: u32,
     pub height: u32,
@@ -21,6 +22,7 @@ impl Default for OgImageParams {
 }
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct OgImageResult {
     pub data: Vec<u8>,
     pub width: u32,

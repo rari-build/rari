@@ -9,6 +9,7 @@ pub mod transform;
 
 use napi::bindgen_prelude::*;
 
+#[non_exhaustive]
 #[napi(object)]
 pub struct TransformOptions {
     pub filename: String,
@@ -16,6 +17,7 @@ pub struct TransformOptions {
     pub cache_kinds: Option<Vec<String>>,
 }
 
+#[non_exhaustive]
 #[napi(object)]
 pub struct TransformResult {
     pub code: String,
@@ -25,11 +27,26 @@ pub struct TransformResult {
 }
 
 #[napi]
+#[allow(
+    clippy::allow_attributes,
+    reason = "NAPI macro interface requires this pattern"
+)]
+#[allow(clippy::needless_pass_by_value)]
 pub fn detect_use_cache(source: String) -> bool {
     directive::detect_use_cache(&source)
 }
 
+/// Transforms source code with use cache directives.
+///
+/// # Errors
+///
+/// Returns an error if transformation fails due to parsing or code generation errors.
 #[napi]
+#[allow(
+    clippy::allow_attributes,
+    reason = "NAPI macro interface requires this pattern"
+)]
+#[allow(clippy::needless_pass_by_value)]
 pub fn transform_use_cache(source: String, options: TransformOptions) -> Result<TransformResult> {
     let hash_salt = options
         .hash_salt
