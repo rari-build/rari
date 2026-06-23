@@ -11,6 +11,7 @@ static CIRCULAR_DETECTION: std::sync::OnceLock<Mutex<FxHashSet<String>>> =
 type ComponentDependencies = SmallVec<[String; 4]>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum ComponentType {
     Client,
     Server,
@@ -18,16 +19,23 @@ pub enum ComponentType {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct ComponentProp {
     pub value: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct ComponentContext {
     pub values: FxHashMap<String, String>,
 }
 
 #[derive(Clone)]
+#[non_exhaustive]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "Component flags are intentionally boolean for clarity"
+)]
 pub struct TransformedComponent {
     pub id: String,
     pub source: String,
@@ -104,7 +112,7 @@ impl ComponentRegistry {
                 id: component_id.clone(),
                 source: source.to_string(),
                 transformed_source,
-                dependencies: dependencies.clone(),
+                dependencies,
                 is_loaded: false,
                 initially_loaded: false,
                 module_specifier: None,

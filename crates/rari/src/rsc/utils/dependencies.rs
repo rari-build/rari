@@ -7,6 +7,7 @@ static IMPORT_REGEX: OnceLock<regex::Regex> = OnceLock::new();
 
 fn get_import_regex() -> &'static regex::Regex {
     IMPORT_REGEX.get_or_init(|| {
+        #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
         regex::Regex::new(r#"(?:import|from)\s*((?:['"])(.*?)(?:['"]))"#)
             .expect("Failed to compile dependency extraction regex")
     })
@@ -22,9 +23,9 @@ pub fn extract_dependencies(code: &str) -> DependencyList {
         {
             let import_path_str = import_path.as_str().to_string();
             if !import_path_str.starts_with("react")
-                && (import_path_str.starts_with(".")
-                    || import_path_str.starts_with("/")
-                    || import_path_str.contains("/"))
+                && (import_path_str.starts_with('.')
+                    || import_path_str.starts_with('/')
+                    || import_path_str.contains('/'))
             {
                 dependencies.push(import_path_str);
             }

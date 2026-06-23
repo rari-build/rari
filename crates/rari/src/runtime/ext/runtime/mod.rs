@@ -4,6 +4,7 @@ use super::{ExtensionOptions, ExtensionTrait};
 use ::deno_permissions::Permissions;
 use deno_core::v8::{BackingStore, SharedRef};
 use deno_core::{CrossIsolateStore, Extension, ExtensionFileSource, extension, op2};
+use deno_runtime::deno_inspector_server::MainInspectorSessionChannel;
 use deno_runtime::permissions::RuntimePermissionDescriptorParser;
 use deno_telemetry::OtelConfig;
 
@@ -14,7 +15,7 @@ use sys_traits::impls::RealSys;
 #[op2]
 #[string]
 fn op_main_module() -> String {
-    "".to_string()
+    String::new()
 }
 
 #[op2(fast)]
@@ -162,7 +163,7 @@ pub fn extensions(
         deno_fs_events::build((), is_snapshot),
         deno_bootstrap::build((), is_snapshot),
         deno_os::build((), is_snapshot),
-        deno_process::build(options.node_resolver.clone(), is_snapshot),
+        deno_process::build(Arc::clone(&options.node_resolver), is_snapshot),
         deno_web_worker::build((), is_snapshot),
         deno_worker_host::build((options, shared_array_buffer_store), is_snapshot),
         deno_permissions::build((), is_snapshot),
@@ -192,7 +193,7 @@ impl WebWorkerCallbackOptions {
     ) -> Self {
         Self {
             shared_array_buffer_store,
-            node_resolver: options.node_resolver.clone(),
+            node_resolver: Arc::clone(&options.node_resolver),
             root_cert_store_provider: options.web.root_cert_store_provider.clone(),
             broadcast_channel: options.broadcast_channel.clone(),
             unsafely_ignore_certificate_errors: options
@@ -201,7 +202,7 @@ impl WebWorkerCallbackOptions {
                 .clone(),
             seed: options.crypto_seed,
             stdio: options.io_pipes.clone().unwrap_or_default(),
-            blob_store: options.web.blob_store.clone(),
+            blob_store: Arc::clone(&options.web.blob_store),
         }
     }
 }
@@ -209,7 +210,7 @@ impl WebWorkerCallbackOptions {
 // Copyright 2018-2024 the Deno authors. All rights reserved. MIT license.
 fn create_web_worker_callback(options: WebWorkerCallbackOptions) -> Arc<CreateWebWorkerCb> {
     Arc::new(move |args| {
-        let node_resolver = options.node_resolver.clone();
+        let node_resolver = Arc::clone(&options.node_resolver);
         let module_loader = Rc::new(crate::runtime::module::loader::RariModuleLoader::new());
 
         let create_web_worker_cb = create_web_worker_callback(options.clone());
@@ -222,12 +223,20 @@ fn create_web_worker_callback(options: WebWorkerCallbackOptions) -> Arc<CreateWe
             module_loader,
             fs: node_resolver.filesystem(),
             node_services: Some(node_resolver.init_services()),
+            #[expect(
+                clippy::clone_on_ref_ptr,
+                reason = "Trait object coercion: Arc<BlobStore> -> Arc<dyn BlobStoreTrait>"
+            )]
             blob_store: options.blob_store.clone(),
             broadcast_channel: options.broadcast_channel.clone(),
             shared_array_buffer_store: options.shared_array_buffer_store.clone(),
             compiled_wasm_module_store: None,
-            main_inspector_session_tx: Default::default(),
+            main_inspector_session_tx: MainInspectorSessionChannel::default(),
             feature_checker: feature_checker.into(),
+            #[expect(
+                clippy::clone_on_ref_ptr,
+                reason = "Trait object coercion: Arc<Resolver> -> Arc<dyn NpmProcessStateProvider>"
+            )]
             npm_process_state_provider: Some(node_resolver.clone()),
             permissions: args.permissions,
             deno_rt_native_addon_loader: None,

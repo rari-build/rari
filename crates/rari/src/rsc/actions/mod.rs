@@ -1,3 +1,6 @@
+use std::fmt::Write;
+use std::sync::Arc;
+
 use crate::server::ServerState;
 use axum::{
     body::Bytes,
@@ -16,6 +19,7 @@ const MAX_BOUND_ARGS: usize = 1000;
 const MAX_BIGINT_DIGITS: usize = 300;
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct ValidationConfig {
     pub max_depth: usize,
     pub max_string_length: usize,
@@ -83,6 +87,7 @@ impl ValidationContext {
 }
 
 #[derive(Debug, Deserialize)]
+#[non_exhaustive]
 pub struct ServerActionRequest {
     pub id: String,
     pub export_name: String,
@@ -90,6 +95,7 @@ pub struct ServerActionRequest {
 }
 
 #[derive(Debug, Serialize)]
+#[non_exhaustive]
 pub struct ServerActionResponse {
     pub success: bool,
     pub result: Option<JsonValue>,
@@ -134,7 +140,7 @@ fn check_origin(headers: &HeaderMap, allowed_origins: &[String]) -> Result<(), S
                 "http"
             });
 
-        let server_origin_str = format!("{}://{}", scheme, host);
+        let server_origin_str = format!("{scheme}://{host}");
         let server_origin_url = url::Url::parse(&server_origin_str).map_err(|e| {
             error!("Failed to parse server origin: {}", e);
             StatusCode::INTERNAL_SERVER_ERROR
@@ -190,9 +196,9 @@ fn check_origin(headers: &HeaderMap, allowed_origins: &[String]) -> Result<(), S
             let (scheme, host, port) = normalize_origin(&referer_url);
             let referer_origin =
                 if (scheme == "http" && port == 80) || (scheme == "https" && port == 443) {
-                    format!("{}://{}", scheme, host)
+                    format!("{scheme}://{host}")
                 } else {
-                    format!("{}://{}:{}", scheme, host, port)
+                    format!("{scheme}://{host}:{port}")
                 };
             if crate::server::core::utils::http::is_origin_allowed(&referer_origin, allowed_origins)
             {
@@ -239,6 +245,7 @@ pub async fn handle_server_action(
             .into_response();
             response.headers_mut().insert(
                 header::CACHE_CONTROL,
+                #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
                 "no-store, no-cache, must-revalidate, private"
                     .parse()
                     .expect("Valid cache-control header"),
@@ -266,6 +273,7 @@ pub async fn handle_server_action(
         .into_response();
         response.headers_mut().insert(
             header::CACHE_CONTROL,
+            #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
             "no-store, no-cache, must-revalidate, private"
                 .parse()
                 .expect("Valid cache-control header"),
@@ -291,6 +299,7 @@ pub async fn handle_server_action(
         .into_response();
         response.headers_mut().insert(
             header::CACHE_CONTROL,
+            #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
             "no-store, no-cache, must-revalidate, private"
                 .parse()
                 .expect("Valid cache-control header"),
@@ -312,12 +321,13 @@ pub async fn handle_server_action(
             let mut response = Json(ServerActionResponse {
                 success: false,
                 result: None,
-                error: Some(format!("Input validation failed: {}", e)),
+                error: Some(format!("Input validation failed: {e}")),
                 redirect: None,
             })
             .into_response();
             response.headers_mut().insert(
                 header::CACHE_CONTROL,
+                #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
                 "no-store, no-cache, must-revalidate, private"
                     .parse()
                     .expect("Valid cache-control header"),
@@ -330,7 +340,7 @@ pub async fn handle_server_action(
     let cookie_header = headers
         .get(header::COOKIE)
         .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string());
+        .map(ToString::to_string);
 
     let request_context = std::sync::Arc::new(
         crate::server::middleware::request_context::RequestContext::new(
@@ -343,7 +353,7 @@ pub async fn handle_server_action(
 
     let result = renderer
         .runtime
-        .execute_with_request_context(request_context.clone(), async {
+        .execute_with_request_context(Arc::clone(&request_context), async {
             renderer
                 .execute_server_function(&request.id, &request.export_name, &sanitized_args)
                 .await
@@ -383,6 +393,7 @@ pub async fn handle_server_action(
             let mut response = Json(response).into_response();
             response.headers_mut().insert(
                 header::CACHE_CONTROL,
+                #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
                 "no-store, no-cache, must-revalidate, private"
                     .parse()
                     .expect("Valid cache-control header"),
@@ -403,6 +414,7 @@ pub async fn handle_server_action(
             .into_response();
             response.headers_mut().insert(
                 header::CACHE_CONTROL,
+                #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
                 "no-store, no-cache, must-revalidate, private"
                     .parse()
                     .expect("Valid cache-control header"),
@@ -463,7 +475,7 @@ pub async fn handle_form_action(
     let cookie_header = headers
         .get(header::COOKIE)
         .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string());
+        .map(ToString::to_string);
 
     let request_context = std::sync::Arc::new(
         crate::server::middleware::request_context::RequestContext::new(
@@ -476,7 +488,7 @@ pub async fn handle_form_action(
 
     let result = renderer
         .runtime
-        .execute_with_request_context(request_context.clone(), async {
+        .execute_with_request_context(Arc::clone(&request_context), async {
             renderer
                 .execute_server_function(action_id, export_name, &sanitized_args)
                 .await
@@ -533,7 +545,7 @@ pub async fn handle_form_action(
                                 .or_else(|| headers.get("x-forwarded-protocol"))
                                 .and_then(|v| v.to_str().ok())
                                 .unwrap_or("http");
-                            let server_origin_str = format!("{}://{}", scheme, host);
+                            let server_origin_str = format!("{scheme}://{host}");
 
                             url::Url::parse(&server_origin_str)
                                 .ok()
@@ -570,7 +582,7 @@ pub async fn handle_form_action(
                                 } else {
                                     parsed.path().to_string()
                                 };
-                                (path_and_query.clone(), Some(parsed.path().to_string()))
+                                (path_and_query, Some(parsed.path().to_string()))
                             } else {
                                 (referer.to_string(), None)
                             }
@@ -633,7 +645,7 @@ pub fn validate_redirect_url(
     if let Some(host) = parsed.host_str() {
         let is_allowed = config.allowed_hosts.iter().any(|allowed| {
             if config.allow_subdomains {
-                host == allowed || host.ends_with(&format!(".{}", allowed))
+                host == allowed || host.ends_with(&format!(".{allowed}"))
             } else {
                 host == allowed
             }
@@ -715,7 +727,7 @@ fn percent_decode(input: &str) -> Result<String, RariError> {
                 .next()
                 .ok_or_else(|| RariError::bad_request("Invalid percent encoding"))?;
 
-            let hex_str = format!("{}{}", hex1, hex2);
+            let hex_str = format!("{hex1}{hex2}");
             let byte = u8::from_str_radix(&hex_str, 16)
                 .map_err(|_| RariError::bad_request("Invalid hex in percent encoding"))?;
 
@@ -792,8 +804,7 @@ fn validate_and_sanitize_value(
 
                     if estimated_digits > MAX_BIGINT_DIGITS {
                         return Err(RariError::bad_request(format!(
-                            "Number too large. Estimated {} digits but the limit is {}.",
-                            estimated_digits, MAX_BIGINT_DIGITS
+                            "Number too large. Estimated {estimated_digits} digits but the limit is {MAX_BIGINT_DIGITS}."
                         )));
                     }
                 }
@@ -884,7 +895,7 @@ fn append_pending_cookies(
         crate::server::middleware::request_context::PendingCookie,
     >,
 ) {
-    for entry in pending_cookies.iter() {
+    for entry in pending_cookies {
         let cookie = entry.value();
         match build_set_cookie_header(cookie) {
             Ok(set_cookie_value) => match set_cookie_value.parse() {
@@ -932,31 +943,35 @@ pub fn build_set_cookie_header(
 
     let path = cookie.path.as_deref().unwrap_or("/");
     if !is_valid_attr_value(path) {
-        return Err(format!("invalid cookie path: {}", path));
+        return Err(format!("invalid cookie path: {path}"));
     }
 
     let mut header = format!("{}={}", cookie.name, cookie.value);
-    header.push_str(&format!("; Path={}", path));
+    #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+    write!(&mut header, "; Path={path}").unwrap();
 
     if let Some(domain) = &cookie.domain {
         if !is_valid_attr_value(domain) {
-            return Err(format!("invalid cookie domain: {}", domain));
+            return Err(format!("invalid cookie domain: {domain}"));
         }
-        header.push_str(&format!("; Domain={}", domain));
+        #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+        write!(&mut header, "; Domain={domain}").unwrap();
     }
     if let Some(expires) = &cookie.expires {
         if !is_valid_attr_value(expires) {
-            return Err(format!("invalid cookie expires: {}", expires));
+            return Err(format!("invalid cookie expires: {expires}"));
         }
-        header.push_str(&format!("; Expires={}", expires));
+        #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+        write!(&mut header, "; Expires={expires}").unwrap();
     }
     if let Some(max_age) = cookie.max_age {
-        header.push_str(&format!("; Max-Age={}", max_age));
+        #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+        write!(&mut header, "; Max-Age={max_age}").unwrap();
     }
     let normalized_same_site = cookie
         .same_site
         .as_deref()
-        .map(|value| value.cow_to_ascii_lowercase());
+        .map(cow_utils::CowUtils::cow_to_ascii_lowercase);
     if normalized_same_site.as_deref() == Some("none") && !cookie.secure {
         return Err("SameSite=None requires Secure".to_string());
     }
@@ -974,16 +989,17 @@ pub fn build_set_cookie_header(
             "strict" => "Strict",
             "lax" => "Lax",
             "none" => "None",
-            _ => return Err(format!("invalid SameSite value: {}", same_site)),
+            _ => return Err(format!("invalid SameSite value: {same_site}")),
         };
-        header.push_str(&format!("; SameSite={}", serialized_same_site));
+        #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
+        write!(&mut header, "; SameSite={serialized_same_site}").unwrap();
     }
     if let Some(priority) = &cookie.priority {
         match priority.cow_to_ascii_lowercase().as_ref() {
             "low" => header.push_str("; Priority=Low"),
             "medium" => header.push_str("; Priority=Medium"),
             "high" => header.push_str("; Priority=High"),
-            _ => return Err(format!("invalid Priority value: {}", priority)),
+            _ => return Err(format!("invalid Priority value: {priority}")),
         }
     }
     if cookie.partitioned {

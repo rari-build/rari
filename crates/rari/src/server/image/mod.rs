@@ -16,6 +16,7 @@ use axum::{
 use std::sync::Arc;
 
 #[derive(Clone)]
+#[non_exhaustive]
 pub struct ImageState {
     pub optimizer: Arc<ImageOptimizer>,
 }
@@ -58,6 +59,7 @@ pub async fn handle_image_request(
 
     response.headers_mut().insert(
         "x-cache",
+        #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
         x_cache
             .parse()
             .expect("x-cache header value should be valid ASCII"),
@@ -67,6 +69,7 @@ pub async fn handle_image_request(
 }
 
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum ImageError {
     #[error("Invalid URL: {0}")]
     InvalidUrl(String),

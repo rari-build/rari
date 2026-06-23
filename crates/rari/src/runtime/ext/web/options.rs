@@ -1,3 +1,8 @@
+#![expect(
+    clippy::unnecessary_wraps,
+    reason = "RequestBuilderHook type requires Result signature even when function never errors"
+)]
+
 use super::{DefaultWebPermissions, WebPermissions};
 use deno_fetch::dns::Resolver;
 use hyper_util::client::legacy::Builder;

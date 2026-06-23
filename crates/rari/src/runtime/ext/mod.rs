@@ -1,5 +1,6 @@
 use deno_core::Extension;
 use deno_fs::{FileSystemRc, sync::MaybeArc};
+use std::sync::Arc;
 
 pub trait ExtensionTrait<A> {
     fn init(options: A) -> Extension;
@@ -49,6 +50,7 @@ mod websocket;
 mod webstorage;
 
 #[derive(Clone)]
+#[non_exhaustive]
 pub struct ExtensionOptions {
     pub web: web::WebOptions,
     pub io_pipes: Option<deno_io::Stdio>,
@@ -90,7 +92,7 @@ pub fn extensions(options: &ExtensionOptions, is_snapshot: bool) -> Vec<Extensio
     extensions.extend(web::extensions(options.web.clone(), is_snapshot));
     extensions.extend(cache::extensions(options.cache, is_snapshot));
     extensions.extend(crypto::extensions(options.crypto_seed, is_snapshot));
-    extensions.extend(fs::extensions(options.filesystem.clone(), is_snapshot));
+    extensions.extend(fs::extensions(Arc::clone(&options.filesystem), is_snapshot));
     extensions.extend(io::extensions(options.io_pipes.clone(), is_snapshot));
     extensions.extend(webstorage::extensions(
         options.webstorage_origin_storage_dir.clone(),
@@ -115,7 +117,10 @@ pub fn extensions(options: &ExtensionOptions, is_snapshot: bool) -> Vec<Extensio
     extensions.extend(napi::extensions(is_snapshot));
     extensions.extend(node_crypto::extensions(is_snapshot));
     extensions.extend(node_sqlite::extensions(is_snapshot));
-    extensions.extend(node::extensions(options.node_resolver.clone(), is_snapshot));
+    extensions.extend(node::extensions(
+        Arc::clone(&options.node_resolver),
+        is_snapshot,
+    ));
     {
         let mut bundle_ext = deno_bundle_runtime::deno_bundle_runtime::init(None);
         if is_snapshot {

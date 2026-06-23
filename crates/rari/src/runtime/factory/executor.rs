@@ -1,4 +1,7 @@
-use crate::runtime::factory::utils::constants::*;
+use crate::runtime::factory::utils::constants::{
+    MODULE_ALREADY_EVALUATED_ERROR, PROMISE_EXTRACT_SCRIPT, PROMISE_SETUP_SCRIPT,
+    create_already_evaluated_response, create_already_loaded_response,
+};
 use crate::runtime::factory::utils::v8::{
     is_promise, run_event_loop_with_error_handling, run_event_loop_with_promise_timeout, v8_to_json,
 };
@@ -18,7 +21,7 @@ pub fn has_export_statement(code: &str) -> bool {
             continue;
         }
 
-        if trimmed.starts_with("//") || trimmed.starts_with("/*") || trimmed.starts_with("*") {
+        if trimmed.starts_with("//") || trimmed.starts_with("/*") || trimmed.starts_with('*') {
             continue;
         }
 
@@ -89,11 +92,10 @@ async fn execute_as_module(
                 .contains(MODULE_ALREADY_EVALUATED_ERROR)
             {
                 return Ok(create_already_loaded_response(script_name));
-            } else {
-                return Err(RariError::js_execution(format!(
-                    "Failed to load module '{script_name}': {load_err}"
-                )));
             }
+            return Err(RariError::js_execution(format!(
+                "Failed to load module '{script_name}': {load_err}"
+            )));
         }
     };
 
@@ -101,7 +103,7 @@ async fn execute_as_module(
     let eval_result = eval_completion_future.await;
 
     match eval_result {
-        Ok(_) => {
+        Ok(()) => {
             match tokio::time::timeout(
                 std::time::Duration::from_millis(10),
                 run_event_loop_with_error_handling(
@@ -128,7 +130,13 @@ async fn execute_as_module(
                 .to_string()
                 .contains(MODULE_ALREADY_EVALUATED_ERROR)
             {
-                println!("[rari] Module '{script_name}' already evaluated, continuing");
+                #[expect(
+                    clippy::print_stdout,
+                    reason = "Debug logging for module evaluation state"
+                )]
+                {
+                    println!("[rari] Module '{script_name}' already evaluated, continuing");
+                }
             } else {
                 return Err(RariError::js_execution(format!(
                     "Failed to evaluate module '{script_name}': {eval_err}"
@@ -149,16 +157,16 @@ async fn execute_as_script(
     script_code: &str,
 ) -> Result<JsonValue, RariError> {
     match runtime.execute_script("script", script_code.to_string()) {
-        Ok(_global_v8_val) => {
+        Ok(global_v8_val) => {
             let is_promise_result = with_scope!(runtime, |scope| {
-                let local_v8_val = deno_core::v8::Local::new(scope, &_global_v8_val);
+                let local_v8_val = deno_core::v8::Local::new(scope, &global_v8_val);
                 is_promise(scope, local_v8_val)
             });
 
             if is_promise_result {
-                handle_promise_result(runtime, script_name, _global_v8_val).await
+                handle_promise_result(runtime, script_name, global_v8_val).await
             } else {
-                handle_non_promise_result(runtime, _global_v8_val)
+                handle_non_promise_result(runtime, global_v8_val)
             }
         }
         Err(e) => {
@@ -170,17 +178,17 @@ async fn execute_as_script(
 async fn handle_promise_result(
     runtime: &mut JsRuntime,
     script_name: &str,
-    _global_v8_val: deno_core::v8::Global<deno_core::v8::Value>,
+    global_v8_val: deno_core::v8::Global<deno_core::v8::Value>,
 ) -> Result<JsonValue, RariError> {
-    let setup_promise_storage = r#"
+    let setup_promise_storage = r"
         (function() {
             if (!globalThis['~promises']) globalThis['~promises'] = {};
             globalThis['~promises'].currentObject = __temp_promise_ref__;
         })()
-        "#;
+        ";
 
     with_scope!(runtime, |scope| {
-        let local_v8_val = deno_core::v8::Local::new(scope, &_global_v8_val);
+        let local_v8_val = deno_core::v8::Local::new(scope, &global_v8_val);
         let context = scope.get_current_context();
         let global = context.global(scope);
         let key = match deno_core::v8::String::new(scope, "__temp_promise_ref__") {
@@ -198,7 +206,7 @@ async fn handle_promise_result(
 
     runtime
         .execute_script("store_promise", setup_promise_storage.to_string())
-        .map_err(|e| RariError::js_execution(format!("Failed to store promise: {}", e)))?;
+        .map_err(|e| RariError::js_execution(format!("Failed to store promise: {e}")))?;
 
     let setup_script = PROMISE_SETUP_SCRIPT;
 
@@ -236,7 +244,7 @@ async fn handle_promise_result(
                         let stack = obj.get("stack").and_then(|v| v.as_str());
 
                         return Err(RariError::js_execution(if let Some(stack_trace) = stack {
-                            format!("{}\n{}", message, stack_trace)
+                            format!("{message}\n{stack_trace}")
                         } else {
                             message.to_string()
                         }));
@@ -245,13 +253,13 @@ async fn handle_promise_result(
                     Ok(json_result)
                 }
                 Err(_) => with_scope!(runtime, |scope| {
-                    let local_v8_val = deno_core::v8::Local::new(scope, _global_v8_val);
+                    let local_v8_val = deno_core::v8::Local::new(scope, global_v8_val);
                     v8_to_json(scope, local_v8_val)
                 }),
             }
         }
         Err(_) => with_scope!(runtime, |scope| {
-            let local_v8_val = deno_core::v8::Local::new(scope, _global_v8_val);
+            let local_v8_val = deno_core::v8::Local::new(scope, global_v8_val);
             v8_to_json(scope, local_v8_val)
         }),
     }
@@ -259,10 +267,10 @@ async fn handle_promise_result(
 
 fn handle_non_promise_result(
     runtime: &mut JsRuntime,
-    _global_v8_val: deno_core::v8::Global<deno_core::v8::Value>,
+    global_v8_val: deno_core::v8::Global<deno_core::v8::Value>,
 ) -> Result<JsonValue, RariError> {
     let json_result = with_scope!(runtime, |scope| {
-        let local_v8_val = deno_core::v8::Local::new(scope, _global_v8_val);
+        let local_v8_val = deno_core::v8::Local::new(scope, global_v8_val);
         v8_to_json(scope, local_v8_val)
     })?;
 
@@ -276,7 +284,7 @@ fn handle_non_promise_result(
         let stack = obj.get("stack").and_then(|v| v.as_str());
 
         return Err(RariError::js_execution(if let Some(stack_trace) = stack {
-            format!("{}\n{}", message, stack_trace)
+            format!("{message}\n{stack_trace}")
         } else {
             message.to_string()
         }));

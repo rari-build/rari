@@ -46,17 +46,35 @@ rc_mutex = "deny"
 rest_pat_in_fully_bound_structs = "deny"
 unnecessary_safety_comment = "deny"
 
+# Enforce proper error handling with anyhow/thiserror
+# Prefer: ? operator > pattern matching > unwrap_or/ok_or > expect (only for proven invariants)
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "warn"
+todo = "warn"
+unimplemented = "warn"
+
+# Avoid unnecessary allocations
+format_collect = "warn"
+string_add = "warn"
+string_add_assign = "warn"
+inefficient_to_string = "warn"
+
+# Force non-exhaustive on public types
+exhaustive_structs = "warn"
+exhaustive_enums = "warn"
+missing_errors_doc = "warn"
+
 # Pedantic rules
 pedantic = { level = "warn", priority = -1 }
 
-# Pedantic overrides - allow rules that are too noisy or not valuable
+# Pedantic overrides
 case_sensitive_file_extension_comparisons = "allow"
 collapsible_if = "allow"
 doc_markdown = "allow"
 inconsistent_struct_constructor = "allow"
 map_unwrap_or = "allow"
 missing_const_for_fn = "allow"
-missing_errors_doc = "allow"
 missing_panics_doc = "allow"
 module_inception = "allow"
 module_name_repetitions = "allow"

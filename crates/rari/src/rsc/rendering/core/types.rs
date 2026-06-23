@@ -1,9 +1,13 @@
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::time::Duration;
 
-use super::constants::*;
+use super::constants::{
+    DEFAULT_MAX_CACHE_SIZE, DEFAULT_MAX_CONCURRENT_RENDERS, DEFAULT_MAX_MEMORY_PER_COMPONENT_MB,
+    DEFAULT_MAX_RENDER_TIME_MS, DEFAULT_MAX_SCRIPT_EXECUTION_TIME_MS,
+};
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct ResourceLimits {
     pub max_concurrent_renders: usize,
     pub max_render_time_ms: u64,
@@ -112,6 +116,7 @@ impl ResourceTracker {
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
+#[non_exhaustive]
 pub struct ResourceMetrics {
     pub active_renders: usize,
     pub total_renders: u64,

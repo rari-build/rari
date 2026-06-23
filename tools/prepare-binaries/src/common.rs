@@ -3,11 +3,20 @@ use colored::Colorize;
 use tokio::process::Command;
 
 #[derive(Debug, Clone)]
+#[expect(
+    clippy::struct_field_names,
+    reason = "Field 'target' in struct 'Target' is semantically correct and matches Rust target triple convention"
+)]
 pub struct Target {
     pub target: &'static str,
     pub platform: &'static str,
     pub binary_name: &'static str,
     pub package_dir: &'static str,
+    #[allow(
+        clippy::allow_attributes,
+        reason = "Field naming follows convention, clippy suggestion less clear"
+    )]
+    #[allow(clippy::struct_field_names)]
     pub addon_package_dir: &'static str,
 }
 
@@ -118,8 +127,6 @@ pub async fn check_rust_installed() -> Result<()> {
 }
 
 pub async fn install_target(target: &str) -> Result<()> {
-    log(&format!("Installing Rust target: {}", target));
-
     let output = Command::new("rustup")
         .args(["target", "add", target])
         .output()
@@ -127,41 +134,11 @@ pub async fn install_target(target: &str) -> Result<()> {
         .context("Failed to install target")?;
 
     if output.status.success() {
-        log_success(&format!("Installed target: {}", target));
+        log_success(&format!("Installed target: {target}"));
         Ok(())
     } else {
-        log_warning(&format!("Failed to install target {}", target));
+        log_warning(&format!("Failed to install target {target}"));
         log_warning("You may need to install additional system dependencies");
         Ok(())
     }
-}
-
-pub async fn install_linux_cross_compiler() -> Result<()> {
-    if std::env::consts::OS != "linux" {
-        return Ok(());
-    }
-
-    log("Installing Linux ARM64 cross-compiler...");
-
-    let output = Command::new("sh")
-        .args([
-            "-c",
-            "sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu",
-        ])
-        .output()
-        .await;
-
-    match output {
-        Ok(output) if output.status.success() => {
-            log_success("Installed Linux ARM64 cross-compiler");
-        }
-        _ => {
-            log_warning("Failed to install Linux ARM64 cross-compiler");
-            log_warning(
-                "You may need to install it manually: sudo apt-get install gcc-aarch64-linux-gnu",
-            );
-        }
-    }
-
-    Ok(())
 }

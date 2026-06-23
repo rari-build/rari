@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[non_exhaustive]
 pub struct ImageConfig {
     #[serde(default = "default_max_cache_size")]
     pub max_cache_size: usize,
@@ -30,6 +31,7 @@ pub struct ImageConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[non_exhaustive]
 pub struct ImageVariant {
     pub src: String,
     pub width: Option<u32>,
@@ -39,6 +41,7 @@ pub struct ImageVariant {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct RemotePattern {
     pub protocol: Option<String>,
     pub hostname: String,
@@ -48,6 +51,7 @@ pub struct RemotePattern {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct LocalPattern {
     pub pathname: String,
     pub search: Option<String>,

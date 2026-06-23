@@ -70,7 +70,7 @@ async fn warm_route(
 ) -> Result<(), String> {
     let route_match = app_router
         .match_route(path)
-        .map_err(|e| format!("Route match failed: {}", e))?;
+        .map_err(|e| format!("Route match failed: {e}"))?;
 
     if route_match.loading.is_some() {
         return Ok(());
@@ -78,8 +78,10 @@ async fn warm_route(
 
     let context = create_warmup_context(&route_match);
 
-    let layout_renderer =
-        LayoutRenderer::with_shared_cache(state.renderer.clone(), state.layout_html_cache.clone());
+    let layout_renderer = LayoutRenderer::with_shared_cache(
+        Arc::clone(&state.renderer),
+        Arc::clone(&state.layout_html_cache),
+    );
 
     let request_context = Arc::new(
         crate::server::middleware::request_context::RequestContext::new(
@@ -90,7 +92,7 @@ async fn warm_route(
     let rsc_wire_format = layout_renderer
         .render_route_by_mode(&route_match, &context, Some(request_context))
         .await
-        .map_err(|e| format!("Render failed: {}", e))?;
+        .map_err(|e| format!("Render failed: {e}"))?;
 
     let cache_key = response::ResponseCache::generate_cache_key_with_mode(path, None, Some("rsc"));
 

@@ -55,12 +55,16 @@ pub async fn stream_component(
             .header("vary", merged_vary)
             .header("x-cache", "HIT");
 
-        for (key, value) in cached.headers.iter() {
+        for (key, value) in &cached.headers {
             if key.as_str() != "vary" {
                 response_builder = response_builder.header(key, value);
             }
         }
 
+        #[expect(
+            clippy::expect_used,
+            reason = "Response::builder() with valid components never fails"
+        )]
         return Ok(response_builder
             .body(Body::from(cached.body))
             .expect("Valid cached RSC response"));
@@ -84,6 +88,10 @@ pub async fn stream_component(
                     .map_err(std::io::Error::other)
             });
 
+            #[expect(
+                clippy::expect_used,
+                reason = "Response::builder() with valid components never fails"
+            )]
             Ok(Response::builder()
                 .header("content-type", RSC_CONTENT_TYPE)
                 .header("cache-control", cache_control)
@@ -120,7 +128,7 @@ pub async fn register_component(
     };
 
     match result {
-        Ok(_) => {
+        Ok(()) => {
             let renderer = state.renderer.lock().await;
             let is_client = renderer
                 .serializer
@@ -157,7 +165,6 @@ pub async fn register_component(
                 }
             }
 
-            #[allow(clippy::disallowed_methods)]
             Ok(Json(serde_json::json!({
                 "success": true,
                 "component_id": request.component_id
@@ -187,7 +194,6 @@ pub async fn register_client_component(
         );
     }
 
-    #[allow(clippy::disallowed_methods)]
     Ok(Json(serde_json::json!({
         "success": true,
         "component_id": request.component_id
@@ -209,7 +215,7 @@ pub async fn reload_component_from_dist(
             error = %e,
             "Component path validation failed"
         );
-        return Err(format!("Path validation error: {}", e).into());
+        return Err(format!("Path validation error: {e}").into());
     }
 
     let file_path = &normalized_path;
@@ -223,7 +229,7 @@ pub async fn reload_component_from_dist(
                 error = %e,
                 "Failed to resolve dist path for component"
             );
-            return Err(format!("Path resolution error: {}", e).into());
+            return Err(format!("Path resolution error: {e}").into());
         }
     };
 
@@ -283,7 +289,7 @@ pub async fn reload_component_from_dist(
                     error = %e,
                     "Failed to re-read dist file after retry"
                 );
-                return Err(format!("Failed to re-read dist file: {}", e).into());
+                return Err(format!("Failed to re-read dist file: {e}").into());
             }
         };
 
@@ -336,10 +342,7 @@ pub async fn reload_component_from_dist(
             .unwrap_or_default()
             .as_millis();
 
-        let hmr_specifier = format!(
-            "file:///rari_hmr/server/{}.js?v={}",
-            component_id, timestamp
-        );
+        let hmr_specifier = format!("file:///rari_hmr/server/{component_id}.js?v={timestamp}");
 
         renderer
             .runtime
@@ -351,7 +354,7 @@ pub async fn reload_component_from_dist(
                     error = %e,
                     "Failed to add HMR module to loader"
                 );
-                format!("Failed to add HMR module to loader: {}", e)
+                format!("Failed to add HMR module to loader: {e}")
             })?;
 
         let module_id = renderer
@@ -364,7 +367,7 @@ pub async fn reload_component_from_dist(
                     error = %e,
                     "Failed to load ES module during HMR"
                 );
-                format!("Failed to load ES module: {}", e)
+                format!("Failed to load ES module: {e}")
             })?;
 
         renderer
@@ -378,12 +381,12 @@ pub async fn reload_component_from_dist(
                     error = %e,
                     "Failed to evaluate module during HMR"
                 );
-                format!("Failed to evaluate module: {}", e)
+                format!("Failed to evaluate module: {e}")
             })?;
 
         let clear_script = format!(
             r#"(function() {{
-                const componentId = "{}";
+                const componentId = "{component_id}";
 
                 delete globalThis[componentId];
 
@@ -392,8 +395,7 @@ pub async fn reload_component_from_dist(
                 }}
 
                 return {{ success: true }};
-            }})()"#,
-            component_id
+            }})()"#
         );
 
         renderer
@@ -409,20 +411,20 @@ pub async fn reload_component_from_dist(
                     error = %e,
                     "Failed to clear old component"
                 );
-                format!("Failed to clear old component: {}", e)
+                format!("Failed to clear old component: {e}")
             })?;
 
         let registration_script = format!(
             r#"(async function() {{
                 try {{
-                    const moduleNamespace = await import("{}");
-                    const componentId = "{}";
+                    const moduleNamespace = await import("{hmr_specifier}");
+                    const componentId = "{component_id}";
 
                     if (moduleNamespace.default) {{
                         globalThis[componentId] = moduleNamespace.default;
                         if (typeof globalThis[componentId] === 'function') {{
                             globalThis[componentId].__hmr_timestamp = Date.now();
-                            globalThis[componentId].__hmr_specifier = "{}";
+                            globalThis[componentId].__hmr_specifier = "{hmr_specifier}";
                         }}
                     }} else {{
                         const exports = Object.values(moduleNamespace).filter(v => typeof v === 'function');
@@ -430,7 +432,7 @@ pub async fn reload_component_from_dist(
                             globalThis[componentId] = exports[0];
                             if (typeof globalThis[componentId] === 'function') {{
                                 globalThis[componentId].__hmr_timestamp = Date.now();
-                                globalThis[componentId].__hmr_specifier = "{}";
+                                globalThis[componentId].__hmr_specifier = "{hmr_specifier}";
                             }}
                         }}
                     }}
@@ -451,8 +453,7 @@ pub async fn reload_component_from_dist(
                 }} catch (error) {{
                     return {{ success: false, error: error.message }};
                 }}
-            }})()"#,
-            hmr_specifier, component_id, hmr_specifier, hmr_specifier
+            }})()"#
         );
 
         renderer
@@ -468,7 +469,7 @@ pub async fn reload_component_from_dist(
                     error = %e,
                     "Failed to register ESM module exports to globalThis"
                 );
-                format!("Failed to register ESM module: {}", e)
+                format!("Failed to register ESM module: {e}")
             })?;
 
         renderer.clear_script_cache();
@@ -510,16 +511,15 @@ pub async fn reload_component_from_dist(
                 "Failed to execute component code during reload. Last known good version will be preserved."
             );
             return Err(format!(
-                "Failed to execute component code: {}. Last known good version will be preserved.",
-                e
+                "Failed to execute component code: {e}. Last known good version will be preserved."
             )
             .into());
         }
     }
 
     let verification_script = format!(
-        r#"(function() {{
-            const expectedKey = '{}';
+        r"(function() {{
+            const expectedKey = '{component_id}';
             const exists = typeof globalThis[expectedKey] !== 'undefined';
             const type = typeof globalThis[expectedKey];
 
@@ -536,8 +536,7 @@ pub async fn reload_component_from_dist(
                 expectedKey: expectedKey,
                 actualKeys: allKeys
             }};
-        }})()"#,
-        component_id
+        }})()"
     );
 
     let result_json = match renderer
@@ -556,14 +555,16 @@ pub async fn reload_component_from_dist(
                 "Failed to execute verification script. Last known good version will be preserved."
             );
             return Err(format!(
-                "Failed to verify component reload: {}. Last known good version will be preserved.",
-                e
+                "Failed to verify component reload: {e}. Last known good version will be preserved."
             )
             .into());
         }
     };
 
-    if let Some(success) = result_json.get("success").and_then(|v| v.as_bool()) {
+    if let Some(success) = result_json
+        .get("success")
+        .and_then(serde_json::Value::as_bool)
+    {
         if success {
             Ok(())
         } else {
@@ -593,10 +594,7 @@ pub async fn reload_component_from_dist(
                 actual_keys
             );
             Err(format!(
-                "Component '{}' not found in globalThis after reload. Expected key '{}' but found keys: [{}]. Last known good version will be preserved.",
-                component_id,
-                expected_key,
-                actual_keys
+                "Component '{component_id}' not found in globalThis after reload. Expected key '{expected_key}' but found keys: [{actual_keys}]. Last known good version will be preserved."
             )
             .into())
         }
@@ -623,7 +621,7 @@ pub async fn immediate_component_reregistration(
             error = %e,
             "Component path validation failed"
         );
-        return Err(format!("Path validation error: {}", e).into());
+        return Err(format!("Path validation error: {e}").into());
     }
 
     let file_path = &normalized_path;
@@ -656,7 +654,7 @@ pub async fn immediate_component_reregistration(
                 error_kind = ?e.kind(),
                 "Failed to read source file for immediate re-registration"
             );
-            return Err(format!("Failed to read source file: {}", e).into());
+            return Err(format!("Failed to read source file: {e}").into());
         }
     };
 
@@ -673,7 +671,7 @@ pub async fn immediate_component_reregistration(
                 error = %e,
                 "Failed to register component directly, preserving last known good version"
             );
-            Err(format!("Failed to register component: {}", e).into())
+            Err(format!("Failed to register component: {e}").into())
         } else {
             tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
@@ -701,7 +699,7 @@ pub async fn immediate_component_reregistration(
                     "Failed to re-register component after cache clear, preserving last known good version"
                 );
                 return Err(
-                    format!("Failed to re-register component after cache clear: {}", e).into(),
+                    format!("Failed to re-register component after cache clear: {e}").into(),
                 );
             }
 
@@ -714,7 +712,6 @@ pub async fn immediate_component_reregistration(
 
 #[axum::debug_handler]
 pub async fn health_check() -> Result<Json<Value>, StatusCode> {
-    #[allow(clippy::disallowed_methods)]
     Ok(Json(serde_json::json!({
         "status": "ok",
         "service": "rari-rsc-server"

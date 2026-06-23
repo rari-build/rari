@@ -60,7 +60,7 @@ impl ModuleResolver {
     }
 
     pub fn get_package_base(&self, referrer: &str) -> Option<String> {
-        for entry in self.resolved_packages.iter() {
+        for entry in &self.resolved_packages {
             let package_path = entry.value();
             if referrer.contains(package_path.as_str()) {
                 if let Some(base_dir) = package_path.rsplit_once('/') {

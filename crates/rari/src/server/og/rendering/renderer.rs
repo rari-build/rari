@@ -75,13 +75,13 @@ impl ImageRenderer {
     }
 
     pub(super) fn alpha_blend(&self, bg: Rgba<u8>, fg: Rgba<u8>) -> Rgba<u8> {
-        let alpha = fg[3] as f32 / 255.0;
+        let alpha = f32::from(fg[3]) / 255.0;
         let inv_alpha = 1.0 - alpha;
 
         Rgba([
-            ((fg[0] as f32 * alpha + bg[0] as f32 * inv_alpha) as u8),
-            ((fg[1] as f32 * alpha + bg[1] as f32 * inv_alpha) as u8),
-            ((fg[2] as f32 * alpha + bg[2] as f32 * inv_alpha) as u8),
+            ((f32::from(fg[0]) * alpha + f32::from(bg[0]) * inv_alpha) as u8),
+            ((f32::from(fg[1]) * alpha + f32::from(bg[1]) * inv_alpha) as u8),
+            ((f32::from(fg[2]) * alpha + f32::from(bg[2]) * inv_alpha) as u8),
             255,
         ])
     }
@@ -97,15 +97,13 @@ impl ImageRenderer {
         style
             .get("fontWeight")
             .and_then(|w| match w.as_str() {
-                "normal" => Some(400),
-                "bold" => Some(700),
+                "normal" | "400" => Some(400),
+                "bold" | "700" => Some(700),
                 "100" => Some(100),
                 "200" => Some(200),
                 "300" => Some(300),
-                "400" => Some(400),
                 "500" => Some(500),
                 "600" => Some(600),
-                "700" => Some(700),
                 "800" => Some(800),
                 "900" => Some(900),
                 _ => w.parse::<u16>().ok(),
@@ -133,7 +131,7 @@ impl ImageRenderer {
             }
             _ if color_str.starts_with("rgb(") => {
                 let inner = color_str.trim_start_matches("rgb(").trim_end_matches(')');
-                let parts: Vec<&str> = inner.split(',').map(|s| s.trim()).collect();
+                let parts: Vec<&str> = inner.split(',').map(str::trim).collect();
                 if parts.len() == 3 {
                     let r = parts[0].parse().unwrap_or(0);
                     let g = parts[1].parse().unwrap_or(0);

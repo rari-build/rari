@@ -12,3 +12,6 @@ crate-type = [ "rlib" ]
 [dependencies]
 cow-utils = { workspace = true }
 url = { workspace = true }
+
+[lints]
+workspace = true

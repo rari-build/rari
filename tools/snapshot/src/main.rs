@@ -1,8 +1,9 @@
+#![allow(clippy::too_many_lines, clippy::cast_precision_loss)]
+
 use std::fmt::Write;
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use cow_utils::CowUtils;
 use deno_core::{ModuleCodeString, ModuleName, SourceMapData};
 use deno_error::JsErrorBox;
 use rustc_hash::FxHashSet;
@@ -18,12 +19,16 @@ fn main() {
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("crates/rari/snapshots"));
 
+    #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
     std::fs::create_dir_all(&output_dir).expect("Failed to create output directory");
 
     let snapshot_path = output_dir.join("RARI_SNAPSHOT.bin");
     let residual_path = output_dir.join("residual_lazy_sources.rs");
 
-    println!("Building V8 snapshot...");
+    #[expect(clippy::print_stdout, reason = "CLI tool - stdout output is expected")]
+    {
+        println!("Building V8 snapshot...");
+    }
 
     let ext_options = rari::runtime::ext::ExtensionOptions::default();
     let extensions = rari::runtime::ext::extensions(&ext_options, false);
@@ -32,6 +37,7 @@ fn main() {
         rari::runtime::utils::transpile::maybe_transpile_source(name, source)
     });
 
+    #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
     let output = deno_core::snapshot::create_snapshot(
         deno_core::snapshot::CreateSnapshotOptions {
             cargo_manifest_dir: env!("CARGO_MANIFEST_DIR"),
@@ -45,23 +51,30 @@ fn main() {
     )
     .expect("Failed to create V8 snapshot");
 
+    #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
     std::fs::write(&snapshot_path, &output.output).expect("Failed to write snapshot file");
-    println!(
-        "Snapshot written to {} ({:.2} MB)",
-        snapshot_path.display(),
-        output.output.len() as f64 / 1024.0 / 1024.0
-    );
+    #[expect(clippy::print_stdout, reason = "CLI tool - stdout output is expected")]
+    {
+        println!(
+            "Snapshot written to {} ({:.2} MB)",
+            snapshot_path.display(),
+            output.output.len() as f64 / 1024.0 / 1024.0
+        );
+    }
 
     let consumed: FxHashSet<&str> = output
         .consumed_lazy_specifiers
         .iter()
-        .map(|s| s.as_str())
+        .map(std::string::String::as_str)
         .collect();
 
-    println!(
-        "Consumed {} lazy specifiers during snapshot creation",
-        consumed.len()
-    );
+    #[expect(clippy::print_stdout, reason = "CLI tool - stdout output is expected")]
+    {
+        println!(
+            "Consumed {} lazy specifiers during snapshot creation",
+            consumed.len()
+        );
+    }
 
     let ext_options = rari::runtime::ext::ExtensionOptions::default();
     let extensions = rari::runtime::ext::extensions(&ext_options, false);
@@ -88,11 +101,14 @@ fn main() {
         }
     }
 
-    println!(
-        "Residual lazy sources: {} ESM, {} JS",
-        residual_esm.len(),
-        residual_js.len()
-    );
+    #[expect(clippy::print_stdout, reason = "CLI tool - stdout output is expected")]
+    {
+        println!(
+            "Residual lazy sources: {} ESM, {} JS",
+            residual_esm.len(),
+            residual_js.len()
+        );
+    }
 
     let mut generated = String::new();
     write_line(
@@ -109,10 +125,11 @@ fn main() {
         "pub static RESIDUAL_LAZY_ESM_SOURCES: &[(&str, &str)] = &[",
     );
     for (specifier, source) in &residual_esm {
-        let escaped = escape_for_raw_string(source);
+        let specifier_raw = format_raw_string(specifier);
+        let source_raw = format_raw_string(source);
         write_line(
             &mut generated,
-            &format!("    (\"{specifier}\", r###\"{escaped}\"###),"),
+            &format!("    ({specifier_raw}, {source_raw}),"),
         );
     }
     write_line(&mut generated, "];\n");
@@ -122,23 +139,29 @@ fn main() {
         "pub static RESIDUAL_LAZY_JS_SOURCES: &[(&str, &str)] = &[",
     );
     for (specifier, source) in &residual_js {
-        let escaped = escape_for_raw_string(source);
+        let specifier_raw = format_raw_string(specifier);
+        let source_raw = format_raw_string(source);
         write_line(
             &mut generated,
-            &format!("    (\"{specifier}\", r###\"{escaped}\"###),"),
+            &format!("    ({specifier_raw}, {source_raw}),"),
         );
     }
     write_line(&mut generated, "];");
 
+    #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
     std::fs::write(&residual_path, &generated).expect("Failed to write residual sources");
-    println!("Residual sources written to {}", residual_path.display());
-    println!(
-        "Files loaded during snapshot: {}",
-        output.files_loaded_during_snapshot.len()
-    );
+    #[expect(clippy::print_stdout, reason = "CLI tool - stdout output is expected")]
+    {
+        println!("Residual sources written to {}", residual_path.display());
+        println!(
+            "Files loaded during snapshot: {}",
+            output.files_loaded_during_snapshot.len()
+        );
+    }
 }
 
 fn write_line(buf: &mut String, line: &str) {
+    #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
     writeln!(buf, "{line}").expect("Failed to write to string buffer");
 }
 
@@ -158,9 +181,14 @@ fn maybe_transpile(specifier: &str, source: &str) -> String {
     }
 
     let specifier_url = url::Url::parse(specifier).unwrap_or_else(|_| {
+        #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
         url::Url::parse(&format!("file:///{specifier}")).expect("invalid specifier")
     });
 
+    #[expect(
+        clippy::panic,
+        reason = "Build tool - parse failures should terminate snapshot generation"
+    )]
     let parsed = deno_ast::parse_module(deno_ast::ParseParams {
         specifier: specifier_url,
         text: source.into(),
@@ -171,7 +199,11 @@ fn maybe_transpile(specifier: &str, source: &str) -> String {
     })
     .unwrap_or_else(|e| panic!("Failed to parse '{specifier}': {e}"));
 
-    parsed
+    #[expect(
+        clippy::panic,
+        reason = "Build tool - transpile failures should terminate snapshot generation"
+    )]
+    let transpiled = parsed
         .transpile(
             &deno_ast::TranspileOptions {
                 imports_not_used_as_values: deno_ast::ImportsNotUsedAsValues::Remove,
@@ -183,11 +215,41 @@ fn maybe_transpile(specifier: &str, source: &str) -> String {
                 ..Default::default()
             },
         )
-        .unwrap_or_else(|e| panic!("Failed to transpile '{specifier}': {e}"))
-        .into_source()
-        .text
+        .unwrap_or_else(|e| panic!("Failed to transpile '{specifier}': {e}"));
+
+    transpiled.into_source().text
 }
 
-fn escape_for_raw_string(s: &str) -> std::borrow::Cow<'_, str> {
-    s.cow_replace("\"###", "\"####")
+fn min_hashes_needed(s: &str) -> usize {
+    let mut max_hashes = 0;
+    let mut current_hashes = 0;
+    let mut after_quote = false;
+
+    for ch in s.chars() {
+        if ch == '"' {
+            after_quote = true;
+            current_hashes = 0;
+        } else if after_quote && ch == '#' {
+            current_hashes += 1;
+            max_hashes = max_hashes.max(current_hashes);
+        } else {
+            after_quote = false;
+            current_hashes = 0;
+        }
+    }
+
+    max_hashes + 1
+}
+
+fn format_raw_string(s: &str) -> String {
+    let hashes_needed = min_hashes_needed(s);
+
+    let hashes_to_use = if hashes_needed == 1 && !s.contains('"') {
+        0
+    } else {
+        hashes_needed
+    };
+
+    let hashes = "#".repeat(hashes_to_use);
+    format!("r{hashes}\"{s}\"{hashes}")
 }

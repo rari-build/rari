@@ -1,6 +1,7 @@
-use deno_ast::swc::ast::*;
+use deno_ast::swc::ast::{BlockStmt, Expr, ExprStmt, Lit, Stmt, Str};
 use deno_ast::swc::ecma_visit::Visit;
 
+#[non_exhaustive]
 pub struct UseCacheDirective {
     pub found: bool,
     pub cache_kind: Option<String>,
@@ -106,6 +107,7 @@ pub fn detect_use_cache(source: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::default_trait_access)]
     use super::*;
 
     #[test]

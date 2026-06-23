@@ -1,3 +1,5 @@
+#![expect(clippy::print_stdout)]
+
 mod app;
 mod changelog;
 mod git;
@@ -105,6 +107,10 @@ async fn run_app(
     Ok(())
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "Non-interactive release orchestration requires comprehensive workflow steps"
+)]
 async fn run_non_interactive(
     only: Option<Vec<String>>,
     dry_run: bool,
@@ -158,7 +164,7 @@ async fn run_non_interactive(
 
         let new_version = if let Some(ref version) = env_version {
             let v = semver::Version::parse(version)
-                .map_err(|_| anyhow::anyhow!("Invalid RELEASE_VERSION: {}", version))?;
+                .map_err(|_| anyhow::anyhow!("Invalid RELEASE_VERSION: {version}"))?;
             let current = semver::Version::parse(unit.current_version())?;
             if v <= current {
                 anyhow::bail!(
@@ -177,7 +183,7 @@ async fn run_non_interactive(
                 "preminor" => ReleaseType::Preminor,
                 "premajor" => ReleaseType::Premajor,
                 "prerelease" => ReleaseType::Prerelease,
-                _ => anyhow::bail!("Invalid RELEASE_TYPE: {}", type_str),
+                _ => anyhow::bail!("Invalid RELEASE_TYPE: {type_str}"),
             };
             release_type
                 .to_version(unit.current_version())
@@ -205,7 +211,7 @@ async fn run_non_interactive(
         if !commits.is_empty() {
             println!("  {} Commits since last release:", "ℹ".blue().bold());
             for commit in commits.iter().take(5) {
-                println!("    {}", commit);
+                println!("    {commit}");
             }
         }
 
@@ -243,7 +249,7 @@ async fn run_non_interactive(
             }
         } else if generates_changelog {
             println!("  {} Generating changelog...", "→".cyan());
-            let tag = format!("{}@{}", unit_name, new_version);
+            let tag = format!("{unit_name}@{new_version}");
             let package_path = unit.paths()[0];
             crate::changelog::generate(&tag, unit_name, package_path).await?;
             println!("  {} Generated changelog", "✓".green());
@@ -251,13 +257,13 @@ async fn run_non_interactive(
             println!("  {} Skipping changelog generation", "ℹ".blue());
         }
 
-        let message = format!("release: {}@{}", unit_name, new_version);
+        let message = format!("release: {unit_name}@{new_version}");
         let tag = if unit_name == "rari-binaries" {
-            format!("v{}", new_version)
+            format!("v{new_version}")
         } else if unit_name == "@rari/use-cache-binaries" {
-            format!("use-cache-binaries@{}", new_version)
+            format!("use-cache-binaries@{new_version}")
         } else {
-            format!("{}@{}", unit_name, new_version)
+            format!("{unit_name}@{new_version}")
         };
         if dry_run {
             println!("  {} Would commit: {}", "[DRY RUN]".yellow(), message);

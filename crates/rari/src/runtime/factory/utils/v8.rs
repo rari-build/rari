@@ -1,3 +1,8 @@
+#![expect(
+    clippy::unnecessary_wraps,
+    reason = "V8 utility functions return Result for API consistency with error-handling variants"
+)]
+
 use deno_core::{JsRuntime, PollEventLoopOptions, v8};
 use rari_error::RariError;
 use serde_json::Value as JsonValue;
@@ -305,12 +310,12 @@ pub fn is_promise(scope: &mut v8::PinScope, value: v8::Local<v8::Value>) -> bool
 }
 
 fn check_promise_completion(runtime: &mut JsRuntime) -> Result<bool, RariError> {
-    let check_script = r#"
+    let check_script = r"
         (function() {
             if (!globalThis['~promises']) globalThis['~promises'] = {};
             return globalThis['~promises'].resolutionComplete === true;
         })()
-    "#;
+    ";
 
     match runtime.execute_script("promise_completion_check", check_script.to_string()) {
         Ok(result_val) => {
@@ -367,7 +372,6 @@ pub async fn run_event_loop_with_promise_timeout(
     }
 
     Err(RariError::js_execution(format!(
-        "Promise resolution timeout ({}ms) for '{}'",
-        timeout_ms, script_name
+        "Promise resolution timeout ({timeout_ms}ms) for '{script_name}'"
     )))
 }

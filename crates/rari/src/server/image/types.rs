@@ -4,6 +4,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Archive, RkyvDeserialize, RkyvSerialize)]
 #[rkyv(compare(PartialEq), derive(Debug))]
+#[non_exhaustive]
 pub enum ImageFormat {
     Avif,
     WebP,
@@ -56,6 +57,7 @@ impl ImageFormat {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[non_exhaustive]
 pub struct OptimizeParams {
     pub url: String,
     #[serde(default)]
@@ -71,6 +73,7 @@ fn default_quality() -> u8 {
 }
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct OptimizedImage {
     pub data: Vec<u8>,
     pub format: ImageFormat,

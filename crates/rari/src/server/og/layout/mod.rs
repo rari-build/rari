@@ -1,3 +1,5 @@
+#![allow(clippy::match_wildcard_for_single_variants)]
+
 pub mod style;
 
 use super::resources::fonts::FontContext;
@@ -69,7 +71,7 @@ impl LayoutEngine {
                     )
                 },
             )
-            .map_err(|e| format!("Layout computation failed: {:?}", e))?;
+            .map_err(|e| format!("Layout computation failed: {e:?}"))?;
 
         self.extract_layout(root_node, 0.0, 0.0)
     }
@@ -102,7 +104,7 @@ impl LayoutEngine {
             let node = self
                 .taffy
                 .new_leaf_with_context(taffy_style, node_data)
-                .map_err(|e| format!("Failed to create SVG leaf node: {:?}", e))?;
+                .map_err(|e| format!("Failed to create SVG leaf node: {e:?}"))?;
             return Ok(node);
         }
 
@@ -117,16 +119,16 @@ impl LayoutEngine {
         let node = if child_nodes.is_empty() {
             self.taffy
                 .new_leaf_with_context(taffy_style, node_data)
-                .map_err(|e| format!("Failed to create leaf node: {:?}", e))?
+                .map_err(|e| format!("Failed to create leaf node: {e:?}"))?
         } else {
             let node = self
                 .taffy
                 .new_with_children(taffy_style, &child_nodes)
-                .map_err(|e| format!("Failed to create parent node: {:?}", e))?;
+                .map_err(|e| format!("Failed to create parent node: {e:?}"))?;
 
             self.taffy
                 .set_node_context(node, Some(node_data))
-                .map_err(|e| format!("Failed to set node context: {:?}", e))?;
+                .map_err(|e| format!("Failed to set node context: {e:?}"))?;
 
             node
         };
@@ -185,13 +187,11 @@ impl LayoutEngine {
                     "flex-end" | "end" => AlignItems::FLEX_END,
                     "center" => AlignItems::CENTER,
                     "baseline" => AlignItems::BASELINE,
-                    "stretch" => AlignItems::STRETCH,
                     _ => AlignItems::STRETCH,
                 });
 
         if let Some(justify_content) = style.get("justifyContent") {
             taffy_style.justify_content = Some(match justify_content.as_str() {
-                "flex-start" | "start" => JustifyContent::FLEX_START,
                 "flex-end" | "end" => JustifyContent::FLEX_END,
                 "center" => JustifyContent::CENTER,
                 "space-between" => JustifyContent::SPACE_BETWEEN,
@@ -423,7 +423,7 @@ impl LayoutEngine {
         let layout = self
             .taffy
             .layout(node)
-            .map_err(|e| format!("Failed to get layout: {:?}", e))?;
+            .map_err(|e| format!("Failed to get layout: {e:?}"))?;
         let node_data = self.taffy.get_node_context(node).ok_or("No node data")?;
 
         let x = parent_x + layout.location.x;
@@ -433,7 +433,7 @@ impl LayoutEngine {
         for child_id in self
             .taffy
             .children(node)
-            .map_err(|e| format!("Failed to get children: {:?}", e))?
+            .map_err(|e| format!("Failed to get children: {e:?}"))?
         {
             children.push(self.extract_layout(child_id, x, y)?);
         }
@@ -534,15 +534,13 @@ fn measure_node(
         .style
         .get("fontWeight")
         .and_then(|w| match w.as_str() {
-            "normal" => Some(400),
-            "bold" => Some(700),
+            "normal" | "400" => Some(400),
+            "bold" | "700" => Some(700),
             "100" => Some(100),
             "200" => Some(200),
             "300" => Some(300),
-            "400" => Some(400),
             "500" => Some(500),
             "600" => Some(600),
-            "700" => Some(700),
             "800" => Some(800),
             "900" => Some(900),
             _ => w.parse::<u16>().ok(),
@@ -595,14 +593,14 @@ fn measure_image(
         .element
         .props
         .get("width")
-        .and_then(|v| v.as_f64())
+        .and_then(serde_json::Value::as_f64)
         .map(|v| v as f32);
 
     let height_prop = node_data
         .element
         .props
         .get("height")
-        .and_then(|v| v.as_f64())
+        .and_then(serde_json::Value::as_f64)
         .map(|v| v as f32);
 
     let width_is_100_percent = node_data
@@ -750,7 +748,7 @@ fn measure_text_with_parley(
 ) -> (f32, f32) {
     let root_style = TextStyle {
         font_size,
-        font_weight: parley::style::FontWeight::new(font_weight as f32),
+        font_weight: parley::style::FontWeight::new(f32::from(font_weight)),
         ..Default::default()
     };
 

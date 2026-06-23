@@ -1,12 +1,13 @@
 use super::ExtensionTrait;
 use deno_core::{Extension, extension};
+use std::rc::Rc;
 use std::sync::Arc;
 
 mod options;
 pub use options::WebOptions;
 
 mod permissions;
-pub(crate) use permissions::PermissionsContainer;
+pub use permissions::PermissionsContainer;
 pub use permissions::{DefaultWebPermissions, WebPermissions};
 
 extension!(
@@ -16,7 +17,7 @@ extension!(
     esm = [ dir "src/runtime/ext/web", "init_fetch.js" ],
 );
 impl ExtensionTrait<WebOptions> for init_fetch {
-    #[allow(unused_variables)]
+    #[expect(unused_variables)]
     fn init(options: WebOptions) -> Extension {
         init_fetch::init()
     }
@@ -30,7 +31,7 @@ impl ExtensionTrait<WebOptions> for deno_fetch::deno_fetch {
             request_builder_hook: options.request_builder_hook,
             unsafely_ignore_certificate_errors: options.unsafely_ignore_certificate_errors.clone(),
             client_cert_chain_and_key: options.client_cert_chain_and_key.clone(),
-            file_fetch_handler: options.file_fetch_handler.clone(),
+            file_fetch_handler: Rc::clone(&options.file_fetch_handler),
             client_builder_hook: options.client_builder_hook,
             resolver: options.resolver.clone(),
         };
@@ -46,7 +47,7 @@ extension!(
     esm = [ dir "src/runtime/ext/web", "init_net.js" ],
 );
 impl ExtensionTrait<WebOptions> for init_net {
-    #[allow(unused_variables)]
+    #[expect(unused_variables)]
     fn init(options: WebOptions) -> Extension {
         init_net::init()
     }

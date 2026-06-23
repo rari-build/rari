@@ -29,10 +29,7 @@ pub async fn generate(tag: &str, package_name: &str, package_path: &Path) -> Res
         let stderr = String::from_utf8_lossy(&output.stderr);
         let stdout = String::from_utf8_lossy(&output.stdout);
         anyhow::bail!(
-            "Failed to generate changelog for {}:\nstdout: {}\nstderr: {}",
-            package_name,
-            stdout,
-            stderr
+            "Failed to generate changelog for {package_name}:\nstdout: {stdout}\nstderr: {stderr}"
         );
     }
 
@@ -44,7 +41,7 @@ pub async fn generate_release_notes(
     package_name: &str,
     previous_tag: Option<&str>,
 ) -> Result<String> {
-    let range = previous_tag.map(|prev| format!("{}..{}", prev, tag));
+    let range = previous_tag.map(|prev| format!("{prev}..{tag}"));
 
     let flags: Vec<&str> = if range.is_some() {
         vec![""]

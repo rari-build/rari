@@ -2,6 +2,10 @@ use axum::http::HeaderValue;
 use cow_utils::CowUtils;
 use rustc_hash::{FxHashMap, FxHashSet};
 
+#[expect(
+    clippy::implicit_hasher,
+    reason = "FxHashMap is the specific hasher needed for this codebase"
+)]
 pub fn extract_search_params(
     query_params: FxHashMap<String, String>,
 ) -> FxHashMap<String, Vec<String>> {
@@ -112,7 +116,7 @@ pub fn is_origin_allowed(origin: &str, allowed_origins: &[String]) -> bool {
             let is_schemeless = !allowed.contains("://");
 
             let normalized_pattern = if is_schemeless {
-                format!("https://{}", allowed)
+                format!("https://{allowed}")
             } else {
                 allowed.clone()
             };

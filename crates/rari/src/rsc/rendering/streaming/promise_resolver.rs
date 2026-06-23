@@ -45,7 +45,7 @@ fn collect_client_components(
                     && !component_map.contains_key(type_str_normalized)
                 {
                     *row_counter += 1;
-                    let module_ref = format!("$L{:x}", row_counter);
+                    let module_ref = format!("$L{row_counter:x}");
 
                     let (file_path, export_name) = if let Some(idx) = type_str_normalized.find('#')
                     {
@@ -54,7 +54,6 @@ fn collect_client_components(
                         (type_str_normalized, "default")
                     };
 
-                    #[allow(clippy::disallowed_methods)]
                     let import_data = serde_json::json!({
                         "id": file_path,
                         "chunks": [],
@@ -124,7 +123,7 @@ fn replace_lazy_markers(value: &mut serde_json::Value, promise_to_row: &FxHashMa
         }
 
         serde_json::Value::Object(obj) => {
-            let is_lazy = obj.get("~rari_lazy").and_then(|v| v.as_bool()) == Some(true);
+            let is_lazy = obj.get("~rari_lazy").and_then(serde_json::Value::as_bool) == Some(true);
 
             let promise_id = obj.get("~rari_promise_id").and_then(|v| v.as_str());
 
@@ -138,7 +137,7 @@ fn replace_lazy_markers(value: &mut serde_json::Value, promise_to_row: &FxHashMa
                     return;
                 };
 
-                *value = serde_json::Value::String(format!("${:x}", row_id));
+                *value = serde_json::Value::String(format!("${row_id:x}"));
 
                 return;
             }
@@ -305,7 +304,7 @@ impl BackgroundPromiseResolver {
                                         Ok(result_data) => {
                                             if result_data
                                                 .get("stale")
-                                                .and_then(|v| v.as_bool())
+                                                .and_then(serde_json::Value::as_bool)
                                                 .unwrap_or(false)
                                             {
                                                 continue;
@@ -433,8 +432,7 @@ impl BackgroundPromiseResolver {
                                             if let Err(e) = error_sender.send(BoundaryError {
                                                 boundary_id: boundary_id.clone(),
                                                 error_message: format!(
-                                                    "Failed to parse promise result: {}",
-                                                    e
+                                                    "Failed to parse promise result: {e}"
                                                 ),
                                                 row_id,
                                             }) {
@@ -459,7 +457,7 @@ impl BackgroundPromiseResolver {
                                     .await;
                                     if let Err(e) = error_sender.send(BoundaryError {
                                         boundary_id: boundary_id.clone(),
-                                        error_message: format!("Failed to execute promise: {}", e),
+                                        error_message: format!("Failed to execute promise: {e}"),
                                         row_id,
                                     }) {
                                         error!(

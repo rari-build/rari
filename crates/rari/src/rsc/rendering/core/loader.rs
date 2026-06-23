@@ -1,9 +1,10 @@
 use cow_utils::CowUtils;
+#[non_exhaustive]
 pub struct RscJsLoader;
 
 fn create_js_wrapper(js_code: &str) -> String {
     format!(
-        r#"
+        r"
         (function() {{
             try {{
                 {js_code}
@@ -11,7 +12,7 @@ fn create_js_wrapper(js_code: &str) -> String {
                 throw error;
             }}
         }})()
-        "#
+        "
     )
 }
 
@@ -83,7 +84,7 @@ impl RscJsLoader {
         };
 
         format!(
-            r#"
+            r"
             (function() {{
                 if (typeof globalThis.RscModuleManager?.stubs?.{} === 'function') {{
                     return globalThis.RscModuleManager.stubs.{}('{}');
@@ -93,7 +94,7 @@ impl RscJsLoader {
                     throw new Error('Stub creation function {} not available - RSC modules extension may not be loaded');
                 }}
             }})()
-            "#,
+            ",
             match stub_type {
                 StubType::Component => "component",
                 StubType::Loader => "loader",
@@ -473,11 +474,11 @@ impl RscJsLoader {
     }
 
     pub fn create_module_loader_check_script() -> String {
-        r#"
+        r"
         (function() {
             return globalThis.RariModuleLoader ? true : false;
         })()
-        "#
+        "
         .to_string()
     }
 
@@ -500,12 +501,14 @@ impl RscJsLoader {
 }
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub enum StubType {
     Component,
     Loader,
 }
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub enum RscModuleOperation {
     Load { module_specifier: String },
     PostRegister,

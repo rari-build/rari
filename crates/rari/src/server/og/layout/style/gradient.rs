@@ -184,7 +184,7 @@ impl LinearGradient {
             "black" => [0, 0, 0, 255],
             "white" => [255, 255, 255, 255],
             "red" => [255, 0, 0, 255],
-            "green" => [0, 255, 0, 255],
+            "green" | "lime" => [0, 255, 0, 255],
             "blue" => [0, 0, 255, 255],
             "yellow" => [255, 255, 0, 255],
             "cyan" => [0, 255, 255, 255],
@@ -195,7 +195,6 @@ impl LinearGradient {
             "purple" => [128, 0, 128, 255],
             "pink" => [255, 192, 203, 255],
             "brown" => [165, 42, 42, 255],
-            "lime" => [0, 255, 0, 255],
             "indigo" => [75, 0, 130, 255],
             "violet" => [238, 130, 238, 255],
             "navy" => [0, 0, 128, 255],
@@ -227,7 +226,7 @@ impl LinearGradient {
                     }
                 } else if color_str.starts_with("rgb(") {
                     let inner = color_str.strip_prefix("rgb(")?.strip_suffix(")")?;
-                    let parts: Vec<&str> = inner.split(',').map(|s| s.trim()).collect();
+                    let parts: Vec<&str> = inner.split(',').map(str::trim).collect();
                     if parts.len() == 3 {
                         let r = parts[0].parse().ok()?;
                         let g = parts[1].parse().ok()?;
@@ -238,7 +237,7 @@ impl LinearGradient {
                     }
                 } else if color_str.starts_with("rgba(") {
                     let inner = color_str.strip_prefix("rgba(")?.strip_suffix(")")?;
-                    let parts: Vec<&str> = inner.split(',').map(|s| s.trim()).collect();
+                    let parts: Vec<&str> = inner.split(',').map(str::trim).collect();
                     if parts.len() == 4 {
                         let r = parts[0].parse().ok()?;
                         let g = parts[1].parse().ok()?;
@@ -363,10 +362,10 @@ impl LinearGradient {
         let c2 = right.color;
 
         Rgba([
-            (c1[0] as f32 * (1.0 - t) + c2[0] as f32 * t) as u8,
-            (c1[1] as f32 * (1.0 - t) + c2[1] as f32 * t) as u8,
-            (c1[2] as f32 * (1.0 - t) + c2[2] as f32 * t) as u8,
-            (c1[3] as f32 * (1.0 - t) + c2[3] as f32 * t) as u8,
+            (f32::from(c1[0]) * (1.0 - t) + f32::from(c2[0]) * t) as u8,
+            (f32::from(c1[1]) * (1.0 - t) + f32::from(c2[1]) * t) as u8,
+            (f32::from(c1[2]) * (1.0 - t) + f32::from(c2[2]) * t) as u8,
+            (f32::from(c1[3]) * (1.0 - t) + f32::from(c2[3]) * t) as u8,
         ])
     }
 
@@ -377,7 +376,7 @@ impl LinearGradient {
 
         let cx = width / 2.0;
         let cy = height / 2.0;
-        let max_extent = ((width * dir_x.abs()) + (height * dir_y.abs())) / 2.0;
+        let max_extent = f32::midpoint(width * dir_x.abs(), height * dir_y.abs());
         let axis_length = 2.0 * max_extent;
 
         GradientParams {

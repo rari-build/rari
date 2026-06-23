@@ -58,7 +58,7 @@ impl OgImageCache {
         key.hash(&mut hasher);
         let hash = hasher.finish();
 
-        self.cache_dir.join(format!("{:x}.webp", hash))
+        self.cache_dir.join(format!("{hash:x}.webp"))
     }
 
     pub async fn get(&self, key: &str) -> Option<Vec<u8>> {

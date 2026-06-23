@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum ApiRouteError {
     NotFound {
         path: String,
@@ -49,10 +50,10 @@ impl ApiRouteError {
         match self {
             Self::NotFound { .. } => StatusCode::NOT_FOUND,
             Self::MethodNotAllowed { .. } => StatusCode::METHOD_NOT_ALLOWED,
-            Self::HandlerError { .. } => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::InvalidResponse { .. } => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::HandlerFileNotFound { .. } => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::HandlerLoadError { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::HandlerError { .. }
+            | Self::InvalidResponse { .. }
+            | Self::HandlerFileNotFound { .. }
+            | Self::HandlerLoadError { .. } => StatusCode::INTERNAL_SERVER_ERROR,
             Self::BodyParseError { .. } => StatusCode::BAD_REQUEST,
         }
     }
@@ -71,35 +72,35 @@ impl ApiRouteError {
 
     pub fn path(&self) -> &str {
         match self {
-            Self::NotFound { path, .. } => path,
-            Self::MethodNotAllowed { path, .. } => path,
-            Self::HandlerError { path, .. } => path,
-            Self::InvalidResponse { path, .. } => path,
-            Self::HandlerFileNotFound { path, .. } => path,
-            Self::HandlerLoadError { path, .. } => path,
-            Self::BodyParseError { path, .. } => path,
+            Self::NotFound { path, .. }
+            | Self::MethodNotAllowed { path, .. }
+            | Self::HandlerError { path, .. }
+            | Self::InvalidResponse { path, .. }
+            | Self::HandlerFileNotFound { path, .. }
+            | Self::HandlerLoadError { path, .. }
+            | Self::BodyParseError { path, .. } => path,
         }
     }
 
     pub fn method(&self) -> Option<&str> {
         match self {
-            Self::MethodNotAllowed { method, .. } => Some(method),
-            Self::HandlerError { method, .. } => Some(method),
-            Self::InvalidResponse { method, .. } => Some(method),
-            Self::BodyParseError { method, .. } => Some(method),
+            Self::MethodNotAllowed { method, .. }
+            | Self::HandlerError { method, .. }
+            | Self::InvalidResponse { method, .. }
+            | Self::BodyParseError { method, .. } => Some(method),
             _ => None,
         }
     }
 
     pub fn message(&self) -> &str {
         match self {
-            Self::NotFound { message, .. } => message,
-            Self::MethodNotAllowed { message, .. } => message,
-            Self::HandlerError { message, .. } => message,
-            Self::InvalidResponse { message, .. } => message,
-            Self::HandlerFileNotFound { message, .. } => message,
-            Self::HandlerLoadError { message, .. } => message,
-            Self::BodyParseError { message, .. } => message,
+            Self::NotFound { message, .. }
+            | Self::MethodNotAllowed { message, .. }
+            | Self::HandlerError { message, .. }
+            | Self::InvalidResponse { message, .. }
+            | Self::HandlerFileNotFound { message, .. }
+            | Self::HandlerLoadError { message, .. }
+            | Self::BodyParseError { message, .. } => message,
         }
     }
 
@@ -124,7 +125,7 @@ impl fmt::Display for ApiRouteError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::NotFound { path, message } => {
-                write!(f, "API route not found at {}: {}", path, message)
+                write!(f, "API route not found at {path}: {message}")
             }
             Self::MethodNotAllowed {
                 path,
@@ -147,7 +148,7 @@ impl fmt::Display for ApiRouteError {
                 message,
                 ..
             } => {
-                write!(f, "Handler error for {} {}: {}", method, path, message)
+                write!(f, "Handler error for {method} {path}: {message}")
             }
             Self::InvalidResponse {
                 path,
@@ -155,7 +156,7 @@ impl fmt::Display for ApiRouteError {
                 message,
                 ..
             } => {
-                write!(f, "Invalid response from {} {}: {}", method, path, message)
+                write!(f, "Invalid response from {method} {path}: {message}")
             }
             Self::HandlerFileNotFound {
                 path,
@@ -164,8 +165,7 @@ impl fmt::Display for ApiRouteError {
             } => {
                 write!(
                     f,
-                    "Handler file not found for route {} at {}: {}",
-                    path, file_path, message
+                    "Handler file not found for route {path} at {file_path}: {message}"
                 )
             }
             Self::HandlerLoadError {
@@ -175,8 +175,7 @@ impl fmt::Display for ApiRouteError {
             } => {
                 write!(
                     f,
-                    "Failed to load handler for route {} from {}: {}",
-                    path, file_path, message
+                    "Failed to load handler for route {path} from {file_path}: {message}"
                 )
             }
             Self::BodyParseError {
@@ -186,8 +185,7 @@ impl fmt::Display for ApiRouteError {
             } => {
                 write!(
                     f,
-                    "Failed to parse request body for {} {}: {}",
-                    method, path, message
+                    "Failed to parse request body for {method} {path}: {message}"
                 )
             }
         }
@@ -229,6 +227,7 @@ impl From<ApiRouteError> for RariError {
 }
 
 #[derive(Debug, Serialize)]
+#[non_exhaustive]
 pub struct ErrorResponse {
     pub error: String,
     pub message: String,
@@ -256,8 +255,8 @@ impl ApiRouteError {
                 message: self.message().to_string(),
                 code: Some(self.error_code().to_string()),
                 route: Some(self.path().to_string()),
-                method: self.method().map(|m| m.to_string()),
-                stack: self.stack().map(|s| s.to_string()),
+                method: self.method().map(std::string::ToString::to_string),
+                stack: self.stack().map(std::string::ToString::to_string),
                 details: self.get_error_details(),
             }
         } else {
@@ -284,7 +283,6 @@ impl ApiRouteError {
         }
     }
 
-    #[allow(clippy::disallowed_methods)]
     fn get_error_details(&self) -> Option<serde_json::Value> {
         match self {
             Self::MethodNotAllowed {
@@ -295,10 +293,8 @@ impl ApiRouteError {
             Self::InvalidResponse { details, .. } => {
                 details.as_ref().and_then(|d| serde_json::from_str(d).ok())
             }
-            Self::HandlerFileNotFound { file_path, .. } => Some(serde_json::json!({
-                "file_path": file_path
-            })),
-            Self::HandlerLoadError { file_path, .. } => Some(serde_json::json!({
+            Self::HandlerFileNotFound { file_path, .. }
+            | Self::HandlerLoadError { file_path, .. } => Some(serde_json::json!({
                 "file_path": file_path
             })),
             _ => None,
@@ -329,6 +325,7 @@ impl ApiRouteError {
             builder = builder.header("allow", allow_header);
         }
 
+        #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
         builder
             .body(axum::body::Body::from(body))
             .expect("Valid error response")
@@ -367,6 +364,10 @@ pub fn create_generic_error_response(
             .to_string()
     });
 
+    #[expect(
+        clippy::expect_used,
+        reason = "Response::builder() with valid components never fails"
+    )]
     axum::http::Response::builder()
         .status(status)
         .header("content-type", "application/json")

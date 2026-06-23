@@ -1,3 +1,5 @@
+#![allow(clippy::unused_async_trait_impl)]
+
 use cow_utils::CowUtils;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
@@ -7,10 +9,17 @@ use tracing::{error, info, warn};
 use crate::runtime::JsExecutionRuntime;
 use rari_error::RariError;
 
-use super::constants::*;
+use super::constants::{
+    COMPONENT_RENDER_SETUP_SCRIPT, COMPOSITION_WRAPPER_SCRIPT, PROMISE_TRACKING_INIT_SCRIPT,
+    RENDER_CHECK_COMPLETE_SCRIPT, RENDER_FETCH_RESULT_SCRIPT, RENDER_INIT_SCRIPT,
+    RENDER_START_SCRIPT, STREAMING_INIT_SCRIPT, STREAMING_REACT_SETUP_SCRIPT,
+};
 use super::promise_resolver::BackgroundPromiseResolver;
 use super::stream::RscStream;
-use super::types::*;
+use super::types::{
+    BoundaryError, BoundaryUpdate, PartialRenderResult, PendingSuspensePromise, PositionHints,
+    RscChunkType, RscStreamChunk, SuspenseBoundaryInfo,
+};
 use super::validation::validate_suspense_boundaries;
 
 pub struct StreamingRenderer {
@@ -412,8 +421,7 @@ impl StreamingRenderer {
                                      error.row_id
                                  );
 
-                                 #[allow(clippy::disallowed_methods)]
-                                  let error_json = serde_json::to_string(&serde_json::json!({
+                                 let error_json = serde_json::to_string(&serde_json::json!({
                                       "error": error.error_message,
                                       "boundary_id": error.boundary_id
                                   })).unwrap_or_else(|_| "{}".to_string());
@@ -552,7 +560,10 @@ impl StreamingRenderer {
             )
             .await?;
 
-        if let Some(available) = react_init_result.get("available").and_then(|v| v.as_bool()) {
+        if let Some(available) = react_init_result
+            .get("available")
+            .and_then(serde_json::Value::as_bool)
+        {
             if !available {
                 return Err(RariError::internal(
                     "Failed to initialize React in streaming context",
@@ -614,7 +625,7 @@ impl StreamingRenderer {
                 loop {
                     match runtime_clone
                         .execute_script(
-                            format!("<check_complete_{}>", component_id_clone),
+                            format!("<check_complete_{component_id_clone}>"),
                             RENDER_CHECK_COMPLETE_SCRIPT.to_string(),
                         )
                         .await
@@ -629,11 +640,11 @@ impl StreamingRenderer {
                                         serde_json::from_str::<serde_json::Value>(json_str)
                                         && (parsed
                                             .get("complete")
-                                            .and_then(|v| v.as_bool())
+                                            .and_then(serde_json::Value::as_bool)
                                             .unwrap_or(false)
                                             || parsed
                                                 .get("initialComplete")
-                                                .and_then(|v| v.as_bool())
+                                                .and_then(serde_json::Value::as_bool)
                                                 .unwrap_or(false))
                                     {
                                         let mut tx = completion_tx_clone.lock().await;
@@ -644,11 +655,11 @@ impl StreamingRenderer {
                                     }
                                 } else if check_data
                                     .get("complete")
-                                    .and_then(|v| v.as_bool())
+                                    .and_then(serde_json::Value::as_bool)
                                     .unwrap_or(false)
                                     || check_data
                                         .get("initialComplete")
-                                        .and_then(|v| v.as_bool())
+                                        .and_then(serde_json::Value::as_bool)
                                         .unwrap_or(false)
                                 {
                                     let mut tx = completion_tx_clone.lock().await;
@@ -727,7 +738,7 @@ impl StreamingRenderer {
             .iter()
             .filter_map(|b| {
                 let id = b["id"].as_str().unwrap_or("unknown").to_string();
-                let count = pending_counts.get(&id).cloned().unwrap_or(0);
+                let count = pending_counts.get(&id).copied().unwrap_or(0);
                 if count == 0 {
                     return None;
                 }
@@ -736,7 +747,7 @@ impl StreamingRenderer {
                     .as_array()
                     .map(|arr| {
                         arr.iter()
-                            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                            .filter_map(|v| v.as_str().map(std::string::ToString::to_string))
                             .collect()
                     })
                     .unwrap_or_else(Vec::new);
@@ -749,27 +760,31 @@ impl StreamingRenderer {
                         .map(|hints| PositionHints {
                             in_content_area: hints
                                 .get("inContentArea")
-                                .and_then(|v| v.as_bool())
+                                .and_then(serde_json::Value::as_bool)
                                 .unwrap_or(false),
                             dom_path: hints
                                 .get("domPath")
                                 .and_then(|v| v.as_array())
                                 .map(|arr| {
                                     arr.iter()
-                                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                                        .filter_map(|v| {
+                                            v.as_str().map(std::string::ToString::to_string)
+                                        })
                                         .collect()
                                 })
                                 .unwrap_or_else(Vec::new),
                             is_stable: hints
                                 .get("isStable")
-                                .and_then(|v| v.as_bool())
+                                .and_then(serde_json::Value::as_bool)
                                 .unwrap_or(false),
                         });
 
                 Some(SuspenseBoundaryInfo {
                     id,
                     fallback_content: b["fallback"].clone(),
-                    parent_boundary_id: b["parentId"].as_str().map(|s| s.to_string()),
+                    parent_boundary_id: b["parentId"]
+                        .as_str()
+                        .map(std::string::ToString::to_string),
                     pending_promise_count: count,
                     parent_path,
                     is_in_content_area,
@@ -827,12 +842,14 @@ impl StreamingRenderer {
             .map_err(|e| {
                 error!("Failed to execute React initialization script: {}", e);
                 RariError::internal(format!(
-                    "Failed to initialize React for streaming context: {}",
-                    e
+                    "Failed to initialize React for streaming context: {e}"
                 ))
             })?;
 
-        if let Some(available) = react_init_result.get("available").and_then(|v| v.as_bool()) {
+        if let Some(available) = react_init_result
+            .get("available")
+            .and_then(serde_json::Value::as_bool)
+        {
             if !available {
                 error!("React initialization reported as unavailable");
                 error!("React init result: {:?}", react_init_result);
@@ -858,8 +875,7 @@ impl StreamingRenderer {
             .map_err(|e| {
                 error!("Streaming initialization script failed: {}", e);
                 RariError::internal(format!(
-                    "Failed to initialize streaming globals and helpers: {}",
-                    e
+                    "Failed to initialize streaming globals and helpers: {e}"
                 ))
             })?
             .as_u64()
@@ -891,7 +907,7 @@ impl StreamingRenderer {
 
         let result_data: serde_json::Value = serde_json::from_str(&result_string).map_err(|e| {
             error!("Failed to parse composition result: {}", e);
-            RariError::internal(format!("Failed to parse composition result: {}", e))
+            RariError::internal(format!("Failed to parse composition result: {e}"))
         })?;
 
         if !result_data["success"].as_bool().unwrap_or(false) {
@@ -904,8 +920,7 @@ impl StreamingRenderer {
             error!("Error stack trace: {}", error_stack);
 
             return Err(RariError::internal(format!(
-                "Composition script execution failed: {} (Stack: {})",
-                error_msg, error_stack
+                "Composition script execution failed: {error_msg} (Stack: {error_stack})"
             )));
         }
 
@@ -925,7 +940,7 @@ impl StreamingRenderer {
             .iter()
             .filter_map(|b| {
                 let id = b["id"].as_str().unwrap_or("unknown").to_string();
-                let count = pending_counts.get(&id).cloned().unwrap_or(0);
+                let count = pending_counts.get(&id).copied().unwrap_or(0);
                 if count == 0 {
                     return None;
                 }
@@ -934,7 +949,7 @@ impl StreamingRenderer {
                     .as_array()
                     .map(|arr| {
                         arr.iter()
-                            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                            .filter_map(|v| v.as_str().map(std::string::ToString::to_string))
                             .collect()
                     })
                     .unwrap_or_else(Vec::new);
@@ -947,27 +962,31 @@ impl StreamingRenderer {
                         .map(|hints| PositionHints {
                             in_content_area: hints
                                 .get("inContentArea")
-                                .and_then(|v| v.as_bool())
+                                .and_then(serde_json::Value::as_bool)
                                 .unwrap_or(false),
                             dom_path: hints
                                 .get("domPath")
                                 .and_then(|v| v.as_array())
                                 .map(|arr| {
                                     arr.iter()
-                                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                                        .filter_map(|v| {
+                                            v.as_str().map(std::string::ToString::to_string)
+                                        })
                                         .collect()
                                 })
                                 .unwrap_or_else(Vec::new),
                             is_stable: hints
                                 .get("isStable")
-                                .and_then(|v| v.as_bool())
+                                .and_then(serde_json::Value::as_bool)
                                 .unwrap_or(false),
                         });
 
                 Some(SuspenseBoundaryInfo {
                     id,
                     fallback_content: b["fallback"].clone(),
-                    parent_boundary_id: b["parentId"].as_str().map(|s| s.to_string()),
+                    parent_boundary_id: b["parentId"]
+                        .as_str()
+                        .map(std::string::ToString::to_string),
                     pending_promise_count: count,
                     parent_path,
                     is_in_content_area,
@@ -1019,7 +1038,7 @@ impl StreamingRenderer {
 
         parser.parse().map_err(|e| {
             error!("Failed to parse RSC wire format: {}", e);
-            RariError::internal(format!("RSC parsing failed: {}", e))
+            RariError::internal(format!("RSC parsing failed: {e}"))
         })?;
 
         let boundaries = parser.find_suspense_boundaries();
@@ -1032,7 +1051,6 @@ impl StreamingRenderer {
         let mut boundary_infos = Vec::new();
 
         for boundary in &linked_boundaries {
-            #[allow(clippy::disallowed_methods)]
             let fallback_content = serde_json::json!({
                 "type": "div",
                 "props": {
@@ -1097,7 +1115,6 @@ impl StreamingRenderer {
         }
 
         if initial_content.is_null() {
-            #[allow(clippy::disallowed_methods)]
             {
                 initial_content = serde_json::json!(rsc_wire_format);
             }
@@ -1162,7 +1179,12 @@ impl StreamingRenderer {
                             position.map(|p| p.is_in_content_area).unwrap_or(false);
 
                         let dom_path = position
-                            .map(|p| p.dom_path.iter().map(|n| n.to_string()).collect())
+                            .map(|p| {
+                                p.dom_path
+                                    .iter()
+                                    .map(std::string::ToString::to_string)
+                                    .collect()
+                            })
                             .unwrap_or_default();
 
                         result.push(SuspenseBoundaryInfo {
@@ -1219,6 +1241,7 @@ impl StreamingRenderer {
         result
     }
 
+    #[expect(clippy::assigning_clones)]
     async fn send_initial_shell(
         &mut self,
         sender: &mpsc::Sender<RscStreamChunk>,
@@ -1267,7 +1290,7 @@ impl StreamingRenderer {
 
         for import_row in &import_rows {
             let import_chunk = RscStreamChunk {
-                data: format!("{}\n", import_row).into_bytes(),
+                data: format!("{import_row}\n").into_bytes(),
                 chunk_type: RscChunkType::ModuleImport,
                 row_id: 0,
                 is_final: false,
@@ -1299,7 +1322,7 @@ impl StreamingRenderer {
     ) {
         for import_row in &update.import_rows {
             let import_chunk = RscStreamChunk {
-                data: format!("{}\n", import_row).into_bytes(),
+                data: format!("{import_row}\n").into_bytes(),
                 chunk_type: RscChunkType::ModuleImport,
                 row_id: 0,
                 is_final: false,
@@ -1325,7 +1348,7 @@ impl StreamingRenderer {
         };
 
         match sender.send(chunk).await {
-            Ok(_) => {}
+            Ok(()) => {}
             Err(e) => {
                 tracing::debug!(
                     "Failed to send boundary update chunk (client disconnected), boundary_id={}, row_id={}, error={}",
@@ -1345,7 +1368,7 @@ impl StreamingRenderer {
             && row_id != 0
         {
             let row_0_chunk = RscStreamChunk {
-                data: format!("0:\"${:x}\"\n", row_id).into_bytes(),
+                data: format!("0:\"${row_id:x}\"\n").into_bytes(),
                 chunk_type: RscChunkType::BoundaryUpdate,
                 row_id: 0,
                 is_final: false,
@@ -1367,7 +1390,6 @@ impl StreamingRenderer {
     }
 
     async fn send_boundary_error(sender: &mpsc::Sender<RscStreamChunk>, error: BoundaryError) {
-        #[allow(clippy::disallowed_methods)]
         let error_data = serde_json::json!({
             "boundary_id": error.boundary_id,
             "error": error.error_message,
@@ -1399,7 +1421,7 @@ impl StreamingRenderer {
         boundary_lazy_refs: &FxHashMap<String, u32>,
     ) -> Result<RscStreamChunk, RariError> {
         let rsc_element = self.json_to_rsc_element(content, symbol_row_id, boundary_lazy_refs)?;
-        let row = format!("{:x}:{}\n", root_row_id, rsc_element);
+        let row = format!("{root_row_id:x}:{rsc_element}\n");
 
         Ok(RscStreamChunk {
             data: row.into_bytes(),
@@ -1426,7 +1448,7 @@ impl StreamingRenderer {
                     && (type_str == "react.suspense" || type_str == "$Sreact.suspense")
                     && let Some(row_id) = symbol_row_id
                 {
-                    serde_json::Value::String(format!("${:x}", row_id))
+                    serde_json::Value::String(format!("${row_id:x}"))
                 } else {
                     element_type.clone()
                 };
@@ -1435,7 +1457,7 @@ impl StreamingRenderer {
                     let mut new_props = serde_json::Map::new();
                     let is_suspense = matches!(
                         element_type.as_str(),
-                        Some("react.suspense") | Some("$Sreact.suspense")
+                        Some("react.suspense" | "$Sreact.suspense")
                     );
                     for (k, v) in props_obj {
                         if k == "children" || (is_suspense && k == "fallback") {
@@ -1473,23 +1495,23 @@ impl StreamingRenderer {
                     key.clone(),
                     final_props,
                 ]));
-            } else {
-                let mut converted = Vec::new();
-                for item in arr {
-                    converted.push(self.json_to_rsc_element(
-                        item,
-                        symbol_row_id,
-                        boundary_lazy_refs,
-                    )?);
-                }
-                return Ok(serde_json::Value::Array(converted));
             }
+
+            let mut converted = Vec::new();
+            for item in arr {
+                converted.push(self.json_to_rsc_element(
+                    item,
+                    symbol_row_id,
+                    boundary_lazy_refs,
+                )?);
+            }
+            return Ok(serde_json::Value::Array(converted));
         }
 
         if let Some(obj) = json.as_object() {
             let is_lazy = obj
                 .get("~rari_lazy")
-                .and_then(|v| v.as_bool())
+                .and_then(serde_json::Value::as_bool)
                 .unwrap_or(false);
 
             if is_lazy {
@@ -1498,7 +1520,7 @@ impl StreamingRenderer {
                 };
 
                 if let Some(&promise_row_id) = boundary_lazy_refs.get(promise_id) {
-                    return Ok(serde_json::Value::String(format!("${:x}", promise_row_id)));
+                    return Ok(serde_json::Value::String(format!("${promise_row_id:x}")));
                 }
 
                 warn!(
@@ -1510,7 +1532,7 @@ impl StreamingRenderer {
 
             let is_rsc_element = obj
                 .get("~rsc_element")
-                .and_then(|v| v.as_bool())
+                .and_then(serde_json::Value::as_bool)
                 .unwrap_or(false);
 
             if is_rsc_element
@@ -1519,7 +1541,7 @@ impl StreamingRenderer {
                 let mut converted_props = serde_json::Map::new();
                 let is_suspense = matches!(
                     element_type.as_str(),
-                    Some("react.suspense") | Some("$Sreact.suspense")
+                    Some("react.suspense" | "$Sreact.suspense")
                 );
 
                 if let Some(props_obj) = props.as_object() {
@@ -1542,7 +1564,7 @@ impl StreamingRenderer {
                     && (type_str == "react.suspense" || type_str == "$Sreact.suspense")
                     && let Some(row_id) = symbol_row_id
                 {
-                    serde_json::Value::String(format!("${:x}", row_id))
+                    serde_json::Value::String(format!("${row_id:x}"))
                 } else {
                     element_type.clone()
                 };
@@ -1601,7 +1623,7 @@ impl StreamingRenderer {
         row_id: u32,
         symbol_name: &str,
     ) -> Result<RscStreamChunk, RariError> {
-        let symbol_row = format!("{:x}:\"$S{}\"\n", row_id, symbol_name);
+        let symbol_row = format!("{row_id:x}:\"$S{symbol_name}\"\n");
 
         Ok(RscStreamChunk {
             data: symbol_row.into_bytes(),

@@ -83,12 +83,15 @@ impl CjsCodeAnalyzer {
         let media_type = MediaType::from_specifier(specifier);
 
         if media_type == MediaType::Json {
-            return Ok(CjsAnalysis::Cjs(Default::default()));
+            return Ok(CjsAnalysis::Cjs(
+                deno_ast::ModuleExportsAndReExports::default(),
+            ));
         }
 
-        let cjs_tracker = self.cjs_tracker.clone();
+        let cjs_tracker = Arc::clone(&self.cjs_tracker);
         let specifier_clone = specifier.clone();
 
+        #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
         let analysis = deno_core::unsync::spawn_blocking({
             let source: Arc<str> = source.into();
             move || -> Result<CjsAnalysis, JsErrorBox> {
@@ -132,7 +135,7 @@ impl CjsCodeAnalyzer {
         Ok(analysis)
     }
 
-    #[allow(unused)]
+    #[expect(unused)]
     fn analyze_cjs<'a>(
         &self,
         specifier: &ModuleSpecifier,

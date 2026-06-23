@@ -120,6 +120,10 @@ impl App {
         })
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Complex key handling for TUI navigation requires comprehensive match arms"
+    )]
     pub async fn handle_key(&mut self, key: KeyCode) -> Result<bool> {
         match &self.screen.clone() {
             Screen::PackageSelection => match key {
@@ -195,19 +199,25 @@ impl App {
                 KeyCode::Enter => {
                     let unit = &self.release_units[*package_idx];
                     if let Ok(version) = semver::Version::parse(input) {
-                        let current = semver::Version::parse(unit.current_version())
-                            .expect("current version should be valid semver");
-                        if version > current {
-                            self.screen = Screen::Publishing {
-                                package_idx: *package_idx,
-                                version: version.to_string(),
-                            };
-                            self.publish_step = PublishStep::UpdatingVersion;
-                            self.publish_progress = 0.0;
-                            self.status_messages.clear();
-                        } else {
-                            self.error_message =
-                                Some("Version must be greater than current".to_string());
+                        match semver::Version::parse(unit.current_version()) {
+                            Ok(current) => {
+                                if version > current {
+                                    self.screen = Screen::Publishing {
+                                        package_idx: *package_idx,
+                                        version: version.to_string(),
+                                    };
+                                    self.publish_step = PublishStep::UpdatingVersion;
+                                    self.publish_progress = 0.0;
+                                    self.status_messages.clear();
+                                } else {
+                                    self.error_message =
+                                        Some("Version must be greater than current".to_string());
+                                }
+                            }
+                            Err(_) => {
+                                self.error_message =
+                                    Some("Failed to parse current version".to_string());
+                            }
                         }
                     } else {
                         self.error_message = Some("Invalid semantic version".to_string());
@@ -228,11 +238,11 @@ impl App {
                 _ => {}
             },
             Screen::PostPublish { has_more_packages } => match key {
-                KeyCode::Char('c') | KeyCode::Char('C') if *has_more_packages => {
+                KeyCode::Char('c' | 'C') if *has_more_packages => {
                     self.selected_package_idx += 1;
                     self.screen = Screen::PackageSelection;
                 }
-                KeyCode::Char('f') | KeyCode::Char('F') | KeyCode::Enter => {
+                KeyCode::Char('f' | 'F') | KeyCode::Enter => {
                     self.screen = Screen::PostRelease {
                         released: self.released_packages.clone(),
                         step: PostReleaseStep::Pushing,
@@ -243,7 +253,7 @@ impl App {
                 _ => {}
             },
             Screen::PostRelease { step, .. } => match key {
-                KeyCode::Char('y') | KeyCode::Char('Y') => {
+                KeyCode::Char('y' | 'Y') => {
                     if *step == PostReleaseStep::PromptGitHub
                         && let Screen::PostRelease { released, .. } = &self.screen.clone()
                     {
@@ -253,9 +263,7 @@ impl App {
                         };
                     }
                 }
-                KeyCode::Char('n') | KeyCode::Char('N')
-                    if *step == PostReleaseStep::PromptGitHub =>
-                {
+                KeyCode::Char('n' | 'N') if *step == PostReleaseStep::PromptGitHub => {
                     self.screen = Screen::Complete;
                 }
                 KeyCode::Enter
@@ -276,6 +284,10 @@ impl App {
         Ok(false)
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Publishing workflow state machine requires comprehensive progress tracking"
+    )]
     pub async fn update(&mut self) -> Result<()> {
         if let Screen::Publishing {
             package_idx,
@@ -287,7 +299,7 @@ impl App {
                 PublishStep::UpdatingVersion => {
                     if self.dry_run {
                         self.status_messages
-                            .push(format!("[DRY RUN] Would update version to {}...", version));
+                            .push(format!("[DRY RUN] Would update version to {version}..."));
                     } else {
                         self.status_messages.push("Updating version...".to_string());
                         unit.update_version(version).await?;
@@ -308,7 +320,7 @@ impl App {
                         } else {
                             self.status_messages
                                 .push("Generating changelog...".to_string());
-                            let tag = format!("{}@{}", unit_name, version);
+                            let tag = format!("{unit_name}@{version}");
                             let package_path = unit.paths()[0];
                             changelog::generate(&tag, unit_name, package_path).await?;
                         }
@@ -328,21 +340,24 @@ impl App {
                 PublishStep::Committing => {
                     let message = format!("release: {}@{}", unit.name(), version);
                     let tag = if unit.name() == "rari-binaries" {
-                        format!("v{}", version)
+                        format!("v{version}")
                     } else if unit.name() == "@rari/use-cache-binaries" {
-                        format!("use-cache-binaries@{}", version)
+                        format!("use-cache-binaries@{version}")
                     } else {
                         format!("{}@{}", unit.name(), version)
                     };
                     if self.dry_run {
                         self.status_messages
-                            .push(format!("[DRY RUN] Would commit with message: {}", message));
+                            .push(format!("[DRY RUN] Would commit with message: {message}"));
                         self.status_messages
-                            .push(format!("[DRY RUN] Would create tag: {}", tag));
+                            .push(format!("[DRY RUN] Would create tag: {tag}"));
                     } else {
                         let paths = unit.paths();
 
-                        if !paths.is_empty() {
+                        if paths.is_empty() {
+                            self.status_messages
+                                .push("Skipping commit (virtual release)...".to_string());
+                        } else {
                             self.status_messages
                                 .push("Committing changes...".to_string());
 
@@ -376,9 +391,6 @@ impl App {
                                 }
                                 git::amend_commit().await?;
                             }
-                        } else {
-                            self.status_messages
-                                .push("Skipping commit (virtual release)...".to_string());
                         }
                         git::create_tag(&tag).await?;
                     }
@@ -405,9 +417,9 @@ impl App {
                     self.publish_progress = 1.0;
 
                     let tag = if unit.name() == "rari-binaries" {
-                        format!("v{}", version)
+                        format!("v{version}")
                     } else if unit.name() == "@rari/use-cache-binaries" {
-                        format!("use-cache-binaries@{}", version)
+                        format!("use-cache-binaries@{version}")
                     } else {
                         format!("{}@{}", unit.name(), version)
                     };
@@ -465,9 +477,9 @@ impl App {
                                     .push(format!("Opening {}@{}...", pkg.name, pkg.version));
                                 if let Err(e) = open::that(&release_url) {
                                     self.post_release_messages
-                                        .push(format!("✗ Failed to open browser: {}", e));
+                                        .push(format!("✗ Failed to open browser: {e}"));
                                     self.post_release_messages
-                                        .push(format!("  URL: {}", release_url));
+                                        .push(format!("  URL: {release_url}"));
                                 } else {
                                     self.post_release_messages
                                         .push("✓ Opened in browser".to_string());
@@ -476,7 +488,7 @@ impl App {
                         }
                         Err(e) => {
                             self.post_release_messages
-                                .push(format!("⚠ Could not determine GitHub repository: {}", e));
+                                .push(format!("⚠ Could not determine GitHub repository: {e}"));
                         }
                     }
                     self.screen = Screen::PostRelease {
@@ -490,6 +502,10 @@ impl App {
         Ok(())
     }
 
+    #[expect(
+        clippy::needless_pass_by_ref_mut,
+        reason = "Frame mutability required by ratatui API contract"
+    )]
     pub fn render(&mut self, frame: &mut Frame) {
         match &self.screen {
             Screen::PackageSelection => {

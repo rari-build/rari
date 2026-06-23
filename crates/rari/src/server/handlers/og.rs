@@ -42,6 +42,10 @@ pub async fn og_image_handler(
 
                 response.headers_mut().insert(
                     "x-cache",
+                    #[expect(
+                        clippy::expect_used,
+                        reason = "Infallible operation with valid inputs"
+                    )]
                     x_cache
                         .parse()
                         .expect("x-cache header value should be valid ASCII"),

@@ -28,6 +28,10 @@ pub async fn root_handler(State(_state): State<ServerState>) -> Result<Response,
                     .header("content-type", "text/html")
                     .header("cache-control", cache_control);
 
+                #[expect(
+                    clippy::expect_used,
+                    reason = "Response::builder() with valid components never fails"
+                )]
                 return Ok(response_builder
                     .body(Body::from(content))
                     .expect("Valid HTML response"));
@@ -73,6 +77,10 @@ pub async fn static_or_spa_handler(
             Ok(content) => {
                 let content_type = get_content_type(&path);
                 let cache_control = &config.caching.static_files;
+                #[expect(
+                    clippy::expect_used,
+                    reason = "Response::builder() with valid components never fails"
+                )]
                 return Ok(Response::builder()
                     .header("content-type", content_type)
                     .header("cache-control", cache_control)
@@ -93,7 +101,7 @@ pub async fn static_or_spa_handler(
                 && let Some(extension) = parts.last()
                 && extension.len() >= 2
                 && extension.len() <= 5
-                && extension.chars().all(|c| c.is_alphanumeric())
+                && extension.chars().all(char::is_alphanumeric)
             {
                 return Err(StatusCode::NOT_FOUND);
             }
@@ -103,7 +111,7 @@ pub async fn static_or_spa_handler(
     let route_path = if path.is_empty() {
         "/"
     } else {
-        &format!("/{}", path)
+        &format!("/{path}")
     };
 
     let index_path = config.public_dir().join("index.html");
@@ -115,6 +123,10 @@ pub async fn static_or_spa_handler(
                     .header("content-type", "text/html")
                     .header("cache-control", cache_control);
 
+                #[expect(
+                    clippy::expect_used,
+                    reason = "Response::builder() with valid components never fails"
+                )]
                 return Ok(response_builder
                     .body(Body::from(content))
                     .expect("Valid HTML response"));
@@ -157,6 +169,10 @@ pub async fn serve_static_asset(
             let content_type = get_content_type(&asset_path);
             let cache_control = &state.config.caching.static_files;
 
+            #[expect(
+                clippy::expect_used,
+                reason = "Response::builder() with valid components never fails"
+            )]
             Ok(Response::builder()
                 .header("content-type", content_type)
                 .header("cache-control", cache_control)
@@ -174,6 +190,10 @@ pub fn cors_preflight_response() -> Response {
     use axum::http::HeaderValue;
 
     let mut builder = Response::builder().status(StatusCode::NO_CONTENT);
+    #[expect(
+        clippy::expect_used,
+        reason = "Response::builder() always initializes headers"
+    )]
     let headers = builder
         .headers_mut()
         .expect("Response builder should have headers");
@@ -189,6 +209,7 @@ pub fn cors_preflight_response() -> Response {
         ),
     );
     headers.insert("Access-Control-Max-Age", HeaderValue::from_static("86400"));
+    #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
     builder
         .body(Body::empty())
         .expect("Valid preflight response")

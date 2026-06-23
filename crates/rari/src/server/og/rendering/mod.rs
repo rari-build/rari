@@ -1,3 +1,8 @@
+#![expect(
+    clippy::unnecessary_wraps,
+    reason = "Rendering helper methods return Result for API consistency"
+)]
+
 mod background;
 mod border;
 mod image;

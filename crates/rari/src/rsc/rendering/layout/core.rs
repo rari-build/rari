@@ -9,14 +9,22 @@ const LAYOUT_KEY_PREFIX: &str = "layout:";
 use crate::server::config::{CacheLayerConfig, Config};
 use crate::server::routing::app_router::AppRouteMatch;
 use cow_utils::CowUtils;
-use rari_utils::path_url::path_to_file_url;
+use rari_utils::path_to_file_url;
 use serde_json::Value;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::debug;
 use tracing::error;
 
-use super::{constants::*, error_messages, types::*, utils};
+use super::{
+    constants::{
+        JS_DISABLE_STREAMING, JS_ENABLE_STREAMING, JS_GET_RESULT, JS_PAGE_RENDER_SIMPLE,
+        JS_PAGE_RENDER_WITH_LOADING,
+    },
+    error_messages,
+    types::{LayoutRenderContext, RenderResult},
+    utils,
+};
 
 pub struct LayoutHtmlCache {
     handler: Arc<dyn CacheHandler>,
@@ -282,7 +290,7 @@ impl LayoutRenderer {
                     })
                     .collect::<String>();
 
-                format!("{}{}", converted_base, ext)
+                format!("{converted_base}{ext}")
             }
 
             let js_filename = file_path
@@ -319,10 +327,10 @@ impl LayoutRenderer {
             r#"
             (async () => {{
                 try {{
-                    const module = await import("{}");
+                    const module = await import("{page_path}");
 
                     if (typeof module.getData === 'function') {{
-                        const pageProps = {};
+                        const pageProps = {page_props_json};
                         const result = await module.getData(pageProps);
                         return {{ notFound: result?.notFound === true }};
                     }}
@@ -333,12 +341,11 @@ impl LayoutRenderer {
                     return {{ notFound: false }};
                 }}
             }})()
-            "#,
-            page_path, page_props_json
+            "#
         );
 
         let renderer = self.renderer.lock().await;
-        let runtime = renderer.runtime.clone();
+        let runtime = Arc::clone(&renderer.runtime);
         drop(renderer);
 
         let result = runtime
@@ -347,7 +354,7 @@ impl LayoutRenderer {
 
         let not_found = result
             .get("notFound")
-            .and_then(|v| v.as_bool())
+            .and_then(serde_json::Value::as_bool)
             .unwrap_or(false);
 
         Ok(not_found)
@@ -487,30 +494,29 @@ impl LayoutRenderer {
             let rsc_payload = if rsc_wire_format.ends_with('\n') {
                 rsc_wire_format.clone()
             } else {
-                format!("{}\n", rsc_wire_format)
+                format!("{rsc_wire_format}\n")
             };
             let escaped_payload = rsc_payload.cow_replace("</", "<\\/");
             let payload_script = format!(
-                r#"<script id="__RARI_RSC_PAYLOAD__" type="text/x-component">{}</script>"#,
-                escaped_payload
+                r#"<script id="__RARI_RSC_PAYLOAD__" type="text/x-component">{escaped_payload}</script>"#
             );
-            let completion_script = r#"<script>
+            let completion_script = r"<script>
 if (typeof window !== 'undefined') {
     if (!window['~rari']) window['~rari'] = {};
     if (!window['~rari'].streaming) window['~rari'].streaming = {};
     window['~rari'].streaming.complete = true;
 }
-</script>"#;
+</script>";
 
             let html = if let Some(body_end) = html.rfind("</body>") {
                 let mut result = html;
                 result.insert_str(
                     body_end,
-                    &format!("{}\n{}\n", payload_script, completion_script),
+                    &format!("{payload_script}\n{completion_script}\n"),
                 );
                 result
             } else {
-                format!("{}{}\n{}", html, payload_script, completion_script)
+                format!("{html}{payload_script}\n{completion_script}")
             };
 
             if route_match.not_found.is_none()
@@ -602,7 +608,7 @@ if (typeof window !== 'undefined') {
                             let prev_count = refcount_for_cleanup.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
 
                             if prev_count == 1 {
-                                let rt = runtime_for_cleanup.clone();
+                                let rt = runtime_for_cleanup;
                                 tokio::spawn(async move {
                                     let _ = rt
                                         .execute_script(
@@ -863,7 +869,7 @@ if (typeof window !== 'undefined') {
                     }
                 };
 
-                if let Some(success) = result.get("success").and_then(|v| v.as_bool())
+                if let Some(success) = result.get("success").and_then(serde_json::Value::as_bool)
                     && !success
                 {
                     let error_msg = result
@@ -981,7 +987,7 @@ if (typeof window !== 'undefined') {
             serializer.reset_for_new_request();
             serializer
                 .serialize_rsc_json(rsc_data)
-                .map_err(|e| RariError::internal(format!("Failed to serialize RSC data: {}", e)))?
+                .map_err(|e| RariError::internal(format!("Failed to serialize RSC data: {e}")))?
         };
 
         Self::resolve_lazy_promises(renderer, &mut rsc_wire_format).await?;

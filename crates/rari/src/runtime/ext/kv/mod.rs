@@ -39,6 +39,10 @@ enum KvStoreBuilder {
 }
 
 #[derive(Clone, Copy)]
+#[expect(
+    clippy::struct_field_names,
+    reason = "All fields are max limits by design"
+)]
 pub struct KvConfig {
     pub max_write_key_size_bytes: usize,
     pub max_value_size_bytes: usize,

@@ -3,6 +3,7 @@ use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
+#[non_exhaustive]
 pub enum RouteSegmentType {
     Static,
     Dynamic,
@@ -11,6 +12,7 @@ pub enum RouteSegmentType {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct RouteSegment {
     #[serde(rename = "type")]
     pub segment_type: RouteSegmentType,
@@ -21,6 +23,7 @@ pub struct RouteSegment {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(untagged)]
+#[non_exhaustive]
 pub enum ParamValue {
     Single(String),
     Multiple(Vec<String>),
@@ -29,7 +32,7 @@ pub enum ParamValue {
 impl fmt::Display for ParamValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ParamValue::Single(s) => write!(f, "{}", s),
+            ParamValue::Single(s) => write!(f, "{s}"),
             ParamValue::Multiple(v) => write!(f, "{}", v.join("/")),
         }
     }

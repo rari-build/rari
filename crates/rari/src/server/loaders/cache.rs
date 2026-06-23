@@ -5,6 +5,7 @@ use regex::Regex;
 use rustc_hash::FxHashMap;
 use tracing::error;
 
+#[non_exhaustive]
 pub struct CacheLoader;
 
 impl CacheLoader {
@@ -88,7 +89,7 @@ impl CacheLoader {
         let route = if route == "index" {
             "/".to_string()
         } else {
-            format!("/{}", route)
+            format!("/{route}")
         };
 
         Ok(route)

@@ -9,6 +9,7 @@ use parking_lot::Mutex;
 use crate::server::cache::handler::{CacheHandler, MemoryCacheHandler, MemoryConfig};
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct CacheMetadata {
     #[serde(with = "instant_serde")]
     pub cached_at: Instant,
@@ -18,6 +19,7 @@ pub struct CacheMetadata {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct CachedResponse {
     pub body: Bytes,
     #[serde(with = "header_map_serde")]
@@ -48,6 +50,7 @@ impl CachedResponse {
 }
 
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct CacheConfig {
     pub max_entries: usize,
     pub default_ttl: u64,
@@ -68,7 +71,7 @@ impl CacheConfig {
             default_ttl: std::env::var("RARI_CACHE_DEFAULT_TTL")
                 .ok()
                 .and_then(|v| v.parse().ok())
-                .unwrap_or(31536000),
+                .unwrap_or(31_536_000),
             enabled: std::env::var("RARI_CACHE_ENABLED")
                 .ok()
                 .and_then(|v| v.parse().ok())
@@ -98,6 +101,7 @@ impl CacheConfig {
 }
 
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct RouteCachePolicy {
     pub ttl: u64,
     pub enabled: bool,
@@ -153,6 +157,7 @@ impl Default for CacheConfig {
 }
 
 #[derive(Clone, Debug, Default)]
+#[non_exhaustive]
 pub struct CacheMetrics {
     pub total_entries: usize,
     pub cache_hits: u64,
@@ -215,18 +220,18 @@ impl ResponseCache {
 
                 let params_str = sorted_params
                     .iter()
-                    .map(|(k, v)| format!("{}={}", k, v))
+                    .map(|(k, v)| format!("{k}={v}"))
                     .collect::<Vec<_>>()
                     .join("&");
 
-                format!("{}?{}", route, params_str)
+                format!("{route}?{params_str}")
             }
         } else {
             route.to_string()
         };
 
         match render_mode {
-            Some(mode) => format!("{}#:{}", base, mode),
+            Some(mode) => format!("{base}#:{mode}"),
             None => base,
         }
     }
@@ -239,7 +244,7 @@ impl ResponseCache {
         content.hash(&mut hasher);
         let hash = hasher.finish();
 
-        format!("W/\"{:x}\"", hash)
+        format!("W/\"{hash:x}\"")
     }
 
     pub async fn get(&self, key: &str) -> Option<CachedResponse> {

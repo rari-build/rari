@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum RSCTree {
     ClientReference {
         id: String,
@@ -62,7 +63,7 @@ impl RSCTree {
     pub fn fragment(children: Vec<RSCTree>, key: Option<&str>) -> Self {
         RSCTree::Fragment {
             children,
-            key: key.map(|k| k.to_string()),
+            key: key.map(std::string::ToString::to_string),
         }
     }
 
@@ -82,7 +83,7 @@ impl RSCTree {
         RSCTree::Error {
             message: message.to_string(),
             component_name: component_name.to_string(),
-            stack: stack.map(|s| s.to_string()),
+            stack: stack.map(std::string::ToString::to_string),
         }
     }
 
@@ -91,13 +92,11 @@ impl RSCTree {
             RSCTree::ClientReference { .. } => true,
             RSCTree::ServerElement { children, .. } => children
                 .as_ref()
-                .is_some_and(|c| c.iter().any(|child| child.has_client_components())),
+                .is_some_and(|c| c.iter().any(RSCTree::has_client_components)),
             RSCTree::Fragment { children, .. } => {
-                children.iter().any(|child| child.has_client_components())
+                children.iter().any(RSCTree::has_client_components)
             }
-            RSCTree::Array(elements) => elements
-                .iter()
-                .any(|element| element.has_client_components()),
+            RSCTree::Array(elements) => elements.iter().any(RSCTree::has_client_components),
             _ => false,
         }
     }
@@ -116,15 +115,8 @@ impl RSCTree {
             RSCTree::ServerElement {
                 children: Some(children),
                 ..
-            } => {
-                for child in children {
-                    child.collect_client_component_ids_recursive(ids);
-                }
             }
-            RSCTree::ServerElement { children: None, .. } => {
-                // No children to process
-            }
-            RSCTree::Fragment { children, .. } => {
+            | RSCTree::Fragment { children, .. } => {
                 for child in children {
                     child.collect_client_component_ids_recursive(ids);
                 }
@@ -141,10 +133,7 @@ impl RSCTree {
     pub fn to_json(&self) -> Value {
         match self {
             RSCTree::ClientReference { id, key, props } => {
-                #[allow(clippy::disallowed_methods)]
-                {
-                    serde_json::json!(["$", id, key, props])
-                }
+                serde_json::json!(["$", id, key, props])
             }
             RSCTree::ServerElement {
                 tag,
@@ -152,7 +141,6 @@ impl RSCTree {
                 children,
                 key,
             } => {
-                #[allow(clippy::disallowed_methods)]
                 let mut element = serde_json::json!({
                     "$$typeof": "react.transitional.element",
                     "type": tag,
@@ -161,7 +149,7 @@ impl RSCTree {
                 });
 
                 if let Some(children) = children {
-                    let children_json: Vec<Value> = children.iter().map(|c| c.to_json()).collect();
+                    let children_json: Vec<Value> = children.iter().map(RSCTree::to_json).collect();
                     if let Some(props) = element.get_mut("props")
                         && let Some(props_obj) = props.as_object_mut()
                     {
@@ -173,11 +161,11 @@ impl RSCTree {
             }
             RSCTree::Text(content) => Value::String(content.clone()),
             RSCTree::Fragment { children, .. } => {
-                let children_json: Vec<Value> = children.iter().map(|c| c.to_json()).collect();
+                let children_json: Vec<Value> = children.iter().map(RSCTree::to_json).collect();
                 Value::Array(children_json)
             }
             RSCTree::Array(elements) => {
-                let elements_json: Vec<Value> = elements.iter().map(|e| e.to_json()).collect();
+                let elements_json: Vec<Value> = elements.iter().map(RSCTree::to_json).collect();
                 Value::Array(elements_json)
             }
             RSCTree::Null => Value::Null,
@@ -187,37 +175,34 @@ impl RSCTree {
                 component_name,
                 ..
             } => {
-                #[allow(clippy::disallowed_methods)]
-                {
-                    serde_json::json!({
-                        "$$typeof": "react.transitional.element",
-                        "type": "div",
-                        "props": {
-                            "style": {
-                                "color": "red",
-                                "border": "1px solid red",
-                                "padding": "10px",
-                                "margin": "10px"
-                            },
-                            "children": [
-                                {
-                                    "$$typeof": "react.transitional.element",
-                                    "type": "h3",
-                                    "props": {
-                                        "children": format!("Error in {}", component_name)
-                                    }
-                                },
-                                {
-                                    "$$typeof": "react.transitional.element",
-                                    "type": "p",
-                                    "props": {
-                                        "children": message
-                                    }
+                serde_json::json!({
+                    "$$typeof": "react.transitional.element",
+                    "type": "div",
+                    "props": {
+                        "style": {
+                            "color": "red",
+                            "border": "1px solid red",
+                            "padding": "10px",
+                            "margin": "10px"
+                        },
+                        "children": [
+                            {
+                                "$$typeof": "react.transitional.element",
+                                "type": "h3",
+                                "props": {
+                                    "children": format!("Error in {}", component_name)
                                 }
-                            ]
-                        }
-                    })
-                }
+                            },
+                            {
+                                "$$typeof": "react.transitional.element",
+                                "type": "p",
+                                "props": {
+                                    "children": message
+                                }
+                            }
+                        ]
+                    }
+                })
             }
         }
     }
@@ -235,7 +220,7 @@ impl RSCTree {
                     let is_client_reference = id.starts_with("$L") || id.contains('#');
 
                     if is_client_reference {
-                        let key = arr[2].as_str().map(|s| s.to_string());
+                        let key = arr[2].as_str().map(std::string::ToString::to_string);
                         let props = arr[3]
                             .as_object()
                             .ok_or("Invalid client reference props")?
@@ -250,7 +235,7 @@ impl RSCTree {
                         })
                     } else {
                         let tag = id;
-                        let key = arr[2].as_str().map(|s| s.to_string());
+                        let key = arr[2].as_str().map(std::string::ToString::to_string);
                         let props_obj = arr[3].as_object().ok_or("Invalid element props")?;
 
                         let mut props: FxHashMap<String, Value> = props_obj
@@ -290,12 +275,11 @@ impl RSCTree {
                 if obj.contains_key("~preSerializedSuspense") && obj.contains_key("rscArray") {
                     if let Some(rsc_array) = obj.get("rscArray") {
                         return RSCTree::from_json(rsc_array);
-                    } else {
-                        tracing::error!(
-                            "Pre-serialized Suspense marker found but rscArray is missing or invalid"
-                        );
-                        return Ok(RSCTree::Primitive(value.clone()));
                     }
+                    tracing::error!(
+                        "Pre-serialized Suspense marker found but rscArray is missing or invalid"
+                    );
+                    return Ok(RSCTree::Primitive(value.clone()));
                 }
 
                 if obj.contains_key("$$typeof") && obj.contains_key("type") {
@@ -307,7 +291,7 @@ impl RSCTree {
                     let key = obj
                         .get("key")
                         .and_then(|k| k.as_str())
-                        .map(|s| s.to_string());
+                        .map(std::string::ToString::to_string);
 
                     let props = obj
                         .get("props")
@@ -346,6 +330,7 @@ impl RSCTree {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct RSCRenderResult {
     pub tree: RSCTree,
     pub has_suspense: bool,
@@ -354,6 +339,7 @@ pub struct RSCRenderResult {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct RSCRenderDebug {
     pub component_id: String,
     pub success: bool,
@@ -399,6 +385,7 @@ impl RSCRenderResult {
         }
     }
 
+    #[must_use]
     pub fn with_suspense(mut self) -> Self {
         self.has_suspense = true;
         if let Some(debug) = &mut self.debug {

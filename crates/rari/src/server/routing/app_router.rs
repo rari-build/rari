@@ -20,6 +20,7 @@ fn parse_decoded_path_segments(path: &str) -> Vec<String> {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct AppRouteEntry {
     pub path: String,
     #[serde(rename = "filePath")]
@@ -45,6 +46,7 @@ pub struct AppRouteEntry {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct LayoutEntry {
     pub path: String,
     #[serde(rename = "filePath")]
@@ -70,6 +72,7 @@ pub struct LayoutEntry {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct TemplateEntry {
     pub path: String,
     #[serde(rename = "filePath")]
@@ -93,6 +96,7 @@ pub struct TemplateEntry {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct LoadingEntry {
     pub path: String,
     #[serde(rename = "filePath")]
@@ -114,6 +118,7 @@ pub struct LoadingEntry {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct ErrorEntry {
     pub path: String,
     #[serde(rename = "filePath")]
@@ -135,6 +140,7 @@ pub struct ErrorEntry {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct NotFoundEntry {
     pub path: String,
     #[serde(rename = "filePath")]
@@ -156,6 +162,7 @@ pub struct NotFoundEntry {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct AppRouteManifest {
     pub routes: Vec<AppRouteEntry>,
     pub layouts: Vec<LayoutEntry>,
@@ -169,6 +176,7 @@ pub struct AppRouteManifest {
 }
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct AppRouteMatch {
     pub route: AppRouteEntry,
     pub params: FxHashMap<String, ParamValue>,
@@ -228,8 +236,7 @@ impl AppRouter {
         }
 
         Err(RariError::not_found(format!(
-            "No route found for path: {}",
-            path
+            "No route found for path: {path}"
         )))
     }
 
@@ -340,6 +347,7 @@ impl AppRouter {
         }
     }
 
+    #[expect(clippy::ref_option, reason = "Function signature matches API pattern")]
     fn matches_path_or_additional(
         path: &str,
         additional_paths: &Option<Vec<String>>,
@@ -368,7 +376,7 @@ impl AppRouter {
         }
 
         let route_dir = Self::normalized_dir(route_file_path);
-        route_dir == boundary_dir || route_dir.starts_with(&format!("{}/", boundary_dir))
+        route_dir == boundary_dir || route_dir.starts_with(&format!("{boundary_dir}/"))
     }
 
     fn file_path_depth(file_path: &str) -> usize {
@@ -632,7 +640,7 @@ impl AppRouter {
         let path = path.split('#').next().unwrap_or(path);
 
         if path.is_empty() || !path.starts_with('/') {
-            format!("/{}", path)
+            format!("/{path}")
         } else {
             path.to_string()
         }

@@ -15,6 +15,7 @@ use tracing::error;
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "action", rename_all = "kebab-case")]
+#[non_exhaustive]
 pub enum HmrRequest {
     Register {
         #[serde(rename = "file_path")]
@@ -45,6 +46,7 @@ pub enum HmrRequest {
 }
 
 #[derive(Debug, Serialize)]
+#[non_exhaustive]
 pub struct HmrResponse {
     pub success: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -82,7 +84,7 @@ async fn invalidate_component_cache(
     cache: &crate::server::cache::response::ResponseCache,
     component_id: &str,
 ) {
-    let cache_key_prefix = format!("/_rari/stream/{}", component_id);
+    let cache_key_prefix = format!("/_rari/stream/{component_id}");
 
     let all_keys = cache.get_all_keys();
     for key in all_keys {
@@ -119,11 +121,11 @@ async fn handle_register(state: ServerState, file_path: String) -> Result<Json<V
             registry.mark_module_stale(&component_id);
         }
 
-        let clear_cache_script = r#"
+        let clear_cache_script = r"
             if (typeof globalThis['~rari']?.lazy?.clear === 'function') {
                 globalThis['~rari'].lazy.clear();
             }
-        "#;
+        ";
 
         if let Err(e) = renderer
             .runtime
@@ -142,7 +144,7 @@ async fn handle_register(state: ServerState, file_path: String) -> Result<Json<V
     let mut reload_error_details: Option<serde_json::Value> = None;
 
     match &reload_result {
-        Ok(_) => {}
+        Ok(()) => {}
         Err(e) => {
             error!(
                 component_id = component_id,
@@ -151,7 +153,6 @@ async fn handle_register(state: ServerState, file_path: String) -> Result<Json<V
                 "Failed to reload component from dist, preserving last known good version"
             );
 
-            #[allow(clippy::disallowed_methods)]
             {
                 reload_error_details = Some(serde_json::json!({
                     "stage": "dist_reload",
@@ -174,7 +175,6 @@ async fn handle_register(state: ServerState, file_path: String) -> Result<Json<V
             "Failed to immediately re-register component, preserving last known good version"
         );
 
-        #[allow(clippy::disallowed_methods)]
         return Ok(Json(serde_json::json!({
             "success": false,
             "file_path": file_path,
@@ -192,7 +192,6 @@ async fn handle_register(state: ServerState, file_path: String) -> Result<Json<V
 
     let reloaded = reload_result.is_ok();
 
-    #[allow(clippy::disallowed_methods)]
     let response = if reloaded {
         invalidate_component_cache(&state.response_cache, &component_id).await;
 
@@ -225,7 +224,6 @@ async fn handle_register(state: ServerState, file_path: String) -> Result<Json<V
                 error = %e,
                 "Failed to clear layout_html_cache during HMR reload"
             );
-            #[allow(clippy::disallowed_methods)]
             return Ok(Json(serde_json::json!({
                 "success": false,
                 "file_path": file_path,
@@ -302,7 +300,7 @@ async fn handle_invalidate(
             r#"
             (function() {{
                 let clearedCount = 0;
-                const componentId = "{}";
+                const componentId = "{component_id}";
 
                 if (typeof globalThis[componentId] !== 'undefined') {{
                     delete globalThis[componentId];
@@ -345,8 +343,7 @@ async fn handle_invalidate(
                     componentId: componentId
                 }};
             }})()
-            "#,
-            component_id
+            "#
         );
 
         renderer
@@ -359,21 +356,16 @@ async fn handle_invalidate(
     };
 
     match result {
-        Ok(clear_result) =>
-        {
-            #[allow(clippy::disallowed_methods)]
-            Ok(Json(serde_json::json!({
-                "success": true,
-                "componentId": component_id,
-                "cleared": clear_result
-            })))
-        }
+        Ok(clear_result) => Ok(Json(serde_json::json!({
+            "success": true,
+            "componentId": component_id,
+            "cleared": clear_result
+        }))),
         Err(e) => {
             error!(
                 "Failed to invalidate component cache for {}: {}",
                 component_id, e
             );
-            #[allow(clippy::disallowed_methods)]
             Ok(Json(serde_json::json!({
                 "success": false,
                 "componentId": component_id,
@@ -392,7 +384,6 @@ async fn handle_reload(
         Some(config) => config,
         None => {
             error!("Failed to get global configuration for HMR reload");
-            #[allow(clippy::disallowed_methods)]
             return Ok(Json(serde_json::json!({
                 "success": false,
                 "componentId": component_id,
@@ -403,7 +394,6 @@ async fn handle_reload(
 
     if file_path.contains("://") {
         error!("Invalid file path: contains URL scheme");
-        #[allow(clippy::disallowed_methods)]
         return Ok(Json(serde_json::json!({
             "success": false,
             "componentId": component_id,
@@ -422,16 +412,15 @@ async fn handle_reload(
     let file_path = if file_path.starts_with('/') {
         file_path.clone()
     } else {
-        format!("/{}", file_path)
+        format!("/{file_path}")
     };
 
-    let vite_url = format!("{}{}?t={}", vite_base_url, file_path, timestamp);
+    let vite_url = format!("{vite_base_url}{file_path}?t={timestamp}");
 
     let transpiled_code = match client.get(&vite_url).send().await {
         Ok(response) => {
             if !response.status().is_success() {
                 error!("Vite returned error status: {}", response.status());
-                #[allow(clippy::disallowed_methods)]
                 return Ok(Json(serde_json::json!({
                     "success": false,
                     "componentId": component_id,
@@ -443,7 +432,6 @@ async fn handle_reload(
                 Ok(code) => code,
                 Err(e) => {
                     error!("Failed to read response from Vite: {}", e);
-                    #[allow(clippy::disallowed_methods)]
                     return Ok(Json(serde_json::json!({
                         "success": false,
                         "componentId": component_id,
@@ -454,7 +442,6 @@ async fn handle_reload(
         }
         Err(e) => {
             error!("Failed to fetch from Vite dev server: {}", e);
-            #[allow(clippy::disallowed_methods)]
             return Ok(Json(serde_json::json!({
                 "success": false,
                 "componentId": component_id,
@@ -473,18 +460,13 @@ async fn handle_reload(
     };
 
     match result {
-        Ok(()) =>
-        {
-            #[allow(clippy::disallowed_methods)]
-            Ok(Json(serde_json::json!({
-                "success": true,
-                "componentId": component_id,
-                "codeSize": transpiled_code.len()
-            })))
-        }
+        Ok(()) => Ok(Json(serde_json::json!({
+            "success": true,
+            "componentId": component_id,
+            "codeSize": transpiled_code.len()
+        }))),
         Err(e) => {
             error!("Failed to reload component {}: {}", component_id, e);
-            #[allow(clippy::disallowed_methods)]
             Ok(Json(serde_json::json!({
                 "success": false,
                 "componentId": component_id,
@@ -501,7 +483,6 @@ async fn handle_invalidate_api_route(
     let api_handler = match &state.api_route_handler {
         Some(handler) => handler,
         None => {
-            #[allow(clippy::disallowed_methods)]
             return Ok(Json(serde_json::json!({
                 "success": false,
                 "filePath": file_path,
@@ -512,7 +493,6 @@ async fn handle_invalidate_api_route(
 
     api_handler.invalidate_handler(&file_path);
 
-    #[allow(clippy::disallowed_methods)]
     Ok(Json(serde_json::json!({
         "success": true,
         "filePath": file_path,
@@ -535,7 +515,6 @@ async fn handle_reload_component(
                 error = %e,
                 "Bundle path validation failed"
             );
-            #[allow(clippy::disallowed_methods)]
             return Ok(Json(serde_json::json!({
                 "success": false,
                 "message": format!("Invalid bundle path: {}", e)
@@ -567,7 +546,6 @@ async fn handle_reload_component(
             bundle_full_path.display(),
             e
         );
-        #[allow(clippy::disallowed_methods)]
         return Ok(Json(serde_json::json!({
             "success": false,
             "message": format!("Failed to read bundle: {}", e)
@@ -613,7 +591,6 @@ async fn handle_reload_component(
                     Err(e) => {
                         error!("Failed to register component {}: {}", component_id, e);
                         registry.remove_component(&component_id);
-                        #[allow(clippy::disallowed_methods)]
                         return Ok(Json(serde_json::json!({
                             "success": false,
                             "message": format!("Failed to register component: {}", e)
@@ -624,7 +601,6 @@ async fn handle_reload_component(
 
             invalidate_component_cache(&state.response_cache, &component_id).await;
 
-            #[allow(clippy::disallowed_methods)]
             Ok(Json(serde_json::json!({
                 "success": true,
                 "message": format!("Component {} reloaded successfully", component_id)
@@ -632,7 +608,6 @@ async fn handle_reload_component(
         }
         Err(e) => {
             error!("Failed to reload component {}: {}", component_id, e);
-            #[allow(clippy::disallowed_methods)]
             Ok(Json(serde_json::json!({
                 "success": false,
                 "message": format!("Failed to reload component: {}", e)

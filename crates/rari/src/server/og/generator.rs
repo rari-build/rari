@@ -1,3 +1,9 @@
+#![expect(
+    clippy::unnecessary_wraps,
+    reason = "Generator methods return Result for API consistency with error-handling variants"
+)]
+#![allow(clippy::explicit_counter_loop)]
+
 use super::OgImageError;
 use super::cache::OgImageCache;
 use super::layout::LayoutEngine;
@@ -5,9 +11,9 @@ use super::rendering::ImageRenderer;
 use super::types::{JsxChild, JsxElement, OgImageEntry};
 use crate::runtime::JsExecutionRuntime;
 use cow_utils::CowUtils;
-use rari_utils::path_url::path_to_file_url;
+use rari_utils::path_to_file_url;
 use rustc_hash::FxHashMap;
-use serde_json::Value;
+use serde_json::{Map, Value};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -62,10 +68,10 @@ impl OgImageGenerator {
     pub async fn load_manifest(&self, manifest_path: &str) -> Result<(), OgImageError> {
         let content = tokio::fs::read_to_string(manifest_path)
             .await
-            .map_err(|e| OgImageError::InternalError(format!("Failed to read manifest: {}", e)))?;
+            .map_err(|e| OgImageError::InternalError(format!("Failed to read manifest: {e}")))?;
 
         let manifest_data: Value = serde_json::from_str(&content)
-            .map_err(|e| OgImageError::InternalError(format!("Failed to parse manifest: {}", e)))?;
+            .map_err(|e| OgImageError::InternalError(format!("Failed to parse manifest: {e}")))?;
 
         let mut manifest = self.manifest.write().await;
         manifest.clear();
@@ -144,17 +150,17 @@ impl OgImageGenerator {
             let font_context = layout_engine.get_font_context();
             let computed_layout = layout_engine
                 .layout(&jsx_element, width as f32, height as f32)
-                .map_err(|e| OgImageError::GenerationError(format!("Layout failed: {}", e)))?;
+                .map_err(|e| OgImageError::GenerationError(format!("Layout failed: {e}")))?;
             (computed_layout, font_context)
         };
 
         let mut renderer = ImageRenderer::new(width, height, font_context);
-        let image = renderer.render(&computed_layout).map_err(|e| {
-            OgImageError::GenerationError(format!("Image generation failed: {}", e))
-        })?;
+        let image = renderer
+            .render(&computed_layout)
+            .map_err(|e| OgImageError::GenerationError(format!("Image generation failed: {e}")))?;
 
         let webp_data = Self::encode_webp(&image)
-            .map_err(|e| OgImageError::GenerationError(format!("Failed to encode WebP: {}", e)))?;
+            .map_err(|e| OgImageError::GenerationError(format!("Failed to encode WebP: {e}")))?;
 
         if let Err(e) = self
             .cache
@@ -205,12 +211,12 @@ impl OgImageGenerator {
                 let mut matches = true;
                 let mut path_idx = 0;
 
-                for pattern_seg in pattern_segments.iter() {
+                for pattern_seg in &pattern_segments {
                     if pattern_seg.starts_with("[...") && pattern_seg.ends_with(']') {
                         let param_name = &pattern_seg[4..pattern_seg.len() - 1];
                         let remaining: Vec<String> = path_segments[path_idx..]
                             .iter()
-                            .map(|s| s.to_string())
+                            .map(std::string::ToString::to_string)
                             .collect();
                         params.insert(param_name.to_string(), ParamValue::Multiple(remaining));
                         break;
@@ -219,9 +225,8 @@ impl OgImageGenerator {
                     {
                         matches = false;
                         break;
-                    } else {
-                        path_idx += 1;
                     }
+                    path_idx += 1;
                 }
 
                 if matches {
@@ -279,7 +284,7 @@ impl OgImageGenerator {
                     }
                 })
                 .collect::<String>();
-            format!("app/{}", path)
+            format!("app/{path}")
         };
 
         let server_manifest = self.server_manifest.read().await;
@@ -301,14 +306,13 @@ impl OgImageGenerator {
         let module_path = self.project_path.join("dist").join(&bundle_path);
         let module_url = path_to_file_url(&module_path);
 
-        let params_json = serde_json::to_string(params).map_err(|e| {
-            OgImageError::InternalError(format!("Failed to serialize params: {}", e))
-        })?;
+        let params_json = serde_json::to_string(params)
+            .map_err(|e| OgImageError::InternalError(format!("Failed to serialize params: {e}")))?;
 
         let wrapper_script = format!(
             r#"
 (async function() {{
-    const module = await import("{}");
+    const module = await import("{module_url}");
 
     const ImageComponent = module.default;
 
@@ -316,7 +320,7 @@ impl OgImageGenerator {
         throw new Error('No default export found in OG image component');
     }}
 
-    const params = {};
+    const params = {params_json};
 
     let result;
     try {{
@@ -334,8 +338,7 @@ impl OgImageGenerator {
 
     throw new Error('Component did not return an ImageResponse');
 }})();
-"#,
-            module_url, params_json
+"#
         );
 
         let result = self
@@ -346,7 +349,7 @@ impl OgImageGenerator {
             )
             .await
             .map_err(|e| {
-                OgImageError::ExecutionError(format!("Failed to execute component: {}", e))
+                OgImageError::ExecutionError(format!("Failed to execute component: {e}"))
             })?;
 
         let jsx_element = Self::parse_serialized_jsx(&result)?;
@@ -374,12 +377,12 @@ impl OgImageGenerator {
         let props = obj
             .get("props")
             .cloned()
-            .unwrap_or(Value::Object(Default::default()));
+            .unwrap_or(Value::Object(Map::default()));
 
         let children_array = obj
             .get("children")
             .and_then(|v| v.as_array())
-            .map(|v| v.as_slice())
+            .map(std::vec::Vec::as_slice)
             .unwrap_or(&[]);
 
         let mut children = Vec::new();

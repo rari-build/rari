@@ -1,4 +1,5 @@
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct LayoutInfo {
     pub component_id: String,
     pub is_root: bool,
@@ -18,6 +19,7 @@ pub struct ErrorBoundaryInfo {
     pub file_path: String,
 }
 
+#[non_exhaustive]
 pub struct RouteComposer;
 
 impl RouteComposer {
@@ -61,7 +63,7 @@ impl RouteComposer {
         metadata_json: &str,
     ) -> String {
         let mut script = format!(
-            r#"
+            r"
             (async () => {{
                 const timings = {{}};
                 const startTotal = performance.now();
@@ -100,15 +102,14 @@ impl RouteComposer {
                 }}
 
                 const startPageRender = performance.now();
-                {}
-            "#,
-            page_render_script
+                {page_render_script}
+            "
         );
 
         let mut current_element = "pageElement".to_string();
 
         for (i, template) in templates.iter().rev().enumerate() {
-            let template_var = format!("template{}", i);
+            let template_var = format!("template{i}");
             script.push_str(&Self::generate_template_wrapper(
                 i,
                 &template.component_id,
@@ -121,7 +122,7 @@ impl RouteComposer {
         }
 
         for (i, layout) in layouts.iter().rev().enumerate() {
-            let layout_var = format!("layout{}", i);
+            let layout_var = format!("layout{i}");
 
             script.push_str(&Self::generate_layout_wrapper(
                 i,
@@ -161,12 +162,7 @@ impl RouteComposer {
                 const layoutResult{index} = React.createElement(LayoutComponent{index}, {{ children: {current_element}, pathname: {pathname_json} }});
                 const {layout_var} = layoutResult{index};
                 timings.layout{index} = performance.now() - startLayout{index};
-                "#,
-            index = index,
-            layout_component_id = layout_component_id,
-            current_element = current_element,
-            layout_var = layout_var,
-            pathname_json = pathname_json
+                "#
         )
     }
 
@@ -197,13 +193,7 @@ impl RouteComposer {
             );
             const {template_var} = templateResult{index};
             timings.template{index} = performance.now() - startTemplate{index};
-            "#,
-            index = index,
-            template_component_id = template_component_id,
-            template_client_component_id = template_client_component_id,
-            current_element = current_element,
-            template_var = template_var,
-            pathname_json = pathname_json
+            "#
         )
     }
 
@@ -218,7 +208,7 @@ impl RouteComposer {
             .unwrap_or_else(|| "\"\"".to_string());
 
         format!(
-            r#"
+            r"
 
                 const startRSC = performance.now();
                 let rscData = await globalThis.renderToRsc({final_element}, globalThis['~clientComponents'] || {{}});
@@ -263,11 +253,7 @@ impl RouteComposer {
                     return result;
                 }}
             }})()
-            "#,
-            final_element = final_element,
-            wrap_with_error_boundary = wrap_with_error_boundary,
-            error_component_id_json = error_component_id_json,
-            metadata_json = metadata_json
+            "
         )
     }
 }

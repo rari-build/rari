@@ -8,6 +8,7 @@ use std::sync::OnceLock;
 pub static GLOBAL_CONFIG: OnceLock<Config> = OnceLock::new();
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[non_exhaustive]
 pub enum Mode {
     #[default]
     Development,
@@ -24,6 +25,7 @@ impl std::fmt::Display for Mode {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct ServerConfig {
     pub host: String,
     pub port: u16,
@@ -45,6 +47,7 @@ impl Default for ServerConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct CorsConfig {
     pub allowed_origins: Vec<String>,
     pub allow_credentials: bool,
@@ -62,6 +65,7 @@ impl Default for CorsConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct RedirectConfig {
     pub allowed_hosts: Vec<String>,
     pub allow_relative: bool,
@@ -110,6 +114,7 @@ pub fn default_cache_layers() -> FxHashMap<String, CacheLayerConfig> {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct CacheConfig {
     #[serde(default = "default_cache_layers")]
     pub layers: FxHashMap<String, CacheLayerConfig>,
@@ -147,11 +152,13 @@ impl Default for RedirectConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[non_exhaustive]
 pub struct ActionConfig {
     pub allowed_origins: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct CspConfig {
     pub script_src: Vec<String>,
     pub style_src: Vec<String>,
@@ -181,6 +188,7 @@ impl Default for CspConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct ViteConfig {
     pub host: String,
     pub port: u16,
@@ -200,6 +208,7 @@ impl Default for ViteConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct StaticConfig {
     pub dev_public_dir: PathBuf,
     pub prod_public_dir: PathBuf,
@@ -232,7 +241,7 @@ impl RoutePattern {
         } else if pattern.contains('*') {
             let escaped = regex::escape(pattern);
             let regex_pattern = escaped.cow_replace(r"\*", ".*");
-            match regex::Regex::new(&format!("^{}$", regex_pattern)) {
+            match regex::Regex::new(&format!("^{regex_pattern}$")) {
                 Ok(regex) => RoutePattern::Regex(regex),
                 Err(_) => RoutePattern::Exact(pattern.to_string()),
             }
@@ -245,7 +254,7 @@ impl RoutePattern {
         match self {
             RoutePattern::Exact(pattern) => pattern == path,
             RoutePattern::Prefix(prefix) => {
-                path == prefix || path.starts_with(&format!("{}/", prefix))
+                path == prefix || path.starts_with(&format!("{prefix}/"))
             }
             RoutePattern::Regex(regex) => regex.is_match(path),
         }
@@ -253,6 +262,7 @@ impl RoutePattern {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct CacheControlConfig {
     pub routes: FxHashMap<String, String>,
     pub static_files: String,
@@ -274,16 +284,22 @@ impl From<&CacheControlConfig> for CompiledCacheControlConfig {
             })
             .collect();
 
-        routes.sort_by(|(a, _), (b, _)| match (a, b) {
-            (RoutePattern::Exact(_), RoutePattern::Exact(_)) => std::cmp::Ordering::Equal,
-            (RoutePattern::Exact(_), _) => std::cmp::Ordering::Less,
-            (_, RoutePattern::Exact(_)) => std::cmp::Ordering::Greater,
-            (RoutePattern::Prefix(a_prefix), RoutePattern::Prefix(b_prefix)) => {
-                b_prefix.len().cmp(&a_prefix.len())
+        routes.sort_by(|(a, _), (b, _)| {
+            #[expect(
+                clippy::match_same_arms,
+                reason = "Explicit ordering is clearer than merged patterns for documentation"
+            )]
+            match (a, b) {
+                (RoutePattern::Exact(_), RoutePattern::Exact(_)) => std::cmp::Ordering::Equal,
+                (RoutePattern::Exact(_), _) => std::cmp::Ordering::Less,
+                (_, RoutePattern::Exact(_)) => std::cmp::Ordering::Greater,
+                (RoutePattern::Prefix(a_prefix), RoutePattern::Prefix(b_prefix)) => {
+                    b_prefix.len().cmp(&a_prefix.len())
+                }
+                (RoutePattern::Prefix(_), RoutePattern::Regex(_)) => std::cmp::Ordering::Less,
+                (RoutePattern::Regex(_), RoutePattern::Prefix(_)) => std::cmp::Ordering::Greater,
+                (RoutePattern::Regex(_), RoutePattern::Regex(_)) => std::cmp::Ordering::Equal,
             }
-            (RoutePattern::Prefix(_), RoutePattern::Regex(_)) => std::cmp::Ordering::Less,
-            (RoutePattern::Regex(_), RoutePattern::Prefix(_)) => std::cmp::Ordering::Greater,
-            (RoutePattern::Regex(_), RoutePattern::Regex(_)) => std::cmp::Ordering::Equal,
         });
 
         CompiledCacheControlConfig { routes }
@@ -301,6 +317,7 @@ impl Default for CacheControlConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct RscHtmlConfig {
     pub enabled: bool,
     pub timeout_ms: u64,
@@ -320,6 +337,7 @@ impl Default for RscHtmlConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct LoadingConfig {
     pub enabled: bool,
     pub min_display_time_ms: u64,
@@ -337,6 +355,7 @@ impl Default for LoadingConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct StreamingConfig {
     pub enabled: bool,
     pub buffer_size: usize,
@@ -354,6 +373,11 @@ impl Default for StreamingConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "Configuration flags are intentionally boolean"
+)]
 pub struct RscConfig {
     pub enable_ssr: bool,
     pub enable_streaming: bool,
@@ -379,6 +403,7 @@ impl Default for RscConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[non_exhaustive]
 pub struct Config {
     pub mode: Mode,
     pub server: ServerConfig,
@@ -577,43 +602,43 @@ impl Config {
                 if let Some(script_src) = csp_data.get("scriptSrc").and_then(|v| v.as_array()) {
                     config.csp.script_src = script_src
                         .iter()
-                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .filter_map(|v| v.as_str().map(std::string::ToString::to_string))
                         .collect();
                 }
                 if let Some(style_src) = csp_data.get("styleSrc").and_then(|v| v.as_array()) {
                     config.csp.style_src = style_src
                         .iter()
-                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .filter_map(|v| v.as_str().map(std::string::ToString::to_string))
                         .collect();
                 }
                 if let Some(img_src) = csp_data.get("imgSrc").and_then(|v| v.as_array()) {
                     config.csp.img_src = img_src
                         .iter()
-                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .filter_map(|v| v.as_str().map(std::string::ToString::to_string))
                         .collect();
                 }
                 if let Some(font_src) = csp_data.get("fontSrc").and_then(|v| v.as_array()) {
                     config.csp.font_src = font_src
                         .iter()
-                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .filter_map(|v| v.as_str().map(std::string::ToString::to_string))
                         .collect();
                 }
                 if let Some(connect_src) = csp_data.get("connectSrc").and_then(|v| v.as_array()) {
                     config.csp.connect_src = connect_src
                         .iter()
-                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .filter_map(|v| v.as_str().map(std::string::ToString::to_string))
                         .collect();
                 }
                 if let Some(default_src) = csp_data.get("defaultSrc").and_then(|v| v.as_array()) {
                     config.csp.default_src = default_src
                         .iter()
-                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .filter_map(|v| v.as_str().map(std::string::ToString::to_string))
                         .collect();
                 }
                 if let Some(worker_src) = csp_data.get("workerSrc").and_then(|v| v.as_array()) {
                     config.csp.worker_src = worker_src
                         .iter()
-                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .filter_map(|v| v.as_str().map(std::string::ToString::to_string))
                         .collect();
                 }
             }
@@ -624,7 +649,7 @@ impl Config {
             {
                 config.action.allowed_origins = allowed_origins
                     .iter()
-                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                    .filter_map(|v| v.as_str().map(std::string::ToString::to_string))
                     .collect();
             }
 
@@ -931,6 +956,7 @@ impl Config {
 }
 
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum ConfigError {
     #[error("Invalid mode: {0}")]
     Mode(String),
