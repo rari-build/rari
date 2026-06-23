@@ -174,9 +174,9 @@ jobs:
     name: Build rari binary (${{ matrix.os }})
     needs: [changes, build-snapshot]
     if: >-
-      (needs.changes.outputs.rust == 'true' || needs.changes.outputs.src == 'true') &&
+      needs.changes.outputs.rust == 'true' &&
       (github.event_name != 'push' || github.ref_name != 'main') &&
-      (needs.build-snapshot.result == 'success' || needs.build-snapshot.result == 'skipped')
+      needs.build-snapshot.result == 'success'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
     permissions:
@@ -386,7 +386,9 @@ jobs:
 
   build:
     needs: [changes, build-use-cache-addon]
-    if: needs.changes.outputs.src == 'true' || needs.changes.outputs.rust == 'true'
+    if: |
+      (always() && !cancelled()) &&
+      (needs.changes.outputs.src == 'true' || needs.changes.outputs.rust == 'true')
     runs-on: namespace-profile-rari-linux-amd64
     timeout-minutes: 10
     permissions:
@@ -470,7 +472,9 @@ jobs:
 
   lint-and-test:
     needs: [changes, build-use-cache-addon]
-    if: needs.changes.outputs.src == 'true' || needs.changes.outputs.rust == 'true'
+    if: |
+      (always() && !cancelled()) &&
+      (needs.changes.outputs.src == 'true' || needs.changes.outputs.rust == 'true')
     runs-on: namespace-profile-rari-linux-amd64
     timeout-minutes: 15
     permissions:
