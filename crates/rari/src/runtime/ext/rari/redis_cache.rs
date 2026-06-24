@@ -77,8 +77,8 @@ impl RedisCacheState {
                         "redis connect timeout",
                     )))
                 })??;
-        *connection = Some(new_connection.clone());
 
+        *connection = Some(new_connection.clone());
         Ok(new_connection)
     }
 }
