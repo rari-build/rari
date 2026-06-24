@@ -101,7 +101,27 @@ pub fn finalize_metadata(metadata: &mut Value) {
 }
 
 #[cfg(test)]
-#[allow(clippy::disallowed_methods)]
+#[allow(
+    clippy::allow_attributes,
+    clippy::unreadable_literal,
+    clippy::needless_raw_string_hashes,
+    clippy::panic,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::print_stdout,
+    clippy::float_cmp,
+    clippy::bool_assert_comparison,
+    clippy::redundant_clone,
+    clippy::redundant_closure_for_method_calls,
+    clippy::single_char_pattern,
+    clippy::approx_constant,
+    clippy::uninlined_format_args,
+    clippy::module_inception,
+    clippy::return_self_not_must_use,
+    clippy::disallowed_methods,
+    clippy::clone_on_ref_ptr,
+    clippy::get_unwrap
+)]
 mod tests {
     use super::*;
     use serde_json::json;
