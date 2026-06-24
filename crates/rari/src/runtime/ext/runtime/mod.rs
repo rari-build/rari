@@ -1,27 +1,32 @@
-use super::node::resolvers::Resolver;
-use super::web::PermissionsContainer;
-use super::{ExtensionOptions, ExtensionTrait};
-use ::deno_permissions::Permissions;
-use deno_core::v8::{BackingStore, SharedRef};
-use deno_core::{CrossIsolateStore, Extension, ExtensionFileSource, extension, op2};
-use deno_runtime::deno_inspector_server::MainInspectorSessionChannel;
-use deno_runtime::permissions::RuntimePermissionDescriptorParser;
-use deno_telemetry::OtelConfig;
-
+use std::num::NonZero;
 use std::rc::Rc;
 use std::sync::Arc;
 use sys_traits::impls::RealSys;
 
-#[op2]
-#[string]
-fn op_main_module() -> String {
-    String::new()
-}
+use deno_core::v8::{BackingStore, SharedRef};
+use deno_core::{CrossIsolateStore, Extension, ExtensionFileSource, extension};
 
-#[op2(fast)]
-#[smi]
-fn op_ppid() -> u32 {
-    1
+use ::deno_permissions::Permissions;
+use deno_process::deno_process;
+use deno_runtime::deno_inspector_server::MainInspectorSessionChannel;
+use deno_runtime::deno_os::{ExitCode, deno_os};
+use deno_runtime::fmt_errors::format_js_error as deno_format_js_error;
+use deno_runtime::ops::bootstrap::deno_bootstrap;
+use deno_runtime::ops::fs_events::deno_fs_events;
+use deno_runtime::ops::permissions::deno_permissions;
+use deno_runtime::ops::web_worker::deno_web_worker;
+use deno_runtime::ops::worker_host::{CreateWebWorkerCb, deno_worker_host};
+use deno_runtime::permissions::RuntimePermissionDescriptorParser;
+use deno_runtime::web_worker::{WebWorker, WebWorkerOptions, WebWorkerServiceOptions};
+use deno_runtime::{BootstrapOptions, WorkerExecutionMode, WorkerLogLevel, colors, runtime};
+use deno_telemetry::OtelConfig;
+
+use super::node::resolvers::Resolver;
+use super::web::PermissionsContainer;
+use super::{ExtensionOptions, ExtensionTrait};
+
+fn format_js_error(error: &deno_core::error::JsError) -> String {
+    deno_format_js_error(error, None)
 }
 
 fn build_permissions(
@@ -37,16 +42,9 @@ extension!(
     esm_entry_point = "ext:init_console/init_console.js",
     esm = [ dir "src/runtime/ext/runtime", "init_console.js" ],
 );
-impl ExtensionTrait<()> for init_console {
-    fn init((): ()) -> Extension {
-        deno_terminal::colors::set_use_color(true);
-        init_console::init()
-    }
-}
 
 extension!(
     init_runtime,
-    ops = [op_main_module, op_ppid],
     esm_entry_point = "ext:init_runtime/init_runtime.js",
     esm = [ dir "src/runtime/ext/runtime",  "init_runtime.js" ],
     state = |state| {
@@ -63,17 +61,19 @@ extension!(
         state.put(permissions);
     },
     customizer = |e: &mut Extension| {
-        use deno_core::ascii_str_include;
         e.esm_files.to_mut().push(
             ExtensionFileSource::new("ext:deno_features/flags.js", deno_features::JS_SOURCE)
         );
-                        e.esm_files.to_mut().push(ExtensionFileSource::new(
-            "ext:runtime_main/js/99_main.js",
-            ascii_str_include!("./99_main.js")
-        ));
-        e.esm_entry_point = Some("ext:runtime_main/js/99_main.js");
     }
 );
+
+impl ExtensionTrait<()> for init_console {
+    fn init((): ()) -> Extension {
+        deno_terminal::colors::set_use_color(true);
+        init_console::init()
+    }
+}
+
 impl ExtensionTrait<()> for init_runtime {
     fn init((): ()) -> Extension {
         init_runtime::init()
@@ -82,25 +82,27 @@ impl ExtensionTrait<()> for init_runtime {
 
 impl ExtensionTrait<()> for deno_runtime::runtime {
     fn init((): ()) -> Extension {
-        let mut e = deno_runtime::runtime::init();
-        e.esm_entry_point = None;
-        e
+        let mut ext = runtime::init();
+
+        ext.esm_files = ext
+            .esm_files
+            .iter()
+            .filter(|file| !file.specifier.contains("99_main.js"))
+            .cloned()
+            .collect::<Vec<_>>()
+            .into();
+        ext.esm_entry_point = None;
+
+        ext
     }
 }
 
-use deno_runtime::fmt_errors::format_js_error as deno_format_js_error;
-
-fn format_js_error(error: &deno_core::error::JsError) -> String {
-    deno_format_js_error(error, None)
-}
-use deno_runtime::ops::permissions::deno_permissions;
 impl ExtensionTrait<()> for deno_permissions {
     fn init((): ()) -> Extension {
         deno_permissions::init()
     }
 }
 
-use deno_runtime::ops::worker_host::{CreateWebWorkerCb, deno_worker_host};
 impl
     ExtensionTrait<(
         &ExtensionOptions,
@@ -119,35 +121,30 @@ impl
     }
 }
 
-use deno_runtime::ops::web_worker::deno_web_worker;
 impl ExtensionTrait<()> for deno_web_worker {
     fn init((): ()) -> Extension {
         deno_web_worker::init()
     }
 }
 
-use deno_process::deno_process;
 impl ExtensionTrait<Arc<Resolver>> for deno_process {
     fn init(resolver: Arc<Resolver>) -> Extension {
         deno_process::init(Some(resolver))
     }
 }
 
-use deno_runtime::deno_os::{ExitCode, deno_os};
 impl ExtensionTrait<()> for deno_os {
     fn init((): ()) -> Extension {
         deno_os::init(Some(ExitCode::default()))
     }
 }
 
-use deno_runtime::ops::bootstrap::deno_bootstrap;
 impl ExtensionTrait<()> for deno_bootstrap {
     fn init((): ()) -> Extension {
         deno_bootstrap::init(None, false)
     }
 }
 
-use deno_runtime::ops::fs_events::deno_fs_events;
 impl ExtensionTrait<()> for deno_fs_events {
     fn init((): ()) -> Extension {
         deno_fs_events::init()
@@ -173,8 +170,6 @@ pub fn extensions(
     ]
 }
 
-use deno_runtime::web_worker::{WebWorker, WebWorkerOptions, WebWorkerServiceOptions};
-use deno_runtime::{BootstrapOptions, WorkerExecutionMode, WorkerLogLevel, colors};
 #[derive(Clone)]
 pub struct WebWorkerCallbackOptions {
     shared_array_buffer_store: Option<CrossIsolateStore<SharedRef<BackingStore>>>,
@@ -186,6 +181,7 @@ pub struct WebWorkerCallbackOptions {
     stdio: deno_io::Stdio,
     blob_store: Arc<deno_web::BlobStore>,
 }
+
 impl WebWorkerCallbackOptions {
     pub fn new(
         options: &ExtensionOptions,
@@ -252,7 +248,7 @@ fn create_web_worker_callback(options: WebWorkerCallbackOptions) -> Arc<CreateWe
                 deno_version: env!("CARGO_PKG_VERSION").to_string(),
                 args: vec![],
                 cpu_count: std::thread::available_parallelism()
-                    .map(std::num::NonZero::get)
+                    .map(NonZero::get)
                     .unwrap_or(1),
                 log_level: WorkerLogLevel::default(),
                 enable_testing_features: false,

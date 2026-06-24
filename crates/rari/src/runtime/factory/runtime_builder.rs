@@ -30,13 +30,7 @@ pub fn build_js_runtime(
         ops: Cow::Owned(streaming_ops),
         op_state_fn: Some(Box::new(|state| {
             state.put(StreamOpState::default());
-            let mut feature_checker = deno_features::FeatureChecker::default();
-            feature_checker.enable_feature("broadcast-channel");
-            feature_checker.enable_feature("webgpu");
-            feature_checker.enable_feature("kv");
-            feature_checker.enable_feature("cron");
-            feature_checker.enable_feature("net");
-            feature_checker.enable_feature("worker-options");
+            let feature_checker = deno_features::FeatureChecker::default();
             state.put(std::sync::Arc::new(feature_checker));
         })),
         ..Default::default()
