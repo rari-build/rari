@@ -36,9 +36,8 @@ export class RedisCacheStorage implements CacheStorage {
       console.error(`[rari] redis cache read failed for key="${key}":`, err)
     }
 
-    if (!text) {
+    if (!text)
       return null
-    }
 
     try {
       return { value: JSON.parse(text) }

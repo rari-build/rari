@@ -6,7 +6,7 @@ use tokio::process::Command;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
-#[cfg(unix)]
+#[cfg(target_os = "macos")]
 use crate::common::log_warning;
 use crate::common::{Target, log, log_error, log_success};
 

@@ -24,20 +24,6 @@ pub fn build_js_runtime(
     let ext_options = crate::runtime::ext::ExtensionOptions::default();
     let mut extensions = crate::runtime::ext::extensions(&ext_options, true);
 
-    #[cfg(feature = "redis")]
-    {
-        let redis_enabled = crate::server::config::Config::get()
-            .and_then(|c| c.use_cache.remote.as_ref())
-            .filter(|layer| layer.handler == "redis")
-            .and_then(|layer| layer.url.as_deref())
-            .map(str::trim)
-            .filter(|url| !url.is_empty())
-            .is_some();
-        if redis_enabled {
-            extensions.extend(crate::runtime::redis_cache::extensions(None, true));
-        }
-    }
-
     extensions.push(Extension {
         name: "rari:streaming",
         ops: Cow::Owned(streaming_ops),

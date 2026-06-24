@@ -74,6 +74,7 @@ pub struct RedirectConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
+#[non_exhaustive]
 pub struct CacheLayerConfig {
     pub handler: String,
     pub url: Option<String>,
@@ -136,6 +137,7 @@ impl CacheConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
+#[non_exhaustive]
 pub struct UseCacheConfig {
     #[serde(default)]
     pub remote: Option<CacheLayerConfig>,
@@ -711,18 +713,17 @@ impl Config {
                 && let Some(remote_value) = use_cache_data.get("remote")
             {
                 match serde_json::from_value::<CacheLayerConfig>(remote_value.clone()) {
-                    Ok(layer) => {
-                        let missing_url = layer
-                            .url
-                            .as_deref()
-                            .map(str::trim)
-                            .filter(|v| !v.is_empty())
-                            .is_none();
+                    Ok(mut layer) => {
+                        let trimmed_url = layer.url.as_deref().map(str::trim);
+                        let missing_url = trimmed_url.is_none_or(str::is_empty);
+
                         if layer.handler == "redis" && missing_url {
                             tracing::warn!(
                                 "Invalid useCache.remote: handler=redis requires a non-empty url. Ignoring remote cache config."
                             );
                         } else {
+                            // Store the trimmed URL
+                            layer.url = trimmed_url.map(String::from);
                             config.use_cache.remote = Some(layer);
                         }
                     }
