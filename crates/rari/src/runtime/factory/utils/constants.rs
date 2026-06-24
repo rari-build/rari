@@ -2,7 +2,6 @@ use rari_error::RariError;
 use serde_json::Value as JsonValue;
 
 pub const CHANNEL_CAPACITY: usize = 32;
-pub const RUNTIME_RESTART_DELAY_MS: u64 = 1000;
 pub const RUNTIME_QUICK_RESTART_DELAY_MS: u64 = 100;
 
 pub const MODULE_ALREADY_EVALUATED_ERROR: &str = "Module already evaluated";
@@ -32,14 +31,6 @@ pub const MODULE_CHECK_SCRIPT: &str = r"
     return { available: true, extension: 'rsc_modules' };
 })()
 ";
-
-pub const API_HANDLER_INIT_SCRIPT: &str = include_str!("js/api_handler.js");
-
-pub const METADATA_COLLECTOR_INIT_SCRIPT: &str = include_str!("js/metadata_collector_helper.js");
-
-pub const COMPONENT_LOADER_INIT_SCRIPT: &str = include_str!("js/component_loader_helper.js");
-
-pub const COOKIES_INIT_SCRIPT: &str = include_str!("js/cookies_helper.js");
 
 pub const PROMISE_SETUP_SCRIPT: &str = r#"
 (function() {

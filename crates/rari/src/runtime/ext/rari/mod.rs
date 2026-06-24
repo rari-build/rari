@@ -6,7 +6,14 @@ pub mod redis_cache;
 extension!(
     rari,
     esm_entry_point = "ext:rari/rari.js",
-    esm = [ dir "src/runtime/ext/rari", "rari.js" ],
+    esm = [
+        dir "src/runtime/ext/rari",
+        "rari.js",
+        "cookies.ts",
+        "api_handler.ts",
+        "component_loader.ts",
+        "metadata_collector.ts",
+    ],
 );
 
 impl ExtensionTrait<()> for rari {

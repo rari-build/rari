@@ -1,12 +1,8 @@
-use crate::runtime::factory::utils::constants::{
-    API_HANDLER_INIT_SCRIPT, COMPONENT_LOADER_INIT_SCRIPT, COOKIES_INIT_SCRIPT,
-    ENV_INJECTION_SCRIPT, METADATA_COLLECTOR_INIT_SCRIPT, MODULE_CHECK_SCRIPT,
-};
+use crate::runtime::factory::utils::constants::{ENV_INJECTION_SCRIPT, MODULE_CHECK_SCRIPT};
 use crate::runtime::module::loader::RariModuleLoader;
 use crate::runtime::ops::StreamOpState;
 use cow_utils::CowUtils;
 use deno_core::{Extension, JsRuntime, RuntimeOptions};
-use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use std::borrow::Cow;
 use std::rc::Rc;
@@ -16,7 +12,7 @@ include!("../../../snapshots/residual_lazy_sources.rs");
 
 pub fn build_js_runtime(
     env_vars: Option<FxHashMap<String, String>>,
-) -> Result<(JsRuntime, Rc<RariModuleLoader>), RariError> {
+) -> (JsRuntime, Rc<RariModuleLoader>) {
     let module_loader = Rc::new(RariModuleLoader::new());
 
     let streaming_ops = get_streaming_ops();
@@ -78,37 +74,7 @@ pub fn build_js_runtime(
         eprintln!("[rari] Failed to check module registration extension: {err}");
     }
 
-    runtime
-        .execute_script("api_handler_init.js", API_HANDLER_INIT_SCRIPT.to_string())
-        .map_err(|e| {
-            RariError::internal(format!("Failed to initialize API handler helper: {e}"))
-        })?;
-
-    runtime
-        .execute_script(
-            "metadata_collector_init.js",
-            METADATA_COLLECTOR_INIT_SCRIPT.to_string(),
-        )
-        .map_err(|e| {
-            RariError::internal(format!(
-                "Failed to initialize metadata collector helper: {e}"
-            ))
-        })?;
-
-    runtime
-        .execute_script(
-            "component_loader_init.js",
-            COMPONENT_LOADER_INIT_SCRIPT.to_string(),
-        )
-        .map_err(|e| {
-            RariError::internal(format!("Failed to initialize component loader helper: {e}"))
-        })?;
-
-    runtime
-        .execute_script("cookies_init.js", COOKIES_INIT_SCRIPT.to_string())
-        .map_err(|e| RariError::internal(format!("Failed to initialize cookies helper: {e}")))?;
-
-    Ok((runtime, module_loader))
+    (runtime, module_loader)
 }
 
 fn get_streaming_ops() -> Vec<deno_core::OpDecl> {

@@ -1,3 +1,8 @@
+import 'ext:rari/cookies.ts'
+import 'ext:rari/api_handler.ts'
+import 'ext:rari/component_loader.ts'
+import 'ext:rari/metadata_collector.ts'
+
 const ObjectProperties = {
   nonEnumerable: { writable: true, enumerable: false, configurable: true },
   readOnly: { writable: false, enumerable: false, configurable: true },
