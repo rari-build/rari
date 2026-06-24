@@ -5,10 +5,10 @@ pub mod redis_cache;
 
 extension!(
     rari,
-    esm_entry_point = "ext:rari/rari.js",
+    esm_entry_point = "ext:rari/rari.ts",
     esm = [
         dir "src/runtime/ext/rari",
-        "rari.js",
+        "rari.ts",
         "cookies.ts",
         "api_handler.ts",
         "component_loader.ts",

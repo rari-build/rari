@@ -1,5 +1,5 @@
 import { core } from 'ext:core/mod.js'
-import { applyToGlobal, getterOnly, nonEnumerable } from 'ext:rari/rari.js'
+import { applyToGlobal, getterOnly, nonEnumerable } from 'ext:rari/rari.ts'
 
 const webStorage = core.loadExtScript('ext:deno_webstorage/01_webstorage.js')
 

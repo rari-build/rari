@@ -2,7 +2,7 @@
 /* eslint-disable unused-imports/no-unused-imports, unused-imports/no-unused-vars */
 import { core } from 'ext:core/mod.js'
 import * as errors from 'ext:init_web/init_errors.js'
-import { applyToGlobal, nonEnumerable, writeable } from 'ext:rari/rari.js'
+import { applyToGlobal, nonEnumerable, writeable } from 'ext:rari/rari.ts'
 
 const infra = core.loadExtScript('ext:deno_web/00_infra.js')
 const url = core.loadExtScript('ext:deno_web/00_url.js')

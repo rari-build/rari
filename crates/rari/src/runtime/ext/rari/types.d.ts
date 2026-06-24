@@ -14,4 +14,9 @@ declare global {
   }
 }
 
+declare module 'ext:rari/cookies.ts' {}
+declare module 'ext:rari/api_handler.ts' {}
+declare module 'ext:rari/component_loader.ts' {}
+declare module 'ext:rari/metadata_collector.ts' {}
+
 export {}

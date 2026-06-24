@@ -1,6 +1,6 @@
 /* eslint-disable no-undef */
 import { core } from 'ext:core/mod.js'
-import { applyToGlobal, nonEnumerable, writeable } from 'ext:rari/rari.js'
+import { applyToGlobal, nonEnumerable, writeable } from 'ext:rari/rari.ts'
 
 const headers = core.loadExtScript('ext:deno_fetch/20_headers.js')
 const formData = core.loadExtScript('ext:deno_fetch/21_formdata.js')

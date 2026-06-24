@@ -1,7 +1,7 @@
 // oxlint-disable no-unused-vars
 /* eslint-disable unused-imports/no-unused-imports, unused-imports/no-unused-vars */
 import { core } from 'ext:core/mod.js'
-import { applyToDeno, getterOnly, nonEnumerable, readOnly } from 'ext:rari/rari.js'
+import { applyToDeno, getterOnly, nonEnumerable, readOnly } from 'ext:rari/rari.ts'
 import * as scope from 'ext:runtime/98_global_scope_shared.js'
 import * as scopeWindow from 'ext:runtime/98_global_scope_window.js'
 import * as scopeWorker from 'ext:runtime/98_global_scope_worker.js'
