@@ -713,18 +713,22 @@ impl Config {
                 && let Some(remote_value) = use_cache_data.get("remote")
             {
                 match serde_json::from_value::<CacheLayerConfig>(remote_value.clone()) {
-                    Ok(layer) => {
+                    Ok(mut layer) => {
                         let missing_url = layer
                             .url
                             .as_deref()
                             .map(str::trim)
                             .as_ref()
                             .is_none_or(|v| v.is_empty());
+
                         if layer.handler == "redis" && missing_url {
                             tracing::warn!(
                                 "Invalid useCache.remote: handler=redis requires a non-empty url. Ignoring remote cache config."
                             );
                         } else {
+                            if let Some(url) = layer.url.as_deref() {
+                                layer.url = Some(url.trim().to_string());
+                            }
                             config.use_cache.remote = Some(layer);
                         }
                     }
