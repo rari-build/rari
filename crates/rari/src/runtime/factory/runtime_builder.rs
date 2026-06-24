@@ -3,6 +3,7 @@ use crate::runtime::module::loader::RariModuleLoader;
 use crate::runtime::ops::StreamOpState;
 use cow_utils::CowUtils;
 use deno_core::{Extension, JsRuntime, RuntimeOptions};
+use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use std::borrow::Cow;
 use std::rc::Rc;
@@ -10,9 +11,13 @@ use std::rc::Rc;
 static RUNTIME_SNAPSHOT: &[u8] = include_bytes!("../../../snapshots/RARI_SNAPSHOT.bin");
 include!("../../../snapshots/residual_lazy_sources.rs");
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "Result enables graceful runtime restart on JsRuntime::new() panic from TypeScript transpilation failures"
+)]
 pub fn build_js_runtime(
     env_vars: Option<FxHashMap<String, String>>,
-) -> (JsRuntime, Rc<RariModuleLoader>) {
+) -> Result<(JsRuntime, Rc<RariModuleLoader>), RariError> {
     let module_loader = Rc::new(RariModuleLoader::new());
 
     let streaming_ops = get_streaming_ops();
@@ -74,7 +79,7 @@ pub fn build_js_runtime(
         eprintln!("[rari] Failed to check module registration extension: {err}");
     }
 
-    (runtime, module_loader)
+    Ok((runtime, module_loader))
 }
 
 fn get_streaming_ops() -> Vec<deno_core::OpDecl> {

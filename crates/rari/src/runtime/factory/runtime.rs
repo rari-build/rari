@@ -3,7 +3,7 @@ use crate::runtime::factory::interface::{AsyncBatchResult, JsRuntimeInterface};
 use crate::runtime::factory::runtime_builder::build_js_runtime;
 use crate::runtime::factory::utils::constants::{
     CHANNEL_CAPACITY, JS_EXECUTOR_CHANNEL_CLOSED_ERROR, JS_EXECUTOR_FAILED_ERROR,
-    MODULE_ALREADY_EVALUATED_ERROR, RUNTIME_QUICK_RESTART_DELAY_MS,
+    MODULE_ALREADY_EVALUATED_ERROR, RUNTIME_QUICK_RESTART_DELAY_MS, RUNTIME_RESTART_DELAY_MS,
     create_already_evaluated_response, create_graceful_error, is_critical_error,
     is_runtime_restart_needed,
 };
@@ -106,7 +106,17 @@ impl RariRuntime {
 
             runtime.block_on(async {
                 loop {
-                    let (mut js_runtime, module_loader) = build_js_runtime(env_vars.clone());
+                    let (mut js_runtime, module_loader) =
+                        match build_js_runtime(env_vars.clone()) {
+                            Ok(rt) => rt,
+                            Err(_) => {
+                                tokio::time::sleep(std::time::Duration::from_millis(
+                                    RUNTIME_RESTART_DELAY_MS,
+                                ))
+                                .await;
+                                continue;
+                            }
+                        };
 
                     let mut continue_processing = true;
                     let mut pending_batches: Vec<PendingBatch> = Vec::new();

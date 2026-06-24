@@ -2,6 +2,7 @@ use rari_error::RariError;
 use serde_json::Value as JsonValue;
 
 pub const CHANNEL_CAPACITY: usize = 32;
+pub const RUNTIME_RESTART_DELAY_MS: u64 = 1000;
 pub const RUNTIME_QUICK_RESTART_DELAY_MS: u64 = 100;
 
 pub const MODULE_ALREADY_EVALUATED_ERROR: &str = "Module already evaluated";
