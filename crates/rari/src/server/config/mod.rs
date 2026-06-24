@@ -715,7 +715,7 @@ impl Config {
                 match serde_json::from_value::<CacheLayerConfig>(remote_value.clone()) {
                     Ok(mut layer) => {
                         let trimmed_url = layer.url.as_deref().map(str::trim);
-                        let missing_url = trimmed_url.is_none_or(|v| v.is_empty());
+                        let missing_url = trimmed_url.is_none_or(str::is_empty);
 
                         if layer.handler == "redis" && missing_url {
                             tracing::warn!(
