@@ -1,7 +1,4 @@
-use crate::runtime::factory::utils::constants::{
-    API_HANDLER_INIT_SCRIPT, COMPONENT_LOADER_INIT_SCRIPT, COOKIES_INIT_SCRIPT,
-    ENV_INJECTION_SCRIPT, METADATA_COLLECTOR_INIT_SCRIPT, MODULE_CHECK_SCRIPT,
-};
+use crate::runtime::factory::utils::constants::{ENV_INJECTION_SCRIPT, MODULE_CHECK_SCRIPT};
 use crate::runtime::module::loader::RariModuleLoader;
 use crate::runtime::ops::StreamOpState;
 use cow_utils::CowUtils;
@@ -14,6 +11,10 @@ use std::rc::Rc;
 static RUNTIME_SNAPSHOT: &[u8] = include_bytes!("../../../snapshots/RARI_SNAPSHOT.bin");
 include!("../../../snapshots/residual_lazy_sources.rs");
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "Result enables graceful runtime restart on JsRuntime::new() panic from TypeScript transpilation failures"
+)]
 pub fn build_js_runtime(
     env_vars: Option<FxHashMap<String, String>>,
 ) -> Result<(JsRuntime, Rc<RariModuleLoader>), RariError> {
@@ -77,36 +78,6 @@ pub fn build_js_runtime(
     ) {
         eprintln!("[rari] Failed to check module registration extension: {err}");
     }
-
-    runtime
-        .execute_script("api_handler_init.js", API_HANDLER_INIT_SCRIPT.to_string())
-        .map_err(|e| {
-            RariError::internal(format!("Failed to initialize API handler helper: {e}"))
-        })?;
-
-    runtime
-        .execute_script(
-            "metadata_collector_init.js",
-            METADATA_COLLECTOR_INIT_SCRIPT.to_string(),
-        )
-        .map_err(|e| {
-            RariError::internal(format!(
-                "Failed to initialize metadata collector helper: {e}"
-            ))
-        })?;
-
-    runtime
-        .execute_script(
-            "component_loader_init.js",
-            COMPONENT_LOADER_INIT_SCRIPT.to_string(),
-        )
-        .map_err(|e| {
-            RariError::internal(format!("Failed to initialize component loader helper: {e}"))
-        })?;
-
-    runtime
-        .execute_script("cookies_init.js", COOKIES_INIT_SCRIPT.to_string())
-        .map_err(|e| RariError::internal(format!("Failed to initialize cookies helper: {e}")))?;
 
     Ok((runtime, module_loader))
 }

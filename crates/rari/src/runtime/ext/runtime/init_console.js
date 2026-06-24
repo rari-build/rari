@@ -1,5 +1,5 @@
 import { core } from 'ext:core/mod.js'
-import { applyToGlobal, nonEnumerable } from 'ext:rari/rari.js'
+import { applyToGlobal, nonEnumerable } from 'ext:rari/rari.ts'
 
 const _console = core.loadExtScript('ext:deno_web/01_console.js')
 

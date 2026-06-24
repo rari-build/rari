@@ -1,5 +1,5 @@
 import { core } from 'ext:core/mod.js'
-import { applyToGlobal, nonEnumerable, readOnly } from 'ext:rari/rari.js'
+import { applyToGlobal, nonEnumerable, readOnly } from 'ext:rari/rari.ts'
 
 const crypto = core.loadExtScript('ext:deno_crypto/00_crypto.js')
 
