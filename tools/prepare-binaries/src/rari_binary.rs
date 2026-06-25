@@ -1,10 +1,9 @@
-use anyhow::{Context, Result};
-use std::fs;
-use std::path::Path;
-use tokio::process::Command;
-
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
+use std::{fs, path::Path};
+
+use anyhow::{Context, Result};
+use tokio::process::Command;
 
 #[cfg(target_os = "macos")]
 use crate::common::log_warning;
@@ -21,13 +20,9 @@ pub async fn build_binary(target: &str, project_root: &Path, dev_mode: bool) -> 
         cmd.arg("--release");
     }
 
-    cmd.args(["--target", target, "--bin", "rari"])
-        .current_dir(project_root);
+    cmd.args(["--target", target, "--bin", "rari"]).current_dir(project_root);
 
-    let output = cmd
-        .output()
-        .await
-        .context("Failed to execute cargo build")?;
+    let output = cmd.output().await.context("Failed to execute cargo build")?;
 
     if output.status.success() {
         log_success("Built binary");
@@ -77,9 +72,8 @@ pub fn copy_binary_to_platform_package(
         if target_info.platform.starts_with("darwin")
             && let Some(path_str) = dest_path.to_str()
         {
-            let sign_result = std::process::Command::new("codesign")
-                .args(["-s", "-", path_str])
-                .output();
+            let sign_result =
+                std::process::Command::new("codesign").args(["-s", "-", path_str]).output();
             match sign_result {
                 Ok(output) if output.status.success() => {
                     log_success(&format!("Ad-hoc signed: {}", dest_path.display()));
@@ -106,10 +100,8 @@ pub fn copy_binary_to_platform_package(
     reason = "File size in bytes to MB conversion, precision loss acceptable for display"
 )]
 pub fn validate_binary(target_info: &Target, project_root: &Path, dev_mode: bool) -> Result<bool> {
-    let binary_path = project_root
-        .join(target_info.package_dir)
-        .join("bin")
-        .join(target_info.binary_name);
+    let binary_path =
+        project_root.join(target_info.package_dir).join("bin").join(target_info.binary_name);
 
     if !binary_path.exists() {
         log_error(&format!("Binary not found: {}", binary_path.display()));
@@ -121,10 +113,7 @@ pub fn validate_binary(target_info: &Target, project_root: &Path, dev_mode: bool
         let metadata = fs::metadata(&binary_path)?;
         let permissions = metadata.permissions();
         if permissions.mode() & 0o111 == 0 {
-            log_error(&format!(
-                "Binary is not executable: {}",
-                binary_path.display()
-            ));
+            log_error(&format!("Binary is not executable: {}", binary_path.display()));
             return Ok(false);
         }
     }

@@ -45,15 +45,7 @@ pub fn generate_cache_inner_name(index: usize, export_name: &str) -> String {
 }
 
 fn sanitize_export_name(name: &str) -> String {
-    name.chars()
-        .map(|c| {
-            if c.is_alphanumeric() || c == '_' {
-                c
-            } else {
-                '_'
-            }
-        })
-        .collect()
+    name.chars().map(|c| if c.is_alphanumeric() || c == '_' { c } else { '_' }).collect()
 }
 
 #[cfg(test)]

@@ -1,5 +1,6 @@
-use super::ExtensionTrait;
 use deno_core::Extension;
+
+use super::ExtensionTrait;
 
 impl ExtensionTrait<()> for deno_node_sqlite::deno_node_sqlite {
     fn init((): ()) -> Extension {

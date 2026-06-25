@@ -1,5 +1,6 @@
-use super::ExtensionTrait;
 use deno_core::Extension;
+
+use super::ExtensionTrait;
 
 impl ExtensionTrait<()> for deno_webgpu::deno_webgpu {
     fn init((): ()) -> Extension {

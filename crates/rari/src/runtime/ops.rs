@@ -1,13 +1,15 @@
-use crate::server::core::utils::client::get_http_client;
-use crate::server::middleware::request_context::{PendingCookie, PendingCookieKey};
+use std::{cell::RefCell, rc::Rc, sync::Arc};
+
 use deno_core::{OpDecl, OpState, op2};
 use deno_error::JsErrorBox;
 use serde::Deserialize;
-use std::cell::RefCell;
-use std::rc::Rc;
-use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::error;
+
+use crate::server::{
+    core::utils::client::get_http_client,
+    middleware::request_context::{PendingCookie, PendingCookieKey},
+};
 
 #[derive(Deserialize, Debug)]
 #[serde(tag = "type")]
@@ -22,10 +24,7 @@ enum RscStreamOperation {
         async_module: bool,
     },
     #[serde(rename = "element")]
-    ReactElement {
-        row_id: String,
-        element: serde_json::Value,
-    },
+    ReactElement { row_id: String, element: serde_json::Value },
     #[serde(rename = "symbol")]
     Symbol { row_id: String, symbol_ref: String },
     #[serde(rename = "error")]
@@ -65,18 +64,12 @@ impl StreamOpState {
 
 fn parse_hex_row_id(row_id: &str, context: &str) -> Result<u32, JsErrorBox> {
     if !row_id.chars().all(|c| c.is_ascii_hexdigit()) {
-        error!(
-            "op_send_chunk_to_rust: invalid row_id '{}' for {}",
-            row_id, context
-        );
+        error!("op_send_chunk_to_rust: invalid row_id '{}' for {}", row_id, context);
         return Err(JsErrorBox::generic(format!("Invalid row_id: {row_id}")));
     }
 
     u32::from_str_radix(row_id, 16).map_err(|e| {
-        error!(
-            "op_send_chunk_to_rust: invalid row_id '{}' for {}: {}",
-            row_id, context, e
-        );
+        error!("op_send_chunk_to_rust: invalid row_id '{}' for {}: {}", row_id, context, e);
         JsErrorBox::generic(format!("Invalid row_id: {row_id}"))
     })
 }
@@ -118,13 +111,7 @@ pub async fn op_send_chunk_to_rust(
     match (sender_option, operation) {
         (
             Some(sender),
-            RscStreamOperation::ModuleReference {
-                row_id,
-                module_id,
-                chunks,
-                name,
-                async_module,
-            },
+            RscStreamOperation::ModuleReference { row_id, module_id, chunks, name, async_module },
         ) => {
             let module_data = serde_json::json!({
                 "id": module_id,
@@ -156,16 +143,7 @@ pub async fn op_send_chunk_to_rust(
                 error!("op_send_chunk_to_rust: receiver dropped for symbol reference.");
             }
         }
-        (
-            Some(sender),
-            RscStreamOperation::Error {
-                row_id,
-                message,
-                stack,
-                phase,
-                digest,
-            },
-        ) => {
+        (Some(sender), RscStreamOperation::Error { row_id, message, stack, phase, digest }) => {
             error!("Streaming error in row {row_id}: {message}");
             if let Some(stack_trace) = &stack {
                 error!("Stack trace: {stack_trace}");
@@ -398,26 +376,17 @@ async fn perform_simple_fetch(
         }
     }
 
-    let timeout = options
-        .get("timeout")
-        .and_then(|t| t.parse::<u64>().ok())
-        .unwrap_or(5000);
+    let timeout = options.get("timeout").and_then(|t| t.parse::<u64>().ok()).unwrap_or(5000);
 
     request = request.timeout(std::time::Duration::from_millis(timeout));
 
-    let response = request
-        .send()
-        .await
-        .map_err(|e| format!("Request failed: {e}"))?;
+    let response = request.send().await.map_err(|e| format!("Request failed: {e}"))?;
 
     let status = response.status().as_u16();
     let headers = response.headers().clone();
     let headers_obj = headers_to_json(&headers);
 
-    let body = response
-        .text()
-        .await
-        .map_err(|e| format!("Failed to read response: {e}"))?;
+    let body = response.text().await.map_err(|e| format!("Failed to read response: {e}"))?;
 
     Ok((status, body, headers_obj))
 }
@@ -441,19 +410,12 @@ pub fn op_get_cookies(state: Rc<RefCell<OpState>>) -> String {
             let mut parts = pair.splitn(2, '=');
             let name = parts.next()?.trim().to_string();
             let value = parts.next().unwrap_or("").trim().to_string();
-            if name.is_empty() {
-                None
-            } else {
-                Some((name, value))
-            }
+            if name.is_empty() { None } else { Some((name, value)) }
         })
         .collect();
 
-    let mut pending: Vec<_> = ctx
-        .pending_cookies
-        .iter()
-        .map(|e| (e.key().clone(), e.value().clone()))
-        .collect();
+    let mut pending: Vec<_> =
+        ctx.pending_cookies.iter().map(|e| (e.key().clone(), e.value().clone())).collect();
     pending.sort_by(|(a_key, a_cookie), (b_key, b_cookie)| {
         let a_is_delete = a_cookie.max_age == Some(0);
         let b_is_delete = b_cookie.max_age == Some(0);
@@ -479,11 +441,7 @@ pub fn op_get_cookies(state: Rc<RefCell<OpState>>) -> String {
         }
     }
 
-    cookies
-        .iter()
-        .map(|(k, v)| format!("{k}={v}"))
-        .collect::<Vec<_>>()
-        .join("; ")
+    cookies.iter().map(|(k, v)| format!("{k}={v}")).collect::<Vec<_>>().join("; ")
 }
 
 #[derive(serde::Deserialize)]
@@ -513,10 +471,7 @@ pub fn op_set_cookie(
     #[serde] args: SetCookieArgs,
 ) -> Result<(), JsErrorBox> {
     if !crate::rsc::actions::is_valid_cookie_name(&args.name) {
-        return Err(JsErrorBox::type_error(format!(
-            "Invalid cookie name: '{}'",
-            args.name
-        )));
+        return Err(JsErrorBox::type_error(format!("Invalid cookie name: '{}'", args.name)));
     }
 
     if !crate::rsc::actions::is_valid_cookie_value(&args.value) {
@@ -636,9 +591,7 @@ pub fn op_cache_get(
     if let Some(ctx) =
         op_state_ref.try_borrow::<Arc<crate::server::middleware::request_context::RequestContext>>()
     {
-        ctx.function_cache
-            .get(&cache_key)
-            .map(|entry| entry.value().clone())
+        ctx.function_cache.get(&cache_key).map(|entry| entry.value().clone())
     } else {
         None
     }
@@ -681,8 +634,9 @@ pub fn op_cache_set(
     clippy::get_unwrap
 )]
 mod tests {
-    use super::*;
     use tokio::sync::mpsc;
+
+    use super::*;
 
     #[test]
     fn test_stream_op_state_operations() {

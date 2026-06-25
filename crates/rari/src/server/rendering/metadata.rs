@@ -123,8 +123,9 @@ pub fn finalize_metadata(metadata: &mut Value) {
     clippy::get_unwrap
 )]
 mod tests {
-    use super::*;
     use serde_json::json;
+
+    use super::*;
 
     #[test]
     fn test_merge_simple_fields() {

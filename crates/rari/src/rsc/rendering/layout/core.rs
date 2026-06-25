@@ -1,20 +1,20 @@
-use crate::rsc::rendering::core::RscRenderer;
-use crate::rsc::rendering::streaming::RscStream;
-use crate::server::cache::handler::{
-    CacheError, CacheHandler, CacheHandlerRegistry, MemoryCacheHandler, MemoryConfig,
-};
 use rari_error::RariError;
 
+use crate::{
+    rsc::rendering::{core::RscRenderer, streaming::RscStream},
+    server::cache::handler::{
+        CacheError, CacheHandler, CacheHandlerRegistry, MemoryCacheHandler, MemoryConfig,
+    },
+};
+
 const LAYOUT_KEY_PREFIX: &str = "layout:";
-use crate::server::config::{CacheLayerConfig, Config};
-use crate::server::routing::app_router::AppRouteMatch;
+use std::sync::Arc;
+
 use cow_utils::CowUtils;
 use rari_utils::path_to_file_url;
 use serde_json::Value;
-use std::sync::Arc;
 use tokio::sync::mpsc;
-use tracing::debug;
-use tracing::error;
+use tracing::{debug, error};
 
 use super::{
     constants::{
@@ -24,6 +24,10 @@ use super::{
     error_messages,
     types::{LayoutRenderContext, RenderResult},
     utils,
+};
+use crate::server::{
+    config::{CacheLayerConfig, Config},
+    routing::app_router::AppRouteMatch,
 };
 
 pub struct LayoutHtmlCache {
@@ -58,10 +62,7 @@ impl LayoutHtmlCache {
     }
 
     pub fn with_ttl(handler: Arc<dyn CacheHandler>, default_ttl_secs: u64) -> Self {
-        Self {
-            handler,
-            default_ttl_secs,
-        }
+        Self { handler, default_ttl_secs }
     }
 
     fn namespaced(key: u64) -> String {
@@ -88,13 +89,7 @@ impl LayoutHtmlCache {
     }
 
     pub async fn insert(&self, key: u64, html: String) -> Result<(), CacheError> {
-        self.handler
-            .set(
-                &Self::namespaced(key),
-                html.into_bytes(),
-                self.default_ttl_secs,
-            )
-            .await?;
+        self.handler.set(&Self::namespaced(key), html.into_bytes(), self.default_ttl_secs).await?;
         Ok(())
     }
 
@@ -115,20 +110,14 @@ pub struct LayoutRenderer {
 
 impl LayoutRenderer {
     pub fn new(renderer: Arc<tokio::sync::Mutex<RscRenderer>>) -> Self {
-        Self {
-            renderer,
-            html_cache: Arc::new(LayoutHtmlCache::new()),
-        }
+        Self { renderer, html_cache: Arc::new(LayoutHtmlCache::new()) }
     }
 
     pub fn with_shared_cache(
         renderer: Arc<tokio::sync::Mutex<RscRenderer>>,
         html_cache: Arc<LayoutHtmlCache>,
     ) -> Self {
-        Self {
-            renderer,
-            html_cache,
-        }
+        Self { renderer, html_cache }
     }
 
     pub fn create_shared_cache() -> Arc<LayoutHtmlCache> {
@@ -145,38 +134,28 @@ impl LayoutRenderer {
     async fn enable_streaming_and_inject_lazy_resolver(
         renderer: &RscRenderer,
     ) -> Result<(), RariError> {
-        let prev_count = renderer
-            .streaming_refcount
-            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let prev_count =
+            renderer.streaming_refcount.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
         if prev_count == 0
             && let Err(e) = renderer
                 .runtime
-                .execute_script(
-                    "enable_streaming".to_string(),
-                    JS_ENABLE_STREAMING.to_string(),
-                )
+                .execute_script("enable_streaming".to_string(), JS_ENABLE_STREAMING.to_string())
                 .await
         {
-            renderer
-                .streaming_refcount
-                .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+            renderer.streaming_refcount.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
             return Err(e);
         }
 
         let resolve_helper = include_str!("js/resolve_lazy_helper.js");
         let injection_result = renderer
             .runtime
-            .execute_script(
-                "inject_lazy_resolver".to_string(),
-                resolve_helper.to_string(),
-            )
+            .execute_script("inject_lazy_resolver".to_string(), resolve_helper.to_string())
             .await;
 
         if let Err(e) = injection_result {
-            let new_count = renderer
-                .streaming_refcount
-                .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+            let new_count =
+                renderer.streaming_refcount.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
             if new_count == 1
                 && let Err(cleanup_err) = renderer
                     .runtime
@@ -198,17 +177,13 @@ impl LayoutRenderer {
     }
 
     async fn disable_streaming(renderer: &RscRenderer) -> Result<(), RariError> {
-        let prev_count = renderer
-            .streaming_refcount
-            .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+        let prev_count =
+            renderer.streaming_refcount.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
 
         if prev_count == 1 {
             renderer
                 .runtime
-                .execute_script(
-                    "disable_streaming".to_string(),
-                    JS_DISABLE_STREAMING.to_string(),
-                )
+                .execute_script("disable_streaming".to_string(), JS_DISABLE_STREAMING.to_string())
                 .await?;
         }
         Ok(())
@@ -238,9 +213,8 @@ impl LayoutRenderer {
         let html_renderer =
             crate::rsc::rendering::html::RscHtmlRenderer::new(Arc::clone(&renderer.runtime));
         let config = Config::get().ok_or_else(|| RariError::internal("Config not available"))?;
-        let html = html_renderer
-            .render_to_html_for_route(&rsc_wire_format, config, route_match)
-            .await?;
+        let html =
+            html_renderer.render_to_html_for_route(&rsc_wire_format, config, route_match).await?;
         Self::validate_html_structure(&html, route_match)?;
 
         let is_not_found = route_match.not_found.is_some();
@@ -293,10 +267,8 @@ impl LayoutRenderer {
                 format!("{converted_base}{ext}")
             }
 
-            let js_filename = file_path
-                .cow_replace(".tsx", ".js")
-                .cow_replace(".ts", ".js")
-                .into_owned();
+            let js_filename =
+                file_path.cow_replace(".tsx", ".js").cow_replace(".ts", ".js").into_owned();
             let dist_filename = convert_route_path_to_dist_path(&js_filename);
             base_path.join("app").join(&dist_filename)
         }
@@ -348,14 +320,10 @@ impl LayoutRenderer {
         let runtime = Arc::clone(&renderer.runtime);
         drop(renderer);
 
-        let result = runtime
-            .execute_script("check_not_found".to_string(), check_script)
-            .await?;
+        let result = runtime.execute_script("check_not_found".to_string(), check_script).await?;
 
-        let not_found = result
-            .get("notFound")
-            .and_then(serde_json::Value::as_bool)
-            .unwrap_or(false);
+        let not_found =
+            result.get("notFound").and_then(serde_json::Value::as_bool).unwrap_or(false);
 
         Ok(not_found)
     }
@@ -368,9 +336,7 @@ impl LayoutRenderer {
             std::sync::Arc<crate::server::middleware::request_context::RequestContext>,
         >,
     ) -> Result<String, RariError> {
-        let loading_enabled = Config::get()
-            .map(|config| config.loading.enabled)
-            .unwrap_or(true);
+        let loading_enabled = Config::get().map(|config| config.loading.enabled).unwrap_or(true);
 
         let loading_component_id = if loading_enabled {
             if let Some(loading_entry) = &route_match.loading {
@@ -415,10 +381,7 @@ impl LayoutRenderer {
         };
 
         if let Some(ctx) = request_context {
-            renderer
-                .runtime
-                .execute_with_request_context(ctx, render_operation)
-                .await
+            renderer.runtime.execute_with_request_context(ctx, render_operation).await
         } else {
             render_operation.await
         }
@@ -432,8 +395,7 @@ impl LayoutRenderer {
             std::sync::Arc<crate::server::middleware::request_context::RequestContext>,
         >,
     ) -> Result<String, RariError> {
-        self.render_route(route_match, context, request_context)
-            .await
+        self.render_route(route_match, context, request_context).await
     }
 
     pub async fn render_route_with_streaming(
@@ -451,9 +413,7 @@ impl LayoutRenderer {
             return Ok(RenderResult::Static(cached_html));
         }
 
-        let loading_enabled = Config::get()
-            .map(|config| config.loading.enabled)
-            .unwrap_or(true);
+        let loading_enabled = Config::get().map(|config| config.loading.enabled).unwrap_or(true);
 
         let loading_component_id = if loading_enabled {
             if let Some(loading_entry) = &route_match.loading {
@@ -472,9 +432,7 @@ impl LayoutRenderer {
         let needs_streaming = loading_component_id.is_some();
 
         if !needs_streaming {
-            let rsc_wire_format = self
-                .render_route(route_match, context, request_context)
-                .await?;
+            let rsc_wire_format = self.render_route(route_match, context, request_context).await?;
 
             if return_rsc_on_fallback {
                 return Ok(RenderResult::Static(rsc_wire_format));
@@ -510,10 +468,7 @@ if (typeof window !== 'undefined') {
 
             let html = if let Some(body_end) = html.rfind("</body>") {
                 let mut result = html;
-                result.insert_str(
-                    body_end,
-                    &format!("{payload_script}\n{completion_script}\n"),
-                );
+                result.insert_str(body_end, &format!("{payload_script}\n{completion_script}\n"));
                 result
             } else {
                 format!("{html}{payload_script}\n{completion_script}")
@@ -567,10 +522,7 @@ if (typeof window !== 'undefined') {
 
                 let resolve_helper = include_str!("js/resolve_lazy_helper.js");
                 let injection_result = runtime
-                    .execute_script(
-                        "inject_lazy_resolver".to_string(),
-                        resolve_helper.to_string(),
-                    )
+                    .execute_script("inject_lazy_resolver".to_string(), resolve_helper.to_string())
                     .await;
 
                 if let Err(e) = injection_result {
@@ -752,11 +704,8 @@ if (typeof window !== 'undefined') {
     }
 
     fn validate_html_structure(html: &str, route_match: &AppRouteMatch) -> Result<(), RariError> {
-        let root_layout_path = route_match
-            .layouts
-            .iter()
-            .find(|l| l.is_root)
-            .map(|l| l.file_path.as_str());
+        let root_layout_path =
+            route_match.layouts.iter().find(|l| l.is_root).map(|l| l.file_path.as_str());
 
         let trimmed = html.trim_start();
 
@@ -872,10 +821,8 @@ if (typeof window !== 'undefined') {
                 if let Some(success) = result.get("success").and_then(serde_json::Value::as_bool)
                     && !success
                 {
-                    let error_msg = result
-                        .get("error")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("Unknown error");
+                    let error_msg =
+                        result.get("error").and_then(|v| v.as_str()).unwrap_or("Unknown error");
                     tracing::error!(
                         "Failed to resolve lazy promise {}: {}",
                         lazy_promise.promise_id,
@@ -1030,8 +977,7 @@ if (typeof window !== 'undefined') {
 
             Ok(RscStream::new(rx))
         } else {
-            self.render_route_streaming_progressive(route_match, context)
-                .await
+            self.render_route_streaming_progressive(route_match, context).await
         }
     }
 
@@ -1067,10 +1013,7 @@ if (typeof window !== 'undefined') {
         use_suspense: bool,
     ) -> Result<String, RariError> {
         let page_props = utils::create_page_props(route_match, context).map_err(|e| {
-            error!(
-                "Failed to create page props for route '{}': {}",
-                route_match.route.path, e
-            );
+            error!("Failed to create page props for route '{}': {}", route_match.route.path, e);
             RariError::internal(format!(
                 "Failed to create page props for route '{}' (component: {}): {}",
                 route_match.route.path, route_match.route.file_path, e
@@ -1078,10 +1021,7 @@ if (typeof window !== 'undefined') {
         })?;
 
         let page_props_json = serde_json::to_string(&page_props).map_err(|e| {
-            error!(
-                "Failed to serialize page props for route '{}': {}",
-                route_match.route.path, e
-            );
+            error!("Failed to serialize page props for route '{}': {}", route_match.route.path, e);
             RariError::internal(format!(
                 "Failed to serialize page props for route '{}' (component: {}): {}",
                 route_match.route.path, route_match.route.file_path, e
@@ -1107,20 +1047,14 @@ if (typeof window !== 'undefined') {
                 .cow_replace("{page_props_json}", "{}")
                 .into_owned()
         } else if let Some(loading_id) = loading_component_id {
-            let loading_file_path = route_match
-                .loading
-                .as_ref()
-                .map(|l| l.file_path.as_str())
-                .unwrap_or("");
+            let loading_file_path =
+                route_match.loading.as_ref().map(|l| l.file_path.as_str()).unwrap_or("");
 
             JS_PAGE_RENDER_WITH_LOADING
                 .cow_replace("{page_component_id}", &page_component_id)
                 .cow_replace("{loading_id}", loading_id)
                 .cow_replace("{page_props_json}", &page_props_json)
-                .cow_replace(
-                    "{use_suspense}",
-                    if use_suspense { "true" } else { "false" },
-                )
+                .cow_replace("{use_suspense}", if use_suspense { "true" } else { "false" })
                 .cow_replace("{route_file_path}", &route_match.route.file_path)
                 .cow_replace("{loading_file_path}", loading_file_path)
                 .into_owned()
@@ -1223,9 +1157,7 @@ if (typeof window !== 'undefined') {
             .map_err(|e| RariError::internal(format!("Failed to serialize error props: {e}")))?;
 
         let mut renderer = self.renderer.lock().await;
-        renderer
-            .render_to_string(&component_id, Some(&props_json))
-            .await
+        renderer.render_to_string(&component_id, Some(&props_json)).await
     }
 
     pub async fn render_not_found(
@@ -1249,11 +1181,7 @@ if (typeof window !== 'undefined') {
         component_id: &str,
         component_code: &str,
     ) -> Result<(), RariError> {
-        self.renderer
-            .lock()
-            .await
-            .register_component(component_id, component_code)
-            .await
+        self.renderer.lock().await.register_component(component_id, component_code).await
     }
 }
 
@@ -1317,10 +1245,7 @@ mod tests {
     async fn test_layout_with_noop_handler() {
         let cache = LayoutHtmlCache::with_handler(Arc::new(NoOpCacheHandler));
 
-        cache
-            .insert(1, "x".to_string())
-            .await
-            .expect("insert is no-op but Ok");
+        cache.insert(1, "x".to_string()).await.expect("insert is no-op but Ok");
         assert!(cache.get(1).await.is_none());
         cache.clear().await.expect("clear is no-op but Ok");
     }

@@ -1,5 +1,6 @@
-use super::ExtensionTrait;
 use deno_core::{Extension, extension};
+
+use super::ExtensionTrait;
 
 extension!(
     init_crypto,
@@ -19,8 +20,5 @@ impl ExtensionTrait<Option<u64>> for deno_crypto::deno_crypto {
 }
 
 pub fn extensions(seed: Option<u64>, is_snapshot: bool) -> Vec<Extension> {
-    vec![
-        deno_crypto::deno_crypto::build(seed, is_snapshot),
-        init_crypto::build((), is_snapshot),
-    ]
+    vec![deno_crypto::deno_crypto::build(seed, is_snapshot), init_crypto::build((), is_snapshot)]
 }

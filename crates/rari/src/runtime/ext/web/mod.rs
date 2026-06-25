@@ -1,14 +1,14 @@
-use super::ExtensionTrait;
+use std::{rc::Rc, sync::Arc};
+
 use deno_core::{Extension, extension};
-use std::rc::Rc;
-use std::sync::Arc;
+
+use super::ExtensionTrait;
 
 mod options;
 pub use options::WebOptions;
 
 mod permissions;
-pub use permissions::PermissionsContainer;
-pub use permissions::{DefaultWebPermissions, WebPermissions};
+pub use permissions::{DefaultWebPermissions, PermissionsContainer, WebPermissions};
 
 extension!(
     init_fetch,

@@ -1,5 +1,6 @@
-use crate::server::routing::app_router::AppRouteMatch;
 use std::fmt::Write;
+
+use crate::server::routing::app_router::AppRouteMatch;
 
 pub fn create_wrapped_html_error_message(
     route_match: &AppRouteMatch,
@@ -72,11 +73,7 @@ pub fn create_wrapped_html_error_message(
         msg.push_str("   Your current component tree for this route:\n\n");
         for (idx, layout) in route_match.layouts.iter().enumerate() {
             let indent = "   ".repeat(idx + 1);
-            let marker = if layout.is_root {
-                " ← ROOT LAYOUT (check this!)"
-            } else {
-                ""
-            };
+            let marker = if layout.is_root { " ← ROOT LAYOUT (check this!)" } else { "" };
             #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
             writeln!(&mut msg, "   {}└─ {}{}", indent, layout.file_path, marker).unwrap();
         }

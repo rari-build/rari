@@ -1,5 +1,7 @@
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
-use std::time::Duration;
+use std::{
+    sync::atomic::{AtomicU64, AtomicUsize, Ordering},
+    time::Duration,
+};
 
 use super::constants::{
     DEFAULT_MAX_CACHE_SIZE, DEFAULT_MAX_CONCURRENT_RENDERS, DEFAULT_MAX_MEMORY_PER_COMPONENT_MB,
@@ -73,11 +75,7 @@ impl ResourceTracker {
                 let hits = self.cache_hits.load(Ordering::Relaxed);
                 let misses = self.cache_misses.load(Ordering::Relaxed);
                 let total = hits + misses;
-                if total > 0 {
-                    hits as f64 / total as f64
-                } else {
-                    0.0
-                }
+                if total > 0 { hits as f64 / total as f64 } else { 0.0 }
             },
             timeout_errors: self.timeout_errors.load(Ordering::Relaxed),
             memory_pressure_events: self.memory_pressure_events.load(Ordering::Relaxed),
@@ -94,8 +92,7 @@ impl ResourceTracker {
 
     pub fn record_render_completion(&self, duration: Duration) {
         self.total_renders.fetch_add(1, Ordering::Relaxed);
-        self.total_render_time_ms
-            .fetch_add(duration.as_millis() as u64, Ordering::Relaxed);
+        self.total_render_time_ms.fetch_add(duration.as_millis() as u64, Ordering::Relaxed);
     }
 
     pub fn record_cache_hit(&self) {

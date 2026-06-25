@@ -1,29 +1,26 @@
 #![allow(clippy::unused_async_trait_impl)]
 
-use crate::runtime::JsExecutionRuntime;
-use crate::server::routing::types::RouteSegment;
-use axum::body::Body;
-use axum::http::{HeaderMap, Request, Response, StatusCode};
+use std::{path::Path, sync::Arc, time::SystemTime};
+
+use axum::{
+    body::Body,
+    http::{HeaderMap, Request, Response, StatusCode},
+};
 use cow_utils::CowUtils;
 use dashmap::DashMap;
 use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value as JsonValue, json};
-use std::path::Path;
-use std::sync::Arc;
-use std::time::SystemTime;
 use tracing::error;
 use urlencoding::decode;
+
+use crate::{runtime::JsExecutionRuntime, server::routing::types::RouteSegment};
 
 fn parse_decoded_path_segments(path: &str) -> Vec<String> {
     path.split('/')
         .filter(|s| !s.is_empty())
-        .map(|s| {
-            decode(s)
-                .unwrap_or_else(|_| s.to_string().into())
-                .into_owned()
-        })
+        .map(|s| decode(s).unwrap_or_else(|_| s.to_string().into()).into_owned())
         .collect()
 }
 
@@ -33,11 +30,7 @@ pub struct ApiRouteEntry {
     pub path: String,
     #[serde(rename = "filePath")]
     pub file_path: String,
-    #[serde(
-        rename = "componentId",
-        default,
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(rename = "componentId", default, skip_serializing_if = "Option::is_none")]
     pub component_id: Option<String>,
     pub segments: Vec<RouteSegment>,
     pub params: Vec<String>,
@@ -76,11 +69,7 @@ pub struct ApiRouteHandler {
 
 impl ApiRouteHandler {
     pub fn new(runtime: Arc<JsExecutionRuntime>, manifest: ApiRouteManifest) -> Self {
-        Self {
-            runtime,
-            manifest: Arc::new(manifest),
-            handler_cache: Arc::new(DashMap::new()),
-        }
+        Self { runtime, manifest: Arc::new(manifest), handler_cache: Arc::new(DashMap::new()) }
     }
 
     pub async fn from_file(
@@ -124,8 +113,7 @@ impl ApiRouteHandler {
                 .trim_end_matches(".jsx")
                 .trim_end_matches(".js")
         );
-        self.handler_cache
-            .retain(|key, _| key != file_path && !key.starts_with(&route_prefix));
+        self.handler_cache.retain(|key, _| key != file_path && !key.starts_with(&route_prefix));
     }
 
     pub fn get_supported_methods(&self, path: &str) -> Option<Vec<String>> {
@@ -164,9 +152,7 @@ impl ApiRouteHandler {
             }
         }
 
-        Err(RariError::not_found(format!(
-            "No API route found for path: {path}"
-        )))
+        Err(RariError::not_found(format!("No API route found for path: {path}")))
     }
 
     fn match_route_pattern(
@@ -174,11 +160,7 @@ impl ApiRouteHandler {
         route: &ApiRouteEntry,
         path: &str,
     ) -> Option<FxHashMap<String, String>> {
-        let route_segments = route
-            .path
-            .split('/')
-            .filter(|s| !s.is_empty())
-            .collect::<Vec<_>>();
+        let route_segments = route.path.split('/').filter(|s| !s.is_empty()).collect::<Vec<_>>();
         let path_segments = parse_decoded_path_segments(path);
 
         let mut params = FxHashMap::default();
@@ -233,11 +215,7 @@ impl ApiRouteHandler {
             route_idx += 1;
         }
 
-        if path_idx == path_segments.len() {
-            Some(params)
-        } else {
-            None
-        }
+        if path_idx == path_segments.len() { Some(params) } else { None }
     }
 
     fn normalize_path(path: &str) -> String {
@@ -319,26 +297,20 @@ impl ApiRouteHandler {
             last_modified,
         };
 
-        self.handler_cache
-            .insert(cache_key.to_string(), compiled.clone());
+        self.handler_cache.insert(cache_key.to_string(), compiled.clone());
 
         Ok(compiled)
     }
 
     fn resolve_route_dist_path(route: &ApiRouteEntry) -> Result<std::path::PathBuf, RariError> {
         if let Some(component_id) = &route.component_id {
-            return Ok(Path::new("dist")
-                .join("server")
-                .join(format!("{component_id}.js")));
+            return Ok(Path::new("dist").join("server").join(format!("{component_id}.js")));
         }
 
         Self::resolve_dist_path(&route.file_path)
     }
 
-    #[expect(
-        clippy::unnecessary_wraps,
-        reason = "Result return type maintains API consistency"
-    )]
+    #[expect(clippy::unnecessary_wraps, reason = "Result return type maintains API consistency")]
     fn resolve_dist_path(file_path: &str) -> Result<std::path::PathBuf, RariError> {
         let mut normalized_path = String::new();
         let mut chars = file_path.chars().peekable();
@@ -398,11 +370,8 @@ impl ApiRouteHandler {
             }
         }
 
-        let dist_path = Path::new("dist")
-            .join("server")
-            .join("app")
-            .join(normalized_path)
-            .with_extension("js");
+        let dist_path =
+            Path::new("dist").join("server").join("app").join(normalized_path).with_extension("js");
 
         Ok(dist_path)
     }
@@ -415,32 +384,27 @@ impl ApiRouteHandler {
     ) -> Result<Response<Body>, RariError> {
         const MAX_API_BODY_SIZE: usize = 10 * 1024 * 1024;
 
-        let handler = self
-            .load_handler(&route_match.route, is_development)
-            .await
-            .map_err(|e| {
-                error!(
-                    route_path = %route_match.route.path,
-                    method = %route_match.method,
-                    error = %e,
-                    "Failed to load handler"
-                );
-                e
-            })?;
+        let handler = self.load_handler(&route_match.route, is_development).await.map_err(|e| {
+            error!(
+                route_path = %route_match.route.path,
+                method = %route_match.method,
+                error = %e,
+                "Failed to load handler"
+            );
+            e
+        })?;
 
         let (parts, body) = request.into_parts();
 
-        let body_bytes = axum::body::to_bytes(body, MAX_API_BODY_SIZE)
-            .await
-            .map_err(|e| {
-                error!(
-                    route_path = %route_match.route.path,
-                    method = %route_match.method,
-                    error = %e,
-                    "Failed to read request body (may exceed size limit)"
-                );
-                RariError::bad_request(format!("Failed to read request body: {e}"))
-            })?;
+        let body_bytes = axum::body::to_bytes(body, MAX_API_BODY_SIZE).await.map_err(|e| {
+            error!(
+                route_path = %route_match.route.path,
+                method = %route_match.method,
+                error = %e,
+                "Failed to read request body (may exceed size limit)"
+            );
+            RariError::bad_request(format!("Failed to read request body: {e}"))
+        })?;
 
         let body_string = String::from_utf8_lossy(&body_bytes).to_string();
 
@@ -452,11 +416,10 @@ impl ApiRouteHandler {
             &route_match.params,
         )?;
 
-        let request_context = std::sync::Arc::new(
-            crate::server::middleware::request_context::RequestContext::new(
+        let request_context =
+            std::sync::Arc::new(crate::server::middleware::request_context::RequestContext::new(
                 route_match.route.path.clone(),
-            ),
-        );
+            ));
 
         self.runtime
             .execute_with_request_context(request_context, async {
@@ -511,20 +474,16 @@ impl ApiRouteHandler {
                         })
                 });
 
-                let module_id = self
-                    .runtime
-                    .load_es_module(&component_id)
-                    .await
-                    .map_err(|e| {
-                        error!(
-                            route_path = %route_match.route.path,
-                            method = %route_match.method,
-                            component_id = %component_id,
-                            error = %e,
-                            "Failed to load API route as ES module"
-                        );
-                        RariError::js_execution(format!("Failed to load ES module: {e}"))
-                    })?;
+                let module_id = self.runtime.load_es_module(&component_id).await.map_err(|e| {
+                    error!(
+                        route_path = %route_match.route.path,
+                        method = %route_match.method,
+                        component_id = %component_id,
+                        error = %e,
+                        "Failed to load API route as ES module"
+                    );
+                    RariError::js_execution(format!("Failed to load ES module: {e}"))
+                })?;
 
                 if let Err(e) = self.runtime.evaluate_module(module_id).await {
                     error!(
@@ -534,9 +493,7 @@ impl ApiRouteHandler {
                         error = %e,
                         "Failed to evaluate API route module"
                     );
-                    return Err(RariError::js_execution(format!(
-                        "Failed to evaluate module: {e}"
-                    )));
+                    return Err(RariError::js_execution(format!("Failed to evaluate module: {e}")));
                 }
 
                 let result = self
@@ -571,10 +528,7 @@ impl ApiRouteHandler {
             })
             .await
     }
-    #[expect(
-        clippy::unnecessary_wraps,
-        reason = "Result return type maintains API consistency"
-    )]
+    #[expect(clippy::unnecessary_wraps, reason = "Result return type maintains API consistency")]
     fn create_request_object(
         &self,
         method: &str,
@@ -613,9 +567,7 @@ impl ApiRouteHandler {
         let script = format!(
             r#"globalThis['~rari'].apiHandler.callHandler({}, "{}", "{}")"#,
             request_json,
-            module_specifier
-                .cow_replace('\\', "\\\\")
-                .cow_replace('"', "\\\""),
+            module_specifier.cow_replace('\\', "\\\\").cow_replace('"', "\\\""),
             method.cow_replace('\\', "\\\\").cow_replace('"', "\\\"")
         );
 
@@ -629,10 +581,7 @@ impl ApiRouteHandler {
             .map_err(|e| RariError::js_execution(format!("Failed to execute handler: {e}")))
     }
 
-    #[expect(
-        clippy::unused_async_trait_impl,
-        reason = "Async required by trait implementation"
-    )]
+    #[expect(clippy::unused_async_trait_impl, reason = "Async required by trait implementation")]
     async fn create_response(&self, result: JsonValue) -> Result<Response<Body>, RariError> {
         let is_http_envelope = if let Some(status_val) = result.get("status") {
             if let Some(status_num) = status_val.as_u64() {
@@ -653,11 +602,7 @@ impl ApiRouteHandler {
 
             let status_code =
                 StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
-            let body_str = result
-                .get("body")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
+            let body_str = result.get("body").and_then(|v| v.as_str()).unwrap_or("").to_string();
 
             let mut response = Response::builder().status(status_code);
 
@@ -709,8 +654,9 @@ impl ApiRouteHandler {
     clippy::get_unwrap
 )]
 mod tests {
-    use super::*;
     use axum::http::HeaderValue;
+
+    use super::*;
 
     #[test]
     fn test_create_request_object_basic() {
@@ -724,9 +670,8 @@ mod tests {
 
         let params = FxHashMap::default();
 
-        let result = handler
-            .create_request_object("GET", "/api/test", &headers, "", &params)
-            .unwrap();
+        let result =
+            handler.create_request_object("GET", "/api/test", &headers, "", &params).unwrap();
 
         assert_eq!(result["method"], "GET");
         assert_eq!(result["url"], "/api/test");
@@ -745,9 +690,8 @@ mod tests {
         params.insert("id".to_string(), "123".to_string());
         params.insert("name".to_string(), "test".to_string());
 
-        let result = handler
-            .create_request_object("GET", "/api/users/123", &headers, "", &params)
-            .unwrap();
+        let result =
+            handler.create_request_object("GET", "/api/users/123", &headers, "", &params).unwrap();
 
         assert_eq!(result["params"]["id"], "123");
         assert_eq!(result["params"]["name"], "test");
@@ -771,10 +715,7 @@ mod tests {
         let response = handler.create_response(response_json).await.unwrap();
 
         assert_eq!(response.status(), StatusCode::CREATED);
-        assert_eq!(
-            response.headers().get("content-type").unwrap(),
-            "application/json"
-        );
+        assert_eq!(response.headers().get("content-type").unwrap(), "application/json");
         assert_eq!(response.headers().get("x-custom").unwrap(), "value");
     }
 
@@ -792,9 +733,6 @@ mod tests {
         let response = handler.create_response(plain_json).await.unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        assert_eq!(
-            response.headers().get("content-type").unwrap(),
-            "application/json"
-        );
+        assert_eq!(response.headers().get("content-type").unwrap(), "application/json");
     }
 }

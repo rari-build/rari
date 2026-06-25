@@ -1,9 +1,10 @@
 // Copyright 2018-2024 the Deno authors. All rights reserved. MIT license.
 
+use std::rc::Rc;
+
 use deno_core::{OpState, ResourceId, error::ResourceError, extension, op2};
 use deno_http::http_create_conn_resource;
 use deno_net::{io::TcpStreamResource, ops_tls::TlsStreamResource};
-use std::rc::Rc;
 
 extension!(deno_http_runtime, ops = [op_http_start]);
 
@@ -86,10 +87,7 @@ fn op_http_start(
     state: &mut OpState,
     #[smi] tcp_stream_rid: ResourceId,
 ) -> Result<ResourceId, HttpStartError> {
-    if let Ok(resource_rc) = state
-        .resource_table
-        .take::<TcpStreamResource>(tcp_stream_rid)
-    {
+    if let Ok(resource_rc) = state.resource_table.take::<TcpStreamResource>(tcp_stream_rid) {
         // This TCP connection might be used somewhere else. If it's the case, we cannot proceed with the
         // process of starting a HTTP server on top of this TCP connection, so we just return a Busy error.
         // See also: https://github.com/denoland/deno/pull/16242
@@ -100,10 +98,7 @@ fn op_http_start(
         return Ok(http_create_conn_resource(state, tcp_stream, addr, "http"));
     }
 
-    if let Ok(resource_rc) = state
-        .resource_table
-        .take::<TlsStreamResource>(tcp_stream_rid)
-    {
+    if let Ok(resource_rc) = state.resource_table.take::<TlsStreamResource>(tcp_stream_rid) {
         // This TLS connection might be used somewhere else. If it's the case, we cannot proceed with the
         // process of starting a HTTP server on top of this TLS connection, so we just return a Busy error.
         // See also: https://github.com/denoland/deno/pull/16242
@@ -114,9 +109,8 @@ fn op_http_start(
     }
 
     #[cfg(unix)]
-    if let Ok(resource_rc) = state
-        .resource_table
-        .take::<deno_net::io::UnixStreamResource>(tcp_stream_rid)
+    if let Ok(resource_rc) =
+        state.resource_table.take::<deno_net::io::UnixStreamResource>(tcp_stream_rid)
     {
         // This UNIX socket might be used somewhere else. If it's the case, we cannot proceed with the
         // process of starting a HTTP server on top of this UNIX socket, so we just return a Busy error.
@@ -125,12 +119,7 @@ fn op_http_start(
         let (read_half, write_half) = resource.into_inner();
         let unix_stream = read_half.reunite(write_half)?;
         let addr = unix_stream.local_addr()?;
-        return Ok(http_create_conn_resource(
-            state,
-            unix_stream,
-            addr,
-            "http+unix",
-        ));
+        return Ok(http_create_conn_resource(state, unix_stream, addr, "http+unix"));
     }
 
     Err(HttpStartError::Resource(ResourceError::BadResourceId))

@@ -1,9 +1,10 @@
-use crate::server::ServerState;
 use cow_utils::CowUtils;
 use rari_error::RariError;
 use regex::Regex;
 use rustc_hash::FxHashMap;
 use tracing::error;
+
+use crate::server::ServerState;
 
 #[non_exhaustive]
 pub struct CacheLoader;
@@ -80,17 +81,10 @@ impl CacheLoader {
             RariError::configuration("Page path is not within pages directory".to_string())
         })?;
 
-        let route = relative_path
-            .with_extension("")
-            .to_string_lossy()
-            .cow_replace('\\', "/")
-            .into_owned();
+        let route =
+            relative_path.with_extension("").to_string_lossy().cow_replace('\\', "/").into_owned();
 
-        let route = if route == "index" {
-            "/".to_string()
-        } else {
-            format!("/{route}")
-        };
+        let route = if route == "index" { "/".to_string() } else { format!("/{route}") };
 
         Ok(route)
     }

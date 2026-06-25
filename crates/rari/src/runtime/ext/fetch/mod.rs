@@ -1,6 +1,8 @@
-use super::ExtensionTrait;
-use deno_core::{Extension, extension};
 use std::sync::Arc;
+
+use deno_core::{Extension, extension};
+
+use super::ExtensionTrait;
 
 extension!(
     rari_fetch,

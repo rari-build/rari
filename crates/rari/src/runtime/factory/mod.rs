@@ -6,11 +6,11 @@ mod runtime;
 mod runtime_builder;
 pub(crate) mod utils;
 
+use std::sync::Arc;
+
 pub use interface::JsRuntimeInterface;
 pub use runtime::RariRuntime;
-
 use rustc_hash::FxHashMap;
-use std::sync::Arc;
 
 pub fn create_runtime() -> Arc<RariRuntime> {
     Arc::new(RariRuntime::new(None))

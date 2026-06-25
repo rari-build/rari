@@ -1,7 +1,9 @@
-use crate::rsc::rendering::html::escape_html;
-use crate::rsc::rendering::layout::types::PageMetadata;
-use crate::server::image::ImageOptimizer;
 use std::fmt::Write;
+
+use crate::{
+    rsc::rendering::{html::escape_html, layout::types::PageMetadata},
+    server::image::ImageOptimizer,
+};
 
 pub fn inject_metadata(
     html: &str,
@@ -68,10 +70,8 @@ pub fn inject_metadata(
         }
 
         if !result.contains(r#"<meta name="viewport""#) {
-            let viewport_content = metadata
-                .viewport
-                .as_deref()
-                .unwrap_or("width=device-width, initial-scale=1.0");
+            let viewport_content =
+                metadata.viewport.as_deref().unwrap_or("width=device-width, initial-scale=1.0");
             #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
             write!(
                 critical_tags,
@@ -106,23 +106,14 @@ pub fn inject_metadata(
         if let Some(keywords) = &metadata.keywords
             && !keywords.is_empty()
         {
-            let keywords_str = keywords
-                .iter()
-                .map(|k| escape_html(k))
-                .collect::<Vec<_>>()
-                .join(", ");
+            let keywords_str =
+                keywords.iter().map(|k| escape_html(k)).collect::<Vec<_>>().join(", ");
             #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
-            writeln!(
-                meta_tags,
-                r#"    <meta name="keywords" content="{keywords_str}" />"#
-            )
-            .unwrap();
+            writeln!(meta_tags, r#"    <meta name="keywords" content="{keywords_str}" />"#)
+                .unwrap();
         }
 
-        let alternates_canonical = metadata
-            .alternates
-            .as_ref()
-            .and_then(|a| a.canonical.as_ref());
+        let alternates_canonical = metadata.alternates.as_ref().and_then(|a| a.canonical.as_ref());
         let effective_canonical = alternates_canonical.or(metadata.canonical.as_ref());
         if let Some(canonical) = effective_canonical {
             #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
@@ -409,11 +400,8 @@ pub fn inject_metadata(
             if let Some(other_list) = &icons.other {
                 for icon in other_list {
                     let rel = icon.rel.as_deref().unwrap_or("icon");
-                    let mut attrs = format!(
-                        r#"rel="{}" href="{}""#,
-                        escape_html(rel),
-                        escape_html(&icon.url)
-                    );
+                    let mut attrs =
+                        format!(r#"rel="{}" href="{}""#, escape_html(rel), escape_html(&icon.url));
                     if let Some(icon_type) = &icon.icon_type {
                         #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
                         write!(&mut attrs, r#" type="{}""#, escape_html(icon_type)).unwrap();
@@ -434,12 +422,8 @@ pub fn inject_metadata(
 
         if let Some(manifest) = &metadata.manifest {
             #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
-            writeln!(
-                meta_tags,
-                r#"    <link rel="manifest" href="{}" />"#,
-                escape_html(manifest)
-            )
-            .unwrap();
+            writeln!(meta_tags, r#"    <link rel="manifest" href="{}" />"#, escape_html(manifest))
+                .unwrap();
         }
 
         if let Some(theme_color) = &metadata.theme_color {
@@ -580,11 +564,12 @@ pub fn inject_metadata(
     clippy::get_unwrap
 )]
 mod tests {
+    use rustc_hash::FxHashMap;
+
     use super::*;
     use crate::rsc::rendering::layout::types::{
         OpenGraphMetadata, RobotsMetadata, TwitterMetadata,
     };
-    use rustc_hash::FxHashMap;
 
     #[test]
     fn test_inject_basic_metadata() {
@@ -834,26 +819,16 @@ mod tests {
             r#"<meta name="viewport" content="width=device-width, initial-scale=1.0" />"#
         ));
 
-        let charset_pos = result
-            .find(r#"<meta charset="UTF-8" />"#)
-            .expect("charset meta tag should be present");
+        let charset_pos =
+            result.find(r#"<meta charset="UTF-8" />"#).expect("charset meta tag should be present");
         let viewport_pos = result
             .find(r#"<meta name="viewport" content="width=device-width, initial-scale=1.0" />"#)
             .expect("viewport meta tag should be present");
         let title_pos = result.find("<title>").expect("title tag should be present");
 
-        assert!(
-            charset_pos < title_pos,
-            "charset meta tag should appear before title"
-        );
-        assert!(
-            viewport_pos < title_pos,
-            "viewport meta tag should appear before title"
-        );
-        assert!(
-            charset_pos < viewport_pos,
-            "charset should appear before viewport"
-        );
+        assert!(charset_pos < title_pos, "charset meta tag should appear before title");
+        assert!(viewport_pos < title_pos, "viewport meta tag should appear before title");
+        assert!(charset_pos < viewport_pos, "charset should appear before viewport");
     }
 
     #[test]
@@ -972,10 +947,7 @@ mod tests {
         use crate::rsc::rendering::layout::types::AlternatesMetadata;
 
         let mut types = FxHashMap::default();
-        types.insert(
-            "application/rss+xml".to_string(),
-            "https://example.com/feed.xml".to_string(),
-        );
+        types.insert("application/rss+xml".to_string(), "https://example.com/feed.xml".to_string());
 
         let metadata = PageMetadata {
             title: Some("Test".to_string()),

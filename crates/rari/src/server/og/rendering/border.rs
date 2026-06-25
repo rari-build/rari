@@ -1,8 +1,11 @@
-use super::super::layout::ComputedLayout;
-use super::mask::{MaskMemory, build_rounded_rect_path, mask_index};
-use super::renderer::ImageRenderer;
 use image::RgbaImage;
 use zeno::Fill;
+
+use super::{
+    super::layout::ComputedLayout,
+    mask::{MaskMemory, build_rounded_rect_path, mask_index},
+    renderer::ImageRenderer,
+};
 
 #[derive(Debug, Clone, Copy)]
 pub(super) struct BorderWidth {
@@ -249,24 +252,14 @@ impl ImageRenderer {
             if let Some(width_str) = parts.first()
                 && let Ok(width) = width_str.trim_end_matches("px").parse::<f32>()
             {
-                return BorderWidth {
-                    top: width,
-                    right: width,
-                    bottom: width,
-                    left: width,
-                };
+                return BorderWidth { top: width, right: width, bottom: width, left: width };
             }
         }
 
         if let Some(width_str) = style.get("borderWidth")
             && let Ok(width) = width_str.trim_end_matches("px").parse::<f32>()
         {
-            return BorderWidth {
-                top: width,
-                right: width,
-                bottom: width,
-                left: width,
-            };
+            return BorderWidth { top: width, right: width, bottom: width, left: width };
         }
 
         BorderWidth {

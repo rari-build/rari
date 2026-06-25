@@ -1,15 +1,15 @@
 #![allow(unused)]
-use deno_fs::FsError;
-use deno_permissions::PermissionCheckError;
-use parking_lot::RwLock;
-use rustc_hash::FxHashSet;
 use std::{
     borrow::Cow,
     path::{Path, PathBuf},
     sync::Arc,
 };
 
+use deno_fs::FsError;
+use deno_permissions::PermissionCheckError;
 pub use deno_permissions::PermissionDeniedError;
+use parking_lot::RwLock;
+use rustc_hash::FxHashSet;
 
 fn to_io_err(err: PermissionDeniedError) -> std::io::Error {
     std::io::Error::new(std::io::ErrorKind::PermissionDenied, err.to_string())
@@ -128,10 +128,7 @@ impl WebPermissions for DefaultWebPermissions {
 }
 
 #[derive(Clone, Default, Debug)]
-#[expect(
-    clippy::struct_excessive_bools,
-    reason = "Permission flags are intentionally boolean"
-)]
+#[expect(clippy::struct_excessive_bools, reason = "Permission flags are intentionally boolean")]
 struct AllowlistWebPermissionsSet {
     pub hrtime: bool,
     pub exec: bool,
@@ -166,11 +163,7 @@ impl WebPermissions for AllowlistWebPermissions {
         port: Option<u16>,
         api_name: &str,
     ) -> Result<(), PermissionDeniedError> {
-        if self.borrow().hosts.contains(host) {
-            Ok(())
-        } else {
-            oops(host)?
-        }
+        if self.borrow().hosts.contains(host) { Ok(()) } else { oops(host)? }
     }
 
     fn check_url(
@@ -178,11 +171,7 @@ impl WebPermissions for AllowlistWebPermissions {
         url: &deno_core::url::Url,
         api_name: &str,
     ) -> Result<(), PermissionDeniedError> {
-        if self.borrow().url.contains(url.as_str()) {
-            Ok(())
-        } else {
-            oops(url)?
-        }
+        if self.borrow().url.contains(url.as_str()) { Ok(()) } else { oops(url)? }
     }
 
     fn check_read<'a>(
@@ -230,11 +219,7 @@ impl WebPermissions for AllowlistWebPermissions {
     }
 
     fn check_read_all(&self, api_name: Option<&str>) -> Result<(), PermissionDeniedError> {
-        if self.borrow().read_all {
-            Ok(())
-        } else {
-            oops("read_all")?
-        }
+        if self.borrow().read_all { Ok(()) } else { oops("read_all")? }
     }
 
     fn check_read_blind(
@@ -251,11 +236,7 @@ impl WebPermissions for AllowlistWebPermissions {
     }
 
     fn check_write_all(&self, api_name: &str) -> Result<(), PermissionDeniedError> {
-        if self.borrow().write_all {
-            Ok(())
-        } else {
-            oops("write_all")?
-        }
+        if self.borrow().write_all { Ok(()) } else { oops("write_all")? }
     }
 
     fn check_write_blind(
@@ -282,27 +263,15 @@ impl WebPermissions for AllowlistWebPermissions {
         kind: SystemsPermissionKind,
         api_name: &str,
     ) -> Result<(), PermissionDeniedError> {
-        if self.borrow().sys.contains(&kind) {
-            Ok(())
-        } else {
-            oops(kind.as_str())?
-        }
+        if self.borrow().sys.contains(&kind) { Ok(()) } else { oops(kind.as_str())? }
     }
 
     fn check_env(&self, var: &str) -> Result<(), PermissionDeniedError> {
-        if self.borrow().envs.contains(var) {
-            Ok(())
-        } else {
-            oops(var)?
-        }
+        if self.borrow().envs.contains(var) { Ok(()) } else { oops(var)? }
     }
 
     fn check_exec(&self) -> Result<(), PermissionDeniedError> {
-        if self.borrow().exec {
-            Ok(())
-        } else {
-            oops("ffi")?
-        }
+        if self.borrow().exec { Ok(()) } else { oops("ffi")? }
     }
 }
 

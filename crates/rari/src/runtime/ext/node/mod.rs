@@ -1,9 +1,11 @@
-use super::ExtensionTrait;
+use std::sync::Arc;
+
 use deno_core::{Extension, extension};
 use deno_resolver::npm::DenoInNpmPackageChecker;
 use resolvers::{NpmPackageFolderResolverImpl, Resolver};
-use std::sync::Arc;
 use sys_traits::impls::RealSys;
+
+use super::ExtensionTrait;
 
 mod cjs_translator;
 pub mod resolvers;

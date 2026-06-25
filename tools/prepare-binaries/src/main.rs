@@ -4,11 +4,11 @@ mod common;
 mod rari_binary;
 mod use_cache_addon;
 
+use std::path::PathBuf;
+
 use anyhow::{Context, Result};
 use clap::Parser;
 use colored::Colorize;
-use std::path::PathBuf;
-
 use common::{
     check_rust_installed, get_current_platform_target, install_target, log, log_error, log_success,
     log_warning,
@@ -25,10 +25,7 @@ struct Args {
     #[arg(long, help = "Build in debug mode (faster, for development)")]
     dev: bool,
 
-    #[arg(
-        long,
-        help = "Build the rari-use-cache native addon in addition to the main binary"
-    )]
+    #[arg(long, help = "Build the rari-use-cache native addon in addition to the main binary")]
     addon: bool,
 
     #[arg(
@@ -39,10 +36,6 @@ struct Args {
 }
 
 #[tokio::main]
-#[expect(
-    clippy::too_many_lines,
-    reason = "Main orchestration function coordinates build, validation, and packaging steps"
-)]
 async fn main() -> Result<()> {
     let args = Args::parse();
 
@@ -55,10 +48,7 @@ async fn main() -> Result<()> {
         );
     }
 
-    println!(
-        "{}",
-        "🔧 Preparing rari artifacts for current platform".bold()
-    );
+    println!("{}", "🔧 Preparing rari artifacts for current platform".bold());
     println!();
 
     let project_root = PathBuf::from(".");
@@ -79,10 +69,7 @@ async fn main() -> Result<()> {
     if do_build_bin {
         check_rust_installed().await?;
 
-        log(&format!(
-            "Installing Rust target: {}",
-            current_target.target
-        ));
+        log(&format!("Installing Rust target: {}", current_target.target));
         install_target(current_target.target).await?;
     }
 
@@ -173,14 +160,8 @@ async fn main() -> Result<()> {
     println!();
     println!("{}", "Next steps:".dimmed());
     println!("{}", "  1. Test the artifacts locally".dimmed());
-    println!(
-        "{}",
-        "  2. Use GitHub Actions for cross-platform builds".dimmed()
-    );
-    println!(
-        "{}",
-        "  3. Run the release script: pnpm run release".dimmed()
-    );
+    println!("{}", "  2. Use GitHub Actions for cross-platform builds".dimmed());
+    println!("{}", "  3. Run the release script: pnpm run release".dimmed());
 
     Ok(())
 }

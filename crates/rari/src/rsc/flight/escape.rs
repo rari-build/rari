@@ -12,11 +12,10 @@ pub fn escape_rsc_string(value: &str) -> String {
 
         let prefix = &value[0..2];
         let rest = &value[2..];
-        let is_numeric_prefixed_ref = matches!(
-            prefix,
-            "$L" | "$@" | "$F" | "$W" | "$Q" | "$K" | "$Y" | "$i" | "$B"
-        ) && !rest.is_empty()
-            && rest.chars().all(|c| c.is_ascii_hexdigit());
+        let is_numeric_prefixed_ref =
+            matches!(prefix, "$L" | "$@" | "$F" | "$W" | "$Q" | "$K" | "$Y" | "$i" | "$B")
+                && !rest.is_empty()
+                && rest.chars().all(|c| c.is_ascii_hexdigit());
         let is_symbolic_prefixed_ref = matches!(prefix, "$S" | "$T" | "$h");
 
         let is_date_marker = prefix == "$D"
@@ -26,10 +25,8 @@ pub fn escape_rsc_string(value: &str) -> String {
             && !rest.is_empty()
             && (rest.starts_with('-') && rest[1..].chars().all(|c| c.is_ascii_digit())
                 || rest.chars().all(|c| c.is_ascii_digit()));
-        let is_special_scalar = matches!(
-            value,
-            "$NaN" | "$Infinity" | "$-Infinity" | "$-0" | "$undefined"
-        );
+        let is_special_scalar =
+            matches!(value, "$NaN" | "$Infinity" | "$-Infinity" | "$-0" | "$undefined");
 
         let is_scalar_marker = is_date_marker || is_bigint_marker || is_special_scalar;
 
@@ -80,11 +77,7 @@ pub fn escape_rsc_value(value: &Value) -> Value {
 }
 
 pub fn unescape_rsc_string(value: &str) -> String {
-    if value.starts_with("$$") {
-        value[1..].to_string()
-    } else {
-        value.to_string()
-    }
+    if value.starts_with("$$") { value[1..].to_string() } else { value.to_string() }
 }
 
 pub fn unescape_rsc_value(value: &Value) -> Value {
@@ -138,8 +131,9 @@ pub fn unescape_rsc_value(value: &Value) -> Value {
     clippy::get_unwrap
 )]
 mod tests {
-    use super::*;
     use serde_json::json;
+
+    use super::*;
 
     #[test]
     fn test_escape_rsc_string() {
@@ -177,17 +171,8 @@ mod tests {
 
     #[test]
     fn test_escape_unescape_roundtrip() {
-        let test_cases = vec![
-            "hello",
-            "$L999",
-            "$La",
-            "$1f",
-            "$double",
-            "$triple",
-            "",
-            "no dollar",
-            "$",
-        ];
+        let test_cases =
+            vec!["hello", "$L999", "$La", "$1f", "$double", "$triple", "", "no dollar", "$"];
 
         for case in test_cases {
             let escaped = escape_rsc_string(case);
@@ -323,20 +308,11 @@ mod tests {
         assert_eq!(escape_rsc_string("$-0"), "$-0");
         assert_eq!(escape_rsc_string("$undefined"), "$undefined");
 
-        assert_eq!(
-            escape_rsc_string("$D2026-12-09T18:00:00.000Z"),
-            "$D2026-12-09T18:00:00.000Z"
-        );
-        assert_eq!(
-            escape_rsc_string("$D2026-01-01T00:00:00Z"),
-            "$D2026-01-01T00:00:00Z"
-        );
+        assert_eq!(escape_rsc_string("$D2026-12-09T18:00:00.000Z"), "$D2026-12-09T18:00:00.000Z");
+        assert_eq!(escape_rsc_string("$D2026-01-01T00:00:00Z"), "$D2026-01-01T00:00:00Z");
 
         assert_eq!(escape_rsc_string("$n123"), "$n123");
-        assert_eq!(
-            escape_rsc_string("$n9007199254740991"),
-            "$n9007199254740991"
-        );
+        assert_eq!(escape_rsc_string("$n9007199254740991"), "$n9007199254740991");
         assert_eq!(escape_rsc_string("$n-456"), "$n-456");
 
         assert_eq!(escape_rsc_string("$danger"), "$$danger");

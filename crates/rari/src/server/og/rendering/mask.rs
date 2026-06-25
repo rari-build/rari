@@ -1,4 +1,5 @@
 use std::f32::consts::SQRT_2;
+
 use zeno::{Command, Mask, PathBuilder, Placement, Scratch, Style};
 
 use super::border::BorderRadius;
@@ -27,8 +28,7 @@ impl MaskMemory {
         bounds.max = bounds.max.ceil();
 
         self.buffer.clear();
-        self.buffer
-            .resize((bounds.width() as usize) * (bounds.height() as usize), 0);
+        self.buffer.resize((bounds.width() as usize) * (bounds.height() as usize), 0);
 
         let placement = Mask::with_scratch(paths, &mut self.scratch)
             .style(style)
@@ -123,10 +123,7 @@ pub(super) fn build_rounded_rect_path(
     path
 }
 
-#[expect(
-    clippy::inline_always,
-    reason = "Performance-critical function requires inlining"
-)]
+#[expect(clippy::inline_always, reason = "Performance-critical function requires inlining")]
 #[inline(always)]
 pub(super) fn mask_index(x: u32, y: u32, width: u32) -> usize {
     (y * width + x) as usize

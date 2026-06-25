@@ -2,16 +2,11 @@
 
 #![allow(clippy::exhaustive_structs)]
 
-use std::borrow::Cow;
-use std::path::Path;
+use std::{borrow::Cow, path::Path};
 
 use cow_utils::CowUtils;
-use deno_ast::MediaType;
-use deno_ast::ParseParams;
-use deno_ast::SourceMapOption;
-use deno_core::ModuleCodeString;
-use deno_core::ModuleName;
-use deno_core::SourceMapData;
+use deno_ast::{MediaType, ParseParams, SourceMapOption};
+use deno_core::{ModuleCodeString, ModuleName, SourceMapData};
 use deno_error::JsErrorBox;
 
 deno_error::js_error_wrapper!(deno_ast::ParseDiagnostic, JsParseDiagnostic, "Error");
@@ -98,9 +93,8 @@ pub fn maybe_transpile_source(
         .map_err(|e| JsErrorBox::from_err(JsTranspileError(e)))?
         .into_source();
 
-    let maybe_source_map: Option<SourceMapData> = transpiled_source
-        .source_map
-        .map(|sm| sm.into_bytes().into());
+    let maybe_source_map: Option<SourceMapData> =
+        transpiled_source.source_map.map(|sm| sm.into_bytes().into());
     let source_text = transpiled_source.text;
     Ok((source_text.into(), maybe_source_map))
 }

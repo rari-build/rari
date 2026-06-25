@@ -1,12 +1,15 @@
-use crate::runtime::factory::utils::constants::{ENV_INJECTION_SCRIPT, MODULE_CHECK_SCRIPT};
-use crate::runtime::module::loader::RariModuleLoader;
-use crate::runtime::ops::StreamOpState;
+use std::{borrow::Cow, rc::Rc};
+
 use cow_utils::CowUtils;
 use deno_core::{Extension, JsRuntime, RuntimeOptions};
 use rari_error::RariError;
 use rustc_hash::FxHashMap;
-use std::borrow::Cow;
-use std::rc::Rc;
+
+use crate::runtime::{
+    factory::utils::constants::{ENV_INJECTION_SCRIPT, MODULE_CHECK_SCRIPT},
+    module::loader::RariModuleLoader,
+    ops::StreamOpState,
+};
 
 static RUNTIME_SNAPSHOT: &[u8] = include_bytes!("../../../snapshots/RARI_SNAPSHOT.bin");
 include!("../../../snapshots/residual_lazy_sources.rs");
@@ -66,10 +69,9 @@ pub fn build_js_runtime(
         }
     }
 
-    if let Err(err) = runtime.execute_script(
-        "module_registration_check.js",
-        MODULE_CHECK_SCRIPT.to_string(),
-    ) {
+    if let Err(err) =
+        runtime.execute_script("module_registration_check.js", MODULE_CHECK_SCRIPT.to_string())
+    {
         eprintln!("[rari] Failed to check module registration extension: {err}");
     }
 

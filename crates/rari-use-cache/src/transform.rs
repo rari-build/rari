@@ -1,14 +1,14 @@
-use rustc_hash::FxHashSet;
-
-use deno_ast::swc::ast::{
-    Decl, DefaultDecl, ExportDecl, ExportDefaultDecl, ExportDefaultExpr, Expr, FnDecl, Id, Ident,
-    Module, ModuleDecl, ModuleItem, Stmt,
+use deno_ast::swc::{
+    ast::{
+        Decl, DefaultDecl, ExportDecl, ExportDefaultDecl, ExportDefaultExpr, Expr, FnDecl, Id,
+        Ident, Module, ModuleDecl, ModuleItem, Stmt,
+    },
+    codegen::{Emitter, text_writer::JsWriter},
+    common::{DUMMY_SP, FileName, GLOBALS, Globals, SourceMap, SyntaxContext, sync::Lrc},
+    ecma_visit::VisitMut,
+    parser::{Parser, StringInput, Syntax, TsSyntax},
 };
-use deno_ast::swc::codegen::{Emitter, text_writer::JsWriter};
-use deno_ast::swc::common::sync::Lrc;
-use deno_ast::swc::common::{DUMMY_SP, FileName, GLOBALS, Globals, SourceMap, SyntaxContext};
-use deno_ast::swc::ecma_visit::VisitMut;
-use deno_ast::swc::parser::{Parser, StringInput, Syntax, TsSyntax};
+use rustc_hash::FxHashSet;
 
 use crate::{closure, directive, hoist, id};
 
@@ -97,26 +97,14 @@ impl TransformVisitor {
             match item {
                 ModuleItem::Stmt(Stmt::Decl(Decl::Fn(fn_decl))) => {
                     let export_name = fn_decl.ident.sym.to_string();
-                    (
-                        fn_decl.clone(),
-                        false,
-                        false,
-                        export_name.clone(),
-                        export_name,
-                    )
+                    (fn_decl.clone(), false, false, export_name.clone(), export_name)
                 }
                 ModuleItem::ModuleDecl(ModuleDecl::ExportDecl(ExportDecl {
                     decl: Decl::Fn(fn_decl),
                     ..
                 })) => {
                     let export_name = fn_decl.ident.sym.to_string();
-                    (
-                        fn_decl.clone(),
-                        true,
-                        false,
-                        export_name.clone(),
-                        export_name,
-                    )
+                    (fn_decl.clone(), true, false, export_name.clone(), export_name)
                 }
                 ModuleItem::ModuleDecl(ModuleDecl::ExportDefaultDecl(ExportDefaultDecl {
                     decl: DefaultDecl::Fn(fn_expr),
@@ -136,11 +124,7 @@ impl TransformVisitor {
                         .unwrap_or_else(|| "default".to_string());
                     let local_binding_name = ident.sym.to_string();
                     (
-                        FnDecl {
-                            ident,
-                            function: fn_expr.function.clone(),
-                            declare: false,
-                        },
+                        FnDecl { ident, function: fn_expr.function.clone(), declare: false },
                         true,
                         true,
                         reference_export_name,
@@ -205,16 +189,14 @@ impl TransformVisitor {
 
         if is_default_export {
             extra_items.push(replacement);
-            Some(ModuleItem::ModuleDecl(ModuleDecl::ExportDefaultExpr(
-                ExportDefaultExpr {
-                    span: DUMMY_SP,
-                    expr: Box::new(Expr::Ident(Ident::new(
-                        local_binding_name.into(),
-                        DUMMY_SP,
-                        SyntaxContext::default(),
-                    ))),
-                },
-            )))
+            Some(ModuleItem::ModuleDecl(ModuleDecl::ExportDefaultExpr(ExportDefaultExpr {
+                span: DUMMY_SP,
+                expr: Box::new(Expr::Ident(Ident::new(
+                    local_binding_name.into(),
+                    DUMMY_SP,
+                    SyntaxContext::default(),
+                ))),
+            })))
         } else if is_exported {
             Some(ModuleItem::ModuleDecl(ModuleDecl::ExportDecl(ExportDecl {
                 span: DUMMY_SP,
@@ -249,17 +231,13 @@ pub fn transform_source(
             );
 
             let mut parser = Parser::new(
-                Syntax::Typescript(TsSyntax {
-                    tsx: true,
-                    ..Default::default()
-                }),
+                Syntax::Typescript(TsSyntax { tsx: true, ..Default::default() }),
                 StringInput::from(&*fm),
                 None,
             );
 
-            let mut module: Module = parser
-                .parse_module()
-                .map_err(|e| format!("Parse error: {e:?}"))?;
+            let mut module: Module =
+                parser.parse_module().map_err(|e| format!("Parse error: {e:?}"))?;
 
             let mut visitor = TransformVisitor::new(filename, hash_salt);
             visitor.visit_mut_module(&mut module);
@@ -281,9 +259,7 @@ pub fn transform_source(
                     comments: None,
                     wr: JsWriter::new(std::rc::Rc::clone(&cm), "\n", &mut code_buf, None),
                 };
-                emitter
-                    .emit_module(&module)
-                    .map_err(|e| format!("Codegen error: {e:?}"))?;
+                emitter.emit_module(&module).map_err(|e| format!("Codegen error: {e:?}"))?;
             }
             let code = String::from_utf8(code_buf).map_err(|e| format!("UTF-8 error: {e:?}"))?;
 

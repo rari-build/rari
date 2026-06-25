@@ -1,34 +1,23 @@
+use std::path::{Path, PathBuf};
+
+use anyhow::Result;
+use crossterm::event::KeyCode;
+use ratatui::Frame;
+
 use crate::{
     changelog, git,
     package::{Package, ReleaseType, ReleasedPackage},
     ui,
 };
-use anyhow::Result;
-use crossterm::event::KeyCode;
-use ratatui::Frame;
-use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Screen {
     PackageSelection,
-    VersionSelection {
-        package_idx: usize,
-    },
-    CustomVersion {
-        package_idx: usize,
-        input: String,
-    },
-    Publishing {
-        package_idx: usize,
-        version: String,
-    },
-    PostPublish {
-        has_more_packages: bool,
-    },
-    PostRelease {
-        released: Vec<ReleasedPackage>,
-        step: PostReleaseStep,
-    },
+    VersionSelection { package_idx: usize },
+    CustomVersion { package_idx: usize, input: String },
+    Publishing { package_idx: usize, version: String },
+    PostPublish { has_more_packages: bool },
+    PostRelease { released: Vec<ReleasedPackage>, step: PostReleaseStep },
     Complete,
 }
 
@@ -95,10 +84,7 @@ impl App {
         if let Some(only_list) = only {
             release_units.retain(|unit| only_list.contains(&unit.name().to_string()));
             if release_units.is_empty() {
-                anyhow::bail!(
-                    "No matching packages for selection: {}",
-                    only_list.join(", ")
-                );
+                anyhow::bail!("No matching packages for selection: {}", only_list.join(", "));
             }
         }
 
@@ -165,10 +151,8 @@ impl App {
                     } else if let Some(new_version) =
                         release_type.to_version(unit.current_version())
                     {
-                        self.screen = Screen::Publishing {
-                            package_idx: *package_idx,
-                            version: new_version,
-                        };
+                        self.screen =
+                            Screen::Publishing { package_idx: *package_idx, version: new_version };
                         self.publish_step = PublishStep::UpdatingVersion;
                         self.publish_progress = 0.0;
                         self.status_messages.clear();
@@ -183,18 +167,14 @@ impl App {
                 KeyCode::Char(c) => {
                     let mut new_input = input.clone();
                     new_input.push(c);
-                    self.screen = Screen::CustomVersion {
-                        package_idx: *package_idx,
-                        input: new_input,
-                    };
+                    self.screen =
+                        Screen::CustomVersion { package_idx: *package_idx, input: new_input };
                 }
                 KeyCode::Backspace => {
                     let mut new_input = input.clone();
                     new_input.pop();
-                    self.screen = Screen::CustomVersion {
-                        package_idx: *package_idx,
-                        input: new_input,
-                    };
+                    self.screen =
+                        Screen::CustomVersion { package_idx: *package_idx, input: new_input };
                 }
                 KeyCode::Enter => {
                     let unit = &self.release_units[*package_idx];
@@ -224,9 +204,7 @@ impl App {
                     }
                 }
                 KeyCode::Esc => {
-                    self.screen = Screen::VersionSelection {
-                        package_idx: *package_idx,
-                    };
+                    self.screen = Screen::VersionSelection { package_idx: *package_idx };
                     self.error_message = None;
                 }
                 _ => {}
@@ -289,11 +267,7 @@ impl App {
         reason = "Publishing workflow state machine requires comprehensive progress tracking"
     )]
     pub async fn update(&mut self) -> Result<()> {
-        if let Screen::Publishing {
-            package_idx,
-            version,
-        } = &self.screen.clone()
-        {
+        if let Screen::Publishing { package_idx, version } = &self.screen.clone() {
             let unit = &self.release_units[*package_idx];
             match self.publish_step {
                 PublishStep::UpdatingVersion => {
@@ -318,20 +292,17 @@ impl App {
                             self.status_messages
                                 .push("[DRY RUN] Would generate changelog...".to_string());
                         } else {
-                            self.status_messages
-                                .push("Generating changelog...".to_string());
+                            self.status_messages.push("Generating changelog...".to_string());
                             let tag = format!("{unit_name}@{version}");
                             let package_path = unit.paths()[0];
                             changelog::generate(&tag, unit_name, package_path).await?;
                         }
-                        self.status_messages
-                            .push("* Generated changelog".to_string());
+                        self.status_messages.push("* Generated changelog".to_string());
                     } else if self.dry_run {
                         self.status_messages
                             .push("[DRY RUN] Skipping changelog generation...".to_string());
                     } else {
-                        self.status_messages
-                            .push("Skipping changelog generation...".to_string());
+                        self.status_messages.push("Skipping changelog generation...".to_string());
                     }
 
                     self.publish_step = PublishStep::Committing;
@@ -349,8 +320,7 @@ impl App {
                     if self.dry_run {
                         self.status_messages
                             .push(format!("[DRY RUN] Would commit with message: {message}"));
-                        self.status_messages
-                            .push(format!("[DRY RUN] Would create tag: {tag}"));
+                        self.status_messages.push(format!("[DRY RUN] Would create tag: {tag}"));
                     } else {
                         let paths = unit.paths();
 
@@ -358,8 +328,7 @@ impl App {
                             self.status_messages
                                 .push("Skipping commit (virtual release)...".to_string());
                         } else {
-                            self.status_messages
-                                .push("Committing changes...".to_string());
+                            self.status_messages.push("Committing changes...".to_string());
 
                             if paths.len() > 1 {
                                 let path_refs: Vec<&std::path::Path> =
@@ -394,8 +363,7 @@ impl App {
                         }
                         git::create_tag(&tag).await?;
                     }
-                    self.status_messages
-                        .push("* Committed and tagged".to_string());
+                    self.status_messages.push("* Committed and tagged".to_string());
 
                     self.publish_step = PublishStep::Publishing;
                     self.publish_progress = 0.85;
@@ -454,8 +422,7 @@ impl App {
                         self.post_release_messages
                             .push("Pushing commits and tags to remote...".to_string());
                         git::push_changes().await?;
-                        self.post_release_messages
-                            .push("✓ Pushed to remote".to_string());
+                        self.post_release_messages.push("✓ Pushed to remote".to_string());
                     }
                     self.screen = Screen::PostRelease {
                         released: released.clone(),
@@ -519,10 +486,7 @@ impl App {
                 let unit = &self.release_units[*package_idx];
                 ui::render_custom_version(frame, self, unit, input);
             }
-            Screen::Publishing {
-                package_idx,
-                version,
-            } => {
+            Screen::Publishing { package_idx, version } => {
                 let unit = &self.release_units[*package_idx];
                 ui::render_publishing(frame, self, unit, version);
             }

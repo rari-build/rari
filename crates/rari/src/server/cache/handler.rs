@@ -10,15 +10,16 @@
 //! Native `async fn in dyn trait` is not yet stable; when it lands
 //! the macro can be dropped.
 
-use std::fmt;
-use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::{
+    fmt,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
+pub use async_trait::async_trait;
 use dashmap::DashMap;
 use lru::LruCache;
 use parking_lot::Mutex;
-
-pub use async_trait::async_trait;
 
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
@@ -95,10 +96,7 @@ pub struct MemoryConfig {
 
 impl Default for MemoryConfig {
     fn default() -> Self {
-        Self {
-            max_entries: 1000,
-            default_ttl: 31_536_000,
-        }
+        Self { max_entries: 1000, default_ttl: 31_536_000 }
     }
 }
 
@@ -112,10 +110,7 @@ pub struct MemoryCacheHandler {
 
 impl MemoryCacheHandler {
     pub fn with_config(config: MemoryConfig) -> Self {
-        #[expect(
-            clippy::expect_used,
-            reason = "Value is clamped to >= 1, guaranteed non-zero"
-        )]
+        #[expect(clippy::expect_used, reason = "Value is clamped to >= 1, guaranteed non-zero")]
         let max_entries =
             std::num::NonZeroUsize::new(config.max_entries.max(1)).expect("clamped to >= 1");
         tracing::debug!(
@@ -152,9 +147,7 @@ impl MemoryCacheHandler {
     }
 
     fn entry_is_expired(entry: &MemEntry) -> bool {
-        entry
-            .expires_at
-            .is_some_and(|expires_at| Instant::now() >= expires_at)
+        entry.expires_at.is_some_and(|expires_at| Instant::now() >= expires_at)
     }
 
     fn touch_lru(&self, key: &str) {
@@ -180,10 +173,7 @@ impl MemoryCacheHandler {
 
     fn insert_tag_index(&self, key: &str, tags: &[String]) {
         for tag in tags {
-            self.tag_index
-                .entry(tag.clone())
-                .or_default()
-                .push(key.to_string());
+            self.tag_index.entry(tag.clone()).or_default().push(key.to_string());
         }
     }
 
@@ -212,11 +202,7 @@ impl CacheHandler for MemoryCacheHandler {
         let (snapshot, observed_expires_at) = match self.cache.get(key) {
             Some(entry) => {
                 let expired = Self::entry_is_expired(&entry);
-                let bytes = if expired {
-                    None
-                } else {
-                    Some(entry.bytes.clone())
-                };
+                let bytes = if expired { None } else { Some(entry.bytes.clone()) };
                 (bytes, Some((entry.expires_at, expired)))
             }
             None => (None, None),
@@ -298,11 +284,8 @@ impl CacheHandler for MemoryCacheHandler {
             lru = self.lru.lock();
         }
 
-        let entry = MemEntry {
-            bytes: value,
-            expires_at: Self::expires_at(ttl_secs),
-            tags: tags.to_vec(),
-        };
+        let entry =
+            MemEntry { bytes: value, expires_at: Self::expires_at(ttl_secs), tags: tags.to_vec() };
         self.cache.insert(key.to_string(), entry);
         self.insert_tag_index(key, tags);
 
@@ -314,11 +297,7 @@ impl CacheHandler for MemoryCacheHandler {
             }
         }
 
-        Ok(SetOutcome {
-            replaced,
-            evicted,
-            evicted_bytes,
-        })
+        Ok(SetOutcome { replaced, evicted, evicted_bytes })
     }
 
     async fn invalidate(&self, key: &str) -> Result<bool, CacheError> {
@@ -333,20 +312,13 @@ impl CacheHandler for MemoryCacheHandler {
     }
 
     async fn invalidate_by_tag(&self, tag: &str) -> Result<(), CacheError> {
-        let keys: Vec<String> = self
-            .tag_index
-            .get(tag)
-            .map(|e| e.value().clone())
-            .unwrap_or_default();
+        let keys: Vec<String> =
+            self.tag_index.get(tag).map(|e| e.value().clone()).unwrap_or_default();
         tracing::debug!(tag = %tag, key_count = keys.len(), "memory cache invalidate_by_tag");
         for key in keys {
             self.invalidate(&key).await?;
         }
-        let empty = self
-            .tag_index
-            .get(tag)
-            .map(|e| e.value().is_empty())
-            .unwrap_or(true);
+        let empty = self.tag_index.get(tag).map(|e| e.value().is_empty()).unwrap_or(true);
         if empty {
             self.tag_index.remove(tag);
         }
@@ -448,9 +420,7 @@ pub struct CacheHandlerRegistry {
 
 impl CacheHandlerRegistry {
     pub fn new() -> Self {
-        Self {
-            handlers: DashMap::new(),
-        }
+        Self { handlers: DashMap::new() }
     }
 
     pub fn register(&self, name: &str, handler: Arc<dyn CacheHandler>) {
@@ -521,9 +491,9 @@ impl CacheHandlerRegistry {
     clippy::get_unwrap
 )]
 mod tests {
+    use std::{sync::Arc, time::Duration};
+
     use super::*;
-    use std::sync::Arc;
-    use std::time::Duration;
 
     #[tokio::test]
     async fn test_memory_get_set() {
@@ -544,10 +514,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_memory_lru_eviction() {
-        let handler = MemoryCacheHandler::with_config(MemoryConfig {
-            max_entries: 2,
-            default_ttl: 60,
-        });
+        let handler =
+            MemoryCacheHandler::with_config(MemoryConfig { max_entries: 2, default_ttl: 60 });
         handler.set("a", b"1".to_vec(), 60).await.unwrap();
         handler.set("b", b"2".to_vec(), 60).await.unwrap();
         let _ = handler.get("a").await.unwrap();
@@ -570,14 +538,8 @@ mod tests {
     #[tokio::test]
     async fn test_memory_invalidate_by_tag() {
         let handler = MemoryCacheHandler::default();
-        handler
-            .set_with_tags("k1", b"a".to_vec(), 60, &["t".to_string()])
-            .await
-            .unwrap();
-        handler
-            .set_with_tags("k2", b"b".to_vec(), 60, &["t".to_string()])
-            .await
-            .unwrap();
+        handler.set_with_tags("k1", b"a".to_vec(), 60, &["t".to_string()]).await.unwrap();
+        handler.set_with_tags("k2", b"b".to_vec(), 60, &["t".to_string()]).await.unwrap();
         handler.set("k3", b"c".to_vec(), 60).await.unwrap();
 
         handler.invalidate_by_tag("t").await.unwrap();
@@ -614,12 +576,7 @@ mod tests {
     async fn test_memory_tag_index_cleanup() {
         let handler = MemoryCacheHandler::default();
         handler
-            .set_with_tags(
-                "k1",
-                b"a".to_vec(),
-                60,
-                &["alpha".to_string(), "shared".to_string()],
-            )
+            .set_with_tags("k1", b"a".to_vec(), 60, &["alpha".to_string(), "shared".to_string()])
             .await
             .unwrap();
 
@@ -638,10 +595,7 @@ mod tests {
         assert_eq!(handler.get("anything").await.unwrap(), None);
         handler.set("k", b"v".to_vec(), 60).await.unwrap();
         assert_eq!(handler.get("k").await.unwrap(), None);
-        handler
-            .set_with_tags("k", b"v".to_vec(), 60, &["t".to_string()])
-            .await
-            .unwrap();
+        handler.set_with_tags("k", b"v".to_vec(), 60, &["t".to_string()]).await.unwrap();
         handler.invalidate("k").await.unwrap();
         handler.invalidate_by_tag("t").await.unwrap();
         handler.clear().await.unwrap();

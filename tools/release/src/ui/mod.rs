@@ -1,5 +1,3 @@
-use crate::app::App;
-use crate::package::ReleaseUnit;
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout},
@@ -8,29 +6,20 @@ use ratatui::{
     widgets::{Block, Borders, Gauge, List, ListItem, Paragraph},
 };
 
+use crate::{app::App, package::ReleaseUnit};
+
 pub fn render_package_selection(frame: &mut Frame, app: &App) {
     let area = frame.area();
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .margin(2)
-        .constraints([
-            Constraint::Length(3),
-            Constraint::Min(5),
-            Constraint::Length(3),
-        ])
+        .constraints([Constraint::Length(3), Constraint::Min(5), Constraint::Length(3)])
         .split(area);
 
-    let title_text = if app.dry_run {
-        "rari Release Manager [DRY RUN MODE]"
-    } else {
-        "rari Release Manager"
-    };
+    let title_text =
+        if app.dry_run { "rari Release Manager [DRY RUN MODE]" } else { "rari Release Manager" };
     let title = Paragraph::new(title_text)
-        .style(
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        )
+        .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
         .alignment(Alignment::Center)
         .block(Block::default().borders(Borders::ALL));
     frame.render_widget(title, chunks[0]);
@@ -40,27 +29,18 @@ pub fn render_package_selection(frame: &mut Frame, app: &App) {
         .iter()
         .enumerate()
         .map(|(idx, unit)| {
-            let prefix = if idx == app.selected_package_idx {
-                "> "
-            } else {
-                "  "
-            };
+            let prefix = if idx == app.selected_package_idx { "> " } else { "  " };
             let content = format!("{}{} (v{})", prefix, unit.name(), unit.current_version());
             ListItem::new(content).style(if idx == app.selected_package_idx {
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD)
+                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
             } else {
                 Style::default()
             })
         })
         .collect();
 
-    let list = List::new(items).block(
-        Block::default()
-            .borders(Borders::ALL)
-            .title("Select Package"),
-    );
+    let list =
+        List::new(items).block(Block::default().borders(Borders::ALL).title("Select Package"));
     frame.render_widget(list, chunks[1]);
 
     let help = Paragraph::new("Up/Down: Navigate  Enter: Select  q/Esc: Quit")
@@ -87,9 +67,7 @@ pub fn render_version_selection(frame: &mut Frame, app: &App, unit: &ReleaseUnit
             Span::raw("Package: "),
             Span::styled(
                 unit.name(),
-                Style::default()
-                    .fg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD),
+                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
             ),
         ]),
         Line::from(vec![
@@ -101,10 +79,7 @@ pub fn render_version_selection(frame: &mut Frame, app: &App, unit: &ReleaseUnit
     if let ReleaseUnit::Virtual(_) = unit {
         info_lines.push(Line::from(vec![
             Span::raw("Type: "),
-            Span::styled(
-                "virtual (CI-published binaries)",
-                Style::default().fg(Color::Green),
-            ),
+            Span::styled("virtual (CI-published binaries)", Style::default().fg(Color::Green)),
         ]));
     }
 
@@ -112,17 +87,10 @@ pub fn render_version_selection(frame: &mut Frame, app: &App, unit: &ReleaseUnit
         .block(Block::default().borders(Borders::ALL).title("Package Info"));
     frame.render_widget(info, chunks[0]);
 
-    let commits: Vec<Line> = app
-        .recent_commits
-        .iter()
-        .take(5)
-        .map(|c| Line::from(format!("* {c}")))
-        .collect();
-    let commits_widget = Paragraph::new(commits).block(
-        Block::default()
-            .borders(Borders::ALL)
-            .title("Recent Commits"),
-    );
+    let commits: Vec<Line> =
+        app.recent_commits.iter().take(5).map(|c| Line::from(format!("* {c}"))).collect();
+    let commits_widget = Paragraph::new(commits)
+        .block(Block::default().borders(Borders::ALL).title("Recent Commits"));
     frame.render_widget(commits_widget, chunks[1]);
 
     let items: Vec<ListItem> = app
@@ -130,27 +98,18 @@ pub fn render_version_selection(frame: &mut Frame, app: &App, unit: &ReleaseUnit
         .iter()
         .enumerate()
         .map(|(idx, vt)| {
-            let prefix = if idx == app.selected_version_idx {
-                "> * "
-            } else {
-                "  o "
-            };
+            let prefix = if idx == app.selected_version_idx { "> * " } else { "  o " };
             let content = format!("{}{}", prefix, vt.label(unit.current_version()));
             ListItem::new(content).style(if idx == app.selected_version_idx {
-                Style::default()
-                    .fg(Color::Green)
-                    .add_modifier(Modifier::BOLD)
+                Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
             } else {
                 Style::default()
             })
         })
         .collect();
 
-    let list = List::new(items).block(
-        Block::default()
-            .borders(Borders::ALL)
-            .title("Select Version"),
-    );
+    let list =
+        List::new(items).block(Block::default().borders(Borders::ALL).title("Select Version"));
     frame.render_widget(list, chunks[2]);
 
     let help = Paragraph::new("Up/Down: Navigate  Enter: Confirm  Esc: Back")
@@ -177,9 +136,7 @@ pub fn render_custom_version(frame: &mut Frame, app: &App, unit: &ReleaseUnit, i
             Span::raw("Package: "),
             Span::styled(
                 unit.name(),
-                Style::default()
-                    .fg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD),
+                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
             ),
         ]),
         Line::from(vec![
@@ -192,11 +149,7 @@ pub fn render_custom_version(frame: &mut Frame, app: &App, unit: &ReleaseUnit, i
 
     let input_widget = Paragraph::new(input)
         .style(Style::default().fg(Color::Yellow))
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title("Enter Custom Version"),
-        );
+        .block(Block::default().borders(Borders::ALL).title("Enter Custom Version"));
     frame.render_widget(input_widget, chunks[1]);
 
     if let Some(error) = &app.error_message {
@@ -212,14 +165,8 @@ pub fn render_custom_version(frame: &mut Frame, app: &App, unit: &ReleaseUnit, i
     }
 }
 
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "Progress percentage 0-100 fits in u16"
-)]
-#[expect(
-    clippy::cast_sign_loss,
-    reason = "Progress percentage is always positive 0.0-1.0"
-)]
+#[expect(clippy::cast_possible_truncation, reason = "Progress percentage 0-100 fits in u16")]
+#[expect(clippy::cast_sign_loss, reason = "Progress percentage is always positive 0.0-1.0")]
 pub fn render_publishing(frame: &mut Frame, app: &App, unit: &ReleaseUnit, version: &str) {
     let area = frame.area();
     let chunks = Layout::default()
@@ -239,11 +186,7 @@ pub fn render_publishing(frame: &mut Frame, app: &App, unit: &ReleaseUnit, versi
         format!("Publishing {}@{}", unit.name(), version)
     };
     let title = Paragraph::new(title_text)
-        .style(
-            Style::default()
-                .fg(Color::Green)
-                .add_modifier(Modifier::BOLD),
-        )
+        .style(Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
         .alignment(Alignment::Center)
         .block(Block::default().borders(Borders::ALL));
     frame.render_widget(title, chunks[0]);
@@ -254,11 +197,8 @@ pub fn render_publishing(frame: &mut Frame, app: &App, unit: &ReleaseUnit, versi
         .percent((app.publish_progress * 100.0) as u16);
     frame.render_widget(gauge, chunks[1]);
 
-    let status_lines: Vec<Line> = app
-        .status_messages
-        .iter()
-        .map(|msg| Line::from(msg.as_str()))
-        .collect();
+    let status_lines: Vec<Line> =
+        app.status_messages.iter().map(|msg| Line::from(msg.as_str())).collect();
     let status =
         Paragraph::new(status_lines).block(Block::default().borders(Borders::ALL).title("Status"));
     frame.render_widget(status, chunks[2]);
@@ -274,19 +214,11 @@ pub fn render_post_publish(frame: &mut Frame, app: &App, has_more_packages: bool
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .margin(2)
-        .constraints([
-            Constraint::Length(5),
-            Constraint::Min(5),
-            Constraint::Length(3),
-        ])
+        .constraints([Constraint::Length(5), Constraint::Min(5), Constraint::Length(3)])
         .split(area);
 
     let title = Paragraph::new("Package Released Successfully!")
-        .style(
-            Style::default()
-                .fg(Color::Green)
-                .add_modifier(Modifier::BOLD),
-        )
+        .style(Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
         .alignment(Alignment::Center)
         .block(Block::default().borders(Borders::ALL));
     frame.render_widget(title, chunks[0]);
@@ -296,12 +228,7 @@ pub fn render_post_publish(frame: &mut Frame, app: &App, has_more_packages: bool
     for pkg in &app.released_packages {
         lines.push(Line::from(vec![
             Span::styled("  ✓ ", Style::default().fg(Color::Green)),
-            Span::styled(
-                &pkg.name,
-                Style::default()
-                    .fg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD),
-            ),
+            Span::styled(&pkg.name, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
             Span::raw("@"),
             Span::styled(&pkg.version, Style::default().fg(Color::Yellow)),
         ]));
@@ -311,31 +238,19 @@ pub fn render_post_publish(frame: &mut Frame, app: &App, has_more_packages: bool
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
         "What would you like to do next?",
-        Style::default()
-            .fg(Color::Cyan)
-            .add_modifier(Modifier::BOLD),
+        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
     )));
     lines.push(Line::from(""));
 
     if has_more_packages {
         lines.push(Line::from(vec![
-            Span::styled(
-                "  C",
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            ),
+            Span::styled("  C", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
             Span::raw(": Continue releasing more packages"),
         ]));
     }
 
     lines.push(Line::from(vec![
-        Span::styled(
-            "  F",
-            Style::default()
-                .fg(Color::Green)
-                .add_modifier(Modifier::BOLD),
-        ),
+        Span::styled("  F", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
         Span::raw(": Finish - Push tags and open GitHub releases"),
     ]));
 
@@ -356,10 +271,6 @@ pub fn render_post_publish(frame: &mut Frame, app: &App, has_more_packages: bool
     frame.render_widget(help, chunks[2]);
 }
 
-#[expect(
-    clippy::too_many_lines,
-    reason = "TUI rendering with detailed status sections requires comprehensive layout"
-)]
 pub fn render_post_release(
     frame: &mut Frame,
     app: &App,
@@ -370,30 +281,15 @@ pub fn render_post_release(
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .margin(2)
-        .constraints([
-            Constraint::Length(5),
-            Constraint::Min(5),
-            Constraint::Length(3),
-        ])
+        .constraints([Constraint::Length(5), Constraint::Min(5), Constraint::Length(3)])
         .split(area);
 
-    let title_text = if app.dry_run {
-        "[DRY RUN] Post-Release Actions"
-    } else {
-        "Post-Release Actions"
-    };
+    let title_text =
+        if app.dry_run { "[DRY RUN] Post-Release Actions" } else { "Post-Release Actions" };
     let title = Paragraph::new(title_text)
-        .style(
-            Style::default()
-                .fg(Color::Green)
-                .add_modifier(Modifier::BOLD),
-        )
+        .style(Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
         .alignment(Alignment::Center)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title("Release Complete"),
-        );
+        .block(Block::default().borders(Borders::ALL).title("Release Complete"));
     frame.render_widget(title, chunks[0]);
 
     match step {
@@ -409,11 +305,9 @@ pub fn render_post_release(
                     Style::default().fg(Color::Yellow),
                 )));
             }
-            let message = Paragraph::new(lines).alignment(Alignment::Center).block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title("Pushing to Git"),
-            );
+            let message = Paragraph::new(lines)
+                .alignment(Alignment::Center)
+                .block(Block::default().borders(Borders::ALL).title("Pushing to Git"));
             frame.render_widget(message, chunks[1]);
         }
         crate::app::PostReleaseStep::PromptGitHub => {
@@ -421,9 +315,7 @@ pub fn render_post_release(
                 Line::from(""),
                 Line::from(Span::styled(
                     "Create GitHub Releases?",
-                    Style::default()
-                        .fg(Color::Cyan)
-                        .add_modifier(Modifier::BOLD),
+                    Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
                 )),
                 Line::from(""),
             ];
@@ -438,11 +330,9 @@ pub fn render_post_release(
                 Style::default().fg(Color::Yellow),
             )));
 
-            let message = Paragraph::new(lines).alignment(Alignment::Center).block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title("GitHub Releases"),
-            );
+            let message = Paragraph::new(lines)
+                .alignment(Alignment::Center)
+                .block(Block::default().borders(Borders::ALL).title("GitHub Releases"));
             frame.render_widget(message, chunks[1]);
 
             let help = Paragraph::new("Y: Open in browser  N/Enter: Skip")
@@ -455,11 +345,9 @@ pub fn render_post_release(
             for msg in &app.post_release_messages {
                 lines.push(Line::from(msg.as_str()));
             }
-            let message = Paragraph::new(lines).alignment(Alignment::Center).block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title("GitHub Releases"),
-            );
+            let message = Paragraph::new(lines)
+                .alignment(Alignment::Center)
+                .block(Block::default().borders(Borders::ALL).title("GitHub Releases"));
             frame.render_widget(message, chunks[1]);
 
             let help = if *step == crate::app::PostReleaseStep::Done {
@@ -503,9 +391,7 @@ pub fn render_complete(
         Line::from(""),
         Line::from(Span::styled(
             success_text,
-            Style::default()
-                .fg(Color::Green)
-                .add_modifier(Modifier::BOLD),
+            Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
         )),
         Line::from(""),
     ];

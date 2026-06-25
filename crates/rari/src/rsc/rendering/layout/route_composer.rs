@@ -498,10 +498,7 @@ mod tests {
         let script = RouteComposer::build_composition_script_with_templates(
             "const pageElement = Page();",
             &[],
-            &[
-                template_info("template.tsx"),
-                template_info("about/template.tsx"),
-            ],
+            &[template_info("template.tsx"), template_info("about/template.tsx")],
             "\"/about\"",
             None,
             "{}",

@@ -1,9 +1,12 @@
+use std::{
+    sync::{Arc, OnceLock},
+    time::Duration,
+};
+
 use cow_utils::CowUtils;
 use rari_error::RariError;
 use regex::Regex;
 use serde_json::{Value, json};
-use std::sync::{Arc, OnceLock};
-use std::time::Duration;
 use tracing::error;
 
 pub mod ext;
@@ -12,8 +15,9 @@ pub mod module;
 pub mod ops;
 pub mod utils;
 
-use crate::server::rendering::metadata::{finalize_metadata, merge_metadata};
 use factory::JsRuntimeInterface;
+
+use crate::server::rendering::metadata::{finalize_metadata, merge_metadata};
 
 pub struct JsExecutionRuntime {
     runtime: Arc<factory::RariRuntime>,
@@ -51,10 +55,7 @@ impl JsExecutionRuntime {
             factory::create_runtime()
         };
 
-        Self {
-            runtime,
-            timeout_ms: 30000,
-        }
+        Self { runtime, timeout_ms: 30000 }
     }
 
     pub async fn execute_script(
@@ -116,9 +117,7 @@ impl JsExecutionRuntime {
             }})()"
         );
 
-        let metadata_list = self
-            .execute_script("collect_metadata".to_string(), script)
-            .await?;
+        let metadata_list = self.execute_script("collect_metadata".to_string(), script).await?;
 
         let metadata_array = metadata_list.as_array().ok_or_else(|| {
             RariError::serialization("Expected metadata list to be an array".to_string())
@@ -355,10 +354,7 @@ impl JsExecutionRuntime {
         );
 
         match self
-            .execute_script(
-                format!("invalidate_{}", component_id.cow_replace('/', "_")),
-                script,
-            )
+            .execute_script(format!("invalidate_{}", component_id.cow_replace('/', "_")), script)
             .await
         {
             Ok(_) => Ok(()),
@@ -387,11 +383,7 @@ impl JsExecutionRuntime {
             let hmr_specifier = format!("file:///rari_hmr/server/{component_id}.js?v={timestamp}");
 
             if let Err(e) = self.clear_module_loader_caches(component_id).await {
-                tracing::warn!(
-                    "Failed to clear module loader caches for {}: {}",
-                    component_id,
-                    e
-                );
+                tracing::warn!("Failed to clear module loader caches for {}: {}", component_id, e);
             }
 
             self.add_module_to_loader_only(&hmr_specifier, component_code.to_string())
@@ -460,10 +452,7 @@ impl JsExecutionRuntime {
 
             let result = self
                 .execute_script(
-                    format!(
-                        "register_component_{}.js",
-                        component_id.cow_replace('/', "_")
-                    ),
+                    format!("register_component_{}.js", component_id.cow_replace('/', "_")),
                     registration_script,
                 )
                 .await
@@ -474,16 +463,12 @@ impl JsExecutionRuntime {
                     RariError::js_execution(error_msg)
                 })?;
 
-            let success = result
-                .get("success")
-                .and_then(serde_json::Value::as_bool)
-                .unwrap_or(false);
+            let success =
+                result.get("success").and_then(serde_json::Value::as_bool).unwrap_or(false);
 
             if !success {
-                let error_msg = result
-                    .get("error")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("Unknown error");
+                let error_msg =
+                    result.get("error").and_then(|v| v.as_str()).unwrap_or("Unknown error");
                 tracing::error!(
                     "Component registration failed for {}: {}",
                     component_id,
@@ -497,10 +482,7 @@ impl JsExecutionRuntime {
             Ok(())
         } else {
             let script_name = format!("load_component_{}", component_id.cow_replace('/', "_"));
-            match self
-                .execute_script(script_name, component_code.to_string())
-                .await
-            {
+            match self.execute_script(script_name, component_code.to_string()).await {
                 Ok(_) => Ok(()),
                 Err(e) => {
                     let error_msg =
@@ -588,17 +570,11 @@ impl JsExecutionRuntime {
         match (result, clear_result) {
             (Ok(value), Ok(())) => Ok(value),
             (Ok(value), Err(clear_err)) => {
-                error!(
-                    "Failed to clear request context after successful operation: {}",
-                    clear_err
-                );
+                error!("Failed to clear request context after successful operation: {}", clear_err);
                 Ok(value)
             }
             (Err(op_err), Err(clear_err)) => {
-                error!(
-                    "Failed to clear request context after operation error: {}",
-                    clear_err
-                );
+                error!("Failed to clear request context after operation error: {}", clear_err);
                 Err(op_err)
             }
             (Err(op_err), Ok(())) => Err(op_err),

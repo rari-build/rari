@@ -1,3 +1,10 @@
+use std::{
+    borrow::Cow,
+    path::{Path, PathBuf},
+    rc::Rc,
+    sync::{Arc, RwLock},
+};
+
 use deno_ast::{MediaType, ModuleSpecifier};
 use deno_error::JsErrorBox;
 use deno_fs::{FileSystem, RealFs};
@@ -20,12 +27,6 @@ use node_resolver::{
 };
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::{
-    borrow::Cow,
-    path::{Path, PathBuf},
-    rc::Rc,
-    sync::{Arc, RwLock},
-};
 use sys_traits::impls::RealSys;
 
 const NODE_MODULES_DIR: &str = "node_modules";
@@ -34,10 +35,7 @@ const TYPESCRIPT_VERSION: &str = "5.8.3";
 #[derive(Debug)]
 pub struct Resolver {
     in_pkg_checker: DenoInNpmPackageChecker,
-    #[expect(
-        clippy::struct_field_names,
-        reason = "Field name is intentionally descriptive"
-    )]
+    #[expect(clippy::struct_field_names, reason = "Field name is intentionally descriptive")]
     folder_resolver: NpmPackageFolderResolverImpl,
     fs: Arc<dyn FileSystem + Send + Sync>,
 
@@ -97,8 +95,9 @@ impl Resolver {
             NodeResolver<DenoInNpmPackageChecker, NpmPackageFolderResolverImpl, RealSys>,
         >,
     ) -> super::cjs_translator::NodeCodeTranslator {
-        use super::cjs_translator::CjsCodeAnalyzer;
         use node_resolver::analyze::CjsModuleExportAnalyzer;
+
+        use super::cjs_translator::CjsCodeAnalyzer;
 
         let cjs = CjsCodeAnalyzer::new(self.filesystem(), Arc::clone(self));
 
@@ -122,10 +121,7 @@ impl Resolver {
     }
 
     fn get_known_is_cjs(&self, specifier: &ModuleSpecifier) -> Option<bool> {
-        self.known
-            .read()
-            .ok()
-            .and_then(|k| k.get(specifier).copied())
+        self.known.read().ok().and_then(|k| k.get(specifier).copied())
     }
 
     fn set_is_cjs(&self, specifier: &ModuleSpecifier, value: bool) {
@@ -284,12 +280,7 @@ impl NpmPackageFolderResolverImpl {
 
         let byonm = ByonmNpmResolver::new(options);
 
-        Self {
-            byonm,
-            pjson,
-            resolution_cache,
-            base_dir,
-        }
+        Self { byonm, pjson, resolution_cache, base_dir }
     }
 
     pub fn npm_resolver(&self) -> ByonmNpmResolver<RealSys> {
@@ -323,24 +314,19 @@ impl NpmPackageFolderResolver for NpmPackageFolderResolverImpl {
         };
 
         let request = PackageReq::from_str(specifier).map_err(|_| {
-            let e = Box::new(PackageFolderResolveErrorKind::PackageNotFound(
-                PackageNotFoundError {
+            let e =
+                Box::new(PackageFolderResolveErrorKind::PackageNotFound(PackageNotFoundError {
                     package_name: specifier.to_string(),
                     referrer: UrlOrPath::Url(referrer_url.clone()),
                     referrer_extra: None,
-                },
-            ));
+                }));
             PackageFolderResolveError(e)
         })?;
 
-        let p = self
-            .byonm
-            .resolve_pkg_folder_from_deno_module_req(&request, referrer_url);
+        let p = self.byonm.resolve_pkg_folder_from_deno_module_req(&request, referrer_url);
         match p {
             Ok(p) => Ok(p),
-            Err(_) => self
-                .byonm
-                .resolve_package_folder_from_package(specifier, referrer),
+            Err(_) => self.byonm.resolve_package_folder_from_package(specifier, referrer),
         }
     }
 
@@ -397,17 +383,12 @@ pub struct NodeResolutionCacheImpl {
 }
 impl Default for NodeResolutionCacheImpl {
     fn default() -> Self {
-        Self {
-            inner: Arc::new(RwLock::new(NodeResolutionCacheInner::default())),
-        }
+        Self { inner: Arc::new(RwLock::new(NodeResolutionCacheInner::default())) }
     }
 }
 impl NodeResolutionCache for NodeResolutionCacheImpl {
     fn get_canonicalized(&self, path: &Path) -> Option<Result<PathBuf, std::io::Error>> {
-        self.inner
-            .read()
-            .ok()
-            .and_then(|i| i.get_canonicalized(path))
+        self.inner.read().ok().and_then(|i| i.get_canonicalized(path))
     }
 
     fn set_canonicalized(&self, from: PathBuf, to: &std::io::Result<PathBuf>) {
@@ -433,8 +414,7 @@ pub struct NodeResolutionCacheInner {
 impl NodeResolutionCacheInner {
     fn get_canonicalized(&self, path: &Path) -> Option<Result<PathBuf, std::io::Error>> {
         self.cache.get(path).map(|(t, _)| {
-            t.clone()
-                .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "Not found."))
+            t.clone().ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "Not found."))
         })
     }
 
@@ -477,11 +457,8 @@ pub enum NpmProcessStateKind {
 }
 impl NpmProcessStateProvider for Resolver {
     fn get_npm_process_state(&self) -> String {
-        let modules_path = self
-            .folder_resolver
-            .base_dir()
-            .as_ref()
-            .map(|p| p.to_string_lossy().to_string());
+        let modules_path =
+            self.folder_resolver.base_dir().as_ref().map(|p| p.to_string_lossy().to_string());
         let state = NpmProcessState {
             kind: NpmProcessStateKind::Byonm,
             local_node_modules_path: modules_path,
@@ -495,10 +472,7 @@ struct RequireLoader(Arc<dyn FileSystem + Send + Sync>);
 impl NodeRequireLoader for RequireLoader {
     fn load_text_file_lossy(&self, path: &Path) -> Result<deno_core::FastString, JsErrorBox> {
         let path_checked = deno_permissions::CheckedPath::unsafe_new(Cow::Borrowed(path));
-        let text = self
-            .0
-            .read_text_file_lossy_sync(&path_checked)
-            .map_err(JsErrorBox::from_err)?;
+        let text = self.0.read_text_file_lossy_sync(&path_checked).map_err(JsErrorBox::from_err)?;
         Ok(deno_core::FastString::from(text.into_owned()))
     }
 

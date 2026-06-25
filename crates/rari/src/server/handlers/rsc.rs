@@ -1,11 +1,3 @@
-use crate::server::core::utils::component::{
-    get_dist_path_for_component, wrap_server_action_module,
-};
-use crate::server::core::utils::http::merge_vary_with_accept;
-use crate::server::core::utils::path_validation::{
-    normalize_component_path, validate_component_path,
-};
-use crate::server::{RegisterClientRequest, RegisterRequest, RenderRequest, ServerState};
 use axum::{
     body::Body,
     extract::State,
@@ -15,6 +7,15 @@ use axum::{
 use cow_utils::CowUtils;
 use serde_json::Value;
 use tracing::error;
+
+use crate::server::{
+    RegisterClientRequest, RegisterRequest, RenderRequest, ServerState,
+    core::utils::{
+        component::{get_dist_path_for_component, wrap_server_action_module},
+        http::merge_vary_with_accept,
+        path_validation::{normalize_component_path, validate_component_path},
+    },
+};
 
 const RSC_CONTENT_TYPE: &str = "text/x-component";
 
@@ -27,18 +28,12 @@ pub async fn stream_component(
         let renderer = state.renderer.lock().await;
         let registry = renderer.component_registry.lock();
         if !registry.is_component_registered(&request.component_id) {
-            error!(
-                "Attempted to stream unregistered component: {}",
-                request.component_id
-            );
+            error!("Attempted to stream unregistered component: {}", request.component_id);
             return Err(StatusCode::NOT_FOUND);
         }
     }
 
-    let props_str = request
-        .props
-        .as_ref()
-        .map(|p| serde_json::to_string(p).unwrap_or_default());
+    let props_str = request.props.as_ref().map(|p| serde_json::to_string(p).unwrap_or_default());
 
     let cache_key = if let Some(props) = &props_str {
         format!("/_rari/stream/{}?props={}", request.component_id, props)
@@ -72,9 +67,7 @@ pub async fn stream_component(
 
     let stream_result = {
         let renderer = state.renderer.lock().await;
-        renderer
-            .render_with_streaming(&request.component_id, props_str.as_deref())
-            .await
+        renderer.render_with_streaming(&request.component_id, props_str.as_deref()).await
     };
 
     match stream_result {
@@ -82,11 +75,8 @@ pub async fn stream_component(
             let cache_control = state.config.get_cache_control_for_route("/_rari/stream");
 
             use futures::StreamExt;
-            let byte_stream = rsc_stream.map(|result| {
-                result
-                    .map(bytes::Bytes::from)
-                    .map_err(std::io::Error::other)
-            });
+            let byte_stream = rsc_stream
+                .map(|result| result.map(bytes::Bytes::from).map_err(std::io::Error::other));
 
             #[expect(
                 clippy::expect_used,
@@ -101,10 +91,7 @@ pub async fn stream_component(
                 .expect("Valid RSC response"))
         }
         Err(e) => {
-            error!(
-                "Failed to create true streaming for component {}: {}",
-                request.component_id, e
-            );
+            error!("Failed to create true streaming for component {}: {}", request.component_id, e);
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
@@ -122,18 +109,14 @@ pub async fn register_component(
 
     let result = {
         let mut renderer = state.renderer.lock().await;
-        renderer
-            .register_component(&request.component_id, &request.component_code)
-            .await
+        renderer.register_component(&request.component_id, &request.component_code).await
     };
 
     match result {
         Ok(()) => {
             let renderer = state.renderer.lock().await;
-            let is_client = renderer
-                .serializer
-                .lock()
-                .is_client_component_registered(&request.component_id);
+            let is_client =
+                renderer.serializer.lock().is_client_component_registered(&request.component_id);
 
             if is_client {
                 let mark_script = format!(
@@ -150,18 +133,12 @@ pub async fn register_component(
                 if let Err(e) = renderer
                     .runtime
                     .execute_script(
-                        format!(
-                            "mark_client_{}.js",
-                            request.component_id.cow_replace('/', "_")
-                        ),
+                        format!("mark_client_{}.js", request.component_id.cow_replace('/', "_")),
                         mark_script,
                     )
                     .await
                 {
-                    error!(
-                        "Failed to mark {} as client component: {}",
-                        request.component_id, e
-                    );
+                    error!("Failed to mark {} as client component: {}", request.component_id, e);
                 }
             }
 
@@ -171,10 +148,7 @@ pub async fn register_component(
             })))
         }
         Err(e) => {
-            error!(
-                "Failed to register component {}: {}",
-                request.component_id, e
-            );
+            error!("Failed to register component {}: {}", request.component_id, e);
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
@@ -264,11 +238,8 @@ pub async fn reload_component_from_dist(
         let renderer = state.renderer.lock().await;
         let registry = renderer.component_registry.lock();
         if let Some(existing_component) = registry.get_component(component_id) {
-            let existing_snippet = existing_component
-                .transformed_source
-                .chars()
-                .take(500)
-                .collect::<String>();
+            let existing_snippet =
+                existing_component.transformed_source.chars().take(500).collect::<String>();
             let new_snippet = dist_code.chars().take(500).collect::<String>();
 
             existing_snippet == new_snippet
@@ -296,11 +267,8 @@ pub async fn reload_component_from_dist(
         let renderer = state.renderer.lock().await;
         let registry = renderer.component_registry.lock();
         if let Some(existing_component) = registry.get_component(component_id) {
-            let existing_snippet = existing_component
-                .transformed_source
-                .chars()
-                .take(500)
-                .collect::<String>();
+            let existing_snippet =
+                existing_component.transformed_source.chars().take(500).collect::<String>();
             let new_snippet = new_dist_code.chars().take(500).collect::<String>();
 
             if existing_snippet == new_snippet {
@@ -326,15 +294,8 @@ pub async fn reload_component_from_dist(
     if is_esm {
         renderer.clear_component_cache(component_id);
 
-        if let Err(e) = renderer
-            .runtime
-            .clear_module_loader_caches(component_id)
-            .await
-        {
-            error!(
-                "Failed to clear module loader caches for {}: {}",
-                component_id, e
-            );
+        if let Err(e) = renderer.runtime.clear_module_loader_caches(component_id).await {
+            error!("Failed to clear module loader caches for {}: {}", component_id, e);
         }
 
         let timestamp = std::time::SystemTime::now()
@@ -357,32 +318,24 @@ pub async fn reload_component_from_dist(
                 format!("Failed to add HMR module to loader: {e}")
             })?;
 
-        let module_id = renderer
-            .runtime
-            .load_es_module(component_id)
-            .await
-            .map_err(|e| {
-                error!(
-                    component_id = component_id,
-                    error = %e,
-                    "Failed to load ES module during HMR"
-                );
-                format!("Failed to load ES module: {e}")
-            })?;
+        let module_id = renderer.runtime.load_es_module(component_id).await.map_err(|e| {
+            error!(
+                component_id = component_id,
+                error = %e,
+                "Failed to load ES module during HMR"
+            );
+            format!("Failed to load ES module: {e}")
+        })?;
 
-        renderer
-            .runtime
-            .evaluate_module(module_id)
-            .await
-            .map_err(|e| {
-                error!(
-                    component_id = component_id,
-                    module_id = module_id,
-                    error = %e,
-                    "Failed to evaluate module during HMR"
-                );
-                format!("Failed to evaluate module: {e}")
-            })?;
+        renderer.runtime.evaluate_module(module_id).await.map_err(|e| {
+            error!(
+                component_id = component_id,
+                module_id = module_id,
+                error = %e,
+                "Failed to evaluate module during HMR"
+            );
+            format!("Failed to evaluate module: {e}")
+        })?;
 
         let clear_script = format!(
             r#"(function() {{
@@ -561,28 +514,18 @@ pub async fn reload_component_from_dist(
         }
     };
 
-    if let Some(success) = result_json
-        .get("success")
-        .and_then(serde_json::Value::as_bool)
-    {
+    if let Some(success) = result_json.get("success").and_then(serde_json::Value::as_bool) {
         if success {
             Ok(())
         } else {
             let actual_keys = result_json
                 .get("actualKeys")
                 .and_then(|v| v.as_array())
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|v| v.as_str())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                })
+                .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>().join(", "))
                 .unwrap_or_else(|| "unknown".to_string());
 
-            let expected_key = result_json
-                .get("expectedKey")
-                .and_then(|v| v.as_str())
-                .unwrap_or(component_id);
+            let expected_key =
+                result_json.get("expectedKey").and_then(|v| v.as_str()).unwrap_or(component_id);
 
             error!(
                 component_id = component_id,
@@ -627,20 +570,15 @@ pub async fn immediate_component_reregistration(
     let file_path = &normalized_path;
 
     let path = std::path::Path::new(file_path);
-    let component_name = path
-        .file_stem()
-        .and_then(|stem| stem.to_str())
-        .unwrap_or("UnknownComponent");
+    let component_name =
+        path.file_stem().and_then(|stem| stem.to_str()).unwrap_or("UnknownComponent");
 
     {
         let mut renderer = state.renderer.lock().await;
         renderer.clear_script_cache();
 
         if let Err(e) = renderer.clear_component_module_cache(component_name).await {
-            error!(
-                "Failed to clear component module cache for {}: {}",
-                component_name, e
-            );
+            error!("Failed to clear component module cache for {}: {}", component_name, e);
         }
     }
 
@@ -659,12 +597,8 @@ pub async fn immediate_component_reregistration(
     };
 
     {
-        if let Err(e) = state
-            .renderer
-            .lock()
-            .await
-            .register_component(component_name, &content)
-            .await
+        if let Err(e) =
+            state.renderer.lock().await.register_component(component_name, &content).await
         {
             error!(
                 component_name = component_name,
@@ -677,21 +611,14 @@ pub async fn immediate_component_reregistration(
 
             let mut renderer = state.renderer.lock().await;
             if let Err(e) = renderer.clear_component_module_cache(component_name).await {
-                error!(
-                    "Failed to clear component module cache for {}: {}",
-                    component_name, e
-                );
+                error!("Failed to clear component module cache for {}: {}", component_name, e);
             }
             drop(renderer);
 
             tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
 
-            if let Err(e) = state
-                .renderer
-                .lock()
-                .await
-                .register_component(component_name, &content)
-                .await
+            if let Err(e) =
+                state.renderer.lock().await.register_component(component_name, &content).await
             {
                 error!(
                     component_name = component_name,
@@ -699,7 +626,7 @@ pub async fn immediate_component_reregistration(
                     "Failed to re-register component after cache clear, preserving last known good version"
                 );
                 return Err(
-                    format!("Failed to re-register component after cache clear: {e}").into(),
+                    format!("Failed to re-register component after cache clear: {e}").into()
                 );
             }
 

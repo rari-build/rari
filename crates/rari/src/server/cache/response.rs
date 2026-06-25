@@ -1,6 +1,10 @@
-use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::Instant;
+use std::{
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+    time::Instant,
+};
 
 use axum::http::HeaderMap;
 use bytes::Bytes;
@@ -110,11 +114,7 @@ pub struct RouteCachePolicy {
 
 impl Default for RouteCachePolicy {
     fn default() -> Self {
-        Self {
-            ttl: 60,
-            enabled: true,
-            tags: Vec::new(),
-        }
+        Self { ttl: 60, enabled: true, tags: Vec::new() }
     }
 }
 
@@ -148,11 +148,7 @@ impl RouteCachePolicy {
 
 impl Default for CacheConfig {
     fn default() -> Self {
-        Self {
-            max_entries: 1000,
-            default_ttl: 60,
-            enabled: true,
-        }
+        Self { max_entries: 1000, default_ttl: 60, enabled: true }
     }
 }
 
@@ -237,8 +233,10 @@ impl ResponseCache {
     }
 
     pub fn generate_etag(content: &[u8]) -> String {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
+        use std::{
+            collections::hash_map::DefaultHasher,
+            hash::{Hash, Hasher},
+        };
 
         let mut hasher = DefaultHasher::new();
         content.hash(&mut hasher);
@@ -435,30 +433,24 @@ impl ResponseCache {
     }
 
     fn resync_entry_count(&self) {
-        let live = self
-            .handler
-            .get_all_keys()
-            .iter()
-            .filter(|k| k.starts_with(Self::KEY_PREFIX))
-            .count();
+        let live =
+            self.handler.get_all_keys().iter().filter(|k| k.starts_with(Self::KEY_PREFIX)).count();
         self.entry_count.store(live, Ordering::Relaxed);
         self.update_entry_count_metrics();
     }
 }
 
 mod instant_serde {
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
     use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
     pub fn serialize<S: Serializer>(instant: &Instant, s: S) -> Result<S::Ok, S::Error> {
         let now_mono = Instant::now();
         let now_wall = SystemTime::now();
         let elapsed = now_mono.saturating_duration_since(*instant);
         let stored = now_wall.checked_sub(elapsed).unwrap_or(now_wall);
-        let stored_ms = stored
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis() as u64;
+        let stored_ms = stored.duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
         stored_ms.serialize(s)
     }
 
@@ -466,9 +458,7 @@ mod instant_serde {
         let ms = u64::deserialize(d)?;
         let stored = UNIX_EPOCH + Duration::from_millis(ms);
         let elapsed_since_stored = SystemTime::now().duration_since(stored).unwrap_or_default();
-        Ok(Instant::now()
-            .checked_sub(elapsed_since_stored)
-            .unwrap_or_else(Instant::now))
+        Ok(Instant::now().checked_sub(elapsed_since_stored).unwrap_or_else(Instant::now))
     }
 }
 
@@ -488,10 +478,9 @@ mod header_map_serde {
         let pairs: Vec<(String, Vec<u8>)> = Vec::deserialize(d)?;
         let mut map = HeaderMap::with_capacity(pairs.len());
         for (name, value) in pairs {
-            if let (Ok(n), Ok(v)) = (
-                HeaderName::from_bytes(name.as_bytes()),
-                HeaderValue::from_bytes(&value),
-            ) {
+            if let (Ok(n), Ok(v)) =
+                (HeaderName::from_bytes(name.as_bytes()), HeaderValue::from_bytes(&value))
+            {
                 map.append(n, v);
             }
         }
@@ -522,12 +511,13 @@ mod header_map_serde {
     clippy::get_unwrap
 )]
 mod tests {
-    use super::*;
-    use crate::server::cache::handler::{CacheError, SetOutcome};
+    use std::{sync::Arc, time::Duration};
+
     use parking_lot::Mutex as PMutex;
     use rustc_hash::FxHashMap;
-    use std::sync::Arc;
-    use std::time::Duration;
+
+    use super::*;
+    use crate::server::cache::handler::{CacheError, SetOutcome};
 
     fn create_test_response(body: &str, ttl: u64) -> CachedResponse {
         CachedResponse {
@@ -596,11 +586,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_cache_basic_operations() {
-        let config = CacheConfig {
-            max_entries: 10,
-            default_ttl: 60,
-            enabled: true,
-        };
+        let config = CacheConfig { max_entries: 10, default_ttl: 60, enabled: true };
         let cache = ResponseCache::new(config);
 
         assert!(cache.get("test-key").await.is_none());
@@ -620,11 +606,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_cache_expiration() {
-        let config = CacheConfig {
-            max_entries: 10,
-            default_ttl: 60,
-            enabled: true,
-        };
+        let config = CacheConfig { max_entries: 10, default_ttl: 60, enabled: true };
         let cache = ResponseCache::new(config);
 
         let response = create_test_response("test body", 0);
@@ -637,11 +619,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_cache_invalidation() {
-        let config = CacheConfig {
-            max_entries: 10,
-            default_ttl: 60,
-            enabled: true,
-        };
+        let config = CacheConfig { max_entries: 10, default_ttl: 60, enabled: true };
         let cache = ResponseCache::new(config);
 
         let response = create_test_response("test body", 60);
@@ -656,11 +634,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_cache_tag_invalidation() {
-        let config = CacheConfig {
-            max_entries: 10,
-            default_ttl: 60,
-            enabled: true,
-        };
+        let config = CacheConfig { max_entries: 10, default_ttl: 60, enabled: true };
         let cache = ResponseCache::new(config);
 
         let mut response1 = create_test_response("body1", 60);
@@ -683,26 +657,16 @@ mod tests {
 
     #[tokio::test]
     async fn test_cache_lru_eviction() {
-        let config = CacheConfig {
-            max_entries: 2,
-            default_ttl: 60,
-            enabled: true,
-        };
+        let config = CacheConfig { max_entries: 2, default_ttl: 60, enabled: true };
         let cache = ResponseCache::new(config);
 
-        cache
-            .set("key1".to_string(), create_test_response("body1", 60))
-            .await;
-        cache
-            .set("key2".to_string(), create_test_response("body2", 60))
-            .await;
+        cache.set("key1".to_string(), create_test_response("body1", 60)).await;
+        cache.set("key2".to_string(), create_test_response("body2", 60)).await;
 
         assert!(cache.get("key1").await.is_some());
         assert!(cache.get("key2").await.is_some());
 
-        cache
-            .set("key3".to_string(), create_test_response("body3", 60))
-            .await;
+        cache.set("key3".to_string(), create_test_response("body3", 60)).await;
 
         assert!(cache.get("key1").await.is_none());
         assert!(cache.get("key2").await.is_some());
@@ -711,11 +675,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_cache_disabled() {
-        let config = CacheConfig {
-            max_entries: 10,
-            default_ttl: 60,
-            enabled: false,
-        };
+        let config = CacheConfig { max_entries: 10, default_ttl: 60, enabled: false };
         let cache = ResponseCache::new(config);
 
         let response = create_test_response("test body", 60);
@@ -726,19 +686,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_cache_clear() {
-        let config = CacheConfig {
-            max_entries: 10,
-            default_ttl: 60,
-            enabled: true,
-        };
+        let config = CacheConfig { max_entries: 10, default_ttl: 60, enabled: true };
         let cache = ResponseCache::new(config);
 
-        cache
-            .set("key1".to_string(), create_test_response("body1", 60))
-            .await;
-        cache
-            .set("key2".to_string(), create_test_response("body2", 60))
-            .await;
+        cache.set("key1".to_string(), create_test_response("body1", 60)).await;
+        cache.set("key2".to_string(), create_test_response("body2", 60)).await;
 
         assert_eq!(cache.get_metrics().total_entries, 2);
 
@@ -751,20 +703,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_clear_percentage() {
-        let config = CacheConfig {
-            max_entries: 10,
-            default_ttl: 60,
-            enabled: true,
-        };
+        let config = CacheConfig { max_entries: 10, default_ttl: 60, enabled: true };
         let cache = ResponseCache::new(config);
 
         for i in 0..10 {
-            cache
-                .set(
-                    format!("key{}", i),
-                    create_test_response(&format!("body{}", i), 60),
-                )
-                .await;
+            cache.set(format!("key{}", i), create_test_response(&format!("body{}", i), 60)).await;
         }
 
         assert_eq!(cache.get_metrics().total_entries, 10);
@@ -778,27 +721,16 @@ mod tests {
 
     #[tokio::test]
     async fn test_memory_pressure_detection() {
-        let config = CacheConfig {
-            max_entries: 10,
-            default_ttl: 60,
-            enabled: true,
-        };
+        let config = CacheConfig { max_entries: 10, default_ttl: 60, enabled: true };
         let cache = ResponseCache::new(config);
 
         for i in 0..8 {
-            cache
-                .set(
-                    format!("key{}", i),
-                    create_test_response(&format!("body{}", i), 60),
-                )
-                .await;
+            cache.set(format!("key{}", i), create_test_response(&format!("body{}", i), 60)).await;
         }
 
         assert!(!cache.should_clear_on_memory_pressure());
 
-        cache
-            .set("key8".to_string(), create_test_response("body8", 60))
-            .await;
+        cache.set("key8".to_string(), create_test_response("body8", 60)).await;
 
         assert!(cache.should_clear_on_memory_pressure());
     }
@@ -882,11 +814,7 @@ mod tests {
         ) -> Result<SetOutcome, CacheError> {
             self.set_calls.lock().push(key.to_string());
             let replaced = self.map.lock().insert(key.to_string(), value).is_some();
-            Ok(SetOutcome {
-                replaced,
-                evicted: 0,
-                evicted_bytes: 0,
-            })
+            Ok(SetOutcome { replaced, evicted: 0, evicted_bytes: 0 })
         }
         async fn set_with_tags(
             &self,
@@ -915,50 +843,27 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_handler_is_memory_by_default() {
-        let config = CacheConfig {
-            max_entries: 2,
-            default_ttl: 60,
-            enabled: true,
-        };
+        let config = CacheConfig { max_entries: 2, default_ttl: 60, enabled: true };
         let cache = ResponseCache::new(config);
 
-        cache
-            .set("a".to_string(), create_test_response("body-a", 60))
-            .await;
-        cache
-            .set("b".to_string(), create_test_response("body-b", 60))
-            .await;
-        cache
-            .set("c".to_string(), create_test_response("body-c", 60))
-            .await;
+        cache.set("a".to_string(), create_test_response("body-a", 60)).await;
+        cache.set("b".to_string(), create_test_response("body-b", 60)).await;
+        cache.set("c".to_string(), create_test_response("body-c", 60)).await;
 
-        assert_eq!(
-            cache.get_all_keys().len(),
-            2,
-            "MemoryCacheHandler must cap at max_entries"
-        );
+        assert_eq!(cache.get_all_keys().len(), 2, "MemoryCacheHandler must cap at max_entries");
         assert_eq!(cache.get_metrics().total_entries, 2);
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_new_with_custom_handler() {
         let stub = Arc::new(StubHandler::default());
-        let config = CacheConfig {
-            max_entries: 100,
-            default_ttl: 60,
-            enabled: true,
-        };
+        let config = CacheConfig { max_entries: 100, default_ttl: 60, enabled: true };
         let cache = ResponseCache::new_with_handler(config, stub.clone());
 
-        cache
-            .set("k".to_string(), create_test_response("v", 60))
-            .await;
+        cache.set("k".to_string(), create_test_response("v", 60)).await;
         assert_eq!(*stub.set_calls.lock(), vec!["response:k".to_string()]);
 
-        let got = cache
-            .get("k")
-            .await
-            .expect("get should round-trip via stub");
+        let got = cache.get("k").await.expect("get should round-trip via stub");
         assert_eq!(got.body, Bytes::from("v"));
 
         cache.invalidate("k").await;
@@ -976,33 +881,18 @@ mod tests {
             }));
 
         let response_cache = ResponseCache::new_with_handler(
-            CacheConfig {
-                max_entries: 32,
-                default_ttl: 60,
-                enabled: true,
-            },
+            CacheConfig { max_entries: 32, default_ttl: 60, enabled: true },
             shared.clone(),
         );
         let test_dir = std::env::temp_dir().join("rari-test-cache-namespace");
         let og_cache = OgImageCache::with_handler(shared.clone(), &test_dir);
 
-        response_cache
-            .set(
-                "/about".to_string(),
-                create_test_response("response-body", 60),
-            )
-            .await;
+        response_cache.set("/about".to_string(), create_test_response("response-body", 60)).await;
         let og_payload = vec![0x52, 0x49, 0x46, 0x46];
-        og_cache
-            .insert("/about".to_string(), og_payload.clone())
-            .await
-            .expect("og insert");
+        og_cache.insert("/about".to_string(), og_payload.clone()).await.expect("og insert");
 
         let response_got = response_cache.get("/about").await;
-        assert!(
-            response_got.is_some(),
-            "response cache must not be polluted by og write"
-        );
+        assert!(response_got.is_some(), "response cache must not be polluted by og write");
         assert_eq!(response_got.unwrap().body, Bytes::from("response-body"));
 
         let og_got = og_cache.get("/about").await;
@@ -1023,11 +913,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_serialized_response_round_trip() {
-        let config = CacheConfig {
-            max_entries: 10,
-            default_ttl: 60,
-            enabled: true,
-        };
+        let config = CacheConfig { max_entries: 10, default_ttl: 60, enabled: true };
         let cache = ResponseCache::new(config);
 
         let mut headers = HeaderMap::new();
@@ -1072,20 +958,14 @@ mod tests {
         // paths like `update_in_place` that re-serialize an existing
         // `CachedResponse` would silently reset `cached_at` to the moment of
         // the call, extending the entry's effective TTL.
-        let config = CacheConfig {
-            max_entries: 10,
-            default_ttl: 60,
-            enabled: true,
-        };
+        let config = CacheConfig { max_entries: 10, default_ttl: 60, enabled: true };
         let cache = ResponseCache::new(config);
 
         // Backdate `cached_at` so the age is clearly distinguishable from "now".
         // Must stay < ttl, otherwise `get` evicts the entry as expired and the
         // assertion below never runs.
         let original_age = Duration::from_secs(10);
-        let original_cached_at = Instant::now()
-            .checked_sub(original_age)
-            .expect("monotonic clock");
+        let original_cached_at = Instant::now().checked_sub(original_age).expect("monotonic clock");
 
         let mut response = create_test_response("body", 60);
         response.metadata.cached_at = original_cached_at;

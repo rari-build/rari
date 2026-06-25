@@ -1,17 +1,18 @@
-use crate::server::ServerState;
-use crate::server::config::Config;
-use crate::server::core::utils::component::extract_component_id;
-use crate::server::core::utils::path_validation::{
-    normalize_component_path, validate_component_path, validate_safe_path,
-};
-use crate::server::handlers::rsc::{
-    immediate_component_reregistration, reload_component_from_dist,
-};
 use axum::{extract::State, http::StatusCode, response::Json};
 use cow_utils::CowUtils;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tracing::error;
+
+use crate::server::{
+    ServerState,
+    config::Config,
+    core::utils::{
+        component::extract_component_id,
+        path_validation::{normalize_component_path, validate_component_path, validate_safe_path},
+    },
+    handlers::rsc::{immediate_component_reregistration, reload_component_from_dist},
+};
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "action", rename_all = "kebab-case")]
@@ -62,21 +63,18 @@ pub async fn handle_hmr_action(
 ) -> Result<Json<Value>, StatusCode> {
     match request {
         HmrRequest::Register { file_path } => handle_register(state, file_path).await,
-        HmrRequest::Invalidate {
-            component_id,
-            file_path,
-        } => handle_invalidate(state, component_id, file_path).await,
-        HmrRequest::Reload {
-            component_id,
-            file_path,
-        } => handle_reload(state, component_id, file_path).await,
+        HmrRequest::Invalidate { component_id, file_path } => {
+            handle_invalidate(state, component_id, file_path).await
+        }
+        HmrRequest::Reload { component_id, file_path } => {
+            handle_reload(state, component_id, file_path).await
+        }
         HmrRequest::InvalidateApiRoute { file_path } => {
             handle_invalidate_api_route(state, file_path).await
         }
-        HmrRequest::ReloadComponent {
-            component_id,
-            bundle_path,
-        } => handle_reload_component(state, component_id, bundle_path).await,
+        HmrRequest::ReloadComponent { component_id, bundle_path } => {
+            handle_reload_component(state, component_id, bundle_path).await
+        }
     }
 }
 
@@ -129,10 +127,7 @@ async fn handle_register(state: ServerState, file_path: String) -> Result<Json<V
 
         if let Err(e) = renderer
             .runtime
-            .execute_script(
-                "clear_resolved_cache".to_string(),
-                clear_cache_script.to_string(),
-            )
+            .execute_script("clear_resolved_cache".to_string(), clear_cache_script.to_string())
             .await
         {
             error!("Failed to clear resolved cache: {}", e);
@@ -196,14 +191,8 @@ async fn handle_register(state: ServerState, file_path: String) -> Result<Json<V
         invalidate_component_cache(&state.response_cache, &component_id).await;
 
         let route_cache_patterns: Vec<String> = vec![
-            file_path
-                .cow_replace("src/app/", "/")
-                .cow_replace("/page.tsx", "")
-                .into_owned(),
-            file_path
-                .cow_replace("src/app/", "/")
-                .cow_replace("/page.ts", "")
-                .into_owned(),
+            file_path.cow_replace("src/app/", "/").cow_replace("/page.tsx", "").into_owned(),
+            file_path.cow_replace("src/app/", "/").cow_replace("/page.ts", "").into_owned(),
         ]
         .into_iter()
         .filter(|p| p.len() > 1)
@@ -285,15 +274,8 @@ async fn handle_invalidate(
 
         renderer.clear_component_cache(&component_id);
 
-        if let Err(e) = renderer
-            .runtime
-            .clear_module_loader_caches(&component_id)
-            .await
-        {
-            error!(
-                "Failed to clear module loader caches for {}: {}",
-                component_id, e
-            );
+        if let Err(e) = renderer.runtime.clear_module_loader_caches(&component_id).await {
+            error!("Failed to clear module loader caches for {}: {}", component_id, e);
         }
 
         let clear_script = format!(
@@ -362,10 +344,7 @@ async fn handle_invalidate(
             "cleared": clear_result
         }))),
         Err(e) => {
-            error!(
-                "Failed to invalidate component cache for {}: {}",
-                component_id, e
-            );
+            error!("Failed to invalidate component cache for {}: {}", component_id, e);
             Ok(Json(serde_json::json!({
                 "success": false,
                 "componentId": component_id,
@@ -409,11 +388,8 @@ async fn handle_reload(
         .unwrap_or_default()
         .as_millis();
 
-    let file_path = if file_path.starts_with('/') {
-        file_path.clone()
-    } else {
-        format!("/{file_path}")
-    };
+    let file_path =
+        if file_path.starts_with('/') { file_path.clone() } else { format!("/{file_path}") };
 
     let vite_url = format!("{vite_base_url}{file_path}?t={timestamp}");
 
@@ -450,14 +426,8 @@ async fn handle_reload(
         }
     };
 
-    let result = {
-        state
-            .renderer
-            .lock()
-            .await
-            .register_component(&component_id, &transpiled_code)
-            .await
-    };
+    let result =
+        { state.renderer.lock().await.register_component(&component_id, &transpiled_code).await };
 
     match result {
         Ok(()) => Ok(Json(serde_json::json!({
@@ -541,11 +511,7 @@ async fn handle_reload_component(
     }
 
     if let Some(e) = last_error {
-        error!(
-            "Failed to read bundle file {}: {}",
-            bundle_full_path.display(),
-            e
-        );
+        error!("Failed to read bundle file {}: {}", bundle_full_path.display(), e);
         return Ok(Json(serde_json::json!({
             "success": false,
             "message": format!("Failed to read bundle: {}", e)
@@ -561,10 +527,7 @@ async fn handle_reload_component(
 
     let load_result = {
         let renderer = state.renderer.lock().await;
-        renderer
-            .runtime
-            .load_component_code(&component_id, &bundle_code)
-            .await
+        renderer.runtime.load_component_code(&component_id, &bundle_code).await
     };
 
     match load_result {

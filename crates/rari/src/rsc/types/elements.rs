@@ -13,20 +13,12 @@ pub struct ReactElement {
 
 impl ReactElement {
     pub fn new(tag: impl Into<String>) -> Self {
-        Self {
-            tag: tag.into(),
-            props: FxHashMap::default(),
-            key: None,
-        }
+        Self { tag: tag.into(), props: FxHashMap::default(), key: None }
     }
 
     #[cfg(test)]
     pub fn with_props(tag: impl Into<String>, props: FxHashMap<String, serde_json::Value>) -> Self {
-        Self {
-            tag: tag.into(),
-            props,
-            key: None,
-        }
+        Self { tag: tag.into(), props, key: None }
     }
 
     #[cfg(test)]
@@ -70,8 +62,9 @@ impl ReactElement {
     clippy::get_unwrap
 )]
 mod tests {
-    use super::*;
     use serde_json::json;
+
+    use super::*;
 
     #[test]
     fn test_create_react_element() {

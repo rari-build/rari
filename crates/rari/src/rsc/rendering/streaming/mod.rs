@@ -36,9 +36,10 @@ pub use validation::validate_suspense_boundaries;
     clippy::get_unwrap
 )]
 mod tests {
-    use super::boundary_manager::SuspenseBoundaryManager;
-    use super::types::*;
-    use super::validation::validate_suspense_boundaries;
+    use super::{
+        boundary_manager::SuspenseBoundaryManager, types::*,
+        validation::validate_suspense_boundaries,
+    };
 
     #[tokio::test]
     async fn test_partial_render_result() {
@@ -148,16 +149,10 @@ mod tests {
         });
 
         let result = validate_suspense_boundaries(&rsc_data);
-        assert!(
-            result.is_err(),
-            "Validation should fail with duplicate fallbacks"
-        );
+        assert!(result.is_err(), "Validation should fail with duplicate fallbacks");
 
         let error_msg = result.unwrap_err();
-        assert!(
-            error_msg.contains("boundary-2"),
-            "Error should mention the duplicate boundary"
-        );
+        assert!(error_msg.contains("boundary-2"), "Error should mention the duplicate boundary");
     }
 
     #[test]
@@ -227,9 +222,6 @@ mod tests {
         });
 
         let result = validate_suspense_boundaries(&rsc_data);
-        assert!(
-            result.is_ok(),
-            "Validation should pass with multiple unique boundaries"
-        );
+        assert!(result.is_ok(), "Validation should pass with multiple unique boundaries");
     }
 }

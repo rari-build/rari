@@ -1,8 +1,7 @@
 use axum::{Json, extract::State, http::StatusCode};
 use serde::{Deserialize, Serialize};
 
-use crate::server::core::types::ServerState;
-use crate::server::routing::types::RouteSegment;
+use crate::server::{core::types::ServerState, routing::types::RouteSegment};
 
 #[derive(Debug, Deserialize)]
 pub struct RouteInfoRequest {
@@ -59,11 +58,7 @@ pub async fn get_route_info(
 
     match app_router.match_route(&path) {
         Ok(route_match) => {
-            let layouts = route_match
-                .layouts
-                .iter()
-                .map(|layout| layout.path.clone())
-                .collect();
+            let layouts = route_match.layouts.iter().map(|layout| layout.path.clone()).collect();
 
             let loading = route_match.loading.map(|l| l.path);
 

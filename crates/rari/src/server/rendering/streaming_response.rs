@@ -1,9 +1,11 @@
-use axum::body::Body;
-use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
-use futures::{Stream, StreamExt};
 use std::pin::Pin;
 
+use axum::{
+    body::Body,
+    http::StatusCode,
+    response::{IntoResponse, Response},
+};
+use futures::{Stream, StreamExt};
 use rari_error::RariError;
 
 pub struct StreamingHtmlResponse {
@@ -16,20 +18,14 @@ impl StreamingHtmlResponse {
     where
         S: Stream<Item = Result<Vec<u8>, RariError>> + Send + 'static,
     {
-        Self {
-            stream: Box::pin(stream),
-            status_code: StatusCode::OK,
-        }
+        Self { stream: Box::pin(stream), status_code: StatusCode::OK }
     }
 
     pub fn with_status<S>(stream: S, status_code: StatusCode) -> Self
     where
         S: Stream<Item = Result<Vec<u8>, RariError>> + Send + 'static,
     {
-        Self {
-            stream: Box::pin(stream),
-            status_code,
-        }
+        Self { stream: Box::pin(stream), status_code }
     }
 }
 
@@ -99,9 +95,10 @@ impl IntoResponse for StreamingHtmlResponse {
     clippy::get_unwrap
 )]
 mod tests {
-    use super::*;
     use async_stream::stream;
     use axum::body::to_bytes;
+
+    use super::*;
 
     #[tokio::test]
     async fn test_streaming_response_basic() {
@@ -116,26 +113,14 @@ mod tests {
 
         assert_eq!(response.status(), 200);
 
-        assert_eq!(
-            response.headers().get("content-type").unwrap(),
-            "text/html; charset=utf-8"
-        );
-        assert_eq!(
-            response.headers().get("transfer-encoding").unwrap(),
-            "chunked"
-        );
-        assert_eq!(
-            response.headers().get("x-content-type-options").unwrap(),
-            "nosniff"
-        );
+        assert_eq!(response.headers().get("content-type").unwrap(), "text/html; charset=utf-8");
+        assert_eq!(response.headers().get("transfer-encoding").unwrap(), "chunked");
+        assert_eq!(response.headers().get("x-content-type-options").unwrap(), "nosniff");
         assert_eq!(response.headers().get("cache-control").unwrap(), "no-cache");
 
         let body_bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let body_str = String::from_utf8(body_bytes.to_vec()).unwrap();
-        assert_eq!(
-            body_str,
-            "<!DOCTYPE html><html><body><h1>Hello</h1></body></html>"
-        );
+        assert_eq!(body_str, "<!DOCTYPE html><html><body><h1>Hello</h1></body></html>");
     }
 
     #[tokio::test]

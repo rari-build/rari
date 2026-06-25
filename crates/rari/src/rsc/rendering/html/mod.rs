@@ -1,22 +1,30 @@
 #![allow(clippy::format_collect, clippy::unused_async_trait_impl)]
 
-use crate::rsc::RscElement;
-use crate::rsc::flight::escape::unescape_rsc_value;
-use crate::rsc::rendering::streaming::{RscChunkType, RscStreamChunk};
-use crate::runtime::JsExecutionRuntime;
-use crate::server::config::Config;
-use crate::server::routing::app_router::AppRouteMatch;
+use std::{
+    fmt::Write,
+    sync::{
+        Arc,
+        atomic::{AtomicU32, Ordering},
+    },
+};
+
 use cow_utils::CowUtils;
 use rari_error::{RariError, StreamingError};
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde_json::Value as JsonValue;
-use std::fmt::Write;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicU32, Ordering};
 use tracing::error;
 
 #[cfg(test)]
 use crate::server::config::Mode;
+use crate::{
+    rsc::{
+        RscElement,
+        flight::escape::unescape_rsc_value,
+        rendering::streaming::{RscChunkType, RscStreamChunk},
+    },
+    runtime::JsExecutionRuntime,
+    server::{config::Config, routing::app_router::AppRouteMatch},
+};
 
 const SELF_CLOSING_TAGS: &[&str] = &[
     "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source",
@@ -42,12 +50,10 @@ fn is_valid_attribute_name(name: &str) -> bool {
         return false;
     }
 
-    if name.chars().any(|c| {
-        matches!(
-            c,
-            ' ' | '\t' | '\n' | '\r' | '"' | '\'' | '=' | '<' | '>' | '/' | '\\'
-        )
-    }) {
+    if name
+        .chars()
+        .any(|c| matches!(c, ' ' | '\t' | '\n' | '\r' | '"' | '\'' | '=' | '<' | '>' | '/' | '\\'))
+    {
         return false;
     }
 
@@ -153,17 +159,15 @@ fn serialize_style_object(style_obj: &serde_json::Map<String, serde_json::Value>
     let style_parts: Vec<String> = style_obj
         .iter()
         .filter_map(|(k, v)| {
-            let kebab_key = k
-                .chars()
-                .fold(String::with_capacity(k.len() + 4), |mut acc, c| {
-                    if c.is_ascii_uppercase() {
-                        acc.push('-');
-                        acc.push(c.to_ascii_lowercase());
-                    } else {
-                        acc.push(c);
-                    }
-                    acc
-                });
+            let kebab_key = k.chars().fold(String::with_capacity(k.len() + 4), |mut acc, c| {
+                if c.is_ascii_uppercase() {
+                    acc.push('-');
+                    acc.push(c.to_ascii_lowercase());
+                } else {
+                    acc.push(c);
+                }
+                acc
+            });
 
             let value_str = if let Some(s) = v.as_str() {
                 Some(s.to_owned())
@@ -227,9 +231,7 @@ pub struct BoundaryIdGenerator {
 
 impl BoundaryIdGenerator {
     pub fn new() -> Self {
-        Self {
-            counter: AtomicU32::new(0),
-        }
+        Self { counter: AtomicU32::new(0) }
     }
 
     pub fn next(&self) -> String {
@@ -258,10 +260,7 @@ pub struct RscHtmlRenderer {
 
 impl RscHtmlRenderer {
     pub fn new(runtime: Arc<JsExecutionRuntime>) -> Self {
-        Self {
-            runtime,
-            template_cache: parking_lot::Mutex::new(None),
-        }
+        Self { runtime, template_cache: parking_lot::Mutex::new(None) }
     }
 
     fn string_looks_like_rsc(s: &str) -> bool {
@@ -302,10 +301,7 @@ impl RscHtmlRenderer {
             props_json = props_json,
         );
 
-        let result = self
-            .runtime
-            .execute_script("ssr_render_client".to_string(), script)
-            .await?;
+        let result = self.runtime.execute_script("ssr_render_client".to_string(), script).await?;
 
         match result.as_str() {
             Some(html) if !html.is_empty() => Ok(html.to_string()),
@@ -316,15 +312,9 @@ impl RscHtmlRenderer {
     fn extract_script_tags(template: &str) -> String {
         use regex::Regex;
 
-        #[expect(
-            clippy::unwrap_used,
-            reason = "Hardcoded regex pattern is guaranteed to be valid"
-        )]
+        #[expect(clippy::unwrap_used, reason = "Hardcoded regex pattern is guaranteed to be valid")]
         let script_regex = Regex::new(r"(?s)<script[^>]*>.*?</script>|<script[^>]*/>").unwrap();
-        #[expect(
-            clippy::unwrap_used,
-            reason = "Hardcoded regex pattern is guaranteed to be valid"
-        )]
+        #[expect(clippy::unwrap_used, reason = "Hardcoded regex pattern is guaranteed to be valid")]
         let link_regex = Regex::new(r"<link[^>]*/?>").unwrap();
 
         let mut tags = Vec::new();
@@ -441,19 +431,9 @@ impl RscHtmlRenderer {
 
     async fn read_template_file(&self, is_dev_mode: bool) -> Result<String, RariError> {
         let possible_paths = if is_dev_mode {
-            vec![
-                "index.html",
-                "public/index.html",
-                "dist/index.html",
-                "build/index.html",
-            ]
+            vec!["index.html", "public/index.html", "dist/index.html", "build/index.html"]
         } else {
-            vec![
-                "dist/index.html",
-                "build/index.html",
-                "index.html",
-                "public/index.html",
-            ]
+            vec!["dist/index.html", "build/index.html", "index.html", "public/index.html"]
         };
 
         for path in possible_paths {
@@ -598,9 +578,7 @@ impl RscHtmlRenderer {
 
     fn parse_rsc_line(&self, line: &str) -> Result<RscRow, RariError> {
         let colon_pos = line.find(':').ok_or_else(|| {
-            RariError::internal(format!(
-                "Invalid RSC line format: missing colon in '{line}'"
-            ))
+            RariError::internal(format!("Invalid RSC line format: missing colon in '{line}'"))
         })?;
 
         let (id_str, data_str) = line.split_at(colon_pos);
@@ -611,11 +589,8 @@ impl RscHtmlRenderer {
 
         if let Some(json_str) = data_str.strip_prefix('I') {
             if let Ok(import_data) = serde_json::from_str::<serde_json::Value>(json_str) {
-                let module_path = import_data
-                    .get("id")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string();
+                let module_path =
+                    import_data.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
                 let export_name = import_data
                     .get("name")
                     .and_then(|v| v.as_str())
@@ -623,16 +598,10 @@ impl RscHtmlRenderer {
                     .to_string();
                 return Ok(RscRow {
                     id,
-                    data: RscElement::ModuleImport {
-                        module_path,
-                        export_name,
-                    },
+                    data: RscElement::ModuleImport { module_path, export_name },
                 });
             }
-            return Ok(RscRow {
-                id,
-                data: RscElement::Text(data_str.to_string()),
-            });
+            return Ok(RscRow { id, data: RscElement::Text(data_str.to_string()) });
         }
 
         let json_value: JsonValue = serde_json::from_str(data_str)
@@ -659,9 +628,7 @@ impl RscHtmlRenderer {
 
             JsonValue::Array(arr) => {
                 if arr.is_empty() {
-                    return Err(RariError::internal(
-                        "Empty array in RSC element".to_string(),
-                    ));
+                    return Err(RariError::internal("Empty array in RSC element".to_string()));
                 }
 
                 if let Some(JsonValue::String(marker)) = arr.first()
@@ -682,9 +649,9 @@ impl RscHtmlRenderer {
             JsonValue::Bool(b) => Ok(RscElement::Text(b.to_string())),
             JsonValue::Null => Ok(RscElement::Text(String::new())),
 
-            JsonValue::Object(_) => Ok(RscElement::Text(
-                serde_json::to_string(value).unwrap_or_default(),
-            )),
+            JsonValue::Object(_) => {
+                Ok(RscElement::Text(serde_json::to_string(value).unwrap_or_default()))
+            }
         }
     }
 
@@ -718,8 +685,7 @@ impl RscHtmlRenderer {
         rsc_wire_format: &str,
         config: &Config,
     ) -> Result<String, RariError> {
-        self.render_to_html_inner(rsc_wire_format, config, None)
-            .await
+        self.render_to_html_inner(rsc_wire_format, config, None).await
     }
 
     pub async fn render_to_html_for_route(
@@ -728,8 +694,7 @@ impl RscHtmlRenderer {
         config: &Config,
         route_match: &AppRouteMatch,
     ) -> Result<String, RariError> {
-        self.render_to_html_inner(rsc_wire_format, config, Some(route_match))
-            .await
+        self.render_to_html_inner(rsc_wire_format, config, Some(route_match)).await
     }
 
     async fn render_to_html_inner(
@@ -763,19 +728,14 @@ impl RscHtmlRenderer {
                 .map_err(|e| RariError::internal(format!("Failed to render RSC to HTML: {e}")))?;
 
             let is_complete_document = html_content.trim_start().starts_with("<!DOCTYPE")
-                || html_content
-                    .trim_start()
-                    .cow_to_lowercase()
-                    .starts_with("<html");
+                || html_content.trim_start().cow_to_lowercase().starts_with("<html");
 
             if is_complete_document {
                 let script_tags = if is_dev_mode {
                     String::new()
                 } else {
-                    let template = self
-                        .load_template(cache_template, is_dev_mode)
-                        .await
-                        .map_err(|e| {
+                    let template =
+                        self.load_template(cache_template, is_dev_mode).await.map_err(|e| {
                             RariError::internal(format!("Failed to load HTML template: {e}"))
                         })?;
                     Self::extract_script_tags(&template)
@@ -806,11 +766,9 @@ impl RscHtmlRenderer {
 
             let template = Self::inject_css_links(&template, &css_links);
 
-            let final_html = self
-                .inject_into_template(&html_content, &template)
-                .map_err(|e| {
-                    RariError::internal(format!("Failed to inject HTML into template: {e}"))
-                })?;
+            let final_html = self.inject_into_template(&html_content, &template).map_err(|e| {
+                RariError::internal(format!("Failed to inject HTML into template: {e}"))
+            })?;
 
             Ok::<String, RariError>(final_html)
         };
@@ -871,9 +829,7 @@ impl RscHtmlRenderer {
             u32::from_str_radix(stripped, 16)
                 .map_err(|_| RariError::internal(format!("Invalid row reference: {ref_str}")))
         } else {
-            Err(RariError::internal(format!(
-                "Invalid reference format: {ref_str}"
-            )))
+            Err(RariError::internal(format!("Invalid reference format: {ref_str}")))
         }
     }
 
@@ -944,8 +900,7 @@ impl RscHtmlRenderer {
                     let props_value = serde_json::Value::Object(
                         props.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
                     );
-                    self.render_component_to_html(tag, &props_value, row_map, row_cache)
-                        .await
+                    self.render_component_to_html(tag, &props_value, row_map, row_cache).await
                 }
 
                 RscElement::Reference(ref_str) => {
@@ -964,12 +919,7 @@ impl RscHtmlRenderer {
                     Ok(String::new())
                 }
 
-                RscElement::Suspense {
-                    fallback_ref,
-                    children_ref,
-                    boundary_id,
-                    props: _,
-                } => {
+                RscElement::Suspense { fallback_ref, children_ref, boundary_id, props: _ } => {
                     if let Ok(row_id) = Self::parse_reference(children_ref) {
                         let html = self.render_row(row_id, row_map, row_cache).await?;
                         if !html.is_empty() {
@@ -1020,10 +970,8 @@ impl RscHtmlRenderer {
                     && let Some(stripped) =
                         tag.strip_prefix("$L").or_else(|| tag.strip_prefix("$@"))
                     && let Ok(module_row_id) = u32::from_str_radix(stripped, 16)
-                    && let Some(RscElement::ModuleImport {
-                        module_path,
-                        export_name,
-                    }) = row_map.get(&module_row_id).copied()
+                    && let Some(RscElement::ModuleImport { module_path, export_name }) =
+                        row_map.get(&module_row_id).copied()
                 {
                     let props_json =
                         serde_json::to_string(&unescape_rsc_value(props)).unwrap_or_default();
@@ -1039,9 +987,8 @@ impl RscHtmlRenderer {
                 if let Some(props_obj) = props.as_object()
                     && let Some(children) = props_obj.get("children")
                 {
-                    let children_html = self
-                        .render_json_to_html(children, row_map, row_cache)
-                        .await?;
+                    let children_html =
+                        self.render_json_to_html(children, row_map, row_cache).await?;
                     if !children_html.is_empty() {
                         return Ok(children_html);
                     }
@@ -1063,10 +1010,7 @@ impl RscHtmlRenderer {
                 return Ok(String::new());
             }
 
-            if !tag
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ':')
-            {
+            if !tag.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ':') {
                 return Err(RariError::internal(format!("Invalid tag name: {tag}")));
             }
 
@@ -1144,9 +1088,7 @@ impl RscHtmlRenderer {
             if let Some(props_obj) = props.as_object()
                 && let Some(children) = props_obj.get("children")
             {
-                let children_html = self
-                    .render_json_to_html(children, row_map, row_cache)
-                    .await?;
+                let children_html = self.render_json_to_html(children, row_map, row_cache).await?;
                 html.push_str(&children_html);
             }
 
@@ -1197,9 +1139,7 @@ impl RscHtmlRenderer {
                     && arr[0].as_str() == Some("$")
                     && let (Some(tag), Some(props)) = (arr[1].as_str(), arr.get(3))
                 {
-                    return self
-                        .render_component_to_html(tag, props, row_map, row_cache)
-                        .await;
+                    return self.render_component_to_html(tag, props, row_map, row_cache).await;
                 }
 
                 let mut html = String::with_capacity(arr.len() * 64);
@@ -1350,18 +1290,14 @@ impl RscToHtmlConverter {
                     && let Some(i_data) = parts[1].trim().strip_prefix('I')
                     && let Ok(import_data) = serde_json::from_str::<serde_json::Value>(i_data)
                 {
-                    let module_path = import_data
-                        .get("id")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string();
+                    let module_path =
+                        import_data.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
                     let export_name = import_data
                         .get("name")
                         .and_then(|v| v.as_str())
                         .unwrap_or("default")
                         .to_string();
-                    self.module_imports
-                        .insert(row_id, (module_path, export_name));
+                    self.module_imports.insert(row_id, (module_path, export_name));
                 }
 
                 Ok(Vec::new())
@@ -1452,8 +1388,7 @@ impl RscToHtmlConverter {
                         }
                     ]);
                     let placeholder_row = format!("{:x}:{}\n", chunk.row_id, placeholder_payload);
-                    self.rsc_wire_format
-                        .push(placeholder_row.trim().to_string());
+                    self.rsc_wire_format.push(placeholder_row.trim().to_string());
                 }
 
                 let fallback_html = self.generate_fallback_error_html();
@@ -1608,18 +1543,14 @@ impl RscToHtmlConverter {
 
         rows_with_ids.sort_by_key(|(id, _)| if *id == 0 { u32::MAX - 1 } else { *id });
 
-        let mut rsc_payload = rows_with_ids
-            .iter()
-            .map(|(_, row)| format!("{row}\n"))
-            .collect::<String>();
+        let mut rsc_payload =
+            rows_with_ids.iter().map(|(_, row)| format!("{row}\n")).collect::<String>();
 
         let has_row_0 = rows_with_ids.iter().any(|(id, _)| *id == 0);
 
         if !has_row_0
-            && let Some((max_id, _)) = rows_with_ids
-                .iter()
-                .filter(|(id, _)| *id != u32::MAX)
-                .max_by_key(|(id, _)| *id)
+            && let Some((max_id, _)) =
+                rows_with_ids.iter().filter(|(id, _)| *id != u32::MAX).max_by_key(|(id, _)| *id)
             && *max_id > 0
         {
             let row_0 = format!("0:\"${max_id:x}\"\n");
@@ -1678,18 +1609,14 @@ if (typeof window !== 'undefined') {{
 
         if let Some(i_data) = json_str.strip_prefix('I') {
             if let Ok(import_data) = serde_json::from_str::<serde_json::Value>(i_data) {
-                let module_path = import_data
-                    .get("id")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string();
+                let module_path =
+                    import_data.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
                 let export_name = import_data
                     .get("name")
                     .and_then(|v| v.as_str())
                     .unwrap_or("default")
                     .to_string();
-                self.module_imports
-                    .insert(row_id, (module_path, export_name));
+                self.module_imports.insert(row_id, (module_path, export_name));
             }
             return Ok(Vec::new());
         }
@@ -1792,9 +1719,7 @@ if (typeof window !== 'undefined') {{
                     }
 
                     if is_client_component {
-                        return self
-                            .render_client_component_placeholder(element_type, props)
-                            .await;
+                        return self.render_client_component_placeholder(element_type, props).await;
                     }
 
                     return self.render_html_element(element_type, props).await;
@@ -1828,9 +1753,7 @@ if (typeof window !== 'undefined') {{
                     }
 
                     if is_client_component {
-                        return self
-                            .render_client_component_placeholder(type_str, props_obj)
-                            .await;
+                        return self.render_client_component_placeholder(type_str, props_obj).await;
                     }
 
                     return self.render_html_element(type_str, props_obj).await;
@@ -1853,9 +1776,8 @@ if (typeof window !== 'undefined') {{
             props.is_some_and(|p| p.values().any(RscHtmlRenderer::value_looks_like_rsc));
 
         if !props_are_rsc
-            && let Some(stripped) = component_ref
-                .strip_prefix("$L")
-                .or_else(|| component_ref.strip_prefix("$@"))
+            && let Some(stripped) =
+                component_ref.strip_prefix("$L").or_else(|| component_ref.strip_prefix("$@"))
             && let Ok(module_row_id) = u32::from_str_radix(stripped, 16)
             && let Some((module_path, export_name)) = self.module_imports.get(&module_row_id)
         {
@@ -1889,10 +1811,8 @@ if (typeof window !== 'undefined') {{
         props: Option<&serde_json::Map<String, serde_json::Value>>,
     ) -> Result<String, RariError> {
         if let Some(props) = props {
-            let rari_boundary_id = props
-                .get("~boundaryId")
-                .and_then(|v| v.as_str())
-                .unwrap_or("unknown");
+            let rari_boundary_id =
+                props.get("~boundaryId").and_then(|v| v.as_str()).unwrap_or("unknown");
 
             let (react_boundary_id, is_duplicate) = {
                 let map = self.rari_to_react_boundary_map.lock();
@@ -1961,10 +1881,7 @@ if (typeof window !== 'undefined') {{
             return self.render_suspense_boundary(tag, props).await;
         }
 
-        if !tag
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ':')
-        {
+        if !tag.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ':') {
             return Err(RariError::internal(format!("Invalid tag name: {tag}")));
         }
 
@@ -2012,13 +1929,8 @@ if (typeof window !== 'undefined') {{
                         }
                     } else {
                         #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
-                        write!(
-                            html,
-                            " {}=\"{}\"",
-                            attr_name,
-                            if b { "true" } else { "false" }
-                        )
-                        .unwrap();
+                        write!(html, " {}=\"{}\"", attr_name, if b { "true" } else { "false" })
+                            .unwrap();
                     }
                     continue;
                 }
@@ -2108,10 +2020,8 @@ if (typeof window !== 'undefined') {{
         };
 
         let dom_swap_html = if let Some(ref react_id) = react_boundary_id {
-            let content_id = format!(
-                "S:{}",
-                self.content_id_counter.fetch_add(1, Ordering::SeqCst)
-            );
+            let content_id =
+                format!("S:{}", self.content_id_counter.fetch_add(1, Ordering::SeqCst));
 
             let content_json = parts[1];
             let (rendered_html, render_successful) =
@@ -2167,28 +2077,17 @@ if (typeof window !== 'undefined') {{
         let error_data = match serde_json::from_str::<serde_json::Value>(json_part) {
             Ok(data) => data,
             Err(e) => {
-                error!(
-                    "Failed to parse error data from stream, using fallback: {}",
-                    e
-                );
+                error!("Failed to parse error data from stream, using fallback: {}", e);
                 return Ok(self.generate_fallback_error_html());
             }
         };
 
-        let rari_boundary_id = error_data["boundary_id"]
-            .as_str()
-            .unwrap_or("unknown")
-            .to_string();
-        let error_message = error_data["error"]
-            .as_str()
-            .unwrap_or("Error loading content")
-            .to_string();
+        let rari_boundary_id = error_data["boundary_id"].as_str().unwrap_or("unknown").to_string();
+        let error_message =
+            error_data["error"].as_str().unwrap_or("Error loading content").to_string();
 
-        let react_boundary_id = self
-            .rari_to_react_boundary_map
-            .lock()
-            .get(&rari_boundary_id)
-            .cloned();
+        let react_boundary_id =
+            self.rari_to_react_boundary_map.lock().get(&rari_boundary_id).cloned();
 
         if let Some(react_boundary_id) = react_boundary_id {
             let error_html = format!(
@@ -2330,10 +2229,7 @@ mod tests {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
         let renderer = RscHtmlRenderer::new(runtime);
 
-        let arr = vec![
-            JsonValue::String("$".to_string()),
-            JsonValue::String("div".to_string()),
-        ];
+        let arr = vec![JsonValue::String("$".to_string()), JsonValue::String("div".to_string())];
 
         let result = renderer.parse_react_element(&arr);
         assert!(result.is_err());
@@ -2425,10 +2321,7 @@ mod tests {
         let renderer = RscHtmlRenderer::new(runtime);
 
         let mut props = serde_json::Map::new();
-        props.insert(
-            "children".to_string(),
-            JsonValue::String("Hello".to_string()),
-        );
+        props.insert("children".to_string(), JsonValue::String("Hello".to_string()));
 
         let value = JsonValue::Array(vec![
             JsonValue::String("$".to_string()),
@@ -2487,27 +2380,14 @@ mod tests {
         let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
 
         let html_result = renderer.render_rsc_to_html_string(&rows).await;
-        assert!(
-            html_result.is_ok(),
-            "Failed to render HTML: {:?}",
-            html_result.err()
-        );
+        assert!(html_result.is_ok(), "Failed to render HTML: {:?}", html_result.err());
 
         let html = html_result.unwrap();
 
         assert!(html.contains("<div"), "HTML should contain opening div tag");
-        assert!(
-            html.contains("class=\"container\""),
-            "HTML should have class attribute"
-        );
-        assert!(
-            html.contains("Hello World"),
-            "HTML should contain the text content"
-        );
-        assert!(
-            html.contains("</div>"),
-            "HTML should contain closing div tag"
-        );
+        assert!(html.contains("class=\"container\""), "HTML should have class attribute");
+        assert!(html.contains("Hello World"), "HTML should contain the text content");
+        assert!(html.contains("</div>"), "HTML should contain closing div tag");
     }
 
     #[tokio::test]
@@ -2538,10 +2418,7 @@ mod tests {
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
         assert!(html.contains("&lt;script&gt;"), "Should escape < and >");
-        assert!(
-            !html.contains("<script>alert"),
-            "Should not contain unescaped script tag"
-        );
+        assert!(!html.contains("<script>alert"), "Should not contain unescaped script tag");
     }
 
     #[tokio::test]
@@ -2555,14 +2432,8 @@ mod tests {
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
         assert!(html.contains("type=\"text\""), "Should have type attribute");
-        assert!(
-            html.contains("class=\"form-control\""),
-            "className should be converted to class"
-        );
-        assert!(
-            html.contains("placeholder=\"Enter text\""),
-            "Should have placeholder attribute"
-        );
+        assert!(html.contains("class=\"form-control\""), "className should be converted to class");
+        assert!(html.contains("placeholder=\"Enter text\""), "Should have placeholder attribute");
         assert!(html.contains("<input"), "Should be an input tag");
         assert!(html.contains("/>"), "Input should be self-closing");
     }
@@ -2740,10 +2611,7 @@ mod tests {
 
         let html = result.unwrap();
 
-        assert!(
-            html.contains("Hello World"),
-            "Should contain rendered content"
-        );
+        assert!(html.contains("Hello World"), "Should contain rendered content");
         assert!(html.contains("<!DOCTYPE html>"), "Should have DOCTYPE");
         assert!(html.contains(r#"<div id="root">"#), "Should have root div");
         assert!(html.contains("</html>"), "Should be complete HTML document");
@@ -2765,10 +2633,7 @@ mod tests {
         let html = result.unwrap();
 
         assert!(html.contains("Title"), "Should contain title text");
-        assert!(
-            html.contains("class=\"container\""),
-            "Should have container class"
-        );
+        assert!(html.contains("class=\"container\""), "Should have container class");
         assert!(html.contains("<h1"), "Should have h1 tag");
     }
 
@@ -2816,10 +2681,7 @@ mod tests {
 
         let html = result.unwrap();
 
-        assert!(
-            html.contains("<!DOCTYPE html>"),
-            "Should have DOCTYPE in fallback"
-        );
+        assert!(html.contains("<!DOCTYPE html>"), "Should have DOCTYPE in fallback");
         assert!(
             html.contains(r#"<div id="root"></div>"#),
             "Should have empty root div in fallback"
@@ -2843,10 +2705,7 @@ mod tests {
         assert!(html.contains("<html"), "Should have html tag");
         assert!(html.contains("<head>"), "Should have head tag");
         assert!(html.contains("<body>"), "Should have body tag");
-        assert!(
-            html.contains("/@vite/client"),
-            "Should have Vite client script in dev mode"
-        );
+        assert!(html.contains("/@vite/client"), "Should have Vite client script in dev mode");
     }
 
     #[tokio::test]
@@ -2886,10 +2745,7 @@ mod tests {
         assert!(result.is_err(), "Should fail when SSR is disabled");
 
         let err_msg = format!("{:?}", result.unwrap_err());
-        assert!(
-            err_msg.contains("disabled"),
-            "Error should mention SSR is disabled"
-        );
+        assert!(err_msg.contains("disabled"), "Error should mention SSR is disabled");
     }
 
     #[tokio::test]
@@ -2920,10 +2776,7 @@ mod tests {
         assert!(dev_result.is_ok());
         let dev_html = dev_result.unwrap();
 
-        assert!(
-            dev_html.contains("/@vite/client"),
-            "Dev mode should have Vite client"
-        );
+        assert!(dev_html.contains("/@vite/client"), "Dev mode should have Vite client");
 
         renderer.clear_template_cache();
     }
@@ -2936,10 +2789,7 @@ mod tests {
         let mut props = serde_json::Map::new();
         props.insert("fallback".to_string(), JsonValue::String("$L1".to_string()));
         props.insert("children".to_string(), JsonValue::String("$L2".to_string()));
-        props.insert(
-            "~boundaryId".to_string(),
-            JsonValue::String("suspense_123".to_string()),
-        );
+        props.insert("~boundaryId".to_string(), JsonValue::String("suspense_123".to_string()));
 
         let value = JsonValue::Array(vec![
             JsonValue::String("$".to_string()),
@@ -2957,10 +2807,7 @@ mod tests {
             assert!(props.contains_key("fallback"));
             assert!(props.contains_key("children"));
             assert!(props.contains_key("~boundaryId"));
-            assert_eq!(
-                props.get("~boundaryId").unwrap().as_str().unwrap(),
-                "suspense_123"
-            );
+            assert_eq!(props.get("~boundaryId").unwrap().as_str().unwrap(), "suspense_123");
         } else {
             panic!("Expected Component element");
         }
@@ -2986,31 +2833,16 @@ mod tests {
             }
         ]);
 
-        let html = converter
-            .rsc_element_to_html(&suspense_element)
-            .await
-            .unwrap();
+        let html = converter.rsc_element_to_html(&suspense_element).await.unwrap();
 
-        assert!(
-            html.contains("Loading..."),
-            "Should render fallback content"
-        );
-        assert!(
-            html.contains("class=\"loading\""),
-            "Should have loading class"
-        );
-        assert!(
-            html.contains("<!--$?-->"),
-            "Should have React boundary start marker"
-        );
+        assert!(html.contains("Loading..."), "Should render fallback content");
+        assert!(html.contains("class=\"loading\""), "Should have loading class");
+        assert!(html.contains("<!--$?-->"), "Should have React boundary start marker");
         assert!(
             html.contains("<template id=\"B:0\">"),
             "Should have React template with boundary ID B:0"
         );
-        assert!(
-            html.contains("<!--/$-->"),
-            "Should have React boundary end marker"
-        );
+        assert!(html.contains("<!--/$-->"), "Should have React boundary end marker");
     }
 
     #[tokio::test]
@@ -3019,13 +2851,8 @@ mod tests {
         let renderer = Arc::new(RscHtmlRenderer::new(runtime));
         let mut converter = RscToHtmlConverter::new(renderer);
 
-        converter
-            .row_cache
-            .insert(1, r#"<div class="loading">Loading...</div>"#.to_string());
-        converter.row_cache.insert(
-            2,
-            r#"<div class="content">Actual Content</div>"#.to_string(),
-        );
+        converter.row_cache.insert(1, r#"<div class="loading">Loading...</div>"#.to_string());
+        converter.row_cache.insert(2, r#"<div class="content">Actual Content</div>"#.to_string());
 
         let suspense_element = serde_json::json!([
             "$",
@@ -3038,35 +2865,20 @@ mod tests {
             }
         ]);
 
-        let html = converter
-            .rsc_element_to_html(&suspense_element)
-            .await
-            .unwrap();
+        let html = converter.rsc_element_to_html(&suspense_element).await.unwrap();
 
-        assert!(
-            html.contains("Actual Content"),
-            "Should render resolved children"
-        );
-        assert!(
-            html.contains("class=\"content\""),
-            "Should have content class"
-        );
+        assert!(html.contains("Actual Content"), "Should render resolved children");
+        assert!(html.contains("class=\"content\""), "Should have content class");
         assert!(
             !html.contains("Loading..."),
             "Should not render fallback when children are resolved"
         );
-        assert!(
-            html.contains("<!--$?-->"),
-            "Should have React boundary start marker"
-        );
+        assert!(html.contains("<!--$?-->"), "Should have React boundary start marker");
         assert!(
             html.contains("<template id=\"B:0\">"),
             "Should have React template with boundary ID"
         );
-        assert!(
-            html.contains("<!--/$-->"),
-            "Should have React boundary end marker"
-        );
+        assert!(html.contains("<!--/$-->"), "Should have React boundary end marker");
     }
 
     #[tokio::test]
@@ -3075,15 +2887,9 @@ mod tests {
         let renderer = Arc::new(RscHtmlRenderer::new(runtime));
         let mut converter = RscToHtmlConverter::new(renderer);
 
-        converter
-            .row_cache
-            .insert(1, r#"<div>Outer Loading</div>"#.to_string());
-        converter
-            .row_cache
-            .insert(2, r#"<div>Inner Loading</div>"#.to_string());
-        converter
-            .row_cache
-            .insert(3, r#"<div>Inner Content</div>"#.to_string());
+        converter.row_cache.insert(1, r#"<div>Outer Loading</div>"#.to_string());
+        converter.row_cache.insert(2, r#"<div>Inner Loading</div>"#.to_string());
+        converter.row_cache.insert(3, r#"<div>Inner Content</div>"#.to_string());
 
         let inner_suspense = serde_json::json!([
             "$",
@@ -3095,10 +2901,7 @@ mod tests {
                 "~boundaryId": "inner"
             }
         ]);
-        let inner_html = converter
-            .rsc_element_to_html(&inner_suspense)
-            .await
-            .unwrap();
+        let inner_html = converter.rsc_element_to_html(&inner_suspense).await.unwrap();
         converter.row_cache.insert(4, inner_html);
 
         let outer_suspense = serde_json::json!([
@@ -3111,39 +2914,15 @@ mod tests {
                 "~boundaryId": "outer"
             }
         ]);
-        let html = converter
-            .rsc_element_to_html(&outer_suspense)
-            .await
-            .unwrap();
+        let html = converter.rsc_element_to_html(&outer_suspense).await.unwrap();
 
-        assert!(
-            html.contains("Inner Content"),
-            "Should render inner content"
-        );
-        assert!(
-            !html.contains("Inner Loading"),
-            "Should not render inner fallback"
-        );
-        assert!(
-            !html.contains("Outer Loading"),
-            "Should not render outer fallback"
-        );
-        assert!(
-            html.contains("<!--$?-->"),
-            "Should have React boundary markers"
-        );
-        assert!(
-            html.contains("<template id=\"B:0\">"),
-            "Should have inner boundary ID B:0"
-        );
-        assert!(
-            html.contains("<template id=\"B:1\">"),
-            "Should have outer boundary ID B:1"
-        );
-        assert!(
-            html.contains("<!--/$-->"),
-            "Should have React boundary end markers"
-        );
+        assert!(html.contains("Inner Content"), "Should render inner content");
+        assert!(!html.contains("Inner Loading"), "Should not render inner fallback");
+        assert!(!html.contains("Outer Loading"), "Should not render outer fallback");
+        assert!(html.contains("<!--$?-->"), "Should have React boundary markers");
+        assert!(html.contains("<template id=\"B:0\">"), "Should have inner boundary ID B:0");
+        assert!(html.contains("<template id=\"B:1\">"), "Should have outer boundary ID B:1");
+        assert!(html.contains("<!--/$-->"), "Should have React boundary end markers");
     }
 
     #[tokio::test]
@@ -3162,27 +2941,15 @@ mod tests {
             }
         ]);
 
-        let html = converter
-            .rsc_element_to_html(&suspense_element)
-            .await
-            .unwrap();
+        let html = converter.rsc_element_to_html(&suspense_element).await.unwrap();
 
-        assert!(
-            html.contains("<!--$?-->"),
-            "Should have React boundary start marker"
-        );
+        assert!(html.contains("<!--$?-->"), "Should have React boundary start marker");
         assert!(
             html.contains("<template id=\"B:0\">"),
             "Should have React template with boundary ID"
         );
-        assert!(
-            html.contains("<!--/$-->"),
-            "Should have React boundary end marker"
-        );
-        assert!(
-            html.contains("rari-loading"),
-            "Should have default loading fallback"
-        );
+        assert!(html.contains("<!--/$-->"), "Should have React boundary end marker");
+        assert!(html.contains("rari-loading"), "Should have default loading fallback");
     }
 
     #[tokio::test]
@@ -3191,9 +2958,7 @@ mod tests {
         let renderer = Arc::new(RscHtmlRenderer::new(runtime));
         let mut converter = RscToHtmlConverter::new(renderer);
 
-        converter
-            .row_cache
-            .insert(1, r#"<div>Loading</div>"#.to_string());
+        converter.row_cache.insert(1, r#"<div>Loading</div>"#.to_string());
 
         let suspense_element = serde_json::json!([
             "$",
@@ -3206,31 +2971,16 @@ mod tests {
             }
         ]);
 
-        let html = converter
-            .rsc_element_to_html(&suspense_element)
-            .await
-            .unwrap();
+        let html = converter.rsc_element_to_html(&suspense_element).await.unwrap();
 
-        assert!(
-            html.contains("Inline Content"),
-            "Should render inline children"
-        );
-        assert!(
-            !html.contains("Loading"),
-            "Should not render fallback when children are inline"
-        );
-        assert!(
-            html.contains("<!--$?-->"),
-            "Should have React boundary start marker"
-        );
+        assert!(html.contains("Inline Content"), "Should render inline children");
+        assert!(!html.contains("Loading"), "Should not render fallback when children are inline");
+        assert!(html.contains("<!--$?-->"), "Should have React boundary start marker");
         assert!(
             html.contains("<template id=\"B:0\">"),
             "Should have React template with boundary ID"
         );
-        assert!(
-            html.contains("<!--/$-->"),
-            "Should have React boundary end marker"
-        );
+        assert!(html.contains("<!--/$-->"), "Should have React boundary end marker");
     }
 
     #[tokio::test]
@@ -3261,10 +3011,7 @@ mod tests {
         let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
-        assert!(
-            html.contains("Last Content"),
-            "Should render max row ID as root"
-        );
+        assert!(html.contains("Last Content"), "Should render max row ID as root");
         assert!(html.contains("<div"), "Should have div from row 5");
     }
 
@@ -3307,10 +3054,7 @@ mod tests {
 
         assert!(html.contains("Row Zero"), "Should render row 0 as root");
         assert!(html.contains("<div"), "Should have div from row 0");
-        assert!(
-            !html.contains("Row Hundred"),
-            "Should not render row 100 as root"
-        );
+        assert!(!html.contains("Row Hundred"), "Should not render row 100 as root");
     }
 
     #[tokio::test]
@@ -3325,10 +3069,7 @@ mod tests {
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
         assert!(html.contains("<div"), "Should have div from row 0");
-        assert!(
-            html.contains("Child Content"),
-            "Should resolve $L1 reference"
-        );
+        assert!(html.contains("Child Content"), "Should resolve $L1 reference");
         assert!(html.contains("<span"), "Should have span from row 1");
     }
 
@@ -3346,10 +3087,7 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
         assert!(html.contains("<div"), "Should have div from row a (10)");
-        assert!(
-            html.contains("Content from row 10"),
-            "Should resolve $La reference to row 10"
-        );
+        assert!(html.contains("Content from row 10"), "Should resolve $La reference to row 10");
     }
 
     #[tokio::test]
@@ -3369,96 +3107,39 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
 
     #[test]
     fn test_is_valid_attribute_name_valid_names() {
-        assert!(
-            test_is_valid_attribute_name("class"),
-            "class should be valid"
-        );
+        assert!(test_is_valid_attribute_name("class"), "class should be valid");
         assert!(test_is_valid_attribute_name("id"), "id should be valid");
         assert!(test_is_valid_attribute_name("type"), "type should be valid");
         assert!(test_is_valid_attribute_name("href"), "href should be valid");
         assert!(test_is_valid_attribute_name("src"), "src should be valid");
 
-        assert!(
-            test_is_valid_attribute_name("data-id"),
-            "data-id should be valid"
-        );
-        assert!(
-            test_is_valid_attribute_name("data-test-value"),
-            "data-test-value should be valid"
-        );
-        assert!(
-            test_is_valid_attribute_name("data-123"),
-            "data-123 should be valid"
-        );
+        assert!(test_is_valid_attribute_name("data-id"), "data-id should be valid");
+        assert!(test_is_valid_attribute_name("data-test-value"), "data-test-value should be valid");
+        assert!(test_is_valid_attribute_name("data-123"), "data-123 should be valid");
 
-        assert!(
-            test_is_valid_attribute_name("aria-label"),
-            "aria-label should be valid"
-        );
-        assert!(
-            test_is_valid_attribute_name("aria-hidden"),
-            "aria-hidden should be valid"
-        );
+        assert!(test_is_valid_attribute_name("aria-label"), "aria-label should be valid");
+        assert!(test_is_valid_attribute_name("aria-hidden"), "aria-hidden should be valid");
 
-        assert!(
-            test_is_valid_attribute_name("_private"),
-            "_private should be valid"
-        );
-        assert!(
-            test_is_valid_attribute_name("my_attr"),
-            "my_attr should be valid"
-        );
+        assert!(test_is_valid_attribute_name("_private"), "_private should be valid");
+        assert!(test_is_valid_attribute_name("my_attr"), "my_attr should be valid");
 
-        assert!(
-            test_is_valid_attribute_name("xml:lang"),
-            "xml:lang should be valid"
-        );
-        assert!(
-            test_is_valid_attribute_name("xlink:href"),
-            "xlink:href should be valid"
-        );
-        assert!(
-            test_is_valid_attribute_name(":colon-start"),
-            ":colon-start should be valid"
-        );
+        assert!(test_is_valid_attribute_name("xml:lang"), "xml:lang should be valid");
+        assert!(test_is_valid_attribute_name("xlink:href"), "xlink:href should be valid");
+        assert!(test_is_valid_attribute_name(":colon-start"), ":colon-start should be valid");
 
-        assert!(
-            test_is_valid_attribute_name("ng.model"),
-            "ng.model should be valid"
-        );
-        assert!(
-            test_is_valid_attribute_name("v.bind"),
-            "v.bind should be valid"
-        );
+        assert!(test_is_valid_attribute_name("ng.model"), "ng.model should be valid");
+        assert!(test_is_valid_attribute_name("v.bind"), "v.bind should be valid");
 
-        assert!(
-            test_is_valid_attribute_name("中文"),
-            "Chinese characters should be valid"
-        );
-        assert!(
-            test_is_valid_attribute_name("日本語"),
-            "Japanese characters should be valid"
-        );
-        assert!(
-            test_is_valid_attribute_name("한글"),
-            "Korean characters should be valid"
-        );
-        assert!(
-            test_is_valid_attribute_name("data-中文"),
-            "data- with Chinese should be valid"
-        );
-        assert!(
-            test_is_valid_attribute_name("属性名"),
-            "Chinese attribute name should be valid"
-        );
+        assert!(test_is_valid_attribute_name("中文"), "Chinese characters should be valid");
+        assert!(test_is_valid_attribute_name("日本語"), "Japanese characters should be valid");
+        assert!(test_is_valid_attribute_name("한글"), "Korean characters should be valid");
+        assert!(test_is_valid_attribute_name("data-中文"), "data- with Chinese should be valid");
+        assert!(test_is_valid_attribute_name("属性名"), "Chinese attribute name should be valid");
     }
 
     #[test]
     fn test_is_valid_attribute_name_invalid_names() {
-        assert!(
-            !test_is_valid_attribute_name(""),
-            "empty string should be invalid"
-        );
+        assert!(!test_is_valid_attribute_name(""), "empty string should be invalid");
 
         assert!(
             !test_is_valid_attribute_name("1invalid"),
@@ -3472,110 +3153,35 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
             !test_is_valid_attribute_name(".invalid"),
             "starting with period should be invalid"
         );
-        assert!(
-            !test_is_valid_attribute_name("@invalid"),
-            "starting with @ should be invalid"
-        );
-        assert!(
-            !test_is_valid_attribute_name("#invalid"),
-            "starting with # should be invalid"
-        );
+        assert!(!test_is_valid_attribute_name("@invalid"), "starting with @ should be invalid");
+        assert!(!test_is_valid_attribute_name("#invalid"), "starting with # should be invalid");
 
-        assert!(
-            !test_is_valid_attribute_name("on click"),
-            "space should be invalid"
-        );
-        assert!(
-            !test_is_valid_attribute_name("on=click"),
-            "equals sign should be invalid"
-        );
-        assert!(
-            !test_is_valid_attribute_name("on'click"),
-            "single quote should be invalid"
-        );
-        assert!(
-            !test_is_valid_attribute_name("on\"click"),
-            "double quote should be invalid"
-        );
-        assert!(
-            !test_is_valid_attribute_name("on<click"),
-            "less than should be invalid"
-        );
-        assert!(
-            !test_is_valid_attribute_name("on>click"),
-            "greater than should be invalid"
-        );
-        assert!(
-            !test_is_valid_attribute_name("on/click"),
-            "slash should be invalid"
-        );
-        assert!(
-            !test_is_valid_attribute_name("on\\click"),
-            "backslash should be invalid"
-        );
+        assert!(!test_is_valid_attribute_name("on click"), "space should be invalid");
+        assert!(!test_is_valid_attribute_name("on=click"), "equals sign should be invalid");
+        assert!(!test_is_valid_attribute_name("on'click"), "single quote should be invalid");
+        assert!(!test_is_valid_attribute_name("on\"click"), "double quote should be invalid");
+        assert!(!test_is_valid_attribute_name("on<click"), "less than should be invalid");
+        assert!(!test_is_valid_attribute_name("on>click"), "greater than should be invalid");
+        assert!(!test_is_valid_attribute_name("on/click"), "slash should be invalid");
+        assert!(!test_is_valid_attribute_name("on\\click"), "backslash should be invalid");
 
-        assert!(
-            !test_is_valid_attribute_name("onclick"),
-            "onclick should be invalid"
-        );
-        assert!(
-            !test_is_valid_attribute_name("onClick"),
-            "onClick should be invalid"
-        );
-        assert!(
-            !test_is_valid_attribute_name("ONCLICK"),
-            "ONCLICK should be invalid"
-        );
-        assert!(
-            !test_is_valid_attribute_name("onload"),
-            "onload should be invalid"
-        );
-        assert!(
-            !test_is_valid_attribute_name("onerror"),
-            "onerror should be invalid"
-        );
-        assert!(
-            !test_is_valid_attribute_name("onmouseover"),
-            "onmouseover should be invalid"
-        );
-        assert!(
-            !test_is_valid_attribute_name("onsubmit"),
-            "onsubmit should be invalid"
-        );
+        assert!(!test_is_valid_attribute_name("onclick"), "onclick should be invalid");
+        assert!(!test_is_valid_attribute_name("onClick"), "onClick should be invalid");
+        assert!(!test_is_valid_attribute_name("ONCLICK"), "ONCLICK should be invalid");
+        assert!(!test_is_valid_attribute_name("onload"), "onload should be invalid");
+        assert!(!test_is_valid_attribute_name("onerror"), "onerror should be invalid");
+        assert!(!test_is_valid_attribute_name("onmouseover"), "onmouseover should be invalid");
+        assert!(!test_is_valid_attribute_name("onsubmit"), "onsubmit should be invalid");
 
-        assert!(
-            !test_is_valid_attribute_name("on中文"),
-            "on with Chinese should be invalid"
-        );
+        assert!(!test_is_valid_attribute_name("on中文"), "on with Chinese should be invalid");
 
-        assert!(
-            !test_is_valid_attribute_name(":"),
-            "colon only should be invalid"
-        );
-        assert!(
-            !test_is_valid_attribute_name("-"),
-            "hyphen only should be invalid"
-        );
-        assert!(
-            !test_is_valid_attribute_name("."),
-            "period only should be invalid"
-        );
-        assert!(
-            !test_is_valid_attribute_name("::"),
-            "multiple colons only should be invalid"
-        );
-        assert!(
-            !test_is_valid_attribute_name("--"),
-            "multiple hyphens only should be invalid"
-        );
-        assert!(
-            !test_is_valid_attribute_name(".."),
-            "multiple periods only should be invalid"
-        );
-        assert!(
-            !test_is_valid_attribute_name(":-."),
-            "mixed punctuation only should be invalid"
-        );
+        assert!(!test_is_valid_attribute_name(":"), "colon only should be invalid");
+        assert!(!test_is_valid_attribute_name("-"), "hyphen only should be invalid");
+        assert!(!test_is_valid_attribute_name("."), "period only should be invalid");
+        assert!(!test_is_valid_attribute_name("::"), "multiple colons only should be invalid");
+        assert!(!test_is_valid_attribute_name("--"), "multiple hyphens only should be invalid");
+        assert!(!test_is_valid_attribute_name(".."), "multiple periods only should be invalid");
+        assert!(!test_is_valid_attribute_name(":-."), "mixed punctuation only should be invalid");
 
         assert!(
             !test_is_valid_attribute_name("onclick='alert(1)'"),
@@ -3601,27 +3207,12 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
-        assert!(
-            html.contains("class=\"safe\""),
-            "Valid class attribute should be rendered"
-        );
-        assert!(
-            html.contains("data-valid=\"good\""),
-            "Valid data attribute should be rendered"
-        );
+        assert!(html.contains("class=\"safe\""), "Valid class attribute should be rendered");
+        assert!(html.contains("data-valid=\"good\""), "Valid data attribute should be rendered");
 
-        assert!(
-            !html.contains("onclick"),
-            "Invalid onclick attribute should be filtered"
-        );
-        assert!(
-            !html.contains("alert(1)"),
-            "Malicious code should not be in output"
-        );
-        assert!(
-            !html.contains("on click"),
-            "Attribute with space should be filtered"
-        );
+        assert!(!html.contains("onclick"), "Invalid onclick attribute should be filtered");
+        assert!(!html.contains("alert(1)"), "Malicious code should not be in output");
+        assert!(!html.contains("on click"), "Attribute with space should be filtered");
     }
 
     #[tokio::test]
@@ -3634,18 +3225,9 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
-        assert!(
-            html.contains("data-test-id=\"123\""),
-            "data- attributes should be allowed"
-        );
-        assert!(
-            html.contains("aria-label=\"Description\""),
-            "aria- attributes should be allowed"
-        );
-        assert!(
-            html.contains("xml:lang=\"en\""),
-            "XML namespace attributes should be allowed"
-        );
+        assert!(html.contains("data-test-id=\"123\""), "data- attributes should be allowed");
+        assert!(html.contains("aria-label=\"Description\""), "aria- attributes should be allowed");
+        assert!(html.contains("xml:lang=\"en\""), "XML namespace attributes should be allowed");
         assert!(
             html.contains("_private=\"value\""),
             "Underscore-prefixed attributes should be allowed"
@@ -3675,39 +3257,15 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
 
         let html = converter.rsc_element_to_html(&element).await.unwrap();
 
-        assert!(
-            html.contains("type=\"button\""),
-            "Valid type attribute should be rendered"
-        );
-        assert!(
-            html.contains("class=\"btn\""),
-            "Valid class attribute should be rendered"
-        );
-        assert!(
-            html.contains("data-id=\"123\""),
-            "Valid data attribute should be rendered"
-        );
+        assert!(html.contains("type=\"button\""), "Valid type attribute should be rendered");
+        assert!(html.contains("class=\"btn\""), "Valid class attribute should be rendered");
+        assert!(html.contains("data-id=\"123\""), "Valid data attribute should be rendered");
 
-        assert!(
-            !html.contains("onclick"),
-            "Invalid onclick attribute should be filtered"
-        );
-        assert!(
-            !html.contains("alert(1)"),
-            "Malicious code should not be in output"
-        );
-        assert!(
-            !html.contains("on load"),
-            "Attribute with space should be filtered"
-        );
-        assert!(
-            !html.contains("1invalid"),
-            "Attribute starting with number should be filtered"
-        );
-        assert!(
-            !html.contains("@bad"),
-            "Attribute starting with @ should be filtered"
-        );
+        assert!(!html.contains("onclick"), "Invalid onclick attribute should be filtered");
+        assert!(!html.contains("alert(1)"), "Malicious code should not be in output");
+        assert!(!html.contains("on load"), "Attribute with space should be filtered");
+        assert!(!html.contains("1invalid"), "Attribute starting with number should be filtered");
+        assert!(!html.contains("@bad"), "Attribute starting with @ should be filtered");
     }
 
     #[tokio::test]
@@ -3720,14 +3278,8 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
-        assert!(
-            html.contains("class=\"container\""),
-            "className should be mapped to class"
-        );
-        assert!(
-            html.contains("for=\"input1\""),
-            "htmlFor should be mapped to for"
-        );
+        assert!(html.contains("class=\"container\""), "className should be mapped to class");
+        assert!(html.contains("for=\"input1\""), "htmlFor should be mapped to for");
     }
 
     #[tokio::test]
@@ -3757,18 +3309,9 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
 
         let html = converter.rsc_element_to_html(&element).await.unwrap();
 
-        assert!(
-            html.contains("a=\"single char valid\""),
-            "Single letter should be valid"
-        );
-        assert!(
-            html.contains("A=\"uppercase valid\""),
-            "Uppercase letter should be valid"
-        );
-        assert!(
-            html.contains("_=\"underscore only valid\""),
-            "Underscore only should be valid"
-        );
+        assert!(html.contains("a=\"single char valid\""), "Single letter should be valid");
+        assert!(html.contains("A=\"uppercase valid\""), "Uppercase letter should be valid");
+        assert!(html.contains("_=\"underscore only valid\""), "Underscore only should be valid");
         assert!(
             html.contains("a-b-c=\"multiple hyphens valid\""),
             "Multiple hyphens should be valid"
@@ -3786,18 +3329,9 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
             "Multiple underscores should be valid"
         );
 
-        assert!(
-            !html.contains(":=\"colon only"),
-            "Colon only should be invalid"
-        );
-        assert!(
-            !html.contains("-=\"hyphen only invalid\""),
-            "Hyphen only should be invalid"
-        );
-        assert!(
-            !html.contains(".=\"period only invalid\""),
-            "Period only should be invalid"
-        );
+        assert!(!html.contains(":=\"colon only"), "Colon only should be invalid");
+        assert!(!html.contains("-=\"hyphen only invalid\""), "Hyphen only should be invalid");
+        assert!(!html.contains(".=\"period only invalid\""), "Period only should be invalid");
     }
 
     #[tokio::test]
@@ -3817,10 +3351,7 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
             html.contains("font-size:16px"),
             "Style should contain font-size (camelCase converted)"
         );
-        assert!(
-            html.contains("class=\"test\""),
-            "Other attributes should still work"
-        );
+        assert!(html.contains("class=\"test\""), "Other attributes should still work");
     }
 
     #[tokio::test]
@@ -3834,18 +3365,9 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
-        assert!(
-            html.contains("中文=\"value1\""),
-            "Chinese attribute should be rendered"
-        );
-        assert!(
-            html.contains("日本語=\"value2\""),
-            "Japanese attribute should be rendered"
-        );
-        assert!(
-            html.contains("data-한글=\"value3\""),
-            "Korean data attribute should be rendered"
-        );
+        assert!(html.contains("中文=\"value1\""), "Chinese attribute should be rendered");
+        assert!(html.contains("日本語=\"value2\""), "Japanese attribute should be rendered");
+        assert!(html.contains("data-한글=\"value3\""), "Korean data attribute should be rendered");
     }
 
     #[tokio::test]
@@ -3861,16 +3383,10 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
         assert!(!html.contains("onclick"), "onclick should be filtered");
         assert!(!html.contains("onClick"), "onClick should be filtered");
         assert!(!html.contains("ONCLICK"), "ONCLICK should be filtered");
-        assert!(
-            !html.contains("on中文"),
-            "on with Unicode should be filtered"
-        );
+        assert!(!html.contains("on中文"), "on with Unicode should be filtered");
         assert!(!html.contains("alert"), "No alert code should be in output");
 
-        assert!(
-            html.contains("中文=\"good\""),
-            "Valid Unicode attribute should be rendered"
-        );
+        assert!(html.contains("中文=\"good\""), "Valid Unicode attribute should be rendered");
     }
 
     #[tokio::test]
@@ -3883,32 +3399,16 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
-        assert!(
-            html.contains("color:red"),
-            "color should be in style: {}",
-            html
-        );
-        assert!(
-            html.contains("padding:10px"),
-            "padding should be in style: {}",
-            html
-        );
+        assert!(html.contains("color:red"), "color should be in style: {}", html);
+        assert!(html.contains("padding:10px"), "padding should be in style: {}", html);
 
         assert!(
             !html.contains("display:null"),
             "display:null should not appear in style: {}",
             html
         );
-        assert!(
-            !html.contains("margin:null"),
-            "margin:null should not appear in style: {}",
-            html
-        );
-        assert!(
-            !html.contains("null"),
-            "The word 'null' should not appear in output: {}",
-            html
-        );
+        assert!(!html.contains("margin:null"), "margin:null should not appear in style: {}", html);
+        assert!(!html.contains("null"), "The word 'null' should not appear in output: {}", html);
     }
 
     #[tokio::test]
@@ -3922,17 +3422,9 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
-        assert!(
-            !html.contains("null"),
-            "Should not contain 'null' string: {}",
-            html
-        );
+        assert!(!html.contains("null"), "Should not contain 'null' string: {}", html);
 
-        assert!(
-            html.contains("class=\"test\""),
-            "Should have class attribute: {}",
-            html
-        );
+        assert!(html.contains("class=\"test\""), "Should have class attribute: {}", html);
     }
 
     #[tokio::test]
@@ -3947,17 +3439,11 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
 
         let valid_custom = serde_json::json!(["$", "custom-element", null, {}]);
         let result = converter.rsc_element_to_html(&valid_custom).await;
-        assert!(
-            result.is_ok(),
-            "Valid custom element with hyphen should be accepted"
-        );
+        assert!(result.is_ok(), "Valid custom element with hyphen should be accepted");
 
         let valid_namespace = serde_json::json!(["$", "svg:circle", null, {}]);
         let result = converter.rsc_element_to_html(&valid_namespace).await;
-        assert!(
-            result.is_ok(),
-            "Valid namespaced element should be accepted"
-        );
+        assert!(result.is_ok(), "Valid namespaced element should be accepted");
 
         let invalid_space = serde_json::json!(["$", "div onclick", null, {}]);
         let result = converter.rsc_element_to_html(&invalid_space).await;
@@ -3970,10 +3456,7 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
         let invalid_angle = serde_json::json!(["$", "div>script", null, {}]);
         let result = converter.rsc_element_to_html(&invalid_angle).await;
         if let Ok(html) = result {
-            panic!(
-                "Tag with angle bracket should be rejected, but got: {:?}",
-                html
-            );
+            panic!("Tag with angle bracket should be rejected, but got: {:?}", html);
         }
         assert!(result.is_err(), "Tag with angle bracket should be rejected");
 
@@ -4004,10 +3487,7 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
         let rsc_data_injection = r#"0:["$","div><script>alert(1)</script",null,{}]"#;
         let rows = renderer.parse_rsc_wire_format(rsc_data_injection).unwrap();
         let result = renderer.render_rsc_to_html_string(&rows).await;
-        assert!(
-            result.is_err(),
-            "Tag with injection attempt should be rejected"
-        );
+        assert!(result.is_err(), "Tag with injection attempt should be rejected");
     }
 
     #[tokio::test]
@@ -4029,11 +3509,7 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
             let element = serde_json::json!(["$", malicious_tag, null, {}]);
             let result = converter.rsc_element_to_html(&element).await;
 
-            assert!(
-                result.is_err(),
-                "Malicious tag '{}' should be rejected",
-                malicious_tag
-            );
+            assert!(result.is_err(), "Malicious tag '{}' should be rejected", malicious_tag);
         }
     }
 
@@ -4048,26 +3524,10 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
-        assert!(
-            html.contains("width:100px"),
-            "Width should have px suffix: {}",
-            html
-        );
-        assert!(
-            html.contains("height:200px"),
-            "Height should have px suffix: {}",
-            html
-        );
-        assert!(
-            html.contains("margin:10px"),
-            "Margin should have px suffix: {}",
-            html
-        );
-        assert!(
-            html.contains("padding:20px"),
-            "Padding should have px suffix: {}",
-            html
-        );
+        assert!(html.contains("width:100px"), "Width should have px suffix: {}", html);
+        assert!(html.contains("height:200px"), "Height should have px suffix: {}", html);
+        assert!(html.contains("margin:10px"), "Margin should have px suffix: {}", html);
+        assert!(html.contains("padding:20px"), "Padding should have px suffix: {}", html);
     }
 
     #[tokio::test]
@@ -4080,26 +3540,14 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
-        assert!(
-            html.contains("opacity:0.5"),
-            "Opacity should not have px suffix: {}",
-            html
-        );
-        assert!(
-            html.contains("z-index:10"),
-            "z-index should not have px suffix: {}",
-            html
-        );
+        assert!(html.contains("opacity:0.5"), "Opacity should not have px suffix: {}", html);
+        assert!(html.contains("z-index:10"), "z-index should not have px suffix: {}", html);
         assert!(
             html.contains("line-height:1.5"),
             "line-height should not have px suffix: {}",
             html
         );
-        assert!(
-            html.contains("flex-grow:2"),
-            "flex-grow should not have px suffix: {}",
-            html
-        );
+        assert!(html.contains("flex-grow:2"), "flex-grow should not have px suffix: {}", html);
     }
 
     #[tokio::test]
@@ -4112,26 +3560,10 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
-        assert!(
-            html.contains("width:50%"),
-            "String width should be preserved: {}",
-            html
-        );
-        assert!(
-            html.contains("height:100px"),
-            "Numeric height should have px: {}",
-            html
-        );
-        assert!(
-            html.contains("opacity:0.8"),
-            "Opacity should not have px: {}",
-            html
-        );
-        assert!(
-            html.contains("color:red"),
-            "Color string should be preserved: {}",
-            html
-        );
+        assert!(html.contains("width:50%"), "String width should be preserved: {}", html);
+        assert!(html.contains("height:100px"), "Numeric height should have px: {}", html);
+        assert!(html.contains("opacity:0.8"), "Opacity should not have px: {}", html);
+        assert!(html.contains("color:red"), "Color string should be preserved: {}", html);
     }
 
     #[tokio::test]
@@ -4159,11 +3591,7 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
             "paddingLeft should become padding-left with px: {}",
             html
         );
-        assert!(
-            html.contains("z-index:100"),
-            "zIndex should become z-index without px: {}",
-            html
-        );
+        assert!(html.contains("z-index:100"), "zIndex should become z-index without px: {}", html);
     }
 
     #[tokio::test]
@@ -4177,21 +3605,9 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
-        assert!(
-            html.contains("width:100.5px"),
-            "Float width should have px: {}",
-            html
-        );
-        assert!(
-            html.contains("opacity:0.75"),
-            "Float opacity should not have px: {}",
-            html
-        );
-        assert!(
-            html.contains("line-height:1.2"),
-            "Float line-height should not have px: {}",
-            html
-        );
+        assert!(html.contains("width:100.5px"), "Float width should have px: {}", html);
+        assert!(html.contains("opacity:0.75"), "Float opacity should not have px: {}", html);
+        assert!(html.contains("line-height:1.2"), "Float line-height should not have px: {}", html);
     }
 
     #[tokio::test]
@@ -4204,16 +3620,8 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
-        assert!(
-            html.contains(" checked"),
-            "checked=true should render as presence-only: {}",
-            html
-        );
-        assert!(
-            !html.contains("checked=\"true\""),
-            "checked should not have =\"true\": {}",
-            html
-        );
+        assert!(html.contains(" checked"), "checked=true should render as presence-only: {}", html);
+        assert!(!html.contains("checked=\"true\""), "checked should not have =\"true\": {}", html);
         assert!(
             html.contains(" disabled"),
             "disabled=true should render as presence-only: {}",
@@ -4225,11 +3633,7 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
             html
         );
 
-        assert!(
-            !html.contains("required"),
-            "required=false should be omitted: {}",
-            html
-        );
+        assert!(!html.contains("required"), "required=false should be omitted: {}", html);
     }
 
     #[tokio::test]
@@ -4299,16 +3703,8 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
-        assert!(
-            html.contains(" disabled"),
-            "disabled=true should be presence-only: {}",
-            html
-        );
-        assert!(
-            !html.contains(" disabled="),
-            "disabled should not have a value: {}",
-            html
-        );
+        assert!(html.contains(" disabled"), "disabled=true should be presence-only: {}", html);
+        assert!(!html.contains(" disabled="), "disabled should not have a value: {}", html);
 
         assert!(
             html.contains("aria-disabled=\"true\""),
@@ -4343,21 +3739,9 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
 
         let html = converter.rsc_element_to_html(&element).await.unwrap();
 
-        assert!(
-            html.contains(" checked"),
-            "checked=true should be presence-only: {}",
-            html
-        );
-        assert!(
-            !html.contains(" checked="),
-            "checked should not have a value: {}",
-            html
-        );
-        assert!(
-            !html.contains(" disabled"),
-            "disabled=false should be omitted: {}",
-            html
-        );
+        assert!(html.contains(" checked"), "checked=true should be presence-only: {}", html);
+        assert!(!html.contains(" checked="), "checked should not have a value: {}", html);
+        assert!(!html.contains(" disabled"), "disabled=false should be omitted: {}", html);
 
         assert!(
             html.contains("aria-checked=\"true\""),
@@ -4381,31 +3765,11 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
-        assert!(
-            html.contains(" hidden"),
-            "hidden should be presence-only: {}",
-            html
-        );
-        assert!(
-            html.contains(" readonly"),
-            "readonly should be presence-only: {}",
-            html
-        );
-        assert!(
-            html.contains(" required"),
-            "required should be presence-only: {}",
-            html
-        );
-        assert!(
-            html.contains(" autofocus"),
-            "autofocus should be presence-only: {}",
-            html
-        );
-        assert!(
-            html.contains(" multiple"),
-            "multiple should be presence-only: {}",
-            html
-        );
+        assert!(html.contains(" hidden"), "hidden should be presence-only: {}", html);
+        assert!(html.contains(" readonly"), "readonly should be presence-only: {}", html);
+        assert!(html.contains(" required"), "required should be presence-only: {}", html);
+        assert!(html.contains(" autofocus"), "autofocus should be presence-only: {}", html);
+        assert!(html.contains(" multiple"), "multiple should be presence-only: {}", html);
 
         assert!(
             !html.contains("=\"true\""),
@@ -4426,16 +3790,8 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
         let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
-        assert!(
-            html.contains("Row 10"),
-            "Should render content from row 10 (hex 'a'): {}",
-            html
-        );
-        assert!(
-            html.contains("Row 31"),
-            "Should render content from row 31 (hex '1f'): {}",
-            html
-        );
+        assert!(html.contains("Row 10"), "Should render content from row 10 (hex 'a'): {}", html);
+        assert!(html.contains("Row 31"), "Should render content from row 31 (hex '1f'): {}", html);
     }
 
     #[tokio::test]
@@ -4459,10 +3815,7 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
         };
     "#;
         runtime
-            .execute_script(
-                "register_test_component".to_string(),
-                register_script.to_string(),
-            )
+            .execute_script("register_test_component".to_string(), register_script.to_string())
             .await
             .expect("Failed to register test component");
 
@@ -4472,11 +3825,7 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
             .expect("SSR render should not error");
 
         assert!(!html.is_empty(), "SSR should produce non-empty HTML");
-        assert!(
-            html.contains("Hello SSR"),
-            "Should contain rendered text: {}",
-            html
-        );
+        assert!(html.contains("Hello SSR"), "Should contain rendered text: {}", html);
         assert!(
             html.contains("class=\"hello\""),
             "Should have className mapped to class: {}",
@@ -4537,21 +3886,9 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
             .expect("SSR render should not error");
 
         assert!(html.contains("<nav"), "Should have nav element: {}", html);
-        assert!(
-            html.contains("class=\"sidebar\""),
-            "Should have sidebar class: {}",
-            html
-        );
+        assert!(html.contains("class=\"sidebar\""), "Should have sidebar class: {}", html);
         assert!(html.contains("Home"), "Should render child links: {}", html);
-        assert!(
-            html.contains("About"),
-            "Should render child links: {}",
-            html
-        );
-        assert!(
-            html.contains("href=\"/home\""),
-            "Should have href attributes: {}",
-            html
-        );
+        assert!(html.contains("About"), "Should render child links: {}", html);
+        assert!(html.contains("href=\"/home\""), "Should have href attributes: {}", html);
     }
 }

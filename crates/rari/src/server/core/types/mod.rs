@@ -1,17 +1,20 @@
+use std::{path::PathBuf, sync::Arc};
+
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::path::PathBuf;
-use std::sync::Arc;
 
 pub mod request;
 
-use crate::rsc::rendering::layout::LayoutHtmlCache;
-use crate::server::cache::handler::CacheHandler;
-use crate::server::cache::response;
-use crate::server::config;
-use crate::server::og::OgImageGenerator;
-use crate::server::routing;
+use crate::{
+    rsc::rendering::layout::LayoutHtmlCache,
+    server::{
+        cache::{handler::CacheHandler, response},
+        config,
+        og::OgImageGenerator,
+        routing,
+    },
+};
 
 #[derive(Clone)]
 #[non_exhaustive]

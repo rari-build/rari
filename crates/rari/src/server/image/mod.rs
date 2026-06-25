@@ -3,17 +3,17 @@ mod config;
 mod optimizer;
 mod types;
 
-pub use cache::ImageCache;
-pub use config::{ImageConfig, ImageVariant, LocalPattern, RemotePattern};
-pub use optimizer::{ImageOptimizer, PreloadImage};
-pub use types::{ImageFormat, OptimizeParams, OptimizedImage};
+use std::sync::Arc;
 
 use axum::{
     extract::{Query, State},
     http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
-use std::sync::Arc;
+pub use cache::ImageCache;
+pub use config::{ImageConfig, ImageVariant, LocalPattern, RemotePattern};
+pub use optimizer::{ImageOptimizer, PreloadImage};
+pub use types::{ImageFormat, OptimizeParams, OptimizedImage};
 
 #[derive(Clone)]
 #[non_exhaustive]
@@ -35,9 +35,7 @@ pub async fn handle_image_request(
         ImageFormat::Gif => "image/gif",
     };
 
-    let is_production = std::env::var("NODE_ENV")
-        .map(|v| v == "production")
-        .unwrap_or(false);
+    let is_production = std::env::var("NODE_ENV").map(|v| v == "production").unwrap_or(false);
 
     let cache_header = if is_production {
         "public, max-age=31536000, immutable"
@@ -49,10 +47,7 @@ pub async fn handle_image_request(
 
     let mut response = (
         StatusCode::OK,
-        [
-            (header::CONTENT_TYPE, content_type),
-            (header::CACHE_CONTROL, cache_header),
-        ],
+        [(header::CONTENT_TYPE, content_type), (header::CACHE_CONTROL, cache_header)],
         optimized.data,
     )
         .into_response();
@@ -60,9 +55,7 @@ pub async fn handle_image_request(
     response.headers_mut().insert(
         "x-cache",
         #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
-        x_cache
-            .parse()
-            .expect("x-cache header value should be valid ASCII"),
+        x_cache.parse().expect("x-cache header value should be valid ASCII"),
     );
 
     Ok(response)

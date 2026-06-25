@@ -1,12 +1,10 @@
 #![allow(clippy::exhaustive_structs)]
 
+use std::{cell::RefCell, rc::Rc, sync::Arc, time::Duration};
+
 use deno_core::{Extension, OpState, extension, op2};
 use deno_error::JsErrorBox;
 use redis::AsyncCommands;
-use std::cell::RefCell;
-use std::rc::Rc;
-use std::sync::Arc;
-use std::time::Duration;
 use tokio::sync::Mutex;
 
 use crate::runtime::ext::ExtensionTrait;
@@ -46,15 +44,10 @@ impl RedisCacheState {
             .and_then(|config| config.use_cache.remote.as_ref());
 
         let url = remote.and_then(|remote| remote.url.clone());
-        let default_ttl_secs = remote
-            .map(|remote| remote.default_ttl_secs)
-            .unwrap_or(DEFAULT_TTL_SECS);
+        let default_ttl_secs =
+            remote.map(|remote| remote.default_ttl_secs).unwrap_or(DEFAULT_TTL_SECS);
 
-        Self {
-            url,
-            default_ttl_secs,
-            connection: Mutex::new(None),
-        }
+        Self { url, default_ttl_secs, connection: Mutex::new(None) }
     }
 
     async fn connection(&self) -> Result<redis::aio::MultiplexedConnection, RedisCacheError> {
@@ -72,11 +65,11 @@ impl RedisCacheState {
             tokio::time::timeout(REDIS_TIMEOUT, client.get_multiplexed_async_connection())
                 .await
                 .map_err(|_| {
-                    RedisCacheError::Connect(redis::RedisError::from((
-                        redis::ErrorKind::Io,
-                        "redis connect timeout",
-                    )))
-                })??;
+                RedisCacheError::Connect(redis::RedisError::from((
+                    redis::ErrorKind::Io,
+                    "redis connect timeout",
+                )))
+            })??;
 
         *connection = Some(new_connection.clone());
         Ok(new_connection)
@@ -95,10 +88,7 @@ pub enum RedisCacheError {
 }
 
 fn ttl_ms_to_secs(ttl_ms: u32) -> u64 {
-    u64::from(ttl_ms)
-        .saturating_add(MS_PER_SEC - 1)
-        .saturating_div(MS_PER_SEC)
-        .max(1)
+    u64::from(ttl_ms).saturating_add(MS_PER_SEC - 1).saturating_div(MS_PER_SEC).max(1)
 }
 
 fn js_error(error: &impl std::fmt::Display) -> JsErrorBox {
@@ -140,11 +130,7 @@ pub async fn op_cache_remote_set(
 ) -> Result<(), JsErrorBox> {
     let redis_state = get_redis_state(state).map_err(|e| js_error(&e))?;
     let mut connection = redis_state.connection().await.map_err(|e| js_error(&e))?;
-    let ttl_secs = if ttl_ms == 0 {
-        redis_state.default_ttl_secs
-    } else {
-        ttl_ms_to_secs(ttl_ms)
-    };
+    let ttl_secs = if ttl_ms == 0 { redis_state.default_ttl_secs } else { ttl_ms_to_secs(ttl_ms) };
     tokio::time::timeout(
         REDIS_TIMEOUT,
         connection.set_ex::<_, _, ()>(&key, value.into_bytes(), ttl_secs),

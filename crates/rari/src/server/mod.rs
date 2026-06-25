@@ -11,5 +11,4 @@ pub mod rendering;
 pub mod routing;
 pub mod vite;
 
-pub use core::Server;
-pub use core::types::*;
+pub use core::{Server, types::*};

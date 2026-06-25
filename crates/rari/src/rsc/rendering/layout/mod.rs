@@ -5,8 +5,9 @@ mod route_composer;
 pub mod types;
 mod utils;
 
-pub use constants::*;
 pub use core::{LayoutHtmlCache, LayoutRenderer};
+
+pub use constants::*;
 pub use route_composer::{LayoutInfo, RouteComposer};
 pub use types::*;
 pub use utils::create_layout_context;
@@ -34,13 +35,16 @@ pub use utils::create_layout_context;
     clippy::get_unwrap
 )]
 mod tests {
-    use super::*;
-    use crate::rsc::rendering::core::RscRenderer;
-    use crate::runtime::JsExecutionRuntime;
-    use crate::server::routing::app_router::AppRouteMatch;
-    use crate::server::routing::types::ParamValue;
-    use rustc_hash::FxHashMap;
     use std::sync::Arc;
+
+    use rustc_hash::FxHashMap;
+
+    use super::*;
+    use crate::{
+        rsc::rendering::core::RscRenderer,
+        runtime::JsExecutionRuntime,
+        server::routing::{app_router::AppRouteMatch, types::ParamValue},
+    };
 
     #[test]
     fn test_get_component_id() {
@@ -53,10 +57,7 @@ mod tests {
     #[test]
     fn test_create_component_id_includes_stable_hash_suffix() {
         assert_eq!(utils::create_component_id("page.tsx"), "app/page_73d7a23e");
-        assert_eq!(
-            utils::create_component_id("css/page.tsx"),
-            "app/css/page_1a52d086"
-        );
+        assert_eq!(utils::create_component_id("css/page.tsx"), "app/css/page_1a52d086");
 
         let at_path = utils::create_component_id("foo@bar/page.tsx");
         let hash_path = utils::create_component_id("foo#bar/page.tsx");
@@ -366,9 +367,7 @@ mod tests {
             metadata: None,
         };
 
-        let script = renderer
-            .build_composition_script(&route_match, &context, None, true)
-            .unwrap();
+        let script = renderer.build_composition_script(&route_match, &context, None, true).unwrap();
 
         assert!(!script.contains("'data-content-slot': true"));
         assert!(!script.contains("const contentSlot = React.createElement"));
@@ -410,12 +409,10 @@ mod tests {
             metadata: None,
         };
 
-        let script_ssr = renderer
-            .build_composition_script(&route_match, &context, None, true)
-            .unwrap();
-        let script_rsc = renderer
-            .build_composition_script(&route_match, &context, None, false)
-            .unwrap();
+        let script_ssr =
+            renderer.build_composition_script(&route_match, &context, None, true).unwrap();
+        let script_rsc =
+            renderer.build_composition_script(&route_match, &context, None, false).unwrap();
 
         assert!(script_ssr.contains("globalThis.renderToRsc"));
         assert!(script_rsc.contains("globalThis.renderToRsc"));
@@ -458,12 +455,10 @@ mod tests {
             metadata: None,
         };
 
-        let script_ssr = renderer
-            .build_composition_script(&route_match, &context, None, true)
-            .unwrap();
-        let script_rsc = renderer
-            .build_composition_script(&route_match, &context, None, false)
-            .unwrap();
+        let script_ssr =
+            renderer.build_composition_script(&route_match, &context, None, true).unwrap();
+        let script_rsc =
+            renderer.build_composition_script(&route_match, &context, None, false).unwrap();
 
         assert!(script_ssr.contains("AsyncComponentMarker._isAsyncComponent = true"));
         assert!(script_rsc.contains("AsyncComponentMarker._isAsyncComponent = true"));
@@ -506,12 +501,10 @@ mod tests {
             metadata: None,
         };
 
-        let script_ssr = renderer
-            .build_composition_script(&route_match, &context, None, true)
-            .unwrap();
-        let script_rsc = renderer
-            .build_composition_script(&route_match, &context, None, false)
-            .unwrap();
+        let script_ssr =
+            renderer.build_composition_script(&route_match, &context, None, true).unwrap();
+        let script_rsc =
+            renderer.build_composition_script(&route_match, &context, None, false).unwrap();
 
         assert!(script_ssr.contains("rsc_data: rscData"));
         assert!(script_rsc.contains("rsc_data: rscData"));
@@ -659,12 +652,10 @@ mod tests {
             metadata: None,
         };
 
-        let script_ssr = renderer
-            .build_composition_script(&route_match, &context, None, true)
-            .unwrap();
-        let script_rsc = renderer
-            .build_composition_script(&route_match, &context, None, false)
-            .unwrap();
+        let script_ssr =
+            renderer.build_composition_script(&route_match, &context, None, true).unwrap();
+        let script_rsc =
+            renderer.build_composition_script(&route_match, &context, None, false).unwrap();
 
         assert!(!script_ssr.contains("const contentSlot = React.createElement"));
         assert!(!script_ssr.contains("'data-content-slot': true"));
@@ -712,12 +703,10 @@ mod tests {
             metadata: None,
         };
 
-        let script_ssr = renderer
-            .build_composition_script(&route_match, &context, None, true)
-            .unwrap();
-        let script_rsc = renderer
-            .build_composition_script(&route_match, &context, None, false)
-            .unwrap();
+        let script_ssr =
+            renderer.build_composition_script(&route_match, &context, None, true).unwrap();
+        let script_rsc =
+            renderer.build_composition_script(&route_match, &context, None, false).unwrap();
 
         assert!(script_ssr.contains("React.createElement"));
         assert!(script_rsc.contains("React.createElement"));
@@ -760,12 +749,10 @@ mod tests {
             metadata: None,
         };
 
-        let script_ssr = renderer
-            .build_composition_script(&route_match, &context, None, true)
-            .unwrap();
-        let script_rsc = renderer
-            .build_composition_script(&route_match, &context, None, false)
-            .unwrap();
+        let script_ssr =
+            renderer.build_composition_script(&route_match, &context, None, true).unwrap();
+        let script_rsc =
+            renderer.build_composition_script(&route_match, &context, None, false).unwrap();
 
         assert!(script_ssr.contains("AsyncComponentMarker"));
         assert!(script_rsc.contains("AsyncComponentMarker"));

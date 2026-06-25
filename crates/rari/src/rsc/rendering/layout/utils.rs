@@ -1,16 +1,20 @@
 #![allow(clippy::string_add, clippy::implicit_hasher)]
 
-use crate::server::core::utils::component::{readable_component_id, short_hash};
-use crate::server::routing::app_router::AppRouteMatch;
-use crate::server::routing::types::ParamValue;
+use std::{
+    collections::hash_map::DefaultHasher,
+    hash::{Hash, Hasher},
+};
+
 use cow_utils::CowUtils;
 use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use serde_json::Value;
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
 
 use super::LayoutRenderContext;
+use crate::server::{
+    core::utils::component::{readable_component_id, short_hash},
+    routing::{app_router::AppRouteMatch, types::ParamValue},
+};
 
 pub fn generate_cache_key(route_match: &AppRouteMatch, context: &LayoutRenderContext) -> u64 {
     let mut hasher = DefaultHasher::new();
@@ -66,10 +70,7 @@ pub fn create_client_component_id(file_path: &str) -> String {
 
 pub fn get_component_id(file_path: &str) -> String {
     let path = std::path::Path::new(file_path);
-    let stem = path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("Unknown");
+    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("Unknown");
 
     let mut chars = stem.chars();
     match chars.next() {
@@ -107,11 +108,5 @@ pub fn create_layout_context(
     headers: FxHashMap<String, String>,
     pathname: String,
 ) -> LayoutRenderContext {
-    LayoutRenderContext {
-        params,
-        search_params,
-        headers,
-        pathname,
-        metadata: None,
-    }
+    LayoutRenderContext { params, search_params, headers, pathname, metadata: None }
 }
