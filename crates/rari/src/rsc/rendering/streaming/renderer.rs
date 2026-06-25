@@ -380,39 +380,12 @@ impl StreamingRenderer {
                             map.insert(update.boundary_id.clone(), update.row_id);
                         }
 
-                        for import_row in &update.import_rows {
-                            let import_chunk = RscStreamChunk {
-                                data: format!("{import_row}\n").into_bytes(),
-                                chunk_type: RscChunkType::ModuleImport,
-                                row_id: 0,
-                                is_final: false,
-                                boundary_id: None,
-                            };
-
-                            if chunk_sender_clone.send(import_chunk).await.is_err() {
-                                break;
-                            }
-                        }
-
-                        let content_json = serde_json::to_string(&update.content).unwrap_or_else(|_| "null".to_string());
-                        let row_id_hex = format!("{:x}", update.row_id);
-                        let mut update_str = String::with_capacity(row_id_hex.len() + content_json.len() + 2);
-                        update_str.push_str(&row_id_hex);
-                        update_str.push(':');
-                        update_str.push_str(&content_json);
-                        update_str.push('\n');
-
-                        let chunk = RscStreamChunk {
-                            data: update_str.into_bytes(),
-                            chunk_type: RscChunkType::BoundaryUpdate,
-                            row_id: update.row_id,
-                            is_final: false,
-                            boundary_id: Some(update.boundary_id.clone()),
-                        };
-
-                        if chunk_sender_clone.send(chunk).await.is_err() {
-                            break;
-                        }
+                        Self::send_boundary_update_with_map(
+                            &chunk_sender_clone,
+                            update,
+                            Arc::clone(&boundary_rows_map),
+                        )
+                        .await;
 
                     }
                     Some(error) = error_receiver.recv() => {
@@ -424,29 +397,7 @@ impl StreamingRenderer {
                             error.row_id
                         );
 
-                        let error_json = serde_json::to_string(&serde_json::json!({
-                             "error": error.error_message,
-                             "boundary_id": error.boundary_id
-                         })).unwrap_or_else(|_| "{}".to_string());
-
-                        let row_id_hex = format!("{:x}", error.row_id);
-                        let mut error_str = String::with_capacity(row_id_hex.len() + error_json.len() + 3);
-                        error_str.push_str(&row_id_hex);
-                        error_str.push_str(":E");
-                        error_str.push_str(&error_json);
-                        error_str.push('\n');
-
-                        let chunk = RscStreamChunk {
-                            data: error_str.into_bytes(),
-                            chunk_type: RscChunkType::BoundaryError,
-                            row_id: error.row_id,
-                            is_final: false,
-                            boundary_id: None,
-                        };
-
-                        if chunk_sender_clone.send(chunk).await.is_err() {
-                            break;
-                        }
+                        Self::send_boundary_error(&chunk_sender_clone, error).await;
                     }
                     else => {
                         break;
