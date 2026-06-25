@@ -380,6 +380,20 @@ impl StreamingRenderer {
                             map.insert(update.boundary_id.clone(), update.row_id);
                         }
 
+                        for import_row in &update.import_rows {
+                            let import_chunk = RscStreamChunk {
+                                data: format!("{import_row}\n").into_bytes(),
+                                chunk_type: RscChunkType::ModuleImport,
+                                row_id: 0,
+                                is_final: false,
+                                boundary_id: None,
+                            };
+
+                            if chunk_sender_clone.send(import_chunk).await.is_err() {
+                                break;
+                            }
+                        }
+
                         let content_json = serde_json::to_string(&update.content).unwrap_or_else(|_| "null".to_string());
                         let row_id_hex = format!("{:x}", update.row_id);
                         let mut update_str = String::with_capacity(row_id_hex.len() + content_json.len() + 2);

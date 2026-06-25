@@ -36,7 +36,7 @@ impl OgImageCache {
     }
 
     fn resolve_cache_dir(project_path: &Path) -> PathBuf {
-        let is_production = Config::get().map(|c| c.is_production()).unwrap_or(false);
+        let is_production = Config::get().map(Config::is_production).unwrap_or(false);
 
         if is_production {
             PathBuf::from("/tmp/rari-og-cache")
