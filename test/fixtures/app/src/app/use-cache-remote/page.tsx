@@ -1,16 +1,26 @@
+import type { TestStorageBackend } from '@rari/use-cache'
 import type { Metadata } from 'rari'
+import { setTestStorageBackend } from '@rari/use-cache'
 
-let callCount = 0
+type SearchBackend = TestStorageBackend | undefined
+
+function normalizeBackend(value: string | string[] | undefined): TestStorageBackend {
+  const raw = Array.isArray(value) ? value[0] : value
+  return raw === 'redis' ? 'redis' : 'redb'
+}
+
+const callCounts = new Map<string, number>()
 
 async function getCachedData(label: string, cacheScope: string) {
   'use cache: remote'
-  void cacheScope
-  callCount++
+  callCounts.set(cacheScope, (callCounts.get(cacheScope) ?? 0) + 1)
   return label
 }
 
-export default async function UseCacheRemotePage({ searchParams }: { searchParams?: { case?: string } }) {
+export default async function UseCacheRemotePage({ searchParams }: { searchParams?: { case?: string, backend?: SearchBackend } }) {
+  setTestStorageBackend(normalizeBackend(searchParams?.backend))
   const cacheScope = searchParams?.case ?? 'default'
+
   const result1 = await getCachedData('first', cacheScope)
   const result2 = await getCachedData('first', cacheScope)
   const result3 = await getCachedData('second', cacheScope)
@@ -22,8 +32,7 @@ export default async function UseCacheRemotePage({ searchParams }: { searchParam
       <p data-testid="result2">{result2}</p>
       <p data-testid="result3">{result3}</p>
       <p data-testid="totals">
-        calls:
-        {callCount}
+        {`calls: ${callCounts.get(cacheScope) ?? 0}`}
       </p>
     </div>
   )

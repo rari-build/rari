@@ -1,41 +1,19 @@
+import type { MockBackend } from './deno-mock'
 import { Buffer } from 'node:buffer'
 import { deserialize } from 'node:v8'
 import { $$cache__, encodeBoundArgs } from '@rari/use-cache/runtime/cache-wrapper'
 import { describe, expect, it } from 'vite-plus/test'
-
-interface RemoteCacheOps {
-  op_cache_remote_get: (key: string) => Promise<string | null>
-  op_cache_remote_set: (key: string, value: string, ttlMs: number) => Promise<void>
-}
-
-interface DenoLike {
-  core: {
-    ops: RemoteCacheOps
-  }
-}
-
-interface MockBackend {
-  read: (key: string) => string | null
-  write: (key: string, value: string, ttlMs: number) => void
-}
+import { patchDenoBackend, restoreDeno } from './deno-mock'
 
 function installOpsMock(backend: MockBackend) {
-  (globalThis as { Deno?: DenoLike }).Deno = {
-    core: {
-      ops: {
-        async op_cache_remote_get(key: string) {
-          return backend.read(key)
-        },
-        async op_cache_remote_set(key: string, value: string, ttlMs: number) {
-          backend.write(key, value, ttlMs)
-        },
-      },
-    },
-  }
+  patchDenoBackend(
+    { get: 'op_redis_cache_get', set: 'op_redis_cache_set' },
+    backend,
+  )
 }
 
 function uninstallOpsMock(): void {
-  delete (globalThis as { Deno?: DenoLike }).Deno
+  restoreDeno()
 }
 
 const CACHE_LIMIT = 1000

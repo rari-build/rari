@@ -12,6 +12,14 @@ readme = { workspace = true }
 keywords = { workspace = true }
 categories = { workspace = true }
 
+[features]
+default = [
+  "redis",
+  "redb",
+]
+redis = [ "dep:redis" ]
+redb = [ "dep:redb" ]
+
 [lib]
 crate-type = [ "rlib" ]
 
@@ -125,7 +133,8 @@ regex = { workspace = true }
 rustc-hash = { workspace = true }
 lru = "0.18.0"
 uuid = { version = "1.23.3", features = [ "v4" ] }
-redis = { version = "1.2.4", default-features = false, features = [ "tokio-comp" ] }
+redis = { version = "1.2.4", default-features = false, features = [ "tokio-comp" ], optional = true }
+redb = { version = "3.0.1", default-features = false, optional = true }
 
 # === Image Processing & Layout ===
 image = { version = "0.25.10", default-features = false, features = [
@@ -183,3 +192,6 @@ hex = { workspace = true }
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+tempfile = "3.20.0"

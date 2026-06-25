@@ -1,20 +1,31 @@
 import type { CacheStorage } from './cache-storage'
 import { MemoryCacheStorage } from './cache-storage-memory'
-import { hasRedisOps, RedisCacheStorage } from './cache-storage-redis'
+import { createRedbCacheStorage, hasRedbOps } from './cache-storage-redb'
+import { createRedisCacheStorage, hasRedisOps } from './cache-storage-redis'
+import { getTestStorageBackend, TestCacheStorage } from './cache-storage-test'
 
 let memoryStorage: CacheStorage | undefined
+let redbStorage: CacheStorage | undefined
 let redisStorage: CacheStorage | undefined
+
+const backends = {
+  test: (): CacheStorage => new TestCacheStorage(),
+  redb: (): CacheStorage => (redbStorage ??= createRedbCacheStorage()),
+  redis: (): CacheStorage => (redisStorage ??= createRedisCacheStorage()),
+  memory: (): CacheStorage => (memoryStorage ??= new MemoryCacheStorage()),
+}
 
 export function getStorage(kind: string): CacheStorage {
   if (kind === 'remote') {
-    if (!redisStorage && hasRedisOps())
-      redisStorage = new RedisCacheStorage()
-    if (redisStorage)
-      return redisStorage
+    if (getTestStorageBackend() !== undefined)
+      return backends.test()
+
+    if (hasRedbOps())
+      return backends.redb()
+
+    if (hasRedisOps())
+      return backends.redis()
   }
 
-  if (!memoryStorage)
-    memoryStorage = new MemoryCacheStorage()
-
-  return memoryStorage
+  return backends.memory()
 }
