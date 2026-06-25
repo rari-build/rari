@@ -104,7 +104,6 @@ impl StreamingRenderer {
         }
 
         let chunk_sender_clone = chunk_sender.clone();
-        let boundary_rows_map = Arc::clone(&self.boundary_row_ids);
         let boundary_positions_clone = Arc::clone(&boundary_positions);
         let rendered_skeleton_ids = Arc::clone(&self.rendered_skeleton_ids);
         let resolved_boundary_ids = Arc::clone(&self.resolved_boundary_ids);
@@ -140,19 +139,17 @@ impl StreamingRenderer {
                             );
                         }
 
-                        Self::send_boundary_update_with_map(
-                            &chunk_sender_clone,
-                            update,
-                            Arc::clone(&boundary_rows_map),
-                        )
-                        .await;
+                        if Self::send_boundary_update_with_map(&chunk_sender_clone, update)
+                            .await
+                            .is_err()
+                        {
+                            break;
+                        }
                     }
                     Some(error) = error_receiver.recv() => {
-                        Self::send_boundary_error(
-                            &chunk_sender_clone,
-                            error,
-                        )
-                        .await;
+                        if Self::send_boundary_error(&chunk_sender_clone, error).await.is_err() {
+                            break;
+                        }
                     }
                     else => {
                         break;
@@ -240,7 +237,6 @@ impl StreamingRenderer {
             });
         }
 
-        let boundary_rows_map = Arc::clone(&self.boundary_row_ids);
         let boundary_positions_clone = Arc::clone(&boundary_positions);
         let rendered_skeleton_ids = Arc::clone(&self.rendered_skeleton_ids);
         let resolved_boundary_ids = Arc::clone(&self.resolved_boundary_ids);
@@ -269,19 +265,17 @@ impl StreamingRenderer {
                             update.dom_path = dom_path.clone();
                         }
 
-                        Self::send_boundary_update_with_map(
-                            &chunk_sender_clone,
-                            update,
-                            Arc::clone(&boundary_rows_map),
-                        )
-                        .await;
+                        if Self::send_boundary_update_with_map(&chunk_sender_clone, update)
+                            .await
+                            .is_err()
+                        {
+                            break;
+                        }
                     }
                     Some(error) = error_receiver.recv() => {
-                        Self::send_boundary_error(
-                            &chunk_sender_clone,
-                            error,
-                        )
-                        .await;
+                        if Self::send_boundary_error(&chunk_sender_clone, error).await.is_err() {
+                            break;
+                        }
                     }
                     else => break,
                 }
@@ -380,12 +374,12 @@ impl StreamingRenderer {
                             map.insert(update.boundary_id.clone(), update.row_id);
                         }
 
-                        Self::send_boundary_update_with_map(
-                            &chunk_sender_clone,
-                            update,
-                            Arc::clone(&boundary_rows_map),
-                        )
-                        .await;
+                        if Self::send_boundary_update_with_map(&chunk_sender_clone, update)
+                            .await
+                            .is_err()
+                        {
+                            break;
+                        }
 
                     }
                     Some(error) = error_receiver.recv() => {
@@ -397,7 +391,9 @@ impl StreamingRenderer {
                             error.row_id
                         );
 
-                        Self::send_boundary_error(&chunk_sender_clone, error).await;
+                        if Self::send_boundary_error(&chunk_sender_clone, error).await.is_err() {
+                            break;
+                        }
                     }
                     else => {
                         break;
@@ -462,7 +458,6 @@ impl StreamingRenderer {
         }
 
         let chunk_sender_clone = chunk_sender.clone();
-        let boundary_rows_map = Arc::clone(&self.boundary_row_ids);
         let root_row_id = Arc::clone(&self.root_row_id);
         tokio::spawn(async move {
             let mut update_receiver = update_receiver;
@@ -471,19 +466,17 @@ impl StreamingRenderer {
             loop {
                 tokio::select! {
                     Some(update) = update_receiver.recv() => {
-                        Self::send_boundary_update_with_map(
-                            &chunk_sender_clone,
-                            update,
-                            Arc::clone(&boundary_rows_map),
-                        )
-                        .await;
+                        if Self::send_boundary_update_with_map(&chunk_sender_clone, update)
+                            .await
+                            .is_err()
+                        {
+                            break;
+                        }
                     }
                     Some(error) = error_receiver.recv() => {
-                        Self::send_boundary_error(
-                            &chunk_sender_clone,
-                            error,
-                        )
-                        .await;
+                        if Self::send_boundary_error(&chunk_sender_clone, error).await.is_err() {
+                            break;
+                        }
                     }
                     else => break,
                 }
@@ -1239,8 +1232,7 @@ impl StreamingRenderer {
     async fn send_boundary_update_with_map(
         sender: &mpsc::Sender<RscStreamChunk>,
         update: BoundaryUpdate,
-        _boundary_rows_map: Arc<Mutex<FxHashMap<String, u32>>>,
-    ) {
+    ) -> Result<(), mpsc::error::SendError<RscStreamChunk>> {
         for import_row in &update.import_rows {
             let import_chunk = RscStreamChunk {
                 data: format!("{import_row}\n").into_bytes(),
@@ -1250,9 +1242,7 @@ impl StreamingRenderer {
                 boundary_id: None,
             };
 
-            if let Err(e) = sender.send(import_chunk).await {
-                tracing::debug!("Failed to send import row chunk (client disconnected): {}", e);
-            }
+            sender.send(import_chunk).await?;
         }
 
         let update_row = format!("{:x}:{}\n", update.row_id, update.content);
@@ -1265,17 +1255,8 @@ impl StreamingRenderer {
             boundary_id: Some(update.boundary_id.clone()),
         };
 
-        match sender.send(chunk).await {
-            Ok(()) => {}
-            Err(e) => {
-                tracing::debug!(
-                    "Failed to send boundary update chunk (client disconnected), boundary_id={}, row_id={}, error={}",
-                    update.boundary_id,
-                    update.row_id,
-                    e
-                );
-            }
-        }
+        sender.send(chunk).await?;
+        Ok(())
     }
 
     async fn send_row_0_and_complete(
@@ -1307,7 +1288,10 @@ impl StreamingRenderer {
         let _ = sender.send(final_chunk).await;
     }
 
-    async fn send_boundary_error(sender: &mpsc::Sender<RscStreamChunk>, error: BoundaryError) {
+    async fn send_boundary_error(
+        sender: &mpsc::Sender<RscStreamChunk>,
+        error: BoundaryError,
+    ) -> Result<(), mpsc::error::SendError<RscStreamChunk>> {
         let error_data = serde_json::json!({
             "boundary_id": error.boundary_id,
             "error": error.error_message,
@@ -1323,12 +1307,8 @@ impl StreamingRenderer {
             boundary_id: None,
         };
 
-        if let Err(e) = sender.send(chunk).await {
-            error!(
-                "Failed to send boundary error chunk, boundary_id={}, row_id={}, error={}",
-                error.boundary_id, error.row_id, e
-            );
-        }
+        sender.send(chunk).await?;
+        Ok(())
     }
 
     fn create_shell_chunk_with_module(
