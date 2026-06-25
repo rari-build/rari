@@ -1,6 +1,8 @@
-use super::ExtensionTrait;
-use deno_core::{Extension, extension};
 use std::path::PathBuf;
+
+use deno_core::{Extension, extension};
+
+use super::ExtensionTrait;
 
 extension!(
     init_webstorage,

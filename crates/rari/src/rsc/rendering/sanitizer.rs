@@ -1,5 +1,6 @@
-use regex::Regex;
 use std::sync::OnceLock;
+
+use regex::Regex;
 
 pub fn sanitize_component_output(html: &str) -> String {
     if html.is_empty() {

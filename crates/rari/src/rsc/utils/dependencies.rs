@@ -1,5 +1,6 @@
-use smallvec::SmallVec;
 use std::sync::OnceLock;
+
+use smallvec::SmallVec;
 
 pub type DependencyList = SmallVec<[String; 4]>;
 
@@ -36,8 +37,10 @@ pub fn extract_dependencies(code: &str) -> DependencyList {
 }
 
 pub fn hash_string(s: &str) -> String {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
+    use std::{
+        collections::hash_map::DefaultHasher,
+        hash::{Hash, Hasher},
+    };
 
     let mut hasher = DefaultHasher::new();
     s.hash(&mut hasher);

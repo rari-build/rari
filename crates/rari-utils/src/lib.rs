@@ -1,5 +1,6 @@
-use cow_utils::CowUtils;
 use std::path::{Path, PathBuf};
+
+use cow_utils::CowUtils;
 
 fn normalize_path(path: &Path) -> PathBuf {
     let mut components = Vec::new();
@@ -41,25 +42,21 @@ pub fn path_to_file_url(path: &Path) -> String {
         normalize_path(&joined)
     };
 
-    url::Url::from_file_path(&absolute_path)
-        .map(|url| url.to_string())
-        .unwrap_or_else(|()| {
-            let path_str = absolute_path
-                .to_string_lossy()
-                .cow_replace('\\', "/")
-                .into_owned();
-            if path_str.starts_with('/') {
-                format!("file://{path_str}")
-            } else {
-                format!("file:///{path_str}")
-            }
-        })
+    url::Url::from_file_path(&absolute_path).map(|url| url.to_string()).unwrap_or_else(|()| {
+        let path_str = absolute_path.to_string_lossy().cow_replace('\\', "/").into_owned();
+        if path_str.starts_with('/') {
+            format!("file://{path_str}")
+        } else {
+            format!("file:///{path_str}")
+        }
+    })
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::path::PathBuf;
+
+    use super::*;
 
     #[test]
     fn test_unix_path() {

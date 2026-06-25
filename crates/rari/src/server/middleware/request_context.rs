@@ -1,4 +1,9 @@
-use crate::server::core::utils::client::get_http_client;
+use std::{
+    num::NonZeroUsize,
+    sync::{Arc, LazyLock},
+    time::Instant,
+};
+
 use axum::http::HeaderMap;
 use bytes::Bytes;
 use dashmap::DashMap;
@@ -7,11 +12,10 @@ use parking_lot::Mutex;
 use rari_error::RariError;
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde_json::Value as JsonValue;
-use std::num::NonZeroUsize;
-use std::sync::{Arc, LazyLock};
-use std::time::Instant;
 use tokio::sync::Mutex as TokioMutex;
 use uuid::Uuid;
+
+use crate::server::core::utils::client::get_http_client;
 
 #[derive(Clone, Debug)]
 #[non_exhaustive]
@@ -177,18 +181,14 @@ impl RequestContext {
     ) -> Result<CachedFetchResult, RariError> {
         let cache_key = Self::generate_cache_key(url, &options);
 
-        let tags: Vec<String> = options
-            .get("tags")
-            .and_then(|t| serde_json::from_str(t).ok())
-            .unwrap_or_default();
+        let tags: Vec<String> =
+            options.get("tags").and_then(|t| serde_json::from_str(t).ok()).unwrap_or_default();
 
         {
             let mut cache = self.fetch_cache.lock();
             if let Some(cached) = cache.get(&cache_key) {
-                let ttl_ms = options
-                    .get("cacheTTLMs")
-                    .and_then(|t| t.parse::<u64>().ok())
-                    .unwrap_or(60_000);
+                let ttl_ms =
+                    options.get("cacheTTLMs").and_then(|t| t.parse::<u64>().ok()).unwrap_or(60_000);
 
                 let elapsed_ms = cached.cached_at.elapsed().as_millis();
 
@@ -207,9 +207,7 @@ impl RequestContext {
 
         let fetch_lock = {
             let entry = self.in_flight_fetches.entry(cache_key.clone());
-            entry
-                .or_insert_with(|| Arc::new(TokioMutex::new(None)))
-                .clone()
+            entry.or_insert_with(|| Arc::new(TokioMutex::new(None))).clone()
         };
 
         let mut guard = fetch_lock.lock().await;
@@ -279,10 +277,7 @@ impl RequestContext {
             }
         }
 
-        let timeout = options
-            .get("timeout")
-            .and_then(|t| t.parse::<u64>().ok())
-            .unwrap_or(5000);
+        let timeout = options.get("timeout").and_then(|t| t.parse::<u64>().ok()).unwrap_or(5000);
 
         request = request.timeout(std::time::Duration::from_millis(timeout));
 

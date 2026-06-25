@@ -1,29 +1,33 @@
-use std::num::NonZero;
-use std::rc::Rc;
-use std::sync::Arc;
-use sys_traits::impls::RealSys;
-
-use deno_core::v8::{BackingStore, SharedRef};
-use deno_core::{CrossIsolateStore, Extension, ExtensionFileSource, extension};
+use std::{num::NonZero, rc::Rc, sync::Arc};
 
 use ::deno_permissions::Permissions;
+use deno_core::{
+    CrossIsolateStore, Extension, ExtensionFileSource, extension,
+    v8::{BackingStore, SharedRef},
+};
 use deno_process::deno_process;
-use deno_runtime::deno_inspector_server::MainInspectorSessionChannel;
-use deno_runtime::deno_os::{ExitCode, deno_os};
-use deno_runtime::fmt_errors::format_js_error as deno_format_js_error;
-use deno_runtime::ops::bootstrap::deno_bootstrap;
-use deno_runtime::ops::fs_events::deno_fs_events;
-use deno_runtime::ops::permissions::deno_permissions;
-use deno_runtime::ops::web_worker::deno_web_worker;
-use deno_runtime::ops::worker_host::{CreateWebWorkerCb, deno_worker_host};
-use deno_runtime::permissions::RuntimePermissionDescriptorParser;
-use deno_runtime::web_worker::{WebWorker, WebWorkerOptions, WebWorkerServiceOptions};
-use deno_runtime::{BootstrapOptions, WorkerExecutionMode, WorkerLogLevel, colors, runtime};
+use deno_runtime::{
+    BootstrapOptions, WorkerExecutionMode, WorkerLogLevel, colors,
+    deno_inspector_server::MainInspectorSessionChannel,
+    deno_os::{ExitCode, deno_os},
+    fmt_errors::format_js_error as deno_format_js_error,
+    ops::{
+        bootstrap::deno_bootstrap,
+        fs_events::deno_fs_events,
+        permissions::deno_permissions,
+        web_worker::deno_web_worker,
+        worker_host::{CreateWebWorkerCb, deno_worker_host},
+    },
+    permissions::RuntimePermissionDescriptorParser,
+    runtime,
+    web_worker::{WebWorker, WebWorkerOptions, WebWorkerServiceOptions},
+};
 use deno_telemetry::OtelConfig;
+use sys_traits::impls::RealSys;
 
-use super::node::resolvers::Resolver;
-use super::web::PermissionsContainer;
-use super::{ExtensionOptions, ExtensionTrait};
+use super::{
+    ExtensionOptions, ExtensionTrait, node::resolvers::Resolver, web::PermissionsContainer,
+};
 
 fn format_js_error(error: &deno_core::error::JsError) -> String {
     deno_format_js_error(error, None)
@@ -103,17 +107,11 @@ impl ExtensionTrait<()> for deno_permissions {
     }
 }
 
-impl
-    ExtensionTrait<(
-        &ExtensionOptions,
-        Option<CrossIsolateStore<SharedRef<BackingStore>>>,
-    )> for deno_worker_host
+impl ExtensionTrait<(&ExtensionOptions, Option<CrossIsolateStore<SharedRef<BackingStore>>>)>
+    for deno_worker_host
 {
     fn init(
-        options: (
-            &ExtensionOptions,
-            Option<CrossIsolateStore<SharedRef<BackingStore>>>,
-        ),
+        options: (&ExtensionOptions, Option<CrossIsolateStore<SharedRef<BackingStore>>>),
     ) -> Extension {
         let options = WebWorkerCallbackOptions::new(options.0, options.1);
         let callback = create_web_worker_callback(options);
@@ -247,9 +245,7 @@ fn create_web_worker_callback(options: WebWorkerCallbackOptions) -> Arc<CreateWe
             bootstrap: BootstrapOptions {
                 deno_version: env!("CARGO_PKG_VERSION").to_string(),
                 args: vec![],
-                cpu_count: std::thread::available_parallelism()
-                    .map(NonZero::get)
-                    .unwrap_or(1),
+                cpu_count: std::thread::available_parallelism().map(NonZero::get).unwrap_or(1),
                 log_level: WorkerLogLevel::default(),
                 enable_testing_features: false,
                 locale: deno_core::v8::icu::get_language_tag(),

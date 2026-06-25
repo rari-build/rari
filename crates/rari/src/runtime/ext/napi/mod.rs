@@ -1,5 +1,6 @@
-use super::ExtensionTrait;
 use deno_core::Extension;
+
+use super::ExtensionTrait;
 
 impl ExtensionTrait<()> for deno_napi::deno_napi {
     fn init((): ()) -> Extension {

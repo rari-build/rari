@@ -1,7 +1,7 @@
+use std::{future::Future, pin::Pin};
+
 use rari_error::RariError;
 use serde_json::Value as JsonValue;
-use std::future::Future;
-use std::pin::Pin;
 use tokio::sync::mpsc;
 
 pub type BatchResultReceiver = mpsc::UnboundedReceiver<(usize, Result<JsonValue, RariError>)>;

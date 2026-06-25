@@ -34,11 +34,7 @@ pub enum RSCTree {
 impl RSCTree {
     #[cfg(test)]
     pub fn client_reference(id: &str, key: Option<&str>, props: FxHashMap<String, Value>) -> Self {
-        RSCTree::ClientReference {
-            id: id.to_string(),
-            key: key.map(ToString::to_string),
-            props,
-        }
+        RSCTree::ClientReference { id: id.to_string(), key: key.map(ToString::to_string), props }
     }
 
     #[cfg(test)]
@@ -61,10 +57,7 @@ impl RSCTree {
     }
 
     pub fn fragment(children: Vec<RSCTree>, key: Option<&str>) -> Self {
-        RSCTree::Fragment {
-            children,
-            key: key.map(std::string::ToString::to_string),
-        }
+        RSCTree::Fragment { children, key: key.map(std::string::ToString::to_string) }
     }
 
     pub fn array(elements: Vec<RSCTree>) -> Self {
@@ -90,9 +83,9 @@ impl RSCTree {
     pub fn has_client_components(&self) -> bool {
         match self {
             RSCTree::ClientReference { .. } => true,
-            RSCTree::ServerElement { children, .. } => children
-                .as_ref()
-                .is_some_and(|c| c.iter().any(RSCTree::has_client_components)),
+            RSCTree::ServerElement { children, .. } => {
+                children.as_ref().is_some_and(|c| c.iter().any(RSCTree::has_client_components))
+            }
             RSCTree::Fragment { children, .. } => {
                 children.iter().any(RSCTree::has_client_components)
             }
@@ -112,10 +105,7 @@ impl RSCTree {
             RSCTree::ClientReference { id, .. } => {
                 ids.push(id.clone());
             }
-            RSCTree::ServerElement {
-                children: Some(children),
-                ..
-            }
+            RSCTree::ServerElement { children: Some(children), .. }
             | RSCTree::Fragment { children, .. } => {
                 for child in children {
                     child.collect_client_component_ids_recursive(ids);
@@ -135,12 +125,7 @@ impl RSCTree {
             RSCTree::ClientReference { id, key, props } => {
                 serde_json::json!(["$", id, key, props])
             }
-            RSCTree::ServerElement {
-                tag,
-                props,
-                children,
-                key,
-            } => {
+            RSCTree::ServerElement { tag, props, children, key } => {
                 let mut element = serde_json::json!({
                     "$$typeof": "react.transitional.element",
                     "type": tag,
@@ -170,11 +155,7 @@ impl RSCTree {
             }
             RSCTree::Null => Value::Null,
             RSCTree::Primitive(value) => value.clone(),
-            RSCTree::Error {
-                message,
-                component_name,
-                ..
-            } => {
+            RSCTree::Error { message, component_name, .. } => {
                 serde_json::json!({
                     "$$typeof": "react.transitional.element",
                     "type": "div",
@@ -228,20 +209,14 @@ impl RSCTree {
                             .map(|(k, v)| (k.clone(), v.clone()))
                             .collect();
 
-                        Ok(RSCTree::ClientReference {
-                            id: id.to_string(),
-                            key,
-                            props,
-                        })
+                        Ok(RSCTree::ClientReference { id: id.to_string(), key, props })
                     } else {
                         let tag = id;
                         let key = arr[2].as_str().map(std::string::ToString::to_string);
                         let props_obj = arr[3].as_object().ok_or("Invalid element props")?;
 
-                        let mut props: FxHashMap<String, Value> = props_obj
-                            .iter()
-                            .map(|(k, v)| (k.clone(), v.clone()))
-                            .collect();
+                        let mut props: FxHashMap<String, Value> =
+                            props_obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
 
                         let children = props
                             .remove("children")
@@ -283,10 +258,8 @@ impl RSCTree {
                 }
 
                 if obj.contains_key("$$typeof") && obj.contains_key("type") {
-                    let tag = obj
-                        .get("type")
-                        .and_then(|t| t.as_str())
-                        .ok_or("Invalid element type")?;
+                    let tag =
+                        obj.get("type").and_then(|t| t.as_str()).ok_or("Invalid element type")?;
 
                     let key = obj
                         .get("key")
@@ -418,8 +391,9 @@ impl RSCRenderResult {
     clippy::get_unwrap
 )]
 mod tests {
-    use super::*;
     use serde_json::json;
+
+    use super::*;
 
     #[test]
     fn test_client_reference_creation() {
@@ -447,17 +421,9 @@ mod tests {
         let tree = RSCTree::server_element("div", Some(props), Some(children), None);
 
         match tree {
-            RSCTree::ServerElement {
-                tag,
-                props,
-                children,
-                ..
-            } => {
+            RSCTree::ServerElement { tag, props, children, .. } => {
                 assert_eq!(tag, "div");
-                assert_eq!(
-                    props.as_ref().unwrap().get("className"),
-                    Some(&json!("container"))
-                );
+                assert_eq!(props.as_ref().unwrap().get("className"), Some(&json!("container")));
                 assert_eq!(children.as_ref().unwrap().len(), 1);
             }
             _ => panic!("Expected ServerElement"),

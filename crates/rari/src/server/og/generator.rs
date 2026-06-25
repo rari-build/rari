@@ -4,19 +4,22 @@
 )]
 #![allow(clippy::explicit_counter_loop)]
 
-use super::OgImageError;
-use super::cache::OgImageCache;
-use super::layout::LayoutEngine;
-use super::rendering::ImageRenderer;
-use super::types::{JsxChild, JsxElement, OgImageEntry};
-use crate::runtime::JsExecutionRuntime;
+use std::{path::PathBuf, sync::Arc};
+
 use cow_utils::CowUtils;
 use rari_utils::path_to_file_url;
 use rustc_hash::FxHashMap;
 use serde_json::{Map, Value};
-use std::path::PathBuf;
-use std::sync::Arc;
 use tokio::sync::RwLock;
+
+use super::{
+    OgImageError,
+    cache::OgImageCache,
+    layout::LayoutEngine,
+    rendering::ImageRenderer,
+    types::{JsxChild, JsxElement, OgImageEntry},
+};
+use crate::runtime::JsExecutionRuntime;
 
 pub struct OgImageGenerator {
     runtime: Arc<JsExecutionRuntime>,
@@ -92,9 +95,8 @@ impl OgImageGenerator {
             }
         }
 
-        let server_manifest_path = manifest_path
-            .cow_replace("routes.json", "manifest.json")
-            .into_owned();
+        let server_manifest_path =
+            manifest_path.cow_replace("routes.json", "manifest.json").into_owned();
         if let Ok(server_content) = tokio::fs::read_to_string(&server_manifest_path).await
             && let Ok(server_data) = serde_json::from_str::<Value>(&server_content)
             && let Some(components) = server_data.get("components").and_then(|v| v.as_object())
@@ -117,8 +119,7 @@ impl OgImageGenerator {
 
     pub async fn find_og_image_for_route(&self, route_path: &str) -> Option<OgImageEntry> {
         let manifest = self.manifest.read().await;
-        self.find_matching_entry(&manifest, route_path)
-            .map(|(entry, _)| entry.clone())
+        self.find_matching_entry(&manifest, route_path).map(|(entry, _)| entry.clone())
     }
 
     pub async fn generate(&self, route_path: &str) -> Result<(Vec<u8>, bool), OgImageError> {
@@ -138,9 +139,7 @@ impl OgImageGenerator {
         let entry = entry.clone();
         drop(manifest);
 
-        let jsx_element = self
-            .execute_og_component(&entry, route_path, &params)
-            .await?;
+        let jsx_element = self.execute_og_component(&entry, route_path, &params).await?;
 
         let width = entry.width.unwrap_or(1200).min(MAX_OG_WIDTH);
         let height = entry.height.unwrap_or(630).min(MAX_OG_HEIGHT);
@@ -148,9 +147,10 @@ impl OgImageGenerator {
         let (computed_layout, font_context) = {
             let mut layout_engine = LayoutEngine::new();
             let font_context = layout_engine.get_font_context();
-            let computed_layout = layout_engine
-                .layout(&jsx_element, width as f32, height as f32)
-                .map_err(|e| OgImageError::GenerationError(format!("Layout failed: {e}")))?;
+            let computed_layout =
+                layout_engine
+                    .layout(&jsx_element, width as f32, height as f32)
+                    .map_err(|e| OgImageError::GenerationError(format!("Layout failed: {e}")))?;
             (computed_layout, font_context)
         };
 
@@ -162,11 +162,7 @@ impl OgImageGenerator {
         let webp_data = Self::encode_webp(&image)
             .map_err(|e| OgImageError::GenerationError(format!("Failed to encode WebP: {e}")))?;
 
-        if let Err(e) = self
-            .cache
-            .insert(route_path.to_string(), webp_data.clone())
-            .await
-        {
+        if let Err(e) = self.cache.insert(route_path.to_string(), webp_data.clone()).await {
             tracing::warn!(error = %e, route_path, "OG cache insert failed");
         }
 
@@ -177,10 +173,8 @@ impl OgImageGenerator {
         &self,
         manifest: &'a FxHashMap<String, OgImageEntry>,
         route_path: &str,
-    ) -> Option<(
-        &'a OgImageEntry,
-        FxHashMap<String, crate::server::routing::types::ParamValue>,
-    )> {
+    ) -> Option<(&'a OgImageEntry, FxHashMap<String, crate::server::routing::types::ParamValue>)>
+    {
         use crate::server::routing::types::ParamValue;
 
         if let Some(entry) = manifest.get(route_path) {
@@ -202,9 +196,8 @@ impl OgImageGenerator {
             let pattern_segments: Vec<&str> =
                 pattern.split('/').filter(|s| !s.is_empty()).collect();
 
-            let has_catch_all = pattern_segments
-                .iter()
-                .any(|seg| seg.starts_with("[...") && seg.ends_with(']'));
+            let has_catch_all =
+                pattern_segments.iter().any(|seg| seg.starts_with("[...") && seg.ends_with(']'));
 
             if has_catch_all {
                 let mut params = FxHashMap::default();
@@ -274,16 +267,16 @@ impl OgImageGenerator {
             let path = path.cow_replace(".ts", "");
             let path = path.cow_replace(".jsx", "");
             let path = path.cow_replace(".js", "");
-            let path = path
-                .chars()
-                .map(|c| {
-                    if c.is_alphanumeric() || c == '/' || c == '-' || c == '_' {
-                        c
-                    } else {
-                        '_'
-                    }
-                })
-                .collect::<String>();
+            let path =
+                path.chars()
+                    .map(|c| {
+                        if c.is_alphanumeric() || c == '/' || c == '-' || c == '_' {
+                            c
+                        } else {
+                            '_'
+                        }
+                    })
+                    .collect::<String>();
             format!("app/{path}")
         };
 
@@ -294,10 +287,7 @@ impl OgImageGenerator {
                 OgImageError::ExecutionError(format!(
                     "Component '{}' not found in server manifest. Available: {:?}",
                     component_id,
-                    server_manifest
-                        .keys()
-                        .filter(|k| k.contains("opengraph"))
-                        .collect::<Vec<_>>()
+                    server_manifest.keys().filter(|k| k.contains("opengraph")).collect::<Vec<_>>()
                 ))
             })?
             .clone();
@@ -359,25 +349,17 @@ impl OgImageGenerator {
 
     fn parse_serialized_jsx(value: &Value) -> Result<JsxElement, OgImageError> {
         if value.is_null() {
-            return Err(OgImageError::ExecutionError(
-                "Component returned null".to_string(),
-            ));
+            return Err(OgImageError::ExecutionError("Component returned null".to_string()));
         }
 
         let obj = value.as_object().ok_or_else(|| {
             OgImageError::ExecutionError("Expected object from component".to_string())
         })?;
 
-        let element_type = obj
-            .get("elementType")
-            .and_then(|v| v.as_str())
-            .unwrap_or("div")
-            .to_string();
+        let element_type =
+            obj.get("elementType").and_then(|v| v.as_str()).unwrap_or("div").to_string();
 
-        let props = obj
-            .get("props")
-            .cloned()
-            .unwrap_or(Value::Object(Map::default()));
+        let props = obj.get("props").cloned().unwrap_or(Value::Object(Map::default()));
 
         let children_array = obj
             .get("children")
@@ -403,11 +385,7 @@ impl OgImageGenerator {
             }
         }
 
-        Ok(JsxElement {
-            element_type,
-            props,
-            children,
-        })
+        Ok(JsxElement { element_type, props, children })
     }
 
     fn encode_webp(image: &image::RgbaImage) -> Result<Vec<u8>, String> {
@@ -474,9 +452,7 @@ mod tests {
             additional_paths: None,
         };
 
-        generator
-            .register_component("/blog".to_string(), entry.clone())
-            .await;
+        generator.register_component("/blog".to_string(), entry.clone()).await;
 
         let found = generator.find_og_image_for_route("/blog").await;
         assert!(found.is_some());
@@ -501,9 +477,7 @@ mod tests {
             additional_paths: None,
         };
 
-        generator
-            .register_component("/blog/[slug]".to_string(), entry.clone())
-            .await;
+        generator.register_component("/blog/[slug]".to_string(), entry.clone()).await;
 
         let found = generator.find_og_image_for_route("/blog/hello-world").await;
         assert!(found.is_some());
@@ -547,12 +521,8 @@ mod tests {
             additional_paths: None,
         };
 
-        generator
-            .register_component("/blog/[slug]".to_string(), dynamic_entry)
-            .await;
-        generator
-            .register_component("/blog/featured".to_string(), static_entry)
-            .await;
+        generator.register_component("/blog/[slug]".to_string(), dynamic_entry).await;
+        generator.register_component("/blog/featured".to_string(), static_entry).await;
 
         let found = generator.find_og_image_for_route("/blog/featured").await;
         assert!(found.is_some());
@@ -576,9 +546,7 @@ mod tests {
             additional_paths: Some(vec!["/pricing".to_string()]),
         };
 
-        generator
-            .register_component("/about".to_string(), entry)
-            .await;
+        generator.register_component("/about".to_string(), entry).await;
 
         let found = generator.find_og_image_for_route("/pricing").await;
         assert!(found.is_some());
@@ -632,9 +600,7 @@ mod tests {
         let test_dir = std::env::temp_dir().join("rari-test-og-load-manifest");
         let generator = OgImageGenerator::new(runtime, test_dir);
 
-        let result = generator
-            .load_manifest(manifest_path.to_str().unwrap())
-            .await;
+        let result = generator.load_manifest(manifest_path.to_str().unwrap()).await;
         assert!(result.is_ok(), "load_manifest should succeed: {:?}", result);
 
         let found = generator.find_og_image_for_route("/").await;

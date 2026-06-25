@@ -1,17 +1,26 @@
-use crate::runtime::factory::utils::constants::{
-    MODULE_ALREADY_EVALUATED_ERROR, PROMISE_EXTRACT_SCRIPT, PROMISE_SETUP_SCRIPT,
-    create_already_evaluated_response, create_already_loaded_response,
-};
-use crate::runtime::factory::utils::v8::{
-    is_promise, run_event_loop_with_error_handling, run_event_loop_with_promise_timeout, v8_to_json,
-};
-use crate::runtime::module::loader::RariModuleLoader;
-use crate::with_scope;
+use std::rc::Rc;
+
 use deno_core::JsRuntime;
 use rari_error::RariError;
 use serde_json::Value as JsonValue;
-use std::rc::Rc;
 use tracing::error;
+
+use crate::{
+    runtime::{
+        factory::utils::{
+            constants::{
+                MODULE_ALREADY_EVALUATED_ERROR, PROMISE_EXTRACT_SCRIPT, PROMISE_SETUP_SCRIPT,
+                create_already_evaluated_response, create_already_loaded_response,
+            },
+            v8::{
+                is_promise, run_event_loop_with_error_handling,
+                run_event_loop_with_promise_timeout, v8_to_json,
+            },
+        },
+        module::loader::RariModuleLoader,
+    },
+    with_scope,
+};
 
 pub fn has_export_statement(code: &str) -> bool {
     for line in code.lines() {
@@ -71,9 +80,7 @@ async fn execute_as_module(
 ) -> Result<JsonValue, RariError> {
     let specifier_str = module_loader.create_specifier(script_name, "rari_internal");
 
-    module_loader
-        .add_module(&specifier_str, script_name, script_code.to_string())
-        .await;
+    module_loader.add_module(&specifier_str, script_name, script_code.to_string()).await;
 
     let specifier = deno_core::resolve_url(&specifier_str).map_err(|url_err| {
         RariError::js_execution(format!(
@@ -87,10 +94,7 @@ async fn execute_as_module(
     let module_id: usize = match module_id_result {
         Ok(id) => id,
         Err(load_err) => {
-            if load_err
-                .to_string()
-                .contains(MODULE_ALREADY_EVALUATED_ERROR)
-            {
+            if load_err.to_string().contains(MODULE_ALREADY_EVALUATED_ERROR) {
                 return Ok(create_already_loaded_response(script_name));
             }
             return Err(RariError::js_execution(format!(
@@ -126,10 +130,7 @@ async fn execute_as_module(
             }
         }
         Err(eval_err) => {
-            if eval_err
-                .to_string()
-                .contains(MODULE_ALREADY_EVALUATED_ERROR)
-            {
+            if eval_err.to_string().contains(MODULE_ALREADY_EVALUATED_ERROR) {
                 #[expect(
                     clippy::print_stdout,
                     reason = "Debug logging for module evaluation state"
@@ -195,9 +196,7 @@ async fn handle_promise_result(
             Some(key) => key,
             None => {
                 error!("Failed to create V8 string for __temp_promise_ref__");
-                return Err(RariError::internal(
-                    "Failed to create V8 string".to_string(),
-                ));
+                return Err(RariError::internal("Failed to create V8 string".to_string()));
             }
         };
         global.set(scope, key.into(), local_v8_val);
@@ -210,10 +209,7 @@ async fn handle_promise_result(
 
     let setup_script = PROMISE_SETUP_SCRIPT;
 
-    match runtime.execute_script(
-        format!("{script_name}_promise_setup"),
-        setup_script.to_string(),
-    ) {
+    match runtime.execute_script(format!("{script_name}_promise_setup"), setup_script.to_string()) {
         Ok(_) => {
             let promise_timeout_ms = std::env::var("RARI_PROMISE_RESOLUTION_TIMEOUT_MS")
                 .ok()
@@ -224,10 +220,9 @@ async fn handle_promise_result(
 
             let extract_script = PROMISE_EXTRACT_SCRIPT;
 
-            match runtime.execute_script(
-                format!("{script_name}_extract_value"),
-                extract_script.to_string(),
-            ) {
+            match runtime
+                .execute_script(format!("{script_name}_extract_value"), extract_script.to_string())
+            {
                 Ok(extracted_value) => {
                     let json_result = with_scope!(runtime, |scope| {
                         let local_v8_val = deno_core::v8::Local::new(scope, extracted_value);
@@ -237,10 +232,8 @@ async fn handle_promise_result(
                     if let JsonValue::Object(ref obj) = json_result
                         && let Some(JsonValue::Bool(true)) = obj.get("~error")
                     {
-                        let message = obj
-                            .get("message")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("Unknown error");
+                        let message =
+                            obj.get("message").and_then(|v| v.as_str()).unwrap_or("Unknown error");
                         let stack = obj.get("stack").and_then(|v| v.as_str());
 
                         return Err(RariError::js_execution(if let Some(stack_trace) = stack {
@@ -277,10 +270,7 @@ fn handle_non_promise_result(
     if let JsonValue::Object(ref obj) = json_result
         && let Some(JsonValue::Bool(true)) = obj.get("~error")
     {
-        let message = obj
-            .get("message")
-            .and_then(|v| v.as_str())
-            .unwrap_or("Unknown error");
+        let message = obj.get("message").and_then(|v| v.as_str()).unwrap_or("Unknown error");
         let stack = obj.get("stack").and_then(|v| v.as_str());
 
         return Err(RariError::js_execution(if let Some(stack_trace) = stack {
@@ -309,9 +299,7 @@ async fn handle_script_error(
     }
 
     if error_string.contains("assertion") || error_string.contains("panicked") {
-        return Err(RariError::js_runtime(format!(
-            "Critical runtime error: {error_string}"
-        )));
+        return Err(RariError::js_runtime(format!("Critical runtime error: {error_string}")));
     }
 
     if error_string.contains("Error")
@@ -354,9 +342,7 @@ async fn retry_as_module(
     let specifier_str = module_loader.create_specifier(script_name, "rari_internal");
     let module_code = module_loader.transform_to_esmodule(script_code, script_name);
 
-    module_loader
-        .add_module(&specifier_str, script_name, module_code)
-        .await;
+    module_loader.add_module(&specifier_str, script_name, module_code).await;
 
     let specifier = deno_core::resolve_url(&specifier_str).map_err(|url_err| {
         RariError::js_execution(format!(
@@ -364,27 +350,18 @@ async fn retry_as_module(
         ))
     })?;
 
-    let module_id: usize = runtime
-        .load_side_es_module(&specifier)
-        .await
-        .map_err(|load_err| {
-            if load_err
-                .to_string()
-                .contains(MODULE_ALREADY_EVALUATED_ERROR)
-                || load_err.to_string().contains("assertion")
-            {
-                RariError::js_runtime(format!("Runtime error loading module: {load_err}"))
-            } else {
-                RariError::js_execution(format!(
-                    "Failed to load module '{script_name}': {load_err}"
-                ))
-            }
-        })?;
+    let module_id: usize = runtime.load_side_es_module(&specifier).await.map_err(|load_err| {
+        if load_err.to_string().contains(MODULE_ALREADY_EVALUATED_ERROR)
+            || load_err.to_string().contains("assertion")
+        {
+            RariError::js_runtime(format!("Runtime error loading module: {load_err}"))
+        } else {
+            RariError::js_execution(format!("Failed to load module '{script_name}': {load_err}"))
+        }
+    })?;
 
     runtime.mod_evaluate(module_id).await.map_err(|eval_err| {
-        if eval_err
-            .to_string()
-            .contains(MODULE_ALREADY_EVALUATED_ERROR)
+        if eval_err.to_string().contains(MODULE_ALREADY_EVALUATED_ERROR)
             || eval_err.to_string().contains("assertion")
         {
             RariError::js_runtime(format!("Runtime error evaluating module: {eval_err}"))

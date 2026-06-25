@@ -1,14 +1,15 @@
+use std::task::{Context, Poll};
+
 use axum::{body::Body, extract::Request, http::StatusCode, response::Response};
 use futures_util::future::BoxFuture;
 use rari_error::RariError;
+use rari_utils::path_to_file_url;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::task::{Context, Poll};
 use tower::{Layer, Service};
 use tracing::error;
 
 use crate::server::core::types::ServerState;
-use rari_utils::path_to_file_url;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ProxyResult {
@@ -53,15 +54,9 @@ async fn execute_proxy(
     let renderer = state.renderer.lock().await;
     let runtime = &renderer.runtime;
 
-    let scheme = headers
-        .get("x-forwarded-proto")
-        .cloned()
-        .unwrap_or_else(|| "http".to_string());
+    let scheme = headers.get("x-forwarded-proto").cloned().unwrap_or_else(|| "http".to_string());
 
-    let host = headers
-        .get("host")
-        .cloned()
-        .unwrap_or_else(|| "localhost".to_string());
+    let host = headers.get("host").cloned().unwrap_or_else(|| "localhost".to_string());
 
     let url = format!("{scheme}://{host}{uri}");
 
@@ -71,9 +66,7 @@ async fn execute_proxy(
         "headers": headers,
     });
 
-    let result_json = runtime
-        .execute_function("~rariExecuteProxy", vec![request_data])
-        .await?;
+    let result_json = runtime.execute_function("~rariExecuteProxy", vec![request_data]).await?;
 
     let proxy_result: ProxyResult = serde_json::from_value(result_json)?;
 
@@ -95,10 +88,7 @@ impl<S> Layer<S> for ProxyLayer {
     type Service = ProxyMiddleware<S>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        ProxyMiddleware {
-            inner,
-            state: self.state.clone(),
-        }
+        ProxyMiddleware { inner, state: self.state.clone() }
     }
 }
 
@@ -268,11 +258,8 @@ pub async fn initialize_proxy(state: &ServerState) -> Result<(), Box<dyn std::er
         return Ok(());
     }
 
-    let executor_absolute = if let Ok(canonical) = executor_path.canonicalize() {
-        canonical
-    } else {
-        executor_path
-    };
+    let executor_absolute =
+        if let Ok(canonical) = executor_path.canonicalize() { canonical } else { executor_path };
     let executor_specifier = path_to_file_url(&executor_absolute);
 
     let rari_request_path = rari_pkg_dir.join("dist/proxy/RariRequest.mjs");
@@ -304,10 +291,7 @@ pub async fn initialize_proxy(state: &ServerState) -> Result<(), Box<dyn std::er
         }})()"#
     );
 
-    match runtime
-        .execute_script("initialize_proxy_executor".to_string(), init_script)
-        .await
-    {
+    match runtime.execute_script("initialize_proxy_executor".to_string(), init_script).await {
         Ok(result) => {
             if let Some(success) = result.get("success").and_then(serde_json::Value::as_bool) {
                 if success {
@@ -318,17 +302,13 @@ pub async fn initialize_proxy(state: &ServerState) -> Result<(), Box<dyn std::er
                         .and_then(|v| v.as_str())
                         .unwrap_or("Unknown error during proxy initialization");
                     error!("Proxy initialization failed: {error_msg}");
-                    Err(
-                        RariError::js_runtime(format!("Proxy initialization failed: {error_msg}"))
-                            .into(),
-                    )
+                    Err(RariError::js_runtime(format!("Proxy initialization failed: {error_msg}"))
+                        .into())
                 }
             } else {
                 error!("Proxy initialization returned invalid result format");
-                Err(
-                    RariError::js_runtime("Proxy initialization returned invalid result format")
-                        .into(),
-                )
+                Err(RariError::js_runtime("Proxy initialization returned invalid result format")
+                    .into())
             }
         }
         Err(e) => {

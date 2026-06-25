@@ -1,8 +1,7 @@
+pub use deno_error::JsErrorBox;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-
-pub use deno_error::JsErrorBox;
 
 #[non_exhaustive]
 #[derive(Error, Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -306,15 +305,12 @@ impl RariError {
     pub fn with_source(mut self, source: Box<dyn std::error::Error + Send + Sync>) -> Self {
         let code = self.code().to_string();
         let metadata = self.metadata_mut();
-        let mut new_meta = metadata
-            .take()
-            .map(|b| *b)
-            .unwrap_or_else(|| ErrorMetadata {
-                code,
-                details: Some(FxHashMap::default()),
-                source: None,
-                error_source: None,
-            });
+        let mut new_meta = metadata.take().map(|b| *b).unwrap_or_else(|| ErrorMetadata {
+            code,
+            details: Some(FxHashMap::default()),
+            source: None,
+            error_source: None,
+        });
         new_meta.source = Some(source.to_string());
         new_meta.error_source = Some(source);
         *metadata = Some(Box::new(new_meta));
@@ -414,52 +410,30 @@ impl From<serde_json::Error> for RariError {
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum StreamingError {
-    StreamInitError {
-        message: String,
-        component_id: Option<String>,
-    },
-    ChunkConversionError {
-        message: String,
-        chunk_type: Option<String>,
-    },
-    BoundaryTimeout {
-        message: String,
-        boundary_id: String,
-        timeout_ms: u64,
-    },
-    ClientDisconnected {
-        message: String,
-    },
+    StreamInitError { message: String, component_id: Option<String> },
+    ChunkConversionError { message: String, chunk_type: Option<String> },
+    BoundaryTimeout { message: String, boundary_id: String, timeout_ms: u64 },
+    ClientDisconnected { message: String },
 }
 
 impl std::fmt::Display for StreamingError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::StreamInitError {
-                message,
-                component_id,
-            } => {
+            Self::StreamInitError { message, component_id } => {
                 write!(f, "Failed to initialize streaming: {message}")?;
                 if let Some(id) = component_id {
                     write!(f, " (component: {id})")?;
                 }
                 Ok(())
             }
-            Self::ChunkConversionError {
-                message,
-                chunk_type,
-            } => {
+            Self::ChunkConversionError { message, chunk_type } => {
                 write!(f, "Error converting chunk to HTML: {message}")?;
                 if let Some(ct) = chunk_type {
                     write!(f, " (chunk type: {ct})")?;
                 }
                 Ok(())
             }
-            Self::BoundaryTimeout {
-                message,
-                boundary_id,
-                timeout_ms,
-            } => {
+            Self::BoundaryTimeout { message, boundary_id, timeout_ms } => {
                 write!(
                     f,
                     "Suspense boundary '{boundary_id}' timed out after {timeout_ms}ms: {message}"
@@ -487,19 +461,12 @@ impl From<StreamingError> for RariError {
                 }
             }
             StreamingError::ChunkConversionError { chunk_type, .. } => {
-                details.insert(
-                    "error_type".to_string(),
-                    "chunk_conversion_error".to_string(),
-                );
+                details.insert("error_type".to_string(), "chunk_conversion_error".to_string());
                 if let Some(ct) = chunk_type {
                     details.insert("chunk_type".to_string(), ct.clone());
                 }
             }
-            StreamingError::BoundaryTimeout {
-                boundary_id,
-                timeout_ms,
-                ..
-            } => {
+            StreamingError::BoundaryTimeout { boundary_id, timeout_ms, .. } => {
                 details.insert("error_type".to_string(), "boundary_timeout".to_string());
                 details.insert("boundary_id".to_string(), boundary_id.clone());
                 details.insert("timeout_ms".to_string(), timeout_ms.to_string());
@@ -524,24 +491,10 @@ impl From<StreamingError> for RariError {
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum LoadingStateError {
-    LoadingNotFound {
-        path: String,
-        message: String,
-    },
-    RenderError {
-        path: String,
-        message: String,
-        source: Option<String>,
-    },
-    SuspenseError {
-        message: String,
-        boundary_id: Option<String>,
-    },
-    InvalidOutput {
-        path: String,
-        message: String,
-        details: Option<String>,
-    },
+    LoadingNotFound { path: String, message: String },
+    RenderError { path: String, message: String, source: Option<String> },
+    SuspenseError { message: String, boundary_id: Option<String> },
+    InvalidOutput { path: String, message: String, details: Option<String> },
 }
 
 impl std::fmt::Display for LoadingStateError {
@@ -550,39 +503,22 @@ impl std::fmt::Display for LoadingStateError {
             Self::LoadingNotFound { path, message } => {
                 write!(f, "Loading component not found at '{path}': {message}")
             }
-            Self::RenderError {
-                path,
-                message,
-                source,
-            } => {
-                write!(
-                    f,
-                    "Failed to render loading component at '{path}': {message}"
-                )?;
+            Self::RenderError { path, message, source } => {
+                write!(f, "Failed to render loading component at '{path}': {message}")?;
                 if let Some(src) = source {
                     write!(f, " (source: {src})")?;
                 }
                 Ok(())
             }
-            Self::SuspenseError {
-                message,
-                boundary_id,
-            } => {
+            Self::SuspenseError { message, boundary_id } => {
                 write!(f, "Suspense boundary error: {message}")?;
                 if let Some(id) = boundary_id {
                     write!(f, " (boundary ID: {id})")?;
                 }
                 Ok(())
             }
-            Self::InvalidOutput {
-                path,
-                message,
-                details,
-            } => {
-                write!(
-                    f,
-                    "Invalid loading component output from '{path}': {message}"
-                )?;
+            Self::InvalidOutput { path, message, details } => {
+                write!(f, "Invalid loading component output from '{path}': {message}")?;
                 if let Some(d) = details {
                     write!(f, " ({d})")?;
                 }
@@ -617,11 +553,7 @@ impl From<LoadingStateError> for RariError {
                     details.insert("boundary_id".to_string(), id.clone());
                 }
             }
-            LoadingStateError::InvalidOutput {
-                path,
-                details: output_details,
-                ..
-            } => {
+            LoadingStateError::InvalidOutput { path, details: output_details, .. } => {
                 details.insert("path".to_string(), path.clone());
                 details.insert("error_type".to_string(), "invalid_output".to_string());
                 if let Some(d) = output_details {

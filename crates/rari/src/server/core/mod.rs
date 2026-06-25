@@ -1,48 +1,54 @@
 pub mod types;
 pub mod utils;
 
-use crate::rsc::actions::{handle_form_action, handle_server_action};
-use crate::rsc::rendering::core::ResourceLimits;
-use crate::server::cache::handler::CacheHandlerRegistry;
-use crate::server::cache::response;
-use crate::server::config::{
-    CACHE_LAYER_IMAGE, CACHE_LAYER_LAYOUT, CACHE_LAYER_OG, CACHE_LAYER_RESPONSE, Config,
-};
-use crate::server::handlers::api::{api_cors_preflight, handle_api_route};
-use crate::server::handlers::app::handle_app_route;
-use crate::server::handlers::hmr::handle_hmr_action;
-use crate::server::handlers::revalidate::revalidate_by_path;
-use crate::server::handlers::route_info::get_route_info;
-use crate::server::handlers::rsc::{
-    health_check, register_client_component, register_component, stream_component,
-};
-use crate::server::handlers::r#static::{
-    cors_preflight_ok, root_handler, serve_static_asset, static_or_spa_handler,
-};
-use crate::server::loaders::cache::CacheLoader;
-use crate::server::loaders::component::ComponentLoader;
-use crate::server::middleware::proxy::ProxyLayer;
-use crate::server::middleware::request::{cors_middleware, security_headers_middleware};
-use crate::server::routing::{api_routes, app_router};
-use crate::server::vite::{
-    check_vite_server_health, vite_reverse_proxy, vite_src_proxy, vite_websocket_proxy,
-};
-use axum::extract::DefaultBodyLimit;
+use std::{net::SocketAddr, sync::Arc};
+
 use axum::{
     Router,
+    extract::DefaultBodyLimit,
     middleware::{self},
     routing::{any, get, post},
 };
 use colored::Colorize;
 use rari_error::RariError;
 use rustc_hash::FxHashMap;
-use std::net::SocketAddr;
-use std::sync::Arc;
 use tokio::net::TcpListener;
-use tower_http::compression::CompressionLayer;
-use tower_http::services::ServeDir;
+use tower_http::{compression::CompressionLayer, services::ServeDir};
 use tracing::{debug, error};
 use types::ServerState;
+
+use crate::{
+    rsc::{
+        actions::{handle_form_action, handle_server_action},
+        rendering::core::ResourceLimits,
+    },
+    server::{
+        cache::{handler::CacheHandlerRegistry, response},
+        config::{
+            CACHE_LAYER_IMAGE, CACHE_LAYER_LAYOUT, CACHE_LAYER_OG, CACHE_LAYER_RESPONSE, Config,
+        },
+        handlers::{
+            api::{api_cors_preflight, handle_api_route},
+            app::handle_app_route,
+            hmr::handle_hmr_action,
+            revalidate::revalidate_by_path,
+            route_info::get_route_info,
+            rsc::{health_check, register_client_component, register_component, stream_component},
+            r#static::{
+                cors_preflight_ok, root_handler, serve_static_asset, static_or_spa_handler,
+            },
+        },
+        loaders::{cache::CacheLoader, component::ComponentLoader},
+        middleware::{
+            proxy::ProxyLayer,
+            request::{cors_middleware, security_headers_middleware},
+        },
+        routing::{api_routes, app_router},
+        vite::{
+            check_vite_server_health, vite_reverse_proxy, vite_src_proxy, vite_websocket_proxy,
+        },
+    },
+};
 
 #[derive(Clone, Copy, Debug)]
 struct NotStreamingResponse;
@@ -144,10 +150,8 @@ impl Server {
         let response_layer = config.cache.layer(CACHE_LAYER_RESPONSE);
         let response_handler = cache_registry.resolve(&response_layer.handler);
         let cache_config = response::CacheConfig::from_env(config.is_production());
-        let response_cache = Arc::new(response::ResponseCache::new_with_handler(
-            cache_config,
-            response_handler,
-        ));
+        let response_cache =
+            Arc::new(response::ResponseCache::new_with_handler(cache_config, response_handler));
 
         let image_layer = config.cache.layer(CACHE_LAYER_IMAGE);
         let image_handler = cache_registry.resolve(&image_layer.handler);
@@ -158,13 +162,11 @@ impl Server {
         let og_generator = {
             let runtime = Arc::clone(&js_runtime);
             let og_cache = crate::server::og::OgImageCache::with_handler(og_handler, &project_root);
-            let generator = Arc::new(
-                crate::server::og::OgImageGenerator::with_capacity_and_cache(
-                    runtime,
-                    project_root.clone(),
-                    og_cache,
-                ),
-            );
+            let generator = Arc::new(crate::server::og::OgImageGenerator::with_capacity_and_cache(
+                runtime,
+                project_root.clone(),
+                og_cache,
+            ));
 
             let manifest_path = "dist/server/routes.json";
             if let Err(e) = generator.load_manifest(manifest_path).await {
@@ -234,12 +236,7 @@ impl Server {
             .local_addr()
             .map_err(|e| RariError::network(format!("Failed to get local address: {e}")))?;
 
-        Ok(Self {
-            router,
-            config,
-            listener,
-            address: socket_addr,
-        })
+        Ok(Self { router, config, listener, address: socket_addr })
     }
 
     async fn build_router(config: &Config, mut state: ServerState) -> Result<Router, RariError> {
@@ -259,9 +256,7 @@ impl Server {
 
         state.image_optimizer = Some(Arc::clone(&image_optimizer));
 
-        let image_state = crate::server::image::ImageState {
-            optimizer: image_optimizer,
-        };
+        let image_state = crate::server::image::ImageState { optimizer: image_optimizer };
 
         let revalidation_router = Router::new()
             .route("/_rari/revalidate", post(revalidate_by_path))
@@ -280,23 +275,14 @@ impl Server {
             .merge(revalidation_router);
 
         let image_router = Router::new()
-            .route(
-                "/_rari/image",
-                get(crate::server::image::handle_image_request),
-            )
+            .route("/_rari/image", get(crate::server::image::handle_image_request))
             .with_state(image_state);
 
         router = router.merge(image_router);
 
         let og_router = Router::new()
-            .route(
-                "/_rari/og/",
-                get(crate::server::handlers::og::og_image_handler_root),
-            )
-            .route(
-                "/_rari/og/{*path}",
-                get(crate::server::handlers::og::og_image_handler),
-            )
+            .route("/_rari/og/", get(crate::server::handlers::og::og_image_handler_root))
+            .route("/_rari/og/{*path}", get(crate::server::handlers::og::og_image_handler))
             .with_state(state.clone());
 
         router = router.merge(og_router);
@@ -343,9 +329,8 @@ impl Server {
                 .route("/{*path}", get(handle_app_route))
                 .route("/{*path}", axum::routing::options(cors_preflight_ok));
         } else if config.is_production() {
-            router = router
-                .route("/", get(root_handler))
-                .route("/{*path}", get(static_or_spa_handler));
+            router =
+                router.route("/", get(root_handler)).route("/{*path}", get(static_or_spa_handler));
         } else {
             let static_service =
                 ServeDir::new(config.public_dir()).append_index_html_on_directories(true);
@@ -373,13 +358,9 @@ impl Server {
     pub async fn start(self) -> Result<(), RariError> {
         self.display_startup_message();
 
-        axum::serve(
-            self.listener,
-            self.router
-                .into_make_service_with_connect_info::<SocketAddr>(),
-        )
-        .await
-        .map_err(|e| RariError::network(format!("Server error: {e}")))?;
+        axum::serve(self.listener, self.router.into_make_service_with_connect_info::<SocketAddr>())
+            .await
+            .map_err(|e| RariError::network(format!("Server error: {e}")))?;
 
         Ok(())
     }

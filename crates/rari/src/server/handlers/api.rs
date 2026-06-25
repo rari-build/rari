@@ -1,7 +1,3 @@
-use crate::server::ServerState;
-use crate::server::core::utils::http::{add_api_cors_headers, add_api_security_headers};
-use crate::server::handlers::r#static::cors_preflight_response;
-use crate::server::routing::api_error::{ApiRouteError, create_generic_error_response};
 use axum::{
     body::Body,
     extract::State,
@@ -10,6 +6,13 @@ use axum::{
 };
 use tracing::error;
 
+use crate::server::{
+    ServerState,
+    core::utils::http::{add_api_cors_headers, add_api_security_headers},
+    handlers::r#static::cors_preflight_response,
+    routing::api_error::{ApiRouteError, create_generic_error_response},
+};
+
 fn add_cors_headers(
     response_headers: &mut HeaderMap,
     origin: Option<&str>,
@@ -17,13 +20,7 @@ fn add_cors_headers(
     allow_credentials: bool,
     max_age: u32,
 ) {
-    add_api_cors_headers(
-        response_headers,
-        origin,
-        allowed_origins,
-        allow_credentials,
-        max_age,
-    );
+    add_api_cors_headers(response_headers, origin, allowed_origins, allow_credentials, max_age);
 }
 
 #[axum::debug_handler]
@@ -38,13 +35,8 @@ pub async fn api_cors_preflight(
         && let Some(methods) = api_handler.get_supported_methods(path)
     {
         let mut builder = Response::builder().status(StatusCode::NO_CONTENT);
-        #[expect(
-            clippy::expect_used,
-            reason = "Response::builder() always initializes headers"
-        )]
-        let headers = builder
-            .headers_mut()
-            .expect("Response builder should have headers");
+        #[expect(clippy::expect_used, reason = "Response::builder() always initializes headers")]
+        let headers = builder.headers_mut().expect("Response builder should have headers");
 
         let origin = request_headers.get("origin").and_then(|v| v.to_str().ok());
         let cors_config = state.config.cors_config();
@@ -68,9 +60,7 @@ pub async fn api_cors_preflight(
         }
 
         #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
-        return builder
-            .body(Body::empty())
-            .expect("Valid preflight response");
+        return builder.body(Body::empty()).expect("Valid preflight response");
     }
 
     cors_preflight_response()
@@ -155,10 +145,7 @@ pub async fn handle_api_route(
         }
     };
 
-    match api_handler
-        .execute_handler(&route_match, req, is_development)
-        .await
-    {
+    match api_handler.execute_handler(&route_match, req, is_development).await {
         Ok(mut response) => {
             let headers = response.headers_mut();
             if is_development {

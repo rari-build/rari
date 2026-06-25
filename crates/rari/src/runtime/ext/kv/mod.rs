@@ -1,7 +1,9 @@
-use super::ExtensionTrait;
+use std::path::PathBuf;
+
 use deno_core::{Extension, extension};
 use deno_kv::{dynamic::MultiBackendDbHandler, remote::RemoteDbHandler, sqlite::SqliteDbHandler};
-use std::path::PathBuf;
+
+use super::ExtensionTrait;
 
 extension!(
     init_kv,
@@ -21,28 +23,17 @@ impl ExtensionTrait<KvStore> for deno_kv::deno_kv {
 }
 
 pub fn extensions(store: KvStore, is_snapshot: bool) -> Vec<Extension> {
-    vec![
-        deno_kv::deno_kv::build(store, is_snapshot),
-        init_kv::build((), is_snapshot),
-    ]
+    vec![deno_kv::deno_kv::build(store, is_snapshot), init_kv::build((), is_snapshot)]
 }
 
 #[derive(Clone)]
 enum KvStoreBuilder {
-    Local {
-        path: Option<PathBuf>,
-        rng_seed: Option<u64>,
-    },
-    Remote {
-        http_options: deno_kv::remote::HttpOptions,
-    },
+    Local { path: Option<PathBuf>, rng_seed: Option<u64> },
+    Remote { http_options: deno_kv::remote::HttpOptions },
 }
 
 #[derive(Clone, Copy)]
-#[expect(
-    clippy::struct_field_names,
-    reason = "All fields are max limits by design"
-)]
+#[expect(clippy::struct_field_names, reason = "All fields are max limits by design")]
 pub struct KvConfig {
     pub max_write_key_size_bytes: usize,
     pub max_value_size_bytes: usize,

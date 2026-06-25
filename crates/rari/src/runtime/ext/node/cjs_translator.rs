@@ -1,25 +1,20 @@
 // Copyright 2018-2025 the Deno authors. All rights reserved. MIT license.
 
-use std::borrow::Cow;
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 
-use deno_ast::MediaType;
-use deno_ast::ModuleExportsAndReExports;
-use deno_ast::ModuleSpecifier;
+use deno_ast::{MediaType, ModuleExportsAndReExports, ModuleSpecifier};
 use deno_error::JsErrorBox;
 use deno_resolver::npm::DenoInNpmPackageChecker;
 use deno_runtime::deno_fs;
-use node_resolver::DenoIsBuiltInNodeModuleChecker;
-use node_resolver::analyze::CjsAnalysis as ExtNodeCjsAnalysis;
-use node_resolver::analyze::CjsAnalysisExports;
-use node_resolver::analyze::EsmAnalysisMode;
+use node_resolver::{
+    DenoIsBuiltInNodeModuleChecker,
+    analyze::{CjsAnalysis as ExtNodeCjsAnalysis, CjsAnalysisExports, EsmAnalysisMode},
+};
 use rustc_hash::FxHashMap;
-use serde::Deserialize;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sys_traits::impls::RealSys;
 
-use super::resolvers::NpmPackageFolderResolverImpl;
-use super::resolvers::Resolver;
+use super::resolvers::{NpmPackageFolderResolverImpl, Resolver};
 
 pub type NodeCodeTranslator = node_resolver::analyze::NodeCodeTranslator<
     CjsCodeAnalyzer,
@@ -62,11 +57,7 @@ pub struct CjsCodeAnalyzer {
 
 impl CjsCodeAnalyzer {
     pub fn new(fs: deno_fs::FileSystemRc, cjs_tracker: Arc<Resolver>) -> Self {
-        Self {
-            fs,
-            cache: std::cell::RefCell::new(FxHashMap::default()),
-            cjs_tracker,
-        }
+        Self { fs, cache: std::cell::RefCell::new(FxHashMap::default()), cjs_tracker }
     }
 
     async fn inner_cjs_analysis(
@@ -83,9 +74,7 @@ impl CjsCodeAnalyzer {
         let media_type = MediaType::from_specifier(specifier);
 
         if media_type == MediaType::Json {
-            return Ok(CjsAnalysis::Cjs(
-                deno_ast::ModuleExportsAndReExports::default(),
-            ));
+            return Ok(CjsAnalysis::Cjs(deno_ast::ModuleExportsAndReExports::default()));
         }
 
         let cjs_tracker = Arc::clone(&self.cjs_tracker);
@@ -129,9 +118,7 @@ impl CjsCodeAnalyzer {
         .await
         .expect("task panicked")?;
 
-        self.cache
-            .borrow_mut()
-            .insert(specifier.as_str().to_string(), analysis.clone());
+        self.cache.borrow_mut().insert(specifier.as_str().to_string(), analysis.clone());
         Ok(analysis)
     }
 
@@ -202,9 +189,7 @@ impl node_resolver::analyze::CjsCodeAnalyzer for CjsCodeAnalyzer {
             }
         };
 
-        let analysis = self
-            .inner_cjs_analysis(specifier, &source, esm_analysis_mode)
-            .await?;
+        let analysis = self.inner_cjs_analysis(specifier, &source, esm_analysis_mode).await?;
 
         match analysis {
             CjsAnalysis::Esm => Ok(ExtNodeCjsAnalysis::Esm(source, None)),

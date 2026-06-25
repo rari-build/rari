@@ -1,34 +1,44 @@
 #![allow(clippy::unused_async_trait_impl)]
 
+use std::{
+    fmt::Write,
+    sync::{Arc, atomic::Ordering},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+};
+
 use cow_utils::CowUtils;
 use dashmap::DashMap;
 use parking_lot::Mutex;
+use rari_error::RariError;
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde_json::Value as JsonValue;
-use std::fmt::Write;
-use std::sync::Arc;
-use std::sync::atomic::Ordering;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::time::{sleep, timeout};
 use tracing::error;
 
-use crate::rsc::components::ComponentRegistry;
-use crate::rsc::flight::serializer::RscSerializer;
-use crate::rsc::rendering::core::loader::{RscJsLoader, RscModuleOperation};
-use crate::rsc::rendering::streaming::{RscStream, StreamingRenderer};
-use crate::rsc::utils::dependencies::{extract_dependencies, hash_string};
-use crate::runtime::JsExecutionRuntime;
-use rari_error::RariError;
-
-use super::constants::{
-    BATCH_ERROR_COLLECTION_SCRIPT, CACHE_CLEANUP_INTERVAL, COMPONENT_AVAILABILITY_CHECK_DELAY_MS,
-    COMPONENT_EVAL_SETUP_SCRIPT, EXTENSION_CHECKS_SCRIPT, JSX_RUNTIME_SETUP_SCRIPT, MAX_RETRIES,
-    MEMORY_PRESSURE_THRESHOLD, MODULE_REGISTRATION_SCRIPT, PROMISE_MANAGER_CHECK_SCRIPT,
-    REGISTRY_PROXY_SETUP_SCRIPT, RESOLVE_SERVER_FUNCTIONS_SCRIPT, RETRY_BASE_DELAY_MS,
-    SERVER_ACTION_INVOCATION_SCRIPT, SERVER_FUNCTION_RESOLVER_SCRIPT, V8_CACHE_CLEAR_SCRIPT,
+use super::{
+    constants::{
+        BATCH_ERROR_COLLECTION_SCRIPT, CACHE_CLEANUP_INTERVAL,
+        COMPONENT_AVAILABILITY_CHECK_DELAY_MS, COMPONENT_EVAL_SETUP_SCRIPT,
+        EXTENSION_CHECKS_SCRIPT, JSX_RUNTIME_SETUP_SCRIPT, MAX_RETRIES, MEMORY_PRESSURE_THRESHOLD,
+        MODULE_REGISTRATION_SCRIPT, PROMISE_MANAGER_CHECK_SCRIPT, REGISTRY_PROXY_SETUP_SCRIPT,
+        RESOLVE_SERVER_FUNCTIONS_SCRIPT, RETRY_BASE_DELAY_MS, SERVER_ACTION_INVOCATION_SCRIPT,
+        SERVER_FUNCTION_RESOLVER_SCRIPT, V8_CACHE_CLEAR_SCRIPT,
+    },
+    types::{ResourceLimits, ResourceMetrics, ResourceTracker},
+    utils::transform_imports_for_hmr,
 };
-use super::types::{ResourceLimits, ResourceMetrics, ResourceTracker};
-use super::utils::transform_imports_for_hmr;
+use crate::{
+    rsc::{
+        components::ComponentRegistry,
+        flight::serializer::RscSerializer,
+        rendering::{
+            core::loader::{RscJsLoader, RscModuleOperation},
+            streaming::{RscStream, StreamingRenderer},
+        },
+        utils::dependencies::{extract_dependencies, hash_string},
+    },
+    runtime::JsExecutionRuntime,
+};
 
 pub struct RscRenderer {
     pub(crate) runtime: Arc<JsExecutionRuntime>,
@@ -95,9 +105,7 @@ impl RscRenderer {
 
     pub async fn force_cleanup(&self) -> Result<(), RariError> {
         self.clear_script_cache();
-        self.resource_tracker
-            .memory_pressure_events
-            .store(0, Ordering::Relaxed);
+        self.resource_tracker.memory_pressure_events.store(0, Ordering::Relaxed);
         Ok(())
     }
 
@@ -108,18 +116,11 @@ impl RscRenderer {
     }
 
     fn get_cached_script(&self, cache_key: &str) -> Option<String> {
-        let result = self
-            .script_cache
-            .get(cache_key)
-            .map(|entry| entry.value().clone());
+        let result = self.script_cache.get(cache_key).map(|entry| entry.value().clone());
         if result.is_some() {
-            self.resource_tracker
-                .cache_hits
-                .fetch_add(1, Ordering::Relaxed);
+            self.resource_tracker.cache_hits.fetch_add(1, Ordering::Relaxed);
         } else {
-            self.resource_tracker
-                .cache_misses
-                .fetch_add(1, Ordering::Relaxed);
+            self.resource_tracker.cache_misses.fetch_add(1, Ordering::Relaxed);
         }
         result
     }
@@ -127,9 +128,7 @@ impl RscRenderer {
     fn cache_script(&self, cache_key: String, script: String) {
         if self.script_cache.len() > self.resource_limits.max_cache_size {
             self.script_cache.clear();
-            self.resource_tracker
-                .memory_pressure_events
-                .fetch_add(1, Ordering::Relaxed);
+            self.resource_tracker.memory_pressure_events.fetch_add(1, Ordering::Relaxed);
         }
 
         self.script_cache.insert(cache_key, script);
@@ -147,17 +146,12 @@ impl RscRenderer {
         let timeout_duration =
             Duration::from_millis(self.resource_limits.max_script_execution_time_ms);
 
-        match timeout(
-            timeout_duration,
-            self.runtime.execute_script(script_name.clone(), script),
-        )
-        .await
+        match timeout(timeout_duration, self.runtime.execute_script(script_name.clone(), script))
+            .await
         {
             Ok(result) => result,
             Err(_) => {
-                self.resource_tracker
-                    .timeout_errors
-                    .fetch_add(1, Ordering::Relaxed);
+                self.resource_tracker.timeout_errors.fetch_add(1, Ordering::Relaxed);
                 Err(RariError::js_execution(format!(
                     "Script '{}' execution timed out after {}ms",
                     script_name, self.resource_limits.max_script_execution_time_ms
@@ -210,9 +204,7 @@ globalThis['~errors'].batch.push({{
         let final_script = format!("{combined_script}\n\n{BATCH_ERROR_COLLECTION_SCRIPT}");
 
         let batch_name = format!("batch_execution_{}", scripts.len());
-        let result = self
-            .execute_script_with_timeout(batch_name, final_script)
-            .await?;
+        let result = self.execute_script_with_timeout(batch_name, final_script).await?;
 
         self.handle_batch_script_result(result, scripts.len())
     }
@@ -230,10 +222,8 @@ globalThis['~errors'].batch.push({{
                 .iter()
                 .filter_map(|e| {
                     e.get("script").and_then(|s| s.as_str()).map(|script| {
-                        let error_msg = e
-                            .get("error")
-                            .and_then(|m| m.as_str())
-                            .unwrap_or("Unknown error");
+                        let error_msg =
+                            e.get("error").and_then(|m| m.as_str()).unwrap_or("Unknown error");
                         format!("  - {script}: {error_msg}")
                     })
                 })
@@ -254,10 +244,7 @@ globalThis['~errors'].batch.push({{
         }
 
         self.runtime
-            .execute_script(
-                "extension-checks".to_string(),
-                EXTENSION_CHECKS_SCRIPT.to_string(),
-            )
+            .execute_script("extension-checks".to_string(), EXTENSION_CHECKS_SCRIPT.to_string())
             .await?;
 
         let html_render_script = include_str!("../layout/js/html_render.js");
@@ -277,10 +264,7 @@ globalThis['~errors'].batch.push({{
     ) -> Result<(), RariError> {
         let init_registry_script = RscJsLoader::create_global_init();
         self.runtime
-            .execute_script(
-                "ensure_global_registries.js".to_string(),
-                init_registry_script,
-            )
+            .execute_script("ensure_global_registries.js".to_string(), init_registry_script)
             .await?;
 
         let isolation_namespacing_script =
@@ -304,8 +288,7 @@ globalThis['~errors'].batch.push({{
             }
         }
 
-        self.register_component_without_loading(component_id, component_code)
-            .await?;
+        self.register_component_without_loading(component_id, component_code).await?;
 
         self.load_all_components().await?;
 
@@ -318,11 +301,7 @@ globalThis['~errors'].batch.push({{
             .iter()
             .filter_map(|entry| {
                 let key = entry.key();
-                if key.contains(component_id) {
-                    Some(key.clone())
-                } else {
-                    None
-                }
+                if key.contains(component_id) { Some(key.clone()) } else { None }
             })
             .collect();
 
@@ -343,13 +322,10 @@ globalThis['~errors'].batch.push({{
             registry.mark_component_not_loaded(component_id);
         }
 
-        self.runtime
-            .clear_module_loader_caches(component_id)
-            .await?;
+        self.runtime.clear_module_loader_caches(component_id).await?;
 
-        let force_v8_cache_clear_script = V8_CACHE_CLEAR_SCRIPT
-            .cow_replace("{component_id}", component_id)
-            .into_owned();
+        let force_v8_cache_clear_script =
+            V8_CACHE_CLEAR_SCRIPT.cow_replace("{component_id}", component_id).into_owned();
 
         self.runtime
             .execute_script(
@@ -511,10 +487,7 @@ globalThis['~errors'].batch.push({{
         );
 
         self.runtime
-            .execute_script(
-                format!("register_exports_{component_id}.js"),
-                register_exports_script,
-            )
+            .execute_script(format!("register_exports_{component_id}.js"), register_exports_script)
             .await?;
 
         Ok(())
@@ -533,10 +506,7 @@ globalThis['~errors'].batch.push({{
         let init_registry_script = RscJsLoader::create_global_init();
 
         self.runtime
-            .execute_script(
-                "init_global_registries.js".to_string(),
-                init_registry_script.clone(),
-            )
+            .execute_script("init_global_registries.js".to_string(), init_registry_script.clone())
             .await?;
 
         for component_id in &components_to_load {
@@ -552,10 +522,7 @@ globalThis['~errors'].batch.push({{
                     RariError::not_found(format!("Component not found: {component_id}"))
                 })?;
 
-                (
-                    component.transformed_source.clone(),
-                    component.dependencies.clone(),
-                )
+                (component.transformed_source.clone(), component.dependencies.clone())
             };
 
             let module_specifier_js = format!("file:///rari_component/{component_id}.js");
@@ -585,20 +552,14 @@ globalThis['~errors'].batch.push({{
 
             let load_script = RscJsLoader::create_module_operation_script(
                 component_id,
-                RscModuleOperation::Load {
-                    module_specifier: module_specifier_js,
-                },
+                RscModuleOperation::Load { module_specifier: module_specifier_js },
             );
 
-            match self
-                .runtime
-                .execute_script(format!("load_{component_id}.js"), load_script)
-                .await
+            match self.runtime.execute_script(format!("load_{component_id}.js"), load_script).await
             {
                 Ok(_) => {
                     let verify_script = self.create_component_verification_script(component_id);
-                    self.execute_verification_script(component_id, verify_script)
-                        .await?;
+                    self.execute_verification_script(component_id, verify_script).await?;
 
                     let mut registry = self.component_registry.lock();
                     registry.mark_component_loaded(component_id);
@@ -634,10 +595,7 @@ globalThis['~errors'].batch.push({{
                 ))
             })?;
 
-        let success = result
-            .get("success")
-            .and_then(serde_json::Value::as_bool)
-            .unwrap_or(false);
+        let success = result.get("success").and_then(serde_json::Value::as_bool).unwrap_or(false);
 
         if success {
             return Ok(());
@@ -664,10 +622,7 @@ globalThis['~errors'].batch.push({{
         let registry = self.component_registry.lock();
         registry.get_component(component_id).is_some()
     }
-    #[expect(
-        clippy::unused_async_trait_impl,
-        reason = "Async required by trait implementation"
-    )]
+    #[expect(clippy::unused_async_trait_impl, reason = "Async required by trait implementation")]
     pub async fn is_client_reference(&self, component_id: &str) -> bool {
         let registry = self.component_registry.lock();
         let is_client_ref = registry.is_client_reference(component_id);
@@ -716,8 +671,7 @@ globalThis['~errors'].batch.push({{
         component_id: &str,
         props: Option<&str>,
     ) -> Result<String, RariError> {
-        self.render_to_rsc_format_with_context(component_id, props, None)
-            .await
+        self.render_to_rsc_format_with_context(component_id, props, None).await
     }
 
     pub async fn render_to_rsc_format_with_context(
@@ -727,9 +681,8 @@ globalThis['~errors'].batch.push({{
         request_context: Option<Arc<crate::server::middleware::request_context::RequestContext>>,
     ) -> Result<String, RariError> {
         self.resource_tracker.increment_active_renders();
-        let result = self
-            .internal_render_to_rsc_with_context(component_id, props, request_context)
-            .await;
+        let result =
+            self.internal_render_to_rsc_with_context(component_id, props, request_context).await;
         self.resource_tracker.decrement_active_renders();
         result
     }
@@ -739,8 +692,7 @@ globalThis['~errors'].batch.push({{
         component_id: &str,
         props: Option<&str>,
     ) -> Result<String, RariError> {
-        self.render_to_string_with_context(component_id, props, None)
-            .await
+        self.render_to_string_with_context(component_id, props, None).await
     }
 
     pub async fn render_to_string_with_context(
@@ -750,9 +702,8 @@ globalThis['~errors'].batch.push({{
         request_context: Option<Arc<crate::server::middleware::request_context::RequestContext>>,
     ) -> Result<String, RariError> {
         self.resource_tracker.increment_active_renders();
-        let result = self
-            .internal_render_to_string_with_context(component_id, props, request_context)
-            .await;
+        let result =
+            self.internal_render_to_string_with_context(component_id, props, request_context).await;
         self.resource_tracker.decrement_active_renders();
         result
     }
@@ -773,9 +724,7 @@ globalThis['~errors'].batch.push({{
         }
 
         if !self.component_exists(component_id) {
-            return Err(RariError::not_found(format!(
-                "Component not found: {component_id}"
-            )));
+            return Err(RariError::not_found(format!("Component not found: {component_id}")));
         }
 
         let component_hash = hash_string(component_id);
@@ -823,8 +772,7 @@ globalThis['~errors'].batch.push({{
             .await?;
 
         let render_duration = render_start.elapsed();
-        self.resource_tracker
-            .record_render_completion(render_duration);
+        self.resource_tracker.record_render_completion(render_duration);
 
         self.process_rsc_extraction_result(component_id, extraction_result)
     }
@@ -898,9 +846,7 @@ globalThis['~errors'].batch.push({{
     ) -> Result<String, RariError> {
         let render_start = Instant::now();
 
-        self.resource_tracker
-            .total_renders
-            .fetch_add(1, Ordering::Relaxed);
+        self.resource_tracker.total_renders.fetch_add(1, Ordering::Relaxed);
 
         if !self.initialized {
             return Err(RariError::internal("RSC renderer not initialized"));
@@ -915,9 +861,7 @@ globalThis['~errors'].batch.push({{
         if !is_app_router_component {
             let component_found = self.component_exists(component_id);
             if !component_found {
-                return Err(RariError::not_found(format!(
-                    "Component not found: {component_id}"
-                )));
+                return Err(RariError::not_found(format!("Component not found: {component_id}")));
             }
         }
 
@@ -1021,11 +965,8 @@ globalThis['~errors'].batch.push({{
 
         match extraction_result {
             Ok(value) => {
-                let mut html = value
-                    .get("html")
-                    .and_then(|h| h.as_str())
-                    .unwrap_or_default()
-                    .to_string();
+                let mut html =
+                    value.get("html").and_then(|h| h.as_str()).unwrap_or_default().to_string();
 
                 html = self.sanitize_html_output(&html, component_id);
 
@@ -1075,10 +1016,7 @@ globalThis['~errors'].batch.push({{
         }
     }
 
-    #[expect(
-        clippy::unused_async_trait_impl,
-        reason = "Async required by trait implementation"
-    )]
+    #[expect(clippy::unused_async_trait_impl, reason = "Async required by trait implementation")]
     async fn handle_client_reference(
         &mut self,
         component_id: &str,
@@ -1122,11 +1060,8 @@ globalThis['~errors'].batch.push({{
     fn sanitize_html_output(&self, html: &str, component_id: &str) -> String {
         let mut sanitized_html = html.to_string();
 
-        let sanitization_rules = [
-            (r#"\{"id".*?\}"#, ""),
-            (r"<pre>\{.*?\}</pre>", ""),
-            (r#"\[(\{".*?},?)+\]"#, "[]"),
-        ];
+        let sanitization_rules =
+            [(r#"\{"id".*?\}"#, ""), (r"<pre>\{.*?\}</pre>", ""), (r#"\[(\{".*?},?)+\]"#, "[]")];
 
         for (pattern, replacement) in &sanitization_rules {
             if let Ok(regex) = regex::Regex::new(pattern)
@@ -1211,11 +1146,7 @@ globalThis['~errors'].batch.push({{
 
         self.runtime
             .execute_script(
-                format!(
-                    "execute_action_{}_{}.js",
-                    function_id.cow_replace('/', "_"),
-                    export_name
-                ),
+                format!("execute_action_{}_{}.js", function_id.cow_replace('/', "_"), export_name),
                 script,
             )
             .await
@@ -1227,8 +1158,7 @@ globalThis['~errors'].batch.push({{
         component_id: &str,
         props: Option<&str>,
     ) -> Result<RscStream, RariError> {
-        self.render_with_streaming_and_context(component_id, props, None)
-            .await
+        self.render_with_streaming_and_context(component_id, props, None).await
     }
 
     pub async fn render_with_streaming_and_context(
@@ -1268,10 +1198,7 @@ globalThis['~errors'].batch.push({{
             }
 
             let mut streaming_renderer = StreamingRenderer::new(Arc::clone(&self.runtime));
-            match streaming_renderer
-                .start_streaming(&canonical_id, props)
-                .await
-            {
+            match streaming_renderer.start_streaming(&canonical_id, props).await {
                 Ok(stream) => return Ok(stream),
                 Err(e) => {
                     let msg = format!("{e}");
@@ -1346,8 +1273,7 @@ globalThis['~errors'].batch.push({{
     }
 
     pub async fn ensure_component_loaded(&self, component_id: &str) -> Result<(), RariError> {
-        self.ensure_component_loaded_with_force(component_id, false)
-            .await
+        self.ensure_component_loaded_with_force(component_id, false).await
     }
 
     pub async fn ensure_component_loaded_with_force(
@@ -1357,10 +1283,7 @@ globalThis['~errors'].batch.push({{
     ) -> Result<(), RariError> {
         let init_registry_script = RscJsLoader::create_global_init();
         self.runtime
-            .execute_script(
-                "init_global_registries.js".to_string(),
-                init_registry_script.clone(),
-            )
+            .execute_script("init_global_registries.js".to_string(), init_registry_script.clone())
             .await?;
 
         let is_loaded = {
@@ -1419,10 +1342,7 @@ globalThis['~errors'].batch.push({{
             let component = registry.get_component(component_id).ok_or_else(|| {
                 RariError::not_found(format!("Component not registered: {component_id}"))
             })?;
-            (
-                component.transformed_source.clone(),
-                component.dependencies.clone(),
-            )
+            (component.transformed_source.clone(), component.dependencies.clone())
         };
 
         let isolation_script = RscJsLoader::create_isolation_init_script(component_id);
@@ -1486,9 +1406,7 @@ globalThis['~errors'].batch.push({{
                 )
                 .await?;
 
-            self.component_registry
-                .lock()
-                .mark_component_initially_loaded(component_id);
+            self.component_registry.lock().mark_component_initially_loaded(component_id);
         } else {
             // HMR reload: Skip V8 ES module system entirely to avoid "Module already evaluated" crashes
         }
@@ -1502,10 +1420,7 @@ globalThis['~errors'].batch.push({{
         );
 
         self.runtime
-            .execute_script(
-                format!("register_exports_{component_id}.js"),
-                register_exports_script,
-            )
+            .execute_script(format!("register_exports_{component_id}.js"), register_exports_script)
             .await?;
 
         if force_reload {
@@ -1527,16 +1442,12 @@ globalThis['~errors'].batch.push({{
                     .cow_replace("export default function", "function")
                     .into_owned();
             } else {
-                transformed_source_safe = transformed_source_safe
-                    .cow_replace("export default ", "")
-                    .into_owned();
+                transformed_source_safe =
+                    transformed_source_safe.cow_replace("export default ", "").into_owned();
             }
 
             transformed_source_safe = transformed_source_safe
-                .cow_replace(
-                    &format!("export const ~rari_main_export = {component_id};"),
-                    "",
-                )
+                .cow_replace(&format!("export const ~rari_main_export = {component_id};"), "")
                 .cow_replace("export const metadata =", "const metadata =")
                 .cow_replace("export const ", "const ")
                 .cow_replace("export function ", "function ")
@@ -1570,10 +1481,7 @@ globalThis['~rsc'].functions['{component_id}'] = {component_id};
 
             let execution_result = self
                 .runtime
-                .execute_script(
-                    format!("direct_execution_{component_id}.js"),
-                    eval_safe_source,
-                )
+                .execute_script(format!("direct_execution_{component_id}.js"), eval_safe_source)
                 .await;
 
             if let Err(e) = execution_result {
@@ -1590,15 +1498,11 @@ globalThis['~rsc'].functions['{component_id}'] = {component_id};
             RscModuleOperation::PostRegister,
         );
         self.runtime
-            .execute_script(
-                format!("post_register_{component_id}.js"),
-                post_register_script,
-            )
+            .execute_script(format!("post_register_{component_id}.js"), post_register_script)
             .await?;
 
         let verify_script = self.create_component_verification_script(component_id);
-        self.execute_verification_script(component_id, verify_script)
-            .await?;
+        self.execute_verification_script(component_id, verify_script).await?;
         {
             let mut registry = self.component_registry.lock();
             registry.mark_component_loaded(component_id);

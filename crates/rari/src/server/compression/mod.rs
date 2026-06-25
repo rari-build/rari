@@ -1,9 +1,8 @@
 pub mod stream;
 
-pub use stream::{CompressionEncoding, compress_stream};
-
 use bytes::Bytes;
 use futures::StreamExt;
+pub use stream::{CompressionEncoding, compress_stream};
 
 pub async fn compress_body(
     body: Bytes,

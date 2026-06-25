@@ -1,7 +1,6 @@
-use super::super::layout::ComputedLayout;
-use super::border::BorderRadius;
-use super::renderer::ImageRenderer;
 use image::RgbaImage;
+
+use super::{super::layout::ComputedLayout, border::BorderRadius, renderer::ImageRenderer};
 
 impl ImageRenderer {
     pub(super) fn render_image(
@@ -18,11 +17,8 @@ impl ImageRenderer {
 
         let source_image = self.load_image(src)?;
 
-        let object_fit = layout
-            .style
-            .get("objectFit")
-            .map(std::string::String::as_str)
-            .unwrap_or("fill");
+        let object_fit =
+            layout.style.get("objectFit").map(std::string::String::as_str).unwrap_or("fill");
 
         let border_radius = self.parse_border_radius(&layout.style);
 
@@ -141,16 +137,10 @@ impl ImageRenderer {
                 Ok((resized, offset_x, offset_y))
             }
             "none" => {
-                let offset_x = if src_width < target_w {
-                    ((target_w - src_width) / 2.0) as u32
-                } else {
-                    0
-                };
-                let offset_y = if src_height < target_h {
-                    ((target_h - src_height) / 2.0) as u32
-                } else {
-                    0
-                };
+                let offset_x =
+                    if src_width < target_w { ((target_w - src_width) / 2.0) as u32 } else { 0 };
+                let offset_y =
+                    if src_height < target_h { ((target_h - src_height) / 2.0) as u32 } else { 0 };
 
                 if src_width > target_w || src_height > target_h {
                     let crop_x = if src_width > target_w {
@@ -258,9 +248,7 @@ impl ImageRenderer {
         } else if src.starts_with("data:") {
             self.load_data_url(src)
         } else {
-            Ok(image::open(src)
-                .map_err(|e| format!("Failed to load image {src}: {e}"))?
-                .to_rgba8())
+            Ok(image::open(src).map_err(|e| format!("Failed to load image {src}: {e}"))?.to_rgba8())
         }
     }
 
@@ -272,10 +260,8 @@ impl ImageRenderer {
             .build()
             .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
 
-        let response = client
-            .get(url)
-            .send()
-            .map_err(|e| format!("Failed to fetch image from {url}: {e}"))?;
+        let response =
+            client.get(url).send().map_err(|e| format!("Failed to fetch image from {url}: {e}"))?;
 
         if !response.status().is_success() {
             return Err(format!("Failed to fetch image: HTTP {}", response.status()));

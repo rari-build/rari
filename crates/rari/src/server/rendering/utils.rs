@@ -1,10 +1,12 @@
 #![allow(clippy::needless_continue)]
 
-use crate::server::config::Config;
+use std::fmt::Write;
+
 use axum::http::StatusCode;
 use cow_utils::CowUtils;
-use std::fmt::Write;
 use tracing::error;
+
+use crate::server::config::Config;
 
 pub async fn extract_asset_links_from_index_html() -> Option<String> {
     use tokio::fs;
@@ -230,11 +232,7 @@ async fn inject_assets_into_complete_document(
 ) -> Result<String, StatusCode> {
     let has_root_before = html.contains(r#"id="root""#);
 
-    let template_path = if config.is_development() {
-        "index.html"
-    } else {
-        "dist/index.html"
-    };
+    let template_path = if config.is_development() { "index.html" } else { "dist/index.html" };
 
     let template = match tokio::fs::read_to_string(template_path).await {
         Ok(t) => t,
@@ -443,11 +441,7 @@ async fn inject_content_into_template(
     content: &str,
     config: &Config,
 ) -> Result<String, StatusCode> {
-    let template_path = if config.is_development() {
-        "index.html"
-    } else {
-        "dist/index.html"
-    };
+    let template_path = if config.is_development() { "index.html" } else { "dist/index.html" };
 
     let template = match tokio::fs::read_to_string(template_path).await {
         Ok(t) => t,

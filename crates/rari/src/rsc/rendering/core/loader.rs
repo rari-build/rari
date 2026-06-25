@@ -19,9 +19,7 @@ fn create_js_wrapper(js_code: &str) -> String {
 impl RscJsLoader {
     pub fn load_component_isolation_with_id(component_id: &str) -> Result<String, &'static str> {
         let template = include_str!("js/component_isolation.js");
-        Ok(template
-            .cow_replace("{component_id}", component_id)
-            .into_owned())
+        Ok(template.cow_replace("{component_id}", component_id).into_owned())
     }
 
     pub fn load_component_render_with_data(

@@ -1,5 +1,6 @@
-use super::ExtensionTrait;
 use deno_core::{Extension, extension};
+
+use super::ExtensionTrait;
 
 extension!(
     init_react,

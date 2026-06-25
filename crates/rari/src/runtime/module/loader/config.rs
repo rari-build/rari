@@ -7,9 +7,6 @@ pub struct RuntimeConfig {
 
 impl Default for RuntimeConfig {
     fn default() -> Self {
-        Self {
-            cache_size_limit: 5000,
-            module_cache_handler: "memory".to_string(),
-        }
+        Self { cache_size_limit: 5000, module_cache_handler: "memory".to_string() }
     }
 }

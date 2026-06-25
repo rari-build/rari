@@ -1,5 +1,6 @@
-use serde::{Deserialize, Serialize};
 use std::fmt;
+
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -79,8 +80,9 @@ impl ParamValue {
     clippy::get_unwrap
 )]
 mod tests {
-    use super::*;
     use rustc_hash::FxHashMap;
+
+    use super::*;
 
     #[test]
     fn test_param_value_serialization() {
@@ -106,10 +108,7 @@ mod tests {
         let json = serde_json::to_value(&map).unwrap();
         assert!(json.is_object());
         assert_eq!(json.get("slug").and_then(|v| v.as_str()), Some("hello"));
-        assert_eq!(
-            json.get("path").and_then(|v| v.as_array()).map(|a| a.len()),
-            Some(2)
-        );
+        assert_eq!(json.get("path").and_then(|v| v.as_array()).map(|a| a.len()), Some(2));
     }
 
     #[test]

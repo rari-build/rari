@@ -5,17 +5,17 @@ mod rendering;
 mod resources;
 mod types;
 
-pub use cache::OgImageCache;
-pub use generator::OgImageGenerator;
-pub use types::{OgImageParams, OgImageResult};
+use std::sync::Arc;
 
 use axum::{
     extract::{Path, State},
     http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
+pub use cache::OgImageCache;
+pub use generator::OgImageGenerator;
 use rari_error::RariError;
-use std::sync::Arc;
+pub use types::{OgImageParams, OgImageResult};
 
 pub async fn handle_og_image_request(
     State(generator): State<Arc<OgImageGenerator>>,
@@ -44,9 +44,7 @@ pub async fn handle_og_image_request(
     response.headers_mut().insert(
         "x-cache",
         #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
-        x_cache
-            .parse()
-            .expect("x-cache header value should be valid ASCII"),
+        x_cache.parse().expect("x-cache header value should be valid ASCII"),
     );
 
     Ok(response)
@@ -81,10 +79,9 @@ impl IntoResponse for OgImageError {
             OgImageError::ExecutionError(_) | OgImageError::GenerationError(_) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, self.to_string())
             }
-            OgImageError::InternalError(_) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Internal server error".to_string(),
-            ),
+            OgImageError::InternalError(_) => {
+                (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error".to_string())
+            }
         };
 
         (status, message).into_response()

@@ -1,5 +1,6 @@
-use super::ImageFormat;
 use serde::{Deserialize, Serialize};
+
+use super::ImageFormat;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

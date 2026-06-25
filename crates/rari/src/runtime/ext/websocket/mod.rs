@@ -1,5 +1,6 @@
-use super::{ExtensionTrait, web::WebOptions};
 use deno_core::{Extension, extension};
+
+use super::{ExtensionTrait, web::WebOptions};
 
 extension!(
     init_websocket,

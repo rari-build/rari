@@ -1,14 +1,17 @@
-use crate::rsc::rendering::core::RscRenderer;
-use crate::rsc::utils::dependencies::extract_dependencies;
-use crate::runtime::JsExecutionRuntime;
-use crate::server::core::utils::component::{
-    has_use_client_directive, has_use_server_directive, wrap_server_action_module,
-};
+use std::sync::Arc;
+
 use cow_utils::CowUtils;
 use rari_error::RariError;
 use rari_utils::path_to_file_url;
-use std::sync::Arc;
 use tracing::error;
+
+use crate::{
+    rsc::{rendering::core::RscRenderer, utils::dependencies::extract_dependencies},
+    runtime::JsExecutionRuntime,
+    server::core::utils::component::{
+        has_use_client_directive, has_use_server_directive, wrap_server_action_module,
+    },
+};
 
 const DIST_DIR: &str = "dist";
 
@@ -33,14 +36,10 @@ impl ComponentLoader {
                 continue;
             }
 
-            let module_specifier = component_info
-                .get("moduleSpecifier")
-                .and_then(|s| s.as_str());
+            let module_specifier = component_info.get("moduleSpecifier").and_then(|s| s.as_str());
 
-            let bundle_path = component_info
-                .get("bundlePath")
-                .and_then(|p| p.as_str())
-                .ok_or_else(|| {
+            let bundle_path =
+                component_info.get("bundlePath").and_then(|p| p.as_str()).ok_or_else(|| {
                     RariError::configuration(format!("Component {component_id} missing bundlePath"))
                 })?;
 
@@ -61,10 +60,7 @@ impl ComponentLoader {
                     .add_module_to_loader_only(specifier, component_code.clone())
                     .await
                 {
-                    error!(
-                        "Failed to add component {} to module loader: {}",
-                        component_id, e
-                    );
+                    error!("Failed to add component {} to module loader: {}", component_id, e);
                     continue;
                 }
 
@@ -207,17 +203,11 @@ impl ComponentLoader {
                         }
                     }
                     Err(e) => {
-                        error!(
-                            "Failed to load component {} as ESM module: {}",
-                            component_id, e
-                        );
+                        error!("Failed to load component {} as ESM module: {}", component_id, e);
                     }
                 }
             } else {
-                error!(
-                    "Component {} missing moduleSpecifier in manifest.",
-                    component_id
-                );
+                error!("Component {} missing moduleSpecifier in manifest.", component_id);
             }
         }
 
@@ -887,12 +877,9 @@ impl ComponentLoader {
     fn parse_manifest_components(
         manifest: &serde_json::Value,
     ) -> Result<&serde_json::Map<String, serde_json::Value>, RariError> {
-        manifest
-            .get("components")
-            .and_then(|c| c.as_object())
-            .ok_or_else(|| {
-                RariError::configuration("Invalid manifest: missing components".to_string())
-            })
+        manifest.get("components").and_then(|c| c.as_object()).ok_or_else(|| {
+            RariError::configuration("Invalid manifest: missing components".to_string())
+        })
     }
 
     pub async fn load_component_from_manifest(
@@ -900,10 +887,8 @@ impl ComponentLoader {
         component_info: &serde_json::Value,
         renderer: &mut RscRenderer,
     ) -> Result<(), RariError> {
-        let bundle_path = component_info
-            .get("bundlePath")
-            .and_then(|p| p.as_str())
-            .ok_or_else(|| {
+        let bundle_path =
+            component_info.get("bundlePath").and_then(|p| p.as_str()).ok_or_else(|| {
                 RariError::configuration(format!("Component {component_id} missing bundlePath"))
             })?;
 
@@ -944,10 +929,7 @@ impl ComponentLoader {
         };
 
         for (module_path, info) in entries {
-            let bundle_path = info
-                .get("bundlePath")
-                .and_then(|v| v.as_str())
-                .unwrap_or_default();
+            let bundle_path = info.get("bundlePath").and_then(|v| v.as_str()).unwrap_or_default();
 
             let component_file = std::path::Path::new(DIST_DIR).join(bundle_path);
             if !component_file.exists() {
@@ -960,10 +942,7 @@ impl ComponentLoader {
             };
 
             let module_specifier = format!("file:///{}", bundle_path.cow_replace('\\', "/"));
-            if let Err(e) = runtime
-                .add_module_to_loader_only(&module_specifier, code)
-                .await
-            {
+            if let Err(e) = runtime.add_module_to_loader_only(&module_specifier, code).await {
                 error!("Failed to add SSR module {}: {}", module_path, e);
                 continue;
             }

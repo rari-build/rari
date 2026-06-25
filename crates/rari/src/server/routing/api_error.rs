@@ -1,48 +1,19 @@
+use std::fmt;
+
 use axum::http::StatusCode;
 use rari_error::RariError;
 use serde::{Deserialize, Serialize};
-use std::fmt;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[non_exhaustive]
 pub enum ApiRouteError {
-    NotFound {
-        path: String,
-        message: String,
-    },
-    MethodNotAllowed {
-        path: String,
-        method: String,
-        allowed_methods: Vec<String>,
-        message: String,
-    },
-    HandlerError {
-        path: String,
-        method: String,
-        message: String,
-        stack: Option<String>,
-    },
-    InvalidResponse {
-        path: String,
-        method: String,
-        message: String,
-        details: Option<String>,
-    },
-    HandlerFileNotFound {
-        path: String,
-        file_path: String,
-        message: String,
-    },
-    HandlerLoadError {
-        path: String,
-        file_path: String,
-        message: String,
-    },
-    BodyParseError {
-        path: String,
-        method: String,
-        message: String,
-    },
+    NotFound { path: String, message: String },
+    MethodNotAllowed { path: String, method: String, allowed_methods: Vec<String>, message: String },
+    HandlerError { path: String, method: String, message: String, stack: Option<String> },
+    InvalidResponse { path: String, method: String, message: String, details: Option<String> },
+    HandlerFileNotFound { path: String, file_path: String, message: String },
+    HandlerLoadError { path: String, file_path: String, message: String },
+    BodyParseError { path: String, method: String, message: String },
 }
 
 impl ApiRouteError {
@@ -106,9 +77,7 @@ impl ApiRouteError {
 
     pub fn allowed_methods(&self) -> Option<&[String]> {
         match self {
-            Self::MethodNotAllowed {
-                allowed_methods, ..
-            } => Some(allowed_methods),
+            Self::MethodNotAllowed { allowed_methods, .. } => Some(allowed_methods),
             _ => None,
         }
     }
@@ -127,12 +96,7 @@ impl fmt::Display for ApiRouteError {
             Self::NotFound { path, message } => {
                 write!(f, "API route not found at {path}: {message}")
             }
-            Self::MethodNotAllowed {
-                path,
-                method,
-                allowed_methods,
-                message,
-            } => {
+            Self::MethodNotAllowed { path, method, allowed_methods, message } => {
                 write!(
                     f,
                     "Method {} not allowed for route {}. Allowed methods: {}. {}",
@@ -142,51 +106,20 @@ impl fmt::Display for ApiRouteError {
                     message
                 )
             }
-            Self::HandlerError {
-                path,
-                method,
-                message,
-                ..
-            } => {
+            Self::HandlerError { path, method, message, .. } => {
                 write!(f, "Handler error for {method} {path}: {message}")
             }
-            Self::InvalidResponse {
-                path,
-                method,
-                message,
-                ..
-            } => {
+            Self::InvalidResponse { path, method, message, .. } => {
                 write!(f, "Invalid response from {method} {path}: {message}")
             }
-            Self::HandlerFileNotFound {
-                path,
-                file_path,
-                message,
-            } => {
-                write!(
-                    f,
-                    "Handler file not found for route {path} at {file_path}: {message}"
-                )
+            Self::HandlerFileNotFound { path, file_path, message } => {
+                write!(f, "Handler file not found for route {path} at {file_path}: {message}")
             }
-            Self::HandlerLoadError {
-                path,
-                file_path,
-                message,
-            } => {
-                write!(
-                    f,
-                    "Failed to load handler for route {path} from {file_path}: {message}"
-                )
+            Self::HandlerLoadError { path, file_path, message } => {
+                write!(f, "Failed to load handler for route {path} from {file_path}: {message}")
             }
-            Self::BodyParseError {
-                path,
-                method,
-                message,
-            } => {
-                write!(
-                    f,
-                    "Failed to parse request body for {method} {path}: {message}"
-                )
+            Self::BodyParseError { path, method, message } => {
+                write!(f, "Failed to parse request body for {method} {path}: {message}")
             }
         }
     }
@@ -200,13 +133,11 @@ impl From<ApiRouteError> for RariError {
             ApiRouteError::NotFound { message, .. } => {
                 RariError::not_found(message).with_property("error_type", "api_route_not_found")
             }
-            ApiRouteError::MethodNotAllowed {
-                message,
-                allowed_methods,
-                ..
-            } => RariError::bad_request(message)
-                .with_property("error_type", "method_not_allowed")
-                .with_property("allowed_methods", &allowed_methods.join(",")),
+            ApiRouteError::MethodNotAllowed { message, allowed_methods, .. } => {
+                RariError::bad_request(message)
+                    .with_property("error_type", "method_not_allowed")
+                    .with_property("allowed_methods", &allowed_methods.join(","))
+            }
             ApiRouteError::HandlerError { message, .. } => {
                 RariError::js_execution(message).with_property("error_type", "handler_error")
             }
@@ -247,11 +178,7 @@ impl ApiRouteError {
     pub fn to_json_response(&self, is_development: bool) -> ErrorResponse {
         if is_development {
             ErrorResponse {
-                error: self
-                    .status_code()
-                    .canonical_reason()
-                    .unwrap_or("Error")
-                    .to_string(),
+                error: self.status_code().canonical_reason().unwrap_or("Error").to_string(),
                 message: self.message().to_string(),
                 code: Some(self.error_code().to_string()),
                 route: Some(self.path().to_string()),
@@ -268,11 +195,7 @@ impl ApiRouteError {
             };
 
             ErrorResponse {
-                error: self
-                    .status_code()
-                    .canonical_reason()
-                    .unwrap_or("Error")
-                    .to_string(),
+                error: self.status_code().canonical_reason().unwrap_or("Error").to_string(),
                 message: generic_message.to_string(),
                 code: None,
                 route: None,
@@ -285,9 +208,7 @@ impl ApiRouteError {
 
     fn get_error_details(&self) -> Option<serde_json::Value> {
         match self {
-            Self::MethodNotAllowed {
-                allowed_methods, ..
-            } => Some(serde_json::json!({
+            Self::MethodNotAllowed { allowed_methods, .. } => Some(serde_json::json!({
                 "allowed_methods": allowed_methods
             })),
             Self::InvalidResponse { details, .. } => {
@@ -317,18 +238,13 @@ impl ApiRouteError {
             .status(status)
             .header("content-type", "application/json");
 
-        if let Self::MethodNotAllowed {
-            allowed_methods, ..
-        } = self
-        {
+        if let Self::MethodNotAllowed { allowed_methods, .. } = self {
             let allow_header = allowed_methods.join(", ");
             builder = builder.header("allow", allow_header);
         }
 
         #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
-        builder
-            .body(axum::body::Body::from(body))
-            .expect("Valid error response")
+        builder.body(axum::body::Body::from(body)).expect("Valid error response")
     }
 }
 
@@ -364,10 +280,7 @@ pub fn create_generic_error_response(
             .to_string()
     });
 
-    #[expect(
-        clippy::expect_used,
-        reason = "Response::builder() with valid components never fails"
-    )]
+    #[expect(clippy::expect_used, reason = "Response::builder() with valid components never fails")]
     axum::http::Response::builder()
         .status(status)
         .header("content-type", "application/json")

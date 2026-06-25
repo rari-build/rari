@@ -1,11 +1,12 @@
-use rustc_hash::FxHashSet;
-
-use deno_ast::swc::ast::{
-    ArrowExpr, BlockStmt, CatchClause, Decl, DefaultDecl, ExportDecl, ExportDefaultDecl, FnDecl,
-    ForInStmt, ForOfStmt, ForStmt, Function, Id, Ident, ImportSpecifier, ModuleDecl, ModuleItem,
-    ObjectPatProp, Pat, Stmt, VarDecl, VarDeclKind,
+use deno_ast::swc::{
+    ast::{
+        ArrowExpr, BlockStmt, CatchClause, Decl, DefaultDecl, ExportDecl, ExportDefaultDecl,
+        FnDecl, ForInStmt, ForOfStmt, ForStmt, Function, Id, Ident, ImportSpecifier, ModuleDecl,
+        ModuleItem, ObjectPatProp, Pat, Stmt, VarDecl, VarDeclKind,
+    },
+    ecma_visit::{Visit, VisitWith},
 };
-use deno_ast::swc::ecma_visit::{Visit, VisitWith};
+use rustc_hash::FxHashSet;
 
 pub fn collect_module_level_idents(item: &ModuleItem) -> FxHashSet<Id> {
     let mut idents = FxHashSet::default();
@@ -123,10 +124,7 @@ fn collect_bindings_from_pat(pat: &Pat, scope: &mut FxHashSet<Id>) {
     }
 }
 
-#[expect(
-    clippy::too_many_lines,
-    reason = "AST visitor pattern requires comprehensive match arms"
-)]
+#[expect(clippy::too_many_lines, reason = "AST visitor pattern requires comprehensive match arms")]
 #[expect(clippy::implicit_hasher)]
 pub fn collect_closure_idents(
     body: &BlockStmt,
@@ -338,14 +336,17 @@ fn collect_pat_idents(pattern: &Pat, idents: &mut FxHashSet<Id>) {
 mod tests {
     #![allow(clippy::default_trait_access)]
     #![allow(clippy::expect_used)]
-    use super::*;
-    use deno_ast::swc::ast::{
-        AssignPatProp, BindingIdent, Class, ClassDecl, ClassExpr, Decl, DefaultDecl, ExportDecl,
-        ExportDefaultDecl, FnDecl, FnExpr, Function, Ident, ImportDecl, ImportDefaultSpecifier,
-        ImportPhase, ImportSpecifier, ModuleDecl, ModuleItem, ObjectPat, ObjectPatProp, Param, Pat,
-        RestPat, Stmt, Str,
+    use deno_ast::swc::{
+        ast::{
+            AssignPatProp, BindingIdent, Class, ClassDecl, ClassExpr, Decl, DefaultDecl,
+            ExportDecl, ExportDefaultDecl, FnDecl, FnExpr, Function, Ident, ImportDecl,
+            ImportDefaultSpecifier, ImportPhase, ImportSpecifier, ModuleDecl, ModuleItem,
+            ObjectPat, ObjectPatProp, Param, Pat, RestPat, Stmt, Str,
+        },
+        common::{Span, SyntaxContext},
     };
-    use deno_ast::swc::common::{Span, SyntaxContext};
+
+    use super::*;
 
     fn ident(name: &str) -> Ident {
         Ident::new(name.into(), Span::default(), SyntaxContext::default())
@@ -371,18 +372,12 @@ mod tests {
             Param {
                 span: Default::default(),
                 decorators: vec![],
-                pat: Pat::Ident(BindingIdent {
-                    id: ident("a"),
-                    type_ann: None,
-                }),
+                pat: Pat::Ident(BindingIdent { id: ident("a"), type_ann: None }),
             },
             Param {
                 span: Default::default(),
                 decorators: vec![],
-                pat: Pat::Ident(BindingIdent {
-                    id: ident("b"),
-                    type_ann: None,
-                }),
+                pat: Pat::Ident(BindingIdent { id: ident("b"), type_ann: None }),
             },
         ]);
 
@@ -398,11 +393,7 @@ mod tests {
                 span: Default::default(),
                 local: ident("React"),
             })],
-            src: Box::new(Str {
-                span: Default::default(),
-                value: "react".into(),
-                raw: None,
-            }),
+            src: Box::new(Str { span: Default::default(), value: "react".into(), raw: None }),
             with: None,
             phase: ImportPhase::Evaluation,
             type_only: false,
@@ -410,10 +401,7 @@ mod tests {
 
         let idents = collect_module_level_idents(&item);
         assert_eq!(idents.len(), 1);
-        let id = idents
-            .into_iter()
-            .next()
-            .expect("expected imported React identifier");
+        let id = idents.into_iter().next().expect("expected imported React identifier");
         assert_eq!(id.0.to_string(), "React");
     }
 
@@ -514,10 +502,7 @@ mod tests {
                 decorators: vec![],
                 pat: Pat::Rest(RestPat {
                     span: Default::default(),
-                    arg: Box::new(Pat::Ident(BindingIdent {
-                        id: ident("rest"),
-                        type_ann: None,
-                    })),
+                    arg: Box::new(Pat::Ident(BindingIdent { id: ident("rest"), type_ann: None })),
                     type_ann: None,
                     dot3_token: Default::default(),
                 }),

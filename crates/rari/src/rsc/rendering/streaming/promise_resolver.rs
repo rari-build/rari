@@ -1,14 +1,15 @@
+use std::{collections::VecDeque, sync::Arc};
+
 use cow_utils::CowUtils;
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::collections::VecDeque;
-use std::sync::Arc;
 use tokio::sync::{Mutex, mpsc};
 use tracing::{error, info, warn};
 
+use super::{
+    constants::PROMISE_RESOLUTION_SCRIPT,
+    types::{BoundaryError, BoundaryUpdate, PendingSuspensePromise, RscWireFormatTag},
+};
 use crate::runtime::JsExecutionRuntime;
-
-use super::constants::PROMISE_RESOLUTION_SCRIPT;
-use super::types::{BoundaryError, BoundaryUpdate, PendingSuspensePromise, RscWireFormatTag};
 
 pub(super) fn process_client_components(
     content: &mut serde_json::Value,
@@ -129,10 +130,7 @@ fn replace_lazy_markers(value: &mut serde_json::Value, promise_to_row: &FxHashMa
 
             if is_lazy && let Some(promise_id) = promise_id {
                 let Some(row_id) = promise_to_row.get(promise_id) else {
-                    warn!(
-                        "Lazy marker missing from promise_to_row in streaming: {}",
-                        promise_id
-                    );
+                    warn!("Lazy marker missing from promise_to_row in streaming: {}", promise_id);
                     *value = serde_json::Value::Null;
                     return;
                 };
@@ -170,10 +168,7 @@ fn nested_pending_promises(
             Some(PendingSuspensePromise {
                 id: promise_id.to_string(),
                 boundary_id,
-                component_path: p["componentPath"]
-                    .as_str()
-                    .unwrap_or("AsyncComponent")
-                    .to_string(),
+                component_path: p["componentPath"].as_str().unwrap_or("AsyncComponent").to_string(),
                 promise_handle: promise_id.to_string(),
                 render_generation,
             })

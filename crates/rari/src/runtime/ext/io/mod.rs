@@ -1,5 +1,6 @@
-use super::ExtensionTrait;
 use deno_core::{Extension, extension};
+
+use super::ExtensionTrait;
 
 #[cfg(windows)]
 mod tty_windows;

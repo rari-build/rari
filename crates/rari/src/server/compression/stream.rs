@@ -179,9 +179,7 @@ struct ZstdCompressor {
 
 impl ZstdCompressor {
     fn new() -> Self {
-        Self {
-            encoder: ZstdEncoder::new(Vec::new()),
-        }
+        Self { encoder: ZstdEncoder::new(Vec::new()) }
     }
 
     async fn compress_and_flush(&mut self, data: &[u8]) -> std::io::Result<Bytes> {
@@ -207,9 +205,7 @@ struct BrotliCompressor {
 
 impl BrotliCompressor {
     fn new() -> Self {
-        Self {
-            encoder: BrotliEncoder::new(Vec::new()),
-        }
+        Self { encoder: BrotliEncoder::new(Vec::new()) }
     }
 
     async fn compress_and_flush(&mut self, data: &[u8]) -> std::io::Result<Bytes> {
@@ -235,9 +231,7 @@ struct GzipCompressor {
 
 impl GzipCompressor {
     fn new() -> Self {
-        Self {
-            encoder: GzipEncoder::new(Vec::new()),
-        }
+        Self { encoder: GzipEncoder::new(Vec::new()) }
     }
 
     async fn compress_and_flush(&mut self, data: &[u8]) -> std::io::Result<Bytes> {
@@ -280,16 +274,13 @@ impl GzipCompressor {
     clippy::get_unwrap
 )]
 mod tests {
-    use super::*;
     use futures::stream;
+
+    use super::*;
 
     #[tokio::test]
     async fn test_gzip_compression() {
-        let data = vec![
-            Ok(Bytes::from("Hello ")),
-            Ok(Bytes::from("World")),
-            Ok(Bytes::from("!")),
-        ];
+        let data = vec![Ok(Bytes::from("Hello ")), Ok(Bytes::from("World")), Ok(Bytes::from("!"))];
 
         let input_stream = stream::iter(data);
         let mut compressed_stream = compress_stream(input_stream, CompressionEncoding::Gzip);
@@ -320,11 +311,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_zstd_compression() {
-        let data = vec![
-            Ok(Bytes::from("Hello ")),
-            Ok(Bytes::from("World")),
-            Ok(Bytes::from("!")),
-        ];
+        let data = vec![Ok(Bytes::from("Hello ")), Ok(Bytes::from("World")), Ok(Bytes::from("!"))];
 
         let input_stream = stream::iter(data);
         let mut compressed_stream = compress_stream(input_stream, CompressionEncoding::Zstd);
@@ -371,9 +358,6 @@ mod tests {
             CompressionEncoding::from_accept_encoding(Some("identity")),
             CompressionEncoding::Identity
         );
-        assert_eq!(
-            CompressionEncoding::from_accept_encoding(None),
-            CompressionEncoding::Identity
-        );
+        assert_eq!(CompressionEncoding::from_accept_encoding(None), CompressionEncoding::Identity);
     }
 }

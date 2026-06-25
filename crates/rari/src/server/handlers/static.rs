@@ -1,7 +1,3 @@
-use crate::server::ServerState;
-use crate::server::config::Config;
-use crate::server::core::utils::http::get_content_type;
-use crate::server::core::utils::path_validation::validate_safe_path;
 use axum::{
     body::Body,
     extract::{Path, State},
@@ -9,6 +5,12 @@ use axum::{
     response::Response,
 };
 use tracing::error;
+
+use crate::server::{
+    ServerState,
+    config::Config,
+    core::utils::{http::get_content_type, path_validation::validate_safe_path},
+};
 
 pub async fn root_handler(State(_state): State<ServerState>) -> Result<Response, StatusCode> {
     let config = match Config::get() {
@@ -108,11 +110,7 @@ pub async fn static_or_spa_handler(
         }
     }
 
-    let route_path = if path.is_empty() {
-        "/"
-    } else {
-        &format!("/{path}")
-    };
+    let route_path = if path.is_empty() { "/" } else { &format!("/{path}") };
 
     let index_path = config.public_dir().join("index.html");
     if index_path.exists() {
@@ -190,13 +188,8 @@ pub fn cors_preflight_response() -> Response {
     use axum::http::HeaderValue;
 
     let mut builder = Response::builder().status(StatusCode::NO_CONTENT);
-    #[expect(
-        clippy::expect_used,
-        reason = "Response::builder() always initializes headers"
-    )]
-    let headers = builder
-        .headers_mut()
-        .expect("Response builder should have headers");
+    #[expect(clippy::expect_used, reason = "Response::builder() always initializes headers")]
+    let headers = builder.headers_mut().expect("Response builder should have headers");
     headers.insert("Access-Control-Allow-Origin", HeaderValue::from_static("*"));
     headers.insert(
         "Access-Control-Allow-Methods",
@@ -210,9 +203,7 @@ pub fn cors_preflight_response() -> Response {
     );
     headers.insert("Access-Control-Max-Age", HeaderValue::from_static("86400"));
     #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
-    builder
-        .body(Body::empty())
-        .expect("Valid preflight response")
+    builder.body(Body::empty()).expect("Valid preflight response")
 }
 
 #[axum::debug_handler]

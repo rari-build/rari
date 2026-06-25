@@ -1,5 +1,6 @@
-use regex::Regex;
 use std::fmt::Write;
+
+use regex::Regex;
 
 pub fn transform_imports_for_hmr(source: &str) -> String {
     let react_named_imports_regex =

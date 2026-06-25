@@ -1,7 +1,9 @@
 #![allow(clippy::exhaustive_structs)]
 
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use parking_lot::Mutex;
 use rkyv::{Archive, Deserialize as RkyvDeserialize, Serialize as RkyvSerialize};
@@ -30,10 +32,7 @@ pub struct ImageCache {
 
 impl ImageCache {
     pub fn new(max_memory_size: usize, project_path: &Path) -> Self {
-        #[expect(
-            clippy::expect_used,
-            reason = "Value is clamped to >= 20, guaranteed non-zero"
-        )]
+        #[expect(clippy::expect_used, reason = "Value is clamped to >= 20, guaranteed non-zero")]
         let capacity = std::num::NonZeroUsize::new((max_memory_size / 1024 / 50).max(20))
             .expect("capacity is always at least 20");
         let handler =
@@ -50,12 +49,7 @@ impl ImageCache {
         project_path: &Path,
     ) -> Self {
         let cache_dir = Self::resolve_cache_dir(project_path);
-        Self {
-            handler,
-            cache_dir,
-            max_memory_size,
-            current_memory_size: Mutex::new(0),
-        }
+        Self { handler, cache_dir, max_memory_size, current_memory_size: Mutex::new(0) }
     }
 
     fn ns(key: &str) -> String {
@@ -71,9 +65,7 @@ impl ImageCache {
     }
 
     fn resolve_cache_dir(project_path: &Path) -> PathBuf {
-        let is_production = std::env::var("NODE_ENV")
-            .map(|v| v == "production")
-            .unwrap_or(false);
+        let is_production = std::env::var("NODE_ENV").map(|v| v == "production").unwrap_or(false);
 
         if is_production {
             PathBuf::from("/tmp/rari-image-cache")
@@ -83,8 +75,10 @@ impl ImageCache {
     }
 
     fn cache_filename(&self, key: &str) -> PathBuf {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
+        use std::{
+            collections::hash_map::DefaultHasher,
+            hash::{Hash, Hasher},
+        };
 
         let mut hasher = DefaultHasher::new();
         key.hash(&mut hasher);
@@ -122,11 +116,7 @@ impl ImageCache {
         let cached_arc = Arc::new(cached);
         let data_size = cached_arc.data.len();
 
-        if let Err(e) = self
-            .handler
-            .set(&Self::ns(key), read_result, IMG_TTL_SECS)
-            .await
-        {
+        if let Err(e) = self.handler.set(&Self::ns(key), read_result, IMG_TTL_SECS).await {
             tracing::debug!("Image cache write-through to handler failed: {}", e);
         } else {
             let mut size = self.current_memory_size.lock();
@@ -169,11 +159,7 @@ impl ImageCache {
             }
         }
 
-        match self
-            .handler
-            .set(&Self::ns(&key), serialized, IMG_TTL_SECS)
-            .await
-        {
+        match self.handler.set(&Self::ns(&key), serialized, IMG_TTL_SECS).await {
             Ok(outcome) if outcome.evicted_bytes > 0 => {
                 let mut size = self.current_memory_size.lock();
                 *size = size.saturating_sub(outcome.evicted_bytes);
@@ -211,9 +197,9 @@ impl ImageCache {
     clippy::get_unwrap
 )]
 mod tests {
-    use super::*;
     use std::env::temp_dir;
 
+    use super::*;
     use crate::server::cache::handler::MemoryCacheHandler;
 
     fn test_project_path(test_name: &str) -> PathBuf {
@@ -222,10 +208,7 @@ mod tests {
 
     fn fresh_cache(test_name: &str, max_memory_size: usize) -> ImageCache {
         let handler = Arc::new(MemoryCacheHandler::with_config(
-            crate::server::cache::handler::MemoryConfig {
-                max_entries: 32,
-                default_ttl: 0,
-            },
+            crate::server::cache::handler::MemoryConfig { max_entries: 32, default_ttl: 0 },
         ));
         ImageCache::with_handler(handler, max_memory_size, &test_project_path(test_name))
     }
@@ -261,10 +244,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&project_path);
 
         let handler_a = Arc::new(MemoryCacheHandler::with_config(
-            crate::server::cache::handler::MemoryConfig {
-                max_entries: 32,
-                default_ttl: 0,
-            },
+            crate::server::cache::handler::MemoryConfig { max_entries: 32, default_ttl: 0 },
         ));
         let cache_a = ImageCache::with_handler(handler_a, 1024 * 1024, &project_path);
         let image = sample_image();
@@ -273,10 +253,7 @@ mod tests {
         drop(cache_a);
 
         let handler_b = Arc::new(MemoryCacheHandler::with_config(
-            crate::server::cache::handler::MemoryConfig {
-                max_entries: 32,
-                default_ttl: 0,
-            },
+            crate::server::cache::handler::MemoryConfig { max_entries: 32, default_ttl: 0 },
         ));
         let cache_b = ImageCache::with_handler(
             Arc::clone(&handler_b) as Arc<dyn CacheHandler>,
@@ -284,10 +261,7 @@ mod tests {
             &project_path,
         );
 
-        let got = cache_b
-            .get("persistent")
-            .await
-            .expect("expected disk-fallback hit in cache_b");
+        let got = cache_b.get("persistent").await.expect("expected disk-fallback hit in cache_b");
         assert_eq!(got.data, image.data);
 
         let in_handler_b = handler_b.get("image:persistent").await.unwrap();

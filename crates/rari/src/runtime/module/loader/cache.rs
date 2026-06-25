@@ -1,10 +1,13 @@
-use crate::server::cache::handler::CacheHandler;
-use crate::server::cache::{CacheHandlerRegistry, MemoryCacheHandler, MemoryConfig};
-use crate::server::config::CacheLayerConfig;
+use std::sync::Arc;
+
 use dashmap::DashMap;
 use rari_error::RariError;
 use serde_json::Value as JsonValue;
-use std::sync::Arc;
+
+use crate::server::{
+    cache::{CacheHandlerRegistry, MemoryCacheHandler, MemoryConfig, handler::CacheHandler},
+    config::CacheLayerConfig,
+};
 
 pub struct ModuleCaching {
     handler: Arc<dyn CacheHandler>,
@@ -47,11 +50,7 @@ impl ModuleCaching {
         max_age_secs: u64,
         handler: Arc<dyn CacheHandler>,
     ) -> Self {
-        Self {
-            handler,
-            max_age_secs,
-            component_source_paths: DashMap::new(),
-        }
+        Self { handler, max_age_secs, component_source_paths: DashMap::new() }
     }
 
     pub fn from_config(layer: &CacheLayerConfig, registry: &CacheHandlerRegistry) -> Self {
@@ -95,9 +94,7 @@ impl ModuleCaching {
     }
 
     pub fn get_component_source_path(&self, component_id: &str) -> Option<String> {
-        self.component_source_paths
-            .get(component_id)
-            .map(|entry| entry.value().clone())
+        self.component_source_paths.get(component_id).map(|entry| entry.value().clone())
     }
 
     pub fn remove_component_source_path(&self, component_id: &str) {
@@ -146,14 +143,8 @@ mod tests {
     async fn test_cache_basic_operations() {
         let cache = ModuleCaching::new(10, DEFAULT_TTL_SECS);
 
-        cache
-            .insert("key1".to_string(), serde_json::json!({"value": 1}))
-            .await
-            .unwrap();
-        assert_eq!(
-            cache.get("key1").await,
-            Some(serde_json::json!({"value": 1}))
-        );
+        cache.insert("key1".to_string(), serde_json::json!({"value": 1})).await.unwrap();
+        assert_eq!(cache.get("key1").await, Some(serde_json::json!({"value": 1})));
         assert!(cache.get("nonexistent").await.is_none());
     }
 
@@ -161,18 +152,9 @@ mod tests {
     async fn test_cache_lru_eviction() {
         let cache = ModuleCaching::new(2, DEFAULT_TTL_SECS);
 
-        cache
-            .insert("key1".to_string(), serde_json::json!(1))
-            .await
-            .unwrap();
-        cache
-            .insert("key2".to_string(), serde_json::json!(2))
-            .await
-            .unwrap();
-        cache
-            .insert("key3".to_string(), serde_json::json!(3))
-            .await
-            .unwrap();
+        cache.insert("key1".to_string(), serde_json::json!(1)).await.unwrap();
+        cache.insert("key2".to_string(), serde_json::json!(2)).await.unwrap();
+        cache.insert("key3".to_string(), serde_json::json!(3)).await.unwrap();
 
         assert!(cache.get("key1").await.is_none());
         assert!(cache.get("key2").await.is_some());
@@ -184,15 +166,9 @@ mod tests {
         let caching = ModuleCaching::new(10, DEFAULT_TTL_SECS);
 
         caching.set_component_source_path("comp1".to_string(), "/path/to/comp1".to_string());
-        assert_eq!(
-            caching.get_component_source_path("comp1"),
-            Some("/path/to/comp1".to_string())
-        );
+        assert_eq!(caching.get_component_source_path("comp1"), Some("/path/to/comp1".to_string()));
 
-        caching
-            .insert("module1".to_string(), serde_json::json!({"data": "test"}))
-            .await
-            .unwrap();
+        caching.insert("module1".to_string(), serde_json::json!({"data": "test"})).await.unwrap();
         assert!(caching.get("module1").await.is_some());
     }
 
@@ -210,10 +186,7 @@ mod tests {
         let handler = Arc::new(MemoryCacheHandler::default());
         let cache = ModuleCaching::with_handler(4, 60, handler.clone());
 
-        cache
-            .insert("k".to_string(), serde_json::json!({"v": 1}))
-            .await
-            .unwrap();
+        cache.insert("k".to_string(), serde_json::json!({"v": 1})).await.unwrap();
         assert!(cache.get("k").await.is_some());
 
         cache.invalidate("k").await;
@@ -224,14 +197,8 @@ mod tests {
     async fn test_clear() {
         let cache = ModuleCaching::new(10, DEFAULT_TTL_SECS);
 
-        cache
-            .insert("a".to_string(), serde_json::json!(1))
-            .await
-            .unwrap();
-        cache
-            .insert("b".to_string(), serde_json::json!(2))
-            .await
-            .unwrap();
+        cache.insert("a".to_string(), serde_json::json!(1)).await.unwrap();
+        cache.insert("b".to_string(), serde_json::json!(2)).await.unwrap();
         cache.set_component_source_path("comp".to_string(), "/path".to_string());
 
         cache.clear().await;
@@ -248,10 +215,7 @@ mod tests {
         let handler = Arc::new(MemoryCacheHandler::default());
         let cache = ModuleCaching::with_handler(4, DEFAULT_TTL_SECS, handler.clone());
 
-        handler
-            .set("corrupt", b"not-json{".to_vec(), DEFAULT_TTL_SECS)
-            .await
-            .unwrap();
+        handler.set("corrupt", b"not-json{".to_vec(), DEFAULT_TTL_SECS).await.unwrap();
 
         let got = cache.get("corrupt").await;
         assert!(got.is_none());

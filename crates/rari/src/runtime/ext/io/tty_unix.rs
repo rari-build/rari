@@ -1,28 +1,16 @@
 // Copyright 2018-2025 the Deno authors. MIT license.
 
-use deno_core::OpState;
-use deno_core::ResourceId;
-use deno_core::op2;
-use deno_error::JsErrorBox;
-use deno_error::JsErrorClass;
-use deno_error::builtin_classes::GENERIC_ERROR;
+use std::{cell::RefCell, io::Error, rc::Rc};
+
+use deno_core::{OpState, ResourceId, op2};
+use deno_error::{JsErrorBox, JsErrorClass, builtin_classes::GENERIC_ERROR};
 use nix::sys::termios;
 use rustc_hash::FxHashMap;
-use rustyline::Cmd;
-use rustyline::Editor;
-use rustyline::KeyCode;
-use rustyline::KeyEvent;
-use rustyline::Modifiers;
-use rustyline::config::Configurer;
-use rustyline::error::ReadlineError;
-use std::cell::RefCell;
-use std::io::Error;
-use std::rc::Rc;
+use rustyline::{
+    Cmd, Editor, KeyCode, KeyEvent, Modifiers, config::Configurer, error::ReadlineError,
+};
 
-deno_core::extension!(
-    deno_tty,
-    ops = [op_set_raw, op_console_size, op_read_line_prompt],
-);
+deno_core::extension!(deno_tty, ops = [op_set_raw, op_console_size, op_read_line_prompt],);
 
 #[derive(Default, Clone)]
 pub struct TtyModeStore(Rc<RefCell<FxHashMap<ResourceId, termios::Termios>>>);
@@ -103,11 +91,9 @@ fn op_set_raw(state: &mut OpState, rid: u32, is_raw: bool, cbreak: bool) -> Resu
     fn prepare_stdio() {
         // SAFETY: Save current state of stdio and restore it when we exit.
         unsafe {
-            use libc::atexit;
-            use libc::tcgetattr;
-            use libc::tcsetattr;
-            use libc::termios;
             use std::sync::OnceLock;
+
+            use libc::{atexit, tcgetattr, tcsetattr, termios};
 
             // Only save original state once.
             static ORIG_TERMIOS: OnceLock<Option<termios>> = OnceLock::new();
@@ -229,10 +215,7 @@ fn console_size_from_fd(fd: std::os::unix::prelude::RawFd) -> Result<ConsoleSize
         if libc::ioctl(fd, libc::TIOCGWINSZ, &raw mut size) != 0 {
             return Err(Error::last_os_error());
         }
-        Ok(ConsoleSize {
-            cols: u32::from(size.ws_col),
-            rows: u32::from(size.ws_row),
-        })
+        Ok(ConsoleSize { cols: u32::from(size.ws_col), rows: u32::from(size.ws_row) })
     }
 }
 

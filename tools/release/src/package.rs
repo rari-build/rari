@@ -1,7 +1,7 @@
+use std::{fmt::Write, path::PathBuf};
+
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use std::fmt::Write;
-use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PackageJson {
@@ -26,10 +26,7 @@ pub struct PackageGroup {
 
 impl PackageGroup {
     pub fn new_virtual(name: String, version: String) -> Self {
-        Self {
-            name,
-            current_version: version,
-        }
+        Self { name, current_version: version }
     }
 }
 
@@ -93,11 +90,7 @@ impl Package {
         let content = tokio::fs::read_to_string(&pkg_json_path).await?;
         let pkg_json: PackageJson = serde_json::from_str(&content)?;
 
-        Ok(Self {
-            name: name.to_string(),
-            path: pkg_path,
-            current_version: pkg_json.version,
-        })
+        Ok(Self { name: name.to_string(), path: pkg_path, current_version: pkg_json.version })
     }
 
     pub async fn update_version(&self, new_version: &str) -> Result<()> {

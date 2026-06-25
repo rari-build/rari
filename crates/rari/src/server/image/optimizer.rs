@@ -1,22 +1,27 @@
 #![allow(clippy::unnecessary_debug_formatting)]
 
+use std::{
+    path::{Path, PathBuf},
+    sync::{
+        Arc, RwLock,
+        atomic::{AtomicUsize, Ordering},
+    },
+    time::Duration,
+};
+
+use cow_utils::CowUtils;
+use futures::stream::{self, StreamExt};
+use image::{DynamicImage, imageops::FilterType};
+use reqwest::Client;
+use tokio::sync::Semaphore;
+use url::Url;
+
 use super::{
     ImageError,
     cache::{self, ImageCache},
     config::{ImageConfig, LocalPattern, RemotePattern},
     types::{ImageFormat, OptimizeParams, OptimizedImage},
 };
-use cow_utils::CowUtils;
-use futures::stream::{self, StreamExt};
-use image::{DynamicImage, imageops::FilterType};
-use reqwest::Client;
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use std::sync::RwLock;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::Duration;
-use tokio::sync::Semaphore;
-use url::Url;
 
 const MAX_SOURCE_IMAGE_SIZE: usize = 10 * 1024 * 1024;
 const MAX_OUTPUT_WIDTH: u32 = 3840;
@@ -58,9 +63,7 @@ impl ImageOptimizer {
             .build()
             .expect("Failed to create HTTP client");
 
-        let mut concurrency = config
-            .optimization_concurrency
-            .unwrap_or(DEFAULT_CONCURRENCY);
+        let mut concurrency = config.optimization_concurrency.unwrap_or(DEFAULT_CONCURRENCY);
         if concurrency == 0 {
             tracing::warn!("optimization_concurrency is 0, clamping to 1");
             concurrency = 1;
@@ -87,10 +90,8 @@ impl ImageOptimizer {
     }
 
     pub fn get_preload_links(&self) -> Vec<String> {
-        let preload_images = self
-            .preload_images
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let preload_images =
+            self.preload_images.read().unwrap_or_else(std::sync::PoisonError::into_inner);
         preload_images
             .iter()
             .map(|img| {
@@ -106,10 +107,8 @@ impl ImageOptimizer {
     }
 
     pub fn clear_preload_images(&self) {
-        let mut preload_images = self
-            .preload_images
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut preload_images =
+            self.preload_images.write().unwrap_or_else(std::sync::PoisonError::into_inner);
         preload_images.clear();
     }
 
@@ -220,8 +219,7 @@ impl ImageOptimizer {
             tracing::debug!("  - {}", path);
         }
 
-        self.optimize_image_urls_internal(image_paths, dry_run)
-            .await
+        self.optimize_image_urls_internal(image_paths, dry_run).await
     }
 
     async fn preoptimize_from_manifest(&self, dry_run: bool) -> Result<usize, ImageError> {
@@ -295,10 +293,7 @@ impl ImageOptimizer {
 
         if dry_run {
             tracing::info!("Starting local image pre-optimization preview (dry-run)...");
-            tracing::info!(
-                "Using preoptimize manifest with {} image variants",
-                tasks.len()
-            );
+            tracing::info!("Using preoptimize manifest with {} image variants", tasks.len());
             tracing::info!("[DRY RUN] Would process {} image variants:", tasks.len());
             for (url, width, format, q) in &tasks {
                 tracing::info!(
@@ -336,10 +331,8 @@ impl ImageOptimizer {
         if needs_optimization == 0 {
             tracing::debug!("All {} image variants are already cached", tasks.len());
             if !preload_list.is_empty() {
-                let mut preload_images = self
-                    .preload_images
-                    .write()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let mut preload_images =
+                    self.preload_images.write().unwrap_or_else(std::sync::PoisonError::into_inner);
                 preload_images.extend(preload_list);
                 tracing::debug!("Registered {} images for preloading", preload_images.len());
             }
@@ -347,10 +340,7 @@ impl ImageOptimizer {
         }
 
         tracing::info!("Starting local image pre-optimization...");
-        tracing::info!(
-            "Using preoptimize manifest with {} image variants",
-            tasks.len()
-        );
+        tracing::info!("Using preoptimize manifest with {} image variants", tasks.len());
         tracing::info!(
             "Pre-optimizing {} image variants from manifest ({} already cached)",
             needs_optimization,
@@ -358,10 +348,8 @@ impl ImageOptimizer {
         );
 
         if !preload_list.is_empty() {
-            let mut preload_images = self
-                .preload_images
-                .write()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut preload_images =
+                self.preload_images.write().unwrap_or_else(std::sync::PoisonError::into_inner);
             preload_images.extend(preload_list);
             tracing::debug!("Registered {} images for preloading", preload_images.len());
         }
@@ -714,11 +702,7 @@ impl ImageOptimizer {
     }
 
     fn pathname_matches(&self, path: &str, pattern: &str) -> bool {
-        let path_without_query = if let Some(idx) = path.find('?') {
-            &path[..idx]
-        } else {
-            path
-        };
+        let path_without_query = if let Some(idx) = path.find('?') { &path[..idx] } else { path };
 
         if let Some(prefix) = pattern.strip_suffix("/**") {
             path_without_query.starts_with(prefix)
@@ -811,9 +795,7 @@ impl ImageOptimizer {
         match parsed.scheme() {
             "http" | "https" => {}
             other => {
-                return Err(ImageError::InvalidUrl(format!(
-                    "Unsupported URL scheme '{other}'"
-                )));
+                return Err(ImageError::InvalidUrl(format!("Unsupported URL scheme '{other}'")));
             }
         }
 
@@ -956,11 +938,7 @@ impl ImageOptimizer {
 
     async fn make_validated_request(&self, url: &str) -> Result<reqwest::Response, ImageError> {
         self.validate_remote_url(url)?;
-        self.http_client
-            .get(url)
-            .send()
-            .await
-            .map_err(|e| ImageError::FetchError(e.to_string()))
+        self.http_client.get(url).send().await.map_err(|e| ImageError::FetchError(e.to_string()))
     }
 
     async fn fetch_image(&self, url: &str) -> Result<Vec<u8>, ImageError> {
@@ -1151,23 +1129,17 @@ impl ImageOptimizer {
             ImageFormat::Jpeg => Self::encode_jpeg(&processed, params.q)?,
             ImageFormat::Png => Self::encode_png(&processed)?,
             ImageFormat::Gif => {
-                return Err(ImageError::ProcessingError(
-                    "GIF encoding not supported".to_string(),
-                ));
+                return Err(ImageError::ProcessingError("GIF encoding not supported".to_string()));
             }
         };
 
-        Ok(OptimizedImage {
-            data,
-            format,
-            width: processed.width(),
-            height: processed.height(),
-        })
+        Ok(OptimizedImage { data, format, width: processed.width(), height: processed.height() })
     }
 
     fn encode_avif(img: &DynamicImage, quality: u8) -> Result<Vec<u8>, ImageError> {
-        use image::codecs::avif::AvifEncoder;
         use std::io::Cursor;
+
+        use image::codecs::avif::AvifEncoder;
 
         let mut buffer = Vec::new();
         let mut cursor = Cursor::new(&mut buffer);
@@ -1192,8 +1164,9 @@ impl ImageOptimizer {
     }
 
     fn encode_jpeg(img: &DynamicImage, quality: u8) -> Result<Vec<u8>, ImageError> {
-        use image::codecs::jpeg::JpegEncoder;
         use std::io::Cursor;
+
+        use image::codecs::jpeg::JpegEncoder;
 
         let mut buffer = Vec::new();
         let mut cursor = Cursor::new(&mut buffer);
@@ -1206,8 +1179,9 @@ impl ImageOptimizer {
     }
 
     fn encode_png(img: &DynamicImage) -> Result<Vec<u8>, ImageError> {
-        use image::codecs::png::PngEncoder;
         use std::io::Cursor;
+
+        use image::codecs::png::PngEncoder;
 
         let mut buffer = Vec::new();
         let mut cursor = Cursor::new(&mut buffer);

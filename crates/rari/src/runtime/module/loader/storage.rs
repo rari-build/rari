@@ -9,11 +9,7 @@ pub struct ModuleStorage {
 
 impl ModuleStorage {
     pub fn new() -> Self {
-        Self {
-            code: DashMap::new(),
-            meta: DashMap::new(),
-            versions: DashMap::new(),
-        }
+        Self { code: DashMap::new(), meta: DashMap::new(), versions: DashMap::new() }
     }
 
     pub fn get_module_code(&self, specifier: &str) -> Option<String> {

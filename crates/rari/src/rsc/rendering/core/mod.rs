@@ -31,12 +31,12 @@ pub use types::{ResourceLimits, ResourceMetrics, ResourceTracker};
     clippy::get_unwrap
 )]
 mod tests {
-    use smallvec::SmallVec;
     use std::sync::Arc;
 
-    use crate::runtime::JsExecutionRuntime;
+    use smallvec::SmallVec;
 
     use super::renderer::RscRenderer;
+    use crate::runtime::JsExecutionRuntime;
 
     #[tokio::test]
     async fn test_renderer_initialization() {
@@ -55,10 +55,7 @@ mod tests {
 
         let mut renderer = RscRenderer::new(runtime);
 
-        renderer
-            .initialize()
-            .await
-            .expect("Failed to initialize renderer");
+        renderer.initialize().await.expect("Failed to initialize renderer");
 
         {
             let mut registry = renderer.component_registry.lock();
@@ -84,10 +81,7 @@ mod tests {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
         let mut renderer = RscRenderer::new(runtime);
 
-        renderer
-            .initialize()
-            .await
-            .expect("Failed to initialize renderer");
+        renderer.initialize().await.expect("Failed to initialize renderer");
 
         let register_component_js = r#"
         globalThis.MyJsxComponent = function(props) {
@@ -109,17 +103,13 @@ mod tests {
             registry.mark_component_loaded("MyJsxComponent");
         }
 
-        let render_result = renderer
-            .render_to_string("MyJsxComponent", Some(r#"{"name":"Test"}"#))
-            .await;
+        let render_result =
+            renderer.render_to_string("MyJsxComponent", Some(r#"{"name":"Test"}"#)).await;
 
         assert!(renderer.initialized);
 
         let output = render_result.expect("Rendering should succeed");
-        assert!(
-            output.contains("<"),
-            "Output should contain some HTML content"
-        );
+        assert!(output.contains("<"), "Output should contain some HTML content");
     }
 
     #[tokio::test]
@@ -127,10 +117,7 @@ mod tests {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
         let mut renderer = RscRenderer::new(runtime);
 
-        renderer
-            .initialize()
-            .await
-            .expect("Failed to initialize renderer");
+        renderer.initialize().await.expect("Failed to initialize renderer");
 
         assert!(renderer.initialized);
     }

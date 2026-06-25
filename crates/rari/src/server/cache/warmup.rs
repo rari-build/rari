@@ -1,13 +1,19 @@
-use crate::rsc::rendering::layout::{LayoutRenderContext, LayoutRenderer};
-use crate::server::ServerState;
-use crate::server::cache::response;
-use crate::server::routing::types::ParamValue;
+use std::{
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+    time::Instant,
+};
+
 use futures::stream::{self, StreamExt};
 use rustc_hash::FxHashMap;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::Instant;
 use tracing::{error, info};
+
+use crate::{
+    rsc::rendering::layout::{LayoutRenderContext, LayoutRenderer},
+    server::{ServerState, cache::response, routing::types::ParamValue},
+};
 
 const WARMUP_CONCURRENCY: usize = 10;
 
@@ -27,10 +33,7 @@ pub async fn warm_cache(state: &ServerState) {
         return;
     }
 
-    info!(
-        "[rari] Cache warmup: Pre-rendering {} routes...",
-        paths.len()
-    );
+    info!("[rari] Cache warmup: Pre-rendering {} routes...", paths.len());
     let start = Instant::now();
 
     let success_count = Arc::new(AtomicUsize::new(0));
@@ -68,9 +71,8 @@ async fn warm_route(
     app_router: &Arc<crate::server::routing::app_router::AppRouter>,
     path: &str,
 ) -> Result<(), String> {
-    let route_match = app_router
-        .match_route(path)
-        .map_err(|e| format!("Route match failed: {e}"))?;
+    let route_match =
+        app_router.match_route(path).map_err(|e| format!("Route match failed: {e}"))?;
 
     if route_match.loading.is_some() {
         return Ok(());
@@ -83,11 +85,10 @@ async fn warm_route(
         Arc::clone(&state.layout_html_cache),
     );
 
-    let request_context = Arc::new(
-        crate::server::middleware::request_context::RequestContext::new(
+    let request_context =
+        Arc::new(crate::server::middleware::request_context::RequestContext::new(
             route_match.route.path.clone(),
-        ),
-    );
+        ));
 
     let rsc_wire_format = layout_renderer
         .render_route_by_mode(&route_match, &context, Some(request_context))

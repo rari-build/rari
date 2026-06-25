@@ -54,10 +54,6 @@ pub struct OgImageEntry {
     pub height: Option<u32>,
     #[serde(rename = "contentType")]
     pub content_type: Option<String>,
-    #[serde(
-        rename = "additionalPaths",
-        default,
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(rename = "additionalPaths", default, skip_serializing_if = "Option::is_none")]
     pub additional_paths: Option<Vec<String>>,
 }

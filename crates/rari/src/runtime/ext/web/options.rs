@@ -3,10 +3,12 @@
     reason = "RequestBuilderHook type requires Result signature even when function never errors"
 )]
 
-use super::{DefaultWebPermissions, WebPermissions};
+use std::sync::Arc;
+
 use deno_fetch::dns::Resolver;
 use hyper_util::client::legacy::Builder;
-use std::sync::Arc;
+
+use super::{DefaultWebPermissions, WebPermissions};
 
 type RequestBuilderHook =
     fn(&mut http::Request<deno_fetch::ReqBody>) -> Result<(), deno_error::JsErrorBox>;
@@ -58,8 +60,7 @@ fn fix_accept_encoding_for_deno(
     use http::header::{ACCEPT_ENCODING, HeaderValue};
 
     if !req.headers().contains_key(ACCEPT_ENCODING) {
-        req.headers_mut()
-            .insert(ACCEPT_ENCODING, HeaderValue::from_static("gzip, deflate"));
+        req.headers_mut().insert(ACCEPT_ENCODING, HeaderValue::from_static("gzip, deflate"));
     }
 
     Ok(())

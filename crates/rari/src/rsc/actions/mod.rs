@@ -1,7 +1,5 @@
-use std::fmt::Write;
-use std::sync::Arc;
+use std::{fmt::Write, sync::Arc};
 
-use crate::server::ServerState;
 use axum::{
     body::Bytes,
     extract::State,
@@ -14,6 +12,8 @@ use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use tracing::error;
+
+use crate::server::ServerState;
 
 const MAX_BOUND_ARGS: usize = 1000;
 const MAX_BIGINT_DIGITS: usize = 300;
@@ -67,10 +67,7 @@ struct ValidationContext {
 
 impl ValidationContext {
     fn new() -> Self {
-        Self {
-            total_elements: 0,
-            has_fork: false,
-        }
+        Self { total_elements: 0, has_fork: false }
     }
 
     fn bump_count(&mut self, count: usize, config: &ValidationConfig) -> Result<(), RariError> {
@@ -112,22 +109,15 @@ fn effective_port(url: &url::Url) -> u16 {
 }
 
 fn normalize_origin(url: &url::Url) -> (String, String, u16) {
-    (
-        url.scheme().to_string(),
-        url.host_str().unwrap_or("").to_string(),
-        effective_port(url),
-    )
+    (url.scheme().to_string(), url.host_str().unwrap_or("").to_string(), effective_port(url))
 }
 
 fn check_origin(headers: &HeaderMap, allowed_origins: &[String]) -> Result<(), StatusCode> {
     if allowed_origins.is_empty() {
-        let host = headers
-            .get("host")
-            .and_then(|v| v.to_str().ok())
-            .ok_or_else(|| {
-                error!("Missing host header in server action request");
-                StatusCode::BAD_REQUEST
-            })?;
+        let host = headers.get("host").and_then(|v| v.to_str().ok()).ok_or_else(|| {
+            error!("Missing host header in server action request");
+            StatusCode::BAD_REQUEST
+        })?;
 
         let scheme = headers
             .get("x-forwarded-proto")
@@ -155,10 +145,7 @@ fn check_origin(headers: &HeaderMap, allowed_origins: &[String]) -> Result<(), S
                     return Ok(());
                 }
             }
-            error!(
-                "Origin mismatch: origin={}, server_origin={}",
-                origin, server_origin_str
-            );
+            error!("Origin mismatch: origin={}, server_origin={}", origin, server_origin_str);
             return Err(StatusCode::FORBIDDEN);
         }
 
@@ -255,11 +242,7 @@ pub async fn handle_server_action(
     };
 
     if request.args.len() > MAX_BOUND_ARGS {
-        error!(
-            "Too many server function arguments: {} > {}",
-            request.args.len(),
-            MAX_BOUND_ARGS
-        );
+        error!("Too many server function arguments: {} > {}", request.args.len(), MAX_BOUND_ARGS);
         let mut response = Json(ServerActionResponse {
             success: false,
             result: None,
@@ -283,10 +266,7 @@ pub async fn handle_server_action(
     }
 
     if is_reserved_export_name(&request.export_name) {
-        error!(
-            "Attempted to call reserved export name: {}",
-            request.export_name
-        );
+        error!("Attempted to call reserved export name: {}", request.export_name);
         let mut response = Json(ServerActionResponse {
             success: false,
             result: None,
@@ -337,10 +317,8 @@ pub async fn handle_server_action(
         }
     };
 
-    let cookie_header = headers
-        .get(header::COOKIE)
-        .and_then(|v| v.to_str().ok())
-        .map(ToString::to_string);
+    let cookie_header =
+        headers.get(header::COOKIE).and_then(|v| v.to_str().ok()).map(ToString::to_string);
 
     let request_context = std::sync::Arc::new(
         crate::server::middleware::request_context::RequestContext::new(
@@ -369,11 +347,7 @@ pub async fn handle_server_action(
                 let redirect_path = if let Ok(parsed) = url::Url::parse(redirect_url) {
                     parsed.path().to_string()
                 } else if redirect_url.starts_with('/') {
-                    redirect_url
-                        .split('?')
-                        .next()
-                        .unwrap_or(redirect_url)
-                        .to_string()
+                    redirect_url.split('?').next().unwrap_or(redirect_url).to_string()
                 } else {
                     redirect_url.clone()
                 };
@@ -383,12 +357,8 @@ pub async fn handle_server_action(
                 clear_layout_html_cache(&state).await;
             }
 
-            let response = ServerActionResponse {
-                success: true,
-                result: Some(value),
-                error: None,
-                redirect,
-            };
+            let response =
+                ServerActionResponse { success: true, result: Some(value), error: None, redirect };
 
             let mut response = Json(response).into_response();
             response.headers_mut().insert(
@@ -441,18 +411,11 @@ pub async fn handle_form_action(
         }
     };
 
-    let action_id = form_data
-        .get("__action_id")
-        .ok_or(StatusCode::BAD_REQUEST)?;
-    let export_name = form_data
-        .get("__export_name")
-        .ok_or(StatusCode::BAD_REQUEST)?;
+    let action_id = form_data.get("__action_id").ok_or(StatusCode::BAD_REQUEST)?;
+    let export_name = form_data.get("__export_name").ok_or(StatusCode::BAD_REQUEST)?;
 
     if is_reserved_export_name(export_name) {
-        error!(
-            "Attempted to call reserved export name in form action: {}",
-            export_name
-        );
+        error!("Attempted to call reserved export name in form action: {}", export_name);
         return Err(StatusCode::BAD_REQUEST);
     }
 
@@ -472,10 +435,8 @@ pub async fn handle_form_action(
         }
     };
 
-    let cookie_header = headers
-        .get(header::COOKIE)
-        .and_then(|v| v.to_str().ok())
-        .map(ToString::to_string);
+    let cookie_header =
+        headers.get(header::COOKIE).and_then(|v| v.to_str().ok()).map(ToString::to_string);
 
     let request_context = std::sync::Arc::new(
         crate::server::middleware::request_context::RequestContext::new(
@@ -489,9 +450,7 @@ pub async fn handle_form_action(
     let result = renderer
         .runtime
         .execute_with_request_context(Arc::clone(&request_context), async {
-            renderer
-                .execute_server_function(action_id, export_name, &sanitized_args)
-                .await
+            renderer.execute_server_function(action_id, export_name, &sanitized_args).await
         })
         .await;
 
@@ -502,11 +461,7 @@ pub async fn handle_form_action(
                 let redirect_path = if let Ok(parsed) = url::Url::parse(&redirect_url) {
                     parsed.path().to_string()
                 } else if redirect_url.starts_with('/') {
-                    redirect_url
-                        .split('?')
-                        .next()
-                        .unwrap_or(&redirect_url)
-                        .to_string()
+                    redirect_url.split('?').next().unwrap_or(&redirect_url).to_string()
                 } else {
                     redirect_url.clone()
                 };
@@ -530,71 +485,66 @@ pub async fn handle_form_action(
                 return Ok(redirect_response);
             }
 
-            let (redirect_url, redirect_path_opt) =
-                if let Some(referer) = headers.get("referer").and_then(|h| h.to_str().ok()) {
-                    if let Ok(parsed) = url::Url::parse(referer) {
-                        let referer_tuple = normalize_origin(&parsed);
+            let (redirect_url, redirect_path_opt) = if let Some(referer) =
+                headers.get("referer").and_then(|h| h.to_str().ok())
+            {
+                if let Ok(parsed) = url::Url::parse(referer) {
+                    let referer_tuple = normalize_origin(&parsed);
 
-                        let server_origin_tuple_opt = {
-                            let host = headers
-                                .get("host")
-                                .and_then(|v| v.to_str().ok())
-                                .unwrap_or("");
-                            let scheme = headers
-                                .get("x-forwarded-proto")
-                                .or_else(|| headers.get("x-forwarded-protocol"))
-                                .and_then(|v| v.to_str().ok())
-                                .unwrap_or("http");
-                            let server_origin_str = format!("{scheme}://{host}");
+                    let server_origin_tuple_opt = {
+                        let host = headers.get("host").and_then(|v| v.to_str().ok()).unwrap_or("");
+                        let scheme = headers
+                            .get("x-forwarded-proto")
+                            .or_else(|| headers.get("x-forwarded-protocol"))
+                            .and_then(|v| v.to_str().ok())
+                            .unwrap_or("http");
+                        let server_origin_str = format!("{scheme}://{host}");
 
-                            url::Url::parse(&server_origin_str)
-                                .ok()
-                                .map(|u| normalize_origin(&u))
-                        };
+                        url::Url::parse(&server_origin_str).ok().map(|u| normalize_origin(&u))
+                    };
 
-                        let (is_same_origin, is_allowed) = if allowed_origins.is_empty() {
-                            if let Some(server_origin_tuple) = &server_origin_tuple_opt {
-                                let is_same = referer_tuple == *server_origin_tuple;
-                                (is_same, is_same)
-                            } else {
-                                (false, false)
-                            }
+                    let (is_same_origin, is_allowed) = if allowed_origins.is_empty() {
+                        if let Some(server_origin_tuple) = &server_origin_tuple_opt {
+                            let is_same = referer_tuple == *server_origin_tuple;
+                            (is_same, is_same)
                         } else {
-                            let is_same = server_origin_tuple_opt
-                                .as_ref()
-                                .is_some_and(|t| referer_tuple == *t);
+                            (false, false)
+                        }
+                    } else {
+                        let is_same =
+                            server_origin_tuple_opt.as_ref().is_some_and(|t| referer_tuple == *t);
 
-                            let referer_origin = format!(
-                                "{}://{}:{}",
-                                referer_tuple.0, referer_tuple.1, referer_tuple.2
-                            );
-                            let allowed = crate::server::core::utils::http::is_origin_allowed(
-                                &referer_origin,
-                                &allowed_origins,
-                            );
-                            (is_same, allowed)
-                        };
+                        let referer_origin = format!(
+                            "{}://{}:{}",
+                            referer_tuple.0, referer_tuple.1, referer_tuple.2
+                        );
+                        let allowed = crate::server::core::utils::http::is_origin_allowed(
+                            &referer_origin,
+                            &allowed_origins,
+                        );
+                        (is_same, allowed)
+                    };
 
-                        if is_allowed {
-                            if is_same_origin {
-                                let path_and_query = if let Some(query) = parsed.query() {
-                                    format!("{}?{}", parsed.path(), query)
-                                } else {
-                                    parsed.path().to_string()
-                                };
-                                (path_and_query, Some(parsed.path().to_string()))
+                    if is_allowed {
+                        if is_same_origin {
+                            let path_and_query = if let Some(query) = parsed.query() {
+                                format!("{}?{}", parsed.path(), query)
                             } else {
-                                (referer.to_string(), None)
-                            }
+                                parsed.path().to_string()
+                            };
+                            (path_and_query, Some(parsed.path().to_string()))
                         } else {
-                            ("/".to_string(), None)
+                            (referer.to_string(), None)
                         }
                     } else {
                         ("/".to_string(), None)
                     }
                 } else {
                     ("/".to_string(), None)
-                };
+                }
+            } else {
+                ("/".to_string(), None)
+            };
 
             if let Some(redirect_path) = redirect_path_opt {
                 state.response_cache.invalidate_by_tag(&redirect_path).await;
@@ -637,9 +587,7 @@ pub fn validate_redirect_url(
         url::Url::parse(url).map_err(|_| RariError::bad_request("Invalid redirect URL format"))?;
 
     if parsed.scheme() != "http" && parsed.scheme() != "https" {
-        return Err(RariError::bad_request(
-            "Invalid redirect scheme: only http/https allowed",
-        ));
+        return Err(RariError::bad_request("Invalid redirect scheme: only http/https allowed"));
     }
 
     if let Some(host) = parsed.host_str() {
@@ -652,9 +600,7 @@ pub fn validate_redirect_url(
         });
 
         if !is_allowed {
-            return Err(RariError::bad_request(
-                "Redirect to untrusted host not allowed",
-            ));
+            return Err(RariError::bad_request("Redirect to untrusted host not allowed"));
         }
     } else {
         return Err(RariError::bad_request("Invalid redirect URL: missing host"));
@@ -720,12 +666,10 @@ fn percent_decode(input: &str) -> Result<String, RariError> {
 
     while let Some(ch) = chars.next() {
         if ch == '%' {
-            let hex1 = chars
-                .next()
-                .ok_or_else(|| RariError::bad_request("Invalid percent encoding"))?;
-            let hex2 = chars
-                .next()
-                .ok_or_else(|| RariError::bad_request("Invalid percent encoding"))?;
+            let hex1 =
+                chars.next().ok_or_else(|| RariError::bad_request("Invalid percent encoding"))?;
+            let hex2 =
+                chars.next().ok_or_else(|| RariError::bad_request("Invalid percent encoding"))?;
 
             let hex_str = format!("{hex1}{hex2}");
             let byte = u8::from_str_radix(&hex_str, 16)
@@ -751,9 +695,7 @@ pub fn validate_and_sanitize_args(
     config: &ValidationConfig,
 ) -> Result<Vec<JsonValue>, RariError> {
     let mut context = ValidationContext::new();
-    args.iter()
-        .map(|arg| validate_and_sanitize_value(arg, config, 0, &mut context))
-        .collect()
+    args.iter().map(|arg| validate_and_sanitize_value(arg, config, 0, &mut context)).collect()
 }
 
 fn validate_and_sanitize_value(
@@ -796,11 +738,8 @@ fn validate_and_sanitize_value(
             if let Some(f) = n.as_f64() {
                 let abs_f = f.abs();
                 if abs_f > 1e100 {
-                    let estimated_digits = if abs_f == 0.0 {
-                        1
-                    } else {
-                        (abs_f.log10().floor() as usize) + 1
-                    };
+                    let estimated_digits =
+                        if abs_f == 0.0 { 1 } else { (abs_f.log10().floor() as usize) + 1 };
 
                     if estimated_digits > MAX_BIGINT_DIGITS {
                         return Err(RariError::bad_request(format!(
@@ -917,14 +856,11 @@ fn append_pending_cookies(
 }
 
 pub fn is_valid_cookie_name(s: &str) -> bool {
-    !s.is_empty()
-        && s.bytes()
-            .all(|b| b > 32 && b < 127 && !b"()<>@,;:\\\"/[]?={} \t".contains(&b))
+    !s.is_empty() && s.bytes().all(|b| b > 32 && b < 127 && !b"()<>@,;:\\\"/[]?={} \t".contains(&b))
 }
 
 pub fn is_valid_cookie_value(s: &str) -> bool {
-    s.bytes()
-        .all(|b| matches!(b, 0x21 | 0x23..=0x2B | 0x2D..=0x3A | 0x3C..=0x5B | 0x5D..=0x7E))
+    s.bytes().all(|b| matches!(b, 0x21 | 0x23..=0x2B | 0x2D..=0x3A | 0x3C..=0x5B | 0x5D..=0x7E))
 }
 
 pub fn is_valid_attr_value(s: &str) -> bool {
@@ -968,10 +904,8 @@ pub fn build_set_cookie_header(
         #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
         write!(&mut header, "; Max-Age={max_age}").unwrap();
     }
-    let normalized_same_site = cookie
-        .same_site
-        .as_deref()
-        .map(cow_utils::CowUtils::cow_to_ascii_lowercase);
+    let normalized_same_site =
+        cookie.same_site.as_deref().map(cow_utils::CowUtils::cow_to_ascii_lowercase);
     if normalized_same_site.as_deref() == Some("none") && !cookie.secure {
         return Err("SameSite=None requires Secure".to_string());
     }
@@ -1031,10 +965,10 @@ pub fn build_set_cookie_header(
     clippy::get_unwrap
 )]
 mod tests {
-    use super::*;
-    use crate::server::config::RedirectConfig;
-    use crate::server::middleware::request_context::PendingCookie;
     use serde_json::json;
+
+    use super::*;
+    use crate::server::{config::RedirectConfig, middleware::request_context::PendingCookie};
 
     #[test]
     fn test_sanitize_args_removes_proto() {
@@ -1225,10 +1159,7 @@ mod tests {
 
     #[test]
     fn test_validation_depth_limit() {
-        let config = ValidationConfig {
-            max_depth: 3,
-            ..Default::default()
-        };
+        let config = ValidationConfig { max_depth: 3, ..Default::default() };
 
         let valid = vec![json!({
             "level1": {
@@ -1255,10 +1186,7 @@ mod tests {
 
     #[test]
     fn test_validation_string_length() {
-        let config = ValidationConfig {
-            max_string_length: 100,
-            ..Default::default()
-        };
+        let config = ValidationConfig { max_string_length: 100, ..Default::default() };
 
         let valid = vec![json!({"text": "A".repeat(100)})];
         assert!(validate_and_sanitize_args(&valid, &config).is_ok());
@@ -1271,10 +1199,7 @@ mod tests {
 
     #[test]
     fn test_validation_array_length() {
-        let config = ValidationConfig {
-            max_array_length: 10,
-            ..Default::default()
-        };
+        let config = ValidationConfig { max_array_length: 10, ..Default::default() };
 
         let valid = vec![json!({"items": vec![1; 10]})];
         assert!(validate_and_sanitize_args(&valid, &config).is_ok());
@@ -1287,10 +1212,7 @@ mod tests {
 
     #[test]
     fn test_validation_object_keys() {
-        let config = ValidationConfig {
-            max_object_keys: 5,
-            ..Default::default()
-        };
+        let config = ValidationConfig { max_object_keys: 5, ..Default::default() };
 
         let mut valid_obj = serde_json::Map::new();
         for i in 0..5 {
@@ -1306,20 +1228,12 @@ mod tests {
         let invalid = vec![json!(invalid_obj)];
         let result = validate_and_sanitize_args(&invalid, &config);
         assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("Too many object keys")
-        );
+        assert!(result.unwrap_err().to_string().contains("Too many object keys"));
     }
 
     #[test]
     fn test_validation_special_numbers() {
-        let config = ValidationConfig {
-            allow_special_numbers: false,
-            ..Default::default()
-        };
+        let config = ValidationConfig { allow_special_numbers: false, ..Default::default() };
 
         let valid = vec![json!({"value": 42.5})];
         assert!(validate_and_sanitize_args(&valid, &config).is_ok());
@@ -1397,11 +1311,7 @@ mod tests {
 
     #[test]
     fn test_validation_nested_arrays() {
-        let config = ValidationConfig {
-            max_depth: 3,
-            max_array_length: 2,
-            ..Default::default()
-        };
+        let config = ValidationConfig { max_depth: 3, max_array_length: 2, ..Default::default() };
 
         let valid = vec![json!({
             "matrix": [
@@ -1518,11 +1428,8 @@ mod tests {
 
     #[test]
     fn test_redirect_relative_url_allowed() {
-        let config = RedirectConfig {
-            allowed_hosts: vec![],
-            allow_relative: true,
-            allow_subdomains: false,
-        };
+        let config =
+            RedirectConfig { allowed_hosts: vec![], allow_relative: true, allow_subdomains: false };
 
         assert!(validate_redirect_url("/dashboard", &config).is_ok());
         assert!(validate_redirect_url("/users/123", &config).is_ok());
@@ -1542,11 +1449,8 @@ mod tests {
 
     #[test]
     fn test_redirect_protocol_relative_blocked() {
-        let config = RedirectConfig {
-            allowed_hosts: vec![],
-            allow_relative: true,
-            allow_subdomains: false,
-        };
+        let config =
+            RedirectConfig { allowed_hosts: vec![], allow_relative: true, allow_subdomains: false };
 
         assert!(validate_redirect_url("//evil.com/phishing", &config).is_err());
     }
@@ -1676,11 +1580,8 @@ mod tests {
 
     #[test]
     fn test_redirect_empty_allowed_hosts() {
-        let config = RedirectConfig {
-            allowed_hosts: vec![],
-            allow_relative: true,
-            allow_subdomains: false,
-        };
+        let config =
+            RedirectConfig { allowed_hosts: vec![], allow_relative: true, allow_subdomains: false };
 
         assert!(validate_redirect_url("/page", &config).is_ok());
 
@@ -1880,10 +1781,7 @@ mod tests {
         };
 
         let result = crate::rsc::actions::build_set_cookie_header(&cookie);
-        assert!(
-            result.is_err(),
-            "Cookie value with double-quote should be rejected"
-        );
+        assert!(result.is_err(), "Cookie value with double-quote should be rejected");
     }
 
     #[test]
@@ -1903,10 +1801,7 @@ mod tests {
         };
 
         let result = crate::rsc::actions::build_set_cookie_header(&cookie);
-        assert!(
-            result.is_err(),
-            "Cookie value with backslash should be rejected"
-        );
+        assert!(result.is_err(), "Cookie value with backslash should be rejected");
     }
 
     #[test]
@@ -1926,10 +1821,7 @@ mod tests {
         };
 
         let result = crate::rsc::actions::build_set_cookie_header(&cookie);
-        assert!(
-            result.is_err(),
-            "Cookie value with space should be rejected"
-        );
+        assert!(result.is_err(), "Cookie value with space should be rejected");
     }
 
     #[test]
@@ -1949,10 +1841,7 @@ mod tests {
         };
 
         let result = crate::rsc::actions::build_set_cookie_header(&cookie);
-        assert!(
-            result.is_ok(),
-            "Cookie value with valid RFC 6265 characters should be accepted"
-        );
+        assert!(result.is_ok(), "Cookie value with valid RFC 6265 characters should be accepted");
     }
 
     #[test]
@@ -1972,10 +1861,7 @@ mod tests {
         };
 
         let result = crate::rsc::actions::build_set_cookie_header(&cookie);
-        assert!(
-            result.is_err(),
-            "Cookie value with control characters should be rejected"
-        );
+        assert!(result.is_err(), "Cookie value with control characters should be rejected");
     }
 
     #[test]
@@ -1995,10 +1881,7 @@ mod tests {
         };
 
         let result = crate::rsc::actions::build_set_cookie_header(&cookie);
-        assert!(
-            result.is_err(),
-            "Cookie value with DEL character (0x7F) should be rejected"
-        );
+        assert!(result.is_err(), "Cookie value with DEL character (0x7F) should be rejected");
     }
 
     #[test]
@@ -2018,16 +1901,14 @@ mod tests {
         };
 
         let result = crate::rsc::actions::build_set_cookie_header(&cookie);
-        assert!(
-            result.is_ok(),
-            "Cookie value with exclamation mark (0x21) should be accepted"
-        );
+        assert!(result.is_ok(), "Cookie value with exclamation mark (0x21) should be accepted");
     }
 
     #[test]
     fn test_origin_comparison_with_default_https_port() {
-        use crate::rsc::actions::check_origin;
         use axum::http::HeaderMap;
+
+        use crate::rsc::actions::check_origin;
 
         let mut headers = HeaderMap::new();
         headers.insert("host", "example.com".parse().unwrap());
@@ -2043,8 +1924,9 @@ mod tests {
 
     #[test]
     fn test_origin_comparison_with_default_http_port() {
-        use crate::rsc::actions::check_origin;
         use axum::http::HeaderMap;
+
+        use crate::rsc::actions::check_origin;
 
         let mut headers = HeaderMap::new();
         headers.insert("host", "example.com".parse().unwrap());
@@ -2060,8 +1942,9 @@ mod tests {
 
     #[test]
     fn test_origin_comparison_with_explicit_port_in_host() {
-        use crate::rsc::actions::check_origin;
         use axum::http::HeaderMap;
+
+        use crate::rsc::actions::check_origin;
 
         let mut headers = HeaderMap::new();
         headers.insert("host", "example.com:8080".parse().unwrap());
@@ -2077,8 +1960,9 @@ mod tests {
 
     #[test]
     fn test_origin_comparison_port_mismatch() {
-        use crate::rsc::actions::check_origin;
         use axum::http::HeaderMap;
+
+        use crate::rsc::actions::check_origin;
 
         let mut headers = HeaderMap::new();
         headers.insert("host", "example.com:8080".parse().unwrap());
@@ -2086,24 +1970,19 @@ mod tests {
         headers.insert("origin", "https://example.com:9090".parse().unwrap());
 
         let result = check_origin(&headers, &[]);
-        assert!(
-            result.is_err(),
-            "Origin with different port should not match"
-        );
+        assert!(result.is_err(), "Origin with different port should not match");
     }
 
     #[test]
     fn test_referer_comparison_with_default_port() {
-        use crate::rsc::actions::check_origin;
         use axum::http::HeaderMap;
+
+        use crate::rsc::actions::check_origin;
 
         let mut headers = HeaderMap::new();
         headers.insert("host", "example.com".parse().unwrap());
         headers.insert("x-forwarded-proto", "https".parse().unwrap());
-        headers.insert(
-            "referer",
-            "https://example.com:443/some/path".parse().unwrap(),
-        );
+        headers.insert("referer", "https://example.com:443/some/path".parse().unwrap());
 
         let result = check_origin(&headers, &[]);
         assert!(
