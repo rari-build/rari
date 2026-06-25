@@ -373,71 +373,71 @@ impl StreamingRenderer {
 
             loop {
                 tokio::select! {
-                             Some(update) = update_receiver.recv() => {
+                    Some(update) = update_receiver.recv() => {
 
-                                 {
-                                     let mut map = boundary_rows_map.lock().await;
-                                     map.insert(update.boundary_id.clone(), update.row_id);
-                                 }
+                        {
+                            let mut map = boundary_rows_map.lock().await;
+                            map.insert(update.boundary_id.clone(), update.row_id);
+                        }
 
-                                 let content_json = serde_json::to_string(&update.content).unwrap_or_else(|_| "null".to_string());
-                                 let row_id_hex = format!("{:x}", update.row_id);
-                                 let mut update_str = String::with_capacity(row_id_hex.len() + content_json.len() + 2);
-                                 update_str.push_str(&row_id_hex);
-                                 update_str.push(':');
-                                 update_str.push_str(&content_json);
-                                 update_str.push('\n');
+                        let content_json = serde_json::to_string(&update.content).unwrap_or_else(|_| "null".to_string());
+                        let row_id_hex = format!("{:x}", update.row_id);
+                        let mut update_str = String::with_capacity(row_id_hex.len() + content_json.len() + 2);
+                        update_str.push_str(&row_id_hex);
+                        update_str.push(':');
+                        update_str.push_str(&content_json);
+                        update_str.push('\n');
 
-                                 let chunk = RscStreamChunk {
-                                     data: update_str.into_bytes(),
-                                     chunk_type: RscChunkType::BoundaryUpdate,
-                                     row_id: update.row_id,
-                                     is_final: false,
-                                     boundary_id: Some(update.boundary_id.clone()),
-                                 };
+                        let chunk = RscStreamChunk {
+                            data: update_str.into_bytes(),
+                            chunk_type: RscChunkType::BoundaryUpdate,
+                            row_id: update.row_id,
+                            is_final: false,
+                            boundary_id: Some(update.boundary_id.clone()),
+                        };
 
-                                 if chunk_sender_clone.send(chunk).await.is_err() {
-                                     break;
-                                 }
+                        if chunk_sender_clone.send(chunk).await.is_err() {
+                            break;
+                        }
 
-                             }
-                             Some(error) = error_receiver.recv() => {
+                    }
+                    Some(error) = error_receiver.recv() => {
 
-                                 error!(
-                                     "Streaming boundary error: boundary_id={}, error={}, row_id={}",
-                                     error.boundary_id,
-                                     error.error_message,
-                                     error.row_id
-                                 );
+                        error!(
+                            "Streaming boundary error: boundary_id={}, error={}, row_id={}",
+                            error.boundary_id,
+                            error.error_message,
+                            error.row_id
+                        );
 
-                                 let error_json = serde_json::to_string(&serde_json::json!({
-                                      "error": error.error_message,
-                                      "boundary_id": error.boundary_id
-                                  })).unwrap_or_else(|_| "{}".to_string());
+                        let error_json = serde_json::to_string(&serde_json::json!({
+                             "error": error.error_message,
+                             "boundary_id": error.boundary_id
+                         })).unwrap_or_else(|_| "{}".to_string());
 
-                                 let row_id_hex = format!("{:x}", error.row_id);
-                                 let mut error_str = String::with_capacity(row_id_hex.len() + error_json.len() + 3);
-                                 error_str.push_str(&row_id_hex);
-                                 error_str.push_str(":E");
-                                 error_str.push_str(&error_json);
-                                 error_str.push('\n');
+                        let row_id_hex = format!("{:x}", error.row_id);
+                        let mut error_str = String::with_capacity(row_id_hex.len() + error_json.len() + 3);
+                        error_str.push_str(&row_id_hex);
+                        error_str.push_str(":E");
+                        error_str.push_str(&error_json);
+                        error_str.push('\n');
 
-                                 let chunk = RscStreamChunk {
-                                     data: error_str.into_bytes(),
-                                     chunk_type: RscChunkType::BoundaryError,
-                                     row_id: error.row_id,
-                                     is_final: false,
-                boundary_id: None,
-                                 };
+                        let chunk = RscStreamChunk {
+                            data: error_str.into_bytes(),
+                            chunk_type: RscChunkType::BoundaryError,
+                            row_id: error.row_id,
+                            is_final: false,
+                            boundary_id: None,
+                        };
 
-                                 if chunk_sender_clone.send(chunk).await.is_err() {
-                                     break;
-                                 }
-                             }
-                             else => {
-                                 break;
-                             }
-                         }
+                        if chunk_sender_clone.send(chunk).await.is_err() {
+                            break;
+                        }
+                    }
+                    else => {
+                        break;
+                    }
+                }
             }
 
             let final_chunk = RscStreamChunk {

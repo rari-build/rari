@@ -3,7 +3,10 @@ use std::{
     sync::Arc,
 };
 
-use crate::server::cache::handler::{CacheError, CacheHandler, MemoryCacheHandler};
+use crate::server::{
+    cache::handler::{CacheError, CacheHandler, MemoryCacheHandler},
+    config::Config,
+};
 
 const OG_TTL_SECS: u64 = 60 * 60 * 24 * 365 * 10;
 const KEY_PREFIX: &str = "og:";
@@ -33,7 +36,7 @@ impl OgImageCache {
     }
 
     fn resolve_cache_dir(project_path: &Path) -> PathBuf {
-        let is_production = std::env::var("NODE_ENV").map(|v| v == "production").unwrap_or(false);
+        let is_production = Config::get().map(|c| c.is_production()).unwrap_or(false);
 
         if is_production {
             PathBuf::from("/tmp/rari-og-cache")
