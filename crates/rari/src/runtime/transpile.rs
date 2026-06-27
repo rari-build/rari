@@ -20,7 +20,7 @@ fn maybe_substitute_version_placeholders(name: &str, source: ModuleCodeString) -
     const NODE_VERSION_TOKEN: &str = "__NODE_VERSION__";
     const V8_VERSION_TOKEN: &str = "__V8_VERSION__";
 
-    if name != "ext:init_node/init_node.js" {
+    if name != "ext:init_node/init_node.ts" {
         return source;
     }
 

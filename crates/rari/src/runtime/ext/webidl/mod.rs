@@ -11,11 +11,10 @@ extension!(
 
 impl ExtensionTrait<()> for init_webidl {
     fn init((): ()) -> Extension {
-        Extension::default()
+        init_webidl::init()
     }
 }
 
-#[expect(unused)]
 pub fn extensions(is_snapshot: bool) -> Vec<Extension> {
-    vec![deno_webidl::deno_webidl::init(), <init_webidl as ExtensionTrait<()>>::init(())]
+    vec![deno_webidl::deno_webidl::init(), init_webidl::build((), is_snapshot)]
 }

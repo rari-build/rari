@@ -173,13 +173,15 @@ interface RegisterResult {
     functionName: string,
     args: unknown[] = [],
   ): ServerFunctionPromise {
-    const cacheKey = `${functionName}_${JSON.stringify(args)}`
-    const promiseId = `server_fn_${functionName}_${btoa(JSON.stringify(args))
-      .replace(NON_ALPHANUMERIC_REGEX, '')
-      .slice(0, 10)}`
-
+    let cacheKey = `${functionName}_unknown`
+    let promiseId = `server_fn_${functionName}_unknown`
     let promise: ServerFunctionPromise
     try {
+      cacheKey = `${functionName}_${JSON.stringify(args)}`
+      promiseId = `server_fn_${functionName}_${btoa(JSON.stringify(args))
+        .replace(NON_ALPHANUMERIC_REGEX, '')
+        .slice(0, 10)}`
+
       const serverFunction = g.getServerFunction?.(functionName)
       if (!serverFunction) {
         const error = new Error(`Server function '${functionName}' not found`)

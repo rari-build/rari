@@ -54,8 +54,20 @@
     return result
   }
 
-  function normalizeOptions(opts: RariCookieSetOptions): RariCookieSetOptions {
-    const normalized: Partial<RariCookieSetOptions> = {}
+  function normalizeOptions(opts: RariCookieSetOptions & { name?: string, value?: string }): {
+    name?: string
+    value?: string
+    path?: string
+    domain?: string
+    expires?: string
+    maxAge?: number
+    httpOnly?: boolean
+    secure?: boolean
+    sameSite?: string
+    priority?: string
+    partitioned?: boolean
+  } {
+    const normalized: any = { ...opts }
 
     if (opts.expires instanceof Date)
       normalized.expires = opts.expires.toUTCString()
@@ -63,7 +75,7 @@
     if (typeof opts.sameSite === 'boolean')
       normalized.sameSite = opts.sameSite ? 'strict' : undefined
 
-    return { ...opts, ...normalized }
+    return normalized
   }
 
   function createCookieStore(): RariCookieStore {
@@ -86,12 +98,36 @@
 
       set: ((nameOrOptions: string | (RariCookieSetOptions & { name: string, value: string }), value?: string, options?: RariCookieSetOptions): void => {
         if (typeof nameOrOptions === 'string') {
-          const opts = normalizeOptions(options || {})
-          Deno.core.ops.op_set_cookie({ name: nameOrOptions, value: value ?? '', ...opts } as Record<string, unknown>)
+          const opts = normalizeOptions({ ...options, name: nameOrOptions, value: value ?? '' })
+          Deno.core.ops.op_set_cookie({
+            name: opts.name!,
+            value: opts.value!,
+            path: opts.path,
+            domain: opts.domain,
+            expires: opts.expires,
+            maxAge: opts.maxAge,
+            httpOnly: opts.httpOnly,
+            secure: opts.secure,
+            sameSite: opts.sameSite,
+            priority: opts.priority,
+            partitioned: opts.partitioned,
+          })
         }
         else {
           const opts = normalizeOptions(nameOrOptions)
-          Deno.core.ops.op_set_cookie(opts as Record<string, unknown>)
+          Deno.core.ops.op_set_cookie({
+            name: opts.name!,
+            value: opts.value!,
+            path: opts.path,
+            domain: opts.domain,
+            expires: opts.expires,
+            maxAge: opts.maxAge,
+            httpOnly: opts.httpOnly,
+            secure: opts.secure,
+            sameSite: opts.sameSite,
+            priority: opts.priority,
+            partitioned: opts.partitioned,
+          })
         }
       }) as RariCookieStore['set'],
 

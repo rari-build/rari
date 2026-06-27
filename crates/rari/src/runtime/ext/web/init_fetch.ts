@@ -45,7 +45,7 @@ function extractValidTags(init: RequestInit & { rari?: { tags?: unknown }, next?
   return []
 }
 
-function generateCacheKey(input: RequestInfo | URL, init: RequestInit): string {
+function generateCacheKey(input: RequestInfo | URL, init: RequestInit & { rari?: { timeout?: number, revalidate?: number | false, tags?: unknown }, next?: { revalidate?: number | false, tags?: unknown } }): string {
   const { url, method, headers } = resolveRequestMeta(input, init)
 
   let headersStr = '{}'
@@ -104,7 +104,11 @@ function generateCacheKey(input: RequestInfo | URL, init: RequestInit): string {
     tagsStr = `:tags:${JSON.stringify(normalizedTags)}`
   }
 
-  return `${method}:${url}:${headersStr}:${bodyStr}${tagsStr}`
+  const timeout = init?.rari?.timeout ?? 5000
+  const revalidate = init?.rari?.revalidate ?? init?.next?.revalidate
+  const optionsStr = `:timeout:${timeout}:revalidate:${revalidate}`
+
+  return `${method}:${url}:${headersStr}:${bodyStr}${tagsStr}${optionsStr}`
 }
 
 function shouldCache(input: RequestInfo | URL, init: RequestInit & { rari?: { revalidate?: number | false }, next?: { revalidate?: number | false } }, meta?: RequestMeta): boolean {

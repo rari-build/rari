@@ -30,8 +30,8 @@ declare module 'ext:core/ops' {
 }
 
 declare module 'ext:init_utilities/utilities.ts' {
-  export function applyToGlobal(props: Record<string, any>): void
-  export function applyToDeno(props: Record<string, any>): void
+  export function applyToGlobal(props: PropertyDescriptorMap): void
+  export function applyToDeno(props: PropertyDescriptorMap): void
   export function nonEnumerable(value: any): PropertyDescriptor
   export function readOnly(value: any): PropertyDescriptor
   export function getterOnly(fn: () => any): PropertyDescriptor

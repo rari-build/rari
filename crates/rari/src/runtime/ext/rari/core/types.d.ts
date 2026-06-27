@@ -153,7 +153,19 @@ declare global {
     namespace core {
       namespace ops {
         function op_get_cookies(): string
-        function op_set_cookie(options: Record<string, unknown>): void
+        function op_set_cookie(options: {
+          name: string
+          value: string
+          path?: string
+          domain?: string
+          expires?: string
+          maxAge?: number
+          httpOnly?: boolean
+          secure?: boolean
+          sameSite?: string
+          priority?: string
+          partitioned?: boolean
+        }): void
         function op_delete_cookie(name: string): void
         function op_cache_get(key: string): any
         function op_cache_set(key: string, value: any): void

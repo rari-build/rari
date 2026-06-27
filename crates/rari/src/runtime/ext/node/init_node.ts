@@ -17,7 +17,7 @@ if (!g.process) {
         return '/'
       }
     },
-    nextTick: (fn: () => void) => setTimeout(fn, 0),
+    nextTick: (fn: () => void) => queueMicrotask(fn),
     platform: (() => {
       try {
         const os = g.Deno?.build?.os
@@ -202,7 +202,7 @@ if (!g.Buffer) {
     }
 
     static isBuffer(obj: unknown): obj is Buffer {
-      return obj instanceof Buffer || obj instanceof Uint8Array
+      return obj instanceof Buffer
     }
   }
 }

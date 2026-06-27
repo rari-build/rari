@@ -435,6 +435,8 @@ declare global {
           status: number
           statusText?: string
           headers?: Record<string, string>
+          cached: boolean
+          tags: string[]
         }>
         function op_bootstrap_no_color(): boolean
       }

@@ -42,6 +42,7 @@ impl ExtensionTrait<WebOptions> for deno_fetch::deno_fetch {
 
 extension!(
     init_net,
+    deps = [init_utilities],
     esm_entry_point = "ext:init_net/init_net.ts",
     esm = [ dir "src/runtime/ext/web", "init_net.ts" ],
 );
@@ -62,6 +63,7 @@ impl ExtensionTrait<WebOptions> for deno_net::deno_net {
 
 extension!(
     init_telemetry,
+    deps = [init_utilities],
     esm_entry_point = "ext:init_telemetry/init_telemetry.ts",
     esm = [ dir "src/runtime/ext/web", "init_telemetry.ts" ],
 );

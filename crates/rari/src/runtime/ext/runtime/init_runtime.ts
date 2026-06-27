@@ -32,7 +32,6 @@ applyToDeno({
   args: getterOnly(opArgs),
   mainModule: getterOnly(() => core.ops.op_main_module()),
   exitCode: {
-    __proto__: null,
     get() {
       return os.getExitCode()
     },
