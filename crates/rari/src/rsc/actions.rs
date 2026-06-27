@@ -10,7 +10,7 @@ use cow_utils::CowUtils;
 use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use serde_json::Value as JsonValue;
+use serde_json::Value;
 use tracing::error;
 
 use crate::server::ServerState;
@@ -88,14 +88,14 @@ impl ValidationContext {
 pub struct ServerActionRequest {
     pub id: String,
     pub export_name: String,
-    pub args: Vec<JsonValue>,
+    pub args: Vec<Value>,
 }
 
 #[derive(Debug, Serialize)]
 #[non_exhaustive]
 pub struct ServerActionResponse {
     pub success: bool,
-    pub result: Option<JsonValue>,
+    pub result: Option<Value>,
     pub error: Option<String>,
     pub redirect: Option<String>,
 }
@@ -610,7 +610,7 @@ pub fn validate_redirect_url(
 }
 
 fn extract_redirect_from_result(
-    result: &JsonValue,
+    result: &Value,
     config: &crate::server::config::RedirectConfig,
 ) -> Option<String> {
     if let Some(redirect) = result.get("redirect") {
@@ -645,19 +645,19 @@ fn parse_form_data(body: &Bytes) -> Result<FxHashMap<String, String>, RariError>
     Ok(form_data)
 }
 
-fn convert_form_data_to_args(form_data: &FxHashMap<String, String>) -> Vec<JsonValue> {
+fn convert_form_data_to_args(form_data: &FxHashMap<String, String>) -> Vec<Value> {
     let mut form_entries = serde_json::Map::new();
 
     for (key, value) in form_data {
         if key.starts_with("__") {
             continue;
         }
-        form_entries.insert(key.clone(), JsonValue::String(value.clone()));
+        form_entries.insert(key.clone(), Value::String(value.clone()));
     }
 
-    let form_data_object = JsonValue::Object(form_entries);
+    let form_data_object = Value::Object(form_entries);
 
-    vec![JsonValue::Null, form_data_object]
+    vec![Value::Null, form_data_object]
 }
 
 fn percent_decode(input: &str) -> Result<String, RariError> {
@@ -691,19 +691,19 @@ fn percent_decode(input: &str) -> Result<String, RariError> {
 }
 
 pub fn validate_and_sanitize_args(
-    args: &[JsonValue],
+    args: &[Value],
     config: &ValidationConfig,
-) -> Result<Vec<JsonValue>, RariError> {
+) -> Result<Vec<Value>, RariError> {
     let mut context = ValidationContext::new();
     args.iter().map(|arg| validate_and_sanitize_value(arg, config, 0, &mut context)).collect()
 }
 
 fn validate_and_sanitize_value(
-    value: &JsonValue,
+    value: &Value,
     config: &ValidationConfig,
     depth: usize,
     context: &mut ValidationContext,
-) -> Result<JsonValue, RariError> {
+) -> Result<Value, RariError> {
     if depth > config.max_depth {
         return Err(RariError::bad_request(format!(
             "Maximum nesting depth exceeded: {} > {}",
@@ -712,7 +712,7 @@ fn validate_and_sanitize_value(
     }
 
     match value {
-        JsonValue::String(s) => {
+        Value::String(s) => {
             if s.len() > config.max_string_length {
                 return Err(RariError::bad_request(format!(
                     "String too long: {} > {}",
@@ -725,7 +725,7 @@ fn validate_and_sanitize_value(
 
             Ok(value.clone())
         }
-        JsonValue::Number(n) => {
+        Value::Number(n) => {
             if let Some(f) = n.as_f64()
                 && !config.allow_special_numbers
                 && !f.is_finite()
@@ -751,7 +751,7 @@ fn validate_and_sanitize_value(
 
             Ok(value.clone())
         }
-        JsonValue::Array(arr) => {
+        Value::Array(arr) => {
             if arr.len() > config.max_array_length {
                 return Err(RariError::bad_request(format!(
                     "Array too large: {} > {}",
@@ -771,9 +771,9 @@ fn validate_and_sanitize_value(
                 .map(|v| validate_and_sanitize_value(v, config, depth + 1, context))
                 .collect();
 
-            Ok(JsonValue::Array(validated?))
+            Ok(Value::Array(validated?))
         }
-        JsonValue::Object(obj) => {
+        Value::Object(obj) => {
             if obj.len() > config.max_object_keys {
                 return Err(RariError::bad_request(format!(
                     "Too many object keys: {} > {}",
@@ -792,9 +792,9 @@ fn validate_and_sanitize_value(
                 sanitized.insert(key.clone(), validated_val);
             }
 
-            Ok(JsonValue::Object(sanitized))
+            Ok(Value::Object(sanitized))
         }
-        JsonValue::Bool(_) | JsonValue::Null => Ok(value.clone()),
+        Value::Bool(_) | Value::Null => Ok(value.clone()),
     }
 }
 

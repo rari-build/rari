@@ -16,7 +16,6 @@ pub const DEFAULT_MAX_CACHE_SIZE: usize = 1000;
 pub const BATCH_ERROR_COLLECTION_SCRIPT: &str = include_str!("js/batch_error_collection.js");
 pub const EXTENSION_CHECKS_SCRIPT: &str = include_str!("js/extension_checks.js");
 pub const V8_CACHE_CLEAR_SCRIPT: &str = include_str!("js/v8_cache_clear.js");
-pub const PROMISE_MANAGER_CHECK_SCRIPT: &str = include_str!("js/promise_manager_check.js");
 pub const SERVER_FUNCTION_RESOLVER_SCRIPT: &str = include_str!("js/server_function_resolver.js");
 pub const RESOLVE_SERVER_FUNCTIONS_SCRIPT: &str = include_str!("js/resolve_server_functions.js");
 pub const SERVER_ACTION_INVOCATION_SCRIPT: &str = include_str!("js/server_action_invocation.js");

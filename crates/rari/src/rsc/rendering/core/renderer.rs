@@ -20,9 +20,9 @@ use super::{
         BATCH_ERROR_COLLECTION_SCRIPT, CACHE_CLEANUP_INTERVAL,
         COMPONENT_AVAILABILITY_CHECK_DELAY_MS, COMPONENT_EVAL_SETUP_SCRIPT,
         EXTENSION_CHECKS_SCRIPT, JSX_RUNTIME_SETUP_SCRIPT, MAX_RETRIES, MEMORY_PRESSURE_THRESHOLD,
-        MODULE_REGISTRATION_SCRIPT, PROMISE_MANAGER_CHECK_SCRIPT, REGISTRY_PROXY_SETUP_SCRIPT,
-        RESOLVE_SERVER_FUNCTIONS_SCRIPT, RETRY_BASE_DELAY_MS, SERVER_ACTION_INVOCATION_SCRIPT,
-        SERVER_FUNCTION_RESOLVER_SCRIPT, V8_CACHE_CLEAR_SCRIPT,
+        MODULE_REGISTRATION_SCRIPT, REGISTRY_PROXY_SETUP_SCRIPT, RESOLVE_SERVER_FUNCTIONS_SCRIPT,
+        RETRY_BASE_DELAY_MS, SERVER_ACTION_INVOCATION_SCRIPT, SERVER_FUNCTION_RESOLVER_SCRIPT,
+        V8_CACHE_CLEAR_SCRIPT,
     },
     types::{ResourceLimits, ResourceMetrics, ResourceTracker},
     utils::transform_imports_for_hmr,
@@ -35,7 +35,7 @@ use crate::{
             core::loader::{RscJsLoader, RscModuleOperation},
             streaming::{RscStream, StreamingRenderer},
         },
-        utils::dependencies::{extract_dependencies, hash_string},
+        utils::{extract_dependencies, hash_string},
     },
     runtime::JsExecutionRuntime,
 };
@@ -890,17 +890,6 @@ globalThis['~errors'].batch.push({{
             }
         };
 
-        let enhance_use_hook_script = {
-            let cache_key = "enhance_use_hook".to_string();
-            if let Some(cached) = self.get_cached_script(&cache_key) {
-                cached
-            } else {
-                let script = PROMISE_MANAGER_CHECK_SCRIPT.to_string();
-                self.cache_script(cache_key, script.clone());
-                script
-            }
-        };
-
         let server_function_resolver_script = {
             let cache_key = "server_function_resolver".to_string();
             if let Some(cached) = self.get_cached_script(&cache_key) {
@@ -926,7 +915,6 @@ globalThis['~errors'].batch.push({{
         let setup_scripts = vec![
             ("clear_environment", clear_environment_script),
             ("detect_promises", detect_module_promises),
-            ("enhance_use_hook", enhance_use_hook_script),
             ("server_function_resolver", server_function_resolver_script),
             ("isolation_init", isolation_init_script),
         ];
@@ -1311,8 +1299,7 @@ globalThis['~errors'].batch.push({{
                     ))
                 })?;
 
-                let dependencies =
-                    crate::rsc::utils::dependencies::extract_dependencies(&component_code);
+                let dependencies = crate::rsc::utils::extract_dependencies(&component_code);
 
                 {
                     let mut registry = self.component_registry.lock();

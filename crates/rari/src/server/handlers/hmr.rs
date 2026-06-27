@@ -538,8 +538,7 @@ async fn handle_reload_component(
 
                 registry.remove_component(&component_id);
 
-                let dependencies =
-                    crate::rsc::utils::dependencies::extract_dependencies(&bundle_code);
+                let dependencies = crate::rsc::utils::extract_dependencies(&bundle_code);
 
                 match registry.register_component(
                     &component_id,

@@ -33,9 +33,7 @@ use super::{
     },
     transpiler::{needs_jsx_transpilation, needs_typescript_transpilation},
 };
-use crate::{
-    rsc::utils::dependencies::DependencyList, server::cache::handler::CacheHandlerRegistry,
-};
+use crate::{rsc::utils::DependencyList, server::cache::handler::CacheHandlerRegistry};
 
 type ExtensionTranspilerResult = Result<(FastString, Option<Cow<'static, [u8]>>), JsErrorBox>;
 type ExtensionTranspilerFn = dyn Fn(FastString, FastString) -> ExtensionTranspilerResult;

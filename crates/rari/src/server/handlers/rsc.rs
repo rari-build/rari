@@ -425,7 +425,7 @@ pub async fn reload_component_from_dist(
 
         renderer.clear_script_cache();
 
-        let dependencies = crate::rsc::utils::dependencies::extract_dependencies(&dist_code);
+        let dependencies = crate::rsc::utils::extract_dependencies(&dist_code);
 
         {
             let mut registry = renderer.component_registry.lock();
