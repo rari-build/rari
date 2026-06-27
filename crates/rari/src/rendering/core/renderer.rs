@@ -33,7 +33,7 @@ use super::{
     utils::transform_imports_for_hmr,
 };
 use crate::{
-    rsc::rendering::{
+    rendering::{
         core::loader::{RscJsLoader, RscModuleOperation},
         streaming::{RscStream, StreamingRenderer},
     },

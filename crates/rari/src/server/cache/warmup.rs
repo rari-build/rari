@@ -11,7 +11,7 @@ use rustc_hash::FxHashMap;
 use tracing::{error, info};
 
 use crate::{
-    rsc::rendering::layout::{LayoutRenderContext, LayoutRenderer},
+    rendering::layout::{LayoutRenderContext, LayoutRenderer},
     server::{ServerState, cache::response, routing::types::ParamValue},
 };
 

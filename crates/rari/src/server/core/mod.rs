@@ -18,16 +18,14 @@ use tracing::{debug, error};
 use types::ServerState;
 
 use crate::{
-    rsc::{
-        actions::{handle_form_action, handle_server_action},
-        rendering::core::ResourceLimits,
-    },
+    rendering::core::ResourceLimits,
     server::{
         cache::{handler::CacheHandlerRegistry, response},
         config::{
             CACHE_LAYER_IMAGE, CACHE_LAYER_LAYOUT, CACHE_LAYER_OG, CACHE_LAYER_RESPONSE, Config,
         },
         handlers::{
+            actions::{handle_form_action, handle_server_action},
             api::{api_cors_preflight, handle_api_route},
             app::handle_app_route,
             hmr::handle_hmr_action,
@@ -91,8 +89,10 @@ impl Server {
 
         let env_vars: rustc_hash::FxHashMap<String, String> = std::env::vars().collect();
         let js_runtime = Arc::new(crate::runtime::JsExecutionRuntime::new(Some(env_vars)));
-        let mut renderer =
-            crate::rsc::RscRenderer::with_resource_limits(Arc::clone(&js_runtime), resource_limits);
+        let mut renderer = crate::rendering::core::RscRenderer::with_resource_limits(
+            Arc::clone(&js_runtime),
+            resource_limits,
+        );
         renderer.initialize().await?;
 
         if config.is_production() {
@@ -136,7 +136,7 @@ impl Server {
 
         let ssr_renderer = {
             let runtime = Arc::clone(&renderer.runtime);
-            let ssr = crate::rsc::RscHtmlRenderer::new(runtime);
+            let ssr = crate::rendering::html::RscHtmlRenderer::new(runtime);
             Arc::new(ssr)
         };
 
@@ -190,7 +190,7 @@ impl Server {
             api_route_handler,
             html_cache: Arc::new(dashmap::DashMap::new()),
             layout_html_cache:
-                crate::rsc::rendering::layout::LayoutRenderer::create_shared_cache_from_config(
+                crate::rendering::layout::LayoutRenderer::create_shared_cache_from_config(
                     &layout_layer,
                     &cache_registry,
                 ),

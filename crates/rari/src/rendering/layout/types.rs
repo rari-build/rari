@@ -1,6 +1,6 @@
 use rustc_hash::FxHashMap;
 
-use crate::{rsc::rendering::streaming::RscStream, server::routing::types::ParamValue};
+use crate::{rendering::streaming::RscStream, server::routing::types::ParamValue};
 
 #[derive(Debug, Clone)]
 #[non_exhaustive]

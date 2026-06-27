@@ -1618,7 +1618,7 @@ mod tests {
 
     #[test]
     fn test_is_reserved_export_name_then() {
-        use crate::rsc::actions::is_reserved_export_name;
+        use super::is_reserved_export_name;
 
         assert!(is_reserved_export_name("then"));
         assert!(is_reserved_export_name("catch"));
@@ -1627,7 +1627,7 @@ mod tests {
 
     #[test]
     fn test_is_reserved_export_name_object_methods() {
-        use crate::rsc::actions::is_reserved_export_name;
+        use super::is_reserved_export_name;
 
         assert!(is_reserved_export_name("toString"));
         assert!(is_reserved_export_name("valueOf"));
@@ -1637,7 +1637,7 @@ mod tests {
 
     #[test]
     fn test_is_reserved_export_name_symbols() {
-        use crate::rsc::actions::is_reserved_export_name;
+        use super::is_reserved_export_name;
 
         assert!(is_reserved_export_name("Symbol"));
         assert!(is_reserved_export_name("@@iterator"));
@@ -1646,7 +1646,7 @@ mod tests {
 
     #[test]
     fn test_is_reserved_export_name_allows_valid_names() {
-        use crate::rsc::actions::is_reserved_export_name;
+        use super::is_reserved_export_name;
 
         assert!(!is_reserved_export_name("getData"));
         assert!(!is_reserved_export_name("submitForm"));
@@ -1659,7 +1659,7 @@ mod tests {
 
     #[test]
     fn test_is_reserved_export_name_case_sensitive() {
-        use crate::rsc::actions::is_reserved_export_name;
+        use super::is_reserved_export_name;
 
         assert!(is_reserved_export_name("then"));
         assert!(!is_reserved_export_name("Then"));
@@ -1671,7 +1671,7 @@ mod tests {
 
     #[test]
     fn test_is_reserved_export_name_similar_names() {
-        use crate::rsc::actions::is_reserved_export_name;
+        use super::is_reserved_export_name;
 
         assert!(!is_reserved_export_name("thenDo"));
         assert!(!is_reserved_export_name("catchError"));
@@ -1780,7 +1780,7 @@ mod tests {
             partitioned: false,
         };
 
-        let result = crate::rsc::actions::build_set_cookie_header(&cookie);
+        let result = super::build_set_cookie_header(&cookie);
         assert!(result.is_err(), "Cookie value with double-quote should be rejected");
     }
 
@@ -1800,7 +1800,7 @@ mod tests {
             partitioned: false,
         };
 
-        let result = crate::rsc::actions::build_set_cookie_header(&cookie);
+        let result = super::build_set_cookie_header(&cookie);
         assert!(result.is_err(), "Cookie value with backslash should be rejected");
     }
 
@@ -1820,7 +1820,7 @@ mod tests {
             partitioned: false,
         };
 
-        let result = crate::rsc::actions::build_set_cookie_header(&cookie);
+        let result = super::build_set_cookie_header(&cookie);
         assert!(result.is_err(), "Cookie value with space should be rejected");
     }
 
@@ -1840,7 +1840,7 @@ mod tests {
             partitioned: false,
         };
 
-        let result = crate::rsc::actions::build_set_cookie_header(&cookie);
+        let result = super::build_set_cookie_header(&cookie);
         assert!(result.is_ok(), "Cookie value with valid RFC 6265 characters should be accepted");
     }
 
@@ -1860,7 +1860,7 @@ mod tests {
             partitioned: false,
         };
 
-        let result = crate::rsc::actions::build_set_cookie_header(&cookie);
+        let result = super::build_set_cookie_header(&cookie);
         assert!(result.is_err(), "Cookie value with control characters should be rejected");
     }
 
@@ -1880,7 +1880,7 @@ mod tests {
             partitioned: false,
         };
 
-        let result = crate::rsc::actions::build_set_cookie_header(&cookie);
+        let result = super::build_set_cookie_header(&cookie);
         assert!(result.is_err(), "Cookie value with DEL character (0x7F) should be rejected");
     }
 
@@ -1900,7 +1900,7 @@ mod tests {
             partitioned: false,
         };
 
-        let result = crate::rsc::actions::build_set_cookie_header(&cookie);
+        let result = super::build_set_cookie_header(&cookie);
         assert!(result.is_ok(), "Cookie value with exclamation mark (0x21) should be accepted");
     }
 
@@ -1908,7 +1908,7 @@ mod tests {
     fn test_origin_comparison_with_default_https_port() {
         use axum::http::HeaderMap;
 
-        use crate::rsc::actions::check_origin;
+        use super::check_origin;
 
         let mut headers = HeaderMap::new();
         headers.insert("host", "example.com".parse().unwrap());
@@ -1926,7 +1926,7 @@ mod tests {
     fn test_origin_comparison_with_default_http_port() {
         use axum::http::HeaderMap;
 
-        use crate::rsc::actions::check_origin;
+        use super::check_origin;
 
         let mut headers = HeaderMap::new();
         headers.insert("host", "example.com".parse().unwrap());
@@ -1944,7 +1944,7 @@ mod tests {
     fn test_origin_comparison_with_explicit_port_in_host() {
         use axum::http::HeaderMap;
 
-        use crate::rsc::actions::check_origin;
+        use super::check_origin;
 
         let mut headers = HeaderMap::new();
         headers.insert("host", "example.com:8080".parse().unwrap());
@@ -1962,7 +1962,7 @@ mod tests {
     fn test_origin_comparison_port_mismatch() {
         use axum::http::HeaderMap;
 
-        use crate::rsc::actions::check_origin;
+        use super::check_origin;
 
         let mut headers = HeaderMap::new();
         headers.insert("host", "example.com:8080".parse().unwrap());
@@ -1977,7 +1977,7 @@ mod tests {
     fn test_referer_comparison_with_default_port() {
         use axum::http::HeaderMap;
 
-        use crate::rsc::actions::check_origin;
+        use super::check_origin;
 
         let mut headers = HeaderMap::new();
         headers.insert("host", "example.com".parse().unwrap());

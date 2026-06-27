@@ -227,7 +227,6 @@ impl RSCTree {
     /// # Errors
     ///
     /// Returns an error if the JSON structure is invalid or cannot be parsed as an RSCTree.
-    #[expect(clippy::too_many_lines, reason = "Complex JSON parsing logic with many variants")]
     pub fn from_json(value: &Value) -> Result<Self, String> {
         match value {
             Value::String(s) => Ok(RSCTree::Text(s.clone())),

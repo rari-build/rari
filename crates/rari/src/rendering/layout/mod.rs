@@ -41,7 +41,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        rsc::rendering::core::RscRenderer,
+        rendering::core::RscRenderer,
         runtime::JsExecutionRuntime,
         server::routing::{app_router::AppRouteMatch, types::ParamValue},
     };

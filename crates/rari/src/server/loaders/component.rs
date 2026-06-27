@@ -7,7 +7,7 @@ use rari_utils::path_to_file_url;
 use tracing::error;
 
 use crate::{
-    rsc::rendering::core::RscRenderer,
+    rendering::core::RscRenderer,
     runtime::JsExecutionRuntime,
     server::core::utils::component::{
         has_use_client_directive, has_use_server_directive, wrap_server_action_module,

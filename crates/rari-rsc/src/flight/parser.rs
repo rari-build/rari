@@ -97,11 +97,9 @@ impl RscFlightParser {
                         return Ok(RscElement::Text(format!("Date({date_str})")));
                     } else if let Some(bigint_str) = s.strip_prefix("$n") {
                         return Ok(RscElement::Text(format!("{bigint_str}n")));
-                    } else if s.starts_with("$Z") {
-                        return Ok(RscElement::Reference(s.clone()));
-                    } else if s.starts_with("$h") {
-                        return Ok(RscElement::Reference(s.clone()));
-                    } else if s.starts_with("$Q")
+                    } else if s.starts_with("$Z")
+                        || s.starts_with("$h")
+                        || s.starts_with("$Q")
                         || s.starts_with("$W")
                         || s.starts_with("$K")
                         || s.starts_with("$@")

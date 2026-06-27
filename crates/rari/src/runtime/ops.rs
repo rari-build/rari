@@ -8,6 +8,7 @@ use tracing::error;
 
 use crate::server::{
     core::utils::client::get_http_client,
+    handlers::actions::{is_valid_attr_value, is_valid_cookie_name, is_valid_cookie_value},
     middleware::request_context::{PendingCookie, PendingCookieKey},
 };
 
@@ -249,7 +250,7 @@ pub fn op_internal_log(#[string] message: &str) {
 #[op2]
 #[string]
 pub fn op_sanitize_html(#[string] html: &str, #[string] _component_id: &str) -> String {
-    crate::rsc::rendering::sanitizer::sanitize_component_output(html)
+    crate::rendering::sanitizer::sanitize_component_output(html)
 }
 
 fn http_status_text(status: u16) -> &'static str {
@@ -470,11 +471,11 @@ pub fn op_set_cookie(
     state: Rc<RefCell<OpState>>,
     #[serde] args: SetCookieArgs,
 ) -> Result<(), JsErrorBox> {
-    if !crate::rsc::actions::is_valid_cookie_name(&args.name) {
+    if !is_valid_cookie_name(&args.name) {
         return Err(JsErrorBox::type_error(format!("Invalid cookie name: '{}'", args.name)));
     }
 
-    if !crate::rsc::actions::is_valid_cookie_value(&args.value) {
+    if !is_valid_cookie_value(&args.value) {
         return Err(JsErrorBox::type_error(format!(
             "Invalid cookie value for '{}': contains invalid characters",
             args.name
@@ -482,7 +483,7 @@ pub fn op_set_cookie(
     }
 
     if let Some(ref path) = args.path
-        && !crate::rsc::actions::is_valid_attr_value(path)
+        && !is_valid_attr_value(path)
     {
         return Err(JsErrorBox::type_error(format!(
             "Invalid cookie path for '{}': '{}'",
@@ -491,7 +492,7 @@ pub fn op_set_cookie(
     }
 
     if let Some(ref domain) = args.domain
-        && !crate::rsc::actions::is_valid_attr_value(domain)
+        && !is_valid_attr_value(domain)
     {
         return Err(JsErrorBox::type_error(format!(
             "Invalid cookie domain for '{}': '{}'",

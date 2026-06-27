@@ -7,7 +7,7 @@ use serde_json::Value;
 pub mod request;
 
 use crate::{
-    rsc::rendering::layout::LayoutHtmlCache,
+    rendering::layout::LayoutHtmlCache,
     server::{
         cache::{handler::CacheHandler, response},
         config,
@@ -19,8 +19,8 @@ use crate::{
 #[derive(Clone)]
 #[non_exhaustive]
 pub struct ServerState {
-    pub renderer: Arc<tokio::sync::Mutex<crate::rsc::RscRenderer>>,
-    pub ssr_renderer: Arc<crate::rsc::RscHtmlRenderer>,
+    pub renderer: Arc<tokio::sync::Mutex<crate::rendering::core::RscRenderer>>,
+    pub ssr_renderer: Arc<crate::rendering::html::RscHtmlRenderer>,
     pub config: Arc<config::Config>,
     pub request_count: Arc<std::sync::atomic::AtomicU64>,
     pub start_time: std::time::Instant,
