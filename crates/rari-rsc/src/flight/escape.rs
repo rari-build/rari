@@ -13,7 +13,7 @@ pub fn escape_rsc_string(value: &str) -> String {
         let prefix = &value[0..2];
         let rest = &value[2..];
         let is_numeric_prefixed_ref =
-            matches!(prefix, "$L" | "$@" | "$F" | "$W" | "$Q" | "$K" | "$Y" | "$i" | "$B")
+            matches!(prefix, "$L" | "$@" | "$F" | "$W" | "$Q" | "$K" | "$Y" | "$i" | "$B" | "$Z")
                 && !rest.is_empty()
                 && rest.chars().all(|c| c.is_ascii_hexdigit());
         let is_symbolic_prefixed_ref = matches!(prefix, "$S" | "$T" | "$h");
@@ -31,7 +31,7 @@ pub fn escape_rsc_string(value: &str) -> String {
         let is_scalar_marker = is_date_marker || is_bigint_marker || is_special_scalar;
 
         let is_plain_hex_ref = !matches!(prefix, "$D" | "$n")
-            && !value[1..].is_empty()
+            && value.len() >= 3
             && value[1..].chars().all(|c| c.is_ascii_hexdigit());
 
         if is_numeric_prefixed_ref
@@ -140,7 +140,7 @@ mod tests {
         assert_eq!(escape_rsc_string("hello"), "hello");
         assert_eq!(escape_rsc_string("$"), "$$");
         assert_eq!(escape_rsc_string("$La"), "$La");
-        assert_eq!(escape_rsc_string("$1f"), "$1f");
+        assert_eq!(escape_rsc_string("$1f"), "$1f"); // Two-char hex after $, valid row ID
         assert_eq!(escape_rsc_string("$L999"), "$L999");
         assert_eq!(escape_rsc_string("$@123"), "$@123");
         assert_eq!(escape_rsc_string("$F456"), "$F456");
@@ -148,10 +148,9 @@ mod tests {
         assert_eq!(escape_rsc_string("$already"), "$$already");
         assert_eq!(escape_rsc_string(""), "");
         assert_eq!(escape_rsc_string("no dollar"), "no dollar");
-        assert_eq!(escape_rsc_string("$5"), "$5");
-        assert_eq!(escape_rsc_string("$a"), "$a");
-        assert_eq!(escape_rsc_string("$1f"), "$1f");
-        assert_eq!(escape_rsc_string("$ff"), "$ff");
+        assert_eq!(escape_rsc_string("$5"), "$$5"); // Single-char hex, should be escaped
+        assert_eq!(escape_rsc_string("$a"), "$$a"); // Single-char hex, should be escaped
+        assert_eq!(escape_rsc_string("$ff"), "$ff"); // Two-char hex, valid row ID
         assert_eq!(escape_rsc_string("$$foo"), "$$foo");
         assert_eq!(escape_rsc_string("$$5"), "$$5");
     }
@@ -323,5 +322,34 @@ mod tests {
         assert_eq!(escape_rsc_string("$nice"), "$$nice");
         assert_eq!(escape_rsc_string("$n"), "$$n");
         assert_eq!(escape_rsc_string("$nabc"), "$$nabc");
+    }
+
+    #[test]
+    fn test_escape_single_digit_hex_strings() {
+        // Regression test: single-digit hex strings like "$5" or "$a" should be escaped
+        // to prevent misinterpretation as row references by the parser
+        assert_eq!(escape_rsc_string("$5"), "$$5");
+        assert_eq!(escape_rsc_string("$a"), "$$a");
+        assert_eq!(escape_rsc_string("$0"), "$$0");
+        assert_eq!(escape_rsc_string("$f"), "$$f");
+        assert_eq!(escape_rsc_string("$F"), "$$F");
+
+        // Two-char hex strings (e.g., "$12", "$ab") could be row IDs,
+        // so we preserve them as potential references (the serializer DOES generate these)
+        assert_eq!(escape_rsc_string("$12"), "$12");
+        assert_eq!(escape_rsc_string("$ab"), "$ab");
+
+        // Longer hex strings are clearly row IDs and should not be escaped
+        assert_eq!(escape_rsc_string("$123"), "$123");
+        assert_eq!(escape_rsc_string("$abcd"), "$abcd");
+    }
+
+    #[test]
+    fn test_escape_error_references() {
+        // Error references with $Z prefix should be preserved
+        assert_eq!(escape_rsc_string("$Z1"), "$Z1");
+        assert_eq!(escape_rsc_string("$Za"), "$Za");
+        assert_eq!(escape_rsc_string("$Z123"), "$Z123");
+        assert_eq!(escape_rsc_string("$Zabc"), "$Zabc");
     }
 }
