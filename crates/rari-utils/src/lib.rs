@@ -73,7 +73,7 @@ mod tests {
         let url = path_to_file_url(&path);
         assert!(url.starts_with("file:///"));
         assert!(url.contains("C:/"));
-        assert!(!url.contains("\\"));
+        assert!(!url.contains('\\'));
     }
 
     #[test]

@@ -8,7 +8,10 @@ use deno_io::WinTtyState;
 use rustyline::{
     Cmd, Editor, KeyCode, KeyEvent, Modifiers, config::Configurer, error::ReadlineError,
 };
-use windows_sys::Win32::{Foundation::FALSE, System::Console as wincon};
+use windows_sys::Win32::{
+    Foundation::{FALSE, INVALID_HANDLE_VALUE},
+    System::Console as wincon,
+};
 
 deno_core::extension!(deno_tty, ops = [op_set_raw, op_console_size, op_read_line_prompt],);
 
@@ -25,9 +28,9 @@ pub enum TtyError {
 impl std::fmt::Display for TtyError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TtyError::Resource(err) => write!(f, "{}", err),
-            TtyError::Io(err) => write!(f, "{}", err),
-            TtyError::Other(err) => write!(f, "{}", err),
+            TtyError::Resource(err) => write!(f, "{err}"),
+            TtyError::Io(err) => write!(f, "{err}"),
+            TtyError::Other(err) => write!(f, "{err}"),
         }
     }
 }
@@ -89,7 +92,7 @@ fn op_set_raw(state: &mut OpState, rid: u32, is_raw: bool, cbreak: bool) -> Resu
 
     let mut original_mode: u32 = 0;
     // SAFETY: Win32 call
-    if unsafe { wincon::GetConsoleMode(handle, &mut original_mode) } == FALSE {
+    if unsafe { wincon::GetConsoleMode(handle, &raw mut original_mode) } == FALSE {
         return Err(TtyError::Io(Error::last_os_error()));
     }
 
@@ -100,7 +103,7 @@ fn op_set_raw(state: &mut OpState, rid: u32, is_raw: bool, cbreak: bool) -> Resu
     let mut stdin_state = stdin_state.lock();
 
     if stdin_state.reading {
-        let cvar = stdin_state.cvar.clone();
+        let cvar = Arc::clone(&stdin_state.cvar);
 
         /* Trick to unblock an ongoing line-buffered read operation if not already pending.
         See https://github.com/libuv/libuv/pull/866 for prior art */
@@ -119,7 +122,7 @@ fn op_set_raw(state: &mut OpState, rid: u32, is_raw: bool, cbreak: bool) -> Resu
                 record.Event.KeyEvent.uChar.UnicodeChar = '\r' as u16;
                 record.Event.KeyEvent.dwControlKeyState = 0;
                 record.Event.KeyEvent.wVirtualScanCode =
-                    MapVirtualKeyW(VK_RETURN as u32, MAPVK_VK_TO_VSC) as u16;
+                    MapVirtualKeyW(u32::from(VK_RETURN), MAPVK_VK_TO_VSC) as u16;
                 record
             };
             stdin_state.cancelled = true;
@@ -144,15 +147,26 @@ fn op_set_raw(state: &mut OpState, rid: u32, is_raw: bool, cbreak: bool) -> Resu
                     std::ptr::null_mut(),
                 );
 
-                let mut active_screen_buffer = std::mem::zeroed();
-                wincon::GetConsoleScreenBufferInfo(handle, &mut active_screen_buffer);
-                windows_sys::Win32::Foundation::CloseHandle(handle);
-                active_screen_buffer
+                if handle == INVALID_HANDLE_VALUE {
+                    None
+                } else {
+                    let mut active_screen_buffer = std::mem::zeroed();
+                    let ok =
+                        wincon::GetConsoleScreenBufferInfo(handle, &raw mut active_screen_buffer)
+                            != 0;
+                    let _ = windows_sys::Win32::Foundation::CloseHandle(handle);
+                    ok.then_some(active_screen_buffer)
+                }
             };
-            stdin_state.screen_buffer_info = Some(active_screen_buffer);
+            if let Some(buf) = active_screen_buffer {
+                stdin_state.screen_buffer_info = Some(buf);
+            }
 
-            // SAFETY: Win32 call to write the VK_RETURN event.
-            if unsafe { wincon::WriteConsoleInputW(handle, &record, 1, &mut 0) } == FALSE {
+            let mut events_written: u32 = 0;
+            if unsafe {
+                wincon::WriteConsoleInputW(handle, &raw const record, 1, &raw mut events_written)
+            } == FALSE
+            {
                 return Err(TtyError::Io(Error::last_os_error()));
             }
 
@@ -211,19 +225,21 @@ fn console_size_from_fd(
     unsafe {
         let mut bufinfo: wincon::CONSOLE_SCREEN_BUFFER_INFO = std::mem::zeroed();
 
-        if wincon::GetConsoleScreenBufferInfo(handle, &mut bufinfo) == 0 {
+        if wincon::GetConsoleScreenBufferInfo(handle, &raw mut bufinfo) == 0 {
             return Err(Error::last_os_error());
         }
 
         // calculate the size of the visible window
         // * use over/under-flow protections b/c MSDN docs only imply that srWindow components are all non-negative
         // * ref: <https://docs.microsoft.com/en-us/windows/console/console-screen-buffer-info-str> @@ <https://archive.is/sfjnm>
-        let cols =
-            std::cmp::max(bufinfo.srWindow.Right as i32 - bufinfo.srWindow.Left as i32 + 1, 0)
-                as u32;
-        let rows =
-            std::cmp::max(bufinfo.srWindow.Bottom as i32 - bufinfo.srWindow.Top as i32 + 1, 0)
-                as u32;
+        let cols = std::cmp::max(
+            i32::from(bufinfo.srWindow.Right) - i32::from(bufinfo.srWindow.Left) + 1,
+            0,
+        ) as u32;
+        let rows = std::cmp::max(
+            i32::from(bufinfo.srWindow.Bottom) - i32::from(bufinfo.srWindow.Top) + 1,
+            0,
+        ) as u32;
 
         Ok(ConsoleSize { cols, rows })
     }
@@ -246,8 +262,10 @@ pub fn op_read_line_prompt(
     #[string] prompt_text: &str,
     #[string] default_value: &str,
 ) -> Result<Option<String>, JsReadlineError> {
-    let mut editor =
-        Editor::<(), rustyline::history::DefaultHistory>::new().expect("Failed to create editor.");
+    let mut editor = match Editor::<(), rustyline::history::DefaultHistory>::new() {
+        Ok(editor) => editor,
+        Err(err) => return Err(JsReadlineError(err)),
+    };
 
     editor.set_keyseq_timeout(Some(1));
     editor.bind_sequence(KeyEvent(KeyCode::Esc, Modifiers::empty()), Cmd::Interrupt);
@@ -255,8 +273,7 @@ pub fn op_read_line_prompt(
     let read_result = editor.readline_with_initial(prompt_text, (default_value, ""));
     match read_result {
         Ok(line) => Ok(Some(line)),
-        Err(ReadlineError::Interrupted) => Ok(None),
-        Err(ReadlineError::Eof) => Ok(None),
+        Err(ReadlineError::Interrupted | ReadlineError::Eof) => Ok(None),
         Err(err) => Err(JsReadlineError(err)),
     }
 }

@@ -16,6 +16,34 @@ fn addon_napi_output_path(target_info: &Target, project_root: &Path) -> PathBuf 
     project_root.join(ADDON_BUILD_DIR).join(format!("rari-use-cache.{}.node", target_info.platform))
 }
 
+fn find_addon_artifact(target_info: &Target, project_root: &Path) -> Option<PathBuf> {
+    let dir = project_root.join(ADDON_BUILD_DIR);
+    let exact = addon_napi_output_path(target_info, project_root);
+    if exact.exists() {
+        return Some(exact);
+    }
+    for abi in ["msvc", "gnu", "musl"] {
+        let with_abi = dir.join(format!("rari-use-cache.{}-{abi}.node", target_info.platform));
+        if with_abi.exists() {
+            return Some(with_abi);
+        }
+    }
+    if let Ok(entries) = fs::read_dir(&dir) {
+        let prefix = format!("rari-use-cache.{}.", target_info.platform);
+        let mut matches: Vec<PathBuf> = entries
+            .flatten()
+            .map(|entry| (entry.file_name().to_string_lossy().to_string(), entry.path()))
+            .filter(|(name, _)| name.starts_with(&prefix) && name.ends_with(".node"))
+            .map(|(_, path)| path)
+            .collect();
+        if !matches.is_empty() {
+            matches.sort();
+            return matches.into_iter().next();
+        }
+    }
+    None
+}
+
 fn addon_stable_output_path(target_info: &Target, project_root: &Path) -> PathBuf {
     project_root.join(ADDON_BUILD_DIR).join(target_info.platform).join(ADDON_OUTPUT_FILE)
 }
@@ -114,11 +142,13 @@ pub async fn build_addon(
         return Ok(false);
     }
 
-    let src = addon_napi_output_path(target_info, project_root);
-    if !src.exists() {
-        log_error(&format!("expected addon artifact not found: {}", src.display()));
+    let Some(src) = find_addon_artifact(target_info, project_root) else {
+        log_error(&format!(
+            "expected addon artifact not found: {}",
+            addon_napi_output_path(target_info, project_root).display()
+        ));
         return Ok(false);
-    }
+    };
 
     let stable = addon_stable_output_path(target_info, project_root);
     if let Some(parent) = stable.parent() {
