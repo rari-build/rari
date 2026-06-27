@@ -959,7 +959,7 @@ impl StreamingRenderer {
         rsc_wire_format: &str,
         render_generation: u32,
     ) -> Result<PartialRenderResult, RariError> {
-        let mut parser = crate::rsc::flight::parser::RscWireFormatParser::new(rsc_wire_format);
+        let mut parser = rari_rsc::flight::parser::RscFlightParser::new(rsc_wire_format);
 
         parser.parse().map_err(|e| {
             error!("Failed to parse RSC wire format: {}", e);

@@ -1,4 +1,4 @@
-use serde_json::Value;
+use serde_json::{Map, Value};
 
 pub fn escape_rsc_string(value: &str) -> String {
     if value == "$" {
@@ -31,7 +31,7 @@ pub fn escape_rsc_string(value: &str) -> String {
         let is_scalar_marker = is_date_marker || is_bigint_marker || is_special_scalar;
 
         let is_plain_hex_ref = !matches!(prefix, "$D" | "$n")
-            && value[1..].len() >= 2
+            && !value[1..].is_empty()
             && value[1..].chars().all(|c| c.is_ascii_hexdigit());
 
         if is_numeric_prefixed_ref
@@ -52,7 +52,7 @@ pub fn escape_rsc_value(value: &Value) -> Value {
     match value {
         Value::String(s) => Value::String(escape_rsc_string(s)),
         Value::Object(map) => {
-            let mut escaped = serde_json::Map::new();
+            let mut escaped = Map::new();
             for (k, v) in map {
                 escaped.insert(k.clone(), escape_rsc_value(v));
             }
@@ -84,7 +84,7 @@ pub fn unescape_rsc_value(value: &Value) -> Value {
     match value {
         Value::String(s) => Value::String(unescape_rsc_string(s)),
         Value::Object(map) => {
-            let mut unescaped = serde_json::Map::new();
+            let mut unescaped = Map::new();
             for (k, v) in map {
                 unescaped.insert(k.clone(), unescape_rsc_value(v));
             }
@@ -148,8 +148,8 @@ mod tests {
         assert_eq!(escape_rsc_string("$already"), "$$already");
         assert_eq!(escape_rsc_string(""), "");
         assert_eq!(escape_rsc_string("no dollar"), "no dollar");
-        assert_eq!(escape_rsc_string("$5"), "$$5");
-        assert_eq!(escape_rsc_string("$a"), "$$a");
+        assert_eq!(escape_rsc_string("$5"), "$5");
+        assert_eq!(escape_rsc_string("$a"), "$a");
         assert_eq!(escape_rsc_string("$1f"), "$1f");
         assert_eq!(escape_rsc_string("$ff"), "$ff");
         assert_eq!(escape_rsc_string("$$foo"), "$$foo");

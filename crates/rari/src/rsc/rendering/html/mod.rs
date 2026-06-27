@@ -10,6 +10,7 @@ use std::{
 
 use cow_utils::CowUtils;
 use rari_error::{RariError, StreamingError};
+use rari_rsc::flight::escape::unescape_rsc_value;
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde_json::Value as JsonValue;
 use tracing::error;
@@ -19,7 +20,6 @@ use crate::server::config::Mode;
 use crate::{
     rsc::{
         RscElement,
-        flight::escape::unescape_rsc_value,
         rendering::streaming::{RscChunkType, RscStreamChunk},
     },
     runtime::JsExecutionRuntime,
@@ -859,8 +859,8 @@ impl RscHtmlRenderer {
     fn render_rsc_element<'a>(
         &'a self,
         element: &'a RscElement,
-        row_map: &'a FxHashMap<u32, &RscElement>,
-        row_cache: &'a mut FxHashMap<u32, String>,
+        _row_map: &'a FxHashMap<u32, &RscElement>,
+        _row_cache: &'a mut FxHashMap<u32, String>,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, RariError>> + Send + 'a>>
     {
         Box::pin(async move {
@@ -869,7 +869,7 @@ impl RscHtmlRenderer {
                     if (text.starts_with("$L") || text.starts_with("$@"))
                         && let Ok(row_id) = Self::parse_reference(text)
                     {
-                        return self.render_row(row_id, row_map, row_cache).await;
+                        return self.render_row(row_id, _row_map, _row_cache).await;
                     }
 
                     if text.starts_with('$')
@@ -877,7 +877,7 @@ impl RscHtmlRenderer {
                         && text[1..].chars().all(|c| c.is_ascii_hexdigit())
                         && let Ok(row_id) = u32::from_str_radix(&text[1..], 16)
                     {
-                        return self.render_row(row_id, row_map, row_cache).await;
+                        return self.render_row(row_id, _row_map, _row_cache).await;
                     }
 
                     if text.starts_with("I[") || text.starts_with("S[") || text.starts_with("E[") {
@@ -890,7 +890,8 @@ impl RscHtmlRenderer {
                 RscElement::Fragment { children } => {
                     let mut html = String::new();
                     for child in children {
-                        let child_html = self.render_rsc_element(child, row_map, row_cache).await?;
+                        let child_html =
+                            self.render_rsc_element(child, _row_map, _row_cache).await?;
                         html.push_str(&child_html);
                     }
                     Ok(html)
@@ -900,35 +901,35 @@ impl RscHtmlRenderer {
                     let props_value = serde_json::Value::Object(
                         props.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
                     );
-                    self.render_component_to_html(tag, &props_value, row_map, row_cache).await
+                    self.render_component_to_html(tag, &props_value, _row_map, _row_cache).await
                 }
 
                 RscElement::Reference(ref_str) => {
                     if (ref_str.starts_with("$L") || ref_str.starts_with("$@"))
                         && let Ok(row_id) = Self::parse_reference(ref_str)
                     {
-                        return self.render_row(row_id, row_map, row_cache).await;
+                        return self.render_row(row_id, _row_map, _row_cache).await;
                     }
                     if ref_str.starts_with('$')
                         && ref_str.len() > 1
                         && ref_str[1..].chars().all(|c| c.is_ascii_hexdigit())
                         && let Ok(row_id) = u32::from_str_radix(&ref_str[1..], 16)
                     {
-                        return self.render_row(row_id, row_map, row_cache).await;
+                        return self.render_row(row_id, _row_map, _row_cache).await;
                     }
                     Ok(String::new())
                 }
 
                 RscElement::Suspense { fallback_ref, children_ref, boundary_id, props: _ } => {
                     if let Ok(row_id) = Self::parse_reference(children_ref) {
-                        let html = self.render_row(row_id, row_map, row_cache).await?;
+                        let html = self.render_row(row_id, _row_map, _row_cache).await?;
                         if !html.is_empty() {
                             return Ok(html);
                         }
                     }
 
                     if let Ok(row_id) = Self::parse_reference(fallback_ref) {
-                        let html = self.render_row(row_id, row_map, row_cache).await?;
+                        let html = self.render_row(row_id, _row_map, _row_cache).await?;
                         return Ok(format!(
                             r#"<div data-boundary-id="{}" class="rari-suspense-boundary">{}</div>"#,
                             Self::escape_html_attribute(boundary_id),
@@ -942,6 +943,8 @@ impl RscHtmlRenderer {
                 RscElement::Promise { promise_id: _ } | RscElement::ModuleImport { .. } => {
                     Ok(String::new())
                 }
+
+                _ => Ok(String::new()),
             }
         })
     }

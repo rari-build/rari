@@ -11,7 +11,7 @@ use lru::LruCache;
 use parking_lot::Mutex;
 use rari_error::RariError;
 use rustc_hash::{FxHashMap, FxHashSet};
-use serde_json::Value as JsonValue;
+use serde_json::Value;
 use tokio::sync::Mutex as TokioMutex;
 use uuid::Uuid;
 
@@ -88,7 +88,7 @@ pub struct RequestContext {
     route_path: String,
     pub cookie_header: Option<String>,
     pub pending_cookies: Arc<DashMap<PendingCookieKey, PendingCookie>>,
-    pub function_cache: Arc<DashMap<String, JsonValue>>,
+    pub function_cache: Arc<DashMap<String, Value>>,
 }
 
 impl RequestContext {

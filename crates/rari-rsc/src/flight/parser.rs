@@ -5,9 +5,10 @@
 
 use rari_error::RariError;
 use rustc_hash::{FxHashMap, FxHashSet};
-use serde_json::Value as JsonValue;
+use serde_json::Value;
+use uuid::Uuid;
 
-use crate::rsc::{RscElement, SuspenseBoundary};
+use crate::core::{RscElement, SuspenseBoundary};
 
 #[derive(Debug, Clone)]
 #[non_exhaustive]
@@ -26,15 +27,15 @@ pub struct StreamingState {
     pub resolved: FxHashSet<String>,
 }
 
-pub struct RscWireFormatParser {
+pub struct RscFlightParser {
     lines: Vec<String>,
     elements: FxHashMap<u32, RscElement>,
 }
 
-impl RscWireFormatParser {
+impl RscFlightParser {
     pub fn new(rsc_output: &str) -> Self {
         Self {
-            lines: rsc_output.lines().map(std::string::ToString::to_string).collect(),
+            lines: rsc_output.lines().map(ToString::to_string).collect(),
             elements: FxHashMap::default(),
         }
     }
@@ -68,7 +69,7 @@ impl RscWireFormatParser {
             return Ok((row_id, RscElement::Text(String::new())));
         }
 
-        let json_value: JsonValue = serde_json::from_str(data_str)
+        let json_value: Value = serde_json::from_str(data_str)
             .map_err(|e| RariError::internal(format!("Invalid JSON in RSC line: {e}")))?;
 
         let element = self.parse_json_element(&json_value)?;
@@ -76,9 +77,9 @@ impl RscWireFormatParser {
         Ok((row_id, element))
     }
 
-    fn parse_json_element(&self, value: &JsonValue) -> Result<RscElement, RariError> {
+    fn parse_json_element(&self, value: &Value) -> Result<RscElement, RariError> {
         match value {
-            JsonValue::String(s) => {
+            Value::String(s) => {
                 if let Some(stripped) = s.strip_prefix('$') {
                     if s.starts_with("$$") {
                         return Ok(RscElement::Text(stripped.to_string()));
@@ -96,6 +97,10 @@ impl RscWireFormatParser {
                         return Ok(RscElement::Text(format!("Date({date_str})")));
                     } else if let Some(bigint_str) = s.strip_prefix("$n") {
                         return Ok(RscElement::Text(format!("{bigint_str}n")));
+                    } else if s.starts_with("$Z") {
+                        return Ok(RscElement::Reference(s.clone()));
+                    } else if s.starts_with("$h") {
+                        return Ok(RscElement::Reference(s.clone()));
                     } else if s.starts_with("$Q")
                         || s.starts_with("$W")
                         || s.starts_with("$K")
@@ -116,12 +121,12 @@ impl RscWireFormatParser {
                 }
             }
 
-            JsonValue::Array(arr) => {
+            Value::Array(arr) => {
                 if arr.is_empty() {
                     return Err(RariError::internal("Empty array in RSC element".to_string()));
                 }
 
-                if let Some(JsonValue::String(marker)) = arr.first()
+                if let Some(Value::String(marker)) = arr.first()
                     && marker == "$"
                 {
                     return self.parse_react_element(arr);
@@ -130,17 +135,16 @@ impl RscWireFormatParser {
                 Ok(RscElement::Text(serde_json::to_string(value).unwrap_or_default()))
             }
 
-            JsonValue::Number(n) => Ok(RscElement::Text(n.to_string())),
-            JsonValue::Bool(b) => Ok(RscElement::Text(b.to_string())),
-            JsonValue::Null => Ok(RscElement::Text(String::new())),
-
-            JsonValue::Object(_) => {
+            Value::Number(n) => Ok(RscElement::Text(n.to_string())),
+            Value::Bool(b) => Ok(RscElement::Text(b.to_string())),
+            Value::Null => Ok(RscElement::Text(String::new())),
+            Value::Object(_) => {
                 Ok(RscElement::Text(serde_json::to_string(value).unwrap_or_default()))
             }
         }
     }
 
-    fn parse_react_element(&self, arr: &[JsonValue]) -> Result<RscElement, RariError> {
+    fn parse_react_element(&self, arr: &[Value]) -> Result<RscElement, RariError> {
         if arr.len() < 4 {
             return Err(RariError::internal(format!(
                 "Invalid React element: expected 4 elements, got {}",
@@ -153,10 +157,10 @@ impl RscWireFormatParser {
             .ok_or_else(|| RariError::internal("React element tag must be a string".to_string()))?
             .to_string();
 
-        let key = arr[2].as_str().map(std::string::ToString::to_string);
+        let key = arr[2].as_str().map(ToString::to_string);
 
         let props_value = &arr[3];
-        let props = if let JsonValue::Object(obj) = props_value {
+        let props = if let Value::Object(obj) = props_value {
             obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
         } else {
             FxHashMap::default()
@@ -176,15 +180,15 @@ impl RscWireFormatParser {
     fn parse_suspense_element(
         &self,
         key: Option<String>,
-        props: FxHashMap<String, JsonValue>,
+        props: FxHashMap<String, Value>,
     ) -> Result<RscElement, RariError> {
         let fallback_ref = if let Some(fallback_value) = props.get("fallback") {
             match fallback_value {
-                JsonValue::String(s) => s.clone(),
-                JsonValue::Array(_) | JsonValue::Object(_) => {
+                Value::String(s) => s.clone(),
+                Value::Array(_) | Value::Object(_) => {
                     serde_json::to_string(fallback_value).unwrap_or_default()
                 }
-                JsonValue::Null => String::new(),
+                Value::Null => String::new(),
                 _ => fallback_value.to_string(),
             }
         } else {
@@ -193,9 +197,9 @@ impl RscWireFormatParser {
 
         let children_ref = if let Some(children_value) = props.get("children") {
             match children_value {
-                JsonValue::String(s) => s.clone(),
-                JsonValue::Null => String::new(),
-                JsonValue::Array(_) | JsonValue::Object(_) => {
+                Value::String(s) => s.clone(),
+                Value::Null => String::new(),
+                Value::Array(_) | Value::Object(_) => {
                     serde_json::to_string(children_value).unwrap_or_default()
                 }
                 _ => children_value.to_string(),
@@ -207,22 +211,22 @@ impl RscWireFormatParser {
         let boundary_id = props
             .get("~boundaryId")
             .and_then(|v| v.as_str())
-            .map(std::string::ToString::to_string)
+            .map(ToString::to_string)
             .or_else(|| key.clone())
-            .unwrap_or_else(|| format!("boundary_{}", uuid::Uuid::new_v4()));
+            .unwrap_or_else(|| format!("boundary_{}", Uuid::new_v4()));
 
         Ok(RscElement::Suspense { fallback_ref, children_ref, boundary_id, props })
     }
 
     fn parse_promise_element(
         &self,
-        props: FxHashMap<String, JsonValue>,
+        props: FxHashMap<String, Value>,
     ) -> Result<RscElement, RariError> {
         let promise_id = props
             .get("id")
             .and_then(|v| v.as_str())
-            .map(std::string::ToString::to_string)
-            .unwrap_or_else(|| format!("promise_{}", uuid::Uuid::new_v4()));
+            .map(ToString::to_string)
+            .unwrap_or_else(|| format!("promise_{}", Uuid::new_v4()));
 
         Ok(RscElement::Promise { promise_id })
     }
@@ -232,14 +236,12 @@ impl RscWireFormatParser {
 
         for (row_id, element) in &self.elements {
             if let RscElement::Suspense { fallback_ref, children_ref, boundary_id, .. } = element {
-                let boundary = SuspenseBoundary {
-                    boundary_id: boundary_id.clone(),
-                    fallback_ref: fallback_ref.clone(),
-                    children_ref: children_ref.clone(),
-                    has_promise: false,
-                    promise_ids: Vec::new(),
-                    row_id: *row_id,
-                };
+                let boundary = SuspenseBoundary::new(
+                    boundary_id.clone(),
+                    fallback_ref.clone(),
+                    children_ref.clone(),
+                    *row_id,
+                );
 
                 boundaries.push(boundary);
             }
@@ -319,7 +321,7 @@ mod tests {
     fn test_parse_simple_component() {
         let rsc = r#"0:["$","div",null,{"className":"container","children":"Hello"}]"#;
 
-        let mut parser = RscWireFormatParser::new(rsc);
+        let mut parser = RscFlightParser::new(rsc);
         assert!(parser.parse().is_ok());
 
         let elements = parser.elements();
@@ -337,7 +339,7 @@ mod tests {
     fn test_parse_suspense_boundary() {
         let rsc = r#"0:["$","Suspense",null,{"fallback":"$L1","children":"$L2","~boundaryId":"test-boundary"}]"#;
 
-        let mut parser = RscWireFormatParser::new(rsc);
+        let mut parser = RscFlightParser::new(rsc);
         assert!(parser.parse().is_ok());
 
         let boundaries = parser.find_suspense_boundaries();
@@ -353,7 +355,7 @@ mod tests {
     fn test_parse_promise() {
         let rsc = r#"0:["$","Promise",null,{"id":"promise-1"}]"#;
 
-        let mut parser = RscWireFormatParser::new(rsc);
+        let mut parser = RscFlightParser::new(rsc);
         assert!(parser.parse().is_ok());
 
         let promises = parser.find_promises();
@@ -367,7 +369,7 @@ mod tests {
     fn test_parse_reference() {
         let rsc = r#"0:"$L1""#;
 
-        let mut parser = RscWireFormatParser::new(rsc);
+        let mut parser = RscFlightParser::new(rsc);
         assert!(parser.parse().is_ok());
 
         let elements = parser.elements();
@@ -382,7 +384,7 @@ mod tests {
     fn test_parse_text() {
         let rsc = r#"0:"Hello World""#;
 
-        let mut parser = RscWireFormatParser::new(rsc);
+        let mut parser = RscFlightParser::new(rsc);
         assert!(parser.parse().is_ok());
 
         let elements = parser.elements();
@@ -399,7 +401,7 @@ mod tests {
 1:["$","div",null,{"children":"Loading..."}]
 2:["$","Promise",null,{"id":"promise-1"}]"#;
 
-        let mut parser = RscWireFormatParser::new(rsc);
+        let mut parser = RscFlightParser::new(rsc);
         assert!(parser.parse().is_ok());
 
         let boundaries = parser.find_suspense_boundaries();
@@ -428,7 +430,7 @@ mod tests {
 2:["$","div",null,{"children":"Loading..."}]
 3:["$","Promise",null,{"id":"async-data"}]"#;
 
-        let mut parser = RscWireFormatParser::new(rsc);
+        let mut parser = RscFlightParser::new(rsc);
         assert!(parser.parse().is_ok());
 
         let elements = parser.elements();
@@ -445,7 +447,7 @@ mod tests {
     fn test_parse_special_value_undefined() {
         let rsc = r#"0:"$undefined""#;
 
-        let mut parser = RscWireFormatParser::new(rsc);
+        let mut parser = RscFlightParser::new(rsc);
         assert!(parser.parse().is_ok());
 
         let elements = parser.elements();
@@ -460,7 +462,7 @@ mod tests {
     fn test_parse_special_value_nan() {
         let rsc = r#"0:"$NaN""#;
 
-        let mut parser = RscWireFormatParser::new(rsc);
+        let mut parser = RscFlightParser::new(rsc);
         assert!(parser.parse().is_ok());
 
         let elements = parser.elements();
@@ -476,7 +478,7 @@ mod tests {
         let rsc = r#"0:"$Infinity"
 1:"$-Infinity""#;
 
-        let mut parser = RscWireFormatParser::new(rsc);
+        let mut parser = RscFlightParser::new(rsc);
         assert!(parser.parse().is_ok());
 
         let elements = parser.elements();
@@ -498,7 +500,7 @@ mod tests {
     fn test_parse_special_value_negative_zero() {
         let rsc = r#"0:"$-0""#;
 
-        let mut parser = RscWireFormatParser::new(rsc);
+        let mut parser = RscFlightParser::new(rsc);
         assert!(parser.parse().is_ok());
 
         let elements = parser.elements();
@@ -513,7 +515,7 @@ mod tests {
     fn test_parse_date_marker() {
         let rsc = r#"0:"$D2025-12-09T18:00:00.000Z""#;
 
-        let mut parser = RscWireFormatParser::new(rsc);
+        let mut parser = RscFlightParser::new(rsc);
         assert!(parser.parse().is_ok());
 
         let elements = parser.elements();
@@ -528,7 +530,7 @@ mod tests {
     fn test_parse_bigint_marker() {
         let rsc = r#"0:"$n9007199254740991""#;
 
-        let mut parser = RscWireFormatParser::new(rsc);
+        let mut parser = RscFlightParser::new(rsc);
         assert!(parser.parse().is_ok());
 
         let elements = parser.elements();
@@ -543,7 +545,7 @@ mod tests {
     fn test_parse_map_reference() {
         let rsc = r#"0:"$Q1""#;
 
-        let mut parser = RscWireFormatParser::new(rsc);
+        let mut parser = RscFlightParser::new(rsc);
         assert!(parser.parse().is_ok());
 
         let elements = parser.elements();
@@ -558,7 +560,7 @@ mod tests {
     fn test_parse_set_reference() {
         let rsc = r#"0:"$W2""#;
 
-        let mut parser = RscWireFormatParser::new(rsc);
+        let mut parser = RscFlightParser::new(rsc);
         assert!(parser.parse().is_ok());
 
         let elements = parser.elements();
@@ -573,7 +575,7 @@ mod tests {
     fn test_parse_formdata_reference() {
         let rsc = r#"0:"$K3""#;
 
-        let mut parser = RscWireFormatParser::new(rsc);
+        let mut parser = RscFlightParser::new(rsc);
         assert!(parser.parse().is_ok());
 
         let elements = parser.elements();
@@ -588,7 +590,7 @@ mod tests {
     fn test_parse_promise_reference() {
         let rsc = r#"0:"$@4""#;
 
-        let mut parser = RscWireFormatParser::new(rsc);
+        let mut parser = RscFlightParser::new(rsc);
         assert!(parser.parse().is_ok());
 
         let elements = parser.elements();
@@ -603,7 +605,7 @@ mod tests {
     fn test_parse_server_function_reference() {
         let rsc = r#"0:"$F5""#;
 
-        let mut parser = RscWireFormatParser::new(rsc);
+        let mut parser = RscFlightParser::new(rsc);
         assert!(parser.parse().is_ok());
 
         let elements = parser.elements();
@@ -618,7 +620,7 @@ mod tests {
     fn test_parse_temporary_reference() {
         let rsc = r#"0:"$T6""#;
 
-        let mut parser = RscWireFormatParser::new(rsc);
+        let mut parser = RscFlightParser::new(rsc);
         assert!(parser.parse().is_ok());
 
         let elements = parser.elements();
@@ -633,7 +635,7 @@ mod tests {
     fn test_parse_symbol_reference() {
         let rsc = r#"0:"$Sreact.transitional.element""#;
 
-        let mut parser = RscWireFormatParser::new(rsc);
+        let mut parser = RscFlightParser::new(rsc);
         assert!(parser.parse().is_ok());
 
         let elements = parser.elements();
@@ -648,7 +650,7 @@ mod tests {
     fn test_parse_deferred_object_reference() {
         let rsc = r#"0:"$Y7""#;
 
-        let mut parser = RscWireFormatParser::new(rsc);
+        let mut parser = RscFlightParser::new(rsc);
         assert!(parser.parse().is_ok());
 
         let elements = parser.elements();
@@ -663,7 +665,7 @@ mod tests {
     fn test_parse_iterator_reference() {
         let rsc = r#"0:"$i8""#;
 
-        let mut parser = RscWireFormatParser::new(rsc);
+        let mut parser = RscFlightParser::new(rsc);
         assert!(parser.parse().is_ok());
 
         let elements = parser.elements();
@@ -678,7 +680,7 @@ mod tests {
     fn test_parse_blob_reference() {
         let rsc = r#"0:"$B1""#;
 
-        let mut parser = RscWireFormatParser::new(rsc);
+        let mut parser = RscFlightParser::new(rsc);
         assert!(parser.parse().is_ok());
 
         let elements = parser.elements();
@@ -693,7 +695,7 @@ mod tests {
     fn test_parse_typedarray_reference() {
         let rsc = r#"0:"$a""#;
 
-        let mut parser = RscWireFormatParser::new(rsc);
+        let mut parser = RscFlightParser::new(rsc);
         assert!(parser.parse().is_ok());
 
         let elements = parser.elements();
@@ -708,7 +710,7 @@ mod tests {
     fn test_parse_stream_reference() {
         let rsc = r#"0:"$5""#;
 
-        let mut parser = RscWireFormatParser::new(rsc);
+        let mut parser = RscFlightParser::new(rsc);
         assert!(parser.parse().is_ok());
 
         let elements = parser.elements();
@@ -723,7 +725,7 @@ mod tests {
     fn test_parse_binary_in_component() {
         let rsc = r#"0:["$","div",null,{"buffer":"$B2","data":"$3"}]"#;
 
-        let mut parser = RscWireFormatParser::new(rsc);
+        let mut parser = RscFlightParser::new(rsc);
         assert!(parser.parse().is_ok());
 
         let elements = parser.elements();
@@ -747,7 +749,7 @@ mod tests {
 
         for (marker, description) in markers {
             let rsc = format!(r#"0:"{}""#, marker);
-            let mut parser = RscWireFormatParser::new(&rsc);
+            let mut parser = RscFlightParser::new(&rsc);
             assert!(parser.parse().is_ok(), "Failed to parse {}", description);
 
             let elements = parser.elements();
@@ -755,6 +757,68 @@ mod tests {
                 assert_eq!(ref_str, marker, "Marker mismatch for {}", description);
             } else {
                 panic!("Expected Reference element for {}", description);
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_error_marker() {
+        let rsc = r#"0:"$Z1""#;
+
+        let mut parser = RscFlightParser::new(rsc);
+        assert!(parser.parse().is_ok());
+
+        let elements = parser.elements();
+        if let Some(RscElement::Reference(ref_str)) = elements.get(&0) {
+            assert_eq!(ref_str, "$Z1");
+        } else {
+            panic!("Expected Reference element for error marker");
+        }
+    }
+
+    #[test]
+    fn test_parse_server_hint_reference() {
+        let rsc = r#"0:"$h123""#;
+
+        let mut parser = RscFlightParser::new(rsc);
+        assert!(parser.parse().is_ok());
+
+        let elements = parser.elements();
+        if let Some(RscElement::Reference(ref_str)) = elements.get(&0) {
+            assert_eq!(ref_str, "$h123");
+        } else {
+            panic!("Expected Reference element for server hint");
+        }
+    }
+
+    #[test]
+    fn test_parse_all_react_markers() {
+        let markers = vec![
+            ("$L1", "Lazy module reference"),
+            ("$@2", "Promise reference"),
+            ("$Sreact.element", "Symbol"),
+            ("$h3", "Server reference hint"),
+            ("$T4", "Temporary reference"),
+            ("$Q5", "Map"),
+            ("$W6", "Set"),
+            ("$B7", "Blob"),
+            ("$K8", "FormData"),
+            ("$Z9", "Error"),
+            ("$ia", "Iterator"),
+            ("$Yb", "Deferred object"),
+            ("$Fc", "Server function"),
+        ];
+
+        for (marker, description) in markers {
+            let rsc = format!(r#"0:"{}""#, marker);
+            let mut parser = RscFlightParser::new(&rsc);
+            assert!(parser.parse().is_ok(), "Failed to parse {}: {}", marker, description);
+
+            let elements = parser.elements();
+            if let Some(RscElement::Reference(ref_str)) = elements.get(&0) {
+                assert_eq!(ref_str, marker, "Marker mismatch for {}: {}", marker, description);
+            } else {
+                panic!("Expected Reference element for {}: {}", marker, description);
             }
         }
     }

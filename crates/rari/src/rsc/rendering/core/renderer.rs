@@ -10,6 +10,11 @@ use cow_utils::CowUtils;
 use dashmap::DashMap;
 use parking_lot::Mutex;
 use rari_error::RariError;
+use rari_rsc::{
+    components::ComponentRegistry,
+    flight::serializer::RscSerializer,
+    utils::{extract_dependencies, hash_string},
+};
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde_json::Value as JsonValue;
 use tokio::time::{sleep, timeout};
@@ -28,14 +33,9 @@ use super::{
     utils::transform_imports_for_hmr,
 };
 use crate::{
-    rsc::{
-        components::ComponentRegistry,
-        flight::serializer::RscSerializer,
-        rendering::{
-            core::loader::{RscJsLoader, RscModuleOperation},
-            streaming::{RscStream, StreamingRenderer},
-        },
-        utils::{extract_dependencies, hash_string},
+    rsc::rendering::{
+        core::loader::{RscJsLoader, RscModuleOperation},
+        streaming::{RscStream, StreamingRenderer},
     },
     runtime::JsExecutionRuntime,
 };
@@ -1019,7 +1019,7 @@ globalThis['~errors'].batch.push({{
         };
 
         let client_element =
-            crate::rsc::flight::serializer::SerializedReactElement::create_client_component(
+            rari_rsc::flight::serializer::SerializedReactElement::create_client_component(
                 component_id,
                 props_map,
             );
@@ -1299,7 +1299,7 @@ globalThis['~errors'].batch.push({{
                     ))
                 })?;
 
-                let dependencies = crate::rsc::utils::extract_dependencies(&component_code);
+                let dependencies = rari_rsc::utils::extract_dependencies(&component_code);
 
                 {
                     let mut registry = self.component_registry.lock();

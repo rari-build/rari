@@ -1,6 +1,8 @@
 use cow_utils::CowUtils;
 use sha2::{Digest, Sha256};
 
+const DIST_DIR: &str = "dist";
+
 pub fn short_hash(value: &str) -> String {
     let hash = Sha256::digest(value.as_bytes());
     hex::encode(hash)[..8].to_string()
@@ -142,7 +144,8 @@ pub fn get_dist_path_for_component(
 ) -> Result<std::path::PathBuf, Box<dyn std::error::Error + Send + Sync>> {
     let component_id = extract_component_id(file_path)?;
 
-    let dist_path = std::path::Path::new("dist").join("server").join(format!("{component_id}.js"));
+    let dist_path =
+        std::path::Path::new(DIST_DIR).join("server").join(format!("{component_id}.js"));
 
     Ok(dist_path)
 }

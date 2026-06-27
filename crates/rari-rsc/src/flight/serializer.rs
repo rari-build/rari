@@ -12,9 +12,10 @@ use serde_json::Value;
 use smallvec::SmallVec;
 use tracing::error;
 
-use crate::rsc::{
-    flight::escape::escape_rsc_value, rendering::streaming::types::RscWireFormatTag,
-    types::tree::RSCTree,
+use crate::{
+    core::{RscFlightTag, ServerComponentExecutor},
+    flight::escape::escape_rsc_value,
+    types::RSCTree,
 };
 
 fn base64_encode(bytes: &[u8]) -> String {
@@ -100,14 +101,6 @@ struct LazyMarker {
     promise_id: String,
     component_id: String,
     loading_id: String,
-}
-
-pub trait ServerComponentExecutor: Send + Sync {
-    fn execute_server_component(
-        &self,
-        component_name: &str,
-        props: Option<&FxHashMap<String, Value>>,
-    ) -> Result<Value, RariError>;
 }
 
 #[derive(Debug, Clone)]
@@ -250,7 +243,7 @@ impl RscSerializer {
     }
 
     pub fn serialize_rsc_json(&mut self, rsc_data: &serde_json::Value) -> Result<String, String> {
-        let rsc_tree = crate::rsc::types::tree::RSCTree::from_json(rsc_data)
+        let rsc_tree = crate::types::RSCTree::from_json(rsc_data)
             .map_err(|e| format!("Failed to parse RSC tree from JSON: {e}"))?;
 
         let has_suspense = self.tree_contains_suspense(&rsc_tree);
@@ -675,7 +668,7 @@ impl RscSerializer {
         });
 
         let import_line =
-            RscWireFormatTag::ModuleImport.format_row(module_id, &module_data.to_string());
+            RscFlightTag::ModuleImport.format_row(module_id, &module_data.to_string());
         self.output_lines.push(import_line.trim_end().to_string());
 
         self.serialized_modules.insert(component_id.to_string(), format!("$L{module_id:x}"));
@@ -1354,7 +1347,7 @@ impl RscSerializer {
 
     pub fn serialize_element(
         &mut self,
-        element: &crate::rsc::types::elements::ReactElement,
+        element: &crate::types::ReactElement,
     ) -> Result<String, RariError> {
         if element.tag == "react.suspense" {
             let fallback = element
@@ -1370,12 +1363,12 @@ impl RscSerializer {
             let boundary_id =
                 element.props.get("~boundaryId").and_then(|v| v.as_str()).unwrap_or("default");
 
-            let fallback_element: crate::rsc::types::elements::ReactElement =
+            let fallback_element: crate::types::ReactElement =
                 serde_json::from_value(fallback.clone()).map_err(|e| {
                     RariError::internal(format!("Failed to parse Suspense fallback: {e}"))
                 })?;
 
-            let children_element: crate::rsc::types::elements::ReactElement =
+            let children_element: crate::types::ReactElement =
                 serde_json::from_value(children.clone()).map_err(|e| {
                     RariError::internal(format!("Failed to parse Suspense children: {e}"))
                 })?;
@@ -1391,7 +1384,7 @@ impl RscSerializer {
 
     fn serialize_regular_element(
         &mut self,
-        element: &crate::rsc::types::elements::ReactElement,
+        element: &crate::types::ReactElement,
     ) -> Result<String, RariError> {
         let element_id = self.get_next_row_id();
 
@@ -1537,7 +1530,7 @@ mod tests {
     use serde_json::{Value, json};
 
     use super::*;
-    use crate::rsc::ServerComponentExecutor;
+    use crate::ServerComponentExecutor;
 
     #[test]
     fn test_serialize_html_element() {
@@ -1843,7 +1836,7 @@ mod tests {
 
     #[test]
     fn test_serialize_element_with_suspense() {
-        use crate::rsc::types::elements::ReactElement as LoadingReactElement;
+        use crate::types::ReactElement as LoadingReactElement;
 
         let mut serializer = RscSerializer::new();
 
@@ -1875,7 +1868,7 @@ mod tests {
 
     #[test]
     fn test_serialize_element_regular() {
-        use crate::rsc::types::elements::ReactElement as LoadingReactElement;
+        use crate::types::ReactElement as LoadingReactElement;
 
         let mut serializer = RscSerializer::new();
 
@@ -1898,7 +1891,7 @@ mod tests {
 
     #[test]
     fn test_serialize_element_regular_hex_reference() {
-        use crate::rsc::types::elements::ReactElement as LoadingReactElement;
+        use crate::types::ReactElement as LoadingReactElement;
 
         let mut serializer = RscSerializer::new();
 
@@ -2251,7 +2244,7 @@ mod tests {
 
     #[test]
     fn test_suspense_wire_format_structure() {
-        use crate::rsc::types::elements::ReactElement as LoadingReactElement;
+        use crate::types::ReactElement as LoadingReactElement;
 
         let mut serializer = RscSerializer::new();
 
@@ -2298,7 +2291,7 @@ mod tests {
 
     #[test]
     fn test_suspense_missing_fallback_error() {
-        use crate::rsc::types::elements::ReactElement as LoadingReactElement;
+        use crate::types::ReactElement as LoadingReactElement;
 
         let mut serializer = RscSerializer::new();
 
@@ -2318,7 +2311,7 @@ mod tests {
 
     #[test]
     fn test_suspense_missing_children_error() {
-        use crate::rsc::types::elements::ReactElement as LoadingReactElement;
+        use crate::types::ReactElement as LoadingReactElement;
 
         let mut serializer = RscSerializer::new();
 
