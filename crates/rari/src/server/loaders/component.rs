@@ -55,10 +55,8 @@ impl ComponentLoader {
             let is_server_action = has_use_server_directive(&component_code);
 
             if let Some(specifier) = module_specifier {
-                if let Err(e) = renderer
-                    .runtime
-                    .add_module_to_loader_only(specifier, component_code.clone())
-                    .await
+                if let Err(e) =
+                    renderer.runtime.add_module_to_loader(specifier, component_code.clone()).await
                 {
                     error!("Failed to add component {} to module loader: {}", component_id, e);
                     continue;
@@ -280,10 +278,7 @@ impl ComponentLoader {
 
                                     let esm_load_result = renderer
                                         .runtime
-                                        .add_module_to_loader_only(
-                                            &module_specifier,
-                                            dist_code.clone(),
-                                        )
+                                        .add_module_to_loader(&module_specifier, dist_code.clone())
                                         .await;
 
                                     if esm_load_result.is_ok() {
@@ -487,7 +482,7 @@ impl ComponentLoader {
 
                         let esm_load_result = renderer
                             .runtime
-                            .add_module_to_loader_only(&module_specifier, component_code.clone())
+                            .add_module_to_loader(&module_specifier, component_code.clone())
                             .await;
 
                         if esm_load_result.is_ok() {
@@ -654,7 +649,7 @@ impl ComponentLoader {
 
                     let esm_load_result = renderer
                         .runtime
-                        .add_module_to_loader_only(&module_specifier, component_code.clone())
+                        .add_module_to_loader(&module_specifier, component_code.clone())
                         .await;
 
                     if esm_load_result.is_ok() {
@@ -942,7 +937,7 @@ impl ComponentLoader {
             };
 
             let module_specifier = format!("file:///{}", bundle_path.cow_replace('\\', "/"));
-            if let Err(e) = runtime.add_module_to_loader_only(&module_specifier, code).await {
+            if let Err(e) = runtime.add_module_to_loader(&module_specifier, code).await {
                 error!("Failed to add SSR module {}: {}", module_path, e);
                 continue;
             }

@@ -4,9 +4,9 @@ use super::{ExtensionTrait, web::WebOptions};
 
 extension!(
     init_websocket,
-    deps = [rari],
-    esm_entry_point = "ext:init_websocket/init_websocket.js",
-    esm = [ dir "src/runtime/ext/websocket", "init_websocket.js" ],
+    deps = [init_utilities],
+    esm_entry_point = "ext:init_websocket/init_websocket.ts",
+    esm = [ dir "src/runtime/ext/websocket", "init_websocket.ts" ],
 );
 impl ExtensionTrait<()> for init_websocket {
     fn init((): ()) -> Extension {

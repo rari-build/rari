@@ -5,7 +5,7 @@
 
 use deno_core::{JsRuntime, PollEventLoopOptions, v8};
 use rari_error::RariError;
-use serde_json::Value as JsonValue;
+use serde_json::Value;
 
 #[macro_export]
 macro_rules! with_scope {
@@ -20,7 +20,7 @@ macro_rules! with_scope {
 pub fn get_module_namespace_as_json(
     runtime: &mut JsRuntime,
     module_id: deno_core::ModuleId,
-) -> Result<JsonValue, RariError> {
+) -> Result<Value, RariError> {
     match runtime.get_module_namespace(module_id) {
         Ok(namespace) => {
             let context = runtime.main_context();
@@ -60,7 +60,7 @@ pub async fn run_event_loop_with_error_handling(
 fn extract_promise_metadata<'s>(
     scope: &mut v8::PinScope<'s, '_>,
     value: v8::Local<'s, v8::Value>,
-) -> Option<JsonValue> {
+) -> Option<Value> {
     if !is_promise(scope, value) {
         return None;
     }
@@ -100,7 +100,7 @@ fn extract_promise_metadata<'s>(
 fn deserialize_composition_result<'s>(
     scope: &mut v8::PinScope<'s, '_>,
     value: v8::Local<'s, v8::Value>,
-) -> Result<JsonValue, RariError> {
+) -> Result<Value, RariError> {
     if is_promise(scope, value)
         && let Some(metadata) = extract_promise_metadata(scope, value)
     {
@@ -158,9 +158,9 @@ fn extract_composition_result_manually<'s>(
     scope: &mut v8::PinScope<'s, '_>,
     value: v8::Local<'s, v8::Value>,
     original_error: deno_core::serde_v8::Error,
-) -> Result<JsonValue, RariError> {
+) -> Result<Value, RariError> {
     let try_json_stringify =
-        |scope: &mut v8::PinScope, value: v8::Local<v8::Value>| -> Option<JsonValue> {
+        |scope: &mut v8::PinScope, value: v8::Local<v8::Value>| -> Option<Value> {
             let context = scope.get_current_context();
             let global = context.global(scope);
             let json_key = v8::String::new(scope, "JSON")?;
@@ -198,9 +198,9 @@ fn extract_composition_result_manually<'s>(
 fn extract_composition_result_manually_from_panic<'s>(
     scope: &mut v8::PinScope<'s, '_>,
     value: v8::Local<'s, v8::Value>,
-) -> Result<JsonValue, RariError> {
+) -> Result<Value, RariError> {
     let try_json_stringify =
-        |scope: &mut v8::PinScope, value: v8::Local<v8::Value>| -> Option<JsonValue> {
+        |scope: &mut v8::PinScope, value: v8::Local<v8::Value>| -> Option<Value> {
             let context = scope.get_current_context();
             let global = context.global(scope);
             let json_key = v8::String::new(scope, "JSON")?;
@@ -244,7 +244,7 @@ fn extract_composition_result_manually_from_panic<'s>(
 pub fn v8_to_json<'s>(
     scope: &mut v8::PinScope<'s, '_>,
     value: v8::Local<'s, v8::Value>,
-) -> Result<JsonValue, RariError> {
+) -> Result<Value, RariError> {
     deserialize_composition_result(scope, value)
 }
 

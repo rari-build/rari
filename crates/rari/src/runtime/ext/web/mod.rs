@@ -5,16 +5,16 @@ use deno_core::{Extension, extension};
 use super::ExtensionTrait;
 
 mod options;
-pub use options::WebOptions;
-
 mod permissions;
+
+pub use options::WebOptions;
 pub use permissions::{DefaultWebPermissions, PermissionsContainer, WebPermissions};
 
 extension!(
     init_fetch,
-    deps = [rari],
-    esm_entry_point = "ext:init_fetch/init_fetch.js",
-    esm = [ dir "src/runtime/ext/web", "init_fetch.js" ],
+    deps = [init_utilities],
+    esm_entry_point = "ext:init_fetch/init_fetch.ts",
+    esm = [ dir "src/runtime/ext/web", "init_fetch.ts" ],
 );
 impl ExtensionTrait<WebOptions> for init_fetch {
     #[expect(unused_variables)]
@@ -42,9 +42,9 @@ impl ExtensionTrait<WebOptions> for deno_fetch::deno_fetch {
 
 extension!(
     init_net,
-    deps = [rari],
-    esm_entry_point = "ext:init_net/init_net.js",
-    esm = [ dir "src/runtime/ext/web", "init_net.js" ],
+    deps = [init_utilities],
+    esm_entry_point = "ext:init_net/init_net.ts",
+    esm = [ dir "src/runtime/ext/web", "init_net.ts" ],
 );
 impl ExtensionTrait<WebOptions> for init_net {
     #[expect(unused_variables)]
@@ -63,9 +63,9 @@ impl ExtensionTrait<WebOptions> for deno_net::deno_net {
 
 extension!(
     init_telemetry,
-    deps = [rari],
-    esm_entry_point = "ext:init_telemetry/init_telemetry.js",
-    esm = [ dir "src/runtime/ext/web", "init_telemetry.js" ],
+    deps = [init_utilities],
+    esm_entry_point = "ext:init_telemetry/init_telemetry.ts",
+    esm = [ dir "src/runtime/ext/web", "init_telemetry.ts" ],
 );
 impl ExtensionTrait<()> for init_telemetry {
     fn init((): ()) -> Extension {
@@ -81,9 +81,9 @@ impl ExtensionTrait<()> for deno_telemetry::deno_telemetry {
 
 extension!(
     init_web,
-    deps = [rari],
-    esm_entry_point = "ext:init_web/init_web.js",
-    esm = [ dir "src/runtime/ext/web", "init_web.js", "init_errors.js" ],
+    deps = [init_utilities],
+    esm_entry_point = "ext:init_web/init_web.ts",
+    esm = [ dir "src/runtime/ext/web", "init_web.ts", "init_errors.ts" ],
     options = {
         permissions: Arc<dyn WebPermissions>
     },

@@ -1,0 +1,9 @@
+// @ts-nocheck
+import 'ext:rari/http/cookies.ts'
+import 'ext:rari/http/api_handler.ts'
+import 'ext:rari/react/component_loader.ts'
+import 'ext:rari/react/metadata_collector.ts'
+import 'ext:rari/rsc/rsc_modules.ts'
+import 'ext:rari/rsc/server_functions.ts'
+import 'ext:rari/rsc/client_registry.ts'
+import 'ext:rari/react/react_shims.ts'

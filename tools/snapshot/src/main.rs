@@ -31,9 +31,7 @@ fn main() {
     let ext_options = rari::runtime::ext::ExtensionOptions::default();
     let extensions = rari::runtime::ext::extensions(&ext_options, false);
 
-    let transpiler: Rc<Transpiler> = Rc::new(|name, source| {
-        rari::runtime::utils::transpile::maybe_transpile_source(name, source)
-    });
+    let transpiler: Rc<Transpiler> = Rc::new(rari::runtime::transpile::maybe_transpile_source);
 
     #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
     let output = deno_core::snapshot::create_snapshot(

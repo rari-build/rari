@@ -470,7 +470,7 @@ globalThis['~errors'].batch.push({{
 
         if let Err(e) = self
             .runtime
-            .add_module_to_loader_only(&module_specifier, transformed_module_code.clone())
+            .add_module_to_loader(&module_specifier, transformed_module_code.clone())
             .await
         {
             return Err(RariError::js_execution(format!(
@@ -527,9 +527,7 @@ globalThis['~errors'].batch.push({{
 
             let module_specifier_js = format!("file:///rari_component/{component_id}.js");
 
-            self.runtime
-                .add_module_to_loader_only(&module_specifier_js, transformed_source)
-                .await?;
+            self.runtime.add_module_to_loader(&module_specifier_js, transformed_source).await?;
 
             let dependencies_json =
                 serde_json::to_string(&dependencies.into_iter().collect::<Vec<_>>())
@@ -1361,9 +1359,7 @@ globalThis['~errors'].batch.push({{
             format!("file:///rari_component/{component_id}.js?v={timestamp}")
         };
 
-        self.runtime
-            .add_module_to_loader_only(&module_specifier_js, transformed_source.clone())
-            .await?;
+        self.runtime.add_module_to_loader(&module_specifier_js, transformed_source.clone()).await?;
 
         let needs_initial_load = !force_reload;
 

@@ -42,15 +42,15 @@ fn build_permissions(
 
 extension!(
     init_console,
-    deps = [rari],
-    esm_entry_point = "ext:init_console/init_console.js",
-    esm = [ dir "src/runtime/ext/runtime", "init_console.js" ],
+    deps = [init_utilities],
+    esm_entry_point = "ext:init_console/init_console.ts",
+    esm = [ dir "src/runtime/ext/runtime", "init_console.ts" ],
 );
 
 extension!(
     init_runtime,
-    esm_entry_point = "ext:init_runtime/init_runtime.js",
-    esm = [ dir "src/runtime/ext/runtime",  "init_runtime.js" ],
+    esm_entry_point = "ext:init_runtime/init_runtime.ts",
+    esm = [ dir "src/runtime/ext/runtime",  "init_runtime.ts" ],
     state = |state| {
         let options = BootstrapOptions {
             args: vec![
@@ -91,7 +91,10 @@ impl ExtensionTrait<()> for deno_runtime::runtime {
         ext.esm_files = ext
             .esm_files
             .iter()
-            .filter(|file| !file.specifier.contains("99_main.js"))
+            .filter(|file| {
+                !file.specifier.contains("99_main.js")
+                    && !file.specifier.contains("98_global_scope_worker.js")
+            })
             .cloned()
             .collect::<Vec<_>>()
             .into();
@@ -201,11 +204,10 @@ impl WebWorkerCallbackOptions {
     }
 }
 
-// Copyright 2018-2024 the Deno authors. All rights reserved. MIT license.
 fn create_web_worker_callback(options: WebWorkerCallbackOptions) -> Arc<CreateWebWorkerCb> {
     Arc::new(move |args| {
         let node_resolver = Arc::clone(&options.node_resolver);
-        let module_loader = Rc::new(crate::runtime::module::loader::RariModuleLoader::new());
+        let module_loader = Rc::new(crate::runtime::module_loader::RariModuleLoader::new());
 
         let create_web_worker_cb = create_web_worker_callback(options.clone());
 

@@ -621,6 +621,17 @@ export default defineConfig({
           'react',
         ],
       },
+      {
+        files: [
+          'crates/rari/src/runtime/ext/**/*.ts',
+          'crates/rari/src/rsc/rendering/**/*.ts',
+        ],
+        rules: {
+          'no-undef': 'off',
+          'no-unused-vars': 'off',
+          'no-use-before-define': 'off',
+        },
+      },
     ],
     options: {
       typeAware: true,

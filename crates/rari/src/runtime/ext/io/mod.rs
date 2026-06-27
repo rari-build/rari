@@ -15,8 +15,8 @@ use tty_unix as tty;
 extension!(
     init_io,
     deps = [rari],
-    esm_entry_point = "ext:init_io/init_io.js",
-    esm = [ dir "src/runtime/ext/io", "init_io.js" ],
+    esm_entry_point = "ext:init_io/init_io.ts",
+    esm = [ dir "src/runtime/ext/io", "init_io.ts" ],
 );
 impl ExtensionTrait<()> for init_io {
     fn init((): ()) -> Extension {

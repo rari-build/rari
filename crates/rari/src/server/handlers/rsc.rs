@@ -305,18 +305,16 @@ pub async fn reload_component_from_dist(
 
         let hmr_specifier = format!("file:///rari_hmr/server/{component_id}.js?v={timestamp}");
 
-        renderer
-            .runtime
-            .add_module_to_loader_only(&hmr_specifier, dist_code.clone())
-            .await
-            .map_err(|e| {
+        renderer.runtime.add_module_to_loader(&hmr_specifier, dist_code.clone()).await.map_err(
+            |e| {
                 error!(
                     component_id = component_id,
                     error = %e,
                     "Failed to add HMR module to loader"
                 );
                 format!("Failed to add HMR module to loader: {e}")
-            })?;
+            },
+        )?;
 
         let module_id = renderer.runtime.load_es_module(component_id).await.map_err(|e| {
             error!(

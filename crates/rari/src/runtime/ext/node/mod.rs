@@ -13,8 +13,8 @@ pub mod resolvers;
 extension!(
     init_node,
     deps = [rari],
-    esm_entry_point = "ext:init_node/init_node.js",
-    esm = [ dir "src/runtime/ext/node", "init_node.js" ],
+    esm_entry_point = "ext:init_node/init_node.ts",
+    esm = [ dir "src/runtime/ext/node", "init_node.ts" ],
 );
 
 impl ExtensionTrait<()> for init_node {

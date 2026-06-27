@@ -6,9 +6,9 @@ use super::ExtensionTrait;
 
 extension!(
     init_webstorage,
-    deps = [rari],
-    esm_entry_point = "ext:init_webstorage/init_webstorage.js",
-    esm = [ dir "src/runtime/ext/webstorage", "init_webstorage.js" ],
+    deps = [init_utilities],
+    esm_entry_point = "ext:init_webstorage/init_webstorage.ts",
+    esm = [ dir "src/runtime/ext/webstorage", "init_webstorage.ts" ],
 );
 impl ExtensionTrait<()> for init_webstorage {
     fn init((): ()) -> Extension {

@@ -6,8 +6,8 @@ use super::ExtensionTrait;
 extension!(
     init_fs,
     deps = [rari],
-    esm_entry_point = "ext:init_fs/init_fs.js",
-    esm = [ dir "src/runtime/ext/fs", "init_fs.js" ],
+    esm_entry_point = "ext:init_fs/init_fs.ts",
+    esm = [ dir "src/runtime/ext/fs", "init_fs.ts" ],
 );
 
 impl ExtensionTrait<()> for init_fs {
