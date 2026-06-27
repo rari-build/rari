@@ -175,9 +175,10 @@ interface RegisterResult {
   ): ServerFunctionPromise {
     let cacheKey = `${functionName}_unknown`
     let promiseId = `server_fn_${functionName}_unknown`
+    let argsJson = 'unknown'
     let promise: ServerFunctionPromise
     try {
-      const argsJson = JSON.stringify(args)
+      argsJson = JSON.stringify(args)
       cacheKey = `${functionName}_${argsJson}`
 
       const encoder = new TextEncoder()
@@ -199,7 +200,7 @@ interface RegisterResult {
         promise['~rsc_cache_key'] = cacheKey
         promise['~rsc_promise_id'] = promiseId
         promise.toString = () =>
-          `ServerFunctionPromise(${functionName}(${JSON.stringify(args)}))`
+          `ServerFunctionPromise(${functionName}(${argsJson}))`
         return promise
       }
 
@@ -219,7 +220,7 @@ interface RegisterResult {
     promise['~rsc_cache_key'] = cacheKey
     promise['~rsc_promise_id'] = promiseId
     promise.toString = () =>
-      `ServerFunctionPromise(${functionName}(${JSON.stringify(args)}))`
+      `ServerFunctionPromise(${functionName}(${argsJson}))`
 
     return promise
   }
