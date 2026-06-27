@@ -6,8 +6,8 @@ use super::ExtensionTrait;
 extension!(
     init_cron,
     deps = [rari],
-    esm_entry_point = "ext:init_cron/init_cron.js",
-    esm = [ dir "src/runtime/ext/cron", "init_cron.js" ],
+    esm_entry_point = "ext:init_cron/init_cron.ts",
+    esm = [ dir "src/runtime/ext/cron", "init_cron.ts" ],
 );
 impl ExtensionTrait<()> for init_cron {
     fn init((): ()) -> Extension {

@@ -4,9 +4,9 @@ use super::ExtensionTrait;
 
 extension!(
     init_crypto,
-    deps = [rari],
-    esm_entry_point = "ext:init_crypto/init_crypto.js",
-    esm = [ dir "src/runtime/ext/crypto", "init_crypto.js" ],
+    deps = [init_utilities],
+    esm_entry_point = "ext:init_crypto/init_crypto.ts",
+    esm = [ dir "src/runtime/ext/crypto", "init_crypto.ts" ],
 );
 impl ExtensionTrait<()> for init_crypto {
     fn init((): ()) -> Extension {

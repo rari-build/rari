@@ -439,10 +439,8 @@ impl ApiRouteHandler {
                     })?
                     .to_string();
 
-                if let Err(e) = self
-                    .runtime
-                    .add_module_to_loader_only(&module_specifier, handler.code.clone())
-                    .await
+                if let Err(e) =
+                    self.runtime.add_module_to_loader(&module_specifier, handler.code.clone()).await
                 {
                     error!(
                         route_path = %route_match.route.path,

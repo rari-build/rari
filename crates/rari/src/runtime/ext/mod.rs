@@ -35,11 +35,9 @@ mod node_crypto;
 mod node_sqlite;
 mod promise_manager;
 mod rari;
-mod react;
-mod rsc_modules;
 mod rsc_renderer;
 mod runtime;
-mod server_functions;
+mod utilities;
 mod web;
 mod webgpu;
 mod webidl;
@@ -79,15 +77,13 @@ impl Default for ExtensionOptions {
 pub fn extensions(options: &ExtensionOptions, is_snapshot: bool) -> Vec<Extension> {
     let mut extensions = Vec::new();
 
-    extensions.extend(rari::extensions(is_snapshot));
-    extensions.extend(rari::redis_cache_extensions(is_snapshot));
-    extensions.extend(promise_manager::extensions(is_snapshot));
-    extensions.extend(rsc_modules::extensions(is_snapshot));
-    extensions.extend(server_functions::extensions(is_snapshot));
-    extensions.extend(react::extensions(is_snapshot));
-    extensions.extend(rsc_renderer::extensions(is_snapshot));
+    extensions.extend(utilities::extensions(is_snapshot));
     extensions.extend(webidl::extensions(is_snapshot));
     extensions.extend(web::extensions(options.web.clone(), is_snapshot));
+    extensions.extend(rari::extensions(is_snapshot));
+    extensions.extend(promise_manager::extensions(is_snapshot));
+    extensions.extend(rsc_renderer::extensions(is_snapshot));
+    extensions.extend(rari::redis_cache_extensions(is_snapshot));
     extensions.extend(cache::extensions(options.cache, is_snapshot));
     extensions.extend(crypto::extensions(options.crypto_seed, is_snapshot));
     extensions.extend(fs::extensions(Arc::clone(&options.filesystem), is_snapshot));

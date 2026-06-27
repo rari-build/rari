@@ -1,0 +1,56 @@
+/// <reference path="../types.d.ts" />
+
+import { core } from 'ext:core/mod.js'
+
+const fs = core.loadExtScript('ext:deno_fs/30_fs.js')
+
+g.Deno.writeFileSync = fs.writeFileSync
+g.Deno.writeFile = fs.writeFile
+g.Deno.writeTextFileSync = fs.writeTextFileSync
+g.Deno.writeTextFile = fs.writeTextFile
+g.Deno.readTextFile = fs.readTextFile
+g.Deno.readTextFileSync = fs.readTextFileSync
+g.Deno.readFile = fs.readFile
+g.Deno.readFileSync = fs.readFileSync
+g.Deno.chmodSync = fs.chmodSync
+g.Deno.chmod = fs.chmod
+g.Deno.chown = fs.chown
+g.Deno.chownSync = fs.chownSync
+g.Deno.copyFileSync = fs.copyFileSync
+g.Deno.cwd = fs.cwd
+g.Deno.makeTempDirSync = fs.makeTempDirSync
+g.Deno.makeTempDir = fs.makeTempDir
+g.Deno.makeTempFileSync = fs.makeTempFileSync
+g.Deno.makeTempFile = fs.makeTempFile
+g.Deno.mkdirSync = fs.mkdirSync
+g.Deno.mkdir = fs.mkdir
+g.Deno.chdir = fs.chdir
+g.Deno.copyFile = fs.copyFile
+g.Deno.readDirSync = fs.readDirSync
+g.Deno.readDir = fs.readDir
+g.Deno.readLinkSync = fs.readLinkSync
+g.Deno.readLink = fs.readLink
+g.Deno.realPathSync = fs.realPathSync
+g.Deno.realPath = fs.realPath
+g.Deno.removeSync = fs.removeSync
+g.Deno.remove = fs.remove
+g.Deno.renameSync = fs.renameSync
+g.Deno.rename = fs.rename
+g.Deno.statSync = fs.statSync
+g.Deno.lstatSync = fs.lstatSync
+g.Deno.stat = fs.stat
+g.Deno.lstat = fs.lstat
+g.Deno.truncateSync = fs.truncateSync
+g.Deno.truncate = fs.truncate
+g.Deno.FsFile = fs.FsFile
+g.Deno.open = fs.open
+g.Deno.openSync = fs.openSync
+g.Deno.create = fs.create
+g.Deno.createSync = fs.createSync
+g.Deno.symlink = fs.symlink
+g.Deno.symlinkSync = fs.symlinkSync
+g.Deno.link = fs.link
+g.Deno.linkSync = fs.linkSync
+g.Deno.utime = fs.utime
+g.Deno.utimeSync = fs.utimeSync
+g.Deno.umask = fs.umask

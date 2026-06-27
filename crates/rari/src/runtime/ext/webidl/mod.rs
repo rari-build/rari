@@ -4,9 +4,9 @@ use super::ExtensionTrait;
 
 extension!(
     init_webidl,
-    deps = [rari],
-    esm_entry_point = "ext:init_webidl/init_webidl.js",
-    esm = [ dir "src/runtime/ext/webidl", "init_webidl.js" ],
+    deps = [init_utilities],
+    esm_entry_point = "ext:init_webidl/init_webidl.ts",
+    esm = [ dir "src/runtime/ext/webidl", "init_webidl.ts" ],
 );
 
 impl ExtensionTrait<()> for init_webidl {

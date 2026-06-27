@@ -8,8 +8,8 @@ use super::ExtensionTrait;
 extension!(
     init_kv,
     deps = [rari],
-    esm_entry_point = "ext:init_kv/init_kv.js",
-    esm = [ dir "src/runtime/ext/kv", "init_kv.js" ],
+    esm_entry_point = "ext:init_kv/init_kv.ts",
+    esm = [ dir "src/runtime/ext/kv", "init_kv.ts" ],
 );
 impl ExtensionTrait<()> for init_kv {
     fn init((): ()) -> Extension {

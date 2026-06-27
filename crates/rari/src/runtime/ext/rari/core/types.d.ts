@@ -1,0 +1,169 @@
+/// <reference path="../../types.d.ts" />
+
+declare global {
+  interface GlobalThis {
+    '~rsc'?: {
+      modules?: Record<string, { default?: unknown, [key: string]: unknown }>
+      functions?: Record<string, unknown>
+      keyCounter?: number
+      renderGeneration?: number
+      renderResult?: unknown
+    }
+    '~render'?: {
+      lastResult?: unknown
+      currentComponent?: string
+    }
+    '~suspense'?: {
+      streaming?: boolean
+      promises?: Record<string, unknown>
+      boundaryProps?: Record<string, unknown>
+      discoveredBoundaries?: unknown[]
+      pendingPromises?: unknown[]
+      pendingPromisesById?: Record<string, unknown>
+      currentBoundaryId?: string | null
+      renderGeneration?: number
+      SAFE_PROPS?: Set<string>
+      isSafeProp?: (key: string) => boolean
+      safeSerializeElement?: (element: unknown) => unknown
+      depth?: number
+    }
+    '~reactServer'?: {
+      renderToReadableStream: (element: unknown, options?: { onError?: (error: unknown) => void }) => Promise<ReadableStream>
+    }
+    '~realReact'?: {
+      createElement: (type: unknown, props: unknown | null, ...children: unknown[]) => unknown
+      Suspense: unknown
+      Fragment: unknown
+    }
+    '~flightClient'?: {
+      createFromReadableStream: (stream: ReadableStream, options?: { ssrManifest?: unknown }) => Promise<unknown>
+    }
+    '~reactServerRenderer'?: {
+      renderToReadableStream: (element: unknown, bundlerConfig: unknown, options?: { onError?: (error: unknown) => void }) => Promise<ReadableStream>
+    }
+    '~promises'?: {
+      resolved?: Map<Promise<unknown>, { status: 'fulfilled' | 'rejected', value?: unknown, reason?: unknown }>
+    }
+    '~clientComponents'?: Record<string, { id: string, path: string, type: 'client', component: any, registered: boolean }>
+    '~clientComponentNames'?: Record<string, string>
+    '~clientComponentPaths'?: Record<string, string>
+    'registerClientComponent'?: (componentId: string, componentPath: string, component?: any) => void
+    'isClientComponent'?: (componentType: any, registry?: Record<string, any>) => boolean
+    'getClientComponentInfo'?: (componentType: any) => { id: string, path: string, type: 'client', component: any, registered: boolean } | null
+    'getClientComponentId'?: (componentType: any) => string | null
+    'listClientComponents'?: () => Record<string, any>
+    'listClientComponentNames'?: () => Record<string, string>
+    'clearClientComponents'?: () => void
+    'registerClientComponentFromModule'?: (componentPath: string, moduleExports: any) => void
+    'markAsClientComponent'?: (component: any, componentId?: string) => void
+    'createClientReference'?: (componentId: string, componentPath: string) => any
+    '~serverFunctions'?: {
+      registered?: Set<string>
+      exported?: Record<string, unknown>
+      all?: Record<string, unknown>
+    }
+    'getServerFunction'?: (name: string) => ((...args: unknown[]) => Promise<unknown>) | null
+    'renderToRsc'?: (element: unknown) => Promise<string>
+    'renderToHtmlFizz'?: (element: unknown) => Promise<string>
+    'React'?: {
+      createElement: (component: unknown, props: unknown, ...children: unknown[]) => unknown
+      Fragment: symbol
+      Suspense: symbol
+      use: <T>(usable: T | Promise<T>) => T
+      cache: <T extends (...args: any[]) => any>(fn: T) => T
+    }
+    'resolveServerFunctionsForComponent'?: (componentId?: string) => Promise<unknown>
+    'clearServerFunctionCache'?: () => void
+    'isServerFunctionRegistered'?: (functionName: string) => boolean
+    'registerModule'?: (moduleKeyOrModule: string | any, moduleNameOrMainExport: string | any, exportedFunctions?: Record<string, (...args: any[]) => any>) => { success: boolean, exportCount: number }
+    'executeServerFunction'?: (functionName: string, args?: any[]) => Promise<any>
+    'createEnhancedServerFunctionPromise'?: (functionName: string, args?: any[], options?: { componentId?: string }) => Promise<any>
+    'discoverModuleExports'?: (code: string) => string[]
+    'createServerFunctionPromise'?: (functionName: string, args?: any[]) => Promise<any>
+    'createLoaderStub'?: (componentId: string) => string
+    'createComponentStub'?: (componentName: string) => string
+    'RscModuleManager'?: {
+      register: (moduleKeyOrModule: string | any, moduleNameOrMainExport: string | any, exportedFunctions?: Record<string, (...args: any[]) => any>) => { success: boolean, exportCount: number }
+      getFunction: (name: string) => ((...args: any[]) => any) | null
+      createPromise: (functionName: string, args?: any[]) => Promise<any>
+      discoverExports: (code: string) => string[]
+      stubs: {
+        loader: (componentId: string) => string
+        component: (componentName: string) => string
+      }
+    }
+    'ServerFunctions'?: {
+      resolve: (componentId?: string) => Promise<unknown>
+      execute: (functionName: string, args?: any[]) => Promise<any>
+      createPromise: (functionName: string, args?: any[], options?: { componentId?: string }) => Promise<any>
+      isRegistered: (functionName: string) => boolean
+      clear: () => void
+    }
+    '__RARI_DEV__'?: boolean
+    '~rari'?: {
+      isDevelopment?: boolean
+      apiHandler?: {
+        callHandler: (requestData: any, moduleSpecifier: string, methodName: string) => Promise<any>
+      }
+      lazy?: {
+        pending: Map<string, {
+          isDeferred?: boolean
+          component?: (props: unknown) => Promise<unknown>
+          props?: unknown
+          promise?: Promise<unknown>
+        }>
+        resolved: Map<string, {
+          success: boolean
+          data?: unknown
+          error?: string
+          stack?: string
+        } | Promise<{
+          success: boolean
+          data?: unknown
+          error?: string
+          stack?: string
+        }>>
+        counter: number
+        clear: (promiseId?: string) => void
+        resolve: (promiseId: string) => Promise<{
+          success: boolean
+          data?: unknown
+          error?: string
+          stack?: string
+        }>
+      }
+      readStream?: (stream: ReadableStream) => Promise<string>
+      ssrModules?: Record<string, { default?: unknown, [key: string]: unknown }>
+      ssrRenderComponent?: (modulePath: string, exportName: string, props: unknown) => Promise<string>
+      renderWireToHtml?: (wireFormat: string) => Promise<string>
+      renderWireToFizzStream?: (wireFormat: string) => Promise<void>
+      clientReferenceManifest?: Record<string, { id: string, chunks: string, name: string }>
+      exportOwners?: Record<string, string>
+      metadataCollector?: {
+        collect: (layoutPaths: string[], pagePath: string, params: Record<string, string>, searchParams: Record<string, string>) => Promise<unknown[]>
+      }
+      componentLoader?: {
+        registerComponent: (moduleSpecifier: string, componentId: string, skipGlobalBinding?: boolean) => Promise<unknown>
+      }
+      cookies?: (req: Request) => unknown
+    }
+  }
+
+  namespace Deno {
+    namespace core {
+      namespace ops {
+        function op_get_cookies(): string
+        function op_set_cookie(options: Record<string, unknown>): void
+        function op_delete_cookie(name: string): void
+        function op_cache_get(key: string): any
+        function op_cache_set(key: string, value: any): void
+      }
+    }
+
+    const env: {
+      get: (key: string) => string | undefined
+    }
+  }
+}
+
+export {}

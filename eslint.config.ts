@@ -24,6 +24,22 @@ export default antfu(
       'react-refresh/only-export-components': 'off',
     },
   },
+  {
+    files: ['crates/rari/src/rsc/rendering/**/*.ts'],
+    rules: {
+      'antfu/no-top-level-await': 'off',
+      'style/object-curly-spacing': 'off',
+    },
+  },
+  {
+    files: ['crates/rari/src/runtime/ext/**/*.ts'],
+    rules: {
+      'ts/ban-ts-comment': 'off',
+      'react/no-unnecessary-use-prefix': 'off',
+      'unused-imports/no-unused-imports': 'off',
+      'unused-imports/no-unused-vars': 'off',
+    },
+  },
   deMorgan.configs.recommended,
   ...oxlint.buildFromOxlintConfigFile(join(import.meta.dirname, 'vite.config.ts')),
 )

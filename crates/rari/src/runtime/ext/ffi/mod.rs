@@ -5,8 +5,8 @@ use super::ExtensionTrait;
 extension!(
     init_ffi,
     deps = [rari],
-    esm_entry_point = "ext:init_ffi/init_ffi.js",
-    esm = [ dir "src/runtime/ext/ffi", "init_ffi.js" ],
+    esm_entry_point = "ext:init_ffi/init_ffi.ts",
+    esm = [ dir "src/runtime/ext/ffi", "init_ffi.ts" ],
 );
 impl ExtensionTrait<()> for init_ffi {
     fn init((): ()) -> Extension {

@@ -3,7 +3,7 @@ use std::{future::Future, pin::Pin};
 use deno_core::{ModuleSpecifier, PollEventLoopOptions};
 use rari_error::RariError;
 use rustc_hash::FxHashMap;
-use serde_json::Value as JsonValue;
+use serde_json::Value;
 use tokio::sync::{mpsc, oneshot};
 
 use crate::{
@@ -22,21 +22,21 @@ use crate::{
                 v8::{get_module_namespace_as_json, v8_to_json},
             },
         },
-        module::loader::RariModuleLoader,
+        module_loader::RariModuleLoader,
     },
     with_scope,
 };
 
-type ScriptBatchItem = (String, String, oneshot::Sender<Result<JsonValue, RariError>>);
-type BatchResultSender = mpsc::UnboundedSender<(usize, Result<JsonValue, RariError>)>;
+type ScriptBatchItem = (String, String, oneshot::Sender<Result<Value, RariError>>);
+type BatchResultSender = mpsc::UnboundedSender<(usize, Result<Value, RariError>)>;
 type PendingScript = (
-    oneshot::Sender<Result<JsonValue, RariError>>,
+    oneshot::Sender<Result<Value, RariError>>,
     String,
     Option<deno_core::v8::Global<deno_core::v8::Value>>,
 );
 
 struct PendingBatch {
-    senders: Vec<Option<oneshot::Sender<Result<JsonValue, RariError>>>>,
+    senders: Vec<Option<oneshot::Sender<Result<Value, RariError>>>>,
     names: Vec<String>,
     sent: Vec<bool>,
     remaining: usize,
@@ -49,15 +49,11 @@ enum JsRequest {
     ExecuteScript {
         script_name: String,
         script_code: String,
-        result_tx: oneshot::Sender<Result<JsonValue, RariError>>,
+        result_tx: oneshot::Sender<Result<Value, RariError>>,
     },
     ExecuteScriptBatch {
         scripts: Vec<(String, String)>,
         result_tx: BatchResultSender,
-    },
-    AddModuleToLoader {
-        component_id: String,
-        result_tx: oneshot::Sender<Result<(), RariError>>,
     },
     LoadEsModule {
         component_id: String,
@@ -65,13 +61,13 @@ enum JsRequest {
     },
     EvaluateModule {
         module_id: deno_core::ModuleId,
-        result_tx: oneshot::Sender<Result<JsonValue, RariError>>,
+        result_tx: oneshot::Sender<Result<Value, RariError>>,
     },
     GetModuleNamespace {
         module_id: deno_core::ModuleId,
-        result_tx: oneshot::Sender<Result<JsonValue, RariError>>,
+        result_tx: oneshot::Sender<Result<Value, RariError>>,
     },
-    AddModuleToLoaderOnly {
+    AddModuleToLoader {
         specifier: String,
         code: String,
         result_tx: oneshot::Sender<Result<(), RariError>>,
@@ -276,7 +272,7 @@ async fn handle_evaluate_module(
     js_runtime: &mut deno_core::JsRuntime,
     module_loader: &std::rc::Rc<RariModuleLoader>,
     module_id: deno_core::ModuleId,
-    result_tx: oneshot::Sender<Result<JsonValue, RariError>>,
+    result_tx: oneshot::Sender<Result<Value, RariError>>,
     continue_processing: &mut bool,
 ) -> Result<(), RariError> {
     let module_registered = module_loader.is_already_evaluated(&module_id.to_string());
@@ -327,7 +323,7 @@ async fn handle_get_module_namespace(
     js_runtime: &mut deno_core::JsRuntime,
     module_loader: &std::rc::Rc<RariModuleLoader>,
     module_id: deno_core::ModuleId,
-    result_tx: oneshot::Sender<Result<JsonValue, RariError>>,
+    result_tx: oneshot::Sender<Result<Value, RariError>>,
 ) -> Result<(), RariError> {
     let module_evaluated = module_loader.is_already_evaluated(&module_id.to_string());
 
@@ -385,7 +381,7 @@ async fn handle_js_request(
                 .into_iter()
                 .enumerate()
                 .map(|(i, (name, code))| {
-                    let (tx, rx) = oneshot::channel::<Result<JsonValue, RariError>>();
+                    let (tx, rx) = oneshot::channel::<Result<Value, RariError>>();
                     let result_tx_clone = result_tx.clone();
                     tokio::spawn(async move {
                         let result = rx.await.unwrap_or_else(|_| Err(create_graceful_error()));
@@ -399,16 +395,6 @@ async fn handle_js_request(
                 setup_concurrent_batch(js_runtime, batch, batch_id_counter).await
             {
                 pending_batches.push(pending_batch);
-            }
-        }
-        JsRequest::AddModuleToLoader { component_id, result_tx } => {
-            let specifier_opt = module_loader.get_component_specifier(&component_id);
-            if specifier_opt.is_some() {
-                let _ = result_tx.send(Ok(()));
-            } else {
-                let _ = result_tx.send(Err(RariError::js_execution(format!(
-                    "Component specifier not found in loader for AddModuleToLoader: {component_id}"
-                ))));
             }
         }
         JsRequest::LoadEsModule { component_id, result_tx } => {
@@ -427,7 +413,7 @@ async fn handle_js_request(
         JsRequest::GetModuleNamespace { module_id, result_tx } => {
             handle_get_module_namespace(js_runtime, module_loader, module_id, result_tx).await?;
         }
-        JsRequest::AddModuleToLoaderOnly { specifier, code, result_tx } => {
+        JsRequest::AddModuleToLoader { specifier, code, result_tx } => {
             module_loader.set_module_code(specifier.clone(), code);
             let component_id = extract_component_id_from_specifier(&specifier);
             let is_hmr_specifier = specifier.contains("/rari_hmr/");
@@ -652,16 +638,16 @@ fn check_pending_batches(
                             v8_to_json(scope, local)
                         });
                         match json_result {
-                            Ok(JsonValue::Object(obj)) => {
-                                if matches!(obj.get("ok"), Some(JsonValue::Bool(false))) {
+                            Ok(Value::Object(obj)) => {
+                                if matches!(obj.get("ok"), Some(Value::Bool(false))) {
                                     Err(RariError::js_execution(
                                         obj.get("error")
-                                            .and_then(JsonValue::as_str)
+                                            .and_then(Value::as_str)
                                             .unwrap_or("Unknown concurrent error")
                                             .to_string(),
                                     ))
                                 } else {
-                                    Ok(obj.get("value").cloned().unwrap_or(JsonValue::Null))
+                                    Ok(obj.get("value").cloned().unwrap_or(Value::Null))
                                 }
                             }
                             Ok(_) => {
@@ -789,7 +775,7 @@ impl JsRuntimeInterface for RariRuntime {
         &self,
         script_name: String,
         script_code: String,
-    ) -> Pin<Box<dyn Future<Output = Result<JsonValue, RariError>> + Send>> {
+    ) -> Pin<Box<dyn Future<Output = Result<Value, RariError>> + Send>> {
         let request_sender = self.request_sender.clone();
 
         Box::pin(async move {
@@ -839,8 +825,8 @@ impl JsRuntimeInterface for RariRuntime {
     fn execute_function(
         &self,
         function_name: &str,
-        args: Vec<JsonValue>,
-    ) -> Pin<Box<dyn Future<Output = Result<JsonValue, RariError>> + Send + 'static>> {
+        args: Vec<Value>,
+    ) -> Pin<Box<dyn Future<Output = Result<Value, RariError>> + Send + 'static>> {
         let request_sender = self.request_sender.clone();
         let function_name = function_name.to_string();
 
@@ -897,30 +883,6 @@ impl JsRuntimeInterface for RariRuntime {
         })
     }
 
-    fn add_module_to_loader(
-        &self,
-        specifier: &str,
-    ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>> {
-        let request_sender = self.request_sender.clone();
-        let specifier = specifier.to_string();
-
-        Box::pin(async move {
-            let (response_sender, response_receiver) = oneshot::channel();
-
-            request_sender
-                .send(JsRequest::AddModuleToLoader {
-                    component_id: specifier,
-                    result_tx: response_sender,
-                })
-                .await
-                .map_err(|_| RariError::js_runtime(JS_EXECUTOR_CHANNEL_CLOSED_ERROR.to_string()))?;
-
-            response_receiver
-                .await
-                .map_err(|_| RariError::js_runtime(JS_EXECUTOR_FAILED_ERROR.to_string()))?
-        })
-    }
-
     fn load_es_module(
         &self,
         specifier: &str,
@@ -948,7 +910,7 @@ impl JsRuntimeInterface for RariRuntime {
     fn evaluate_module(
         &self,
         module_id: deno_core::ModuleId,
-    ) -> Pin<Box<dyn Future<Output = Result<JsonValue, RariError>> + Send>> {
+    ) -> Pin<Box<dyn Future<Output = Result<Value, RariError>> + Send>> {
         let request_sender = self.request_sender.clone();
 
         Box::pin(async move {
@@ -968,7 +930,7 @@ impl JsRuntimeInterface for RariRuntime {
     fn get_module_namespace(
         &self,
         module_id: deno_core::ModuleId,
-    ) -> Pin<Box<dyn Future<Output = Result<JsonValue, RariError>> + Send>> {
+    ) -> Pin<Box<dyn Future<Output = Result<Value, RariError>> + Send>> {
         let request_sender = self.request_sender.clone();
 
         Box::pin(async move {
@@ -985,7 +947,7 @@ impl JsRuntimeInterface for RariRuntime {
         })
     }
 
-    fn add_module_to_loader_only(
+    fn add_module_to_loader(
         &self,
         specifier: &str,
         code: String,
@@ -996,19 +958,17 @@ impl JsRuntimeInterface for RariRuntime {
         Box::pin(async move {
             let (response_sender, response_receiver) = oneshot::channel();
             request_sender
-                .send(JsRequest::AddModuleToLoaderOnly {
+                .send(JsRequest::AddModuleToLoader {
                     specifier: specifier_str,
                     code,
                     result_tx: response_sender,
                 })
                 .await
                 .map_err(|_| {
-                    RariError::js_runtime(
-                        "JS executor channel closed (add_module_only)".to_string(),
-                    )
+                    RariError::js_runtime("JS executor channel closed (add_module)".to_string())
                 })?;
             response_receiver.await.map_err(|_| {
-                RariError::js_runtime("JS executor failed to respond (add_module_only)".to_string())
+                RariError::js_runtime("JS executor failed to respond (add_module)".to_string())
             })?
         })
     }

@@ -11,9 +11,9 @@ use tracing::error;
 
 pub mod ext;
 pub mod factory;
-pub mod module;
+pub mod module_loader;
 pub mod ops;
-pub mod utils;
+pub mod transpile;
 
 use factory::JsRuntimeInterface;
 
@@ -193,25 +193,7 @@ impl JsExecutionRuntime {
         }
     }
 
-    pub async fn add_module_to_loader(&self, specifier: &str) -> Result<(), RariError> {
-        let runtime = Arc::clone(&self.runtime);
-        let specifier = specifier.to_string();
-
-        match tokio::time::timeout(
-            Duration::from_millis(self.timeout_ms),
-            runtime.add_module_to_loader(&specifier),
-        )
-        .await
-        {
-            Ok(result) => result,
-            Err(_) => Err(RariError::timeout(format!(
-                "Adding module to loader timed out after {} ms for {}",
-                self.timeout_ms, specifier
-            ))),
-        }
-    }
-
-    pub async fn add_module_to_loader_only(
+    pub async fn add_module_to_loader(
         &self,
         specifier: &str,
         code: String,
@@ -221,13 +203,13 @@ impl JsExecutionRuntime {
 
         match tokio::time::timeout(
             Duration::from_millis(self.timeout_ms),
-            runtime.add_module_to_loader_only(&specifier, code),
+            runtime.add_module_to_loader(&specifier, code),
         )
         .await
         {
             Ok(result) => result,
             Err(_) => Err(RariError::timeout(format!(
-                "Adding module (only) to loader timed out after {} ms for {}",
+                "Adding module to loader timed out after {} ms for {}",
                 self.timeout_ms, specifier
             ))),
         }
@@ -325,15 +307,6 @@ impl JsExecutionRuntime {
                     deleted = true;
                 }}
 
-                if (globalThis.PromiseManager && globalThis.PromiseManager.clear) {{
-                    try {{
-                        globalThis.PromiseManager.clear(componentId);
-                        deleted = true;
-                    }} catch (e) {{
-                        console.warn('Failed to clear PromiseManager for component:', componentId, e);
-                    }}
-                }}
-
                 if (globalThis['~rsc']?.components?.[componentId]) {{
                     delete globalThis['~rsc'].components[componentId];
                     deleted = true;
@@ -386,14 +359,14 @@ impl JsExecutionRuntime {
                 tracing::warn!("Failed to clear module loader caches for {}: {}", component_id, e);
             }
 
-            self.add_module_to_loader_only(&hmr_specifier, component_code.to_string())
-                .await
-                .map_err(|e| {
+            self.add_module_to_loader(&hmr_specifier, component_code.to_string()).await.map_err(
+                |e| {
                     let error_msg =
                         format!("Failed to add component module to loader for {component_id}: {e}");
                     tracing::error!("{}", error_msg);
                     RariError::js_execution(error_msg)
-                })?;
+                },
+            )?;
 
             let module_id = self.load_es_module(component_id).await.map_err(|e| {
                 let error_msg = format!("Failed to load ES module for {component_id}: {e}");

@@ -4,9 +4,9 @@ use super::ExtensionTrait;
 
 extension!(
     init_cache,
-    deps = [rari, deno_cache],
-    esm_entry_point = "ext:init_cache/init_cache.js",
-    esm = [ dir "src/runtime/ext/cache", "init_cache.js" ],
+    deps = [init_utilities, deno_cache],
+    esm_entry_point = "ext:init_cache/init_cache.ts",
+    esm = [ dir "src/runtime/ext/cache", "init_cache.ts" ],
 );
 impl ExtensionTrait<()> for init_cache {
     fn init((): ()) -> Extension {

@@ -2,7 +2,8 @@ use std::rc::Rc;
 
 use deno_core::JsRuntime;
 use rari_error::RariError;
-use serde_json::Value as JsonValue;
+use serde_json::Value;
+use tokio::sync::mpsc;
 use tracing::error;
 
 use crate::{
@@ -17,7 +18,7 @@ use crate::{
                 run_event_loop_with_promise_timeout, v8_to_json,
             },
         },
-        module::loader::RariModuleLoader,
+        module_loader::RariModuleLoader,
     },
     with_scope,
 };
@@ -50,7 +51,7 @@ pub async fn execute_script(
     module_loader: &Rc<RariModuleLoader>,
     script_name: &str,
     script_code: &str,
-) -> Result<JsonValue, RariError> {
+) -> Result<Value, RariError> {
     if let Some(cached_result) = module_loader.module_caching.get(script_name).await {
         return Ok(cached_result);
     }
@@ -77,7 +78,7 @@ async fn execute_as_module(
     module_loader: &Rc<RariModuleLoader>,
     script_name: &str,
     script_code: &str,
-) -> Result<JsonValue, RariError> {
+) -> Result<Value, RariError> {
     let specifier_str = module_loader.create_specifier(script_name, "rari_internal");
 
     module_loader.add_module(&specifier_str, script_name, script_code.to_string()).await;
@@ -148,7 +149,7 @@ async fn execute_as_module(
 
     module_loader.mark_module_evaluated(script_name);
 
-    Ok(JsonValue::Null)
+    Ok(Value::Null)
 }
 
 async fn execute_as_script(
@@ -156,8 +157,26 @@ async fn execute_as_script(
     module_loader: &Rc<RariModuleLoader>,
     script_name: &str,
     script_code: &str,
-) -> Result<JsonValue, RariError> {
-    match runtime.execute_script("script", script_code.to_string()) {
+) -> Result<Value, RariError> {
+    let transpiled_code = if script_name.ends_with(".ts") || script_name.ends_with(".tsx") {
+        match crate::runtime::transpile::maybe_transpile_source(
+            deno_core::ModuleName::from(script_name.to_string()),
+            deno_core::ModuleCodeString::from(script_code.to_string()),
+        ) {
+            Ok((code, _source_map)) => Some(code.to_string()),
+            Err(e) => {
+                return Err(RariError::js_execution(format!(
+                    "Failed to transpile TypeScript in script '{script_name}': {e}"
+                )));
+            }
+        }
+    } else {
+        None
+    };
+
+    let code_to_execute = transpiled_code.as_deref().unwrap_or(script_code);
+
+    match runtime.execute_script("script", code_to_execute.to_string()) {
         Ok(global_v8_val) => {
             let is_promise_result = with_scope!(runtime, |scope| {
                 let local_v8_val = deno_core::v8::Local::new(scope, &global_v8_val);
@@ -171,7 +190,8 @@ async fn execute_as_script(
             }
         }
         Err(e) => {
-            handle_script_error(runtime, module_loader, script_name, script_code, e.into()).await
+            handle_script_error(runtime, module_loader, script_name, code_to_execute, e.into())
+                .await
         }
     }
 }
@@ -180,7 +200,7 @@ async fn handle_promise_result(
     runtime: &mut JsRuntime,
     script_name: &str,
     global_v8_val: deno_core::v8::Global<deno_core::v8::Value>,
-) -> Result<JsonValue, RariError> {
+) -> Result<Value, RariError> {
     let setup_promise_storage = r"
         (function() {
             if (!globalThis['~promises']) globalThis['~promises'] = {};
@@ -229,8 +249,8 @@ async fn handle_promise_result(
                         v8_to_json(scope, local_v8_val)
                     })?;
 
-                    if let JsonValue::Object(ref obj) = json_result
-                        && let Some(JsonValue::Bool(true)) = obj.get("~error")
+                    if let Value::Object(ref obj) = json_result
+                        && let Some(Value::Bool(true)) = obj.get("~error")
                     {
                         let message =
                             obj.get("message").and_then(|v| v.as_str()).unwrap_or("Unknown error");
@@ -261,14 +281,14 @@ async fn handle_promise_result(
 fn handle_non_promise_result(
     runtime: &mut JsRuntime,
     global_v8_val: deno_core::v8::Global<deno_core::v8::Value>,
-) -> Result<JsonValue, RariError> {
+) -> Result<Value, RariError> {
     let json_result = with_scope!(runtime, |scope| {
         let local_v8_val = deno_core::v8::Local::new(scope, global_v8_val);
         v8_to_json(scope, local_v8_val)
     })?;
 
-    if let JsonValue::Object(ref obj) = json_result
-        && let Some(JsonValue::Bool(true)) = obj.get("~error")
+    if let Value::Object(ref obj) = json_result
+        && let Some(Value::Bool(true)) = obj.get("~error")
     {
         let message = obj.get("message").and_then(|v| v.as_str()).unwrap_or("Unknown error");
         let stack = obj.get("stack").and_then(|v| v.as_str());
@@ -289,7 +309,7 @@ async fn handle_script_error(
     script_name: &str,
     script_code: &str,
     e: deno_core::error::AnyError,
-) -> Result<JsonValue, RariError> {
+) -> Result<Value, RariError> {
     let error_string = e.to_string();
 
     if error_string.contains("SyntaxError") {
@@ -338,7 +358,7 @@ async fn retry_as_module(
     module_loader: &Rc<RariModuleLoader>,
     script_name: &str,
     script_code: &str,
-) -> Result<JsonValue, RariError> {
+) -> Result<Value, RariError> {
     let specifier_str = module_loader.create_specifier(script_name, "rari_internal");
     let module_code = module_loader.transform_to_esmodule(script_code, script_name);
 
@@ -375,5 +395,43 @@ async fn retry_as_module(
     run_event_loop_with_error_handling(runtime, &format!("module exec for '{script_name}'"))
         .await?;
 
-    Ok(JsonValue::Null)
+    Ok(Value::Null)
+}
+
+#[expect(dead_code)]
+pub async fn execute_script_for_streaming(
+    runtime: &mut JsRuntime,
+    module_loader: &Rc<RariModuleLoader>,
+    script_name: &str,
+    script_code: &str,
+    chunk_sender: mpsc::Sender<Result<Vec<u8>, String>>,
+) -> Result<(), RariError> {
+    // Set up the chunk sender so op_fizz_chunk/op_fizz_done can forward HTML
+    // chunks to the HTTP response body during script execution.
+    {
+        let op_state_rc = runtime.op_state();
+        let mut op_state = op_state_rc.borrow_mut();
+        if let Some(stream_state) = op_state.try_borrow_mut::<crate::runtime::ops::StreamOpState>()
+        {
+            stream_state.chunk_sender = Some(chunk_sender);
+        } else {
+            return Err(RariError::js_runtime(
+                "StreamOpState not available in runtime".to_string(),
+            ));
+        }
+    }
+
+    // Delegate to the standard execute_script path which already handles
+    // async promises correctly (tracks the promise via .then(), drives the
+    // event loop in 10ms polling intervals until resolution). The streaming
+    // IIFE calls op_fizz_chunk during execution, sending HTML chunks through
+    // the sender, and calls op_fizz_done at the end to drop the sender
+    // (signaling stream end to the HTTP body consumer).
+    //
+    // The previous module-based approach (load_side_es_module + mod_evaluate
+    // + run_event_loop) deadlocked because mod_evaluate for TLA modules
+    // requires concurrent event-loop driving, but we were awaiting them
+    // sequentially.
+    let _result = execute_script(runtime, module_loader, script_name, script_code).await?;
+    Ok(())
 }

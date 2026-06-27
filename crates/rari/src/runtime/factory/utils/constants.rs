@@ -1,5 +1,5 @@
 use rari_error::RariError;
-use serde_json::Value as JsonValue;
+use serde_json::Value;
 
 pub const CHANNEL_CAPACITY: usize = 32;
 pub const RUNTIME_RESTART_DELAY_MS: u64 = 1000;
@@ -106,14 +106,14 @@ pub fn create_graceful_error() -> RariError {
     RariError::js_runtime(RUNTIME_RESTART_MESSAGE.to_string())
 }
 
-pub fn create_already_evaluated_response(component_name: &str) -> JsonValue {
+pub fn create_already_evaluated_response(component_name: &str) -> Value {
     serde_json::json!({
         "status": "already_evaluated",
         "component": component_name
     })
 }
 
-pub fn create_already_loaded_response(component_name: &str) -> JsonValue {
+pub fn create_already_loaded_response(component_name: &str) -> Value {
     serde_json::json!({
         "status": "already_loaded",
         "component": component_name

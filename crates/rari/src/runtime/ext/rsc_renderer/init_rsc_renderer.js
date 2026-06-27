@@ -1,5 +1,4 @@
 import 'ext:init_rsc_renderer/rsc_traversal.js'
-import 'ext:init_rsc_renderer/client_registry.js'
 
 if (typeof globalThis.renderToRsc === 'undefined') {
   throw new TypeError(

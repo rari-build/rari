@@ -7,7 +7,7 @@ use rustc_hash::FxHashMap;
 
 use crate::runtime::{
     factory::utils::constants::{ENV_INJECTION_SCRIPT, MODULE_CHECK_SCRIPT},
-    module::loader::RariModuleLoader,
+    module_loader::RariModuleLoader,
     ops::StreamOpState,
 };
 

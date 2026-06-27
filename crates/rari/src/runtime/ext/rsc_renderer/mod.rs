@@ -4,13 +4,12 @@ use super::ExtensionTrait;
 
 extension!(
     init_rsc_renderer,
-    deps = [rari, init_react, init_rsc_modules],
+    deps = [rari],
     esm_entry_point = "ext:init_rsc_renderer/init_rsc_renderer.js",
-            esm = [
+    esm = [
         dir "src/runtime/ext/rsc_renderer",
         "init_rsc_renderer.js",
-        "rsc_traversal.js",
-        "client_registry.js"
+        "rsc_traversal.js"
     ],
 );
 
