@@ -33,7 +33,6 @@ mod napi;
 mod node;
 mod node_crypto;
 mod node_sqlite;
-mod promise_manager;
 mod rari;
 mod rsc_renderer;
 mod runtime;
@@ -81,7 +80,6 @@ pub fn extensions(options: &ExtensionOptions, is_snapshot: bool) -> Vec<Extensio
     extensions.extend(webidl::extensions(is_snapshot));
     extensions.extend(web::extensions(options.web.clone(), is_snapshot));
     extensions.extend(rari::extensions(is_snapshot));
-    extensions.extend(promise_manager::extensions(is_snapshot));
     extensions.extend(rsc_renderer::extensions(is_snapshot));
     extensions.extend(rari::redis_cache_extensions(is_snapshot));
     extensions.extend(cache::extensions(options.cache, is_snapshot));

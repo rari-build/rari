@@ -1,7 +1,7 @@
 use axum::{
     body::Body,
     extract::State,
-    http::{HeaderValue, StatusCode},
+    http::{HeaderMap, HeaderValue, StatusCode},
     response::Response,
 };
 use tracing::error;
@@ -12,6 +12,16 @@ use crate::server::{
     handlers::r#static::cors_preflight_response,
     routing::api_error::{ApiRouteError, create_generic_error_response},
 };
+
+fn add_cors_headers(
+    response_headers: &mut HeaderMap,
+    origin: Option<&str>,
+    allowed_origins: &[String],
+    allow_credentials: bool,
+    max_age: u32,
+) {
+    add_api_cors_headers(response_headers, origin, allowed_origins, allow_credentials, max_age);
+}
 
 #[axum::debug_handler]
 pub async fn api_cors_preflight(
@@ -105,7 +115,7 @@ pub async fn handle_api_route(
 
                 let mut response = api_error.to_http_response(is_development);
                 if is_development {
-                    add_api_cors_headers(
+                    add_cors_headers(
                         response.headers_mut(),
                         origin.as_deref(),
                         &cors_config.allowed_origins,
@@ -123,7 +133,7 @@ pub async fn handle_api_route(
 
             let mut response = api_error.to_http_response(is_development);
             if is_development {
-                add_api_cors_headers(
+                add_cors_headers(
                     response.headers_mut(),
                     origin.as_deref(),
                     &cors_config.allowed_origins,
@@ -139,7 +149,7 @@ pub async fn handle_api_route(
         Ok(mut response) => {
             let headers = response.headers_mut();
             if is_development {
-                add_api_cors_headers(
+                add_cors_headers(
                     headers,
                     origin.as_deref(),
                     &cors_config.allowed_origins,
@@ -186,7 +196,7 @@ pub async fn handle_api_route(
             let mut response = api_error.to_http_response(is_development);
             let headers = response.headers_mut();
             if is_development {
-                add_api_cors_headers(
+                add_cors_headers(
                     headers,
                     origin.as_deref(),
                     &cors_config.allowed_origins,

@@ -76,4 +76,4 @@ pub use types::{
     elements::{ReactElement as LoadingReactElement, ReactElement},
     tree::{RSCRenderDebug, RSCRenderResult, RSCTree},
 };
-pub use utils::dependencies::extract_dependencies;
+pub use utils::extract_dependencies;

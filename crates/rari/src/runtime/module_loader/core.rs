@@ -34,7 +34,8 @@ use super::{
     transpiler::{needs_jsx_transpilation, needs_typescript_transpilation},
 };
 use crate::{
-    rsc::utils::dependencies::DependencyList, server::cache::handler::CacheHandlerRegistry,
+    rsc::utils::{DependencyList, extract_dependencies},
+    server::cache::handler::CacheHandlerRegistry,
 };
 
 type ExtensionTranspilerResult = Result<(FastString, Option<Cow<'static, [u8]>>), JsErrorBox>;
@@ -64,15 +65,7 @@ impl AsyncFileManager {
     }
 }
 
-static IMPORT_REGEX: OnceLock<regex::Regex> = OnceLock::new();
 static ASYNC_FILE_MANAGER: OnceLock<AsyncFileManager> = OnceLock::new();
-
-fn get_import_regex() -> &'static regex::Regex {
-    IMPORT_REGEX.get_or_init(|| {
-        #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
-        regex::Regex::new(r#"(?:import|from)\s+(['"])(.*?)(['"])"#).expect("Invalid import regex")
-    })
-}
 
 fn get_async_file_manager() -> &'static AsyncFileManager {
     ASYNC_FILE_MANAGER.get_or_init(AsyncFileManager::new)
@@ -207,21 +200,7 @@ export default {{}};
     }
 
     fn register_dependencies(&self, _original_path: &str, code: &str) -> DependencyList {
-        let import_regex = get_import_regex();
-        let mut dependencies = DependencyList::new();
-
-        for captures in import_regex.captures_iter(code) {
-            if captures.len() >= 4
-                && let Some(import_path) = captures.get(2)
-            {
-                let import_path_str = import_path.as_str().to_string();
-                if import_path_str.contains('/') || import_path_str.contains('.') {
-                    dependencies.push(import_path_str);
-                }
-            }
-        }
-
-        dependencies
+        extract_dependencies(code)
     }
 
     pub fn set_module_code(&self, specifier: String, code: String) {
