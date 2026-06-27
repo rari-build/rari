@@ -177,8 +177,16 @@ interface RegisterResult {
     let promiseId = `server_fn_${functionName}_unknown`
     let promise: ServerFunctionPromise
     try {
-      cacheKey = `${functionName}_${JSON.stringify(args)}`
-      promiseId = `server_fn_${functionName}_${btoa(JSON.stringify(args))
+      const argsJson = JSON.stringify(args)
+      cacheKey = `${functionName}_${argsJson}`
+
+      const encoder = new TextEncoder()
+      const data = encoder.encode(argsJson)
+      let binary = ''
+      for (let i = 0; i < data.length; i++) {
+        binary += String.fromCharCode(data[i])
+      }
+      promiseId = `server_fn_${functionName}_${btoa(binary)
         .replace(NON_ALPHANUMERIC_REGEX, '')
         .slice(0, 10)}`
 

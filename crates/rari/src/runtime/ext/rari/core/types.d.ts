@@ -162,8 +162,8 @@ declare global {
           maxAge?: number
           httpOnly?: boolean
           secure?: boolean
-          sameSite?: string
-          priority?: string
+          sameSite?: 'strict' | 'lax' | 'none'
+          priority?: 'low' | 'medium' | 'high'
           partitioned?: boolean
         }): void
         function op_delete_cookie(name: string): void

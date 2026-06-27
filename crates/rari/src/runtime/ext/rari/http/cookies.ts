@@ -63,8 +63,8 @@
     maxAge?: number
     httpOnly?: boolean
     secure?: boolean
-    sameSite?: string
-    priority?: string
+    sameSite?: 'strict' | 'lax' | 'none'
+    priority?: 'low' | 'medium' | 'high'
     partitioned?: boolean
   } {
     const normalized: any = { ...opts }
@@ -72,8 +72,12 @@
     if (opts.expires instanceof Date)
       normalized.expires = opts.expires.toUTCString()
 
-    if (typeof opts.sameSite === 'boolean')
+    if (typeof opts.sameSite === 'boolean') {
       normalized.sameSite = opts.sameSite ? 'strict' : undefined
+    }
+    else if (opts.sameSite) {
+      normalized.sameSite = opts.sameSite
+    }
 
     return normalized
   }
@@ -108,8 +112,8 @@
             maxAge: opts.maxAge,
             httpOnly: opts.httpOnly,
             secure: opts.secure,
-            sameSite: opts.sameSite,
-            priority: opts.priority,
+            sameSite: opts.sameSite as 'strict' | 'lax' | 'none' | undefined,
+            priority: opts.priority as 'low' | 'medium' | 'high' | undefined,
             partitioned: opts.partitioned,
           })
         }
@@ -124,8 +128,8 @@
             maxAge: opts.maxAge,
             httpOnly: opts.httpOnly,
             secure: opts.secure,
-            sameSite: opts.sameSite,
-            priority: opts.priority,
+            sameSite: opts.sameSite as 'strict' | 'lax' | 'none' | undefined,
+            priority: opts.priority as 'low' | 'medium' | 'high' | undefined,
             partitioned: opts.partitioned,
           })
         }
