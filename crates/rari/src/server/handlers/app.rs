@@ -1,8 +1,14 @@
 use std::{
+    io::Cursor,
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::Instant,
 };
 
+use async_compression::tokio::bufread::{BrotliDecoder, GzipDecoder, ZstdDecoder};
 use axum::{
     body::Body,
     extract::{Query, State},
@@ -12,21 +18,22 @@ use axum::{
 use cow_utils::CowUtils;
 use rari_utils::path_to_file_url;
 use rustc_hash::FxHashMap;
+use tokio::{io::AsyncReadExt, sync::Mutex};
 use tracing::error;
 
 use crate::{
     rendering::{
-        html::{RscHtmlRenderer, RscToHtmlConverter},
         layout::{
             LayoutRenderContext, LayoutRenderer, OpenGraphImage, OpenGraphImageDescriptor,
             OpenGraphMetadata, PageMetadata, RenderResult, TwitterMetadata, create_layout_context,
         },
+        r#static::{RscHtmlRenderer, RscToHtmlConverter},
         streaming::stream::RscStream,
     },
     server::{
         ServerState,
-        cache::response,
-        compression::{CompressionEncoding, compress_stream},
+        cache::response::{self, CacheMetadata, CachedResponse, ResponseCache, RouteCachePolicy},
+        compression::{CompressionEncoding, compress_body, compress_stream},
         config::Config,
         core::{
             types::request::{RenderMode, RequestTypeDetector},
@@ -38,7 +45,9 @@ use crate::{
                 path_validation::validate_safe_path,
             },
         },
+        middleware::request_context::RequestContext,
         rendering::{
+            self,
             metadata_injection::inject_metadata,
             utils::{
                 extract_asset_links_from_index_html, extract_body_scripts_from_index_html,
@@ -53,30 +62,22 @@ async fn decompress_bytes(
     data: &bytes::Bytes,
     encoding: CompressionEncoding,
 ) -> Result<bytes::Bytes, std::io::Error> {
-    use tokio::io::AsyncReadExt;
-
     let data = data.clone();
     match encoding {
         CompressionEncoding::Gzip => {
-            let mut decoder = async_compression::tokio::bufread::GzipDecoder::new(
-                std::io::Cursor::new(&data[..]),
-            );
+            let mut decoder = GzipDecoder::new(Cursor::new(&data[..]));
             let mut decompressed = Vec::new();
             decoder.read_to_end(&mut decompressed).await?;
             Ok(bytes::Bytes::from(decompressed))
         }
         CompressionEncoding::Brotli => {
-            let mut decoder = async_compression::tokio::bufread::BrotliDecoder::new(
-                std::io::Cursor::new(&data[..]),
-            );
+            let mut decoder = BrotliDecoder::new(Cursor::new(&data[..]));
             let mut decompressed = Vec::new();
             decoder.read_to_end(&mut decompressed).await?;
             Ok(bytes::Bytes::from(decompressed))
         }
         CompressionEncoding::Zstd => {
-            let mut decoder = async_compression::tokio::bufread::ZstdDecoder::new(
-                std::io::Cursor::new(&data[..]),
-            );
+            let mut decoder = ZstdDecoder::new(Cursor::new(&data[..]));
             let mut decompressed = Vec::new();
             decoder.read_to_end(&mut decompressed).await?;
             Ok(bytes::Bytes::from(decompressed))
@@ -320,10 +321,7 @@ async fn inject_og_image_into_metadata(
     }
 }
 
-fn get_base_url_from_context(
-    context: &LayoutRenderContext,
-    config: &crate::server::config::Config,
-) -> String {
+fn get_base_url_from_context(context: &LayoutRenderContext, config: &Config) -> String {
     if let Some(host) = context.headers.get("host") {
         let protocol = context
             .headers
@@ -342,7 +340,7 @@ fn get_base_url_from_context(
 
 pub async fn render_with_fallback(
     state: Arc<ServerState>,
-    route_match: crate::server::routing::AppRouteMatch,
+    route_match: AppRouteMatch,
     context: LayoutRenderContext,
     accept_encoding: Option<&str>,
 ) -> Result<Response, StatusCode> {
@@ -370,7 +368,7 @@ pub async fn render_with_fallback(
 
 pub async fn render_rsc_navigation_streaming(
     state: Arc<ServerState>,
-    route_match: crate::server::routing::AppRouteMatch,
+    route_match: AppRouteMatch,
     context: LayoutRenderContext,
     accept_encoding: Option<&str>,
 ) -> Result<Response, StatusCode> {
@@ -380,10 +378,7 @@ pub async fn render_rsc_navigation_streaming(
     );
     let is_not_found = route_match.not_found.is_some();
 
-    let request_context =
-        std::sync::Arc::new(crate::server::middleware::request_context::RequestContext::new(
-            route_match.route.path.clone(),
-        ));
+    let request_context = Arc::new(RequestContext::new(route_match.route.path.clone()));
 
     let render_result = match layout_renderer
         .render_route_with_streaming(
@@ -451,17 +446,17 @@ pub async fn render_rsc_navigation_streaming(
 
 async fn render_rsc_streaming_response(
     state: Arc<ServerState>,
-    _route_match: crate::server::routing::AppRouteMatch,
+    _route_match: AppRouteMatch,
     context: LayoutRenderContext,
     mut rsc_stream: RscStream,
     is_not_found: bool,
     accept_encoding: Option<&str>,
 ) -> Result<Response, StatusCode> {
-    let should_continue = Arc::new(std::sync::atomic::AtomicBool::new(true));
+    let should_continue = Arc::new(AtomicBool::new(true));
     let should_continue_clone = should_continue;
 
     let rsc_wire_stream = async_stream::stream! {
-        while should_continue_clone.load(std::sync::atomic::Ordering::Relaxed) {
+        while should_continue_clone.load(Ordering::Relaxed) {
             match rsc_stream.next_chunk().await {
                 Some(chunk) => {
                     let data = String::from_utf8_lossy(&chunk.data).to_string();
@@ -509,7 +504,7 @@ async fn render_rsc_streaming_response(
 
 pub async fn render_synchronous(
     state: Arc<ServerState>,
-    route_match: crate::server::routing::AppRouteMatch,
+    route_match: AppRouteMatch,
     context: LayoutRenderContext,
     accept_encoding: Option<&str>,
 ) -> Result<Response, StatusCode> {
@@ -517,10 +512,7 @@ pub async fn render_synchronous(
         Arc::clone(&state.renderer),
         Arc::clone(&state.layout_html_cache),
     );
-    let request_context =
-        std::sync::Arc::new(crate::server::middleware::request_context::RequestContext::new(
-            route_match.route.path.clone(),
-        ));
+    let request_context = Arc::new(RequestContext::new(route_match.route.path.clone()));
 
     let is_not_found = route_match.not_found.is_some();
 
@@ -579,7 +571,7 @@ pub async fn render_synchronous(
 
 async fn render_streaming_response(
     state: Arc<ServerState>,
-    _route_match: crate::server::routing::AppRouteMatch,
+    _route_match: AppRouteMatch,
     context: LayoutRenderContext,
     mut rsc_stream: RscStream,
     is_not_found: bool,
@@ -631,17 +623,17 @@ async fn render_streaming_response(
         base_shell
     };
 
-    let converter = Arc::new(tokio::sync::Mutex::new(RscToHtmlConverter::with_custom_shell(
+    let converter = Arc::new(Mutex::new(RscToHtmlConverter::with_custom_shell(
         base_shell,
         body_scripts,
         html_renderer,
     )));
 
-    let should_continue = Arc::new(std::sync::atomic::AtomicBool::new(true));
+    let should_continue = Arc::new(AtomicBool::new(true));
     let should_continue_clone = should_continue;
 
     let html_stream = async_stream::stream! {
-        while should_continue_clone.load(std::sync::atomic::Ordering::Relaxed) {
+        while should_continue_clone.load(Ordering::Relaxed) {
             match rsc_stream.next_chunk().await {
                 Some(chunk) => {
                     let mut conv = converter.lock().await;
@@ -654,7 +646,7 @@ async fn render_streaming_response(
                         }
                         Err(e) => {
                             if e.to_string().contains("disconnected") || e.to_string().contains("broken pipe") {
-                                should_continue_clone.store(false, std::sync::atomic::Ordering::Relaxed);
+                                should_continue_clone.store(false, Ordering::Relaxed);
                                 break;
                             }
 
@@ -695,7 +687,7 @@ async fn render_streaming_response(
 
 pub async fn render_streaming_with_layout(
     state: Arc<ServerState>,
-    route_match: crate::server::routing::AppRouteMatch,
+    route_match: AppRouteMatch,
     context: LayoutRenderContext,
     layout_renderer: &LayoutRenderer,
     accept_encoding: Option<&str>,
@@ -703,10 +695,7 @@ pub async fn render_streaming_with_layout(
     let layout_count = route_match.layouts.len();
     let is_not_found = route_match.not_found.is_some();
 
-    let request_context =
-        std::sync::Arc::new(crate::server::middleware::request_context::RequestContext::new(
-            route_match.route.path.clone(),
-        ));
+    let request_context = Arc::new(RequestContext::new(route_match.route.path.clone()));
 
     let render_result = match layout_renderer
         .render_route_with_streaming(&route_match, &context, Some(request_context), false)
@@ -731,8 +720,6 @@ pub async fn render_streaming_with_layout(
     let rsc_stream = match render_result {
         RenderResult::Streaming(stream) => stream,
         RenderResult::Static(html) => {
-            use crate::server::compression::compress_body;
-
             let html_with_assets = match inject_assets_into_html(&html, &state.config).await {
                 Ok(html) => html,
                 Err(e) => {
@@ -787,7 +774,7 @@ pub async fn render_fallback_html(
     is_not_found: bool,
 ) -> Result<Response, StatusCode> {
     let index_path = if state.config.is_development() {
-        let root_index = std::path::PathBuf::from("index.html");
+        let root_index = PathBuf::from("index.html");
         if root_index.exists() { root_index } else { state.config.public_dir().join("index.html") }
     } else {
         state.config.public_dir().join("index.html")
@@ -912,10 +899,7 @@ pub async fn handle_app_route(
 ) -> Result<Response, StatusCode> {
     let path = uri.path();
 
-    fn should_use_streaming(
-        route_match: &crate::server::routing::AppRouteMatch,
-        config: &Config,
-    ) -> bool {
+    fn should_use_streaming(route_match: &AppRouteMatch, config: &Config) -> bool {
         if route_match.not_found.is_some() { false } else { config.rsc.enable_streaming }
     }
 
@@ -980,9 +964,7 @@ pub async fn handle_app_route(
         },
     };
 
-    let request_context = std::sync::Arc::new(
-        crate::server::middleware::request_context::RequestContext::new(path.to_string()),
-    );
+    let request_context = Arc::new(RequestContext::new(path.to_string()));
 
     let render_mode = RequestTypeDetector::detect_render_mode(&headers);
     let accept_encoding = headers.get("accept-encoding").and_then(|v| v.to_str().ok());
@@ -1034,7 +1016,7 @@ pub async fn handle_app_route(
                 .await;
                 return result;
             }
-            let cache_key = response::ResponseCache::generate_cache_key_with_mode(
+            let cache_key = ResponseCache::generate_cache_key_with_mode(
                 path,
                 if query_params_for_cache.is_empty() {
                     None
@@ -1107,15 +1089,14 @@ pub async fn handle_app_route(
                     }
 
                     let cache_control = state.config.get_cache_control_for_route(path);
-                    let cache_policy =
-                        response::RouteCachePolicy::from_cache_control(cache_control, path);
+                    let cache_policy = RouteCachePolicy::from_cache_control(cache_control, path);
 
                     if cache_policy.enabled && state.response_cache.config.enabled {
-                        let cached_response = response::CachedResponse {
+                        let cached_response = CachedResponse {
                             body: bytes::Bytes::from(rsc_wire_format.clone()),
                             headers: cache_headers,
-                            metadata: response::CacheMetadata {
-                                cached_at: std::time::Instant::now(),
+                            metadata: CacheMetadata {
+                                cached_at: Instant::now(),
                                 ttl: cache_policy.ttl,
                                 etag: None,
                                 tags: cache_policy.tags,
@@ -1143,7 +1124,7 @@ pub async fn handle_app_route(
             }
         }
         RenderMode::Ssr => {
-            let cache_key = response::ResponseCache::generate_cache_key(
+            let cache_key = ResponseCache::generate_cache_key(
                 path,
                 if query_params_for_cache.is_empty() {
                     None
@@ -1180,7 +1161,6 @@ pub async fn handle_app_route(
 
                 let merged_vary = merge_vary_with_accept(cached.headers.get("vary"));
 
-                use crate::server::compression::compress_body;
                 let encoding = CompressionEncoding::from_accept_encoding(accept_encoding);
 
                 let (body_bytes, actual_encoding) =
@@ -1271,9 +1251,9 @@ pub async fn handle_app_route(
                         parts.headers.get("cache-control").and_then(|v| v.to_str().ok());
 
                     let cache_policy = if let Some(cc) = cache_control_value {
-                        response::RouteCachePolicy::from_cache_control(cc, path)
+                        RouteCachePolicy::from_cache_control(cc, path)
                     } else {
-                        let mut policy = response::RouteCachePolicy {
+                        let mut policy = RouteCachePolicy {
                             ttl: state.response_cache.config.default_ttl,
                             ..Default::default()
                         };
@@ -1321,7 +1301,7 @@ pub async fn handle_app_route(
                                 }
                             };
 
-                        let etag = response::ResponseCache::generate_etag(&raw_body);
+                        let etag = ResponseCache::generate_etag(&raw_body);
                         let mut response_headers = axum::http::HeaderMap::new();
                         for (key, value) in &parts.headers {
                             if key.as_str() != "content-encoding"
@@ -1331,10 +1311,10 @@ pub async fn handle_app_route(
                             }
                         }
 
-                        let cached_response = response::CachedResponse {
+                        let cached_response = CachedResponse {
                             body: raw_body,
                             headers: response_headers,
-                            metadata: response::CacheMetadata {
+                            metadata: CacheMetadata {
                                 cached_at: std::time::Instant::now(),
                                 ttl: cache_policy.ttl,
                                 etag: Some(etag.clone()),
@@ -1409,7 +1389,7 @@ pub async fn handle_app_route(
                         &state,
                     );
 
-                    let etag = response::ResponseCache::generate_etag(final_html.as_bytes());
+                    let etag = ResponseCache::generate_etag(final_html.as_bytes());
 
                     (final_html, etag)
                 }
@@ -1458,8 +1438,7 @@ pub async fn handle_app_route(
                     };
 
                     let body_scripts =
-                        crate::server::rendering::utils::extract_body_scripts_from_index_html()
-                            .await;
+                        rendering::utils::extract_body_scripts_from_index_html().await;
                     let mut converter = RscToHtmlConverter::with_custom_shell(
                         base_shell,
                         body_scripts,
@@ -1489,7 +1468,7 @@ pub async fn handle_app_route(
                     }
 
                     let final_html = buffered_html;
-                    let etag = response::ResponseCache::generate_etag(final_html.as_bytes());
+                    let etag = ResponseCache::generate_etag(final_html.as_bytes());
 
                     (final_html, etag)
                 }
@@ -1520,10 +1499,10 @@ pub async fn handle_app_route(
                 response::RouteCachePolicy::from_cache_control(cache_control_value, path);
 
             if cache_policy.enabled {
-                let cached_response = response::CachedResponse {
+                let cached_response = CachedResponse {
                     body: bytes::Bytes::from(final_html.clone()),
                     headers: response_headers,
-                    metadata: response::CacheMetadata {
+                    metadata: CacheMetadata {
                         cached_at: std::time::Instant::now(),
                         ttl: cache_policy.ttl,
                         etag: Some(etag),

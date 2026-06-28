@@ -2,7 +2,11 @@
 
 use std::{
     fmt::Write,
-    sync::{Arc, atomic::Ordering},
+    path::PathBuf,
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
@@ -16,7 +20,7 @@ use rari_rsc::{
     utils::{extract_dependencies, hash_string},
 };
 use rustc_hash::{FxHashMap, FxHashSet};
-use serde_json::Value as JsonValue;
+use serde_json::Value;
 use tokio::time::{sleep, timeout};
 use tracing::error;
 
@@ -34,7 +38,7 @@ use super::{
 };
 use crate::{
     rendering::{
-        core::loader::{RscJsLoader, RscModuleOperation},
+        base::loader::{RscJsLoader, RscModuleOperation},
         streaming::{RscStream, StreamingRenderer},
     },
     runtime::JsExecutionRuntime,
@@ -49,7 +53,7 @@ pub struct RscRenderer {
     pub(crate) resource_limits: ResourceLimits,
     pub(crate) resource_tracker: Arc<ResourceTracker>,
     pub(crate) serializer: Arc<Mutex<RscSerializer>>,
-    pub(crate) streaming_refcount: Arc<std::sync::atomic::AtomicUsize>,
+    pub(crate) streaming_refcount: Arc<AtomicUsize>,
 }
 
 impl RscRenderer {
@@ -70,7 +74,7 @@ impl RscRenderer {
             resource_limits,
             resource_tracker: Arc::new(ResourceTracker::new()),
             serializer: Arc::new(Mutex::new(RscSerializer::new())),
-            streaming_refcount: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+            streaming_refcount: Arc::new(AtomicUsize::new(0)),
         }
     }
 
@@ -142,7 +146,7 @@ impl RscRenderer {
         &self,
         script_name: String,
         script: String,
-    ) -> Result<JsonValue, RariError> {
+    ) -> Result<Value, RariError> {
         let timeout_duration =
             Duration::from_millis(self.resource_limits.max_script_execution_time_ms);
 
@@ -188,7 +192,7 @@ globalThis['~errors'].batch.push({{
     async fn execute_batched_scripts(
         &self,
         scripts: Vec<(&str, String)>,
-    ) -> Result<JsonValue, RariError> {
+    ) -> Result<Value, RariError> {
         if scripts.is_empty() {
             return Ok(serde_json::json!({}));
         }
@@ -211,10 +215,10 @@ globalThis['~errors'].batch.push({{
 
     fn handle_batch_script_result(
         &self,
-        result: JsonValue,
+        result: Value,
         _script_count: usize,
-    ) -> Result<JsonValue, RariError> {
-        if let Some(success) = result.get("success").and_then(serde_json::Value::as_bool)
+    ) -> Result<Value, RariError> {
+        if let Some(success) = result.get("success").and_then(Value::as_bool)
             && !success
             && let Some(errors) = result.get("errors").and_then(|e| e.as_array())
         {
@@ -371,7 +375,7 @@ globalThis['~errors'].batch.push({{
 
             let clean_dep = current.trim_start_matches("./").trim_start_matches("../");
 
-            let mut resolved_path_candidates: Vec<std::path::PathBuf> = Vec::new();
+            let mut resolved_path_candidates: Vec<PathBuf> = Vec::new();
             if current.starts_with("../") {
                 let up_count = current.matches("../").count();
                 let remaining_path = current.cow_replacen("../", "", up_count).into_owned();
@@ -385,7 +389,7 @@ globalThis['~errors'].batch.push({{
                 resolved_path_candidates.push(src_dir.join(clean_dep));
             }
 
-            let mut potential_paths: Vec<std::path::PathBuf> = Vec::new();
+            let mut potential_paths: Vec<PathBuf> = Vec::new();
             for base_path_candidate in &resolved_path_candidates {
                 for ext in &extensions {
                     potential_paths.push(base_path_candidate.with_extension(&ext[1..]));
@@ -462,10 +466,8 @@ globalThis['~errors'].batch.push({{
             );
         }
 
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis();
+        let timestamp =
+            SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis();
         let module_specifier = format!("file:///rari_component/{component_id}.js?v={timestamp}");
 
         if let Err(e) = self
@@ -593,7 +595,7 @@ globalThis['~errors'].batch.push({{
                 ))
             })?;
 
-        let success = result.get("success").and_then(serde_json::Value::as_bool).unwrap_or(false);
+        let success = result.get("success").and_then(Value::as_bool).unwrap_or(false);
 
         if success {
             return Ok(());
@@ -778,10 +780,10 @@ globalThis['~errors'].batch.push({{
     fn process_rsc_extraction_result(
         &self,
         component_id: &str,
-        extraction_result: JsonValue,
+        extraction_result: Value,
     ) -> Result<String, RariError> {
-        let parsed_result: serde_json::Value = if let Some(obj) = extraction_result.as_object() {
-            serde_json::Value::Object(obj.clone())
+        let parsed_result: Value = if let Some(obj) = extraction_result.as_object() {
+            Value::Object(obj.clone())
         } else {
             let rsc_result = extraction_result.as_str().unwrap_or("");
             if rsc_result.is_empty() {
@@ -987,7 +989,7 @@ globalThis['~errors'].batch.push({{
             Err(e) => {
                 #[expect(clippy::expect_used, reason = "System time is always after UNIX_EPOCH")]
                 let server_time = SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
+                    .duration_since(UNIX_EPOCH)
                     .expect("System time is before UNIX_EPOCH")
                     .as_secs();
 
@@ -1012,7 +1014,7 @@ globalThis['~errors'].batch.push({{
             if props_str.trim().is_empty() {
                 None
             } else {
-                serde_json::from_str::<FxHashMap<String, JsonValue>>(props_str).ok()
+                serde_json::from_str::<FxHashMap<String, Value>>(props_str).ok()
             }
         } else {
             None
@@ -1120,8 +1122,8 @@ globalThis['~errors'].batch.push({{
         &self,
         function_id: &str,
         export_name: &str,
-        args: &[JsonValue],
-    ) -> Result<JsonValue, RariError> {
+        args: &[Value],
+    ) -> Result<Value, RariError> {
         let args_json = serde_json::to_string(args)
             .map_err(|e| RariError::serialization(format!("Failed to serialize args: {e}")))?;
 
@@ -1335,10 +1337,8 @@ globalThis['~errors'].batch.push({{
             .execute_script(format!("isolation_{component_id}.js"), isolation_script)
             .await?;
 
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis();
+        let timestamp =
+            SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis();
 
         let module_specifier_js = if force_reload {
             format!("file:///rari_component/{component_id}.js")

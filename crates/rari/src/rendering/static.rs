@@ -11,12 +11,11 @@ use std::{
 use cow_utils::CowUtils;
 use rari_error::{RariError, StreamingError};
 use rari_rsc::flight::escape::unescape_rsc_value;
+use regex::Regex;
 use rustc_hash::{FxHashMap, FxHashSet};
-use serde_json::Value as JsonValue;
+use serde_json::Value;
 use tracing::error;
 
-#[cfg(test)]
-use crate::server::config::Mode;
 use crate::{
     RscElement,
     rendering::streaming::{RscChunkType, RscStreamChunk},
@@ -308,8 +307,6 @@ impl RscHtmlRenderer {
     }
 
     fn extract_script_tags(template: &str) -> String {
-        use regex::Regex;
-
         #[expect(clippy::unwrap_used, reason = "Hardcoded regex pattern is guaranteed to be valid")]
         let script_regex = Regex::new(r"(?s)<script[^>]*>.*?</script>|<script[^>]*/>").unwrap();
         #[expect(clippy::unwrap_used, reason = "Hardcoded regex pattern is guaranteed to be valid")]
@@ -450,8 +447,6 @@ impl RscHtmlRenderer {
         html_content: &str,
         template: &str,
     ) -> Result<String, RariError> {
-        use regex::Regex;
-
         let root_div_regex =
             Regex::new(r#"<div\s+id=["']root["'](?:\s+[^>]*)?\s*(?:/>|>\s*</div>)"#)
                 .map_err(|e| RariError::internal(format!("Failed to create regex: {e}")))?;
@@ -552,10 +547,10 @@ impl RscHtmlRenderer {
         Ok(rows)
     }
 
-    fn looks_like_rsc_payload(value: &JsonValue) -> bool {
+    fn looks_like_rsc_payload(value: &Value) -> bool {
         match value {
-            JsonValue::Array(arr) => arr.first().and_then(|v| v.as_str()) == Some("$"),
-            JsonValue::Object(obj) => {
+            Value::Array(arr) => arr.first().and_then(|v| v.as_str()) == Some("$"),
+            Value::Object(obj) => {
                 obj.contains_key("Suspense")
                     || obj.contains_key("Component")
                     || obj.contains_key("Text")
@@ -567,7 +562,7 @@ impl RscHtmlRenderer {
     }
 
     fn is_rsc_payload(s: &str) -> bool {
-        if let Ok(value) = serde_json::from_str::<JsonValue>(s) {
+        if let Ok(value) = serde_json::from_str::<Value>(s) {
             Self::looks_like_rsc_payload(&value)
         } else {
             false
@@ -602,7 +597,7 @@ impl RscHtmlRenderer {
             return Ok(RscRow { id, data: RscElement::Text(data_str.to_string()) });
         }
 
-        let json_value: JsonValue = serde_json::from_str(data_str)
+        let json_value: Value = serde_json::from_str(data_str)
             .map_err(|e| RariError::internal(format!("Invalid JSON in RSC line: {e}")))?;
 
         let data = self.parse_rsc_element(&json_value)?;
@@ -610,9 +605,9 @@ impl RscHtmlRenderer {
         Ok(RscRow { id, data })
     }
 
-    fn parse_rsc_element(&self, value: &JsonValue) -> Result<RscElement, RariError> {
+    fn parse_rsc_element(&self, value: &Value) -> Result<RscElement, RariError> {
         match value {
-            JsonValue::String(s) => {
+            Value::String(s) => {
                 if let Some(stripped) = s.strip_prefix('$') {
                     if s.starts_with("$$") {
                         Ok(RscElement::Text(stripped.to_string()))
@@ -624,12 +619,12 @@ impl RscHtmlRenderer {
                 }
             }
 
-            JsonValue::Array(arr) => {
+            Value::Array(arr) => {
                 if arr.is_empty() {
                     return Err(RariError::internal("Empty array in RSC element".to_string()));
                 }
 
-                if let Some(JsonValue::String(marker)) = arr.first()
+                if let Some(Value::String(marker)) = arr.first()
                     && marker == "$"
                 {
                     return self.parse_react_element(arr);
@@ -643,17 +638,17 @@ impl RscHtmlRenderer {
                 Ok(RscElement::Fragment { children })
             }
 
-            JsonValue::Number(n) => Ok(RscElement::Text(n.to_string())),
-            JsonValue::Bool(b) => Ok(RscElement::Text(b.to_string())),
-            JsonValue::Null => Ok(RscElement::Text(String::new())),
+            Value::Number(n) => Ok(RscElement::Text(n.to_string())),
+            Value::Bool(b) => Ok(RscElement::Text(b.to_string())),
+            Value::Null => Ok(RscElement::Text(String::new())),
 
-            JsonValue::Object(_) => {
+            Value::Object(_) => {
                 Ok(RscElement::Text(serde_json::to_string(value).unwrap_or_default()))
             }
         }
     }
 
-    fn parse_react_element(&self, arr: &[JsonValue]) -> Result<RscElement, RariError> {
+    fn parse_react_element(&self, arr: &[Value]) -> Result<RscElement, RariError> {
         if arr.len() < 4 {
             return Err(RariError::internal(format!(
                 "Invalid React element: expected 4 elements, got {}",
@@ -669,7 +664,7 @@ impl RscHtmlRenderer {
         let key = arr[2].as_str().map(std::string::ToString::to_string);
 
         let props_value = &arr[3];
-        let props = if let JsonValue::Object(obj) = props_value {
+        let props = if let Value::Object(obj) = props_value {
             obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
         } else {
             FxHashMap::default()
@@ -2142,6 +2137,7 @@ impl Default for RscToHtmlConverter {
 )]
 mod tests {
     use super::*;
+    use crate::server::config::Mode;
 
     #[test]
     fn test_rsc_html_renderer_creation() {
@@ -2229,7 +2225,7 @@ mod tests {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
         let renderer = RscHtmlRenderer::new(runtime);
 
-        let arr = vec![JsonValue::String("$".to_string()), JsonValue::String("div".to_string())];
+        let arr = vec![Value::String("$".to_string()), Value::String("div".to_string())];
 
         let result = renderer.parse_react_element(&arr);
         assert!(result.is_err());
@@ -2243,10 +2239,10 @@ mod tests {
         let renderer = RscHtmlRenderer::new(runtime);
 
         let arr = vec![
-            JsonValue::String("$".to_string()),
-            JsonValue::Number(123.into()),
-            JsonValue::Null,
-            JsonValue::Object(serde_json::Map::new()),
+            Value::String("$".to_string()),
+            Value::Number(123.into()),
+            Value::Null,
+            Value::Object(serde_json::Map::new()),
         ];
 
         let result = renderer.parse_react_element(&arr);
@@ -2260,7 +2256,7 @@ mod tests {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
         let renderer = RscHtmlRenderer::new(runtime);
 
-        let value = JsonValue::String("Hello World".to_string());
+        let value = Value::String("Hello World".to_string());
         let result = renderer.parse_rsc_element(&value);
         assert!(result.is_ok());
 
@@ -2276,7 +2272,7 @@ mod tests {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
         let renderer = RscHtmlRenderer::new(runtime);
 
-        let value = JsonValue::String("$L1".to_string());
+        let value = Value::String("$L1".to_string());
         let result = renderer.parse_rsc_element(&value);
         assert!(result.is_ok());
 
@@ -2321,13 +2317,13 @@ mod tests {
         let renderer = RscHtmlRenderer::new(runtime);
 
         let mut props = serde_json::Map::new();
-        props.insert("children".to_string(), JsonValue::String("Hello".to_string()));
+        props.insert("children".to_string(), Value::String("Hello".to_string()));
 
-        let value = JsonValue::Array(vec![
-            JsonValue::String("$".to_string()),
-            JsonValue::String("div".to_string()),
-            JsonValue::Null,
-            JsonValue::Object(props),
+        let value = Value::Array(vec![
+            Value::String("$".to_string()),
+            Value::String("div".to_string()),
+            Value::Null,
+            Value::Object(props),
         ]);
 
         let result = renderer.parse_rsc_element(&value);
@@ -2347,7 +2343,7 @@ mod tests {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
         let renderer = RscHtmlRenderer::new(runtime);
 
-        let value = JsonValue::Array(vec![]);
+        let value = Value::Array(vec![]);
         let result = renderer.parse_rsc_element(&value);
         assert!(result.is_err());
         let err_msg = format!("{:?}", result.unwrap_err());
@@ -2787,15 +2783,15 @@ mod tests {
         let renderer = RscHtmlRenderer::new(runtime);
 
         let mut props = serde_json::Map::new();
-        props.insert("fallback".to_string(), JsonValue::String("$L1".to_string()));
-        props.insert("children".to_string(), JsonValue::String("$L2".to_string()));
-        props.insert("~boundaryId".to_string(), JsonValue::String("suspense_123".to_string()));
+        props.insert("fallback".to_string(), Value::String("$L1".to_string()));
+        props.insert("children".to_string(), Value::String("$L2".to_string()));
+        props.insert("~boundaryId".to_string(), Value::String("suspense_123".to_string()));
 
-        let value = JsonValue::Array(vec![
-            JsonValue::String("$".to_string()),
-            JsonValue::String("react.suspense".to_string()),
-            JsonValue::Null,
-            JsonValue::Object(props),
+        let value = Value::Array(vec![
+            Value::String("$".to_string()),
+            Value::String("react.suspense".to_string()),
+            Value::Null,
+            Value::Object(props),
         ]);
 
         let result = renderer.parse_rsc_element(&value);
@@ -3799,7 +3795,7 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
         let runtime = Arc::new(JsExecutionRuntime::new(None));
         let renderer = RscHtmlRenderer::new(runtime.clone());
 
-        let html_render_script = include_str!("../../rendering/layout/js/html_render.js");
+        let html_render_script = include_str!("./layout/js/html_render.js");
         runtime
             .execute_script("html_render".to_string(), html_render_script.to_string())
             .await
@@ -3851,7 +3847,7 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
         let runtime = Arc::new(JsExecutionRuntime::new(None));
         let renderer = RscHtmlRenderer::new(runtime.clone());
 
-        let html_render_script = include_str!("../../rendering/layout/js/html_render.js");
+        let html_render_script = include_str!("./layout/js/html_render.js");
         runtime
             .execute_script("html_render".to_string(), html_render_script.to_string())
             .await

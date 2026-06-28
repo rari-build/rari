@@ -1,7 +1,10 @@
 use std::fmt::Write;
 
 use crate::{
-    rendering::{html::escape_html, layout::types::PageMetadata},
+    rendering::{
+        layout::types::{IconValue, OpenGraphImage, PageMetadata, ThemeColorMetadata},
+        r#static::escape_html,
+    },
     server::image::ImageOptimizer,
 };
 
@@ -197,7 +200,6 @@ pub fn inject_metadata(
             }
             if let Some(images) = &og.images {
                 for image in images {
-                    use crate::rendering::layout::types::OpenGraphImage;
                     let image_url = match image {
                         OpenGraphImage::Simple(url) => url.as_str(),
                         OpenGraphImage::Detailed(desc) => desc.url.as_str(),
@@ -302,7 +304,6 @@ pub fn inject_metadata(
 
         if let Some(icons) = &metadata.icons {
             if let Some(icon_value) = &icons.icon {
-                use crate::rendering::layout::types::IconValue;
                 match icon_value {
                     IconValue::Single(url) => {
                         #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
@@ -354,7 +355,6 @@ pub fn inject_metadata(
                 }
             }
             if let Some(apple_value) = &icons.apple {
-                use crate::rendering::layout::types::IconValue;
                 match apple_value {
                     IconValue::Single(url) => {
                         #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
@@ -427,7 +427,6 @@ pub fn inject_metadata(
         }
 
         if let Some(theme_color) = &metadata.theme_color {
-            use crate::rendering::layout::types::ThemeColorMetadata;
             match theme_color {
                 ThemeColorMetadata::Simple(color) => {
                     #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
@@ -567,7 +566,10 @@ mod tests {
     use rustc_hash::FxHashMap;
 
     use super::*;
-    use crate::rendering::layout::types::{OpenGraphMetadata, RobotsMetadata, TwitterMetadata};
+    use crate::rendering::layout::types::{
+        AlternatesMetadata, OpenGraphImage, OpenGraphImageDescriptor, OpenGraphMetadata,
+        RobotsMetadata, TwitterMetadata,
+    };
 
     #[test]
     fn test_inject_basic_metadata() {
@@ -612,8 +614,6 @@ mod tests {
 </head>
 <body></body>
 </html>"#;
-
-        use crate::rendering::layout::types::{OpenGraphImage, OpenGraphImageDescriptor};
 
         let metadata = PageMetadata {
             title: Some("Test".to_string()),
@@ -942,8 +942,6 @@ mod tests {
 <body></body>
 </html>"#;
 
-        use crate::rendering::layout::types::AlternatesMetadata;
-
         let mut types = FxHashMap::default();
         types.insert("application/rss+xml".to_string(), "https://example.com/feed.xml".to_string());
 
@@ -983,8 +981,6 @@ mod tests {
 </head>
 <body></body>
 </html>"#;
-
-        use crate::rendering::layout::types::AlternatesMetadata;
 
         let mut languages = FxHashMap::default();
         languages.insert("en".to_string(), "https://example.com/en".to_string());
@@ -1034,8 +1030,6 @@ mod tests {
 </head>
 <body></body>
 </html>"#;
-
-        use crate::rendering::layout::types::AlternatesMetadata;
 
         let metadata = PageMetadata {
             title: Some("Test".to_string()),

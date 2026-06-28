@@ -1,4 +1,5 @@
 use cow_utils::CowUtils;
+
 #[non_exhaustive]
 pub struct RscJsLoader;
 
