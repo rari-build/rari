@@ -15,7 +15,7 @@ pub enum HttpStartError {
     #[class("Busy")]
     TlsStreamInUse,
     #[class("Busy")]
-    #[cfg_attr(not(unix), allow(dead_code))]
+    #[cfg_attr(not(unix), expect(dead_code))]
     UnixSocketInUse,
     #[class(generic)]
     ReuniteTcp(tokio::net::tcp::ReuniteError),

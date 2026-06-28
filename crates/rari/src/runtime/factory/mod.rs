@@ -2,6 +2,7 @@
 
 mod executor;
 mod interface;
+pub mod pool;
 mod runtime;
 mod runtime_builder;
 pub(crate) mod utils;
