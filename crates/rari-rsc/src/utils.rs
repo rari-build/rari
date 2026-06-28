@@ -1,15 +1,20 @@
-use std::sync::OnceLock;
+use std::{
+    collections::hash_map::DefaultHasher,
+    hash::{Hash, Hasher},
+    sync::OnceLock,
+};
 
+use regex::Regex;
 use smallvec::SmallVec;
 
 pub type DependencyList = SmallVec<[String; 4]>;
 
-static IMPORT_REGEX: OnceLock<regex::Regex> = OnceLock::new();
+static IMPORT_REGEX: OnceLock<Regex> = OnceLock::new();
 
-fn get_import_regex() -> &'static regex::Regex {
+fn get_import_regex() -> &'static Regex {
     IMPORT_REGEX.get_or_init(|| {
         #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
-        regex::Regex::new(r#"(?:import|from)\s*((?:['"])(.*?)(?:['"]))"#)
+        Regex::new(r#"(?:import|from)\s*((?:['"])(.*?)(?:['"]))"#)
             .expect("Failed to compile dependency extraction regex")
     })
 }
@@ -37,11 +42,6 @@ pub fn extract_dependencies(code: &str) -> DependencyList {
 }
 
 pub fn hash_string(s: &str) -> String {
-    use std::{
-        collections::hash_map::DefaultHasher,
-        hash::{Hash, Hasher},
-    };
-
     let mut hasher = DefaultHasher::new();
     s.hash(&mut hasher);
     format!("{:x}", hasher.finish())

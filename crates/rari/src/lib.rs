@@ -21,7 +21,7 @@ pub use rari_rsc::{
     SuspenseBoundary, escape_rsc_value,
 };
 pub use rendering::{
-    core::{RscJsLoader, RscRenderer},
-    html::RscHtmlRenderer,
+    base::{RscJsLoader, RscRenderer},
+    r#static::RscHtmlRenderer,
     streaming::{RscStream, RscStreamChunk},
 };

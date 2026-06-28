@@ -1,41 +1,48 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::PathBuf,
+    sync::{Arc, atomic::AtomicU64},
+    time::Instant,
+};
 
+use dashmap::DashMap;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use tokio::sync::{Mutex, RwLock};
 
 pub mod request;
 
 use crate::{
+    RscHtmlRenderer, RscRenderer,
     rendering::layout::LayoutHtmlCache,
     server::{
-        cache::{handler::CacheHandler, response},
-        config,
+        cache::{CacheHandlerRegistry, handler::CacheHandler, response::ResponseCache},
+        config::Config,
+        image::ImageOptimizer,
         og::OgImageGenerator,
-        routing,
+        routing::{ApiRouteHandler, AppRouter},
     },
 };
 
 #[derive(Clone)]
 #[non_exhaustive]
 pub struct ServerState {
-    pub renderer: Arc<tokio::sync::Mutex<crate::rendering::core::RscRenderer>>,
-    pub ssr_renderer: Arc<crate::rendering::html::RscHtmlRenderer>,
-    pub config: Arc<config::Config>,
-    pub request_count: Arc<std::sync::atomic::AtomicU64>,
-    pub start_time: std::time::Instant,
-    pub component_cache_configs:
-        Arc<tokio::sync::RwLock<FxHashMap<String, FxHashMap<String, String>>>>,
-    pub page_cache_configs: Arc<tokio::sync::RwLock<FxHashMap<String, FxHashMap<String, String>>>>,
-    pub app_router: Option<Arc<routing::AppRouter>>,
-    pub api_route_handler: Option<Arc<routing::ApiRouteHandler>>,
-    pub html_cache: Arc<dashmap::DashMap<String, String>>,
+    pub renderer: Arc<Mutex<RscRenderer>>,
+    pub ssr_renderer: Arc<RscHtmlRenderer>,
+    pub config: Arc<Config>,
+    pub request_count: Arc<AtomicU64>,
+    pub start_time: Instant,
+    pub component_cache_configs: Arc<RwLock<FxHashMap<String, FxHashMap<String, String>>>>,
+    pub page_cache_configs: Arc<RwLock<FxHashMap<String, FxHashMap<String, String>>>>,
+    pub app_router: Option<Arc<AppRouter>>,
+    pub api_route_handler: Option<Arc<ApiRouteHandler>>,
+    pub html_cache: Arc<DashMap<String, String>>,
     pub layout_html_cache: Arc<LayoutHtmlCache>,
-    pub response_cache: Arc<response::ResponseCache>,
+    pub response_cache: Arc<ResponseCache>,
     pub og_generator: Option<Arc<OgImageGenerator>>,
     pub project_root: PathBuf,
-    pub image_optimizer: Option<Arc<crate::server::image::ImageOptimizer>>,
-    pub cache_registry: Arc<crate::server::cache::handler::CacheHandlerRegistry>,
+    pub image_optimizer: Option<Arc<ImageOptimizer>>,
+    pub cache_registry: Arc<CacheHandlerRegistry>,
     pub image_handler: Arc<dyn CacheHandler>,
 }
 

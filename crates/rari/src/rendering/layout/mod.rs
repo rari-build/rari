@@ -38,12 +38,16 @@ mod tests {
     use std::sync::Arc;
 
     use rustc_hash::FxHashMap;
+    use tokio::sync::Mutex;
 
     use super::*;
     use crate::{
-        rendering::core::RscRenderer,
+        rendering::base::RscRenderer,
         runtime::JsExecutionRuntime,
-        server::routing::{app_router::AppRouteMatch, types::ParamValue},
+        server::routing::{
+            app_router::{AppRouteEntry, AppRouteMatch, LayoutEntry},
+            types::ParamValue,
+        },
     };
 
     #[test]
@@ -84,7 +88,7 @@ mod tests {
         };
 
         let route_match = AppRouteMatch {
-            route: crate::server::routing::app_router::AppRouteEntry {
+            route: AppRouteEntry {
                 path: "/test".to_string(),
                 file_path: "app/test/page.tsx".to_string(),
                 component_id: None,
@@ -110,8 +114,6 @@ mod tests {
 
     #[test]
     fn test_wrapped_html_error_message_contains_key_info() {
-        use crate::server::routing::app_router::{AppRouteEntry, LayoutEntry};
-
         let route_match = AppRouteMatch {
             route: AppRouteEntry {
                 path: "/test".to_string(),
@@ -168,12 +170,12 @@ mod tests {
 
     #[test]
     fn test_build_composition_script_with_use_suspense_true() {
-        let renderer = LayoutRenderer::new(Arc::new(tokio::sync::Mutex::new(RscRenderer::new(
-            Arc::new(JsExecutionRuntime::new(None)),
-        ))));
+        let renderer = LayoutRenderer::new(Arc::new(Mutex::new(RscRenderer::new(Arc::new(
+            JsExecutionRuntime::new(None),
+        )))));
 
         let route_match = AppRouteMatch {
-            route: crate::server::routing::app_router::AppRouteEntry {
+            route: AppRouteEntry {
                 path: "/test".to_string(),
                 file_path: "app/test/page.tsx".to_string(),
                 component_id: None,
@@ -212,12 +214,12 @@ mod tests {
 
     #[test]
     fn test_build_composition_script_with_use_suspense_false() {
-        let renderer = LayoutRenderer::new(Arc::new(tokio::sync::Mutex::new(RscRenderer::new(
-            Arc::new(JsExecutionRuntime::new(None)),
-        ))));
+        let renderer = LayoutRenderer::new(Arc::new(Mutex::new(RscRenderer::new(Arc::new(
+            JsExecutionRuntime::new(None),
+        )))));
 
         let route_match = AppRouteMatch {
-            route: crate::server::routing::app_router::AppRouteEntry {
+            route: AppRouteEntry {
                 path: "/test".to_string(),
                 file_path: "app/test/page.tsx".to_string(),
                 component_id: None,
@@ -325,14 +327,12 @@ mod tests {
 
     #[test]
     fn test_composition_script_includes_layout_structure_markers() {
-        use crate::server::routing::app_router::LayoutEntry;
-
-        let renderer = LayoutRenderer::new(Arc::new(tokio::sync::Mutex::new(RscRenderer::new(
-            Arc::new(JsExecutionRuntime::new(None)),
-        ))));
+        let renderer = LayoutRenderer::new(Arc::new(Mutex::new(RscRenderer::new(Arc::new(
+            JsExecutionRuntime::new(None),
+        )))));
 
         let route_match = AppRouteMatch {
-            route: crate::server::routing::app_router::AppRouteEntry {
+            route: AppRouteEntry {
                 path: "/test".to_string(),
                 file_path: "app/test/page.tsx".to_string(),
                 component_id: None,
@@ -377,12 +377,12 @@ mod tests {
 
     #[test]
     fn test_mode_consistency_both_modes_generate_render_to_rsc() {
-        let renderer = LayoutRenderer::new(Arc::new(tokio::sync::Mutex::new(RscRenderer::new(
-            Arc::new(JsExecutionRuntime::new(None)),
-        ))));
+        let renderer = LayoutRenderer::new(Arc::new(Mutex::new(RscRenderer::new(Arc::new(
+            JsExecutionRuntime::new(None),
+        )))));
 
         let route_match = AppRouteMatch {
-            route: crate::server::routing::app_router::AppRouteEntry {
+            route: AppRouteEntry {
                 path: "/test".to_string(),
                 file_path: "app/test/page.tsx".to_string(),
                 component_id: None,
@@ -423,12 +423,12 @@ mod tests {
 
     #[test]
     fn test_mode_consistency_suspense_serialization_format() {
-        let renderer = LayoutRenderer::new(Arc::new(tokio::sync::Mutex::new(RscRenderer::new(
-            Arc::new(JsExecutionRuntime::new(None)),
-        ))));
+        let renderer = LayoutRenderer::new(Arc::new(Mutex::new(RscRenderer::new(Arc::new(
+            JsExecutionRuntime::new(None),
+        )))));
 
         let route_match = AppRouteMatch {
-            route: crate::server::routing::app_router::AppRouteEntry {
+            route: AppRouteEntry {
                 path: "/test".to_string(),
                 file_path: "app/test/page.tsx".to_string(),
                 component_id: None,
@@ -469,12 +469,12 @@ mod tests {
 
     #[test]
     fn test_mode_consistency_metadata_structure() {
-        let renderer = LayoutRenderer::new(Arc::new(tokio::sync::Mutex::new(RscRenderer::new(
-            Arc::new(JsExecutionRuntime::new(None)),
-        ))));
+        let renderer = LayoutRenderer::new(Arc::new(Mutex::new(RscRenderer::new(Arc::new(
+            JsExecutionRuntime::new(None),
+        )))));
 
         let route_match = AppRouteMatch {
-            route: crate::server::routing::app_router::AppRouteEntry {
+            route: AppRouteEntry {
                 path: "/test".to_string(),
                 file_path: "app/test/page.tsx".to_string(),
                 component_id: None,
@@ -521,12 +521,12 @@ mod tests {
 
     #[test]
     fn test_mode_consistency_async_component_handling_with_loading() {
-        let renderer = LayoutRenderer::new(Arc::new(tokio::sync::Mutex::new(RscRenderer::new(
-            Arc::new(JsExecutionRuntime::new(None)),
-        ))));
+        let renderer = LayoutRenderer::new(Arc::new(Mutex::new(RscRenderer::new(Arc::new(
+            JsExecutionRuntime::new(None),
+        )))));
 
         let route_match = AppRouteMatch {
-            route: crate::server::routing::app_router::AppRouteEntry {
+            route: AppRouteEntry {
                 path: "/test".to_string(),
                 file_path: "app/test/page.tsx".to_string(),
                 component_id: None,
@@ -575,12 +575,12 @@ mod tests {
 
     #[test]
     fn test_mode_consistency_boundary_id_format() {
-        let renderer = LayoutRenderer::new(Arc::new(tokio::sync::Mutex::new(RscRenderer::new(
-            Arc::new(JsExecutionRuntime::new(None)),
-        ))));
+        let renderer = LayoutRenderer::new(Arc::new(Mutex::new(RscRenderer::new(Arc::new(
+            JsExecutionRuntime::new(None),
+        )))));
 
         let route_match = AppRouteMatch {
-            route: crate::server::routing::app_router::AppRouteEntry {
+            route: AppRouteEntry {
                 path: "/test".to_string(),
                 file_path: "app/test/page.tsx".to_string(),
                 component_id: None,
@@ -620,12 +620,12 @@ mod tests {
 
     #[test]
     fn test_mode_consistency_wrapper_elements() {
-        let renderer = LayoutRenderer::new(Arc::new(tokio::sync::Mutex::new(RscRenderer::new(
-            Arc::new(JsExecutionRuntime::new(None)),
-        ))));
+        let renderer = LayoutRenderer::new(Arc::new(Mutex::new(RscRenderer::new(Arc::new(
+            JsExecutionRuntime::new(None),
+        )))));
 
         let route_match = AppRouteMatch {
-            route: crate::server::routing::app_router::AppRouteEntry {
+            route: AppRouteEntry {
                 path: "/test".to_string(),
                 file_path: "app/test/page.tsx".to_string(),
                 component_id: None,
@@ -671,12 +671,12 @@ mod tests {
 
     #[test]
     fn test_mode_consistency_error_handling() {
-        let renderer = LayoutRenderer::new(Arc::new(tokio::sync::Mutex::new(RscRenderer::new(
-            Arc::new(JsExecutionRuntime::new(None)),
-        ))));
+        let renderer = LayoutRenderer::new(Arc::new(Mutex::new(RscRenderer::new(Arc::new(
+            JsExecutionRuntime::new(None),
+        )))));
 
         let route_match = AppRouteMatch {
-            route: crate::server::routing::app_router::AppRouteEntry {
+            route: AppRouteEntry {
                 path: "/test".to_string(),
                 file_path: "app/test/page.tsx".to_string(),
                 component_id: None,
@@ -717,12 +717,12 @@ mod tests {
 
     #[test]
     fn test_mode_consistency_rsc_props_cleanup() {
-        let renderer = LayoutRenderer::new(Arc::new(tokio::sync::Mutex::new(RscRenderer::new(
-            Arc::new(JsExecutionRuntime::new(None)),
-        ))));
+        let renderer = LayoutRenderer::new(Arc::new(Mutex::new(RscRenderer::new(Arc::new(
+            JsExecutionRuntime::new(None),
+        )))));
 
         let route_match = AppRouteMatch {
-            route: crate::server::routing::app_router::AppRouteEntry {
+            route: AppRouteEntry {
                 path: "/test".to_string(),
                 file_path: "app/test/page.tsx".to_string(),
                 component_id: None,

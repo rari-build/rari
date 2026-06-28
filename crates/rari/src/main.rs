@@ -1,11 +1,13 @@
-use clap::{Arg, Command};
+use std::env;
+
+use clap::{Arg, ArgAction::SetTrue, Command};
 use rari::server::{
     Server,
     config::{Config, Mode},
-    image::ImageOptimizer,
+    image::{ImageConfig, ImageOptimizer},
 };
 use rari_error::RariError;
-use rustls::crypto::CryptoProvider;
+use rustls::crypto::{CryptoProvider, aws_lc_rs};
 use tracing::error;
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -24,13 +26,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                         .short('v')
                         .long("verbose")
                         .help("Enable verbose logging")
-                        .action(clap::ArgAction::SetTrue),
+                        .action(SetTrue),
                 )
                 .arg(
                     Arg::new("dry-run")
                         .long("dry-run")
                         .help("Preview images that would be optimized without performing writes")
-                        .action(clap::ArgAction::SetTrue),
+                        .action(SetTrue),
                 ),
         )
         .arg(
@@ -64,20 +66,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 .short('v')
                 .long("verbose")
                 .help("Enable verbose logging")
-                .action(clap::ArgAction::SetTrue),
+                .action(SetTrue),
         )
-        .arg(
-            Arg::new("quiet")
-                .short('q')
-                .long("quiet")
-                .help("Reduce log output")
-                .action(clap::ArgAction::SetTrue),
-        )
+        .arg(Arg::new("quiet").short('q').long("quiet").help("Reduce log output").action(SetTrue))
         .get_matches();
 
     if let Some(("optimize-images", sub_matches)) = matches.subcommand() {
         init_logging_for_subcommand(sub_matches)?;
-        CryptoProvider::install_default(rustls::crypto::aws_lc_rs::default_provider())
+        CryptoProvider::install_default(aws_lc_rs::default_provider())
             .map_err(|_| "Failed to install rustls crypto provider")?;
         let dry_run = sub_matches.get_flag("dry-run");
         return run_optimize_images(dry_run).await;
@@ -85,7 +81,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     init_logging(&matches)?;
 
-    CryptoProvider::install_default(rustls::crypto::aws_lc_rs::default_provider())
+    CryptoProvider::install_default(aws_lc_rs::default_provider())
         .map_err(|_| "Failed to install rustls crypto provider")?;
 
     let config = load_configuration(&matches)?;
@@ -116,17 +112,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 async fn run_optimize_images(
     dry_run: bool,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let project_path = std::env::current_dir()?;
+    let project_path = env::current_dir()?;
 
     let image_config_path = project_path.join("dist").join("server").join("image.json");
 
-    let image_config: rari::server::image::ImageConfig =
-        if tokio::fs::try_exists(&image_config_path).await? {
-            let config_content = tokio::fs::read_to_string(&image_config_path).await?;
-            serde_json::from_str(&config_content)?
-        } else {
-            return Ok(());
-        };
+    let image_config: ImageConfig = if tokio::fs::try_exists(&image_config_path).await? {
+        let config_content = tokio::fs::read_to_string(&image_config_path).await?;
+        serde_json::from_str(&config_content)?
+    } else {
+        return Ok(());
+    };
 
     let has_work =
         !image_config.preoptimize_manifest.is_empty() || !image_config.local_patterns.is_empty();

@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    env,
+    path::{Component, Path, PathBuf},
+};
 
 use cow_utils::CowUtils;
 
@@ -6,7 +9,6 @@ fn normalize_path(path: &Path) -> PathBuf {
     let mut components = Vec::new();
 
     for component in path.components() {
-        use std::path::Component;
         match component {
             Component::CurDir => {}
             Component::ParentDir => {
@@ -35,9 +37,8 @@ pub fn path_to_file_url(path: &Path) -> String {
     let absolute_path = if path.is_absolute() {
         normalize_path(path)
     } else {
-        let joined = std::env::current_dir()
-            .map(|cwd| cwd.join(path))
-            .unwrap_or_else(|_| path.to_path_buf());
+        let joined =
+            env::current_dir().map(|cwd| cwd.join(path)).unwrap_or_else(|_| path.to_path_buf());
 
         normalize_path(&joined)
     };
@@ -54,8 +55,6 @@ pub fn path_to_file_url(path: &Path) -> String {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-
     use super::*;
 
     #[test]

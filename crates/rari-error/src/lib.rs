@@ -1,7 +1,17 @@
+use std::{
+    cell::BorrowMutError,
+    fmt::{Display, Formatter, Result},
+};
+
+use deno_core::{
+    error::{CoreError, JsError},
+    v8::DataError,
+};
 pub use deno_error::JsErrorBox;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use tokio::time::error::Elapsed;
 
 #[non_exhaustive]
 #[derive(Error, Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -23,27 +33,27 @@ pub enum Error {
     #[error("{0}")]
     Runtime(String),
     #[error("{0}")]
-    Js(Box<deno_core::error::JsError>),
+    Js(Box<JsError>),
     #[error("Module timed out: {0}")]
     Timeout(String),
     #[error("Heap exhausted")]
     HeapExhausted,
 }
 
-impl From<deno_core::error::CoreError> for Error {
-    fn from(e: deno_core::error::CoreError) -> Self {
+impl From<CoreError> for Error {
+    fn from(e: CoreError) -> Self {
         Error::Runtime(e.to_string())
     }
 }
 
-impl From<deno_core::error::JsError> for Error {
-    fn from(e: deno_core::error::JsError) -> Self {
+impl From<JsError> for Error {
+    fn from(e: JsError) -> Self {
         Error::Js(Box::new(e))
     }
 }
 
-impl From<std::cell::BorrowMutError> for Error {
-    fn from(e: std::cell::BorrowMutError) -> Self {
+impl From<BorrowMutError> for Error {
+    fn from(e: BorrowMutError) -> Self {
         Error::Runtime(e.to_string())
     }
 }
@@ -113,8 +123,8 @@ pub enum RariError {
     Cache(String, Option<Box<ErrorMetadata>>),
 }
 
-impl std::fmt::Display for RariError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for RariError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             Self::NotFound(msg, _) => write!(f, "Not found: {msg}"),
             Self::Validation(msg, _) => write!(f, "Validation error: {msg}"),
@@ -375,8 +385,8 @@ impl From<std::io::Error> for RariError {
     }
 }
 
-impl From<tokio::time::error::Elapsed> for RariError {
-    fn from(error: tokio::time::error::Elapsed) -> Self {
+impl From<Elapsed> for RariError {
+    fn from(error: Elapsed) -> Self {
         Self::Timeout(error.to_string(), None)
     }
 }
@@ -416,8 +426,8 @@ pub enum StreamingError {
     ClientDisconnected { message: String },
 }
 
-impl std::fmt::Display for StreamingError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for StreamingError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             Self::StreamInitError { message, component_id } => {
                 write!(f, "Failed to initialize streaming: {message}")?;
@@ -497,8 +507,8 @@ pub enum LoadingStateError {
     InvalidOutput { path: String, message: String, details: Option<String> },
 }
 
-impl std::fmt::Display for LoadingStateError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for LoadingStateError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             Self::LoadingNotFound { path, message } => {
                 write!(f, "Loading component not found at '{path}': {message}")
@@ -632,8 +642,8 @@ impl From<RariError> for JsErrorBox {
     }
 }
 
-impl From<deno_core::v8::DataError> for RariError {
-    fn from(err: deno_core::v8::DataError) -> Self {
+impl From<DataError> for RariError {
+    fn from(err: DataError) -> Self {
         RariError::JsRuntime(format!("V8 Data Error: {err}"), None)
     }
 }

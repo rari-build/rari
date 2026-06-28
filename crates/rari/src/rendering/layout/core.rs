@@ -1,19 +1,11 @@
-use rari_error::RariError;
-
-use crate::{
-    rendering::{core::RscRenderer, streaming::RscStream},
-    server::cache::handler::{
-        CacheError, CacheHandler, CacheHandlerRegistry, MemoryCacheHandler, MemoryConfig,
-    },
-};
-
-const LAYOUT_KEY_PREFIX: &str = "layout:";
-use std::sync::Arc;
+use std::sync::{Arc, atomic::Ordering};
 
 use cow_utils::CowUtils;
+use rari_error::RariError;
 use rari_utils::path_to_file_url;
+use rustc_hash::FxHashSet;
 use serde_json::Value;
-use tokio::sync::mpsc;
+use tokio::sync::{Mutex, mpsc};
 use tracing::{debug, error};
 
 use super::{
@@ -25,10 +17,27 @@ use super::{
     types::{LayoutRenderContext, RenderResult},
     utils,
 };
-use crate::server::{
-    config::{CacheLayerConfig, Config},
-    routing::app_router::AppRouteMatch,
+use crate::{
+    RscHtmlRenderer, RscStreamChunk,
+    rendering::{
+        base::RscRenderer,
+        layout::{
+            LayoutInfo, LayoutStructure, RouteComposer,
+            route_composer::{ErrorBoundaryInfo, TemplateInfo},
+        },
+        streaming::{RscChunkType, RscStream, StreamingRenderer},
+    },
+    server::{
+        cache::handler::{
+            CacheError, CacheHandler, CacheHandlerRegistry, MemoryCacheHandler, MemoryConfig,
+        },
+        config::{CacheLayerConfig, Config},
+        middleware::request_context::RequestContext,
+        routing::app_router::AppRouteMatch,
+    },
 };
+
+const LAYOUT_KEY_PREFIX: &str = "layout:";
 
 pub struct LayoutHtmlCache {
     handler: Arc<dyn CacheHandler>,
@@ -104,17 +113,17 @@ impl LayoutHtmlCache {
 }
 
 pub struct LayoutRenderer {
-    renderer: Arc<tokio::sync::Mutex<RscRenderer>>,
+    renderer: Arc<Mutex<RscRenderer>>,
     html_cache: Arc<LayoutHtmlCache>,
 }
 
 impl LayoutRenderer {
-    pub fn new(renderer: Arc<tokio::sync::Mutex<RscRenderer>>) -> Self {
+    pub fn new(renderer: Arc<Mutex<RscRenderer>>) -> Self {
         Self { renderer, html_cache: Arc::new(LayoutHtmlCache::new()) }
     }
 
     pub fn with_shared_cache(
-        renderer: Arc<tokio::sync::Mutex<RscRenderer>>,
+        renderer: Arc<Mutex<RscRenderer>>,
         html_cache: Arc<LayoutHtmlCache>,
     ) -> Self {
         Self { renderer, html_cache }
@@ -125,8 +134,8 @@ impl LayoutRenderer {
     }
 
     pub fn create_shared_cache_from_config(
-        layer: &crate::server::config::CacheLayerConfig,
-        registry: &crate::server::cache::handler::CacheHandlerRegistry,
+        layer: &CacheLayerConfig,
+        registry: &CacheHandlerRegistry,
     ) -> Arc<LayoutHtmlCache> {
         Arc::new(LayoutHtmlCache::from_config(layer, registry))
     }
@@ -134,8 +143,7 @@ impl LayoutRenderer {
     async fn enable_streaming_and_inject_lazy_resolver(
         renderer: &RscRenderer,
     ) -> Result<(), RariError> {
-        let prev_count =
-            renderer.streaming_refcount.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let prev_count = renderer.streaming_refcount.fetch_add(1, Ordering::SeqCst);
 
         if prev_count == 0
             && let Err(e) = renderer
@@ -143,7 +151,7 @@ impl LayoutRenderer {
                 .execute_script("enable_streaming".to_string(), JS_ENABLE_STREAMING.to_string())
                 .await
         {
-            renderer.streaming_refcount.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+            renderer.streaming_refcount.fetch_sub(1, Ordering::SeqCst);
             return Err(e);
         }
 
@@ -154,8 +162,7 @@ impl LayoutRenderer {
             .await;
 
         if let Err(e) = injection_result {
-            let new_count =
-                renderer.streaming_refcount.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+            let new_count = renderer.streaming_refcount.fetch_sub(1, Ordering::SeqCst);
             if new_count == 1
                 && let Err(cleanup_err) = renderer
                     .runtime
@@ -177,8 +184,7 @@ impl LayoutRenderer {
     }
 
     async fn disable_streaming(renderer: &RscRenderer) -> Result<(), RariError> {
-        let prev_count =
-            renderer.streaming_refcount.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+        let prev_count = renderer.streaming_refcount.fetch_sub(1, Ordering::SeqCst);
 
         if prev_count == 1 {
             renderer
@@ -210,8 +216,7 @@ impl LayoutRenderer {
 
         Self::validate_html_structure(&rsc_wire_format, route_match)?;
 
-        let html_renderer =
-            crate::rendering::html::RscHtmlRenderer::new(Arc::clone(&renderer.runtime));
+        let html_renderer = RscHtmlRenderer::new(Arc::clone(&renderer.runtime));
         let config = Config::get().ok_or_else(|| RariError::internal("Config not available"))?;
         let html =
             html_renderer.render_to_html_for_route(&rsc_wire_format, config, route_match).await?;
@@ -332,9 +337,7 @@ impl LayoutRenderer {
         &self,
         route_match: &AppRouteMatch,
         context: &LayoutRenderContext,
-        request_context: Option<
-            std::sync::Arc<crate::server::middleware::request_context::RequestContext>,
-        >,
+        request_context: Option<Arc<RequestContext>>,
     ) -> Result<String, RariError> {
         let loading_enabled = Config::get().map(|config| config.loading.enabled).unwrap_or(true);
 
@@ -391,9 +394,7 @@ impl LayoutRenderer {
         &self,
         route_match: &AppRouteMatch,
         context: &LayoutRenderContext,
-        request_context: Option<
-            std::sync::Arc<crate::server::middleware::request_context::RequestContext>,
-        >,
+        request_context: Option<Arc<RequestContext>>,
     ) -> Result<String, RariError> {
         self.render_route(route_match, context, request_context).await
     }
@@ -402,9 +403,7 @@ impl LayoutRenderer {
         &self,
         route_match: &AppRouteMatch,
         context: &LayoutRenderContext,
-        request_context: Option<
-            std::sync::Arc<crate::server::middleware::request_context::RequestContext>,
-        >,
+        request_context: Option<Arc<RequestContext>>,
         return_rsc_on_fallback: bool,
     ) -> Result<RenderResult, RariError> {
         let cache_key = utils::generate_cache_key(route_match, context);
@@ -442,7 +441,7 @@ impl LayoutRenderer {
                 let renderer = self.renderer.lock().await;
                 Arc::clone(&renderer.runtime)
             };
-            let html_renderer = crate::rendering::html::RscHtmlRenderer::new(runtime);
+            let html_renderer = RscHtmlRenderer::new(runtime);
             let config =
                 Config::get().ok_or_else(|| RariError::internal("Config not available"))?;
             let html = html_renderer
@@ -506,7 +505,7 @@ if (typeof window !== 'undefined') {
             drop(renderer_guard);
 
             let streaming_operation = async {
-                let prev_count = refcount.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                let prev_count = refcount.fetch_add(1, Ordering::SeqCst);
 
                 if prev_count == 0
                     && let Err(e) = runtime
@@ -516,7 +515,7 @@ if (typeof window !== 'undefined') {
                         )
                         .await
                 {
-                    refcount.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+                    refcount.fetch_sub(1, Ordering::SeqCst);
                     return Err(e);
                 }
 
@@ -526,7 +525,7 @@ if (typeof window !== 'undefined') {
                     .await;
 
                 if let Err(e) = injection_result {
-                    let new_count = refcount.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+                    let new_count = refcount.fetch_sub(1, Ordering::SeqCst);
                     if new_count == 1
                         && let Err(cleanup_err) = runtime
                             .execute_script(
@@ -543,10 +542,9 @@ if (typeof window !== 'undefined') {
                     return Err(e);
                 }
 
-                let mut streaming_renderer =
-                    crate::rendering::streaming::StreamingRenderer::new(Arc::clone(&runtime));
+                let mut streaming_renderer = StreamingRenderer::new(Arc::clone(&runtime));
 
-                let layout_structure = crate::rendering::layout::LayoutStructure::new();
+                let layout_structure = LayoutStructure::new();
 
                 let streaming_result = streaming_renderer
                     .start_streaming_with_composition(composition_script, layout_structure)
@@ -557,7 +555,7 @@ if (typeof window !== 'undefined') {
                         let runtime_for_cleanup = Arc::clone(&runtime);
                         let refcount_for_cleanup = Arc::clone(&refcount);
                         let stream_with_cleanup = stream.with_cleanup(move || {
-                            let prev_count = refcount_for_cleanup.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+                            let prev_count = refcount_for_cleanup.fetch_sub(1, Ordering::SeqCst);
 
                             if prev_count == 1 {
                                 let rt = runtime_for_cleanup;
@@ -565,7 +563,7 @@ if (typeof window !== 'undefined') {
                                     let _ = rt
                                         .execute_script(
                                             "disable_streaming".to_string(),
-                                            crate::rendering::layout::constants::JS_DISABLE_STREAMING.to_string(),
+                                            JS_DISABLE_STREAMING.to_string(),
                                         )
                                         .await;
                                 });
@@ -576,7 +574,7 @@ if (typeof window !== 'undefined') {
                     Err(e) => {
                         error!("Streaming failed, falling back to static render: {}", e);
 
-                        let prev_count = refcount.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+                        let prev_count = refcount.fetch_sub(1, Ordering::SeqCst);
                         if prev_count == 1 {
                             let _ = runtime
                                 .execute_script(
@@ -640,11 +638,10 @@ if (typeof window !== 'undefined') {
 
                 Self::enable_streaming_and_inject_lazy_resolver(&renderer_guard).await?;
 
-                let mut streaming_renderer = crate::rendering::streaming::StreamingRenderer::new(
-                    Arc::clone(&renderer_guard.runtime),
-                );
+                let mut streaming_renderer =
+                    StreamingRenderer::new(Arc::clone(&renderer_guard.runtime));
 
-                let layout_structure = crate::rendering::layout::LayoutStructure::new();
+                let layout_structure = LayoutStructure::new();
 
                 let runtime_for_cleanup = Arc::clone(&renderer_guard.runtime);
                 let refcount_for_cleanup = Arc::clone(&renderer_guard.streaming_refcount);
@@ -659,13 +656,14 @@ if (typeof window !== 'undefined') {
                     Ok(stream) => {
                         let stream_with_cleanup = stream.with_cleanup(move || {
                             tokio::spawn(async move {
-                                let prev_count = refcount_for_cleanup.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+                                let prev_count =
+                                    refcount_for_cleanup.fetch_sub(1, Ordering::SeqCst);
 
                                 if prev_count == 1 {
                                     let _ = runtime_for_cleanup
                                         .execute_script(
                                             "disable_streaming".to_string(),
-                                            crate::rendering::layout::constants::JS_DISABLE_STREAMING.to_string(),
+                                            JS_DISABLE_STREAMING.to_string(),
                                         )
                                         .await;
                                 }
@@ -763,7 +761,7 @@ if (typeof window !== 'undefined') {
         renderer: &RscRenderer,
         rsc_wire_format: &mut String,
     ) -> Result<(), RariError> {
-        let mut seen_lazy_promise_ids = rustc_hash::FxHashSet::default();
+        let mut seen_lazy_promise_ids = FxHashSet::default();
 
         loop {
             let pending_promises = {
@@ -777,7 +775,7 @@ if (typeof window !== 'undefined') {
                 break;
             }
 
-            let mut batch_seen_ids = rustc_hash::FxHashSet::default();
+            let mut batch_seen_ids = FxHashSet::default();
             let unique_promises: Vec<_> = pending_promises
                 .into_iter()
                 .filter(|p| {
@@ -817,7 +815,7 @@ if (typeof window !== 'undefined') {
                     }
                 };
 
-                if let Some(success) = result.get("success").and_then(serde_json::Value::as_bool)
+                if let Some(success) = result.get("success").and_then(Value::as_bool)
                     && !success
                 {
                     let error_msg =
@@ -964,9 +962,9 @@ if (typeof window !== 'undefined') {
 
             let (tx, rx) = mpsc::channel(1);
             let _ = tx
-                .send(crate::rendering::streaming::RscStreamChunk {
+                .send(RscStreamChunk {
                     data: html.into_bytes(),
-                    chunk_type: crate::rendering::streaming::RscChunkType::InitialShell,
+                    chunk_type: RscChunkType::InitialShell,
                     row_id: 0,
                     is_final: true,
                     boundary_id: None,
@@ -991,9 +989,9 @@ if (typeof window !== 'undefined') {
 
         let (tx, rx) = mpsc::channel(1);
         let _ = tx
-            .send(crate::rendering::streaming::RscStreamChunk {
+            .send(RscStreamChunk {
                 data: html.into_bytes(),
-                chunk_type: crate::rendering::streaming::RscChunkType::InitialShell,
+                chunk_type: RscChunkType::InitialShell,
                 row_id: 0,
                 is_final: true,
                 boundary_id: None,
@@ -1067,10 +1065,10 @@ if (typeof window !== 'undefined') {
         let pathname_json =
             serde_json::to_string(&context.pathname).unwrap_or_else(|_| "null".to_string());
 
-        let layouts: Vec<super::route_composer::LayoutInfo> = route_match
+        let layouts: Vec<LayoutInfo> = route_match
             .layouts
             .iter()
-            .map(|layout| super::route_composer::LayoutInfo {
+            .map(|layout| LayoutInfo {
                 component_id: layout
                     .component_id
                     .clone()
@@ -1080,10 +1078,10 @@ if (typeof window !== 'undefined') {
             })
             .collect();
 
-        let templates: Vec<super::route_composer::TemplateInfo> = route_match
+        let templates: Vec<TemplateInfo> = route_match
             .templates
             .iter()
-            .map(|template| super::route_composer::TemplateInfo {
+            .map(|template| TemplateInfo {
                 component_id: template
                     .component_id
                     .clone()
@@ -1095,10 +1093,7 @@ if (typeof window !== 'undefined') {
 
         let error_boundary = route_match.error.as_ref().map(|error| {
             let component_id = utils::create_client_component_id(&error.file_path);
-            super::route_composer::ErrorBoundaryInfo {
-                component_id,
-                file_path: error.file_path.clone(),
-            }
+            ErrorBoundaryInfo { component_id, file_path: error.file_path.clone() }
         });
 
         let metadata_json = context
@@ -1114,7 +1109,7 @@ if (typeof window !== 'undefined') {
             })
             .unwrap_or_else(|| "{}".to_string());
 
-        let script = super::route_composer::RouteComposer::build_composition_script_with_templates(
+        let script = RouteComposer::build_composition_script_with_templates(
             &page_render_script,
             &layouts,
             &templates,
