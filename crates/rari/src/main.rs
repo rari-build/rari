@@ -8,7 +8,6 @@ use rari::server::{
 };
 use rari_error::RariError;
 use rustls::crypto::{CryptoProvider, aws_lc_rs};
-use tokio::signal::unix::{SignalKind, signal};
 use tracing::error;
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -277,6 +276,8 @@ fn validate_configuration(config: &Config) -> Result<(), RariError> {
 async fn setup_shutdown_signal() {
     #[cfg(unix)]
     {
+        use tokio::signal::unix::{SignalKind, signal};
+
         #[expect(
             clippy::expect_used,
             reason = "Signal handler initialization always succeeds on Unix"
