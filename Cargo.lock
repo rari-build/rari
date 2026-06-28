@@ -7314,6 +7314,7 @@ dependencies = [
  "parking_lot",
  "parley",
  "rari-error",
+ "rari-rsc",
  "rari-utils",
  "redis",
  "regex",
@@ -7387,6 +7388,23 @@ dependencies = [
  "serde_json",
  "tokio",
  "urlencoding",
+]
+
+[[package]]
+name = "rari-rsc"
+version = "0.0.0"
+dependencies = [
+ "base64 0.22.1",
+ "cow-utils",
+ "parking_lot",
+ "rari-error",
+ "regex",
+ "rustc-hash 2.1.2",
+ "serde",
+ "serde_json",
+ "smallvec",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]

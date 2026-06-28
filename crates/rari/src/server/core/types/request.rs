@@ -23,7 +23,7 @@ impl RequestTypeDetector {
     }
 
     #[cfg(test)]
-    pub fn needs_rsc_wire_format(mode: RenderMode) -> bool {
+    pub fn needs_rsc_flight_protocol(mode: RenderMode) -> bool {
         matches!(mode, RenderMode::RscNavigation)
     }
 }
@@ -100,13 +100,13 @@ mod tests {
     }
 
     #[test]
-    fn test_needs_rsc_wire_format_for_ssr() {
-        assert!(!RequestTypeDetector::needs_rsc_wire_format(RenderMode::Ssr));
+    fn test_needs_rsc_flight_protocol_for_ssr() {
+        assert!(!RequestTypeDetector::needs_rsc_flight_protocol(RenderMode::Ssr));
     }
 
     #[test]
-    fn test_needs_rsc_wire_format_for_rsc_navigation() {
-        assert!(RequestTypeDetector::needs_rsc_wire_format(RenderMode::RscNavigation));
+    fn test_needs_rsc_flight_protocol_for_rsc_navigation() {
+        assert!(RequestTypeDetector::needs_rsc_flight_protocol(RenderMode::RscNavigation));
     }
 
     #[test]

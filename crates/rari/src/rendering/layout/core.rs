@@ -1,7 +1,7 @@
 use rari_error::RariError;
 
 use crate::{
-    rsc::rendering::{core::RscRenderer, streaming::RscStream},
+    rendering::{core::RscRenderer, streaming::RscStream},
     server::cache::handler::{
         CacheError, CacheHandler, CacheHandlerRegistry, MemoryCacheHandler, MemoryConfig,
     },
@@ -211,7 +211,7 @@ impl LayoutRenderer {
         Self::validate_html_structure(&rsc_wire_format, route_match)?;
 
         let html_renderer =
-            crate::rsc::rendering::html::RscHtmlRenderer::new(Arc::clone(&renderer.runtime));
+            crate::rendering::html::RscHtmlRenderer::new(Arc::clone(&renderer.runtime));
         let config = Config::get().ok_or_else(|| RariError::internal("Config not available"))?;
         let html =
             html_renderer.render_to_html_for_route(&rsc_wire_format, config, route_match).await?;
@@ -442,7 +442,7 @@ impl LayoutRenderer {
                 let renderer = self.renderer.lock().await;
                 Arc::clone(&renderer.runtime)
             };
-            let html_renderer = crate::rsc::rendering::html::RscHtmlRenderer::new(runtime);
+            let html_renderer = crate::rendering::html::RscHtmlRenderer::new(runtime);
             let config =
                 Config::get().ok_or_else(|| RariError::internal("Config not available"))?;
             let html = html_renderer
@@ -544,9 +544,9 @@ if (typeof window !== 'undefined') {
                 }
 
                 let mut streaming_renderer =
-                    crate::rsc::rendering::streaming::StreamingRenderer::new(Arc::clone(&runtime));
+                    crate::rendering::streaming::StreamingRenderer::new(Arc::clone(&runtime));
 
-                let layout_structure = crate::rsc::rendering::layout::LayoutStructure::new();
+                let layout_structure = crate::rendering::layout::LayoutStructure::new();
 
                 let streaming_result = streaming_renderer
                     .start_streaming_with_composition(composition_script, layout_structure)
@@ -565,7 +565,7 @@ if (typeof window !== 'undefined') {
                                     let _ = rt
                                         .execute_script(
                                             "disable_streaming".to_string(),
-                                            crate::rsc::rendering::layout::constants::JS_DISABLE_STREAMING.to_string(),
+                                            crate::rendering::layout::constants::JS_DISABLE_STREAMING.to_string(),
                                         )
                                         .await;
                                 });
@@ -640,12 +640,11 @@ if (typeof window !== 'undefined') {
 
                 Self::enable_streaming_and_inject_lazy_resolver(&renderer_guard).await?;
 
-                let mut streaming_renderer =
-                    crate::rsc::rendering::streaming::StreamingRenderer::new(Arc::clone(
-                        &renderer_guard.runtime,
-                    ));
+                let mut streaming_renderer = crate::rendering::streaming::StreamingRenderer::new(
+                    Arc::clone(&renderer_guard.runtime),
+                );
 
-                let layout_structure = crate::rsc::rendering::layout::LayoutStructure::new();
+                let layout_structure = crate::rendering::layout::LayoutStructure::new();
 
                 let runtime_for_cleanup = Arc::clone(&renderer_guard.runtime);
                 let refcount_for_cleanup = Arc::clone(&renderer_guard.streaming_refcount);
@@ -666,7 +665,7 @@ if (typeof window !== 'undefined') {
                                     let _ = runtime_for_cleanup
                                         .execute_script(
                                             "disable_streaming".to_string(),
-                                            crate::rsc::rendering::layout::constants::JS_DISABLE_STREAMING.to_string(),
+                                            crate::rendering::layout::constants::JS_DISABLE_STREAMING.to_string(),
                                         )
                                         .await;
                                 }
@@ -965,9 +964,9 @@ if (typeof window !== 'undefined') {
 
             let (tx, rx) = mpsc::channel(1);
             let _ = tx
-                .send(crate::rsc::rendering::streaming::RscStreamChunk {
+                .send(crate::rendering::streaming::RscStreamChunk {
                     data: html.into_bytes(),
-                    chunk_type: crate::rsc::rendering::streaming::RscChunkType::InitialShell,
+                    chunk_type: crate::rendering::streaming::RscChunkType::InitialShell,
                     row_id: 0,
                     is_final: true,
                     boundary_id: None,
@@ -992,9 +991,9 @@ if (typeof window !== 'undefined') {
 
         let (tx, rx) = mpsc::channel(1);
         let _ = tx
-            .send(crate::rsc::rendering::streaming::RscStreamChunk {
+            .send(crate::rendering::streaming::RscStreamChunk {
                 data: html.into_bytes(),
-                chunk_type: crate::rsc::rendering::streaming::RscChunkType::InitialShell,
+                chunk_type: crate::rendering::streaming::RscChunkType::InitialShell,
                 row_id: 0,
                 is_final: true,
                 boundary_id: None,

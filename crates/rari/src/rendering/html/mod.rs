@@ -10,6 +10,7 @@ use std::{
 
 use cow_utils::CowUtils;
 use rari_error::{RariError, StreamingError};
+use rari_rsc::flight::escape::unescape_rsc_value;
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde_json::Value as JsonValue;
 use tracing::error;
@@ -17,11 +18,8 @@ use tracing::error;
 #[cfg(test)]
 use crate::server::config::Mode;
 use crate::{
-    rsc::{
-        RscElement,
-        flight::escape::unescape_rsc_value,
-        rendering::streaming::{RscChunkType, RscStreamChunk},
-    },
+    RscElement,
+    rendering::streaming::{RscChunkType, RscStreamChunk},
     runtime::JsExecutionRuntime,
     server::{config::Config, routing::app_router::AppRouteMatch},
 };
@@ -942,6 +940,8 @@ impl RscHtmlRenderer {
                 RscElement::Promise { promise_id: _ } | RscElement::ModuleImport { .. } => {
                     Ok(String::new())
                 }
+
+                _ => Ok(String::new()),
             }
         })
     }

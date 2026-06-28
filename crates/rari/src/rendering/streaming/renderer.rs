@@ -56,7 +56,7 @@ impl StreamingRenderer {
     pub async fn start_streaming_with_composition(
         &mut self,
         composition_script: String,
-        layout_structure: crate::rsc::rendering::layout::LayoutStructure,
+        layout_structure: crate::rendering::layout::LayoutStructure,
     ) -> Result<RscStream, RariError> {
         if !layout_structure.is_valid() {
             for boundary in &layout_structure.suspense_boundaries {
@@ -173,8 +173,8 @@ impl StreamingRenderer {
     pub async fn start_streaming_with_precomputed_data(
         &mut self,
         rsc_data: serde_json::Value,
-        boundaries: Vec<crate::rsc::rendering::layout::BoundaryInfo>,
-        layout_structure: crate::rsc::rendering::layout::LayoutStructure,
+        boundaries: Vec<crate::rendering::layout::BoundaryInfo>,
+        layout_structure: crate::rendering::layout::LayoutStructure,
         pending_promises: Vec<PendingSuspensePromise>,
     ) -> Result<RscStream, RariError> {
         if !layout_structure.is_valid() {
@@ -959,7 +959,7 @@ impl StreamingRenderer {
         rsc_wire_format: &str,
         render_generation: u32,
     ) -> Result<PartialRenderResult, RariError> {
-        let mut parser = crate::rsc::flight::parser::RscWireFormatParser::new(rsc_wire_format);
+        let mut parser = rari_rsc::flight::parser::RscFlightParser::new(rsc_wire_format);
 
         parser.parse().map_err(|e| {
             error!("Failed to parse RSC wire format: {}", e);
@@ -1057,29 +1057,24 @@ impl StreamingRenderer {
 
     fn extract_suspense_boundaries(
         rsc_data: &serde_json::Value,
-        boundaries: &[crate::rsc::rendering::layout::BoundaryInfo],
-        layout_structure: &crate::rsc::rendering::layout::LayoutStructure,
+        boundaries: &[crate::rendering::layout::BoundaryInfo],
+        layout_structure: &crate::rendering::layout::LayoutStructure,
     ) -> Vec<SuspenseBoundaryInfo> {
         let mut result = Vec::new();
 
         let boundary_ids: FxHashSet<String> = boundaries.iter().map(|b| b.id.clone()).collect();
 
-        let boundary_positions: FxHashMap<
-            String,
-            &crate::rsc::rendering::layout::BoundaryPosition,
-        > = layout_structure
-            .suspense_boundaries
-            .iter()
-            .map(|bp| (bp.boundary_id.clone(), bp))
-            .collect();
+        let boundary_positions: FxHashMap<String, &crate::rendering::layout::BoundaryPosition> =
+            layout_structure
+                .suspense_boundaries
+                .iter()
+                .map(|bp| (bp.boundary_id.clone(), bp))
+                .collect();
 
         fn traverse(
             value: &serde_json::Value,
             boundary_ids: &FxHashSet<String>,
-            boundary_positions: &FxHashMap<
-                String,
-                &crate::rsc::rendering::layout::BoundaryPosition,
-            >,
+            boundary_positions: &FxHashMap<String, &crate::rendering::layout::BoundaryPosition>,
             result: &mut Vec<SuspenseBoundaryInfo>,
             parent_path: &mut Vec<String>,
         ) {

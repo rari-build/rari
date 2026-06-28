@@ -2,11 +2,12 @@ use std::sync::Arc;
 
 use cow_utils::CowUtils;
 use rari_error::RariError;
+use rari_rsc::utils::extract_dependencies;
 use rari_utils::path_to_file_url;
 use tracing::error;
 
 use crate::{
-    rsc::{rendering::core::RscRenderer, utils::extract_dependencies},
+    rendering::core::RscRenderer,
     runtime::JsExecutionRuntime,
     server::core::utils::component::{
         has_use_client_directive, has_use_server_directive, wrap_server_action_module,

@@ -11,7 +11,17 @@
 #![expect(clippy::unused_async)]
 #![expect(clippy::needless_pass_by_ref_mut)]
 
-pub mod rsc;
+pub mod rendering;
 pub mod runtime;
 pub mod server;
 pub use ::async_trait;
+pub use rari_rsc::{
+    ElementType, RSCRenderDebug, RSCRenderResult, RSCTree, ReactElement, RscElement,
+    RscFlightParser, RscFlightTag, RscSerializer, SerializedReactElement, ServerComponentExecutor,
+    SuspenseBoundary, escape_rsc_value,
+};
+pub use rendering::{
+    core::{RscJsLoader, RscRenderer},
+    html::RscHtmlRenderer,
+    streaming::{RscStream, RscStreamChunk},
+};

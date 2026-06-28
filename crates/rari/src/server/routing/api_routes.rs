@@ -11,16 +11,15 @@ use dashmap::DashMap;
 use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use serde_json::{Value as JsonValue, json};
+use serde_json::{Value, json};
 use tracing::error;
-use urlencoding::decode;
 
 use crate::{runtime::JsExecutionRuntime, server::routing::types::RouteSegment};
 
 fn parse_decoded_path_segments(path: &str) -> Vec<String> {
     path.split('/')
         .filter(|s| !s.is_empty())
-        .map(|s| decode(s).unwrap_or_else(|_| s.to_string().into()).into_owned())
+        .map(|s| urlencoding::decode(s).unwrap_or_else(|_| s.to_string().into()).into_owned())
         .collect()
 }
 
@@ -534,7 +533,7 @@ impl ApiRouteHandler {
         headers: &HeaderMap,
         body: &str,
         params: &FxHashMap<String, String>,
-    ) -> Result<JsonValue, RariError> {
+    ) -> Result<Value, RariError> {
         let mut headers_map = FxHashMap::default();
         for (name, value) in headers {
             if let Ok(value_str) = value.to_str() {
@@ -556,9 +555,9 @@ impl ApiRouteHandler {
     async fn execute_handler_from_namespace(
         &self,
         method: &str,
-        request_obj: &JsonValue,
+        request_obj: &Value,
         module_specifier: &str,
-    ) -> Result<JsonValue, RariError> {
+    ) -> Result<Value, RariError> {
         let request_json = serde_json::to_string(request_obj)
             .map_err(|e| RariError::serialization(format!("Failed to serialize request: {e}")))?;
 
@@ -580,7 +579,7 @@ impl ApiRouteHandler {
     }
 
     #[expect(clippy::unused_async_trait_impl, reason = "Async required by trait implementation")]
-    async fn create_response(&self, result: JsonValue) -> Result<Response<Body>, RariError> {
+    async fn create_response(&self, result: Value) -> Result<Response<Body>, RariError> {
         let is_http_envelope = if let Some(status_val) = result.get("status") {
             if let Some(status_num) = status_val.as_u64() {
                 (100..=599).contains(&status_num)

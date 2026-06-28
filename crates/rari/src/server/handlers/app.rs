@@ -15,7 +15,7 @@ use rustc_hash::FxHashMap;
 use tracing::error;
 
 use crate::{
-    rsc::rendering::{
+    rendering::{
         html::{RscHtmlRenderer, RscToHtmlConverter},
         layout::{
             LayoutRenderContext, LayoutRenderer, OpenGraphImage, OpenGraphImageDescriptor,
