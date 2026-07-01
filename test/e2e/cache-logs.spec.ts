@@ -72,8 +72,11 @@ test('response cache: first GET is a miss, second GET is a hit', async ({ reques
 test('response cache: invalidate_by_tag clears the entry', async ({ request }) => {
   const r1 = await request.get('/about')
   expect(r1.status()).toBe(200)
-  const r1Hits = await waitForCount(/memory cache hit/, 1)
-  const r1Misses = await waitForCount(/memory cache miss/, 1)
+  await waitForCount(/memory cache hit/, 1)
+  await waitForCount(/memory cache miss/, 1)
+
+  const hitsBefore = grepLog(/memory cache hit/).length
+  const missesBefore = grepLog(/memory cache miss/).length
 
   const invalidate = await request.post('/_rari/revalidate', {
     data: { type: 'path', path: '/about', secret: 'e2e-test-secret' },
@@ -84,15 +87,17 @@ test('response cache: invalidate_by_tag clears the entry', async ({ request }) =
 
   const r2 = await request.get('/about')
   expect(r2.status()).toBe(200)
+  expect(r2.headers()['x-cache']).toBe('MISS')
   await expect.poll(() => grepLog(/memory cache miss/).length, {
     message: 'miss count after r2',
-  }).toBeGreaterThan(r1Misses)
+  }).toBeGreaterThan(missesBefore)
 
   const r3 = await request.get('/about')
   expect(r3.status()).toBe(200)
+  expect(r3.headers()['x-cache']).toBe('HIT')
   await expect.poll(() => grepLog(/memory cache hit/).length, {
     message: 'hit count after r3',
-  }).toBeGreaterThan(r1Hits)
+  }).toBeGreaterThan(hitsBefore)
 
   await expectAllLogged([
     /memory cache set_with_tags/,

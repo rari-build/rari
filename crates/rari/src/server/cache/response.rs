@@ -9,6 +9,7 @@ use std::{
 
 use axum::http::HeaderMap;
 use bytes::Bytes;
+use dashmap::DashMap;
 use parking_lot::Mutex;
 
 use crate::server::{
@@ -85,6 +86,22 @@ impl CachedResponse {
             CompressionEncoding::Gzip => self.compressed_gzip.as_ref(),
             CompressionEncoding::Identity => None,
         }
+    }
+}
+
+pub fn invalidate_static_fast_cache_for_path(
+    cache: &DashMap<String, Arc<PrebuiltResponse>>,
+    path: &str,
+) {
+    cache.remove(path);
+    let query_prefix = format!("{path}?");
+    let keys: Vec<String> = cache
+        .iter()
+        .filter(|entry| entry.key().starts_with(&query_prefix))
+        .map(|entry| entry.key().clone())
+        .collect();
+    for key in keys {
+        cache.remove(&key);
     }
 }
 
@@ -1020,5 +1037,33 @@ mod tests {
             "cached_at was reset on re-serialize: original age = {original_age:?}, \
              reconstructed age = {reconstructed_age:?}",
         );
+    }
+
+    #[test]
+    fn test_invalidate_static_fast_cache_for_path() {
+        let cache: DashMap<String, Arc<PrebuiltResponse>> = DashMap::new();
+        let body = Bytes::from("html");
+        let make_entry = || {
+            Arc::new(PrebuiltResponse {
+                identity: body.clone(),
+                gzip: None,
+                br: None,
+                zstd: None,
+                etag: "W/\"1\"".to_string(),
+                content_type: "text/html; charset=utf-8".to_string(),
+                cache_control: "public".to_string(),
+                is_not_found: false,
+            })
+        };
+
+        cache.insert("/about".to_string(), make_entry());
+        cache.insert("/about?tab=1".to_string(), make_entry());
+        cache.insert("/other".to_string(), make_entry());
+
+        invalidate_static_fast_cache_for_path(&cache, "/about");
+
+        assert!(!cache.contains_key("/about"));
+        assert!(!cache.contains_key("/about?tab=1"));
+        assert!(cache.contains_key("/other"));
     }
 }

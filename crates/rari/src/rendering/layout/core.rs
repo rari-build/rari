@@ -601,9 +601,12 @@ impl LayoutRenderer {
                             }}
                         }});
 
-                        if (!rootElement) {{
+                        if (rootElement == null) {{
                             Deno.core.ops.op_fizz_done();
                             return;
+                        }}
+                        if (rootElement.status === 'rejected') {{
+                            throw rootElement.reason ?? new Error('Flight payload rejected');
                         }}
 
                         const ReactDOMServer = globalThis['~reactServer'];
