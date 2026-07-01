@@ -611,7 +611,7 @@ impl LayoutRenderer {
 
                         const ReactDOMServer = globalThis['~reactServer'];
                         const headContent = {head_content_json};
-                        const R = globalThis.React;
+                        const R = globalThis['~realReact'] || globalThis.React;
 
                         const fullDoc = R.createElement('html', {{ lang: 'en' }},
                             R.createElement('head', {{ dangerouslySetInnerHTML: {{ __html: headContent }} }}),
@@ -947,6 +947,19 @@ impl LayoutRenderer {
         if rsc_data.trim().is_empty() {
             let error_msg = error_messages::create_empty_rsc_error_message();
             return Err(RariError::internal(error_msg));
+        }
+
+        let looks_like_flight = rsc_data.lines().any(|line| {
+            let line = line.trim();
+            line.find(':').is_some_and(|colon| {
+                !line[..colon].is_empty() && line[..colon].chars().all(|c| c.is_ascii_hexdigit())
+            })
+        });
+
+        if !looks_like_flight {
+            return Err(RariError::internal(
+                "RSC output does not look like a valid Flight wire format".to_string(),
+            ));
         }
 
         Ok(())
@@ -1310,5 +1323,31 @@ mod tests {
         for i in 0..50 {
             assert!(cache.get(i).await.is_none(), "key {i} survived clear");
         }
+    }
+
+    #[test]
+    fn test_validate_rsc_flight_protocol_accepts_flight_rows() {
+        assert!(
+            LayoutRenderer::validate_rsc_flight_protocol("0:\"$1\"\n1:[\"$\",\"div\",null,{}]\n")
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn test_validate_rsc_flight_protocol_rejects_empty() {
+        assert!(LayoutRenderer::validate_rsc_flight_protocol("").is_err());
+        assert!(LayoutRenderer::validate_rsc_flight_protocol("   \n").is_err());
+    }
+
+    #[test]
+    fn test_validate_rsc_flight_protocol_rejects_non_flight_output() {
+        let result = LayoutRenderer::validate_rsc_flight_protocol("Error: composition failed");
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("does not look like a valid Flight wire format")
+        );
     }
 }
