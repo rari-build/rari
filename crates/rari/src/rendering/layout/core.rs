@@ -399,11 +399,13 @@ impl LayoutRenderer {
 
                 let script = format!(
                     r"(async function() {{
-                        try {{ {composition_script} }} catch(e) {{}}
+                        try {{
+                        try {{ {composition_script} }} catch(e) {{
+                            console.error('[rari] Composition error in RSC streaming nav:', e);
+                        }}
 
                         const capturedElement = globalThis['~rari']?.capturedElement;
                         if (!capturedElement) {{
-                            Deno.core.ops.op_fizz_done();
                             return;
                         }}
 
@@ -426,7 +428,11 @@ impl LayoutRenderer {
                         }}
                         const tail = decoder.decode();
                         if (tail) await Deno.core.ops.op_fizz_chunk(tail);
-                        Deno.core.ops.op_fizz_done();
+                        }} catch(e) {{
+                            console.error('[rari] RSC streaming navigation fatal error:', e);
+                        }} finally {{
+                            Deno.core.ops.op_fizz_done();
+                        }}
                     }})()"
                 );
 
@@ -662,7 +668,7 @@ impl LayoutRenderer {
                 return Ok(RenderResult::FizzHtmlStream { shell, closing, chunks: chunk_receiver });
             }
 
-            let (rsc_wire_format, html) = {
+            let render_result = {
                 let renderer = self.renderer.lock().await;
 
                 let composition_script = self.build_composition_script(
@@ -691,104 +697,103 @@ impl LayoutRenderer {
                 };
 
                 if let Some(ctx) = request_context.clone() {
-                    renderer.runtime.execute_with_request_context(ctx, render_and_capture).await?
+                    renderer.runtime.execute_with_request_context(ctx, render_and_capture).await
                 } else {
-                    render_and_capture.await?
+                    render_and_capture.await
                 }
             };
 
-            match Ok::<String, RariError>(html) {
-                Ok(html) => {
-                    let has_binary_rows = rsc_wire_format.lines().any(|line| {
-                        let trimmed = line.trim();
-                        if let Some(colon_pos) = trimmed.find(':') {
-                            let header = &trimmed[..colon_pos];
-                            header.chars().all(|c| c.is_ascii_hexdigit())
-                                && !header.is_empty()
-                                && trimmed[colon_pos + 1..].starts_with('T')
-                        } else {
-                            false
-                        }
-                    });
-
-                    let payload_script = if has_binary_rows {
-                        let binary_b64 = {
-                            let renderer = self.renderer.lock().await;
-                            let result = renderer
-                                .runtime
-                                .execute_script(
-                                    "get_rsc_b64_for_embed".to_string(),
-                                    r"(function() {
-                                        const bin = globalThis['~rari']?.lastRscBinary;
-                                        if (!bin || bin.length === 0) return null;
-                                        let str = '';
-                                        for (let i = 0; i < bin.length; i++) {
-                                            str += String.fromCharCode(bin[i]);
-                                        }
-                                        return btoa(str);
-                                    })()"
-                                        .to_string(),
-                                )
-                                .await;
-                            match result {
-                                Ok(v) => v.as_str().map(String::from),
-                                Err(_) => None,
-                            }
-                        };
-                        if let Some(b64) = binary_b64 {
-                            format!(
-                                r#"<script id="__RARI_RSC_PAYLOAD__" type="application/octet-stream" data-encoding="base64">{b64}</script>"#
-                            )
-                        } else {
-                            let rsc_payload = if rsc_wire_format.ends_with('\n') {
-                                rsc_wire_format.clone()
-                            } else {
-                                format!("{rsc_wire_format}\n")
-                            };
-                            let escaped_payload = rsc_payload.cow_replace("</", "<\\/");
-                            format!(
-                                r#"<script id="__RARI_RSC_PAYLOAD__" type="text/x-component">{escaped_payload}</script>"#
-                            )
-                        }
-                    } else {
-                        let rsc_payload = if rsc_wire_format.ends_with('\n') {
-                            rsc_wire_format.clone()
-                        } else {
-                            format!("{rsc_wire_format}\n")
-                        };
-                        let escaped_payload = rsc_payload.cow_replace("</", "<\\/");
-                        format!(
-                            r#"<script id="__RARI_RSC_PAYLOAD__" type="text/x-component">{escaped_payload}</script>"#
-                        )
-                    };
-                    let completion_script = r"<script>if(!window['~rari'])window['~rari']={};window['~rari'].streaming={complete:true}</script>";
-
-                    let html = if let Some(body_end) = html.rfind("</body>") {
-                        let mut result = html;
-                        result.insert_str(
-                            body_end,
-                            &format!("{payload_script}\n{completion_script}\n"),
-                        );
-                        result
-                    } else {
-                        format!("{html}{payload_script}\n{completion_script}")
-                    };
-
-                    if route_match.not_found.is_none() {
-                        let _ = self.html_cache.insert(cache_key, html.clone()).await;
-                    }
-
-                    Ok(RenderResult::Static(html))
-                }
+            let (rsc_wire_format, html) = match render_result {
+                Ok(v) => v,
                 Err(e) if needs_streaming => {
                     tracing::warn!("Fizz render failed for streaming route: {e}");
-                    Err(RariError::internal(format!("Fizz render failed for streaming route: {e}")))
+                    return Err(RariError::internal(format!(
+                        "Fizz render failed for streaming route: {e}"
+                    )));
                 }
                 Err(e) => {
                     tracing::warn!("Fizz render failed for static route: {e}");
-                    Err(RariError::internal(format!("Fizz render failed: {e}")))
+                    return Err(RariError::internal(format!("Fizz render failed: {e}")));
                 }
+            };
+
+            let has_binary_rows = rsc_wire_format.lines().any(|line| {
+                let trimmed = line.trim();
+                if let Some(colon_pos) = trimmed.find(':') {
+                    let header = &trimmed[..colon_pos];
+                    header.chars().all(|c| c.is_ascii_hexdigit())
+                        && !header.is_empty()
+                        && trimmed[colon_pos + 1..].starts_with('T')
+                } else {
+                    false
+                }
+            });
+
+            let payload_script = if has_binary_rows {
+                let binary_b64 = {
+                    let renderer = self.renderer.lock().await;
+                    let result = renderer
+                        .runtime
+                        .execute_script(
+                            "get_rsc_b64_for_embed".to_string(),
+                            r"(function() {
+                                const bin = globalThis['~rari']?.lastRscBinary;
+                                if (!bin || bin.length === 0) return null;
+                                let str = '';
+                                for (let i = 0; i < bin.length; i++) {
+                                    str += String.fromCharCode(bin[i]);
+                                }
+                                return btoa(str);
+                            })()"
+                                .to_string(),
+                        )
+                        .await;
+                    match result {
+                        Ok(v) => v.as_str().map(String::from),
+                        Err(_) => None,
+                    }
+                };
+                if let Some(b64) = binary_b64 {
+                    format!(
+                        r#"<script id="__RARI_RSC_PAYLOAD__" type="application/octet-stream" data-encoding="base64">{b64}</script>"#
+                    )
+                } else {
+                    let rsc_payload = if rsc_wire_format.ends_with('\n') {
+                        rsc_wire_format.clone()
+                    } else {
+                        format!("{rsc_wire_format}\n")
+                    };
+                    let escaped_payload = rsc_payload.cow_replace("</", "<\\/");
+                    format!(
+                        r#"<script id="__RARI_RSC_PAYLOAD__" type="text/x-component">{escaped_payload}</script>"#
+                    )
+                }
+            } else {
+                let rsc_payload = if rsc_wire_format.ends_with('\n') {
+                    rsc_wire_format.clone()
+                } else {
+                    format!("{rsc_wire_format}\n")
+                };
+                let escaped_payload = rsc_payload.cow_replace("</", "<\\/");
+                format!(
+                    r#"<script id="__RARI_RSC_PAYLOAD__" type="text/x-component">{escaped_payload}</script>"#
+                )
+            };
+            let completion_script = r"<script>if(!window['~rari'])window['~rari']={};window['~rari'].streaming={complete:true}</script>";
+
+            let html = if let Some(body_end) = html.rfind("</body>") {
+                let mut result = html;
+                result.insert_str(body_end, &format!("{payload_script}\n{completion_script}\n"));
+                result
+            } else {
+                format!("{html}{payload_script}\n{completion_script}")
+            };
+
+            if route_match.not_found.is_none() {
+                let _ = self.html_cache.insert(cache_key, html.clone()).await;
             }
+
+            Ok(RenderResult::Static(html))
         }
     }
 

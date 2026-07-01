@@ -1,4 +1,4 @@
-use std::{env, rc::Rc, time::Duration};
+use std::{env, rc::Rc, string::ToString, time::Duration};
 
 use deno_core::{JsRuntime, error::AnyError, v8};
 use rari_error::RariError;
@@ -419,6 +419,30 @@ pub async fn execute_script_for_streaming(
         }
     }
 
-    let _result = execute_script(runtime, module_loader, script_name, script_code).await?;
+    let result = execute_script(runtime, module_loader, script_name, script_code).await;
+
+    if result.is_err() {
+        let error_message = result
+            .as_ref()
+            .err()
+            .map(ToString::to_string)
+            .unwrap_or_else(|| "Unknown streaming script error".to_string());
+
+        let failed_sender = {
+            let op_state_rc = runtime.op_state();
+            let mut op_state = op_state_rc.borrow_mut();
+            op_state
+                .try_borrow_mut::<StreamOpState>()
+                .and_then(|stream_state| stream_state.chunk_sender.take())
+        };
+
+        if let Some(sender) = failed_sender {
+            let _ = sender
+                .send(Err(format!("Streaming script '{script_name}' failed: {error_message}")))
+                .await;
+        }
+    }
+
+    result?;
     Ok(())
 }

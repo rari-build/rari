@@ -1026,24 +1026,18 @@ impl ComponentLoader {
         let manifest_content = fs::read_to_string(manifest_path)
             .map_err(|e| RariError::io(format!("Failed to read client reference manifest: {e}")))?;
 
-        let _manifest: Value = serde_json::from_str(&manifest_content).map_err(|e| {
+        let manifest: Value = serde_json::from_str(&manifest_content).map_err(|e| {
             RariError::internal(format!("Failed to parse client reference manifest: {e}"))
         })?;
 
-        let manifest_json =
-            serde_json::to_string(&manifest_content).unwrap_or_else(|_| "\"{}\"".to_string());
+        let manifest_json = serde_json::to_string(&manifest).unwrap_or_else(|_| "{}".to_string());
 
         let init_script = format!(
             r"(function() {{
                 if (!globalThis['~rari']) {{
                     globalThis['~rari'] = {{}};
                 }}
-                try {{
-                    globalThis['~rari'].clientReferenceManifest = JSON.parse({manifest_json});
-                }} catch (e) {{
-                    console.error('[rari] Failed to parse client reference manifest:', e);
-                    globalThis['~rari'].clientReferenceManifest = {{}};
-                }}
+                globalThis['~rari'].clientReferenceManifest = {manifest_json};
             }})()"
         );
 

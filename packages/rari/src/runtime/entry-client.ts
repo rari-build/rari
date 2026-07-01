@@ -64,6 +64,19 @@ function getWindow(): WindowWithRari {
   return window as unknown as WindowWithRari
 }
 
+function showHydrationFailureMessage(container: Element, message: string): void {
+  if (container.querySelector('.rari-error[data-rari-hydration-failure]'))
+    return
+
+  const banner = document.createElement('div')
+  banner.className = 'rari-error'
+  banner.setAttribute('data-rari-hydration-failure', 'true')
+  banner.setAttribute('role', 'alert')
+  banner.style.cssText = 'color:red;border:1px solid red;padding:10px;border-radius:4px;background-color:#fff5f5;margin:10px 0;'
+  banner.innerHTML = `<strong>Failed to load page: </strong>${message.replace(/</g, '&lt;')}`
+  container.prepend(banner)
+}
+
 if (typeof getRariGlobal() === 'undefined')
   (globalThis as unknown as GlobalWithRari)['~rari'] = {}
 
@@ -351,6 +364,8 @@ export async function renderApp(): Promise<void> {
     const needsInitialFetch = !payloadScript && !hasBufferedRows && !hasServerRenderedContent
 
     if (hasServerRenderedContent && payloadScript) {
+      let hydrationErrorMessage = 'Could not load interactive page data.'
+
       try {
         const isBase64 = payloadScript.getAttribute('data-encoding') === 'base64'
 
@@ -385,7 +400,11 @@ export async function renderApp(): Promise<void> {
           element = await createFromReadableStream(stream)
         }
       }
-      catch {
+      catch (parseErr) {
+        hydrationErrorMessage = parseErr instanceof Error
+          ? parseErr.message
+          : 'Failed to parse embedded RSC payload.'
+
         try {
           const currentPath = window.location.pathname + window.location.search
           const rscServerUrl = import.meta.env.DEV
@@ -407,8 +426,14 @@ export async function renderApp(): Promise<void> {
             })
             element = await createFromReadableStream(stream)
           }
+          else {
+            hydrationErrorMessage = `Failed to fetch RSC payload fallback: HTTP ${response.status}.`
+          }
         }
         catch (fetchErr) {
+          hydrationErrorMessage = fetchErr instanceof Error
+            ? fetchErr.message
+            : 'Failed to fetch RSC payload fallback.'
           console.error('[rari] Failed to fetch RSC payload fallback:', fetchErr)
         }
       }
@@ -436,6 +461,13 @@ export async function renderApp(): Promise<void> {
             }
           },
         })
+      }
+      else {
+        showHydrationFailureMessage(
+          rootElement,
+          `${hydrationErrorMessage} Try refreshing the page.`,
+        )
+        console.error('[rari] Hydration skipped: failed to load RSC payload')
       }
 
       return
