@@ -63,9 +63,13 @@ jobs:
               - 'rust-toolchain.toml'
               - '.clippy.toml'
               - '.rustfmt.toml'
+              - 'tools/bundle-react-esm/**'
+              - 'pnpm-lock.yaml'
             snapshot:
               - 'crates/rari/src/runtime/ext/**'
               - 'tools/snapshot/**'
+              - 'tools/bundle-react-esm/**'
+              - 'pnpm-lock.yaml'
             use_cache_crate:
               - '.github/workflows/ci.yml'
               - 'crates/rari-use-cache/**'
@@ -100,12 +104,15 @@ jobs:
         with:
           shared-key: rust-linux
 
+      - name: Bundle React ESM vendor files
+        uses: ./.github/actions/bundle-react-esm
+
       - name: Restore snapshot from cache
         id: cache-snapshot
         uses: actions/cache/restore@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
         with:
           path: crates/rari/snapshots
-          key: v8-snapshot-${{ hashFiles('crates/rari/src/runtime/ext/**', 'tools/snapshot/**') }}
+          key: v8-snapshot-${{ hashFiles('crates/rari/src/runtime/ext/**', 'tools/snapshot/**', 'tools/bundle-react-esm/**', 'pnpm-lock.yaml') }}
 
       - name: Create snapshot placeholder
         if: steps.cache-snapshot.outputs.cache-hit != 'true'
@@ -124,7 +131,7 @@ jobs:
         uses: actions/cache/save@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
         with:
           path: crates/rari/snapshots
-          key: v8-snapshot-${{ hashFiles('crates/rari/src/runtime/ext/**', 'tools/snapshot/**') }}
+          key: v8-snapshot-${{ hashFiles('crates/rari/src/runtime/ext/**', 'tools/snapshot/**', 'tools/bundle-react-esm/**', 'pnpm-lock.yaml') }}
 
       - name: Upload snapshot
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -171,13 +178,16 @@ jobs:
         with:
           shared-key: rust-linux
 
+      - name: Bundle React ESM vendor files
+        uses: ./.github/actions/bundle-react-esm
+
       - name: Restore snapshot from cache
         if: needs.build-snapshot.result != 'success'
         id: cache-snapshot
         uses: actions/cache/restore@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
         with:
           path: crates/rari/snapshots
-          key: v8-snapshot-${{ hashFiles('crates/rari/src/runtime/ext/**', 'tools/snapshot/**') }}
+          key: v8-snapshot-${{ hashFiles('crates/rari/src/runtime/ext/**', 'tools/snapshot/**', 'tools/bundle-react-esm/**', 'pnpm-lock.yaml') }}
           restore-keys: |
             v8-snapshot-
 
@@ -253,6 +263,9 @@ jobs:
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
           shared-key: rust-${{ runner.os }}
+
+      - name: Bundle React ESM vendor files
+        uses: ./.github/actions/bundle-react-esm
 
       - name: Restore binary from cache
         if: needs.changes.outputs.rust != 'true'

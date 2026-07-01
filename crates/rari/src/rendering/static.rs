@@ -14,7 +14,7 @@ use std::{
 
 use cow_utils::CowUtils;
 use rari_error::{RariError, StreamingError};
-use rari_rsc::escape_rsc_value;
+use rari_rsc::flight::escape::unescape_rsc_value;
 use regex::Regex;
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde_json::Value;
@@ -1953,7 +1953,7 @@ if (typeof window !== 'undefined') {{
             && let Some((module_path, export_name)) = self.module_imports.get(&module_row_id)
         {
             let props_json = if let Some(p) = props {
-                serde_json::to_string(&escape_rsc_value(&serde_json::Value::Object(p.clone())))
+                serde_json::to_string(&unescape_rsc_value(&serde_json::Value::Object(p.clone())))
                     .unwrap_or_default()
             } else {
                 "{}".to_string()
