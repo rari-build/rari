@@ -1,4 +1,4 @@
-use std::{path::Path, sync::Arc};
+use std::{fs, future::Future, path::Path, pin::Pin, sync::Arc};
 
 use cow_utils::CowUtils;
 use rari_error::RariError;
@@ -45,13 +45,13 @@ impl ComponentLoader {
                     RariError::configuration(format!("Component {component_id} missing bundlePath"))
                 })?;
 
-            let component_file = std::path::Path::new(DIST_DIR).join(bundle_path);
+            let component_file = Path::new(DIST_DIR).join(bundle_path);
             if !component_file.exists() {
                 error!("Component file not found: {}", component_file.display());
                 continue;
             }
 
-            let component_code = std::fs::read_to_string(&component_file)
+            let component_code = fs::read_to_string(&component_file)
                 .map_err(|_e| RariError::io("Failed to read component file".to_string()))?;
 
             let is_server_action = has_use_server_directive(&component_code);
@@ -217,7 +217,7 @@ impl ComponentLoader {
     pub async fn load_server_actions_from_source(
         renderer: &mut RscRenderer,
     ) -> Result<(), RariError> {
-        let src_dir = std::path::Path::new("src");
+        let src_dir = Path::new("src");
         if !src_dir.exists() {
             return Ok(());
         }
@@ -228,11 +228,11 @@ impl ComponentLoader {
     }
 
     fn scan_for_server_actions<'a>(
-        dir: &'a std::path::Path,
+        dir: &'a Path,
         renderer: &'a mut RscRenderer,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), RariError>> + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + 'a>> {
         Box::pin(async move {
-            let entries = std::fs::read_dir(dir).map_err(|e| {
+            let entries = fs::read_dir(dir).map_err(|e| {
                 RariError::io(format!("Failed to read directory {}: {}", dir.display(), e))
             })?;
 
@@ -249,13 +249,13 @@ impl ComponentLoader {
                     .map(|s| s == "ts" || s == "tsx" || s == "js" || s == "jsx")
                     .unwrap_or(false)
                 {
-                    let code = match std::fs::read_to_string(&path) {
+                    let code = match fs::read_to_string(&path) {
                         Ok(c) => c,
                         Err(_) => continue,
                     };
 
                     if has_use_server_directive(&code) {
-                        let src_dir = std::path::Path::new("src");
+                        let src_dir = Path::new("src");
                         let relative_path = path.strip_prefix(src_dir).unwrap_or(&path);
                         let action_id = relative_path
                             .to_str()
@@ -271,7 +271,7 @@ impl ComponentLoader {
                             Path::new(DIST_DIR).join("server").join(format!("{action_id}.js"));
 
                         if dist_path.exists() {
-                            match std::fs::read_to_string(&dist_path) {
+                            match fs::read_to_string(&dist_path) {
                                 Ok(dist_code) => {
                                     let canonical_path =
                                         dist_path.canonicalize().unwrap_or(dist_path.clone());
@@ -432,7 +432,7 @@ impl ComponentLoader {
     }
 
     pub async fn load_app_router_components(renderer: &mut RscRenderer) -> Result<(), RariError> {
-        let server_dir = std::path::Path::new(DIST_DIR).join("server");
+        let server_dir = Path::new(DIST_DIR).join("server");
         if !server_dir.exists() {
             return Ok(());
         }
@@ -443,12 +443,12 @@ impl ComponentLoader {
     }
 
     fn load_server_components_recursive<'a>(
-        dir: &'a std::path::Path,
-        base_dir: &'a std::path::Path,
+        dir: &'a Path,
+        base_dir: &'a Path,
         renderer: &'a mut RscRenderer,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), RariError>> + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + 'a>> {
         Box::pin(async move {
-            let entries = std::fs::read_dir(dir).map_err(|e| {
+            let entries = fs::read_dir(dir).map_err(|e| {
                 RariError::io(format!("Failed to read directory {}: {}", dir.display(), e))
             })?;
 
@@ -465,7 +465,7 @@ impl ComponentLoader {
                         continue;
                     }
 
-                    let component_code = std::fs::read_to_string(&path).map_err(|e| {
+                    let component_code = fs::read_to_string(&path).map_err(|e| {
                         RariError::io(format!("Failed to read component file: {e}"))
                     })?;
 
@@ -862,8 +862,8 @@ impl ComponentLoader {
         })
     }
 
-    fn read_manifest(manifest_path: &std::path::Path) -> Result<serde_json::Value, RariError> {
-        let manifest_content = std::fs::read_to_string(manifest_path)
+    fn read_manifest(manifest_path: &Path) -> Result<serde_json::Value, RariError> {
+        let manifest_content = fs::read_to_string(manifest_path)
             .map_err(|e| RariError::io(format!("Failed to read server manifest: {e}")))?;
 
         serde_json::from_str(&manifest_content)
@@ -888,7 +888,7 @@ impl ComponentLoader {
                 RariError::configuration(format!("Component {component_id} missing bundlePath"))
             })?;
 
-        let component_file = std::path::Path::new(DIST_DIR).join(bundle_path);
+        let component_file = Path::new(DIST_DIR).join(bundle_path);
 
         if !component_file.exists() {
             return Err(RariError::not_found(format!(
@@ -897,7 +897,7 @@ impl ComponentLoader {
             )));
         }
 
-        let component_code = std::fs::read_to_string(&component_file)
+        let component_code = fs::read_to_string(&component_file)
             .map_err(|e| RariError::io(format!("Failed to read component file: {e}")))?;
 
         renderer
@@ -927,7 +927,7 @@ impl ComponentLoader {
             .await
             .map_err(|e| RariError::internal(format!("Failed to initialize ssrModules: {e}")))?;
 
-        let manifest_content = std::fs::read_to_string(manifest_path)
+        let manifest_content = fs::read_to_string(manifest_path)
             .map_err(|e| RariError::io(format!("Failed to read SSR manifest: {e}")))?;
 
         let manifest: serde_json::Value = serde_json::from_str(&manifest_content)
@@ -941,12 +941,12 @@ impl ComponentLoader {
         for (module_path, info) in entries {
             let bundle_path = info.get("bundlePath").and_then(|v| v.as_str()).unwrap_or_default();
 
-            let component_file = std::path::Path::new(DIST_DIR).join(bundle_path);
+            let component_file = Path::new(DIST_DIR).join(bundle_path);
             if !component_file.exists() {
                 continue;
             }
 
-            let code = match std::fs::read_to_string(&component_file) {
+            let code = match fs::read_to_string(&component_file) {
                 Ok(c) => c,
                 Err(_) => continue,
             };
@@ -1023,7 +1023,7 @@ impl ComponentLoader {
             return Ok(());
         }
 
-        let manifest_content = std::fs::read_to_string(manifest_path)
+        let manifest_content = fs::read_to_string(manifest_path)
             .map_err(|e| RariError::io(format!("Failed to read client reference manifest: {e}")))?;
 
         let _manifest: Value = serde_json::from_str(&manifest_content).map_err(|e| {

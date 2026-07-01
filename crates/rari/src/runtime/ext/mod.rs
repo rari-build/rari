@@ -1,15 +1,16 @@
-use std::sync::Arc;
+use std::{borrow::Cow::Borrowed, option::Option::None, path::PathBuf, sync::Arc};
 
 use deno_core::Extension;
 use deno_fs::{FileSystemRc, sync::MaybeArc};
+use deno_runtime::deno_canvas::deno_canvas;
 
 pub trait ExtensionTrait<A> {
     fn init(options: A) -> Extension;
 
     fn for_warmup(mut ext: Extension) -> Extension {
-        ext.js_files = ::std::borrow::Cow::Borrowed(&[]);
-        ext.esm_files = ::std::borrow::Cow::Borrowed(&[]);
-        ext.esm_entry_point = ::std::option::Option::None;
+        ext.js_files = Borrowed(&[]);
+        ext.esm_files = Borrowed(&[]);
+        ext.esm_entry_point = None;
 
         ext
     }
@@ -50,9 +51,9 @@ pub struct ExtensionOptions {
     pub cache: Option<()>,
     pub filesystem: FileSystemRc,
     pub crypto_seed: Option<u64>,
-    pub node_resolver: std::sync::Arc<node::resolvers::Resolver>,
+    pub node_resolver: Arc<node::resolvers::Resolver>,
     pub broadcast_channel: deno_web::InMemoryBroadcastChannel,
-    pub webstorage_origin_storage_dir: Option<std::path::PathBuf>,
+    pub webstorage_origin_storage_dir: Option<PathBuf>,
     pub kv_store: kv::KvStore,
 }
 
@@ -64,7 +65,7 @@ impl Default for ExtensionOptions {
             filesystem: MaybeArc::new(deno_fs::RealFs),
             cache: Some(()),
             crypto_seed: None,
-            node_resolver: std::sync::Arc::new(node::resolvers::Resolver::default()),
+            node_resolver: Arc::new(node::resolvers::Resolver::default()),
             broadcast_channel: deno_web::InMemoryBroadcastChannel::default(),
             webstorage_origin_storage_dir: None,
             kv_store: kv::KvStore::default(),
@@ -93,10 +94,10 @@ pub fn extensions(options: &ExtensionOptions, is_snapshot: bool) -> Vec<Extensio
     extensions.extend(kv::extensions(options.kv_store.clone(), is_snapshot));
     extensions.extend(webgpu::extensions(is_snapshot));
     {
-        let mut canvas_ext = deno_runtime::deno_canvas::deno_canvas::init();
+        let mut canvas_ext = deno_canvas::init();
         if is_snapshot {
-            canvas_ext.js_files = std::borrow::Cow::Borrowed(&[]);
-            canvas_ext.esm_files = std::borrow::Cow::Borrowed(&[]);
+            canvas_ext.js_files = Borrowed(&[]);
+            canvas_ext.esm_files = Borrowed(&[]);
             canvas_ext.esm_entry_point = None;
         }
         extensions.push(canvas_ext);
@@ -109,8 +110,8 @@ pub fn extensions(options: &ExtensionOptions, is_snapshot: bool) -> Vec<Extensio
     {
         let mut bundle_ext = deno_bundle_runtime::deno_bundle_runtime::init(None);
         if is_snapshot {
-            bundle_ext.js_files = std::borrow::Cow::Borrowed(&[]);
-            bundle_ext.esm_files = std::borrow::Cow::Borrowed(&[]);
+            bundle_ext.js_files = Borrowed(&[]);
+            bundle_ext.esm_files = Borrowed(&[]);
             bundle_ext.esm_entry_point = None;
         }
         extensions.push(bundle_ext);

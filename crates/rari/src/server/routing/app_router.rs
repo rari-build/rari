@@ -4,6 +4,7 @@ use cow_utils::CowUtils;
 use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
+use tokio::fs;
 
 #[cfg(test)]
 use crate::server::routing::types::RouteSegmentType;
@@ -147,7 +148,7 @@ impl AppRouter {
     }
 
     pub async fn from_file(path: &str) -> Result<Self, RariError> {
-        let content = tokio::fs::read_to_string(path)
+        let content = fs::read_to_string(path)
             .await
             .map_err(|e| RariError::io(format!("Failed to read manifest: {e}")))?;
 

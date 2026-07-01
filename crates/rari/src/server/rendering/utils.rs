@@ -4,6 +4,7 @@ use std::fmt::Write;
 
 use axum::http::StatusCode;
 use cow_utils::CowUtils;
+use tokio::fs;
 use tracing::error;
 
 use crate::server::config::Config;
@@ -234,7 +235,7 @@ async fn inject_assets_into_complete_document(
 
     let template_path = if config.is_development() { "index.html" } else { "dist/index.html" };
 
-    let template = match tokio::fs::read_to_string(template_path).await {
+    let template = match fs::read_to_string(template_path).await {
         Ok(t) => t,
         Err(_) => {
             let trimmed_lower = html.trim_start().cow_to_lowercase();
@@ -443,7 +444,7 @@ async fn inject_content_into_template(
 ) -> Result<String, StatusCode> {
     let template_path = if config.is_development() { "index.html" } else { "dist/index.html" };
 
-    let template = match tokio::fs::read_to_string(template_path).await {
+    let template = match fs::read_to_string(template_path).await {
         Ok(t) => t,
         Err(_) => {
             return Ok(format!(

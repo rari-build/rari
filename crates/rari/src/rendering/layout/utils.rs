@@ -3,6 +3,7 @@
 use std::{
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
+    path::Path,
 };
 
 use cow_utils::CowUtils;
@@ -73,7 +74,7 @@ pub fn create_client_component_id(file_path: &str) -> String {
 }
 
 pub fn get_component_id(file_path: &str) -> String {
-    let path = std::path::Path::new(file_path);
+    let path = Path::new(file_path);
     let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("Unknown");
 
     let mut chars = stem.chars();

@@ -1,6 +1,9 @@
-use std::fmt;
+use std::{error::Error, fmt, string::ToString};
 
-use axum::http::StatusCode;
+use axum::{
+    body::Body,
+    http::{Response, StatusCode},
+};
 use rari_error::RariError;
 use serde::{Deserialize, Serialize};
 
@@ -125,7 +128,7 @@ impl fmt::Display for ApiRouteError {
     }
 }
 
-impl std::error::Error for ApiRouteError {}
+impl Error for ApiRouteError {}
 
 impl From<ApiRouteError> for RariError {
     fn from(error: ApiRouteError) -> Self {
@@ -182,8 +185,8 @@ impl ApiRouteError {
                 message: self.message().to_string(),
                 code: Some(self.error_code().to_string()),
                 route: Some(self.path().to_string()),
-                method: self.method().map(std::string::ToString::to_string),
-                stack: self.stack().map(std::string::ToString::to_string),
+                method: self.method().map(ToString::to_string),
+                stack: self.stack().map(ToString::to_string),
                 details: self.get_error_details(),
             }
         } else {
@@ -230,13 +233,12 @@ impl ApiRouteError {
         })
     }
 
-    pub fn to_http_response(&self, is_development: bool) -> axum::http::Response<axum::body::Body> {
+    pub fn to_http_response(&self, is_development: bool) -> Response<Body> {
         let status = self.status_code();
         let body = self.to_json_string(is_development);
 
-        let mut builder = axum::http::Response::builder()
-            .status(status)
-            .header("content-type", "application/json");
+        let mut builder =
+            Response::builder().status(status).header("content-type", "application/json");
 
         if let Self::MethodNotAllowed { allowed_methods, .. } = self {
             let allow_header = allowed_methods.join(", ");
@@ -244,7 +246,7 @@ impl ApiRouteError {
         }
 
         #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
-        builder.body(axum::body::Body::from(body)).expect("Valid error response")
+        builder.body(Body::from(body)).expect("Valid error response")
     }
 }
 
@@ -252,7 +254,7 @@ pub fn create_generic_error_response(
     status: StatusCode,
     message: &str,
     is_development: bool,
-) -> axum::http::Response<axum::body::Body> {
+) -> Response<Body> {
     let response = if is_development {
         ErrorResponse {
             error: status.canonical_reason().unwrap_or("Error").to_string(),
@@ -281,9 +283,9 @@ pub fn create_generic_error_response(
     });
 
     #[expect(clippy::expect_used, reason = "Response::builder() with valid components never fails")]
-    axum::http::Response::builder()
+    Response::builder()
         .status(status)
         .header("content-type", "application/json")
-        .body(axum::body::Body::from(body))
+        .body(Body::from(body))
         .expect("Valid error response")
 }

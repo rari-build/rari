@@ -1,10 +1,23 @@
-use std::{future::Future, pin::Pin};
+use std::{
+    env,
+    future::Future,
+    pin::Pin,
+    rc::Rc,
+    sync::Arc,
+    thread,
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+};
 
-use deno_core::{ModuleSpecifier, PollEventLoopOptions};
+use base64::engine::general_purpose::STANDARD;
+use deno_core::{ModuleSpecifier, PollEventLoopOptions, v8};
 use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use serde_json::Value;
-use tokio::sync::{mpsc, oneshot};
+use tokio::{
+    runtime::Builder,
+    sync::{mpsc, oneshot},
+    time,
+};
 
 use crate::{
     runtime::{
@@ -13,6 +26,7 @@ use crate::{
             interface::{AsyncBatchResult, JsRuntimeInterface},
             runtime_builder::build_js_runtime,
             utils::{
+                self,
                 constants::{
                     CHANNEL_CAPACITY, JS_EXECUTOR_CHANNEL_CLOSED_ERROR, JS_EXECUTOR_FAILED_ERROR,
                     MODULE_ALREADY_EVALUATED_ERROR, RUNTIME_QUICK_RESTART_DELAY_MS,
@@ -24,24 +38,22 @@ use crate::{
         },
         module_loader::RariModuleLoader,
     },
+    server::middleware::request_context::RequestContext,
     with_scope,
 };
 
 type ScriptBatchItem = (String, String, oneshot::Sender<Result<Value, RariError>>);
 type BatchResultSender = mpsc::UnboundedSender<(usize, Result<Value, RariError>)>;
-type PendingScript = (
-    oneshot::Sender<Result<Value, RariError>>,
-    String,
-    Option<deno_core::v8::Global<deno_core::v8::Value>>,
-);
+type PendingScript =
+    (oneshot::Sender<Result<Value, RariError>>, String, Option<v8::Global<v8::Value>>);
 
 struct PendingBatch {
     senders: Vec<Option<oneshot::Sender<Result<Value, RariError>>>>,
     names: Vec<String>,
     sent: Vec<bool>,
     remaining: usize,
-    start: std::time::Instant,
-    timeout: std::time::Duration,
+    start: Instant,
+    timeout: Duration,
     batch_id: u64,
 }
 
@@ -77,15 +89,14 @@ enum JsRequest {
         result_tx: oneshot::Sender<Result<(), RariError>>,
     },
     SetRequestContext {
-        request_context: std::sync::Arc<crate::server::middleware::request_context::RequestContext>,
+        request_context: Arc<RequestContext>,
         result_tx: oneshot::Sender<Result<(), RariError>>,
     },
     ClearRequestContext {
         result_tx: oneshot::Sender<Result<(), RariError>>,
     },
     ClearRequestContextIfMatches {
-        expected_context:
-            std::sync::Arc<crate::server::middleware::request_context::RequestContext>,
+        expected_context: Arc<RequestContext>,
         result_tx: oneshot::Sender<Result<(), RariError>>,
     },
     ExecuteScriptForStreaming {
@@ -104,9 +115,9 @@ impl RariRuntime {
     pub fn new(env_vars: Option<FxHashMap<String, String>>) -> Self {
         let (request_sender, mut request_receiver) = mpsc::channel(CHANNEL_CAPACITY);
 
-        std::thread::spawn(move || {
+        thread::spawn(move || {
             #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
-            let runtime = tokio::runtime::Builder::new_current_thread()
+            let runtime = Builder::new_current_thread()
                 .enable_all()
                 .build()
                 .expect("Failed to create Tokio runtime");
@@ -117,7 +128,7 @@ impl RariRuntime {
                         match build_js_runtime(env_vars.clone()) {
                             Ok(rt) => rt,
                             Err(_) => {
-                                tokio::time::sleep(std::time::Duration::from_millis(
+                                time::sleep(Duration::from_millis(
                                     RUNTIME_RESTART_DELAY_MS,
                                 ))
                                 .await;
@@ -174,9 +185,9 @@ impl RariRuntime {
                                         }
                                     }
                                 }
-                                event_loop_result = tokio::time::timeout(
-                                    std::time::Duration::from_millis(50),
-                                    crate::runtime::factory::utils::v8::run_event_loop_with_error_handling(
+                                event_loop_result = time::timeout(
+                                    Duration::from_millis(50),
+                                    utils::v8::run_event_loop_with_error_handling(
                                         &mut js_runtime, "concurrent batch"
                                     ),
                                 ) => {
@@ -198,8 +209,8 @@ impl RariRuntime {
                             pending_batches.retain(|b| b.remaining > 0 && b.start.elapsed() < b.timeout);
                         }
 
-                        let _ = tokio::time::timeout(
-                            std::time::Duration::from_millis(10),
+                        let _ = time::timeout(
+                            Duration::from_millis(10),
                             js_runtime.run_event_loop(PollEventLoopOptions::default()),
                         ).await;
                     }
@@ -208,7 +219,7 @@ impl RariRuntime {
                     {
                         println!("[rari] Restarting JS runtime due to error or forced restart");
                     }
-                    tokio::time::sleep(std::time::Duration::from_millis(
+                    time::sleep(Duration::from_millis(
                         RUNTIME_QUICK_RESTART_DELAY_MS,
                     ))
                     .await;
@@ -222,7 +233,7 @@ impl RariRuntime {
 
 async fn handle_load_es_module(
     js_runtime: &mut deno_core::JsRuntime,
-    module_loader: &std::rc::Rc<RariModuleLoader>,
+    module_loader: &Rc<RariModuleLoader>,
     component_id: &str,
     result_tx: oneshot::Sender<Result<deno_core::ModuleId, RariError>>,
 ) -> Result<(), RariError> {
@@ -276,7 +287,7 @@ async fn handle_load_es_module(
 
 async fn handle_evaluate_module(
     js_runtime: &mut deno_core::JsRuntime,
-    module_loader: &std::rc::Rc<RariModuleLoader>,
+    module_loader: &Rc<RariModuleLoader>,
     module_id: deno_core::ModuleId,
     result_tx: oneshot::Sender<Result<Value, RariError>>,
     continue_processing: &mut bool,
@@ -327,7 +338,7 @@ async fn handle_evaluate_module(
 
 async fn handle_get_module_namespace(
     js_runtime: &mut deno_core::JsRuntime,
-    module_loader: &std::rc::Rc<RariModuleLoader>,
+    module_loader: &Rc<RariModuleLoader>,
     module_id: deno_core::ModuleId,
     result_tx: oneshot::Sender<Result<Value, RariError>>,
 ) -> Result<(), RariError> {
@@ -365,7 +376,7 @@ async fn handle_get_module_namespace(
 async fn handle_js_request(
     request: JsRequest,
     js_runtime: &mut deno_core::JsRuntime,
-    module_loader: &std::rc::Rc<RariModuleLoader>,
+    module_loader: &Rc<RariModuleLoader>,
     continue_processing: &mut bool,
     pending_batches: &mut Vec<PendingBatch>,
     batch_id_counter: &mut u64,
@@ -443,22 +454,22 @@ async fn handle_js_request(
             let _ = result_tx.send(Ok(()));
         }
         JsRequest::ClearRequestContext { result_tx } => {
-            js_runtime.op_state().borrow_mut().try_take::<std::sync::Arc<crate::server::middleware::request_context::RequestContext>>();
+            js_runtime.op_state().borrow_mut().try_take::<Arc<RequestContext>>();
             let _ = result_tx.send(Ok(()));
         }
         JsRequest::ClearRequestContextIfMatches { expected_context, result_tx } => {
             let should_clear = {
                 let op_state = js_runtime.op_state();
                 let borrowed = op_state.borrow();
-                if let Some(current_context) = borrowed.try_borrow::<std::sync::Arc<crate::server::middleware::request_context::RequestContext>>() {
-                    std::sync::Arc::ptr_eq(current_context, &expected_context)
+                if let Some(current_context) = borrowed.try_borrow::<Arc<RequestContext>>() {
+                    Arc::ptr_eq(current_context, &expected_context)
                 } else {
                     false
                 }
             };
 
             if should_clear {
-                js_runtime.op_state().borrow_mut().try_take::<std::sync::Arc<crate::server::middleware::request_context::RequestContext>>();
+                js_runtime.op_state().borrow_mut().try_take::<Arc<RequestContext>>();
             }
             let _ = result_tx.send(Ok(()));
         }
@@ -506,7 +517,7 @@ async fn setup_concurrent_batch(
                     let local_val = deno_core::v8::Local::new(scope, &v8_val);
                     let context = scope.get_current_context();
                     let global = context.global(scope);
-                    if let Some(key_str) = deno_core::v8::String::new(scope, &slot_key) {
+                    if let Some(key_str) = v8::String::new(scope, &slot_key) {
                         global.set(scope, key_str.into(), local_val);
                         Ok::<(), RariError>(())
                     } else {
@@ -534,7 +545,7 @@ async fn setup_concurrent_batch(
         return None;
     }
 
-    let promise_timeout_ms: u64 = std::env::var("RARI_PROMISE_RESOLUTION_TIMEOUT_MS")
+    let promise_timeout_ms: u64 = env::var("RARI_PROMISE_RESOLUTION_TIMEOUT_MS")
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(5000);
@@ -587,8 +598,8 @@ async fn setup_concurrent_batch(
         names,
         sent,
         remaining,
-        start: std::time::Instant::now(),
-        timeout: std::time::Duration::from_millis(promise_timeout_ms),
+        start: Instant::now(),
+        timeout: Duration::from_millis(promise_timeout_ms),
         batch_id,
     })
 }
@@ -862,15 +873,10 @@ impl JsRuntimeInterface for RariRuntime {
             let args_json = serde_json::to_string(&args)
                 .map_err(|e| RariError::js_runtime(format!("Failed to serialize args: {e}")))?;
 
-            let unique_id = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos();
+            let unique_id =
+                SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
 
-            let args_base64 = base64::Engine::encode(
-                &base64::engine::general_purpose::STANDARD,
-                args_json.as_bytes(),
-            );
+            let args_base64 = base64::Engine::encode(&STANDARD, args_json.as_bytes());
 
             let escaped_function_name = function_name.replace('\\', "\\\\").replace('"', "\\\"");
             let script = format!(
@@ -1027,7 +1033,7 @@ impl JsRuntimeInterface for RariRuntime {
 
     fn set_request_context(
         &self,
-        request_context: std::sync::Arc<crate::server::middleware::request_context::RequestContext>,
+        request_context: Arc<RequestContext>,
     ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>> {
         let request_sender = self.request_sender.clone();
 
@@ -1072,9 +1078,7 @@ impl JsRuntimeInterface for RariRuntime {
 
     fn clear_request_context_if_matches(
         &self,
-        expected_context: std::sync::Arc<
-            crate::server::middleware::request_context::RequestContext,
-        >,
+        expected_context: Arc<RequestContext>,
     ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>> {
         let request_sender = self.request_sender.clone();
 

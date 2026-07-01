@@ -1,4 +1,7 @@
-use image::RgbaImage;
+use std::{string::String, time::Duration};
+
+use image::{RgbaImage, imageops};
+use reqwest::blocking::Client;
 
 use super::{super::layout::ComputedLayout, border::BorderRadius, renderer::ImageRenderer};
 
@@ -17,8 +20,7 @@ impl ImageRenderer {
 
         let source_image = self.load_image(src)?;
 
-        let object_fit =
-            layout.style.get("objectFit").map(std::string::String::as_str).unwrap_or("fill");
+        let object_fit = layout.style.get("objectFit").map(String::as_str).unwrap_or("fill");
 
         let border_radius = self.parse_border_radius(&layout.style);
 
@@ -77,11 +79,11 @@ impl ImageRenderer {
                 let new_width = (src_width * scale) as u32;
                 let new_height = (src_height * scale) as u32;
 
-                let resized = image::imageops::resize(
+                let resized = imageops::resize(
                     &source_image,
                     new_width,
                     new_height,
-                    image::imageops::FilterType::CatmullRom,
+                    imageops::FilterType::CatmullRom,
                 );
 
                 let offset_x = (target_width - new_width) / 2;
@@ -94,24 +96,19 @@ impl ImageRenderer {
                 let new_width = (src_width * scale) as u32;
                 let new_height = (src_height * scale) as u32;
 
-                let resized = image::imageops::resize(
+                let resized = imageops::resize(
                     &source_image,
                     new_width,
                     new_height,
-                    image::imageops::FilterType::CatmullRom,
+                    imageops::FilterType::CatmullRom,
                 );
 
                 let crop_x = (new_width - target_width) / 2;
                 let crop_y = (new_height - target_height) / 2;
 
-                let cropped = image::imageops::crop_imm(
-                    &resized,
-                    crop_x,
-                    crop_y,
-                    target_width,
-                    target_height,
-                )
-                .to_image();
+                let cropped =
+                    imageops::crop_imm(&resized, crop_x, crop_y, target_width, target_height)
+                        .to_image();
 
                 Ok((cropped, 0, 0))
             }
@@ -121,11 +118,11 @@ impl ImageRenderer {
                 let new_height = (src_height * scale) as u32;
 
                 let resized = if scale < 1.0 {
-                    image::imageops::resize(
+                    imageops::resize(
                         &source_image,
                         new_width,
                         new_height,
-                        image::imageops::FilterType::CatmullRom,
+                        imageops::FilterType::CatmullRom,
                     )
                 } else {
                     source_image
@@ -157,14 +154,9 @@ impl ImageRenderer {
                     let crop_width = src_width.min(target_w) as u32;
                     let crop_height = src_height.min(target_h) as u32;
 
-                    let cropped = image::imageops::crop_imm(
-                        &source_image,
-                        crop_x,
-                        crop_y,
-                        crop_width,
-                        crop_height,
-                    )
-                    .to_image();
+                    let cropped =
+                        imageops::crop_imm(&source_image, crop_x, crop_y, crop_width, crop_height)
+                            .to_image();
 
                     Ok((cropped, offset_x, offset_y))
                 } else {
@@ -175,11 +167,11 @@ impl ImageRenderer {
                 let resized = if source_image.width() != target_width
                     || source_image.height() != target_height
                 {
-                    image::imageops::resize(
+                    imageops::resize(
                         &source_image,
                         target_width,
                         target_height,
-                        image::imageops::FilterType::CatmullRom,
+                        imageops::FilterType::CatmullRom,
                     )
                 } else {
                     source_image
@@ -255,8 +247,8 @@ impl ImageRenderer {
     fn load_remote_image(&self, url: &str) -> Result<RgbaImage, String> {
         use std::io::Read;
 
-        let client = reqwest::blocking::Client::builder()
-            .timeout(std::time::Duration::from_secs(10))
+        let client = Client::builder()
+            .timeout(Duration::from_secs(10))
             .build()
             .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
 

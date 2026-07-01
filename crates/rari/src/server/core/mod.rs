@@ -1,3 +1,8 @@
+use std::{env, fs, path::PathBuf};
+
+use axum::{body::HttpBody, routing};
+use tokio::sync::Mutex;
+
 pub mod types;
 pub mod utils;
 
@@ -18,7 +23,10 @@ use dashmap::DashMap;
 use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use tokio::{net::TcpListener, sync::RwLock};
-use tower_http::{compression::CompressionLayer, services::ServeDir};
+use tower_http::{
+    compression::{CompressionLayer, Predicate},
+    services::ServeDir,
+};
 use tracing::{debug, error};
 use types::ServerState;
 
@@ -61,10 +69,10 @@ use crate::{
 #[derive(Clone, Copy, Debug)]
 struct NotStreamingResponse;
 
-impl tower_http::compression::Predicate for NotStreamingResponse {
+impl Predicate for NotStreamingResponse {
     fn should_compress<B>(&self, response: &http::Response<B>) -> bool
     where
-        B: axum::body::HttpBody,
+        B: HttpBody,
     {
         if response.headers().get("content-encoding").is_some() {
             return false;
@@ -97,7 +105,7 @@ impl Server {
             ..ResourceLimits::default()
         };
 
-        let env_vars: rustc_hash::FxHashMap<String, String> = std::env::vars().collect();
+        let env_vars: rustc_hash::FxHashMap<String, String> = env::vars().collect();
         let js_runtime = Arc::new(JsExecutionRuntime::new(Some(env_vars)));
         let mut renderer =
             RscRenderer::with_resource_limits(Arc::clone(&js_runtime), resource_limits);
@@ -149,10 +157,9 @@ impl Server {
             Arc::new(ssr)
         };
 
-        let renderer_arc = Arc::new(tokio::sync::Mutex::new(renderer));
+        let renderer_arc = Arc::new(Mutex::new(renderer));
 
-        let project_root =
-            std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+        let project_root = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
 
         let cache_registry = Arc::new(CacheHandlerRegistry::from_env());
 
@@ -222,7 +229,7 @@ impl Server {
         let mut config = config;
         let config_path = "dist/server/image.json";
 
-        if let Ok(image_config_str) = std::fs::read_to_string(config_path)
+        if let Ok(image_config_str) = fs::read_to_string(config_path)
             && let Ok(image_config) = serde_json::from_str::<ImageConfig>(&image_config_str)
         {
             config.images = image_config;
@@ -301,7 +308,7 @@ impl Server {
                 .route("/_rari/register-client", post(register_client_component))
                 .layer(large_body_limit)
                 .route("/_rari/hmr", post(handle_hmr_action))
-                .route("/_rari/hmr", axum::routing::options(cors_preflight_ok))
+                .route("/_rari/hmr", routing::options(cors_preflight_ok))
                 .layer(medium_body_limit)
                 .route("/vite-server", get(vite_websocket_proxy))
                 .route("/vite-server/", get(vite_websocket_proxy))
@@ -318,7 +325,7 @@ impl Server {
         if has_app_router {
             let medium_body_limit = DefaultBodyLimit::max(1024 * 1024);
             router = router
-                .route("/api/{*path}", axum::routing::options(api_cors_preflight))
+                .route("/api/{*path}", routing::options(api_cors_preflight))
                 .route("/api/{*path}", any(handle_api_route))
                 .layer(medium_body_limit);
         }
@@ -330,9 +337,9 @@ impl Server {
 
             router = router
                 .route("/", get(handle_app_route))
-                .route("/", axum::routing::options(cors_preflight_ok))
+                .route("/", routing::options(cors_preflight_ok))
                 .route("/{*path}", get(handle_app_route))
-                .route("/{*path}", axum::routing::options(cors_preflight_ok));
+                .route("/{*path}", routing::options(cors_preflight_ok));
         } else if config.is_production() {
             router =
                 router.route("/", get(root_handler)).route("/{*path}", get(static_or_spa_handler));

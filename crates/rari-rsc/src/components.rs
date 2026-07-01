@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::{borrow::Cow, sync::OnceLock, time::Instant};
 
 use cow_utils::CowUtils;
 use parking_lot::Mutex;
@@ -6,8 +6,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 
-static CIRCULAR_DETECTION: std::sync::OnceLock<Mutex<FxHashSet<String>>> =
-    std::sync::OnceLock::new();
+static CIRCULAR_DETECTION: OnceLock<Mutex<FxHashSet<String>>> = OnceLock::new();
 
 type ComponentDependencies = SmallVec<[String; 4]>;
 
@@ -71,7 +70,7 @@ impl ComponentRegistry {
         }
     }
 
-    fn normalize_id(id: &str) -> std::borrow::Cow<'_, str> {
+    fn normalize_id(id: &str) -> Cow<'_, str> {
         id.cow_replace('\\', "/")
     }
 

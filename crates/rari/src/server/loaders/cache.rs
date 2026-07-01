@@ -1,3 +1,5 @@
+use std::{fs, path::Path};
+
 use cow_utils::CowUtils;
 use rari_error::RariError;
 use regex::Regex;
@@ -11,7 +13,7 @@ pub struct CacheLoader;
 
 impl CacheLoader {
     pub async fn load_page_cache_configs(state: &ServerState) -> Result<(), RariError> {
-        let pages_dir = std::path::Path::new("src/pages");
+        let pages_dir = Path::new("src/pages");
         if !pages_dir.exists() {
             return Ok(());
         }
@@ -23,14 +25,14 @@ impl CacheLoader {
     }
 
     async fn scan_pages_directory(
-        dir: &std::path::Path,
+        dir: &Path,
         state: &ServerState,
         loaded_count: &mut usize,
     ) -> Result<(), RariError> {
         let mut dirs_to_scan = vec![dir.to_path_buf()];
 
         while let Some(current_dir) = dirs_to_scan.pop() {
-            let entries = std::fs::read_dir(&current_dir)
+            let entries = fs::read_dir(&current_dir)
                 .map_err(|e| RariError::io(format!("Failed to read pages directory: {e}")))?;
 
             for entry in entries {
@@ -59,10 +61,10 @@ impl CacheLoader {
     }
 
     async fn load_page_cache_config(
-        page_path: &std::path::Path,
+        page_path: &Path,
         state: &ServerState,
     ) -> Result<(), RariError> {
-        let content = std::fs::read_to_string(page_path)
+        let content = fs::read_to_string(page_path)
             .map_err(|e| RariError::io(format!("Failed to read page file: {e}")))?;
 
         if let Some(cache_config) = Self::extract_cache_config_from_content(&content) {
@@ -75,8 +77,8 @@ impl CacheLoader {
         Ok(())
     }
 
-    fn page_path_to_route(page_path: &std::path::Path) -> Result<String, RariError> {
-        let pages_dir = std::path::Path::new("src/pages");
+    fn page_path_to_route(page_path: &Path) -> Result<String, RariError> {
+        let pages_dir = Path::new("src/pages");
         let relative_path = page_path.strip_prefix(pages_dir).map_err(|_| {
             RariError::configuration("Page path is not within pages directory".to_string())
         })?;

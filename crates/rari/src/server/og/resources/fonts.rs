@@ -1,4 +1,4 @@
-use std::{borrow::Cow, sync::Arc};
+use std::{borrow::Cow, iter, sync::Arc};
 
 use parley::{
     FontContext as ParleyFontContext, GenericFamily,
@@ -97,7 +97,7 @@ impl FontContext {
         for (family, _) in fonts {
             self.inner
                 .collection
-                .append_generic_families(GenericFamily::SansSerif, std::iter::once(family));
+                .append_generic_families(GenericFamily::SansSerif, iter::once(family));
         }
 
         Ok(())
@@ -110,14 +110,12 @@ impl FontContext {
         let fonts = self.inner.collection.register_fonts(blob, None);
 
         for (family, _) in fonts {
-            self.inner
-                .collection
-                .append_generic_families(GenericFamily::Emoji, std::iter::once(family));
+            self.inner.collection.append_generic_families(GenericFamily::Emoji, iter::once(family));
 
             for (script, _) in Script::all_samples() {
                 self.inner
                     .collection
-                    .append_fallbacks(FallbackKey::new(*script, None), std::iter::once(family));
+                    .append_fallbacks(FallbackKey::new(*script, None), iter::once(family));
             }
         }
 
@@ -148,6 +146,9 @@ impl FontContext {
     clippy::get_unwrap
 )]
 mod tests {
+    use parley::PositionedLayoutItem::GlyphRun;
+    use swash::scale::StrikeWith::BestFit;
+
     use super::*;
 
     #[test]
@@ -181,7 +182,7 @@ mod tests {
         let mut glyph_count = 0;
         for line in layout.lines() {
             for item in line.items() {
-                if let parley::PositionedLayoutItem::GlyphRun(gr) = item {
+                if let GlyphRun(gr) = item {
                     glyph_count += gr.positioned_glyphs().count();
                 }
             }
@@ -211,7 +212,7 @@ mod tests {
 
         for line in layout.lines() {
             for item in line.items() {
-                if let parley::PositionedLayoutItem::GlyphRun(gr) = item {
+                if let GlyphRun(gr) = item {
                     let run = gr.run();
                     let font_ref =
                         FontRef::from_index(run.font().data.as_ref(), run.font().index as usize)
@@ -228,9 +229,7 @@ mod tests {
                     for glyph in gr.positioned_glyphs() {
                         println!("Glyph ID: {}", glyph.id);
 
-                        if let Some(bitmap) = scaler
-                            .scale_color_bitmap(glyph.id as u16, swash::scale::StrikeWith::BestFit)
-                        {
+                        if let Some(bitmap) = scaler.scale_color_bitmap(glyph.id as u16, BestFit) {
                             println!(
                                 "  -> Color bitmap: {}x{}",
                                 bitmap.placement.width, bitmap.placement.height

@@ -1,3 +1,5 @@
+use std::env::consts::{ARCH, OS};
+
 use anyhow::{Context, Result};
 use colored::Colorize;
 use tokio::process::Command;
@@ -82,8 +84,8 @@ pub fn log_warning(message: &str) {
 }
 
 pub fn get_current_platform_target() -> Option<&'static Target> {
-    let os = std::env::consts::OS;
-    let arch = std::env::consts::ARCH;
+    let os = OS;
+    let arch = ARCH;
 
     TARGETS.iter().find(|target| {
         let parts: Vec<&str> = target.platform.split('-').collect();

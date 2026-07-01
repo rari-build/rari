@@ -1,8 +1,11 @@
 #![allow(clippy::unused_async_trait_impl)]
 
 use std::{
+    env,
     fmt::Write,
-    path::PathBuf,
+    future,
+    path::{Path, PathBuf},
+    string::ToString,
     sync::{Arc, atomic::Ordering},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
@@ -13,11 +16,11 @@ use parking_lot::Mutex;
 use rari_error::RariError;
 use rari_rsc::{
     components::ComponentRegistry,
-    utils::{extract_dependencies, hash_string},
+    utils::{self, extract_dependencies, hash_string},
 };
 use rustc_hash::FxHashSet;
 use serde_json::Value;
-use tokio::time::timeout;
+use tokio::{fs, time, time::timeout};
 use tracing::error;
 
 use super::{
@@ -32,6 +35,7 @@ use super::{
 use crate::{
     rendering::base::loader::{RscJsLoader, RscModuleOperation},
     runtime::JsExecutionRuntime,
+    server::middleware::request_context::RequestContext,
 };
 
 pub struct RscRenderer {
@@ -76,7 +80,7 @@ impl RscRenderer {
             if start_time.elapsed() > shutdown_timeout {
                 break;
             }
-            tokio::time::sleep(CACHE_CLEANUP_INTERVAL).await;
+            time::sleep(CACHE_CLEANUP_INTERVAL).await;
         }
 
         self.clear_script_cache();
@@ -96,7 +100,7 @@ impl RscRenderer {
     pub fn force_cleanup(&self) -> impl Future<Output = Result<(), RariError>> {
         self.clear_script_cache();
         self.resource_tracker.memory_pressure_events.store(0, Ordering::Relaxed);
-        std::future::ready(Ok(()))
+        future::ready(Ok(()))
     }
 
     #[must_use]
@@ -418,7 +422,7 @@ globalThis['~errors'].batch.push({{
         let mut stack: Vec<String> = vec![dep];
         let mut visited: FxHashSet<String> = FxHashSet::default();
 
-        let base_path = std::env::current_dir().unwrap_or_default();
+        let base_path = env::current_dir().unwrap_or_default();
         let src_dir = base_path.join("src");
         let extensions = [".ts", ".tsx", ".js", ".jsx"];
 
@@ -459,7 +463,7 @@ globalThis['~errors'].batch.push({{
 
             for potential_path in &potential_paths {
                 if potential_path.exists() {
-                    if let Ok(content) = std::fs::read_to_string(potential_path) {
+                    if let Ok(content) = fs::read_to_string(potential_path).await {
                         let dep_component_id = potential_path
                             .file_stem()
                             .unwrap_or_default()
@@ -653,17 +657,16 @@ globalThis['~errors'].batch.push({{
             return Ok(());
         }
 
-        let error_details = result
-            .get("details")
-            .and_then(|v| v.as_str())
-            .map(std::string::ToString::to_string)
-            .unwrap_or_else(|| {
-                result
-                    .get("error")
-                    .and_then(|v| v.as_str())
-                    .map(std::string::ToString::to_string)
-                    .unwrap_or_else(|| "No error details available".to_string())
-            });
+        let error_details =
+            result.get("details").and_then(|v| v.as_str()).map(ToString::to_string).unwrap_or_else(
+                || {
+                    result
+                        .get("error")
+                        .and_then(|v| v.as_str())
+                        .map(ToString::to_string)
+                        .unwrap_or_else(|| "No error details available".to_string())
+                },
+            );
 
         Err(RariError::js_execution(format!(
             "Component verification failed for '{component_id}': {error_details}"
@@ -677,7 +680,7 @@ globalThis['~errors'].batch.push({{
 
     pub fn is_client_reference(&self, component_id: &str) -> impl Future<Output = bool> {
         let registry = self.component_registry.lock();
-        std::future::ready(registry.is_client_reference(component_id))
+        future::ready(registry.is_client_reference(component_id))
     }
 
     pub fn register_client_component(
@@ -720,7 +723,7 @@ globalThis['~errors'].batch.push({{
         &mut self,
         component_id: &str,
         props: Option<&str>,
-        request_context: Option<Arc<crate::server::middleware::request_context::RequestContext>>,
+        request_context: Option<Arc<RequestContext>>,
     ) -> Result<String, RariError> {
         self.resource_tracker.increment_active_renders();
         let result =
@@ -741,7 +744,7 @@ globalThis['~errors'].batch.push({{
         &mut self,
         component_id: &str,
         props: Option<&str>,
-        request_context: Option<Arc<crate::server::middleware::request_context::RequestContext>>,
+        request_context: Option<Arc<RequestContext>>,
     ) -> Result<String, RariError> {
         self.resource_tracker.increment_active_renders();
         let result =
@@ -857,7 +860,7 @@ globalThis['~errors'].batch.push({{
         &mut self,
         component_id: &str,
         props: Option<&str>,
-        _request_context: Option<Arc<crate::server::middleware::request_context::RequestContext>>,
+        _request_context: Option<Arc<RequestContext>>,
     ) -> Result<String, RariError> {
         self.internal_render_to_rsc(component_id, props).await
     }
@@ -866,7 +869,7 @@ globalThis['~errors'].batch.push({{
         &mut self,
         component_id: &str,
         props: Option<&str>,
-        _request_context: Option<Arc<crate::server::middleware::request_context::RequestContext>>,
+        _request_context: Option<Arc<RequestContext>>,
     ) -> Result<String, RariError> {
         self.internal_render_to_string(component_id, props).await
     }
@@ -1004,10 +1007,7 @@ globalThis['~errors'].batch.push({{
                     </div>",
                 component_id,
                 e,
-                SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .map(|d| d.as_secs())
-                    .unwrap_or(0)
+                SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
             )),
         }
     }
@@ -1017,7 +1017,7 @@ globalThis['~errors'].batch.push({{
         component_id: &str,
         _props: Option<&str>,
     ) -> impl Future<Output = Result<String, RariError>> {
-        std::future::ready(Ok(format!(
+        future::ready(Ok(format!(
             r#"<div data-client-component="{component_id}" data-component-id="{component_id}"></div>"#,
         )))
     }
@@ -1142,11 +1142,10 @@ globalThis['~errors'].batch.push({{
 
         if !is_registered {
             let component_path = component_id.strip_prefix("app/").unwrap_or(component_id);
-            let dist_path =
-                std::path::Path::new("dist/server").join(format!("{component_path}.js"));
+            let dist_path = Path::new("dist/server").join(format!("{component_path}.js"));
 
             if dist_path.exists() {
-                let component_code = tokio::fs::read_to_string(&dist_path).await.map_err(|e| {
+                let component_code = fs::read_to_string(&dist_path).await.map_err(|e| {
                     RariError::io(format!(
                         "Failed to read component file {}: {}",
                         dist_path.display(),
@@ -1154,7 +1153,7 @@ globalThis['~errors'].batch.push({{
                     ))
                 })?;
 
-                let dependencies = rari_rsc::utils::extract_dependencies(&component_code);
+                let dependencies = utils::extract_dependencies(&component_code);
 
                 {
                     let mut registry = self.component_registry.lock();

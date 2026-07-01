@@ -2,6 +2,7 @@ use std::{fmt::Write, path::PathBuf};
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+use tokio::fs;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PackageJson {
@@ -87,7 +88,7 @@ impl Package {
         let pkg_path = PathBuf::from(path);
         let pkg_json_path = pkg_path.join("package.json");
 
-        let content = tokio::fs::read_to_string(&pkg_json_path).await?;
+        let content = fs::read_to_string(&pkg_json_path).await?;
         let pkg_json: PackageJson = serde_json::from_str(&content)?;
 
         Ok(Self { name: name.to_string(), path: pkg_path, current_version: pkg_json.version })
@@ -95,7 +96,7 @@ impl Package {
 
     pub async fn update_version(&self, new_version: &str) -> Result<()> {
         let pkg_json_path = self.path.join("package.json");
-        let content = tokio::fs::read_to_string(&pkg_json_path).await?;
+        let content = fs::read_to_string(&pkg_json_path).await?;
 
         let pkg_json: PackageJson = serde_json::from_str(&content)?;
         let old_version = &pkg_json.version;
@@ -110,7 +111,7 @@ impl Package {
             anyhow::bail!("Failed to update version in package.json - pattern not found");
         }
 
-        tokio::fs::write(&pkg_json_path, updated.as_ref()).await?;
+        fs::write(&pkg_json_path, updated.as_ref()).await?;
 
         Ok(())
     }

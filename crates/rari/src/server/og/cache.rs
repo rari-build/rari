@@ -1,10 +1,20 @@
 use std::{
+    collections::hash_map::DefaultHasher,
+    error::Error,
+    fs as StdFs,
+    hash::{Hash, Hasher},
+    io::ErrorKind::NotFound,
     path::{Path, PathBuf},
     sync::Arc,
 };
 
+use tokio::{fs, task};
+
 use crate::server::{
-    cache::handler::{CacheError, CacheHandler, MemoryCacheHandler},
+    cache::{
+        MemoryConfig,
+        handler::{CacheError, CacheHandler, MemoryCacheHandler},
+    },
     config::Config,
 };
 
@@ -18,11 +28,10 @@ pub struct OgImageCache {
 
 impl OgImageCache {
     pub fn new(memory_capacity: usize, project_path: &Path) -> Self {
-        let handler =
-            MemoryCacheHandler::with_config(crate::server::cache::handler::MemoryConfig {
-                max_entries: memory_capacity.max(1),
-                default_ttl: 0,
-            });
+        let handler = MemoryCacheHandler::with_config(MemoryConfig {
+            max_entries: memory_capacity.max(1),
+            default_ttl: 0,
+        });
         Self::with_handler(Arc::new(handler), project_path)
     }
 
@@ -47,18 +56,13 @@ impl OgImageCache {
 
     async fn ensure_cache_dir(&self) {
         let dir = self.cache_dir.clone();
-        let result = tokio::task::spawn_blocking(move || std::fs::create_dir_all(&dir)).await;
+        let result = task::spawn_blocking(move || StdFs::create_dir_all(&dir)).await;
         if let Ok(Err(e)) = result {
             tracing::error!("Failed to create OG cache directory: {}", e);
         }
     }
 
     fn cache_filename(&self, key: &str) -> PathBuf {
-        use std::{
-            collections::hash_map::DefaultHasher,
-            hash::{Hash, Hasher},
-        };
-
         let mut hasher = DefaultHasher::new();
         key.hash(&mut hasher);
         let hash = hasher.finish();
@@ -72,7 +76,7 @@ impl OgImageCache {
         }
 
         let path = self.cache_filename(key);
-        if let Ok(data) = tokio::fs::read(&path).await {
+        if let Ok(data) = fs::read(&path).await {
             if let Err(e) = self.handler.set(&Self::ns(key), data.clone(), OG_TTL_SECS).await {
                 tracing::debug!("OG image cache write-through to handler failed: {}", e);
             }
@@ -82,15 +86,11 @@ impl OgImageCache {
         None
     }
 
-    pub async fn insert(
-        &self,
-        key: String,
-        value: Vec<u8>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn insert(&self, key: String, value: Vec<u8>) -> Result<(), Box<dyn Error>> {
         self.ensure_cache_dir().await;
 
         let path = self.cache_filename(&key);
-        tokio::fs::write(&path, &value).await?;
+        fs::write(&path, &value).await?;
 
         self.handler.set(&Self::ns(&key), value, OG_TTL_SECS).await?;
         Ok(())
@@ -108,9 +108,9 @@ impl OgImageCache {
         }
 
         let path = self.cache_filename(key);
-        match tokio::fs::remove_file(&path).await {
+        match fs::remove_file(&path).await {
             Ok(()) => Ok(prev),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(prev),
+            Err(e) if e.kind() == NotFound => Ok(prev),
             Err(e) => {
                 tracing::error!(key = %key, path = %path.display(), error = %e, "Failed to remove OG image from disk cache");
                 Err(CacheError::Io(e))
@@ -121,9 +121,9 @@ impl OgImageCache {
     pub async fn clear(&self) -> Result<(), CacheError> {
         self.handler.clear_prefix(KEY_PREFIX).await?;
 
-        let mut entries = match tokio::fs::read_dir(&self.cache_dir).await {
+        let mut entries = match fs::read_dir(&self.cache_dir).await {
             Ok(e) => e,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(e) if e.kind() == NotFound => return Ok(()),
             Err(e) => {
                 tracing::error!(path = %self.cache_dir.display(), error = %e, "Failed to read OG cache dir for clear");
                 return Err(CacheError::Io(e));
@@ -145,7 +145,7 @@ impl OgImageCache {
 
             if entry.path().extension().map(|e| e == "webp").unwrap_or(false) {
                 let path = entry.path();
-                if let Err(e) = tokio::fs::remove_file(&path).await
+                if let Err(e) = fs::remove_file(&path).await
                     && first_err.is_none()
                 {
                     first_err = Some(CacheError::Io(e));
@@ -190,12 +190,10 @@ mod tests {
     }
 
     fn fresh_cache(test_name: &str, memory_capacity: usize) -> OgImageCache {
-        let handler = Arc::new(MemoryCacheHandler::with_config(
-            crate::server::cache::handler::MemoryConfig {
-                max_entries: memory_capacity.max(1),
-                default_ttl: 0,
-            },
-        ));
+        let handler = Arc::new(MemoryCacheHandler::with_config(MemoryConfig {
+            max_entries: memory_capacity.max(1),
+            default_ttl: 0,
+        }));
         OgImageCache::with_handler(handler, &test_project_path(test_name))
     }
 
@@ -244,11 +242,12 @@ mod tests {
     #[tokio::test]
     async fn test_handler_fallback_to_disk() {
         let project_path = test_project_path("fallback-to-disk");
-        let _ = std::fs::remove_dir_all(&project_path);
+        let _ = StdFs::remove_dir_all(&project_path);
 
-        let handler_a = Arc::new(MemoryCacheHandler::with_config(
-            crate::server::cache::handler::MemoryConfig { max_entries: 8, default_ttl: 0 },
-        ));
+        let handler_a = Arc::new(MemoryCacheHandler::with_config(MemoryConfig {
+            max_entries: 8,
+            default_ttl: 0,
+        }));
         let cache_a = OgImageCache::with_handler(handler_a, &project_path);
 
         let payload = vec![0xDE, 0xAD, 0xBE, 0xEF];
@@ -256,9 +255,10 @@ mod tests {
         cache_a.get("/persistent").await.expect("cache_a in-memory hit");
         drop(cache_a);
 
-        let handler_b = Arc::new(MemoryCacheHandler::with_config(
-            crate::server::cache::handler::MemoryConfig { max_entries: 8, default_ttl: 0 },
-        ));
+        let handler_b = Arc::new(MemoryCacheHandler::with_config(MemoryConfig {
+            max_entries: 8,
+            default_ttl: 0,
+        }));
         let cache_b = OgImageCache::with_handler(
             Arc::clone(&handler_b) as Arc<dyn CacheHandler>,
             &project_path,
@@ -271,6 +271,6 @@ mod tests {
         assert_eq!(in_new_handler, Some(payload.clone()), "write-through to new handler missing");
 
         cache_b.clear().await.expect("clear");
-        let _ = std::fs::remove_dir_all(&project_path);
+        let _ = StdFs::remove_dir_all(&project_path);
     }
 }

@@ -1,8 +1,9 @@
+use std::string::ToString;
+
 use axum::{
     body::Body,
     extract::State,
-    http::{HeaderMap, HeaderValue, StatusCode},
-    response::Response,
+    http::{HeaderMap, HeaderValue, Request, Response, StatusCode},
 };
 use tracing::error;
 
@@ -26,8 +27,8 @@ fn add_cors_headers(
 #[axum::debug_handler]
 pub async fn api_cors_preflight(
     State(state): State<ServerState>,
-    req: axum::http::Request<Body>,
-) -> Response {
+    req: Request<Body>,
+) -> Response<Body> {
     let path = req.uri().path();
     let request_headers = req.headers();
 
@@ -69,17 +70,13 @@ pub async fn api_cors_preflight(
 #[axum::debug_handler]
 pub async fn handle_api_route(
     State(state): State<ServerState>,
-    req: axum::http::Request<Body>,
-) -> Result<axum::http::Response<Body>, StatusCode> {
+    req: Request<Body>,
+) -> Result<Response<Body>, StatusCode> {
     let path = req.uri().path().to_string();
     let method = req.method().to_string();
     let is_development = state.config.is_development();
 
-    let origin = req
-        .headers()
-        .get("origin")
-        .and_then(|v| v.to_str().ok())
-        .map(std::string::ToString::to_string);
+    let origin = req.headers().get("origin").and_then(|v| v.to_str().ok()).map(ToString::to_string);
     let cors_config = state.config.cors_config();
 
     let api_handler = match &state.api_route_handler {
@@ -103,7 +100,7 @@ pub async fn handle_api_route(
                     .get_property("allowed_methods")
                     .unwrap_or("")
                     .split(',')
-                    .map(std::string::ToString::to_string)
+                    .map(ToString::to_string)
                     .collect::<Vec<_>>();
 
                 let api_error = ApiRouteError::MethodNotAllowed {

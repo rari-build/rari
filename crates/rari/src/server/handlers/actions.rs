@@ -1,4 +1,4 @@
-use std::{fmt::Write, sync::Arc};
+use std::{fmt::Write, str, sync::Arc};
 
 use axum::{
     body::Bytes,
@@ -13,7 +13,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tracing::error;
 
-use crate::server::ServerState;
+use crate::server::{
+    ServerState,
+    config::RedirectConfig,
+    core::utils::http::is_origin_allowed,
+    middleware::request_context::{PendingCookie, PendingCookieKey, RequestContext},
+};
 
 const MAX_BOUND_ARGS: usize = 1000;
 const MAX_BIGINT_DIGITS: usize = 300;
@@ -171,7 +176,7 @@ fn check_origin(headers: &HeaderMap, allowed_origins: &[String]) -> Result<(), S
     }
 
     if let Some(origin) = headers.get("origin").and_then(|v| v.to_str().ok()) {
-        if !crate::server::core::utils::http::is_origin_allowed(origin, allowed_origins) {
+        if !is_origin_allowed(origin, allowed_origins) {
             error!("Invalid origin: {}", origin);
             return Err(StatusCode::FORBIDDEN);
         }
@@ -187,8 +192,7 @@ fn check_origin(headers: &HeaderMap, allowed_origins: &[String]) -> Result<(), S
                 } else {
                     format!("{scheme}://{host}:{port}")
                 };
-            if crate::server::core::utils::http::is_origin_allowed(&referer_origin, allowed_origins)
-            {
+            if is_origin_allowed(&referer_origin, allowed_origins) {
                 return Ok(());
             }
             error!("Invalid referer origin: {}", referer_origin);
@@ -320,12 +324,8 @@ pub async fn handle_server_action(
     let cookie_header =
         headers.get(header::COOKIE).and_then(|v| v.to_str().ok()).map(ToString::to_string);
 
-    let request_context = std::sync::Arc::new(
-        crate::server::middleware::request_context::RequestContext::new(
-            "/_rari/action".to_string(),
-        )
-        .with_cookies(cookie_header),
-    );
+    let request_context =
+        Arc::new(RequestContext::new("/_rari/action".to_string()).with_cookies(cookie_header));
 
     let renderer = state.renderer.lock().await;
 
@@ -438,12 +438,8 @@ pub async fn handle_form_action(
     let cookie_header =
         headers.get(header::COOKIE).and_then(|v| v.to_str().ok()).map(ToString::to_string);
 
-    let request_context = std::sync::Arc::new(
-        crate::server::middleware::request_context::RequestContext::new(
-            "/_rari/action".to_string(),
-        )
-        .with_cookies(cookie_header),
-    );
+    let request_context =
+        Arc::new(RequestContext::new("/_rari/action".to_string()).with_cookies(cookie_header));
 
     let renderer = state.renderer.lock().await;
 
@@ -518,10 +514,7 @@ pub async fn handle_form_action(
                             "{}://{}:{}",
                             referer_tuple.0, referer_tuple.1, referer_tuple.2
                         );
-                        let allowed = crate::server::core::utils::http::is_origin_allowed(
-                            &referer_origin,
-                            &allowed_origins,
-                        );
+                        let allowed = is_origin_allowed(&referer_origin, &allowed_origins);
                         (is_same, allowed)
                     };
 
@@ -575,10 +568,7 @@ pub async fn handle_form_action(
     }
 }
 
-pub fn validate_redirect_url(
-    url: &str,
-    config: &crate::server::config::RedirectConfig,
-) -> Result<String, RariError> {
+pub fn validate_redirect_url(url: &str, config: &RedirectConfig) -> Result<String, RariError> {
     if config.allow_relative && url.starts_with('/') && !url.starts_with("//") {
         return Ok(url.to_string());
     }
@@ -609,10 +599,7 @@ pub fn validate_redirect_url(
     Ok(url.to_string())
 }
 
-fn extract_redirect_from_result(
-    result: &Value,
-    config: &crate::server::config::RedirectConfig,
-) -> Option<String> {
+fn extract_redirect_from_result(result: &Value, config: &RedirectConfig) -> Option<String> {
     if let Some(redirect) = result.get("redirect") {
         if let Some(url) = redirect.as_str() {
             return validate_redirect_url(url, config).ok();
@@ -627,8 +614,8 @@ fn extract_redirect_from_result(
 }
 
 fn parse_form_data(body: &Bytes) -> Result<FxHashMap<String, String>, RariError> {
-    let body_str = std::str::from_utf8(body)
-        .map_err(|_| RariError::bad_request("Invalid UTF-8 in form data"))?;
+    let body_str =
+        str::from_utf8(body).map_err(|_| RariError::bad_request("Invalid UTF-8 in form data"))?;
 
     let mut form_data = FxHashMap::default();
 
@@ -828,11 +815,8 @@ pub fn is_reserved_export_name(name: &str) -> bool {
 }
 
 fn append_pending_cookies(
-    headers: &mut axum::http::HeaderMap,
-    pending_cookies: &dashmap::DashMap<
-        crate::server::middleware::request_context::PendingCookieKey,
-        crate::server::middleware::request_context::PendingCookie,
-    >,
+    headers: &mut HeaderMap,
+    pending_cookies: &dashmap::DashMap<PendingCookieKey, PendingCookie>,
 ) {
     for entry in pending_cookies {
         let cookie = entry.value();
@@ -867,9 +851,7 @@ pub fn is_valid_attr_value(s: &str) -> bool {
     !s.is_empty() && s.is_ascii() && s.bytes().all(|b| b >= 32 && b != b';' && b != 127)
 }
 
-pub fn build_set_cookie_header(
-    cookie: &crate::server::middleware::request_context::PendingCookie,
-) -> Result<String, String> {
+pub fn build_set_cookie_header(cookie: &PendingCookie) -> Result<String, String> {
     if !is_valid_cookie_name(&cookie.name) {
         return Err(format!("invalid cookie name: {}", cookie.name));
     }

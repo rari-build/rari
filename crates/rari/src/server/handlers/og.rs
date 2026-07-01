@@ -1,3 +1,5 @@
+use std::env;
+
 use axum::{
     extract::{Path, State},
     http::{StatusCode, header},
@@ -20,7 +22,7 @@ pub async fn og_image_handler(
         match og_generator.generate(&normalized_path).await {
             Ok((image_data, cache_hit)) => {
                 let is_production =
-                    std::env::var("NODE_ENV").map(|v| v == "production").unwrap_or(false);
+                    env::var("NODE_ENV").map(|v| v == "production").unwrap_or(false);
 
                 let cache_header = if is_production {
                     "public, max-age=31536000, immutable"

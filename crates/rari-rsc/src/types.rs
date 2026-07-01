@@ -1,3 +1,5 @@
+use std::string::ToString;
+
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -91,7 +93,7 @@ impl RSCTree {
     }
 
     pub fn fragment(children: Vec<RSCTree>, key: Option<&str>) -> Self {
-        RSCTree::Fragment { children, key: key.map(std::string::ToString::to_string) }
+        RSCTree::Fragment { children, key: key.map(ToString::to_string) }
     }
 
     pub fn array(elements: Vec<RSCTree>) -> Self {
@@ -110,7 +112,7 @@ impl RSCTree {
         RSCTree::Error {
             message: message.to_string(),
             component_name: component_name.to_string(),
-            stack: stack.map(std::string::ToString::to_string),
+            stack: stack.map(ToString::to_string),
         }
     }
 
@@ -239,7 +241,7 @@ impl RSCTree {
                     let is_client_reference = id.starts_with("$L") || id.contains('#');
 
                     if is_client_reference {
-                        let key = arr[2].as_str().map(std::string::ToString::to_string);
+                        let key = arr[2].as_str().map(ToString::to_string);
                         let props = arr[3]
                             .as_object()
                             .ok_or("Invalid client reference props")?
@@ -250,7 +252,7 @@ impl RSCTree {
                         Ok(RSCTree::ClientReference { id: id.to_string(), key, props })
                     } else {
                         let tag = id;
-                        let key = arr[2].as_str().map(std::string::ToString::to_string);
+                        let key = arr[2].as_str().map(ToString::to_string);
                         let props_obj = arr[3].as_object().ok_or("Invalid element props")?;
 
                         let mut props: FxHashMap<String, Value> =
@@ -298,10 +300,7 @@ impl RSCTree {
                 if obj.contains_key("$$typeof") && obj.contains_key("type") {
                     let tag =
                         obj.get("type").and_then(|t| t.as_str()).ok_or("Invalid element type")?;
-                    let key = obj
-                        .get("key")
-                        .and_then(|k| k.as_str())
-                        .map(std::string::ToString::to_string);
+                    let key = obj.get("key").and_then(|k| k.as_str()).map(ToString::to_string);
                     let props = obj
                         .get("props")
                         .and_then(|p| p.as_object())

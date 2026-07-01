@@ -9,18 +9,22 @@ mod ui;
 use std::{
     env,
     io::{self, Write},
+    path::{Path, PathBuf},
     time::Duration,
 };
 
 use anyhow::Result;
 use app::App;
 use clap::Parser;
+use colored::Colorize;
 use crossterm::{
     event::{self, Event, KeyEventKind},
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
+
+use crate::package::{Package, PackageGroup, ReleaseType, ReleaseUnit, ReleasedPackage};
 
 #[derive(Parser, Debug)]
 #[command(name = "release")]
@@ -119,10 +123,6 @@ async fn run_non_interactive(
     env_version: Option<String>,
     env_type: Option<String>,
 ) -> Result<()> {
-    use colored::Colorize;
-
-    use crate::package::{Package, PackageGroup, ReleaseType, ReleaseUnit, ReleasedPackage};
-
     println!("{}", "rari Release Script".cyan().bold());
     if dry_run {
         println!("{}", "[DRY RUN MODE]".yellow().bold());
@@ -193,10 +193,9 @@ async fn run_non_interactive(
 
         println!("  {} {} → {}", "Version:".bold(), unit.current_version(), new_version.green());
 
-        let first_path =
-            unit.paths().first().map(|p| p.as_path()).unwrap_or(std::path::Path::new("."));
-        let commits = crate::git::get_commits_since_tag(unit_name, first_path).await?;
-        let previous_tag = crate::git::get_previous_tag(unit_name, None).await?;
+        let first_path = unit.paths().first().map(|p| p.as_path()).unwrap_or(Path::new("."));
+        let commits = git::get_commits_since_tag(unit_name, first_path).await?;
+        let previous_tag = git::get_previous_tag(unit_name, None).await?;
         if !commits.is_empty() {
             println!("  {} Commits since last release:", "ℹ".blue().bold());
             for commit in commits.iter().take(5) {
@@ -236,7 +235,7 @@ async fn run_non_interactive(
             println!("  {} Generating changelog...", "→".cyan());
             let tag = format!("{unit_name}@{new_version}");
             let package_path = unit.paths()[0];
-            crate::changelog::generate(&tag, unit_name, package_path).await?;
+            changelog::generate(&tag, unit_name, package_path).await?;
             println!("  {} Generated changelog", "✓".green());
         } else {
             println!("  {} Skipping changelog generation", "ℹ".blue());
@@ -258,10 +257,10 @@ async fn run_non_interactive(
             let paths = unit.paths();
             if paths.is_empty() {
             } else if paths.len() > 1 {
-                let path_refs: Vec<&std::path::Path> = paths.iter().map(|p| p.as_path()).collect();
-                crate::git::add_and_commit_multiple(&message, &path_refs).await?;
+                let path_refs: Vec<&Path> = paths.iter().map(|p| p.as_path()).collect();
+                git::add_and_commit_multiple(&message, &path_refs).await?;
             } else {
-                crate::git::add_and_commit(&message, paths[0]).await?;
+                git::add_and_commit(&message, paths[0]).await?;
             }
 
             let generates_changelog =
@@ -273,19 +272,19 @@ async fn run_non_interactive(
                     files_to_add.push(changelog_path);
                 }
             }
-            let lockfile_path = std::path::PathBuf::from("pnpm-lock.yaml");
+            let lockfile_path = PathBuf::from("pnpm-lock.yaml");
             if lockfile_path.exists() {
                 files_to_add.push(lockfile_path);
             }
 
             if !files_to_add.is_empty() {
                 for file in &files_to_add {
-                    crate::git::add_file(file).await?;
+                    git::add_file(file).await?;
                 }
-                crate::git::amend_commit().await?;
+                git::amend_commit().await?;
             }
 
-            crate::git::create_tag(&tag).await?;
+            git::create_tag(&tag).await?;
             println!("  {} Committed and tagged", "✓".green());
         }
 
@@ -321,7 +320,7 @@ async fn run_non_interactive(
             name: unit_name.to_string(),
             version: new_version.clone(),
             tag: tag.clone(),
-            release_notes: crate::changelog::generate_release_notes(
+            release_notes: changelog::generate_release_notes(
                 &tag,
                 unit_name,
                 previous_tag.as_deref(),
@@ -339,7 +338,7 @@ async fn run_non_interactive(
         println!("{} Would push commits and tags to remote", "[DRY RUN]".yellow());
     } else {
         println!("{} Pushing commits and tags to remote...", "→".cyan());
-        crate::git::push_changes().await?;
+        git::push_changes().await?;
         println!("{} Pushed to remote", "✓".green());
     }
     println!();
@@ -350,7 +349,7 @@ async fn run_non_interactive(
         println!();
         println!("{}", "📝 Create GitHub Releases?".cyan().bold());
 
-        match crate::git::get_repo_info().await {
+        match git::get_repo_info().await {
             Ok((owner, repo)) => {
                 let release_urls: Vec<_> = released_packages
                     .iter()

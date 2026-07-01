@@ -6,8 +6,10 @@ use std::{
     time::Instant,
 };
 
+use axum::http::HeaderMap;
 use futures::stream::{self, StreamExt};
 use rustc_hash::FxHashMap;
+use tokio::sync::{Mutex, OnceCell};
 use tracing::{error, info};
 
 use crate::{
@@ -16,7 +18,8 @@ use crate::{
         ServerState,
         cache::response,
         handlers::app::{collect_page_metadata, wrap_html_with_metadata},
-        routing::types::ParamValue,
+        middleware::request_context::RequestContext,
+        routing::{AppRouteMatch, AppRouter, types::ParamValue},
     },
 };
 
@@ -26,11 +29,10 @@ const WARMUP_CONCURRENCY: usize = 10;
 /// The RSC+Fizz pipeline shares V8 globals between the mutex-protected
 /// RSC render and the non-mutex Fizz render. Without serialization,
 /// concurrent warmup tasks interleave and produce wrong HTML.
-static WARMUP_RENDER_LOCK: tokio::sync::OnceCell<tokio::sync::Mutex<()>> =
-    tokio::sync::OnceCell::const_new();
+static WARMUP_RENDER_LOCK: OnceCell<Mutex<()>> = OnceCell::const_new();
 
-async fn warmup_render_lock() -> &'static tokio::sync::Mutex<()> {
-    WARMUP_RENDER_LOCK.get_or_init(|| async { tokio::sync::Mutex::new(()) }).await
+async fn warmup_render_lock() -> &'static Mutex<()> {
+    WARMUP_RENDER_LOCK.get_or_init(|| async { Mutex::new(()) }).await
 }
 
 pub async fn warm_cache(state: &ServerState) {
@@ -84,7 +86,7 @@ pub async fn warm_cache(state: &ServerState) {
 
 async fn warm_route(
     state: &ServerState,
-    app_router: &Arc<crate::server::routing::app_router::AppRouter>,
+    app_router: &Arc<AppRouter>,
     path: &str,
 ) -> Result<(), String> {
     let route_match =
@@ -101,10 +103,7 @@ async fn warm_route(
         Arc::clone(&state.layout_html_cache),
     );
 
-    let request_context =
-        Arc::new(crate::server::middleware::request_context::RequestContext::new(
-            route_match.route.path.clone(),
-        ));
+    let request_context = Arc::new(RequestContext::new(route_match.route.path.clone()));
 
     let _render_guard = warmup_render_lock().await.lock().await;
 
@@ -169,7 +168,7 @@ async fn warm_route(
 
         state.static_fast_cache.insert(
             path.to_string(),
-            std::sync::Arc::new(response::PrebuiltResponse {
+            Arc::new(response::PrebuiltResponse {
                 identity: body_bytes.clone(),
                 gzip: compressed_gzip.clone(),
                 br: compressed_br.clone(),
@@ -183,7 +182,7 @@ async fn warm_route(
 
         let cached_response = response::CachedResponse {
             body: body_bytes,
-            headers: axum::http::HeaderMap::new(),
+            headers: HeaderMap::new(),
             metadata: response::CacheMetadata {
                 cached_at: Instant::now(),
                 ttl: state.response_cache.config.default_ttl,
@@ -206,7 +205,7 @@ async fn warm_route(
             response::ResponseCache::generate_cache_key_with_mode(path, None, Some("rsc"));
 
         if state.response_cache.config.enabled {
-            let mut cache_headers = axum::http::HeaderMap::new();
+            let mut cache_headers = HeaderMap::new();
 
             if let Some(ref metadata) = context.metadata
                 && let Ok(metadata_json) = serde_json::to_string(metadata)
@@ -238,9 +237,7 @@ async fn warm_route(
     Ok(())
 }
 
-fn create_warmup_context(
-    route_match: &crate::server::routing::app_router::AppRouteMatch,
-) -> LayoutRenderContext {
+fn create_warmup_context(route_match: &AppRouteMatch) -> LayoutRenderContext {
     let mut params: FxHashMap<String, ParamValue> = FxHashMap::default();
 
     for (key, value) in &route_match.params {

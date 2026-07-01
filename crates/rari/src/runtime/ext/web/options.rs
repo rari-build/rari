@@ -3,7 +3,7 @@
     reason = "RequestBuilderHook type requires Result signature even when function never errors"
 )]
 
-use std::sync::Arc;
+use std::{rc::Rc, sync::Arc};
 
 use deno_fetch::dns::Resolver;
 use hyper_util::client::legacy::Builder;
@@ -17,12 +17,12 @@ type RequestBuilderHook =
 pub struct WebOptions {
     pub base_url: Option<deno_core::ModuleSpecifier>,
     pub user_agent: String,
-    pub root_cert_store_provider: Option<std::sync::Arc<dyn deno_tls::RootCertStoreProvider>>,
+    pub root_cert_store_provider: Option<Arc<dyn deno_tls::RootCertStoreProvider>>,
     pub proxy: Option<deno_tls::Proxy>,
     pub request_builder_hook: Option<RequestBuilderHook>,
     pub unsafely_ignore_certificate_errors: Option<Vec<String>>,
     pub client_cert_chain_and_key: deno_tls::TlsKeys,
-    pub file_fetch_handler: std::rc::Rc<dyn deno_fetch::FetchHandler>,
+    pub file_fetch_handler: Rc<dyn deno_fetch::FetchHandler>,
     pub permissions: Arc<dyn WebPermissions>,
     pub blob_store: Arc<deno_web::BlobStore>,
     pub broadcast_channel: deno_web::InMemoryBroadcastChannel,
@@ -41,7 +41,7 @@ impl Default for WebOptions {
             request_builder_hook: Some(fix_accept_encoding_for_deno),
             unsafely_ignore_certificate_errors: None,
             client_cert_chain_and_key: deno_tls::TlsKeys::Null,
-            file_fetch_handler: std::rc::Rc::new(deno_fetch::DefaultFileFetchHandler),
+            file_fetch_handler: Rc::new(deno_fetch::DefaultFileFetchHandler),
             permissions: Arc::new(DefaultWebPermissions),
             blob_store: Arc::new(deno_web::BlobStore::default()),
             broadcast_channel: deno_web::InMemoryBroadcastChannel::default(),

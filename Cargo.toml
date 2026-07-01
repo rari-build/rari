@@ -94,6 +94,7 @@ redundant_clone = "warn"
 redundant_pub_crate = "warn"
 significant_drop_in_scrutinee = "warn"
 unused_peekable = "warn"
+absolute_paths = "warn"
 
 [workspace.dependencies]
 anyhow = "1.0.102"

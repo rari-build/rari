@@ -1,10 +1,18 @@
-use std::sync::Arc;
+use std::{
+    env,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
+use base64::{Engine, engine::general_purpose::STANDARD};
 use cow_utils::CowUtils;
 use rari_error::RariError;
 use rari_utils::path_to_file_url;
 use serde_json::Value;
-use tokio::sync::{Mutex, mpsc};
+use tokio::{
+    sync::{Mutex, mpsc},
+    task,
+};
 use tracing::{debug, error};
 
 use super::{
@@ -147,10 +155,10 @@ impl LayoutRenderer {
         let page_props_json = serde_json::to_string(&page_props)?;
 
         fn component_dist_path(
-            base_path: &std::path::Path,
+            base_path: &Path,
             file_path: &str,
             component_id: Option<&str>,
-        ) -> std::path::PathBuf {
+        ) -> PathBuf {
             if let Some(component_id) = component_id {
                 return base_path.join(format!("{component_id}.js"));
             }
@@ -182,7 +190,7 @@ impl LayoutRenderer {
             base_path.join("app").join(&dist_filename)
         }
 
-        let dist_server_path = std::env::current_dir()
+        let dist_server_path = env::current_dir()
             .ok()
             .map(|p| p.join("dist/server"))
             .and_then(|p| p.canonicalize().ok());
@@ -241,9 +249,7 @@ impl LayoutRenderer {
         &self,
         route_match: &AppRouteMatch,
         context: &LayoutRenderContext,
-        request_context: Option<
-            std::sync::Arc<crate::server::middleware::request_context::RequestContext>,
-        >,
+        request_context: Option<Arc<RequestContext>>,
     ) -> Result<String, RariError> {
         self.render_route_with_mode_internal(route_match, context, request_context).await
     }
@@ -252,9 +258,7 @@ impl LayoutRenderer {
         &self,
         route_match: &AppRouteMatch,
         context: &LayoutRenderContext,
-        request_context: Option<
-            std::sync::Arc<crate::server::middleware::request_context::RequestContext>,
-        >,
+        request_context: Option<Arc<RequestContext>>,
     ) -> Result<String, RariError> {
         let loading_enabled = Config::get().map(|c| c.loading.enabled).unwrap_or(true);
         let loading_component_id = if loading_enabled {
@@ -292,9 +296,7 @@ impl LayoutRenderer {
         &self,
         route_match: &AppRouteMatch,
         context: &LayoutRenderContext,
-        request_context: Option<
-            std::sync::Arc<crate::server::middleware::request_context::RequestContext>,
-        >,
+        request_context: Option<Arc<RequestContext>>,
     ) -> Result<String, RariError> {
         let loading_enabled = Config::get().map(|config| config.loading.enabled).unwrap_or(true);
 
@@ -387,8 +389,7 @@ impl LayoutRenderer {
                     true,
                 )?;
 
-                let (chunk_sender, chunk_receiver) =
-                    tokio::sync::mpsc::channel::<Result<Vec<u8>, String>>(32);
+                let (chunk_sender, chunk_receiver) = mpsc::channel::<Result<Vec<u8>, String>>(32);
 
                 let runtime = {
                     let renderer = self.renderer.lock().await;
@@ -443,7 +444,7 @@ impl LayoutRenderer {
                     }
                 });
 
-                let (rsc_tx, rsc_rx) = tokio::sync::mpsc::channel::<RscStreamChunk>(32);
+                let (rsc_tx, rsc_rx) = mpsc::channel::<RscStreamChunk>(32);
                 tokio::spawn(async move {
                     let mut receiver = chunk_receiver;
                     while let Some(chunk_result) = receiver.recv().await {
@@ -506,10 +507,7 @@ impl LayoutRenderer {
                         .await;
 
                     let binary = match b64_result {
-                        Ok(v) => v.as_str().and_then(|b64| {
-                            use base64::Engine;
-                            base64::engine::general_purpose::STANDARD.decode(b64).ok()
-                        }),
+                        Ok(v) => v.as_str().and_then(|b64| STANDARD.decode(b64).ok()),
                         Err(_) => None,
                     };
 
@@ -560,8 +558,7 @@ impl LayoutRenderer {
                     .unwrap_or("")
                     .to_string();
 
-                let (chunk_sender, chunk_receiver) =
-                    tokio::sync::mpsc::channel::<Result<Vec<u8>, String>>(32);
+                let (chunk_sender, chunk_receiver) = mpsc::channel::<Result<Vec<u8>, String>>(32);
 
                 let head_content_json =
                     serde_json::to_string(&head_content).unwrap_or_else(|_| "\"\"".to_string());
@@ -649,7 +646,7 @@ impl LayoutRenderer {
 
                 let runtime_clone = Arc::clone(&runtime);
                 tokio::spawn(async move {
-                    tokio::task::yield_now().await;
+                    task::yield_now().await;
                     if let Err(e) = runtime_clone
                         .execute_script_for_streaming(
                             "fizz_direct_stream".to_string(),

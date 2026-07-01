@@ -2,9 +2,11 @@
 
 use std::{
     borrow::Cow,
-    fs,
+    env, fs,
+    io::{Error, ErrorKind::InvalidInput},
     path::{Path, PathBuf},
     rc::Rc,
+    string::ToString,
     sync::{Arc, OnceLock},
 };
 
@@ -34,7 +36,10 @@ use super::{
     },
     transpiler::{needs_jsx_transpilation, needs_typescript_transpilation},
 };
-use crate::server::cache::handler::CacheHandlerRegistry;
+use crate::{
+    runtime::transpile,
+    server::{cache::handler::CacheHandlerRegistry, config::CacheLayerConfig},
+};
 
 type ExtensionTranspilerResult = Result<(FastString, Option<Cow<'static, [u8]>>), JsErrorBox>;
 type ExtensionTranspilerFn = dyn Fn(FastString, FastString) -> ExtensionTranspilerResult;
@@ -106,7 +111,7 @@ impl RariModuleLoader {
         config: RuntimeConfig,
         registry: &CacheHandlerRegistry,
     ) -> Self {
-        let layer = crate::server::config::CacheLayerConfig {
+        let layer = CacheLayerConfig {
             handler: config.module_cache_handler.clone(),
             url: None,
             max_entries: config.cache_size_limit,
@@ -287,9 +292,9 @@ export default {{}};
     pub fn as_extension_transpiler(self: &Rc<Self>) -> Rc<ExtensionTranspilerFn> {
         Rc::new(move |specifier: FastString, code: FastString| {
             match ModuleSpecifier::parse(specifier.as_str()) {
-                Ok(_) => crate::runtime::transpile::maybe_transpile_source(specifier, code),
-                Err(e) => Err(JsErrorBox::from_err(Box::new(std::io::Error::new(
-                    std::io::ErrorKind::InvalidInput,
+                Ok(_) => transpile::maybe_transpile_source(specifier, code),
+                Err(e) => Err(JsErrorBox::from_err(Box::new(Error::new(
+                    InvalidInput,
                     format!("Failed to parse module specifier '{specifier}': {e}"),
                 )))),
             }
@@ -329,13 +334,13 @@ export default {{}};
         if dir.join("pnpm-workspace.yaml").exists() || dir.join("pnpm-lock.yaml").exists() {
             return true;
         }
-        if let Ok(content) = std::fs::read_to_string(dir.join("package.json"))
+        if let Ok(content) = fs::read_to_string(dir.join("package.json"))
             && content.contains("\"workspaces\"")
         {
             return true;
         }
         if dir.join("Cargo.toml").exists()
-            && let Ok(content) = std::fs::read_to_string(dir.join("Cargo.toml"))
+            && let Ok(content) = fs::read_to_string(dir.join("Cargo.toml"))
             && content.contains("[workspace]")
         {
             return true;
@@ -347,12 +352,12 @@ export default {{}};
         workspace_root: &Path,
         package_name: &str,
     ) -> Option<PathBuf> {
-        let entries = std::fs::read_dir(workspace_root).ok()?;
+        let entries = fs::read_dir(workspace_root).ok()?;
 
         for entry in entries.flatten() {
             let path = entry.path();
 
-            if let Ok(metadata) = std::fs::symlink_metadata(&path)
+            if let Ok(metadata) = fs::symlink_metadata(&path)
                 && metadata.file_type().is_symlink()
             {
                 continue;
@@ -385,12 +390,12 @@ export default {{}};
             for container in &["packages", "apps"] {
                 let container_path = path.join(container);
                 if container_path.is_dir()
-                    && let Ok(nested_entries) = std::fs::read_dir(&container_path)
+                    && let Ok(nested_entries) = fs::read_dir(&container_path)
                 {
                     for nested_entry in nested_entries.flatten() {
                         let nested_path = nested_entry.path();
 
-                        if let Ok(metadata) = std::fs::symlink_metadata(&nested_path)
+                        if let Ok(metadata) = fs::symlink_metadata(&nested_path)
                             && metadata.file_type().is_symlink()
                         {
                             continue;
@@ -417,7 +422,7 @@ export default {{}};
         referrer_path: &str,
     ) -> Option<String> {
         let start_dir = if referrer_path.is_empty() {
-            std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+            env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
         } else {
             let clean_referrer_path = if referrer_path.starts_with(FILE_PROTOCOL) {
                 file_url_to_path(referrer_path).unwrap_or_else(|| PathBuf::from(referrer_path))
@@ -430,12 +435,12 @@ export default {{}};
             if clean_referrer_str.contains("/rari_component/")
                 || clean_referrer_str.contains("/rari_internal/")
             {
-                std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+                env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
             } else {
-                let dir_path =
-                    clean_referrer_path.parent().map(std::path::Path::to_path_buf).unwrap_or_else(
-                        || std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
-                    );
+                let dir_path = clean_referrer_path
+                    .parent()
+                    .map(Path::to_path_buf)
+                    .unwrap_or_else(|| env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
                 dir_path.canonicalize().unwrap_or(dir_path)
             }
         };
@@ -443,8 +448,8 @@ export default {{}};
         let result = self.resolve_from_node_modules_with_dir(package_specifier, &start_dir);
 
         if result.is_none() {
-            let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-            let cwd_canonical = std::fs::canonicalize(&cwd).unwrap_or(cwd);
+            let cwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+            let cwd_canonical = fs::canonicalize(&cwd).unwrap_or(cwd);
             if cwd_canonical != start_dir {
                 return self.resolve_from_node_modules_with_dir(package_specifier, &cwd_canonical);
             }
@@ -525,7 +530,7 @@ export default {{}};
     ) -> Option<ModuleLoadResponse> {
         if let Some(code) = self.storage.get_module_code(specifier_str) {
             let (final_code, module_type) = if needs_typescript_transpilation(specifier_str) {
-                match crate::runtime::transpile::maybe_transpile_source(
+                match transpile::maybe_transpile_source(
                     specifier_str.to_string().into(),
                     code.into(),
                 ) {
@@ -539,7 +544,7 @@ export default {{}};
                     }
                 }
             } else if needs_jsx_transpilation(specifier_str) {
-                match crate::runtime::transpile::maybe_transpile_source(
+                match transpile::maybe_transpile_source(
                     specifier_str.to_string().into(),
                     code.into(),
                 ) {
@@ -600,7 +605,7 @@ export default {{}};
                     return None;
                 };
 
-                if !std::path::Path::new(&file_path).exists() {
+                if !Path::new(&file_path).exists() {
                     return Some(ModuleLoadResponse::Sync(Err(JsErrorBox::generic(
                         "Module not found",
                     ))));
@@ -1174,7 +1179,7 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
         let mut current_dir = PathBuf::from(&clean_referrer);
 
         if !current_dir.pop() {
-            current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+            current_dir = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
         }
 
         while !current_dir.as_os_str().is_empty() {
@@ -1264,10 +1269,7 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
         let json: serde_json::Value = serde_json::from_str(content)?;
 
         Ok(PackageInfo {
-            module: json
-                .get("module")
-                .and_then(|v| v.as_str())
-                .map(std::string::ToString::to_string),
+            module: json.get("module").and_then(|v| v.as_str()).map(ToString::to_string),
             exports: json.get("exports").cloned(),
         })
     }
@@ -1434,7 +1436,7 @@ impl ModuleLoader for RariModuleLoader {
             if after_node_modules.find('/').is_some()
                 && (specifier.starts_with("./") || specifier.starts_with("../"))
             {
-                let referrer_dir = match std::path::Path::new(referrer).parent() {
+                let referrer_dir = match Path::new(referrer).parent() {
                     Some(dir) => dir,
                     None => {
                         return Err(JsErrorBox::generic("Module not found"));

@@ -1,6 +1,6 @@
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
-use std::{fs, path::Path};
+use std::{fs, path::Path, process};
 
 use anyhow::{Context, Result};
 use tokio::process::Command;
@@ -73,7 +73,7 @@ pub fn copy_binary_to_platform_package(
             && let Some(path_str) = dest_path.to_str()
         {
             let sign_result =
-                std::process::Command::new("codesign").args(["-s", "-", path_str]).output();
+                process::Command::new("codesign").args(["-s", "-", path_str]).output();
             match sign_result {
                 Ok(output) if output.status.success() => {
                     log_success(&format!("Ad-hoc signed: {}", dest_path.display()));

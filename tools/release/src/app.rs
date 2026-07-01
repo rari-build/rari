@@ -6,7 +6,7 @@ use ratatui::Frame;
 
 use crate::{
     changelog, git,
-    package::{Package, ReleaseType, ReleasedPackage},
+    package::{Package, ReleaseType, ReleaseUnit, ReleasedPackage},
     ui,
 };
 
@@ -41,7 +41,7 @@ pub enum PublishStep {
 
 pub struct App {
     pub screen: Screen,
-    pub release_units: Vec<crate::package::ReleaseUnit>,
+    pub release_units: Vec<ReleaseUnit>,
     pub selected_package_idx: usize,
     pub selected_version_idx: usize,
     pub version_types: Vec<ReleaseType>,
@@ -331,7 +331,7 @@ impl App {
                             self.status_messages.push("Committing changes...".to_string());
 
                             if paths.len() > 1 {
-                                let path_refs: Vec<&std::path::Path> =
+                                let path_refs: Vec<&Path> =
                                     paths.iter().map(|p| p.as_path()).collect();
                                 git::add_and_commit_multiple(&message, &path_refs).await?;
                             } else {

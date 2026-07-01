@@ -1,4 +1,7 @@
+use std::time::Duration;
+
 use axum::{
+    body,
     body::Body,
     extract::{
         Request,
@@ -9,8 +12,10 @@ use axum::{
 };
 use futures::StreamExt as FuturesStreamExt;
 use futures_util::SinkExt;
+use http::uri::PathAndQuery;
 use rari_error::RariError;
 use reqwest::Client;
+use tokio::time;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use tracing::error;
 use tungstenite::{client::IntoClientRequest, http::Request as HttpRequest};
@@ -22,8 +27,8 @@ const VITE_WS_PROTOCOL: &str = "vite-hmr";
 fn create_client() -> Client {
     #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
     Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .connect_timeout(std::time::Duration::from_secs(10))
+        .timeout(Duration::from_secs(30))
+        .connect_timeout(Duration::from_secs(10))
         .build()
         .expect("Failed to create HTTP client")
 }
@@ -44,7 +49,7 @@ pub async fn vite_src_proxy(req: Request) -> impl IntoResponse {
     let vite_base_url = format!("http://{}", config.vite_address());
 
     let path_and_query =
-        req.uri().path_and_query().map(http::uri::PathAndQuery::as_str).unwrap_or(req.uri().path());
+        req.uri().path_and_query().map(PathAndQuery::as_str).unwrap_or(req.uri().path());
 
     let path_without_prefix = path_and_query.strip_prefix("/src").unwrap_or(path_and_query);
     let target_url = format!("{vite_base_url}/src{path_without_prefix}");
@@ -52,7 +57,7 @@ pub async fn vite_src_proxy(req: Request) -> impl IntoResponse {
     let method = req.method().clone();
     let headers = req.headers().clone();
 
-    let body_bytes = match axum::body::to_bytes(req.into_body(), usize::MAX).await {
+    let body_bytes = match body::to_bytes(req.into_body(), usize::MAX).await {
         Ok(bytes) => bytes,
         Err(e) => {
             error!("Failed to read request body: {}", e);
@@ -124,7 +129,7 @@ pub async fn vite_reverse_proxy(req: Request) -> impl IntoResponse {
     let vite_base_url = format!("http://{}", config.vite_address());
 
     let path_and_query =
-        req.uri().path_and_query().map(http::uri::PathAndQuery::as_str).unwrap_or(req.uri().path());
+        req.uri().path_and_query().map(PathAndQuery::as_str).unwrap_or(req.uri().path());
 
     let path_without_prefix = path_and_query.strip_prefix("/vite-server").unwrap_or(path_and_query);
     let target_url = format!("{vite_base_url}/vite-server{path_without_prefix}");
@@ -132,7 +137,7 @@ pub async fn vite_reverse_proxy(req: Request) -> impl IntoResponse {
     let method = req.method().clone();
     let headers = req.headers().clone();
 
-    let body_bytes = match axum::body::to_bytes(req.into_body(), usize::MAX).await {
+    let body_bytes = match body::to_bytes(req.into_body(), usize::MAX).await {
         Ok(bytes) => bytes,
         Err(e) => {
             error!("Failed to read request body: {}", e);
@@ -207,7 +212,7 @@ async fn handle_websocket(mut client_socket: WebSocket, uri: Uri) {
         }
     };
 
-    let path_and_query = uri.path_and_query().map(http::uri::PathAndQuery::as_str).unwrap_or("/");
+    let path_and_query = uri.path_and_query().map(PathAndQuery::as_str).unwrap_or("/");
     let path_without_prefix = path_and_query.strip_prefix("/vite-server").unwrap_or(path_and_query);
     let vite_ws_url = format!("ws://{}/vite-server{}", config.vite_address(), path_without_prefix);
 
@@ -370,7 +375,7 @@ pub async fn check_vite_server_health() -> Result<(), RariError> {
         }
 
         if attempt < 60 {
-            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            time::sleep(time::Duration::from_millis(100)).await;
         }
     }
 

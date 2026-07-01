@@ -1,9 +1,9 @@
-use std::rc::Rc;
+use std::{env, rc::Rc, time::Duration};
 
-use deno_core::JsRuntime;
+use deno_core::{JsRuntime, error::AnyError, v8};
 use rari_error::RariError;
 use serde_json::Value;
-use tokio::sync::mpsc;
+use tokio::{sync::mpsc, time::timeout};
 use tracing::error;
 
 use crate::{
@@ -19,6 +19,8 @@ use crate::{
             },
         },
         module_loader::RariModuleLoader,
+        ops::StreamOpState,
+        transpile,
     },
     with_scope,
 };
@@ -109,8 +111,8 @@ async fn execute_as_module(
 
     match eval_result {
         Ok(()) => {
-            match tokio::time::timeout(
-                std::time::Duration::from_millis(10),
+            match timeout(
+                Duration::from_millis(10),
                 run_event_loop_with_error_handling(
                     runtime,
                     &format!("module execution for '{script_name}'"),
@@ -159,7 +161,7 @@ async fn execute_as_script(
     script_code: &str,
 ) -> Result<Value, RariError> {
     let transpiled_code = if script_name.ends_with(".ts") || script_name.ends_with(".tsx") {
-        match crate::runtime::transpile::maybe_transpile_source(
+        match transpile::maybe_transpile_source(
             deno_core::ModuleName::from(script_name.to_string()),
             deno_core::ModuleCodeString::from(script_code.to_string()),
         ) {
@@ -199,7 +201,7 @@ async fn execute_as_script(
 async fn handle_promise_result(
     runtime: &mut JsRuntime,
     script_name: &str,
-    global_v8_val: deno_core::v8::Global<deno_core::v8::Value>,
+    global_v8_val: v8::Global<v8::Value>,
 ) -> Result<Value, RariError> {
     let setup_promise_storage = r"
         (function() {
@@ -212,7 +214,7 @@ async fn handle_promise_result(
         let local_v8_val = deno_core::v8::Local::new(scope, &global_v8_val);
         let context = scope.get_current_context();
         let global = context.global(scope);
-        let key = match deno_core::v8::String::new(scope, "__temp_promise_ref__") {
+        let key = match v8::String::new(scope, "__temp_promise_ref__") {
             Some(key) => key,
             None => {
                 error!("Failed to create V8 string for __temp_promise_ref__");
@@ -231,7 +233,7 @@ async fn handle_promise_result(
 
     match runtime.execute_script(format!("{script_name}_promise_setup"), setup_script.to_string()) {
         Ok(_) => {
-            let promise_timeout_ms = std::env::var("RARI_PROMISE_RESOLUTION_TIMEOUT_MS")
+            let promise_timeout_ms = env::var("RARI_PROMISE_RESOLUTION_TIMEOUT_MS")
                 .ok()
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(5000);
@@ -280,7 +282,7 @@ async fn handle_promise_result(
 
 fn handle_non_promise_result(
     runtime: &mut JsRuntime,
-    global_v8_val: deno_core::v8::Global<deno_core::v8::Value>,
+    global_v8_val: v8::Global<v8::Value>,
 ) -> Result<Value, RariError> {
     let json_result = with_scope!(runtime, |scope| {
         let local_v8_val = deno_core::v8::Local::new(scope, global_v8_val);
@@ -308,7 +310,7 @@ async fn handle_script_error(
     module_loader: &Rc<RariModuleLoader>,
     script_name: &str,
     script_code: &str,
-    e: deno_core::error::AnyError,
+    e: AnyError,
 ) -> Result<Value, RariError> {
     let error_string = e.to_string();
 
@@ -408,8 +410,7 @@ pub async fn execute_script_for_streaming(
     {
         let op_state_rc = runtime.op_state();
         let mut op_state = op_state_rc.borrow_mut();
-        if let Some(stream_state) = op_state.try_borrow_mut::<crate::runtime::ops::StreamOpState>()
-        {
+        if let Some(stream_state) = op_state.try_borrow_mut::<StreamOpState>() {
             stream_state.chunk_sender = Some(chunk_sender);
         } else {
             return Err(RariError::js_runtime(

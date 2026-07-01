@@ -1,3 +1,5 @@
+use std::env;
+
 use axum::{extract::State, http::StatusCode, response::Json};
 use serde::{Deserialize, Serialize};
 
@@ -32,7 +34,7 @@ pub async fn revalidate_by_path(
     State(state): State<ServerState>,
     Json(request): Json<RevalidateRequest>,
 ) -> Result<Json<RevalidateResponse>, StatusCode> {
-    let expected_secret = std::env::var("RARI_REVALIDATE_SECRET").map_err(|_| {
+    let expected_secret = env::var("RARI_REVALIDATE_SECRET").map_err(|_| {
         tracing::error!("RARI_REVALIDATE_SECRET not configured. Set this environment variable to enable revalidation.");
         StatusCode::FORBIDDEN
     })?;

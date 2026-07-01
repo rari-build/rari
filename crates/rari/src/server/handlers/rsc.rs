@@ -1,6 +1,14 @@
+use std::{
+    error::Error,
+    path::Path,
+    time::{SystemTime, UNIX_EPOCH},
+};
+
 use axum::{extract::State, http::StatusCode, response::Json};
 use cow_utils::CowUtils;
+use rari_rsc::utils;
 use serde_json::Value;
+use tokio::{fs, time};
 use tracing::error;
 
 use crate::server::{
@@ -94,7 +102,7 @@ pub async fn reload_component_from_dist(
     state: &ServerState,
     file_path: &str,
     component_id: &str,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<(), Box<dyn Error + Send + Sync>> {
     let normalized_path = normalize_component_path(file_path);
 
     if let Err(e) = validate_component_path(&normalized_path) {
@@ -131,7 +139,7 @@ pub async fn reload_component_from_dist(
         .into());
     }
 
-    let mut dist_code = match tokio::fs::read_to_string(&dist_path).await {
+    let mut dist_code = match fs::read_to_string(&dist_path).await {
         Ok(code) => code,
         Err(e) => {
             error!(
@@ -165,9 +173,9 @@ pub async fn reload_component_from_dist(
     };
 
     if needs_retry {
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        time::sleep(time::Duration::from_millis(100)).await;
 
-        let new_dist_code = match tokio::fs::read_to_string(&dist_path).await {
+        let new_dist_code = match fs::read_to_string(&dist_path).await {
             Ok(code) => code,
             Err(e) => {
                 error!(
@@ -214,10 +222,8 @@ pub async fn reload_component_from_dist(
             error!("Failed to clear module loader caches for {}: {}", component_id, e);
         }
 
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis();
+        let timestamp =
+            SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis();
 
         let hmr_specifier = format!("file:///rari_hmr/server/{component_id}.js?v={timestamp}");
 
@@ -341,7 +347,7 @@ pub async fn reload_component_from_dist(
 
         renderer.clear_script_cache();
 
-        let dependencies = rari_rsc::utils::extract_dependencies(&dist_code);
+        let dependencies = utils::extract_dependencies(&dist_code);
 
         {
             let mut registry = renderer.component_registry.lock();
@@ -468,7 +474,7 @@ pub async fn reload_component_from_dist(
 pub async fn immediate_component_reregistration(
     state: &ServerState,
     file_path: &str,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<(), Box<dyn Error + Send + Sync>> {
     let normalized_path = normalize_component_path(file_path);
 
     if let Err(e) = validate_component_path(&normalized_path) {
@@ -483,7 +489,7 @@ pub async fn immediate_component_reregistration(
 
     let file_path = &normalized_path;
 
-    let path = std::path::Path::new(file_path);
+    let path = Path::new(file_path);
     let component_name =
         path.file_stem().and_then(|stem| stem.to_str()).unwrap_or("UnknownComponent");
 
@@ -496,7 +502,7 @@ pub async fn immediate_component_reregistration(
         }
     }
 
-    let content = match tokio::fs::read_to_string(file_path).await {
+    let content = match fs::read_to_string(file_path).await {
         Ok(c) => c,
         Err(e) => {
             error!(
@@ -521,7 +527,7 @@ pub async fn immediate_component_reregistration(
             );
             Err(format!("Failed to register component: {e}").into())
         } else {
-            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            time::sleep(time::Duration::from_millis(100)).await;
 
             let mut renderer = state.renderer.lock().await;
             if let Err(e) = renderer.clear_component_module_cache(component_name).await {
@@ -529,7 +535,7 @@ pub async fn immediate_component_reregistration(
             }
             drop(renderer);
 
-            tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+            time::sleep(time::Duration::from_millis(200)).await;
 
             if let Err(e) =
                 state.renderer.lock().await.register_component(component_name, &content).await
@@ -544,7 +550,7 @@ pub async fn immediate_component_reregistration(
                 );
             }
 
-            tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+            time::sleep(time::Duration::from_millis(200)).await;
 
             Ok(())
         }

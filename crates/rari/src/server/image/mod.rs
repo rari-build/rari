@@ -1,3 +1,5 @@
+use std::env;
+
 pub mod cache;
 mod config;
 mod optimizer;
@@ -35,7 +37,7 @@ pub async fn handle_image_request(
         ImageFormat::Gif => "image/gif",
     };
 
-    let is_production = std::env::var("NODE_ENV").map(|v| v == "production").unwrap_or(false);
+    let is_production = env::var("NODE_ENV").map(|v| v == "production").unwrap_or(false);
 
     let cache_header = if is_production {
         "public, max-age=31536000, immutable"

@@ -4,7 +4,7 @@ mod common;
 mod rari_binary;
 mod use_cache_addon;
 
-use std::path::PathBuf;
+use std::{path::PathBuf, process};
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -82,7 +82,7 @@ async fn main() -> Result<()> {
         if !success {
             log_error("Failed to build binary for current platform");
             log_error("This may indicate a Rust compilation issue");
-            std::process::exit(1);
+            process::exit(1);
         }
 
         println!();
@@ -97,7 +97,7 @@ async fn main() -> Result<()> {
 
         if !binary_path.exists() {
             log_error(&format!("Binary not found: {}", binary_path.display()));
-            std::process::exit(1);
+            process::exit(1);
         }
 
         copy_binary_to_platform_package(current_target, &project_root, args.dev)?;
@@ -119,7 +119,7 @@ async fn main() -> Result<()> {
                 "Failed to build addon for current platform ({})",
                 current_target.platform
             ));
-            std::process::exit(1);
+            process::exit(1);
         }
 
         println!();
@@ -128,7 +128,7 @@ async fn main() -> Result<()> {
         let src = addon_stable_output_path_public(current_target, &project_root);
         if !src.exists() {
             log_error(&format!("Addon artifact missing: {}", src.display()));
-            std::process::exit(1);
+            process::exit(1);
         }
 
         copy_addon_to_platform_package(current_target, &project_root, args.dev)?;

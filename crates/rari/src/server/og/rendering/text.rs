@@ -1,9 +1,14 @@
 use cow_utils::CowUtils;
 use image::{Rgba, RgbaImage};
-use parley::{Alignment, AlignmentOptions, LayoutContext};
+use parley::{
+    Alignment, AlignmentOptions, LayoutContext,
+    LineHeight::Absolute,
+    PositionedLayoutItem::{GlyphRun, InlineBox},
+    style::FontWeight,
+};
 use swash::{
     FontRef,
-    scale::{ScaleContext, StrikeWith},
+    scale::{ScaleContext, StrikeWith, image::Image, outline::Outline},
 };
 use zeno::{Mask, PathData};
 
@@ -192,11 +197,11 @@ impl ImageRenderer {
     ) -> Result<(), String> {
         use parley::TextStyle;
 
-        let line_height_parley = parley::LineHeight::Absolute(params.line_height);
+        let line_height_parley = Absolute(params.line_height);
 
         let root_style = TextStyle {
             font_size: params.font_size,
-            font_weight: parley::style::FontWeight::new(f32::from(params.font_weight)),
+            font_weight: FontWeight::new(f32::from(params.font_weight)),
             line_height: line_height_parley,
             ..Default::default()
         };
@@ -220,8 +225,8 @@ impl ImageRenderer {
 
             for item in line.items() {
                 let glyph_run = match item {
-                    parley::PositionedLayoutItem::GlyphRun(gr) => gr,
-                    parley::PositionedLayoutItem::InlineBox(_) => continue,
+                    GlyphRun(gr) => gr,
+                    InlineBox(_) => continue,
                 };
 
                 let run = glyph_run.run();
@@ -270,7 +275,7 @@ impl ImageRenderer {
         let mut line_end_x = 0.0f32;
 
         for item in line.items() {
-            if let parley::PositionedLayoutItem::GlyphRun(gr) = item {
+            if let GlyphRun(gr) = item {
                 let run_x = gr.offset();
                 let run_width = gr.advance();
                 line_start_x = line_start_x.min(run_x);
@@ -330,13 +335,7 @@ impl ImageRenderer {
         }
     }
 
-    fn draw_color_bitmap(
-        &self,
-        bitmap: &swash::scale::image::Image,
-        x: f32,
-        y: f32,
-        image: &mut RgbaImage,
-    ) {
+    fn draw_color_bitmap(&self, bitmap: &Image, x: f32, y: f32, image: &mut RgbaImage) {
         let placement = &bitmap.placement;
         let data = &bitmap.data;
 
@@ -367,7 +366,7 @@ impl ImageRenderer {
 
     fn draw_color_outline(
         &mut self,
-        outline: &swash::scale::outline::Outline,
+        outline: &Outline,
         x: f32,
         y: f32,
         palette: Option<swash::ColorPalette>,
@@ -415,7 +414,7 @@ impl ImageRenderer {
 
     fn draw_outline(
         &mut self,
-        outline: &swash::scale::outline::Outline,
+        outline: &Outline,
         x: f32,
         y: f32,
         color: Rgba<u8>,

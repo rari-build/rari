@@ -12,6 +12,8 @@
 
 use std::{
     fmt,
+    io::Error,
+    num::NonZeroUsize,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -25,7 +27,7 @@ use parking_lot::Mutex;
 #[non_exhaustive]
 pub enum CacheError {
     #[error("io error: {0}")]
-    Io(#[from] std::io::Error),
+    Io(#[from] Error),
 
     #[error("serialization error: {0}")]
     Serialize(String),
@@ -111,8 +113,7 @@ pub struct MemoryCacheHandler {
 impl MemoryCacheHandler {
     pub fn with_config(config: MemoryConfig) -> Self {
         #[expect(clippy::expect_used, reason = "Value is clamped to >= 1, guaranteed non-zero")]
-        let max_entries =
-            std::num::NonZeroUsize::new(config.max_entries.max(1)).expect("clamped to >= 1");
+        let max_entries = NonZeroUsize::new(config.max_entries.max(1)).expect("clamped to >= 1");
         tracing::debug!(
             max_entries = max_entries.get(),
             default_ttl_secs = config.default_ttl,
@@ -493,6 +494,8 @@ impl CacheHandlerRegistry {
 mod tests {
     use std::{sync::Arc, time::Duration};
 
+    use tokio::time;
+
     use super::*;
 
     #[tokio::test]
@@ -507,7 +510,7 @@ mod tests {
     async fn test_memory_ttl_expiry() {
         let handler = MemoryCacheHandler::default();
         handler.set("k", b"hello".to_vec(), 0).await.unwrap();
-        tokio::time::sleep(Duration::from_millis(50)).await;
+        time::sleep(Duration::from_millis(50)).await;
         assert_eq!(handler.get("k").await.unwrap(), None);
         assert_eq!(handler.get("k").await.unwrap(), None);
     }

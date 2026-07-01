@@ -2,10 +2,14 @@
 
 use std::{
     fmt::Write,
+    future::Future,
+    pin::Pin,
+    string::ToString,
     sync::{
         Arc,
         atomic::{AtomicU32, Ordering},
     },
+    time::Duration,
 };
 
 use cow_utils::CowUtils;
@@ -14,7 +18,7 @@ use rari_rsc::escape_rsc_value;
 use regex::Regex;
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde_json::Value;
-use tokio::sync::mpsc;
+use tokio::{fs, sync::mpsc, time};
 use tracing::error;
 
 use crate::{
@@ -433,7 +437,7 @@ impl RscHtmlRenderer {
         };
 
         for path in possible_paths {
-            if let Ok(content) = tokio::fs::read_to_string(path).await {
+            if let Ok(content) = fs::read_to_string(path).await {
                 return Ok(content);
             }
         }
@@ -662,7 +666,7 @@ impl RscHtmlRenderer {
             .ok_or_else(|| RariError::internal("React element tag must be a string".to_string()))?
             .to_string();
 
-        let key = arr[2].as_str().map(std::string::ToString::to_string);
+        let key = arr[2].as_str().map(ToString::to_string);
 
         let props_value = &arr[3];
         let props = if let Value::Object(obj) = props_value {
@@ -694,7 +698,7 @@ impl RscHtmlRenderer {
     pub async fn render_to_html_for_route_fizz(
         &self,
         rsc_flight_protocol: &str,
-        config: &crate::server::config::Config,
+        config: &Config,
         route_match: &AppRouteMatch,
     ) -> Result<String, RariError> {
         let cache_template = config.rsc_html.cache_template;
@@ -740,7 +744,7 @@ impl RscHtmlRenderer {
     pub async fn start_fizz_html_stream(
         &self,
         rsc_flight_protocol: &str,
-        config: &crate::server::config::Config,
+        config: &Config,
         route_match: &AppRouteMatch,
     ) -> Result<
         (
@@ -940,9 +944,7 @@ impl RscHtmlRenderer {
         };
 
         let result = if timeout_ms > 0 {
-            match tokio::time::timeout(std::time::Duration::from_millis(timeout_ms), render_future)
-                .await
-            {
+            match time::timeout(Duration::from_millis(timeout_ms), render_future).await {
                 Ok(result) => result,
                 Err(_) => {
                     return Err(RariError::timeout(format!(
@@ -1005,8 +1007,7 @@ impl RscHtmlRenderer {
         row_id: u32,
         row_map: &'a FxHashMap<u32, &RscElement>,
         row_cache: &'a mut FxHashMap<u32, String>,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, RariError>> + Send + 'a>>
-    {
+    ) -> Pin<Box<dyn Future<Output = Result<String, RariError>> + Send + 'a>> {
         Box::pin(async move {
             if let Some(cached) = row_cache.get(&row_id) {
                 return Ok(cached.clone());
@@ -1028,8 +1029,7 @@ impl RscHtmlRenderer {
         element: &'a RscElement,
         row_map: &'a FxHashMap<u32, &RscElement>,
         row_cache: &'a mut FxHashMap<u32, String>,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, RariError>> + Send + 'a>>
-    {
+    ) -> Pin<Box<dyn Future<Output = Result<String, RariError>> + Send + 'a>> {
         Box::pin(async move {
             match element {
                 RscElement::Text(text) => {
@@ -1121,8 +1121,7 @@ impl RscHtmlRenderer {
         props: &'a serde_json::Value,
         row_map: &'a FxHashMap<u32, &RscElement>,
         row_cache: &'a mut FxHashMap<u32, String>,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, RariError>> + Send + 'a>>
-    {
+    ) -> Pin<Box<dyn Future<Output = Result<String, RariError>> + Send + 'a>> {
         Box::pin(async move {
             if tag.contains('<') || tag.contains('>') || tag.contains('"') || tag.contains('\'') {
                 return Err(RariError::internal(format!("Invalid tag name: {tag}")));
@@ -1255,8 +1254,7 @@ impl RscHtmlRenderer {
         json: &'a serde_json::Value,
         row_map: &'a FxHashMap<u32, &RscElement>,
         row_cache: &'a mut FxHashMap<u32, String>,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, RariError>> + Send + 'a>>
-    {
+    ) -> Pin<Box<dyn Future<Output = Result<String, RariError>> + Send + 'a>> {
         Box::pin(async move {
             if json.is_null() {
                 return Ok(String::new());
@@ -1805,8 +1803,7 @@ if (typeof window !== 'undefined') {{
     fn rsc_element_to_html<'a>(
         &'a self,
         element: &'a serde_json::Value,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, RariError>> + Send + 'a>>
-    {
+    ) -> Pin<Box<dyn Future<Output = Result<String, RariError>> + Send + 'a>> {
         Box::pin(async move {
             if let Some(s) = element.as_str() {
                 if s.starts_with("$$") {

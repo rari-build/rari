@@ -1,5 +1,10 @@
 #![allow(clippy::match_wildcard_for_single_variants)]
 
+use std::time::Duration;
+
+use parley::style::FontWeight;
+use reqwest::blocking::Client;
+
 pub mod style;
 
 use std::cell::RefCell;
@@ -582,10 +587,7 @@ fn load_image_dimensions(src: &str) -> Option<Size<f32>> {
     use std::io::Read;
 
     if src.starts_with("http://") || src.starts_with("https://") {
-        let client = reqwest::blocking::Client::builder()
-            .timeout(std::time::Duration::from_secs(10))
-            .build()
-            .ok()?;
+        let client = Client::builder().timeout(Duration::from_secs(10)).build().ok()?;
 
         let response = client.get(src).send().ok()?;
         if !response.status().is_success() {
@@ -630,7 +632,7 @@ fn measure_text_with_parley(
 ) -> (f32, f32) {
     let root_style = TextStyle {
         font_size,
-        font_weight: parley::style::FontWeight::new(f32::from(font_weight)),
+        font_weight: FontWeight::new(f32::from(font_weight)),
         ..Default::default()
     };
 
