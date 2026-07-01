@@ -3,10 +3,7 @@
 use std::{
     fmt::Write,
     path::PathBuf,
-    sync::{
-        Arc,
-        atomic::{AtomicUsize, Ordering},
-    },
+    sync::{Arc, atomic::Ordering},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
@@ -16,31 +13,24 @@ use parking_lot::Mutex;
 use rari_error::RariError;
 use rari_rsc::{
     components::ComponentRegistry,
-    flight::serializer::RscSerializer,
     utils::{extract_dependencies, hash_string},
 };
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashSet;
 use serde_json::Value;
-use tokio::time::{sleep, timeout};
+use tokio::time::timeout;
 use tracing::error;
 
 use super::{
     constants::{
-        BATCH_ERROR_COLLECTION_SCRIPT, CACHE_CLEANUP_INTERVAL,
-        COMPONENT_AVAILABILITY_CHECK_DELAY_MS, COMPONENT_EVAL_SETUP_SCRIPT,
-        EXTENSION_CHECKS_SCRIPT, JSX_RUNTIME_SETUP_SCRIPT, MAX_RETRIES, MEMORY_PRESSURE_THRESHOLD,
-        MODULE_REGISTRATION_SCRIPT, REGISTRY_PROXY_SETUP_SCRIPT, RESOLVE_SERVER_FUNCTIONS_SCRIPT,
-        RETRY_BASE_DELAY_MS, SERVER_ACTION_INVOCATION_SCRIPT, SERVER_FUNCTION_RESOLVER_SCRIPT,
-        V8_CACHE_CLEAR_SCRIPT,
+        BATCH_ERROR_COLLECTION, CACHE_CLEANUP_INTERVAL, EXTENSION_CHECKS,
+        MEMORY_PRESSURE_THRESHOLD, SERVER_ACTION_INVOCATION_SCRIPT, SERVER_FUNCTION_RESOLVER,
+        V8_CACHE_CLEAR_SCRIPT, module_registration_script, resolve_server_functions_for_component,
     },
     types::{ResourceLimits, ResourceMetrics, ResourceTracker},
     utils::transform_imports_for_hmr,
 };
 use crate::{
-    rendering::{
-        base::loader::{RscJsLoader, RscModuleOperation},
-        streaming::{RscStream, StreamingRenderer},
-    },
+    rendering::base::loader::{RscJsLoader, RscModuleOperation},
     runtime::JsExecutionRuntime,
 };
 
@@ -52,8 +42,6 @@ pub struct RscRenderer {
     pub(crate) script_cache: DashMap<String, String>,
     pub(crate) resource_limits: ResourceLimits,
     pub(crate) resource_tracker: Arc<ResourceTracker>,
-    pub(crate) serializer: Arc<Mutex<RscSerializer>>,
-    pub(crate) streaming_refcount: Arc<AtomicUsize>,
 }
 
 impl RscRenderer {
@@ -73,8 +61,6 @@ impl RscRenderer {
             script_cache: DashMap::new(),
             resource_limits,
             resource_tracker: Arc::new(ResourceTracker::new()),
-            serializer: Arc::new(Mutex::new(RscSerializer::new())),
-            streaming_refcount: Arc::new(AtomicUsize::new(0)),
         }
     }
 
@@ -107,10 +93,10 @@ impl RscRenderer {
             || metrics.memory_pressure_events > 0
     }
 
-    pub async fn force_cleanup(&self) -> Result<(), RariError> {
+    pub fn force_cleanup(&self) -> impl Future<Output = Result<(), RariError>> {
         self.clear_script_cache();
         self.resource_tracker.memory_pressure_events.store(0, Ordering::Relaxed);
-        Ok(())
+        std::future::ready(Ok(()))
     }
 
     #[must_use]
@@ -205,7 +191,7 @@ globalThis['~errors'].batch.push({{
 
         let combined_script = batch_sections.join("\n");
 
-        let final_script = format!("{combined_script}\n\n{BATCH_ERROR_COLLECTION_SCRIPT}");
+        let final_script = format!("{combined_script}\n\n{BATCH_ERROR_COLLECTION}");
 
         let batch_name = format!("batch_execution_{}", scripts.len());
         let result = self.execute_script_with_timeout(batch_name, final_script).await?;
@@ -218,7 +204,7 @@ globalThis['~errors'].batch.push({{
         result: Value,
         _script_count: usize,
     ) -> Result<Value, RariError> {
-        if let Some(success) = result.get("success").and_then(Value::as_bool)
+        if let Some(success) = result.get("success").and_then(serde_json::Value::as_bool)
             && !success
             && let Some(errors) = result.get("errors").and_then(|e| e.as_array())
         {
@@ -248,13 +234,90 @@ globalThis['~errors'].batch.push({{
         }
 
         self.runtime
-            .execute_script("extension-checks".to_string(), EXTENSION_CHECKS_SCRIPT.to_string())
+            .execute_script(
+                "init_rsc_namespace".to_string(),
+                r"(function() {
+                    if (!globalThis['~rsc']) globalThis['~rsc'] = {};
+                    if (!globalThis['~rsc'].componentNamespaces) globalThis['~rsc'].componentNamespaces = new Map();
+                    if (!globalThis['~rsc'].modules) globalThis['~rsc'].modules = {};
+                    if (!globalThis['~rsc'].functions) globalThis['~rsc'].functions = {};
+                })()".to_string(),
+            )
             .await?;
 
-        let html_render_script = include_str!("../layout/js/html_render.js");
         self.runtime
-            .execute_script("html_render".to_string(), html_render_script.to_string())
+            .execute_script("extension-checks".to_string(), EXTENSION_CHECKS.to_string())
             .await?;
+
+        let setup_fizz_script = r"
+            (async function() {
+                try {
+                    const [react, reactDomServer, flightClient, flightServer] = await Promise.all([
+                        import('file:///react_vendor/react.js'),
+                        import('file:///react_vendor/react-dom-server.js'),
+                        import('file:///react_vendor/react-server-dom-webpack-client.js'),
+                        import('file:///react_vendor/react-server-dom-webpack-server.js'),
+                    ]);
+                    globalThis['~realReact'] = react.default && react.default.createElement ? react.default : react;
+                    globalThis['~reactServer'] = reactDomServer;
+                    globalThis['~flightClient'] = flightClient;
+                    globalThis['~reactServerRenderer'] = flightServer;
+                    return {
+                        success: !!(globalThis['~realReact'].createElement
+                            && globalThis['~reactServer'].renderToReadableStream
+                            && globalThis['~flightClient'].createFromReadableStream
+                            && globalThis['~reactServerRenderer'].renderToReadableStream),
+                    };
+                } catch (e) {
+                    console.warn('[rari] Could not load React server modules:', e?.message || e);
+                    return { success: false, error: String(e?.message || e) };
+                }
+            })()
+        ";
+
+        match self
+            .runtime
+            .execute_script("setup_react_server".to_string(), setup_fizz_script.to_string())
+            .await
+        {
+            Ok(result) => {
+                let success =
+                    result.get("success").and_then(serde_json::Value::as_bool).unwrap_or(false);
+                if success {
+                    let fizz_render_script = include_str!("../layout/js/fizz_render.ts");
+                    if let Err(e) = self
+                        .runtime
+                        .execute_script(
+                            "fizz_render.ts".to_string(),
+                            fizz_render_script.to_string(),
+                        )
+                        .await
+                    {
+                        tracing::warn!("Failed to initialize Fizz renderer: {e}");
+                    }
+
+                    let flight_render_script = include_str!("../layout/js/flight_render.ts");
+                    if let Err(e) = self
+                        .runtime
+                        .execute_script(
+                            "flight_render.ts".to_string(),
+                            flight_render_script.to_string(),
+                        )
+                        .await
+                    {
+                        tracing::warn!("Failed to initialize Flight renderer: {e}");
+                    }
+                } else {
+                    let err = result.get("error").and_then(|v| v.as_str()).unwrap_or("unknown");
+                    tracing::warn!("React Fizz module load returned failure: {err}");
+                }
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "Failed to load React Fizz renderer, falling back to custom HTML renderer: {e}"
+                );
+            }
+        }
 
         self.initialized = true;
 
@@ -266,11 +329,6 @@ globalThis['~errors'].batch.push({{
         component_id: &str,
         component_code: &str,
     ) -> Result<(), RariError> {
-        let init_registry_script = RscJsLoader::create_global_init();
-        self.runtime
-            .execute_script("ensure_global_registries.js".to_string(), init_registry_script)
-            .await?;
-
         let isolation_namespacing_script =
             RscJsLoader::create_isolation_namespacing_script(component_id);
 
@@ -333,7 +391,7 @@ globalThis['~errors'].batch.push({{
 
         self.runtime
             .execute_script(
-                format!("force_v8_cache_clear_{component_id}.js"),
+                format!("force_v8_cache_clear_{component_id}.ts"),
                 force_v8_cache_clear_script,
             )
             .await?;
@@ -505,12 +563,6 @@ globalThis['~errors'].batch.push({{
             return Ok(());
         }
 
-        let init_registry_script = RscJsLoader::create_global_init();
-
-        self.runtime
-            .execute_script("init_global_registries.js".to_string(), init_registry_script.clone())
-            .await?;
-
         for component_id in &components_to_load {
             let isolation_script = RscJsLoader::create_isolation_init_script(component_id);
 
@@ -622,17 +674,10 @@ globalThis['~errors'].batch.push({{
         let registry = self.component_registry.lock();
         registry.get_component(component_id).is_some()
     }
-    #[expect(clippy::unused_async_trait_impl, reason = "Async required by trait implementation")]
-    pub async fn is_client_reference(&self, component_id: &str) -> bool {
+
+    pub fn is_client_reference(&self, component_id: &str) -> impl Future<Output = bool> {
         let registry = self.component_registry.lock();
-        let is_client_ref = registry.is_client_reference(component_id);
-        if is_client_ref {
-            return true;
-        }
-
-        let serializer = self.serializer.lock();
-
-        serializer.is_client_component_registered(component_id)
+        std::future::ready(registry.is_client_reference(component_id))
     }
 
     pub fn register_client_component(
@@ -643,9 +688,6 @@ globalThis['~errors'].batch.push({{
     ) {
         let mut registry = self.component_registry.lock();
         registry.register_client_reference(component_id, file_path, export_name);
-
-        let mut serializer = self.serializer.lock();
-        serializer.register_client_component(component_id, file_path, export_name);
     }
 
     pub fn list_components(&self) -> Vec<String> {
@@ -735,18 +777,7 @@ globalThis['~errors'].batch.push({{
                 RscJsLoader::create_component_environment_setup(component_id)
             });
 
-        let detect_module_promises =
-            self.get_or_cache_script(&format!("detect_promises_{component_id}"), || {
-                RscJsLoader::load_component_isolation_with_id(component_id).unwrap_or_else(|e| {
-                    tracing::error!("Failed to load component isolation script: {}", e);
-                    String::new()
-                })
-            });
-
-        let setup_scripts = vec![
-            ("clear_environment", clear_environment_script),
-            ("detect_promises", detect_module_promises),
-        ];
+        let setup_scripts = vec![("clear_environment", clear_environment_script)];
 
         self.execute_batched_scripts(setup_scripts).await?;
 
@@ -756,7 +787,7 @@ globalThis['~errors'].batch.push({{
                     RariError::js_execution(format!("Failed to load component render script: {e}"))
                 })?;
 
-        self.execute_script_with_timeout(format!("render_{component_id}.js"), render_script)
+        self.execute_script_with_timeout(format!("render_{component_id}.ts"), render_script)
             .await?;
 
         let rsc_extraction_script = self
@@ -813,12 +844,13 @@ globalThis['~errors'].batch.push({{
             ))
         })?;
 
-        let mut serializer = self.serializer.lock();
-        let rsc_payload = serializer
-            .serialize_rsc_json(rsc_data)
-            .map_err(|e| RariError::js_execution(format!("Failed to serialize RSC data: {e}")))?;
+        if let Some(wire_format) = rsc_data.as_str() {
+            return Ok(wire_format.to_string());
+        }
 
-        Ok(rsc_payload)
+        Err(RariError::js_execution(format!(
+            "RSC data for component '{component_id}' is not a wire format string"
+        )))
     }
 
     async fn internal_render_to_rsc_with_context(
@@ -876,28 +908,12 @@ globalThis['~errors'].batch.push({{
             }
         };
 
-        let detect_module_promises = {
-            let cache_key = format!("detect_promises_{component_id}");
-            if let Some(cached) = self.get_cached_script(&cache_key) {
-                cached
-            } else {
-                let script =
-                    RscJsLoader::load_component_isolation_with_id(component_id).map_err(|e| {
-                        RariError::js_execution(format!(
-                            "Failed to load component isolation script: {e}"
-                        ))
-                    })?;
-                self.cache_script(cache_key, script.clone());
-                script
-            }
-        };
-
         let server_function_resolver_script = {
             let cache_key = "server_function_resolver".to_string();
             if let Some(cached) = self.get_cached_script(&cache_key) {
                 cached
             } else {
-                let script = SERVER_FUNCTION_RESOLVER_SCRIPT.to_string();
+                let script = SERVER_FUNCTION_RESOLVER.to_string();
                 self.cache_script(cache_key, script.clone());
                 script
             }
@@ -916,16 +932,13 @@ globalThis['~errors'].batch.push({{
 
         let setup_scripts = vec![
             ("clear_environment", clear_environment_script),
-            ("detect_promises", detect_module_promises),
             ("server_function_resolver", server_function_resolver_script),
             ("isolation_init", isolation_init_script),
         ];
 
         self.execute_batched_scripts(setup_scripts).await?;
 
-        let resolve_server_functions_script = RESOLVE_SERVER_FUNCTIONS_SCRIPT
-            .cow_replace("{component_id}", component_id)
-            .into_owned();
+        let resolve_server_functions_script = resolve_server_functions_for_component(component_id);
 
         self.execute_script_with_timeout(
             format!("resolve_server_functions_{component_id}.js"),
@@ -965,84 +978,48 @@ globalThis['~errors'].batch.push({{
                     .fetch_add(render_duration.as_millis() as u64, Ordering::Relaxed);
 
                 if html == "<div></div>" || html.trim() == "" || html == "<div/>" {
-                    #[expect(
-                        clippy::expect_used,
-                        reason = "System time is always after UNIX_EPOCH"
-                    )]
-                    let server_time = SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .expect("System time is before UNIX_EPOCH")
-                        .as_secs();
-
                     return Ok(format!(
-                        r"<div data-component-id='{component_id}' data-diagnostic='true'>
-                            <h2>Component: {component_id}</h2>
+                        r"<div data-component-id='{}' data-diagnostic='true'>
+                            <h2>Component: {}</h2>
                             <p>This component rendered with no content.</p>
                             <p>This may indicate the component doesn't return JSX or has a rendering issue.</p>
-                            <p>Server time: {server_time}</p>
-                        </div>"
+                            <p>Server time: {}</p>
+                        </div>",
+                        component_id,
+                        component_id,
+                        SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .map(|d| d.as_secs())
+                            .unwrap_or(0)
                     ));
                 }
 
                 Ok(html)
             }
-            Err(e) => {
-                #[expect(clippy::expect_used, reason = "System time is always after UNIX_EPOCH")]
-                let server_time = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .expect("System time is before UNIX_EPOCH")
-                    .as_secs();
-
-                Ok(format!(
-                    r"<div>
-                        <h2>Error Rendering {component_id}</h2>
-                        <p>There was an error rendering this component: {e}</p>
-                        <p>Server time: {server_time}</p>
-                    </div>"
-                ))
-            }
+            Err(e) => Ok(format!(
+                r"<div>
+                        <h2>Error Rendering {}</h2>
+                        <p>There was an error rendering this component: {}</p>
+                        <p>Server time: {}</p>
+                    </div>",
+                component_id,
+                e,
+                SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0)
+            )),
         }
     }
 
-    #[expect(clippy::unused_async_trait_impl, reason = "Async required by trait implementation")]
-    async fn handle_client_reference(
+    fn handle_client_reference(
         &mut self,
         component_id: &str,
-        props: Option<&str>,
-    ) -> Result<String, RariError> {
-        let props_map = if let Some(props_str) = props {
-            if props_str.trim().is_empty() {
-                None
-            } else {
-                serde_json::from_str::<FxHashMap<String, Value>>(props_str).ok()
-            }
-        } else {
-            None
-        };
-
-        let client_element =
-            rari_rsc::flight::serializer::SerializedReactElement::create_client_component(
-                component_id,
-                props_map,
-            );
-
-        let mut serializer = self.serializer.lock();
-        let rsc_payload = serializer.serialize_to_rsc_format(&client_element);
-
-        Ok(format!(
-            r#"<div data-rsc-client-reference="{}" data-rsc-payload="{}" data-component-id="{}">
-                <div style="padding: 1rem; border: 2px dashed #3b82f6; background-color: #eff6ff; color: #1e40af; border-radius: 0.5rem;">
-                    <h4 style="margin: 0 0 0.5rem 0; font-weight: 600;">Client Component: {}</h4>
-                    <p style="margin: 0; font-size: 0.875rem;">This component should be hydrated on the client side.</p>
-                    <p style="margin: 0.25rem 0 0 0; font-size: 0.75rem; opacity: 0.7;">RSC Payload: {}</p>
-                </div>
-            </div>"#,
-            component_id,
-            rsc_payload.cow_replace('"', "&quot;"),
-            component_id,
-            component_id,
-            rsc_payload.cow_replace('"', "&quot;")
-        ))
+        _props: Option<&str>,
+    ) -> impl Future<Output = Result<String, RariError>> {
+        std::future::ready(Ok(format!(
+            r#"<div data-client-component="{component_id}" data-component-id="{component_id}"></div>"#,
+        )))
     }
 
     fn sanitize_html_output(&self, html: &str, component_id: &str) -> String {
@@ -1134,130 +1111,11 @@ globalThis['~errors'].batch.push({{
 
         self.runtime
             .execute_script(
-                format!("execute_action_{}_{}.js", function_id.cow_replace('/', "_"), export_name),
+                format!("execute_action_{}_{}.ts", function_id.cow_replace('/', "_"), export_name),
                 script,
             )
             .await
             .map_err(|e| RariError::js_execution(format!("Server function execution failed: {e}")))
-    }
-
-    pub async fn render_with_streaming(
-        &self,
-        component_id: &str,
-        props: Option<&str>,
-    ) -> Result<RscStream, RariError> {
-        self.render_with_streaming_and_context(component_id, props, None).await
-    }
-
-    pub async fn render_with_streaming_and_context(
-        &self,
-        component_id: &str,
-        props: Option<&str>,
-        _request_context: Option<Arc<crate::server::middleware::request_context::RequestContext>>,
-    ) -> Result<RscStream, RariError> {
-        if !self.initialized {
-            return Err(RariError::internal("RSC renderer not initialized"));
-        }
-
-        let max_retries = MAX_RETRIES;
-        let mut attempt = 0;
-        let mut last_error = None;
-
-        while attempt < max_retries {
-            attempt += 1;
-
-            let canonical_id = match self.ensure_component_available(component_id).await {
-                Ok(id) => id,
-                Err(e) => {
-                    if attempt >= max_retries {
-                        return Err(e);
-                    }
-                    sleep(Duration::from_millis(RETRY_BASE_DELAY_MS * attempt)).await;
-                    continue;
-                }
-            };
-
-            if let Err(e) = self.ensure_component_loaded(&canonical_id).await {
-                if attempt >= max_retries {
-                    return Err(e);
-                }
-                sleep(Duration::from_millis(RETRY_BASE_DELAY_MS * attempt)).await;
-                continue;
-            }
-
-            let mut streaming_renderer = StreamingRenderer::new(Arc::clone(&self.runtime));
-            match streaming_renderer.start_streaming(&canonical_id, props).await {
-                Ok(stream) => return Ok(stream),
-                Err(e) => {
-                    let msg = format!("{e}");
-                    let should_retry = msg.contains("not a function")
-                        || msg.contains("not found")
-                        || msg.contains("Component render failed");
-
-                    if should_retry && attempt < max_retries {
-                        last_error = Some(e);
-                        sleep(Duration::from_millis(RETRY_BASE_DELAY_MS * attempt)).await;
-                        continue;
-                    }
-
-                    return Err(e);
-                }
-            }
-        }
-
-        Err(last_error.unwrap_or_else(|| {
-            RariError::internal(format!(
-                "Failed to render component {component_id} after {max_retries} attempts with unknown error"
-            ))
-        }))
-    }
-
-    async fn ensure_component_available(&self, original_id: &str) -> Result<String, RariError> {
-        if self.component_exists(original_id) {
-            return Ok(original_id.to_string());
-        }
-
-        let candidates = self.generate_component_id_candidates(original_id);
-        for candidate in &candidates {
-            if self.component_exists(candidate) {
-                return Ok(candidate.clone());
-            }
-        }
-
-        sleep(Duration::from_millis(COMPONENT_AVAILABILITY_CHECK_DELAY_MS)).await;
-        if self.component_exists(original_id) {
-            return Ok(original_id.to_string());
-        }
-
-        Err(RariError::not_found(format!(
-            "Component not found: {} (tried: {})",
-            original_id,
-            candidates.join(", ")
-        )))
-    }
-
-    fn generate_component_id_candidates(&self, id: &str) -> Vec<String> {
-        let mut out: Vec<String> = Vec::new();
-        out.push(id.to_string());
-
-        if let Some((path, _export)) = id.split_once('#') {
-            out.push(path.to_string());
-        }
-
-        let path_like = id.cow_replace('\\', "/");
-        if let Some(basename) = path_like.rsplit('/').next() {
-            out.push(basename.to_string());
-        }
-
-        for ext in [".tsx", ".ts", ".jsx", ".js"] {
-            if id.ends_with(ext) {
-                out.push(id.trim_end_matches(ext).to_string());
-            }
-        }
-
-        let mut seen = FxHashSet::default();
-        out.retain(|s| seen.insert(s.clone()));
-        out
     }
 
     pub async fn ensure_component_loaded(&self, component_id: &str) -> Result<(), RariError> {
@@ -1269,11 +1127,6 @@ globalThis['~errors'].batch.push({{
         component_id: &str,
         force_reload: bool,
     ) -> Result<(), RariError> {
-        let init_registry_script = RscJsLoader::create_global_init();
-        self.runtime
-            .execute_script("init_global_registries.js".to_string(), init_registry_script.clone())
-            .await?;
-
         let is_loaded = {
             let registry = self.component_registry.lock();
             registry.is_component_loaded(component_id)
@@ -1377,10 +1230,8 @@ globalThis['~errors'].batch.push({{
 
             let module_namespace_json =
                 serde_json::to_string(&module_namespace).unwrap_or_else(|_| "null".to_string());
-            let register_from_namespace_script = MODULE_REGISTRATION_SCRIPT
-                .cow_replace("{module_namespace}", &module_namespace_json)
-                .cow_replace("{component_id}", component_id)
-                .into_owned();
+            let register_from_namespace_script =
+                module_registration_script(&module_namespace_json, component_id);
 
             self.runtime
                 .execute_script(
@@ -1407,13 +1258,6 @@ globalThis['~errors'].batch.push({{
             .await?;
 
         if force_reload {
-            self.runtime
-                .execute_script(
-                    format!("setup_jsx_{component_id}.js"),
-                    JSX_RUNTIME_SETUP_SCRIPT.to_string(),
-                )
-                .await?;
-
             let mut transformed_source_safe = transformed_source.clone();
 
             if transformed_source_safe.contains("export default async function") {
@@ -1439,17 +1283,13 @@ globalThis['~errors'].batch.push({{
                 .cow_replace("export *", "// export *")
                 .into_owned();
 
-            transformed_source_safe.push_str(REGISTRY_PROXY_SETUP_SCRIPT);
-
             transformed_source_safe = transformed_source_safe
                 .cow_replace("\"use module\";", "")
                 .cow_replace("'use module';", "")
                 .into_owned();
 
-            let mut eval_safe_source = COMPONENT_EVAL_SETUP_SCRIPT.to_string();
-
             let import_transformed_source = transform_imports_for_hmr(&transformed_source_safe);
-            eval_safe_source.push_str(&import_transformed_source);
+            let mut eval_safe_source = import_transformed_source;
 
             let _ = write!(
                 eval_safe_source,

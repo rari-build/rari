@@ -61,4 +61,11 @@ pub trait JsRuntimeInterface: Send + Sync {
             crate::server::middleware::request_context::RequestContext,
         >,
     ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>>;
+
+    fn execute_script_for_streaming(
+        &self,
+        script_name: String,
+        script_code: String,
+        chunk_sender: tokio::sync::mpsc::Sender<Result<Vec<u8>, String>>,
+    ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>>;
 }

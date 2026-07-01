@@ -566,8 +566,18 @@ jobs:
             writeFileSync(f, JSON.stringify(JSON.parse(readFileSync(f, 'utf8')), null, 2) + '\n');
           "
 
-          cp .github/templates/js/use-cache-platform.js "${PACKAGE_DIR}/index.js"
-          sed -i "s|{PLATFORM}|${{ matrix.platform }}|g" "${PACKAGE_DIR}/index.js"
+          cat > "${PACKAGE_DIR}/index.js" << 'EOF'
+          import { createRequire } from 'node:module'
+          import { dirname, join } from 'node:path'
+          import { fileURLToPath } from 'node:url'
+
+          const require = createRequire(import.meta.url)
+          const __dirname = dirname(fileURLToPath(import.meta.url))
+
+          const addon = require(join(__dirname, 'rari_use_cache.node'))
+
+          export default addon
+          EOF
 
           cp LICENSE "${PACKAGE_DIR}/LICENSE"
 

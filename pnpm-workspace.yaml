@@ -5,6 +5,7 @@ packages:
   - examples/*
   - packages/*
   - test/fixtures/*
+  - tools/bundle-react-esm
   - web
 catalogs:
   analytics:
@@ -17,8 +18,8 @@ catalogs:
     vite-plus: ^0.2.1
   cli:
     '@clack/prompts': ^1.6.0
-  default:
-    rari: ^0.14.12
+  # default:
+  # rari: ^0.14.12
   eslint:
     '@antfu/eslint-config': ^9.0.0
     '@eslint-react/eslint-plugin': ^5.9.1
@@ -43,6 +44,7 @@ catalogs:
     '@types/react-dom': ^19.2.3
     react: ^19.2.7
     react-dom: ^19.2.7
+    react-server-dom-webpack: ^19.2.7
   runtime:
     quick-lru: ^7.3.0
   tailwind:

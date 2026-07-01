@@ -12,6 +12,43 @@ use parking_lot::Mutex;
 
 use crate::server::cache::handler::{CacheHandler, MemoryCacheHandler, MemoryConfig};
 
+#[derive(Clone)]
+#[non_exhaustive]
+pub struct PrebuiltResponse {
+    pub identity: Bytes,
+    pub gzip: Option<Bytes>,
+    pub br: Option<Bytes>,
+    pub zstd: Option<Bytes>,
+    pub etag: String,
+    pub content_type: String,
+    pub cache_control: String,
+    pub is_not_found: bool,
+}
+
+impl PrebuiltResponse {
+    pub fn body_for(
+        &self,
+        encoding: crate::server::compression::CompressionEncoding,
+    ) -> (Bytes, Option<&'static str>) {
+        use crate::server::compression::CompressionEncoding;
+        match encoding {
+            CompressionEncoding::Zstd => match &self.zstd {
+                Some(b) => (b.clone(), Some("zstd")),
+                None => (self.identity.clone(), None),
+            },
+            CompressionEncoding::Brotli => match &self.br {
+                Some(b) => (b.clone(), Some("br")),
+                None => (self.identity.clone(), None),
+            },
+            CompressionEncoding::Gzip => match &self.gzip {
+                Some(b) => (b.clone(), Some("gzip")),
+                None => (self.identity.clone(), None),
+            },
+            CompressionEncoding::Identity => (self.identity.clone(), None),
+        }
+    }
+}
+
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[non_exhaustive]
 pub struct CacheMetadata {

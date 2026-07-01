@@ -398,7 +398,6 @@ async fn retry_as_module(
     Ok(Value::Null)
 }
 
-#[expect(dead_code)]
 pub async fn execute_script_for_streaming(
     runtime: &mut JsRuntime,
     module_loader: &Rc<RariModuleLoader>,
@@ -406,8 +405,6 @@ pub async fn execute_script_for_streaming(
     script_code: &str,
     chunk_sender: mpsc::Sender<Result<Vec<u8>, String>>,
 ) -> Result<(), RariError> {
-    // Set up the chunk sender so op_fizz_chunk/op_fizz_done can forward HTML
-    // chunks to the HTTP response body during script execution.
     {
         let op_state_rc = runtime.op_state();
         let mut op_state = op_state_rc.borrow_mut();
@@ -421,17 +418,6 @@ pub async fn execute_script_for_streaming(
         }
     }
 
-    // Delegate to the standard execute_script path which already handles
-    // async promises correctly (tracks the promise via .then(), drives the
-    // event loop in 10ms polling intervals until resolution). The streaming
-    // IIFE calls op_fizz_chunk during execution, sending HTML chunks through
-    // the sender, and calls op_fizz_done at the end to drop the sender
-    // (signaling stream end to the HTTP body consumer).
-    //
-    // The previous module-based approach (load_side_es_module + mod_evaluate
-    // + run_event_loop) deadlocked because mod_evaluate for TLA modules
-    // requires concurrent event-loop driving, but we were awaiting them
-    // sequentially.
     let _result = execute_script(runtime, module_loader, script_name, script_code).await?;
     Ok(())
 }

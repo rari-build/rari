@@ -39,7 +39,7 @@ use crate::{
             og::{og_image_handler, og_image_handler_root},
             revalidate::revalidate_by_path,
             route_info::get_route_info,
-            rsc::{health_check, register_client_component, register_component, stream_component},
+            rsc::{health_check, register_client_component, register_component},
             r#static::{
                 cors_preflight_ok, root_handler, serve_static_asset, static_or_spa_handler,
             },
@@ -111,6 +111,7 @@ impl Server {
         }
 
         ComponentLoader::load_ssr_client_components(&renderer.runtime).await?;
+        ComponentLoader::load_client_reference_manifest(&renderer.runtime).await?;
 
         let app_router = {
             let manifest_path = "dist/server/routes.json";
@@ -202,6 +203,7 @@ impl Server {
                 &cache_registry,
             ),
             response_cache,
+            static_fast_cache: Arc::new(DashMap::new()),
             og_generator,
             project_root,
             image_optimizer: None,
@@ -270,8 +272,6 @@ impl Server {
 
         let mut router = Router::new()
             .route("/_rari/health", get(health_check))
-            .route("/_rari/stream", post(stream_component))
-            .route("/_rari/stream", axum::routing::options(cors_preflight_ok))
             .layer(medium_body_limit)
             .route("/_rari/route-info", post(get_route_info))
             .layer(small_body_limit)

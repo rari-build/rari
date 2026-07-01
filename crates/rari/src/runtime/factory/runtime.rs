@@ -9,7 +9,7 @@ use tokio::sync::{mpsc, oneshot};
 use crate::{
     runtime::{
         factory::{
-            executor::execute_script,
+            executor::{self, execute_script},
             interface::{AsyncBatchResult, JsRuntimeInterface},
             runtime_builder::build_js_runtime,
             utils::{
@@ -86,6 +86,12 @@ enum JsRequest {
     ClearRequestContextIfMatches {
         expected_context:
             std::sync::Arc<crate::server::middleware::request_context::RequestContext>,
+        result_tx: oneshot::Sender<Result<(), RariError>>,
+    },
+    ExecuteScriptForStreaming {
+        script_name: String,
+        script_code: String,
+        chunk_sender: mpsc::Sender<Result<Vec<u8>, String>>,
         result_tx: oneshot::Sender<Result<(), RariError>>,
     },
 }
@@ -455,6 +461,28 @@ async fn handle_js_request(
                 js_runtime.op_state().borrow_mut().try_take::<std::sync::Arc<crate::server::middleware::request_context::RequestContext>>();
             }
             let _ = result_tx.send(Ok(()));
+        }
+        JsRequest::ExecuteScriptForStreaming {
+            script_name,
+            script_code,
+            chunk_sender,
+            result_tx,
+        } => {
+            let result = executor::execute_script_for_streaming(
+                js_runtime,
+                module_loader,
+                &script_name,
+                &script_code,
+                chunk_sender,
+            )
+            .await;
+            if let Err(e) = &result
+                && is_runtime_restart_needed(e)
+            {
+                let _ = result_tx.send(Err(create_graceful_error()));
+                return Err(RariError::internal("Runtime restart needed".to_string()));
+            }
+            let _ = result_tx.send(result);
         }
     }
     Ok(())
@@ -1066,6 +1094,39 @@ impl JsRuntimeInterface for RariRuntime {
             response_receiver.await.map_err(|_| {
                 RariError::js_runtime(
                     "JS executor failed to respond (clear_request_context_if_matches)".to_string(),
+                )
+            })?
+        })
+    }
+
+    fn execute_script_for_streaming(
+        &self,
+        script_name: String,
+        script_code: String,
+        chunk_sender: mpsc::Sender<Result<Vec<u8>, String>>,
+    ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>> {
+        let request_sender = self.request_sender.clone();
+
+        Box::pin(async move {
+            let (response_sender, response_receiver) = oneshot::channel();
+
+            request_sender
+                .send(JsRequest::ExecuteScriptForStreaming {
+                    script_name,
+                    script_code,
+                    chunk_sender,
+                    result_tx: response_sender,
+                })
+                .await
+                .map_err(|_| {
+                    RariError::js_runtime(
+                        "JS executor channel closed (execute_script_for_streaming)".to_string(),
+                    )
+                })?;
+
+            response_receiver.await.map_err(|_| {
+                RariError::js_runtime(
+                    "JS executor failed to respond (execute_script_for_streaming)".to_string(),
                 )
             })?
         })

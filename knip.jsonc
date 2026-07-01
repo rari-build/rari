@@ -87,6 +87,12 @@
         "@tailwindcss/vite" // Used by Tailwind CSS
       ]
     },
+    "tools/bundle-react-esm": {
+      "ignoreDependencies": [
+        "react-dom",
+        "react-server-dom-webpack"
+      ]
+    },
     "test/fixtures/app": {
       "ignore": [
         "**/*" // Test fixture app is not analyzed

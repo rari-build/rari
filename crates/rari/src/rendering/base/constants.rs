@@ -13,13 +13,71 @@ pub const DEFAULT_MAX_SCRIPT_EXECUTION_TIME_MS: u64 = 3000;
 pub const DEFAULT_MAX_MEMORY_PER_COMPONENT_MB: usize = 50;
 pub const DEFAULT_MAX_CACHE_SIZE: usize = 1000;
 
-pub const BATCH_ERROR_COLLECTION_SCRIPT: &str = include_str!("js/batch_error_collection.js");
-pub const EXTENSION_CHECKS_SCRIPT: &str = include_str!("js/extension_checks.js");
-pub const V8_CACHE_CLEAR_SCRIPT: &str = include_str!("js/v8_cache_clear.js");
-pub const SERVER_FUNCTION_RESOLVER_SCRIPT: &str = include_str!("js/server_function_resolver.js");
-pub const RESOLVE_SERVER_FUNCTIONS_SCRIPT: &str = include_str!("js/resolve_server_functions.js");
-pub const SERVER_ACTION_INVOCATION_SCRIPT: &str = include_str!("js/server_action_invocation.js");
-pub const MODULE_REGISTRATION_SCRIPT: &str = include_str!("js/module_registration.js");
-pub const JSX_RUNTIME_SETUP_SCRIPT: &str = include_str!("js/jsx_runtime_setup.js");
-pub const REGISTRY_PROXY_SETUP_SCRIPT: &str = include_str!("js/registry_proxy_setup.js");
-pub const COMPONENT_EVAL_SETUP_SCRIPT: &str = include_str!("js/component_eval_setup.js");
+pub const V8_CACHE_CLEAR_SCRIPT: &str = include_str!("js/v8_cache_clear.ts");
+pub const SERVER_ACTION_INVOCATION_SCRIPT: &str = include_str!("js/server_action_invocation.ts");
+
+pub const EXTENSION_CHECKS: &str = r"(function () {
+  const checks = {};
+  checks.rsc_renderer = true;
+  if (!globalThis.registerModule)
+    throw new Error('RSC Modules extension not loaded');
+  checks.rsc_modules = true;
+  return {
+    initialized: true,
+    extensions: checks,
+    timestamp: Date.now(),
+  };
+})();";
+
+pub const BATCH_ERROR_COLLECTION: &str = r"(function () {
+  if (!globalThis['~errors'])
+    globalThis['~errors'] = {};
+  const errors = globalThis['~errors'].batch || [];
+  globalThis['~errors'].batch = [];
+  return {
+    success: errors.length === 0,
+    errors,
+    timestamp: Date.now(),
+  };
+})();";
+
+pub const SERVER_FUNCTION_RESOLVER: &str = r"(function () {
+  if (!globalThis.ServerFunctions)
+    throw new Error('ServerFunctions extension not loaded');
+  return globalThis.ServerFunctions.resolve();
+})();";
+
+pub fn resolve_server_functions_for_component(component_id: &str) -> String {
+    format!(
+        r"(async function () {{
+  try {{
+    if (typeof globalThis.resolveServerFunctionsForComponent === 'function')
+      await globalThis.resolveServerFunctionsForComponent('{component_id}');
+    return {{ success: true, resolved: true }};
+  }} catch (error) {{
+    return {{ success: false, error: error.message }};
+  }}
+}})()"
+    )
+}
+
+pub fn module_registration_script(module_namespace_json: &str, component_id: &str) -> String {
+    format!(
+        r"(function () {{
+  try {{
+    const moduleNamespace = {module_namespace_json};
+    if (typeof globalThis.RscModuleManager?.register === 'function') {{
+      const result = globalThis.RscModuleManager.register(moduleNamespace, '{component_id}');
+      return {{ success: true, module: '{component_id}', exports: result.exportCount }};
+    }} else if (typeof globalThis.registerModule === 'function') {{
+      const result = globalThis.registerModule(moduleNamespace, '{component_id}');
+      return {{ success: true, module: '{component_id}', exports: result.exportCount }};
+    }} else {{
+      return {{ success: false, error: 'No module registration function available' }};
+    }}
+  }} catch (error) {{
+    return {{ success: false, error: error.message }};
+  }}
+}})()"
+    )
+}

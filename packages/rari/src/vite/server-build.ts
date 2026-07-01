@@ -173,6 +173,7 @@ export class ServerComponentBuilder {
   private htmlOnlyImports = new Set<string>()
   private fileImporters = new Map<string, Set<string>>()
   private directiveResultCache = new Map<string, { hasUseClient: boolean, hasUseServer: boolean, error: boolean }>()
+  private discoveredExternalClientComponents = new Set<string>()
 
   getComponentCount(): number {
     return this.serverComponents.size + this.serverActions.size
@@ -788,6 +789,10 @@ const ${importName} = (props) => {
                   const relativePath = path.relative(self.projectRoot, pathWithExt)
                   const componentId = (relativePath.startsWith('..') ? pathWithExt : relativePath).replace(BACKSLASH_REGEX, '/')
                   clientComponentRefs.set(pathWithExt, componentId)
+
+                  if (relativePath.startsWith('..'))
+                    self.discoveredExternalClientComponents.add(pathWithExt)
+
                   return { id: `\0client-ref:${pathWithExt}` }
                 }
 
@@ -1333,10 +1338,39 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
 
     scanForClientComponents(srcDir)
 
+    for (const extPath of this.discoveredExternalClientComponents) {
+      if (clientFiles.some(f => f.filePath === extPath))
+        continue
+      try {
+        const code = fs.readFileSync(extPath, 'utf-8')
+        clientFiles.push({ filePath: extPath, code })
+      }
+      catch {}
+    }
+
+    try {
+      const rariPkgDir = path.dirname(fileURLToPath(import.meta.resolve('rari/package.json')))
+      const errorBoundarySource = path.join(rariPkgDir, 'src', 'runtime', 'ErrorBoundaryWrapper.tsx')
+      if (fs.existsSync(errorBoundarySource)) {
+        const code = fs.readFileSync(errorBoundarySource, 'utf-8')
+        clientFiles.push({ filePath: errorBoundarySource, code })
+      }
+    }
+    catch {}
+
     if (clientFiles.length === 0) {
       const manifestPath = path.join(ssrOutDir, 'manifest.json')
       await fs.promises.writeFile(manifestPath, '{}', 'utf-8')
       return
+    }
+
+    const clientModuleSpecifiers = new Map<string, string>()
+    for (const { filePath } of clientFiles) {
+      const bundleName = this.getComponentId(filePath)
+      clientModuleSpecifiers.set(
+        path.resolve(filePath),
+        `file:///ssr/${bundleName}.js`,
+      )
     }
 
     const manifest: Record<string, { id: string, filePath: string, bundlePath: string, exports: string[] }> = {}
@@ -1348,7 +1382,8 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
       const next = () => {
         while (active < concurrency && index < clientFiles.length) {
           const { filePath, code } = clientFiles[index++]
-          const componentId = path.relative(this.projectRoot, filePath).replace(BACKSLASH_REGEX, '/')
+          const relativePath = path.relative(this.projectRoot, filePath).replace(BACKSLASH_REGEX, '/')
+          const componentId = relativePath.startsWith('..') ? filePath.replace(BACKSLASH_REGEX, '/') : relativePath
           const bundleName = this.getComponentId(filePath)
           const bundlePath = `ssr/${bundleName}.js`
           const fullBundlePath = path.join(this.options.outDir, bundlePath)
@@ -1359,7 +1394,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
               const bundleDir = path.dirname(fullBundlePath)
               await fs.promises.mkdir(bundleDir, { recursive: true })
 
-              await this.buildSSRSingleClient(filePath, fullBundlePath)
+              await this.buildSSRSingleClient(filePath, fullBundlePath, clientModuleSpecifiers)
 
               const exports = this.extractExportNames(code)
               manifest[componentId] = {
@@ -1390,7 +1425,47 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     })
 
     const manifestPath = path.join(ssrOutDir, 'manifest.json')
+
+    const ebEntry = Object.entries(manifest).find(([_, v]) =>
+      v.filePath?.includes('ErrorBoundaryWrapper'),
+    )
+    if (ebEntry) {
+      const [, ebInfo] = ebEntry
+      manifest['virtual:error-boundary-wrapper.tsx'] = {
+        id: 'virtual:error-boundary-wrapper.tsx',
+        filePath: 'virtual:error-boundary-wrapper.tsx',
+        bundlePath: ebInfo.bundlePath,
+        exports: ['ErrorBoundaryWrapper'],
+      }
+    }
+
     await fs.promises.writeFile(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8')
+
+    const clientReferenceManifest: Record<string, { id: string, chunks: string, name: string }> = {}
+    for (const [componentId, entry] of Object.entries(manifest)) {
+      for (const exportName of entry.exports) {
+        const fullId = `${componentId}#${exportName}`
+        clientReferenceManifest[fullId] = {
+          id: fullId,
+          chunks: `/${entry.bundlePath}`,
+          name: exportName,
+        }
+      }
+    }
+
+    if (ebEntry) {
+      const [, ebInfo] = ebEntry
+      clientReferenceManifest['virtual:error-boundary-wrapper.tsx#ErrorBoundaryWrapper'] = {
+        id: 'virtual:error-boundary-wrapper.tsx#ErrorBoundaryWrapper',
+        chunks: `/${ebInfo.bundlePath}`,
+        name: 'ErrorBoundaryWrapper',
+      }
+    }
+
+    const serverOutDir = path.join(this.options.outDir, 'server')
+    await fs.promises.mkdir(serverOutDir, { recursive: true })
+    const clientRefManifestPath = path.join(serverOutDir, 'client-reference-manifest.json')
+    await fs.promises.writeFile(clientRefManifestPath, JSON.stringify(clientReferenceManifest, null, 2), 'utf-8')
   }
 
   private extractExportNames(code: string): string[] {
@@ -1408,6 +1483,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
   private async buildSSRSingleClient(
     inputPath: string,
     outputPath: string,
+    clientModuleSpecifiers?: Map<string, string>,
   ): Promise<{ code: string }> {
     const originalCode = await fs.promises.readFile(inputPath, 'utf-8')
     const strippedCode = originalCode.replace(/^['"]use client['"];?\s*/m, '')
@@ -1486,6 +1562,14 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
 
               const found = resolveWithExtensions(resolved, ['.ts', '.tsx', '.js', '.jsx'])
                 || resolveIndexFile(resolved, ['.ts', '.tsx', '.js', '.jsx'])
+
+              if (found && clientModuleSpecifiers) {
+                const resolvedAbs = path.resolve(found)
+                const specifier = clientModuleSpecifiers.get(resolvedAbs)
+                if (specifier && resolvedAbs !== path.resolve(inputPath))
+                  return { id: specifier, external: true }
+              }
+
               return found || null
             }
 

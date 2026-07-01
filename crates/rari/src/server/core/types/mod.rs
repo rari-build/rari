@@ -16,7 +16,11 @@ use crate::{
     RscHtmlRenderer, RscRenderer,
     rendering::layout::LayoutHtmlCache,
     server::{
-        cache::{CacheHandlerRegistry, handler::CacheHandler, response::ResponseCache},
+        cache::{
+            CacheHandlerRegistry,
+            handler::CacheHandler,
+            response::{PrebuiltResponse, ResponseCache},
+        },
         config::Config,
         image::ImageOptimizer,
         og::OgImageGenerator,
@@ -39,6 +43,7 @@ pub struct ServerState {
     pub html_cache: Arc<DashMap<String, String>>,
     pub layout_html_cache: Arc<LayoutHtmlCache>,
     pub response_cache: Arc<ResponseCache>,
+    pub static_fast_cache: Arc<DashMap<String, Arc<PrebuiltResponse>>>,
     pub og_generator: Option<Arc<OgImageGenerator>>,
     pub project_root: PathBuf,
     pub image_optimizer: Option<Arc<ImageOptimizer>>,

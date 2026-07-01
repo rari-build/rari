@@ -624,7 +624,7 @@ export default defineConfig({
       {
         files: [
           'crates/rari/src/runtime/ext/**/*.ts',
-          'crates/rari/src/rsc/rendering/**/*.ts',
+          'crates/rari/src/rendering/**/*.ts',
         ],
         rules: {
           'no-undef': 'off',

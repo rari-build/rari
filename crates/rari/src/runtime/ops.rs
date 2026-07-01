@@ -6,10 +6,13 @@ use serde::Deserialize;
 use tokio::sync::mpsc;
 use tracing::error;
 
-use crate::server::{
-    core::utils::client::get_http_client,
-    handlers::actions::{is_valid_attr_value, is_valid_cookie_name, is_valid_cookie_value},
-    middleware::request_context::{PendingCookie, PendingCookieKey},
+use crate::{
+    rendering::base::sanitize_component_output,
+    server::{
+        core::utils::client::get_http_client,
+        handlers::actions::{is_valid_attr_value, is_valid_cookie_name, is_valid_cookie_value},
+        middleware::request_context::{PendingCookie, PendingCookieKey},
+    },
 };
 
 #[derive(Deserialize, Debug)]
@@ -234,12 +237,48 @@ pub fn create_error_operation(
 pub fn get_streaming_ops() -> Vec<OpDecl> {
     vec![
         op_send_chunk_to_rust(),
+        op_fizz_chunk(),
+        op_fizz_done(),
         op_internal_log(),
         op_sanitize_html(),
         op_get_cookies(),
         op_set_cookie(),
         op_delete_cookie(),
     ]
+}
+
+#[allow(clippy::allow_attributes)]
+#[allow(clippy::disallowed_methods)]
+#[op2]
+pub async fn op_fizz_chunk(
+    state: Rc<RefCell<OpState>>,
+    #[string] html: String,
+) -> Result<(), JsErrorBox> {
+    let sender = {
+        let mut op_state_ref = state.borrow_mut();
+        let stream_op_state = match op_state_ref.try_borrow_mut::<StreamOpState>() {
+            Some(sos) => sos,
+            None => return Err(JsErrorBox::generic("StreamOpState not found.")),
+        };
+        stream_op_state.chunk_sender.clone()
+    };
+
+    match sender {
+        Some(sender) => {
+            let _ = sender.send(Ok(html.into_bytes())).await.is_err();
+            Ok(())
+        }
+        None => Err(JsErrorBox::generic("No chunk sender available for Fizz chunk")),
+    }
+}
+
+#[allow(clippy::allow_attributes)]
+#[allow(clippy::disallowed_methods)]
+#[op2(fast)]
+pub fn op_fizz_done(state: &mut OpState) {
+    if let Some(stream_op_state) = state.try_borrow_mut::<StreamOpState>() {
+        stream_op_state.chunk_sender.take();
+    }
 }
 
 #[op2(fast)]
@@ -250,7 +289,7 @@ pub fn op_internal_log(#[string] message: &str) {
 #[op2]
 #[string]
 pub fn op_sanitize_html(#[string] html: &str, #[string] _component_id: &str) -> String {
-    crate::rendering::sanitizer::sanitize_component_output(html)
+    sanitize_component_output(html)
 }
 
 fn http_status_text(status: u16) -> &'static str {

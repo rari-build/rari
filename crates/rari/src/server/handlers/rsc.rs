@@ -1,101 +1,15 @@
-use axum::{
-    body::Body,
-    extract::State,
-    http::StatusCode,
-    response::{Json, Response},
-};
+use axum::{extract::State, http::StatusCode, response::Json};
 use cow_utils::CowUtils;
 use serde_json::Value;
 use tracing::error;
 
 use crate::server::{
-    RegisterClientRequest, RegisterRequest, RenderRequest, ServerState,
+    RegisterClientRequest, RegisterRequest, ServerState,
     core::utils::{
         component::{get_dist_path_for_component, wrap_server_action_module},
-        http::merge_vary_with_accept,
         path_validation::{normalize_component_path, validate_component_path},
     },
 };
-
-const RSC_CONTENT_TYPE: &str = "text/x-component";
-
-#[axum::debug_handler]
-pub async fn stream_component(
-    State(state): State<ServerState>,
-    Json(request): Json<RenderRequest>,
-) -> Result<Response, StatusCode> {
-    {
-        let renderer = state.renderer.lock().await;
-        let registry = renderer.component_registry.lock();
-        if !registry.is_component_registered(&request.component_id) {
-            error!("Attempted to stream unregistered component: {}", request.component_id);
-            return Err(StatusCode::NOT_FOUND);
-        }
-    }
-
-    let props_str = request.props.as_ref().map(|p| serde_json::to_string(p).unwrap_or_default());
-
-    let cache_key = if let Some(props) = &props_str {
-        format!("/_rari/stream/{}?props={}", request.component_id, props)
-    } else {
-        format!("/_rari/stream/{}", request.component_id)
-    };
-
-    if let Some(cached) = state.response_cache.get(&cache_key).await {
-        let merged_vary = merge_vary_with_accept(cached.headers.get("vary"));
-
-        let mut response_builder = Response::builder()
-            .status(StatusCode::OK)
-            .header("content-type", RSC_CONTENT_TYPE)
-            .header("vary", merged_vary)
-            .header("x-cache", "HIT");
-
-        for (key, value) in &cached.headers {
-            if key.as_str() != "vary" {
-                response_builder = response_builder.header(key, value);
-            }
-        }
-
-        #[expect(
-            clippy::expect_used,
-            reason = "Response::builder() with valid components never fails"
-        )]
-        return Ok(response_builder
-            .body(Body::from(cached.body))
-            .expect("Valid cached RSC response"));
-    }
-
-    let stream_result = {
-        let renderer = state.renderer.lock().await;
-        renderer.render_with_streaming(&request.component_id, props_str.as_deref()).await
-    };
-
-    match stream_result {
-        Ok(rsc_stream) => {
-            let cache_control = state.config.get_cache_control_for_route("/_rari/stream");
-
-            use futures::StreamExt;
-            let byte_stream = rsc_stream
-                .map(|result| result.map(bytes::Bytes::from).map_err(std::io::Error::other));
-
-            #[expect(
-                clippy::expect_used,
-                reason = "Response::builder() with valid components never fails"
-            )]
-            Ok(Response::builder()
-                .header("content-type", RSC_CONTENT_TYPE)
-                .header("cache-control", cache_control)
-                .header("vary", "Accept")
-                .header("x-cache", "MISS")
-                .body(Body::from_stream(byte_stream))
-                .expect("Valid RSC response"))
-        }
-        Err(e) => {
-            error!("Failed to create true streaming for component {}: {}", request.component_id, e);
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
-        }
-    }
-}
 
 #[axum::debug_handler]
 pub async fn register_component(
@@ -115,8 +29,10 @@ pub async fn register_component(
     match result {
         Ok(()) => {
             let renderer = state.renderer.lock().await;
-            let is_client =
-                renderer.serializer.lock().is_client_component_registered(&request.component_id);
+            let is_client = {
+                let registry = renderer.component_registry.lock();
+                registry.is_client_reference(&request.component_id)
+            };
 
             if is_client {
                 let mark_script = format!(

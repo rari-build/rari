@@ -7,7 +7,7 @@ import { ClientRouter } from 'rari/client'
 import { RouterProvider } from 'rari/router'
 import * as React from 'react'
 import { Suspense } from 'react'
-import { createRoot } from 'react-dom/client'
+import { createRoot, hydrateRoot } from 'react-dom/client'
 // @ts-expect-error - virtual module resolved by Vite
 import { AppRouterProvider } from 'virtual:app-router-provider'
 // @ts-expect-error - virtual module resolved by Vite
@@ -21,6 +21,24 @@ import { isSuspenseType } from './shared/suspense'
 import 'virtual:rsc-integration.ts'
 
 const MODULE_REF_REGEX_ENTRY = /^\$L?[0-9a-f]+$/i
+
+function hasFizzMarkers(root: Element): boolean {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_COMMENT)
+  while (walker.nextNode()) {
+    const comment = walker.currentNode as Comment
+    if (comment.data === '$' || comment.data === '$?' || comment.data === '/$')
+      return true
+  }
+
+  if (root.querySelector('[data-reactroot]'))
+    return true
+
+  const scripts = root.querySelectorAll('template[data-rri]')
+  if (scripts.length > 0)
+    return true
+
+  return false
+}
 
 function getModuleByRef(modules: Map<string, any>, ref: string): any {
   const direct = modules.get(ref)
@@ -192,8 +210,17 @@ function setupPartialHydration(): void {
       const reactElement = rscToReactElement(content)
 
       if (reactElement) {
-        const root = createRoot(boundaryElement)
-        root.render(reactElement)
+        if (hasFizzMarkers(boundaryElement)) {
+          hydrateRoot(boundaryElement, reactElement, {
+            onRecoverableError(error) {
+              console.warn(`[rari] Boundary hydration mismatch:`, error)
+            },
+          })
+        }
+        else {
+          const root = createRoot(boundaryElement)
+          root.render(reactElement)
+        }
         boundaryElement.classList.add('rari-boundary-hydrated')
       }
     }
@@ -275,9 +302,19 @@ export async function renderApp(): Promise<void> {
           requestAnimationFrame(() => {
             try {
               if (document.contains(element)) {
-                element.replaceChildren()
-                const root = createRoot(element)
-                root.render(React.createElement(Component, props))
+                const reactElement = React.createElement(Component, props)
+                if (hasFizzMarkers(element)) {
+                  hydrateRoot(element, reactElement, {
+                    onRecoverableError(error) {
+                      console.warn(`[rari] Hydration mismatch in ${componentId}:`, error)
+                    },
+                  })
+                }
+                else {
+                  element.replaceChildren()
+                  const root = createRoot(element)
+                  root.render(reactElement)
+                }
               }
             }
             catch (error) {
@@ -310,9 +347,99 @@ export async function renderApp(): Promise<void> {
 
   try {
     let element
-    const isFullDocument = false
 
     const needsInitialFetch = !payloadScript && !hasBufferedRows && !hasServerRenderedContent
+
+    if (hasServerRenderedContent && payloadScript) {
+      try {
+        const isBase64 = payloadScript.getAttribute('data-encoding') === 'base64'
+
+        if (isBase64) {
+          const b64 = payloadScript.textContent!
+          const binaryString = atob(b64)
+          const buffer = new Uint8Array(binaryString.length)
+          for (let i = 0; i < binaryString.length; i++)
+            buffer[i] = binaryString.charCodeAt(i)
+
+          const textForPreload = new TextDecoder().decode(buffer)
+          await preloadModulesFromWireFormat(textForPreload)
+
+          const stream = new ReadableStream({
+            start(controller) {
+              controller.enqueue(buffer)
+              controller.close()
+            },
+          })
+          element = await createFromReadableStream(stream)
+        }
+        else {
+          const payloadText = payloadScript.textContent!
+          await preloadModulesFromWireFormat(payloadText)
+
+          const stream = new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode(payloadText))
+              controller.close()
+            },
+          })
+          element = await createFromReadableStream(stream)
+        }
+      }
+      catch {
+        try {
+          const currentPath = window.location.pathname + window.location.search
+          const rscServerUrl = import.meta.env.DEV
+            ? (import.meta.env.RARI_SERVER_URL || `http://localhost:${import.meta.env.VITE_RSC_PORT || '3000'}`)
+            : window.location.origin
+
+          const response = await fetch(rscServerUrl + currentPath, {
+            headers: { Accept: 'text/x-component' },
+            cache: 'no-store',
+          })
+
+          if (response.ok) {
+            const buffer = new Uint8Array(await response.arrayBuffer())
+            const stream = new ReadableStream({
+              start(controller) {
+                controller.enqueue(buffer)
+                controller.close()
+              },
+            })
+            element = await createFromReadableStream(stream)
+          }
+        }
+        catch (fetchErr) {
+          console.error('[rari] Failed to fetch RSC payload fallback:', fetchErr)
+        }
+      }
+
+      if (element) {
+        let hydrationContent: any = React.createElement(
+          AppRouterProvider,
+          { initialPayload: { element } },
+        )
+        hydrationContent = React.createElement(
+          ClientRouter,
+          // eslint-disable-next-line react/jsx-no-children-prop
+          { initialRoute: window.location.pathname, children: hydrationContent },
+        )
+        hydrationContent = React.createElement(
+          RouterProvider,
+          // eslint-disable-next-line react/jsx-no-children-prop
+          { initialPathname: window.location.pathname, children: hydrationContent },
+        )
+
+        hydrateRoot(rootElement, hydrationContent, {
+          onRecoverableError(error) {
+            if (import.meta.env.DEV) {
+              console.warn('[rari] Hydration mismatch:', error)
+            }
+          },
+        })
+      }
+
+      return
+    }
 
     if (needsInitialFetch) {
       try {
@@ -341,35 +468,7 @@ export async function renderApp(): Promise<void> {
       catch (e) {
         if (e instanceof Promise)
           throw e
-
         console.error('[rari] Failed to fetch initial RSC data:', e)
-
-        if (e instanceof Error) {
-          console.error('[rari] Error name:', e.name)
-          console.error('[rari] Error message:', e.message)
-          if (e.stack) {
-            console.error('[rari] Error stack:', e.stack)
-          }
-        }
-        else if (typeof e === 'string') {
-          console.error('[rari] Error details:', e)
-        }
-        else if (e && typeof e === 'object') {
-          try {
-            const errorDetails: any = {}
-            for (const key of Object.getOwnPropertyNames(e)) {
-              errorDetails[key] = (e as any)[key]
-            }
-            console.error('[rari] Error details:', JSON.stringify(errorDetails, null, 2))
-          }
-          catch {
-            console.error('[rari] Error details:', String(e))
-          }
-        }
-        else {
-          console.error('[rari] Error details:', String(e))
-        }
-
         element = null
       }
     }
@@ -478,120 +577,39 @@ export async function renderApp(): Promise<void> {
     if (!element)
       throw new Error('No RSC data available for hydration')
 
-    let contentToRender
-
-    if (payloadScript && element) {
-      contentToRender = element
-    }
-    else if (isFullDocument) {
-      const bodyContent = extractBodyContent(element, false)
-      if (bodyContent) {
-        contentToRender = bodyContent
-      }
-      else {
-        console.error('[rari] Could not extract body content, falling back to full element')
-        contentToRender = element
-      }
-    }
-    else {
-      contentToRender = element
-    }
-
-    let wrappedContent
-
-    wrappedContent = React.createElement(
+    // Wrap element in providers for routing/navigation support.
+    // All providers (RouterProvider, ClientRouter, AppRouterProvider) produce
+    // no extra DOM — they only provide context and render children directly.
+    let content: any = React.createElement(
       AppRouterProvider,
       { initialPayload: { element } },
-      contentToRender,
     )
-
-    /* eslint-disable react/jsx-no-children-prop */
-    wrappedContent = React.createElement(
+    content = React.createElement(
       ClientRouter,
-      { initialRoute: window.location.pathname, children: wrappedContent },
+      // eslint-disable-next-line react/jsx-no-children-prop
+      { initialRoute: window.location.pathname, children: content },
     )
-
-    wrappedContent = React.createElement(
+    content = React.createElement(
       RouterProvider,
-      { initialPathname: window.location.pathname, children: wrappedContent },
+      // eslint-disable-next-line react/jsx-no-children-prop
+      { initialPathname: window.location.pathname, children: content },
     )
-    /* eslint-enable react/jsx-no-children-prop */
 
-    const root = createRoot(rootElement)
-    root.render(wrappedContent)
+    if (hasServerRenderedContent) {
+      hydrateRoot(rootElement, content, {
+        onRecoverableError(error) {
+          if (import.meta.env.DEV)
+            console.warn('[rari] Hydration mismatch:', error)
+        },
+      })
+    }
+    else {
+      const root = createRoot(rootElement)
+      root.render(content)
+    }
   }
   catch (error) {
     console.error('[rari] Error rendering app:', error)
-  }
-}
-
-function extractBodyContent(element: any, skipHeadInjection = false): any {
-  if (element && element.type === 'html' && element.props && element.props.children) {
-    const children = Array.isArray(element.props.children)
-      ? element.props.children
-      : [element.props.children]
-
-    let headElement = null
-    let bodyElement = null
-
-    for (const child of children) {
-      if (child && child.type === 'head')
-        headElement = child
-      else if (child && child.type === 'body')
-        bodyElement = child
-    }
-
-    if (bodyElement) {
-      if (!skipHeadInjection && headElement && headElement.props && headElement.props.children)
-        injectHeadContent(headElement)
-
-      const bodyChildren = bodyElement.props?.children
-
-      if (bodyChildren
-        && typeof bodyChildren === 'object'
-        && !Array.isArray(bodyChildren)
-        && bodyChildren.type === 'div'
-        && bodyChildren.props?.id === 'root') { return bodyChildren.props?.children || null }
-
-      return bodyChildren || null
-    }
-  }
-
-  return null
-}
-
-function injectHeadContent(headElement: any): void {
-  const headChildren = Array.isArray(headElement.props.children)
-    ? headElement.props.children
-    : [headElement.props.children]
-
-  for (const child of headChildren) {
-    if (!child)
-      continue
-
-    if (child.type === 'style' && child.props && child.props.children) {
-      const styleElement = document.createElement('style')
-
-      const styleContent = Array.isArray(child.props.children)
-        ? child.props.children.join('')
-        : child.props.children
-
-      styleElement.textContent = styleContent
-      document.head.appendChild(styleElement)
-    }
-    else if (child.type === 'meta' && child.props) {
-      const metaElement = document.createElement('meta')
-      Object.keys(child.props).forEach((key) => {
-        if (key !== 'children')
-          metaElement.setAttribute(key, child.props[key])
-      })
-      document.head.appendChild(metaElement)
-    }
-    else if (child.type === 'title' && child.props && child.props.children) {
-      document.title = Array.isArray(child.props.children)
-        ? child.props.children.join('')
-        : child.props.children
-    }
   }
 }
 

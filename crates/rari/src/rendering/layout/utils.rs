@@ -49,6 +49,10 @@ fn normalize_route_component_path(file_path: &str) -> String {
     }
 }
 
+pub fn normalize_route_component_path_public(file_path: &str) -> String {
+    normalize_route_component_path(file_path)
+}
+
 pub fn create_component_id(file_path: &str) -> String {
     let project_relative_path = normalize_route_component_path(file_path);
     format!(

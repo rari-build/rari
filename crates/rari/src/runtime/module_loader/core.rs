@@ -42,6 +42,7 @@ type ExtensionTranspilerFn = dyn Fn(FastString, FastString) -> ExtensionTranspil
 const NODE_MODULES_PATH: &str = "/node_modules/";
 const RARI_COMPONENT_PATH: &str = "/rari_component/";
 const REACT_STUB_PATH: &str = "/react_stub/";
+const REACT_VENDOR_PATH: &str = "/react_vendor/";
 const RARI_STUB_PATH: &str = "/rari_stub/";
 const FILE_PROTOCOL: &str = "file://";
 const NODE_PREFIX: &str = "node:";
@@ -1405,6 +1406,26 @@ impl ModuleLoader for RariModuleLoader {
         referrer: &str,
         kind: ResolutionKind,
     ) -> Result<ModuleSpecifier, JsErrorBox> {
+        if referrer.starts_with("ext:")
+            && (specifier.starts_with("./") || specifier.starts_with("../"))
+        {
+            if let Ok(referrer_url) = ModuleSpecifier::parse(referrer) {
+                if let Ok(resolved_url) = referrer_url.join(specifier) {
+                    return Ok(resolved_url);
+                }
+            }
+        }
+
+        if specifier.contains("/react_vendor/") {
+            let module_name =
+                specifier.rsplit("/react_vendor/").next().unwrap_or("").trim_end_matches(".mjs");
+
+            let ext_specifier = format!("ext:rari/react/vendor/{module_name}");
+            let url = ModuleSpecifier::parse(&ext_specifier)
+                .map_err(|err| JsErrorBox::generic(format!("Invalid URL: {err}")))?;
+            return Ok(url);
+        }
+
         if matches!(kind, ResolutionKind::DynamicImport)
             && referrer.contains("node_modules")
             && let Some(package_start) = referrer.rfind("node_modules/")
@@ -1575,17 +1596,34 @@ impl ModuleLoader for RariModuleLoader {
 
         if !specifier.contains("://") && !specifier.starts_with('/') {
             if specifier == "react" || specifier.starts_with("react/") {
+                let use_real_react =
+                    referrer.contains("/ssr/") || referrer.contains(REACT_VENDOR_PATH);
+
                 let react_url =
                     if specifier == "react/jsx-runtime" || specifier == "react/jsx-runtime.js" {
-                        "file:///react_stub/jsx-runtime.js".to_string()
+                        if use_real_react {
+                            "file:///react_vendor/react-jsx-runtime.js".to_string()
+                        } else {
+                            "file:///react_stub/jsx-runtime.js".to_string()
+                        }
                     } else if specifier == "react/jsx-dev-runtime"
                         || specifier == "react/jsx-dev-runtime.js"
                     {
-                        "file:///react_stub/jsx-dev-runtime.js".to_string()
+                        if use_real_react {
+                            "file:///react_vendor/react-jsx-runtime.js".to_string()
+                        } else {
+                            "file:///react_stub/jsx-dev-runtime.js".to_string()
+                        }
+                    } else if use_real_react {
+                        "file:///react_vendor/react.js".to_string()
                     } else {
                         "file:///react_stub/react.js".to_string()
                     };
                 return self.resolve(&react_url, referrer, kind);
+            }
+
+            if specifier == "react-dom/server" || specifier == "react-dom/server.browser" {
+                return self.resolve("file:///react_vendor/react-dom-server.js", referrer, kind);
             }
 
             if specifier == "react-dom" || specifier.starts_with("react-dom/") {

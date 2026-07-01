@@ -30,7 +30,7 @@ check-prerequisites:
 # --- Build commands ---
 
 # Build everything (Rust + all Node.js packages)
-build: build-snapshot build-rust build-node
+build: bundle-react-esm build-snapshot build-rust build-node
 
 # Generate V8 startup snapshot (required before building rari)
 # Rebuilds when snapshot is missing, empty, or stale (older than Cargo.toml or extension sources)
@@ -216,6 +216,10 @@ prepare-binaries:
 # Prepare binaries for development (fast debug build)
 prepare-binaries-dev:
     cargo run --manifest-path tools/prepare-binaries/Cargo.toml -- --dev
+
+# Bundle React CJS into ESM for rari's V8 runtime (emits .js into the rari crate)
+bundle-react-esm: _ensure-node-deps
+    pnpm --filter @rari/bundle-react-esm bundle
 
 # --- Utility commands ---
 

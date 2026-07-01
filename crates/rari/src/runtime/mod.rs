@@ -88,6 +88,27 @@ impl JsExecutionRuntime {
         self.runtime.execute_script_batch(scripts).await
     }
 
+    pub async fn execute_script_for_streaming(
+        &self,
+        script_name: String,
+        script_code: String,
+        chunk_sender: tokio::sync::mpsc::Sender<Result<Vec<u8>, String>>,
+    ) -> Result<(), RariError> {
+        let runtime = Arc::clone(&self.runtime);
+        match tokio::time::timeout(
+            Duration::from_millis(self.timeout_ms),
+            runtime.execute_script_for_streaming(script_name, script_code, chunk_sender),
+        )
+        .await
+        {
+            Ok(result) => result,
+            Err(_) => Err(RariError::timeout(format!(
+                "Streaming script execution timed out after {} ms",
+                self.timeout_ms
+            ))),
+        }
+    }
+
     pub async fn collect_metadata(
         &self,
         layout_paths: Vec<String>,

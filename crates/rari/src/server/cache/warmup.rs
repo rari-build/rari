@@ -11,11 +11,27 @@ use rustc_hash::FxHashMap;
 use tracing::{error, info};
 
 use crate::{
-    rendering::layout::{LayoutRenderContext, LayoutRenderer},
-    server::{ServerState, cache::response, routing::types::ParamValue},
+    rendering::layout::{LayoutRenderContext, LayoutRenderer, types::RenderResult},
+    server::{
+        ServerState,
+        cache::response,
+        handlers::app::{collect_page_metadata, wrap_html_with_metadata},
+        routing::types::ParamValue,
+    },
 };
 
 const WARMUP_CONCURRENCY: usize = 10;
+
+/// Serialize warmup renders to prevent V8 global state corruption.
+/// The RSC+Fizz pipeline shares V8 globals between the mutex-protected
+/// RSC render and the non-mutex Fizz render. Without serialization,
+/// concurrent warmup tasks interleave and produce wrong HTML.
+static WARMUP_RENDER_LOCK: tokio::sync::OnceCell<tokio::sync::Mutex<()>> =
+    tokio::sync::OnceCell::const_new();
+
+async fn warmup_render_lock() -> &'static tokio::sync::Mutex<()> {
+    WARMUP_RENDER_LOCK.get_or_init(|| async { tokio::sync::Mutex::new(()) }).await
+}
 
 pub async fn warm_cache(state: &ServerState) {
     let app_router = match &state.app_router {
@@ -78,7 +94,7 @@ async fn warm_route(
         return Ok(());
     }
 
-    let context = create_warmup_context(&route_match);
+    let mut context = create_warmup_context(&route_match);
 
     let layout_renderer = LayoutRenderer::with_shared_cache(
         Arc::clone(&state.renderer),
@@ -90,32 +106,133 @@ async fn warm_route(
             route_match.route.path.clone(),
         ));
 
-    let rsc_flight_protocol = layout_renderer
-        .render_route_by_mode(&route_match, &context, Some(request_context))
+    let _render_guard = warmup_render_lock().await.lock().await;
+
+    let render_result = layout_renderer
+        .render_route_with_streaming(
+            &route_match,
+            &context,
+            Some(Arc::clone(&request_context)),
+            false,
+        )
         .await
         .map_err(|e| format!("Render failed: {e}"))?;
 
-    let cache_key = response::ResponseCache::generate_cache_key_with_mode(path, None, Some("rsc"));
+    context.metadata = collect_page_metadata(state, &route_match, &context).await;
 
-    let cache_control = state.config.get_cache_control_for_route(path);
-    let cache_policy = response::RouteCachePolicy::from_cache_control(cache_control, path);
+    let html = match render_result {
+        RenderResult::Static(html) => html,
+        RenderResult::FizzHtmlStream { shell, closing, mut chunks } => {
+            let mut html = String::from_utf8_lossy(&shell).into_owned();
+            while let Some(chunk_result) = chunks.recv().await {
+                match chunk_result {
+                    Ok(data) => html.push_str(&String::from_utf8_lossy(&data)),
+                    Err(_) => break,
+                }
+            }
+            html.push_str(&String::from_utf8_lossy(&closing));
+            html
+        }
+        _ => return Ok(()),
+    };
 
-    if cache_policy.enabled && state.response_cache.config.enabled {
+    let html = wrap_html_with_metadata(html, context.metadata.as_ref(), state);
+
+    let html_cache_key = response::ResponseCache::generate_cache_key(path, None);
+    let etag = response::ResponseCache::generate_etag(html.as_bytes());
+
+    if state.response_cache.config.enabled {
+        let body_bytes = bytes::Bytes::from(html);
+
+        let compressed_gzip = {
+            use crate::server::compression::{CompressionEncoding, compress_body};
+            let (compressed, enc) =
+                compress_body(body_bytes.clone(), CompressionEncoding::Gzip).await;
+            if matches!(enc, CompressionEncoding::Gzip) { Some(compressed) } else { None }
+        };
+
+        let compressed_zstd = {
+            use crate::server::compression::{CompressionEncoding, compress_body};
+            let (compressed, enc) =
+                compress_body(body_bytes.clone(), CompressionEncoding::Zstd).await;
+            if matches!(enc, CompressionEncoding::Zstd) { Some(compressed) } else { None }
+        };
+
+        let compressed_br = {
+            use crate::server::compression::{CompressionEncoding, compress_body};
+            let (compressed, enc) =
+                compress_body(body_bytes.clone(), CompressionEncoding::Brotli).await;
+            if matches!(enc, CompressionEncoding::Brotli) { Some(compressed) } else { None }
+        };
+
+        let cache_control = state.config.get_cache_control_for_route(path).to_string();
+
+        state.static_fast_cache.insert(
+            path.to_string(),
+            std::sync::Arc::new(response::PrebuiltResponse {
+                identity: body_bytes.clone(),
+                gzip: compressed_gzip.clone(),
+                br: compressed_br.clone(),
+                zstd: compressed_zstd.clone(),
+                etag: etag.clone(),
+                content_type: "text/html; charset=utf-8".to_string(),
+                cache_control,
+                is_not_found: false,
+            }),
+        );
+
         let cached_response = response::CachedResponse {
-            body: bytes::Bytes::from(rsc_flight_protocol),
+            body: body_bytes,
             headers: axum::http::HeaderMap::new(),
             metadata: response::CacheMetadata {
                 cached_at: Instant::now(),
-                ttl: cache_policy.ttl,
-                etag: None,
-                tags: cache_policy.tags,
+                ttl: state.response_cache.config.default_ttl,
+                etag: Some(etag),
+                tags: vec![path.to_string()],
             },
-            compressed_zstd: None,
-            compressed_br: None,
-            compressed_gzip: None,
+            compressed_zstd,
+            compressed_br,
+            compressed_gzip,
         };
 
-        state.response_cache.set(cache_key, cached_response).await;
+        state.response_cache.set(html_cache_key, cached_response).await;
+    }
+
+    let rsc_result =
+        layout_renderer.render_route_by_mode(&route_match, &context, Some(request_context)).await;
+
+    if let Ok(rsc_flight_protocol) = rsc_result {
+        let rsc_cache_key =
+            response::ResponseCache::generate_cache_key_with_mode(path, None, Some("rsc"));
+
+        if state.response_cache.config.enabled {
+            let mut cache_headers = axum::http::HeaderMap::new();
+
+            if let Some(ref metadata) = context.metadata
+                && let Ok(metadata_json) = serde_json::to_string(metadata)
+            {
+                let encoded_metadata = urlencoding::encode(&metadata_json);
+                if let Ok(header_value) = encoded_metadata.as_ref().parse() {
+                    cache_headers.insert("x-rari-metadata", header_value);
+                }
+            }
+
+            let cached_response = response::CachedResponse {
+                body: bytes::Bytes::from(rsc_flight_protocol),
+                headers: cache_headers,
+                metadata: response::CacheMetadata {
+                    cached_at: Instant::now(),
+                    ttl: state.response_cache.config.default_ttl,
+                    etag: None,
+                    tags: vec![path.to_string()],
+                },
+                compressed_zstd: None,
+                compressed_br: None,
+                compressed_gzip: None,
+            };
+
+            state.response_cache.set(rsc_cache_key, cached_response).await;
+        }
     }
 
     Ok(())

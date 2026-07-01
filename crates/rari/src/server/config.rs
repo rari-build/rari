@@ -327,42 +327,13 @@ impl Default for LoadingConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[non_exhaustive]
-pub struct StreamingConfig {
-    pub enabled: bool,
-    pub buffer_size: usize,
-    pub resolution_timeout_ms: u64,
-}
-
-impl Default for StreamingConfig {
-    fn default() -> Self {
-        Self { enabled: true, buffer_size: 64, resolution_timeout_ms: 5000 }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[non_exhaustive]
-#[expect(clippy::struct_excessive_bools, reason = "Configuration flags are intentionally boolean")]
 pub struct RscConfig {
-    pub enable_ssr: bool,
-    pub enable_streaming: bool,
-    pub component_cache_size: usize,
-    pub render_timeout_ms: u64,
     pub script_execution_timeout_ms: u64,
-    pub enable_hot_reload: bool,
-    pub hmr_reload_enabled: bool,
 }
 
 impl Default for RscConfig {
     fn default() -> Self {
-        Self {
-            enable_ssr: true,
-            enable_streaming: true,
-            component_cache_size: 2000,
-            render_timeout_ms: 8000,
-            script_execution_timeout_ms: 3000,
-            enable_hot_reload: true,
-            hmr_reload_enabled: true,
-        }
+        Self { script_execution_timeout_ms: 3000 }
     }
 }
 
@@ -377,8 +348,6 @@ pub struct Config {
     pub rsc_html: RscHtmlConfig,
     pub caching: CacheControlConfig,
     pub loading: LoadingConfig,
-    #[serde(default)]
-    pub streaming: StreamingConfig,
     #[serde(default)]
     pub cors: CorsConfig,
     #[serde(default)]
@@ -405,11 +374,7 @@ impl Config {
                 host: default_config.server.host.clone(),
                 ..default_config.vite
             },
-            rsc: RscConfig {
-                enable_hot_reload: mode != Mode::Production,
-                hmr_reload_enabled: mode != Mode::Production,
-                ..default_config.rsc
-            },
+            rsc: default_config.rsc,
             rsc_html: RscHtmlConfig {
                 pretty_print: mode == Mode::Development,
                 ..default_config.rsc_html
@@ -475,12 +440,6 @@ impl Config {
                 timeout_str.parse().map_err(|_| ConfigError::Timeout(timeout_str.clone()))?;
         }
 
-        if let Ok(disable_hmr) = std::env::var("DISABLE_HMR_RELOAD") {
-            config.rsc.hmr_reload_enabled = disable_hmr.cow_to_lowercase() != "true"
-                && disable_hmr != "1"
-                && disable_hmr.cow_to_lowercase() != "yes";
-        }
-
         if let Ok(rsc_html_enabled_str) = std::env::var("RARI_RSC_HTML_ENABLED") {
             config.rsc_html.enabled = rsc_html_enabled_str.cow_to_lowercase() == "true"
                 || rsc_html_enabled_str == "1"
@@ -523,25 +482,6 @@ impl Config {
                 == "true"
                 || cache_loading_str == "1"
                 || cache_loading_str.cow_to_lowercase() == "yes";
-        }
-
-        if let Ok(streaming_enabled_str) = std::env::var("RARI_STREAMING_ENABLED") {
-            config.streaming.enabled = streaming_enabled_str.cow_to_lowercase() == "true"
-                || streaming_enabled_str == "1"
-                || streaming_enabled_str.cow_to_lowercase() == "yes";
-        }
-
-        if let Ok(buffer_size_str) = std::env::var("RARI_STREAMING_BUFFER_SIZE") {
-            config.streaming.buffer_size = buffer_size_str
-                .parse()
-                .map_err(|_| ConfigError::Config("RARI_STREAMING_BUFFER_SIZE".to_string()))?;
-        }
-
-        if let Ok(resolution_timeout_str) = std::env::var("RARI_STREAMING_RESOLUTION_TIMEOUT_MS") {
-            config.streaming.resolution_timeout_ms =
-                resolution_timeout_str.parse().map_err(|_| {
-                    ConfigError::Config("RARI_STREAMING_RESOLUTION_TIMEOUT_MS".to_string())
-                })?;
         }
 
         let config_path = match base {
@@ -729,10 +669,6 @@ impl Config {
 
     pub fn is_production(&self) -> bool {
         self.mode == Mode::Production
-    }
-
-    pub fn hmr_reload_enabled(&self) -> bool {
-        self.is_development() && self.rsc.hmr_reload_enabled
     }
 
     pub fn cors_config(&self) -> CorsConfig {
@@ -944,13 +880,6 @@ mod tests {
     }
 
     #[test]
-    fn test_config_new_with_mode() {
-        let config = Config::new(Mode::Production);
-        assert_eq!(config.mode, Mode::Production);
-        assert!(!config.rsc.enable_hot_reload);
-    }
-
-    #[test]
     fn test_server_address() {
         let config = Config::default();
         assert_eq!(config.server_address(), "127.0.0.1:3000");
@@ -1062,35 +991,6 @@ mod tests {
         assert_eq!(cache_config.static_files, deserialized.static_files);
         assert_eq!(cache_config.server_components, deserialized.server_components);
         assert_eq!(cache_config.routes.len(), deserialized.routes.len());
-    }
-
-    #[test]
-    fn test_streaming_config_default() {
-        let streaming_config = StreamingConfig::default();
-        assert!(streaming_config.enabled);
-        assert_eq!(streaming_config.buffer_size, 64);
-        assert_eq!(streaming_config.resolution_timeout_ms, 5000);
-    }
-
-    #[test]
-    fn test_config_includes_streaming() {
-        let config = Config::default();
-        assert!(config.streaming.enabled);
-        assert_eq!(config.streaming.buffer_size, 64);
-        assert_eq!(config.streaming.resolution_timeout_ms, 5000);
-    }
-
-    #[test]
-    fn test_streaming_config_serialization() {
-        let streaming_config =
-            StreamingConfig { enabled: false, buffer_size: 128, resolution_timeout_ms: 10000 };
-
-        let serialized = serde_json::to_string(&streaming_config).unwrap();
-        let deserialized: StreamingConfig = serde_json::from_str(&serialized).unwrap();
-
-        assert_eq!(streaming_config.enabled, deserialized.enabled);
-        assert_eq!(streaming_config.buffer_size, deserialized.buffer_size);
-        assert_eq!(streaming_config.resolution_timeout_ms, deserialized.resolution_timeout_ms);
     }
 
     #[test]

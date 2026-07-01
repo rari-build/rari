@@ -387,12 +387,28 @@ jobs:
           cd crates/rari-use-cache
           pnpm exec napi build --release --strip --platform
 
+      - name: Write use-cache index.js template
+        shell: bash
+        run: |
+          cat > "${RUNNER_TEMP}/use-cache-index.js" << 'EOF'
+          import { createRequire } from 'node:module'
+          import { dirname, join } from 'node:path'
+          import { fileURLToPath } from 'node:url'
+
+          const require = createRequire(import.meta.url)
+          const __dirname = dirname(fileURLToPath(import.meta.url))
+
+          const addon = require(join(__dirname, 'rari_use_cache.node'))
+
+          export default addon
+          EOF
+
       - name: Copy addon to platform package (Linux)
         if: runner.os == 'Linux'
         run: |
           mkdir -p packages/use-cache-linux-x64
           cp crates/rari-use-cache/*.linux-x64-gnu.node packages/use-cache-linux-x64/rari_use_cache.node
-          cp .github/templates/js/use-cache-platform.js packages/use-cache-linux-x64/index.js
+          cp "${RUNNER_TEMP}/use-cache-index.js" packages/use-cache-linux-x64/index.js
           sed -e 's/{PLATFORM}/linux-x64/g' \
               -e 's/{VERSION}/0.0.0/g' \
               -e 's/{OS}/linux/g' \
@@ -405,7 +421,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path packages/use-cache-win32-x64
           Copy-Item crates/rari-use-cache/*.win32-x64-msvc.node packages/use-cache-win32-x64/rari_use_cache.node
-          Copy-Item .github/templates/js/use-cache-platform.js packages/use-cache-win32-x64/index.js
+          Copy-Item "$env:RUNNER_TEMP/use-cache-index.js" packages/use-cache-win32-x64/index.js
           (Get-Content .github/templates/package-json/use-cache-platform.json) `
             -replace '\{PLATFORM\}', 'win32-x64' `
             -replace '\{VERSION\}', '0.0.0' `
