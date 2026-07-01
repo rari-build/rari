@@ -1,6 +1,6 @@
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
-#[cfg(unix)]
+#[cfg(target_os = "macos")]
 use std::process as StdProcess;
 use std::{fs, path::Path};
 
