@@ -1,6 +1,8 @@
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
-use std::{fs, path::Path, process};
+#[cfg(unix)]
+use std::process;
+use std::{fs, path::Path};
 
 use anyhow::{Context, Result};
 use tokio::process::Command;
