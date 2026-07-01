@@ -1,5 +1,3 @@
-#!/usr/bin/env node
-
 import type { SpawnOptions } from 'node:child_process'
 import { spawn } from 'node:child_process'
 import { existsSync, readFileSync, realpathSync } from 'node:fs'

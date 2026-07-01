@@ -1,4 +1,4 @@
-use axum::http::HeaderValue;
+use axum::http::{HeaderMap, HeaderValue};
 use cow_utils::CowUtils;
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -12,7 +12,7 @@ pub fn extract_search_params(
     query_params.into_iter().map(|(k, v)| (k, vec![v])).collect()
 }
 
-pub fn extract_headers(headers: &axum::http::HeaderMap) -> FxHashMap<String, String> {
+pub fn extract_headers(headers: &HeaderMap) -> FxHashMap<String, String> {
     let mut header_map = FxHashMap::default();
     for (name, value) in headers {
         if let Ok(value_str) = value.to_str() {
@@ -159,7 +159,7 @@ pub fn is_origin_allowed(origin: &str, allowed_origins: &[String]) -> bool {
 }
 
 pub fn add_api_cors_headers(
-    headers: &mut axum::http::HeaderMap,
+    headers: &mut HeaderMap,
     request_origin: Option<&str>,
     allowed_origins: &[String],
     allow_credentials: bool,
@@ -206,7 +206,7 @@ pub fn add_api_cors_headers(
     }
 }
 
-pub fn add_api_security_headers(headers: &mut axum::http::HeaderMap) {
+pub fn add_api_security_headers(headers: &mut HeaderMap) {
     if !headers.contains_key("X-Content-Type-Options") {
         headers.insert("X-Content-Type-Options", HeaderValue::from_static("nosniff"));
     }
@@ -318,7 +318,7 @@ mod tests {
 
     #[test]
     fn test_add_api_cors_headers_valid_origin() {
-        let mut headers = axum::http::HeaderMap::new();
+        let mut headers = HeaderMap::new();
         let allowed = vec!["https://example.com".to_string()];
 
         add_api_cors_headers(&mut headers, Some("https://example.com"), &allowed, true, 86400);
@@ -333,7 +333,7 @@ mod tests {
 
     #[test]
     fn test_add_api_cors_headers_invalid_origin() {
-        let mut headers = axum::http::HeaderMap::new();
+        let mut headers = HeaderMap::new();
         let allowed = vec!["https://example.com".to_string()];
 
         add_api_cors_headers(&mut headers, Some("https://evil.com"), &allowed, true, 86400);
@@ -347,7 +347,7 @@ mod tests {
 
     #[test]
     fn test_add_api_cors_headers_no_origin() {
-        let mut headers = axum::http::HeaderMap::new();
+        let mut headers = HeaderMap::new();
         let allowed = vec!["https://example.com".to_string()];
 
         add_api_cors_headers(&mut headers, None, &allowed, true, 86400);
@@ -361,7 +361,7 @@ mod tests {
 
     #[test]
     fn test_add_api_cors_headers_without_credentials() {
-        let mut headers = axum::http::HeaderMap::new();
+        let mut headers = HeaderMap::new();
         let allowed = vec!["https://example.com".to_string()];
 
         add_api_cors_headers(&mut headers, Some("https://example.com"), &allowed, false, 86400);
@@ -373,7 +373,7 @@ mod tests {
 
     #[test]
     fn test_add_api_cors_headers_preserves_existing() {
-        let mut headers = axum::http::HeaderMap::new();
+        let mut headers = HeaderMap::new();
         headers.insert(
             "Access-Control-Allow-Origin",
             HeaderValue::from_static("https://existing.com"),

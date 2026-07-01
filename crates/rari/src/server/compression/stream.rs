@@ -1,6 +1,8 @@
+use std::{io::Result, mem};
+
 use async_compression::tokio::write::{BrotliEncoder, GzipEncoder, ZstdEncoder};
 use bytes::Bytes;
-use futures::stream::{Stream, StreamExt};
+use futures::stream::{self, Stream, StreamExt};
 use tokio::io::AsyncWriteExt;
 use tracing::error;
 
@@ -41,14 +43,14 @@ impl CompressionEncoding {
 pub fn compress_stream<S>(
     input: S,
     encoding: CompressionEncoding,
-) -> impl Stream<Item = Result<Bytes, std::io::Error>>
+) -> impl Stream<Item = Result<Bytes>>
 where
-    S: Stream<Item = Result<Bytes, std::io::Error>> + Send + 'static,
+    S: Stream<Item = Result<Bytes>> + Send + 'static,
 {
     match encoding {
         CompressionEncoding::Zstd => {
             let pinned_input = Box::pin(input);
-            futures::stream::unfold(
+            stream::unfold(
                 (pinned_input, Some(ZstdCompressor::new()), false),
                 |(mut input, mut compressor, finished)| async move {
                     if finished {
@@ -89,7 +91,7 @@ where
         }
         CompressionEncoding::Brotli => {
             let pinned_input = Box::pin(input);
-            futures::stream::unfold(
+            stream::unfold(
                 (pinned_input, Some(BrotliCompressor::new()), false),
                 |(mut input, mut compressor, finished)| async move {
                     if finished {
@@ -130,7 +132,7 @@ where
         }
         CompressionEncoding::Gzip => {
             let pinned_input = Box::pin(input);
-            futures::stream::unfold(
+            stream::unfold(
                 (pinned_input, Some(GzipCompressor::new()), false),
                 |(mut input, mut compressor, finished)| async move {
                     if finished {
@@ -182,17 +184,17 @@ impl ZstdCompressor {
         Self { encoder: ZstdEncoder::new(Vec::new()) }
     }
 
-    async fn compress_and_flush(&mut self, data: &[u8]) -> std::io::Result<Bytes> {
+    async fn compress_and_flush(&mut self, data: &[u8]) -> Result<Bytes> {
         self.encoder.write_all(data).await?;
         self.encoder.flush().await?;
 
         let inner = self.encoder.get_mut();
-        let compressed = std::mem::take(inner);
+        let compressed = mem::take(inner);
 
         Ok(Bytes::from(compressed))
     }
 
-    async fn finish(mut self) -> std::io::Result<Bytes> {
+    async fn finish(mut self) -> Result<Bytes> {
         self.encoder.shutdown().await?;
         let final_bytes = self.encoder.into_inner();
         Ok(Bytes::from(final_bytes))
@@ -208,17 +210,17 @@ impl BrotliCompressor {
         Self { encoder: BrotliEncoder::new(Vec::new()) }
     }
 
-    async fn compress_and_flush(&mut self, data: &[u8]) -> std::io::Result<Bytes> {
+    async fn compress_and_flush(&mut self, data: &[u8]) -> Result<Bytes> {
         self.encoder.write_all(data).await?;
         self.encoder.flush().await?;
 
         let inner = self.encoder.get_mut();
-        let compressed = std::mem::take(inner);
+        let compressed = mem::take(inner);
 
         Ok(Bytes::from(compressed))
     }
 
-    async fn finish(mut self) -> std::io::Result<Bytes> {
+    async fn finish(mut self) -> Result<Bytes> {
         self.encoder.shutdown().await?;
         let final_bytes = self.encoder.into_inner();
         Ok(Bytes::from(final_bytes))
@@ -234,17 +236,17 @@ impl GzipCompressor {
         Self { encoder: GzipEncoder::new(Vec::new()) }
     }
 
-    async fn compress_and_flush(&mut self, data: &[u8]) -> std::io::Result<Bytes> {
+    async fn compress_and_flush(&mut self, data: &[u8]) -> Result<Bytes> {
         self.encoder.write_all(data).await?;
         self.encoder.flush().await?;
 
         let inner = self.encoder.get_mut();
-        let compressed = std::mem::take(inner);
+        let compressed = mem::take(inner);
 
         Ok(Bytes::from(compressed))
     }
 
-    async fn finish(mut self) -> std::io::Result<Bytes> {
+    async fn finish(mut self) -> Result<Bytes> {
         self.encoder.shutdown().await?;
         let final_bytes = self.encoder.into_inner();
         Ok(Bytes::from(final_bytes))

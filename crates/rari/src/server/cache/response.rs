@@ -1,4 +1,5 @@
 use std::{
+    env,
     sync::{
         Arc,
         atomic::{AtomicUsize, Ordering},
@@ -8,9 +9,47 @@ use std::{
 
 use axum::http::HeaderMap;
 use bytes::Bytes;
+use dashmap::DashMap;
 use parking_lot::Mutex;
 
-use crate::server::cache::handler::{CacheHandler, MemoryCacheHandler, MemoryConfig};
+use crate::server::{
+    cache::handler::{CacheHandler, MemoryCacheHandler, MemoryConfig},
+    compression::CompressionEncoding,
+    config::CacheLayerConfig,
+};
+
+#[derive(Clone)]
+#[non_exhaustive]
+pub struct PrebuiltResponse {
+    pub identity: Bytes,
+    pub gzip: Option<Bytes>,
+    pub br: Option<Bytes>,
+    pub zstd: Option<Bytes>,
+    pub etag: String,
+    pub content_type: String,
+    pub cache_control: String,
+    pub is_not_found: bool,
+}
+
+impl PrebuiltResponse {
+    pub fn body_for(&self, encoding: CompressionEncoding) -> (Bytes, Option<&'static str>) {
+        match encoding {
+            CompressionEncoding::Zstd => match &self.zstd {
+                Some(b) => (b.clone(), Some("zstd")),
+                None => (self.identity.clone(), None),
+            },
+            CompressionEncoding::Brotli => match &self.br {
+                Some(b) => (b.clone(), Some("br")),
+                None => (self.identity.clone(), None),
+            },
+            CompressionEncoding::Gzip => match &self.gzip {
+                Some(b) => (b.clone(), Some("gzip")),
+                None => (self.identity.clone(), None),
+            },
+            CompressionEncoding::Identity => (self.identity.clone(), None),
+        }
+    }
+}
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[non_exhaustive]
@@ -40,16 +79,29 @@ impl CachedResponse {
         elapsed < self.metadata.ttl
     }
 
-    pub fn get_compressed(
-        &self,
-        encoding: &crate::server::compression::CompressionEncoding,
-    ) -> Option<&Bytes> {
+    pub fn get_compressed(&self, encoding: &CompressionEncoding) -> Option<&Bytes> {
         match encoding {
-            crate::server::compression::CompressionEncoding::Zstd => self.compressed_zstd.as_ref(),
-            crate::server::compression::CompressionEncoding::Brotli => self.compressed_br.as_ref(),
-            crate::server::compression::CompressionEncoding::Gzip => self.compressed_gzip.as_ref(),
-            crate::server::compression::CompressionEncoding::Identity => None,
+            CompressionEncoding::Zstd => self.compressed_zstd.as_ref(),
+            CompressionEncoding::Brotli => self.compressed_br.as_ref(),
+            CompressionEncoding::Gzip => self.compressed_gzip.as_ref(),
+            CompressionEncoding::Identity => None,
         }
+    }
+}
+
+pub fn invalidate_static_fast_cache_for_path(
+    cache: &DashMap<String, Arc<PrebuiltResponse>>,
+    path: &str,
+) {
+    cache.remove(path);
+    let query_prefix = format!("{path}?");
+    let keys: Vec<String> = cache
+        .iter()
+        .filter(|entry| entry.key().starts_with(&query_prefix))
+        .map(|entry| entry.key().clone())
+        .collect();
+    for key in keys {
+        cache.remove(&key);
     }
 }
 
@@ -68,35 +120,32 @@ impl CacheConfig {
 
     pub fn from_env(is_production: bool) -> Self {
         Self {
-            max_entries: std::env::var("RARI_CACHE_MAX_ENTRIES")
+            max_entries: env::var("RARI_CACHE_MAX_ENTRIES")
                 .ok()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(1000),
-            default_ttl: std::env::var("RARI_CACHE_DEFAULT_TTL")
+            default_ttl: env::var("RARI_CACHE_DEFAULT_TTL")
                 .ok()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(31_536_000),
-            enabled: std::env::var("RARI_CACHE_ENABLED")
+            enabled: env::var("RARI_CACHE_ENABLED")
                 .ok()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(is_production),
         }
     }
 
-    pub fn from_layer(
-        layer: &crate::server::config::CacheLayerConfig,
-        is_production: bool,
-    ) -> Self {
+    pub fn from_layer(layer: &CacheLayerConfig, is_production: bool) -> Self {
         Self {
-            max_entries: std::env::var("RARI_CACHE_MAX_ENTRIES")
+            max_entries: env::var("RARI_CACHE_MAX_ENTRIES")
                 .ok()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(layer.max_entries),
-            default_ttl: std::env::var("RARI_CACHE_DEFAULT_TTL")
+            default_ttl: env::var("RARI_CACHE_DEFAULT_TTL")
                 .ok()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(layer.default_ttl_secs),
-            enabled: std::env::var("RARI_CACHE_ENABLED")
+            enabled: env::var("RARI_CACHE_ENABLED")
                 .ok()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(is_production),
@@ -515,6 +564,7 @@ mod tests {
 
     use parking_lot::Mutex as PMutex;
     use rustc_hash::FxHashMap;
+    use tokio::time;
 
     use super::*;
     use crate::server::cache::handler::{CacheError, SetOutcome};
@@ -612,7 +662,7 @@ mod tests {
         let response = create_test_response("test body", 0);
         cache.set("test-key".to_string(), response).await;
 
-        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+        time::sleep(time::Duration::from_millis(10)).await;
 
         assert!(cache.get("test-key").await.is_none());
     }
@@ -884,7 +934,7 @@ mod tests {
             CacheConfig { max_entries: 32, default_ttl: 60, enabled: true },
             shared.clone(),
         );
-        let test_dir = std::env::temp_dir().join("rari-test-cache-namespace");
+        let test_dir = env::temp_dir().join("rari-test-cache-namespace");
         let og_cache = OgImageCache::with_handler(shared.clone(), &test_dir);
 
         response_cache.set("/about".to_string(), create_test_response("response-body", 60)).await;
@@ -987,5 +1037,33 @@ mod tests {
             "cached_at was reset on re-serialize: original age = {original_age:?}, \
              reconstructed age = {reconstructed_age:?}",
         );
+    }
+
+    #[test]
+    fn test_invalidate_static_fast_cache_for_path() {
+        let cache: DashMap<String, Arc<PrebuiltResponse>> = DashMap::new();
+        let body = Bytes::from("html");
+        let make_entry = || {
+            Arc::new(PrebuiltResponse {
+                identity: body.clone(),
+                gzip: None,
+                br: None,
+                zstd: None,
+                etag: "W/\"1\"".to_string(),
+                content_type: "text/html; charset=utf-8".to_string(),
+                cache_control: "public".to_string(),
+                is_not_found: false,
+            })
+        };
+
+        cache.insert("/about".to_string(), make_entry());
+        cache.insert("/about?tab=1".to_string(), make_entry());
+        cache.insert("/other".to_string(), make_entry());
+
+        invalidate_static_fast_cache_for_path(&cache, "/about");
+
+        assert!(!cache.contains_key("/about"));
+        assert!(!cache.contains_key("/about?tab=1"));
+        assert!(cache.contains_key("/other"));
     }
 }

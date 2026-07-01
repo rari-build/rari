@@ -1,47 +1,48 @@
-/* eslint-disable no-undef, style/object-curly-spacing */
-// oxlint-disable @typescript-eslint/no-floating-promises, @typescript-eslint/unbound-method
+/// <reference path="../../types.d.ts" />
+
 (async () => {
   try {
-    if (!globalThis.getServerFunction) {
+    if (!g.getServerFunction)
       throw new TypeError('Server function registry not initialized (~serverFunctions from init_rsc_modules.js has not run)')
-    }
 
-    const fn = globalThis.getServerFunction('{function_name}')
+    const fn = g.getServerFunction('{function_name}')
 
     if (!fn)
       throw new TypeError('Server function \'{function_name}\' not found or not registered')
-
     if (typeof fn !== 'function')
       throw new TypeError('Server function \'{function_name}\' is not a function')
 
     const hasOwn = Object.prototype.hasOwnProperty
+
     const rawArgs = {args_json}
-    const processedArgs = rawArgs.map((arg) => {
+    // @ts-expect-error - Runtime template placeholder replaced by Rust, rawArgs will be an array
+    const processedArgs = rawArgs.map((arg: unknown) => {
       if (arg && typeof arg === 'object' && !Array.isArray(arg) && !(arg instanceof FormData)) {
+        const data = arg as Record<string, unknown>
         const formDataLike = {
-          data: arg,
-          get(key) {
+          data,
+          get(key: string) {
             if (hasOwn.call(this.data, key))
               return this.data[key]
 
             return undefined
           },
-          has(key) {
+          has(key: string) {
             return hasOwn.call(this.data, key)
           },
-          set(key, value) {
+          set(key: string, value: unknown) {
             if (key === '__proto__' || key === 'constructor' || key === 'prototype')
               return
 
             this.data[key] = value
           },
-          append(key, value) {
+          append(key: string, value: unknown) {
             if (key === '__proto__' || key === 'constructor' || key === 'prototype')
               return
 
             this.data[key] = value
           },
-          delete(key) {
+          delete(key: string) {
             if (hasOwn.call(this.data, key))
               delete this.data[key]
           },
@@ -68,7 +69,8 @@
     const result = await fn(...processedArgs)
     return JSON.parse(JSON.stringify(result))
   }
-  catch (error) {
-    throw new Error(`Server action error: ${error.message || String(error)}`)
+  catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    throw new Error(`Server action error: ${errorMessage}`)
   }
 })()

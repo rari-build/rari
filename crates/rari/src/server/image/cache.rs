@@ -1,15 +1,21 @@
 #![allow(clippy::exhaustive_structs)]
 
 use std::{
+    env, fs,
+    num::NonZeroUsize,
     path::{Path, PathBuf},
     sync::Arc,
 };
 
 use parking_lot::Mutex;
-use rkyv::{Archive, Deserialize as RkyvDeserialize, Serialize as RkyvSerialize};
+use rkyv::{Archive, Deserialize as RkyvDeserialize, Serialize as RkyvSerialize, rancor};
+use tokio::task;
 
 use super::types::ImageFormat;
-use crate::server::cache::handler::{CacheHandler, MemoryCacheHandler};
+use crate::server::cache::{
+    MemoryConfig,
+    handler::{CacheHandler, MemoryCacheHandler},
+};
 
 #[derive(Debug, Clone, Archive, RkyvDeserialize, RkyvSerialize)]
 #[rkyv(compare(PartialEq), derive(Debug))]
@@ -33,13 +39,12 @@ pub struct ImageCache {
 impl ImageCache {
     pub fn new(max_memory_size: usize, project_path: &Path) -> Self {
         #[expect(clippy::expect_used, reason = "Value is clamped to >= 20, guaranteed non-zero")]
-        let capacity = std::num::NonZeroUsize::new((max_memory_size / 1024 / 50).max(20))
+        let capacity = NonZeroUsize::new((max_memory_size / 1024 / 50).max(20))
             .expect("capacity is always at least 20");
-        let handler =
-            MemoryCacheHandler::with_config(crate::server::cache::handler::MemoryConfig {
-                max_entries: capacity.get(),
-                default_ttl: 0,
-            });
+        let handler = MemoryCacheHandler::with_config(MemoryConfig {
+            max_entries: capacity.get(),
+            default_ttl: 0,
+        });
         Self::with_handler(Arc::new(handler), max_memory_size, project_path)
     }
 
@@ -58,14 +63,14 @@ impl ImageCache {
 
     async fn ensure_cache_dir(&self) {
         let dir = self.cache_dir.clone();
-        let result = tokio::task::spawn_blocking(move || std::fs::create_dir_all(&dir)).await;
+        let result = task::spawn_blocking(move || fs::create_dir_all(&dir)).await;
         if let Ok(Err(e)) = result {
             tracing::error!("Failed to create image cache directory: {}", e);
         }
     }
 
     fn resolve_cache_dir(project_path: &Path) -> PathBuf {
-        let is_production = std::env::var("NODE_ENV").map(|v| v == "production").unwrap_or(false);
+        let is_production = env::var("NODE_ENV").map(|v| v == "production").unwrap_or(false);
 
         if is_production {
             PathBuf::from("/tmp/rari-image-cache")
@@ -89,7 +94,7 @@ impl ImageCache {
 
     pub async fn get(&self, key: &str) -> Option<Arc<CachedImage>> {
         if let Ok(Some(bytes)) = self.handler.get(&Self::ns(key)).await {
-            match rkyv::from_bytes::<CachedImage, rkyv::rancor::Error>(&bytes) {
+            match rkyv::from_bytes::<CachedImage, rancor::Error>(&bytes) {
                 Ok(cached) => return Some(Arc::new(cached)),
                 Err(e) => {
                     tracing::debug!("Image cache handler entry un-deserializable: {}", e);
@@ -100,12 +105,10 @@ impl ImageCache {
 
         let path = self.cache_filename(key);
         let path_for_blocking = path.clone();
-        let read_result = tokio::task::spawn_blocking(move || std::fs::read(&path_for_blocking))
-            .await
-            .ok()?
-            .ok()?;
+        let read_result =
+            task::spawn_blocking(move || fs::read(&path_for_blocking)).await.ok()?.ok()?;
 
-        let cached = match rkyv::from_bytes::<CachedImage, rkyv::rancor::Error>(&read_result) {
+        let cached = match rkyv::from_bytes::<CachedImage, rancor::Error>(&read_result) {
             Ok(c) => c,
             Err(e) => {
                 tracing::debug!("Failed to deserialize cached image from disk: {}", e);
@@ -129,7 +132,7 @@ impl ImageCache {
     pub async fn put(&self, key: String, cached: CachedImage) {
         let data_size = cached.data.len();
 
-        let serialized = match rkyv::to_bytes::<rkyv::rancor::Error>(&cached) {
+        let serialized = match rkyv::to_bytes::<rancor::Error>(&cached) {
             Ok(b) => b.into_vec(),
             Err(e) => {
                 tracing::error!("Failed to serialize cached image: {}", e);
@@ -141,10 +144,8 @@ impl ImageCache {
         let path = self.cache_filename(&key);
         let path_for_blocking = path.clone();
         let data_for_blocking = serialized.clone();
-        let write_result = tokio::task::spawn_blocking(move || {
-            std::fs::write(&path_for_blocking, &data_for_blocking)
-        })
-        .await;
+        let write_result =
+            task::spawn_blocking(move || fs::write(&path_for_blocking, &data_for_blocking)).await;
         match write_result {
             Ok(Ok(())) => {}
             Ok(Err(e)) => tracing::error!("Failed to write image to disk cache: {}", e),
@@ -200,16 +201,17 @@ mod tests {
     use std::env::temp_dir;
 
     use super::*;
-    use crate::server::cache::handler::MemoryCacheHandler;
+    use crate::server::cache::{MemoryConfig, handler::MemoryCacheHandler};
 
     fn test_project_path(test_name: &str) -> PathBuf {
         temp_dir().join(format!("rari-test-image-cache-{}", test_name))
     }
 
     fn fresh_cache(test_name: &str, max_memory_size: usize) -> ImageCache {
-        let handler = Arc::new(MemoryCacheHandler::with_config(
-            crate::server::cache::handler::MemoryConfig { max_entries: 32, default_ttl: 0 },
-        ));
+        let handler = Arc::new(MemoryCacheHandler::with_config(MemoryConfig {
+            max_entries: 32,
+            default_ttl: 0,
+        }));
         ImageCache::with_handler(handler, max_memory_size, &test_project_path(test_name))
     }
 
@@ -241,20 +243,22 @@ mod tests {
         // cache_a writes, drops. cache_b (fresh handler, same disk) must
         // serve the read from disk, then write through to its handler.
         let project_path = test_project_path("disk-persistence");
-        let _ = std::fs::remove_dir_all(&project_path);
+        let _ = fs::remove_dir_all(&project_path);
 
-        let handler_a = Arc::new(MemoryCacheHandler::with_config(
-            crate::server::cache::handler::MemoryConfig { max_entries: 32, default_ttl: 0 },
-        ));
+        let handler_a = Arc::new(MemoryCacheHandler::with_config(MemoryConfig {
+            max_entries: 32,
+            default_ttl: 0,
+        }));
         let cache_a = ImageCache::with_handler(handler_a, 1024 * 1024, &project_path);
         let image = sample_image();
         cache_a.put("persistent".to_string(), image.clone()).await;
         assert!(cache_a.get("persistent").await.is_some());
         drop(cache_a);
 
-        let handler_b = Arc::new(MemoryCacheHandler::with_config(
-            crate::server::cache::handler::MemoryConfig { max_entries: 32, default_ttl: 0 },
-        ));
+        let handler_b = Arc::new(MemoryCacheHandler::with_config(MemoryConfig {
+            max_entries: 32,
+            default_ttl: 0,
+        }));
         let cache_b = ImageCache::with_handler(
             Arc::clone(&handler_b) as Arc<dyn CacheHandler>,
             1024 * 1024,
@@ -267,7 +271,7 @@ mod tests {
         let in_handler_b = handler_b.get("image:persistent").await.unwrap();
         assert!(in_handler_b.is_some(), "write-through to handler_b missing");
 
-        let _ = std::fs::remove_dir_all(&project_path);
+        let _ = fs::remove_dir_all(&project_path);
     }
 
     #[tokio::test]

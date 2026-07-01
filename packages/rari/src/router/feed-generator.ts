@@ -3,11 +3,7 @@ import { Buffer } from 'node:buffer'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import {
-  XML_AMPERSAND_REGEX,
-  XML_APOS_REGEX,
-  XML_GT_REGEX,
-  XML_LT_REGEX,
-  XML_QUOTE_REGEX,
+  HTML_ESCAPE_REGEXES,
 } from '../shared/regex-constants'
 import { resolveWithExtensionsAndIndex } from '../shared/utils/resolve'
 import { resolveAlias } from '../vite/alias-resolver'
@@ -23,11 +19,11 @@ export interface FeedGeneratorOptions {
 
 function escapeXml(str: string): string {
   return str
-    .replace(XML_AMPERSAND_REGEX, '&amp;')
-    .replace(XML_LT_REGEX, '&lt;')
-    .replace(XML_GT_REGEX, '&gt;')
-    .replace(XML_QUOTE_REGEX, '&quot;')
-    .replace(XML_APOS_REGEX, '&apos;')
+    .replace(HTML_ESCAPE_REGEXES.AMPERSAND, '&amp;')
+    .replace(HTML_ESCAPE_REGEXES.LT, '&lt;')
+    .replace(HTML_ESCAPE_REGEXES.GT, '&gt;')
+    .replace(HTML_ESCAPE_REGEXES.QUOTE, '&quot;')
+    .replace(HTML_ESCAPE_REGEXES.APOS, '&apos;')
 }
 
 function formatRfc822Date(date: string | Date): string {

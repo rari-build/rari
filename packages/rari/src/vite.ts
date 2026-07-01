@@ -9,9 +9,6 @@ export type {
 
 export { ApiResponse } from './api-routes'
 
-export { createHttpRuntimeClient, HttpRuntimeClient } from './http-runtime-client'
-export type { RuntimeClient } from './http-runtime-client'
-
 export type Request = globalThis.Request
 export type Response = globalThis.Response
 

@@ -1,0 +1,16 @@
+{
+  "name": "@rari/bundle-react-esm",
+  "type": "module",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "bundle": "node bundle.ts"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:typescript",
+    "react": "catalog:react",
+    "react-dom": "catalog:react",
+    "react-server-dom-webpack": "catalog:react",
+    "rolldown": "catalog:build"
+  }
+}

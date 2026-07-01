@@ -1,7 +1,10 @@
 use axum::{
-    http::{HeaderValue, Request, Response, StatusCode},
+    body::Body,
+    http::{HeaderMap, HeaderValue, Request, Response, StatusCode, header::CACHE_CONTROL},
     middleware::Next,
 };
+
+use crate::server::config::Config;
 
 const ACCESS_CONTROL_ALLOW_ORIGIN: &str = "Access-Control-Allow-Origin";
 const ACCESS_CONTROL_ALLOW_METHODS: &str = "Access-Control-Allow-Methods";
@@ -33,19 +36,14 @@ const CORP_SAME_ORIGIN: &str = "same-origin";
 const REFERRER_STRICT_ORIGIN: &str = "strict-origin-when-cross-origin";
 const PERMISSIONS_RESTRICTIVE: &str = "geolocation=(), microphone=(), camera=(), payment=()";
 
-fn apply_error_cache_control(headers: &mut axum::http::HeaderMap, status: StatusCode) {
+fn apply_error_cache_control(headers: &mut HeaderMap, status: StatusCode) {
     if status.is_client_error() || status.is_server_error() {
-        headers.insert(
-            axum::http::header::CACHE_CONTROL,
-            HeaderValue::from_static("no-cache, no-store, must-revalidate"),
-        );
+        headers
+            .insert(CACHE_CONTROL, HeaderValue::from_static("no-cache, no-store, must-revalidate"));
     }
 }
 
-pub async fn cors_middleware(
-    request: Request<axum::body::Body>,
-    next: Next,
-) -> Response<axum::body::Body> {
+pub async fn cors_middleware(request: Request<Body>, next: Next) -> Response<Body> {
     let mut response = next.run(request).await;
 
     let status = response.status();
@@ -57,7 +55,7 @@ pub async fn cors_middleware(
     response
 }
 
-fn add_cors_headers(headers: &mut axum::http::HeaderMap) {
+fn add_cors_headers(headers: &mut HeaderMap) {
     let cors_headers = [
         (ACCESS_CONTROL_ALLOW_ORIGIN, ALLOW_ALL_ORIGINS),
         (ACCESS_CONTROL_ALLOW_METHODS, ALLOWED_METHODS),
@@ -72,10 +70,7 @@ fn add_cors_headers(headers: &mut axum::http::HeaderMap) {
     }
 }
 
-pub async fn security_headers_middleware(
-    request: Request<axum::body::Body>,
-    next: Next,
-) -> Response<axum::body::Body> {
+pub async fn security_headers_middleware(request: Request<Body>, next: Next) -> Response<Body> {
     let mut response = next.run(request).await;
 
     let status = response.status();
@@ -87,8 +82,8 @@ pub async fn security_headers_middleware(
     response
 }
 
-fn add_security_headers(headers: &mut axum::http::HeaderMap) {
-    let csp_policy = if let Some(config) = crate::server::config::Config::get() {
+fn add_security_headers(headers: &mut HeaderMap) {
+    let csp_policy = if let Some(config) = Config::get() {
         config.build_csp_policy()
     } else {
         "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' ws: wss:".to_string()

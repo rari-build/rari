@@ -3,9 +3,15 @@
     reason = "V8 utility functions return Result for API consistency with error-handling variants"
 )]
 
-use deno_core::{JsRuntime, PollEventLoopOptions, v8};
+use std::{
+    cmp, panic,
+    time::{Duration, Instant},
+};
+
+use deno_core::{JsRuntime, PollEventLoopOptions, serde_v8, v8};
 use rari_error::RariError;
 use serde_json::Value;
+use tokio::time;
 
 #[macro_export]
 macro_rules! with_scope {
@@ -115,7 +121,7 @@ fn deserialize_composition_result<'s>(
     {
         let key_count = keys.length();
 
-        for i in 0..std::cmp::min(key_count, 10) {
+        for i in 0..cmp::min(key_count, 10) {
             if let Some(key) = keys.get_index(scope, i)
                 && let Some(_key_str) = key.to_string(scope)
                 && let Some(_val) = obj.get(scope, key)
@@ -123,9 +129,7 @@ fn deserialize_composition_result<'s>(
         }
     }
 
-    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        deno_core::serde_v8::from_v8(scope, value)
-    })) {
+    match panic::catch_unwind(panic::AssertUnwindSafe(|| serde_v8::from_v8(scope, value))) {
         Ok(Ok(json_value)) => Ok(json_value),
         Ok(Err(err)) => {
             let err_str = err.to_string();
@@ -157,7 +161,7 @@ fn deserialize_composition_result<'s>(
 fn extract_composition_result_manually<'s>(
     scope: &mut v8::PinScope<'s, '_>,
     value: v8::Local<'s, v8::Value>,
-    original_error: deno_core::serde_v8::Error,
+    original_error: serde_v8::Error,
 ) -> Result<Value, RariError> {
     let try_json_stringify =
         |scope: &mut v8::PinScope, value: v8::Local<v8::Value>| -> Option<Value> {
@@ -308,12 +312,12 @@ pub async fn run_event_loop_with_promise_timeout(
     script_name: &str,
     timeout_ms: u64,
 ) -> Result<(), RariError> {
-    let timeout_duration = std::time::Duration::from_millis(timeout_ms);
-    let start_time = std::time::Instant::now();
-    let poll_interval = std::time::Duration::from_millis(10);
+    let timeout_duration = Duration::from_millis(timeout_ms);
+    let start_time = Instant::now();
+    let poll_interval = Duration::from_millis(10);
 
     while start_time.elapsed() < timeout_duration {
-        match tokio::time::timeout(
+        match time::timeout(
             poll_interval,
             run_event_loop_with_error_handling(
                 runtime,
@@ -336,9 +340,9 @@ pub async fn run_event_loop_with_promise_timeout(
         }
 
         let remaining = timeout_duration.saturating_sub(start_time.elapsed());
-        let sleep_duration = std::cmp::min(poll_interval, remaining);
-        if sleep_duration > std::time::Duration::ZERO {
-            tokio::time::sleep(sleep_duration).await;
+        let sleep_duration = cmp::min(poll_interval, remaining);
+        if sleep_duration > Duration::ZERO {
+            time::sleep(sleep_duration).await;
         }
     }
 

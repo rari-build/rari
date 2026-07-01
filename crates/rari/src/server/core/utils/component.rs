@@ -1,3 +1,8 @@
+use std::{
+    error::Error,
+    path::{Path, PathBuf},
+};
+
 use cow_utils::CowUtils;
 use sha2::{Digest, Sha256};
 
@@ -108,10 +113,8 @@ if (!globalThis.{module_key}) {{
     )
 }
 
-pub fn extract_component_id(
-    file_path: &str,
-) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-    let path = std::path::Path::new(file_path);
+pub fn extract_component_id(file_path: &str) -> Result<String, Box<dyn Error + Send + Sync>> {
+    let path = Path::new(file_path);
 
     let project_relative_path = if path.is_absolute() {
         let components: Vec<_> = path.components().collect();
@@ -125,7 +128,7 @@ pub fn extract_component_id(
         if normalized.starts_with("src/") {
             path.to_path_buf()
         } else {
-            std::path::Path::new("src").join(path)
+            Path::new("src").join(path)
         }
     };
 
@@ -141,11 +144,10 @@ pub fn extract_component_id(
 
 pub fn get_dist_path_for_component(
     file_path: &str,
-) -> Result<std::path::PathBuf, Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<PathBuf, Box<dyn Error + Send + Sync>> {
     let component_id = extract_component_id(file_path)?;
 
-    let dist_path =
-        std::path::Path::new(DIST_DIR).join("server").join(format!("{component_id}.js"));
+    let dist_path = Path::new(DIST_DIR).join("server").join(format!("{component_id}.js"));
 
     Ok(dist_path)
 }

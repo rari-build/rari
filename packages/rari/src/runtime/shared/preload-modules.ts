@@ -18,16 +18,25 @@ export async function preloadModulesFromWireFormat(
 
     const content = trimmed.substring(colonIndex + 1)
 
-    if (content.startsWith('I{')) {
+    if (content.startsWith('I')) {
       try {
         const jsonContent = content.substring(1)
         const importData = JSON.parse(jsonContent)
 
-        if (typeof importData === 'object' && !Array.isArray(importData) && importData.id) {
-          const normalizedImportId = importData.id.replace(/\\/g, '/')
-          const moduleId = importData.name && importData.name !== 'default'
-            ? `${normalizedImportId}#${importData.name}`
-            : normalizedImportId
+        if (Array.isArray(importData)) {
+          const id = importData[0]
+          const exportName = importData[2]
+          const normalizedImportId = id.replace(/\\/g, '/')
+
+          let moduleId: string
+          if (normalizedImportId.includes('#')) {
+            moduleId = normalizedImportId
+          }
+          else {
+            moduleId = exportName && exportName !== 'default'
+              ? `${normalizedImportId}#${exportName}`
+              : normalizedImportId
+          }
 
           if (!preloadedModuleIds || !preloadedModuleIds.has(moduleId))
             moduleIds.add(moduleId)

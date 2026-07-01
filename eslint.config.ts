@@ -25,7 +25,7 @@ export default antfu(
     },
   },
   {
-    files: ['crates/rari/src/rsc/rendering/**/*.ts'],
+    files: ['crates/rari/src/rendering/**/*.ts'],
     rules: {
       'antfu/no-top-level-await': 'off',
       'style/object-curly-spacing': 'off',

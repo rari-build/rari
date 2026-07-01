@@ -1,4 +1,4 @@
-use std::env;
+use std::{env, error};
 
 use clap::{Arg, ArgAction::SetTrue, Command};
 use rari::server::{
@@ -8,11 +8,12 @@ use rari::server::{
 };
 use rari_error::RariError;
 use rustls::crypto::{CryptoProvider, aws_lc_rs};
+use tokio::{fs, signal};
 use tracing::error;
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn main() -> Result<(), Box<dyn error::Error + Send + Sync>> {
     let matches = Command::new("rari")
         .version(env!("CARGO_PKG_VERSION"))
         .about("rari HTTP Server")
@@ -109,15 +110,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     Ok(())
 }
 
-async fn run_optimize_images(
-    dry_run: bool,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn run_optimize_images(dry_run: bool) -> Result<(), Box<dyn error::Error + Send + Sync>> {
     let project_path = env::current_dir()?;
 
     let image_config_path = project_path.join("dist").join("server").join("image.json");
 
-    let image_config: ImageConfig = if tokio::fs::try_exists(&image_config_path).await? {
-        let config_content = tokio::fs::read_to_string(&image_config_path).await?;
+    let image_config: ImageConfig = if fs::try_exists(&image_config_path).await? {
+        let config_content = fs::read_to_string(&image_config_path).await?;
         serde_json::from_str(&config_content)?
     } else {
         return Ok(());
@@ -294,14 +293,14 @@ async fn setup_shutdown_signal() {
         tokio::select! {
             _ = sigterm.recv() => {}
             _ = sigint.recv() => {}
-            _ = tokio::signal::ctrl_c() => {}
+            _ = signal::ctrl_c() => {}
         }
     }
 
     #[cfg(windows)]
     {
         tokio::select! {
-            _ = tokio::signal::ctrl_c() => {}
+            _ = signal::ctrl_c() => {}
         }
     }
 }

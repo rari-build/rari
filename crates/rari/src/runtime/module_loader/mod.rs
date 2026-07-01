@@ -1,6 +1,7 @@
 pub mod cache;
 pub mod config;
 pub mod core;
+pub mod react_vendor;
 pub mod resolver;
 pub mod storage;
 pub mod stubs;

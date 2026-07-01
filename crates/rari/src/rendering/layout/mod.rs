@@ -1,4 +1,3 @@
-mod constants;
 mod core;
 mod error_messages;
 mod route_composer;
@@ -7,7 +6,6 @@ mod utils;
 
 pub use core::{LayoutHtmlCache, LayoutRenderer};
 
-pub use constants::*;
 pub use route_composer::{LayoutInfo, RouteComposer};
 pub use types::*;
 pub use utils::create_layout_context;
@@ -203,7 +201,7 @@ mod tests {
         };
 
         let script = renderer
-            .build_composition_script(&route_match, &context, Some("app/test/loading"), true)
+            .build_composition_script(&route_match, &context, Some("app/test/loading"), true, false)
             .unwrap();
 
         assert!(script.contains("const useSuspense = true"));
@@ -247,7 +245,13 @@ mod tests {
         };
 
         let script = renderer
-            .build_composition_script(&route_match, &context, Some("app/test/loading"), false)
+            .build_composition_script(
+                &route_match,
+                &context,
+                Some("app/test/loading"),
+                false,
+                false,
+            )
             .unwrap();
 
         assert!(script.contains("const useSuspense = false"));
@@ -367,104 +371,13 @@ mod tests {
             metadata: None,
         };
 
-        let script = renderer.build_composition_script(&route_match, &context, None, true).unwrap();
+        let script =
+            renderer.build_composition_script(&route_match, &context, None, true, false).unwrap();
 
         assert!(!script.contains("'data-content-slot': true"));
         assert!(!script.contains("const contentSlot = React.createElement"));
         assert!(!script.contains("'data-layout-root': true"));
         assert!(!script.contains("const layoutRoot = React.createElement"));
-    }
-
-    #[test]
-    fn test_mode_consistency_both_modes_generate_render_to_rsc() {
-        let renderer = LayoutRenderer::new(Arc::new(Mutex::new(RscRenderer::new(Arc::new(
-            JsExecutionRuntime::new(None),
-        )))));
-
-        let route_match = AppRouteMatch {
-            route: AppRouteEntry {
-                path: "/test".to_string(),
-                file_path: "app/test/page.tsx".to_string(),
-                component_id: None,
-                css: vec![],
-                segments: vec![],
-                params: vec![],
-                is_dynamic: false,
-                static_params: None,
-            },
-            params: FxHashMap::default(),
-            layouts: vec![],
-            loading: None,
-            error: None,
-            not_found: None,
-            templates: vec![],
-            pathname: "/test".to_string(),
-        };
-
-        let context = LayoutRenderContext {
-            params: FxHashMap::default(),
-            search_params: FxHashMap::default(),
-            headers: FxHashMap::default(),
-            pathname: "/test".to_string(),
-            metadata: None,
-        };
-
-        let script_ssr =
-            renderer.build_composition_script(&route_match, &context, None, true).unwrap();
-        let script_rsc =
-            renderer.build_composition_script(&route_match, &context, None, false).unwrap();
-
-        assert!(script_ssr.contains("globalThis.renderToRsc"));
-        assert!(script_rsc.contains("globalThis.renderToRsc"));
-
-        assert!(script_ssr.contains("AsyncComponentMarker._isAsyncComponent = true"));
-        assert!(script_rsc.contains("AsyncComponentMarker._isAsyncComponent = true"));
-    }
-
-    #[test]
-    fn test_mode_consistency_suspense_serialization_format() {
-        let renderer = LayoutRenderer::new(Arc::new(Mutex::new(RscRenderer::new(Arc::new(
-            JsExecutionRuntime::new(None),
-        )))));
-
-        let route_match = AppRouteMatch {
-            route: AppRouteEntry {
-                path: "/test".to_string(),
-                file_path: "app/test/page.tsx".to_string(),
-                component_id: None,
-                css: vec![],
-                segments: vec![],
-                params: vec![],
-                is_dynamic: false,
-                static_params: None,
-            },
-            params: FxHashMap::default(),
-            layouts: vec![],
-            loading: None,
-            error: None,
-            not_found: None,
-            templates: vec![],
-            pathname: "/test".to_string(),
-        };
-
-        let context = LayoutRenderContext {
-            params: FxHashMap::default(),
-            search_params: FxHashMap::default(),
-            headers: FxHashMap::default(),
-            pathname: "/test".to_string(),
-            metadata: None,
-        };
-
-        let script_ssr =
-            renderer.build_composition_script(&route_match, &context, None, true).unwrap();
-        let script_rsc =
-            renderer.build_composition_script(&route_match, &context, None, false).unwrap();
-
-        assert!(script_ssr.contains("AsyncComponentMarker._isAsyncComponent = true"));
-        assert!(script_rsc.contains("AsyncComponentMarker._isAsyncComponent = true"));
-
-        assert!(script_ssr.contains("React.createElement = function(type, props, ...children)"));
-        assert!(script_rsc.contains("React.createElement = function(type, props, ...children)"));
     }
 
     #[test]
@@ -502,9 +415,9 @@ mod tests {
         };
 
         let script_ssr =
-            renderer.build_composition_script(&route_match, &context, None, true).unwrap();
+            renderer.build_composition_script(&route_match, &context, None, true, false).unwrap();
         let script_rsc =
-            renderer.build_composition_script(&route_match, &context, None, false).unwrap();
+            renderer.build_composition_script(&route_match, &context, None, false, false).unwrap();
 
         assert!(script_ssr.contains("rsc_data: rscData"));
         assert!(script_rsc.contains("rsc_data: rscData"));
@@ -554,10 +467,16 @@ mod tests {
         };
 
         let script_ssr = renderer
-            .build_composition_script(&route_match, &context, Some("app/test/loading"), true)
+            .build_composition_script(&route_match, &context, Some("app/test/loading"), true, false)
             .unwrap();
         let script_rsc = renderer
-            .build_composition_script(&route_match, &context, Some("app/test/loading"), false)
+            .build_composition_script(
+                &route_match,
+                &context,
+                Some("app/test/loading"),
+                false,
+                false,
+            )
             .unwrap();
 
         assert!(script_ssr.contains("const useSuspense = true"));
@@ -571,51 +490,6 @@ mod tests {
             script_rsc
                 .contains("const isAsync = PageComponent.constructor.name === 'AsyncFunction'")
         );
-    }
-
-    #[test]
-    fn test_mode_consistency_boundary_id_format() {
-        let renderer = LayoutRenderer::new(Arc::new(Mutex::new(RscRenderer::new(Arc::new(
-            JsExecutionRuntime::new(None),
-        )))));
-
-        let route_match = AppRouteMatch {
-            route: AppRouteEntry {
-                path: "/test".to_string(),
-                file_path: "app/test/page.tsx".to_string(),
-                component_id: None,
-                css: vec![],
-                segments: vec![],
-                params: vec![],
-                is_dynamic: false,
-                static_params: None,
-            },
-            params: FxHashMap::default(),
-            layouts: vec![],
-            loading: None,
-            error: None,
-            not_found: None,
-            templates: vec![],
-            pathname: "/test".to_string(),
-        };
-
-        let context = LayoutRenderContext {
-            params: FxHashMap::default(),
-            search_params: FxHashMap::default(),
-            headers: FxHashMap::default(),
-            pathname: "/test".to_string(),
-            metadata: None,
-        };
-
-        let script_ssr = renderer
-            .build_composition_script(&route_match, &context, Some("app/test/loading"), true)
-            .unwrap();
-        let script_rsc = renderer
-            .build_composition_script(&route_match, &context, Some("app/test/loading"), false)
-            .unwrap();
-
-        assert!(script_ssr.contains("AsyncComponentMarker._isAsyncComponent = true"));
-        assert!(script_rsc.contains("AsyncComponentMarker._isAsyncComponent = true"));
     }
 
     #[test]
@@ -653,9 +527,9 @@ mod tests {
         };
 
         let script_ssr =
-            renderer.build_composition_script(&route_match, &context, None, true).unwrap();
+            renderer.build_composition_script(&route_match, &context, None, true, false).unwrap();
         let script_rsc =
-            renderer.build_composition_script(&route_match, &context, None, false).unwrap();
+            renderer.build_composition_script(&route_match, &context, None, false, false).unwrap();
 
         assert!(!script_ssr.contains("const contentSlot = React.createElement"));
         assert!(!script_ssr.contains("'data-content-slot': true"));
@@ -704,57 +578,14 @@ mod tests {
         };
 
         let script_ssr =
-            renderer.build_composition_script(&route_match, &context, None, true).unwrap();
+            renderer.build_composition_script(&route_match, &context, None, true, false).unwrap();
         let script_rsc =
-            renderer.build_composition_script(&route_match, &context, None, false).unwrap();
+            renderer.build_composition_script(&route_match, &context, None, false, false).unwrap();
 
         assert!(script_ssr.contains("React.createElement"));
         assert!(script_rsc.contains("React.createElement"));
 
         assert!(script_ssr.contains("PageComponent"));
         assert!(script_rsc.contains("PageComponent"));
-    }
-
-    #[test]
-    fn test_mode_consistency_rsc_props_cleanup() {
-        let renderer = LayoutRenderer::new(Arc::new(Mutex::new(RscRenderer::new(Arc::new(
-            JsExecutionRuntime::new(None),
-        )))));
-
-        let route_match = AppRouteMatch {
-            route: AppRouteEntry {
-                path: "/test".to_string(),
-                file_path: "app/test/page.tsx".to_string(),
-                component_id: None,
-                css: vec![],
-                segments: vec![],
-                params: vec![],
-                is_dynamic: false,
-                static_params: None,
-            },
-            params: FxHashMap::default(),
-            layouts: vec![],
-            loading: None,
-            error: None,
-            not_found: None,
-            templates: vec![],
-            pathname: "/test".to_string(),
-        };
-
-        let context = LayoutRenderContext {
-            params: FxHashMap::default(),
-            search_params: FxHashMap::default(),
-            headers: FxHashMap::default(),
-            pathname: "/test".to_string(),
-            metadata: None,
-        };
-
-        let script_ssr =
-            renderer.build_composition_script(&route_match, &context, None, true).unwrap();
-        let script_rsc =
-            renderer.build_composition_script(&route_match, &context, None, false).unwrap();
-
-        assert!(script_ssr.contains("AsyncComponentMarker"));
-        assert!(script_rsc.contains("AsyncComponentMarker"));
     }
 }

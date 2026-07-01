@@ -11,6 +11,7 @@ coverage
 test-results
 playwright-report
 playwright/.cache
+crates/rari/src/runtime/ext/rari/react/vendor
 crates/rari/snapshots/*.bin
 crates/rari/snapshots/*.rs
 .env

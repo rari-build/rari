@@ -148,33 +148,9 @@ pub async fn get_previous_tag(
 }
 
 pub async fn add_and_commit(message: &str, cwd: &Path) -> Result<()> {
-    let add_output = Command::new("git").args(["add", "."]).current_dir(cwd).output().await?;
+    Command::new("git").args(["add", "."]).current_dir(cwd).output().await?;
 
-    if !add_output.status.success() {
-        let stderr = String::from_utf8_lossy(&add_output.stderr);
-        let stdout = String::from_utf8_lossy(&add_output.stdout);
-        anyhow::bail!(
-            "Failed to git add in {}:\nstdout: {}\nstderr: {}",
-            cwd.display(),
-            stdout,
-            stderr
-        );
-    }
-
-    let commit_output =
-        Command::new("git").args(["commit", "-m", message]).current_dir(cwd).output().await?;
-
-    if !commit_output.status.success() {
-        let stderr = String::from_utf8_lossy(&commit_output.stderr);
-        let stdout = String::from_utf8_lossy(&commit_output.stdout);
-        anyhow::bail!(
-            "Failed to git commit in {} with message '{}':\nstdout: {}\nstderr: {}",
-            cwd.display(),
-            message,
-            stdout,
-            stderr
-        );
-    }
+    Command::new("git").args(["commit", "-m", message]).current_dir(cwd).output().await?;
 
     Ok(())
 }

@@ -138,6 +138,8 @@ declare global {
       renderWireToHtml?: (wireFormat: string) => Promise<string>
       renderWireToFizzStream?: (wireFormat: string) => Promise<void>
       clientReferenceManifest?: Record<string, { id: string, chunks: string, name: string }>
+      lastRscBinary?: Uint8Array
+      capturedElement?: unknown
       exportOwners?: Record<string, string>
       metadataCollector?: {
         collect: (layoutPaths: string[], pagePath: string, params: Record<string, string>, searchParams: Record<string, string>) => Promise<unknown[]>

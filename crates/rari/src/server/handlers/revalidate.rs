@@ -1,7 +1,9 @@
+use std::env;
+
 use axum::{extract::State, http::StatusCode, response::Json};
 use serde::{Deserialize, Serialize};
 
-use crate::server::ServerState;
+use crate::server::{ServerState, cache::response};
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
@@ -32,7 +34,7 @@ pub async fn revalidate_by_path(
     State(state): State<ServerState>,
     Json(request): Json<RevalidateRequest>,
 ) -> Result<Json<RevalidateResponse>, StatusCode> {
-    let expected_secret = std::env::var("RARI_REVALIDATE_SECRET").map_err(|_| {
+    let expected_secret = env::var("RARI_REVALIDATE_SECRET").map_err(|_| {
         tracing::error!("RARI_REVALIDATE_SECRET not configured. Set this environment variable to enable revalidation.");
         StatusCode::FORBIDDEN
     })?;
@@ -50,6 +52,7 @@ pub async fn revalidate_by_path(
             }
 
             state.response_cache.invalidate(path).await;
+            response::invalidate_static_fast_cache_for_path(&state.static_fast_cache, path);
 
             let path_pattern = format!("{path}?");
             let all_keys = state.response_cache.get_all_keys();
@@ -90,6 +93,7 @@ pub async fn revalidate_by_path(
             }
 
             state.response_cache.invalidate_by_tag(tag).await;
+            response::invalidate_static_fast_cache_for_path(&state.static_fast_cache, tag);
 
             let res = match state.layout_html_cache.invalidate_by_tag(tag).await {
                 Ok(()) => RevalidateResponse {

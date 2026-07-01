@@ -18,27 +18,18 @@ fn create_js_wrapper(js_code: &str) -> String {
 }
 
 impl RscJsLoader {
-    pub fn load_component_isolation_with_id(component_id: &str) -> Result<String, &'static str> {
-        let template = include_str!("js/component_isolation.js");
-        Ok(template.cow_replace("{component_id}", component_id).into_owned())
-    }
-
     pub fn load_component_render_with_data(
         component_id: &str,
         component_hash: &str,
         props_json: &str,
     ) -> Result<String, &'static str> {
-        let template = include_str!("js/component_render.js");
+        let template = include_str!("js/component_render.ts");
         let script = template
             .cow_replace("{component_id}", component_id)
             .cow_replace("{component_hash}", component_hash)
             .cow_replace("{props_json}", props_json)
             .into_owned();
         Ok(script)
-    }
-
-    pub fn create_global_init() -> String {
-        include_str!("js/global_init.js").to_string()
     }
 
     pub fn create_component_environment_setup(component_id: &str) -> String {
@@ -459,6 +450,8 @@ impl RscJsLoader {
         format!(
             r#"
             (function() {{
+                if (!globalThis['~rsc']) globalThis['~rsc'] = {{}};
+                if (!globalThis['~rsc'].componentNamespaces) globalThis['~rsc'].componentNamespaces = new Map();
                 if (!globalThis['~rsc'].componentNamespaces.has("{component_id}")) {{
                     globalThis['~rsc'].componentNamespaces.set("{component_id}", new Map());
                 }}

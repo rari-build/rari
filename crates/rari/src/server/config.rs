@@ -1,9 +1,18 @@
-use std::{path::PathBuf, sync::OnceLock};
+use std::{
+    cmp::Ordering,
+    env,
+    fmt::{self, Display, Formatter},
+    fs,
+    path::{Path, PathBuf},
+    sync::OnceLock,
+};
 
 use cow_utils::CowUtils;
 use http::HeaderValue;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
+
+use crate::server::image::ImageConfig;
 
 pub static GLOBAL_CONFIG: OnceLock<Config> = OnceLock::new();
 
@@ -15,8 +24,8 @@ pub enum Mode {
     Production,
 }
 
-impl std::fmt::Display for Mode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for Mode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Mode::Development => write!(f, "development"),
             Mode::Production => write!(f, "production"),
@@ -270,15 +279,15 @@ impl From<&CacheControlConfig> for CompiledCacheControlConfig {
                 reason = "Explicit ordering is clearer than merged patterns for documentation"
             )]
             match (a, b) {
-                (RoutePattern::Exact(_), RoutePattern::Exact(_)) => std::cmp::Ordering::Equal,
-                (RoutePattern::Exact(_), _) => std::cmp::Ordering::Less,
-                (_, RoutePattern::Exact(_)) => std::cmp::Ordering::Greater,
+                (RoutePattern::Exact(_), RoutePattern::Exact(_)) => Ordering::Equal,
+                (RoutePattern::Exact(_), _) => Ordering::Less,
+                (_, RoutePattern::Exact(_)) => Ordering::Greater,
                 (RoutePattern::Prefix(a_prefix), RoutePattern::Prefix(b_prefix)) => {
                     b_prefix.len().cmp(&a_prefix.len())
                 }
-                (RoutePattern::Prefix(_), RoutePattern::Regex(_)) => std::cmp::Ordering::Less,
-                (RoutePattern::Regex(_), RoutePattern::Prefix(_)) => std::cmp::Ordering::Greater,
-                (RoutePattern::Regex(_), RoutePattern::Regex(_)) => std::cmp::Ordering::Equal,
+                (RoutePattern::Prefix(_), RoutePattern::Regex(_)) => Ordering::Less,
+                (RoutePattern::Regex(_), RoutePattern::Prefix(_)) => Ordering::Greater,
+                (RoutePattern::Regex(_), RoutePattern::Regex(_)) => Ordering::Equal,
             }
         });
 
@@ -327,42 +336,13 @@ impl Default for LoadingConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[non_exhaustive]
-pub struct StreamingConfig {
-    pub enabled: bool,
-    pub buffer_size: usize,
-    pub resolution_timeout_ms: u64,
-}
-
-impl Default for StreamingConfig {
-    fn default() -> Self {
-        Self { enabled: true, buffer_size: 64, resolution_timeout_ms: 5000 }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[non_exhaustive]
-#[expect(clippy::struct_excessive_bools, reason = "Configuration flags are intentionally boolean")]
 pub struct RscConfig {
-    pub enable_ssr: bool,
-    pub enable_streaming: bool,
-    pub component_cache_size: usize,
-    pub render_timeout_ms: u64,
     pub script_execution_timeout_ms: u64,
-    pub enable_hot_reload: bool,
-    pub hmr_reload_enabled: bool,
 }
 
 impl Default for RscConfig {
     fn default() -> Self {
-        Self {
-            enable_ssr: true,
-            enable_streaming: true,
-            component_cache_size: 2000,
-            render_timeout_ms: 8000,
-            script_execution_timeout_ms: 3000,
-            enable_hot_reload: true,
-            hmr_reload_enabled: true,
-        }
+        Self { script_execution_timeout_ms: 3000 }
     }
 }
 
@@ -378,8 +358,6 @@ pub struct Config {
     pub caching: CacheControlConfig,
     pub loading: LoadingConfig,
     #[serde(default)]
-    pub streaming: StreamingConfig,
-    #[serde(default)]
     pub cors: CorsConfig,
     #[serde(default)]
     pub redirect: RedirectConfig,
@@ -388,7 +366,7 @@ pub struct Config {
     #[serde(default)]
     pub csp: CspConfig,
     #[serde(default)]
-    pub images: crate::server::image::ImageConfig,
+    pub images: ImageConfig,
     #[serde(default)]
     pub cache: CacheConfig,
     #[serde(default, rename = "useCache")]
@@ -405,11 +383,7 @@ impl Config {
                 host: default_config.server.host.clone(),
                 ..default_config.vite
             },
-            rsc: RscConfig {
-                enable_hot_reload: mode != Mode::Production,
-                hmr_reload_enabled: mode != Mode::Production,
-                ..default_config.rsc
-            },
+            rsc: default_config.rsc,
             rsc_html: RscHtmlConfig {
                 pretty_print: mode == Mode::Development,
                 ..default_config.rsc_html
@@ -430,10 +404,10 @@ impl Config {
         Self::from_env_with_base(None)
     }
 
-    pub fn from_env_with_base(base: Option<&std::path::Path>) -> Result<Self, ConfigError> {
+    pub fn from_env_with_base(base: Option<&Path>) -> Result<Self, ConfigError> {
         let mut config = Self::default();
 
-        if let Ok(mode_str) = std::env::var("RARI_MODE") {
+        if let Ok(mode_str) = env::var("RARI_MODE") {
             config.mode = match mode_str.cow_to_lowercase().as_ref() {
                 "development" | "dev" => Mode::Development,
                 "production" | "prod" => Mode::Production,
@@ -441,107 +415,82 @@ impl Config {
             };
         }
 
-        if let Ok(host) = std::env::var("RARI_HOST") {
+        if let Ok(host) = env::var("RARI_HOST") {
             config.server.host = host;
         }
 
-        if let Ok(port_str) = std::env::var("RARI_PORT") {
+        if let Ok(port_str) = env::var("RARI_PORT") {
             config.server.port = port_str.parse().map_err(|_| ConfigError::Port(port_str))?;
         }
 
-        if let Ok(origin) = std::env::var("RARI_ORIGIN") {
+        if let Ok(origin) = env::var("RARI_ORIGIN") {
             config.server.origin = Some(origin);
         }
 
-        if let Ok(vite_host) = std::env::var("RARI_VITE_HOST") {
+        if let Ok(vite_host) = env::var("RARI_VITE_HOST") {
             config.vite.host = vite_host;
         }
 
-        if let Ok(vite_port_str) = std::env::var("RARI_VITE_PORT") {
+        if let Ok(vite_port_str) = env::var("RARI_VITE_PORT") {
             config.vite.port =
                 vite_port_str.parse().map_err(|_| ConfigError::VitePort(vite_port_str))?;
         }
 
-        if let Ok(public_dir) = std::env::var("RARI_PUBLIC_DIR") {
+        if let Ok(public_dir) = env::var("RARI_PUBLIC_DIR") {
             config.static_files.dev_public_dir = PathBuf::from(public_dir);
         }
 
-        if let Ok(dist_dir) = std::env::var("RARI_DIST_DIR") {
+        if let Ok(dist_dir) = env::var("RARI_DIST_DIR") {
             config.static_files.prod_public_dir = PathBuf::from(dist_dir);
         }
 
-        if let Ok(timeout_str) = std::env::var("RARI_SCRIPT_EXECUTION_TIMEOUT_MS") {
+        if let Ok(timeout_str) = env::var("RARI_SCRIPT_EXECUTION_TIMEOUT_MS") {
             config.rsc.script_execution_timeout_ms =
                 timeout_str.parse().map_err(|_| ConfigError::Timeout(timeout_str.clone()))?;
         }
 
-        if let Ok(disable_hmr) = std::env::var("DISABLE_HMR_RELOAD") {
-            config.rsc.hmr_reload_enabled = disable_hmr.cow_to_lowercase() != "true"
-                && disable_hmr != "1"
-                && disable_hmr.cow_to_lowercase() != "yes";
-        }
-
-        if let Ok(rsc_html_enabled_str) = std::env::var("RARI_RSC_HTML_ENABLED") {
+        if let Ok(rsc_html_enabled_str) = env::var("RARI_RSC_HTML_ENABLED") {
             config.rsc_html.enabled = rsc_html_enabled_str.cow_to_lowercase() == "true"
                 || rsc_html_enabled_str == "1"
                 || rsc_html_enabled_str.cow_to_lowercase() == "yes";
         }
 
-        if let Ok(rsc_html_timeout_str) = std::env::var("RARI_RSC_HTML_TIMEOUT_MS") {
+        if let Ok(rsc_html_timeout_str) = env::var("RARI_RSC_HTML_TIMEOUT_MS") {
             config.rsc_html.timeout_ms = rsc_html_timeout_str
                 .parse()
                 .map_err(|_| ConfigError::Config("RARI_RSC_HTML_TIMEOUT_MS".to_string()))?;
         }
 
-        if let Ok(rsc_html_cache_template_str) = std::env::var("RARI_RSC_HTML_CACHE_TEMPLATE") {
+        if let Ok(rsc_html_cache_template_str) = env::var("RARI_RSC_HTML_CACHE_TEMPLATE") {
             config.rsc_html.cache_template = rsc_html_cache_template_str.cow_to_lowercase()
                 == "true"
                 || rsc_html_cache_template_str == "1"
                 || rsc_html_cache_template_str.cow_to_lowercase() == "yes";
         }
 
-        if let Ok(rsc_html_pretty_print_str) = std::env::var("RARI_RSC_HTML_PRETTY_PRINT") {
+        if let Ok(rsc_html_pretty_print_str) = env::var("RARI_RSC_HTML_PRETTY_PRINT") {
             config.rsc_html.pretty_print = rsc_html_pretty_print_str.cow_to_lowercase() == "true"
                 || rsc_html_pretty_print_str == "1"
                 || rsc_html_pretty_print_str.cow_to_lowercase() == "yes";
         }
 
-        if let Ok(loading_enabled_str) = std::env::var("RARI_LOADING_ENABLED") {
+        if let Ok(loading_enabled_str) = env::var("RARI_LOADING_ENABLED") {
             config.loading.enabled = loading_enabled_str.cow_to_lowercase() == "true"
                 || loading_enabled_str == "1"
                 || loading_enabled_str.cow_to_lowercase() == "yes";
         }
 
-        if let Ok(min_display_time_str) = std::env::var("RARI_LOADING_MIN_DISPLAY_TIME_MS") {
+        if let Ok(min_display_time_str) = env::var("RARI_LOADING_MIN_DISPLAY_TIME_MS") {
             config.loading.min_display_time_ms = min_display_time_str
                 .parse()
                 .map_err(|_| ConfigError::Config("RARI_LOADING_MIN_DISPLAY_TIME_MS".to_string()))?;
         }
 
-        if let Ok(cache_loading_str) = std::env::var("RARI_LOADING_CACHE_COMPONENTS") {
+        if let Ok(cache_loading_str) = env::var("RARI_LOADING_CACHE_COMPONENTS") {
             config.loading.cache_loading_components = cache_loading_str.cow_to_lowercase()
                 == "true"
                 || cache_loading_str == "1"
                 || cache_loading_str.cow_to_lowercase() == "yes";
-        }
-
-        if let Ok(streaming_enabled_str) = std::env::var("RARI_STREAMING_ENABLED") {
-            config.streaming.enabled = streaming_enabled_str.cow_to_lowercase() == "true"
-                || streaming_enabled_str == "1"
-                || streaming_enabled_str.cow_to_lowercase() == "yes";
-        }
-
-        if let Ok(buffer_size_str) = std::env::var("RARI_STREAMING_BUFFER_SIZE") {
-            config.streaming.buffer_size = buffer_size_str
-                .parse()
-                .map_err(|_| ConfigError::Config("RARI_STREAMING_BUFFER_SIZE".to_string()))?;
-        }
-
-        if let Ok(resolution_timeout_str) = std::env::var("RARI_STREAMING_RESOLUTION_TIMEOUT_MS") {
-            config.streaming.resolution_timeout_ms =
-                resolution_timeout_str.parse().map_err(|_| {
-                    ConfigError::Config("RARI_STREAMING_RESOLUTION_TIMEOUT_MS".to_string())
-                })?;
         }
 
         let config_path = match base {
@@ -549,7 +498,7 @@ impl Config {
             None => PathBuf::from("dist/server/config.json"),
         };
 
-        if let Ok(server_config_json) = std::fs::read_to_string(&config_path) {
+        if let Ok(server_config_json) = fs::read_to_string(&config_path) {
             let config_data = match serde_json::from_str::<serde_json::Value>(&server_config_json) {
                 Ok(data) => data,
                 Err(e) => {
@@ -564,43 +513,43 @@ impl Config {
                 if let Some(script_src) = csp_data.get("scriptSrc").and_then(|v| v.as_array()) {
                     config.csp.script_src = script_src
                         .iter()
-                        .filter_map(|v| v.as_str().map(std::string::ToString::to_string))
+                        .filter_map(|v| v.as_str().map(ToString::to_string))
                         .collect();
                 }
                 if let Some(style_src) = csp_data.get("styleSrc").and_then(|v| v.as_array()) {
                     config.csp.style_src = style_src
                         .iter()
-                        .filter_map(|v| v.as_str().map(std::string::ToString::to_string))
+                        .filter_map(|v| v.as_str().map(ToString::to_string))
                         .collect();
                 }
                 if let Some(img_src) = csp_data.get("imgSrc").and_then(|v| v.as_array()) {
                     config.csp.img_src = img_src
                         .iter()
-                        .filter_map(|v| v.as_str().map(std::string::ToString::to_string))
+                        .filter_map(|v| v.as_str().map(ToString::to_string))
                         .collect();
                 }
                 if let Some(font_src) = csp_data.get("fontSrc").and_then(|v| v.as_array()) {
                     config.csp.font_src = font_src
                         .iter()
-                        .filter_map(|v| v.as_str().map(std::string::ToString::to_string))
+                        .filter_map(|v| v.as_str().map(ToString::to_string))
                         .collect();
                 }
                 if let Some(connect_src) = csp_data.get("connectSrc").and_then(|v| v.as_array()) {
                     config.csp.connect_src = connect_src
                         .iter()
-                        .filter_map(|v| v.as_str().map(std::string::ToString::to_string))
+                        .filter_map(|v| v.as_str().map(ToString::to_string))
                         .collect();
                 }
                 if let Some(default_src) = csp_data.get("defaultSrc").and_then(|v| v.as_array()) {
                     config.csp.default_src = default_src
                         .iter()
-                        .filter_map(|v| v.as_str().map(std::string::ToString::to_string))
+                        .filter_map(|v| v.as_str().map(ToString::to_string))
                         .collect();
                 }
                 if let Some(worker_src) = csp_data.get("workerSrc").and_then(|v| v.as_array()) {
                     config.csp.worker_src = worker_src
                         .iter()
-                        .filter_map(|v| v.as_str().map(std::string::ToString::to_string))
+                        .filter_map(|v| v.as_str().map(ToString::to_string))
                         .collect();
                 }
             }
@@ -611,7 +560,7 @@ impl Config {
             {
                 config.action.allowed_origins = allowed_origins
                     .iter()
-                    .filter_map(|v| v.as_str().map(std::string::ToString::to_string))
+                    .filter_map(|v| v.as_str().map(ToString::to_string))
                     .collect();
             }
 
@@ -729,10 +678,6 @@ impl Config {
 
     pub fn is_production(&self) -> bool {
         self.mode == Mode::Production
-    }
-
-    pub fn hmr_reload_enabled(&self) -> bool {
-        self.is_development() && self.rsc.hmr_reload_enabled
     }
 
     pub fn cors_config(&self) -> CorsConfig {
@@ -932,6 +877,8 @@ pub enum ConfigError {
     clippy::get_unwrap
 )]
 mod tests {
+    use std::{fs::File, io::Write, process};
+
     use super::*;
 
     #[test]
@@ -941,13 +888,6 @@ mod tests {
         assert_eq!(config.server.host, "127.0.0.1");
         assert_eq!(config.server.port, 3000);
         assert_eq!(config.vite.port, 5173);
-    }
-
-    #[test]
-    fn test_config_new_with_mode() {
-        let config = Config::new(Mode::Production);
-        assert_eq!(config.mode, Mode::Production);
-        assert!(!config.rsc.enable_hot_reload);
     }
 
     #[test]
@@ -1065,41 +1005,10 @@ mod tests {
     }
 
     #[test]
-    fn test_streaming_config_default() {
-        let streaming_config = StreamingConfig::default();
-        assert!(streaming_config.enabled);
-        assert_eq!(streaming_config.buffer_size, 64);
-        assert_eq!(streaming_config.resolution_timeout_ms, 5000);
-    }
-
-    #[test]
-    fn test_config_includes_streaming() {
-        let config = Config::default();
-        assert!(config.streaming.enabled);
-        assert_eq!(config.streaming.buffer_size, 64);
-        assert_eq!(config.streaming.resolution_timeout_ms, 5000);
-    }
-
-    #[test]
-    fn test_streaming_config_serialization() {
-        let streaming_config =
-            StreamingConfig { enabled: false, buffer_size: 128, resolution_timeout_ms: 10000 };
-
-        let serialized = serde_json::to_string(&streaming_config).unwrap();
-        let deserialized: StreamingConfig = serde_json::from_str(&serialized).unwrap();
-
-        assert_eq!(streaming_config.enabled, deserialized.enabled);
-        assert_eq!(streaming_config.buffer_size, deserialized.buffer_size);
-        assert_eq!(streaming_config.resolution_timeout_ms, deserialized.resolution_timeout_ms);
-    }
-
-    #[test]
     fn test_config_from_env_cache_control_validation() {
-        use std::io::Write;
-
-        let temp_dir = std::env::temp_dir().join(format!("rari_test_{}", std::process::id()));
+        let temp_dir = env::temp_dir().join(format!("rari_test_{}", process::id()));
         let dist_server_dir = temp_dir.join("dist").join("server");
-        std::fs::create_dir_all(&dist_server_dir).unwrap();
+        fs::create_dir_all(&dist_server_dir).unwrap();
 
         let config_json = serde_json::json!({
             "cacheControl": {
@@ -1112,12 +1021,12 @@ mod tests {
         });
 
         let config_path = dist_server_dir.join("config.json");
-        let mut file = std::fs::File::create(&config_path).unwrap();
+        let mut file = File::create(&config_path).unwrap();
         file.write_all(config_json.to_string().as_bytes()).unwrap();
 
         let result = Config::from_env_with_base(Some(&temp_dir));
 
-        let _ = std::fs::remove_dir_all(&temp_dir);
+        let _ = fs::remove_dir_all(&temp_dir);
 
         let config = result.unwrap();
 
@@ -1211,12 +1120,9 @@ mod tests {
 
     #[test]
     fn test_config_from_env_parses_cache_layers() {
-        use std::io::Write;
-
-        let temp_dir =
-            std::env::temp_dir().join(format!("rari_test_cache_layers_{}", std::process::id()));
+        let temp_dir = env::temp_dir().join(format!("rari_test_cache_layers_{}", process::id()));
         let dist_server_dir = temp_dir.join("dist").join("server");
-        std::fs::create_dir_all(&dist_server_dir).unwrap();
+        fs::create_dir_all(&dist_server_dir).unwrap();
 
         let config_json = serde_json::json!({
             "cache": {
@@ -1231,11 +1137,11 @@ mod tests {
         });
 
         let config_path = dist_server_dir.join("config.json");
-        let mut file = std::fs::File::create(&config_path).unwrap();
+        let mut file = File::create(&config_path).unwrap();
         file.write_all(config_json.to_string().as_bytes()).unwrap();
 
         let result = Config::from_env_with_base(Some(&temp_dir));
-        let _ = std::fs::remove_dir_all(&temp_dir);
+        let _ = fs::remove_dir_all(&temp_dir);
 
         let config = result.unwrap();
 

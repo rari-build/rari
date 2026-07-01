@@ -1,14 +1,22 @@
+use std::{
+    panic,
+    pin::Pin,
+    string::String,
+    sync::Arc,
+    task::{Context, Poll},
+};
+
 use futures::Stream;
 use tokio::sync::mpsc;
 
 use super::types::RscStreamChunk;
+use crate::server::middleware::request_context::RequestContext;
 
 type CleanupCallback = Box<dyn FnOnce() + Send + 'static>;
 
 pub struct RscStream {
     receiver: mpsc::Receiver<RscStreamChunk>,
-    request_context_guard:
-        Option<std::sync::Arc<crate::server::middleware::request_context::RequestContext>>,
+    request_context_guard: Option<Arc<RequestContext>>,
     cleanup: Option<CleanupCallback>,
 }
 
@@ -18,10 +26,7 @@ impl RscStream {
     }
 
     #[must_use]
-    pub fn with_request_context(
-        mut self,
-        request_context: std::sync::Arc<crate::server::middleware::request_context::RequestContext>,
-    ) -> Self {
+    pub fn with_request_context(mut self, request_context: Arc<RequestContext>) -> Self {
         self.request_context_guard = Some(request_context);
         self
     }
@@ -33,26 +38,26 @@ impl RscStream {
     {
         if let Some(existing_cleanup) = self.cleanup.take() {
             self.cleanup = Some(Box::new(move || {
-                if let Err(e) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                if let Err(e) = panic::catch_unwind(panic::AssertUnwindSafe(|| {
                     existing_cleanup();
                 })) {
                     tracing::error!(
                         "Panic in existing cleanup handler: {:?}",
                         e.downcast_ref::<&str>()
                             .copied()
-                            .or_else(|| e.downcast_ref::<String>().map(std::string::String::as_str))
+                            .or_else(|| e.downcast_ref::<String>().map(String::as_str))
                             .unwrap_or("unknown panic")
                     );
                 }
 
-                if let Err(e) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                if let Err(e) = panic::catch_unwind(panic::AssertUnwindSafe(|| {
                     cleanup();
                 })) {
                     tracing::error!(
                         "Panic in cleanup handler: {:?}",
                         e.downcast_ref::<&str>()
                             .copied()
-                            .or_else(|| e.downcast_ref::<String>().map(std::string::String::as_str))
+                            .or_else(|| e.downcast_ref::<String>().map(String::as_str))
                             .unwrap_or("unknown panic")
                     );
                 }
@@ -75,10 +80,7 @@ impl RscStream {
 impl Stream for RscStream {
     type Item = Result<Vec<u8>, String>;
 
-    fn poll_next(
-        mut self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Option<Self::Item>> {
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         use std::task::Poll;
 
         match self.receiver.poll_recv(cx) {
@@ -92,7 +94,7 @@ impl Stream for RscStream {
 impl Drop for RscStream {
     fn drop(&mut self) {
         if let Some(cleanup) = self.cleanup.take()
-            && let Err(e) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(cleanup))
+            && let Err(e) = panic::catch_unwind(panic::AssertUnwindSafe(cleanup))
         {
             tracing::error!("RscStream cleanup callback panicked: {:?}", e);
         }

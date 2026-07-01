@@ -1,22 +1,24 @@
 // Copyright 2018-2025 the Deno authors. All rights reserved. MIT license.
 
-use std::{borrow::Cow, sync::Arc};
+use std::{borrow::Cow, cell::RefCell, sync::Arc};
 
 use deno_ast::{MediaType, ModuleExportsAndReExports, ModuleSpecifier};
+use deno_core::unsync;
 use deno_error::JsErrorBox;
 use deno_resolver::npm::DenoInNpmPackageChecker;
 use deno_runtime::deno_fs;
 use node_resolver::{
     DenoIsBuiltInNodeModuleChecker,
-    analyze::{CjsAnalysis as ExtNodeCjsAnalysis, CjsAnalysisExports, EsmAnalysisMode},
+    analyze::{self, CjsAnalysis as ExtNodeCjsAnalysis, CjsAnalysisExports, EsmAnalysisMode},
 };
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use sys_traits::impls::RealSys;
+use tokio::runtime::Handle;
 
 use super::resolvers::{NpmPackageFolderResolverImpl, Resolver};
 
-pub type NodeCodeTranslator = node_resolver::analyze::NodeCodeTranslator<
+pub type NodeCodeTranslator = analyze::NodeCodeTranslator<
     CjsCodeAnalyzer,
     DenoInNpmPackageChecker,
     DenoIsBuiltInNodeModuleChecker,
@@ -51,13 +53,13 @@ impl From<ExtNodeCjsAnalysis<'_>> for CjsAnalysis {
 
 pub struct CjsCodeAnalyzer {
     fs: deno_fs::FileSystemRc,
-    cache: std::cell::RefCell<FxHashMap<String, CjsAnalysis>>,
+    cache: RefCell<FxHashMap<String, CjsAnalysis>>,
     cjs_tracker: Arc<Resolver>,
 }
 
 impl CjsCodeAnalyzer {
     pub fn new(fs: deno_fs::FileSystemRc, cjs_tracker: Arc<Resolver>) -> Self {
-        Self { fs, cache: std::cell::RefCell::new(FxHashMap::default()), cjs_tracker }
+        Self { fs, cache: RefCell::new(FxHashMap::default()), cjs_tracker }
     }
 
     async fn inner_cjs_analysis(
@@ -81,7 +83,7 @@ impl CjsCodeAnalyzer {
         let specifier_clone = specifier.clone();
 
         #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
-        let analysis = deno_core::unsync::spawn_blocking({
+        let analysis = unsync::spawn_blocking({
             let source: Arc<str> = source.into();
             move || -> Result<CjsAnalysis, JsErrorBox> {
                 let parsed_source = deno_ast::parse_program(deno_ast::ParseParams {
@@ -129,7 +131,7 @@ impl CjsCodeAnalyzer {
         source: Cow<'a, str>,
         esm_analysis_mode: EsmAnalysisMode,
     ) -> Result<ExtNodeCjsAnalysis<'a>, JsErrorBox> {
-        let rt = tokio::runtime::Handle::current();
+        let rt = Handle::current();
         let analysis =
             rt.block_on(self.inner_cjs_analysis(specifier, &source, esm_analysis_mode))?;
 
@@ -153,7 +155,7 @@ impl CjsCodeAnalyzer {
 }
 
 #[async_trait::async_trait(?Send)]
-impl node_resolver::analyze::CjsCodeAnalyzer for CjsCodeAnalyzer {
+impl analyze::CjsCodeAnalyzer for CjsCodeAnalyzer {
     async fn analyze_cjs<'a>(
         &self,
         specifier: &ModuleSpecifier,

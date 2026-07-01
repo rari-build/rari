@@ -4,13 +4,13 @@
 )]
 #![allow(clippy::explicit_counter_loop)]
 
-use std::{path::PathBuf, sync::Arc};
+use std::{path::PathBuf, string::ToString, sync::Arc, vec::Vec};
 
 use cow_utils::CowUtils;
 use rari_utils::path_to_file_url;
 use rustc_hash::FxHashMap;
 use serde_json::{Map, Value};
-use tokio::sync::RwLock;
+use tokio::{fs, sync::RwLock};
 
 use super::{
     OgImageError,
@@ -19,7 +19,10 @@ use super::{
     rendering::ImageRenderer,
     types::{JsxChild, JsxElement, OgImageEntry},
 };
-use crate::runtime::JsExecutionRuntime;
+use crate::{
+    runtime::JsExecutionRuntime,
+    server::{cache::handler::CacheError, routing::types::ParamValue},
+};
 
 pub struct OgImageGenerator {
     runtime: Arc<JsExecutionRuntime>,
@@ -69,7 +72,7 @@ impl OgImageGenerator {
     }
 
     pub async fn load_manifest(&self, manifest_path: &str) -> Result<(), OgImageError> {
-        let content = tokio::fs::read_to_string(manifest_path)
+        let content = fs::read_to_string(manifest_path)
             .await
             .map_err(|e| OgImageError::InternalError(format!("Failed to read manifest: {e}")))?;
 
@@ -97,7 +100,7 @@ impl OgImageGenerator {
 
         let server_manifest_path =
             manifest_path.cow_replace("routes.json", "manifest.json").into_owned();
-        if let Ok(server_content) = tokio::fs::read_to_string(&server_manifest_path).await
+        if let Ok(server_content) = fs::read_to_string(&server_manifest_path).await
             && let Ok(server_data) = serde_json::from_str::<Value>(&server_content)
             && let Some(components) = server_data.get("components").and_then(|v| v.as_object())
         {
@@ -173,10 +176,7 @@ impl OgImageGenerator {
         &self,
         manifest: &'a FxHashMap<String, OgImageEntry>,
         route_path: &str,
-    ) -> Option<(&'a OgImageEntry, FxHashMap<String, crate::server::routing::types::ParamValue>)>
-    {
-        use crate::server::routing::types::ParamValue;
-
+    ) -> Option<(&'a OgImageEntry, FxHashMap<String, ParamValue>)> {
         if let Some(entry) = manifest.get(route_path) {
             return Some((entry, FxHashMap::default()));
         }
@@ -207,10 +207,8 @@ impl OgImageGenerator {
                 for pattern_seg in &pattern_segments {
                     if pattern_seg.starts_with("[...") && pattern_seg.ends_with(']') {
                         let param_name = &pattern_seg[4..pattern_seg.len() - 1];
-                        let remaining: Vec<String> = path_segments[path_idx..]
-                            .iter()
-                            .map(std::string::ToString::to_string)
-                            .collect();
+                        let remaining: Vec<String> =
+                            path_segments[path_idx..].iter().map(ToString::to_string).collect();
                         params.insert(param_name.to_string(), ParamValue::Multiple(remaining));
                         break;
                     } else if path_idx >= path_segments.len()
@@ -259,7 +257,7 @@ impl OgImageGenerator {
         &self,
         entry: &OgImageEntry,
         route_path: &str,
-        params: &FxHashMap<String, crate::server::routing::types::ParamValue>,
+        params: &FxHashMap<String, ParamValue>,
     ) -> Result<JsxElement, OgImageError> {
         let component_id = {
             let path = entry.file_path.as_str();
@@ -361,11 +359,8 @@ impl OgImageGenerator {
 
         let props = obj.get("props").cloned().unwrap_or(Value::Object(Map::default()));
 
-        let children_array = obj
-            .get("children")
-            .and_then(|v| v.as_array())
-            .map(std::vec::Vec::as_slice)
-            .unwrap_or(&[]);
+        let children_array =
+            obj.get("children").and_then(|v| v.as_array()).map(Vec::as_slice).unwrap_or(&[]);
 
         let mut children = Vec::new();
         for child_value in children_array {
@@ -404,10 +399,7 @@ impl OgImageGenerator {
         self.cache.clear().await.expect("clear");
     }
 
-    pub async fn invalidate(
-        &self,
-        route_path: &str,
-    ) -> Result<(), crate::server::cache::handler::CacheError> {
+    pub async fn invalidate(&self, route_path: &str) -> Result<(), CacheError> {
         self.cache.remove(route_path).await.map(|_| ())
     }
 }
@@ -435,12 +427,14 @@ impl OgImageGenerator {
     clippy::get_unwrap
 )]
 mod tests {
+    use std::env;
+
     use super::*;
 
     #[tokio::test]
     async fn test_find_og_image_for_static_route() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let test_dir = std::env::temp_dir().join("rari-test-og-static");
+        let test_dir = env::temp_dir().join("rari-test-og-static");
         let generator = OgImageGenerator::new(runtime, test_dir);
 
         let entry = OgImageEntry {
@@ -465,7 +459,7 @@ mod tests {
     #[tokio::test]
     async fn test_find_og_image_for_dynamic_route() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let test_dir = std::env::temp_dir().join("rari-test-og-dynamic");
+        let test_dir = env::temp_dir().join("rari-test-og-dynamic");
         let generator = OgImageGenerator::new(runtime, test_dir);
 
         let entry = OgImageEntry {
@@ -490,7 +484,7 @@ mod tests {
     #[tokio::test]
     async fn test_find_og_image_not_found() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let test_dir = std::env::temp_dir().join("rari-test-og-not-found");
+        let test_dir = env::temp_dir().join("rari-test-og-not-found");
         let generator = OgImageGenerator::new(runtime, test_dir);
 
         let found = generator.find_og_image_for_route("/nonexistent").await;
@@ -500,7 +494,7 @@ mod tests {
     #[tokio::test]
     async fn test_find_og_image_prefers_exact_match() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let test_dir = std::env::temp_dir().join("rari-test-og-exact-match");
+        let test_dir = env::temp_dir().join("rari-test-og-exact-match");
         let generator = OgImageGenerator::new(runtime, test_dir);
 
         let dynamic_entry = OgImageEntry {
@@ -534,7 +528,7 @@ mod tests {
     #[tokio::test]
     async fn test_find_og_image_with_additional_paths() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let test_dir = std::env::temp_dir().join("rari-test-og-additional-paths");
+        let test_dir = env::temp_dir().join("rari-test-og-additional-paths");
         let generator = OgImageGenerator::new(runtime, test_dir);
 
         let entry = OgImageEntry {
@@ -591,13 +585,13 @@ mod tests {
             ]
         });
 
-        let dir = std::env::temp_dir().join("rari-test-manifest-collision");
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = env::temp_dir().join("rari-test-manifest-collision");
+        fs::create_dir_all(&dir).await.unwrap();
         let manifest_path = dir.join("routes.json");
-        std::fs::write(&manifest_path, serde_json::to_string(&manifest).unwrap()).unwrap();
+        fs::write(&manifest_path, serde_json::to_string(&manifest).unwrap()).await.unwrap();
 
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let test_dir = std::env::temp_dir().join("rari-test-og-load-manifest");
+        let test_dir = env::temp_dir().join("rari-test-og-load-manifest");
         let generator = OgImageGenerator::new(runtime, test_dir);
 
         let result = generator.load_manifest(manifest_path.to_str().unwrap()).await;

@@ -45,7 +45,6 @@ deno_io = "0.161.0"
 
 # === Advanced Features ===
 deno_telemetry = "0.73.0"
-deno_terminal = "=0.2.3"
 deno_webgpu = "0.218.0"
 deno_kv = "0.159.0"
 deno_cron = "0.131.0"

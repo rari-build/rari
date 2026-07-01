@@ -2,11 +2,15 @@
 
 #![allow(clippy::exhaustive_structs)]
 
-use std::{borrow::Cow, path::Path};
+use std::{
+    borrow::Cow,
+    io::{Error, ErrorKind::InvalidInput},
+    path::Path,
+};
 
 use cow_utils::CowUtils;
 use deno_ast::{MediaType, ParseParams, SourceMapOption};
-use deno_core::{ModuleCodeString, ModuleName, SourceMapData};
+use deno_core::{ModuleCodeString, ModuleName, SourceMapData, url::Url, v8::VERSION_STRING};
 use deno_error::JsErrorBox;
 
 deno_error::js_error_wrapper!(deno_ast::ParseDiagnostic, JsParseDiagnostic, "Error");
@@ -33,8 +37,7 @@ fn maybe_substitute_version_placeholders(name: &str, source: ModuleCodeString) -
     let result: Cow<str> = source_str.cow_replace(NODE_VERSION_TOKEN, NODE_VERSION);
 
     if result.contains(V8_VERSION_TOKEN) {
-        let final_result: Cow<str> =
-            result.cow_replace(V8_VERSION_TOKEN, deno_core::v8::VERSION_STRING);
+        let final_result: Cow<str> = result.cow_replace(V8_VERSION_TOKEN, VERSION_STRING);
         return final_result.into_owned().into();
     }
 
@@ -59,17 +62,17 @@ pub fn maybe_transpile_source(
         MediaType::TypeScript | MediaType::Tsx | MediaType::Jsx => {}
         MediaType::JavaScript | MediaType::Mjs => return Ok((source, None)),
         _ => {
-            return Err(JsErrorBox::from_err(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
+            return Err(JsErrorBox::from_err(Error::new(
+                InvalidInput,
                 format!("Unsupported media type for transpilation: {media_type:?} for file {name}"),
             )));
         }
     }
 
     let parsed = deno_ast::parse_module(ParseParams {
-        specifier: deno_core::url::Url::parse(&name).unwrap_or_else(|_| {
+        specifier: Url::parse(&name).unwrap_or_else(|_| {
             #[expect(clippy::expect_used, reason = "Fallback URL construction is infallible")]
-            deno_core::url::Url::parse(&format!("file:///__rari_script__/{name}"))
+            Url::parse(&format!("file:///__rari_script__/{name}"))
                 .expect("failed to create fallback URL")
         }),
         text: source.into(),

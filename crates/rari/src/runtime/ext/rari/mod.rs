@@ -21,6 +21,16 @@ extension!(
         "rsc/rsc_modules.ts",
         "rsc/server_functions.ts"
     ],
+    lazy_loaded_esm = [
+        dir "src/runtime/ext/rari",
+        "react/vendor/react.js",
+        "react/vendor/react-server.js",
+        "react/vendor/react-jsx-runtime.js",
+        "react/vendor/react-dom-server.js",
+        "react/vendor/react-server-dom-webpack-client.js",
+        "react/vendor/react-server-dom-webpack-server.js",
+        "react/vendor/index.js",
+    ],
 );
 
 impl ExtensionTrait<()> for rari {

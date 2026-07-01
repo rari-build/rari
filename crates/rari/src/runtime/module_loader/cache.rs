@@ -1,4 +1,8 @@
-use std::sync::Arc;
+use std::{
+    fmt::{Debug, Formatter, Result},
+    result,
+    sync::Arc,
+};
 
 use dashmap::DashMap;
 use rari_error::RariError;
@@ -15,8 +19,8 @@ pub struct ModuleCaching {
     component_source_paths: DashMap<String, String>,
 }
 
-impl std::fmt::Debug for ModuleCaching {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Debug for ModuleCaching {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         f.debug_struct("ModuleCaching")
             .field("max_age_secs", &self.max_age_secs)
             .field("component_source_paths", &self.component_source_paths)
@@ -72,7 +76,7 @@ impl ModuleCaching {
         }
     }
 
-    pub async fn insert(&self, key: String, value: Value) -> Result<(), RariError> {
+    pub async fn insert(&self, key: String, value: Value) -> result::Result<(), RariError> {
         let bytes = serde_json::to_vec(&value)
             .map_err(|e| RariError::cache(format!("json serialize: {e}")))?;
         self.handler

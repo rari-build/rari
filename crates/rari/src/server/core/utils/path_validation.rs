@@ -133,12 +133,12 @@ pub fn validate_component_path(file_path: &str) -> Result<(), RariError> {
     clippy::get_unwrap
 )]
 mod tests {
-    use std::fs;
+    use std::{env, fs};
 
     use super::*;
 
-    fn test_temp_dir(name: &str) -> std::path::PathBuf {
-        std::env::temp_dir().join(format!("rari-test-path-validation-{}", name))
+    fn test_temp_dir(name: &str) -> PathBuf {
+        env::temp_dir().join(format!("rari-test-path-validation-{}", name))
     }
 
     #[test]

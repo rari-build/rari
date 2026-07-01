@@ -1,15 +1,26 @@
-use std::{cell::RefCell, rc::Rc, sync::Arc};
+use std::{
+    cell::RefCell,
+    cmp::Ordering::{Greater, Less},
+    collections::BTreeMap,
+    rc::Rc,
+    sync::Arc,
+    time::Duration,
+};
 
+use axum::http::HeaderMap;
 use deno_core::{OpDecl, OpState, op2};
 use deno_error::JsErrorBox;
 use serde::Deserialize;
 use tokio::sync::mpsc;
 use tracing::error;
 
-use crate::server::{
-    core::utils::client::get_http_client,
-    handlers::actions::{is_valid_attr_value, is_valid_cookie_name, is_valid_cookie_value},
-    middleware::request_context::{PendingCookie, PendingCookieKey},
+use crate::{
+    rendering::base::sanitize_component_output,
+    server::{
+        core::utils::client::get_http_client,
+        handlers::actions::{is_valid_attr_value, is_valid_cookie_name, is_valid_cookie_value},
+        middleware::request_context::{PendingCookie, PendingCookieKey, RequestContext},
+    },
 };
 
 #[derive(Deserialize, Debug)]
@@ -234,12 +245,48 @@ pub fn create_error_operation(
 pub fn get_streaming_ops() -> Vec<OpDecl> {
     vec![
         op_send_chunk_to_rust(),
+        op_fizz_chunk(),
+        op_fizz_done(),
         op_internal_log(),
         op_sanitize_html(),
         op_get_cookies(),
         op_set_cookie(),
         op_delete_cookie(),
     ]
+}
+
+#[allow(clippy::allow_attributes)]
+#[allow(clippy::disallowed_methods)]
+#[op2]
+pub async fn op_fizz_chunk(
+    state: Rc<RefCell<OpState>>,
+    #[string] html: String,
+) -> Result<(), JsErrorBox> {
+    let sender = {
+        let mut op_state_ref = state.borrow_mut();
+        let stream_op_state = match op_state_ref.try_borrow_mut::<StreamOpState>() {
+            Some(sos) => sos,
+            None => return Err(JsErrorBox::generic("StreamOpState not found.")),
+        };
+        stream_op_state.chunk_sender.clone()
+    };
+
+    match sender {
+        Some(sender) => {
+            let _ = sender.send(Ok(html.into_bytes())).await.is_err();
+            Ok(())
+        }
+        None => Err(JsErrorBox::generic("No chunk sender available for Fizz chunk")),
+    }
+}
+
+#[allow(clippy::allow_attributes)]
+#[allow(clippy::disallowed_methods)]
+#[op2(fast)]
+pub fn op_fizz_done(state: &mut OpState) {
+    if let Some(stream_op_state) = state.try_borrow_mut::<StreamOpState>() {
+        stream_op_state.chunk_sender.take();
+    }
 }
 
 #[op2(fast)]
@@ -250,7 +297,7 @@ pub fn op_internal_log(#[string] message: &str) {
 #[op2]
 #[string]
 pub fn op_sanitize_html(#[string] html: &str, #[string] _component_id: &str) -> String {
-    crate::rendering::sanitizer::sanitize_component_output(html)
+    sanitize_component_output(html)
 }
 
 fn http_status_text(status: u16) -> &'static str {
@@ -272,7 +319,7 @@ fn http_status_text(status: u16) -> &'static str {
     }
 }
 
-fn headers_to_json(headers: &axum::http::HeaderMap) -> serde_json::Map<String, serde_json::Value> {
+fn headers_to_json(headers: &HeaderMap) -> serde_json::Map<String, serde_json::Value> {
     let mut headers_obj = serde_json::Map::new();
     for (name, value) in headers {
         if let Ok(value_str) = value.to_str() {
@@ -303,9 +350,7 @@ pub async fn op_fetch_with_cache(
 
     let request_context = {
         let op_state_ref = state.borrow();
-        op_state_ref
-            .try_borrow::<Arc<crate::server::middleware::request_context::RequestContext>>()
-            .cloned()
+        op_state_ref.try_borrow::<Arc<RequestContext>>().cloned()
     };
 
     if let Some(ctx) = request_context {
@@ -379,7 +424,7 @@ async fn perform_simple_fetch(
 
     let timeout = options.get("timeout").and_then(|t| t.parse::<u64>().ok()).unwrap_or(5000);
 
-    request = request.timeout(std::time::Duration::from_millis(timeout));
+    request = request.timeout(Duration::from_millis(timeout));
 
     let response = request.send().await.map_err(|e| format!("Request failed: {e}"))?;
 
@@ -396,13 +441,11 @@ async fn perform_simple_fetch(
 #[string]
 pub fn op_get_cookies(state: Rc<RefCell<OpState>>) -> String {
     let op_state_ref = state.borrow();
-    let Some(ctx) = op_state_ref
-        .try_borrow::<Arc<crate::server::middleware::request_context::RequestContext>>()
-    else {
+    let Some(ctx) = op_state_ref.try_borrow::<Arc<RequestContext>>() else {
         return String::new();
     };
 
-    let mut cookies: std::collections::BTreeMap<String, String> = ctx
+    let mut cookies: BTreeMap<String, String> = ctx
         .cookie_header
         .as_deref()
         .unwrap_or("")
@@ -421,8 +464,8 @@ pub fn op_get_cookies(state: Rc<RefCell<OpState>>) -> String {
         let a_is_delete = a_cookie.max_age == Some(0);
         let b_is_delete = b_cookie.max_age == Some(0);
         match (a_is_delete, b_is_delete) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
+            (true, false) => Less,
+            (false, true) => Greater,
             _ => {
                 let a_path_len = a_key.path.as_deref().unwrap_or("").len();
                 let b_path_len = b_key.path.as_deref().unwrap_or("").len();
@@ -501,9 +544,7 @@ pub fn op_set_cookie(
     }
 
     let op_state_ref = state.borrow();
-    if let Some(ctx) =
-        op_state_ref.try_borrow::<Arc<crate::server::middleware::request_context::RequestContext>>()
-    {
+    if let Some(ctx) = op_state_ref.try_borrow::<Arc<RequestContext>>() {
         let path = args.path.or_else(|| Some("/".to_string()));
         ctx.pending_cookies.insert(
             PendingCookieKey::new(&args.name, path.as_deref(), args.domain.as_deref()),
@@ -529,9 +570,7 @@ pub fn op_set_cookie(
 #[op2(fast)]
 pub fn op_delete_cookie(state: Rc<RefCell<OpState>>, #[string] name: String) {
     let op_state_ref = state.borrow();
-    if let Some(ctx) =
-        op_state_ref.try_borrow::<Arc<crate::server::middleware::request_context::RequestContext>>()
-    {
+    if let Some(ctx) = op_state_ref.try_borrow::<Arc<RequestContext>>() {
         let cookies_to_delete: Vec<(Option<String>, Option<String>)> = ctx
             .pending_cookies
             .iter()
@@ -589,9 +628,7 @@ pub fn op_cache_get(
     #[string] cache_key: String,
 ) -> Option<serde_json::Value> {
     let op_state_ref = state.borrow();
-    if let Some(ctx) =
-        op_state_ref.try_borrow::<Arc<crate::server::middleware::request_context::RequestContext>>()
-    {
+    if let Some(ctx) = op_state_ref.try_borrow::<Arc<RequestContext>>() {
         ctx.function_cache.get(&cache_key).map(|entry| entry.value().clone())
     } else {
         None
@@ -605,9 +642,7 @@ pub fn op_cache_set(
     #[serde] value: serde_json::Value,
 ) {
     let op_state_ref = state.borrow();
-    if let Some(ctx) =
-        op_state_ref.try_borrow::<Arc<crate::server::middleware::request_context::RequestContext>>()
-    {
+    if let Some(ctx) = op_state_ref.try_borrow::<Arc<RequestContext>>() {
         ctx.function_cache.insert(cache_key, value);
     }
 }

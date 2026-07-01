@@ -1,5 +1,7 @@
 use std::{
     borrow::Cow,
+    env,
+    io::{self},
     path::{Path, PathBuf},
     rc::Rc,
     sync::{Arc, RwLock},
@@ -19,6 +21,7 @@ use deno_semver::package::PackageReq;
 use node_resolver::{
     DenoIsBuiltInNodeModuleChecker, InNpmPackageChecker, NodeConditionOptions, NodeResolutionCache,
     NpmPackageFolderResolver, PackageJsonResolver, UrlOrPath, UrlOrPathRef,
+    analyze::NodeCodeTranslatorMode::ModuleLoader,
     cache::NodeResolutionSys,
     errors::{
         PackageFolderResolveError, PackageFolderResolveErrorKind, PackageJsonLoadError,
@@ -110,10 +113,7 @@ impl Resolver {
             RealSys,
         );
 
-        super::cjs_translator::NodeCodeTranslator::new(
-            module_export_analyzer.into(),
-            node_resolver::analyze::NodeCodeTranslatorMode::ModuleLoader,
-        )
+        super::cjs_translator::NodeCodeTranslator::new(module_export_analyzer.into(), ModuleLoader)
     }
 
     pub fn package_json_resolver(&self) -> Arc<PackageJsonResolver<RealSys>> {
@@ -255,7 +255,7 @@ pub struct NpmPackageFolderResolverImpl {
 }
 impl NpmPackageFolderResolverImpl {
     pub fn new(base_dir: Option<PathBuf>) -> Self {
-        let base = base_dir.or(std::env::current_dir().ok());
+        let base = base_dir.or(env::current_dir().ok());
         let base_dir = base.clone().map(|mut p| {
             p.push(NODE_MODULES_DIR);
             p
@@ -387,11 +387,11 @@ impl Default for NodeResolutionCacheImpl {
     }
 }
 impl NodeResolutionCache for NodeResolutionCacheImpl {
-    fn get_canonicalized(&self, path: &Path) -> Option<Result<PathBuf, std::io::Error>> {
+    fn get_canonicalized(&self, path: &Path) -> Option<Result<PathBuf, io::Error>> {
         self.inner.read().ok().and_then(|i| i.get_canonicalized(path))
     }
 
-    fn set_canonicalized(&self, from: PathBuf, to: &std::io::Result<PathBuf>) {
+    fn set_canonicalized(&self, from: PathBuf, to: &io::Result<PathBuf>) {
         if let Ok(mut i) = self.inner.write() {
             i.set_canonicalized(from, to);
         }
@@ -412,15 +412,15 @@ pub struct NodeResolutionCacheInner {
     cache: FxHashMap<PathBuf, (Option<PathBuf>, Option<sys_traits::FileType>)>,
 }
 impl NodeResolutionCacheInner {
-    fn get_canonicalized(&self, path: &Path) -> Option<Result<PathBuf, std::io::Error>> {
+    fn get_canonicalized(&self, path: &Path) -> Option<Result<PathBuf, io::Error>> {
         self.cache.get(path).map(|(t, _)| {
-            t.clone().ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "Not found."))
+            t.clone().ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Not found."))
         })
     }
 
-    fn set_canonicalized(&mut self, from: PathBuf, to: &std::io::Result<PathBuf>) {
+    fn set_canonicalized(&mut self, from: PathBuf, to: &io::Result<PathBuf>) {
         let canon = match to {
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => None,
             Ok(p) => Some(p.clone()),
             _ => return,
         };
@@ -463,7 +463,7 @@ impl NpmProcessStateProvider for Resolver {
             kind: NpmProcessStateKind::Byonm,
             local_node_modules_path: modules_path,
         };
-        deno_core::serde_json::to_string(&state).unwrap_or_default()
+        serde_json::to_string(&state).unwrap_or_default()
     }
 }
 
@@ -479,8 +479,8 @@ impl NodeRequireLoader for RequireLoader {
     fn ensure_read_permission<'a>(
         &self,
         _permissions: &mut deno_permissions::PermissionsContainer,
-        path: Cow<'a, std::path::Path>,
-    ) -> Result<std::borrow::Cow<'a, Path>, JsErrorBox> {
+        path: Cow<'a, Path>,
+    ) -> Result<Cow<'a, Path>, JsErrorBox> {
         Ok(path)
     }
 

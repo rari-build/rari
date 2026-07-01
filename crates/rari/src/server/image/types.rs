@@ -1,6 +1,6 @@
 use cow_utils::CowUtils;
 use rkyv::{Archive, Deserialize as RkyvDeserialize, Serialize as RkyvSerialize};
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de::Error};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Archive, RkyvDeserialize, RkyvSerialize)]
 #[rkyv(compare(PartialEq), derive(Debug))]
@@ -25,10 +25,7 @@ impl<'de> Deserialize<'de> for ImageFormat {
             "jpeg" | "jpg" => Ok(ImageFormat::Jpeg),
             "png" => Ok(ImageFormat::Png),
             "gif" => Ok(ImageFormat::Gif),
-            _ => Err(serde::de::Error::unknown_variant(
-                &s,
-                &["avif", "webp", "jpeg", "jpg", "png", "gif"],
-            )),
+            _ => Err(Error::unknown_variant(&s, &["avif", "webp", "jpeg", "jpg", "png", "gif"])),
         }
     }
 }
