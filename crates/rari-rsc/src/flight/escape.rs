@@ -109,27 +109,6 @@ pub fn unescape_rsc_value(value: &Value) -> Value {
 }
 
 #[cfg(test)]
-#[allow(
-    clippy::allow_attributes,
-    clippy::unreadable_literal,
-    clippy::needless_raw_string_hashes,
-    clippy::panic,
-    clippy::expect_used,
-    clippy::unwrap_used,
-    clippy::print_stdout,
-    clippy::float_cmp,
-    clippy::bool_assert_comparison,
-    clippy::redundant_clone,
-    clippy::redundant_closure_for_method_calls,
-    clippy::single_char_pattern,
-    clippy::approx_constant,
-    clippy::uninlined_format_args,
-    clippy::module_inception,
-    clippy::return_self_not_must_use,
-    clippy::disallowed_methods,
-    clippy::clone_on_ref_ptr,
-    clippy::get_unwrap
-)]
 mod tests {
     use serde_json::json;
 
@@ -176,7 +155,7 @@ mod tests {
         for case in test_cases {
             let escaped = escape_rsc_string(case);
             let unescaped = unescape_rsc_string(&escaped);
-            assert_eq!(unescaped, case, "Roundtrip failed for: {}", case);
+            assert_eq!(unescaped, case, "Roundtrip failed for: {case}");
         }
     }
 

@@ -48,33 +48,12 @@ pub fn hash_string(s: &str) -> String {
 }
 
 #[cfg(test)]
-#[allow(
-    clippy::allow_attributes,
-    clippy::unreadable_literal,
-    clippy::needless_raw_string_hashes,
-    clippy::panic,
-    clippy::expect_used,
-    clippy::unwrap_used,
-    clippy::print_stdout,
-    clippy::float_cmp,
-    clippy::bool_assert_comparison,
-    clippy::redundant_clone,
-    clippy::redundant_closure_for_method_calls,
-    clippy::single_char_pattern,
-    clippy::approx_constant,
-    clippy::uninlined_format_args,
-    clippy::module_inception,
-    clippy::return_self_not_must_use,
-    clippy::disallowed_methods,
-    clippy::clone_on_ref_ptr,
-    clippy::get_unwrap
-)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_extract_dependencies() {
-        let code = r#"
+        let code = r"
         import React from 'react';
         import { useState } from 'react';
         import Button from './Button';
@@ -83,7 +62,7 @@ mod tests {
         export default function Component() {
             return <div>Test</div>;
         }
-        "#;
+        ";
 
         let dependencies = extract_dependencies(code);
         assert_eq!(dependencies.len(), 2);

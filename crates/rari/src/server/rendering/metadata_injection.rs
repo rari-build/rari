@@ -541,27 +541,7 @@ pub fn inject_metadata(
 }
 
 #[cfg(test)]
-#[allow(
-    clippy::allow_attributes,
-    clippy::unreadable_literal,
-    clippy::needless_raw_string_hashes,
-    clippy::panic,
-    clippy::expect_used,
-    clippy::unwrap_used,
-    clippy::print_stdout,
-    clippy::float_cmp,
-    clippy::bool_assert_comparison,
-    clippy::redundant_clone,
-    clippy::redundant_closure_for_method_calls,
-    clippy::single_char_pattern,
-    clippy::approx_constant,
-    clippy::uninlined_format_args,
-    clippy::module_inception,
-    clippy::return_self_not_must_use,
-    clippy::disallowed_methods,
-    clippy::clone_on_ref_ptr,
-    clippy::get_unwrap
-)]
+#[allow(clippy::allow_attributes, clippy::expect_used)]
 mod tests {
     use rustc_hash::FxHashMap;
 
@@ -607,13 +587,13 @@ mod tests {
 
     #[test]
     fn test_inject_open_graph() {
-        let html = r#"<!DOCTYPE html>
+        let html = r"<!DOCTYPE html>
 <html>
 <head>
     <title>Test</title>
 </head>
 <body></body>
-</html>"#;
+</html>";
 
         let metadata = PageMetadata {
             title: Some("Test".to_string()),
@@ -670,13 +650,13 @@ mod tests {
 
     #[test]
     fn test_inject_twitter_metadata() {
-        let html = r#"<!DOCTYPE html>
+        let html = r"<!DOCTYPE html>
 <html>
 <head>
     <title>Test</title>
 </head>
 <body></body>
-</html>"#;
+</html>";
 
         let metadata = PageMetadata {
             title: Some("Test".to_string()),
@@ -717,13 +697,13 @@ mod tests {
 
     #[test]
     fn test_inject_robots() {
-        let html = r#"<!DOCTYPE html>
+        let html = r"<!DOCTYPE html>
 <html>
 <head>
     <title>Test</title>
 </head>
 <body></body>
-</html>"#;
+</html>";
 
         let metadata = PageMetadata {
             title: Some("Test".to_string()),
@@ -752,13 +732,13 @@ mod tests {
 
     #[test]
     fn test_escape_html() {
-        let html = r#"<!DOCTYPE html>
+        let html = r"<!DOCTYPE html>
 <html>
 <head>
     <title>Test</title>
 </head>
 <body></body>
-</html>"#;
+</html>";
 
         let metadata = PageMetadata {
             title: Some("Test & <script>alert('xss')</script>".to_string()),
@@ -779,20 +759,18 @@ mod tests {
         let result = inject_metadata(html, &metadata, None);
 
         assert!(result.contains("Test &amp; &lt;script&gt;alert(&#39;xss&#39;)&lt;/script&gt;"));
-        assert!(
-            result.contains(r#"Description with &quot;quotes&quot; and &#39;apostrophes&#39;"#)
-        );
+        assert!(result.contains(r"Description with &quot;quotes&quot; and &#39;apostrophes&#39;"));
     }
 
     #[test]
     fn test_inject_default_meta_tags() {
-        let html = r#"<!DOCTYPE html>
+        let html = r"<!DOCTYPE html>
 <html>
 <head>
     <title>Test</title>
 </head>
 <body></body>
-</html>"#;
+</html>";
 
         let metadata = PageMetadata {
             title: Some("Test".to_string()),
@@ -859,19 +837,19 @@ mod tests {
 
         let result = inject_metadata(html, &metadata, None);
 
-        assert_eq!(result.matches(r#"<meta charset"#).count(), 1);
+        assert_eq!(result.matches(r"<meta charset").count(), 1);
         assert_eq!(result.matches(r#"<meta name="viewport""#).count(), 1);
     }
 
     #[test]
     fn test_custom_viewport_overrides_default() {
-        let html = r#"<!DOCTYPE html>
+        let html = r"<!DOCTYPE html>
 <html>
 <head>
     <title>Test</title>
 </head>
 <body></body>
-</html>"#;
+</html>";
 
         let metadata = PageMetadata {
             title: Some("Test".to_string()),
@@ -901,13 +879,13 @@ mod tests {
 
     #[test]
     fn test_no_injection_into_header_tag() {
-        let html = r#"<!DOCTYPE html>
+        let html = r"<!DOCTYPE html>
 <html>
 <header>
     <title>This is not a head tag</title>
 </header>
 <body></body>
-</html>"#;
+</html>";
 
         let metadata = PageMetadata {
             title: Some("Test".to_string()),
@@ -934,13 +912,13 @@ mod tests {
 
     #[test]
     fn test_inject_alternates_rss_feed() {
-        let html = r#"<!DOCTYPE html>
+        let html = r"<!DOCTYPE html>
 <html>
 <head>
     <title>Test</title>
 </head>
 <body></body>
-</html>"#;
+</html>";
 
         let mut types = FxHashMap::default();
         types.insert("application/rss+xml".to_string(), "https://example.com/feed.xml".to_string());
@@ -974,13 +952,13 @@ mod tests {
 
     #[test]
     fn test_inject_alternates_languages() {
-        let html = r#"<!DOCTYPE html>
+        let html = r"<!DOCTYPE html>
 <html>
 <head>
     <title>Test</title>
 </head>
 <body></body>
-</html>"#;
+</html>";
 
         let mut languages = FxHashMap::default();
         languages.insert("en".to_string(), "https://example.com/en".to_string());
@@ -1023,13 +1001,13 @@ mod tests {
 
     #[test]
     fn test_no_duplicate_canonical_when_both_set() {
-        let html = r#"<!DOCTYPE html>
+        let html = r"<!DOCTYPE html>
 <html>
 <head>
     <title>Test</title>
 </head>
 <body></body>
-</html>"#;
+</html>";
 
         let metadata = PageMetadata {
             title: Some("Test".to_string()),

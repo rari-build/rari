@@ -540,24 +540,9 @@ mod header_map_serde {
 #[cfg(test)]
 #[allow(
     clippy::allow_attributes,
-    clippy::unreadable_literal,
-    clippy::needless_raw_string_hashes,
-    clippy::panic,
     clippy::expect_used,
     clippy::unwrap_used,
-    clippy::print_stdout,
-    clippy::float_cmp,
-    clippy::bool_assert_comparison,
-    clippy::redundant_clone,
-    clippy::redundant_closure_for_method_calls,
-    clippy::single_char_pattern,
-    clippy::approx_constant,
-    clippy::uninlined_format_args,
-    clippy::module_inception,
-    clippy::return_self_not_must_use,
-    clippy::disallowed_methods,
-    clippy::clone_on_ref_ptr,
-    clippy::get_unwrap
+    clippy::clone_on_ref_ptr
 )]
 mod tests {
     use std::{sync::Arc, time::Duration};
@@ -624,7 +609,7 @@ mod tests {
         let etag = ResponseCache::generate_etag(content);
 
         assert!(etag.starts_with("W/\""));
-        assert!(etag.ends_with("\""));
+        assert!(etag.ends_with('"'));
 
         let etag2 = ResponseCache::generate_etag(content);
         assert_eq!(etag, etag2);
@@ -757,7 +742,7 @@ mod tests {
         let cache = ResponseCache::new(config);
 
         for i in 0..10 {
-            cache.set(format!("key{}", i), create_test_response(&format!("body{}", i), 60)).await;
+            cache.set(format!("key{i}"), create_test_response(&format!("body{i}"), 60)).await;
         }
 
         assert_eq!(cache.get_metrics().total_entries, 10);
@@ -775,7 +760,7 @@ mod tests {
         let cache = ResponseCache::new(config);
 
         for i in 0..8 {
-            cache.set(format!("key{}", i), create_test_response(&format!("body{}", i), 60)).await;
+            cache.set(format!("key{i}"), create_test_response(&format!("body{i}"), 60)).await;
         }
 
         assert!(!cache.should_clear_on_memory_pressure());
@@ -818,7 +803,7 @@ mod tests {
         let config = CacheConfig::from_env(true);
         assert!(config.enabled);
         assert_eq!(config.max_entries, 1000);
-        assert_eq!(config.default_ttl, 31536000);
+        assert_eq!(config.default_ttl, 31_536_000);
 
         let config = CacheConfig::from_env(false);
         assert!(!config.enabled);

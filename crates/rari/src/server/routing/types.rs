@@ -58,27 +58,7 @@ impl ParamValue {
 }
 
 #[cfg(test)]
-#[allow(
-    clippy::allow_attributes,
-    clippy::unreadable_literal,
-    clippy::needless_raw_string_hashes,
-    clippy::panic,
-    clippy::expect_used,
-    clippy::unwrap_used,
-    clippy::print_stdout,
-    clippy::float_cmp,
-    clippy::bool_assert_comparison,
-    clippy::redundant_clone,
-    clippy::redundant_closure_for_method_calls,
-    clippy::single_char_pattern,
-    clippy::approx_constant,
-    clippy::uninlined_format_args,
-    clippy::module_inception,
-    clippy::return_self_not_must_use,
-    clippy::disallowed_methods,
-    clippy::clone_on_ref_ptr,
-    clippy::get_unwrap
-)]
+#[allow(clippy::allow_attributes, clippy::unwrap_used)]
 mod tests {
     use rustc_hash::FxHashMap;
 
@@ -108,7 +88,7 @@ mod tests {
         let json = serde_json::to_value(&map).unwrap();
         assert!(json.is_object());
         assert_eq!(json.get("slug").and_then(|v| v.as_str()), Some("hello"));
-        assert_eq!(json.get("path").and_then(|v| v.as_array()).map(|a| a.len()), Some(2));
+        assert_eq!(json.get("path").and_then(|v| v.as_array()).map(Vec::len), Some(2));
     }
 
     #[test]
