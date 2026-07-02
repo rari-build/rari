@@ -925,27 +925,7 @@ pub fn build_set_cookie_header(cookie: &PendingCookie) -> Result<String, String>
 }
 
 #[cfg(test)]
-#[allow(
-    clippy::allow_attributes,
-    clippy::unreadable_literal,
-    clippy::needless_raw_string_hashes,
-    clippy::panic,
-    clippy::expect_used,
-    clippy::unwrap_used,
-    clippy::print_stdout,
-    clippy::float_cmp,
-    clippy::bool_assert_comparison,
-    clippy::redundant_clone,
-    clippy::redundant_closure_for_method_calls,
-    clippy::single_char_pattern,
-    clippy::approx_constant,
-    clippy::uninlined_format_args,
-    clippy::module_inception,
-    clippy::return_self_not_must_use,
-    clippy::disallowed_methods,
-    clippy::clone_on_ref_ptr,
-    clippy::get_unwrap
-)]
+#[allow(clippy::allow_attributes, clippy::unwrap_used, clippy::float_cmp, clippy::approx_constant)]
 mod tests {
     use serde_json::json;
 
@@ -1083,13 +1063,13 @@ mod tests {
         assert_eq!(sanitized.len(), 5);
         assert_eq!(sanitized[0].as_str().unwrap(), "string value");
         assert_eq!(sanitized[1].as_i64().unwrap(), 42);
-        assert_eq!(sanitized[2].as_bool().unwrap(), true);
+        assert!(sanitized[2].as_bool().unwrap());
         assert!(sanitized[3].is_null());
 
         let obj = sanitized[4].as_object().unwrap();
         assert_eq!(obj.get("name").unwrap().as_str().unwrap(), "test");
         assert_eq!(obj.get("count").unwrap().as_i64().unwrap(), 10);
-        assert_eq!(obj.get("active").unwrap().as_bool().unwrap(), true);
+        assert!(obj.get("active").unwrap().as_bool().unwrap());
         assert_eq!(obj.get("tags").unwrap().as_array().unwrap().len(), 3);
     }
 
@@ -1198,14 +1178,14 @@ mod tests {
 
         let mut valid_obj = serde_json::Map::new();
         for i in 0..5 {
-            valid_obj.insert(format!("key{}", i), json!(i));
+            valid_obj.insert(format!("key{i}"), json!(i));
         }
         let valid = vec![json!(valid_obj)];
         assert!(validate_and_sanitize_args(&valid, &config).is_ok());
 
         let mut invalid_obj = serde_json::Map::new();
         for i in 0..6 {
-            invalid_obj.insert(format!("key{}", i), json!(i));
+            invalid_obj.insert(format!("key{i}"), json!(i));
         }
         let invalid = vec![json!(invalid_obj)];
         let result = validate_and_sanitize_args(&invalid, &config);
@@ -1330,8 +1310,8 @@ mod tests {
         let result = validate_and_sanitize_args(&args, &config).unwrap();
 
         assert!(result[0].is_null());
-        assert_eq!(result[1].as_bool().unwrap(), true);
-        assert_eq!(result[2].as_bool().unwrap(), false);
+        assert!(result[1].as_bool().unwrap());
+        assert!(!result[2].as_bool().unwrap());
         assert_eq!(result[3].as_i64().unwrap(), 42);
         assert_eq!(result[4].as_i64().unwrap(), -123);
         assert_eq!(result[5].as_f64().unwrap(), 3.14);
@@ -1393,7 +1373,7 @@ mod tests {
                 }
             },
             "action": "update",
-            "timestamp": 1733756400
+            "timestamp": 1_733_756_400
         })];
 
         let result = validate_and_sanitize_args(&args, &config);
@@ -1681,8 +1661,7 @@ mod tests {
         let err_msg = result.unwrap_err().to_string();
         assert!(
             err_msg.contains("Maximum array nesting exceeded") || err_msg.contains("12000 > 10000"),
-            "Expected array nesting error, got: {}",
-            err_msg
+            "Expected array nesting error, got: {err_msg}"
         );
     }
 
@@ -1703,8 +1682,7 @@ mod tests {
         let err_msg = result.unwrap_err().to_string();
         assert!(
             err_msg.contains("Maximum array nesting exceeded"),
-            "Expected cumulative limit error, got: {}",
-            err_msg
+            "Expected cumulative limit error, got: {err_msg}"
         );
     }
 

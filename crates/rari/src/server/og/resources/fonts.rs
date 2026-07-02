@@ -124,27 +124,7 @@ impl FontContext {
 }
 
 #[cfg(test)]
-#[allow(
-    clippy::allow_attributes,
-    clippy::unreadable_literal,
-    clippy::needless_raw_string_hashes,
-    clippy::panic,
-    clippy::expect_used,
-    clippy::unwrap_used,
-    clippy::print_stdout,
-    clippy::float_cmp,
-    clippy::bool_assert_comparison,
-    clippy::redundant_clone,
-    clippy::redundant_closure_for_method_calls,
-    clippy::single_char_pattern,
-    clippy::approx_constant,
-    clippy::uninlined_format_args,
-    clippy::module_inception,
-    clippy::return_self_not_must_use,
-    clippy::disallowed_methods,
-    clippy::clone_on_ref_ptr,
-    clippy::get_unwrap
-)]
+#[allow(clippy::allow_attributes, clippy::expect_used, clippy::print_stdout)]
 mod tests {
     use parley::PositionedLayoutItem::GlyphRun;
     use swash::scale::StrikeWith::BestFit;
@@ -166,7 +146,7 @@ mod tests {
         use parley::{LayoutContext, TextStyle};
 
         let ctx = FontContext::new();
-        let mut font_ctx = ctx.inner.clone();
+        let mut font_ctx = ctx.inner;
         let mut layout_cx: LayoutContext<[u8; 4]> = LayoutContext::new();
 
         let root_style = TextStyle { font_size: 32.0, ..Default::default() };
@@ -188,7 +168,7 @@ mod tests {
             }
         }
 
-        println!("Line count: {}, Glyph count: {}", line_count, glyph_count);
+        println!("Line count: {line_count}, Glyph count: {glyph_count}");
         assert!(glyph_count > 0, "Should have glyphs");
     }
 
@@ -198,7 +178,7 @@ mod tests {
         use swash::{FontRef, scale::ScaleContext};
 
         let ctx = FontContext::new();
-        let mut font_ctx = ctx.inner.clone();
+        let mut font_ctx = ctx.inner;
         let mut layout_cx: LayoutContext<[u8; 4]> = LayoutContext::new();
 
         let root_style = TextStyle { font_size: 32.0, ..Default::default() };

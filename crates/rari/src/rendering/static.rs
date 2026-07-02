@@ -2217,27 +2217,7 @@ impl Default for RscToHtmlConverter {
 }
 
 #[cfg(test)]
-#[allow(
-    clippy::allow_attributes,
-    clippy::unreadable_literal,
-    clippy::needless_raw_string_hashes,
-    clippy::panic,
-    clippy::expect_used,
-    clippy::unwrap_used,
-    clippy::print_stdout,
-    clippy::float_cmp,
-    clippy::bool_assert_comparison,
-    clippy::redundant_clone,
-    clippy::redundant_closure_for_method_calls,
-    clippy::single_char_pattern,
-    clippy::approx_constant,
-    clippy::uninlined_format_args,
-    clippy::module_inception,
-    clippy::return_self_not_must_use,
-    clippy::disallowed_methods,
-    clippy::clone_on_ref_ptr,
-    clippy::get_unwrap
-)]
+#[allow(clippy::allow_attributes, clippy::panic, clippy::unwrap_used, clippy::clone_on_ref_ptr)]
 mod tests {
     use super::*;
     use crate::server::config::Mode;
@@ -2906,7 +2886,7 @@ mod tests {
             assert!(props.contains_key("fallback"));
             assert!(props.contains_key("children"));
             assert!(props.contains_key("~boundaryId"));
-            assert_eq!(props.get("~boundaryId").unwrap().as_str().unwrap(), "suspense_123");
+            assert_eq!(props["~boundaryId"].as_str().unwrap(), "suspense_123");
         } else {
             panic!("Expected Component element");
         }
@@ -2986,9 +2966,9 @@ mod tests {
         let renderer = Arc::new(RscHtmlRenderer::new(runtime));
         let mut converter = RscToHtmlConverter::new(renderer);
 
-        converter.row_cache.insert(1, r#"<div>Outer Loading</div>"#.to_string());
-        converter.row_cache.insert(2, r#"<div>Inner Loading</div>"#.to_string());
-        converter.row_cache.insert(3, r#"<div>Inner Content</div>"#.to_string());
+        converter.row_cache.insert(1, r"<div>Outer Loading</div>".to_string());
+        converter.row_cache.insert(2, r"<div>Inner Loading</div>".to_string());
+        converter.row_cache.insert(3, r"<div>Inner Content</div>".to_string());
 
         let inner_suspense = serde_json::json!([
             "$",
@@ -3057,7 +3037,7 @@ mod tests {
         let renderer = Arc::new(RscHtmlRenderer::new(runtime));
         let mut converter = RscToHtmlConverter::new(renderer);
 
-        converter.row_cache.insert(1, r#"<div>Loading</div>"#.to_string());
+        converter.row_cache.insert(1, r"<div>Loading</div>".to_string());
 
         let suspense_element = serde_json::json!([
             "$",
@@ -3498,16 +3478,12 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
-        assert!(html.contains("color:red"), "color should be in style: {}", html);
-        assert!(html.contains("padding:10px"), "padding should be in style: {}", html);
+        assert!(html.contains("color:red"), "color should be in style: {html}");
+        assert!(html.contains("padding:10px"), "padding should be in style: {html}");
 
-        assert!(
-            !html.contains("display:null"),
-            "display:null should not appear in style: {}",
-            html
-        );
-        assert!(!html.contains("margin:null"), "margin:null should not appear in style: {}", html);
-        assert!(!html.contains("null"), "The word 'null' should not appear in output: {}", html);
+        assert!(!html.contains("display:null"), "display:null should not appear in style: {html}");
+        assert!(!html.contains("margin:null"), "margin:null should not appear in style: {html}");
+        assert!(!html.contains("null"), "The word 'null' should not appear in output: {html}");
     }
 
     #[tokio::test]
@@ -3521,9 +3497,9 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
-        assert!(!html.contains("null"), "Should not contain 'null' string: {}", html);
+        assert!(!html.contains("null"), "Should not contain 'null' string: {html}");
 
-        assert!(html.contains("class=\"test\""), "Should have class attribute: {}", html);
+        assert!(html.contains("class=\"test\""), "Should have class attribute: {html}");
     }
 
     #[tokio::test]
@@ -3555,7 +3531,7 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
         let invalid_angle = serde_json::json!(["$", "div>script", null, {}]);
         let result = converter.rsc_element_to_html(&invalid_angle).await;
         if let Ok(html) = result {
-            panic!("Tag with angle bracket should be rejected, but got: {:?}", html);
+            panic!("Tag with angle bracket should be rejected, but got: {html:?}");
         }
         assert!(result.is_err(), "Tag with angle bracket should be rejected");
 
@@ -3608,7 +3584,7 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
             let element = serde_json::json!(["$", malicious_tag, null, {}]);
             let result = converter.rsc_element_to_html(&element).await;
 
-            assert!(result.is_err(), "Malicious tag '{}' should be rejected", malicious_tag);
+            assert!(result.is_err(), "Malicious tag '{malicious_tag}' should be rejected");
         }
     }
 
@@ -3623,10 +3599,10 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
-        assert!(html.contains("width:100px"), "Width should have px suffix: {}", html);
-        assert!(html.contains("height:200px"), "Height should have px suffix: {}", html);
-        assert!(html.contains("margin:10px"), "Margin should have px suffix: {}", html);
-        assert!(html.contains("padding:20px"), "Padding should have px suffix: {}", html);
+        assert!(html.contains("width:100px"), "Width should have px suffix: {html}");
+        assert!(html.contains("height:200px"), "Height should have px suffix: {html}");
+        assert!(html.contains("margin:10px"), "Margin should have px suffix: {html}");
+        assert!(html.contains("padding:20px"), "Padding should have px suffix: {html}");
     }
 
     #[tokio::test]
@@ -3639,14 +3615,10 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
-        assert!(html.contains("opacity:0.5"), "Opacity should not have px suffix: {}", html);
-        assert!(html.contains("z-index:10"), "z-index should not have px suffix: {}", html);
-        assert!(
-            html.contains("line-height:1.5"),
-            "line-height should not have px suffix: {}",
-            html
-        );
-        assert!(html.contains("flex-grow:2"), "flex-grow should not have px suffix: {}", html);
+        assert!(html.contains("opacity:0.5"), "Opacity should not have px suffix: {html}");
+        assert!(html.contains("z-index:10"), "z-index should not have px suffix: {html}");
+        assert!(html.contains("line-height:1.5"), "line-height should not have px suffix: {html}");
+        assert!(html.contains("flex-grow:2"), "flex-grow should not have px suffix: {html}");
     }
 
     #[tokio::test]
@@ -3659,10 +3631,10 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
-        assert!(html.contains("width:50%"), "String width should be preserved: {}", html);
-        assert!(html.contains("height:100px"), "Numeric height should have px: {}", html);
-        assert!(html.contains("opacity:0.8"), "Opacity should not have px: {}", html);
-        assert!(html.contains("color:red"), "Color string should be preserved: {}", html);
+        assert!(html.contains("width:50%"), "String width should be preserved: {html}");
+        assert!(html.contains("height:100px"), "Numeric height should have px: {html}");
+        assert!(html.contains("opacity:0.8"), "Opacity should not have px: {html}");
+        assert!(html.contains("color:red"), "Color string should be preserved: {html}");
     }
 
     #[tokio::test]
@@ -3677,20 +3649,17 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
 
         assert!(
             html.contains("font-size:16px"),
-            "fontSize should become font-size with px: {}",
-            html
+            "fontSize should become font-size with px: {html}"
         );
         assert!(
             html.contains("margin-top:10px"),
-            "marginTop should become margin-top with px: {}",
-            html
+            "marginTop should become margin-top with px: {html}"
         );
         assert!(
             html.contains("padding-left:5px"),
-            "paddingLeft should become padding-left with px: {}",
-            html
+            "paddingLeft should become padding-left with px: {html}"
         );
-        assert!(html.contains("z-index:100"), "zIndex should become z-index without px: {}", html);
+        assert!(html.contains("z-index:100"), "zIndex should become z-index without px: {html}");
     }
 
     #[tokio::test]
@@ -3704,9 +3673,9 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
-        assert!(html.contains("width:100.5px"), "Float width should have px: {}", html);
-        assert!(html.contains("opacity:0.75"), "Float opacity should not have px: {}", html);
-        assert!(html.contains("line-height:1.2"), "Float line-height should not have px: {}", html);
+        assert!(html.contains("width:100.5px"), "Float width should have px: {html}");
+        assert!(html.contains("opacity:0.75"), "Float opacity should not have px: {html}");
+        assert!(html.contains("line-height:1.2"), "Float line-height should not have px: {html}");
     }
 
     #[tokio::test]
@@ -3719,20 +3688,12 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
-        assert!(html.contains(" checked"), "checked=true should render as presence-only: {}", html);
-        assert!(!html.contains("checked=\"true\""), "checked should not have =\"true\": {}", html);
-        assert!(
-            html.contains(" disabled"),
-            "disabled=true should render as presence-only: {}",
-            html
-        );
-        assert!(
-            !html.contains("disabled=\"true\""),
-            "disabled should not have =\"true\": {}",
-            html
-        );
+        assert!(html.contains(" checked"), "checked=true should render as presence-only: {html}");
+        assert!(!html.contains("checked=\"true\""), "checked should not have =\"true\": {html}");
+        assert!(html.contains(" disabled"), "disabled=true should render as presence-only: {html}");
+        assert!(!html.contains("disabled=\"true\""), "disabled should not have =\"true\": {html}");
 
-        assert!(!html.contains("required"), "required=false should be omitted: {}", html);
+        assert!(!html.contains("required"), "required=false should be omitted: {html}");
     }
 
     #[tokio::test]
@@ -3748,18 +3709,15 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
 
         assert!(
             html.contains("aria-hidden=\"true\""),
-            "aria-hidden=true should render as \"true\": {}",
-            html
+            "aria-hidden=true should render as \"true\": {html}"
         );
         assert!(
             html.contains("aria-expanded=\"false\""),
-            "aria-expanded=false should render as \"false\": {}",
-            html
+            "aria-expanded=false should render as \"false\": {html}"
         );
         assert!(
             html.contains("aria-checked=\"true\""),
-            "aria-checked=true should render as \"true\": {}",
-            html
+            "aria-checked=true should render as \"true\": {html}"
         );
     }
 
@@ -3776,18 +3734,15 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
 
         assert!(
             html.contains("contentEditable=\"true\""),
-            "contentEditable=true should render as \"true\": {}",
-            html
+            "contentEditable=true should render as \"true\": {html}"
         );
         assert!(
             html.contains("draggable=\"false\""),
-            "draggable=false should render as \"false\": {}",
-            html
+            "draggable=false should render as \"false\": {html}"
         );
         assert!(
             html.contains("spellcheck=\"true\""),
-            "spellcheck=true should render as \"true\": {}",
-            html
+            "spellcheck=true should render as \"true\": {html}"
         );
     }
 
@@ -3802,18 +3757,16 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
-        assert!(html.contains(" disabled"), "disabled=true should be presence-only: {}", html);
-        assert!(!html.contains(" disabled="), "disabled should not have a value: {}", html);
+        assert!(html.contains(" disabled"), "disabled=true should be presence-only: {html}");
+        assert!(!html.contains(" disabled="), "disabled should not have a value: {html}");
 
         assert!(
             html.contains("aria-disabled=\"true\""),
-            "aria-disabled=true should render as \"true\": {}",
-            html
+            "aria-disabled=true should render as \"true\": {html}"
         );
         assert!(
             html.contains("aria-pressed=\"false\""),
-            "aria-pressed=false should render as \"false\": {}",
-            html
+            "aria-pressed=false should render as \"false\": {html}"
         );
     }
 
@@ -3838,19 +3791,17 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
 
         let html = converter.rsc_element_to_html(&element).await.unwrap();
 
-        assert!(html.contains(" checked"), "checked=true should be presence-only: {}", html);
-        assert!(!html.contains(" checked="), "checked should not have a value: {}", html);
-        assert!(!html.contains(" disabled"), "disabled=false should be omitted: {}", html);
+        assert!(html.contains(" checked"), "checked=true should be presence-only: {html}");
+        assert!(!html.contains(" checked="), "checked should not have a value: {html}");
+        assert!(!html.contains(" disabled"), "disabled=false should be omitted: {html}");
 
         assert!(
             html.contains("aria-checked=\"true\""),
-            "aria-checked=true should render as \"true\": {}",
-            html
+            "aria-checked=true should render as \"true\": {html}"
         );
         assert!(
             html.contains("aria-disabled=\"false\""),
-            "aria-disabled=false should render as \"false\": {}",
-            html
+            "aria-disabled=false should render as \"false\": {html}"
         );
     }
 
@@ -3864,16 +3815,15 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
-        assert!(html.contains(" hidden"), "hidden should be presence-only: {}", html);
-        assert!(html.contains(" readonly"), "readonly should be presence-only: {}", html);
-        assert!(html.contains(" required"), "required should be presence-only: {}", html);
-        assert!(html.contains(" autofocus"), "autofocus should be presence-only: {}", html);
-        assert!(html.contains(" multiple"), "multiple should be presence-only: {}", html);
+        assert!(html.contains(" hidden"), "hidden should be presence-only: {html}");
+        assert!(html.contains(" readonly"), "readonly should be presence-only: {html}");
+        assert!(html.contains(" required"), "required should be presence-only: {html}");
+        assert!(html.contains(" autofocus"), "autofocus should be presence-only: {html}");
+        assert!(html.contains(" multiple"), "multiple should be presence-only: {html}");
 
         assert!(
             !html.contains("=\"true\""),
-            "HTML boolean attributes should not have =\"true\": {}",
-            html
+            "HTML boolean attributes should not have =\"true\": {html}"
         );
     }
 
@@ -3889,7 +3839,7 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
         let rows = renderer.parse_rsc_flight_protocol(rsc_data).unwrap();
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
-        assert!(html.contains("Row 10"), "Should render content from row 10 (hex 'a'): {}", html);
-        assert!(html.contains("Row 31"), "Should render content from row 31 (hex '1f'): {}", html);
+        assert!(html.contains("Row 10"), "Should render content from row 10 (hex 'a'): {html}");
+        assert!(html.contains("Row 31"), "Should render content from row 31 (hex '1f'): {html}");
     }
 }

@@ -291,27 +291,7 @@ impl RscFlightParser {
 }
 
 #[cfg(test)]
-#[allow(
-    clippy::allow_attributes,
-    clippy::unreadable_literal,
-    clippy::needless_raw_string_hashes,
-    clippy::panic,
-    clippy::expect_used,
-    clippy::unwrap_used,
-    clippy::print_stdout,
-    clippy::float_cmp,
-    clippy::bool_assert_comparison,
-    clippy::redundant_clone,
-    clippy::redundant_closure_for_method_calls,
-    clippy::single_char_pattern,
-    clippy::approx_constant,
-    clippy::uninlined_format_args,
-    clippy::module_inception,
-    clippy::return_self_not_must_use,
-    clippy::disallowed_methods,
-    clippy::clone_on_ref_ptr,
-    clippy::get_unwrap
-)]
+#[allow(clippy::allow_attributes, clippy::panic)]
 mod tests {
     use super::*;
 
@@ -746,15 +726,15 @@ mod tests {
         ];
 
         for (marker, description) in markers {
-            let rsc = format!(r#"0:"{}""#, marker);
+            let rsc = format!(r#"0:"{marker}""#);
             let mut parser = RscFlightParser::new(&rsc);
-            assert!(parser.parse().is_ok(), "Failed to parse {}", description);
+            assert!(parser.parse().is_ok(), "Failed to parse {description}");
 
             let elements = parser.elements();
             if let Some(RscElement::Reference(ref_str)) = elements.get(&0) {
-                assert_eq!(ref_str, marker, "Marker mismatch for {}", description);
+                assert_eq!(ref_str, marker, "Marker mismatch for {description}");
             } else {
-                panic!("Expected Reference element for {}", description);
+                panic!("Expected Reference element for {description}");
             }
         }
     }
@@ -808,15 +788,15 @@ mod tests {
         ];
 
         for (marker, description) in markers {
-            let rsc = format!(r#"0:"{}""#, marker);
+            let rsc = format!(r#"0:"{marker}""#);
             let mut parser = RscFlightParser::new(&rsc);
-            assert!(parser.parse().is_ok(), "Failed to parse {}: {}", marker, description);
+            assert!(parser.parse().is_ok(), "Failed to parse {marker}: {description}");
 
             let elements = parser.elements();
             if let Some(RscElement::Reference(ref_str)) = elements.get(&0) {
-                assert_eq!(ref_str, marker, "Marker mismatch for {}: {}", marker, description);
+                assert_eq!(ref_str, marker, "Marker mismatch for {marker}: {description}");
             } else {
-                panic!("Expected Reference element for {}: {}", marker, description);
+                panic!("Expected Reference element for {marker}: {description}");
             }
         }
     }
