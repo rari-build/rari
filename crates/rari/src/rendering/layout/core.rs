@@ -428,7 +428,7 @@ impl LayoutRenderer {
 
                 let script = format!(
                     r"(async function() {{
-                        {fizz_chunk_pump_helper}
+                        {FIZZ_CHUNK_PUMP_HELPER}
                         try {{
                         try {{ {composition_script} }} catch(e) {{
                             console.error('[rari] Composition error in RSC streaming nav:', e);
@@ -464,7 +464,6 @@ impl LayoutRenderer {
                             Deno.core.ops.op_fizz_done();
                         }}
                     }})()",
-                    fizz_chunk_pump_helper = FIZZ_CHUNK_PUMP_HELPER,
                 );
 
                 let runtime_clone = Arc::clone(&runtime);
@@ -603,8 +602,8 @@ impl LayoutRenderer {
                 let script = format!(
                     r"(async function() {{
                         let caughtErrors = [];
-                        {fizz_stream_error_helper}
-                        {fizz_chunk_pump_helper}
+                        {FIZZ_STREAM_ERROR_HELPER}
+                        {FIZZ_CHUNK_PUMP_HELPER}
                         try {{
                         try {{ {composition_script} }} catch(e) {{
                             console.error('[rari] Composition error in streaming:', e);
@@ -679,7 +678,7 @@ impl LayoutRenderer {
                             allReady ?? Promise.resolve(),
                         ]);
 
-                        {fizz_stream_error_injection}
+                        {FIZZ_STREAM_ERROR_INJECTION}
 
                         Deno.core.ops.op_fizz_done();
 
@@ -692,11 +691,6 @@ impl LayoutRenderer {
                             Deno.core.ops.op_fizz_done();
                         }}
                     }})()",
-                    composition_script = composition_script,
-                    head_content_json = head_content_json,
-                    fizz_stream_error_helper = FIZZ_STREAM_ERROR_HELPER,
-                    fizz_chunk_pump_helper = FIZZ_CHUNK_PUMP_HELPER,
-                    fizz_stream_error_injection = FIZZ_STREAM_ERROR_INJECTION,
                 );
 
                 let shell = bytes::Bytes::new();

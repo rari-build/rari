@@ -104,18 +104,7 @@ impl JsExecutionRuntime {
         chunk_sender: Sender<Result<Vec<u8>, String>>,
     ) -> Result<(), RariError> {
         let runtime = Arc::clone(&self.runtime);
-        match time::timeout(
-            Duration::from_millis(self.timeout_ms),
-            runtime.execute_script_for_streaming(script_name, script_code, chunk_sender),
-        )
-        .await
-        {
-            Ok(result) => result,
-            Err(_) => Err(RariError::timeout(format!(
-                "Streaming script execution timed out after {} ms",
-                self.timeout_ms
-            ))),
-        }
+        runtime.execute_script_for_streaming(script_name, script_code, chunk_sender).await
     }
 
     pub async fn collect_metadata(

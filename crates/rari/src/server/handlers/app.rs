@@ -24,6 +24,7 @@ use rustc_hash::FxHashMap;
 use tokio::{
     fs,
     sync::{Mutex, mpsc::Receiver},
+    time::{self, Duration},
 };
 use tracing::error;
 
@@ -650,19 +651,30 @@ async fn render_fizz_html_stream(
 ) -> Result<Response, StatusCode> {
     use crate::server::compression::compress_stream;
 
+    let stall_timeout = Duration::from_millis(fizz_stream_stall_timeout_ms());
+
     let fizz_stream = async_stream::stream! {
         yield Ok::<_, Error>(shell);
 
-        while let Some(chunk_result) = chunks.recv().await {
-            match chunk_result {
-                Ok(chunk_bytes) => {
+        loop {
+            match time::timeout(stall_timeout, chunks.recv()).await {
+                Ok(Some(Ok(chunk_bytes))) => {
                     if !chunk_bytes.is_empty() {
                         yield Ok(bytes::Bytes::from(chunk_bytes));
                     }
                 }
-                Err(e) => {
+                Ok(Some(Err(e))) => {
                     error!("Error in Fizz stream chunk: {}", e);
                     yield Err(Error::other(e));
+                    break;
+                }
+                Ok(None) => break,
+                Err(_) => {
+                    error!(
+                        "Fizz stream stalled: no chunk received within {} ms",
+                        stall_timeout.as_millis()
+                    );
+                    yield Ok(fizz_stream_error_chunk("Stream timed out waiting for content"));
                     break;
                 }
             }
@@ -693,6 +705,24 @@ async fn render_fizz_html_stream(
     let body = Body::from_stream(compressed_stream);
     #[expect(clippy::expect_used, reason = "Response::builder() with valid components never fails")]
     Ok(response_builder.body(body).expect("Valid Fizz streaming response"))
+}
+
+fn fizz_stream_stall_timeout_ms() -> u64 {
+    env::var("RARI_STREAMING_STALL_TIMEOUT_MS")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(60_000)
+}
+
+fn fizz_stream_error_chunk(message: &str) -> bytes::Bytes {
+    let escaped = message
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;");
+    bytes::Bytes::from(format!(
+        r#"<div class="rari-error" style="color: red; border: 1px solid red; padding: 10px; border-radius: 4px; background-color: #fff5f5;"><strong>Error loading content: </strong>{escaped}</div>"#
+    ))
 }
 
 async fn render_streaming_response(

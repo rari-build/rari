@@ -72,7 +72,22 @@ pub async fn execute_script(
         return execute_as_module(runtime, module_loader, script_name, &script_code_string).await;
     }
 
-    execute_as_script(runtime, module_loader, script_name, &script_code_string).await
+    execute_as_script(
+        runtime,
+        module_loader,
+        script_name,
+        &script_code_string,
+        default_promise_timeout_ms(),
+    )
+    .await
+}
+
+fn default_promise_timeout_ms() -> u64 {
+    env::var("RARI_PROMISE_RESOLUTION_TIMEOUT_MS").ok().and_then(|s| s.parse().ok()).unwrap_or(5000)
+}
+
+fn streaming_promise_timeout_ms() -> u64 {
+    env::var("RARI_STREAMING_SCRIPT_TIMEOUT_MS").ok().and_then(|s| s.parse().ok()).unwrap_or(30000)
 }
 
 async fn execute_as_module(
@@ -159,6 +174,7 @@ async fn execute_as_script(
     module_loader: &Rc<RariModuleLoader>,
     script_name: &str,
     script_code: &str,
+    promise_timeout_ms: u64,
 ) -> Result<Value, RariError> {
     let transpiled_code = if script_name.ends_with(".ts") || script_name.ends_with(".tsx") {
         match transpile::maybe_transpile_source(
@@ -186,7 +202,7 @@ async fn execute_as_script(
             });
 
             if is_promise_result {
-                handle_promise_result(runtime, script_name, global_v8_val).await
+                handle_promise_result(runtime, script_name, global_v8_val, promise_timeout_ms).await
             } else {
                 handle_non_promise_result(runtime, global_v8_val)
             }
@@ -202,6 +218,7 @@ async fn handle_promise_result(
     runtime: &mut JsRuntime,
     script_name: &str,
     global_v8_val: v8::Global<v8::Value>,
+    promise_timeout_ms: u64,
 ) -> Result<Value, RariError> {
     let setup_promise_storage = r"
         (function() {
@@ -233,11 +250,6 @@ async fn handle_promise_result(
 
     match runtime.execute_script(format!("{script_name}_promise_setup"), setup_script.to_string()) {
         Ok(_) => {
-            let promise_timeout_ms = env::var("RARI_PROMISE_RESOLUTION_TIMEOUT_MS")
-                .ok()
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(5000);
-
             run_event_loop_with_promise_timeout(runtime, script_name, promise_timeout_ms).await?;
 
             let extract_script = PROMISE_EXTRACT_SCRIPT;
@@ -419,7 +431,14 @@ pub async fn execute_script_for_streaming(
         }
     }
 
-    let result = execute_script(runtime, module_loader, script_name, script_code).await;
+    let result = execute_as_script(
+        runtime,
+        module_loader,
+        script_name,
+        script_code,
+        streaming_promise_timeout_ms(),
+    )
+    .await;
 
     let leftover_sender = {
         let op_state_rc = runtime.op_state();
@@ -430,17 +449,15 @@ pub async fn execute_script_for_streaming(
     };
 
     if let Some(sender) = leftover_sender {
-        if result.is_err() {
-            let error_message = result
-                .as_ref()
-                .err()
-                .map(ToString::to_string)
-                .unwrap_or_else(|| "Unknown streaming script error".to_string());
+        let error_message = if let Err(err) = &result {
+            err.to_string()
+        } else {
+            format!("Streaming script '{script_name}' ended without completing the stream")
+        };
 
-            let _ = sender
-                .send(Err(format!("Streaming script '{script_name}' failed: {error_message}")))
-                .await;
-        }
+        let _ = sender
+            .send(Err(format!("Streaming script '{script_name}' failed: {error_message}")))
+            .await;
     }
 
     result?;
