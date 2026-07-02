@@ -18,7 +18,7 @@ use rari_rsc::flight::escape::unescape_rsc_value;
 use regex::Regex;
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde_json::Value;
-use tokio::{fs, sync::mpsc, time};
+use tokio::{fs, time};
 use tracing::error;
 
 use crate::{
@@ -739,78 +739,6 @@ impl RscHtmlRenderer {
         }
 
         Ok(result.get("html").and_then(|v| v.as_str()).unwrap_or_default().to_string())
-    }
-
-    pub async fn start_fizz_html_stream(
-        &self,
-        rsc_flight_protocol: &str,
-        config: &Config,
-        route_match: &AppRouteMatch,
-    ) -> Result<
-        (
-            bytes::Bytes,
-            bytes::Bytes,
-            mpsc::Receiver<Result<Vec<u8>, String>>,
-            mpsc::Sender<Result<Vec<u8>, String>>,
-        ),
-        RariError,
-    > {
-        let cache_template = config.rsc_html.cache_template;
-        let is_dev_mode = config.is_development();
-        let css_links = Self::css_links_for_route(route_match);
-
-        let template = self.load_template(cache_template, is_dev_mode).await?;
-        let template = Self::inject_css_links(&template, &css_links);
-
-        let (shell_str, _closing_template) = Self::split_template_at_root(&template);
-
-        let shell = bytes::Bytes::from(shell_str);
-        let closing = bytes::Bytes::new();
-
-        let (fizz_tx, fizz_rx) = mpsc::channel::<Result<Vec<u8>, String>>(32);
-        let payload_tx = fizz_tx.clone();
-
-        let runtime = Arc::clone(&self.runtime);
-        let wire_json =
-            serde_json::to_string(rsc_flight_protocol).unwrap_or_else(|_| "\"\"".to_string());
-
-        let streaming_tx = fizz_tx;
-        tokio::spawn(async move {
-            let script = format!(
-                r"(async function() {{
-                    const fn = globalThis['~rari'] && globalThis['~rari'].renderWireToFizzStream;
-                    if (!fn) {{
-                        throw new Error('renderWireToFizzStream unavailable');
-                    }}
-                    await fn({wire_json});
-                }})()"
-            );
-
-            if let Err(e) = runtime
-                .execute_script_for_streaming("fizz_html_stream".to_string(), script, streaming_tx)
-                .await
-            {
-                error!("Fizz HTML streaming failed: {e}");
-            }
-        });
-
-        Ok((shell, closing, fizz_rx, payload_tx))
-    }
-
-    pub(crate) fn split_template_at_root(template: &str) -> (String, String) {
-        let Ok(re) =
-            regex::Regex::new(r#"<div\s+id=["']root["'](?:\s+[^>]*)?\s*(?:/>|>\s*</div>)"#)
-        else {
-            return (template.to_string(), String::new());
-        };
-
-        if let Some(mat) = re.find(template) {
-            let shell = format!("{}<div id=\"root\">", &template[..mat.start()]);
-            let closing = format!("</div>{}", &template[mat.end()..]);
-            (shell, closing)
-        } else {
-            (template.to_string(), String::new())
-        }
     }
 
     async fn assemble_document(
