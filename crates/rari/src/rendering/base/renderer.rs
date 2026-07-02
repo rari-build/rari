@@ -1,6 +1,3 @@
-#![allow(clippy::unused_async_trait_impl)]
-#![expect(clippy::too_many_lines)]
-
 use std::{
     env,
     fmt::Write,
@@ -27,6 +24,7 @@ use tracing::error;
 use super::{
     constants::{
         BATCH_ERROR_COLLECTION, CACHE_CLEANUP_INTERVAL, EXTENSION_CHECKS,
+        MEMORY_PRESSURE_RENDER_THRESHOLD_DEN, MEMORY_PRESSURE_RENDER_THRESHOLD_NUM,
         SERVER_ACTION_INVOCATION_SCRIPT, SERVER_FUNCTION_RESOLVER, V8_CACHE_CLEAR_SCRIPT,
         module_registration_script, resolve_server_functions_for_component,
     },
@@ -95,7 +93,9 @@ impl RscRenderer {
         let current_renders = metrics.active_renders;
         let max_renders = self.resource_limits.max_concurrent_renders;
 
-        current_renders * 10 > max_renders * 8 || metrics.memory_pressure_events > 0
+        current_renders * MEMORY_PRESSURE_RENDER_THRESHOLD_DEN
+            > max_renders * MEMORY_PRESSURE_RENDER_THRESHOLD_NUM
+            || metrics.memory_pressure_events > 0
     }
 
     pub fn force_cleanup(&self) -> impl Future<Output = Result<(), RariError>> {
@@ -870,6 +870,7 @@ globalThis['~errors'].batch.push({{
         self.internal_render_to_string(component_id, props).await
     }
 
+    #[expect(clippy::too_many_lines)]
     async fn internal_render_to_string(
         &self,
         component_id: &str,
@@ -1117,6 +1118,7 @@ globalThis['~errors'].batch.push({{
         self.ensure_component_loaded_with_force(component_id, false).await
     }
 
+    #[expect(clippy::too_many_lines)]
     pub async fn ensure_component_loaded_with_force(
         &self,
         component_id: &str,

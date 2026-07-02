@@ -1,7 +1,7 @@
 pub mod rendering;
 pub mod runtime;
 pub mod server;
-pub mod utils;
+mod utils;
 pub use ::async_trait;
 pub use rari_rsc::{
     RSCRenderDebug, RSCRenderResult, RSCTree, ReactElement, RscElement, RscFlightParser,

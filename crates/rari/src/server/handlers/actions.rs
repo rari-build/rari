@@ -728,11 +728,8 @@ fn validate_and_sanitize_value(
             if let Some(f) = n.as_f64() {
                 let abs_f = f.abs();
                 if abs_f > 1e100 {
-                    let estimated_digits = if abs_f == 0.0 {
-                        1
-                    } else {
-                        cast::f64_log10_floor_usize(abs_f.log10()) + 1
-                    };
+                    let estimated_digits =
+                        if abs_f == 0.0 { 1 } else { cast::f64_floor_usize(abs_f.log10()) + 1 };
 
                     if estimated_digits > MAX_BIGINT_DIGITS {
                         return Err(RariError::bad_request(format!(

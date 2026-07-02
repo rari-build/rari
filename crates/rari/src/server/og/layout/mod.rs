@@ -23,8 +23,6 @@ use crate::{
     utils::{cast, float},
 };
 
-const MAX_IMAGE_SIZE: usize = 10 * 1024 * 1024;
-
 pub struct MeasureContext {
     font_context: RefCell<ParleyFontContext>,
 }
@@ -608,7 +606,7 @@ fn load_image_dimensions(src: &str) -> Option<Size<f32>> {
         }
 
         let mut buffer = Vec::new();
-        response.take(MAX_IMAGE_SIZE as u64).read_to_end(&mut buffer).ok()?;
+        response.take(super::MAX_OG_IMAGE_BYTES as u64).read_to_end(&mut buffer).ok()?;
 
         let img = image::load_from_memory(&buffer).ok()?;
         Some(Size {

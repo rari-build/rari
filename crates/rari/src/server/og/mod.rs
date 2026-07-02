@@ -5,6 +5,8 @@ mod rendering;
 mod resources;
 mod types;
 
+pub(super) const MAX_OG_IMAGE_BYTES: usize = 10 * 1024 * 1024;
+
 use std::sync::Arc;
 
 use axum::{

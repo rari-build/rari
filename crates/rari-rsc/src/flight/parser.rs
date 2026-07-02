@@ -158,15 +158,20 @@ impl RscFlightParser {
         let key = arr[2].as_str();
 
         let props_value = &arr[3];
+        if tag == "Suspense" || tag == "react.suspense" {
+            let props = if let Value::Object(obj) = props_value {
+                obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+            } else {
+                FxHashMap::default()
+            };
+            return Self::parse_suspense_element(key, props);
+        }
+
         let props = if let Value::Object(obj) = props_value {
             obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
         } else {
             FxHashMap::default()
         };
-
-        if tag == "Suspense" || tag == "react.suspense" {
-            return Self::parse_suspense_element(key, &props);
-        }
 
         if tag == "Promise" || tag == "react.promise" {
             return Self::parse_promise_element(&props);
@@ -177,7 +182,7 @@ impl RscFlightParser {
 
     fn parse_suspense_element(
         key: Option<&str>,
-        props: &FxHashMap<String, Value>,
+        props: FxHashMap<String, Value>,
     ) -> Result<RscElement, RariError> {
         let fallback_ref = if let Some(fallback_value) = props.get("fallback") {
             match fallback_value {
@@ -212,7 +217,7 @@ impl RscFlightParser {
             .or_else(|| key.map(ToString::to_string))
             .unwrap_or_else(|| format!("boundary_{}", Uuid::new_v4()));
 
-        Ok(RscElement::Suspense { fallback_ref, children_ref, boundary_id, props: props.clone() })
+        Ok(RscElement::Suspense { fallback_ref, children_ref, boundary_id, props })
     }
 
     fn parse_promise_element(props: &FxHashMap<String, Value>) -> Result<RscElement, RariError> {

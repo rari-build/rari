@@ -1,9 +1,8 @@
-#![expect(clippy::too_many_lines)]
-
 use std::fmt::Write;
 
 use regex::Regex;
 
+#[expect(clippy::too_many_lines)]
 pub fn transform_imports_for_hmr(source: &str) -> String {
     let Ok(react_named_imports_regex) =
         Regex::new(r"import\s+React,?\s*\{\s*([^}]+)\s*\}\s+from\s+['\x22]react['\x22]")

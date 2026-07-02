@@ -6,8 +6,6 @@ use reqwest::blocking::Client;
 use super::{super::layout::ComputedLayout, border::BorderRadius, renderer::ImageRenderer};
 use crate::utils::{cast, float};
 
-const MAX_IMAGE_SIZE: usize = 10 * 1024 * 1024;
-
 impl ImageRenderer {
     pub(super) fn render_image(
         &self,
@@ -269,11 +267,11 @@ impl ImageRenderer {
 
         let mut buffer = Vec::new();
         response
-            .take((MAX_IMAGE_SIZE + 1) as u64)
+            .take((super::super::MAX_OG_IMAGE_BYTES + 1) as u64)
             .read_to_end(&mut buffer)
             .map_err(|e| format!("Failed to read image data: {e}"))?;
 
-        if buffer.len() > MAX_IMAGE_SIZE {
+        if buffer.len() > super::super::MAX_OG_IMAGE_BYTES {
             return Err("Image too large (max 10MB)".to_string());
         }
 

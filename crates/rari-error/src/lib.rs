@@ -652,8 +652,7 @@ impl From<DataError> for RariError {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::disallowed_methods)]
-    #![allow(clippy::unwrap_used)]
+    #![allow(clippy::disallowed_methods, clippy::unwrap_used)]
     use super::*;
 
     #[test]

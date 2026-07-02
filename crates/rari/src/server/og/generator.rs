@@ -10,7 +10,7 @@ use cow_utils::CowUtils;
 use rari_utils::path_to_file_url;
 use rustc_hash::FxHashMap;
 use serde_json::{Map, Value};
-use tokio::{fs, sync::RwLock};
+use tokio::{fs, sync::RwLock, task};
 
 use super::{
     OgImageError,
@@ -147,22 +147,26 @@ impl OgImageGenerator {
         let width = entry.width.unwrap_or(1200).min(MAX_OG_WIDTH);
         let height = entry.height.unwrap_or(630).min(MAX_OG_HEIGHT);
 
-        let (computed_layout, font_context) = {
-            let mut layout_engine = LayoutEngine::new();
-            let font_context = layout_engine.get_font_context();
-            let computed_layout = layout_engine
-                .layout(&jsx_element, float::u32_to_f32(width), float::u32_to_f32(height))
-                .map_err(|e| OgImageError::GenerationError(format!("Layout failed: {e}")))?;
-            (computed_layout, font_context)
-        };
+        let webp_data = task::spawn_blocking(move || -> Result<Vec<u8>, OgImageError> {
+            let (computed_layout, font_context) = {
+                let mut layout_engine = LayoutEngine::new();
+                let font_context = layout_engine.get_font_context();
+                let computed_layout = layout_engine
+                    .layout(&jsx_element, float::u32_to_f32(width), float::u32_to_f32(height))
+                    .map_err(|e| OgImageError::GenerationError(format!("Layout failed: {e}")))?;
+                (computed_layout, font_context)
+            };
 
-        let mut renderer = ImageRenderer::new(width, height, font_context);
-        let image = renderer
-            .render(&computed_layout)
-            .map_err(|e| OgImageError::GenerationError(format!("Image generation failed: {e}")))?;
+            let mut renderer = ImageRenderer::new(width, height, font_context);
+            let image = renderer.render(&computed_layout).map_err(|e| {
+                OgImageError::GenerationError(format!("Image generation failed: {e}"))
+            })?;
 
-        let webp_data = Self::encode_webp(&image)
-            .map_err(|e| OgImageError::GenerationError(format!("Failed to encode WebP: {e}")))?;
+            Self::encode_webp(&image)
+                .map_err(|e| OgImageError::GenerationError(format!("Failed to encode WebP: {e}")))
+        })
+        .await
+        .map_err(|e| OgImageError::GenerationError(format!("OG generation task failed: {e}")))??;
 
         if let Err(e) = self.cache.insert(route_path.to_string(), webp_data.clone()).await {
             tracing::warn!(error = %e, route_path, "OG cache insert failed");

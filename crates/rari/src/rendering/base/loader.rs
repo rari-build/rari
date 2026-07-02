@@ -1,5 +1,3 @@
-#![expect(clippy::too_many_lines)]
-
 use cow_utils::CowUtils;
 
 #[non_exhaustive]
@@ -103,6 +101,7 @@ impl RscJsLoader {
         )
     }
 
+    #[expect(clippy::too_many_lines)]
     pub fn create_module_operation_script(
         component_id: &str,
         operation: RscModuleOperation,

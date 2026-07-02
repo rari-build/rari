@@ -1,5 +1,3 @@
-#![allow(clippy::unnecessary_debug_formatting)]
-
 use std::{
     path::{Path, PathBuf},
     sync::{
@@ -161,6 +159,7 @@ impl ImageOptimizer {
 
         while let Some(current_dir) = dirs_to_scan.pop() {
             let mut entries = fs::read_dir(&current_dir).await.map_err(|e| {
+                #[expect(clippy::unnecessary_debug_formatting)]
                 ImageError::ProcessingError(format!(
                     "Failed to read directory {current_dir:?}: {e}"
                 ))
@@ -172,6 +171,7 @@ impl ImageOptimizer {
                 let path = entry.path();
 
                 let file_type = entry.file_type().await.map_err(|e| {
+                    #[expect(clippy::unnecessary_debug_formatting)]
                     ImageError::ProcessingError(format!(
                         "Failed to read file type for {path:?}: {e}"
                     ))

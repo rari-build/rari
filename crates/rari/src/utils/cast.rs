@@ -31,7 +31,7 @@ pub fn usize_fraction_ceil(value: usize, factor: f64) -> usize {
 #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 #[inline]
 #[must_use]
-pub fn f64_log10_floor_usize(value: f64) -> usize {
+pub fn f64_floor_usize(value: f64) -> usize {
     value.floor() as usize
 }
 

@@ -1,10 +1,4 @@
-#![expect(clippy::too_many_lines)]
-
-use std::{
-    env,
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::{env, sync::Arc};
 
 use base64::{Engine, engine::general_purpose::STANDARD};
 use cow_utils::CowUtils;
@@ -75,28 +69,6 @@ const FIZZ_CHUNK_PUMP_HELPER: &str = r"
                             }
                         }
 ";
-
-fn convert_route_path_to_dist_path(path: &str) -> String {
-    let (base, ext) =
-        if let Some(pos) = path.rfind('.') { (&path[..pos], &path[pos..]) } else { (path, "") };
-
-    let converted_base = base
-        .chars()
-        .map(|c| if c.is_alphanumeric() || c == '/' || c == '-' || c == '_' { c } else { '_' })
-        .collect::<String>();
-
-    format!("{converted_base}{ext}")
-}
-
-fn component_dist_path(base_path: &Path, file_path: &str, component_id: Option<&str>) -> PathBuf {
-    if let Some(component_id) = component_id {
-        return base_path.join(format!("{component_id}.js"));
-    }
-
-    let js_filename = file_path.cow_replace(".tsx", ".js").cow_replace(".ts", ".js").into_owned();
-    let dist_filename = convert_route_path_to_dist_path(&js_filename);
-    base_path.join("app").join(&dist_filename)
-}
 
 pub struct LayoutHtmlCache {
     handler: Arc<dyn CacheHandler>,
@@ -216,7 +188,7 @@ impl LayoutRenderer {
             return Ok(false);
         };
 
-        let page_file_path = component_dist_path(
+        let page_file_path = utils::component_dist_path(
             &base_path,
             &route_match.route.file_path,
             route_match.route.component_id.as_deref(),
@@ -364,6 +336,7 @@ impl LayoutRenderer {
         self.render_route(route_match, context, request_context).await
     }
 
+    #[expect(clippy::too_many_lines)]
     pub async fn render_route_with_streaming(
         &self,
         route_match: &AppRouteMatch,
@@ -1049,6 +1022,7 @@ impl LayoutRenderer {
         Ok(RscStream::new(rx))
     }
 
+    #[expect(clippy::too_many_lines)]
     pub fn build_composition_script(
         &self,
         route_match: &AppRouteMatch,

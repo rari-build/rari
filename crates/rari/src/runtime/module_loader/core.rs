@@ -1,5 +1,3 @@
-#![allow(clippy::self_only_used_in_recursion)]
-
 use std::{
     borrow::Cow,
     env, fs,
@@ -491,13 +489,13 @@ export default {{}};
                     let package_name = &package_specifier[..actual_slash_pos];
                     let subpath = &package_specifier[actual_slash_pos..];
 
-                    return self.resolve_subpath_export_from_dir(package_name, subpath, start_dir);
+                    return Self::resolve_subpath_export_from_dir(package_name, subpath, start_dir);
                 }
             } else {
                 let package_name = &package_specifier[..slash_pos];
                 let subpath = &package_specifier[slash_pos..];
 
-                return self.resolve_subpath_export_from_dir(package_name, subpath, start_dir);
+                return Self::resolve_subpath_export_from_dir(package_name, subpath, start_dir);
             }
         }
 
@@ -1118,7 +1116,6 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
     }
 
     fn resolve_subpath_export_from_dir(
-        &self,
         package_name: &str,
         subpath: &str,
         start_dir: &Path,
@@ -1134,14 +1131,13 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
         let package_info = Self::parse_package_json(&package_json_content).ok()?;
 
         if let Some(exports) = &package_info.exports {
-            return self.resolve_subpath_from_exports(exports, subpath, &package_dir);
+            return Self::resolve_subpath_from_exports(exports, subpath, &package_dir);
         }
 
         None
     }
 
     fn resolve_subpath_from_exports(
-        &self,
         exports: &serde_json::Value,
         subpath: &str,
         package_dir: &Path,
@@ -1156,7 +1152,7 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
 
             for variant in &subpath_variants {
                 if let Some(export_value) = exports_obj.get(variant)
-                    && let Some(result) = self.resolve_export_value(export_value, package_dir)
+                    && let Some(result) = Self::resolve_export_value(export_value, package_dir)
                 {
                     return Some(result);
                 }
@@ -1166,7 +1162,7 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
         None
     }
 
-    fn resolve_subpath_import(&self, specifier: &str, referrer: &str) -> Option<String> {
+    fn resolve_subpath_import(specifier: &str, referrer: &str) -> Option<String> {
         let clean_referrer = if referrer.starts_with(FILE_PROTOCOL) {
             file_url_to_path(referrer)
                 .map(|p| p.to_string_lossy().to_string())
@@ -1188,7 +1184,7 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
                     && let Ok(json) = serde_json::from_str::<serde_json::Value>(&content)
                     && let Some(imports) = json.get("imports").and_then(|v| v.as_object())
                     && let Some(import_value) = imports.get(specifier)
-                    && let Some(resolved) = self.resolve_import_value(import_value, &current_dir)
+                    && let Some(resolved) = Self::resolve_import_value(import_value, &current_dir)
                 {
                     return Some(resolved);
                 }
@@ -1203,11 +1199,7 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
         None
     }
 
-    fn resolve_import_value(
-        &self,
-        value: &serde_json::Value,
-        package_dir: &Path,
-    ) -> Option<String> {
+    fn resolve_import_value(value: &serde_json::Value, package_dir: &Path) -> Option<String> {
         match value {
             serde_json::Value::String(path_str) => {
                 let clean_path = path_str.trim_start_matches("./");
@@ -1220,7 +1212,7 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
                 let conditions = ["node", "import", "module", "default"];
                 for condition in &conditions {
                     if let Some(nested_value) = obj.get(*condition)
-                        && let Some(result) = self.resolve_import_value(nested_value, package_dir)
+                        && let Some(result) = Self::resolve_import_value(nested_value, package_dir)
                     {
                         return Some(result);
                     }
@@ -1232,7 +1224,6 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
     }
 
     fn resolve_export_value(
-        &self,
         export_value: &serde_json::Value,
         package_dir: &Path,
     ) -> Option<String> {
@@ -1248,7 +1239,7 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
                 let conditions = ["import", "module", "default"];
                 for condition in &conditions {
                     if let Some(nested_value) = obj.get(*condition)
-                        && let Some(result) = self.resolve_export_value(nested_value, package_dir)
+                        && let Some(result) = Self::resolve_export_value(nested_value, package_dir)
                     {
                         return Some(result);
                     }
@@ -1450,7 +1441,7 @@ impl ModuleLoader for RariModuleLoader {
         }
 
         if specifier.starts_with('#')
-            && let Some(resolved) = self.resolve_subpath_import(specifier, referrer)
+            && let Some(resolved) = Self::resolve_subpath_import(specifier, referrer)
         {
             return self.resolve(&resolved, referrer, kind);
         }

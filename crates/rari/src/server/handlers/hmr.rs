@@ -447,7 +447,7 @@ async fn handle_reload(
     }
 }
 
-fn handle_invalidate_api_route(state: &ServerState, file_path: &String) -> axum::Json<Value> {
+fn handle_invalidate_api_route(state: &ServerState, file_path: &str) -> axum::Json<Value> {
     let Some(api_handler) = &state.api_route_handler else {
         return Json(serde_json::json!({
             "success": false,

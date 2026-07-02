@@ -1,5 +1,3 @@
-#![allow(clippy::needless_continue)]
-
 use std::fmt::Write;
 
 use axum::http::StatusCode;
@@ -169,7 +167,6 @@ pub async fn extract_body_scripts_from_index_html() -> Option<String> {
                     if trimmed.contains("</script>") {
                         in_inline_script = false;
                     }
-                    continue;
                 }
             }
 

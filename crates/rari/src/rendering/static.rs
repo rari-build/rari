@@ -1,6 +1,3 @@
-#![allow(clippy::format_collect, clippy::unused_async_trait_impl)]
-#![expect(clippy::too_many_lines)]
-
 use std::{
     fmt::Write,
     future::Future,
@@ -115,6 +112,7 @@ pub fn test_is_valid_attribute_name(name: &str) -> bool {
     is_valid_attribute_name(name)
 }
 
+#[expect(clippy::too_many_lines)]
 fn serialize_style_object(style_obj: &serde_json::Map<String, serde_json::Value>) -> String {
     const UNITLESS_PROPERTIES: &[&str] = &[
         "animation-iteration-count",
@@ -1046,6 +1044,7 @@ impl RscHtmlRenderer {
         })
     }
 
+    #[expect(clippy::too_many_lines)]
     fn render_component_to_html<'a>(
         &'a self,
         tag: &'a str,
@@ -1351,6 +1350,7 @@ impl RscToHtmlConverter {
         self.boundary_id_generator.next()
     }
 
+    #[expect(clippy::too_many_lines)]
     pub async fn convert_chunk(&mut self, chunk: RscStreamChunk) -> Result<Vec<u8>, RariError> {
         let chunk_type_str = format!("{:?}", chunk.chunk_type);
 
@@ -1593,8 +1593,11 @@ impl RscToHtmlConverter {
 
         rows_with_ids.sort_by_key(|(id, _)| if *id == 0 { u32::MAX - 1 } else { *id });
 
-        let mut rsc_payload =
-            rows_with_ids.iter().map(|(_, row)| format!("{row}\n")).collect::<String>();
+        let mut rsc_payload = String::new();
+        for (_, row) in &rows_with_ids {
+            rsc_payload.push_str(row);
+            rsc_payload.push('\n');
+        }
 
         let has_row_0 = rows_with_ids.iter().any(|(id, _)| *id == 0);
 
@@ -1700,6 +1703,7 @@ if (typeof window !== 'undefined') {{
         Ok(html.into_bytes())
     }
 
+    #[expect(clippy::too_many_lines)]
     fn rsc_element_to_html<'a>(
         &'a self,
         element: &'a serde_json::Value,
