@@ -2,7 +2,7 @@ use std::{num::NonZero, rc::Rc, sync::Arc, thread};
 
 use ::deno_permissions::Permissions;
 use deno_core::{
-    CrossIsolateStore, Extension, ExtensionFileSource,
+    CrossIsolateStore, Extension,
     error::JsError,
     extension,
     v8::{BackingStore, SharedRef, icu},
@@ -67,11 +67,6 @@ extension!(
         let permissions = build_permissions(container);
         state.put(permissions);
     },
-    customizer = |e: &mut Extension| {
-        e.esm_files.to_mut().push(
-            ExtensionFileSource::new("ext:deno_features/flags.js", deno_features::JS_SOURCE)
-        );
-    }
 );
 
 impl ExtensionTrait<()> for init_console {
@@ -96,7 +91,10 @@ impl ExtensionTrait<()> for deno_runtime::runtime {
             .iter()
             .filter(|file| {
                 !file.specifier.contains("99_main.js")
+                    && !file.specifier.contains("90_deno_ns.js")
+                    && !file.specifier.contains("98_global_scope_shared.js")
                     && !file.specifier.contains("98_global_scope_worker.js")
+                    && !file.specifier.contains("deno_features/flags.js")
             })
             .cloned()
             .collect::<Vec<_>>()
@@ -273,6 +271,7 @@ fn create_web_worker_callback(options: WebWorkerCallbackOptions) -> Arc<CreateWe
                 no_legacy_abort: false,
                 is_standalone: false,
                 auto_serve: false,
+                disable_offscreen_canvas: false,
             },
             extensions: vec![],
             startup_snapshot: None,
@@ -285,11 +284,14 @@ fn create_web_worker_callback(options: WebWorkerCallbackOptions) -> Arc<CreateWe
             cache_storage_dir: None,
             trace_ops: None,
             close_on_idle: false,
-            maybe_worker_metadata: None,
+            maybe_worker_metadata: args.maybe_worker_metadata,
+            maybe_main_module_blob: args.maybe_main_module_blob,
             maybe_coverage_dir: None,
             create_params: None,
             enable_stack_trace_arg_in_ops: false,
             enable_raw_imports: false,
+            wait_for_debugger_on_start: args.wait_for_debugger_on_start,
+            wait_for_page_wait_for_debugger: args.wait_for_page_wait_for_debugger,
             residual_lazy_js_sources: &[],
             residual_lazy_esm_sources: &[],
         };

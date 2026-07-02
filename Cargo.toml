@@ -1,10 +1,6 @@
 [workspace]
 members = [
-  "crates/rari",
-  "crates/rari-error",
-  "crates/rari-rsc",
-  "crates/rari-use-cache",
-  "crates/rari-utils",
+  "crates/*",
   "tools/prepare-binaries",
   "tools/release",
   "tools/snapshot",
@@ -87,6 +83,7 @@ single_match = "allow"
 single_match_else = "allow"
 
 # Nursery rules that are useful
+absolute_paths = "warn"
 debug_assert_with_mut_call = "warn"
 iter_on_single_items = "warn"
 needless_pass_by_ref_mut = "warn"
@@ -94,10 +91,9 @@ redundant_clone = "warn"
 redundant_pub_crate = "warn"
 significant_drop_in_scrutinee = "warn"
 unused_peekable = "warn"
-absolute_paths = "warn"
 
 [workspace.dependencies]
-anyhow = "1.0.102"
+anyhow = "1.0.103"
 base64 = "0.22.1"
 clap = { version = "4.6.1", features = [ "derive" ] }
 colored = "3.1.1"
@@ -108,8 +104,9 @@ deno_ast = { version = "=0.53.2", features = [
   "visit",
   "transforms",
 ] }
-deno_core = "0.404.0"
+deno_core = "0.406.0"
 deno_error = "=0.7.1"
+deno_node = "0.191.0"
 hex = "0.4.3"
 parking_lot = "0.12.5"
 rari = { path = "crates/rari" }
@@ -129,7 +126,7 @@ tokio = { version = "1.52.3", features = [
 ] }
 tracing = "0.1.44"
 url = "2.5.8"
-uuid = { version = "1.23.3", features = [ "v4" ] }
+uuid = { version = "1.23.4", features = [ "v4" ] }
 
 [profile.dev]
 # Minimal debug info to speed up local and CI builds
