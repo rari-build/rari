@@ -3,23 +3,26 @@
     reason = "Serializer methods return Result for API consistency and future error handling"
 )]
 
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::{
+    ptr,
+    sync::atomic::{AtomicU32, Ordering},
+};
 
+use base64::{Engine, engine::general_purpose::STANDARD};
 use cow_utils::CowUtils;
 use rari_error::RariError;
 use rustc_hash::{FxHashMap, FxHashSet};
-use serde_json::Value;
+use serde_json::{Map, Value, json};
 use smallvec::SmallVec;
 use tracing::error;
 
 use crate::{
     core::{RscFlightTag, ServerComponentExecutor},
     flight::escape::escape_rsc_value,
-    types::RSCTree,
+    types::{RSCTree, ReactElement},
 };
 
 fn base64_encode(bytes: &[u8]) -> String {
-    use base64::{Engine, engine::general_purpose::STANDARD};
     STANDARD.encode(bytes)
 }
 
@@ -81,26 +84,7 @@ pub struct RscSerializer {
     serialized_modules: FxHashMap<String, String>,
     pub server_component_executor: Option<Box<dyn ServerComponentExecutor>>,
     suspense_symbol_row_id: Option<u32>,
-    pub pending_lazy_promises: Vec<LazyPromiseInfo>,
-    pub seen_lazy_promise_ids: FxHashSet<String>,
     module_registration_order: Vec<String>,
-}
-
-#[derive(Debug, Clone)]
-#[non_exhaustive]
-pub struct LazyPromiseInfo {
-    pub promise_id: String,
-    pub lazy_row_id: u32,
-    pub component_id: String,
-    pub loading_id: String,
-}
-
-#[derive(Debug, Clone)]
-#[expect(clippy::struct_field_names, reason = "All fields are IDs by design")]
-struct LazyMarker {
-    promise_id: String,
-    component_id: String,
-    loading_id: String,
 }
 
 #[derive(Debug, Clone)]
@@ -137,8 +121,6 @@ impl RscSerializer {
             serialized_modules: FxHashMap::default(),
             server_component_executor: None,
             suspense_symbol_row_id: None,
-            pending_lazy_promises: Vec::new(),
-            seen_lazy_promise_ids: FxHashSet::default(),
             module_registration_order: Vec::new(),
         }
     }
@@ -242,8 +224,13 @@ impl RscSerializer {
         self.output_lines.join("\n")
     }
 
-    pub fn serialize_rsc_json(&mut self, rsc_data: &serde_json::Value) -> Result<String, String> {
-        let rsc_tree = crate::types::RSCTree::from_json(rsc_data)
+    #[cfg(test)]
+    pub fn get_output(&self) -> String {
+        self.output_lines.join("\n")
+    }
+
+    pub fn serialize_rsc_json(&mut self, rsc_data: &Value) -> Result<String, String> {
+        let rsc_tree = RSCTree::from_json(rsc_data)
             .map_err(|e| format!("Failed to parse RSC tree from JSON: {e}"))?;
 
         let has_suspense = self.tree_contains_suspense(&rsc_tree);
@@ -357,9 +344,7 @@ impl RscSerializer {
                     self.collect_client_components_from_rsc_tree(element);
                 }
             }
-            RSCTree::Primitive(Value::Object(obj))
-                if obj.get("~rari_lazy").and_then(serde_json::Value::as_bool) == Some(true) => {}
-            _ => {}
+            RSCTree::Primitive(Value::Object(_)) | _ => {}
         }
     }
 
@@ -400,16 +385,15 @@ impl RscSerializer {
                 let mut error_props = props.clone();
                 error_props.insert(
                     "data-missing-client-component".to_string(),
-                    serde_json::Value::String(id.to_string()),
+                    Value::String(id.to_string()),
                 );
                 error_props.insert(
                     "children".to_string(),
-                    serde_json::Value::String(format!("Missing client component: {id}")),
+                    Value::String(format!("Missing client component: {id}")),
                 );
 
-                let props_value = Value::Object(
-                    error_props.into_iter().collect::<serde_json::Map<String, Value>>(),
-                );
+                let props_value =
+                    Value::Object(error_props.into_iter().collect::<Map<String, Value>>());
                 let escaped_props = escape_rsc_value(&props_value);
                 let props_json =
                     serde_json::to_string(&escaped_props).unwrap_or_else(|_| "{}".to_string());
@@ -453,7 +437,7 @@ impl RscSerializer {
             .collect();
 
         let props_value =
-            Value::Object(processed_props.into_iter().collect::<serde_json::Map<String, Value>>());
+            Value::Object(processed_props.into_iter().collect::<Map<String, Value>>());
         let escaped_props = escape_rsc_value(&props_value);
         let props_json = serde_json::to_string(&escaped_props).unwrap_or_else(|_| "{}".to_string());
 
@@ -477,7 +461,7 @@ impl RscSerializer {
         }
 
         if let Some(obj) = value.as_object() {
-            let processed: serde_json::Map<String, Value> =
+            let processed: Map<String, Value> =
                 obj.iter().map(|(k, v)| (k.clone(), self.process_prop_value(v))).collect();
             return Value::Object(processed);
         }
@@ -532,44 +516,11 @@ impl RscSerializer {
 
         if let Some(children) = children {
             if children.len() == 1 {
-                if let Some(lazy_info) = self.extract_lazy_marker(&children[0]) {
-                    if self.seen_lazy_promise_ids.contains(&lazy_info.promise_id) {
-                        if let Some(original) = self
-                            .pending_lazy_promises
-                            .iter()
-                            .find(|p| p.promise_id == lazy_info.promise_id)
-                        {
-                            element_props.insert(
-                                "children".to_string(),
-                                Value::String(format!("${:x}", original.lazy_row_id)),
-                            );
-                        } else {
-                            element_props.insert("children".to_string(), Value::Null);
-                        }
-                    } else {
-                        self.seen_lazy_promise_ids.insert(lazy_info.promise_id.clone());
-
-                        let lazy_row_id = self.get_next_row_id();
-
-                        self.pending_lazy_promises.push(LazyPromiseInfo {
-                            promise_id: lazy_info.promise_id.clone(),
-                            lazy_row_id,
-                            component_id: lazy_info.component_id.clone(),
-                            loading_id: lazy_info.loading_id,
-                        });
-
-                        element_props.insert(
-                            "children".to_string(),
-                            Value::String(format!("${lazy_row_id:x}")),
-                        );
-                    }
-                } else {
-                    let child_data = self.serialize_rsc_tree_to_format(&children[0]);
-                    element_props.insert(
-                        "children".to_string(),
-                        serde_json::from_str(&child_data).unwrap_or(Value::String(child_data)),
-                    );
-                }
+                let child_data = self.serialize_rsc_tree_to_format(&children[0]);
+                element_props.insert(
+                    "children".to_string(),
+                    serde_json::from_str(&child_data).unwrap_or(Value::String(child_data)),
+                );
             } else if children.len() > 1 {
                 let children_data: Vec<Value> = children
                     .iter()
@@ -589,25 +540,11 @@ impl RscSerializer {
                 .unwrap_or_else(|| "null".to_string())
         };
 
-        let props_value =
-            Value::Object(element_props.into_iter().collect::<serde_json::Map<String, Value>>());
+        let props_value = Value::Object(element_props.into_iter().collect::<Map<String, Value>>());
         let escaped_props = escape_rsc_value(&props_value);
         let props_json = serde_json::to_string(&escaped_props).unwrap_or_else(|_| "{}".to_string());
 
         format!(r#"["$","{tag}",{key_json},{props_json}]"#)
-    }
-
-    fn extract_lazy_marker(&self, tree: &RSCTree) -> Option<LazyMarker> {
-        if let RSCTree::Primitive(Value::Object(obj)) = tree
-            && obj.get("~rari_lazy").and_then(serde_json::Value::as_bool) == Some(true)
-        {
-            let promise_id = obj.get("~rari_promise_id")?.as_str()?.to_string();
-            let component_id = obj.get("~rari_component_id")?.as_str()?.to_string();
-            let loading_id = obj.get("~rari_loading_id")?.as_str()?.to_string();
-
-            return Some(LazyMarker { promise_id, component_id, loading_id });
-        }
-        None
     }
 
     fn serialize_fragment_rsc(&mut self, children: &[RSCTree]) -> String {
@@ -635,10 +572,29 @@ impl RscSerializer {
     }
 
     fn serialize_error_rsc(&mut self, message: &str, component_name: &str) -> String {
-        let error_element = format!(
-            r#"["$","div",null,{{"style":{{"color":"red","border":"1px solid red","padding":"10px","margin":"10px"}},"children":[["$","h3",null,{{"children":"Error in {component_name}"}}],["$","p",null,{{"children":"{message}"}}]]}}]"#
-        );
-        error_element
+        let error_id = self.get_next_row_id();
+
+        let digest = Self::generate_error_digest(component_name, message);
+        let error_data = json!({
+            "digest": digest,
+            "message": message
+        });
+
+        let error_chunk = RscFlightTag::Error.format_row(error_id, &error_data.to_string());
+        self.output_lines.push(error_chunk.trim_end().to_string());
+
+        format!("\"$Z{error_id}\"")
+    }
+
+    fn generate_error_digest(component_name: &str, message: &str) -> String {
+        let combined = format!("{component_name}:{message}");
+        let mut hash: u32 = 5381;
+
+        for byte in combined.bytes().rev() {
+            hash = hash.wrapping_mul(33) ^ u32::from(byte);
+        }
+
+        hash.to_string()
     }
 
     fn get_next_row_id(&self) -> u32 {
@@ -658,14 +614,11 @@ impl RscSerializer {
     fn emit_module_import_line(&mut self, component_id: &str, module_ref: &ModuleReference) {
         let module_id = self.get_next_row_id();
 
-        let export_name =
-            module_ref.exports.first().map(std::string::String::as_str).unwrap_or("default");
+        let export_name = module_ref.exports.first().map(String::as_str).unwrap_or("default");
 
-        let module_data = serde_json::json!({
-            "id": module_ref.path,
-            "chunks": [],
-            "name": export_name
-        });
+        let chunk_name = module_ref.path.clone();
+
+        let module_data = json!([module_ref.path, [chunk_name], export_name]);
 
         let import_line =
             RscFlightTag::ModuleImport.format_row(module_id, &module_data.to_string());
@@ -727,7 +680,7 @@ impl RscSerializer {
     }
 
     fn create_error_element(&self, error_message: &str, component_name: Option<&str>) -> Value {
-        let mut error_props = serde_json::Map::new();
+        let mut error_props = Map::new();
         let display_message = match component_name {
             Some(name) => format!("Error in {name}: {error_message}"),
             None => error_message.to_string(),
@@ -737,7 +690,7 @@ impl RscSerializer {
         error_props.insert(
             "style".to_string(),
             Value::Object({
-                let mut style = serde_json::Map::new();
+                let mut style = Map::new();
                 style.insert("color".to_string(), Value::String("red".to_string()));
                 style.insert("border".to_string(), Value::String("1px solid red".to_string()));
                 style.insert("padding".to_string(), Value::String("10px".to_string()));
@@ -859,7 +812,7 @@ impl RscSerializer {
         component_name: &str,
         props: Option<&FxHashMap<String, Value>>,
     ) -> String {
-        let mut placeholder_props = serde_json::Map::new();
+        let mut placeholder_props = Map::new();
         placeholder_props
             .insert("children".to_string(), Value::String(format!("Component: {component_name}")));
 
@@ -1003,7 +956,7 @@ impl RscSerializer {
                     return self.outline_stream(stream_data);
                 }
 
-                let mut processed_obj = serde_json::Map::new();
+                let mut processed_obj = Map::new();
                 for (k, v) in obj {
                     processed_obj.insert(k.clone(), self.process_special_values_with_outlining(v));
                 }
@@ -1117,6 +1070,7 @@ impl RscSerializer {
 
         let data = typedarray_data.get("data").and_then(|v| v.as_array());
 
+        #[expect(clippy::wildcard_in_or_patterns)]
         if let Some(data_array) = data {
             let tag = match type_name {
                 "ArrayBuffer" => "A",
@@ -1131,7 +1085,7 @@ impl RscSerializer {
                 "BigInt64Array" => "M",
                 "BigUint64Array" => "m",
                 "DataView" => "V",
-                _ => "o",
+                "Uint8Array" | _ => "o",
             };
 
             let bytes: Vec<u8> =
@@ -1160,7 +1114,7 @@ impl RscSerializer {
                 data_array.iter().filter_map(|v| v.as_u64().map(|n| n as u8)).collect();
 
             let base64_data = base64_encode(&bytes);
-            let blob_model = serde_json::json!([blob_type, base64_data]);
+            let blob_model = json!([blob_type, base64_data]);
             let blob_json = serde_json::to_string(&blob_model).unwrap_or_else(|_| "[]".to_string());
             let chunk_line = format!("{chunk_id:x}:{blob_json}");
             self.output_lines.push(chunk_line);
@@ -1175,7 +1129,7 @@ impl RscSerializer {
         let chunk_id = self.get_next_row_id();
 
         let is_byte_stream =
-            stream_data.get("byteStream").and_then(serde_json::Value::as_bool).unwrap_or(false);
+            stream_data.get("byteStream").and_then(Value::as_bool).unwrap_or(false);
 
         let chunks = stream_data.get("chunks").and_then(|v| v.as_array());
 
@@ -1220,7 +1174,7 @@ impl RscSerializer {
         visited: &mut FxHashSet<*const Value>,
         errors: &mut Vec<PropValidationError>,
     ) -> Result<Value, PropValidationError> {
-        let value_ptr = std::ptr::from_ref::<Value>(value);
+        let value_ptr = ptr::from_ref::<Value>(value);
         if visited.contains(&value_ptr) {
             let error = PropValidationError {
                 field_path: field_path.to_string(),
@@ -1245,7 +1199,7 @@ impl RscSerializer {
             Value::Object(obj) => {
                 visited.insert(value_ptr);
 
-                let mut validated_object = serde_json::Map::new();
+                let mut validated_object = Map::new();
                 for (key, nested_value) in obj {
                     let nested_path = if field_path.is_empty() {
                         key.clone()
@@ -1318,7 +1272,7 @@ impl RscSerializer {
     ) -> String {
         let boundary_row_id = self.get_next_row_id();
 
-        let boundary_data = serde_json::json!([
+        let boundary_data = json!([
             "$",
             "$Sreact.suspense",
             null,
@@ -1345,10 +1299,7 @@ impl RscSerializer {
         content_line
     }
 
-    pub fn serialize_element(
-        &mut self,
-        element: &crate::types::ReactElement,
-    ) -> Result<String, RariError> {
+    pub fn serialize_element(&mut self, element: &ReactElement) -> Result<String, RariError> {
         if element.tag == "react.suspense" {
             let fallback = element
                 .props
@@ -1363,12 +1314,12 @@ impl RscSerializer {
             let boundary_id =
                 element.props.get("~boundaryId").and_then(|v| v.as_str()).unwrap_or("default");
 
-            let fallback_element: crate::types::ReactElement =
+            let fallback_element: ReactElement =
                 serde_json::from_value(fallback.clone()).map_err(|e| {
                     RariError::internal(format!("Failed to parse Suspense fallback: {e}"))
                 })?;
 
-            let children_element: crate::types::ReactElement =
+            let children_element: ReactElement =
                 serde_json::from_value(children.clone()).map_err(|e| {
                     RariError::internal(format!("Failed to parse Suspense children: {e}"))
                 })?;
@@ -1382,10 +1333,7 @@ impl RscSerializer {
         }
     }
 
-    fn serialize_regular_element(
-        &mut self,
-        element: &crate::types::ReactElement,
-    ) -> Result<String, RariError> {
+    fn serialize_regular_element(&mut self, element: &ReactElement) -> Result<String, RariError> {
         let element_id = self.get_next_row_id();
 
         let key_json = element
@@ -1412,7 +1360,7 @@ impl RscSerializer {
     ) -> Result<String, RariError> {
         let boundary_row_id = self.get_next_row_id();
 
-        let boundary_data = serde_json::json!([
+        let boundary_data = json!([
             "$",
             "$Sreact.suspense",
             null,
@@ -1525,12 +1473,8 @@ impl SerializedReactElement {
     clippy::get_unwrap
 )]
 mod tests {
-    use rari_error::RariError;
-    use rustc_hash::FxHashMap;
-    use serde_json::{Value, json};
-
     use super::*;
-    use crate::ServerComponentExecutor;
+    use crate::types::ReactElement as LoadingReactElement;
 
     #[test]
     fn test_serialize_html_element() {
@@ -1836,8 +1780,6 @@ mod tests {
 
     #[test]
     fn test_serialize_element_with_suspense() {
-        use crate::types::ReactElement as LoadingReactElement;
-
         let mut serializer = RscSerializer::new();
 
         let mut fallback_props = FxHashMap::default();
@@ -1868,8 +1810,6 @@ mod tests {
 
     #[test]
     fn test_serialize_element_regular() {
-        use crate::types::ReactElement as LoadingReactElement;
-
         let mut serializer = RscSerializer::new();
 
         let mut props = FxHashMap::default();
@@ -1891,8 +1831,6 @@ mod tests {
 
     #[test]
     fn test_serialize_element_regular_hex_reference() {
-        use crate::types::ReactElement as LoadingReactElement;
-
         let mut serializer = RscSerializer::new();
 
         for _ in 0..10 {
@@ -2244,8 +2182,6 @@ mod tests {
 
     #[test]
     fn test_suspense_wire_format_structure() {
-        use crate::types::ReactElement as LoadingReactElement;
-
         let mut serializer = RscSerializer::new();
 
         let fallback = LoadingReactElement::with_props("div", {
@@ -2291,8 +2227,6 @@ mod tests {
 
     #[test]
     fn test_suspense_missing_fallback_error() {
-        use crate::types::ReactElement as LoadingReactElement;
-
         let mut serializer = RscSerializer::new();
 
         let mut props = FxHashMap::default();
@@ -2311,8 +2245,6 @@ mod tests {
 
     #[test]
     fn test_suspense_missing_children_error() {
-        use crate::types::ReactElement as LoadingReactElement;
-
         let mut serializer = RscSerializer::new();
 
         let mut props = FxHashMap::default();
@@ -2666,5 +2598,64 @@ mod tests {
             "Expected multiple unique row IDs for outlined payload, got {}",
             row_ids.len()
         );
+    }
+
+    #[test]
+    fn test_serialize_error_with_z_marker() {
+        let mut serializer = RscSerializer::new();
+
+        let error_tree = RSCTree::Error {
+            message: "Component failed to render".to_string(),
+            component_name: "UserProfile".to_string(),
+            stack: None,
+        };
+
+        let result = serializer.serialize_rsc_tree(&error_tree);
+
+        assert!(result.contains("$Z"), "Error should serialize to $Z marker, got: {}", result);
+
+        let output = serializer.get_output();
+        assert!(
+            output.lines().any(|line| line.contains(":E")),
+            "Should emit error chunk with E tag, got: {}",
+            output
+        );
+
+        assert!(
+            output.contains("digest"),
+            "Error chunk should contain digest field, got: {}",
+            output
+        );
+
+        assert!(
+            output.contains("Component failed to render"),
+            "Error chunk should contain error message, got: {}",
+            output
+        );
+    }
+
+    #[test]
+    fn test_serialize_error_reference_format() {
+        let mut serializer = RscSerializer::new();
+
+        let error_tree = RSCTree::Error {
+            message: "Test error".to_string(),
+            component_name: "TestComponent".to_string(),
+            stack: None,
+        };
+
+        let result = serializer.serialize_rsc_tree(&error_tree);
+
+        assert!(
+            result.contains("\"$Z"),
+            "Error should return $Z reference format, got: {}",
+            result
+        );
+
+        let has_error_chunk = result.lines().any(|line| line.contains(":E"));
+        assert!(has_error_chunk, "Should have error chunk with E tag in output");
+
+        let lines: Vec<&str> = result.lines().collect();
+        assert!(lines.len() >= 2, "Should have at least 2 lines (root + error chunk)");
     }
 }

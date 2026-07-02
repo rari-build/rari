@@ -6,7 +6,10 @@ use ratatui::{
     widgets::{Block, Borders, Gauge, List, ListItem, Paragraph},
 };
 
-use crate::{app::App, package::ReleaseUnit};
+use crate::{
+    app::{App, PostReleaseStep},
+    package::{ReleaseUnit, ReleasedPackage},
+};
 
 pub fn render_package_selection(frame: &mut Frame, app: &App) {
     let area = frame.area();
@@ -274,8 +277,8 @@ pub fn render_post_publish(frame: &mut Frame, app: &App, has_more_packages: bool
 pub fn render_post_release(
     frame: &mut Frame,
     app: &App,
-    released: &[crate::package::ReleasedPackage],
-    step: &crate::app::PostReleaseStep,
+    released: &[ReleasedPackage],
+    step: &PostReleaseStep,
 ) {
     let area = frame.area();
     let chunks = Layout::default()
@@ -293,12 +296,12 @@ pub fn render_post_release(
     frame.render_widget(title, chunks[0]);
 
     match step {
-        crate::app::PostReleaseStep::Pushing | crate::app::PostReleaseStep::PushComplete => {
+        PostReleaseStep::Pushing | PostReleaseStep::PushComplete => {
             let mut lines: Vec<Line> = vec![Line::from("")];
             for msg in &app.post_release_messages {
                 lines.push(Line::from(msg.as_str()));
             }
-            if *step == crate::app::PostReleaseStep::Pushing {
+            if *step == PostReleaseStep::Pushing {
                 lines.push(Line::from(""));
                 lines.push(Line::from(Span::styled(
                     "Please wait...",
@@ -310,7 +313,7 @@ pub fn render_post_release(
                 .block(Block::default().borders(Borders::ALL).title("Pushing to Git"));
             frame.render_widget(message, chunks[1]);
         }
-        crate::app::PostReleaseStep::PromptGitHub => {
+        PostReleaseStep::PromptGitHub => {
             let mut lines = vec![
                 Line::from(""),
                 Line::from(Span::styled(
@@ -340,7 +343,7 @@ pub fn render_post_release(
                 .block(Block::default().borders(Borders::ALL));
             frame.render_widget(help, chunks[2]);
         }
-        crate::app::PostReleaseStep::OpeningGitHub | crate::app::PostReleaseStep::Done => {
+        PostReleaseStep::OpeningGitHub | PostReleaseStep::Done => {
             let mut lines: Vec<Line> = vec![Line::from("")];
             for msg in &app.post_release_messages {
                 lines.push(Line::from(msg.as_str()));
@@ -350,7 +353,7 @@ pub fn render_post_release(
                 .block(Block::default().borders(Borders::ALL).title("GitHub Releases"));
             frame.render_widget(message, chunks[1]);
 
-            let help = if *step == crate::app::PostReleaseStep::Done {
+            let help = if *step == PostReleaseStep::Done {
                 Paragraph::new("Press Enter to continue")
             } else {
                 Paragraph::new("Please wait...")
@@ -361,7 +364,7 @@ pub fn render_post_release(
         }
     }
 
-    if *step != crate::app::PostReleaseStep::PromptGitHub {
+    if *step != PostReleaseStep::PromptGitHub {
         let help = Paragraph::new("")
             .alignment(Alignment::Center)
             .block(Block::default().borders(Borders::ALL));
@@ -369,11 +372,7 @@ pub fn render_post_release(
     }
 }
 
-pub fn render_complete(
-    frame: &mut Frame,
-    released: &[crate::package::ReleasedPackage],
-    dry_run: bool,
-) {
+pub fn render_complete(frame: &mut Frame, released: &[ReleasedPackage], dry_run: bool) {
     let area = frame.area();
     let chunks = Layout::default()
         .direction(Direction::Vertical)

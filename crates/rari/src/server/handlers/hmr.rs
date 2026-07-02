@@ -1,11 +1,21 @@
+use std::{
+    env,
+    path::PathBuf,
+    time::{SystemTime, UNIX_EPOCH},
+};
+
 use axum::{extract::State, http::StatusCode, response::Json};
 use cow_utils::CowUtils;
+use rari_rsc::utils;
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use tokio::{fs, time};
 use tracing::error;
 
 use crate::server::{
     ServerState,
+    cache::response::ResponseCache,
     config::Config,
     core::utils::{
         component::extract_component_id,
@@ -78,10 +88,7 @@ pub async fn handle_hmr_action(
     }
 }
 
-async fn invalidate_component_cache(
-    cache: &crate::server::cache::response::ResponseCache,
-    component_id: &str,
-) {
+async fn invalidate_component_cache(cache: &ResponseCache, component_id: &str) {
     let cache_key_prefix = format!("/_rari/stream/{component_id}");
 
     let all_keys = cache.get_all_keys();
@@ -380,13 +387,10 @@ async fn handle_reload(
         })));
     }
 
-    let client = reqwest::Client::new();
+    let client = Client::new();
     let vite_base_url = format!("http://{}", config.vite_address());
 
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis();
+    let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis();
 
     let file_path =
         if file_path.starts_with('/') { file_path.clone() } else { format!("/{file_path}") };
@@ -475,7 +479,7 @@ async fn handle_reload_component(
     component_id: String,
     bundle_path: String,
 ) -> Result<Json<Value>, StatusCode> {
-    let project_root = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let project_root = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
 
     let bundle_full_path = match validate_safe_path(&project_root, &bundle_path) {
         Ok(path) => path,
@@ -495,7 +499,7 @@ async fn handle_reload_component(
     let mut bundle_code = String::new();
     let mut last_error = None;
     for attempt in 0..3 {
-        match tokio::fs::read_to_string(&bundle_full_path).await {
+        match fs::read_to_string(&bundle_full_path).await {
             Ok(code) => {
                 bundle_code = code;
                 last_error = None;
@@ -504,7 +508,7 @@ async fn handle_reload_component(
             Err(e) => {
                 last_error = Some(e);
                 if attempt < 2 {
-                    tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+                    time::sleep(time::Duration::from_millis(50)).await;
                 }
             }
         }
@@ -538,7 +542,7 @@ async fn handle_reload_component(
 
                 registry.remove_component(&component_id);
 
-                let dependencies = rari_rsc::utils::extract_dependencies(&bundle_code);
+                let dependencies = utils::extract_dependencies(&bundle_code);
 
                 match registry.register_component(
                     &component_id,

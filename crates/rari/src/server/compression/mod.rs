@@ -1,7 +1,9 @@
+use std::io::Error;
+
 pub mod stream;
 
 use bytes::Bytes;
-use futures::StreamExt;
+use futures::{StreamExt, stream::once};
 pub use stream::{CompressionEncoding, compress_stream};
 
 pub async fn compress_body(
@@ -13,8 +15,7 @@ pub async fn compress_body(
     }
 
     let body_clone = body.clone();
-    let input_stream =
-        futures::stream::once(async move { Ok::<Bytes, std::io::Error>(body_clone) });
+    let input_stream = once(async move { Ok::<Bytes, Error>(body_clone) });
     let mut compressed_stream = compress_stream(input_stream, encoding);
 
     let mut compressed = Vec::new();

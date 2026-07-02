@@ -3,7 +3,7 @@ use serde::Serialize;
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub struct PartialRenderResult {
-    pub initial_content: serde_json::Value,
+    pub initial_content: String,
     pub pending_promises: Vec<PendingSuspensePromise>,
     pub boundaries: Vec<SuspenseBoundaryInfo>,
     pub has_suspense: bool,
@@ -83,7 +83,7 @@ pub enum RscChunkType {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
-pub enum RscWireFormatTag {
+pub enum RscFlightTag {
     ModuleImport,
     Model,
     Error,
@@ -94,7 +94,7 @@ pub enum RscWireFormatTag {
     StreamClose,
 }
 
-impl RscWireFormatTag {
+impl RscFlightTag {
     pub fn tag_char(&self) -> Option<char> {
         match self {
             Self::ModuleImport => Some('I'),

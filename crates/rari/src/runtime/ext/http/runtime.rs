@@ -1,10 +1,20 @@
 // Copyright 2018-2024 the Deno authors. All rights reserved. MIT license.
 
-use std::rc::Rc;
+use std::{
+    error,
+    fmt::{self, Display, Formatter},
+    io,
+    rc::Rc,
+};
 
 use deno_core::{OpState, ResourceId, error::ResourceError, extension, op2};
 use deno_http::http_create_conn_resource;
+#[cfg(unix)]
+use deno_net::io::UnixStreamResource;
 use deno_net::{io::TcpStreamResource, ops_tls::TlsStreamResource};
+use tokio::net::tcp;
+#[cfg(unix)]
+use tokio::net::unix;
 
 extension!(deno_http_runtime, ops = [op_http_start]);
 
@@ -18,18 +28,18 @@ pub enum HttpStartError {
     #[cfg_attr(not(unix), allow(dead_code))]
     UnixSocketInUse,
     #[class(generic)]
-    ReuniteTcp(tokio::net::tcp::ReuniteError),
+    ReuniteTcp(tcp::ReuniteError),
     #[cfg(unix)]
     #[class(generic)]
-    ReuniteUnix(tokio::net::unix::ReuniteError),
+    ReuniteUnix(unix::ReuniteError),
     #[class(inherit)]
-    Io(std::io::Error),
+    Io(io::Error),
     #[class(inherit)]
     Resource(ResourceError),
 }
 
-impl std::fmt::Display for HttpStartError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for HttpStartError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             HttpStartError::TcpStreamInUse => write!(f, "TCP stream is currently in use"),
             HttpStartError::TlsStreamInUse => write!(f, "TLS stream is currently in use"),
@@ -43,8 +53,8 @@ impl std::fmt::Display for HttpStartError {
     }
 }
 
-impl std::error::Error for HttpStartError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+impl error::Error for HttpStartError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
             HttpStartError::ReuniteTcp(err) => Some(err),
             #[cfg(unix)]
@@ -56,21 +66,21 @@ impl std::error::Error for HttpStartError {
     }
 }
 
-impl From<tokio::net::tcp::ReuniteError> for HttpStartError {
-    fn from(err: tokio::net::tcp::ReuniteError) -> Self {
+impl From<tcp::ReuniteError> for HttpStartError {
+    fn from(err: tcp::ReuniteError) -> Self {
         HttpStartError::ReuniteTcp(err)
     }
 }
 
 #[cfg(unix)]
-impl From<tokio::net::unix::ReuniteError> for HttpStartError {
-    fn from(err: tokio::net::unix::ReuniteError) -> Self {
+impl From<unix::ReuniteError> for HttpStartError {
+    fn from(err: unix::ReuniteError) -> Self {
         HttpStartError::ReuniteUnix(err)
     }
 }
 
-impl From<std::io::Error> for HttpStartError {
-    fn from(err: std::io::Error) -> Self {
+impl From<io::Error> for HttpStartError {
+    fn from(err: io::Error) -> Self {
         HttpStartError::Io(err)
     }
 }
@@ -109,9 +119,7 @@ fn op_http_start(
     }
 
     #[cfg(unix)]
-    if let Ok(resource_rc) =
-        state.resource_table.take::<deno_net::io::UnixStreamResource>(tcp_stream_rid)
-    {
+    if let Ok(resource_rc) = state.resource_table.take::<UnixStreamResource>(tcp_stream_rid) {
         // This UNIX socket might be used somewhere else. If it's the case, we cannot proceed with the
         // process of starting a HTTP server on top of this UNIX socket, so we just return a Busy error.
         // See also: https://github.com/denoland/deno/pull/16242

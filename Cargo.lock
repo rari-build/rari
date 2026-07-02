@@ -7294,7 +7294,6 @@ dependencies = [
  "deno_runtime",
  "deno_semver",
  "deno_telemetry",
- "deno_terminal",
  "deno_tls",
  "deno_web",
  "deno_webgpu",

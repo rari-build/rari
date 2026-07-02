@@ -1,4 +1,4 @@
-use std::{borrow::Cow, rc::Rc};
+use std::{borrow::Cow, rc::Rc, sync::Arc};
 
 use cow_utils::CowUtils;
 use deno_core::{Extension, JsRuntime, RuntimeOptions};
@@ -6,9 +6,10 @@ use rari_error::RariError;
 use rustc_hash::FxHashMap;
 
 use crate::runtime::{
+    ext,
     factory::utils::constants::{ENV_INJECTION_SCRIPT, MODULE_CHECK_SCRIPT},
     module_loader::RariModuleLoader,
-    ops::StreamOpState,
+    ops::{self, StreamOpState},
 };
 
 static RUNTIME_SNAPSHOT: &[u8] = include_bytes!("../../../snapshots/RARI_SNAPSHOT.bin");
@@ -25,8 +26,8 @@ pub fn build_js_runtime(
 
     let streaming_ops = get_streaming_ops();
 
-    let ext_options = crate::runtime::ext::ExtensionOptions::default();
-    let mut extensions = crate::runtime::ext::extensions(&ext_options, true);
+    let ext_options = ext::ExtensionOptions::default();
+    let mut extensions = ext::extensions(&ext_options, true);
 
     extensions.push(Extension {
         name: "rari:streaming",
@@ -34,7 +35,7 @@ pub fn build_js_runtime(
         op_state_fn: Some(Box::new(|state| {
             state.put(StreamOpState::default());
             let feature_checker = deno_features::FeatureChecker::default();
-            state.put(std::sync::Arc::new(feature_checker));
+            state.put(Arc::new(feature_checker));
         })),
         ..Default::default()
     });
@@ -79,5 +80,5 @@ pub fn build_js_runtime(
 }
 
 fn get_streaming_ops() -> Vec<deno_core::OpDecl> {
-    crate::runtime::ops::get_streaming_ops()
+    ops::get_streaming_ops()
 }

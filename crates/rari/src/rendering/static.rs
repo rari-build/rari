@@ -2,10 +2,14 @@
 
 use std::{
     fmt::Write,
+    future::Future,
+    pin::Pin,
+    string::ToString,
     sync::{
         Arc,
         atomic::{AtomicU32, Ordering},
     },
+    time::Duration,
 };
 
 use cow_utils::CowUtils;
@@ -14,6 +18,7 @@ use rari_rsc::flight::escape::unescape_rsc_value;
 use regex::Regex;
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde_json::Value;
+use tokio::{fs, time};
 use tracing::error;
 
 use crate::{
@@ -432,7 +437,7 @@ impl RscHtmlRenderer {
         };
 
         for path in possible_paths {
-            if let Ok(content) = tokio::fs::read_to_string(path).await {
+            if let Ok(content) = fs::read_to_string(path).await {
                 return Ok(content);
             }
         }
@@ -464,7 +469,7 @@ impl RscHtmlRenderer {
         Ok(result.to_string())
     }
 
-    fn css_links_for_route(route_match: &AppRouteMatch) -> Vec<String> {
+    pub(crate) fn css_links_for_route(route_match: &AppRouteMatch) -> Vec<String> {
         let mut seen = FxHashSet::default();
         let mut css_links = Vec::new();
 
@@ -498,7 +503,7 @@ impl RscHtmlRenderer {
         css_links
     }
 
-    fn inject_css_links(template: &str, css_links: &[String]) -> String {
+    pub(crate) fn inject_css_links(template: &str, css_links: &[String]) -> String {
         if css_links.is_empty() {
             return template.to_string();
         }
@@ -530,7 +535,7 @@ impl RscHtmlRenderer {
         }
     }
 
-    pub fn parse_rsc_wire_format(&self, rsc_data: &str) -> Result<Vec<RscRow>, RariError> {
+    pub fn parse_rsc_flight_protocol(&self, rsc_data: &str) -> Result<Vec<RscRow>, RariError> {
         let estimated_lines = rsc_data.len() / 50;
         let mut rows = Vec::with_capacity(estimated_lines.max(8));
 
@@ -661,7 +666,7 @@ impl RscHtmlRenderer {
             .ok_or_else(|| RariError::internal("React element tag must be a string".to_string()))?
             .to_string();
 
-        let key = arr[2].as_str().map(std::string::ToString::to_string);
+        let key = arr[2].as_str().map(ToString::to_string);
 
         let props_value = &arr[3];
         let props = if let Value::Object(obj) = props_value {
@@ -675,24 +680,111 @@ impl RscHtmlRenderer {
 
     pub async fn render_to_html(
         &self,
-        rsc_wire_format: &str,
+        rsc_flight_protocol: &str,
         config: &Config,
     ) -> Result<String, RariError> {
-        self.render_to_html_inner(rsc_wire_format, config, None).await
+        self.render_to_html_inner(rsc_flight_protocol, config, None).await
     }
 
     pub async fn render_to_html_for_route(
         &self,
-        rsc_wire_format: &str,
+        rsc_flight_protocol: &str,
         config: &Config,
         route_match: &AppRouteMatch,
     ) -> Result<String, RariError> {
-        self.render_to_html_inner(rsc_wire_format, config, Some(route_match)).await
+        self.render_to_html_inner(rsc_flight_protocol, config, Some(route_match)).await
+    }
+
+    pub async fn render_to_html_for_route_fizz(
+        &self,
+        rsc_flight_protocol: &str,
+        config: &Config,
+        route_match: &AppRouteMatch,
+    ) -> Result<String, RariError> {
+        let cache_template = config.rsc_html.cache_template;
+        let is_dev_mode = config.is_development();
+        let css_links = Self::css_links_for_route(route_match);
+
+        let html_content = self.render_wire_to_fizz_html(rsc_flight_protocol).await?;
+
+        self.assemble_document(html_content, cache_template, is_dev_mode, &css_links).await
+    }
+
+    async fn render_wire_to_fizz_html(
+        &self,
+        rsc_flight_protocol: &str,
+    ) -> Result<String, RariError> {
+        let wire_json =
+            serde_json::to_string(rsc_flight_protocol).unwrap_or_else(|_| "\"\"".to_string());
+
+        let script = format!(
+            r"(async function() {{
+                const fn = globalThis['~rari'] && globalThis['~rari'].renderWireToHtml;
+                if (!fn) return {{ ok: false, error: 'renderWireToHtml unavailable' }};
+                try {{
+                    const html = await fn({wire_json});
+                    return {{ ok: true, html: html }};
+                }} catch (e) {{
+                    return {{ ok: false, error: String((e && e.message) || e) }};
+                }}
+            }})()",
+        );
+
+        let result = self.runtime.execute_script("render_wire_to_fizz".to_string(), script).await?;
+
+        let ok = result.get("ok").and_then(serde_json::Value::as_bool).unwrap_or(false);
+        if !ok {
+            let err = result.get("error").and_then(|v| v.as_str()).unwrap_or("unknown");
+            return Err(RariError::js_execution(format!("Fizz reviver failed: {err}")));
+        }
+
+        Ok(result.get("html").and_then(|v| v.as_str()).unwrap_or_default().to_string())
+    }
+
+    async fn assemble_document(
+        &self,
+        html_content: String,
+        cache_template: bool,
+        is_dev_mode: bool,
+        css_links: &[String],
+    ) -> Result<String, RariError> {
+        let is_complete_document = html_content.trim_start().starts_with("<!DOCTYPE")
+            || html_content.trim_start().cow_to_lowercase().starts_with("<html");
+
+        if is_complete_document {
+            let script_tags = if is_dev_mode {
+                String::new()
+            } else {
+                let template = self.load_template(cache_template, is_dev_mode).await?;
+                Self::extract_script_tags(&template)
+            };
+
+            let mut final_html = html_content;
+
+            if !script_tags.is_empty()
+                && let Some(body_end) = final_html.rfind("</body>")
+            {
+                final_html.insert_str(body_end, &format!("\n{script_tags}\n"));
+            }
+
+            final_html = Self::inject_css_links(&final_html, css_links);
+
+            let trimmed_lower = final_html.trim_start().cow_to_lowercase();
+            if !trimmed_lower.starts_with("<!doctype") {
+                final_html = format!("<!DOCTYPE html>\n{final_html}");
+            }
+
+            return Ok(final_html);
+        }
+
+        let template = self.load_template(cache_template, is_dev_mode).await?;
+        let template = Self::inject_css_links(&template, css_links);
+        self.inject_into_template(&html_content, &template)
     }
 
     async fn render_to_html_inner(
         &self,
-        rsc_wire_format: &str,
+        rsc_flight_protocol: &str,
         config: &Config,
         route_match: Option<&AppRouteMatch>,
     ) -> Result<String, RariError> {
@@ -711,14 +803,27 @@ impl RscHtmlRenderer {
         };
 
         let render_future = async {
-            let rsc_rows = self.parse_rsc_wire_format(rsc_wire_format).map_err(|e| {
+            tracing::info!(
+                "RSC->HTML: Starting wire format parsing, length: {}",
+                rsc_flight_protocol.len()
+            );
+            let rsc_rows = self.parse_rsc_flight_protocol(rsc_flight_protocol).map_err(|e| {
+                tracing::error!("RSC->HTML: Failed to parse wire format: {}", e);
                 RariError::internal(format!("Failed to parse RSC wire format: {e}"))
             })?;
 
-            let html_content = self
-                .render_rsc_to_html_string(&rsc_rows)
-                .await
-                .map_err(|e| RariError::internal(format!("Failed to render RSC to HTML: {e}")))?;
+            tracing::info!("RSC->HTML: Parsed {} rows", rsc_rows.len());
+
+            let html_content = self.render_rsc_to_html_string(&rsc_rows).await.map_err(|e| {
+                tracing::error!("RSC->HTML: Failed to render to HTML: {}", e);
+                RariError::internal(format!("Failed to render RSC to HTML: {e}"))
+            })?;
+
+            tracing::info!(
+                "RSC->HTML: Rendered HTML length: {}, first 100 chars: {}",
+                html_content.len(),
+                &html_content.chars().take(100).collect::<String>()
+            );
 
             let is_complete_document = html_content.trim_start().starts_with("<!DOCTYPE")
                 || html_content.trim_start().cow_to_lowercase().starts_with("<html");
@@ -767,9 +872,7 @@ impl RscHtmlRenderer {
         };
 
         let result = if timeout_ms > 0 {
-            match tokio::time::timeout(std::time::Duration::from_millis(timeout_ms), render_future)
-                .await
-            {
+            match time::timeout(Duration::from_millis(timeout_ms), render_future).await {
                 Ok(result) => result,
                 Err(_) => {
                     return Err(RariError::timeout(format!(
@@ -785,6 +888,7 @@ impl RscHtmlRenderer {
             Ok(html) => Ok(html),
             Err(e) => {
                 eprintln!("RSC-to-HTML rendering failed: {e}, falling back to shell");
+                tracing::warn!("RSC-to-HTML converter failed: {}", e);
 
                 let fallback_template = self.load_template(cache_template, is_dev_mode).await?;
                 Ok(Self::inject_css_links(&fallback_template, &css_links))
@@ -831,8 +935,7 @@ impl RscHtmlRenderer {
         row_id: u32,
         row_map: &'a FxHashMap<u32, &RscElement>,
         row_cache: &'a mut FxHashMap<u32, String>,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, RariError>> + Send + 'a>>
-    {
+    ) -> Pin<Box<dyn Future<Output = Result<String, RariError>> + Send + 'a>> {
         Box::pin(async move {
             if let Some(cached) = row_cache.get(&row_id) {
                 return Ok(cached.clone());
@@ -854,8 +957,7 @@ impl RscHtmlRenderer {
         element: &'a RscElement,
         row_map: &'a FxHashMap<u32, &RscElement>,
         row_cache: &'a mut FxHashMap<u32, String>,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, RariError>> + Send + 'a>>
-    {
+    ) -> Pin<Box<dyn Future<Output = Result<String, RariError>> + Send + 'a>> {
         Box::pin(async move {
             match element {
                 RscElement::Text(text) => {
@@ -947,47 +1049,27 @@ impl RscHtmlRenderer {
         props: &'a serde_json::Value,
         row_map: &'a FxHashMap<u32, &RscElement>,
         row_cache: &'a mut FxHashMap<u32, String>,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, RariError>> + Send + 'a>>
-    {
+    ) -> Pin<Box<dyn Future<Output = Result<String, RariError>> + Send + 'a>> {
         Box::pin(async move {
             if tag.contains('<') || tag.contains('>') || tag.contains('"') || tag.contains('\'') {
                 return Err(RariError::internal(format!("Invalid tag name: {tag}")));
             }
 
+            let is_rsc_reference = tag.starts_with('$')
+                && tag.len() > 1
+                && tag[1..].chars().all(|c| c.is_ascii_hexdigit());
             let is_client_component = tag.starts_with("$L")
                 || tag.starts_with("$@")
+                || is_rsc_reference
                 || tag.contains('#')
                 || tag.contains('/');
             if is_client_component {
-                let props_are_rsc = Self::value_looks_like_rsc(props);
-
-                if !props_are_rsc
-                    && let Some(stripped) =
-                        tag.strip_prefix("$L").or_else(|| tag.strip_prefix("$@"))
-                    && let Ok(module_row_id) = u32::from_str_radix(stripped, 16)
-                    && let Some(RscElement::ModuleImport { module_path, export_name }) =
-                        row_map.get(&module_row_id).copied()
-                {
-                    let props_json =
-                        serde_json::to_string(&unescape_rsc_value(props)).unwrap_or_default();
-                    if let Ok(html) = self
-                        .ssr_render_client_component(module_path, export_name, &props_json)
-                        .await
-                        && !html.is_empty()
-                    {
-                        return Ok(html);
-                    }
-                }
-
                 if let Some(props_obj) = props.as_object()
                     && let Some(children) = props_obj.get("children")
                 {
-                    let children_html =
-                        self.render_json_to_html(children, row_map, row_cache).await?;
-                    if !children_html.is_empty() {
-                        return Ok(children_html);
-                    }
+                    return self.render_json_to_html(children, row_map, row_cache).await;
                 }
+
                 return Ok(String::new());
             }
 
@@ -1100,8 +1182,7 @@ impl RscHtmlRenderer {
         json: &'a serde_json::Value,
         row_map: &'a FxHashMap<u32, &RscElement>,
         row_cache: &'a mut FxHashMap<u32, String>,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, RariError>> + Send + 'a>>
-    {
+    ) -> Pin<Box<dyn Future<Output = Result<String, RariError>> + Send + 'a>> {
         Box::pin(async move {
             if json.is_null() {
                 return Ok(String::new());
@@ -1194,7 +1275,7 @@ pub struct RscToHtmlConverter {
     rari_to_react_boundary_map: parking_lot::Mutex<FxHashMap<String, String>>,
     custom_shell: Option<String>,
     body_scripts: Option<String>,
-    rsc_wire_format: Vec<String>,
+    rsc_flight_protocol: Vec<String>,
     payload_embedding_disabled: bool,
     root_div_closed: bool,
     content_id_counter: AtomicU32,
@@ -1212,7 +1293,7 @@ impl RscToHtmlConverter {
             rari_to_react_boundary_map: parking_lot::Mutex::new(FxHashMap::default()),
             custom_shell: None,
             body_scripts: None,
-            rsc_wire_format: Vec::new(),
+            rsc_flight_protocol: Vec::new(),
             payload_embedding_disabled: false,
             root_div_closed: false,
             content_id_counter: AtomicU32::new(0),
@@ -1230,7 +1311,7 @@ impl RscToHtmlConverter {
             rari_to_react_boundary_map: parking_lot::Mutex::new(FxHashMap::default()),
             custom_shell: None,
             body_scripts: None,
-            rsc_wire_format: Vec::new(),
+            rsc_flight_protocol: Vec::new(),
             payload_embedding_disabled: false,
             root_div_closed: false,
             content_id_counter: AtomicU32::new(0),
@@ -1252,7 +1333,7 @@ impl RscToHtmlConverter {
             rari_to_react_boundary_map: parking_lot::Mutex::new(FxHashMap::default()),
             custom_shell: Some(custom_shell),
             body_scripts,
-            rsc_wire_format: Vec::new(),
+            rsc_flight_protocol: Vec::new(),
             payload_embedding_disabled: false,
             root_div_closed: false,
             content_id_counter: AtomicU32::new(0),
@@ -1260,7 +1341,7 @@ impl RscToHtmlConverter {
     }
 
     pub fn disable_payload_embedding(&mut self) {
-        self.rsc_wire_format.clear();
+        self.rsc_flight_protocol.clear();
         self.payload_embedding_disabled = true;
     }
 
@@ -1276,7 +1357,7 @@ impl RscToHtmlConverter {
                 let rsc_line = String::from_utf8_lossy(&chunk.data);
 
                 if !self.payload_embedding_disabled {
-                    self.rsc_wire_format.push(rsc_line.trim().to_string());
+                    self.rsc_flight_protocol.push(rsc_line.trim().to_string());
                 }
 
                 let parts: Vec<&str> = rsc_line.trim().splitn(2, ':').collect();
@@ -1335,7 +1416,7 @@ impl RscToHtmlConverter {
 
                 if !self.payload_embedding_disabled {
                     let rsc_line = String::from_utf8_lossy(&chunk.data);
-                    self.rsc_wire_format.push(rsc_line.trim().to_string());
+                    self.rsc_flight_protocol.push(rsc_line.trim().to_string());
                 }
 
                 match self.generate_boundary_replacement(&chunk).await {
@@ -1383,7 +1464,7 @@ impl RscToHtmlConverter {
                         }
                     ]);
                     let placeholder_row = format!("{:x}:{}\n", chunk.row_id, placeholder_payload);
-                    self.rsc_wire_format.push(placeholder_row.trim().to_string());
+                    self.rsc_flight_protocol.push(placeholder_row.trim().to_string());
                 }
 
                 let fallback_html = self.generate_fallback_error_html();
@@ -1524,7 +1605,7 @@ impl RscToHtmlConverter {
         let body_scripts = self.body_scripts.as_deref().unwrap_or("");
 
         let mut rows_with_ids: Vec<(u32, String)> = Vec::new();
-        for row in &self.rsc_wire_format {
+        for row in &self.rsc_flight_protocol {
             if let Some(colon_pos) = row.find(':') {
                 if let Ok(row_id) = u32::from_str_radix(&row[..colon_pos], 16) {
                     rows_with_ids.push((row_id, row.clone()));
@@ -1594,7 +1675,7 @@ if (typeof window !== 'undefined') {{
         }
 
         if !self.payload_embedding_disabled {
-            self.rsc_wire_format.push(rsc_line.trim().to_string());
+            self.rsc_flight_protocol.push(rsc_line.trim().to_string());
         }
 
         let json_str = parts[1].trim();
@@ -1650,8 +1731,7 @@ if (typeof window !== 'undefined') {{
     fn rsc_element_to_html<'a>(
         &'a self,
         element: &'a serde_json::Value,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, RariError>> + Send + 'a>>
-    {
+    ) -> Pin<Box<dyn Future<Output = Result<String, RariError>> + Send + 'a>> {
         Box::pin(async move {
             if let Some(s) = element.as_str() {
                 if s.starts_with("$$") {
@@ -1700,6 +1780,11 @@ if (typeof window !== 'undefined') {{
                     let element_type = arr[1].as_str().unwrap_or("div");
                     let props = arr[3].as_object();
 
+                    let is_rsc_reference = element_type.starts_with('$')
+                        && element_type.len() > 1
+                        && !element_type.starts_with("$S")
+                        && element_type[1..].chars().all(|c| c.is_ascii_hexdigit());
+
                     let is_client_component = element_type.starts_with("$L")
                         || element_type.starts_with("$@")
                         || element_type.contains('#')
@@ -1711,6 +1796,13 @@ if (typeof window !== 'undefined') {{
                         || element_type.starts_with("$S")
                     {
                         return self.render_suspense_boundary(element_type, props).await;
+                    }
+
+                    if is_rsc_reference {
+                        let row_id = u32::from_str_radix(&element_type[1..], 16).map_err(|_| {
+                            RariError::internal(format!("Invalid chunk reference: {element_type}"))
+                        })?;
+                        return Ok(self.row_cache.get(&row_id).cloned().unwrap_or_default());
                     }
 
                     if is_client_component {
@@ -1734,6 +1826,11 @@ if (typeof window !== 'undefined') {{
                 {
                     let props_obj = props.as_object();
 
+                    let is_rsc_reference = type_str.starts_with('$')
+                        && type_str.len() > 1
+                        && !type_str.starts_with("$S")
+                        && type_str[1..].chars().all(|c| c.is_ascii_hexdigit());
+
                     let is_client_component = type_str.starts_with("$L")
                         || type_str.starts_with("$@")
                         || type_str.contains('#')
@@ -1745,6 +1842,13 @@ if (typeof window !== 'undefined') {{
                         || type_str.starts_with("$S")
                     {
                         return self.render_suspense_boundary(type_str, props_obj).await;
+                    }
+
+                    if is_rsc_reference {
+                        let row_id = u32::from_str_radix(&type_str[1..], 16).map_err(|_| {
+                            RariError::internal(format!("Invalid chunk reference: {type_str}"))
+                        })?;
+                        return Ok(self.row_cache.get(&row_id).cloned().unwrap_or_default());
                     }
 
                     if is_client_component {
@@ -2019,25 +2123,24 @@ if (typeof window !== 'undefined') {{
                 format!("S:{}", self.content_id_counter.fetch_add(1, Ordering::SeqCst));
 
             let content_json = parts[1];
-            let (rendered_html, render_successful) =
-                if let Some(text) = content_json.strip_prefix('T') {
-                    (escape_html(text), true)
-                } else {
-                    match serde_json::from_str::<serde_json::Value>(content_json) {
-                        Ok(content) => match self.rsc_element_to_html(&content).await {
-                            Ok(html) => (html, true),
-                            Err(_) => (String::new(), false),
-                        },
-                        Err(_) => (String::new(), false),
-                    }
-                };
+            let rendered_html = if let Some(text) = content_json.strip_prefix('T') {
+                escape_html(text)
+            } else {
+                match serde_json::from_str::<serde_json::Value>(content_json) {
+                    Ok(content) => match self.rsc_element_to_html(&content).await {
+                        Ok(html) if !html.is_empty() => html,
+                        _ => String::new(),
+                    },
+                    Err(_) => String::new(),
+                }
+            };
 
-            if render_successful && !rendered_html.is_empty() {
+            if rendered_html.is_empty() {
+                String::new()
+            } else {
                 format!(
                     "<div hidden id=\"{content_id}\">{rendered_html}</div>\n<script>$RC=window.$RC||function(b,c){{var t=document.getElementById(b);var s=document.getElementById(c);if(t&&s){{var p=t.parentNode;var f=document.createDocumentFragment();Array.from(s.childNodes).forEach(function(n){{f.appendChild(n)}});var d=t.nextSibling;while(d&&!(d.nodeType===8&&d.data==='/$')){{var next=d.nextSibling;d.remove();d=next;}}if(d)d.remove();p.insertBefore(f,t.nextSibling);t.remove();s.remove();}}}};$RC(\"{react_id}\",\"{content_id}\")</script>",
                 )
-            } else {
-                String::new()
             }
         } else {
             String::new()
@@ -2095,7 +2198,7 @@ if (typeof window !== 'undefined') {{
             let content_id = format!("E:{}", react_boundary_id.trim_start_matches("B:"));
 
             let error_update = format!(
-                r#"<div hidden id="{content_id}">{error_html}</div><script>$RC=window.$RC||function(b,c){{const t=document.getElementById(b);const s=document.getElementById(c);if(t&&s){{const p=t.parentNode;const f=document.createDocumentFragment();Array.from(s.childNodes).forEach(n=>f.appendChild(n));let d=t.nextSibling;while(d&&!(d.nodeType===8&&d.data==='/$')){{const next=d.nextSibling;d.remove();d=next;}}if(d)d.remove();p.insertBefore(f,t.nextSibling);t.remove();s.remove();}}}};$RC("{react_boundary_id}","{content_id}");</script>"#
+                r#"<div hidden id="{content_id}">{error_html}</div><script>$RC=window.$RC||function(b,c){{const t=document.getElementById(b);const s=document.getElementById(c);if(t&&s){{const p=t.parentNode;Array.from(s.childNodes).forEach(n=>p.insertBefore(n,t));t.remove();s.remove();}}}};$RC("{react_boundary_id}","{content_id}");</script>"#
             );
 
             Ok(error_update.into_bytes())
@@ -2171,14 +2274,14 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_rsc_wire_format_valid() {
+    fn test_parse_rsc_flight_protocol_valid() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
         let renderer = RscHtmlRenderer::new(runtime);
 
         let rsc_data = r#"0:["$","div",null,{"children":"Hello"}]
 1:["$","span",null,{"children":"World"}]"#;
 
-        let result = renderer.parse_rsc_wire_format(rsc_data);
+        let result = renderer.parse_rsc_flight_protocol(rsc_data);
         assert!(result.is_ok());
 
         let rows = result.unwrap();
@@ -2351,7 +2454,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_rsc_wire_format_with_empty_lines() {
+    fn test_parse_rsc_flight_protocol_with_empty_lines() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
         let renderer = RscHtmlRenderer::new(runtime);
 
@@ -2360,7 +2463,7 @@ mod tests {
 1:["$","span",null,{"children":"World"}]
 "#;
 
-        let result = renderer.parse_rsc_wire_format(rsc_data);
+        let result = renderer.parse_rsc_flight_protocol(rsc_data);
         assert!(result.is_ok());
 
         let rows = result.unwrap();
@@ -2373,7 +2476,7 @@ mod tests {
         let renderer = RscHtmlRenderer::new(runtime);
 
         let rsc_data = r#"0:["$","div",null,{"className":"container","children":"Hello World"}]"#;
-        let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+        let rows = renderer.parse_rsc_flight_protocol(rsc_data).unwrap();
 
         let html_result = renderer.render_rsc_to_html_string(&rows).await;
         assert!(html_result.is_ok(), "Failed to render HTML: {:?}", html_result.err());
@@ -2392,7 +2495,7 @@ mod tests {
         let renderer = RscHtmlRenderer::new(runtime);
 
         let rsc_data = r#"0:["$","div",null,{"children":["$","span",null,{"children":"Nested"}]}]"#;
-        let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+        let rows = renderer.parse_rsc_flight_protocol(rsc_data).unwrap();
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
@@ -2409,7 +2512,7 @@ mod tests {
         let renderer = RscHtmlRenderer::new(runtime);
 
         let rsc_data = r#"0:["$","div",null,{"children":"<script>alert('xss')</script>"}]"#;
-        let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+        let rows = renderer.parse_rsc_flight_protocol(rsc_data).unwrap();
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
@@ -2423,7 +2526,7 @@ mod tests {
         let renderer = RscHtmlRenderer::new(runtime);
 
         let rsc_data = r#"0:["$","input",null,{"type":"text","className":"form-control","placeholder":"Enter text"}]"#;
-        let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+        let rows = renderer.parse_rsc_flight_protocol(rsc_data).unwrap();
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
@@ -2598,11 +2701,11 @@ mod tests {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
         let renderer = RscHtmlRenderer::new(runtime);
 
-        let rsc_wire_format = r#"0:["$","div",null,{"children":"Hello World"}]"#;
+        let rsc_flight_protocol = r#"0:["$","div",null,{"children":"Hello World"}]"#;
 
         let config = Config::new(Mode::Development);
 
-        let result = renderer.render_to_html(rsc_wire_format, &config).await;
+        let result = renderer.render_to_html(rsc_flight_protocol, &config).await;
         assert!(result.is_ok());
 
         let html = result.unwrap();
@@ -2618,12 +2721,12 @@ mod tests {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
         let renderer = RscHtmlRenderer::new(runtime);
 
-        let rsc_wire_format = r#"1:["$","h1",null,{"children":"Title"}]
+        let rsc_flight_protocol = r#"1:["$","h1",null,{"children":"Title"}]
 2:["$","div",null,{"className":"container","children":"$@1"}]"#;
 
         let config = Config::new(Mode::Development);
 
-        let result = renderer.render_to_html(rsc_wire_format, &config).await;
+        let result = renderer.render_to_html(rsc_flight_protocol, &config).await;
         assert!(result.is_ok());
 
         let html = result.unwrap();
@@ -2638,12 +2741,12 @@ mod tests {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
         let renderer = RscHtmlRenderer::new(runtime);
 
-        let rsc_wire_format = r#"0:["$","div",null,{"children":"Test"}]"#;
+        let rsc_flight_protocol = r#"0:["$","div",null,{"children":"Test"}]"#;
 
         let mut config = Config::new(Mode::Development);
         config.rsc_html.cache_template = false;
 
-        let result = renderer.render_to_html(rsc_wire_format, &config).await;
+        let result = renderer.render_to_html(rsc_flight_protocol, &config).await;
         assert!(result.is_ok(), "Should succeed with reasonable timeout");
     }
 
@@ -2652,13 +2755,13 @@ mod tests {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
         let renderer = RscHtmlRenderer::new(runtime);
 
-        let rsc_wire_format = r#"0:["$","div",null,{"children":"Test"}]"#;
+        let rsc_flight_protocol = r#"0:["$","div",null,{"children":"Test"}]"#;
 
         let mut config = Config::new(Mode::Development);
         config.rsc_html.timeout_ms = 0;
         config.rsc_html.cache_template = false;
 
-        let result = renderer.render_to_html(rsc_wire_format, &config).await;
+        let result = renderer.render_to_html(rsc_flight_protocol, &config).await;
         assert!(result.is_ok(), "Should succeed with no timeout");
     }
 
@@ -2667,12 +2770,12 @@ mod tests {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
         let renderer = RscHtmlRenderer::new(runtime);
 
-        let rsc_wire_format = "invalid:format:here";
+        let rsc_flight_protocol = "invalid:format:here";
 
         let mut config = Config::new(Mode::Development);
         config.rsc_html.cache_template = false;
 
-        let result = renderer.render_to_html(rsc_wire_format, &config).await;
+        let result = renderer.render_to_html(rsc_flight_protocol, &config).await;
         assert!(result.is_ok(), "Should fall back to shell on error");
 
         let html = result.unwrap();
@@ -2689,11 +2792,11 @@ mod tests {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
         let renderer = RscHtmlRenderer::new(runtime);
 
-        let rsc_wire_format = r#"0:["$","p",null,{"children":"Content"}]"#;
+        let rsc_flight_protocol = r#"0:["$","p",null,{"children":"Content"}]"#;
 
         let config = Config::new(Mode::Development);
 
-        let result = renderer.render_to_html(rsc_wire_format, &config).await;
+        let result = renderer.render_to_html(rsc_flight_protocol, &config).await;
         assert!(result.is_ok());
 
         let html = result.unwrap();
@@ -2709,11 +2812,11 @@ mod tests {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
         let renderer = RscHtmlRenderer::new(runtime);
 
-        let rsc_wire_format = r#"0:["$","div",null,{"children":"Test"}]"#;
+        let rsc_flight_protocol = r#"0:["$","div",null,{"children":"Test"}]"#;
 
         let config = Config::new(Mode::Development);
 
-        let result1 = renderer.render_to_html(rsc_wire_format, &config).await;
+        let result1 = renderer.render_to_html(rsc_flight_protocol, &config).await;
         assert!(result1.is_ok());
 
         {
@@ -2721,7 +2824,7 @@ mod tests {
             assert!(cache.is_some(), "Template should be cached");
         }
 
-        let result2 = renderer.render_to_html(rsc_wire_format, &config).await;
+        let result2 = renderer.render_to_html(rsc_flight_protocol, &config).await;
         assert!(result2.is_ok());
 
         assert_eq!(result1.unwrap(), result2.unwrap());
@@ -2732,12 +2835,12 @@ mod tests {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
         let renderer = RscHtmlRenderer::new(runtime);
 
-        let rsc_wire_format = r#"0:["$","div",null,{"children":"Test"}]"#;
+        let rsc_flight_protocol = r#"0:["$","div",null,{"children":"Test"}]"#;
 
         let mut config = Config::new(Mode::Development);
         config.rsc_html.enabled = false;
 
-        let result = renderer.render_to_html(rsc_wire_format, &config).await;
+        let result = renderer.render_to_html(rsc_flight_protocol, &config).await;
         assert!(result.is_err(), "Should fail when SSR is disabled");
 
         let err_msg = format!("{:?}", result.unwrap_err());
@@ -2749,12 +2852,12 @@ mod tests {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
         let renderer = RscHtmlRenderer::new(runtime);
 
-        let rsc_wire_format = r#"0:["$","div",null,{"children":"Test"}]"#;
+        let rsc_flight_protocol = r#"0:["$","div",null,{"children":"Test"}]"#;
 
         let mut config = Config::new(Mode::Development);
         config.rsc_html.timeout_ms = 10000;
 
-        let result = renderer.render_to_html(rsc_wire_format, &config).await;
+        let result = renderer.render_to_html(rsc_flight_protocol, &config).await;
         assert!(result.is_ok(), "Should succeed with custom timeout");
     }
 
@@ -2763,12 +2866,12 @@ mod tests {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
         let renderer = RscHtmlRenderer::new(runtime);
 
-        let rsc_wire_format = r#"0:["$","div",null,{"children":"Test"}]"#;
+        let rsc_flight_protocol = r#"0:["$","div",null,{"children":"Test"}]"#;
 
         let mut dev_config = Config::new(Mode::Development);
         dev_config.rsc_html.cache_template = false;
 
-        let dev_result = renderer.render_to_html(rsc_wire_format, &dev_config).await;
+        let dev_result = renderer.render_to_html(rsc_flight_protocol, &dev_config).await;
         assert!(dev_result.is_ok());
         let dev_html = dev_result.unwrap();
 
@@ -2988,7 +3091,7 @@ mod tests {
 1:["$","span",null,{"children":"Other Content"}]
 2:["$","p",null,{"children":"More Content"}]"#;
 
-        let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+        let rows = renderer.parse_rsc_flight_protocol(rsc_data).unwrap();
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
         assert!(html.contains("Root Content"), "Should render row 0 as root");
@@ -3004,7 +3107,7 @@ mod tests {
 2:["$","p",null,{"children":"Second"}]
 5:["$","div",null,{"children":"Last Content"}]"#;
 
-        let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+        let rows = renderer.parse_rsc_flight_protocol(rsc_data).unwrap();
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
         assert!(html.contains("Last Content"), "Should render max row ID as root");
@@ -3029,7 +3132,7 @@ mod tests {
 
         let rsc_data = r#"42:["$","div",null,{"children":"Single Row"}]"#;
 
-        let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+        let rows = renderer.parse_rsc_flight_protocol(rsc_data).unwrap();
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
         assert!(html.contains("Single Row"), "Should render single row");
@@ -3045,7 +3148,7 @@ mod tests {
 10:["$","span",null,{"children":"Row Ten"}]
 100:["$","p",null,{"children":"Row Hundred"}]"#;
 
-        let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+        let rows = renderer.parse_rsc_flight_protocol(rsc_data).unwrap();
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
         assert!(html.contains("Row Zero"), "Should render row 0 as root");
@@ -3061,7 +3164,7 @@ mod tests {
         let rsc_data = r#"1:["$","span",null,{"children":"Child Content"}]
 0:["$","div",null,{"children":"$L1"}]"#;
 
-        let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+        let rows = renderer.parse_rsc_flight_protocol(rsc_data).unwrap();
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
         assert!(html.contains("<div"), "Should have div from row 0");
@@ -3079,7 +3182,7 @@ a:["$","div",null,{"children":"Content from row 10 (hex a)"}]
 b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
 10:["$","p",null,{"children":"Content from row 16 (hex 10)"}]"#;
 
-        let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+        let rows = renderer.parse_rsc_flight_protocol(rsc_data).unwrap();
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
         assert!(html.contains("<div"), "Should have div from row a (10)");
@@ -3094,7 +3197,7 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
         let rsc_data = r#"0:["$","main",null,{"children":"Main Content"}]
 1:["$","aside",null,{"children":"Sidebar"}]"#;
 
-        let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+        let rows = renderer.parse_rsc_flight_protocol(rsc_data).unwrap();
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
         assert!(html.contains("<main"), "Should have main tag from row 0");
@@ -3199,7 +3302,7 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
         let renderer = RscHtmlRenderer::new(runtime);
 
         let rsc_data = r#"0:["$","div",null,{"onclick='alert(1)'":"malicious","class":"safe","on click":"bad","data-valid":"good"}]"#;
-        let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+        let rows = renderer.parse_rsc_flight_protocol(rsc_data).unwrap();
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
@@ -3217,7 +3320,7 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
         let renderer = RscHtmlRenderer::new(runtime);
 
         let rsc_data = r#"0:["$","div",null,{"data-test-id":"123","aria-label":"Description","xml:lang":"en","_private":"value"}]"#;
-        let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+        let rows = renderer.parse_rsc_flight_protocol(rsc_data).unwrap();
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
@@ -3270,7 +3373,7 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
         let renderer = RscHtmlRenderer::new(runtime);
 
         let rsc_data = r#"0:["$","div",null,{"className":"container","htmlFor":"input1"}]"#;
-        let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+        let rows = renderer.parse_rsc_flight_protocol(rsc_data).unwrap();
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
@@ -3337,7 +3440,7 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
 
         let rsc_data =
             r#"0:["$","div",null,{"style":{"color":"red","fontSize":"16px"},"class":"test"}]"#;
-        let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+        let rows = renderer.parse_rsc_flight_protocol(rsc_data).unwrap();
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
@@ -3357,7 +3460,7 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
 
         let rsc_data =
             r#"0:["$","div",null,{"中文":"value1","日本語":"value2","data-한글":"value3"}]"#;
-        let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+        let rows = renderer.parse_rsc_flight_protocol(rsc_data).unwrap();
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
@@ -3372,7 +3475,7 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
         let renderer = RscHtmlRenderer::new(runtime);
 
         let rsc_data = r#"0:["$","div",null,{"onclick":"alert(1)","onClick":"alert(2)","ONCLICK":"alert(3)","on中文":"bad","中文":"good"}]"#;
-        let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+        let rows = renderer.parse_rsc_flight_protocol(rsc_data).unwrap();
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
@@ -3391,7 +3494,7 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
         let renderer = RscHtmlRenderer::new(runtime);
 
         let rsc_data = r#"0:["$","div",null,{"style":{"display":null,"color":"red","margin":null,"padding":"10px"}}]"#;
-        let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+        let rows = renderer.parse_rsc_flight_protocol(rsc_data).unwrap();
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
@@ -3414,7 +3517,7 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
 
         let rsc_data =
             r#"0:["$","div",null,{"style":{"display":null,"color":null},"class":"test"}]"#;
-        let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+        let rows = renderer.parse_rsc_flight_protocol(rsc_data).unwrap();
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
@@ -3467,12 +3570,12 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
         let renderer = RscHtmlRenderer::new(runtime);
 
         let rsc_data = r#"0:["$","div",null,{"class":"test"}]"#;
-        let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+        let rows = renderer.parse_rsc_flight_protocol(rsc_data).unwrap();
         let result = renderer.render_rsc_to_html_string(&rows).await;
         assert!(result.is_ok(), "Valid tag 'div' should be accepted");
 
         let rsc_data_invalid = r#"0:["$","div onclick",null,{}]"#;
-        let rows = renderer.parse_rsc_wire_format(rsc_data_invalid).unwrap();
+        let rows = renderer.parse_rsc_flight_protocol(rsc_data_invalid).unwrap();
         let result = renderer.render_rsc_to_html_string(&rows).await;
         assert!(result.is_err(), "Tag with space should be rejected");
         assert!(
@@ -3481,7 +3584,7 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
         );
 
         let rsc_data_injection = r#"0:["$","div><script>alert(1)</script",null,{}]"#;
-        let rows = renderer.parse_rsc_wire_format(rsc_data_injection).unwrap();
+        let rows = renderer.parse_rsc_flight_protocol(rsc_data_injection).unwrap();
         let result = renderer.render_rsc_to_html_string(&rows).await;
         assert!(result.is_err(), "Tag with injection attempt should be rejected");
     }
@@ -3516,7 +3619,7 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
 
         let rsc_data =
             r#"0:["$","div",null,{"style":{"width":100,"height":200,"margin":10,"padding":20}}]"#;
-        let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+        let rows = renderer.parse_rsc_flight_protocol(rsc_data).unwrap();
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
@@ -3532,7 +3635,7 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
         let renderer = RscHtmlRenderer::new(runtime);
 
         let rsc_data = r#"0:["$","div",null,{"style":{"opacity":0.5,"zIndex":10,"lineHeight":1.5,"flexGrow":2}}]"#;
-        let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+        let rows = renderer.parse_rsc_flight_protocol(rsc_data).unwrap();
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
@@ -3552,7 +3655,7 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
         let renderer = RscHtmlRenderer::new(runtime);
 
         let rsc_data = r#"0:["$","div",null,{"style":{"width":"50%","height":100,"opacity":0.8,"color":"red"}}]"#;
-        let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+        let rows = renderer.parse_rsc_flight_protocol(rsc_data).unwrap();
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
@@ -3568,7 +3671,7 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
         let renderer = RscHtmlRenderer::new(runtime);
 
         let rsc_data = r#"0:["$","div",null,{"style":{"fontSize":16,"marginTop":10,"paddingLeft":5,"zIndex":100}}]"#;
-        let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+        let rows = renderer.parse_rsc_flight_protocol(rsc_data).unwrap();
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
@@ -3597,7 +3700,7 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
 
         let rsc_data =
             r#"0:["$","div",null,{"style":{"width":100.5,"opacity":0.75,"lineHeight":1.2}}]"#;
-        let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+        let rows = renderer.parse_rsc_flight_protocol(rsc_data).unwrap();
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
@@ -3612,7 +3715,7 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
         let renderer = RscHtmlRenderer::new(runtime);
 
         let rsc_data = r#"0:["$","input",null,{"type":"checkbox","checked":true,"disabled":true,"required":false}]"#;
-        let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+        let rows = renderer.parse_rsc_flight_protocol(rsc_data).unwrap();
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
@@ -3639,7 +3742,7 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
 
         let rsc_data =
             r#"0:["$","div",null,{"aria-hidden":true,"aria-expanded":false,"aria-checked":true}]"#;
-        let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+        let rows = renderer.parse_rsc_flight_protocol(rsc_data).unwrap();
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
@@ -3667,7 +3770,7 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
 
         let rsc_data =
             r#"0:["$","div",null,{"contentEditable":true,"draggable":false,"spellcheck":true}]"#;
-        let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+        let rows = renderer.parse_rsc_flight_protocol(rsc_data).unwrap();
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
@@ -3695,7 +3798,7 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
 
         let rsc_data =
             r#"0:["$","button",null,{"disabled":true,"aria-disabled":true,"aria-pressed":false}]"#;
-        let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+        let rows = renderer.parse_rsc_flight_protocol(rsc_data).unwrap();
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
@@ -3757,7 +3860,7 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
         let renderer = RscHtmlRenderer::new(runtime);
 
         let rsc_data = r#"0:["$","div",null,{"hidden":true,"readonly":true,"required":true,"autofocus":true,"multiple":true}]"#;
-        let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+        let rows = renderer.parse_rsc_flight_protocol(rsc_data).unwrap();
 
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
@@ -3783,108 +3886,10 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
 1f:["$","span",null,{"children":"Row 31"}]
 0:["$","div",null,{"children":["$a","$1f"]}]"#;
 
-        let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+        let rows = renderer.parse_rsc_flight_protocol(rsc_data).unwrap();
         let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
         assert!(html.contains("Row 10"), "Should render content from row 10 (hex 'a'): {}", html);
         assert!(html.contains("Row 31"), "Should render content from row 31 (hex '1f'): {}", html);
-    }
-
-    #[tokio::test]
-    async fn test_ssr_render_client_component_basic() {
-        let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = RscHtmlRenderer::new(runtime.clone());
-
-        let html_render_script = include_str!("./layout/js/html_render.js");
-        runtime
-            .execute_script("html_render".to_string(), html_render_script.to_string())
-            .await
-            .expect("Failed to load html_render.js");
-
-        let register_script = r#"
-        if (!globalThis['~rari']) globalThis['~rari'] = {};
-        if (!globalThis['~rari'].ssrModules) globalThis['~rari'].ssrModules = {};
-        globalThis['~rari'].ssrModules['src/components/Hello.tsx'] = {
-            default: function Hello(props) {
-                return { type: 'div', props: { className: 'hello', children: 'Hello ' + (props.name || 'World') } };
-            }
-        };
-    "#;
-        runtime
-            .execute_script("register_test_component".to_string(), register_script.to_string())
-            .await
-            .expect("Failed to register test component");
-
-        let html = renderer
-            .ssr_render_client_component("src/components/Hello.tsx", "default", r#"{"name":"SSR"}"#)
-            .await
-            .expect("SSR render should not error");
-
-        assert!(!html.is_empty(), "SSR should produce non-empty HTML");
-        assert!(html.contains("Hello SSR"), "Should contain rendered text: {}", html);
-        assert!(
-            html.contains("class=\"hello\""),
-            "Should have className mapped to class: {}",
-            html
-        );
-    }
-
-    #[tokio::test]
-    async fn test_ssr_render_client_component_missing_module() {
-        let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = RscHtmlRenderer::new(runtime);
-
-        let html = renderer
-            .ssr_render_client_component("src/components/Missing.tsx", "default", "{}")
-            .await
-            .expect("SSR render should not error even for missing modules");
-
-        assert!(html.is_empty(), "Missing module should produce empty HTML");
-    }
-
-    #[tokio::test]
-    async fn test_ssr_render_client_component_with_children() {
-        let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = RscHtmlRenderer::new(runtime.clone());
-
-        let html_render_script = include_str!("./layout/js/html_render.js");
-        runtime
-            .execute_script("html_render".to_string(), html_render_script.to_string())
-            .await
-            .expect("Failed to load html_render.js");
-
-        let register_script = r#"
-        if (!globalThis['~rari']) globalThis['~rari'] = {};
-        if (!globalThis['~rari'].ssrModules) globalThis['~rari'].ssrModules = {};
-        globalThis['~rari'].ssrModules['src/components/Wrapper.tsx'] = {
-            default: function Wrapper(props) {
-                return {
-                    type: 'nav',
-                    props: {
-                        className: 'sidebar',
-                        children: [
-                            { type: 'a', props: { href: '/home', children: 'Home' } },
-                            { type: 'a', props: { href: '/about', children: 'About' } }
-                        ]
-                    }
-                };
-            }
-        };
-    "#;
-        runtime
-            .execute_script("register_wrapper".to_string(), register_script.to_string())
-            .await
-            .expect("Failed to register wrapper component");
-
-        let html = renderer
-            .ssr_render_client_component("src/components/Wrapper.tsx", "default", "{}")
-            .await
-            .expect("SSR render should not error");
-
-        assert!(html.contains("<nav"), "Should have nav element: {}", html);
-        assert!(html.contains("class=\"sidebar\""), "Should have sidebar class: {}", html);
-        assert!(html.contains("Home"), "Should render child links: {}", html);
-        assert!(html.contains("About"), "Should render child links: {}", html);
-        assert!(html.contains("href=\"/home\""), "Should have href attributes: {}", html);
     }
 }

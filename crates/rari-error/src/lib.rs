@@ -1,6 +1,8 @@
 use std::{
     cell::BorrowMutError,
+    error,
     fmt::{Display, Formatter, Result},
+    io,
 };
 
 use deno_core::{
@@ -83,7 +85,7 @@ pub struct ErrorMetadata {
     pub details: Option<FxHashMap<String, String>>,
     pub source: Option<String>,
     #[serde(skip)]
-    pub error_source: Option<Box<dyn std::error::Error + Send + Sync>>,
+    pub error_source: Option<Box<dyn error::Error + Send + Sync>>,
 }
 
 impl Clone for ErrorMetadata {
@@ -145,11 +147,11 @@ impl Display for RariError {
     }
 }
 
-impl std::error::Error for RariError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+impl error::Error for RariError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         self.metadata()
             .and_then(|meta| meta.error_source.as_ref())
-            .map(|source| source.as_ref() as &(dyn std::error::Error + 'static))
+            .map(|source| source.as_ref() as &(dyn error::Error + 'static))
     }
 }
 
@@ -312,7 +314,7 @@ impl RariError {
     }
 
     #[must_use]
-    pub fn with_source(mut self, source: Box<dyn std::error::Error + Send + Sync>) -> Self {
+    pub fn with_source(mut self, source: Box<dyn error::Error + Send + Sync>) -> Self {
         let code = self.code().to_string();
         let metadata = self.metadata_mut();
         let mut new_meta = metadata.take().map(|b| *b).unwrap_or_else(|| ErrorMetadata {
@@ -371,14 +373,14 @@ impl RariError {
     }
 }
 
-impl From<std::io::Error> for RariError {
-    fn from(error: std::io::Error) -> Self {
+impl From<io::Error> for RariError {
+    fn from(error: io::Error) -> Self {
         Self::IoError(
             error.to_string(),
             Some(Box::new(ErrorMetadata {
                 code: "IO_ERROR".to_string(),
                 details: None,
-                source: Some("std::io::Error".to_string()),
+                source: Some("error::Error".to_string()),
                 error_source: None,
             })),
         )
@@ -456,7 +458,7 @@ impl Display for StreamingError {
     }
 }
 
-impl std::error::Error for StreamingError {}
+impl error::Error for StreamingError {}
 
 impl From<StreamingError> for RariError {
     fn from(error: StreamingError) -> Self {
@@ -538,7 +540,7 @@ impl Display for LoadingStateError {
     }
 }
 
-impl std::error::Error for LoadingStateError {}
+impl error::Error for LoadingStateError {}
 
 impl From<LoadingStateError> for RariError {
     fn from(error: LoadingStateError) -> Self {

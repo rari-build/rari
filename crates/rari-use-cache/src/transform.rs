@@ -1,10 +1,14 @@
+use std::{mem, panic, path::PathBuf, rc::Rc};
+
 use deno_ast::swc::{
     ast::{
         Decl, DefaultDecl, ExportDecl, ExportDefaultDecl, ExportDefaultExpr, Expr, FnDecl, Id,
         Ident, Module, ModuleDecl, ModuleItem, Stmt,
     },
-    codegen::{Emitter, text_writer::JsWriter},
-    common::{DUMMY_SP, FileName, GLOBALS, Globals, SourceMap, SyntaxContext, sync::Lrc},
+    codegen::{Config, Emitter, text_writer::JsWriter},
+    common::{
+        DUMMY_SP, FileName, FilePathMapping, GLOBALS, Globals, SourceMap, SyntaxContext, sync::Lrc,
+    },
     ecma_visit::VisitMut,
     parser::{Parser, StringInput, Syntax, TsSyntax},
 };
@@ -58,7 +62,7 @@ impl VisitMut for TransformVisitor {
             }
         }
 
-        let mut items = std::mem::take(&mut module.body);
+        let mut items = mem::take(&mut module.body);
         self.visit_mut_module_items(&mut items);
         module.body = items;
     }
@@ -221,12 +225,11 @@ pub fn transform_source(
     filename: &str,
     hash_salt: &str,
 ) -> Result<TransformOutput, String> {
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+    let result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
         GLOBALS.set(&Globals::default(), || {
-            let cm: Lrc<SourceMap> =
-                SourceMap::new(deno_ast::swc::common::FilePathMapping::empty()).into();
+            let cm: Lrc<SourceMap> = SourceMap::new(FilePathMapping::empty()).into();
             let fm = cm.new_source_file(
-                FileName::Real(std::path::PathBuf::from(filename)).into(),
+                FileName::Real(PathBuf::from(filename)).into(),
                 source.to_string(),
             );
 
@@ -254,10 +257,10 @@ pub fn transform_source(
             let mut code_buf = Vec::new();
             {
                 let mut emitter = Emitter {
-                    cfg: deno_ast::swc::codegen::Config::default(),
-                    cm: std::rc::Rc::clone(&cm),
+                    cfg: Config::default(),
+                    cm: Rc::clone(&cm),
                     comments: None,
-                    wr: JsWriter::new(std::rc::Rc::clone(&cm), "\n", &mut code_buf, None),
+                    wr: JsWriter::new(Rc::clone(&cm), "\n", &mut code_buf, None),
                 };
                 emitter.emit_module(&module).map_err(|e| format!("Codegen error: {e:?}"))?;
             }

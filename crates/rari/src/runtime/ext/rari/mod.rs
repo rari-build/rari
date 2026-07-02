@@ -17,9 +17,18 @@ extension!(
         "react/component_loader.ts",
         "http/cookies.ts",
         "react/metadata_collector.ts",
-        "react/react_shims.ts",
         "rsc/rsc_modules.ts",
         "rsc/server_functions.ts"
+    ],
+    lazy_loaded_esm = [
+        dir "src/runtime/ext/rari",
+        "react/vendor/react.js",
+        "react/vendor/react-server.js",
+        "react/vendor/react-jsx-runtime.js",
+        "react/vendor/react-dom-server.js",
+        "react/vendor/react-server-dom-webpack-client.js",
+        "react/vendor/react-server-dom-webpack-server.js",
+        "react/vendor/index.js",
     ],
 );
 

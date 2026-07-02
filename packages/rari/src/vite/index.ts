@@ -1,7 +1,7 @@
 import type { CSSModulesOptions, Plugin, UserConfig } from 'vite-plus'
 import type { ProxyPluginOptions } from '../proxy/vite-plugin'
-import type { ServerCacheConfig, ServerCacheLayerConfig } from '../types/server-config'
 import type { ServerBuildOptions } from './server-build'
+import type { ServerCacheConfig, ServerCacheLayerConfig } from './server-config'
 import { Buffer } from 'node:buffer'
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
@@ -504,24 +504,8 @@ if (import.meta.hot) {
     }
 
     if (isServerComp) {
-      const exportedNames = parseExportedNames(code)
-      if (exportedNames.length === 0)
-        return ''
-
-      const componentId = getComponentId(id, projectRoot)
-      const idJson = JSON.stringify(id)
-
-      let newCode
-        = 'import { createServerComponentWrapper } from "virtual:rsc-integration.ts";\n'
-
-      for (const name of exportedNames) {
-        if (name === 'default')
-          newCode += `export default createServerComponentWrapper("${componentId}", ${idJson});\n`
-        else
-          newCode += `export const ${name} = createServerComponentWrapper("${componentId}_${name}", ${idJson});\n`
-      }
-
-      return newCode
+      console.warn(`[rari] Server component ${id} should not be imported in client bundle`)
+      return ''
     }
 
     if (!hasTopLevelUseClientDirective(code))
@@ -595,11 +579,6 @@ if (import.meta.hot) {
       return indexFile
 
     return `${resolvedPath}.tsx`
-  }
-
-  function getComponentName(importPath: string): string {
-    const lastSegment = importPath.split('/').pop() || importPath
-    return lastSegment.replace(EXTENSION_REGEX, '')
   }
 
   let rustServerReady = false
@@ -943,6 +922,15 @@ if (import.meta.hot) {
           config.environments.client.build.rolldownOptions = {}
         if (!config.environments.client.build.rolldownOptions.input)
           config.environments.client.build.rolldownOptions.input = {}
+
+        if (!config.environments.client.build.rolldownOptions.external)
+          config.environments.client.build.rolldownOptions.external = []
+
+        const external = config.environments.client.build.rolldownOptions.external
+        if (Array.isArray(external)) {
+          if (!external.includes('react-server-dom-webpack/client'))
+            external.push('react-server-dom-webpack/client')
+        }
       }
 
       return config
@@ -1079,8 +1067,6 @@ ${clientTransformedCode}`
       let modifiedCode = code
       let hasServerImports = false
       let needsReactImport = false
-      let needsWrapperImport = false
-      const serverComponentReplacements: string[] = []
       const importingFileIsClient = hasTopLevelUseClientDirective(code)
         || componentTypeCache.get(id) === 'client'
         || id.includes('entry-client')
@@ -1092,7 +1078,6 @@ ${clientTransformedCode}`
 
         const importedDefault = importMatch[1]
         const importPath = importMatch[4]
-        const componentName = getComponentName(importPath)
         const resolvedImportPath = resolveImportToFilePath(importPath, id)
 
         const isClientComponent
@@ -1132,21 +1117,6 @@ const ${componentName} = registerClientReference(
             needsReactImport = true
           }
         }
-        else if (!importingFileIsClient && isServerComponent(resolvedImportPath)) {
-          hasServerImports = true
-          needsReactImport = true
-          needsWrapperImport = true
-
-          const originalImport = line
-
-          if (importedDefault && importedDefault !== '_') {
-            serverComponentReplacements.push(
-              `const ${importedDefault} = createServerComponentWrapper('${componentName}', '${importPath}');`,
-            )
-          }
-
-          modifiedCode = modifiedCode.replace(originalImport, '')
-        }
       }
 
       if (hasServerImports) {
@@ -1155,18 +1125,10 @@ const ${componentName} = registerClientReference(
             || modifiedCode.match(REACT_IMPORT_REGEX)
             || modifiedCode.match(REACT_IMPORT_WITH_DEFAULT_REGEX)
 
-        const hasWrapperImport = modifiedCode.includes(
-          'createServerComponentWrapper',
-        )
-
         let importsToAdd = ''
 
         if (needsReactImport && !hasReactImport)
           importsToAdd += `import React from 'react';\n`
-        if (needsWrapperImport && !hasWrapperImport)
-          importsToAdd += `import { createServerComponentWrapper } from 'virtual:rsc-integration.ts';\n`
-        if (serverComponentReplacements.length > 0)
-          importsToAdd += `${serverComponentReplacements.join('\n')}\n`
         if (importsToAdd)
           modifiedCode = importsToAdd + modifiedCode
         if (!modifiedCode.includes('Suspense')) {
@@ -1740,6 +1702,14 @@ const ${componentName} = registerClientReference(
         return 'virtual:app-router-provider.tsx'
       if (id === 'virtual:error-boundary-wrapper' || id === 'virtual:error-boundary-wrapper.tsx')
         return 'virtual:error-boundary-wrapper.tsx'
+
+      if ((id === 'react-server-dom-webpack/client' || id === 'react-server-dom-webpack/client.browser') && importer?.startsWith('virtual:')) {
+        try {
+          const packageDir = path.dirname(fileURLToPath(import.meta.resolve('react-server-dom-webpack/package.json')))
+          return path.join(packageDir, 'client.browser.js')
+        }
+        catch {}
+      }
       if (id === './LoadingErrorBoundary' || id === './LoadingErrorBoundary.tsx')
         return 'virtual:loading-error-boundary.tsx'
       if (id === 'react-server-dom-rari/server')
@@ -1985,8 +1955,36 @@ import * as React from 'react';\n${content}`
       }
 
       if (id === 'virtual:react-flight-client.ts') {
+        let browserClientPath: string
+        try {
+          const packageDir = path.dirname(fileURLToPath(import.meta.resolve('react-server-dom-webpack/package.json')))
+          browserClientPath = path.join(packageDir, 'cjs/react-server-dom-webpack-client.browser.production.js')
+        }
+        catch {
+          const rariDir = path.dirname(fileURLToPath(import.meta.url))
+          const nmDir = path.resolve(rariDir, '../../node_modules')
+          browserClientPath = path.join(nmDir, 'react-server-dom-webpack/cjs/react-server-dom-webpack-client.browser.production.js')
+        }
+
+        const cjsSource = fs.readFileSync(browserClientPath, 'utf-8')
+
         return {
-          code: `export * from 'rari/runtime/vendor/react-flight-client'`,
+          code: `
+import * as React from 'react';
+import * as ReactDOM from 'react-dom';
+
+const module = { exports: {} };
+const exports = module.exports;
+(function(module, exports, require) {
+${cjsSource}
+})(module, module.exports, function require(id) {
+  if (id === 'react') return React;
+  if (id === 'react-dom') return ReactDOM;
+  throw new Error('Cannot require "' + id + '" from react-server-dom-webpack client bundle');
+});
+export const createFromFetch = module.exports.createFromFetch;
+export const createFromReadableStream = module.exports.createFromReadableStream;
+`,
         }
       }
 
@@ -2122,7 +2120,35 @@ import * as React from 'react';\n${content}`
     experimental: options.experimental,
   })
 
-  const plugins: Plugin[] = [mainPlugin, serverBuildPlugin]
+  const webpackRequirePatchPlugin: Plugin = {
+    name: 'rari:patch-react-server-dom-webpack',
+    transform(code) {
+      if (!code.includes('__webpack_require__') && !code.includes('__webpack_chunk_load__'))
+        return null
+
+      let modifiedCode = code
+
+      if (modifiedCode.includes('__webpack_chunk_load__'))
+        modifiedCode = modifiedCode.replaceAll('__webpack_chunk_load__', '__rari_chunk_load__')
+
+      if (modifiedCode.includes('__webpack_require__.u'))
+        modifiedCode = modifiedCode.replaceAll('__webpack_require__.u', '({}).u')
+
+      if (modifiedCode.includes('__webpack_require__'))
+        modifiedCode = modifiedCode.replaceAll('__webpack_require__', '__rari_rsc_require__')
+
+      if (modifiedCode !== code) {
+        return {
+          code: modifiedCode,
+          map: null,
+        }
+      }
+
+      return null
+    },
+  }
+
+  const plugins: Plugin[] = [mainPlugin, webpackRequirePatchPlugin, serverBuildPlugin]
 
   if (options.proxy !== false)
     plugins.push(rariProxy(options.proxy || {}))

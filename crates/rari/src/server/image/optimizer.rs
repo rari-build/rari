@@ -3,7 +3,7 @@
 use std::{
     path::{Path, PathBuf},
     sync::{
-        Arc, RwLock,
+        Arc, PoisonError, RwLock,
         atomic::{AtomicUsize, Ordering},
     },
     time::Duration,
@@ -12,8 +12,8 @@ use std::{
 use cow_utils::CowUtils;
 use futures::stream::{self, StreamExt};
 use image::{DynamicImage, imageops::FilterType};
-use reqwest::Client;
-use tokio::sync::Semaphore;
+use reqwest::{Client, header::LOCATION, redirect::Policy};
+use tokio::{fs, sync::Semaphore, task};
 use url::Url;
 
 use super::{
@@ -57,7 +57,7 @@ impl ImageOptimizer {
     pub fn with_cache(config: ImageConfig, project_path: &Path, cache: Arc<ImageCache>) -> Self {
         #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
         let http_client = Client::builder()
-            .redirect(reqwest::redirect::Policy::none())
+            .redirect(Policy::none())
             .timeout(Duration::from_secs(30))
             .connect_timeout(Duration::from_secs(10))
             .build()
@@ -90,8 +90,7 @@ impl ImageOptimizer {
     }
 
     pub fn get_preload_links(&self) -> Vec<String> {
-        let preload_images =
-            self.preload_images.read().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let preload_images = self.preload_images.read().unwrap_or_else(PoisonError::into_inner);
         preload_images
             .iter()
             .map(|img| {
@@ -108,7 +107,7 @@ impl ImageOptimizer {
 
     pub fn clear_preload_images(&self) {
         let mut preload_images =
-            self.preload_images.write().unwrap_or_else(std::sync::PoisonError::into_inner);
+            self.preload_images.write().unwrap_or_else(PoisonError::into_inner);
         preload_images.clear();
     }
 
@@ -133,7 +132,7 @@ impl ImageOptimizer {
         tracing::debug!("No manifest found, scanning public directory...");
 
         let public_dir = self.project_path.join("public");
-        match tokio::fs::try_exists(&public_dir).await {
+        match fs::try_exists(&public_dir).await {
             Ok(false) => {
                 tracing::warn!(
                     "Public directory does not exist at {:?}, skipping local image pre-optimization",
@@ -160,7 +159,7 @@ impl ImageOptimizer {
         let mut dirs_to_scan = vec![public_dir.clone()];
 
         while let Some(current_dir) = dirs_to_scan.pop() {
-            let mut entries = tokio::fs::read_dir(&current_dir).await.map_err(|e| {
+            let mut entries = fs::read_dir(&current_dir).await.map_err(|e| {
                 ImageError::ProcessingError(format!(
                     "Failed to read directory {current_dir:?}: {e}"
                 ))
@@ -332,7 +331,7 @@ impl ImageOptimizer {
             tracing::debug!("All {} image variants are already cached", tasks.len());
             if !preload_list.is_empty() {
                 let mut preload_images =
-                    self.preload_images.write().unwrap_or_else(std::sync::PoisonError::into_inner);
+                    self.preload_images.write().unwrap_or_else(PoisonError::into_inner);
                 preload_images.extend(preload_list);
                 tracing::debug!("Registered {} images for preloading", preload_images.len());
             }
@@ -349,7 +348,7 @@ impl ImageOptimizer {
 
         if !preload_list.is_empty() {
             let mut preload_images =
-                self.preload_images.write().unwrap_or_else(std::sync::PoisonError::into_inner);
+                self.preload_images.write().unwrap_or_else(PoisonError::into_inner);
             preload_images.extend(preload_list);
             tracing::debug!("Registered {} images for preloading", preload_images.len());
         }
@@ -621,7 +620,7 @@ impl ImageOptimizer {
 
         let params_clone = params.clone();
         let config_clone = self.config.clone();
-        let optimized = tokio::task::spawn_blocking(move || {
+        let optimized = task::spawn_blocking(move || {
             Self::process_image_blocking(source, &params_clone, &config_clone)
         })
         .await
@@ -963,7 +962,7 @@ impl ImageOptimizer {
                 )));
             }
 
-            let bytes = tokio::fs::read(&canonical_file).await.map_err(|e| {
+            let bytes = fs::read(&canonical_file).await.map_err(|e| {
                 ImageError::FetchError(format!(
                     "Failed to read local file {}: {}",
                     canonical_file.display(),
@@ -1010,13 +1009,10 @@ impl ImageOptimizer {
                     )));
                 }
 
-                let location = response
-                    .headers()
-                    .get(reqwest::header::LOCATION)
-                    .and_then(|v| v.to_str().ok())
-                    .ok_or_else(|| {
-                        ImageError::FetchError("Redirect without Location header".to_string())
-                    })?;
+                let location =
+                    response.headers().get(LOCATION).and_then(|v| v.to_str().ok()).ok_or_else(
+                        || ImageError::FetchError("Redirect without Location header".to_string()),
+                    )?;
 
                 let redirect_url = if location.starts_with("http://")
                     || location.starts_with("https://")

@@ -24,6 +24,7 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
     timeout: 120000,
     env: {
+      NODE_ENV: 'production',
       RUST_LOG: 'debug',
       RARI_REVALIDATE_SECRET: 'e2e-test-secret',
     },
@@ -32,6 +33,7 @@ export default defineConfig({
   projects: [
     {
       name: 'Mobile Chrome',
+      testIgnore: '**/cache-logs.spec.ts',
       use: {
         ...devices['Pixel 5'],
         launchOptions: {

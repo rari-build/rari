@@ -1,12 +1,17 @@
 use std::{
+    future::Future,
     sync::{Arc, OnceLock},
-    time::Duration,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use cow_utils::CowUtils;
 use rari_error::RariError;
 use regex::Regex;
 use serde_json::{Value, json};
+use tokio::{
+    sync::mpsc::{Sender, UnboundedReceiver},
+    time,
+};
 use tracing::error;
 
 pub mod ext;
@@ -17,7 +22,11 @@ pub mod transpile;
 
 use factory::JsRuntimeInterface;
 
-use crate::server::rendering::metadata::{finalize_metadata, merge_metadata};
+use crate::server::{
+    middleware::request_context::RequestContext,
+    rendering::metadata::{finalize_metadata, merge_metadata},
+    routing::types::ParamValue,
+};
 
 pub struct JsExecutionRuntime {
     runtime: Arc<factory::RariRuntime>,
@@ -67,7 +76,7 @@ impl JsExecutionRuntime {
         let script_name_clone = script_name.clone();
         let script_code_clone = script_code.clone();
 
-        match tokio::time::timeout(
+        match time::timeout(
             Duration::from_millis(self.timeout_ms),
             runtime.execute_script(script_name_clone, script_code_clone),
         )
@@ -84,15 +93,25 @@ impl JsExecutionRuntime {
     pub async fn execute_script_batch(
         &self,
         scripts: Vec<(String, String)>,
-    ) -> tokio::sync::mpsc::UnboundedReceiver<(usize, Result<Value, RariError>)> {
+    ) -> UnboundedReceiver<(usize, Result<Value, RariError>)> {
         self.runtime.execute_script_batch(scripts).await
+    }
+
+    pub async fn execute_script_for_streaming(
+        &self,
+        script_name: String,
+        script_code: String,
+        chunk_sender: Sender<Result<Vec<u8>, String>>,
+    ) -> Result<(), RariError> {
+        let runtime = Arc::clone(&self.runtime);
+        runtime.execute_script_for_streaming(script_name, script_code, chunk_sender).await
     }
 
     pub async fn collect_metadata(
         &self,
         layout_paths: Vec<String>,
         page_path: String,
-        params: rustc_hash::FxHashMap<String, crate::server::routing::types::ParamValue>,
+        params: rustc_hash::FxHashMap<String, ParamValue>,
         search_params: rustc_hash::FxHashMap<String, Vec<String>>,
     ) -> Result<Value, RariError> {
         let data = json!({
@@ -141,7 +160,7 @@ impl JsExecutionRuntime {
         let runtime = Arc::clone(&self.runtime);
         let function_name = function_name.to_string();
 
-        match tokio::time::timeout(
+        match time::timeout(
             Duration::from_millis(self.timeout_ms),
             runtime.execute_function(&function_name, args),
         )
@@ -159,7 +178,7 @@ impl JsExecutionRuntime {
         let runtime = Arc::clone(&self.runtime);
         let specifier = specifier.to_string();
 
-        match tokio::time::timeout(
+        match time::timeout(
             Duration::from_millis(self.timeout_ms),
             runtime.load_es_module(&specifier),
         )
@@ -179,7 +198,7 @@ impl JsExecutionRuntime {
     ) -> Result<Value, RariError> {
         let runtime = Arc::clone(&self.runtime);
 
-        match tokio::time::timeout(
+        match time::timeout(
             Duration::from_millis(self.timeout_ms),
             runtime.evaluate_module(module_id),
         )
@@ -201,7 +220,7 @@ impl JsExecutionRuntime {
         let runtime = Arc::clone(&self.runtime);
         let specifier = specifier.to_string();
 
-        match tokio::time::timeout(
+        match time::timeout(
             Duration::from_millis(self.timeout_ms),
             runtime.add_module_to_loader(&specifier, code),
         )
@@ -219,7 +238,7 @@ impl JsExecutionRuntime {
         let runtime = Arc::clone(&self.runtime);
         let component_id = component_id.to_string();
 
-        match tokio::time::timeout(
+        match time::timeout(
             Duration::from_millis(self.timeout_ms),
             runtime.clear_module_loader_caches(&component_id),
         )
@@ -239,7 +258,7 @@ impl JsExecutionRuntime {
     ) -> Result<Value, RariError> {
         let runtime = Arc::clone(&self.runtime);
 
-        match tokio::time::timeout(
+        match time::timeout(
             Duration::from_millis(self.timeout_ms),
             runtime.get_module_namespace(module_id),
         )
@@ -348,10 +367,8 @@ impl JsExecutionRuntime {
         let is_esm = is_esm_code(component_code);
 
         if is_esm {
-            let timestamp = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_millis();
+            let timestamp =
+                SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis();
 
             let hmr_specifier = format!("file:///rari_hmr/server/{component_id}.js?v={timestamp}");
 
@@ -469,11 +486,11 @@ impl JsExecutionRuntime {
 
     pub async fn set_request_context(
         &self,
-        request_context: std::sync::Arc<crate::server::middleware::request_context::RequestContext>,
+        request_context: Arc<RequestContext>,
     ) -> Result<(), RariError> {
         let runtime = Arc::clone(&self.runtime);
 
-        match tokio::time::timeout(
+        match time::timeout(
             Duration::from_millis(self.timeout_ms),
             runtime.set_request_context(request_context),
         )
@@ -490,11 +507,8 @@ impl JsExecutionRuntime {
     pub async fn clear_request_context(&self) -> Result<(), RariError> {
         let runtime = Arc::clone(&self.runtime);
 
-        match tokio::time::timeout(
-            Duration::from_millis(self.timeout_ms),
-            runtime.clear_request_context(),
-        )
-        .await
+        match time::timeout(Duration::from_millis(self.timeout_ms), runtime.clear_request_context())
+            .await
         {
             Ok(result) => result,
             Err(_) => Err(RariError::timeout(format!(
@@ -506,13 +520,11 @@ impl JsExecutionRuntime {
 
     pub async fn clear_request_context_if_matches(
         &self,
-        expected_context: std::sync::Arc<
-            crate::server::middleware::request_context::RequestContext,
-        >,
+        expected_context: Arc<RequestContext>,
     ) -> Result<(), RariError> {
         let runtime = Arc::clone(&self.runtime);
 
-        match tokio::time::timeout(
+        match time::timeout(
             Duration::from_millis(self.timeout_ms),
             runtime.clear_request_context_if_matches(expected_context),
         )
@@ -528,11 +540,11 @@ impl JsExecutionRuntime {
 
     pub async fn execute_with_request_context<F, T>(
         &self,
-        request_context: std::sync::Arc<crate::server::middleware::request_context::RequestContext>,
+        request_context: Arc<RequestContext>,
         operation: F,
     ) -> Result<T, RariError>
     where
-        F: std::future::Future<Output = Result<T, RariError>>,
+        F: Future<Output = Result<T, RariError>>,
     {
         self.set_request_context(request_context).await?;
 
@@ -556,11 +568,11 @@ impl JsExecutionRuntime {
 
     pub async fn execute_with_persistent_request_context<F, T>(
         &self,
-        request_context: std::sync::Arc<crate::server::middleware::request_context::RequestContext>,
+        request_context: Arc<RequestContext>,
         operation: F,
     ) -> Result<T, RariError>
     where
-        F: std::future::Future<Output = Result<T, RariError>>,
+        F: Future<Output = Result<T, RariError>>,
     {
         self.set_request_context(request_context).await?;
         operation.await

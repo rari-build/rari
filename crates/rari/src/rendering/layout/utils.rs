@@ -3,6 +3,7 @@
 use std::{
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
+    path::Path,
 };
 
 use cow_utils::CowUtils;
@@ -49,6 +50,10 @@ fn normalize_route_component_path(file_path: &str) -> String {
     }
 }
 
+pub fn normalize_route_component_path_public(file_path: &str) -> String {
+    normalize_route_component_path(file_path)
+}
+
 pub fn create_component_id(file_path: &str) -> String {
     let project_relative_path = normalize_route_component_path(file_path);
     format!(
@@ -69,7 +74,7 @@ pub fn create_client_component_id(file_path: &str) -> String {
 }
 
 pub fn get_component_id(file_path: &str) -> String {
-    let path = std::path::Path::new(file_path);
+    let path = Path::new(file_path);
     let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("Unknown");
 
     let mut chars = stem.chars();

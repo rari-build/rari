@@ -1,9 +1,11 @@
-use std::{num::NonZero, rc::Rc, sync::Arc};
+use std::{num::NonZero, rc::Rc, sync::Arc, thread};
 
 use ::deno_permissions::Permissions;
 use deno_core::{
-    CrossIsolateStore, Extension, ExtensionFileSource, extension,
-    v8::{BackingStore, SharedRef},
+    CrossIsolateStore, Extension, ExtensionFileSource,
+    error::JsError,
+    extension,
+    v8::{BackingStore, SharedRef, icu},
 };
 use deno_process::deno_process;
 use deno_runtime::{
@@ -28,8 +30,9 @@ use sys_traits::impls::RealSys;
 use super::{
     ExtensionOptions, ExtensionTrait, node::resolvers::Resolver, web::PermissionsContainer,
 };
+use crate::runtime::module_loader::RariModuleLoader;
 
-fn format_js_error(error: &deno_core::error::JsError) -> String {
+fn format_js_error(error: &JsError) -> String {
     deno_format_js_error(error, None)
 }
 
@@ -73,7 +76,7 @@ extension!(
 
 impl ExtensionTrait<()> for init_console {
     fn init((): ()) -> Extension {
-        deno_terminal::colors::set_use_color(true);
+        colors::set_use_color(true);
         init_console::init()
     }
 }
@@ -207,7 +210,7 @@ impl WebWorkerCallbackOptions {
 fn create_web_worker_callback(options: WebWorkerCallbackOptions) -> Arc<CreateWebWorkerCb> {
     Arc::new(move |args| {
         let node_resolver = Arc::clone(&options.node_resolver);
-        let module_loader = Rc::new(crate::runtime::module_loader::RariModuleLoader::new());
+        let module_loader = Rc::new(RariModuleLoader::new());
 
         let create_web_worker_cb = create_web_worker_callback(options.clone());
 
@@ -247,10 +250,10 @@ fn create_web_worker_callback(options: WebWorkerCallbackOptions) -> Arc<CreateWe
             bootstrap: BootstrapOptions {
                 deno_version: env!("CARGO_PKG_VERSION").to_string(),
                 args: vec![],
-                cpu_count: std::thread::available_parallelism().map(NonZero::get).unwrap_or(1),
+                cpu_count: thread::available_parallelism().map(NonZero::get).unwrap_or(1),
                 log_level: WorkerLogLevel::default(),
                 enable_testing_features: false,
-                locale: deno_core::v8::icu::get_language_tag(),
+                locale: icu::get_language_tag(),
                 location: Some(args.main_module),
                 color_level: colors::get_color_level(),
                 unstable_features: vec![],

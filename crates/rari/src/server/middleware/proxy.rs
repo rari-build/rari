@@ -1,6 +1,17 @@
-use std::task::{Context, Poll};
+use std::{
+    env,
+    error::Error,
+    fs, mem,
+    path::{Path, PathBuf},
+    task::{Context, Poll},
+};
 
-use axum::{body::Body, extract::Request, http::StatusCode, response::Response};
+use axum::{
+    body::Body,
+    extract::Request,
+    http::{HeaderName, HeaderValue, StatusCode},
+    response::Response,
+};
 use futures_util::future::BoxFuture;
 use rari_error::RariError;
 use rari_utils::path_to_file_url;
@@ -42,7 +53,7 @@ use std::sync::OnceLock;
 static PROXY_ENABLED: OnceLock<bool> = OnceLock::new();
 
 fn is_proxy_enabled() -> bool {
-    *PROXY_ENABLED.get_or_init(|| std::fs::metadata("dist/server/proxy.js").is_ok())
+    *PROXY_ENABLED.get_or_init(|| fs::metadata("dist/server/proxy.js").is_ok())
 }
 
 async fn execute_proxy(
@@ -50,7 +61,7 @@ async fn execute_proxy(
     method: String,
     uri: String,
     headers: FxHashMap<String, String>,
-) -> Result<ProxyResult, Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<ProxyResult, Box<dyn Error + Send + Sync>> {
     let renderer = state.renderer.lock().await;
     let runtime = &renderer.runtime;
 
@@ -102,7 +113,7 @@ impl<S> Service<Request> for ProxyMiddleware<S>
 where
     S: Service<Request, Response = Response> + Send + 'static + Clone,
     S::Future: Send + 'static,
-    S::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
+    S::Error: Into<Box<dyn Error + Send + Sync>>,
 {
     type Response = S::Response;
     type Error = S::Error;
@@ -115,7 +126,7 @@ where
     fn call(&mut self, mut request: Request) -> Self::Future {
         let state = self.state.clone();
         let inner = self.inner.clone();
-        let mut inner = std::mem::replace(&mut self.inner, inner);
+        let mut inner = mem::replace(&mut self.inner, inner);
 
         Box::pin(async move {
             if !is_proxy_enabled() {
@@ -168,8 +179,8 @@ where
 
                     if let Some(headers) = result.request_headers {
                         for (key, value) in headers {
-                            if let Ok(header_name) = key.parse::<axum::http::HeaderName>()
-                                && let Ok(header_value) = value.parse::<axum::http::HeaderValue>()
+                            if let Ok(header_name) = key.parse::<HeaderName>()
+                                && let Ok(header_value) = value.parse::<HeaderValue>()
                             {
                                 request.headers_mut().insert(header_name, header_value);
                             }
@@ -196,9 +207,8 @@ where
 
                         if let Some(headers) = result.response_headers {
                             for (key, value) in headers {
-                                if let Ok(header_name) = key.parse::<axum::http::HeaderName>()
-                                    && let Ok(header_value) =
-                                        value.parse::<axum::http::HeaderValue>()
+                                if let Ok(header_name) = key.parse::<HeaderName>()
+                                    && let Ok(header_value) = value.parse::<HeaderValue>()
                                 {
                                     response.headers_mut().insert(header_name, header_value);
                                 }
@@ -219,8 +229,8 @@ where
     }
 }
 
-fn resolve_rari_package_dir() -> Option<std::path::PathBuf> {
-    let cwd = std::env::current_dir().ok()?;
+fn resolve_rari_package_dir() -> Option<PathBuf> {
+    let cwd = env::current_dir().ok()?;
     let mut search_dir = cwd.as_path();
 
     loop {
@@ -232,7 +242,7 @@ fn resolve_rari_package_dir() -> Option<std::path::PathBuf> {
     }
 }
 
-pub async fn initialize_proxy(state: &ServerState) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn initialize_proxy(state: &ServerState) -> Result<(), Box<dyn Error>> {
     if !is_proxy_enabled() {
         return Ok(());
     }
@@ -270,11 +280,11 @@ pub async fn initialize_proxy(state: &ServerState) -> Result<(), Box<dyn std::er
     };
     let rari_request_specifier = path_to_file_url(&rari_request_absolute);
 
-    let proxy_file_path = std::path::Path::new("dist/server/proxy.js");
+    let proxy_file_path = Path::new("dist/server/proxy.js");
     let proxy_absolute = if let Ok(canonical) = proxy_file_path.canonicalize() {
         canonical
     } else {
-        std::env::current_dir()?.join(proxy_file_path)
+        env::current_dir()?.join(proxy_file_path)
     };
     let proxy_specifier = path_to_file_url(&proxy_absolute);
 

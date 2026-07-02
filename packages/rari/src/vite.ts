@@ -9,9 +9,6 @@ export type {
 
 export { ApiResponse } from './api-routes'
 
-export { createHttpRuntimeClient, HttpRuntimeClient } from './http-runtime-client'
-export type { RuntimeClient } from './http-runtime-client'
-
 export type Request = globalThis.Request
 export type Response = globalThis.Response
 
@@ -34,6 +31,8 @@ export type {
 export { rariProxy } from './proxy/vite-plugin'
 
 export type { ProxyPluginOptions } from './proxy/vite-plugin'
+
+export type { Robots, RobotsRule, Sitemap, SitemapEntry, SitemapImage, SitemapVideo } from './router/metadata-route'
 
 export {
   clearPropsCache,
@@ -77,7 +76,9 @@ export type { Metadata } from './router/types'
 
 export { rariRouter } from './router/vite-plugin'
 
-export type { Robots, RobotsRule, Sitemap, SitemapEntry, SitemapImage, SitemapVideo } from './types/metadata-route'
+export { defineRariConfig, defineRariOptions } from './vite/index'
+
+export type { RariOptions, RouterPluginOptions } from './vite/index'
 
 export type {
   ServerCacheConfig,
@@ -86,11 +87,7 @@ export type {
   ServerConfig,
   ServerCSPConfig,
   ServerUseCacheConfig,
-} from './types/server-config'
-
-export { defineRariConfig, defineRariOptions } from './vite/index'
-
-export type { RariOptions, RouterPluginOptions } from './vite/index'
+} from './vite/server-config'
 
 export function rari(options?: Parameters<typeof _rari>[0]): any[] {
   return _rari(options)

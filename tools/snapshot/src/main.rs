@@ -1,9 +1,13 @@
 #![allow(clippy::too_many_lines, clippy::cast_precision_loss)]
 
-use std::{fmt::Write, path::PathBuf, rc::Rc};
+use std::{env, fmt::Write, fs, path::PathBuf, rc::Rc, string::String};
 
-use deno_core::{ModuleCodeString, ModuleName, SourceMapData};
+use deno_core::{ModuleCodeString, ModuleName, SourceMapData, snapshot};
 use deno_error::JsErrorBox;
+use rari::runtime::{
+    ext::{self, ExtensionOptions},
+    transpile,
+};
 use rustc_hash::FxHashSet;
 
 type Transpiler = dyn Fn(
@@ -12,13 +16,13 @@ type Transpiler = dyn Fn(
 ) -> Result<(ModuleCodeString, Option<SourceMapData>), JsErrorBox>;
 
 fn main() {
-    let output_dir = std::env::args()
+    let output_dir = env::args()
         .nth(1)
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("crates/rari/snapshots"));
 
     #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
-    std::fs::create_dir_all(&output_dir).expect("Failed to create output directory");
+    fs::create_dir_all(&output_dir).expect("Failed to create output directory");
 
     let snapshot_path = output_dir.join("RARI_SNAPSHOT.bin");
     let residual_path = output_dir.join("residual_lazy_sources.rs");
@@ -28,14 +32,14 @@ fn main() {
         println!("Building V8 snapshot...");
     }
 
-    let ext_options = rari::runtime::ext::ExtensionOptions::default();
-    let extensions = rari::runtime::ext::extensions(&ext_options, false);
+    let ext_options = ExtensionOptions::default();
+    let extensions = ext::extensions(&ext_options, false);
 
-    let transpiler: Rc<Transpiler> = Rc::new(rari::runtime::transpile::maybe_transpile_source);
+    let transpiler: Rc<Transpiler> = Rc::new(transpile::maybe_transpile_source);
 
     #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
-    let output = deno_core::snapshot::create_snapshot(
-        deno_core::snapshot::CreateSnapshotOptions {
+    let output = snapshot::create_snapshot(
+        snapshot::CreateSnapshotOptions {
             cargo_manifest_dir: env!("CARGO_MANIFEST_DIR"),
             startup_snapshot: None,
             skip_op_registration: false,
@@ -48,7 +52,7 @@ fn main() {
     .expect("Failed to create V8 snapshot");
 
     #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
-    std::fs::write(&snapshot_path, &output.output).expect("Failed to write snapshot file");
+    fs::write(&snapshot_path, &output.output).expect("Failed to write snapshot file");
     #[expect(clippy::print_stdout, reason = "CLI tool - stdout output is expected")]
     {
         println!(
@@ -59,15 +63,15 @@ fn main() {
     }
 
     let consumed: FxHashSet<&str> =
-        output.consumed_lazy_specifiers.iter().map(std::string::String::as_str).collect();
+        output.consumed_lazy_specifiers.iter().map(String::as_str).collect();
 
     #[expect(clippy::print_stdout, reason = "CLI tool - stdout output is expected")]
     {
         println!("Consumed {} lazy specifiers during snapshot creation", consumed.len());
     }
 
-    let ext_options = rari::runtime::ext::ExtensionOptions::default();
-    let extensions = rari::runtime::ext::extensions(&ext_options, false);
+    let ext_options = ExtensionOptions::default();
+    let extensions = ext::extensions(&ext_options, false);
 
     let mut residual_esm = Vec::new();
     let mut residual_js = Vec::new();
@@ -120,7 +124,7 @@ fn main() {
     write_line(&mut generated, "];");
 
     #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
-    std::fs::write(&residual_path, &generated).expect("Failed to write residual sources");
+    fs::write(&residual_path, &generated).expect("Failed to write residual sources");
     #[expect(clippy::print_stdout, reason = "CLI tool - stdout output is expected")]
     {
         println!("Residual sources written to {}", residual_path.display());

@@ -1,13 +1,23 @@
 // Copyright 2018-2025 the Deno authors. MIT license.
 
-use std::{cell::RefCell, io::Error, rc::Rc};
+use std::{
+    cell::RefCell,
+    error,
+    fmt::{self, Display, Formatter},
+    fs,
+    io::{self, Error},
+    mem,
+    os::fd::RawFd,
+    rc::Rc,
+};
 
-use deno_core::{OpState, ResourceId, op2};
+use deno_core::{OpState, ResourceId, error::ResourceError, op2};
 use deno_error::{JsErrorBox, JsErrorClass, builtin_classes::GENERIC_ERROR};
 use nix::sys::termios;
 use rustc_hash::FxHashMap;
 use rustyline::{
     Cmd, Editor, KeyCode, KeyEvent, Modifiers, config::Configurer, error::ReadlineError,
+    history::DefaultHistory,
 };
 
 deno_core::extension!(deno_tty, ops = [op_set_raw, op_console_size, op_read_line_prompt],);
@@ -34,7 +44,7 @@ use deno_process::JsNixError;
 #[derive(Debug, deno_error::JsError)]
 pub enum TtyError {
     #[class(inherit)]
-    Resource(deno_core::error::ResourceError),
+    Resource(ResourceError),
     #[class(inherit)]
     Io(Error),
     #[class(inherit)]
@@ -44,8 +54,8 @@ pub enum TtyError {
     Other(JsErrorBox),
 }
 
-impl std::fmt::Display for TtyError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for TtyError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             TtyError::Resource(err) => write!(f, "{err}"),
             TtyError::Io(err) => write!(f, "{err}"),
@@ -55,8 +65,8 @@ impl std::fmt::Display for TtyError {
     }
 }
 
-impl std::error::Error for TtyError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+impl error::Error for TtyError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
             TtyError::Resource(err) => Some(err),
             TtyError::Io(err) => Some(err),
@@ -66,8 +76,8 @@ impl std::error::Error for TtyError {
     }
 }
 
-impl From<deno_core::error::ResourceError> for TtyError {
-    fn from(err: deno_core::error::ResourceError) -> Self {
+impl From<ResourceError> for TtyError {
+    fn from(err: ResourceError) -> Self {
         TtyError::Resource(err)
     }
 }
@@ -98,7 +108,7 @@ fn op_set_raw(state: &mut OpState, rid: u32, is_raw: bool, cbreak: bool) -> Resu
             // Only save original state once.
             static ORIG_TERMIOS: OnceLock<Option<termios>> = OnceLock::new();
             ORIG_TERMIOS.get_or_init(|| {
-                let mut termios = std::mem::zeroed::<termios>();
+                let mut termios = mem::zeroed::<termios>();
                 if tcgetattr(libc::STDIN_FILENO, &raw mut termios) == 0 {
                     extern "C" fn reset_stdio() {
                         // SAFETY: Reset the stdio state.
@@ -202,16 +212,16 @@ pub struct ConsoleSize {
 }
 
 #[expect(dead_code)]
-pub fn console_size(std_file: &std::fs::File) -> Result<ConsoleSize, std::io::Error> {
+pub fn console_size(std_file: &fs::File) -> Result<ConsoleSize, io::Error> {
     use std::os::unix::io::AsRawFd;
     let fd = std_file.as_raw_fd();
     console_size_from_fd(fd)
 }
 
-fn console_size_from_fd(fd: std::os::unix::prelude::RawFd) -> Result<ConsoleSize, std::io::Error> {
+fn console_size_from_fd(fd: RawFd) -> Result<ConsoleSize, io::Error> {
     // SAFETY: libc calls
     unsafe {
-        let mut size: libc::winsize = std::mem::zeroed();
+        let mut size: libc::winsize = mem::zeroed();
         if libc::ioctl(fd, libc::TIOCGWINSZ, &raw mut size) != 0 {
             return Err(Error::last_os_error());
         }
@@ -233,7 +243,7 @@ pub fn op_read_line_prompt(
     #[string] prompt_text: &str,
     #[string] default_value: &str,
 ) -> Result<Option<String>, JsReadlineError> {
-    let mut editor = Editor::<(), rustyline::history::DefaultHistory>::new()?;
+    let mut editor = Editor::<(), DefaultHistory>::new()?;
 
     editor.set_keyseq_timeout(Some(1));
     editor.bind_sequence(KeyEvent(KeyCode::Esc, Modifiers::empty()), Cmd::Interrupt);

@@ -51,6 +51,7 @@ impl RouteComposer {
             pathname_json,
             error_boundary,
             metadata_json,
+            false,
         )
     }
 
@@ -61,6 +62,7 @@ impl RouteComposer {
         pathname_json: &str,
         error_boundary: Option<&ErrorBoundaryInfo>,
         metadata_json: &str,
+        defer_rsc: bool,
     ) -> String {
         let mut script = format!(
             r"
@@ -76,30 +78,6 @@ impl RouteComposer {
                 globalThis['~suspense'].pendingPromisesByBoundary = {{}};
                 globalThis['~suspense'].promises = {{}};
                 globalThis['~suspense'].currentBoundaryId = null;
-
-                if (!globalThis['~react']) globalThis['~react'] = {{}};
-                if (!globalThis['~react'].originalCreateElement) {{
-                    globalThis['~react'].originalCreateElement = React.createElement;
-
-                    React.createElement = function(type, props, ...children) {{
-                        if (typeof type === 'function' &&
-                            (type.constructor.name === 'AsyncFunction' ||
-                             type.toString().trim().startsWith('async '))) {{
-
-                            const AsyncComponentMarker = function(props) {{
-                                return null;
-                            }};
-
-                            AsyncComponentMarker._isAsyncComponent = true;
-                            AsyncComponentMarker._originalType = type;
-                            AsyncComponentMarker.displayName = `AsyncWrapper(${{type.name || 'Anonymous'}})`;
-
-                            return globalThis['~react'].originalCreateElement(AsyncComponentMarker, props, ...children);
-                        }}
-
-                        return globalThis['~react'].originalCreateElement(type, props, ...children);
-                    }};
-                }}
 
                 const startPageRender = performance.now();
                 {page_render_script}
@@ -139,6 +117,7 @@ impl RouteComposer {
             &current_element,
             error_boundary,
             metadata_json,
+            defer_rsc,
         ));
 
         script
@@ -168,7 +147,7 @@ impl RouteComposer {
 
     fn generate_template_wrapper(
         index: usize,
-        template_component_id: &str,
+        _template_component_id: &str,
         template_client_component_id: &str,
         current_element: &str,
         template_var: &str,
@@ -177,19 +156,18 @@ impl RouteComposer {
         format!(
             r#"
             const startTemplate{index} = performance.now();
-            const ServerTemplateComponent{index} = globalThis["{template_component_id}"];
-            const ClientTemplateComponent{index} = {{
+            const TemplateComponent{index} = {{
                 $$typeof: Symbol.for('react.client.reference'),
                 $$id: "{template_client_component_id}#default",
                 $$async: false,
                 name: 'default',
                 '~isClientComponent': true,
             }};
-            const TemplateComponent{index} = ServerTemplateComponent{index} || ClientTemplateComponent{index};
 
+            const templateKey{index} = {pathname_json} + '::' + Date.now();
             const templateResult{index} = React.createElement(
                 TemplateComponent{index},
-                {{ key: {pathname_json}, children: {current_element} }},
+                {{ key: templateKey{index}, children: {current_element} }},
             );
             const {template_var} = templateResult{index};
             timings.template{index} = performance.now() - startTemplate{index};
@@ -201,32 +179,49 @@ impl RouteComposer {
         final_element: &str,
         error_boundary: Option<&ErrorBoundaryInfo>,
         metadata_json: &str,
+        defer_rsc: bool,
     ) -> String {
         let wrap_with_error_boundary = error_boundary.is_some();
         let error_component_id_json = error_boundary
             .map(|e| serde_json::to_string(&e.component_id).unwrap_or_else(|_| "\"\"".to_string()))
             .unwrap_or_else(|| "\"\"".to_string());
 
+        let rsc_render = if defer_rsc {
+            r"
+                if (!globalThis['~rari']) globalThis['~rari'] = {};
+                globalThis['~rari'].capturedElement = elementToRender;
+                return;
+            "
+        } else {
+            r"
+                let rscData = await globalThis.renderToRsc(elementToRender);
+            "
+        };
+
         format!(
             r"
 
                 const startRSC = performance.now();
-                let rscData = await globalThis.renderToRsc({final_element}, globalThis['~clientComponents'] || {{}});
+
+                let elementToRender = {final_element};
 
                 if ({wrap_with_error_boundary}) {{
                     const errorComponentId = {error_component_id_json};
                     const wrapperComponentId = 'virtual:error-boundary-wrapper.tsx#ErrorBoundaryWrapper';
 
-                    rscData = [
-                        '$',
-                        wrapperComponentId,
-                        null,
-                        {{
-                            errorComponentId: errorComponentId,
-                            children: rscData
-                        }}
-                    ];
+                    const ErrorWrapper = {{
+                        $$typeof: Symbol.for('react.client.reference'),
+                        $$id: wrapperComponentId,
+                        $$async: false,
+                    }};
+                    elementToRender = globalThis.React.createElement(
+                        ErrorWrapper,
+                        {{ errorComponentId: errorComponentId }},
+                        elementToRender
+                    );
                 }}
+
+                {rsc_render}
 
                 timings.rscConversion = performance.now() - startRSC;
 
@@ -314,7 +309,7 @@ mod tests {
             RouteComposer::build_composition_script("const pageElement = Page();", &[], "\"/\"");
 
         assert!(script.contains("const pageElement = Page();"));
-        assert!(script.contains("renderToRsc(pageElement"));
+        assert!(script.contains("elementToRender = pageElement"));
         assert!(!script.contains("LayoutComponent"));
     }
 
@@ -335,7 +330,7 @@ mod tests {
         assert!(script.contains("const pageElement = Page();"));
         assert!(script.contains("LayoutComponent0"));
         assert!(script.contains("RootLayout"));
-        assert!(script.contains("renderToRsc(layout0"));
+        assert!(script.contains("elementToRender = layout0"));
     }
 
     #[test]
@@ -363,7 +358,7 @@ mod tests {
         assert!(script.contains("LayoutComponent1"));
         assert!(script.contains("DashboardLayout"));
         assert!(script.contains("RootLayout"));
-        assert!(script.contains("renderToRsc(layout1"));
+        assert!(script.contains("elementToRender = layout1"));
     }
 
     #[test]
@@ -386,9 +381,10 @@ mod tests {
 
     #[test]
     fn test_generate_rsc_conversion() {
-        let conversion = RouteComposer::generate_rsc_conversion("finalElement", None, "{}");
+        let conversion = RouteComposer::generate_rsc_conversion("finalElement", None, "{}", false);
 
-        assert!(conversion.contains("renderToRsc(finalElement"));
+        assert!(conversion.contains("elementToRender = finalElement"));
+        assert!(conversion.contains("renderToRsc(elementToRender"));
         assert!(conversion.contains("rsc_data: rscData"));
         assert!(conversion.contains("timings: timings"));
         assert!(conversion.contains("success: true"));
@@ -401,23 +397,35 @@ mod tests {
             file_path: "test/error.tsx".to_string(),
         };
 
-        let conversion =
-            RouteComposer::generate_rsc_conversion("finalElement", Some(&error_boundary), "{}");
+        let conversion = RouteComposer::generate_rsc_conversion(
+            "finalElement",
+            Some(&error_boundary),
+            "{}",
+            false,
+        );
 
         assert!(conversion.contains("virtual:error-boundary-wrapper.tsx#ErrorBoundaryWrapper"));
         assert!(conversion.contains("src/app/test/error.tsx"));
-        assert!(conversion.contains("errorComponentId:"));
-        assert!(conversion.contains("rscData = ["));
-        assert!(conversion.contains("'$'"));
+        assert!(conversion.contains("errorComponentId"));
+        assert!(conversion.contains("ErrorWrapper"));
+        assert!(conversion.contains("renderToRsc(elementToRender"));
     }
 
     #[test]
     fn test_generate_rsc_conversion_with_metadata() {
         let metadata_json = r#"{"title":"Test Page","description":"A test"}"#;
         let conversion =
-            RouteComposer::generate_rsc_conversion("finalElement", None, metadata_json);
+            RouteComposer::generate_rsc_conversion("finalElement", None, metadata_json, false);
 
         assert!(conversion.contains(r#"metadata: {"title":"Test Page","description":"A test"}"#));
+    }
+
+    #[test]
+    fn test_generate_rsc_conversion_deferred() {
+        let conversion = RouteComposer::generate_rsc_conversion("finalElement", None, "{}", true);
+
+        assert!(conversion.contains("capturedElement = elementToRender"));
+        assert!(!conversion.contains("renderToRsc(elementToRender"));
     }
 
     fn template_info(file_path: &str) -> TemplateInfo {
@@ -445,6 +453,7 @@ mod tests {
             "\"/\"",
             None,
             "{}",
+            false,
         );
         assert_eq!(empty_tpl, no_tpl);
     }
@@ -458,12 +467,13 @@ mod tests {
             "\"/about\"",
             None,
             "{}",
+            false,
         );
 
         assert!(script.contains("TemplateComponent0"));
-        assert!(script.contains("template:template.tsx"));
         assert!(script.contains(r#"$$id: "src/app/template#default""#));
-        assert!(script.contains("key: \"/about\""));
+        assert!(script.contains("templateKey0 = \"/about\""));
+        assert!(script.contains("key: templateKey0"));
         assert!(
             !script.contains("pathname: \"/about\", children: pageElement"),
             "template wrapper must not include pathname as a prop, only key and children"
@@ -483,6 +493,7 @@ mod tests {
             "\"/blog/hello\"",
             None,
             "{}",
+            false,
         );
 
         let page_idx = script.find("pageElement").expect("pageElement present");
@@ -490,7 +501,7 @@ mod tests {
         let layout_idx = script.find("layout0").expect("layout0 present");
         assert!(page_idx < template_idx);
         assert!(template_idx < layout_idx);
-        assert!(script.contains("key: \"/blog/hello\""));
+        assert!(script.contains("templateKey0 = \"/blog/hello\""));
     }
 
     #[test]
@@ -502,10 +513,12 @@ mod tests {
             "\"/about\"",
             None,
             "{}",
+            false,
         );
 
         assert!(script.contains("TemplateComponent0"));
         assert!(script.contains("TemplateComponent1"));
-        assert!(script.contains("key: \"/about\""));
+        assert!(script.contains("templateKey0 = \"/about\""));
+        assert!(script.contains("templateKey1 = \"/about\""));
     }
 }

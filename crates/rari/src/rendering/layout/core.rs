@@ -1,18 +1,21 @@
-use std::sync::{Arc, atomic::Ordering};
+use std::{
+    env,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
+use base64::{Engine, engine::general_purpose::STANDARD};
 use cow_utils::CowUtils;
 use rari_error::RariError;
 use rari_utils::path_to_file_url;
-use rustc_hash::FxHashSet;
 use serde_json::Value;
-use tokio::sync::{Mutex, mpsc};
+use tokio::{
+    sync::{Mutex, mpsc},
+    task,
+};
 use tracing::{debug, error};
 
 use super::{
-    constants::{
-        JS_DISABLE_STREAMING, JS_ENABLE_STREAMING, JS_GET_RESULT, JS_PAGE_RENDER_SIMPLE,
-        JS_PAGE_RENDER_WITH_LOADING,
-    },
     error_messages,
     types::{LayoutRenderContext, RenderResult},
     utils,
@@ -22,10 +25,10 @@ use crate::{
     rendering::{
         base::RscRenderer,
         layout::{
-            LayoutInfo, LayoutStructure, RouteComposer,
+            LayoutInfo, RouteComposer,
             route_composer::{ErrorBoundaryInfo, TemplateInfo},
         },
-        streaming::{RscChunkType, RscStream, StreamingRenderer},
+        streaming::{RscChunkType, RscStream},
     },
     server::{
         cache::handler::{
@@ -38,6 +41,38 @@ use crate::{
 };
 
 const LAYOUT_KEY_PREFIX: &str = "layout:";
+const JS_GET_RESULT: &str = r"
+globalThis['~rsc'].renderResult
+";
+
+const FIZZ_STREAM_ERROR_HELPER: &str = r"
+                        let rariErrorInjected = false;
+                        async function injectRariErrorFromCaught() {
+                            if (rariErrorInjected || caughtErrors.length === 0) return;
+                            const displayError = caughtErrors.find((e) => e?.message && !String(e.message).includes('omitted in production')) || caughtErrors[0];
+                            const errMsg = String(displayError?.message || 'Unknown error').split('<').join('&lt;');
+                            const errorHtml = '<div class=rari-error style=color:red;border:1px_solid_red;padding:10px;border-radius:4px;background-color:#fff5f5><strong>Error loading content: </strong>' + errMsg + '</div>';
+                            const replaceScript = '<script>!function(h){var l=document.querySelector(\'[data-testid=loading]\');l?l.outerHTML=h:document.getElementById(\'root\')?.insertAdjacentHTML(\'beforeend\',h)}(' + JSON.stringify(errorHtml) + ')</script>';
+                            rariErrorInjected = true;
+                            await Deno.core.ops.op_fizz_chunk(replaceScript);
+                        }
+";
+
+const FIZZ_STREAM_ERROR_INJECTION: &str = r"
+                        await injectRariErrorFromCaught();
+";
+
+const FIZZ_CHUNK_PUMP_HELPER: &str = r"
+                        async function rariPumpFizzChunk(text) {
+                            if (!text) return;
+                            try {
+                                await Deno.core.ops.op_fizz_chunk(text);
+                            } catch (e) {
+                                console.warn('[rari] Fizz stream consumer disconnected');
+                                throw e;
+                            }
+                        }
+";
 
 pub struct LayoutHtmlCache {
     handler: Arc<dyn CacheHandler>,
@@ -140,100 +175,6 @@ impl LayoutRenderer {
         Arc::new(LayoutHtmlCache::from_config(layer, registry))
     }
 
-    async fn enable_streaming_and_inject_lazy_resolver(
-        renderer: &RscRenderer,
-    ) -> Result<(), RariError> {
-        let prev_count = renderer.streaming_refcount.fetch_add(1, Ordering::SeqCst);
-
-        if prev_count == 0
-            && let Err(e) = renderer
-                .runtime
-                .execute_script("enable_streaming".to_string(), JS_ENABLE_STREAMING.to_string())
-                .await
-        {
-            renderer.streaming_refcount.fetch_sub(1, Ordering::SeqCst);
-            return Err(e);
-        }
-
-        let resolve_helper = include_str!("js/resolve_lazy_helper.js");
-        let injection_result = renderer
-            .runtime
-            .execute_script("inject_lazy_resolver".to_string(), resolve_helper.to_string())
-            .await;
-
-        if let Err(e) = injection_result {
-            let new_count = renderer.streaming_refcount.fetch_sub(1, Ordering::SeqCst);
-            if new_count == 1
-                && let Err(cleanup_err) = renderer
-                    .runtime
-                    .execute_script(
-                        "disable_streaming".to_string(),
-                        JS_DISABLE_STREAMING.to_string(),
-                    )
-                    .await
-            {
-                tracing::debug!(
-                    "Failed to disable streaming after injection error: {}",
-                    cleanup_err
-                );
-            }
-            return Err(e);
-        }
-
-        Ok(())
-    }
-
-    async fn disable_streaming(renderer: &RscRenderer) -> Result<(), RariError> {
-        let prev_count = renderer.streaming_refcount.fetch_sub(1, Ordering::SeqCst);
-
-        if prev_count == 1 {
-            renderer
-                .runtime
-                .execute_script("disable_streaming".to_string(), JS_DISABLE_STREAMING.to_string())
-                .await?;
-        }
-        Ok(())
-    }
-
-    async fn render_fallback(
-        &self,
-        renderer: &RscRenderer,
-        fallback_script: String,
-        route_match: &AppRouteMatch,
-        return_rsc_on_fallback: bool,
-        can_use_html_cache: bool,
-        cache_key: u64,
-    ) -> Result<RenderResult, RariError> {
-        let rsc_wire_format =
-            Self::execute_composition_and_serialize(renderer, fallback_script).await?;
-
-        Self::validate_rsc_wire_format(&rsc_wire_format)?;
-
-        if return_rsc_on_fallback {
-            Self::validate_html_structure(&rsc_wire_format, route_match)?;
-            return Ok(RenderResult::Static(rsc_wire_format));
-        }
-
-        Self::validate_html_structure(&rsc_wire_format, route_match)?;
-
-        let html_renderer = RscHtmlRenderer::new(Arc::clone(&renderer.runtime));
-        let config = Config::get().ok_or_else(|| RariError::internal("Config not available"))?;
-        let html =
-            html_renderer.render_to_html_for_route(&rsc_wire_format, config, route_match).await?;
-        Self::validate_html_structure(&html, route_match)?;
-
-        let is_not_found = route_match.not_found.is_some();
-        if is_not_found {
-            return Ok(RenderResult::Static(html));
-        }
-
-        if can_use_html_cache && let Err(e) = self.html_cache.insert(cache_key, html.clone()).await
-        {
-            tracing::debug!("layout_html_cache.insert failed: {}", e);
-        }
-        Ok(RenderResult::Static(html))
-    }
-
     pub async fn check_page_not_found(
         &self,
         route_match: &AppRouteMatch,
@@ -243,10 +184,10 @@ impl LayoutRenderer {
         let page_props_json = serde_json::to_string(&page_props)?;
 
         fn component_dist_path(
-            base_path: &std::path::Path,
+            base_path: &Path,
             file_path: &str,
             component_id: Option<&str>,
-        ) -> std::path::PathBuf {
+        ) -> PathBuf {
             if let Some(component_id) = component_id {
                 return base_path.join(format!("{component_id}.js"));
             }
@@ -278,7 +219,7 @@ impl LayoutRenderer {
             base_path.join("app").join(&dist_filename)
         }
 
-        let dist_server_path = std::env::current_dir()
+        let dist_server_path = env::current_dir()
             .ok()
             .map(|p| p.join("dist/server"))
             .and_then(|p| p.canonicalize().ok());
@@ -339,6 +280,53 @@ impl LayoutRenderer {
         context: &LayoutRenderContext,
         request_context: Option<Arc<RequestContext>>,
     ) -> Result<String, RariError> {
+        self.render_route_with_mode_internal(route_match, context, request_context).await
+    }
+
+    pub async fn render_route_for_fizz_streaming(
+        &self,
+        route_match: &AppRouteMatch,
+        context: &LayoutRenderContext,
+        request_context: Option<Arc<RequestContext>>,
+    ) -> Result<String, RariError> {
+        let loading_enabled = Config::get().map(|c| c.loading.enabled).unwrap_or(true);
+        let loading_component_id = if loading_enabled {
+            route_match.loading.as_ref().map(|e| {
+                e.component_id.clone().unwrap_or_else(|| utils::create_component_id(&e.file_path))
+            })
+        } else {
+            None
+        };
+
+        let composition_script = self.build_composition_script(
+            route_match,
+            context,
+            loading_component_id.as_deref(),
+            loading_component_id.is_some(),
+            false,
+        )?;
+
+        let renderer = self.renderer.lock().await;
+
+        let wire_result: Result<String, RariError> = async {
+            let rsc_flight_protocol =
+                Self::execute_composition_and_serialize(&renderer, composition_script).await?;
+            Self::validate_rsc_flight_protocol(&rsc_flight_protocol)?;
+            Ok(rsc_flight_protocol)
+        }
+        .await;
+
+        drop(request_context);
+
+        wire_result
+    }
+
+    async fn render_route_with_mode_internal(
+        &self,
+        route_match: &AppRouteMatch,
+        context: &LayoutRenderContext,
+        request_context: Option<Arc<RequestContext>>,
+    ) -> Result<String, RariError> {
         let loading_enabled = Config::get().map(|config| config.loading.enabled).unwrap_or(true);
 
         let loading_component_id = if loading_enabled {
@@ -360,27 +348,17 @@ impl LayoutRenderer {
             context,
             loading_component_id.as_deref(),
             loading_component_id.is_some(),
+            false,
         )?;
 
         let renderer = self.renderer.lock().await;
 
         let render_operation = async {
-            Self::enable_streaming_and_inject_lazy_resolver(&renderer).await?;
-
-            let result = async {
-                let rsc_wire_format =
-                    Self::execute_composition_and_serialize(&renderer, composition_script).await?;
-                Self::validate_rsc_wire_format(&rsc_wire_format)?;
-
-                Self::validate_html_structure(&rsc_wire_format, route_match)?;
-
-                Ok(rsc_wire_format)
-            }
-            .await;
-
-            let _ = Self::disable_streaming(&renderer).await;
-
-            result
+            let rsc_flight_protocol =
+                Self::execute_composition_and_serialize(&renderer, composition_script).await?;
+            Self::validate_rsc_flight_protocol(&rsc_flight_protocol)?;
+            Self::validate_html_structure(&rsc_flight_protocol, route_match)?;
+            Ok(rsc_flight_protocol)
         };
 
         if let Some(ctx) = request_context {
@@ -430,40 +408,424 @@ impl LayoutRenderer {
 
         let needs_streaming = loading_component_id.is_some();
 
-        if !needs_streaming {
-            let rsc_wire_format = self.render_route(route_match, context, request_context).await?;
+        if return_rsc_on_fallback {
+            if needs_streaming {
+                let composition_script = self.build_composition_script(
+                    route_match,
+                    context,
+                    loading_component_id.as_deref(),
+                    true,
+                    true,
+                )?;
 
-            if return_rsc_on_fallback {
-                return Ok(RenderResult::Static(rsc_wire_format));
+                let (chunk_sender, chunk_receiver) = mpsc::channel::<Result<Vec<u8>, String>>(32);
+
+                let runtime = {
+                    let renderer = self.renderer.lock().await;
+                    Self::ensure_react_server_loaded(&renderer).await?;
+                    Arc::clone(&renderer.runtime)
+                };
+
+                let script = format!(
+                    r"(async function() {{
+                        {FIZZ_CHUNK_PUMP_HELPER}
+                        try {{
+                        try {{ {composition_script} }} catch(e) {{
+                            console.error('[rari] Composition error in RSC streaming nav:', e);
+                        }}
+
+                        const capturedElement = globalThis['~rari']?.capturedElement;
+                        if (!capturedElement) {{
+                            return;
+                        }}
+
+                        const ReactServerRenderer = globalThis['~reactServerRenderer'];
+                        const bundlerConfig = globalThis['~rari']?.clientReferenceManifest || {{}};
+
+                        const stream = await ReactServerRenderer.renderToReadableStream(
+                            capturedElement,
+                            bundlerConfig,
+                            {{ onError(error) {{ console.error('[rari] RSC stream error:', error); }} }}
+                        );
+
+                        const reader = stream.getReader();
+                        const decoder = new TextDecoder();
+                        while (true) {{
+                            const {{ done, value }} = await reader.read();
+                            if (done) break;
+                            const text = decoder.decode(value, {{ stream: true }});
+                            await rariPumpFizzChunk(text);
+                        }}
+                        const tail = decoder.decode();
+                        await rariPumpFizzChunk(tail);
+                        }} catch(e) {{
+                            console.error('[rari] RSC streaming navigation fatal error:', e);
+                        }} finally {{
+                            Deno.core.ops.op_fizz_done();
+                        }}
+                    }})()",
+                );
+
+                let runtime_clone = Arc::clone(&runtime);
+                tokio::spawn(async move {
+                    if let Err(e) = runtime_clone
+                        .execute_script_for_streaming(
+                            "rsc_streaming_nav".to_string(),
+                            script,
+                            chunk_sender,
+                        )
+                        .await
+                    {
+                        tracing::error!("RSC streaming navigation failed: {e}");
+                    }
+                });
+
+                let (rsc_tx, rsc_rx) = mpsc::channel::<RscStreamChunk>(32);
+                tokio::spawn(async move {
+                    let mut receiver = chunk_receiver;
+                    while let Some(chunk_result) = receiver.recv().await {
+                        match chunk_result {
+                            Ok(data) => {
+                                let chunk = RscStreamChunk {
+                                    chunk_type: RscChunkType::InitialShell,
+                                    data,
+                                    row_id: 0,
+                                    is_final: false,
+                                    boundary_id: None,
+                                };
+                                if rsc_tx.send(chunk).await.is_err() {
+                                    break;
+                                }
+                            }
+                            Err(_) => break,
+                        }
+                    }
+                });
+
+                return Ok(RenderResult::Streaming(RscStream::new(rsc_rx)));
             }
 
-            let runtime = {
+            let (rsc_flight_protocol, binary) = {
                 let renderer = self.renderer.lock().await;
-                Arc::clone(&renderer.runtime)
+
+                let composition_script = self.build_composition_script(
+                    route_match,
+                    context,
+                    loading_component_id.as_deref(),
+                    loading_component_id.is_some(),
+                    false,
+                )?;
+
+                let render_and_capture = async {
+                    Self::ensure_react_server_loaded(&renderer).await?;
+
+                    let rsc_flight_protocol =
+                        Self::execute_composition_and_serialize(&renderer, composition_script)
+                            .await?;
+                    Self::validate_rsc_flight_protocol(&rsc_flight_protocol)?;
+                    Self::validate_html_structure(&rsc_flight_protocol, route_match)?;
+
+                    let b64_result = renderer
+                        .runtime
+                        .execute_script(
+                            "get_rsc_binary_b64".to_string(),
+                            r"(function() {
+                                const bin = globalThis['~rari']?.lastRscBinary;
+                                if (!bin || bin.length === 0) return null;
+                                let str = '';
+                                for (let i = 0; i < bin.length; i++) {
+                                    str += String.fromCharCode(bin[i]);
+                                }
+                                return btoa(str);
+                            })()"
+                                .to_string(),
+                        )
+                        .await;
+
+                    let binary = match b64_result {
+                        Ok(v) => v.as_str().and_then(|b64| STANDARD.decode(b64).ok()),
+                        Err(_) => None,
+                    };
+
+                    Ok::<(String, Option<Vec<u8>>), RariError>((rsc_flight_protocol, binary))
+                };
+
+                if let Some(ctx) = request_context {
+                    renderer.runtime.execute_with_request_context(ctx, render_and_capture).await?
+                } else {
+                    render_and_capture.await?
+                }
             };
-            let html_renderer = RscHtmlRenderer::new(runtime);
+
+            if let Some(bytes) = binary {
+                return Ok(RenderResult::StaticBinary(bytes));
+            }
+
+            Ok(RenderResult::Static(rsc_flight_protocol))
+        } else {
             let config =
                 Config::get().ok_or_else(|| RariError::internal("Config not available"))?;
-            let html = html_renderer
-                .render_to_html_for_route(&rsc_wire_format, config, route_match)
-                .await?;
 
-            let rsc_payload = if rsc_wire_format.ends_with('\n') {
-                rsc_wire_format.clone()
-            } else {
-                format!("{rsc_wire_format}\n")
+            if needs_streaming {
+                let composition_script = self.build_composition_script(
+                    route_match,
+                    context,
+                    loading_component_id.as_deref(),
+                    true,
+                    true,
+                )?;
+
+                let runtime = {
+                    let renderer = self.renderer.lock().await;
+                    Self::ensure_react_server_loaded(&renderer).await?;
+                    Arc::clone(&renderer.runtime)
+                };
+
+                let html_renderer = RscHtmlRenderer::new(Arc::clone(&runtime));
+                let css_links = RscHtmlRenderer::css_links_for_route(route_match);
+                let cache_template = config.rsc_html.cache_template;
+                let is_dev_mode = config.is_development();
+                let template = html_renderer.load_template(cache_template, is_dev_mode).await?;
+                let template = RscHtmlRenderer::inject_css_links(&template, &css_links);
+
+                let head_content = template
+                    .find("<head>")
+                    .and_then(|start| template.find("</head>").map(|end| &template[start + 6..end]))
+                    .unwrap_or("")
+                    .to_string();
+
+                let (chunk_sender, chunk_receiver) = mpsc::channel::<Result<Vec<u8>, String>>(32);
+
+                let head_content_json =
+                    serde_json::to_string(&head_content).unwrap_or_else(|_| "\"\"".to_string());
+
+                let script = format!(
+                    r"(async function() {{
+                        let caughtErrors = [];
+                        {FIZZ_STREAM_ERROR_HELPER}
+                        {FIZZ_CHUNK_PUMP_HELPER}
+                        try {{
+                        try {{ {composition_script} }} catch(e) {{
+                            console.error('[rari] Composition error in streaming:', e);
+                        }}
+
+                        const capturedElement = globalThis['~rari']?.capturedElement;
+                        if (!capturedElement) {{
+                            Deno.core.ops.op_fizz_done();
+                            return;
+                        }}
+
+                        const ReactServerRenderer = globalThis['~reactServerRenderer'];
+                        const bundlerConfig = globalThis['~rari']?.clientReferenceManifest || {{}};
+                        const rscStream = await ReactServerRenderer.renderToReadableStream(
+                            capturedElement, bundlerConfig,
+                            {{ onError(e) {{
+                                console.error('[rari] RSC error:', e);
+                                caughtErrors.push(e);
+                            }} }}
+                        );
+
+                        const FlightClient = globalThis['~flightClient'];
+                        const rootElement = await FlightClient.createFromReadableStream(rscStream, {{
+                            ssrManifest: {{
+                                moduleMap: globalThis['~rari']?.ssrModules || {{}},
+                                moduleLoading: null,
+                            }}
+                        }});
+
+                        if (rootElement == null) {{
+                            Deno.core.ops.op_fizz_done();
+                            return;
+                        }}
+                        if (rootElement.status === 'rejected') {{
+                            throw rootElement.reason ?? new Error('Flight payload rejected');
+                        }}
+
+                        const ReactDOMServer = globalThis['~reactServer'];
+                        const headContent = {head_content_json};
+                        const R = globalThis.React;
+
+                        const fullDoc = R.createElement('html', {{ lang: 'en' }},
+                            R.createElement('head', {{ dangerouslySetInnerHTML: {{ __html: headContent }} }}),
+                            R.createElement('body', null,
+                                R.createElement('div', {{ id: 'root' }}, rootElement)
+                            )
+                        );
+
+                        const fizzStream = await ReactDOMServer.renderToReadableStream(fullDoc, {{
+                            onError(e) {{
+                                console.error('[rari] Fizz streaming error:', e);
+                                caughtErrors.push(e);
+                            }}
+                        }});
+
+                        const reader = fizzStream.getReader();
+                        const decoder = new TextDecoder();
+                        const allReady = fizzStream.allReady;
+                        const pumpFizzStream = (async () => {{
+                            while (true) {{
+                                const {{ done, value }} = await reader.read();
+                                if (done) break;
+                                const text = decoder.decode(value, {{ stream: true }});
+                                await rariPumpFizzChunk(text);
+                            }}
+                            const tail = decoder.decode();
+                            await rariPumpFizzChunk(tail);
+                        }})();
+
+                        await Promise.all([
+                            pumpFizzStream,
+                            allReady ?? Promise.resolve(),
+                        ]);
+
+                        {FIZZ_STREAM_ERROR_INJECTION}
+
+                        Deno.core.ops.op_fizz_done();
+
+                        }} catch(outerError) {{
+                            console.error('[rari] Fizz streaming pipeline fatal error:', outerError);
+                            const displayError = caughtErrors.length > 0 ? caughtErrors[0] : outerError;
+                            const errMsg = String(displayError?.message || outerError?.message || 'Unknown error').split('<').join('&lt;');
+                            const errorHtml = '<!doctype html><html><head></head><body><div id=root><div class=rari-error style=color:red;border:1px_solid_red;padding:10px;border-radius:4px;background-color:#fff5f5><strong>Error loading content: </strong>' + errMsg + '</div></div></body></html>';
+                            await rariPumpFizzChunk(errorHtml);
+                            Deno.core.ops.op_fizz_done();
+                        }}
+                    }})()",
+                );
+
+                let shell = bytes::Bytes::new();
+                let closing = bytes::Bytes::new();
+
+                let runtime_clone = Arc::clone(&runtime);
+                tokio::spawn(async move {
+                    task::yield_now().await;
+                    if let Err(e) = runtime_clone
+                        .execute_script_for_streaming(
+                            "fizz_direct_stream".to_string(),
+                            script,
+                            chunk_sender,
+                        )
+                        .await
+                    {
+                        tracing::error!("Fizz direct streaming error: {e}");
+                    }
+                });
+
+                return Ok(RenderResult::FizzHtmlStream { shell, closing, chunks: chunk_receiver });
+            }
+
+            let render_result = {
+                let renderer = self.renderer.lock().await;
+
+                let composition_script = self.build_composition_script(
+                    route_match,
+                    context,
+                    loading_component_id.as_deref(),
+                    loading_component_id.is_some(),
+                    false,
+                )?;
+
+                let render_and_capture = async {
+                    Self::ensure_react_server_loaded(&renderer).await?;
+
+                    let rsc_flight_protocol =
+                        Self::execute_composition_and_serialize(&renderer, composition_script)
+                            .await?;
+                    Self::validate_rsc_flight_protocol(&rsc_flight_protocol)?;
+                    Self::validate_html_structure(&rsc_flight_protocol, route_match)?;
+
+                    let html_renderer = RscHtmlRenderer::new(Arc::clone(&renderer.runtime));
+                    let html = html_renderer
+                        .render_to_html_for_route_fizz(&rsc_flight_protocol, config, route_match)
+                        .await?;
+
+                    Ok::<(String, String), RariError>((rsc_flight_protocol, html))
+                };
+
+                if let Some(ctx) = request_context.clone() {
+                    renderer.runtime.execute_with_request_context(ctx, render_and_capture).await
+                } else {
+                    render_and_capture.await
+                }
             };
-            let escaped_payload = rsc_payload.cow_replace("</", "<\\/");
-            let payload_script = format!(
-                r#"<script id="__RARI_RSC_PAYLOAD__" type="text/x-component">{escaped_payload}</script>"#
-            );
-            let completion_script = r"<script>
-if (typeof window !== 'undefined') {
-    if (!window['~rari']) window['~rari'] = {};
-    if (!window['~rari'].streaming) window['~rari'].streaming = {};
-    window['~rari'].streaming.complete = true;
-}
-</script>";
+
+            let (rsc_wire_format, html) = match render_result {
+                Ok(v) => v,
+                Err(e) if needs_streaming => {
+                    tracing::warn!("Fizz render failed for streaming route: {e}");
+                    return Err(RariError::internal(format!(
+                        "Fizz render failed for streaming route: {e}"
+                    )));
+                }
+                Err(e) => {
+                    tracing::warn!("Fizz render failed for static route: {e}");
+                    return Err(RariError::internal(format!("Fizz render failed: {e}")));
+                }
+            };
+
+            let has_binary_rows = rsc_wire_format.lines().any(|line| {
+                let trimmed = line.trim();
+                if let Some(colon_pos) = trimmed.find(':') {
+                    let header = &trimmed[..colon_pos];
+                    header.chars().all(|c| c.is_ascii_hexdigit())
+                        && !header.is_empty()
+                        && trimmed[colon_pos + 1..].starts_with('T')
+                } else {
+                    false
+                }
+            });
+
+            let payload_script = if has_binary_rows {
+                let binary_b64 = {
+                    let renderer = self.renderer.lock().await;
+                    let result = renderer
+                        .runtime
+                        .execute_script(
+                            "get_rsc_b64_for_embed".to_string(),
+                            r"(function() {
+                                const bin = globalThis['~rari']?.lastRscBinary;
+                                if (!bin || bin.length === 0) return null;
+                                let str = '';
+                                for (let i = 0; i < bin.length; i++) {
+                                    str += String.fromCharCode(bin[i]);
+                                }
+                                return btoa(str);
+                            })()"
+                                .to_string(),
+                        )
+                        .await;
+                    match result {
+                        Ok(v) => v.as_str().map(String::from),
+                        Err(_) => None,
+                    }
+                };
+                if let Some(b64) = binary_b64 {
+                    format!(
+                        r#"<script id="__RARI_RSC_PAYLOAD__" type="application/octet-stream" data-encoding="base64">{b64}</script>"#
+                    )
+                } else {
+                    let rsc_payload = if rsc_wire_format.ends_with('\n') {
+                        rsc_wire_format.clone()
+                    } else {
+                        format!("{rsc_wire_format}\n")
+                    };
+                    let escaped_payload = rsc_payload.cow_replace("</", "<\\/");
+                    format!(
+                        r#"<script id="__RARI_RSC_PAYLOAD__" type="text/x-component">{escaped_payload}</script>"#
+                    )
+                }
+            } else {
+                let rsc_payload = if rsc_wire_format.ends_with('\n') {
+                    rsc_wire_format.clone()
+                } else {
+                    format!("{rsc_wire_format}\n")
+                };
+                let escaped_payload = rsc_payload.cow_replace("</", "<\\/");
+                format!(
+                    r#"<script id="__RARI_RSC_PAYLOAD__" type="text/x-component">{escaped_payload}</script>"#
+                )
+            };
+            let completion_script = r"<script>if(!window['~rari'])window['~rari']={};window['~rari'].streaming={complete:true}</script>";
 
             let html = if let Some(body_end) = html.rfind("</body>") {
                 let mut result = html;
@@ -473,230 +835,11 @@ if (typeof window !== 'undefined') {
                 format!("{html}{payload_script}\n{completion_script}")
             };
 
-            if route_match.not_found.is_none()
-                && let Err(e) = self.html_cache.insert(cache_key, html.clone()).await
-            {
-                tracing::debug!("layout_html_cache.insert failed: {}", e);
+            if route_match.not_found.is_none() {
+                let _ = self.html_cache.insert(cache_key, html.clone()).await;
             }
 
-            return Ok(RenderResult::Static(html));
-        }
-
-        let composition_script = self.build_composition_script(
-            route_match,
-            context,
-            loading_component_id.as_deref(),
-            true,
-        )?;
-
-        let fallback_script = self.build_composition_script(
-            route_match,
-            context,
-            loading_component_id.as_deref(),
-            false,
-        )?;
-
-        let can_use_html_cache = true;
-
-        if let Some(ctx) = request_context {
-            let renderer_guard = self.renderer.lock().await;
-            let runtime = Arc::clone(&renderer_guard.runtime);
-            let refcount = Arc::clone(&renderer_guard.streaming_refcount);
-            drop(renderer_guard);
-
-            let streaming_operation = async {
-                let prev_count = refcount.fetch_add(1, Ordering::SeqCst);
-
-                if prev_count == 0
-                    && let Err(e) = runtime
-                        .execute_script(
-                            "enable_streaming".to_string(),
-                            JS_ENABLE_STREAMING.to_string(),
-                        )
-                        .await
-                {
-                    refcount.fetch_sub(1, Ordering::SeqCst);
-                    return Err(e);
-                }
-
-                let resolve_helper = include_str!("js/resolve_lazy_helper.js");
-                let injection_result = runtime
-                    .execute_script("inject_lazy_resolver".to_string(), resolve_helper.to_string())
-                    .await;
-
-                if let Err(e) = injection_result {
-                    let new_count = refcount.fetch_sub(1, Ordering::SeqCst);
-                    if new_count == 1
-                        && let Err(cleanup_err) = runtime
-                            .execute_script(
-                                "disable_streaming".to_string(),
-                                JS_DISABLE_STREAMING.to_string(),
-                            )
-                            .await
-                    {
-                        tracing::debug!(
-                            "Failed to disable streaming after injection error: {}",
-                            cleanup_err
-                        );
-                    }
-                    return Err(e);
-                }
-
-                let mut streaming_renderer = StreamingRenderer::new(Arc::clone(&runtime));
-
-                let layout_structure = LayoutStructure::new();
-
-                let streaming_result = streaming_renderer
-                    .start_streaming_with_composition(composition_script, layout_structure)
-                    .await;
-
-                match streaming_result {
-                    Ok(stream) => {
-                        let runtime_for_cleanup = Arc::clone(&runtime);
-                        let refcount_for_cleanup = Arc::clone(&refcount);
-                        let stream_with_cleanup = stream.with_cleanup(move || {
-                            let prev_count = refcount_for_cleanup.fetch_sub(1, Ordering::SeqCst);
-
-                            if prev_count == 1 {
-                                let rt = runtime_for_cleanup;
-                                tokio::spawn(async move {
-                                    let _ = rt
-                                        .execute_script(
-                                            "disable_streaming".to_string(),
-                                            JS_DISABLE_STREAMING.to_string(),
-                                        )
-                                        .await;
-                                });
-                            }
-                        });
-                        Ok(RenderResult::Streaming(stream_with_cleanup))
-                    }
-                    Err(e) => {
-                        error!("Streaming failed, falling back to static render: {}", e);
-
-                        let prev_count = refcount.fetch_sub(1, Ordering::SeqCst);
-                        if prev_count == 1 {
-                            let _ = runtime
-                                .execute_script(
-                                    "disable_streaming".to_string(),
-                                    JS_DISABLE_STREAMING.to_string(),
-                                )
-                                .await;
-                        }
-
-                        let renderer_guard = self.renderer.lock().await;
-                        self.render_fallback(
-                            &renderer_guard,
-                            fallback_script,
-                            route_match,
-                            return_rsc_on_fallback,
-                            can_use_html_cache,
-                            cache_key,
-                        )
-                        .await
-                    }
-                }
-            };
-
-            let result = runtime
-                .execute_with_persistent_request_context(Arc::clone(&ctx), streaming_operation)
-                .await;
-
-            match result {
-                Ok(RenderResult::Streaming(stream)) => {
-                    let runtime_for_cleanup = Arc::clone(&runtime);
-                    let ctx_clone = Arc::clone(&ctx);
-                    let stream_with_context = stream
-                        .with_request_context(ctx)
-                        .with_cleanup(move || {
-                            let runtime = Arc::clone(&runtime_for_cleanup);
-                            let ctx = Arc::clone(&ctx_clone);
-                            tokio::spawn(async move {
-                                if let Err(e) = runtime.clear_request_context_if_matches(ctx).await {
-                                    tracing::error!(
-                                        "Failed to clear request context after streaming completion: {}",
-                                        e
-                                    );
-                                }
-                            });
-                        });
-                    Ok(RenderResult::Streaming(stream_with_context))
-                }
-                other_result => {
-                    if let Err(e) = runtime.clear_request_context().await {
-                        tracing::error!(
-                            "Failed to clear request context after non-streaming result: {}",
-                            e
-                        );
-                    }
-                    other_result
-                }
-            }
-        } else {
-            let streaming_operation = async {
-                let renderer_guard = self.renderer.lock().await;
-
-                Self::enable_streaming_and_inject_lazy_resolver(&renderer_guard).await?;
-
-                let mut streaming_renderer =
-                    StreamingRenderer::new(Arc::clone(&renderer_guard.runtime));
-
-                let layout_structure = LayoutStructure::new();
-
-                let runtime_for_cleanup = Arc::clone(&renderer_guard.runtime);
-                let refcount_for_cleanup = Arc::clone(&renderer_guard.streaming_refcount);
-
-                drop(renderer_guard);
-
-                let streaming_result = streaming_renderer
-                    .start_streaming_with_composition(composition_script, layout_structure)
-                    .await;
-
-                match streaming_result {
-                    Ok(stream) => {
-                        let stream_with_cleanup = stream.with_cleanup(move || {
-                            tokio::spawn(async move {
-                                let prev_count =
-                                    refcount_for_cleanup.fetch_sub(1, Ordering::SeqCst);
-
-                                if prev_count == 1 {
-                                    let _ = runtime_for_cleanup
-                                        .execute_script(
-                                            "disable_streaming".to_string(),
-                                            JS_DISABLE_STREAMING.to_string(),
-                                        )
-                                        .await;
-                                }
-                            });
-                        });
-                        Ok(RenderResult::Streaming(stream_with_cleanup))
-                    }
-                    Err(e) => {
-                        error!("Streaming failed, falling back to static render: {}", e);
-
-                        let renderer = self.renderer.lock().await;
-
-                        let _ = Self::disable_streaming(&renderer).await;
-
-                        let fallback_result = self
-                            .render_fallback(
-                                &renderer,
-                                fallback_script,
-                                route_match,
-                                return_rsc_on_fallback,
-                                can_use_html_cache,
-                                cache_key,
-                            )
-                            .await;
-
-                        drop(renderer);
-
-                        fallback_result
-                    }
-                }
-            };
-
-            streaming_operation.await
+            Ok(RenderResult::Static(html))
         }
     }
 
@@ -745,10 +888,7 @@ if (typeof window !== 'undefined') {
             ""
         };
 
-        if !first_tag_name.is_empty()
-            && first_tag_name != "html"
-            && (html.contains("<html") || html.contains("\"html\""))
-        {
+        if !first_tag_name.is_empty() && (html.contains("<html") || html.contains("\"html\"")) {
             let error_msg =
                 error_messages::create_wrapped_html_error_message(route_match, root_layout_path);
             return Err(RariError::internal(error_msg));
@@ -757,145 +897,53 @@ if (typeof window !== 'undefined') {
         Ok(())
     }
 
-    async fn resolve_lazy_promises(
-        renderer: &RscRenderer,
-        rsc_wire_format: &mut String,
-    ) -> Result<(), RariError> {
-        let mut seen_lazy_promise_ids = FxHashSet::default();
+    async fn ensure_react_server_loaded(renderer: &RscRenderer) -> Result<(), RariError> {
+        let check_result = renderer
+            .runtime
+            .execute_script(
+                "<check_rsc>".to_string(),
+                "typeof globalThis.renderToRsc === 'function'".to_string(),
+            )
+            .await?;
 
-        loop {
-            let pending_promises = {
-                let mut serializer = renderer.serializer.lock();
-                let promises = serializer.pending_lazy_promises.clone();
-                serializer.pending_lazy_promises.clear();
-                promises
-            };
-
-            if pending_promises.is_empty() {
-                break;
-            }
-
-            let mut batch_seen_ids = FxHashSet::default();
-            let unique_promises: Vec<_> = pending_promises
-                .into_iter()
-                .filter(|p| {
-                    !seen_lazy_promise_ids.contains(&p.promise_id)
-                        && batch_seen_ids.insert(p.promise_id.clone())
-                })
-                .collect();
-
-            for lazy_promise in unique_promises {
-                let resolve_script = format!(
-                    "(async () => {{ return await globalThis['~rari'].lazy.resolve('{}'); }})()",
-                    lazy_promise.promise_id
-                );
-
-                let result = match renderer
-                    .runtime
-                    .execute_script(
-                        format!("resolve_promise_{}", lazy_promise.promise_id),
-                        resolve_script,
-                    )
-                    .await
-                {
-                    Ok(result) => result,
-                    Err(e) => {
-                        let error_msg = e.to_string();
-                        if !error_msg.contains("Promise not found") {
-                            tracing::error!(
-                                "Failed to execute script for lazy promise {}: {}",
-                                lazy_promise.promise_id,
-                                e
-                            );
-                        }
-                        return Err(RariError::internal(format!(
-                            "Failed to materialize lazy promise {}",
-                            lazy_promise.promise_id
-                        )));
-                    }
-                };
-
-                if let Some(success) = result.get("success").and_then(Value::as_bool)
-                    && !success
-                {
-                    let error_msg =
-                        result.get("error").and_then(|v| v.as_str()).unwrap_or("Unknown error");
-                    tracing::error!(
-                        "Failed to resolve lazy promise {}: {}",
-                        lazy_promise.promise_id,
-                        error_msg
-                    );
-                    return Err(RariError::internal(format!(
-                        "Failed to materialize lazy promise {}: {}",
-                        lazy_promise.promise_id, error_msg
-                    )));
-                }
-
-                let resolved_content = result.get("data").unwrap_or(&result);
-
-                let serialization_result = {
-                    let mut serializer = renderer.serializer.lock();
-                    serializer.serialize_rsc_json(resolved_content)
-                };
-
-                let wire_format = match serialization_result {
-                    Ok(format) => format,
-                    Err(e) => {
-                        tracing::error!(
-                            "Failed to serialize resolved content for promise {}: {}",
-                            lazy_promise.promise_id,
-                            e
-                        );
-                        return Err(RariError::internal(format!(
-                            "Failed to serialize lazy promise {}: {}",
-                            lazy_promise.promise_id, e
-                        )));
-                    }
-                };
-
-                let mut remapped_root_row = false;
-                for line in wire_format.lines() {
-                    if line.trim().is_empty() {
-                        continue;
-                    }
-                    let line_to_append = if let Some(colon_pos) = line.find(':') {
-                        if line.starts_with(|c: char| c.is_ascii_hexdigit()) {
-                            let row_id_str = &line[..colon_pos];
-                            if usize::from_str_radix(row_id_str, 16).is_ok() {
-                                let content = line.get(colon_pos + 1..).unwrap_or("");
-                                let content_trimmed = content.trim_start();
-
-                                let is_import_or_symbol = content_trimmed.starts_with("I[")
-                                    || content_trimmed.starts_with("I{")
-                                    || content_trimmed.starts_with("\"$S")
-                                    || content_trimmed.starts_with("\"react.suspense");
-
-                                let is_reference = content_trimmed.starts_with("\"$")
-                                    && content_trimmed.len() > 2
-                                    && !content_trimmed.starts_with("\"$S");
-
-                                if is_import_or_symbol || is_reference || remapped_root_row {
-                                    line.to_string()
-                                } else {
-                                    remapped_root_row = true;
-                                    format!("{:x}:{}", lazy_promise.lazy_row_id, content)
-                                }
-                            } else {
-                                line.to_string()
-                            }
-                        } else {
-                            line.to_string()
-                        }
-                    } else {
-                        line.to_string()
-                    };
-                    rsc_wire_format.push('\n');
-                    rsc_wire_format.push_str(&line_to_append);
-                }
-
-                seen_lazy_promise_ids.insert(lazy_promise.promise_id.clone());
-            }
+        if check_result.as_bool() == Some(true) {
+            return Ok(());
         }
+
+        let setup_script = r"
+            (async function() {
+                const [react, flightServer] = await Promise.all([
+                    import('file:///react_vendor/react.js'),
+                    import('file:///react_vendor/react-server-dom-webpack-server.js'),
+                ]);
+                if (!globalThis.React?.createElement) {
+                    globalThis.React = react.default && react.default.createElement ? react.default : react;
+                }
+                globalThis['~reactServerRenderer'] = flightServer;
+                return !!(globalThis.React.createElement && globalThis['~reactServerRenderer'].renderToReadableStream);
+            })()
+        ";
+
+        let result = renderer
+            .runtime
+            .execute_script("<load_react_server>".to_string(), setup_script.to_string())
+            .await
+            .map_err(|e| {
+                RariError::internal(format!("Failed to load React Server renderer: {e}"))
+            })?;
+
+        if result.as_bool() != Some(true) {
+            return Err(RariError::internal(
+                "React Server renderer module failed to initialize".to_string(),
+            ));
+        }
+
+        let renderer_script = include_str!("../streaming/js/rsc_renderer.ts");
+        renderer
+            .runtime
+            .execute_script("load_rsc_renderer.ts".to_string(), renderer_script.to_string())
+            .await
+            .map_err(|e| RariError::internal(format!("Failed to load RSC renderer: {e}")))?;
 
         Ok(())
     }
@@ -904,6 +952,8 @@ if (typeof window !== 'undefined') {
         renderer: &RscRenderer,
         composition_script: String,
     ) -> Result<String, RariError> {
+        Self::ensure_react_server_loaded(renderer).await?;
+
         let promise_result = renderer
             .runtime
             .execute_script("compose_and_render".to_string(), composition_script)
@@ -926,23 +976,33 @@ if (typeof window !== 'undefined') {
             RariError::internal("No RSC data in render result")
         })?;
 
-        let mut rsc_wire_format = {
-            let mut serializer = renderer.serializer.lock();
-            serializer.reset_for_new_request();
-            serializer
-                .serialize_rsc_json(rsc_data)
-                .map_err(|e| RariError::internal(format!("Failed to serialize RSC data: {e}")))?
-        };
+        if let Some(wire_format_str) = rsc_data.as_str() {
+            return Ok(wire_format_str.to_string());
+        }
 
-        Self::resolve_lazy_promises(renderer, &mut rsc_wire_format).await?;
-
-        Ok(rsc_wire_format)
+        Err(RariError::internal(
+            "RSC render did not produce a wire format string. The renderer may not be loaded."
+                .to_string(),
+        ))
     }
 
-    fn validate_rsc_wire_format(rsc_data: &str) -> Result<(), RariError> {
+    fn validate_rsc_flight_protocol(rsc_data: &str) -> Result<(), RariError> {
         if rsc_data.trim().is_empty() {
             let error_msg = error_messages::create_empty_rsc_error_message();
             return Err(RariError::internal(error_msg));
+        }
+
+        let looks_like_flight = rsc_data.lines().any(|line| {
+            let line = line.trim();
+            line.find(':').is_some_and(|colon| {
+                !line[..colon].is_empty() && line[..colon].chars().all(|c| c.is_ascii_hexdigit())
+            })
+        });
+
+        if !looks_like_flight {
+            return Err(RariError::internal(
+                "RSC output does not look like a valid Flight wire format".to_string(),
+            ));
         }
 
         Ok(())
@@ -958,7 +1018,7 @@ if (typeof window !== 'undefined') {
         if has_root_layout {
             let html = self.render_route(route_match, context, None).await?;
 
-            Self::validate_rsc_wire_format(&html)?;
+            Self::validate_rsc_flight_protocol(&html)?;
 
             let (tx, rx) = mpsc::channel(1);
             let _ = tx
@@ -985,7 +1045,7 @@ if (typeof window !== 'undefined') {
     ) -> Result<RscStream, RariError> {
         let html = self.render_route(route_match, context, None).await?;
 
-        Self::validate_rsc_wire_format(&html)?;
+        Self::validate_rsc_flight_protocol(&html)?;
 
         let (tx, rx) = mpsc::channel(1);
         let _ = tx
@@ -1008,6 +1068,7 @@ if (typeof window !== 'undefined') {
         context: &LayoutRenderContext,
         loading_component_id: Option<&str>,
         use_suspense: bool,
+        defer_rsc: bool,
     ) -> Result<String, RariError> {
         let page_props = utils::create_page_props(route_match, context).map_err(|e| {
             error!("Failed to create page props for route '{}': {}", route_match.route.path, e);
@@ -1039,27 +1100,67 @@ if (typeof window !== 'undefined') {
         };
 
         let page_render_script = if route_match.not_found.is_some() {
-            JS_PAGE_RENDER_SIMPLE
-                .cow_replace("{page_component_id}", &page_component_id)
-                .cow_replace("{page_props_json}", "{}")
-                .into_owned()
+            format!(
+                r#"
+                const PageComponent = globalThis["{page_component_id}"];
+                if (!PageComponent || typeof PageComponent !== 'function') {{
+                    throw new Error('Page component {page_component_id} not found');
+                }}
+                const pageElement = React.createElement(PageComponent, {{}});
+                timings.pageRender = performance.now() - startPageRender;
+                "#
+            )
         } else if let Some(loading_id) = loading_component_id {
             let loading_file_path =
                 route_match.loading.as_ref().map(|l| l.file_path.as_str()).unwrap_or("");
 
-            JS_PAGE_RENDER_WITH_LOADING
-                .cow_replace("{page_component_id}", &page_component_id)
-                .cow_replace("{loading_id}", loading_id)
-                .cow_replace("{page_props_json}", &page_props_json)
-                .cow_replace("{use_suspense}", if use_suspense { "true" } else { "false" })
-                .cow_replace("{route_file_path}", &route_match.route.file_path)
-                .cow_replace("{loading_file_path}", loading_file_path)
-                .into_owned()
+            format!(
+                r#"
+                const PageComponent = globalThis["{}"];
+                if (!PageComponent || typeof PageComponent !== 'function') {{
+                    throw new Error('Page component {} not found in route {}');
+                }}
+
+                const LoadingComponent = globalThis["{}"];
+                if (!LoadingComponent || typeof LoadingComponent !== 'function') {{
+                    throw new Error('Loading component {} not found in route {}');
+                }}
+
+                const pageProps = {};
+                const useSuspense = {};
+                const isAsync = PageComponent.constructor.name === 'AsyncFunction';
+
+                const pageElement = (isAsync && useSuspense)
+                    ? React.createElement(
+                        React.Suspense,
+                        {{ fallback: React.createElement(LoadingComponent, {{}}) }},
+                        React.createElement(PageComponent, pageProps)
+                      )
+                    : React.createElement(PageComponent, pageProps);
+
+                timings.pageRender = performance.now() - startPageRender;
+                "#,
+                page_component_id,
+                page_component_id,
+                route_match.route.file_path,
+                loading_id,
+                loading_id,
+                loading_file_path,
+                page_props_json,
+                if use_suspense { "true" } else { "false" }
+            )
         } else {
-            JS_PAGE_RENDER_SIMPLE
-                .cow_replace("{page_component_id}", &page_component_id)
-                .cow_replace("{page_props_json}", &page_props_json)
-                .into_owned()
+            format!(
+                r#"
+                const PageComponent = globalThis["{page_component_id}"];
+                if (!PageComponent || typeof PageComponent !== 'function') {{
+                    throw new Error('Page component {page_component_id} not found');
+                }}
+                const pageProps = {page_props_json};
+                const pageElement = React.createElement(PageComponent, pageProps);
+                timings.pageRender = performance.now() - startPageRender;
+                "#
+            )
         };
 
         let pathname_json =
@@ -1086,7 +1187,9 @@ if (typeof window !== 'undefined') {
                     .component_id
                     .clone()
                     .unwrap_or_else(|| utils::create_component_id(&template.file_path)),
-                client_component_id: utils::create_client_component_id(&template.file_path),
+                client_component_id: utils::normalize_route_component_path_public(
+                    &template.file_path,
+                ),
                 file_path: template.file_path.clone(),
             })
             .collect();
@@ -1116,6 +1219,7 @@ if (typeof window !== 'undefined') {
             &pathname_json,
             error_boundary.as_ref(),
             &metadata_json,
+            defer_rsc,
         );
 
         Ok(script)
@@ -1262,5 +1366,31 @@ mod tests {
         for i in 0..50 {
             assert!(cache.get(i).await.is_none(), "key {i} survived clear");
         }
+    }
+
+    #[test]
+    fn test_validate_rsc_flight_protocol_accepts_flight_rows() {
+        assert!(
+            LayoutRenderer::validate_rsc_flight_protocol("0:\"$1\"\n1:[\"$\",\"div\",null,{}]\n")
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn test_validate_rsc_flight_protocol_rejects_empty() {
+        assert!(LayoutRenderer::validate_rsc_flight_protocol("").is_err());
+        assert!(LayoutRenderer::validate_rsc_flight_protocol("   \n").is_err());
+    }
+
+    #[test]
+    fn test_validate_rsc_flight_protocol_rejects_non_flight_output() {
+        let result = LayoutRenderer::validate_rsc_flight_protocol("Error: composition failed");
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("does not look like a valid Flight wire format")
+        );
     }
 }

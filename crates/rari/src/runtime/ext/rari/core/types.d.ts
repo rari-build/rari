@@ -25,15 +25,9 @@ declare global {
       SAFE_PROPS?: Set<string>
       isSafeProp?: (key: string) => boolean
       safeSerializeElement?: (element: unknown) => unknown
-      depth?: number
     }
     '~reactServer'?: {
       renderToReadableStream: (element: unknown, options?: { onError?: (error: unknown) => void }) => Promise<ReadableStream>
-    }
-    '~realReact'?: {
-      createElement: (type: unknown, props: unknown | null, ...children: unknown[]) => unknown
-      Suspense: unknown
-      Fragment: unknown
     }
     '~flightClient'?: {
       createFromReadableStream: (stream: ReadableStream, options?: { ssrManifest?: unknown }) => Promise<unknown>
@@ -42,7 +36,9 @@ declare global {
       renderToReadableStream: (element: unknown, bundlerConfig: unknown, options?: { onError?: (error: unknown) => void }) => Promise<ReadableStream>
     }
     '~promises'?: {
-      resolved?: Map<Promise<unknown>, { status: 'fulfilled' | 'rejected', value?: unknown, reason?: unknown }>
+      currentObject?: unknown
+      resolvedValue?: unknown
+      resolutionComplete?: boolean
     }
     '~clientComponents'?: Record<string, { id: string, path: string, type: 'client', component: any, registered: boolean }>
     '~clientComponentNames'?: Record<string, string>
@@ -136,8 +132,9 @@ declare global {
       ssrModules?: Record<string, { default?: unknown, [key: string]: unknown }>
       ssrRenderComponent?: (modulePath: string, exportName: string, props: unknown) => Promise<string>
       renderWireToHtml?: (wireFormat: string) => Promise<string>
-      renderWireToFizzStream?: (wireFormat: string) => Promise<void>
       clientReferenceManifest?: Record<string, { id: string, chunks: string, name: string }>
+      lastRscBinary?: Uint8Array
+      capturedElement?: unknown
       exportOwners?: Record<string, string>
       metadataCollector?: {
         collect: (layoutPaths: string[], pagePath: string, params: Record<string, string>, searchParams: Record<string, string>) => Promise<unknown[]>

@@ -1,4 +1,11 @@
-use std::pin::Pin;
+use std::{
+    io::{Error, ErrorKind::BrokenPipe},
+    pin::Pin,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering::Relaxed},
+    },
+};
 
 use axum::{
     body::Body,
@@ -31,15 +38,12 @@ impl StreamingHtmlResponse {
 
 impl IntoResponse for StreamingHtmlResponse {
     fn into_response(self) -> Response {
-        let client_connected = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+        let client_connected = Arc::new(AtomicBool::new(true));
         let client_connected_clone = client_connected;
 
         let stream = self.stream.map(move |chunk| {
-            if !client_connected_clone.load(std::sync::atomic::Ordering::Relaxed) {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::BrokenPipe,
-                    "Client disconnected",
-                ));
+            if !client_connected_clone.load(Relaxed) {
+                return Err(Error::new(BrokenPipe, "Client disconnected"));
             }
 
             match chunk {
@@ -48,10 +52,10 @@ impl IntoResponse for StreamingHtmlResponse {
                     if e.to_string().contains("disconnected")
                         || e.to_string().contains("broken pipe")
                     {
-                        client_connected_clone.store(false, std::sync::atomic::Ordering::Relaxed);
+                        client_connected_clone.store(false, Relaxed);
                     }
 
-                    Err(std::io::Error::other(e.to_string()))
+                    Err(Error::other(e.to_string()))
                 }
             }
         });

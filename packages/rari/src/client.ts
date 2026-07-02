@@ -45,4 +45,4 @@ export type {
 export type {
   ServerConfig,
   ServerCSPConfig,
-} from './types/server-config'
+} from './vite/server-config'

@@ -1,4 +1,5 @@
 use rustc_hash::FxHashMap;
+use tokio::sync::mpsc;
 
 use crate::{rendering::streaming::RscStream, server::routing::types::ParamValue};
 
@@ -198,7 +199,13 @@ pub struct SuspenseDetectionResult {
 #[non_exhaustive]
 pub enum RenderResult {
     Static(String),
+    StaticBinary(Vec<u8>),
     Streaming(RscStream),
+    FizzHtmlStream {
+        shell: bytes::Bytes,
+        closing: bytes::Bytes,
+        chunks: mpsc::Receiver<Result<Vec<u8>, String>>,
+    },
 }
 
 #[derive(Debug, Clone)]

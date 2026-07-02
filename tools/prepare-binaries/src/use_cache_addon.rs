@@ -11,6 +11,17 @@ use crate::common::{Target, get_current_platform_target, log, log_error, log_suc
 
 const ADDON_BUILD_DIR: &str = ".build/rari-use-cache";
 const ADDON_OUTPUT_FILE: &str = "rari_use_cache.node";
+const USE_CACHE_INDEX_JS: &str = r"import { createRequire } from 'node:module'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const require = createRequire(import.meta.url)
+const __dirname = dirname(fileURLToPath(import.meta.url))
+
+const addon = require(join(__dirname, 'rari_use_cache.node'))
+
+export default addon
+";
 
 fn addon_napi_output_path(target_info: &Target, project_root: &Path) -> PathBuf {
     project_root.join(ADDON_BUILD_DIR).join(format!("rari-use-cache.{}.node", target_info.platform))
@@ -222,7 +233,6 @@ fn generate_platform_package_files(
 
     let template_package_json_path =
         project_root.join(".github/templates/package-json/use-cache-platform.json");
-    let template_index_js_path = project_root.join(".github/templates/js/use-cache-platform.js");
 
     let package_json_template = fs::read_to_string(&template_package_json_path)
         .context("Failed to read package.json template")?;
@@ -235,12 +245,9 @@ fn generate_platform_package_files(
         .cow_replace("{CPU}", cpu)
         .into_owned();
 
-    let index_js =
-        fs::read_to_string(&template_index_js_path).context("Failed to read index.js template")?;
-
     fs::write(package_dir.join("package.json"), package_json)
         .context("Failed to write platform package.json")?;
-    fs::write(package_dir.join("index.js"), index_js)
+    fs::write(package_dir.join("index.js"), USE_CACHE_INDEX_JS)
         .context("Failed to write platform index.js")?;
 
     log_success(&format!("Generated package files for {package_name}"));

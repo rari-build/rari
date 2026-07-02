@@ -1,5 +1,9 @@
 use cow_utils::CowUtils;
 use image::{Rgba, RgbaImage};
+use resvg::{
+    tiny_skia::{Pixmap, Transform},
+    usvg::{Options, Size, Tree},
+};
 
 use super::{
     super::{
@@ -55,30 +59,26 @@ impl ImageRenderer {
 
         let svg_string = jsx_to_svg_string(&layout.element);
 
-        let options = resvg::usvg::Options {
-            default_size: resvg::usvg::Size::from_wh(width as f32, height as f32).unwrap_or_else(
-                || {
-                    #[expect(
-                        clippy::expect_used,
-                        reason = "Hardcoded size (100x100) is guaranteed valid"
-                    )]
-                    resvg::usvg::Size::from_wh(100.0, 100.0)
-                        .expect("hardcoded fallback size is always valid")
-                },
-            ),
+        let options = Options {
+            default_size: Size::from_wh(width as f32, height as f32).unwrap_or_else(|| {
+                #[expect(
+                    clippy::expect_used,
+                    reason = "Hardcoded size (100x100) is guaranteed valid"
+                )]
+                Size::from_wh(100.0, 100.0).expect("hardcoded fallback size is always valid")
+            }),
             ..Default::default()
         };
 
-        let tree = resvg::usvg::Tree::from_str(&svg_string, &options)
-            .map_err(|e| format!("SVG parse error: {e}"))?;
+        let tree =
+            Tree::from_str(&svg_string, &options).map_err(|e| format!("SVG parse error: {e}"))?;
 
-        let mut pixmap =
-            resvg::tiny_skia::Pixmap::new(width, height).ok_or("Failed to create pixmap")?;
+        let mut pixmap = Pixmap::new(width, height).ok_or("Failed to create pixmap")?;
 
         let svg_size = tree.size();
         let scale_x = width as f32 / svg_size.width();
         let scale_y = height as f32 / svg_size.height();
-        let transform = resvg::tiny_skia::Transform::from_scale(scale_x, scale_y);
+        let transform = Transform::from_scale(scale_x, scale_y);
 
         resvg::render(&tree, transform, &mut pixmap.as_mut());
 
@@ -450,8 +450,8 @@ mod tests {
         assert!(svg.contains("viewBox=\"0 0 437 145\""));
         assert!(svg.contains("fill=\"#fff\""));
 
-        let options = resvg::usvg::Options::default();
-        let result = resvg::usvg::Tree::from_str(&svg, &options);
+        let options = Options::default();
+        let result = Tree::from_str(&svg, &options);
         assert!(result.is_ok(), "usvg failed to parse Rari logo: {:?}", result.err());
     }
 
@@ -493,8 +493,8 @@ mod tests {
         assert!(svg.contains("gradientUnits=\"userSpaceOnUse\""));
         assert!(svg.contains("stop-color=\"#ff0000\""));
 
-        let options = resvg::usvg::Options::default();
-        let result = resvg::usvg::Tree::from_str(&svg, &options);
+        let options = Options::default();
+        let result = Tree::from_str(&svg, &options);
         assert!(result.is_ok(), "usvg failed to parse gradient SVG: {:?}", result.err());
     }
 }

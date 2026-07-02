@@ -1,47 +1,46 @@
-/* eslint-disable no-undef, style/object-curly-spacing */
-// oxlint-disable @typescript-eslint/no-floating-promises
+/// <reference path="../../types.d.ts" />
+
+interface SuspenseError {
+  $$typeof: symbol
+  promise: Promise<unknown>
+}
+
 (async function () {
   const REACT_ELEMENT_TYPE = Symbol.for('react.transitional.element')
   const REACT_SUSPENSE_PENDING = Symbol.for('react.suspense.pending')
 
-  let Component
+  let Component: (props: unknown) => unknown
   let componentSource = 'not found'
 
-  if (typeof globalThis['{component_id}'] === 'function') {
-    Component = globalThis['{component_id}']
+  if (typeof g['{component_id}'] === 'function') {
+    Component = g['{component_id}'] as (props: unknown) => unknown
     componentSource = 'global.{component_id}'
   }
   else if (
-    globalThis['~rsc'].modules
-    && globalThis['~rsc'].modules['{component_id}']
+    g['~rsc']?.modules
+    && g['~rsc'].modules['{component_id}']
   ) {
     Component
-      = globalThis['~rsc'].modules['{component_id}'].default
-        || Object.values(globalThis['~rsc'].modules['{component_id}'])[0]
+      = (g['~rsc'].modules['{component_id}'].default
+        || Object.values(g['~rsc'].modules['{component_id}'])[0]) as (props: unknown) => unknown
     componentSource = '~rsc.modules.{component_id}'
   }
   else {
     throw new Error('Component {component_id} not found in global scope')
   }
 
-  const sanitizeComponentOutput = (html, componentId) => {
+  const sanitizeComponentOutput = (html: unknown, componentId: string): unknown => {
     if (typeof html !== 'string')
       return html
 
     return Deno.core.ops.op_sanitize_html(html, componentId)
   }
 
-  const elementToRSC = async (element, componentId) => {
+  const elementToRSC = async (element: unknown, componentId: string): Promise<unknown> => {
     try {
-      const clientComponents = globalThis['~clientComponents'] || {}
-
-      let rscResult
-      if (typeof globalThis.renderToRsc === 'function') {
-        const currentBoundaryId = globalThis['~suspense']?.currentBoundaryId || null
-        rscResult = await globalThis.renderToRsc(element, clientComponents, currentBoundaryId)
-      }
-      else if (typeof globalThis.traverseToRsc === 'function') {
-        rscResult = await globalThis.traverseToRsc(element, clientComponents)
+      let rscResult: unknown
+      if (typeof g.renderToRsc === 'function') {
+        rscResult = await g.renderToRsc(element)
       }
       else {
         rscResult = {
@@ -56,13 +55,14 @@
 
       return rscResult
     }
-    catch (error) {
+    catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
       return {
         $$typeof: REACT_ELEMENT_TYPE,
         type: 'div',
         props: {
           'data-rsc-component': componentId,
-          'children': `Error: ${error.message}`,
+          'children': `Error: ${errorMessage}`,
         },
       }
     }
@@ -72,13 +72,14 @@
 
   const isAsyncComponent = Component.constructor.name === 'AsyncFunction'
 
-  let element
+  let element: unknown
   if (isAsyncComponent) {
     try {
       const result = await Component(props)
       element = result
     }
-    catch (asyncError) {
+    catch (asyncError: unknown) {
+      const errorMessage = asyncError instanceof Error ? asyncError.message : String(asyncError)
       console.error(`[rari] Error rendering ${componentSource}:`, asyncError)
       const errorResult = {
         html: '',
@@ -87,12 +88,13 @@
         debug: {
           component_id: componentSource,
           success: false,
-          error: asyncError.message,
+          error: errorMessage,
         },
       }
-      if (!globalThis['~render'])
-        globalThis['~render'] = {}
-      globalThis['~render'].lastResult = errorResult
+
+      if (!g['~render'])
+        g['~render'] = {}
+      g['~render'].lastResult = errorResult
 
       return errorResult
     }
@@ -104,10 +106,10 @@
   try {
     const rscResult = await elementToRSC(element, '{component_id}')
 
-    let htmlResult = null
+    let htmlResult: string | null = null
     try {
-      htmlResult = await renderToHtml(element)
-      htmlResult = sanitizeComponentOutput(htmlResult, '{component_id}')
+      htmlResult = g.renderToHtmlFizz ? await g.renderToHtmlFizz(element) : null
+      htmlResult = sanitizeComponentOutput(htmlResult, '{component_id}') as string
     }
     catch (htmlError) {
       console.warn('HTML generation failed, using RSC only:', htmlError)
@@ -125,9 +127,10 @@
           reason: 'empty_rsc',
         },
       }
-      if (!globalThis['~render'])
-        globalThis['~render'] = {}
-      globalThis['~render'].lastResult = emptyResult
+
+      if (!g['~render'])
+        g['~render'] = {}
+      g['~render'].lastResult = emptyResult
 
       return emptyResult
     }
@@ -144,26 +147,27 @@
       },
     }
 
-    if (!globalThis['~render'])
-      globalThis['~render'] = {}
-    globalThis['~render'].lastResult = finalResult
+    if (!g['~render'])
+      g['~render'] = {}
+    g['~render'].lastResult = finalResult
 
     return finalResult
   }
-  catch (error) {
-    if (error && error.$$typeof === REACT_SUSPENSE_PENDING) {
-      if (error.promise && typeof error.promise.then === 'function') {
+  catch (error: unknown) {
+    const suspenseError = error as SuspenseError
+    if (suspenseError && suspenseError.$$typeof === REACT_SUSPENSE_PENDING) {
+      if (suspenseError.promise && typeof suspenseError.promise.then === 'function') {
         try {
-          await error.promise
+          await suspenseError.promise
 
           const newElement = isAsyncComponent ? await Component(props) : Component(props)
 
           const rscResult = await elementToRSC(newElement, '{component_id}')
 
-          let htmlResult = null
+          let htmlResult: string | null = null
           try {
-            htmlResult = await renderToHtml(newElement)
-            htmlResult = sanitizeComponentOutput(htmlResult, '{component_id}')
+            htmlResult = g.renderToHtmlFizz ? await g.renderToHtmlFizz(newElement) : null
+            htmlResult = sanitizeComponentOutput(htmlResult, '{component_id}') as string
           }
           catch (htmlError) {
             console.warn(
@@ -186,12 +190,14 @@
             },
           }
 
-          if (!globalThis['~render'])
-            globalThis['~render'] = {}
-          globalThis['~render'].lastResult = suspenseResolvedResult
+          if (!g['~render'])
+            g['~render'] = {}
+          g['~render'].lastResult = suspenseResolvedResult
+
           return suspenseResolvedResult
         }
-        catch (resolveError) {
+        catch (resolveError: unknown) {
+          const errorMessage = resolveError instanceof Error ? resolveError.message : String(resolveError)
           console.error(`[rari] Error rendering ${componentSource} after suspense:`, resolveError)
           const errorResult = {
             html: '',
@@ -200,18 +206,20 @@
             debug: {
               component_id: componentSource,
               success: false,
-              error: resolveError.message,
+              error: errorMessage,
             },
           }
 
-          if (!globalThis['~render'])
-            globalThis['~render'] = {}
-          globalThis['~render'].lastResult = errorResult
+          if (!g['~render'])
+            g['~render'] = {}
+          g['~render'].lastResult = errorResult
+
           return errorResult
         }
       }
     }
 
+    const errorMessage = error instanceof Error ? error.message : String(error)
     console.error(`[rari] Error rendering ${componentSource}:`, error)
     const errorResult = {
       html: '',
@@ -220,13 +228,13 @@
       debug: {
         component_id: componentSource,
         success: false,
-        error: error.message,
+        error: errorMessage,
       },
     }
 
-    if (!globalThis['~render'])
-      globalThis['~render'] = {}
-    globalThis['~render'].lastResult = errorResult
+    if (!g['~render'])
+      g['~render'] = {}
+    g['~render'].lastResult = errorResult
 
     return errorResult
   }

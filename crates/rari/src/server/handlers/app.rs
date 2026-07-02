@@ -1,39 +1,47 @@
 use std::{
-    io::Cursor,
+    env,
+    io::{Cursor, Error},
     path::{Path, PathBuf},
+    string::String,
     sync::{
         Arc,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, Ordering::Relaxed},
     },
     time::Instant,
 };
 
 use async_compression::tokio::bufread::{BrotliDecoder, GzipDecoder, ZstdDecoder};
 use axum::{
+    body,
     body::Body,
     extract::{Query, State},
-    http::StatusCode,
+    http::{HeaderMap, HeaderValue, StatusCode, Uri, header::CACHE_CONTROL},
     response::Response,
 };
 use cow_utils::CowUtils;
 use rari_utils::path_to_file_url;
 use rustc_hash::FxHashMap;
-use tokio::{io::AsyncReadExt, sync::Mutex};
+use tokio::{
+    fs,
+    sync::{Mutex, mpsc::Receiver},
+    time::{self, Duration},
+};
 use tracing::error;
 
 use crate::{
+    RscHtmlRenderer,
     rendering::{
         layout::{
             LayoutRenderContext, LayoutRenderer, OpenGraphImage, OpenGraphImageDescriptor,
             OpenGraphMetadata, PageMetadata, RenderResult, TwitterMetadata, create_layout_context,
         },
-        r#static::{RscHtmlRenderer, RscToHtmlConverter},
+        r#static::RscToHtmlConverter,
         streaming::stream::RscStream,
     },
     server::{
         ServerState,
-        cache::response::{self, CacheMetadata, CachedResponse, ResponseCache, RouteCachePolicy},
-        compression::{CompressionEncoding, compress_body, compress_stream},
+        cache::response,
+        compression::{CompressionEncoding, compress_stream},
         config::Config,
         core::{
             types::request::{RenderMode, RequestTypeDetector},
@@ -47,10 +55,9 @@ use crate::{
         },
         middleware::request_context::RequestContext,
         rendering::{
-            self,
             metadata_injection::inject_metadata,
             utils::{
-                extract_asset_links_from_index_html, extract_body_scripts_from_index_html,
+                self, extract_asset_links_from_index_html, extract_body_scripts_from_index_html,
                 inject_assets_into_html, inject_vite_client,
             },
         },
@@ -61,7 +68,9 @@ use crate::{
 async fn decompress_bytes(
     data: &bytes::Bytes,
     encoding: CompressionEncoding,
-) -> Result<bytes::Bytes, std::io::Error> {
+) -> Result<bytes::Bytes, Error> {
+    use tokio::io::AsyncReadExt;
+
     let data = data.clone();
     match encoding {
         CompressionEncoding::Gzip => {
@@ -124,7 +133,7 @@ fn sort_rsc_rows(wire_format: &str) -> String {
     sorted
 }
 
-fn wrap_html_with_metadata(
+pub(crate) fn wrap_html_with_metadata(
     html_content: String,
     metadata: Option<&PageMetadata>,
     state: &ServerState,
@@ -144,15 +153,13 @@ fn wrap_html_with_metadata(
     }
 }
 
-async fn collect_page_metadata(
+pub(crate) async fn collect_page_metadata(
     state: &ServerState,
     route_match: &AppRouteMatch,
     context: &LayoutRenderContext,
 ) -> Option<PageMetadata> {
-    let dist_server_path = std::env::current_dir()
-        .ok()
-        .map(|p| p.join("dist/server"))
-        .and_then(|p| p.canonicalize().ok());
+    let dist_server_path =
+        env::current_dir().ok().map(|p| p.join("dist/server")).and_then(|p| p.canonicalize().ok());
 
     let base_path = match dist_server_path {
         Some(path) => path,
@@ -327,7 +334,7 @@ fn get_base_url_from_context(context: &LayoutRenderContext, config: &Config) -> 
             .headers
             .get("x-forwarded-proto")
             .or_else(|| context.headers.get("x-forwarded-protocol"))
-            .map(std::string::String::as_str)
+            .map(String::as_str)
             .unwrap_or_else(|| if config.is_production() { "https" } else { "http" });
 
         format!("{protocol}://{host}")
@@ -411,6 +418,19 @@ pub async fn render_rsc_navigation_streaming(
             )
             .await
         }
+        RenderResult::FizzHtmlStream { .. } => {
+            error!("FizzHtmlStream not supported in RSC-only mode");
+            let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
+            #[expect(
+                clippy::expect_used,
+                reason = "Response::builder() with valid components never fails"
+            )]
+            Ok(Response::builder()
+                .status(status_code)
+                .header("content-type", "text/x-component")
+                .body(Body::from("0:\"Error: FizzHtmlStream not supported in RSC mode\"\n"))
+                .expect("Valid error response"))
+        }
         RenderResult::Static(rsc_wire_format) => {
             let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
 
@@ -441,6 +461,28 @@ pub async fn render_rsc_navigation_streaming(
             )]
             Ok(response_builder.body(Body::from(final_payload)).expect("Valid RSC response"))
         }
+        RenderResult::StaticBinary(binary_payload) => {
+            let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
+
+            let mut response_builder = Response::builder()
+                .status(status_code)
+                .header("content-type", "text/x-component")
+                .header("vary", "Accept");
+
+            if let Some(ref metadata) = context.metadata
+                && let Ok(metadata_json) = serde_json::to_string(metadata)
+            {
+                let encoded_metadata = urlencoding::encode(&metadata_json);
+                response_builder =
+                    response_builder.header("x-rari-metadata", encoded_metadata.as_ref());
+            }
+
+            #[expect(
+                clippy::expect_used,
+                reason = "Response::builder() with valid components never fails"
+            )]
+            Ok(response_builder.body(Body::from(binary_payload)).expect("Valid RSC response"))
+        }
     }
 }
 
@@ -456,12 +498,12 @@ async fn render_rsc_streaming_response(
     let should_continue_clone = should_continue;
 
     let rsc_wire_stream = async_stream::stream! {
-        while should_continue_clone.load(Ordering::Relaxed) {
+        while should_continue_clone.load(Relaxed) {
             match rsc_stream.next_chunk().await {
                 Some(chunk) => {
                     let data = String::from_utf8_lossy(&chunk.data).to_string();
                     if data.trim() != "STREAM_COMPLETE" {
-                        yield Ok::<_, std::io::Error>(bytes::Bytes::from(data));
+                        yield Ok::<_, Error>(bytes::Bytes::from(data));
                     }
                 }
                 None => {
@@ -550,6 +592,19 @@ pub async fn render_synchronous(
                     .body(Body::from(final_html))
                     .expect("Valid HTML response"))
             }
+            RenderResult::FizzHtmlStream { shell, closing, chunks } => {
+                render_fizz_html_stream(
+                    state,
+                    route_match,
+                    context,
+                    shell,
+                    closing,
+                    chunks,
+                    is_not_found,
+                    accept_encoding,
+                )
+                .await
+            }
             RenderResult::Streaming(stream) => {
                 render_streaming_response(
                     state,
@@ -561,12 +616,113 @@ pub async fn render_synchronous(
                 )
                 .await
             }
+            RenderResult::StaticBinary(bytes) => {
+                let html_content = String::from_utf8_lossy(&bytes).into_owned();
+                let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
+                #[expect(
+                    clippy::expect_used,
+                    reason = "Response::builder() with valid components never fails"
+                )]
+                Ok(Response::builder()
+                    .status(status_code)
+                    .header("content-type", "text/html; charset=utf-8")
+                    .header("vary", "Accept")
+                    .body(Body::from(html_content))
+                    .expect("Valid response"))
+            }
         },
         Err(e) => {
             error!("Synchronous rendering failed: {}", e);
             render_fallback_html(&state, &route_match.route.path, is_not_found).await
         }
     }
+}
+
+#[expect(clippy::too_many_arguments)]
+async fn render_fizz_html_stream(
+    state: Arc<ServerState>,
+    _route_match: AppRouteMatch,
+    context: LayoutRenderContext,
+    shell: bytes::Bytes,
+    closing: bytes::Bytes,
+    mut chunks: Receiver<Result<Vec<u8>, String>>,
+    is_not_found: bool,
+    accept_encoding: Option<&str>,
+) -> Result<Response, StatusCode> {
+    use crate::server::compression::compress_stream;
+
+    let stall_timeout = Duration::from_millis(fizz_stream_stall_timeout_ms());
+
+    let fizz_stream = async_stream::stream! {
+        yield Ok::<_, Error>(shell);
+
+        loop {
+            match time::timeout(stall_timeout, chunks.recv()).await {
+                Ok(Some(Ok(chunk_bytes))) => {
+                    if !chunk_bytes.is_empty() {
+                        yield Ok(bytes::Bytes::from(chunk_bytes));
+                    }
+                }
+                Ok(Some(Err(e))) => {
+                    error!("Error in Fizz stream chunk: {}", e);
+                    yield Err(Error::other(e));
+                    break;
+                }
+                Ok(None) => break,
+                Err(_) => {
+                    error!(
+                        "Fizz stream stalled: no chunk received within {} ms",
+                        stall_timeout.as_millis()
+                    );
+                    yield Ok(fizz_stream_error_chunk("Stream timed out waiting for content"));
+                    break;
+                }
+            }
+        }
+
+        yield Ok(closing);
+    };
+
+    let encoding = CompressionEncoding::from_accept_encoding(accept_encoding);
+    let compressed_stream = compress_stream(fizz_stream, encoding);
+
+    let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
+    let cache_control = state.config.get_cache_control_for_route(&context.pathname);
+
+    let mut response_builder = Response::builder()
+        .status(status_code)
+        .header("content-type", "text/html; charset=utf-8")
+        .header("transfer-encoding", "chunked")
+        .header("x-content-type-options", "nosniff")
+        .header("x-render-mode", "streaming")
+        .header("cache-control", cache_control)
+        .header("vary", "Accept");
+
+    if let Some(encoding_header) = encoding.as_header_value() {
+        response_builder = response_builder.header("content-encoding", encoding_header);
+    }
+
+    let body = Body::from_stream(compressed_stream);
+    #[expect(clippy::expect_used, reason = "Response::builder() with valid components never fails")]
+    Ok(response_builder.body(body).expect("Valid Fizz streaming response"))
+}
+
+fn fizz_stream_stall_timeout_ms() -> u64 {
+    env::var("RARI_STREAMING_STALL_TIMEOUT_MS")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(60_000)
+}
+
+fn fizz_stream_error_chunk(message: &str) -> bytes::Bytes {
+    let escaped = message
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;");
+    bytes::Bytes::from(format!(
+        r#"<div class="rari-error" style="color: red; border: 1px solid red; padding: 10px; border-radius: 4px; background-color: #fff5f5;"><strong>Error loading content: </strong>{escaped}</div>"#
+    ))
 }
 
 async fn render_streaming_response(
@@ -591,7 +747,7 @@ async fn render_streaming_response(
         .metadata
         .as_ref()
         .and_then(|m| m.title.as_ref())
-        .map(std::string::String::as_str)
+        .map(String::as_str)
         .unwrap_or("rari App");
 
     let base_shell = format!(
@@ -633,7 +789,7 @@ async fn render_streaming_response(
     let should_continue_clone = should_continue;
 
     let html_stream = async_stream::stream! {
-        while should_continue_clone.load(Ordering::Relaxed) {
+        while should_continue_clone.load(Relaxed) {
             match rsc_stream.next_chunk().await {
                 Some(chunk) => {
                     let mut conv = converter.lock().await;
@@ -641,17 +797,17 @@ async fn render_streaming_response(
                     match conv.convert_chunk(chunk).await {
                         Ok(html_bytes) => {
                             if !html_bytes.is_empty() {
-                                yield Ok::<_, std::io::Error>(bytes::Bytes::from(html_bytes));
+                                yield Ok::<_, Error>(bytes::Bytes::from(html_bytes));
                             }
                         }
                         Err(e) => {
                             if e.to_string().contains("disconnected") || e.to_string().contains("broken pipe") {
-                                should_continue_clone.store(false, Ordering::Relaxed);
+                                should_continue_clone.store(false, Relaxed);
                                 break;
                             }
 
                             error!("Error converting RSC chunk to HTML: {}", e);
-                            yield Err(std::io::Error::other(e.to_string()));
+                            yield Err(Error::other(e.to_string()));
                         }
                     }
                 }
@@ -719,7 +875,22 @@ pub async fn render_streaming_with_layout(
 
     let rsc_stream = match render_result {
         RenderResult::Streaming(stream) => stream,
+        RenderResult::FizzHtmlStream { shell, closing, chunks } => {
+            return render_fizz_html_stream(
+                state,
+                route_match,
+                context,
+                shell,
+                closing,
+                chunks,
+                is_not_found,
+                accept_encoding,
+            )
+            .await;
+        }
         RenderResult::Static(html) => {
+            use crate::server::compression::compress_body;
+
             let html_with_assets = match inject_assets_into_html(&html, &state.config).await {
                 Ok(html) => html,
                 Err(e) => {
@@ -754,6 +925,9 @@ pub async fn render_streaming_with_layout(
                 reason = "Response::builder() with valid components never fails"
             )]
             return Ok(response_builder.body(Body::from(body_bytes)).expect("Valid HTML response"));
+        }
+        RenderResult::StaticBinary(_bytes) => {
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     };
 
@@ -797,7 +971,7 @@ pub async fn render_fallback_html(
                 .expect("Valid HTML response"));
         }
 
-        if let Ok(html_content) = std::fs::read_to_string(&index_path) {
+        if let Ok(html_content) = fs::read_to_string(&index_path).await {
             let final_html = if state.config.is_development() {
                 inject_vite_client(&html_content, state.config.vite.port)
             } else {
@@ -893,14 +1067,17 @@ pub async fn render_fallback_html(
 )]
 pub async fn handle_app_route(
     State(state): State<ServerState>,
-    uri: axum::http::Uri,
+    uri: Uri,
     Query(query_params): Query<FxHashMap<String, String>>,
-    headers: axum::http::HeaderMap,
+    headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
     let path = uri.path();
 
     fn should_use_streaming(route_match: &AppRouteMatch, config: &Config) -> bool {
-        if route_match.not_found.is_some() { false } else { config.rsc.enable_streaming }
+        if route_match.not_found.is_some() {
+            return false;
+        }
+        config.loading.enabled && route_match.loading.is_some()
     }
 
     if path.len() > 1 {
@@ -920,10 +1097,10 @@ pub async fn handle_app_route(
 
             if let Ok(file_path) =
                 validate_safe_path(state.config.public_dir(), path_without_leading_slash)
-                && let Ok(metadata) = tokio::fs::metadata(&file_path).await
+                && let Ok(metadata) = fs::metadata(&file_path).await
                 && metadata.is_file()
             {
-                match tokio::fs::read(&file_path).await {
+                match fs::read(&file_path).await {
                     Ok(content) => {
                         let content_type = get_content_type(path_without_leading_slash);
                         let cache_control = &state.config.caching.static_files;
@@ -970,6 +1147,58 @@ pub async fn handle_app_route(
     let accept_encoding = headers.get("accept-encoding").and_then(|v| v.to_str().ok());
 
     let query_params_for_cache = query_params.clone();
+
+    if matches!(render_mode, RenderMode::Ssr) {
+        let fast_key = if query_params_for_cache.is_empty() {
+            path.to_string()
+        } else {
+            let mut sorted: Vec<_> = query_params_for_cache.iter().collect();
+            sorted.sort_by_key(|(k, _)| *k);
+            let qs = sorted.iter().map(|(k, v)| format!("{k}={v}")).collect::<Vec<_>>().join("&");
+            format!("{path}?{qs}")
+        };
+
+        if let Some(prebuilt) = state.static_fast_cache.get(&fast_key) {
+            let prebuilt = Arc::clone(prebuilt.value());
+
+            if let Some(client_etag) = headers.get("if-none-match").and_then(|v| v.to_str().ok())
+                && client_etag == prebuilt.etag
+            {
+                #[expect(
+                    clippy::expect_used,
+                    reason = "Response::builder() with valid components never fails"
+                )]
+                return Ok(Response::builder()
+                    .status(StatusCode::NOT_MODIFIED)
+                    .header("etag", &prebuilt.etag)
+                    .header("vary", "Accept, Accept-Encoding")
+                    .body(Body::empty())
+                    .expect("Valid 304 response"));
+            }
+
+            let encoding = CompressionEncoding::from_accept_encoding(accept_encoding);
+            let (body, encoding_header) = prebuilt.body_for(encoding);
+            let status = if prebuilt.is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
+
+            let mut builder = Response::builder()
+                .status(status)
+                .header("content-type", prebuilt.content_type.as_str())
+                .header("cache-control", prebuilt.cache_control.as_str())
+                .header("etag", &prebuilt.etag)
+                .header("vary", "Accept, Accept-Encoding")
+                .header("x-cache", "HIT");
+
+            if let Some(enc) = encoding_header {
+                builder = builder.header("content-encoding", enc);
+            }
+
+            #[expect(
+                clippy::expect_used,
+                reason = "Response::builder() with valid components never fails"
+            )]
+            return Ok(builder.body(Body::from(body)).expect("Valid fast-path response"));
+        }
+    }
     let search_params = extract_search_params(query_params);
 
     let request_headers = extract_headers(&headers);
@@ -1016,7 +1245,7 @@ pub async fn handle_app_route(
                 .await;
                 return result;
             }
-            let cache_key = ResponseCache::generate_cache_key_with_mode(
+            let cache_key = response::ResponseCache::generate_cache_key_with_mode(
                 path,
                 if query_params_for_cache.is_empty() {
                     None
@@ -1075,7 +1304,7 @@ pub async fn handle_app_route(
                         .header("vary", "Accept")
                         .header("x-cache", "MISS");
 
-                    let mut cache_headers = axum::http::HeaderMap::new();
+                    let mut cache_headers = HeaderMap::new();
 
                     if let Some(ref metadata) = context.metadata
                         && let Ok(metadata_json) = serde_json::to_string(metadata)
@@ -1089,13 +1318,14 @@ pub async fn handle_app_route(
                     }
 
                     let cache_control = state.config.get_cache_control_for_route(path);
-                    let cache_policy = RouteCachePolicy::from_cache_control(cache_control, path);
+                    let cache_policy =
+                        response::RouteCachePolicy::from_cache_control(cache_control, path);
 
                     if cache_policy.enabled && state.response_cache.config.enabled {
-                        let cached_response = CachedResponse {
+                        let cached_response = response::CachedResponse {
                             body: bytes::Bytes::from(rsc_wire_format.clone()),
                             headers: cache_headers,
-                            metadata: CacheMetadata {
+                            metadata: response::CacheMetadata {
                                 cached_at: Instant::now(),
                                 ttl: cache_policy.ttl,
                                 etag: None,
@@ -1124,7 +1354,7 @@ pub async fn handle_app_route(
             }
         }
         RenderMode::Ssr => {
-            let cache_key = ResponseCache::generate_cache_key(
+            let cache_key = response::ResponseCache::generate_cache_key(
                 path,
                 if query_params_for_cache.is_empty() {
                     None
@@ -1161,6 +1391,7 @@ pub async fn handle_app_route(
 
                 let merged_vary = merge_vary_with_accept(cached.headers.get("vary"));
 
+                use crate::server::compression::compress_body;
                 let encoding = CompressionEncoding::from_accept_encoding(accept_encoding);
 
                 let (body_bytes, actual_encoding) =
@@ -1243,7 +1474,7 @@ pub async fn handle_app_route(
                     && render_mode == "static"
                 {
                     let (parts, body) = response.into_parts();
-                    let body_bytes = axum::body::to_bytes(body, usize::MAX)
+                    let body_bytes = body::to_bytes(body, usize::MAX)
                         .await
                         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -1251,9 +1482,9 @@ pub async fn handle_app_route(
                         parts.headers.get("cache-control").and_then(|v| v.to_str().ok());
 
                     let cache_policy = if let Some(cc) = cache_control_value {
-                        RouteCachePolicy::from_cache_control(cc, path)
+                        response::RouteCachePolicy::from_cache_control(cc, path)
                     } else {
-                        let mut policy = RouteCachePolicy {
+                        let mut policy = response::RouteCachePolicy {
                             ttl: state.response_cache.config.default_ttl,
                             ..Default::default()
                         };
@@ -1301,8 +1532,8 @@ pub async fn handle_app_route(
                                 }
                             };
 
-                        let etag = ResponseCache::generate_etag(&raw_body);
-                        let mut response_headers = axum::http::HeaderMap::new();
+                        let etag = response::ResponseCache::generate_etag(&raw_body);
+                        let mut response_headers = HeaderMap::new();
                         for (key, value) in &parts.headers {
                             if key.as_str() != "content-encoding"
                                 && key.as_str() != "content-length"
@@ -1311,11 +1542,11 @@ pub async fn handle_app_route(
                             }
                         }
 
-                        let cached_response = CachedResponse {
+                        let cached_response = response::CachedResponse {
                             body: raw_body,
                             headers: response_headers,
-                            metadata: CacheMetadata {
-                                cached_at: std::time::Instant::now(),
+                            metadata: response::CacheMetadata {
+                                cached_at: Instant::now(),
                                 ttl: cache_policy.ttl,
                                 etag: Some(etag.clone()),
                                 tags: cache_policy.tags,
@@ -1389,9 +1620,29 @@ pub async fn handle_app_route(
                         &state,
                     );
 
-                    let etag = ResponseCache::generate_etag(final_html.as_bytes());
+                    let etag = response::ResponseCache::generate_etag(final_html.as_bytes());
 
                     (final_html, etag)
+                }
+                RenderResult::FizzHtmlStream { shell, closing, mut chunks } => {
+                    let mut html = String::from_utf8_lossy(&shell).into_owned();
+
+                    while let Some(chunk_result) = chunks.recv().await {
+                        match chunk_result {
+                            Ok(chunk_data) => {
+                                html.push_str(&String::from_utf8_lossy(&chunk_data));
+                            }
+                            Err(e) => {
+                                error!("FizzHtmlStream chunk error in build mode: {e}");
+                                break;
+                            }
+                        }
+                    }
+
+                    html.push_str(&String::from_utf8_lossy(&closing));
+
+                    let etag = response::ResponseCache::generate_etag(html.as_bytes());
+                    (html, etag)
                 }
                 RenderResult::Streaming(stream) => {
                     let asset_links = extract_asset_links_from_index_html().await;
@@ -1405,7 +1656,7 @@ pub async fn handle_app_route(
                         .metadata
                         .as_ref()
                         .and_then(|m| m.title.as_ref())
-                        .map(std::string::String::as_str)
+                        .map(String::as_str)
                         .unwrap_or("rari App");
 
                     let asset_tags = asset_links.as_deref().unwrap_or("");
@@ -1437,8 +1688,7 @@ pub async fn handle_app_route(
                         base_shell
                     };
 
-                    let body_scripts =
-                        rendering::utils::extract_body_scripts_from_index_html().await;
+                    let body_scripts = utils::extract_body_scripts_from_index_html().await;
                     let mut converter = RscToHtmlConverter::with_custom_shell(
                         base_shell,
                         body_scripts,
@@ -1468,9 +1718,14 @@ pub async fn handle_app_route(
                     }
 
                     let final_html = buffered_html;
-                    let etag = ResponseCache::generate_etag(final_html.as_bytes());
+                    let etag = response::ResponseCache::generate_etag(final_html.as_bytes());
 
                     (final_html, etag)
+                }
+                RenderResult::StaticBinary(_bytes) => {
+                    error!("StaticBinary not supported in build mode");
+                    return render_fallback_html(&state, path, route_match.not_found.is_some())
+                        .await;
                 }
             };
 
@@ -1488,39 +1743,94 @@ pub async fn handle_app_route(
                 .header("x-cache", "MISS");
 
             let cache_control_value = state.config.get_cache_control_for_route(path);
-            let mut response_headers = axum::http::HeaderMap::new();
+            let mut response_headers = HeaderMap::new();
 
             response_builder = response_builder.header("cache-control", cache_control_value);
-            if let Ok(header_value) = axum::http::HeaderValue::from_str(cache_control_value) {
-                response_headers.insert(axum::http::header::CACHE_CONTROL, header_value);
+            if let Ok(header_value) = HeaderValue::from_str(cache_control_value) {
+                response_headers.insert(CACHE_CONTROL, header_value);
             }
 
             let cache_policy =
                 response::RouteCachePolicy::from_cache_control(cache_control_value, path);
 
-            if cache_policy.enabled {
-                let cached_response = CachedResponse {
-                    body: bytes::Bytes::from(final_html.clone()),
+            if cache_policy.enabled && state.response_cache.config.enabled {
+                let body_bytes = bytes::Bytes::from(final_html.clone());
+
+                use crate::server::compression::{CompressionEncoding, compress_body};
+
+                let (compressed_gzip, compressed_zstd, compressed_br) = {
+                    let (gz, gz_enc) =
+                        compress_body(body_bytes.clone(), CompressionEncoding::Gzip).await;
+                    let (zs, zs_enc) =
+                        compress_body(body_bytes.clone(), CompressionEncoding::Zstd).await;
+                    let (br, br_enc) =
+                        compress_body(body_bytes.clone(), CompressionEncoding::Brotli).await;
+                    (
+                        if matches!(gz_enc, CompressionEncoding::Gzip) { Some(gz) } else { None },
+                        if matches!(zs_enc, CompressionEncoding::Zstd) { Some(zs) } else { None },
+                        if matches!(br_enc, CompressionEncoding::Brotli) { Some(br) } else { None },
+                    )
+                };
+
+                let fast_key = if query_params_for_cache.is_empty() {
+                    path.to_string()
+                } else {
+                    let mut sorted: Vec<_> = query_params_for_cache.iter().collect();
+                    sorted.sort_by_key(|(k, _)| *k);
+                    let qs = sorted
+                        .iter()
+                        .map(|(k, v)| format!("{k}={v}"))
+                        .collect::<Vec<_>>()
+                        .join("&");
+                    format!("{path}?{qs}")
+                };
+                state.static_fast_cache.insert(
+                    fast_key,
+                    Arc::new(response::PrebuiltResponse {
+                        identity: body_bytes.clone(),
+                        gzip: compressed_gzip.clone(),
+                        br: compressed_br.clone(),
+                        zstd: compressed_zstd.clone(),
+                        etag: etag.clone(),
+                        content_type: "text/html; charset=utf-8".to_string(),
+                        cache_control: cache_control_value.to_string(),
+                        is_not_found: route_match.not_found.is_some(),
+                    }),
+                );
+
+                let cached_response = response::CachedResponse {
+                    body: body_bytes,
                     headers: response_headers,
-                    metadata: CacheMetadata {
-                        cached_at: std::time::Instant::now(),
+                    metadata: response::CacheMetadata {
+                        cached_at: Instant::now(),
                         ttl: cache_policy.ttl,
-                        etag: Some(etag),
+                        etag: Some(etag.clone()),
                         tags: cache_policy.tags,
                     },
-                    compressed_zstd: None,
-                    compressed_br: None,
-                    compressed_gzip: None,
+                    compressed_zstd,
+                    compressed_br,
+                    compressed_gzip,
                 };
 
                 state.response_cache.set(cache_key, cached_response).await;
             }
 
-            #[expect(
-                clippy::expect_used,
-                reason = "Response::builder() with valid components never fails"
-            )]
-            Ok(response_builder.body(Body::from(final_html)).expect("Valid HTML response"))
+            {
+                use crate::server::compression::{CompressionEncoding, compress_body};
+                let encoding = CompressionEncoding::from_accept_encoding(accept_encoding);
+                let (body_bytes, actual_encoding) =
+                    compress_body(bytes::Bytes::from(final_html), encoding).await;
+
+                if let Some(encoding_header) = actual_encoding.as_header_value() {
+                    response_builder = response_builder.header("content-encoding", encoding_header);
+                }
+
+                #[expect(
+                    clippy::expect_used,
+                    reason = "Response::builder() with valid components never fails"
+                )]
+                Ok(response_builder.body(Body::from(body_bytes)).expect("Valid HTML response"))
+            }
         }
     }
 }

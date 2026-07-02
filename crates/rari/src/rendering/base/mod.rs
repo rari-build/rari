@@ -1,11 +1,13 @@
 pub mod constants;
 pub mod loader;
 pub mod renderer;
+pub mod sanitizer;
 pub mod types;
 pub mod utils;
 
 pub use loader::{RscJsLoader, RscModuleOperation, StubType};
 pub use renderer::RscRenderer;
+pub use sanitizer::sanitize_component_output;
 pub use types::{ResourceLimits, ResourceMetrics, ResourceTracker};
 
 #[cfg(test)]

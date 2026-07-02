@@ -1,21 +1,24 @@
 #![allow(unused)]
 use std::{
     borrow::Cow,
+    fmt::{Debug, Display},
+    io::{Error, ErrorKind::PermissionDenied},
     path::{Path, PathBuf},
     sync::Arc,
 };
 
+use deno_core::url::Url;
 use deno_fs::FsError;
 use deno_permissions::PermissionCheckError;
 pub use deno_permissions::PermissionDeniedError;
 use parking_lot::RwLock;
 use rustc_hash::FxHashSet;
 
-fn to_io_err(err: PermissionDeniedError) -> std::io::Error {
-    std::io::Error::new(std::io::ErrorKind::PermissionDenied, err.to_string())
+fn to_io_err(err: PermissionDeniedError) -> Error {
+    Error::new(PermissionDenied, err.to_string())
 }
 
-pub fn oops<T>(msg: impl std::fmt::Display) -> Result<T, PermissionDeniedError> {
+pub fn oops<T>(msg: impl Display) -> Result<T, PermissionDeniedError> {
     use deno_permissions::PermissionDeniedError;
     Err(PermissionDeniedError {
         access: msg.to_string(),
@@ -32,11 +35,7 @@ impl WebPermissions for DefaultWebPermissions {
         true
     }
 
-    fn check_url(
-        &self,
-        url: &deno_core::url::Url,
-        api_name: &str,
-    ) -> Result<(), PermissionDeniedError> {
+    fn check_url(&self, url: &Url, api_name: &str) -> Result<(), PermissionDeniedError> {
         Ok(())
     }
 
@@ -47,7 +46,7 @@ impl WebPermissions for DefaultWebPermissions {
         write: bool,
         path: Cow<'a, Path>,
         api_name: &str,
-    ) -> Option<std::borrow::Cow<'a, Path>> {
+    ) -> Option<Cow<'a, Path>> {
         Some(path)
     }
 
@@ -97,7 +96,7 @@ impl WebPermissions for DefaultWebPermissions {
         &self,
         path: &str,
         api_name: &str,
-    ) -> Result<std::path::PathBuf, PermissionDeniedError> {
+    ) -> Result<PathBuf, PermissionDeniedError> {
         Ok(PathBuf::from(path))
     }
 
@@ -166,11 +165,7 @@ impl WebPermissions for AllowlistWebPermissions {
         if self.borrow().hosts.contains(host) { Ok(()) } else { oops(host)? }
     }
 
-    fn check_url(
-        &self,
-        url: &deno_core::url::Url,
-        api_name: &str,
-    ) -> Result<(), PermissionDeniedError> {
+    fn check_url(&self, url: &Url, api_name: &str) -> Result<(), PermissionDeniedError> {
         if self.borrow().url.contains(url.as_str()) { Ok(()) } else { oops(url)? }
     }
 
@@ -207,7 +202,7 @@ impl WebPermissions for AllowlistWebPermissions {
         write: bool,
         path: Cow<'a, Path>,
         api_name: &str,
-    ) -> Option<std::borrow::Cow<'a, Path>> {
+    ) -> Option<Cow<'a, Path>> {
         let path_str = path.to_str()?;
         if read && !self.borrow().openr_paths.contains(path_str) {
             return None;
@@ -253,7 +248,7 @@ impl WebPermissions for AllowlistWebPermissions {
         &self,
         path: &str,
         api_name: &str,
-    ) -> Result<std::path::PathBuf, PermissionDeniedError> {
+    ) -> Result<PathBuf, PermissionDeniedError> {
         let p = self.check_write(Cow::Borrowed(Path::new(path)), Some(api_name))?;
         Ok(p.into_owned())
     }
@@ -275,14 +270,10 @@ impl WebPermissions for AllowlistWebPermissions {
     }
 }
 
-pub trait WebPermissions: std::fmt::Debug + Send + Sync {
+pub trait WebPermissions: Debug + Send + Sync {
     fn allow_hrtime(&self) -> bool;
 
-    fn check_url(
-        &self,
-        url: &deno_core::url::Url,
-        api_name: &str,
-    ) -> Result<(), PermissionDeniedError>;
+    fn check_url(&self, url: &Url, api_name: &str) -> Result<(), PermissionDeniedError>;
 
     fn check_open<'a>(
         &self,
@@ -291,7 +282,7 @@ pub trait WebPermissions: std::fmt::Debug + Send + Sync {
         write: bool,
         path: Cow<'a, Path>,
         api_name: &str,
-    ) -> Option<std::borrow::Cow<'a, Path>>;
+    ) -> Option<Cow<'a, Path>>;
 
     fn check_read<'a>(
         &self,
@@ -327,7 +318,7 @@ pub trait WebPermissions: std::fmt::Debug + Send + Sync {
         &self,
         path: &str,
         api_name: &str,
-    ) -> Result<std::path::PathBuf, PermissionDeniedError>;
+    ) -> Result<PathBuf, PermissionDeniedError>;
 
     fn check_host(
         &self,
