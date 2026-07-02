@@ -454,13 +454,19 @@ export async function renderApp(): Promise<void> {
           { initialPathname: window.location.pathname, children: hydrationContent },
         )
 
-        hydrateRoot(rootElement, hydrationContent, {
-          onRecoverableError(error) {
-            if (import.meta.env.DEV) {
-              console.warn('[rari] Hydration mismatch:', error)
-            }
-          },
-        })
+        if (hasFizzMarkers(rootElement)) {
+          hydrateRoot(rootElement, hydrationContent, {
+            onRecoverableError(error) {
+              if (import.meta.env.DEV) {
+                console.warn('[rari] Hydration mismatch:', error)
+              }
+            },
+          })
+        }
+        else {
+          rootElement.replaceChildren()
+          createRoot(rootElement).render(hydrationContent)
+        }
       }
       else {
         showHydrationFailureMessage(
@@ -627,7 +633,7 @@ export async function renderApp(): Promise<void> {
       { initialPathname: window.location.pathname, children: content },
     )
 
-    if (hasServerRenderedContent) {
+    if (hasServerRenderedContent && hasFizzMarkers(rootElement)) {
       hydrateRoot(rootElement, content, {
         onRecoverableError(error) {
           if (import.meta.env.DEV)
@@ -636,6 +642,8 @@ export async function renderApp(): Promise<void> {
       })
     }
     else {
+      if (hasServerRenderedContent)
+        rootElement.replaceChildren()
       const root = createRoot(rootElement)
       root.render(content)
     }

@@ -1,7 +1,7 @@
 import type { CSSModulesOptions, Plugin, UserConfig } from 'vite-plus'
 import type { ProxyPluginOptions } from '../proxy/vite-plugin'
-import type { ServerCacheConfig, ServerCacheLayerConfig } from '../types/server-config'
 import type { ServerBuildOptions } from './server-build'
+import type { ServerCacheConfig, ServerCacheLayerConfig } from './server-config'
 import { Buffer } from 'node:buffer'
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'

@@ -1,4 +1,4 @@
-import type { Feed } from '@rari/types/metadata-route'
+import type { Feed } from '@rari/router/metadata-route'
 import { generateFeedXml } from '@rari/router/feed-generator'
 import { describe, expect, it } from 'vite-plus/test'
 

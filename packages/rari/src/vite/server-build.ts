@@ -1,5 +1,5 @@
 import type { Plugin } from 'vite-plus'
-import type { ServerCacheConfig, ServerCacheControlConfig, ServerCacheLayerConfig, ServerConfig, ServerCSPConfig } from '../types/server-config'
+import type { ServerCacheConfig, ServerCacheControlConfig, ServerCacheLayerConfig, ServerConfig, ServerCSPConfig } from './server-config'
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'

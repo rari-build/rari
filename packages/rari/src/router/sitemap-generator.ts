@@ -1,4 +1,4 @@
-import type { Sitemap, SitemapImage, SitemapVideo } from '../types/metadata-route'
+import type { Sitemap, SitemapImage, SitemapVideo } from './metadata-route'
 import { Buffer } from 'node:buffer'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
