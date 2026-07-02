@@ -30,9 +30,9 @@ use super::{
     resolver::ModuleResolver,
     storage::ModuleStorage,
     stubs::{
-        FALLBACK_MODULE_TEMPLATE, JSX_RUNTIME_STUB, LOADER_STUB_TEMPLATE, RARI_CLIENT_STUB,
-        RARI_DEFAULT_STUB, RARI_HEADERS_STUB, RARI_IMAGE_STUB, RARI_REACT_DOM_STUB,
-        RARI_ROUTER_STUB, REACT_STUB, create_component_stub, create_generic_module_stub,
+        FALLBACK_MODULE_TEMPLATE, LOADER_STUB_TEMPLATE, RARI_CLIENT_STUB, RARI_DEFAULT_STUB,
+        RARI_HEADERS_STUB, RARI_IMAGE_STUB, RARI_ROUTER_STUB, create_component_stub,
+        create_generic_module_stub,
     },
     transpiler::{needs_jsx_transpilation, needs_typescript_transpilation},
 };
@@ -46,8 +46,6 @@ type ExtensionTranspilerFn = dyn Fn(FastString, FastString) -> ExtensionTranspil
 
 const NODE_MODULES_PATH: &str = "/node_modules/";
 const RARI_COMPONENT_PATH: &str = "/rari_component/";
-const REACT_STUB_PATH: &str = "/react_stub/";
-const REACT_VENDOR_PATH: &str = "/react_vendor/";
 const RARI_STUB_PATH: &str = "/rari_stub/";
 const FILE_PROTOCOL: &str = "file://";
 const NODE_PREFIX: &str = "node:";
@@ -951,27 +949,11 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
         specifier_str: &str,
         module_specifier: &ModuleSpecifier,
     ) -> Option<ModuleLoadResponse> {
-        if specifier_str.contains(REACT_STUB_PATH) {
-            let is_jsx_runtime = specifier_str.contains("jsx-runtime.js")
-                || specifier_str.contains("jsx-dev-runtime.js");
-
-            let stub_content =
-                if is_jsx_runtime { JSX_RUNTIME_STUB.to_string() } else { REACT_STUB.to_string() };
-
-            return Some(ModuleLoadResponse::Sync(Ok(ModuleSource::new(
-                ModuleType::JavaScript,
-                ModuleSourceCode::String(stub_content.into()),
-                module_specifier,
-                None,
-            ))));
-        }
-
         if specifier_str.contains(RARI_STUB_PATH) {
             let module_name =
                 specifier_str.rsplit(RARI_STUB_PATH).next().unwrap_or("").trim_end_matches(".js");
             let stub_content = match module_name {
                 "router" => RARI_ROUTER_STUB.to_string(),
-                "react-dom" => RARI_REACT_DOM_STUB.to_string(),
                 "headers" => RARI_HEADERS_STUB.to_string(),
                 "image" => RARI_IMAGE_STUB.to_string(),
                 "client" => RARI_CLIENT_STUB.to_string(),
@@ -1598,41 +1580,37 @@ impl ModuleLoader for RariModuleLoader {
 
         if !specifier.contains("://") && !specifier.starts_with('/') {
             if specifier == "react" || specifier.starts_with("react/") {
-                let use_real_react =
-                    referrer.contains("/ssr/") || referrer.contains(REACT_VENDOR_PATH);
-
-                let react_url =
-                    if specifier == "react/jsx-runtime" || specifier == "react/jsx-runtime.js" {
-                        if use_real_react {
-                            "file:///react_vendor/react-jsx-runtime.js".to_string()
-                        } else {
-                            "file:///react_stub/jsx-runtime.js".to_string()
-                        }
-                    } else if specifier == "react/jsx-dev-runtime"
-                        || specifier == "react/jsx-dev-runtime.js"
-                    {
-                        if use_real_react {
-                            "file:///react_vendor/react-jsx-runtime.js".to_string()
-                        } else {
-                            "file:///react_stub/jsx-dev-runtime.js".to_string()
-                        }
-                    } else if use_real_react {
-                        "file:///react_vendor/react.js".to_string()
-                    } else {
-                        "file:///react_stub/react.js".to_string()
-                    };
+                let react_url = if matches!(
+                    specifier,
+                    "react/jsx-runtime"
+                        | "react/jsx-runtime.js"
+                        | "react/jsx-dev-runtime"
+                        | "react/jsx-dev-runtime.js"
+                ) {
+                    "file:///react_vendor/react-jsx-runtime.js".to_string()
+                } else {
+                    "file:///react_vendor/react.js".to_string()
+                };
                 return self.resolve(&react_url, referrer, kind);
             }
 
-            if specifier == "react-dom/server" || specifier == "react-dom/server.browser" {
+            if matches!(
+                specifier,
+                "react-dom/server"
+                    | "react-dom/server.browser"
+                    | "react-dom/server.node"
+                    | "react-dom"
+            ) || (specifier.starts_with("react-dom/")
+                && !matches!(specifier, "react-dom/client" | "react-dom/client.js"))
+            {
                 return self.resolve("file:///react_vendor/react-dom-server.js", referrer, kind);
             }
 
-            if specifier == "react-dom" || specifier.starts_with("react-dom/") {
-                let is_ssr_context = referrer.contains("/ssr/");
-                if is_ssr_context {
-                    return self.resolve("file:///rari_stub/react-dom.js", referrer, kind);
-                }
+            if matches!(specifier, "react-dom/client" | "react-dom/client.js")
+                && let Some(resolved_path) =
+                    self.resolve_from_node_modules("react-dom/client", referrer)
+            {
+                return self.resolve(&resolved_path, referrer, kind);
             }
 
             if specifier == "rari" || specifier.starts_with("rari/") {

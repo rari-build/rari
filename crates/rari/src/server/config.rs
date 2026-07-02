@@ -374,6 +374,35 @@ pub struct Config {
 }
 
 impl Config {
+    pub fn server_components_cache_control_for_mode(mode: Mode) -> String {
+        if mode == Mode::Production {
+            "public, max-age=31536000, stale-while-revalidate=86400".to_string()
+        } else {
+            "no-cache, no-store, must-revalidate".to_string()
+        }
+    }
+
+    pub fn apply_mode_cache_control(&mut self) {
+        self.caching.server_components = Self::server_components_cache_control_for_mode(self.mode);
+    }
+
+    pub fn load_from_env_for_mode(mode: Mode) -> Result<Self, ConfigError> {
+        Self::load_from_env_with_base_for_mode(mode, None)
+    }
+
+    pub fn load_from_env_with_base_for_mode(
+        mode: Mode,
+        base: Option<&Path>,
+    ) -> Result<Self, ConfigError> {
+        let mut config = match Self::from_env_with_base(base) {
+            Ok(config) => config,
+            Err(_) => Self::new(mode),
+        };
+        config.mode = mode;
+        config.apply_mode_cache_control();
+        Ok(config)
+    }
+
     pub fn new(mode: Mode) -> Self {
         let default_config = Self::default();
         Self {
@@ -389,11 +418,7 @@ impl Config {
                 ..default_config.rsc_html
             },
             caching: CacheControlConfig {
-                server_components: if mode == Mode::Production {
-                    "public, max-age=31536000, stale-while-revalidate=86400".to_string()
-                } else {
-                    "no-cache, no-store, must-revalidate".to_string()
-                },
+                server_components: Self::server_components_cache_control_for_mode(mode),
                 ..default_config.caching
             },
             ..default_config
@@ -643,7 +668,7 @@ impl Config {
         }
 
         if config.mode == Mode::Development {
-            config.caching.server_components = "no-cache, no-store, must-revalidate".to_string();
+            config.apply_mode_cache_control();
         }
 
         Ok(config)
@@ -1044,6 +1069,61 @@ mod tests {
             !config.caching.routes.contains_key("/invalid-type"),
             "Non-string cache-control value should be rejected"
         );
+    }
+
+    #[test]
+    fn test_load_from_env_for_mode_production() {
+        let temp_dir = env::temp_dir().join(format!("rari_test_load_mode_{}", process::id()));
+        let dist_server_dir = temp_dir.join("dist").join("server");
+        fs::create_dir_all(&dist_server_dir).unwrap();
+        fs::write(dist_server_dir.join("config.json"), "{}").unwrap();
+
+        let config =
+            Config::load_from_env_with_base_for_mode(Mode::Production, Some(&temp_dir)).unwrap();
+
+        assert_eq!(config.mode, Mode::Production);
+        assert_eq!(
+            config.get_cache_control_for_route("/"),
+            "public, max-age=31536000, stale-while-revalidate=86400"
+        );
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_from_env_test_fixture_app_production_cache_control() {
+        let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../test/fixtures/app");
+        if !base.join("dist/server/config.json").exists() {
+            return;
+        }
+
+        let config =
+            Config::load_from_env_with_base_for_mode(Mode::Production, Some(&base)).unwrap();
+
+        assert_eq!(
+            config.get_cache_control_for_route("/"),
+            "public, max-age=31536000, stale-while-revalidate=86400",
+            "e2e fixture app must use production cache-control after CLI mode is applied"
+        );
+    }
+
+    #[test]
+    fn test_from_env_then_production_mode_uses_production_cache_control() {
+        let temp_dir = env::temp_dir().join(format!("rari_test_prod_mode_{}", process::id()));
+        let dist_server_dir = temp_dir.join("dist").join("server");
+        fs::create_dir_all(&dist_server_dir).unwrap();
+        fs::write(dist_server_dir.join("config.json"), "{}").unwrap();
+
+        let config =
+            Config::load_from_env_with_base_for_mode(Mode::Production, Some(&temp_dir)).unwrap();
+
+        assert_eq!(
+            config.get_cache_control_for_route("/"),
+            "public, max-age=31536000, stale-while-revalidate=86400",
+            "CLI production mode must override dev cache-control defaults from from_env"
+        );
+
+        let _ = fs::remove_dir_all(&temp_dir);
     }
 
     #[test]

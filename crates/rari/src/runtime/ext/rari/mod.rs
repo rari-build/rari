@@ -17,7 +17,6 @@ extension!(
         "react/component_loader.ts",
         "http/cookies.ts",
         "react/metadata_collector.ts",
-        "react/react_shims.ts",
         "rsc/rsc_modules.ts",
         "rsc/server_functions.ts"
     ],

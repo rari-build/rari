@@ -139,8 +139,10 @@ async fn warm_route(
 
     let html_cache_key = response::ResponseCache::generate_cache_key(path, None);
     let etag = response::ResponseCache::generate_etag(html.as_bytes());
+    let cache_control = state.config.get_cache_control_for_route(path);
+    let cache_policy = response::RouteCachePolicy::from_cache_control(cache_control, path);
 
-    if state.response_cache.config.enabled {
+    if cache_policy.enabled && state.response_cache.config.enabled {
         let body_bytes = bytes::Bytes::from(html);
 
         let compressed_gzip = {
@@ -164,8 +166,6 @@ async fn warm_route(
             if matches!(enc, CompressionEncoding::Brotli) { Some(compressed) } else { None }
         };
 
-        let cache_control = state.config.get_cache_control_for_route(path).to_string();
-
         state.static_fast_cache.insert(
             path.to_string(),
             Arc::new(response::PrebuiltResponse {
@@ -175,7 +175,7 @@ async fn warm_route(
                 zstd: compressed_zstd.clone(),
                 etag: etag.clone(),
                 content_type: "text/html; charset=utf-8".to_string(),
-                cache_control,
+                cache_control: cache_control.to_string(),
                 is_not_found: false,
             }),
         );
@@ -185,9 +185,9 @@ async fn warm_route(
             headers: HeaderMap::new(),
             metadata: response::CacheMetadata {
                 cached_at: Instant::now(),
-                ttl: state.response_cache.config.default_ttl,
+                ttl: cache_policy.ttl,
                 etag: Some(etag),
-                tags: vec![path.to_string()],
+                tags: cache_policy.tags.clone(),
             },
             compressed_zstd,
             compressed_br,
@@ -204,7 +204,7 @@ async fn warm_route(
         let rsc_cache_key =
             response::ResponseCache::generate_cache_key_with_mode(path, None, Some("rsc"));
 
-        if state.response_cache.config.enabled {
+        if cache_policy.enabled && state.response_cache.config.enabled {
             let mut cache_headers = HeaderMap::new();
 
             if let Some(ref metadata) = context.metadata
@@ -221,9 +221,9 @@ async fn warm_route(
                 headers: cache_headers,
                 metadata: response::CacheMetadata {
                     cached_at: Instant::now(),
-                    ttl: state.response_cache.config.default_ttl,
+                    ttl: cache_policy.ttl,
                     etag: None,
-                    tags: vec![path.to_string()],
+                    tags: cache_policy.tags,
                 },
                 compressed_zstd: None,
                 compressed_br: None,

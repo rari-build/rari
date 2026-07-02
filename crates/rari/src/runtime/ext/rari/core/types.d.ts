@@ -25,15 +25,9 @@ declare global {
       SAFE_PROPS?: Set<string>
       isSafeProp?: (key: string) => boolean
       safeSerializeElement?: (element: unknown) => unknown
-      depth?: number
     }
     '~reactServer'?: {
       renderToReadableStream: (element: unknown, options?: { onError?: (error: unknown) => void }) => Promise<ReadableStream>
-    }
-    '~realReact'?: {
-      createElement: (type: unknown, props: unknown | null, ...children: unknown[]) => unknown
-      Suspense: unknown
-      Fragment: unknown
     }
     '~flightClient'?: {
       createFromReadableStream: (stream: ReadableStream, options?: { ssrManifest?: unknown }) => Promise<unknown>
@@ -42,7 +36,9 @@ declare global {
       renderToReadableStream: (element: unknown, bundlerConfig: unknown, options?: { onError?: (error: unknown) => void }) => Promise<ReadableStream>
     }
     '~promises'?: {
-      resolved?: Map<Promise<unknown>, { status: 'fulfilled' | 'rejected', value?: unknown, reason?: unknown }>
+      currentObject?: unknown
+      resolvedValue?: unknown
+      resolutionComplete?: boolean
     }
     '~clientComponents'?: Record<string, { id: string, path: string, type: 'client', component: any, registered: boolean }>
     '~clientComponentNames'?: Record<string, string>

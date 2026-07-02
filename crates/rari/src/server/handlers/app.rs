@@ -1723,13 +1723,7 @@ pub async fn handle_app_route(
             let cache_policy =
                 response::RouteCachePolicy::from_cache_control(cache_control_value, path);
 
-            if state.response_cache.config.enabled {
-                let effective_ttl = if cache_policy.enabled {
-                    cache_policy.ttl
-                } else {
-                    state.response_cache.config.default_ttl
-                };
-
+            if cache_policy.enabled && state.response_cache.config.enabled {
                 let body_bytes = bytes::Bytes::from(final_html.clone());
 
                 use crate::server::compression::{CompressionEncoding, compress_body};
@@ -1779,7 +1773,7 @@ pub async fn handle_app_route(
                     headers: response_headers,
                     metadata: response::CacheMetadata {
                         cached_at: Instant::now(),
-                        ttl: effective_ttl,
+                        ttl: cache_policy.ttl,
                         etag: Some(etag.clone()),
                         tags: cache_policy.tags,
                     },

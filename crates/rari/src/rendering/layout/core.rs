@@ -45,6 +45,23 @@ const JS_GET_RESULT: &str = r"
 globalThis['~rsc'].renderResult
 ";
 
+const FIZZ_STREAM_ERROR_HELPER: &str = r"
+                        let rariErrorInjected = false;
+                        async function injectRariErrorFromCaught() {
+                            if (rariErrorInjected || caughtErrors.length === 0) return;
+                            const displayError = caughtErrors.find((e) => e?.message && !String(e.message).includes('omitted in production')) || caughtErrors[0];
+                            const errMsg = String(displayError?.message || 'Unknown error').split('<').join('&lt;');
+                            const errorHtml = '<div class=rari-error style=color:red;border:1px_solid_red;padding:10px;border-radius:4px;background-color:#fff5f5><strong>Error loading content: </strong>' + errMsg + '</div>';
+                            const replaceScript = '<script>!function(h){var l=document.querySelector(\'[data-testid=loading]\');l?l.outerHTML=h:document.getElementById(\'root\')?.insertAdjacentHTML(\'beforeend\',h)}(' + JSON.stringify(errorHtml) + ')</script>';
+                            rariErrorInjected = true;
+                            await Deno.core.ops.op_fizz_chunk(replaceScript);
+                        }
+";
+
+const FIZZ_STREAM_ERROR_INJECTION: &str = r"
+                        await injectRariErrorFromCaught();
+";
+
 pub struct LayoutHtmlCache {
     handler: Arc<dyn CacheHandler>,
     default_ttl_secs: u64,
@@ -572,6 +589,7 @@ impl LayoutRenderer {
                 let script = format!(
                     r"(async function() {{
                         let caughtErrors = [];
+                        {FIZZ_STREAM_ERROR_HELPER}
                         try {{
                         try {{ {composition_script} }} catch(e) {{
                             console.error('[rari] Composition error in streaming:', e);
@@ -594,7 +612,7 @@ impl LayoutRenderer {
                         );
 
                         const FlightClient = globalThis['~flightClient'];
-                        const rootElement = FlightClient.createFromReadableStream(rscStream, {{
+                        const rootElement = await FlightClient.createFromReadableStream(rscStream, {{
                             ssrManifest: {{
                                 moduleMap: globalThis['~rari']?.ssrModules || {{}},
                                 moduleLoading: null,
@@ -611,7 +629,7 @@ impl LayoutRenderer {
 
                         const ReactDOMServer = globalThis['~reactServer'];
                         const headContent = {head_content_json};
-                        const R = globalThis['~realReact'] || globalThis.React;
+                        const R = globalThis.React;
 
                         const fullDoc = R.createElement('html', {{ lang: 'en' }},
                             R.createElement('head', {{ dangerouslySetInnerHTML: {{ __html: headContent }} }}),
@@ -629,14 +647,25 @@ impl LayoutRenderer {
 
                         const reader = fizzStream.getReader();
                         const decoder = new TextDecoder();
-                        while (true) {{
-                            const {{ done, value }} = await reader.read();
-                            if (done) break;
-                            const text = decoder.decode(value, {{ stream: true }});
-                            if (text) await Deno.core.ops.op_fizz_chunk(text);
-                        }}
-                        const tail = decoder.decode();
-                        if (tail) await Deno.core.ops.op_fizz_chunk(tail);
+                        const allReady = fizzStream.allReady;
+                        const pumpFizzStream = (async () => {{
+                            while (true) {{
+                                const {{ done, value }} = await reader.read();
+                                if (done) break;
+                                const text = decoder.decode(value, {{ stream: true }});
+                                if (text) await Deno.core.ops.op_fizz_chunk(text);
+                            }}
+                            const tail = decoder.decode();
+                            if (tail) await Deno.core.ops.op_fizz_chunk(tail);
+                        }})();
+
+                        await Promise.all([
+                            pumpFizzStream,
+                            allReady ?? Promise.resolve(),
+                        ]);
+
+                        {FIZZ_STREAM_ERROR_INJECTION}
+
                         Deno.core.ops.op_fizz_done();
 
                         }} catch(outerError) {{
@@ -873,11 +902,11 @@ impl LayoutRenderer {
                     import('file:///react_vendor/react.js'),
                     import('file:///react_vendor/react-server-dom-webpack-server.js'),
                 ]);
-                if (!globalThis['~realReact']) {
-                    globalThis['~realReact'] = react.default && react.default.createElement ? react.default : react;
+                if (!globalThis.React?.createElement) {
+                    globalThis.React = react.default && react.default.createElement ? react.default : react;
                 }
                 globalThis['~reactServerRenderer'] = flightServer;
-                return !!(globalThis['~realReact'].createElement && globalThis['~reactServerRenderer'].renderToReadableStream);
+                return !!(globalThis.React.createElement && globalThis['~reactServerRenderer'].renderToReadableStream);
             })()
         ";
 

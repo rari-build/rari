@@ -262,12 +262,12 @@ globalThis['~errors'].batch.push({{
                         import('file:///react_vendor/react-server-dom-webpack-client.js'),
                         import('file:///react_vendor/react-server-dom-webpack-server.js'),
                     ]);
-                    globalThis['~realReact'] = react.default && react.default.createElement ? react.default : react;
+                    globalThis.React = react.default && react.default.createElement ? react.default : react;
                     globalThis['~reactServer'] = reactDomServer;
                     globalThis['~flightClient'] = flightClient;
                     globalThis['~reactServerRenderer'] = flightServer;
                     return {
-                        success: !!(globalThis['~realReact'].createElement
+                        success: !!(globalThis.React.createElement
                             && globalThis['~reactServer'].renderToReadableStream
                             && globalThis['~flightClient'].createFromReadableStream
                             && globalThis['~reactServerRenderer'].renderToReadableStream),

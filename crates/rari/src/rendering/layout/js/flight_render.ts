@@ -1,12 +1,12 @@
 /// <reference path="../../types.d.ts" />
 
 async function renderWireToHtml(wireFormat: string): Promise<string> {
-  const React = g['~realReact']
+  const React = g.React
   const ReactDOMServer = g['~reactServer']
   const FlightClient = g['~flightClient']
 
   if (!React || !React.createElement)
-    throw new Error('[rari] real React not loaded for Flight renderer')
+    throw new Error('[rari] React not loaded for Flight renderer')
   if (!ReactDOMServer || !ReactDOMServer.renderToReadableStream)
     throw new Error('[rari] react-dom/server not loaded for Flight renderer')
   if (!FlightClient || !FlightClient.createFromReadableStream)
@@ -75,12 +75,12 @@ async function renderWireToFizzStream(wireFormat: string): Promise<void> {
   if (!ops || typeof ops.op_fizz_chunk !== 'function')
     throw new Error('[rari] Fizz streaming ops unavailable')
 
-  const React = g['~realReact']
+  const React = g.React
   const ReactDOMServer = g['~reactServer']
   const FlightClient = g['~flightClient']
 
   if (!React || !React.createElement)
-    throw new Error('[rari] real React not loaded for Flight renderer')
+    throw new Error('[rari] React not loaded for Flight renderer')
   if (!ReactDOMServer || !ReactDOMServer.renderToReadableStream)
     throw new Error('[rari] react-dom/server not loaded for Flight renderer')
   if (!FlightClient || !FlightClient.createFromReadableStream)

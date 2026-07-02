@@ -227,15 +227,8 @@ fn load_configuration(matches: &clap::ArgMatches) -> Result<Config, RariError> {
         mode => return Err(RariError::configuration(format!("Invalid mode: {mode}"))),
     };
 
-    let mut config = match Config::from_env() {
-        Ok(config) => config,
-        Err(e) => {
-            error!("No environment config found, using defaults: {}", e);
-            Config::new(mode)
-        }
-    };
-
-    config.mode = mode;
+    let mut config = Config::load_from_env_for_mode(mode)
+        .map_err(|e| RariError::configuration(format!("Failed to load configuration: {e}")))?;
 
     if let Some(host) = matches.get_one::<String>("host") {
         config.server.host.clone_from(host);

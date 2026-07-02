@@ -1,22 +1,10 @@
 /// <reference path="../../types.d.ts" />
 
 (async function initFizzRenderer() {
-  let ReactDOMServer = g['~reactServer']
+  const ReactDOMServer = g['~reactServer']
 
-  if (!ReactDOMServer) {
-    try {
-      // @ts-expect-error - Dynamic import loaded by Deno runtime with Node compatibility
-      const mod = await import('react-dom/server')
-      ReactDOMServer = mod
-      g['~reactServer'] = mod
-    }
-    catch (e) {
-      console.error('[rari] Failed to load react-dom/server:', e)
-    }
-  }
-
-  if (!ReactDOMServer || !ReactDOMServer.renderToReadableStream) {
-    console.warn('[rari] Fizz renderer unavailable')
+  if (!ReactDOMServer?.renderToReadableStream) {
+    console.warn('[rari] Fizz renderer unavailable: react-dom/server vendor not loaded')
     throw new Error('Fizz renderer unavailable')
   }
 
@@ -92,7 +80,7 @@
       }
 
       try {
-        const React = g.React || g['~rsc']?.modules?.react
+        const React = g.React
         if (!React || typeof React.createElement !== 'function') {
           if (g.__RARI_DEV__)
             console.warn('[rari] SSR: React not available for createElement')
