@@ -1,9 +1,10 @@
 #![allow(clippy::too_many_lines, clippy::cast_precision_loss)]
 
-use std::{env, fmt::Write, fs, path::PathBuf, rc::Rc, string::String};
+use std::{env, fmt::Write, fs, path::PathBuf, ptr, rc::Rc, string::String};
 
-use deno_core::{ModuleCodeString, ModuleName, SourceMapData, snapshot};
+use deno_core::{ModuleCodeString, ModuleName, SourceMapData, snapshot, v8};
 use deno_error::JsErrorBox;
+use deno_node::{ContextInitMode, VM_CONTEXT_INDEX, create_v8_context, init_global_template};
 use rari::runtime::{
     ext::{self, ExtensionOptions},
     transpile,
@@ -45,7 +46,15 @@ fn main() {
             skip_op_registration: false,
             extensions,
             extension_transpiler: Some(transpiler),
-            with_runtime_cb: None,
+            with_runtime_cb: Some(Box::new(|rt| {
+                let isolate = rt.v8_isolate();
+                v8::scope!(scope, isolate);
+
+                let tmpl = init_global_template(scope, ContextInitMode::ForSnapshot);
+                let ctx =
+                    create_v8_context(scope, tmpl, ContextInitMode::ForSnapshot, ptr::null_mut());
+                assert_eq!(scope.add_context(ctx), VM_CONTEXT_INDEX);
+            })),
         },
         None,
     )

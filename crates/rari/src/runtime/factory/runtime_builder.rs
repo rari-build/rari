@@ -7,7 +7,10 @@ use rustc_hash::FxHashMap;
 
 use crate::runtime::{
     ext,
-    factory::utils::constants::{ENV_INJECTION_SCRIPT, MODULE_CHECK_SCRIPT},
+    factory::{
+        create_params::runtime_create_params,
+        utils::constants::{ENV_INJECTION_SCRIPT, MODULE_CHECK_SCRIPT},
+    },
     module_loader::RariModuleLoader,
     ops::{self, StreamOpState},
 };
@@ -51,6 +54,7 @@ pub fn build_js_runtime(
         startup_snapshot: Some(RUNTIME_SNAPSHOT),
         residual_lazy_esm_sources: RESIDUAL_LAZY_ESM_SOURCES,
         residual_lazy_js_sources: RESIDUAL_LAZY_JS_SOURCES,
+        create_params: Some(runtime_create_params()),
         ..Default::default()
     };
 

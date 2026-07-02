@@ -2,9 +2,7 @@
 
 import { core } from 'ext:core/mod.js'
 import { applyToDeno, getterOnly, nonEnumerable, readOnly } from 'ext:init_utilities/utilities.ts'
-import * as scope from 'ext:runtime/98_global_scope_shared.js'
 import * as scopeWindow from 'ext:runtime/98_global_scope_window.js'
-import * as scopeWorker from 'ext:runtime/98_global_scope_worker.js'
 
 const os = core.loadExtScript('ext:deno_os/30_os.js')
 const signals = core.loadExtScript('ext:deno_os/40_signals.js')

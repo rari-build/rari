@@ -109,11 +109,8 @@ pub fn extensions(options: &ExtensionOptions, is_snapshot: bool) -> Vec<Extensio
     extensions.extend(node::extensions(Arc::clone(&options.node_resolver), is_snapshot));
     {
         let mut bundle_ext = deno_bundle_runtime::deno_bundle_runtime::init(None);
-        if is_snapshot {
-            bundle_ext.js_files = Borrowed(&[]);
-            bundle_ext.esm_files = Borrowed(&[]);
-            bundle_ext.esm_entry_point = None;
-        }
+        bundle_ext.esm_files = Borrowed(&[]);
+        bundle_ext.esm_entry_point = None;
         extensions.push(bundle_ext);
     }
     extensions.extend(runtime::extensions(options, None, is_snapshot));
