@@ -1,5 +1,3 @@
-// Copyright 2018-2025 the Deno authors. MIT license.
-
 #![allow(clippy::exhaustive_structs)]
 
 use std::{
@@ -16,10 +14,6 @@ use deno_error::JsErrorBox;
 deno_error::js_error_wrapper!(deno_ast::ParseDiagnostic, JsParseDiagnostic, "Error");
 deno_error::js_error_wrapper!(deno_ast::TranspileError, JsTranspileError, "Error");
 
-/// NOTE: In deno_node >= 0.190.0, this is exported as `deno_node::NODE_VERSION`.
-/// When we upgrade, we should use that constant directly to stay aligned.
-const NODE_VERSION: &str = "26.3.0";
-
 fn maybe_substitute_version_placeholders(name: &str, source: ModuleCodeString) -> ModuleCodeString {
     const NODE_VERSION_TOKEN: &str = "__NODE_VERSION__";
     const V8_VERSION_TOKEN: &str = "__V8_VERSION__";
@@ -34,7 +28,7 @@ fn maybe_substitute_version_placeholders(name: &str, source: ModuleCodeString) -
         return source;
     }
 
-    let result: Cow<str> = source_str.cow_replace(NODE_VERSION_TOKEN, NODE_VERSION);
+    let result: Cow<str> = source_str.cow_replace(NODE_VERSION_TOKEN, deno_node::NODE_VERSION);
 
     if result.contains(V8_VERSION_TOKEN) {
         let final_result: Cow<str> = result.cow_replace(V8_VERSION_TOKEN, VERSION_STRING);
