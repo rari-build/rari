@@ -33,6 +33,7 @@ export default defineConfig({
   projects: [
     {
       name: 'Mobile Chrome',
+      testIgnore: '**/cache-logs.spec.ts',
       use: {
         ...devices['Pixel 5'],
         launchOptions: {

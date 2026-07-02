@@ -62,6 +62,18 @@ const FIZZ_STREAM_ERROR_INJECTION: &str = r"
                         await injectRariErrorFromCaught();
 ";
 
+const FIZZ_CHUNK_PUMP_HELPER: &str = r"
+                        async function rariPumpFizzChunk(text) {
+                            if (!text) return;
+                            try {
+                                await Deno.core.ops.op_fizz_chunk(text);
+                            } catch (e) {
+                                console.warn('[rari] Fizz stream consumer disconnected');
+                                throw e;
+                            }
+                        }
+";
+
 pub struct LayoutHtmlCache {
     handler: Arc<dyn CacheHandler>,
     default_ttl_secs: u64,
@@ -416,6 +428,7 @@ impl LayoutRenderer {
 
                 let script = format!(
                     r"(async function() {{
+                        {fizz_chunk_pump_helper}
                         try {{
                         try {{ {composition_script} }} catch(e) {{
                             console.error('[rari] Composition error in RSC streaming nav:', e);
@@ -441,16 +454,17 @@ impl LayoutRenderer {
                             const {{ done, value }} = await reader.read();
                             if (done) break;
                             const text = decoder.decode(value, {{ stream: true }});
-                            if (text) await Deno.core.ops.op_fizz_chunk(text);
+                            await rariPumpFizzChunk(text);
                         }}
                         const tail = decoder.decode();
-                        if (tail) await Deno.core.ops.op_fizz_chunk(tail);
+                        await rariPumpFizzChunk(tail);
                         }} catch(e) {{
                             console.error('[rari] RSC streaming navigation fatal error:', e);
                         }} finally {{
                             Deno.core.ops.op_fizz_done();
                         }}
-                    }})()"
+                    }})()",
+                    fizz_chunk_pump_helper = FIZZ_CHUNK_PUMP_HELPER,
                 );
 
                 let runtime_clone = Arc::clone(&runtime);
@@ -589,7 +603,8 @@ impl LayoutRenderer {
                 let script = format!(
                     r"(async function() {{
                         let caughtErrors = [];
-                        {FIZZ_STREAM_ERROR_HELPER}
+                        {fizz_stream_error_helper}
+                        {fizz_chunk_pump_helper}
                         try {{
                         try {{ {composition_script} }} catch(e) {{
                             console.error('[rari] Composition error in streaming:', e);
@@ -653,10 +668,10 @@ impl LayoutRenderer {
                                 const {{ done, value }} = await reader.read();
                                 if (done) break;
                                 const text = decoder.decode(value, {{ stream: true }});
-                                if (text) await Deno.core.ops.op_fizz_chunk(text);
+                                await rariPumpFizzChunk(text);
                             }}
                             const tail = decoder.decode();
-                            if (tail) await Deno.core.ops.op_fizz_chunk(tail);
+                            await rariPumpFizzChunk(tail);
                         }})();
 
                         await Promise.all([
@@ -664,7 +679,7 @@ impl LayoutRenderer {
                             allReady ?? Promise.resolve(),
                         ]);
 
-                        {FIZZ_STREAM_ERROR_INJECTION}
+                        {fizz_stream_error_injection}
 
                         Deno.core.ops.op_fizz_done();
 
@@ -673,10 +688,15 @@ impl LayoutRenderer {
                             const displayError = caughtErrors.length > 0 ? caughtErrors[0] : outerError;
                             const errMsg = String(displayError?.message || outerError?.message || 'Unknown error').split('<').join('&lt;');
                             const errorHtml = '<!doctype html><html><head></head><body><div id=root><div class=rari-error style=color:red;border:1px_solid_red;padding:10px;border-radius:4px;background-color:#fff5f5><strong>Error loading content: </strong>' + errMsg + '</div></div></body></html>';
-                            await Deno.core.ops.op_fizz_chunk(errorHtml);
+                            await rariPumpFizzChunk(errorHtml);
                             Deno.core.ops.op_fizz_done();
                         }}
-                    }})()"
+                    }})()",
+                    composition_script = composition_script,
+                    head_content_json = head_content_json,
+                    fizz_stream_error_helper = FIZZ_STREAM_ERROR_HELPER,
+                    fizz_chunk_pump_helper = FIZZ_CHUNK_PUMP_HELPER,
+                    fizz_stream_error_injection = FIZZ_STREAM_ERROR_INJECTION,
                 );
 
                 let shell = bytes::Bytes::new();

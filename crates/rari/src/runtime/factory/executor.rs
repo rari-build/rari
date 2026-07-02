@@ -421,22 +421,22 @@ pub async fn execute_script_for_streaming(
 
     let result = execute_script(runtime, module_loader, script_name, script_code).await;
 
-    if result.is_err() {
-        let error_message = result
-            .as_ref()
-            .err()
-            .map(ToString::to_string)
-            .unwrap_or_else(|| "Unknown streaming script error".to_string());
+    let leftover_sender = {
+        let op_state_rc = runtime.op_state();
+        let mut op_state = op_state_rc.borrow_mut();
+        op_state
+            .try_borrow_mut::<StreamOpState>()
+            .and_then(|stream_state| stream_state.chunk_sender.take())
+    };
 
-        let failed_sender = {
-            let op_state_rc = runtime.op_state();
-            let mut op_state = op_state_rc.borrow_mut();
-            op_state
-                .try_borrow_mut::<StreamOpState>()
-                .and_then(|stream_state| stream_state.chunk_sender.take())
-        };
+    if let Some(sender) = leftover_sender {
+        if result.is_err() {
+            let error_message = result
+                .as_ref()
+                .err()
+                .map(ToString::to_string)
+                .unwrap_or_else(|| "Unknown streaming script error".to_string());
 
-        if let Some(sender) = failed_sender {
             let _ = sender
                 .send(Err(format!("Streaming script '{script_name}' failed: {error_message}")))
                 .await;

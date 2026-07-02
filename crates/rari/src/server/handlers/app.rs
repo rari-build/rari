@@ -1043,11 +1043,11 @@ pub async fn handle_app_route(
 ) -> Result<Response, StatusCode> {
     let path = uri.path();
 
-    fn should_use_streaming(route_match: &AppRouteMatch, _config: &Config) -> bool {
+    fn should_use_streaming(route_match: &AppRouteMatch, config: &Config) -> bool {
         if route_match.not_found.is_some() {
             return false;
         }
-        route_match.loading.is_some()
+        config.loading.enabled && route_match.loading.is_some()
     }
 
     if path.len() > 1 {

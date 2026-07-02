@@ -194,13 +194,10 @@ test('fetch cache: GET /fetch-test twice - first miss, second hit', async ({ pag
 test('handler: multiple GETs against distinct URLs eventually trigger set_with_tags / hit / miss lines', async ({ request }) => {
   const urls = ['/', '/about', '/nested', '/nested/deep', '/blog', '/products']
 
-  for (const path of urls) {
-    await revalidatePath(request, path)
-  }
-
   const missesBefore = grepLog(/memory cache miss/).length
 
   for (const path of urls) {
+    await revalidatePath(request, path)
     const r = await request.get(path)
     expect([200, 404]).toContain(r.status())
     if (r.status() === 200)

@@ -129,12 +129,22 @@ async function renderWireToFizzStream(wireFormat: string): Promise<void> {
         break
 
       const text = decoder.decode(value, { stream: true })
-      if (text)
-        await ops.op_fizz_chunk(text)
+      if (text) {
+        try {
+          await ops.op_fizz_chunk(text)
+        }
+        catch {
+          return
+        }
+      }
     }
     const tail = decoder.decode()
-    if (tail)
-      await ops.op_fizz_chunk(tail)
+    if (tail) {
+      try {
+        await ops.op_fizz_chunk(tail)
+      }
+      catch {}
+    }
   }
   finally {
     ops.op_fizz_done()

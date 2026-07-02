@@ -273,7 +273,13 @@ pub async fn op_fizz_chunk(
 
     match sender {
         Some(sender) => {
-            let _ = sender.send(Ok(html.into_bytes())).await.is_err();
+            if sender.send(Ok(html.into_bytes())).await.is_err() {
+                let mut op_state_ref = state.borrow_mut();
+                if let Some(stream_op_state) = op_state_ref.try_borrow_mut::<StreamOpState>() {
+                    stream_op_state.chunk_sender.take();
+                }
+                return Err(JsErrorBox::generic("Fizz stream receiver disconnected"));
+            }
             Ok(())
         }
         None => Err(JsErrorBox::generic("No chunk sender available for Fizz chunk")),
