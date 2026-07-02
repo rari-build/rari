@@ -1,3 +1,5 @@
+#![expect(clippy::too_many_lines)]
+
 use std::{
     env,
     path::{Path, PathBuf},
@@ -74,6 +76,28 @@ const FIZZ_CHUNK_PUMP_HELPER: &str = r"
                         }
 ";
 
+fn convert_route_path_to_dist_path(path: &str) -> String {
+    let (base, ext) =
+        if let Some(pos) = path.rfind('.') { (&path[..pos], &path[pos..]) } else { (path, "") };
+
+    let converted_base = base
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c == '/' || c == '-' || c == '_' { c } else { '_' })
+        .collect::<String>();
+
+    format!("{converted_base}{ext}")
+}
+
+fn component_dist_path(base_path: &Path, file_path: &str, component_id: Option<&str>) -> PathBuf {
+    if let Some(component_id) = component_id {
+        return base_path.join(format!("{component_id}.js"));
+    }
+
+    let js_filename = file_path.cow_replace(".tsx", ".js").cow_replace(".ts", ".js").into_owned();
+    let dist_filename = convert_route_path_to_dist_path(&js_filename);
+    base_path.join("app").join(&dist_filename)
+}
+
 pub struct LayoutHtmlCache {
     handler: Arc<dyn CacheHandler>,
     default_ttl_secs: u64,
@@ -88,7 +112,7 @@ impl Default for LayoutHtmlCache {
 impl LayoutHtmlCache {
     pub fn new() -> Self {
         Self::with_ttl(
-            Arc::new(MemoryCacheHandler::with_config(MemoryConfig {
+            Arc::new(MemoryCacheHandler::with_config(&MemoryConfig {
                 max_entries: 5000,
                 default_ttl: 3600,
             })),
@@ -183,50 +207,13 @@ impl LayoutRenderer {
         let page_props = utils::create_page_props(route_match, context)?;
         let page_props_json = serde_json::to_string(&page_props)?;
 
-        fn component_dist_path(
-            base_path: &Path,
-            file_path: &str,
-            component_id: Option<&str>,
-        ) -> PathBuf {
-            if let Some(component_id) = component_id {
-                return base_path.join(format!("{component_id}.js"));
-            }
-
-            fn convert_route_path_to_dist_path(path: &str) -> String {
-                let (base, ext) = if let Some(pos) = path.rfind('.') {
-                    (&path[..pos], &path[pos..])
-                } else {
-                    (path, "")
-                };
-
-                let converted_base = base
-                    .chars()
-                    .map(|c| {
-                        if c.is_alphanumeric() || c == '/' || c == '-' || c == '_' {
-                            c
-                        } else {
-                            '_'
-                        }
-                    })
-                    .collect::<String>();
-
-                format!("{converted_base}{ext}")
-            }
-
-            let js_filename =
-                file_path.cow_replace(".tsx", ".js").cow_replace(".ts", ".js").into_owned();
-            let dist_filename = convert_route_path_to_dist_path(&js_filename);
-            base_path.join("app").join(&dist_filename)
-        }
-
         let dist_server_path = env::current_dir()
             .ok()
             .map(|p| p.join("dist/server"))
             .and_then(|p| p.canonicalize().ok());
 
-        let base_path = match dist_server_path {
-            Some(path) => path,
-            None => return Ok(false),
+        let Some(base_path) = dist_server_path else {
+            return Ok(false);
         };
 
         let page_file_path = component_dist_path(

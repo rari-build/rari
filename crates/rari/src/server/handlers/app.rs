@@ -41,7 +41,7 @@ use crate::{
     server::{
         ServerState,
         cache::response,
-        compression::{CompressionEncoding, compress_stream},
+        compression::{CompressionEncoding, compress_body, compress_stream},
         config::Config,
         core::{
             types::request::{RenderMode, RequestTypeDetector},
@@ -153,6 +153,35 @@ pub(crate) fn wrap_html_with_metadata(
     }
 }
 
+fn convert_route_path_to_dist_path(path: &str) -> String {
+    let (base, ext) =
+        if let Some(pos) = path.rfind('.') { (&path[..pos], &path[pos..]) } else { (path, "") };
+
+    let converted_base = base
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c == '/' || c == '-' || c == '_' { c } else { '_' })
+        .collect::<String>();
+
+    format!("{converted_base}{ext}")
+}
+
+fn component_dist_path(base_path: &Path, file_path: &str, component_id: Option<&str>) -> PathBuf {
+    if let Some(component_id) = component_id {
+        return base_path.join(format!("{component_id}.js"));
+    }
+
+    let js_filename = file_path.cow_replace(".tsx", ".js").cow_replace(".ts", ".js").into_owned();
+    let dist_filename = convert_route_path_to_dist_path(&js_filename);
+    base_path.join("app").join(&dist_filename)
+}
+
+fn should_use_streaming(route_match: &AppRouteMatch, config: &Config) -> bool {
+    if route_match.not_found.is_some() {
+        return false;
+    }
+    config.loading.enabled && route_match.loading.is_some()
+}
+
 pub(crate) async fn collect_page_metadata(
     state: &ServerState,
     route_match: &AppRouteMatch,
@@ -161,49 +190,10 @@ pub(crate) async fn collect_page_metadata(
     let dist_server_path =
         env::current_dir().ok().map(|p| p.join("dist/server")).and_then(|p| p.canonicalize().ok());
 
-    let base_path = match dist_server_path {
-        Some(path) => path,
-        None => {
-            error!("Could not determine dist/server path for metadata collection");
-            return None;
-        }
+    let Some(base_path) = dist_server_path else {
+        error!("Could not determine dist/server path for metadata collection");
+        return None;
     };
-
-    fn component_dist_path(
-        base_path: &Path,
-        file_path: &str,
-        component_id: Option<&str>,
-    ) -> PathBuf {
-        if let Some(component_id) = component_id {
-            return base_path.join(format!("{component_id}.js"));
-        }
-
-        fn convert_route_path_to_dist_path(path: &str) -> String {
-            let (base, ext) = if let Some(pos) = path.rfind('.') {
-                (&path[..pos], &path[pos..])
-            } else {
-                (path, "")
-            };
-
-            let converted_base =
-                base.chars()
-                    .map(|c| {
-                        if c.is_alphanumeric() || c == '/' || c == '-' || c == '_' {
-                            c
-                        } else {
-                            '_'
-                        }
-                    })
-                    .collect::<String>();
-
-            format!("{converted_base}{ext}")
-        }
-
-        let js_filename =
-            file_path.cow_replace(".tsx", ".js").cow_replace(".ts", ".js").into_owned();
-        let dist_filename = convert_route_path_to_dist_path(&js_filename);
-        base_path.join("app").join(&dist_filename)
-    }
 
     let layout_paths: Vec<String> = route_match
         .layouts
@@ -407,17 +397,14 @@ pub async fn render_rsc_navigation_streaming(
     };
 
     match render_result {
-        RenderResult::Streaming(rsc_stream) => {
-            render_rsc_streaming_response(
-                state,
-                route_match,
-                context,
-                rsc_stream,
-                is_not_found,
-                accept_encoding,
-            )
-            .await
-        }
+        RenderResult::Streaming(rsc_stream) => Ok(render_rsc_streaming_response(
+            &state,
+            route_match,
+            &context,
+            rsc_stream,
+            is_not_found,
+            accept_encoding,
+        )),
         RenderResult::FizzHtmlStream { .. } => {
             error!("FizzHtmlStream not supported in RSC-only mode");
             let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
@@ -486,14 +473,14 @@ pub async fn render_rsc_navigation_streaming(
     }
 }
 
-async fn render_rsc_streaming_response(
-    state: Arc<ServerState>,
+fn render_rsc_streaming_response(
+    state: &Arc<ServerState>,
     _route_match: AppRouteMatch,
-    context: LayoutRenderContext,
+    context: &LayoutRenderContext,
     mut rsc_stream: RscStream,
     is_not_found: bool,
     accept_encoding: Option<&str>,
-) -> Result<Response, StatusCode> {
+) -> http::Response<Body> {
     let should_continue = Arc::new(AtomicBool::new(true));
     let should_continue_clone = should_continue;
 
@@ -541,7 +528,7 @@ async fn render_rsc_streaming_response(
 
     let body = Body::from_stream(compressed_stream);
     #[expect(clippy::expect_used, reason = "Response::builder() with valid components never fails")]
-    Ok(response_builder.body(body).expect("Valid RSC streaming response"))
+    response_builder.body(body).expect("Valid RSC streaming response")
 }
 
 pub async fn render_synchronous(
@@ -592,19 +579,16 @@ pub async fn render_synchronous(
                     .body(Body::from(final_html))
                     .expect("Valid HTML response"))
             }
-            RenderResult::FizzHtmlStream { shell, closing, chunks } => {
-                render_fizz_html_stream(
-                    state,
-                    route_match,
-                    context,
-                    shell,
-                    closing,
-                    chunks,
-                    is_not_found,
-                    accept_encoding,
-                )
-                .await
-            }
+            RenderResult::FizzHtmlStream { shell, closing, chunks } => Ok(render_fizz_html_stream(
+                &state,
+                route_match,
+                &context,
+                shell,
+                closing,
+                chunks,
+                is_not_found,
+                accept_encoding,
+            )),
             RenderResult::Streaming(stream) => {
                 render_streaming_response(
                     state,
@@ -639,16 +623,16 @@ pub async fn render_synchronous(
 }
 
 #[expect(clippy::too_many_arguments)]
-async fn render_fizz_html_stream(
-    state: Arc<ServerState>,
+fn render_fizz_html_stream(
+    state: &Arc<ServerState>,
     _route_match: AppRouteMatch,
-    context: LayoutRenderContext,
+    context: &LayoutRenderContext,
     shell: bytes::Bytes,
     closing: bytes::Bytes,
     mut chunks: Receiver<Result<Vec<u8>, String>>,
     is_not_found: bool,
     accept_encoding: Option<&str>,
-) -> Result<Response, StatusCode> {
+) -> http::Response<Body> {
     use crate::server::compression::compress_stream;
 
     let stall_timeout = Duration::from_millis(fizz_stream_stall_timeout_ms());
@@ -704,7 +688,7 @@ async fn render_fizz_html_stream(
 
     let body = Body::from_stream(compressed_stream);
     #[expect(clippy::expect_used, reason = "Response::builder() with valid components never fails")]
-    Ok(response_builder.body(body).expect("Valid Fizz streaming response"))
+    response_builder.body(body).expect("Valid Fizz streaming response")
 }
 
 fn fizz_stream_stall_timeout_ms() -> u64 {
@@ -876,17 +860,16 @@ pub async fn render_streaming_with_layout(
     let rsc_stream = match render_result {
         RenderResult::Streaming(stream) => stream,
         RenderResult::FizzHtmlStream { shell, closing, chunks } => {
-            return render_fizz_html_stream(
-                state,
+            return Ok(render_fizz_html_stream(
+                &state,
                 route_match,
-                context,
+                &context,
                 shell,
                 closing,
                 chunks,
                 is_not_found,
                 accept_encoding,
-            )
-            .await;
+            ));
         }
         RenderResult::Static(html) => {
             use crate::server::compression::compress_body;
@@ -1073,13 +1056,6 @@ pub async fn handle_app_route(
 ) -> Result<Response, StatusCode> {
     let path = uri.path();
 
-    fn should_use_streaming(route_match: &AppRouteMatch, config: &Config) -> bool {
-        if route_match.not_found.is_some() {
-            return false;
-        }
-        config.loading.enabled && route_match.loading.is_some()
-    }
-
     if path.len() > 1 {
         let path_without_leading_slash = &path[1..];
 
@@ -1122,15 +1098,12 @@ pub async fn handle_app_route(
         }
     }
 
-    let app_router = match &state.app_router {
-        Some(router) => router,
-        None => {
-            tracing::error!(
-                "App router not initialized - routes.json may be missing or invalid. Path: {}",
-                path
-            );
-            return Err(StatusCode::NOT_FOUND);
-        }
+    let Some(app_router) = &state.app_router else {
+        tracing::error!(
+            "App router not initialized - routes.json may be missing or invalid. Path: {}",
+            path
+        );
+        return Err(StatusCode::NOT_FOUND);
     };
 
     let mut route_match = match app_router.match_route(path) {
@@ -1391,7 +1364,6 @@ pub async fn handle_app_route(
 
                 let merged_vary = merge_vary_with_accept(cached.headers.get("vary"));
 
-                use crate::server::compression::compress_body;
                 let encoding = CompressionEncoding::from_accept_encoding(accept_encoding);
 
                 let (body_bytes, actual_encoding) =
@@ -1755,8 +1727,6 @@ pub async fn handle_app_route(
 
             if cache_policy.enabled && state.response_cache.config.enabled {
                 let body_bytes = bytes::Bytes::from(final_html.clone());
-
-                use crate::server::compression::{CompressionEncoding, compress_body};
 
                 let (compressed_gzip, compressed_zstd, compressed_br) = {
                     let (gz, gz_enc) =

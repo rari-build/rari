@@ -12,10 +12,13 @@ use bytes::Bytes;
 use dashmap::DashMap;
 use parking_lot::Mutex;
 
-use crate::server::{
-    cache::handler::{CacheHandler, MemoryCacheHandler, MemoryConfig},
-    compression::CompressionEncoding,
-    config::CacheLayerConfig,
+use crate::{
+    server::{
+        cache::handler::{CacheHandler, MemoryCacheHandler, MemoryConfig},
+        compression::CompressionEncoding,
+        config::CacheLayerConfig,
+    },
+    utils::float,
 };
 
 #[derive(Clone)]
@@ -228,7 +231,7 @@ impl ResponseCache {
     }
 
     pub fn new(config: CacheConfig) -> Self {
-        let handler = MemoryCacheHandler::with_config(MemoryConfig {
+        let handler = MemoryCacheHandler::with_config(&MemoryConfig {
             max_entries: config.max_entries,
             default_ttl: config.default_ttl,
         });
@@ -414,9 +417,11 @@ impl ResponseCache {
 
     #[cfg(test)]
     pub async fn clear_percentage(&self, percentage: f64) {
+        use crate::utils::cast;
+
         let percentage = percentage.clamp(0.0, 1.0);
         let current_size = self.entry_count.load(Ordering::Relaxed);
-        let entries_to_remove = (current_size as f64 * percentage).ceil() as usize;
+        let entries_to_remove = cast::usize_fraction_ceil(current_size, percentage);
 
         let keys: Vec<String> = self
             .handler
@@ -437,7 +442,7 @@ impl ResponseCache {
     #[cfg(test)]
     pub fn should_clear_on_memory_pressure(&self) -> bool {
         let current_size = self.entry_count.load(Ordering::Relaxed);
-        let threshold = (self.config.max_entries as f64 * 0.9) as usize;
+        let threshold = self.config.max_entries * 9 / 10;
         current_size >= threshold
     }
 
@@ -458,19 +463,19 @@ impl ResponseCache {
     fn record_hit(&self) {
         let mut metrics = self.metrics.lock();
         metrics.cache_hits += 1;
-        self.update_hit_rate(&mut metrics);
+        Self::update_hit_rate(&mut metrics);
     }
 
     fn record_miss(&self) {
         let mut metrics = self.metrics.lock();
         metrics.cache_misses += 1;
-        self.update_hit_rate(&mut metrics);
+        Self::update_hit_rate(&mut metrics);
     }
 
-    fn update_hit_rate(&self, metrics: &mut CacheMetrics) {
+    fn update_hit_rate(metrics: &mut CacheMetrics) {
         let total = metrics.cache_hits + metrics.cache_misses;
         if total > 0 {
-            metrics.hit_rate = metrics.cache_hits as f64 / total as f64;
+            metrics.hit_rate = float::u64_ratio(metrics.cache_hits, total);
         }
     }
 
@@ -494,12 +499,15 @@ mod instant_serde {
 
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
+    use crate::utils::cast;
+
     pub fn serialize<S: Serializer>(instant: &Instant, s: S) -> Result<S::Ok, S::Error> {
         let now_mono = Instant::now();
         let now_wall = SystemTime::now();
         let elapsed = now_mono.saturating_duration_since(*instant);
         let stored = now_wall.checked_sub(elapsed).unwrap_or(now_wall);
-        let stored_ms = stored.duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
+        let stored_ms =
+            cast::duration_millis_u64(stored.duration_since(UNIX_EPOCH).unwrap_or_default());
         stored_ms.serialize(s)
     }
 
@@ -910,7 +918,7 @@ mod tests {
         use crate::server::og::OgImageCache;
 
         let shared: Arc<dyn CacheHandler> =
-            Arc::new(MemoryCacheHandler::with_config(MemoryConfig {
+            Arc::new(MemoryCacheHandler::with_config(&MemoryConfig {
                 max_entries: 32,
                 default_ttl: 60,
             }));

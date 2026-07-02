@@ -1,6 +1,4 @@
 #![expect(clippy::missing_errors_doc)]
-#![expect(clippy::unused_self)]
-#![expect(clippy::needless_pass_by_value)]
 
 pub mod components;
 pub mod core;

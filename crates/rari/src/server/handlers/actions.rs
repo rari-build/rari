@@ -13,11 +13,14 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tracing::error;
 
-use crate::server::{
-    ServerState,
-    config::RedirectConfig,
-    core::utils::http::is_origin_allowed,
-    middleware::request_context::{PendingCookie, PendingCookieKey, RequestContext},
+use crate::{
+    server::{
+        ServerState,
+        config::RedirectConfig,
+        core::utils::http::is_origin_allowed,
+        middleware::request_context::{PendingCookie, PendingCookieKey, RequestContext},
+    },
+    utils::cast,
 };
 
 const MAX_BOUND_ARGS: usize = 1000;
@@ -725,8 +728,11 @@ fn validate_and_sanitize_value(
             if let Some(f) = n.as_f64() {
                 let abs_f = f.abs();
                 if abs_f > 1e100 {
-                    let estimated_digits =
-                        if abs_f == 0.0 { 1 } else { (abs_f.log10().floor() as usize) + 1 };
+                    let estimated_digits = if abs_f == 0.0 {
+                        1
+                    } else {
+                        cast::f64_log10_floor_usize(abs_f.log10()) + 1
+                    };
 
                     if estimated_digits > MAX_BIGINT_DIGITS {
                         return Err(RariError::bad_request(format!(

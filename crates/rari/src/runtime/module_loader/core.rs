@@ -88,6 +88,30 @@ fn file_url_to_path(url: &str) -> Option<PathBuf> {
     })
 }
 
+fn append_extension_only(path: &str) -> (String, &str) {
+    let (base_path, suffix) = if let Some(query_pos) = path.find('?') {
+        (&path[..query_pos], &path[query_pos..])
+    } else if let Some(hash_pos) = path.find('#') {
+        (&path[..hash_pos], &path[hash_pos..])
+    } else {
+        (path, "")
+    };
+
+    let base_with_ext = if base_path.ends_with(".ts")
+        || base_path.ends_with(".js")
+        || base_path.ends_with(".tsx")
+        || base_path.ends_with(".jsx")
+        || base_path.ends_with(".mjs")
+        || base_path.ends_with(".cjs")
+    {
+        base_path.to_string()
+    } else {
+        format!("{base_path}.ts")
+    };
+
+    (base_with_ext, suffix)
+}
+
 #[derive(Debug)]
 pub struct RariModuleLoader {
     storage: ModuleStorage,
@@ -98,15 +122,15 @@ pub struct RariModuleLoader {
 
 impl RariModuleLoader {
     pub fn new() -> Self {
-        Self::with_config(RuntimeConfig::default())
+        Self::with_config(&RuntimeConfig::default())
     }
 
-    pub fn with_config(config: RuntimeConfig) -> Self {
+    pub fn with_config(config: &RuntimeConfig) -> Self {
         Self::with_config_and_registry(config, &CacheHandlerRegistry::default_with_memory())
     }
 
     pub fn with_config_and_registry(
-        config: RuntimeConfig,
+        config: &RuntimeConfig,
         registry: &CacheHandlerRegistry,
     ) -> Self {
         let layer = CacheLayerConfig {
@@ -125,7 +149,7 @@ impl RariModuleLoader {
     }
 
     pub async fn add_module(&self, specifier: &str, original_path: &str, code: String) {
-        self.add_module_internal(specifier, original_path, code.clone());
+        self.add_module_internal(specifier, original_path, &code);
 
         if specifier.contains(RARI_INTERNAL_PATH) {
             if let Err(e) =
@@ -136,7 +160,7 @@ impl RariModuleLoader {
         }
     }
 
-    fn add_module_internal(&self, specifier: &str, original_path: &str, code: String) {
+    fn add_module_internal(&self, specifier: &str, original_path: &str, code: &str) {
         let is_update = self.storage.contains_module_code(specifier);
         let specifier_owned = specifier.to_string();
 
@@ -154,20 +178,20 @@ impl RariModuleLoader {
             let current_version = self.storage.get_version(&version_key).unwrap_or(0) + 1;
             let versioned_specifier = format!("{specifier}{VERSION_QUERY_PARAM}{current_version}");
 
-            self.storage.set_module_code(specifier_owned.clone(), code.clone());
-            self.storage.set_module_code(versioned_specifier.clone(), code.clone());
+            self.storage.set_module_code(specifier_owned.clone(), code.to_string());
+            self.storage.set_module_code(versioned_specifier.clone(), code.to_string());
 
             self.storage.set_module_meta(format!("registered_{specifier_owned}"), true);
             self.storage.set_module_meta(format!("registered_{versioned_specifier}"), true);
             self.storage.set_module_meta(format!("hmr_{specifier_owned}"), true);
             self.storage.set_version(version_key, current_version);
         } else {
-            self.storage.set_module_code(specifier_owned.clone(), code.clone());
+            self.storage.set_module_code(specifier_owned.clone(), code.to_string());
             self.storage.set_module_meta(format!("registered_{specifier_owned}"), true);
             self.storage.set_version(version_key, 1);
         }
 
-        let dependencies = self.register_dependencies(original_path, &code);
+        let dependencies = Self::register_dependencies(original_path, code);
 
         if !dependencies.is_empty() {
             for dep in &dependencies {
@@ -201,7 +225,7 @@ export default {{}};
         }
     }
 
-    fn register_dependencies(&self, _original_path: &str, code: &str) -> DependencyList {
+    fn register_dependencies(_original_path: &str, code: &str) -> DependencyList {
         extract_dependencies(code)
     }
 
@@ -290,7 +314,7 @@ export default {{}};
     pub fn as_extension_transpiler(self: &Rc<Self>) -> Rc<ExtensionTranspilerFn> {
         Rc::new(move |specifier: FastString, code: FastString| {
             match ModuleSpecifier::parse(specifier.as_str()) {
-                Ok(_) => transpile::maybe_transpile_source(specifier, code),
+                Ok(_) => transpile::maybe_transpile_source(&specifier, code),
                 Err(e) => Err(JsErrorBox::from_err(Box::new(Error::new(
                     InvalidInput,
                     format!("Failed to parse module specifier '{specifier}': {e}"),
@@ -299,7 +323,7 @@ export default {{}};
         })
     }
 
-    fn find_package_directory(&self, current_dir: &Path, package_name: &str) -> Option<PathBuf> {
+    fn find_package_directory(current_dir: &Path, package_name: &str) -> Option<PathBuf> {
         let node_modules_path = current_dir.join("node_modules").join(package_name);
         if node_modules_path.exists() {
             return Some(node_modules_path);
@@ -365,9 +389,8 @@ export default {{}};
                 continue;
             }
 
-            let dir_name = match path.file_name().and_then(|n| n.to_str()) {
-                Some(name) => name,
-                None => continue,
+            let Some(dir_name) = path.file_name().and_then(|n| n.to_str()) else {
+                continue;
             };
 
             if dir_name.starts_with('.')
@@ -504,7 +527,7 @@ export default {{}};
         self.module_resolver.get_package_base(&clean_referrer)
     }
 
-    fn resolve_relative_up(&self, specifier: &str, package_base: &str) -> String {
+    fn resolve_relative_up(specifier: &str, package_base: &str) -> String {
         let remaining = specifier.strip_prefix("../").unwrap_or(specifier);
         let parent_dir = if package_base.contains('/') {
             package_base.rsplit_once('/').map(|(dir, _)| dir).unwrap_or("")
@@ -515,7 +538,7 @@ export default {{}};
         path_to_file_url(&full_path)
     }
 
-    fn resolve_relative_current(&self, specifier: &str, package_base: &str) -> String {
+    fn resolve_relative_current(specifier: &str, package_base: &str) -> String {
         let remaining = specifier.strip_prefix("./").unwrap_or(specifier);
         let full_path = PathBuf::from(package_base).join(remaining);
         path_to_file_url(&full_path)
@@ -528,10 +551,8 @@ export default {{}};
     ) -> Option<ModuleLoadResponse> {
         if let Some(code) = self.storage.get_module_code(specifier_str) {
             let (final_code, module_type) = if needs_typescript_transpilation(specifier_str) {
-                match transpile::maybe_transpile_source(
-                    specifier_str.to_string().into(),
-                    code.into(),
-                ) {
+                let module_name: FastString = specifier_str.to_string().into();
+                match transpile::maybe_transpile_source(&module_name, code.into()) {
                     Ok((transpiled_code, _source_map)) => {
                         (transpiled_code.to_string(), ModuleType::JavaScript)
                     }
@@ -542,10 +563,8 @@ export default {{}};
                     }
                 }
             } else if needs_jsx_transpilation(specifier_str) {
-                match transpile::maybe_transpile_source(
-                    specifier_str.to_string().into(),
-                    code.into(),
-                ) {
+                let module_name: FastString = specifier_str.to_string().into();
+                match transpile::maybe_transpile_source(&module_name, code.into()) {
                     Ok((transpiled_code, _source_map)) => {
                         (transpiled_code.to_string(), ModuleType::JavaScript)
                     }
@@ -570,7 +589,6 @@ export default {{}};
     }
 
     fn handle_dynamic_import_validation(
-        &self,
         specifier_str: &str,
         maybe_referrer: Option<&ModuleSpecifier>,
         is_dyn_import: bool,
@@ -751,7 +769,7 @@ export default {{}};
         None
     }
 
-    fn wrap_cjs_module(&self, content: &str, file_path: &str) -> String {
+    fn wrap_cjs_module(content: &str, file_path: &str) -> String {
         let file_dir = if let Some(last_slash) = file_path.rfind('/') {
             &file_path[..last_slash]
         } else {
@@ -904,9 +922,8 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
         module_specifier: &ModuleSpecifier,
     ) -> Option<ModuleLoadResponse> {
         if specifier_str.starts_with(FILE_PROTOCOL) {
-            let file_path = match module_specifier.to_file_path() {
-                Ok(path) => path,
-                Err(()) => return None,
+            let Ok(file_path) = module_specifier.to_file_path() else {
+                return None;
             };
 
             let file_path_str = file_path.to_string_lossy();
@@ -928,7 +945,7 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
                 let final_code = if file_path_str.contains("node_modules")
                     && self.is_cjs_module(&content, &file_path_str)
                 {
-                    self.wrap_cjs_module(&content, &file_path_for_wrapper)
+                    Self::wrap_cjs_module(&content, &file_path_for_wrapper)
                 } else {
                     content
                 };
@@ -1086,8 +1103,8 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
             return Some(cached_path);
         }
 
-        if let Some(package_dir) = self.find_package_directory(start_dir, package_name) {
-            if let Some(entry_point) = self.resolve_package_entry_point(&package_dir) {
+        if let Some(package_dir) = Self::find_package_directory(start_dir, package_name) {
+            if let Some(entry_point) = Self::resolve_package_entry_point(&package_dir) {
                 self.cache_resolved_package(package_name, &entry_point);
                 return Some(entry_point);
             }
@@ -1106,7 +1123,7 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
         subpath: &str,
         start_dir: &Path,
     ) -> Option<String> {
-        let package_dir = self.find_package_directory(start_dir, package_name)?;
+        let package_dir = Self::find_package_directory(start_dir, package_name)?;
 
         let package_json_path = package_dir.join("package.json");
         if !package_json_path.exists() {
@@ -1114,7 +1131,7 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
         }
 
         let package_json_content = fs::read_to_string(&package_json_path).ok()?;
-        let package_info = self.parse_package_json(&package_json_content).ok()?;
+        let package_info = Self::parse_package_json(&package_json_content).ok()?;
 
         if let Some(exports) = &package_info.exports {
             return self.resolve_subpath_from_exports(exports, subpath, &package_dir);
@@ -1247,7 +1264,7 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
             .cache_package_resolution(package_name.to_string(), resolved_path.to_string());
     }
 
-    fn parse_package_json(&self, content: &str) -> Result<PackageInfo, serde_json::Error> {
+    fn parse_package_json(content: &str) -> Result<PackageInfo, serde_json::Error> {
         let json: serde_json::Value = serde_json::from_str(content)?;
 
         Ok(PackageInfo {
@@ -1257,12 +1274,11 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
     }
 
     fn resolve_entry_from_package_info(
-        &self,
         package_info: &PackageInfo,
         package_dir: &Path,
     ) -> Option<String> {
         if let Some(exports) = &package_info.exports
-            && let Some(resolved) = self.resolve_from_exports(exports, package_dir)
+            && let Some(resolved) = Self::resolve_from_exports(exports, package_dir)
         {
             return Some(resolved);
         }
@@ -1285,11 +1301,7 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
         None
     }
 
-    fn resolve_from_exports(
-        &self,
-        exports: &serde_json::Value,
-        package_dir: &Path,
-    ) -> Option<String> {
+    fn resolve_from_exports(exports: &serde_json::Value, package_dir: &Path) -> Option<String> {
         if let Some(export_path) = exports.as_str() {
             let clean_path = export_path.trim_start_matches("./");
             let full_path = package_dir.join(clean_path);
@@ -1357,12 +1369,12 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
         None
     }
 
-    fn resolve_package_entry_point(&self, package_dir: &Path) -> Option<String> {
+    fn resolve_package_entry_point(package_dir: &Path) -> Option<String> {
         let package_json_path = package_dir.join("package.json");
         if let Ok(content) = fs::read_to_string(&package_json_path)
-            && let Ok(package_info) = self.parse_package_json(&content)
+            && let Ok(package_info) = Self::parse_package_json(&content)
         {
-            return self.resolve_entry_from_package_info(&package_info, package_dir);
+            return Self::resolve_entry_from_package_info(&package_info, package_dir);
         }
 
         let default_files = ["index.mjs", "index.ts", "index.js"];
@@ -1418,11 +1430,8 @@ impl ModuleLoader for RariModuleLoader {
             if after_node_modules.find('/').is_some()
                 && (specifier.starts_with("./") || specifier.starts_with("../"))
             {
-                let referrer_dir = match Path::new(referrer).parent() {
-                    Some(dir) => dir,
-                    None => {
-                        return Err(JsErrorBox::generic("Module not found"));
-                    }
+                let Some(referrer_dir) = Path::new(referrer).parent() else {
+                    return Err(JsErrorBox::generic("Module not found"));
                 };
                 let resolved_path = referrer_dir.join(specifier);
 
@@ -1451,9 +1460,9 @@ impl ModuleLoader for RariModuleLoader {
                 && let Some(package_base) = self.extract_package_base_from_referrer(referrer)
             {
                 let resolved_path = if specifier.starts_with("../") {
-                    self.resolve_relative_up(specifier, &package_base)
+                    Self::resolve_relative_up(specifier, &package_base)
                 } else {
-                    self.resolve_relative_current(specifier, &package_base)
+                    Self::resolve_relative_current(specifier, &package_base)
                 };
 
                 let url = ModuleSpecifier::parse(&resolved_path)
@@ -1490,30 +1499,6 @@ impl ModuleLoader for RariModuleLoader {
                     } else {
                         ""
                     };
-
-                    fn append_extension_only(path: &str) -> (String, &str) {
-                        let (base_path, suffix) = if let Some(query_pos) = path.find('?') {
-                            (&path[..query_pos], &path[query_pos..])
-                        } else if let Some(hash_pos) = path.find('#') {
-                            (&path[..hash_pos], &path[hash_pos..])
-                        } else {
-                            (path, "")
-                        };
-
-                        let base_with_ext = if base_path.ends_with(".ts")
-                            || base_path.ends_with(".js")
-                            || base_path.ends_with(".tsx")
-                            || base_path.ends_with(".jsx")
-                            || base_path.ends_with(".mjs")
-                            || base_path.ends_with(".cjs")
-                        {
-                            base_path.to_string()
-                        } else {
-                            format!("{base_path}.ts")
-                        };
-
-                        (base_with_ext, suffix)
-                    }
 
                     let resolved_path = if specifier.starts_with("../") {
                         let remaining = specifier.strip_prefix("../").unwrap_or(specifier);
@@ -1650,7 +1635,7 @@ impl ModuleLoader for RariModuleLoader {
         }
 
         let maybe_referrer_spec = maybe_referrer.map(|r| r.specifier.clone());
-        if let Some(response) = self.handle_dynamic_import_validation(
+        if let Some(response) = Self::handle_dynamic_import_validation(
             &specifier_str,
             maybe_referrer_spec.as_ref(),
             is_dyn_import,

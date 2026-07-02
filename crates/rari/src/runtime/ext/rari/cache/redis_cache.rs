@@ -94,7 +94,7 @@ fn js_error(error: &impl Display) -> JsErrorBox {
     JsErrorBox::generic(error.to_string())
 }
 
-fn get_redis_state(state: Rc<RefCell<OpState>>) -> Result<Arc<RedisCacheState>, RedisCacheError> {
+fn get_redis_state(state: &Rc<RefCell<OpState>>) -> Result<Arc<RedisCacheState>, RedisCacheError> {
     state
         .borrow()
         .try_borrow::<Arc<RedisCacheState>>()
@@ -108,7 +108,7 @@ pub async fn op_cache_remote_get(
     state: Rc<RefCell<OpState>>,
     #[string] key: String,
 ) -> Result<Option<String>, JsErrorBox> {
-    let mut connection = get_redis_state(state)
+    let mut connection = get_redis_state(&state)
         .map_err(|e| js_error(&e))?
         .connection()
         .await
@@ -127,7 +127,7 @@ pub async fn op_cache_remote_set(
     #[string] value: String,
     #[smi] ttl_ms: u32,
 ) -> Result<(), JsErrorBox> {
-    let redis_state = get_redis_state(state).map_err(|e| js_error(&e))?;
+    let redis_state = get_redis_state(&state).map_err(|e| js_error(&e))?;
     let mut connection = redis_state.connection().await.map_err(|e| js_error(&e))?;
     let ttl_secs = if ttl_ms == 0 { redis_state.default_ttl_secs } else { ttl_ms_to_secs(ttl_ms) };
     time::timeout(REDIS_TIMEOUT, connection.set_ex::<_, _, ()>(&key, value.into_bytes(), ttl_secs))

@@ -22,6 +22,7 @@ use super::{
 use crate::{
     runtime::JsExecutionRuntime,
     server::{cache::handler::CacheError, routing::types::ParamValue},
+    utils::float,
 };
 
 pub struct OgImageGenerator {
@@ -122,7 +123,7 @@ impl OgImageGenerator {
 
     pub async fn find_og_image_for_route(&self, route_path: &str) -> Option<OgImageEntry> {
         let manifest = self.manifest.read().await;
-        self.find_matching_entry(&manifest, route_path).map(|(entry, _)| entry.clone())
+        Self::find_matching_entry(&manifest, route_path).map(|(entry, _)| entry.clone())
     }
 
     pub async fn generate(&self, route_path: &str) -> Result<(Vec<u8>, bool), OgImageError> {
@@ -135,8 +136,7 @@ impl OgImageGenerator {
 
         let manifest = self.manifest.read().await;
 
-        let (entry, params) = self
-            .find_matching_entry(&manifest, route_path)
+        let (entry, params) = Self::find_matching_entry(&manifest, route_path)
             .ok_or_else(|| OgImageError::ComponentNotFound(route_path.to_string()))?;
 
         let entry = entry.clone();
@@ -150,10 +150,9 @@ impl OgImageGenerator {
         let (computed_layout, font_context) = {
             let mut layout_engine = LayoutEngine::new();
             let font_context = layout_engine.get_font_context();
-            let computed_layout =
-                layout_engine
-                    .layout(&jsx_element, width as f32, height as f32)
-                    .map_err(|e| OgImageError::GenerationError(format!("Layout failed: {e}")))?;
+            let computed_layout = layout_engine
+                .layout(&jsx_element, float::u32_to_f32(width), float::u32_to_f32(height))
+                .map_err(|e| OgImageError::GenerationError(format!("Layout failed: {e}")))?;
             (computed_layout, font_context)
         };
 
@@ -173,7 +172,6 @@ impl OgImageGenerator {
     }
 
     fn find_matching_entry<'a>(
-        &self,
         manifest: &'a FxHashMap<String, OgImageEntry>,
         route_path: &str,
     ) -> Option<(&'a OgImageEntry, FxHashMap<String, ParamValue>)> {

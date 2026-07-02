@@ -66,7 +66,7 @@ fn fix_accept_encoding_for_deno(
 }
 
 impl WebOptions {
-    pub fn whitelist_certificate_for(&mut self, domain_or_ip: impl ToString) {
+    pub fn whitelist_certificate_for(&mut self, domain_or_ip: &impl ToString) {
         if let Some(ref mut domains) = self.unsafely_ignore_certificate_errors {
             domains.push(domain_or_ip.to_string());
         } else {

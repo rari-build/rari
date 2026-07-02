@@ -82,6 +82,17 @@ static GLOBAL_FETCH_CACHE: LazyLock<Arc<Mutex<LruCache<String, CachedFetchResult
 static GLOBAL_IN_FLIGHT_FETCHES: LazyLock<InFlightFetches> =
     LazyLock::new(|| Arc::new(DashMap::new()));
 
+struct FetchCleanupGuard<'a> {
+    in_flight_fetches: &'a InFlightFetches,
+    cache_key: String,
+}
+
+impl Drop for FetchCleanupGuard<'_> {
+    fn drop(&mut self) {
+        self.in_flight_fetches.remove(&self.cache_key);
+    }
+}
+
 pub struct RequestContext {
     fetch_cache: Arc<Mutex<LruCache<String, CachedFetchResult>>>,
     in_flight_fetches: InFlightFetches,
@@ -228,18 +239,7 @@ impl RequestContext {
             return Ok(cloned_result);
         }
 
-        struct CleanupGuard<'a> {
-            in_flight_fetches: &'a InFlightFetches,
-            cache_key: String,
-        }
-
-        impl Drop for CleanupGuard<'_> {
-            fn drop(&mut self) {
-                self.in_flight_fetches.remove(&self.cache_key);
-            }
-        }
-
-        let _cleanup = CleanupGuard {
+        let _cleanup = FetchCleanupGuard {
             in_flight_fetches: &self.in_flight_fetches,
             cache_key: cache_key.clone(),
         };

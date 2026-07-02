@@ -107,9 +107,8 @@ pub async fn op_send_chunk_to_rust(
 
     let sender_option = {
         let mut op_state_ref = state.borrow_mut();
-        let stream_op_state = match op_state_ref.try_borrow_mut::<StreamOpState>() {
-            Some(sos) => sos,
-            None => return Err(JsErrorBox::generic("StreamOpState not found.")),
+        let Some(stream_op_state) = op_state_ref.try_borrow_mut::<StreamOpState>() else {
+            return Err(JsErrorBox::generic("StreamOpState not found."));
         };
 
         match &operation {
@@ -264,9 +263,8 @@ pub async fn op_fizz_chunk(
 ) -> Result<(), JsErrorBox> {
     let sender = {
         let mut op_state_ref = state.borrow_mut();
-        let stream_op_state = match op_state_ref.try_borrow_mut::<StreamOpState>() {
-            Some(sos) => sos,
-            None => return Err(JsErrorBox::generic("StreamOpState not found.")),
+        let Some(stream_op_state) = op_state_ref.try_borrow_mut::<StreamOpState>() else {
+            return Err(JsErrorBox::generic("StreamOpState not found."));
         };
         stream_op_state.chunk_sender.clone()
     };
@@ -443,6 +441,7 @@ async fn perform_simple_fetch(
     Ok((status, body, headers_obj))
 }
 
+#[allow(clippy::allow_attributes, clippy::needless_pass_by_value)]
 #[op2]
 #[string]
 pub fn op_get_cookies(state: Rc<RefCell<OpState>>) -> String {
@@ -514,6 +513,7 @@ pub struct SetCookieArgs {
     partitioned: bool,
 }
 
+#[allow(clippy::allow_attributes, clippy::needless_pass_by_value)]
 #[op2]
 #[serde]
 pub fn op_set_cookie(
@@ -573,6 +573,7 @@ pub fn op_set_cookie(
     Ok(())
 }
 
+#[allow(clippy::allow_attributes, clippy::needless_pass_by_value)]
 #[op2(fast)]
 pub fn op_delete_cookie(state: Rc<RefCell<OpState>>, #[string] name: String) {
     let op_state_ref = state.borrow();
@@ -627,20 +628,22 @@ pub fn op_delete_cookie(state: Rc<RefCell<OpState>>, #[string] name: String) {
     }
 }
 
+#[allow(clippy::allow_attributes, clippy::needless_pass_by_value)]
 #[op2]
 #[serde]
 pub fn op_cache_get(
     state: Rc<RefCell<OpState>>,
-    #[string] cache_key: String,
+    #[string] cache_key: &str,
 ) -> Option<serde_json::Value> {
     let op_state_ref = state.borrow();
     if let Some(ctx) = op_state_ref.try_borrow::<Arc<RequestContext>>() {
-        ctx.function_cache.get(&cache_key).map(|entry| entry.value().clone())
+        ctx.function_cache.get(cache_key).map(|entry| entry.value().clone())
     } else {
         None
     }
 }
 
+#[allow(clippy::allow_attributes, clippy::needless_pass_by_value)]
 #[op2]
 pub fn op_cache_set(
     state: Rc<RefCell<OpState>>,

@@ -34,15 +34,12 @@ fn create_client() -> Client {
 }
 
 pub async fn vite_src_proxy(req: Request) -> impl IntoResponse {
-    let config = match Config::get() {
-        Some(config) => config,
-        None => {
-            error!("Failed to get global configuration for Vite proxy");
-            return create_error_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Configuration not available",
-            );
-        }
+    let Some(config) = Config::get() else {
+        error!("Failed to get global configuration for Vite proxy");
+        return create_error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Configuration not available",
+        );
     };
 
     let client = create_client();
@@ -114,15 +111,12 @@ pub async fn vite_src_proxy(req: Request) -> impl IntoResponse {
 }
 
 pub async fn vite_reverse_proxy(req: Request) -> impl IntoResponse {
-    let config = match Config::get() {
-        Some(config) => config,
-        None => {
-            error!("Failed to get global configuration for Vite proxy");
-            return create_error_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Configuration not available",
-            );
-        }
+    let Some(config) = Config::get() else {
+        error!("Failed to get global configuration for Vite proxy");
+        return create_error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Configuration not available",
+        );
     };
 
     let client = create_client();
@@ -203,13 +197,10 @@ async fn handle_websocket(mut client_socket: WebSocket, uri: Uri) {
         return;
     }
 
-    let config = match Config::get() {
-        Some(config) => config,
-        None => {
-            error!("Failed to get global configuration for WebSocket proxy");
-            let _ = client_socket.send(WsMessage::Close(None)).await;
-            return;
-        }
+    let Some(config) = Config::get() else {
+        error!("Failed to get global configuration for WebSocket proxy");
+        let _ = client_socket.send(WsMessage::Close(None)).await;
+        return;
     };
 
     let path_and_query = uri.path_and_query().map(PathAndQuery::as_str).unwrap_or("/");
@@ -256,16 +247,12 @@ async fn handle_websocket(mut client_socket: WebSocket, uri: Uri) {
 
     let mut client_to_vite = tokio::spawn(async move {
         while let Some(msg) = client_receiver.next().await {
-            let msg = match msg {
-                Ok(msg) => msg,
-                Err(_) => {
-                    break;
-                }
+            let Ok(msg) = msg else {
+                break;
             };
 
-            let vite_msg = match convert_axum_to_tungstenite_message(msg) {
-                Some(msg) => msg,
-                None => continue,
+            let Some(vite_msg) = convert_axum_to_tungstenite_message(msg) else {
+                continue;
             };
 
             if vite_sender.send(vite_msg).await.is_err() {
@@ -276,16 +263,12 @@ async fn handle_websocket(mut client_socket: WebSocket, uri: Uri) {
 
     let mut vite_to_client = tokio::spawn(async move {
         while let Some(msg) = vite_receiver.next().await {
-            let msg = match msg {
-                Ok(msg) => msg,
-                Err(_) => {
-                    break;
-                }
+            let Ok(msg) = msg else {
+                break;
             };
 
-            let client_msg = match convert_tungstenite_to_axum_message(msg) {
-                Some(msg) => msg,
-                None => continue,
+            let Some(client_msg) = convert_tungstenite_to_axum_message(msg) else {
+                continue;
             };
 
             if client_sender.send(client_msg).await.is_err() {

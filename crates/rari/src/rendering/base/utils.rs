@@ -1,31 +1,31 @@
+#![expect(clippy::too_many_lines)]
+
 use std::fmt::Write;
 
 use regex::Regex;
 
 pub fn transform_imports_for_hmr(source: &str) -> String {
-    let react_named_imports_regex =
-        match Regex::new(r"import\s+React,?\s*\{\s*([^}]+)\s*\}\s+from\s+['\x22]react['\x22]") {
-            Ok(regex) => regex,
-            Err(_) => return source.to_string(),
-        };
+    let Ok(react_named_imports_regex) =
+        Regex::new(r"import\s+React,?\s*\{\s*([^}]+)\s*\}\s+from\s+['\x22]react['\x22]")
+    else {
+        return source.to_string();
+    };
 
-    let react_default_import_regex =
-        match Regex::new(r"import\s+React\s+from\s+['\x22]react['\x22]") {
-            Ok(regex) => regex,
-            Err(_) => return source.to_string(),
-        };
+    let Ok(react_default_import_regex) = Regex::new(r"import\s+React\s+from\s+['\x22]react['\x22]")
+    else {
+        return source.to_string();
+    };
 
-    let named_imports_regex =
-        match Regex::new(r"import\s+\{\s*([^}]+)\s*\}\s+from\s+['\x22]([^'\x22]+)['\x22]") {
-            Ok(regex) => regex,
-            Err(_) => return source.to_string(),
-        };
+    let Ok(named_imports_regex) =
+        Regex::new(r"import\s+\{\s*([^}]+)\s*\}\s+from\s+['\x22]([^'\x22]+)['\x22]")
+    else {
+        return source.to_string();
+    };
 
-    let default_import_regex =
-        match Regex::new(r"import\s+(\w+)\s+from\s+['\x22]([^'\x22]+)['\x22]") {
-            Ok(regex) => regex,
-            Err(_) => return source.to_string(),
-        };
+    let Ok(default_import_regex) = Regex::new(r"import\s+(\w+)\s+from\s+['\x22]([^'\x22]+)['\x22]")
+    else {
+        return source.to_string();
+    };
 
     let mut result = String::new();
     let lines: Vec<&str> = source.lines().collect();

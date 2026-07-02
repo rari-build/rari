@@ -141,7 +141,7 @@ fn deserialize_composition_result<'s>(
                 return Ok(metadata);
             }
 
-            extract_composition_result_manually(scope, value, err)
+            extract_composition_result_manually(scope, value, &err)
         }
         Err(_panic) => {
             tracing::error!(
@@ -161,7 +161,7 @@ fn deserialize_composition_result<'s>(
 fn extract_composition_result_manually<'s>(
     scope: &mut v8::PinScope<'s, '_>,
     value: v8::Local<'s, v8::Value>,
-    original_error: serde_v8::Error,
+    original_error: &serde_v8::Error,
 ) -> Result<Value, RariError> {
     let try_json_stringify =
         |scope: &mut v8::PinScope, value: v8::Local<v8::Value>| -> Option<Value> {

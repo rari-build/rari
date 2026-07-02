@@ -18,7 +18,12 @@ use super::{
     resources::fonts::FontContext,
     types::{JsxChild, JsxElement},
 };
-use crate::server::og::rendering::is_svg_element;
+use crate::{
+    server::og::rendering::is_svg_element,
+    utils::{cast, float},
+};
+
+const MAX_IMAGE_SIZE: usize = 10 * 1024 * 1024;
 
 pub struct MeasureContext {
     font_context: RefCell<ParleyFontContext>,
@@ -90,7 +95,7 @@ impl LayoutEngine {
         element: &JsxElement,
         inherited_color: &mut Option<String>,
     ) -> Result<NodeId, String> {
-        let mut style = self.parse_style(&element.props);
+        let mut style = Self::parse_style(&element.props);
 
         if !style.contains_key("color") {
             if let Some(color) = inherited_color {
@@ -100,8 +105,8 @@ impl LayoutEngine {
             *inherited_color = Some(color.clone());
         }
 
-        let has_text = self.has_text_content(element);
-        let taffy_style = self.style_to_taffy(&style);
+        let has_text = Self::has_text_content(element);
+        let taffy_style = Self::style_to_taffy(&style);
 
         let node_data = NodeData { element: element.clone(), style: style.clone(), has_text };
 
@@ -141,11 +146,11 @@ impl LayoutEngine {
         Ok(node)
     }
 
-    fn has_text_content(&self, element: &JsxElement) -> bool {
+    fn has_text_content(element: &JsxElement) -> bool {
         element.children.iter().any(|child| matches!(child, JsxChild::Text(_)))
     }
 
-    fn parse_style(&self, props: &Value) -> FxHashMap<String, String> {
+    fn parse_style(props: &Value) -> FxHashMap<String, String> {
         let mut style_map = FxHashMap::default();
 
         if let Some(Value::Object(style_obj)) = props.get("style") {
@@ -161,7 +166,7 @@ impl LayoutEngine {
         style_map
     }
 
-    fn style_to_taffy(&self, style: &FxHashMap<String, String>) -> Style {
+    fn style_to_taffy(style: &FxHashMap<String, String>) -> Style {
         let mut taffy_style = Style::default();
 
         if let Some(display) = style.get("display") {
@@ -210,62 +215,62 @@ impl LayoutEngine {
         }
 
         if let Some(width) = style.get("width") {
-            taffy_style.size.width = self.parse_dimension(width);
+            taffy_style.size.width = Self::parse_dimension(width);
         }
 
         if let Some(height) = style.get("height") {
-            taffy_style.size.height = self.parse_dimension(height);
+            taffy_style.size.height = Self::parse_dimension(height);
         }
 
         if let Some(padding) = style.get("padding") {
-            taffy_style.padding = self.parse_padding_margin(padding);
+            taffy_style.padding = Self::parse_padding_margin(padding);
         }
 
         if let Some(padding_left) = style.get("paddingLeft") {
-            taffy_style.padding.left = self.parse_length_percentage(padding_left);
+            taffy_style.padding.left = Self::parse_length_percentage(padding_left);
         }
         if let Some(padding_right) = style.get("paddingRight") {
-            taffy_style.padding.right = self.parse_length_percentage(padding_right);
+            taffy_style.padding.right = Self::parse_length_percentage(padding_right);
         }
         if let Some(padding_top) = style.get("paddingTop") {
-            taffy_style.padding.top = self.parse_length_percentage(padding_top);
+            taffy_style.padding.top = Self::parse_length_percentage(padding_top);
         }
         if let Some(padding_bottom) = style.get("paddingBottom") {
-            taffy_style.padding.bottom = self.parse_length_percentage(padding_bottom);
+            taffy_style.padding.bottom = Self::parse_length_percentage(padding_bottom);
         }
 
         if let Some(margin) = style.get("margin") {
-            taffy_style.margin = self.parse_padding_margin_auto(margin);
+            taffy_style.margin = Self::parse_padding_margin_auto(margin);
         }
 
         if let Some(margin_left) = style.get("marginLeft") {
-            taffy_style.margin.left = self.parse_length_percentage_auto(margin_left);
+            taffy_style.margin.left = Self::parse_length_percentage_auto(margin_left);
         }
         if let Some(margin_right) = style.get("marginRight") {
-            taffy_style.margin.right = self.parse_length_percentage_auto(margin_right);
+            taffy_style.margin.right = Self::parse_length_percentage_auto(margin_right);
         }
         if let Some(margin_top) = style.get("marginTop") {
-            taffy_style.margin.top = self.parse_length_percentage_auto(margin_top);
+            taffy_style.margin.top = Self::parse_length_percentage_auto(margin_top);
         }
         if let Some(margin_bottom) = style.get("marginBottom") {
-            taffy_style.margin.bottom = self.parse_length_percentage_auto(margin_bottom);
+            taffy_style.margin.bottom = Self::parse_length_percentage_auto(margin_bottom);
         }
 
         if let Some(gap) = style.get("gap") {
-            let gap_value = self.parse_length_percentage(gap);
+            let gap_value = Self::parse_length_percentage(gap);
             taffy_style.gap = Size { width: gap_value, height: gap_value };
         }
         if let Some(row_gap) = style.get("rowGap") {
-            taffy_style.gap.height = self.parse_length_percentage(row_gap);
+            taffy_style.gap.height = Self::parse_length_percentage(row_gap);
         }
         if let Some(column_gap) = style.get("columnGap") {
-            taffy_style.gap.width = self.parse_length_percentage(column_gap);
+            taffy_style.gap.width = Self::parse_length_percentage(column_gap);
         }
 
         taffy_style
     }
 
-    fn parse_dimension(&self, value: &str) -> Dimension {
+    fn parse_dimension(value: &str) -> Dimension {
         if value.ends_with('%') {
             if let Ok(percent) = value.trim_end_matches('%').parse::<f32>() {
                 return Dimension::percent(percent / 100.0);
@@ -276,7 +281,7 @@ impl LayoutEngine {
         Dimension::auto()
     }
 
-    fn parse_length_percentage(&self, value: &str) -> LengthPercentage {
+    fn parse_length_percentage(value: &str) -> LengthPercentage {
         if value.ends_with('%') {
             if let Ok(percent) = value.trim_end_matches('%').parse::<f32>() {
                 return LengthPercentage::percent(percent / 100.0);
@@ -287,7 +292,7 @@ impl LayoutEngine {
         LengthPercentage::length(0.0)
     }
 
-    fn parse_length_percentage_auto(&self, value: &str) -> LengthPercentageAuto {
+    fn parse_length_percentage_auto(value: &str) -> LengthPercentageAuto {
         if value == "auto" {
             return LengthPercentageAuto::auto();
         }
@@ -301,30 +306,30 @@ impl LayoutEngine {
         LengthPercentageAuto::length(0.0)
     }
 
-    fn parse_padding_margin(&self, value: &str) -> Rect<LengthPercentage> {
+    fn parse_padding_margin(value: &str) -> Rect<LengthPercentage> {
         let parts: Vec<&str> = value.split_whitespace().collect();
 
         match parts.len() {
             1 => {
-                let p = self.parse_length_percentage(parts[0]);
+                let p = Self::parse_length_percentage(parts[0]);
                 Rect { left: p, right: p, top: p, bottom: p }
             }
             2 => {
-                let vertical = self.parse_length_percentage(parts[0]);
-                let horizontal = self.parse_length_percentage(parts[1]);
+                let vertical = Self::parse_length_percentage(parts[0]);
+                let horizontal = Self::parse_length_percentage(parts[1]);
                 Rect { left: horizontal, right: horizontal, top: vertical, bottom: vertical }
             }
             3 => {
-                let top = self.parse_length_percentage(parts[0]);
-                let horizontal = self.parse_length_percentage(parts[1]);
-                let bottom = self.parse_length_percentage(parts[2]);
+                let top = Self::parse_length_percentage(parts[0]);
+                let horizontal = Self::parse_length_percentage(parts[1]);
+                let bottom = Self::parse_length_percentage(parts[2]);
                 Rect { left: horizontal, right: horizontal, top, bottom }
             }
             4 => {
-                let top = self.parse_length_percentage(parts[0]);
-                let right = self.parse_length_percentage(parts[1]);
-                let bottom = self.parse_length_percentage(parts[2]);
-                let left = self.parse_length_percentage(parts[3]);
+                let top = Self::parse_length_percentage(parts[0]);
+                let right = Self::parse_length_percentage(parts[1]);
+                let bottom = Self::parse_length_percentage(parts[2]);
+                let left = Self::parse_length_percentage(parts[3]);
                 Rect { left, right, top, bottom }
             }
             _ => Rect {
@@ -336,30 +341,30 @@ impl LayoutEngine {
         }
     }
 
-    fn parse_padding_margin_auto(&self, value: &str) -> Rect<LengthPercentageAuto> {
+    fn parse_padding_margin_auto(value: &str) -> Rect<LengthPercentageAuto> {
         let parts: Vec<&str> = value.split_whitespace().collect();
 
         match parts.len() {
             1 => {
-                let m = self.parse_length_percentage_auto(parts[0]);
+                let m = Self::parse_length_percentage_auto(parts[0]);
                 Rect { left: m, right: m, top: m, bottom: m }
             }
             2 => {
-                let vertical = self.parse_length_percentage_auto(parts[0]);
-                let horizontal = self.parse_length_percentage_auto(parts[1]);
+                let vertical = Self::parse_length_percentage_auto(parts[0]);
+                let horizontal = Self::parse_length_percentage_auto(parts[1]);
                 Rect { left: horizontal, right: horizontal, top: vertical, bottom: vertical }
             }
             3 => {
-                let top = self.parse_length_percentage_auto(parts[0]);
-                let horizontal = self.parse_length_percentage_auto(parts[1]);
-                let bottom = self.parse_length_percentage_auto(parts[2]);
+                let top = Self::parse_length_percentage_auto(parts[0]);
+                let horizontal = Self::parse_length_percentage_auto(parts[1]);
+                let bottom = Self::parse_length_percentage_auto(parts[2]);
                 Rect { left: horizontal, right: horizontal, top, bottom }
             }
             4 => {
-                let top = self.parse_length_percentage_auto(parts[0]);
-                let right = self.parse_length_percentage_auto(parts[1]);
-                let bottom = self.parse_length_percentage_auto(parts[2]);
-                let left = self.parse_length_percentage_auto(parts[3]);
+                let top = Self::parse_length_percentage_auto(parts[0]);
+                let right = Self::parse_length_percentage_auto(parts[1]);
+                let bottom = Self::parse_length_percentage_auto(parts[2]);
+                let left = Self::parse_length_percentage_auto(parts[3]);
                 Rect { left, right, top, bottom }
             }
             _ => Rect {
@@ -426,7 +431,7 @@ fn measure_node(
             .and_then(|v| {
                 v.as_str()
                     .and_then(|s| s.parse::<f32>().ok())
-                    .or_else(|| v.as_f64().map(|n| n as f32))
+                    .or_else(|| v.as_f64().map(cast::f64_to_f32))
             })
             .or_else(|| {
                 node_data.style.get("width").and_then(|s| s.trim_end_matches("px").parse().ok())
@@ -439,7 +444,7 @@ fn measure_node(
             .and_then(|v| {
                 v.as_str()
                     .and_then(|s| s.parse::<f32>().ok())
-                    .or_else(|| v.as_f64().map(|n| n as f32))
+                    .or_else(|| v.as_f64().map(cast::f64_to_f32))
             })
             .or_else(|| {
                 node_data.style.get("height").and_then(|s| s.trim_end_matches("px").parse().ok())
@@ -521,11 +526,19 @@ fn measure_image(
         Size { width: 0.0, height: 0.0 }
     };
 
-    let width_prop =
-        node_data.element.props.get("width").and_then(serde_json::Value::as_f64).map(|v| v as f32);
+    let width_prop = node_data
+        .element
+        .props
+        .get("width")
+        .and_then(serde_json::Value::as_f64)
+        .map(cast::f64_to_f32);
 
-    let height_prop =
-        node_data.element.props.get("height").and_then(serde_json::Value::as_f64).map(|v| v as f32);
+    let height_prop = node_data
+        .element
+        .props
+        .get("height")
+        .and_then(serde_json::Value::as_f64)
+        .map(cast::f64_to_f32);
 
     let width_is_100_percent = node_data.style.get("width").map(|w| w == "100%").unwrap_or(false);
     let height_is_100_percent = node_data.style.get("height").map(|h| h == "100%").unwrap_or(false);
@@ -594,12 +607,14 @@ fn load_image_dimensions(src: &str) -> Option<Size<f32>> {
             return None;
         }
 
-        const MAX_IMAGE_SIZE: usize = 10 * 1024 * 1024;
         let mut buffer = Vec::new();
         response.take(MAX_IMAGE_SIZE as u64).read_to_end(&mut buffer).ok()?;
 
         let img = image::load_from_memory(&buffer).ok()?;
-        Some(Size { width: img.width() as f32, height: img.height() as f32 })
+        Some(Size {
+            width: float::u32_to_f32(img.width()),
+            height: float::u32_to_f32(img.height()),
+        })
     } else if src.starts_with("data:") {
         use base64::{Engine as _, engine::general_purpose};
         let parts: Vec<&str> = src.splitn(2, ',').collect();
@@ -613,13 +628,19 @@ fn load_image_dimensions(src: &str) -> Option<Size<f32>> {
         if header.contains("base64") {
             let decoded = general_purpose::STANDARD.decode(data).ok()?;
             let img = image::load_from_memory(&decoded).ok()?;
-            Some(Size { width: img.width() as f32, height: img.height() as f32 })
+            Some(Size {
+                width: float::u32_to_f32(img.width()),
+                height: float::u32_to_f32(img.height()),
+            })
         } else {
             None
         }
     } else {
         let img = image::open(src).ok()?;
-        Some(Size { width: img.width() as f32, height: img.height() as f32 })
+        Some(Size {
+            width: float::u32_to_f32(img.width()),
+            height: float::u32_to_f32(img.height()),
+        })
     }
 }
 

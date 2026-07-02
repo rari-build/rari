@@ -41,7 +41,7 @@ impl ImageCache {
         #[expect(clippy::expect_used, reason = "Value is clamped to >= 20, guaranteed non-zero")]
         let capacity = NonZeroUsize::new((max_memory_size / 1024 / 50).max(20))
             .expect("capacity is always at least 20");
-        let handler = MemoryCacheHandler::with_config(MemoryConfig {
+        let handler = MemoryCacheHandler::with_config(&MemoryConfig {
             max_entries: capacity.get(),
             default_ttl: 0,
         });
@@ -188,7 +188,7 @@ mod tests {
     }
 
     fn fresh_cache(test_name: &str, max_memory_size: usize) -> ImageCache {
-        let handler = Arc::new(MemoryCacheHandler::with_config(MemoryConfig {
+        let handler = Arc::new(MemoryCacheHandler::with_config(&MemoryConfig {
             max_entries: 32,
             default_ttl: 0,
         }));
@@ -225,7 +225,7 @@ mod tests {
         let project_path = test_project_path("disk-persistence");
         let _ = fs::remove_dir_all(&project_path);
 
-        let handler_a = Arc::new(MemoryCacheHandler::with_config(MemoryConfig {
+        let handler_a = Arc::new(MemoryCacheHandler::with_config(&MemoryConfig {
             max_entries: 32,
             default_ttl: 0,
         }));
@@ -235,7 +235,7 @@ mod tests {
         assert!(cache_a.get("persistent").await.is_some());
         drop(cache_a);
 
-        let handler_b = Arc::new(MemoryCacheHandler::with_config(MemoryConfig {
+        let handler_b = Arc::new(MemoryCacheHandler::with_config(&MemoryConfig {
             max_entries: 32,
             default_ttl: 0,
         }));

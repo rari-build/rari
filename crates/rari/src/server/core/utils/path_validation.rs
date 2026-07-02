@@ -38,18 +38,12 @@ pub fn validate_safe_path(base: &Path, requested: &str) -> Result<PathBuf, RariE
 
     let path = base.join(requested_clean);
 
-    let canonical_path = match path.canonicalize() {
-        Ok(p) => p,
-        Err(_) => {
-            return Err(RariError::not_found("File not found"));
-        }
+    let Ok(canonical_path) = path.canonicalize() else {
+        return Err(RariError::not_found("File not found"));
     };
 
-    let canonical_base = match base.canonicalize() {
-        Ok(b) => b,
-        Err(_) => {
-            return Err(RariError::internal("Invalid base directory configuration"));
-        }
+    let Ok(canonical_base) = base.canonicalize() else {
+        return Err(RariError::internal("Invalid base directory configuration"));
     };
 
     if !canonical_path.starts_with(&canonical_base) {
@@ -113,6 +107,8 @@ pub fn validate_component_path(file_path: &str) -> Result<(), RariError> {
 #[cfg(test)]
 #[allow(clippy::allow_attributes, clippy::expect_used, clippy::unwrap_used)]
 mod tests {
+    #[cfg(unix)]
+    use std::os::unix::fs::symlink;
     use std::{env, fs};
 
     use super::*;
@@ -208,7 +204,6 @@ mod tests {
         let outside_file = outside_dir.join("secret.txt");
         fs::write(&outside_file, "secret").unwrap();
 
-        use std::os::unix::fs::symlink;
         let link_path = base.join("escape");
         let _ = fs::remove_file(&link_path);
         symlink(&outside_dir, &link_path).expect("Failed to create symlink for security test");

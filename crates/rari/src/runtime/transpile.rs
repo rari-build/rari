@@ -39,7 +39,7 @@ fn maybe_substitute_version_placeholders(name: &str, source: ModuleCodeString) -
 }
 
 pub fn maybe_transpile_source(
-    name: ModuleName,
+    name: &ModuleName,
     source: ModuleCodeString,
 ) -> Result<(ModuleCodeString, Option<SourceMapData>), JsErrorBox> {
     let name_string = name.to_string();
@@ -64,7 +64,7 @@ pub fn maybe_transpile_source(
     }
 
     let parsed = deno_ast::parse_module(ParseParams {
-        specifier: Url::parse(&name).unwrap_or_else(|_| {
+        specifier: Url::parse(name).unwrap_or_else(|_| {
             #[expect(clippy::expect_used, reason = "Fallback URL construction is infallible")]
             Url::parse(&format!("file:///__rari_script__/{name}"))
                 .expect("failed to create fallback URL")

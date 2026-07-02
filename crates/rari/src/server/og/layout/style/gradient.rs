@@ -1,5 +1,7 @@
 use image::Rgba;
 
+use crate::utils::{cast, float};
+
 #[derive(Debug, Clone, Copy)]
 pub enum StopPosition {
     Percentage(f32),
@@ -215,7 +217,7 @@ impl LinearGradient {
                         let r = parts[0].parse().ok()?;
                         let g = parts[1].parse().ok()?;
                         let b = parts[2].parse().ok()?;
-                        let a = (parts[3].parse::<f32>().ok()? * 255.0) as u8;
+                        let a = cast::f32_to_u8(parts[3].parse::<f32>().ok()? * 255.0);
                         [r, g, b, a]
                     } else {
                         return None;
@@ -268,10 +270,11 @@ impl LinearGradient {
 
             let start_pos = resolved[start_idx].position;
             let end_pos = resolved[end_idx].position;
-            let segments = (end_idx - start_idx) as f32;
+            let segments = float::usize_to_f32(end_idx - start_idx);
 
             for (offset, stop) in resolved[(start_idx + 1)..end_idx].iter_mut().enumerate() {
-                stop.position = start_pos + (end_pos - start_pos) * (offset + 1) as f32 / segments;
+                stop.position =
+                    start_pos + (end_pos - start_pos) * float::usize_to_f32(offset + 1) / segments;
             }
 
             i = end_idx + 1;
@@ -329,10 +332,10 @@ impl LinearGradient {
         let c2 = right.color;
 
         Rgba([
-            (f32::from(c1[0]) * (1.0 - t) + f32::from(c2[0]) * t) as u8,
-            (f32::from(c1[1]) * (1.0 - t) + f32::from(c2[1]) * t) as u8,
-            (f32::from(c1[2]) * (1.0 - t) + f32::from(c2[2]) * t) as u8,
-            (f32::from(c1[3]) * (1.0 - t) + f32::from(c2[3]) * t) as u8,
+            cast::f32_to_u8(f32::from(c1[0]) * (1.0 - t) + f32::from(c2[0]) * t),
+            cast::f32_to_u8(f32::from(c1[1]) * (1.0 - t) + f32::from(c2[1]) * t),
+            cast::f32_to_u8(f32::from(c1[2]) * (1.0 - t) + f32::from(c2[2]) * t),
+            cast::f32_to_u8(f32::from(c1[3]) * (1.0 - t) + f32::from(c2[3]) * t),
         ])
     }
 

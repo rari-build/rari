@@ -1,7 +1,16 @@
 #![allow(clippy::too_many_lines, clippy::cast_precision_loss)]
 
-use std::{env, fmt::Write, fs, path::PathBuf, ptr, rc::Rc, string::String};
+use std::{
+    env,
+    fmt::Write,
+    fs,
+    path::{Path, PathBuf},
+    ptr,
+    rc::Rc,
+    string::String,
+};
 
+use deno_ast::MediaType;
 use deno_core::{ModuleCodeString, ModuleName, SourceMapData, snapshot, v8};
 use deno_error::JsErrorBox;
 use deno_node::{ContextInitMode, VM_CONTEXT_INDEX, create_v8_context, init_global_template};
@@ -36,7 +45,8 @@ fn main() {
     let ext_options = ExtensionOptions::default();
     let extensions = ext::extensions(&ext_options, false);
 
-    let transpiler: Rc<Transpiler> = Rc::new(transpile::maybe_transpile_source);
+    let transpiler: Rc<Transpiler> =
+        Rc::new(|name, source| transpile::maybe_transpile_source(&name, source));
 
     #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
     let output = snapshot::create_snapshot(
@@ -147,10 +157,6 @@ fn write_line(buf: &mut String, line: &str) {
 }
 
 fn maybe_transpile(specifier: &str, source: &str) -> String {
-    use std::path::Path;
-
-    use deno_ast::MediaType;
-
     let media_type = if specifier.starts_with("node:") {
         MediaType::TypeScript
     } else {

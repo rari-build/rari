@@ -162,7 +162,7 @@ impl AppRouter {
         let normalized_path = Self::normalize_path(path);
 
         for route in &self.manifest.routes {
-            if let Some(params) = self.match_route_pattern(route, &normalized_path) {
+            if let Some(params) = Self::match_route_pattern(route, &normalized_path) {
                 let layouts = self.resolve_layouts_for_route(route);
                 let templates = self.resolve_templates_for_route(route);
 
@@ -220,7 +220,6 @@ impl AppRouter {
     }
 
     fn match_route_pattern(
-        &self,
         route: &AppRouteEntry,
         path: &str,
     ) -> Option<FxHashMap<String, ParamValue>> {
@@ -578,7 +577,7 @@ impl AppRouter {
                 paths.push(route.path.clone());
             } else if let Some(ref static_params) = route.static_params {
                 for params in static_params {
-                    let concrete_path = self.expand_route_path(&route.path, params);
+                    let concrete_path = Self::expand_route_path(&route.path, params);
                     if let Some(p) = concrete_path {
                         paths.push(p);
                     }
@@ -590,7 +589,6 @@ impl AppRouter {
     }
 
     fn expand_route_path(
-        &self,
         route_path: &str,
         params: &FxHashMap<String, serde_json::Value>,
     ) -> Option<String> {

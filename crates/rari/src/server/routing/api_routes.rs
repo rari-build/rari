@@ -128,7 +128,7 @@ impl ApiRouteHandler {
         let normalized_path = Self::normalize_path(path);
 
         for route in &self.manifest.api_routes {
-            if self.match_route_pattern(route, &normalized_path).is_some() {
+            if Self::match_route_pattern(route, &normalized_path).is_some() {
                 return Some(route.methods.clone());
             }
         }
@@ -140,7 +140,7 @@ impl ApiRouteHandler {
         let normalized_path = Self::normalize_path(path);
 
         for route in &self.manifest.api_routes {
-            if let Some(params) = self.match_route_pattern(route, &normalized_path) {
+            if let Some(params) = Self::match_route_pattern(route, &normalized_path) {
                 if !route.methods.iter().any(|m| m.eq_ignore_ascii_case(method)) {
                     return Err(RariError::bad_request(format!(
                         "Method {} not allowed for route {}. Supported methods: {}",
@@ -163,11 +163,7 @@ impl ApiRouteHandler {
         Err(RariError::not_found(format!("No API route found for path: {path}")))
     }
 
-    fn match_route_pattern(
-        &self,
-        route: &ApiRouteEntry,
-        path: &str,
-    ) -> Option<FxHashMap<String, String>> {
+    fn match_route_pattern(route: &ApiRouteEntry, path: &str) -> Option<FxHashMap<String, String>> {
         let route_segments = route.path.split('/').filter(|s| !s.is_empty()).collect::<Vec<_>>();
         let path_segments = parse_decoded_path_segments(path);
 
@@ -416,7 +412,7 @@ impl ApiRouteHandler {
 
         let body_string = String::from_utf8_lossy(&body_bytes).to_string();
 
-        let request_obj = self.create_request_object(
+        let request_obj = Self::create_request_object(
             parts.method.as_ref(),
             &parts.uri.to_string(),
             &parts.headers,
@@ -517,7 +513,7 @@ impl ApiRouteHandler {
                         RariError::js_execution(format!("Handler execution failed: {e}"))
                     })?;
 
-                let response = self.create_response(result).await.map_err(|e| {
+                let response = Self::create_response(&result).map_err(|e| {
                     error!(
                         route_path = %route_match.route.path,
                         method = %route_match.method,
@@ -533,7 +529,6 @@ impl ApiRouteHandler {
     }
     #[expect(clippy::unnecessary_wraps, reason = "Result return type maintains API consistency")]
     fn create_request_object(
-        &self,
         method: &str,
         uri: &str,
         headers: &HeaderMap,
@@ -584,8 +579,7 @@ impl ApiRouteHandler {
             .map_err(|e| RariError::js_execution(format!("Failed to execute handler: {e}")))
     }
 
-    #[expect(clippy::unused_async_trait_impl, reason = "Async required by trait implementation")]
-    async fn create_response(&self, result: Value) -> Result<Response<Body>, RariError> {
+    fn create_response(result: &Value) -> Result<Response<Body>, RariError> {
         let is_http_envelope = if let Some(status_val) = result.get("status") {
             if let Some(status_num) = status_val.as_u64() {
                 (100..=599).contains(&status_num)
@@ -643,10 +637,6 @@ mod tests {
 
     #[test]
     fn test_create_request_object_basic() {
-        let runtime = Arc::new(JsExecutionRuntime::default());
-        let manifest = ApiRouteManifest { api_routes: vec![] };
-        let handler = ApiRouteHandler::new(runtime, manifest);
-
         let mut headers = HeaderMap::new();
         headers.insert("content-type", HeaderValue::from_static("application/json"));
         headers.insert("user-agent", HeaderValue::from_static("test-agent"));
@@ -654,7 +644,8 @@ mod tests {
         let params = FxHashMap::default();
 
         let result =
-            handler.create_request_object("GET", "/api/test", &headers, "", &params).unwrap();
+            ApiRouteHandler::create_request_object("GET", "/api/test", &headers, "", &params)
+                .unwrap();
 
         assert_eq!(result["method"], "GET");
         assert_eq!(result["url"], "/api/test");
@@ -664,17 +655,14 @@ mod tests {
 
     #[test]
     fn test_create_request_object_with_params() {
-        let runtime = Arc::new(JsExecutionRuntime::default());
-        let manifest = ApiRouteManifest { api_routes: vec![] };
-        let handler = ApiRouteHandler::new(runtime, manifest);
-
         let headers = HeaderMap::new();
         let mut params = FxHashMap::default();
         params.insert("id".to_string(), "123".to_string());
         params.insert("name".to_string(), "test".to_string());
 
         let result =
-            handler.create_request_object("GET", "/api/users/123", &headers, "", &params).unwrap();
+            ApiRouteHandler::create_request_object("GET", "/api/users/123", &headers, "", &params)
+                .unwrap();
 
         assert_eq!(result["params"]["id"], "123");
         assert_eq!(result["params"]["name"], "test");
@@ -682,10 +670,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_response_with_status() {
-        let runtime = Arc::new(JsExecutionRuntime::default());
-        let manifest = ApiRouteManifest { api_routes: vec![] };
-        let handler = ApiRouteHandler::new(runtime, manifest);
-
         let response_json = json!({
             "status": 201,
             "headers": {
@@ -695,7 +679,7 @@ mod tests {
             "body": r#"{"success":true}"#
         });
 
-        let response = handler.create_response(response_json).await.unwrap();
+        let response = ApiRouteHandler::create_response(&response_json).unwrap();
 
         assert_eq!(response.status(), StatusCode::CREATED);
         assert_eq!(response.headers().get("content-type").unwrap(), "application/json");
@@ -704,16 +688,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_response_plain_json() {
-        let runtime = Arc::new(JsExecutionRuntime::default());
-        let manifest = ApiRouteManifest { api_routes: vec![] };
-        let handler = ApiRouteHandler::new(runtime, manifest);
-
         let plain_json = json!({
             "message": "Hello",
             "count": 42
         });
 
-        let response = handler.create_response(plain_json).await.unwrap();
+        let response = ApiRouteHandler::create_response(&plain_json).unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(response.headers().get("content-type").unwrap(), "application/json");

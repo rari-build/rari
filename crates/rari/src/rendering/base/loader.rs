@@ -1,3 +1,5 @@
+#![expect(clippy::too_many_lines)]
+
 use cow_utils::CowUtils;
 
 #[non_exhaustive]
@@ -67,7 +69,7 @@ impl RscJsLoader {
         create_js_wrapper(&setup_code)
     }
 
-    pub fn create_stub_via_js_function(component_id: &str, stub_type: StubType) -> String {
+    pub fn create_stub_via_js_function(component_id: &str, stub_type: &StubType) -> String {
         let function_name = match stub_type {
             StubType::Component => "createComponentStub",
             StubType::Loader => "createLoaderStub",

@@ -7,6 +7,7 @@ use super::{
     super::{layout::ComputedLayout, resources::fonts::FontContext, types::JsxChild},
     mask::MaskMemory,
 };
+use crate::utils::cast;
 
 pub struct ImageRenderer {
     pub(super) width: u32,
@@ -56,7 +57,7 @@ impl ImageRenderer {
                 self.render_svg(layout, image)?;
             }
             _ => {
-                if self.has_text_content(&layout.element) {
+                if Self::has_text_content(&layout.element) {
                     self.render_text(layout, image)?;
                 }
             }
@@ -71,23 +72,23 @@ impl ImageRenderer {
         Ok(())
     }
 
-    pub(super) fn alpha_blend(&self, bg: Rgba<u8>, fg: Rgba<u8>) -> Rgba<u8> {
+    pub(super) fn alpha_blend(bg: Rgba<u8>, fg: Rgba<u8>) -> Rgba<u8> {
         let alpha = f32::from(fg[3]) / 255.0;
         let inv_alpha = 1.0 - alpha;
 
         Rgba([
-            ((f32::from(fg[0]) * alpha + f32::from(bg[0]) * inv_alpha) as u8),
-            ((f32::from(fg[1]) * alpha + f32::from(bg[1]) * inv_alpha) as u8),
-            ((f32::from(fg[2]) * alpha + f32::from(bg[2]) * inv_alpha) as u8),
+            cast::f32_to_u8(f32::from(fg[0]) * alpha + f32::from(bg[0]) * inv_alpha),
+            cast::f32_to_u8(f32::from(fg[1]) * alpha + f32::from(bg[1]) * inv_alpha),
+            cast::f32_to_u8(f32::from(fg[2]) * alpha + f32::from(bg[2]) * inv_alpha),
             255,
         ])
     }
 
-    fn has_text_content(&self, element: &super::super::types::JsxElement) -> bool {
+    fn has_text_content(element: &super::super::types::JsxElement) -> bool {
         element.children.iter().any(|child| matches!(child, JsxChild::Text(_)))
     }
 
-    pub(super) fn parse_font_weight(&self, style: &FxHashMap<String, String>) -> u16 {
+    pub(super) fn parse_font_weight(style: &FxHashMap<String, String>) -> u16 {
         style
             .get("fontWeight")
             .and_then(|w| match w.as_str() {
@@ -105,7 +106,7 @@ impl ImageRenderer {
             .unwrap_or(400)
     }
 
-    pub(super) fn parse_color(&self, color_str: &str) -> Rgba<u8> {
+    pub(super) fn parse_color(color_str: &str) -> Rgba<u8> {
         match color_str {
             "black" => Rgba([0, 0, 0, 255]),
             "white" => Rgba([255, 255, 255, 255]),

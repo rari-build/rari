@@ -28,7 +28,7 @@ pub struct OgImageCache {
 
 impl OgImageCache {
     pub fn new(memory_capacity: usize, project_path: &Path) -> Self {
-        let handler = MemoryCacheHandler::with_config(MemoryConfig {
+        let handler = MemoryCacheHandler::with_config(&MemoryConfig {
             max_entries: memory_capacity.max(1),
             default_ttl: 0,
         });
@@ -170,7 +170,7 @@ mod tests {
     }
 
     fn fresh_cache(test_name: &str, memory_capacity: usize) -> OgImageCache {
-        let handler = Arc::new(MemoryCacheHandler::with_config(MemoryConfig {
+        let handler = Arc::new(MemoryCacheHandler::with_config(&MemoryConfig {
             max_entries: memory_capacity.max(1),
             default_ttl: 0,
         }));
@@ -224,7 +224,7 @@ mod tests {
         let project_path = test_project_path("fallback-to-disk");
         let _ = StdFs::remove_dir_all(&project_path);
 
-        let handler_a = Arc::new(MemoryCacheHandler::with_config(MemoryConfig {
+        let handler_a = Arc::new(MemoryCacheHandler::with_config(&MemoryConfig {
             max_entries: 8,
             default_ttl: 0,
         }));
@@ -235,7 +235,7 @@ mod tests {
         cache_a.get("/persistent").await.expect("cache_a in-memory hit");
         drop(cache_a);
 
-        let handler_b = Arc::new(MemoryCacheHandler::with_config(MemoryConfig {
+        let handler_b = Arc::new(MemoryCacheHandler::with_config(&MemoryConfig {
             max_entries: 8,
             default_ttl: 0,
         }));

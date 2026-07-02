@@ -9,10 +9,12 @@ use std::{
     mem,
     os::fd::RawFd,
     rc::Rc,
+    sync::OnceLock,
 };
 
 use deno_core::{OpState, ResourceId, error::ResourceError, op2};
 use deno_error::{JsErrorBox, JsErrorClass, builtin_classes::GENERIC_ERROR};
+use libc::{atexit, tcgetattr, tcsetattr, termios as LibcTermios};
 use nix::sys::termios;
 use rustc_hash::FxHashMap;
 use rustyline::{
@@ -88,8 +90,34 @@ impl From<Error> for TtyError {
     }
 }
 
+static ORIG_TERMIOS: OnceLock<Option<LibcTermios>> = OnceLock::new();
+
+extern "C" fn reset_stdio() {
+    // SAFETY: Reset the stdio state.
+    unsafe {
+        if let Some(Some(termios)) = ORIG_TERMIOS.get() {
+            tcsetattr(libc::STDIN_FILENO, 0, termios);
+        }
+    }
+}
+
+fn prepare_stdio() {
+    // SAFETY: Save current state of stdio and restore it when we exit.
+    unsafe {
+        ORIG_TERMIOS.get_or_init(|| {
+            let mut termios = mem::zeroed::<LibcTermios>();
+            if tcgetattr(libc::STDIN_FILENO, &raw mut termios) == 0 {
+                atexit(reset_stdio);
+                Some(termios)
+            } else {
+                None
+            }
+        });
+    }
+}
+
 #[op2(fast)]
-fn op_set_raw(state: &mut OpState, rid: u32, is_raw: bool, cbreak: bool) -> Result<(), TtyError> {
+fn op_set_raw(state: &OpState, rid: u32, is_raw: bool, cbreak: bool) -> Result<(), TtyError> {
     let handle_or_fd = state.resource_table.get_fd(rid)?;
 
     // From https://github.com/kkawakam/rustyline/blob/master/src/tty/windows.rs
@@ -97,38 +125,6 @@ fn op_set_raw(state: &mut OpState, rid: u32, is_raw: bool, cbreak: bool) -> Resu
     // and https://github.com/crossterm-rs/crossterm/blob/e35d4d2c1cc4c919e36d242e014af75f6127ab50/src/terminal/sys/windows.rs
     // Copyright (c) 2015 Katsu Kawakami & Rustyline authors. MIT license.
     // Copyright (c) 2019 Timon. MIT license.
-
-    fn prepare_stdio() {
-        // SAFETY: Save current state of stdio and restore it when we exit.
-        unsafe {
-            use std::sync::OnceLock;
-
-            use libc::{atexit, tcgetattr, tcsetattr, termios};
-
-            // Only save original state once.
-            static ORIG_TERMIOS: OnceLock<Option<termios>> = OnceLock::new();
-            ORIG_TERMIOS.get_or_init(|| {
-                let mut termios = mem::zeroed::<termios>();
-                if tcgetattr(libc::STDIN_FILENO, &raw mut termios) == 0 {
-                    extern "C" fn reset_stdio() {
-                        // SAFETY: Reset the stdio state.
-                        unsafe {
-                            if let Some(Some(termios)) = ORIG_TERMIOS.get() {
-                                tcsetattr(libc::STDIN_FILENO, 0, termios)
-                            } else {
-                                -1
-                            }
-                        };
-                    }
-
-                    atexit(reset_stdio);
-                    return Some(termios);
-                }
-
-                None
-            });
-        }
-    }
 
     prepare_stdio();
     let tty_mode_store = state.borrow::<TtyModeStore>().clone();
@@ -179,12 +175,8 @@ fn op_set_raw(state: &mut OpState, rid: u32, is_raw: bool, cbreak: bool) -> Resu
 }
 
 #[op2(fast)]
-fn op_console_size(state: &mut OpState, #[buffer] result: &mut [u32]) -> Result<(), TtyError> {
-    fn check_console_size(
-        state: &mut OpState,
-        result: &mut [u32],
-        rid: u32,
-    ) -> Result<(), TtyError> {
+fn op_console_size(state: &OpState, #[buffer] result: &mut [u32]) -> Result<(), TtyError> {
+    fn check_console_size(state: &OpState, result: &mut [u32], rid: u32) -> Result<(), TtyError> {
         let fd = state.resource_table.get_fd(rid)?;
         let size = console_size_from_fd(fd)?;
         result[0] = size.cols;
