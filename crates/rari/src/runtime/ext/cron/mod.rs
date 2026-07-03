@@ -1,5 +1,6 @@
+use ::deno_cron::local::LocalCronHandler;
 use deno_core::{Extension, extension};
-use deno_cron::local::LocalCronHandler;
+use deno_cron::deno_cron;
 
 use super::ExtensionTrait;
 
@@ -14,12 +15,12 @@ impl ExtensionTrait<()> for init_cron {
         Self::init()
     }
 }
-impl ExtensionTrait<()> for deno_cron::deno_cron {
+impl ExtensionTrait<()> for deno_cron {
     fn init((): ()) -> Extension {
         Self::init(Box::new(LocalCronHandler::new()))
     }
 }
 
 pub fn extensions(is_snapshot: bool) -> Vec<Extension> {
-    vec![deno_cron::deno_cron::build((), is_snapshot), init_cron::build((), is_snapshot)]
+    vec![deno_cron::build((), is_snapshot), init_cron::build((), is_snapshot)]
 }

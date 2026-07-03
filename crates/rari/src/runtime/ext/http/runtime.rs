@@ -8,6 +8,7 @@ use std::{
 };
 
 use deno_core::{OpState, ResourceId, error::ResourceError, extension, op2};
+use deno_error::JsError;
 use deno_http::http_create_conn_resource;
 #[cfg(unix)]
 use deno_net::io::UnixStreamResource;
@@ -18,7 +19,7 @@ use tokio::net::unix;
 
 extension!(deno_http_runtime, ops = [op_http_start]);
 
-#[derive(Debug, deno_error::JsError)]
+#[derive(Debug, JsError)]
 pub enum HttpStartError {
     #[class("Busy")]
     TcpStreamInUse,

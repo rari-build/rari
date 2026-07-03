@@ -1,4 +1,5 @@
 use deno_core::{Extension, extension};
+use deno_webidl::deno_webidl;
 
 use super::ExtensionTrait;
 
@@ -16,5 +17,5 @@ impl ExtensionTrait<()> for init_webidl {
 }
 
 pub fn extensions(is_snapshot: bool) -> Vec<Extension> {
-    vec![deno_webidl::deno_webidl::init(), init_webidl::build((), is_snapshot)]
+    vec![deno_webidl::init(), init_webidl::build((), is_snapshot)]
 }

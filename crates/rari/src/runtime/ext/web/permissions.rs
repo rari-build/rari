@@ -9,9 +9,8 @@ use std::{
 
 use deno_core::url::Url;
 use deno_fs::FsError;
-use deno_permissions::PermissionCheckError;
-pub use deno_permissions::PermissionDeniedError;
-use parking_lot::RwLock;
+use deno_permissions::{PermissionCheckError, PermissionDeniedError, PermissionState};
+use parking_lot::{RwLock, RwLockReadGuard};
 use rustc_hash::FxHashSet;
 
 fn to_io_err(err: &PermissionDeniedError) -> Error {
@@ -19,12 +18,11 @@ fn to_io_err(err: &PermissionDeniedError) -> Error {
 }
 
 pub fn oops<T>(msg: impl Display) -> Result<T, PermissionDeniedError> {
-    use deno_permissions::PermissionDeniedError;
     Err(PermissionDeniedError {
         access: msg.to_string(),
         name: "oops",
         custom_message: None,
-        state: deno_permissions::PermissionState::Denied,
+        state: PermissionState::Denied,
     })
 }
 
@@ -146,7 +144,7 @@ struct AllowlistWebPermissionsSet {
 #[derive(Clone, Default, Debug)]
 pub struct AllowlistWebPermissions(Arc<RwLock<AllowlistWebPermissionsSet>>);
 impl AllowlistWebPermissions {
-    fn borrow(&self) -> parking_lot::RwLockReadGuard<'_, AllowlistWebPermissionsSet> {
+    fn borrow(&self) -> RwLockReadGuard<'_, AllowlistWebPermissionsSet> {
         self.0.read()
     }
 }

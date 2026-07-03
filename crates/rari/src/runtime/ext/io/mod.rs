@@ -1,4 +1,7 @@
+use ::deno_io::Stdio;
 use deno_core::{Extension, extension};
+use deno_io::deno_io;
+use tty::deno_tty;
 
 use super::ExtensionTrait;
 
@@ -23,21 +26,21 @@ impl ExtensionTrait<()> for init_io {
         Self::init()
     }
 }
-impl ExtensionTrait<Option<deno_io::Stdio>> for deno_io::deno_io {
-    fn init(pipes: Option<deno_io::Stdio>) -> Extension {
+impl ExtensionTrait<Option<Stdio>> for deno_io {
+    fn init(pipes: Option<Stdio>) -> Extension {
         Self::init(pipes)
     }
 }
-impl ExtensionTrait<()> for tty::deno_tty {
+impl ExtensionTrait<()> for deno_tty {
     fn init((): ()) -> Extension {
         Self::init()
     }
 }
 
-pub fn extensions(pipes: Option<deno_io::Stdio>, is_snapshot: bool) -> Vec<Extension> {
+pub fn extensions(pipes: Option<Stdio>, is_snapshot: bool) -> Vec<Extension> {
     vec![
-        deno_io::deno_io::build(pipes, is_snapshot),
-        tty::deno_tty::build((), is_snapshot),
+        deno_io::build(pipes, is_snapshot),
+        deno_tty::build((), is_snapshot),
         init_io::build((), is_snapshot),
     ]
 }

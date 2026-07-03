@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use deno_core::{Extension, extension};
+use deno_webstorage::deno_webstorage;
 
 use super::ExtensionTrait;
 
@@ -15,7 +16,7 @@ impl ExtensionTrait<()> for init_webstorage {
         Self::init()
     }
 }
-impl ExtensionTrait<Option<PathBuf>> for deno_webstorage::deno_webstorage {
+impl ExtensionTrait<Option<PathBuf>> for deno_webstorage {
     fn init(origin_storage_dir: Option<PathBuf>) -> Extension {
         Self::init(origin_storage_dir)
     }
@@ -23,7 +24,7 @@ impl ExtensionTrait<Option<PathBuf>> for deno_webstorage::deno_webstorage {
 
 pub fn extensions(origin_storage_dir: Option<PathBuf>, is_snapshot: bool) -> Vec<Extension> {
     vec![
-        deno_webstorage::deno_webstorage::build(origin_storage_dir, is_snapshot),
+        deno_webstorage::build(origin_storage_dir, is_snapshot),
         init_webstorage::build((), is_snapshot),
     ]
 }

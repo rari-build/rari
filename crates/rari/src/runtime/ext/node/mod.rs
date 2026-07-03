@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use deno_core::{Extension, extension};
+use deno_node::deno_node;
 use deno_resolver::npm::DenoInNpmPackageChecker;
 use resolvers::{NpmPackageFolderResolverImpl, Resolver};
 use sys_traits::impls::RealSys;
@@ -23,7 +24,7 @@ impl ExtensionTrait<()> for init_node {
     }
 }
 
-impl ExtensionTrait<Arc<Resolver>> for deno_node::deno_node {
+impl ExtensionTrait<Arc<Resolver>> for deno_node {
     fn init(resolver: Arc<Resolver>) -> Extension {
         let services = resolver.init_services();
 
@@ -37,7 +38,7 @@ impl ExtensionTrait<Arc<Resolver>> for deno_node::deno_node {
 }
 
 pub fn extensions(resolver: Arc<Resolver>, is_snapshot: bool) -> Vec<Extension> {
-    let node_ext = deno_node::deno_node::build(resolver, is_snapshot);
+    let node_ext = deno_node::build(resolver, is_snapshot);
 
     let init_ext = init_node::build((), is_snapshot);
 

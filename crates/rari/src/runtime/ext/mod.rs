@@ -1,8 +1,13 @@
 use std::{borrow::Cow::Borrowed, option::Option::None, path::PathBuf, sync::Arc};
 
+use deno_bundle_runtime::deno_bundle_runtime;
 use deno_core::Extension;
-use deno_fs::{FileSystemRc, sync::MaybeArc};
+use deno_fs::{FileSystemRc, RealFs, sync::MaybeArc};
+use deno_io::Stdio;
 use deno_runtime::deno_canvas::deno_canvas;
+use deno_web::InMemoryBroadcastChannel;
+
+use crate::runtime::ext::{kv::KvStore, node::resolvers::Resolver, web::WebOptions};
 
 pub trait ExtensionTrait<A> {
     fn init(options: A) -> Extension;
@@ -46,29 +51,29 @@ mod webstorage;
 #[derive(Clone)]
 #[non_exhaustive]
 pub struct ExtensionOptions {
-    pub web: web::WebOptions,
-    pub io_pipes: Option<deno_io::Stdio>,
+    pub web: WebOptions,
+    pub io_pipes: Option<Stdio>,
     pub cache: Option<()>,
     pub filesystem: FileSystemRc,
     pub crypto_seed: Option<u64>,
-    pub node_resolver: Arc<node::resolvers::Resolver>,
-    pub broadcast_channel: deno_web::InMemoryBroadcastChannel,
+    pub node_resolver: Arc<Resolver>,
+    pub broadcast_channel: InMemoryBroadcastChannel,
     pub webstorage_origin_storage_dir: Option<PathBuf>,
-    pub kv_store: kv::KvStore,
+    pub kv_store: KvStore,
 }
 
 impl Default for ExtensionOptions {
     fn default() -> Self {
         Self {
-            web: web::WebOptions::default(),
-            io_pipes: Some(deno_io::Stdio::default()),
-            filesystem: MaybeArc::new(deno_fs::RealFs),
+            web: WebOptions::default(),
+            io_pipes: Some(Stdio::default()),
+            filesystem: MaybeArc::new(RealFs),
             cache: Some(()),
             crypto_seed: None,
-            node_resolver: Arc::new(node::resolvers::Resolver::default()),
-            broadcast_channel: deno_web::InMemoryBroadcastChannel::default(),
+            node_resolver: Arc::new(Resolver::default()),
+            broadcast_channel: InMemoryBroadcastChannel::default(),
             webstorage_origin_storage_dir: None,
-            kv_store: kv::KvStore::default(),
+            kv_store: KvStore::default(),
         }
     }
 }
@@ -108,7 +113,7 @@ pub fn extensions(options: &ExtensionOptions, is_snapshot: bool) -> Vec<Extensio
     extensions.extend(node_sqlite::extensions(is_snapshot));
     extensions.extend(node::extensions(Arc::clone(&options.node_resolver), is_snapshot));
     {
-        let mut bundle_ext = deno_bundle_runtime::deno_bundle_runtime::init(None);
+        let mut bundle_ext = deno_bundle_runtime::init(None);
         bundle_ext.esm_files = Borrowed(&[]);
         bundle_ext.esm_entry_point = None;
         extensions.push(bundle_ext);

@@ -8,20 +8,22 @@ use std::{
 };
 
 use deno_ast::{MediaType, ModuleSpecifier};
+use deno_core::FastString;
 use deno_error::JsErrorBox;
 use deno_fs::{FileSystem, RealFs};
 use deno_node::{NodeExtInitServices, NodeRequireLoader, NodeResolver};
-use deno_package_json::{PackageJsonCache, PackageJsonRc};
+use deno_package_json::{PackageJsonCache, PackageJsonCacheResult, PackageJsonRc};
+use deno_permissions::{CheckedPath, PermissionsContainer};
 use deno_process::NpmProcessStateProvider;
 use deno_resolver::npm::{
     ByonmInNpmPackageChecker, ByonmNpmResolver, ByonmNpmResolverCreateOptions,
     DenoInNpmPackageChecker,
 };
-use deno_semver::package::PackageReq;
+use deno_semver::{Version, package::PackageReq};
 use node_resolver::{
     DenoIsBuiltInNodeModuleChecker, InNpmPackageChecker, NodeConditionOptions, NodeResolutionCache,
-    NpmPackageFolderResolver, PackageJsonResolver, UrlOrPath, UrlOrPathRef,
-    analyze::NodeCodeTranslatorMode::ModuleLoader,
+    NodeResolverOptions, NpmPackageFolderResolver, PackageJsonResolver, UrlOrPath, UrlOrPathRef,
+    analyze::{CjsModuleExportAnalyzer, NodeCodeTranslatorMode::ModuleLoader},
     cache::NodeResolutionSys,
     errors::{
         PackageFolderResolveError, PackageFolderResolveErrorKind, PackageJsonLoadError,
@@ -30,7 +32,9 @@ use node_resolver::{
 };
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use sys_traits::impls::RealSys;
+use sys_traits::{FileType, impls::RealSys};
+
+use crate::runtime::ext::node::cjs_translator::CjsCodeAnalyzer;
 
 const NODE_MODULES_DIR: &str = "node_modules";
 const TYPESCRIPT_VERSION: &str = "5.8.3";
@@ -75,7 +79,7 @@ impl Resolver {
             self.folder_resolver.clone(),
             self.folder_resolver.pjson_resolver(),
             NodeResolutionSys::new(RealSys, Some(self.folder_resolver.resolution_cache())),
-            node_resolver::NodeResolverOptions {
+            NodeResolverOptions {
                 conditions: NodeConditionOptions::default(),
                 is_browser_platform: false,
                 bundle_mode: false,
@@ -84,7 +88,7 @@ impl Resolver {
                         clippy::expect_used,
                         reason = "Infallible operation with valid inputs"
                     )]
-                    deno_semver::Version::parse_standard(TYPESCRIPT_VERSION)
+                    Version::parse_standard(TYPESCRIPT_VERSION)
                         .expect("failed to parse typescript version"),
                 ),
             },
@@ -98,10 +102,6 @@ impl Resolver {
             NodeResolver<DenoInNpmPackageChecker, NpmPackageFolderResolverImpl, RealSys>,
         >,
     ) -> super::cjs_translator::NodeCodeTranslator {
-        use node_resolver::analyze::CjsModuleExportAnalyzer;
-
-        use super::cjs_translator::CjsCodeAnalyzer;
-
         let cjs = CjsCodeAnalyzer::new(self.filesystem(), Arc::clone(self));
 
         let module_export_analyzer = CjsModuleExportAnalyzer::new(
@@ -221,7 +221,7 @@ impl Resolver {
 
     pub fn has_node_modules_dir(&self) -> bool {
         self.folder_resolver.base_dir().as_ref().is_some_and(|d| {
-            let checked_path = deno_permissions::CheckedPath::unsafe_new(Cow::Borrowed(d));
+            let checked_path = CheckedPath::unsafe_new(Cow::Borrowed(d));
             self.fs.exists_sync(&checked_path) && self.fs.is_dir_sync(&checked_path)
         })
     }
@@ -333,7 +333,7 @@ impl NpmPackageFolderResolver for NpmPackageFolderResolverImpl {
     fn resolve_types_package_folder(
         &self,
         _package_name: &str,
-        _version: Option<&deno_semver::Version>,
+        _version: Option<&Version>,
         _referrer: Option<&UrlOrPathRef<'_>>,
     ) -> Option<PathBuf> {
         None
@@ -348,8 +348,7 @@ impl PackageJsonCacheImpl {
     }
 }
 impl PackageJsonCache for PackageJsonCacheImpl {
-    fn get(&self, path: &Path) -> deno_package_json::PackageJsonCacheResult {
-        use deno_package_json::PackageJsonCacheResult;
+    fn get(&self, path: &Path) -> PackageJsonCacheResult {
         match self.0.read().ok().and_then(|i| i.get(path)) {
             Some(pkg) => PackageJsonCacheResult::Hit(Some(pkg)),
             None => PackageJsonCacheResult::NotCached,
@@ -397,11 +396,11 @@ impl NodeResolutionCache for NodeResolutionCacheImpl {
         }
     }
 
-    fn get_file_type(&self, path: &Path) -> Option<Option<sys_traits::FileType>> {
+    fn get_file_type(&self, path: &Path) -> Option<Option<FileType>> {
         self.inner.read().ok().and_then(|i| i.get_file_type(path))
     }
 
-    fn set_file_type(&self, path: PathBuf, value: Option<sys_traits::FileType>) {
+    fn set_file_type(&self, path: PathBuf, value: Option<FileType>) {
         if let Ok(mut i) = self.inner.write() {
             i.set_file_type(path, value);
         }
@@ -409,7 +408,7 @@ impl NodeResolutionCache for NodeResolutionCacheImpl {
 }
 #[derive(Debug, Default, Clone)]
 pub struct NodeResolutionCacheInner {
-    cache: FxHashMap<PathBuf, (Option<PathBuf>, Option<sys_traits::FileType>)>,
+    cache: FxHashMap<PathBuf, (Option<PathBuf>, Option<FileType>)>,
 }
 impl NodeResolutionCacheInner {
     fn get_canonicalized(&self, path: &Path) -> Option<Result<PathBuf, io::Error>> {
@@ -433,11 +432,11 @@ impl NodeResolutionCacheInner {
     }
 
     #[expect(clippy::option_option)]
-    fn get_file_type(&self, path: &Path) -> Option<Option<sys_traits::FileType>> {
+    fn get_file_type(&self, path: &Path) -> Option<Option<FileType>> {
         self.cache.get(path).map(|(_, t)| *t)
     }
 
-    fn set_file_type(&mut self, path: PathBuf, value: Option<sys_traits::FileType>) {
+    fn set_file_type(&mut self, path: PathBuf, value: Option<FileType>) {
         if let Some((_, t)) = self.cache.get_mut(&path) {
             *t = value;
         } else {
@@ -471,14 +470,14 @@ impl NpmProcessStateProvider for Resolver {
 struct RequireLoader(Arc<dyn FileSystem + Send + Sync>);
 impl NodeRequireLoader for RequireLoader {
     fn load_text_file_lossy(&self, path: &Path) -> Result<deno_core::FastString, JsErrorBox> {
-        let path_checked = deno_permissions::CheckedPath::unsafe_new(Cow::Borrowed(path));
+        let path_checked = CheckedPath::unsafe_new(Cow::Borrowed(path));
         let text = self.0.read_text_file_lossy_sync(&path_checked).map_err(JsErrorBox::from_err)?;
-        Ok(deno_core::FastString::from(text.into_owned()))
+        Ok(FastString::from(text.into_owned()))
     }
 
     fn ensure_read_permission<'a>(
         &self,
-        _permissions: &mut deno_permissions::PermissionsContainer,
+        _permissions: &mut PermissionsContainer,
         path: Cow<'a, Path>,
     ) -> Result<Cow<'a, Path>, JsErrorBox> {
         Ok(path)

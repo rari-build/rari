@@ -1,4 +1,5 @@
 use deno_core::{Extension, extension};
+use deno_crypto::deno_crypto;
 
 use super::ExtensionTrait;
 
@@ -13,12 +14,12 @@ impl ExtensionTrait<()> for init_crypto {
         Self::init()
     }
 }
-impl ExtensionTrait<Option<u64>> for deno_crypto::deno_crypto {
+impl ExtensionTrait<Option<u64>> for deno_crypto {
     fn init(seed: Option<u64>) -> Extension {
         Self::init(seed)
     }
 }
 
 pub fn extensions(seed: Option<u64>, is_snapshot: bool) -> Vec<Extension> {
-    vec![deno_crypto::deno_crypto::build(seed, is_snapshot), init_crypto::build((), is_snapshot)]
+    vec![deno_crypto::build(seed, is_snapshot), init_crypto::build((), is_snapshot)]
 }

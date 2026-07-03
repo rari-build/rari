@@ -1,5 +1,6 @@
+use ::deno_fs::FileSystemRc;
 use deno_core::{Extension, extension};
-use deno_fs::FileSystemRc;
+use deno_fs::deno_fs;
 
 use super::ExtensionTrait;
 
@@ -16,12 +17,12 @@ impl ExtensionTrait<()> for init_fs {
     }
 }
 
-impl ExtensionTrait<FileSystemRc> for deno_fs::deno_fs {
+impl ExtensionTrait<FileSystemRc> for deno_fs {
     fn init(fs: FileSystemRc) -> Extension {
         Self::init(fs)
     }
 }
 
 pub fn extensions(fs: FileSystemRc, is_snapshot: bool) -> Vec<Extension> {
-    vec![deno_fs::deno_fs::build(fs, is_snapshot), init_fs::build((), is_snapshot)]
+    vec![deno_fs::build(fs, is_snapshot), init_fs::build((), is_snapshot)]
 }
