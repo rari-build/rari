@@ -18,7 +18,6 @@ use rari_utils::path_to_file_url;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use tower::{Layer, Service};
-use tracing::error;
 
 use crate::server::core::types::ServerState;
 
@@ -171,7 +170,7 @@ where
                                 *request.uri_mut() = uri;
                             }
                             Err(e) => {
-                                error!("Failed to parse rewrite path: {}", e);
+                                tracing::error!("Failed to parse rewrite path: {}", e);
                                 return inner.call(request).await;
                             }
                         }
@@ -221,7 +220,7 @@ where
                     inner.call(request).await
                 }
                 Err(e) => {
-                    error!("Proxy execution failed: {}", e);
+                    tracing::error!("Proxy execution failed: {}", e);
                     inner.call(request).await
                 }
             }
@@ -309,18 +308,18 @@ pub async fn initialize_proxy(state: &ServerState) -> Result<(), Box<dyn Error>>
                         .get("error")
                         .and_then(|v| v.as_str())
                         .unwrap_or("Unknown error during proxy initialization");
-                    error!("Proxy initialization failed: {error_msg}");
+                    tracing::error!("Proxy initialization failed: {error_msg}");
                     Err(RariError::js_runtime(format!("Proxy initialization failed: {error_msg}"))
                         .into())
                 }
             } else {
-                error!("Proxy initialization returned invalid result format");
+                tracing::error!("Proxy initialization returned invalid result format");
                 Err(RariError::js_runtime("Proxy initialization returned invalid result format")
                     .into())
             }
         }
         Err(e) => {
-            error!("Failed to register proxy function: {}", e);
+            tracing::error!("Failed to register proxy function: {}", e);
             Err(e.into())
         }
     }

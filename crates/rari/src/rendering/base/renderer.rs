@@ -16,12 +16,11 @@ use parking_lot::Mutex;
 use rari_error::RariError;
 use rari_rsc::{
     components::ComponentRegistry,
-    utils::{self, extract_dependencies, hash_string},
+    utils::{self},
 };
 use rustc_hash::FxHashSet;
 use serde_json::Value;
-use tokio::{fs, time, time::timeout};
-use tracing::error;
+use tokio::{fs, time};
 
 use super::{
     constants::{
@@ -143,8 +142,11 @@ impl RscRenderer {
         let timeout_duration =
             Duration::from_millis(self.resource_limits.max_script_execution_time_ms);
 
-        match timeout(timeout_duration, self.runtime.execute_script(script_name.clone(), script))
-            .await
+        match time::timeout(
+            timeout_duration,
+            self.runtime.execute_script(script_name.clone(), script),
+        )
+        .await
         {
             Ok(result) => result,
             Err(_) => {
@@ -342,12 +344,12 @@ globalThis['~errors'].batch.push({{
             )
             .await?;
 
-        let dependencies = extract_dependencies(component_code);
+        let dependencies = utils::extract_dependencies(component_code);
 
         for dep in &dependencies {
             let dep_owned = dep.clone();
             if let Err(e) = self.register_dependency_if_needed(dep_owned).await {
-                error!(
+                tracing::error!(
                     "[rari] RSC: Failed to register dependency '{dep}' for component '{component_id}': {e}"
                 );
             }
@@ -492,7 +494,7 @@ globalThis['~errors'].batch.push({{
                         };
 
                         if !already_registered && Self::is_react_component_file(&content) {
-                            let sub_dependencies = extract_dependencies(&content);
+                            let sub_dependencies = utils::extract_dependencies(&content);
                             for sub_dep in sub_dependencies {
                                 stack.push(sub_dep);
                             }
@@ -515,7 +517,7 @@ globalThis['~errors'].batch.push({{
     ) -> Result<(), RariError> {
         let transformed_module_code = component_code.to_string();
 
-        let dependencies = extract_dependencies(component_code);
+        let dependencies = utils::extract_dependencies(component_code);
 
         {
             let mut registry = self.component_registry.lock();
@@ -631,7 +633,7 @@ globalThis['~errors'].batch.push({{
     }
 
     fn create_component_verification_script(component_id: &str) -> String {
-        let hashed_component_id = format!("Component_{}", hash_string(component_id));
+        let hashed_component_id = format!("Component_{}", utils::hash_string(component_id));
         RscJsLoader::create_component_verification_script(component_id, &hashed_component_id)
     }
 
@@ -771,7 +773,7 @@ globalThis['~errors'].batch.push({{
             return Err(RariError::not_found(format!("Component not found: {component_id}")));
         }
 
-        let component_hash = hash_string(component_id);
+        let component_hash = utils::hash_string(component_id);
         let props_json = props.filter(|p| !p.trim().is_empty()).unwrap_or("{}");
 
         let clear_environment_script = self
@@ -1306,9 +1308,10 @@ globalThis['~rsc'].functions['{component_id}'] = {component_id};
                 .await;
 
             if let Err(e) = execution_result {
-                error!(
+                tracing::error!(
                     "HMR wrapper script execution failed for component '{}': {:?}",
-                    component_id, e
+                    component_id,
+                    e
                 );
                 return Err(e);
             }

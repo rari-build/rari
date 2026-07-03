@@ -11,7 +11,6 @@ use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tracing::error;
 
 use crate::{
     server::{
@@ -123,7 +122,7 @@ fn normalize_origin(url: &url::Url) -> (String, String, u16) {
 fn check_origin(headers: &HeaderMap, allowed_origins: &[String]) -> Result<(), StatusCode> {
     if allowed_origins.is_empty() {
         let host = headers.get("host").and_then(|v| v.to_str().ok()).ok_or_else(|| {
-            error!("Missing host header in server action request");
+            tracing::error!("Missing host header in server action request");
             StatusCode::BAD_REQUEST
         })?;
 
@@ -140,7 +139,7 @@ fn check_origin(headers: &HeaderMap, allowed_origins: &[String]) -> Result<(), S
 
         let server_origin_str = format!("{scheme}://{host}");
         let server_origin_url = url::Url::parse(&server_origin_str).map_err(|e| {
-            error!("Failed to parse server origin: {}", e);
+            tracing::error!("Failed to parse server origin: {}", e);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
         let server_origin_tuple = normalize_origin(&server_origin_url);
@@ -153,7 +152,11 @@ fn check_origin(headers: &HeaderMap, allowed_origins: &[String]) -> Result<(), S
                     return Ok(());
                 }
             }
-            error!("Origin mismatch: origin={}, server_origin={}", origin, server_origin_str);
+            tracing::error!(
+                "Origin mismatch: origin={}, server_origin={}",
+                origin,
+                server_origin_str
+            );
             return Err(StatusCode::FORBIDDEN);
         }
 
@@ -164,23 +167,26 @@ fn check_origin(headers: &HeaderMap, allowed_origins: &[String]) -> Result<(), S
                 if referer_tuple == server_origin_tuple {
                     return Ok(());
                 }
-                error!(
+                tracing::error!(
                     "Referer mismatch: referer_origin={}://{}:{}, server_origin={}",
-                    referer_tuple.0, referer_tuple.1, referer_tuple.2, server_origin_str
+                    referer_tuple.0,
+                    referer_tuple.1,
+                    referer_tuple.2,
+                    server_origin_str
                 );
             } else {
-                error!("Invalid referer header: failed to parse");
+                tracing::error!("Invalid referer header: failed to parse");
             }
             return Err(StatusCode::FORBIDDEN);
         }
 
-        error!("Missing origin and referer headers in server action request");
+        tracing::error!("Missing origin and referer headers in server action request");
         return Err(StatusCode::FORBIDDEN);
     }
 
     if let Some(origin) = headers.get("origin").and_then(|v| v.to_str().ok()) {
         if !is_origin_allowed(origin, allowed_origins) {
-            error!("Invalid origin: {}", origin);
+            tracing::error!("Invalid origin: {}", origin);
             return Err(StatusCode::FORBIDDEN);
         }
         return Ok(());
@@ -198,14 +204,14 @@ fn check_origin(headers: &HeaderMap, allowed_origins: &[String]) -> Result<(), S
             if is_origin_allowed(&referer_origin, allowed_origins) {
                 return Ok(());
             }
-            error!("Invalid referer origin: {}", referer_origin);
+            tracing::error!("Invalid referer origin: {}", referer_origin);
         } else {
-            error!("Invalid referer header: failed to parse origin");
+            tracing::error!("Invalid referer header: failed to parse origin");
         }
         return Err(StatusCode::FORBIDDEN);
     }
 
-    error!("Missing Origin and Referer headers with non-empty allowed_origins");
+    tracing::error!("Missing Origin and Referer headers with non-empty allowed_origins");
     Err(StatusCode::FORBIDDEN)
 }
 
@@ -229,7 +235,7 @@ pub async fn handle_server_action(
     let request: ServerActionRequest = match serde_json::from_slice(&body) {
         Ok(req) => req,
         Err(e) => {
-            error!("Failed to parse server action request: {}", e);
+            tracing::error!("Failed to parse server action request: {}", e);
             let mut response = Json(ServerActionResponse {
                 success: false,
                 result: None,
@@ -249,7 +255,11 @@ pub async fn handle_server_action(
     };
 
     if request.args.len() > MAX_BOUND_ARGS {
-        error!("Too many server function arguments: {} > {}", request.args.len(), MAX_BOUND_ARGS);
+        tracing::error!(
+            "Too many server function arguments: {} > {}",
+            request.args.len(),
+            MAX_BOUND_ARGS
+        );
         let mut response = Json(ServerActionResponse {
             success: false,
             result: None,
@@ -273,7 +283,7 @@ pub async fn handle_server_action(
     }
 
     if is_reserved_export_name(&request.export_name) {
-        error!("Attempted to call reserved export name: {}", request.export_name);
+        tracing::error!("Attempted to call reserved export name: {}", request.export_name);
         let mut response = Json(ServerActionResponse {
             success: false,
             result: None,
@@ -304,7 +314,7 @@ pub async fn handle_server_action(
     let sanitized_args = match validate_and_sanitize_args(&request.args, &validation_config) {
         Ok(args) => args,
         Err(e) => {
-            error!("Input validation failed: {}", e);
+            tracing::error!("Input validation failed: {}", e);
             let mut response = Json(ServerActionResponse {
                 success: false,
                 result: None,
@@ -377,7 +387,7 @@ pub async fn handle_server_action(
             Ok(response)
         }
         Err(e) => {
-            error!("Server action execution failed: {}", e);
+            tracing::error!("Server action execution failed: {}", e);
             let mut response = Json(ServerActionResponse {
                 success: false,
                 result: None,
@@ -409,7 +419,7 @@ pub async fn handle_form_action(
     let form_data = match parse_form_data(&body) {
         Ok(data) => data,
         Err(e) => {
-            error!("Failed to parse form data: {}", e);
+            tracing::error!("Failed to parse form data: {}", e);
             return Err(StatusCode::BAD_REQUEST);
         }
     };
@@ -418,7 +428,7 @@ pub async fn handle_form_action(
     let export_name = form_data.get("__export_name").ok_or(StatusCode::BAD_REQUEST)?;
 
     if is_reserved_export_name(export_name) {
-        error!("Attempted to call reserved export name in form action: {}", export_name);
+        tracing::error!("Attempted to call reserved export name in form action: {}", export_name);
         return Err(StatusCode::BAD_REQUEST);
     }
 
@@ -433,7 +443,7 @@ pub async fn handle_form_action(
     let sanitized_args = match validate_and_sanitize_args(&args, &validation_config) {
         Ok(args) => args,
         Err(e) => {
-            error!("Form action input validation failed: {}", e);
+            tracing::error!("Form action input validation failed: {}", e);
             return Err(StatusCode::BAD_REQUEST);
         }
     };
@@ -563,7 +573,7 @@ pub async fn handle_form_action(
             Ok(redirect_response)
         }
         Err(e) => {
-            error!("Form action execution failed: {}", e);
+            tracing::error!("Form action execution failed: {}", e);
             let mut response = StatusCode::INTERNAL_SERVER_ERROR.into_response();
             append_pending_cookies(response.headers_mut(), &request_context.pending_cookies);
             Ok(response)

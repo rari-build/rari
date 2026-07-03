@@ -11,7 +11,6 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::{fs, time};
-use tracing::error;
 
 use crate::server::{
     ServerState,
@@ -103,7 +102,7 @@ async fn handle_register(state: ServerState, file_path: String) -> Result<Json<V
     let file_path = normalize_component_path(&file_path);
 
     if let Err(e) = validate_component_path(&file_path) {
-        error!(
+        tracing::error!(
             file_path = %file_path,
             error = %e,
             "Component path validation failed"
@@ -114,7 +113,7 @@ async fn handle_register(state: ServerState, file_path: String) -> Result<Json<V
     let component_id = match extract_component_id(&file_path) {
         Ok(id) => id,
         Err(e) => {
-            error!("Failed to extract component ID from {}: {}", file_path, e);
+            tracing::error!("Failed to extract component ID from {}: {}", file_path, e);
             return Err(StatusCode::BAD_REQUEST);
         }
     };
@@ -137,7 +136,7 @@ async fn handle_register(state: ServerState, file_path: String) -> Result<Json<V
             .execute_script("clear_resolved_cache".to_string(), clear_cache_script.to_string())
             .await
         {
-            error!("Failed to clear resolved cache: {}", e);
+            tracing::error!("Failed to clear resolved cache: {}", e);
         }
     }
 
@@ -148,7 +147,7 @@ async fn handle_register(state: ServerState, file_path: String) -> Result<Json<V
     match &reload_result {
         Ok(()) => {}
         Err(e) => {
-            error!(
+            tracing::error!(
                 component_id = component_id,
                 file_path = file_path,
                 error = %e,
@@ -170,7 +169,7 @@ async fn handle_register(state: ServerState, file_path: String) -> Result<Json<V
     if reload_result.is_err()
         && let Err(e) = immediate_component_reregistration(&state, &file_path).await
     {
-        error!(
+        tracing::error!(
             component_id = component_id,
             file_path = file_path,
             error = %e,
@@ -282,7 +281,7 @@ async fn handle_invalidate(
         renderer.clear_component_cache(&component_id);
 
         if let Err(e) = renderer.runtime.clear_module_loader_caches(&component_id).await {
-            error!("Failed to clear module loader caches for {}: {}", component_id, e);
+            tracing::error!("Failed to clear module loader caches for {}: {}", component_id, e);
         }
 
         let clear_script = format!(
@@ -351,7 +350,7 @@ async fn handle_invalidate(
             "cleared": clear_result
         }))),
         Err(e) => {
-            error!("Failed to invalidate component cache for {}: {}", component_id, e);
+            tracing::error!("Failed to invalidate component cache for {}: {}", component_id, e);
             Ok(Json(serde_json::json!({
                 "success": false,
                 "componentId": component_id,
@@ -367,7 +366,7 @@ async fn handle_reload(
     file_path: String,
 ) -> Result<Json<Value>, StatusCode> {
     let Some(config) = Config::get() else {
-        error!("Failed to get global configuration for HMR reload");
+        tracing::error!("Failed to get global configuration for HMR reload");
         return Ok(Json(serde_json::json!({
             "success": false,
             "componentId": component_id,
@@ -376,7 +375,7 @@ async fn handle_reload(
     };
 
     if file_path.contains("://") {
-        error!("Invalid file path: contains URL scheme");
+        tracing::error!("Invalid file path: contains URL scheme");
         return Ok(Json(serde_json::json!({
             "success": false,
             "componentId": component_id,
@@ -397,7 +396,7 @@ async fn handle_reload(
     let transpiled_code = match client.get(&vite_url).send().await {
         Ok(response) => {
             if !response.status().is_success() {
-                error!("Vite returned error status: {}", response.status());
+                tracing::error!("Vite returned error status: {}", response.status());
                 return Ok(Json(serde_json::json!({
                     "success": false,
                     "componentId": component_id,
@@ -408,7 +407,7 @@ async fn handle_reload(
             match response.text().await {
                 Ok(code) => code,
                 Err(e) => {
-                    error!("Failed to read response from Vite: {}", e);
+                    tracing::error!("Failed to read response from Vite: {}", e);
                     return Ok(Json(serde_json::json!({
                         "success": false,
                         "componentId": component_id,
@@ -418,7 +417,7 @@ async fn handle_reload(
             }
         }
         Err(e) => {
-            error!("Failed to fetch from Vite dev server: {}", e);
+            tracing::error!("Failed to fetch from Vite dev server: {}", e);
             return Ok(Json(serde_json::json!({
                 "success": false,
                 "componentId": component_id,
@@ -437,7 +436,7 @@ async fn handle_reload(
             "codeSize": transpiled_code.len()
         }))),
         Err(e) => {
-            error!("Failed to reload component {}: {}", component_id, e);
+            tracing::error!("Failed to reload component {}: {}", component_id, e);
             Ok(Json(serde_json::json!({
                 "success": false,
                 "componentId": component_id,
@@ -475,7 +474,7 @@ async fn handle_reload_component(
     let bundle_full_path = match validate_safe_path(&project_root, &bundle_path) {
         Ok(path) => path,
         Err(e) => {
-            error!(
+            tracing::error!(
                 bundle_path = %bundle_path,
                 error = %e,
                 "Bundle path validation failed"
@@ -506,7 +505,7 @@ async fn handle_reload_component(
     }
 
     if let Some(e) = last_error {
-        error!("Failed to read bundle file {}: {}", bundle_full_path.display(), e);
+        tracing::error!("Failed to read bundle file {}: {}", bundle_full_path.display(), e);
         return Ok(Json(serde_json::json!({
             "success": false,
             "message": format!("Failed to read bundle: {}", e)
@@ -517,7 +516,7 @@ async fn handle_reload_component(
         let renderer = state.renderer.lock().await;
         renderer.runtime.invalidate_component(&component_id).await
     } {
-        error!("Failed to invalidate component {}: {}", component_id, e);
+        tracing::error!("Failed to invalidate component {}: {}", component_id, e);
     }
 
     let load_result = {
@@ -546,7 +545,7 @@ async fn handle_reload_component(
                         registry.mark_component_initially_loaded(&component_id);
                     }
                     Err(e) => {
-                        error!("Failed to register component {}: {}", component_id, e);
+                        tracing::error!("Failed to register component {}: {}", component_id, e);
                         registry.remove_component(&component_id);
                         return Ok(Json(serde_json::json!({
                             "success": false,
@@ -564,7 +563,7 @@ async fn handle_reload_component(
             })))
         }
         Err(e) => {
-            error!("Failed to reload component {}: {}", component_id, e);
+            tracing::error!("Failed to reload component {}: {}", component_id, e);
             Ok(Json(serde_json::json!({
                 "success": false,
                 "message": format!("Failed to reload component: {}", e)

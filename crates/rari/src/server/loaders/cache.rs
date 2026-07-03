@@ -4,7 +4,6 @@ use cow_utils::CowUtils;
 use rari_error::RariError;
 use regex::Regex;
 use rustc_hash::FxHashMap;
-use tracing::error;
 
 use crate::server::ServerState;
 
@@ -51,7 +50,7 @@ impl CacheLoader {
                         || extension == "js")
                 {
                     if let Err(e) = Self::load_page_cache_config(&path, state).await {
-                        error!("Failed to load page cache config for {:?}: {}", path, e);
+                        tracing::error!("Failed to load page cache config for {:?}: {}", path, e);
                     }
                     *loaded_count += 1;
                 }

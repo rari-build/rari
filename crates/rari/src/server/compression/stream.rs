@@ -4,7 +4,6 @@ use async_compression::tokio::write::{BrotliEncoder, GzipEncoder, ZstdEncoder};
 use bytes::Bytes;
 use futures::stream::{self, Stream, StreamExt};
 use tokio::io::AsyncWriteExt;
-use tracing::error;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
@@ -66,7 +65,7 @@ where
                                     Some((Ok(compressed_chunk), (input, Some(comp), false)))
                                 }
                                 Err(e) => {
-                                    error!("Zstd compression error: {}", e);
+                                    tracing::error!("Zstd compression error: {}", e);
                                     Some((Err(e), (input, None, true)))
                                 }
                             }
@@ -77,7 +76,7 @@ where
                                 match comp.finish().await {
                                     Ok(final_chunk) => Some((Ok(final_chunk), (input, None, true))),
                                     Err(e) => {
-                                        error!("Zstd finalization error: {}", e);
+                                        tracing::error!("Zstd finalization error: {}", e);
                                         Some((Err(e), (input, None, true)))
                                     }
                                 }
@@ -107,7 +106,7 @@ where
                                     Some((Ok(compressed_chunk), (input, Some(comp), false)))
                                 }
                                 Err(e) => {
-                                    error!("Brotli compression error: {}", e);
+                                    tracing::error!("Brotli compression error: {}", e);
                                     Some((Err(e), (input, None, true)))
                                 }
                             }
@@ -118,7 +117,7 @@ where
                                 match comp.finish().await {
                                     Ok(final_chunk) => Some((Ok(final_chunk), (input, None, true))),
                                     Err(e) => {
-                                        error!("Brotli finalization error: {}", e);
+                                        tracing::error!("Brotli finalization error: {}", e);
                                         Some((Err(e), (input, None, true)))
                                     }
                                 }
@@ -148,7 +147,7 @@ where
                                     Some((Ok(compressed_chunk), (input, Some(comp), false)))
                                 }
                                 Err(e) => {
-                                    error!("Gzip compression error: {}", e);
+                                    tracing::error!("Gzip compression error: {}", e);
                                     Some((Err(e), (input, None, true)))
                                 }
                             }
@@ -159,7 +158,7 @@ where
                                 match comp.finish().await {
                                     Ok(final_chunk) => Some((Ok(final_chunk), (input, None, true))),
                                     Err(e) => {
-                                        error!("Gzip finalization error: {}", e);
+                                        tracing::error!("Gzip finalization error: {}", e);
                                         Some((Err(e), (input, None, true)))
                                     }
                                 }

@@ -4,6 +4,7 @@ use std::{
 };
 
 use cow_utils::CowUtils;
+use url::Url;
 
 fn normalize_path(path: &Path) -> PathBuf {
     let mut components = Vec::new();
@@ -43,7 +44,7 @@ pub fn path_to_file_url(path: &Path) -> String {
         normalize_path(&joined)
     };
 
-    url::Url::from_file_path(&absolute_path).map(|url| url.to_string()).unwrap_or_else(|()| {
+    Url::from_file_path(&absolute_path).map(|url| url.to_string()).unwrap_or_else(|()| {
         let path_str = absolute_path.to_string_lossy().cow_replace('\\', "/").into_owned();
         if path_str.starts_with('/') {
             format!("file://{path_str}")

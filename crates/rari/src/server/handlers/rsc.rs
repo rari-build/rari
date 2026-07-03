@@ -9,7 +9,6 @@ use cow_utils::CowUtils;
 use rari_rsc::utils;
 use serde_json::Value;
 use tokio::{fs, time};
-use tracing::error;
 
 use crate::server::{
     RegisterClientRequest, RegisterRequest, ServerState,
@@ -62,7 +61,11 @@ pub async fn register_component(
                     )
                     .await
                 {
-                    error!("Failed to mark {} as client component: {}", request.component_id, e);
+                    tracing::error!(
+                        "Failed to mark {} as client component: {}",
+                        request.component_id,
+                        e
+                    );
                 }
             }
 
@@ -72,7 +75,7 @@ pub async fn register_component(
             })))
         }
         Err(e) => {
-            error!("Failed to register component {}: {}", request.component_id, e);
+            tracing::error!("Failed to register component {}: {}", request.component_id, e);
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
@@ -106,7 +109,7 @@ pub async fn reload_component_from_dist(
     let normalized_path = normalize_component_path(file_path);
 
     if let Err(e) = validate_component_path(&normalized_path) {
-        error!(
+        tracing::error!(
             component_id = component_id,
             file_path = file_path,
             normalized_path = %normalized_path,
@@ -121,7 +124,7 @@ pub async fn reload_component_from_dist(
     let dist_path = match get_dist_path_for_component(file_path) {
         Ok(path) => path,
         Err(e) => {
-            error!(
+            tracing::error!(
                 component_id = component_id,
                 file_path = file_path,
                 error = %e,
@@ -142,7 +145,7 @@ pub async fn reload_component_from_dist(
     let mut dist_code = match fs::read_to_string(&dist_path).await {
         Ok(code) => code,
         Err(e) => {
-            error!(
+            tracing::error!(
                 component_id = component_id,
                 dist_path = %dist_path.display(),
                 error = %e,
@@ -178,7 +181,7 @@ pub async fn reload_component_from_dist(
         let new_dist_code = match fs::read_to_string(&dist_path).await {
             Ok(code) => code,
             Err(e) => {
-                error!(
+                tracing::error!(
                     component_id = component_id,
                     dist_path = %dist_path.display(),
                     error = %e,
@@ -219,7 +222,7 @@ pub async fn reload_component_from_dist(
         renderer.clear_component_cache(component_id);
 
         if let Err(e) = renderer.runtime.clear_module_loader_caches(component_id).await {
-            error!("Failed to clear module loader caches for {}: {}", component_id, e);
+            tracing::error!("Failed to clear module loader caches for {}: {}", component_id, e);
         }
 
         let timestamp =
@@ -229,7 +232,7 @@ pub async fn reload_component_from_dist(
 
         renderer.runtime.add_module_to_loader(&hmr_specifier, dist_code.clone()).await.map_err(
             |e| {
-                error!(
+                tracing::error!(
                     component_id = component_id,
                     error = %e,
                     "Failed to add HMR module to loader"
@@ -239,7 +242,7 @@ pub async fn reload_component_from_dist(
         )?;
 
         let module_id = renderer.runtime.load_es_module(component_id).await.map_err(|e| {
-            error!(
+            tracing::error!(
                 component_id = component_id,
                 error = %e,
                 "Failed to load ES module during HMR"
@@ -248,7 +251,7 @@ pub async fn reload_component_from_dist(
         })?;
 
         renderer.runtime.evaluate_module(module_id).await.map_err(|e| {
-            error!(
+            tracing::error!(
                 component_id = component_id,
                 module_id = module_id,
                 error = %e,
@@ -279,7 +282,7 @@ pub async fn reload_component_from_dist(
             )
             .await
             .map_err(|e| {
-                error!(
+                tracing::error!(
                     component_id = component_id,
                     error = %e,
                     "Failed to clear old component"
@@ -337,7 +340,7 @@ pub async fn reload_component_from_dist(
             )
             .await
             .map_err(|e| {
-                error!(
+                tracing::error!(
                     component_id = component_id,
                     error = %e,
                     "Failed to register ESM module exports to globalThis"
@@ -376,7 +379,7 @@ pub async fn reload_component_from_dist(
             .await;
 
         if let Err(e) = execution_result {
-            error!(
+            tracing::error!(
                 component_id = component_id,
                 dist_path = %dist_path.display(),
                 error = %e,
@@ -422,7 +425,7 @@ pub async fn reload_component_from_dist(
     {
         Ok(json) => json,
         Err(e) => {
-            error!(
+            tracing::error!(
                 component_id = component_id,
                 error = %e,
                 "Failed to execute verification script. Last known good version will be preserved."
@@ -447,7 +450,7 @@ pub async fn reload_component_from_dist(
             let expected_key =
                 result_json.get("expectedKey").and_then(|v| v.as_str()).unwrap_or(component_id);
 
-            error!(
+            tracing::error!(
                 component_id = component_id,
                 expected_key = expected_key,
                 actual_keys = actual_keys,
@@ -462,7 +465,7 @@ pub async fn reload_component_from_dist(
             .into())
         }
     } else {
-        error!(
+        tracing::error!(
             component_id = component_id,
             verification_result = ?result_json,
             "Invalid verification result format. Last known good version will be preserved."
@@ -478,7 +481,7 @@ pub async fn immediate_component_reregistration(
     let normalized_path = normalize_component_path(file_path);
 
     if let Err(e) = validate_component_path(&normalized_path) {
-        error!(
+        tracing::error!(
             file_path = file_path,
             normalized_path = %normalized_path,
             error = %e,
@@ -498,14 +501,14 @@ pub async fn immediate_component_reregistration(
         renderer.clear_script_cache();
 
         if let Err(e) = renderer.clear_component_module_cache(component_name).await {
-            error!("Failed to clear component module cache for {}: {}", component_name, e);
+            tracing::error!("Failed to clear component module cache for {}: {}", component_name, e);
         }
     }
 
     let content = match fs::read_to_string(file_path).await {
         Ok(c) => c,
         Err(e) => {
-            error!(
+            tracing::error!(
                 component_name = component_name,
                 file_path = file_path,
                 error = %e,
@@ -520,7 +523,7 @@ pub async fn immediate_component_reregistration(
         if let Err(e) =
             state.renderer.lock().await.register_component(component_name, &content).await
         {
-            error!(
+            tracing::error!(
                 component_name = component_name,
                 error = %e,
                 "Failed to register component directly, preserving last known good version"
@@ -531,7 +534,11 @@ pub async fn immediate_component_reregistration(
 
             let mut renderer = state.renderer.lock().await;
             if let Err(e) = renderer.clear_component_module_cache(component_name).await {
-                error!("Failed to clear component module cache for {}: {}", component_name, e);
+                tracing::error!(
+                    "Failed to clear component module cache for {}: {}",
+                    component_name,
+                    e
+                );
             }
             drop(renderer);
 
@@ -540,7 +547,7 @@ pub async fn immediate_component_reregistration(
             if let Err(e) =
                 state.renderer.lock().await.register_component(component_name, &content).await
             {
-                error!(
+                tracing::error!(
                     component_name = component_name,
                     error = %e,
                     "Failed to re-register component after cache clear, preserving last known good version"

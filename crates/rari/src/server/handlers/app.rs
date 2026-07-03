@@ -26,7 +26,6 @@ use tokio::{
     sync::{Mutex, mpsc::Receiver},
     time::{self, Duration},
 };
-use tracing::error;
 
 use crate::{
     RscHtmlRenderer,
@@ -170,7 +169,7 @@ pub(crate) async fn collect_page_metadata(
         env::current_dir().ok().map(|p| p.join("dist/server")).and_then(|p| p.canonicalize().ok());
 
     let Some(base_path) = dist_server_path else {
-        error!("Could not determine dist/server path for metadata collection");
+        tracing::error!("Could not determine dist/server path for metadata collection");
         return None;
     };
 
@@ -216,12 +215,12 @@ pub(crate) async fn collect_page_metadata(
                 Some(metadata)
             }
             Err(e) => {
-                error!("Failed to deserialize metadata: {}", e);
+                tracing::error!("Failed to deserialize metadata: {}", e);
                 None
             }
         },
         Err(e) => {
-            error!("Failed to collect metadata from runtime: {}", e);
+            tracing::error!("Failed to collect metadata from runtime: {}", e);
             None
         }
     }
@@ -336,7 +335,7 @@ pub async fn render_with_fallback(
     {
         Ok(response) => Ok(response),
         Err(e) => {
-            error!("Streaming render failed, falling back to synchronous: {}", e);
+            tracing::error!("Streaming render failed, falling back to synchronous: {}", e);
             render_synchronous(state, route_match, context, accept_encoding).await
         }
     }
@@ -367,9 +366,10 @@ pub async fn render_rsc_navigation_streaming(
     {
         Ok(result) => result,
         Err(e) => {
-            error!(
+            tracing::error!(
                 "Failed to render RSC navigation for streaming '{}': {}",
-                route_match.route.path, e
+                route_match.route.path,
+                e
             );
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
@@ -385,7 +385,7 @@ pub async fn render_rsc_navigation_streaming(
             accept_encoding,
         )),
         RenderResult::FizzHtmlStream { .. } => {
-            error!("FizzHtmlStream not supported in RSC-only mode");
+            tracing::error!("FizzHtmlStream not supported in RSC-only mode");
             let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
             #[expect(
                 clippy::expect_used,
@@ -534,7 +534,7 @@ pub async fn render_synchronous(
                     match inject_assets_into_html(&html_content, &state.config).await {
                         Ok(html) => html,
                         Err(e) => {
-                            error!("Failed to inject assets into HTML: {}", e);
+                            tracing::error!("Failed to inject assets into HTML: {}", e);
                             html_content
                         }
                     };
@@ -595,7 +595,7 @@ pub async fn render_synchronous(
             }
         },
         Err(e) => {
-            error!("Synchronous rendering failed: {}", e);
+            tracing::error!("Synchronous rendering failed: {}", e);
             render_fallback_html(&state, &route_match.route.path, is_not_found).await
         }
     }
@@ -627,13 +627,13 @@ fn render_fizz_html_stream(
                     }
                 }
                 Ok(Some(Err(e))) => {
-                    error!("Error in Fizz stream chunk: {}", e);
+                    tracing::error!("Error in Fizz stream chunk: {}", e);
                     yield Err(Error::other(e));
                     break;
                 }
                 Ok(None) => break,
                 Err(_) => {
-                    error!(
+                    tracing::error!(
                         "Fizz stream stalled: no chunk received within {} ms",
                         stall_timeout.as_millis()
                     );
@@ -769,7 +769,7 @@ async fn render_streaming_response(
                                 break;
                             }
 
-                            error!("Error converting RSC chunk to HTML: {}", e);
+                            tracing::error!("Error converting RSC chunk to HTML: {}", e);
                             yield Err(Error::other(e.to_string()));
                         }
                     }
@@ -822,14 +822,25 @@ pub async fn render_streaming_with_layout(
     {
         Ok(result) => result,
         Err(e) => {
-            error!("Failed to render route for streaming '{}': {}", route_match.route.path, e);
-            error!(
+            tracing::error!(
+                "Failed to render route for streaming '{}': {}",
+                route_match.route.path,
+                e
+            );
+            tracing::error!(
                 "Route rendering failure context - Route: {}, Page component: {}, Layout count: {}",
-                route_match.route.path, route_match.route.file_path, layout_count
+                route_match.route.path,
+                route_match.route.file_path,
+                layout_count
             );
 
             for (idx, layout) in route_match.layouts.iter().enumerate() {
-                error!("  Layout {}: {} (is_root: {})", idx, layout.file_path, layout.is_root);
+                tracing::error!(
+                    "  Layout {}: {} (is_root: {})",
+                    idx,
+                    layout.file_path,
+                    layout.is_root
+                );
             }
 
             return render_synchronous(state, route_match, context, accept_encoding).await;
@@ -856,7 +867,7 @@ pub async fn render_streaming_with_layout(
             let html_with_assets = match inject_assets_into_html(&html, &state.config).await {
                 Ok(html) => html,
                 Err(e) => {
-                    error!("Failed to inject assets into HTML: {}", e);
+                    tracing::error!("Failed to inject assets into HTML: {}", e);
                     html
                 }
             };
@@ -1070,7 +1081,11 @@ pub async fn handle_app_route(
                             .expect("Valid static file response"));
                     }
                     Err(e) => {
-                        error!("Failed to read static file {}: {}", file_path.display(), e);
+                        tracing::error!(
+                            "Failed to read static file {}: {}",
+                            file_path.display(),
+                            e
+                        );
                     }
                 }
             }
@@ -1176,7 +1191,7 @@ pub async fn handle_app_route(
             }
             Ok(false) => {}
             Err(e) => {
-                error!("Failed to check if page is not found: {}", e);
+                tracing::error!("Failed to check if page is not found: {}", e);
             }
         }
     }
@@ -1300,7 +1315,7 @@ pub async fn handle_app_route(
                         .expect("Valid RSC response"))
                 }
                 Err(e) => {
-                    error!("Failed to render RSC: {}", e);
+                    tracing::error!("Failed to render RSC: {}", e);
                     Err(StatusCode::INTERNAL_SERVER_ERROR)
                 }
             }
@@ -1548,7 +1563,7 @@ pub async fn handle_app_route(
             {
                 Ok(result) => result,
                 Err(e) => {
-                    error!("Direct HTML rendering failed: {}, falling back to shell", e);
+                    tracing::error!("Direct HTML rendering failed: {}, falling back to shell", e);
                     return render_fallback_html(&state, path, route_match.not_found.is_some())
                         .await;
                 }
@@ -1560,7 +1575,7 @@ pub async fn handle_app_route(
                         match inject_assets_into_html(&html_content, &state.config).await {
                             Ok(html) => html,
                             Err(e) => {
-                                error!("Failed to inject assets into HTML: {}", e);
+                                tracing::error!("Failed to inject assets into HTML: {}", e);
                                 html_content
                             }
                         };
@@ -1584,7 +1599,7 @@ pub async fn handle_app_route(
                                 html.push_str(&String::from_utf8_lossy(&chunk_data));
                             }
                             Err(e) => {
-                                error!("FizzHtmlStream chunk error in build mode: {e}");
+                                tracing::error!("FizzHtmlStream chunk error in build mode: {e}");
                                 break;
                             }
                         }
@@ -1657,7 +1672,7 @@ pub async fn handle_app_route(
                                 }
                             }
                             Err(e) => {
-                                error!("Error converting RSC chunk to HTML: {}", e);
+                                tracing::error!("Error converting RSC chunk to HTML: {}", e);
                                 return render_fallback_html(
                                     &state,
                                     path,
@@ -1674,7 +1689,7 @@ pub async fn handle_app_route(
                     (final_html, etag)
                 }
                 RenderResult::StaticBinary(_bytes) => {
-                    error!("StaticBinary not supported in build mode");
+                    tracing::error!("StaticBinary not supported in build mode");
                     return render_fallback_html(&state, path, route_match.not_found.is_some())
                         .await;
                 }

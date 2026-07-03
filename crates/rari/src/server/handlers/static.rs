@@ -6,7 +6,6 @@ use axum::{
     http::StatusCode,
     response::Response,
 };
-use tracing::error;
 
 use crate::server::{
     ServerState,
@@ -16,7 +15,7 @@ use crate::server::{
 
 pub async fn root_handler(State(_state): State<ServerState>) -> Result<Response, StatusCode> {
     let Some(config) = Config::get() else {
-        error!("Failed to get global configuration for root_handler");
+        tracing::error!("Failed to get global configuration for root_handler");
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     };
 
@@ -38,7 +37,7 @@ pub async fn root_handler(State(_state): State<ServerState>) -> Result<Response,
                     .expect("Valid HTML response"));
             }
             Err(e) => {
-                error!("Failed to read index.html: {}", e);
+                tracing::error!("Failed to read index.html: {}", e);
                 return Err(StatusCode::INTERNAL_SERVER_ERROR);
             }
         }
@@ -59,7 +58,7 @@ pub async fn static_or_spa_handler(
     }
 
     let Some(config) = Config::get() else {
-        error!("Failed to get global configuration for static_or_spa_handler");
+        tracing::error!("Failed to get global configuration for static_or_spa_handler");
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     };
 
@@ -83,7 +82,7 @@ pub async fn static_or_spa_handler(
                     .expect("Valid static file response"));
             }
             Err(e) => {
-                error!("Failed to read static file {}: {}", file_path.display(), e);
+                tracing::error!("Failed to read static file {}: {}", file_path.display(), e);
                 return Err(StatusCode::INTERNAL_SERVER_ERROR);
             }
         }
@@ -123,7 +122,7 @@ pub async fn static_or_spa_handler(
                     .expect("Valid HTML response"));
             }
             Err(e) => {
-                error!("Failed to read index.html: {}", e);
+                tracing::error!("Failed to read index.html: {}", e);
                 return Err(StatusCode::INTERNAL_SERVER_ERROR);
             }
         }
@@ -168,7 +167,7 @@ pub async fn serve_static_asset(
                 .expect("Valid static asset response"))
         }
         Err(e) => {
-            error!("Failed to read static asset {}: {}", file_path.display(), e);
+            tracing::error!("Failed to read static asset {}: {}", file_path.display(), e);
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }

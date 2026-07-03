@@ -5,13 +5,11 @@ use std::{env, sync::Arc};
 use base64::{Engine, engine::general_purpose::STANDARD};
 use cow_utils::CowUtils;
 use rari_error::RariError;
-use rari_utils::path_to_file_url;
 use serde_json::Value;
 use tokio::{
     sync::{Mutex, mpsc},
     task,
 };
-use tracing::{debug, error};
 
 use super::{
     error_messages,
@@ -117,14 +115,14 @@ impl LayoutHtmlCache {
             Ok(Some(b)) => b,
             Ok(None) => return None,
             Err(e) => {
-                debug!(key = %ns_key, error = %e, "layout cache get failed");
+                tracing::debug!(key = %ns_key, error = %e, "layout cache get failed");
                 return None;
             }
         };
         match String::from_utf8(bytes) {
             Ok(s) => Some(s),
             Err(e) => {
-                debug!(key = %ns_key, error = %e, "layout cache value not valid utf-8");
+                tracing::debug!(key = %ns_key, error = %e, "layout cache value not valid utf-8");
                 None
             }
         }
@@ -200,7 +198,7 @@ impl LayoutRenderer {
             return Ok(false);
         }
 
-        let page_path = path_to_file_url(&page_file_path);
+        let page_path = rari_utils::path_to_file_url(&page_file_path);
 
         let check_script = format!(
             r#"
@@ -1030,7 +1028,11 @@ impl LayoutRenderer {
         defer_rsc: bool,
     ) -> Result<String, RariError> {
         let page_props = utils::create_page_props(route_match, context).map_err(|e| {
-            error!("Failed to create page props for route '{}': {}", route_match.route.path, e);
+            tracing::error!(
+                "Failed to create page props for route '{}': {}",
+                route_match.route.path,
+                e
+            );
             RariError::internal(format!(
                 "Failed to create page props for route '{}' (component: {}): {}",
                 route_match.route.path, route_match.route.file_path, e
@@ -1038,7 +1040,11 @@ impl LayoutRenderer {
         })?;
 
         let page_props_json = serde_json::to_string(&page_props).map_err(|e| {
-            error!("Failed to serialize page props for route '{}': {}", route_match.route.path, e);
+            tracing::error!(
+                "Failed to serialize page props for route '{}': {}",
+                route_match.route.path,
+                e
+            );
             RariError::internal(format!(
                 "Failed to serialize page props for route '{}' (component: {}): {}",
                 route_match.route.path, route_match.route.file_path, e

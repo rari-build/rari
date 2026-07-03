@@ -16,7 +16,6 @@ use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tokio::fs;
-use tracing::error;
 
 use crate::{
     runtime::JsExecutionRuntime,
@@ -260,7 +259,7 @@ impl ApiRouteHandler {
         let dist_path = Self::resolve_route_dist_path(route)?;
 
         if !dist_path.exists() {
-            error!(
+            tracing::error!(
                 file_path = %file_path,
                 dist_path = %dist_path.display(),
                 route_path = %route.path,
@@ -273,7 +272,7 @@ impl ApiRouteHandler {
         }
 
         let code = fs::read_to_string(&dist_path).await.map_err(|e| {
-            error!(
+            tracing::error!(
                 file_path = %file_path,
                 dist_path = %dist_path.display(),
                 error = %e,
@@ -390,7 +389,7 @@ impl ApiRouteHandler {
         const MAX_API_BODY_SIZE: usize = 10 * 1024 * 1024;
 
         let handler = self.load_handler(&route_match.route, is_development).await.map_err(|e| {
-            error!(
+            tracing::error!(
                 route_path = %route_match.route.path,
                 method = %route_match.method,
                 error = %e,
@@ -402,7 +401,7 @@ impl ApiRouteHandler {
         let (parts, body) = request.into_parts();
 
         let body_bytes = body::to_bytes(body, MAX_API_BODY_SIZE).await.map_err(|e| {
-            error!(
+            tracing::error!(
                 route_path = %route_match.route.path,
                 method = %route_match.method,
                 error = %e,
@@ -444,7 +443,7 @@ impl ApiRouteHandler {
                 if let Err(e) =
                     self.runtime.add_module_to_loader(&module_specifier, handler.code.clone()).await
                 {
-                    error!(
+                    tracing::error!(
                         route_path = %route_match.route.path,
                         method = %route_match.method,
                         module_id = %handler.module_id,
@@ -475,7 +474,7 @@ impl ApiRouteHandler {
                 });
 
                 let module_id = self.runtime.load_es_module(&component_id).await.map_err(|e| {
-                    error!(
+                    tracing::error!(
                         route_path = %route_match.route.path,
                         method = %route_match.method,
                         component_id = %component_id,
@@ -486,7 +485,7 @@ impl ApiRouteHandler {
                 })?;
 
                 if let Err(e) = self.runtime.evaluate_module(module_id).await {
-                    error!(
+                    tracing::error!(
                         route_path = %route_match.route.path,
                         method = %route_match.method,
                         module_id = module_id,
@@ -504,7 +503,7 @@ impl ApiRouteHandler {
                     )
                     .await
                     .map_err(|e| {
-                        error!(
+                        tracing::error!(
                             route_path = %route_match.route.path,
                             method = %route_match.method,
                             module_id = %handler.module_id,
@@ -515,7 +514,7 @@ impl ApiRouteHandler {
                     })?;
 
                 let response = Self::create_response(&result).map_err(|e| {
-                    error!(
+                    tracing::error!(
                         route_path = %route_match.route.path,
                         method = %route_match.method,
                         error = %e,

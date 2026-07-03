@@ -3,7 +3,6 @@ use std::fmt::Write;
 use axum::http::StatusCode;
 use cow_utils::CowUtils;
 use tokio::fs;
-use tracing::error;
 
 use crate::server::config::Config;
 
@@ -195,8 +194,8 @@ pub async fn inject_assets_into_html(html: &str, config: &Config) -> Result<Stri
             let has_root_after = final_html.contains(r#"id="root""#);
 
             if has_root_before && !has_root_after {
-                error!("CRITICAL: Root element was LOST during asset injection!");
-                error!("This will cause hydration to fail in the browser.");
+                tracing::error!("CRITICAL: Root element was LOST during asset injection!");
+                tracing::error!("This will cause hydration to fail in the browser.");
 
                 let recovered_html = if html.trim_start().starts_with("<!DOCTYPE") {
                     html.to_string()
@@ -208,7 +207,7 @@ pub async fn inject_assets_into_html(html: &str, config: &Config) -> Result<Stri
             }
         }
         Err(e) => {
-            error!("Asset injection failed with error: {:?}", e);
+            tracing::error!("Asset injection failed with error: {:?}", e);
         }
     }
 
@@ -354,7 +353,7 @@ async fn inject_assets_into_complete_document(
 
     let has_root_after = final_html.contains(r#"id="root""#);
     if has_root_before && !has_root_after {
-        error!("Root element was lost during asset injection!");
+        tracing::error!("Root element was lost during asset injection!");
 
         let trimmed_lower = html.trim_start().cow_to_lowercase();
         if trimmed_lower.starts_with("<!doctype") {
@@ -504,8 +503,10 @@ async fn inject_content_into_template(
     };
 
     if !final_html.contains(r#"id="root""#) {
-        error!("CRITICAL: Root element missing in final HTML after template injection!");
-        error!("This should never happen as template injection should always create root element");
+        tracing::error!("CRITICAL: Root element missing in final HTML after template injection!");
+        tracing::error!(
+            "This should never happen as template injection should always create root element"
+        );
 
         let recovered_html = format!(
             r#"<!DOCTYPE html>

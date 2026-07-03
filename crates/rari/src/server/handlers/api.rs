@@ -5,7 +5,6 @@ use axum::{
     extract::State,
     http::{HeaderMap, HeaderValue, Request, Response, StatusCode},
 };
-use tracing::error;
 
 use crate::server::{
     ServerState,
@@ -157,7 +156,7 @@ pub async fn handle_api_route(
             Ok(response)
         }
         Err(e) => {
-            error!(
+            tracing::error!(
                 route_path = %route_match.route.path,
                 method = %method,
                 error = %e,
