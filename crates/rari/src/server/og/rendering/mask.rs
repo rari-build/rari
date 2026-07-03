@@ -3,6 +3,9 @@ use std::f32::consts::SQRT_2;
 use zeno::{Command, Mask, PathBuilder, Placement, Scratch, Style};
 
 use super::border::BorderRadius;
+use crate::utils::cast;
+
+const KAPPA: f32 = 4.0 / 3.0 * (SQRT_2 - 1.0);
 
 #[derive(Default)]
 pub(super) struct MaskMemory {
@@ -28,7 +31,8 @@ impl MaskMemory {
         bounds.max = bounds.max.ceil();
 
         self.buffer.clear();
-        self.buffer.resize((bounds.width() as usize) * (bounds.height() as usize), 0);
+        self.buffer
+            .resize(cast::f32_to_usize(bounds.width()) * cast::f32_to_usize(bounds.height()), 0);
 
         let placement = Mask::with_scratch(paths, &mut self.scratch)
             .style(style)
@@ -46,8 +50,6 @@ pub(super) fn build_rounded_rect_path(
     offset_y: f32,
 ) -> Vec<Command> {
     let mut path = Vec::with_capacity(10);
-
-    const KAPPA: f32 = 4.0 / 3.0 * (SQRT_2 - 1.0);
 
     let scale = 1.0f32
         .min(if radius.top_left + radius.top_right > width {

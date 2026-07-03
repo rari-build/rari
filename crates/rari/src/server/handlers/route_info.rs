@@ -43,17 +43,14 @@ pub async fn get_route_info(
         ));
     }
 
-    let app_router = match &state.app_router {
-        Some(router) => router,
-        None => {
-            return Err((
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(RouteInfoError {
-                    error: "App router not available".to_string(),
-                    code: "SERVER_ERROR".to_string(),
-                }),
-            ));
-        }
+    let Some(app_router) = &state.app_router else {
+        return Err((
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(RouteInfoError {
+                error: "App router not available".to_string(),
+                code: "SERVER_ERROR".to_string(),
+            }),
+        ));
     };
 
     match app_router.match_route(&path) {

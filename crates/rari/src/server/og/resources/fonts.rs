@@ -130,6 +130,7 @@ mod tests {
     use swash::scale::StrikeWith::BestFit;
 
     use super::*;
+    use crate::utils::cast;
 
     #[test]
     fn test_font_context_creation() {
@@ -209,18 +210,24 @@ mod tests {
                     for glyph in gr.positioned_glyphs() {
                         println!("Glyph ID: {}", glyph.id);
 
-                        if let Some(bitmap) = scaler.scale_color_bitmap(glyph.id as u16, BestFit) {
+                        if let Some(bitmap) =
+                            scaler.scale_color_bitmap(cast::u32_to_u16(glyph.id), BestFit)
+                        {
                             println!(
                                 "  -> Color bitmap: {}x{}",
                                 bitmap.placement.width, bitmap.placement.height
                             );
-                        } else if let Some(outline) = scaler.scale_color_outline(glyph.id as u16) {
+                        } else if let Some(outline) =
+                            scaler.scale_color_outline(cast::u32_to_u16(glyph.id))
+                        {
                             println!(
                                 "  -> Color outline with {} layers, is_color: {}",
                                 outline.len(),
                                 outline.is_color()
                             );
-                        } else if let Some(_outline) = scaler.scale_outline(glyph.id as u16) {
+                        } else if let Some(_outline) =
+                            scaler.scale_outline(cast::u32_to_u16(glyph.id))
+                        {
                             println!("  -> Regular outline");
                         } else {
                             println!("  -> NO GLYPH DATA!");

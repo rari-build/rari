@@ -1,9 +1,7 @@
-#![allow(clippy::string_add, clippy::implicit_hasher)]
-
 use std::{
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 use cow_utils::CowUtils;
@@ -73,6 +71,32 @@ pub fn create_client_component_id(file_path: &str) -> String {
         .to_string()
 }
 
+pub fn convert_route_path_to_dist_path(path: &str) -> String {
+    let (base, ext) =
+        if let Some(pos) = path.rfind('.') { (&path[..pos], &path[pos..]) } else { (path, "") };
+
+    let converted_base = base
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c == '/' || c == '-' || c == '_' { c } else { '_' })
+        .collect::<String>();
+
+    format!("{converted_base}{ext}")
+}
+
+pub fn component_dist_path(
+    base_path: &Path,
+    file_path: &str,
+    component_id: Option<&str>,
+) -> PathBuf {
+    if let Some(component_id) = component_id {
+        return base_path.join(format!("{component_id}.js"));
+    }
+
+    let js_filename = file_path.cow_replace(".tsx", ".js").cow_replace(".ts", ".js").into_owned();
+    let dist_filename = convert_route_path_to_dist_path(&js_filename);
+    base_path.join("app").join(&dist_filename)
+}
+
 pub fn get_component_id(file_path: &str) -> String {
     let path = Path::new(file_path);
     let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("Unknown");
@@ -80,7 +104,11 @@ pub fn get_component_id(file_path: &str) -> String {
     let mut chars = stem.chars();
     match chars.next() {
         None => String::new(),
-        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+        Some(first) => {
+            let mut result = first.to_uppercase().collect::<String>();
+            result.push_str(chars.as_str());
+            result
+        }
     }
 }
 
@@ -107,6 +135,10 @@ pub fn create_page_props(
     Ok(result)
 }
 
+#[expect(
+    clippy::implicit_hasher,
+    reason = "FxHashMap is the specific hasher needed for LayoutRenderContext"
+)]
 pub fn create_layout_context(
     params: FxHashMap<String, ParamValue>,
     search_params: FxHashMap<String, Vec<String>>,

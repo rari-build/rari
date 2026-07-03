@@ -1,5 +1,3 @@
-#![allow(clippy::needless_continue)]
-
 use std::fmt::Write;
 
 use axum::http::StatusCode;
@@ -169,7 +167,6 @@ pub async fn extract_body_scripts_from_index_html() -> Option<String> {
                     if trimmed.contains("</script>") {
                         in_inline_script = false;
                     }
-                    continue;
                 }
             }
 
@@ -235,15 +232,12 @@ async fn inject_assets_into_complete_document(
 
     let template_path = if config.is_development() { "index.html" } else { "dist/index.html" };
 
-    let template = match fs::read_to_string(template_path).await {
-        Ok(t) => t,
-        Err(_) => {
-            let trimmed_lower = html.trim_start().cow_to_lowercase();
-            if trimmed_lower.starts_with("<!doctype") {
-                return Ok(html.to_string());
-            }
-            return Ok(format!("<!DOCTYPE html>\n{html}"));
+    let Ok(template) = fs::read_to_string(template_path).await else {
+        let trimmed_lower = html.trim_start().cow_to_lowercase();
+        if trimmed_lower.starts_with("<!doctype") {
+            return Ok(html.to_string());
         }
+        return Ok(format!("<!DOCTYPE html>\n{html}"));
     };
 
     let mut asset_tags = Vec::new();
@@ -444,11 +438,9 @@ async fn inject_content_into_template(
 ) -> Result<String, StatusCode> {
     let template_path = if config.is_development() { "index.html" } else { "dist/index.html" };
 
-    let template = match fs::read_to_string(template_path).await {
-        Ok(t) => t,
-        Err(_) => {
-            return Ok(format!(
-                r#"<!DOCTYPE html>
+    let Ok(template) = fs::read_to_string(template_path).await else {
+        return Ok(format!(
+            r#"<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8" />
@@ -458,8 +450,7 @@ async fn inject_content_into_template(
   <div id="root">{content}</div>
 </body>
 </html>"#
-            ));
-        }
+        ));
     };
 
     let final_html = if let Some(root_start) = template.find(r#"<div id="root""#) {

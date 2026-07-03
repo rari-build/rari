@@ -1,5 +1,3 @@
-#![allow(clippy::unused_async_trait_impl)]
-
 use std::{
     env,
     fmt::Write,
@@ -26,8 +24,9 @@ use tracing::error;
 use super::{
     constants::{
         BATCH_ERROR_COLLECTION, CACHE_CLEANUP_INTERVAL, EXTENSION_CHECKS,
-        MEMORY_PRESSURE_THRESHOLD, SERVER_ACTION_INVOCATION_SCRIPT, SERVER_FUNCTION_RESOLVER,
-        V8_CACHE_CLEAR_SCRIPT, module_registration_script, resolve_server_functions_for_component,
+        MEMORY_PRESSURE_RENDER_THRESHOLD_DEN, MEMORY_PRESSURE_RENDER_THRESHOLD_NUM,
+        SERVER_ACTION_INVOCATION_SCRIPT, SERVER_FUNCTION_RESOLVER, V8_CACHE_CLEAR_SCRIPT,
+        module_registration_script, resolve_server_functions_for_component,
     },
     types::{ResourceLimits, ResourceMetrics, ResourceTracker},
     utils::transform_imports_for_hmr,
@@ -36,6 +35,7 @@ use crate::{
     rendering::base::loader::{RscJsLoader, RscModuleOperation},
     runtime::JsExecutionRuntime,
     server::middleware::request_context::RequestContext,
+    utils::cast,
 };
 
 pub struct RscRenderer {
@@ -93,7 +93,8 @@ impl RscRenderer {
         let current_renders = metrics.active_renders;
         let max_renders = self.resource_limits.max_concurrent_renders;
 
-        current_renders as f64 / max_renders as f64 > MEMORY_PRESSURE_THRESHOLD
+        current_renders * MEMORY_PRESSURE_RENDER_THRESHOLD_DEN
+            > max_renders * MEMORY_PRESSURE_RENDER_THRESHOLD_NUM
             || metrics.memory_pressure_events > 0
     }
 
@@ -154,7 +155,7 @@ impl RscRenderer {
         }
     }
 
-    fn create_batch_script_section(&self, index: usize, name: &str, script: &str) -> String {
+    fn create_batch_script_section(index: usize, name: &str, script: &str) -> String {
         format!(
             r#"
             // === Batch Script {}: {} ===
@@ -190,7 +191,7 @@ globalThis['~errors'].batch.push({{
         let batch_sections: Vec<String> = scripts
             .iter()
             .enumerate()
-            .map(|(i, (name, script))| self.create_batch_script_section(i, name, script))
+            .map(|(i, (name, script))| Self::create_batch_script_section(i, name, script))
             .collect();
 
         let combined_script = batch_sections.join("\n");
@@ -200,14 +201,10 @@ globalThis['~errors'].batch.push({{
         let batch_name = format!("batch_execution_{}", scripts.len());
         let result = self.execute_script_with_timeout(batch_name, final_script).await?;
 
-        self.handle_batch_script_result(result, scripts.len())
+        Self::handle_batch_script_result(result, scripts.len())
     }
 
-    fn handle_batch_script_result(
-        &self,
-        result: Value,
-        _script_count: usize,
-    ) -> Result<Value, RariError> {
+    fn handle_batch_script_result(result: Value, _script_count: usize) -> Result<Value, RariError> {
         if let Some(success) = result.get("success").and_then(serde_json::Value::as_bool)
             && !success
             && let Some(errors) = result.get("errors").and_then(|e| e.as_array())
@@ -329,7 +326,7 @@ globalThis['~errors'].batch.push({{
     }
 
     pub async fn register_component(
-        &mut self,
+        &self,
         component_id: &str,
         component_code: &str,
     ) -> Result<(), RariError> {
@@ -418,7 +415,7 @@ globalThis['~errors'].batch.push({{
         has_jsx || has_client_directive || (has_react_import && has_component_export)
     }
 
-    async fn register_dependency_if_needed(&mut self, dep: String) -> Result<(), RariError> {
+    async fn register_dependency_if_needed(&self, dep: String) -> Result<(), RariError> {
         let mut stack: Vec<String> = vec![dep];
         let mut visited: FxHashSet<String> = FxHashSet::default();
 
@@ -510,7 +507,7 @@ globalThis['~errors'].batch.push({{
     }
 
     async fn register_component_without_loading(
-        &mut self,
+        &self,
         component_id: &str,
         component_code: &str,
     ) -> Result<(), RariError> {
@@ -557,7 +554,7 @@ globalThis['~errors'].batch.push({{
         Ok(())
     }
 
-    async fn load_all_components(&mut self) -> Result<(), RariError> {
+    async fn load_all_components(&self) -> Result<(), RariError> {
         let components_to_load = {
             let registry = self.component_registry.lock();
             registry.get_unloaded_components_in_order()
@@ -614,7 +611,7 @@ globalThis['~errors'].batch.push({{
             match self.runtime.execute_script(format!("load_{component_id}.js"), load_script).await
             {
                 Ok(_) => {
-                    let verify_script = self.create_component_verification_script(component_id);
+                    let verify_script = Self::create_component_verification_script(component_id);
                     self.execute_verification_script(component_id, verify_script).await?;
 
                     let mut registry = self.component_registry.lock();
@@ -631,7 +628,7 @@ globalThis['~errors'].batch.push({{
         Ok(())
     }
 
-    fn create_component_verification_script(&self, component_id: &str) -> String {
+    fn create_component_verification_script(component_id: &str) -> String {
         let hashed_component_id = format!("Component_{}", hash_string(component_id));
         RscJsLoader::create_component_verification_script(component_id, &hashed_component_id)
     }
@@ -712,7 +709,7 @@ globalThis['~errors'].batch.push({{
     }
 
     pub async fn render_to_rsc_format(
-        &mut self,
+        &self,
         component_id: &str,
         props: Option<&str>,
     ) -> Result<String, RariError> {
@@ -720,7 +717,7 @@ globalThis['~errors'].batch.push({{
     }
 
     pub async fn render_to_rsc_format_with_context(
-        &mut self,
+        &self,
         component_id: &str,
         props: Option<&str>,
         request_context: Option<Arc<RequestContext>>,
@@ -733,7 +730,7 @@ globalThis['~errors'].batch.push({{
     }
 
     pub async fn render_to_string(
-        &mut self,
+        &self,
         component_id: &str,
         props: Option<&str>,
     ) -> Result<String, RariError> {
@@ -741,7 +738,7 @@ globalThis['~errors'].batch.push({{
     }
 
     pub async fn render_to_string_with_context(
-        &mut self,
+        &self,
         component_id: &str,
         props: Option<&str>,
         request_context: Option<Arc<RequestContext>>,
@@ -754,7 +751,7 @@ globalThis['~errors'].batch.push({{
     }
 
     async fn internal_render_to_rsc(
-        &mut self,
+        &self,
         component_id: &str,
         props: Option<&str>,
     ) -> Result<String, RariError> {
@@ -765,7 +762,7 @@ globalThis['~errors'].batch.push({{
         }
 
         if self.is_client_reference(component_id).await {
-            return self.handle_client_reference(component_id, props).await;
+            return Self::handle_client_reference(component_id, props).await;
         }
 
         if !self.component_exists(component_id) {
@@ -808,13 +805,12 @@ globalThis['~errors'].batch.push({{
         let render_duration = render_start.elapsed();
         self.resource_tracker.record_render_completion(render_duration);
 
-        self.process_rsc_extraction_result(component_id, extraction_result)
+        Self::process_rsc_extraction_result(component_id, &extraction_result)
     }
 
     fn process_rsc_extraction_result(
-        &self,
         component_id: &str,
-        extraction_result: Value,
+        extraction_result: &Value,
     ) -> Result<String, RariError> {
         let parsed_result: Value = if let Some(obj) = extraction_result.as_object() {
             Value::Object(obj.clone())
@@ -857,7 +853,7 @@ globalThis['~errors'].batch.push({{
     }
 
     async fn internal_render_to_rsc_with_context(
-        &mut self,
+        &self,
         component_id: &str,
         props: Option<&str>,
         _request_context: Option<Arc<RequestContext>>,
@@ -866,7 +862,7 @@ globalThis['~errors'].batch.push({{
     }
 
     async fn internal_render_to_string_with_context(
-        &mut self,
+        &self,
         component_id: &str,
         props: Option<&str>,
         _request_context: Option<Arc<RequestContext>>,
@@ -874,8 +870,9 @@ globalThis['~errors'].batch.push({{
         self.internal_render_to_string(component_id, props).await
     }
 
+    #[expect(clippy::too_many_lines)]
     async fn internal_render_to_string(
-        &mut self,
+        &self,
         component_id: &str,
         props: Option<&str>,
     ) -> Result<String, RariError> {
@@ -888,7 +885,7 @@ globalThis['~errors'].batch.push({{
         }
 
         if self.is_client_reference(component_id).await {
-            return self.handle_client_reference(component_id, props).await;
+            return Self::handle_client_reference(component_id, props).await;
         }
 
         let is_app_router_component = component_id.starts_with("app/");
@@ -972,13 +969,13 @@ globalThis['~errors'].batch.push({{
                 let mut html =
                     value.get("html").and_then(|h| h.as_str()).unwrap_or_default().to_string();
 
-                html = self.sanitize_html_output(&html, component_id);
+                html = Self::sanitize_html_output(&html, component_id);
 
                 let render_duration = render_start.elapsed();
 
                 self.resource_tracker
                     .total_render_time_ms
-                    .fetch_add(render_duration.as_millis() as u64, Ordering::Relaxed);
+                    .fetch_add(cast::duration_millis_u64(render_duration), Ordering::Relaxed);
 
                 if html == "<div></div>" || html.trim() == "" || html == "<div/>" {
                     return Ok(format!(
@@ -1013,7 +1010,6 @@ globalThis['~errors'].batch.push({{
     }
 
     fn handle_client_reference(
-        &mut self,
         component_id: &str,
         _props: Option<&str>,
     ) -> impl Future<Output = Result<String, RariError>> {
@@ -1022,7 +1018,7 @@ globalThis['~errors'].batch.push({{
         )))
     }
 
-    fn sanitize_html_output(&self, html: &str, component_id: &str) -> String {
+    fn sanitize_html_output(html: &str, component_id: &str) -> String {
         let mut sanitized_html = html.to_string();
 
         let sanitization_rules =
@@ -1122,6 +1118,7 @@ globalThis['~errors'].batch.push({{
         self.ensure_component_loaded_with_force(component_id, false).await
     }
 
+    #[expect(clippy::too_many_lines)]
     pub async fn ensure_component_loaded_with_force(
         &self,
         component_id: &str,
@@ -1323,7 +1320,7 @@ globalThis['~rsc'].functions['{component_id}'] = {component_id};
             .execute_script(format!("post_register_{component_id}.js"), post_register_script)
             .await?;
 
-        let verify_script = self.create_component_verification_script(component_id);
+        let verify_script = Self::create_component_verification_script(component_id);
         self.execute_verification_script(component_id, verify_script).await?;
         {
             let mut registry = self.component_registry.lock();

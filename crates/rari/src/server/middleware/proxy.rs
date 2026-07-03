@@ -250,12 +250,9 @@ pub async fn initialize_proxy(state: &ServerState) -> Result<(), Box<dyn Error>>
     let renderer = state.renderer.lock().await;
     let runtime = &renderer.runtime;
 
-    let rari_pkg_dir = match resolve_rari_package_dir() {
-        Some(dir) => dir,
-        None => {
-            tracing::debug!("Proxy: rari package directory not found in node_modules");
-            return Ok(());
-        }
+    let Some(rari_pkg_dir) = resolve_rari_package_dir() else {
+        tracing::debug!("Proxy: rari package directory not found in node_modules");
+        return Ok(());
     };
 
     let executor_path = rari_pkg_dir.join("dist/proxy/runtime-executor.mjs");

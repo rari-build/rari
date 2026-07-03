@@ -3,9 +3,8 @@ use serde_json::{Map, Value};
 
 pub fn merge_metadata(parent: &Value, child: &Value) -> Value {
     let parent_obj = parent.as_object();
-    let child_obj = match child.as_object() {
-        Some(obj) => obj,
-        None => return parent.clone(),
+    let Some(child_obj) = child.as_object() else {
+        return parent.clone();
     };
 
     let mut merged = parent_obj.cloned().unwrap_or_default();

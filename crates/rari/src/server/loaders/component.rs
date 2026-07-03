@@ -249,9 +249,8 @@ impl ComponentLoader {
                     .map(|s| s == "ts" || s == "tsx" || s == "js" || s == "jsx")
                     .unwrap_or(false)
                 {
-                    let code = match fs::read_to_string(&path) {
-                        Ok(c) => c,
-                        Err(_) => continue,
+                    let Ok(code) = fs::read_to_string(&path) else {
+                        continue;
                     };
 
                     if has_use_server_directive(&code) {
@@ -946,9 +945,8 @@ impl ComponentLoader {
                 continue;
             }
 
-            let code = match fs::read_to_string(&component_file) {
-                Ok(c) => c,
-                Err(_) => continue,
+            let Ok(code) = fs::read_to_string(&component_file) else {
+                continue;
             };
 
             let module_specifier = format!("file:///{}", bundle_path.cow_replace('\\', "/"));

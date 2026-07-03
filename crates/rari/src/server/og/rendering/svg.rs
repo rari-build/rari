@@ -12,6 +12,7 @@ use super::{
     },
     renderer::ImageRenderer,
 };
+use crate::utils::{cast, float};
 
 const SVG_ELEMENTS: &[&str] = &[
     "svg",
@@ -46,12 +47,12 @@ pub fn is_svg_element(element_type: &str) -> bool {
 
 impl ImageRenderer {
     pub(super) fn render_svg(
-        &mut self,
+        &self,
         layout: &ComputedLayout,
         image: &mut RgbaImage,
     ) -> Result<(), String> {
-        let width = layout.width.round() as u32;
-        let height = layout.height.round() as u32;
+        let width = cast::f32_to_u32(layout.width.round());
+        let height = cast::f32_to_u32(layout.height.round());
 
         if width == 0 || height == 0 {
             return Ok(());
@@ -60,13 +61,14 @@ impl ImageRenderer {
         let svg_string = jsx_to_svg_string(&layout.element);
 
         let options = Options {
-            default_size: Size::from_wh(width as f32, height as f32).unwrap_or_else(|| {
-                #[expect(
-                    clippy::expect_used,
-                    reason = "Hardcoded size (100x100) is guaranteed valid"
-                )]
-                Size::from_wh(100.0, 100.0).expect("hardcoded fallback size is always valid")
-            }),
+            default_size: Size::from_wh(float::u32_to_f32(width), float::u32_to_f32(height))
+                .unwrap_or_else(|| {
+                    #[expect(
+                        clippy::expect_used,
+                        reason = "Hardcoded size (100x100) is guaranteed valid"
+                    )]
+                    Size::from_wh(100.0, 100.0).expect("hardcoded fallback size is always valid")
+                }),
             ..Default::default()
         };
 
@@ -76,14 +78,14 @@ impl ImageRenderer {
         let mut pixmap = Pixmap::new(width, height).ok_or("Failed to create pixmap")?;
 
         let svg_size = tree.size();
-        let scale_x = width as f32 / svg_size.width();
-        let scale_y = height as f32 / svg_size.height();
+        let scale_x = float::u32_to_f32(width) / svg_size.width();
+        let scale_y = float::u32_to_f32(height) / svg_size.height();
         let transform = Transform::from_scale(scale_x, scale_y);
 
         resvg::render(&tree, transform, &mut pixmap.as_mut());
 
-        let x_start = layout.x.round() as u32;
-        let y_start = layout.y.round() as u32;
+        let x_start = cast::f32_to_u32(layout.x.round());
+        let y_start = cast::f32_to_u32(layout.y.round());
         let data = pixmap.data();
 
         for py in 0..height {
@@ -102,9 +104,9 @@ impl ImageRenderer {
                 } else {
                     let af = f32::from(a) / 255.0;
                     (
-                        (f32::from(data[idx]) / af).min(255.0) as u8,
-                        (f32::from(data[idx + 1]) / af).min(255.0) as u8,
-                        (f32::from(data[idx + 2]) / af).min(255.0) as u8,
+                        cast::f32_to_u8((f32::from(data[idx]) / af).min(255.0)),
+                        cast::f32_to_u8((f32::from(data[idx + 1]) / af).min(255.0)),
+                        cast::f32_to_u8((f32::from(data[idx + 2]) / af).min(255.0)),
                     )
                 };
 
@@ -113,7 +115,7 @@ impl ImageRenderer {
                 if canvas_x < self.width && canvas_y < self.height {
                     let bg = image.get_pixel(canvas_x, canvas_y);
                     let fg = Rgba([r, g, b, a]);
-                    let blended = self.alpha_blend(*bg, fg);
+                    let blended = Self::alpha_blend(*bg, fg);
                     image.put_pixel(canvas_x, canvas_y, blended);
                 }
             }

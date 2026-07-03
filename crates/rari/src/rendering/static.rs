@@ -1,5 +1,3 @@
-#![allow(clippy::format_collect, clippy::unused_async_trait_impl)]
-
 use std::{
     fmt::Write,
     future::Future,
@@ -32,6 +30,8 @@ const SELF_CLOSING_TAGS: &[&str] = &[
     "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source",
     "track", "wbr",
 ];
+
+const PAYLOAD_SIZE_LIMIT: usize = 50000;
 
 pub fn escape_html(text: &str) -> String {
     text.cow_replace('&', "&amp;")
@@ -112,6 +112,7 @@ pub fn test_is_valid_attribute_name(name: &str) -> bool {
     is_valid_attribute_name(name)
 }
 
+#[expect(clippy::too_many_lines)]
 fn serialize_style_object(style_obj: &serde_json::Map<String, serde_json::Value>) -> String {
     const UNITLESS_PROPERTIES: &[&str] = &[
         "animation-iteration-count",
@@ -354,14 +355,14 @@ impl RscHtmlRenderer {
         let template = match self.read_template_file(is_dev_mode).await {
             Ok(content) => {
                 if is_dev_mode {
-                    self.inject_vite_client_if_needed(&content)
+                    Self::inject_vite_client_if_needed(&content)
                 } else {
                     content
                 }
             }
             Err(e) => {
                 if is_dev_mode {
-                    self.generate_dev_template_fallback()
+                    Self::generate_dev_template_fallback()
                 } else {
                     return Err(e);
                 }
@@ -376,7 +377,7 @@ impl RscHtmlRenderer {
         Ok(template)
     }
 
-    fn inject_vite_client_if_needed(&self, html: &str) -> String {
+    fn inject_vite_client_if_needed(html: &str) -> String {
         if html.contains("/@vite/client") || html.contains("@vite/client") {
             return html.to_string();
         }
@@ -412,7 +413,7 @@ impl RscHtmlRenderer {
         )
     }
 
-    fn generate_dev_template_fallback(&self) -> String {
+    fn generate_dev_template_fallback() -> String {
         r#"<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -545,7 +546,7 @@ impl RscHtmlRenderer {
                 continue;
             }
 
-            let row = self.parse_rsc_line(line)?;
+            let row = Self::parse_rsc_line(line)?;
             rows.push(row);
         }
 
@@ -574,7 +575,7 @@ impl RscHtmlRenderer {
         }
     }
 
-    fn parse_rsc_line(&self, line: &str) -> Result<RscRow, RariError> {
+    fn parse_rsc_line(line: &str) -> Result<RscRow, RariError> {
         let colon_pos = line.find(':').ok_or_else(|| {
             RariError::internal(format!("Invalid RSC line format: missing colon in '{line}'"))
         })?;
@@ -605,12 +606,12 @@ impl RscHtmlRenderer {
         let json_value: Value = serde_json::from_str(data_str)
             .map_err(|e| RariError::internal(format!("Invalid JSON in RSC line: {e}")))?;
 
-        let data = self.parse_rsc_element(&json_value)?;
+        let data = Self::parse_rsc_element(&json_value)?;
 
         Ok(RscRow { id, data })
     }
 
-    fn parse_rsc_element(&self, value: &Value) -> Result<RscElement, RariError> {
+    fn parse_rsc_element(value: &Value) -> Result<RscElement, RariError> {
         match value {
             Value::String(s) => {
                 if let Some(stripped) = s.strip_prefix('$') {
@@ -632,12 +633,12 @@ impl RscHtmlRenderer {
                 if let Some(Value::String(marker)) = arr.first()
                     && marker == "$"
                 {
-                    return self.parse_react_element(arr);
+                    return Self::parse_react_element(arr);
                 }
 
                 let mut children = Vec::new();
                 for item in arr {
-                    children.push(self.parse_rsc_element(item)?);
+                    children.push(Self::parse_rsc_element(item)?);
                 }
 
                 Ok(RscElement::Fragment { children })
@@ -653,7 +654,7 @@ impl RscHtmlRenderer {
         }
     }
 
-    fn parse_react_element(&self, arr: &[Value]) -> Result<RscElement, RariError> {
+    fn parse_react_element(arr: &[Value]) -> Result<RscElement, RariError> {
         if arr.len() < 4 {
             return Err(RariError::internal(format!(
                 "Invalid React element: expected 4 elements, got {}",
@@ -1043,6 +1044,7 @@ impl RscHtmlRenderer {
         })
     }
 
+    #[expect(clippy::too_many_lines)]
     fn render_component_to_html<'a>(
         &'a self,
         tag: &'a str,
@@ -1154,8 +1156,7 @@ impl RscHtmlRenderer {
                 }
             }
 
-            const SELF_CLOSING: &[&str] = SELF_CLOSING_TAGS;
-            if SELF_CLOSING.contains(&tag) {
+            if SELF_CLOSING_TAGS.contains(&tag) {
                 html.push_str(" />");
                 return Ok(html);
             }
@@ -1349,6 +1350,7 @@ impl RscToHtmlConverter {
         self.boundary_id_generator.next()
     }
 
+    #[expect(clippy::too_many_lines)]
     pub async fn convert_chunk(&mut self, chunk: RscStreamChunk) -> Result<Vec<u8>, RariError> {
         let chunk_type_str = format!("{:?}", chunk.chunk_type);
 
@@ -1467,37 +1469,9 @@ impl RscToHtmlConverter {
                     self.rsc_flight_protocol.push(placeholder_row.trim().to_string());
                 }
 
-                let fallback_html = self.generate_fallback_error_html();
-
-                match self.generate_error_replacement(&chunk).await {
-                    Ok(error_html) => {
-                        html.extend(error_html);
-                        Ok(html)
-                    }
-                    Err(e) => {
-                        error!("Error generating error replacement: {}", e);
-                        if let Some(ref boundary_id) = chunk.boundary_id {
-                            let react_boundary_id = {
-                                let map = self.rari_to_react_boundary_map.lock();
-                                map.get(boundary_id).cloned()
-                            };
-                            if let Some(react_id) = react_boundary_id {
-                                let content_id = format!("E:{}", react_id.trim_start_matches("B:"));
-                                let cleanup = format!(
-                                    r#"<div hidden id="{}">{}</div><script>$RC=window.$RC||function(b,c){{var t=document.getElementById(b);var s=document.getElementById(c);if(t&&s){{var p=t.parentNode;var f=document.createDocumentFragment();Array.from(s.childNodes).forEach(function(n){{f.appendChild(n)}});var d=t.nextSibling;while(d&&!(d.nodeType===8&&d.data==='/$')){{var next=d.nextSibling;d.remove();d=next;}}if(d)d.remove();p.insertBefore(f,t.nextSibling);t.remove();s.remove();}}}};$RC("{}","{}")</script>"#,
-                                    content_id,
-                                    String::from_utf8_lossy(&fallback_html),
-                                    react_id,
-                                    content_id
-                                );
-                                html.extend(cleanup.into_bytes());
-                                return Ok(html);
-                            }
-                        }
-                        html.extend(fallback_html);
-                        Ok(html)
-                    }
-                }
+                let error_html = self.generate_error_replacement(&chunk);
+                html.extend(error_html);
+                Ok(html)
             }
 
             RscChunkType::StreamComplete => {
@@ -1525,7 +1499,7 @@ impl RscToHtmlConverter {
         result
     }
 
-    fn generate_fallback_error_html(&self) -> Vec<u8> {
+    fn generate_fallback_error_html() -> Vec<u8> {
         r#"<div style="color: red; border: 1px solid red; padding: 10px; margin: 10px 0;">
             An error occurred while loading content.
         </div>"#
@@ -1619,8 +1593,11 @@ impl RscToHtmlConverter {
 
         rows_with_ids.sort_by_key(|(id, _)| if *id == 0 { u32::MAX - 1 } else { *id });
 
-        let mut rsc_payload =
-            rows_with_ids.iter().map(|(_, row)| format!("{row}\n")).collect::<String>();
+        let mut rsc_payload = String::new();
+        for (_, row) in &rows_with_ids {
+            rsc_payload.push_str(row);
+            rsc_payload.push('\n');
+        }
 
         let has_row_0 = rows_with_ids.iter().any(|(id, _)| *id == 0);
 
@@ -1712,8 +1689,6 @@ if (typeof window !== 'undefined') {{
             return Ok(Vec::new());
         }
 
-        const PAYLOAD_SIZE_LIMIT: usize = 50000;
-
         if json_str.starts_with("[[") || json_str.len() > PAYLOAD_SIZE_LIMIT {
             return Ok(Vec::new());
         }
@@ -1728,6 +1703,7 @@ if (typeof window !== 'undefined') {{
         Ok(html.into_bytes())
     }
 
+    #[expect(clippy::too_many_lines)]
     fn rsc_element_to_html<'a>(
         &'a self,
         element: &'a serde_json::Value,
@@ -2059,8 +2035,7 @@ if (typeof window !== 'undefined') {{
             }
         }
 
-        const SELF_CLOSING: &[&str] = SELF_CLOSING_TAGS;
-        if SELF_CLOSING.contains(&tag) {
+        if SELF_CLOSING_TAGS.contains(&tag) {
             html.push_str(" />");
             return Ok(html);
         }
@@ -2159,15 +2134,12 @@ if (typeof window !== 'undefined') {{
         Ok(output.into_bytes())
     }
 
-    async fn generate_error_replacement(
-        &self,
-        chunk: &RscStreamChunk,
-    ) -> Result<Vec<u8>, RariError> {
+    fn generate_error_replacement(&self, chunk: &RscStreamChunk) -> Vec<u8> {
         let rsc_line = String::from_utf8_lossy(&chunk.data);
         let parts: Vec<&str> = rsc_line.trim().splitn(2, ':').collect();
 
         if parts.len() != 2 {
-            return Ok(self.generate_fallback_error_html());
+            return Self::generate_fallback_error_html();
         }
 
         let json_part = parts[1].strip_prefix('E').unwrap_or(parts[1]);
@@ -2176,7 +2148,7 @@ if (typeof window !== 'undefined') {{
             Ok(data) => data,
             Err(e) => {
                 error!("Failed to parse error data from stream, using fallback: {}", e);
-                return Ok(self.generate_fallback_error_html());
+                return Self::generate_fallback_error_html();
             }
         };
 
@@ -2201,9 +2173,9 @@ if (typeof window !== 'undefined') {{
                 r#"<div hidden id="{content_id}">{error_html}</div><script>$RC=window.$RC||function(b,c){{const t=document.getElementById(b);const s=document.getElementById(c);if(t&&s){{const p=t.parentNode;Array.from(s.childNodes).forEach(n=>p.insertBefore(n,t));t.remove();s.remove();}}}};$RC("{react_boundary_id}","{content_id}");</script>"#
             );
 
-            Ok(error_update.into_bytes())
+            error_update.into_bytes()
         } else {
-            Ok(self.generate_fallback_error_html())
+            Self::generate_fallback_error_html()
         }
     }
 }
@@ -2272,10 +2244,7 @@ mod tests {
 
     #[test]
     fn test_parse_rsc_line_missing_colon() {
-        let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = RscHtmlRenderer::new(runtime);
-
-        let result = renderer.parse_rsc_line("0invalid");
+        let result = RscHtmlRenderer::parse_rsc_line("0invalid");
         assert!(result.is_err());
         let err_msg = format!("{:?}", result.unwrap_err());
         assert!(err_msg.contains("missing colon"));
@@ -2283,10 +2252,7 @@ mod tests {
 
     #[test]
     fn test_parse_rsc_line_invalid_row_id() {
-        let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = RscHtmlRenderer::new(runtime);
-
-        let result = renderer.parse_rsc_line("xyz:{}");
+        let result = RscHtmlRenderer::parse_rsc_line("xyz:{}");
         assert!(result.is_err());
         let err_msg = format!("{:?}", result.unwrap_err());
         assert!(err_msg.contains("Invalid row ID"));
@@ -2294,10 +2260,7 @@ mod tests {
 
     #[test]
     fn test_parse_rsc_line_invalid_json() {
-        let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = RscHtmlRenderer::new(runtime);
-
-        let result = renderer.parse_rsc_line("0:{invalid json}");
+        let result = RscHtmlRenderer::parse_rsc_line("0:{invalid json}");
         assert!(result.is_err());
         let err_msg = format!("{:?}", result.unwrap_err());
         assert!(err_msg.contains("Invalid JSON"));
@@ -2305,12 +2268,9 @@ mod tests {
 
     #[test]
     fn test_parse_react_element_invalid_structure() {
-        let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = RscHtmlRenderer::new(runtime);
-
         let arr = vec![Value::String("$".to_string()), Value::String("div".to_string())];
 
-        let result = renderer.parse_react_element(&arr);
+        let result = RscHtmlRenderer::parse_react_element(&arr);
         assert!(result.is_err());
         let err_msg = format!("{:?}", result.unwrap_err());
         assert!(err_msg.contains("expected 4 elements"));
@@ -2318,9 +2278,6 @@ mod tests {
 
     #[test]
     fn test_parse_react_element_non_string_tag() {
-        let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = RscHtmlRenderer::new(runtime);
-
         let arr = vec![
             Value::String("$".to_string()),
             Value::Number(123.into()),
@@ -2328,7 +2285,7 @@ mod tests {
             Value::Object(serde_json::Map::new()),
         ];
 
-        let result = renderer.parse_react_element(&arr);
+        let result = RscHtmlRenderer::parse_react_element(&arr);
         assert!(result.is_err());
         let err_msg = format!("{:?}", result.unwrap_err());
         assert!(err_msg.contains("tag must be a string"));
@@ -2336,11 +2293,8 @@ mod tests {
 
     #[test]
     fn test_parse_rsc_element_text() {
-        let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = RscHtmlRenderer::new(runtime);
-
         let value = Value::String("Hello World".to_string());
-        let result = renderer.parse_rsc_element(&value);
+        let result = RscHtmlRenderer::parse_rsc_element(&value);
         assert!(result.is_ok());
 
         if let RscElement::Text(text) = result.unwrap() {
@@ -2352,11 +2306,8 @@ mod tests {
 
     #[test]
     fn test_parse_rsc_element_reference() {
-        let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = RscHtmlRenderer::new(runtime);
-
         let value = Value::String("$L1".to_string());
-        let result = renderer.parse_rsc_element(&value);
+        let result = RscHtmlRenderer::parse_rsc_element(&value);
         assert!(result.is_ok());
 
         if let RscElement::Reference(ref_str) = result.unwrap() {
@@ -2396,9 +2347,6 @@ mod tests {
 
     #[test]
     fn test_parse_rsc_element_component() {
-        let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = RscHtmlRenderer::new(runtime);
-
         let mut props = serde_json::Map::new();
         props.insert("children".to_string(), Value::String("Hello".to_string()));
 
@@ -2409,7 +2357,7 @@ mod tests {
             Value::Object(props),
         ]);
 
-        let result = renderer.parse_rsc_element(&value);
+        let result = RscHtmlRenderer::parse_rsc_element(&value);
         assert!(result.is_ok());
 
         if let RscElement::Component { tag, key, props } = result.unwrap() {
@@ -2423,11 +2371,8 @@ mod tests {
 
     #[test]
     fn test_parse_rsc_element_empty_array() {
-        let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = RscHtmlRenderer::new(runtime);
-
         let value = Value::Array(vec![]);
-        let result = renderer.parse_rsc_element(&value);
+        let result = RscHtmlRenderer::parse_rsc_element(&value);
         assert!(result.is_err());
         let err_msg = format!("{:?}", result.unwrap_err());
         assert!(err_msg.contains("Empty array"));
@@ -2611,10 +2556,7 @@ mod tests {
 
     #[test]
     fn test_generate_dev_template_fallback() {
-        let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = RscHtmlRenderer::new(runtime);
-
-        let template = renderer.generate_dev_template_fallback();
+        let template = RscHtmlRenderer::generate_dev_template_fallback();
 
         assert!(template.contains("<!DOCTYPE html>"));
         assert!(template.contains(r#"<div id="root"></div>"#));
@@ -2862,9 +2804,6 @@ mod tests {
 
     #[test]
     fn test_parse_suspense_boundary() {
-        let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = RscHtmlRenderer::new(runtime);
-
         let mut props = serde_json::Map::new();
         props.insert("fallback".to_string(), Value::String("$L1".to_string()));
         props.insert("children".to_string(), Value::String("$L2".to_string()));
@@ -2877,7 +2816,7 @@ mod tests {
             Value::Object(props),
         ]);
 
-        let result = renderer.parse_rsc_element(&value);
+        let result = RscHtmlRenderer::parse_rsc_element(&value);
         assert!(result.is_ok());
 
         if let RscElement::Component { tag, key, props } = result.unwrap() {

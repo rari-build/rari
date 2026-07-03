@@ -36,12 +36,9 @@ async fn warmup_render_lock() -> &'static Mutex<()> {
 }
 
 pub async fn warm_cache(state: &ServerState) {
-    let app_router = match &state.app_router {
-        Some(router) => router,
-        None => {
-            info!("[rari] Cache warmup: No app router available, skipping");
-            return;
-        }
+    let Some(app_router) = &state.app_router else {
+        info!("[rari] Cache warmup: No app router available, skipping");
+        return;
     };
 
     let paths = app_router.warmup_paths();

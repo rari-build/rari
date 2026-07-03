@@ -1,5 +1,3 @@
-#![allow(clippy::unnecessary_debug_formatting)]
-
 use std::{
     path::{Path, PathBuf},
     sync::{
@@ -22,6 +20,7 @@ use super::{
     config::{ImageConfig, LocalPattern, RemotePattern},
     types::{ImageFormat, OptimizeParams, OptimizedImage},
 };
+use crate::utils::{cast, float};
 
 const MAX_SOURCE_IMAGE_SIZE: usize = 10 * 1024 * 1024;
 const MAX_OUTPUT_WIDTH: u32 = 3840;
@@ -160,6 +159,7 @@ impl ImageOptimizer {
 
         while let Some(current_dir) = dirs_to_scan.pop() {
             let mut entries = fs::read_dir(&current_dir).await.map_err(|e| {
+                #[expect(clippy::unnecessary_debug_formatting)]
                 ImageError::ProcessingError(format!(
                     "Failed to read directory {current_dir:?}: {e}"
                 ))
@@ -171,6 +171,7 @@ impl ImageOptimizer {
                 let path = entry.path();
 
                 let file_type = entry.file_type().await.map_err(|e| {
+                    #[expect(clippy::unnecessary_debug_formatting)]
                     ImageError::ProcessingError(format!(
                         "Failed to read file type for {path:?}: {e}"
                     ))
@@ -321,7 +322,7 @@ impl ImageOptimizer {
                 q: *q,
                 f: Some(format.extension().to_string()),
             };
-            let cache_key = self.generate_cache_key(&params);
+            let cache_key = Self::generate_cache_key(&params);
             if self.cache.get(&cache_key).await.is_none() {
                 needs_optimization += 1;
             }
@@ -367,7 +368,7 @@ impl ImageOptimizer {
                         f: Some(format.extension().to_string()),
                     };
 
-                    let cache_key = self.generate_cache_key(&params);
+                    let cache_key = Self::generate_cache_key(&params);
 
                     if self.cache.get(&cache_key).await.is_some() {
                         return Ok::<_, ImageError>(false);
@@ -471,7 +472,7 @@ impl ImageOptimizer {
                 q: *q,
                 f: Some(format.extension().to_string()),
             };
-            let cache_key = self.generate_cache_key(&params);
+            let cache_key = Self::generate_cache_key(&params);
             if self.cache.get(&cache_key).await.is_none() {
                 needs_optimization += 1;
             }
@@ -506,7 +507,7 @@ impl ImageOptimizer {
                         f: Some(format.extension().to_string()),
                     };
 
-                    let cache_key = self.generate_cache_key(&params);
+                    let cache_key = Self::generate_cache_key(&params);
 
                     if self.cache.get(&cache_key).await.is_some() {
                         return Ok::<_, ImageError>(false);
@@ -555,7 +556,7 @@ impl ImageOptimizer {
         }
 
         for pattern in &self.config.local_patterns {
-            if self.matches_local_pattern(path, pattern) {
+            if Self::matches_local_pattern(path, pattern) {
                 return true;
             }
         }
@@ -584,7 +585,7 @@ impl ImageOptimizer {
             )));
         }
 
-        let cache_key = self.generate_cache_key(&params);
+        let cache_key = Self::generate_cache_key(&params);
 
         if let Some(cached) = self.cache.get(&cache_key).await {
             return Ok((
@@ -621,7 +622,7 @@ impl ImageOptimizer {
         let params_clone = params.clone();
         let config_clone = self.config.clone();
         let optimized = task::spawn_blocking(move || {
-            Self::process_image_blocking(source, &params_clone, &config_clone)
+            Self::process_image_blocking(&source, &params_clone, &config_clone)
         })
         .await
         .map_err(|e| ImageError::ProcessingError(format!("Image processing task failed: {e}")))??;
@@ -641,7 +642,7 @@ impl ImageOptimizer {
         Ok((optimized, false))
     }
 
-    fn generate_cache_key(&self, params: &OptimizeParams) -> String {
+    fn generate_cache_key(params: &OptimizeParams) -> String {
         use sha2::{Digest, Sha256};
 
         let mut hasher = Sha256::new();
@@ -665,7 +666,7 @@ impl ImageOptimizer {
 
             let mut allowed = false;
             for pattern in &self.config.local_patterns {
-                if self.matches_local_pattern(url_str, pattern) {
+                if Self::matches_local_pattern(url_str, pattern) {
                     allowed = true;
                     break;
                 }
@@ -681,8 +682,8 @@ impl ImageOptimizer {
         self.validate_remote_url(url_str)
     }
 
-    fn matches_local_pattern(&self, path: &str, pattern: &LocalPattern) -> bool {
-        if !self.pathname_matches(path, &pattern.pathname) {
+    fn matches_local_pattern(path: &str, pattern: &LocalPattern) -> bool {
+        if !Self::pathname_matches(path, &pattern.pathname) {
             return false;
         }
 
@@ -700,19 +701,19 @@ impl ImageOptimizer {
         true
     }
 
-    fn pathname_matches(&self, path: &str, pattern: &str) -> bool {
+    fn pathname_matches(path: &str, pattern: &str) -> bool {
         let path_without_query = if let Some(idx) = path.find('?') { &path[..idx] } else { path };
 
         if let Some(prefix) = pattern.strip_suffix("/**") {
             path_without_query.starts_with(prefix)
         } else if pattern.contains('*') {
-            self.glob_match(path_without_query, pattern)
+            Self::glob_match(path_without_query, pattern)
         } else {
             path_without_query == pattern
         }
     }
 
-    fn glob_match(&self, text: &str, pattern: &str) -> bool {
+    fn glob_match(text: &str, pattern: &str) -> bool {
         let pattern_parts: Vec<&str> = pattern.split('*').collect();
         if pattern_parts.len() == 1 {
             return text == pattern;
@@ -738,7 +739,7 @@ impl ImageOptimizer {
         true
     }
 
-    fn matches_pattern(&self, url: &Url, pattern: &RemotePattern) -> bool {
+    fn matches_pattern(url: &Url, pattern: &RemotePattern) -> bool {
         if let Some(ref protocol) = pattern.protocol
             && url.scheme() != protocol
         {
@@ -746,7 +747,7 @@ impl ImageOptimizer {
         }
 
         if let Some(host) = url.host_str() {
-            if !self.hostname_matches(host, &pattern.hostname) {
+            if !Self::hostname_matches(host, &pattern.hostname) {
                 return false;
             }
         } else {
@@ -760,7 +761,7 @@ impl ImageOptimizer {
         }
 
         if let Some(ref pathname) = pattern.pathname
-            && !self.pathname_matches(url.path(), pathname)
+            && !Self::pathname_matches(url.path(), pathname)
         {
             return false;
         }
@@ -779,7 +780,7 @@ impl ImageOptimizer {
         true
     }
 
-    fn hostname_matches(&self, host: &str, pattern: &str) -> bool {
+    fn hostname_matches(host: &str, pattern: &str) -> bool {
         if let Some(domain) = pattern.strip_prefix("*.") {
             host.ends_with(domain) || host == &domain[1..]
         } else {
@@ -878,10 +879,10 @@ impl ImageOptimizer {
                         }
 
                         let client_octets = [
-                            ((segments[6] >> 8) ^ 0xff) as u8,
-                            ((segments[6] & 0xff) ^ 0xff) as u8,
-                            ((segments[7] >> 8) ^ 0xff) as u8,
-                            ((segments[7] & 0xff) ^ 0xff) as u8,
+                            cast::u16_to_u8((segments[6] >> 8) ^ 0xff),
+                            cast::u16_to_u8((segments[6] & 0xff) ^ 0xff),
+                            cast::u16_to_u8((segments[7] >> 8) ^ 0xff),
+                            cast::u16_to_u8((segments[7] & 0xff) ^ 0xff),
                         ];
                         if is_private_ipv4(client_octets) {
                             return Err(ImageError::UnauthorizedDomain(format!(
@@ -920,7 +921,7 @@ impl ImageOptimizer {
 
         let mut allowed = false;
         for pattern in &self.config.remote_patterns {
-            if self.matches_pattern(&parsed, pattern) {
+            if Self::matches_pattern(&parsed, pattern) {
                 allowed = true;
                 break;
             }
@@ -1045,7 +1046,7 @@ impl ImageOptimizer {
             }
 
             if let Some(content_length) = response.content_length()
-                && content_length as usize > MAX_SOURCE_IMAGE_SIZE
+                && cast::u64_to_usize(content_length) > MAX_SOURCE_IMAGE_SIZE
             {
                 return Err(ImageError::InvalidParams(format!(
                     "Image too large: {content_length} bytes (max {MAX_SOURCE_IMAGE_SIZE} bytes)"
@@ -1053,7 +1054,7 @@ impl ImageOptimizer {
             }
 
             let mut bytes = if let Some(content_length) = response.content_length() {
-                let capacity = (content_length as usize).min(MAX_SOURCE_IMAGE_SIZE);
+                let capacity = cast::u64_to_usize(content_length).min(MAX_SOURCE_IMAGE_SIZE);
                 Vec::with_capacity(capacity)
             } else {
                 Vec::new()
@@ -1084,11 +1085,11 @@ impl ImageOptimizer {
     }
 
     fn process_image_blocking(
-        source: Vec<u8>,
+        source: &[u8],
         params: &OptimizeParams,
         _config: &ImageConfig,
     ) -> Result<OptimizedImage, ImageError> {
-        let img = image::load_from_memory(&source)
+        let img = image::load_from_memory(source)
             .map_err(|e| ImageError::ProcessingError(format!("Failed to decode image: {e}")))?;
 
         if img.width() > MAX_OUTPUT_WIDTH * 2 || img.height() > MAX_OUTPUT_HEIGHT * 2 {
@@ -1109,9 +1110,9 @@ impl ImageOptimizer {
                 img
             }
         } else if img.width() > MAX_OUTPUT_WIDTH || img.height() > MAX_OUTPUT_HEIGHT {
-            let scale = (MAX_OUTPUT_WIDTH as f32 / img.width() as f32)
-                .min(MAX_OUTPUT_HEIGHT as f32 / img.height() as f32);
-            let new_width = (img.width() as f32 * scale) as u32;
+            let scale = (float::u32_to_f32(MAX_OUTPUT_WIDTH) / float::u32_to_f32(img.width()))
+                .min(float::u32_to_f32(MAX_OUTPUT_HEIGHT) / float::u32_to_f32(img.height()));
+            let new_width = cast::f32_to_u32(float::u32_to_f32(img.width()) * scale);
             img.resize(new_width, u32::MAX, FilterType::Lanczos3)
         } else {
             img

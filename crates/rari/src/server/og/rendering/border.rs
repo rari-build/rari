@@ -6,6 +6,7 @@ use super::{
     mask::{MaskMemory, build_rounded_rect_path, mask_index},
     renderer::ImageRenderer,
 };
+use crate::utils::{cast, float};
 
 #[derive(Debug, Clone, Copy)]
 pub(super) struct BorderWidth {
@@ -41,8 +42,8 @@ impl ImageRenderer {
         image: &mut RgbaImage,
         mask_memory: &mut MaskMemory,
     ) -> Result<(), String> {
-        let border_width = self.parse_border_width(&layout.style);
-        let border_color = self.parse_border_color(&layout.style);
+        let border_width = Self::parse_border_width(&layout.style);
+        let border_color = Self::parse_border_color(&layout.style);
 
         if border_width.top == 0.0
             && border_width.right == 0.0
@@ -52,10 +53,10 @@ impl ImageRenderer {
             return Ok(());
         }
 
-        let border_radius = self.parse_border_radius(&layout.style);
+        let border_radius = Self::parse_border_radius(&layout.style);
 
-        let x_start = layout.x as u32;
-        let y_start = layout.y as u32;
+        let x_start = cast::f32_to_u32(layout.x);
+        let y_start = cast::f32_to_u32(layout.y);
         let width = layout.width;
         let height = layout.height;
 
@@ -102,16 +103,18 @@ impl ImageRenderer {
         border_width: BorderWidth,
         color: image::Rgba<u8>,
     ) {
-        let x_end = (x as f32 + width).min(self.width as f32) as u32;
-        let y_end = (y as f32 + height).min(self.height as f32) as u32;
+        let x_end =
+            cast::f32_to_u32((float::u32_to_f32(x) + width).min(float::u32_to_f32(self.width)));
+        let y_end =
+            cast::f32_to_u32((float::u32_to_f32(y) + height).min(float::u32_to_f32(self.height)));
 
         if border_width.top > 0.0 {
-            let top_height = (border_width.top as u32).min(height as u32);
+            let top_height = cast::f32_to_u32(border_width.top).min(cast::f32_to_u32(height));
             for py in y..y.saturating_add(top_height).min(y_end) {
                 for px in x..x_end {
                     if px < self.width && py < self.height {
                         let bg = image.get_pixel(px, py);
-                        let blended = self.alpha_blend(*bg, color);
+                        let blended = Self::alpha_blend(*bg, color);
                         image.put_pixel(px, py, blended);
                     }
                 }
@@ -119,12 +122,12 @@ impl ImageRenderer {
         }
 
         if border_width.bottom > 0.0 {
-            let bottom_start = y_end.saturating_sub(border_width.bottom as u32);
+            let bottom_start = y_end.saturating_sub(cast::f32_to_u32(border_width.bottom));
             for py in bottom_start..y_end {
                 for px in x..x_end {
                     if px < self.width && py < self.height {
                         let bg = image.get_pixel(px, py);
-                        let blended = self.alpha_blend(*bg, color);
+                        let blended = Self::alpha_blend(*bg, color);
                         image.put_pixel(px, py, blended);
                     }
                 }
@@ -132,12 +135,12 @@ impl ImageRenderer {
         }
 
         if border_width.left > 0.0 {
-            let left_width = (border_width.left as u32).min(width as u32);
+            let left_width = cast::f32_to_u32(border_width.left).min(cast::f32_to_u32(width));
             for py in y..y_end {
                 for px in x..x.saturating_add(left_width).min(x_end) {
                     if px < self.width && py < self.height {
                         let bg = image.get_pixel(px, py);
-                        let blended = self.alpha_blend(*bg, color);
+                        let blended = Self::alpha_blend(*bg, color);
                         image.put_pixel(px, py, blended);
                     }
                 }
@@ -145,12 +148,12 @@ impl ImageRenderer {
         }
 
         if border_width.right > 0.0 {
-            let right_start = x_end.saturating_sub(border_width.right as u32);
+            let right_start = x_end.saturating_sub(cast::f32_to_u32(border_width.right));
             for py in y..y_end {
                 for px in right_start..x_end {
                     if px < self.width && py < self.height {
                         let bg = image.get_pixel(px, py);
-                        let blended = self.alpha_blend(*bg, color);
+                        let blended = Self::alpha_blend(*bg, color);
                         image.put_pixel(px, py, blended);
                     }
                 }
@@ -189,8 +192,8 @@ impl ImageRenderer {
 
         let (mask, placement) = mask_memory.render_with_style(&combined_path, Fill::EvenOdd.into());
 
-        for rel_y in 0..height as u32 {
-            for rel_x in 0..width as u32 {
+        for rel_y in 0..cast::f32_to_u32(height) {
+            for rel_x in 0..cast::f32_to_u32(width) {
                 let canvas_x = x_start + rel_x;
                 let canvas_y = y_start + rel_y;
 
@@ -198,15 +201,19 @@ impl ImageRenderer {
                     continue;
                 }
 
-                let mask_x = rel_x as i32 - placement.left;
-                let mask_y = rel_y as i32 - placement.top;
+                let mask_x = rel_x.cast_signed() - placement.left;
+                let mask_y = rel_y.cast_signed() - placement.top;
 
                 let alpha = if mask_x >= 0
-                    && mask_x < placement.width as i32
+                    && mask_x < placement.width.cast_signed()
                     && mask_y >= 0
-                    && mask_y < placement.height as i32
+                    && mask_y < placement.height.cast_signed()
                 {
-                    mask[mask_index(mask_x as u32, mask_y as u32, placement.width)]
+                    mask[mask_index(
+                        mask_x.cast_unsigned(),
+                        mask_y.cast_unsigned(),
+                        placement.width,
+                    )]
                 } else {
                     0
                 };
@@ -217,9 +224,9 @@ impl ImageRenderer {
 
                 let bg = image.get_pixel(canvas_x, canvas_y);
                 let blended = if alpha < 255 {
-                    self.blend_border_with_alpha(*bg, color, alpha)
+                    Self::blend_border_with_alpha(*bg, color, alpha)
                 } else {
-                    self.alpha_blend(*bg, color)
+                    Self::alpha_blend(*bg, color)
                 };
                 image.put_pixel(canvas_x, canvas_y, blended);
             }
@@ -227,7 +234,6 @@ impl ImageRenderer {
     }
 
     fn blend_border_with_alpha(
-        &self,
         bg: image::Rgba<u8>,
         fg: image::Rgba<u8>,
         mask_alpha: u8,
@@ -236,17 +242,14 @@ impl ImageRenderer {
         let inv_alpha = 1.0 - alpha;
 
         image::Rgba([
-            ((f32::from(fg[0]) * alpha + f32::from(bg[0]) * inv_alpha) as u8),
-            ((f32::from(fg[1]) * alpha + f32::from(bg[1]) * inv_alpha) as u8),
-            ((f32::from(fg[2]) * alpha + f32::from(bg[2]) * inv_alpha) as u8),
+            cast::f32_to_u8(f32::from(fg[0]) * alpha + f32::from(bg[0]) * inv_alpha),
+            cast::f32_to_u8(f32::from(fg[1]) * alpha + f32::from(bg[1]) * inv_alpha),
+            cast::f32_to_u8(f32::from(fg[2]) * alpha + f32::from(bg[2]) * inv_alpha),
             255,
         ])
     }
 
-    pub(super) fn parse_border_width(
-        &self,
-        style: &rustc_hash::FxHashMap<String, String>,
-    ) -> BorderWidth {
+    pub(super) fn parse_border_width(style: &rustc_hash::FxHashMap<String, String>) -> BorderWidth {
         if let Some(border) = style.get("border") {
             let parts: Vec<&str> = border.split_whitespace().collect();
             if let Some(width_str) = parts.first()
@@ -282,23 +285,22 @@ impl ImageRenderer {
         }
     }
 
-    fn parse_border_color(&self, style: &rustc_hash::FxHashMap<String, String>) -> image::Rgba<u8> {
+    fn parse_border_color(style: &rustc_hash::FxHashMap<String, String>) -> image::Rgba<u8> {
         if let Some(color) = style.get("borderColor") {
-            return self.parse_color(color);
+            return Self::parse_color(color);
         }
 
         if let Some(border) = style.get("border") {
             let parts: Vec<&str> = border.split_whitespace().collect();
             if parts.len() >= 3 {
-                return self.parse_color(parts[2]);
+                return Self::parse_color(parts[2]);
             }
         }
 
-        self.parse_color("black")
+        Self::parse_color("black")
     }
 
     pub(super) fn parse_border_radius(
-        &self,
         style: &rustc_hash::FxHashMap<String, String>,
     ) -> BorderRadius {
         if let Some(radius_str) = style.get("borderRadius")

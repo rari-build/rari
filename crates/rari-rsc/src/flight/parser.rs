@@ -47,14 +47,14 @@ impl RscFlightParser {
                 continue;
             }
 
-            let (row_id, element) = self.parse_line(line)?;
+            let (row_id, element) = Self::parse_line(line)?;
             self.elements.insert(row_id, element);
         }
 
         Ok(())
     }
 
-    fn parse_line(&self, line: &str) -> Result<(u32, RscElement), RariError> {
+    fn parse_line(line: &str) -> Result<(u32, RscElement), RariError> {
         let colon_pos = line.find(':').ok_or_else(|| {
             RariError::internal(format!("Invalid RSC line format: missing colon in '{line}'"))
         })?;
@@ -72,12 +72,12 @@ impl RscFlightParser {
         let json_value: Value = serde_json::from_str(data_str)
             .map_err(|e| RariError::internal(format!("Invalid JSON in RSC line: {e}")))?;
 
-        let element = self.parse_json_element(&json_value)?;
+        let element = Self::parse_json_element(&json_value)?;
 
         Ok((row_id, element))
     }
 
-    fn parse_json_element(&self, value: &Value) -> Result<RscElement, RariError> {
+    fn parse_json_element(value: &Value) -> Result<RscElement, RariError> {
         match value {
             Value::String(s) => {
                 if let Some(stripped) = s.strip_prefix('$') {
@@ -127,7 +127,7 @@ impl RscFlightParser {
                 if let Some(Value::String(marker)) = arr.first()
                     && marker == "$"
                 {
-                    return self.parse_react_element(arr);
+                    return Self::parse_react_element(arr);
                 }
 
                 Ok(RscElement::Text(serde_json::to_string(value).unwrap_or_default()))
@@ -142,7 +142,7 @@ impl RscFlightParser {
         }
     }
 
-    fn parse_react_element(&self, arr: &[Value]) -> Result<RscElement, RariError> {
+    fn parse_react_element(arr: &[Value]) -> Result<RscElement, RariError> {
         if arr.len() < 4 {
             return Err(RariError::internal(format!(
                 "Invalid React element: expected 4 elements, got {}",
@@ -155,7 +155,7 @@ impl RscFlightParser {
             .ok_or_else(|| RariError::internal("React element tag must be a string".to_string()))?
             .to_string();
 
-        let key = arr[2].as_str().map(ToString::to_string);
+        let key = arr[2].as_str();
 
         let props_value = &arr[3];
         let props = if let Value::Object(obj) = props_value {
@@ -165,19 +165,18 @@ impl RscFlightParser {
         };
 
         if tag == "Suspense" || tag == "react.suspense" {
-            return self.parse_suspense_element(key, props);
+            return Self::parse_suspense_element(key, props);
         }
 
         if tag == "Promise" || tag == "react.promise" {
-            return self.parse_promise_element(props);
+            return Self::parse_promise_element(&props);
         }
 
-        Ok(RscElement::Component { tag, key, props })
+        Ok(RscElement::Component { tag, key: key.map(ToString::to_string), props })
     }
 
     fn parse_suspense_element(
-        &self,
-        key: Option<String>,
+        key: Option<&str>,
         props: FxHashMap<String, Value>,
     ) -> Result<RscElement, RariError> {
         let fallback_ref = if let Some(fallback_value) = props.get("fallback") {
@@ -210,16 +209,13 @@ impl RscFlightParser {
             .get("~boundaryId")
             .and_then(|v| v.as_str())
             .map(ToString::to_string)
-            .or_else(|| key.clone())
+            .or_else(|| key.map(ToString::to_string))
             .unwrap_or_else(|| format!("boundary_{}", Uuid::new_v4()));
 
         Ok(RscElement::Suspense { fallback_ref, children_ref, boundary_id, props })
     }
 
-    fn parse_promise_element(
-        &self,
-        props: FxHashMap<String, Value>,
-    ) -> Result<RscElement, RariError> {
+    fn parse_promise_element(props: &FxHashMap<String, Value>) -> Result<RscElement, RariError> {
         let promise_id = props
             .get("id")
             .and_then(|v| v.as_str())

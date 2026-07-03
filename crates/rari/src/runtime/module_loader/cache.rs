@@ -42,7 +42,7 @@ impl ModuleCaching {
         Self::with_handler(
             cache_size,
             ttl_secs,
-            Arc::new(MemoryCacheHandler::with_config(MemoryConfig {
+            Arc::new(MemoryCacheHandler::with_config(&MemoryConfig {
                 max_entries: cache_size.max(1),
                 default_ttl: ttl_secs,
             })),
@@ -63,9 +63,8 @@ impl ModuleCaching {
     }
 
     pub async fn get(&self, key: &str) -> Option<Value> {
-        let bytes = match self.handler.get(key).await {
-            Ok(Some(b)) => b,
-            Ok(None) | Err(_) => return None,
+        let Ok(Some(bytes)) = self.handler.get(key).await else {
+            return None;
         };
         match serde_json::from_slice(&bytes) {
             Ok(v) => Some(v),

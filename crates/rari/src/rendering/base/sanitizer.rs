@@ -2,18 +2,19 @@ use std::sync::OnceLock;
 
 use regex::Regex;
 
+static PRE_JSON_REGEX: OnceLock<Regex> = OnceLock::new();
+static ID_JSON_REGEX: OnceLock<Regex> = OnceLock::new();
+
 pub fn sanitize_component_output(html: &str) -> String {
     if html.is_empty() {
         return String::new();
     }
 
-    static PRE_JSON_REGEX: OnceLock<Regex> = OnceLock::new();
     #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
     let pre_json_regex = PRE_JSON_REGEX
         .get_or_init(|| Regex::new(r"<pre>\\?\{.*?\\?\}</pre>").expect("Valid regex pattern"));
     let result = pre_json_regex.replace_all(html, "");
 
-    static ID_JSON_REGEX: OnceLock<Regex> = OnceLock::new();
     #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
     let id_json_regex = ID_JSON_REGEX
         .get_or_init(|| Regex::new(r#"\\?\{"id":.*?\\?\}"#).expect("Valid regex pattern"));

@@ -80,7 +80,7 @@ pub async fn handle_hmr_action(
             handle_reload(state, component_id, file_path).await
         }
         HmrRequest::InvalidateApiRoute { file_path } => {
-            handle_invalidate_api_route(state, file_path).await
+            Ok(handle_invalidate_api_route(&state, &file_path))
         }
         HmrRequest::ReloadComponent { component_id, bundle_path } => {
             handle_reload_component(state, component_id, bundle_path).await
@@ -366,16 +366,13 @@ async fn handle_reload(
     component_id: String,
     file_path: String,
 ) -> Result<Json<Value>, StatusCode> {
-    let config = match Config::get() {
-        Some(config) => config,
-        None => {
-            error!("Failed to get global configuration for HMR reload");
-            return Ok(Json(serde_json::json!({
-                "success": false,
-                "componentId": component_id,
-                "error": "Configuration not available"
-            })));
-        }
+    let Some(config) = Config::get() else {
+        error!("Failed to get global configuration for HMR reload");
+        return Ok(Json(serde_json::json!({
+            "success": false,
+            "componentId": component_id,
+            "error": "Configuration not available"
+        })));
     };
 
     if file_path.contains("://") {
@@ -450,28 +447,22 @@ async fn handle_reload(
     }
 }
 
-async fn handle_invalidate_api_route(
-    state: ServerState,
-    file_path: String,
-) -> Result<Json<Value>, StatusCode> {
-    let api_handler = match &state.api_route_handler {
-        Some(handler) => handler,
-        None => {
-            return Ok(Json(serde_json::json!({
-                "success": false,
-                "filePath": file_path,
-                "error": "API route handler not available"
-            })));
-        }
+fn handle_invalidate_api_route(state: &ServerState, file_path: &str) -> axum::Json<Value> {
+    let Some(api_handler) = &state.api_route_handler else {
+        return Json(serde_json::json!({
+            "success": false,
+            "filePath": file_path,
+            "error": "API route handler not available"
+        }));
     };
 
-    api_handler.invalidate_handler(&file_path);
+    api_handler.invalidate_handler(file_path);
 
-    Ok(Json(serde_json::json!({
+    Json(serde_json::json!({
         "success": true,
         "filePath": file_path,
         "message": "API route handler cache invalidated"
-    })))
+    }))
 }
 
 async fn handle_reload_component(

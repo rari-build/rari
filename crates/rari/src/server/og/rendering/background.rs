@@ -5,6 +5,7 @@ use super::{
     mask::{MaskMemory, build_rounded_rect_path, mask_index},
     renderer::ImageRenderer,
 };
+use crate::utils::{cast, float};
 
 impl ImageRenderer {
     pub(super) fn render_background(
@@ -14,10 +15,10 @@ impl ImageRenderer {
         image: &mut RgbaImage,
         mask_memory: &mut MaskMemory,
     ) -> Result<(), String> {
-        let border_radius = self.parse_border_radius(&layout.style);
+        let border_radius = Self::parse_border_radius(&layout.style);
 
-        let x_start = layout.x as u32;
-        let y_start = layout.y as u32;
+        let x_start = cast::f32_to_u32(layout.x);
+        let y_start = cast::f32_to_u32(layout.y);
         let box_width = layout.width;
         let box_height = layout.height;
 
@@ -37,8 +38,8 @@ impl ImageRenderer {
         if let Some(gradient) = LinearGradient::parse(bg) {
             let params = gradient.calculate_params(box_width, box_height);
 
-            for rel_y in 0..box_height as u32 {
-                for rel_x in 0..box_width as u32 {
+            for rel_y in 0..cast::f32_to_u32(box_height) {
+                for rel_x in 0..cast::f32_to_u32(box_width) {
                     let canvas_x = x_start + rel_x;
                     let canvas_y = y_start + rel_y;
 
@@ -46,30 +47,31 @@ impl ImageRenderer {
                         continue;
                     }
 
-                    let alpha =
-                        if let Some((ref mask, mask_w, mask_h, mask_left, mask_top)) = mask_data {
-                            let mask_x = rel_x as i32 - mask_left;
-                            let mask_y = rel_y as i32 - mask_top;
+                    let alpha = if let Some((ref mask, mask_w, mask_h, mask_left, mask_top)) =
+                        mask_data
+                    {
+                        let mask_x = rel_x.cast_signed() - mask_left;
+                        let mask_y = rel_y.cast_signed() - mask_top;
 
-                            if mask_x >= 0
-                                && mask_x < mask_w as i32
-                                && mask_y >= 0
-                                && mask_y < mask_h as i32
-                            {
-                                mask[mask_index(mask_x as u32, mask_y as u32, mask_w)]
-                            } else {
-                                0
-                            }
+                        if mask_x >= 0
+                            && mask_x < mask_w.cast_signed()
+                            && mask_y >= 0
+                            && mask_y < mask_h.cast_signed()
+                        {
+                            mask[mask_index(mask_x.cast_unsigned(), mask_y.cast_unsigned(), mask_w)]
                         } else {
-                            255
-                        };
+                            0
+                        }
+                    } else {
+                        255
+                    };
 
                     if alpha == 0 {
                         continue;
                     }
 
-                    let dx = rel_x as f32 - params.cx;
-                    let dy = rel_y as f32 - params.cy;
+                    let dx = float::u32_to_f32(rel_x) - params.cx;
+                    let dy = float::u32_to_f32(rel_y) - params.cy;
                     let projection = dx * params.dir_x + dy * params.dir_y;
                     let position =
                         ((projection + params.max_extent) / params.axis_length).clamp(0.0, 1.0);
@@ -78,17 +80,17 @@ impl ImageRenderer {
 
                     if alpha < 255 {
                         let bg_pixel = image.get_pixel(canvas_x, canvas_y);
-                        color = self.blend_with_alpha(*bg_pixel, color, alpha);
+                        color = Self::blend_with_alpha(*bg_pixel, color, alpha);
                     }
 
                     image.put_pixel(canvas_x, canvas_y, color);
                 }
             }
         } else {
-            let color = self.parse_color(bg);
+            let color = Self::parse_color(bg);
 
-            for rel_y in 0..box_height as u32 {
-                for rel_x in 0..box_width as u32 {
+            for rel_y in 0..cast::f32_to_u32(box_height) {
+                for rel_x in 0..cast::f32_to_u32(box_width) {
                     let canvas_x = x_start + rel_x;
                     let canvas_y = y_start + rel_y;
 
@@ -96,23 +98,24 @@ impl ImageRenderer {
                         continue;
                     }
 
-                    let alpha =
-                        if let Some((ref mask, mask_w, mask_h, mask_left, mask_top)) = mask_data {
-                            let mask_x = rel_x as i32 - mask_left;
-                            let mask_y = rel_y as i32 - mask_top;
+                    let alpha = if let Some((ref mask, mask_w, mask_h, mask_left, mask_top)) =
+                        mask_data
+                    {
+                        let mask_x = rel_x.cast_signed() - mask_left;
+                        let mask_y = rel_y.cast_signed() - mask_top;
 
-                            if mask_x >= 0
-                                && mask_x < mask_w as i32
-                                && mask_y >= 0
-                                && mask_y < mask_h as i32
-                            {
-                                mask[mask_index(mask_x as u32, mask_y as u32, mask_w)]
-                            } else {
-                                0
-                            }
+                        if mask_x >= 0
+                            && mask_x < mask_w.cast_signed()
+                            && mask_y >= 0
+                            && mask_y < mask_h.cast_signed()
+                        {
+                            mask[mask_index(mask_x.cast_unsigned(), mask_y.cast_unsigned(), mask_w)]
                         } else {
-                            255
-                        };
+                            0
+                        }
+                    } else {
+                        255
+                    };
 
                     if alpha == 0 {
                         continue;
@@ -120,7 +123,7 @@ impl ImageRenderer {
 
                     let final_color = if alpha < 255 {
                         let bg_pixel = image.get_pixel(canvas_x, canvas_y);
-                        self.blend_with_alpha(*bg_pixel, color, alpha)
+                        Self::blend_with_alpha(*bg_pixel, color, alpha)
                     } else {
                         color
                     };
@@ -134,7 +137,6 @@ impl ImageRenderer {
     }
 
     fn blend_with_alpha(
-        &self,
         bg: image::Rgba<u8>,
         fg: image::Rgba<u8>,
         mask_alpha: u8,
@@ -143,9 +145,9 @@ impl ImageRenderer {
         let inv_alpha = 1.0 - alpha;
 
         image::Rgba([
-            ((f32::from(fg[0]) * alpha + f32::from(bg[0]) * inv_alpha) as u8),
-            ((f32::from(fg[1]) * alpha + f32::from(bg[1]) * inv_alpha) as u8),
-            ((f32::from(fg[2]) * alpha + f32::from(bg[2]) * inv_alpha) as u8),
+            cast::f32_to_u8(f32::from(fg[0]) * alpha + f32::from(bg[0]) * inv_alpha),
+            cast::f32_to_u8(f32::from(fg[1]) * alpha + f32::from(bg[1]) * inv_alpha),
+            cast::f32_to_u8(f32::from(fg[2]) * alpha + f32::from(bg[2]) * inv_alpha),
             255,
         ])
     }

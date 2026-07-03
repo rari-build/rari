@@ -79,15 +79,12 @@ pub async fn handle_api_route(
     let origin = req.headers().get("origin").and_then(|v| v.to_str().ok()).map(ToString::to_string);
     let cors_config = state.config.cors_config();
 
-    let api_handler = match &state.api_route_handler {
-        Some(handler) => handler,
-        None => {
-            return Ok(create_generic_error_response(
-                StatusCode::NOT_FOUND,
-                "API routes not configured",
-                is_development,
-            ));
-        }
+    let Some(api_handler) = &state.api_route_handler else {
+        return Ok(create_generic_error_response(
+            StatusCode::NOT_FOUND,
+            "API routes not configured",
+            is_development,
+        ));
     };
 
     let route_match = match api_handler.match_route(&path, &method) {

@@ -1,6 +1,8 @@
 use std::time::Duration;
 
 pub const MEMORY_PRESSURE_THRESHOLD: f64 = 0.8;
+pub const MEMORY_PRESSURE_RENDER_THRESHOLD_NUM: usize = 8;
+pub const MEMORY_PRESSURE_RENDER_THRESHOLD_DEN: usize = 10;
 pub const CACHE_CLEANUP_INTERVAL: Duration = Duration::from_millis(10);
 
 pub const MAX_RETRIES: u64 = 3;

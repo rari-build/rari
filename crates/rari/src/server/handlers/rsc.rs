@@ -30,7 +30,7 @@ pub async fn register_component(
     }
 
     let result = {
-        let mut renderer = state.renderer.lock().await;
+        let renderer = state.renderer.lock().await;
         renderer.register_component(&request.component_id, &request.component_code).await
     };
 

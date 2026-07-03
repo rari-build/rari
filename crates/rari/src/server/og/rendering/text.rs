@@ -16,6 +16,7 @@ use super::{
     super::{layout::ComputedLayout, types::JsxChild},
     renderer::ImageRenderer,
 };
+use crate::utils::{cast, float};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TextDecoration {
@@ -42,7 +43,7 @@ impl ImageRenderer {
         layout: &ComputedLayout,
         image: &mut RgbaImage,
     ) -> Result<(), String> {
-        let text = self.extract_text(&layout.element);
+        let text = Self::extract_text(&layout.element);
         if text.is_empty() {
             return Ok(());
         }
@@ -51,15 +52,15 @@ impl ImageRenderer {
             layout.style.get("fontSize").and_then(|s| s.parse::<f32>().ok()).unwrap_or(16.0);
 
         let color =
-            layout.style.get("color").map(|c| self.parse_color(c)).unwrap_or(Rgba([0, 0, 0, 255]));
+            layout.style.get("color").map(|c| Self::parse_color(c)).unwrap_or(Rgba([0, 0, 0, 255]));
 
-        let font_weight = self.parse_font_weight(&layout.style);
+        let font_weight = Self::parse_font_weight(&layout.style);
 
-        let line_height = self.parse_line_height(&layout.style, font_size);
+        let line_height = Self::parse_line_height(&layout.style, font_size);
 
-        let text_align = self.parse_text_align(&layout.style);
+        let text_align = Self::parse_text_align(&layout.style);
 
-        let text_decoration = self.parse_text_decoration(&layout.style);
+        let text_decoration = Self::parse_text_decoration(&layout.style);
 
         let params = GlyphRenderParams {
             x: layout.x + layout.border.left + layout.padding.left,
@@ -84,7 +85,7 @@ impl ImageRenderer {
         Ok(())
     }
 
-    fn extract_text(&self, element: &super::super::types::JsxElement) -> String {
+    fn extract_text(element: &super::super::types::JsxElement) -> String {
         element
             .children
             .iter()
@@ -96,11 +97,7 @@ impl ImageRenderer {
             .join("")
     }
 
-    fn parse_line_height(
-        &self,
-        style: &rustc_hash::FxHashMap<String, String>,
-        font_size: f32,
-    ) -> f32 {
+    fn parse_line_height(style: &rustc_hash::FxHashMap<String, String>, font_size: f32) -> f32 {
         if let Some(lh) = style.get("lineHeight") {
             if let Ok(multiplier) = lh.parse::<f32>() {
                 return font_size * multiplier;
@@ -132,7 +129,7 @@ impl ImageRenderer {
         font_size * 1.2
     }
 
-    fn parse_text_align(&self, style: &rustc_hash::FxHashMap<String, String>) -> Alignment {
+    fn parse_text_align(style: &rustc_hash::FxHashMap<String, String>) -> Alignment {
         style
             .get("textAlign")
             .map(|ta| {
@@ -151,10 +148,7 @@ impl ImageRenderer {
             .unwrap_or(Alignment::Start)
     }
 
-    fn parse_text_decoration(
-        &self,
-        style: &rustc_hash::FxHashMap<String, String>,
-    ) -> Vec<TextDecoration> {
+    fn parse_text_decoration(style: &rustc_hash::FxHashMap<String, String>) -> Vec<TextDecoration> {
         let mut decorations = Vec::new();
 
         if let Some(td) = style.get("textDecoration") {
@@ -247,12 +241,14 @@ impl ImageRenderer {
                     let glyph_y = params.y + glyph.y;
 
                     if let Some(bitmap) =
-                        scaler.scale_color_bitmap(glyph.id as u16, StrikeWith::BestFit)
+                        scaler.scale_color_bitmap(cast::u32_to_u16(glyph.id), StrikeWith::BestFit)
                     {
                         self.draw_color_bitmap(&bitmap, glyph_x, glyph_y, image);
-                    } else if let Some(outline) = scaler.scale_color_outline(glyph.id as u16) {
+                    } else if let Some(outline) =
+                        scaler.scale_color_outline(cast::u32_to_u16(glyph.id))
+                    {
                         self.draw_color_outline(&outline, glyph_x, glyph_y, palette, image)?;
-                    } else if let Some(outline) = scaler.scale_outline(glyph.id as u16) {
+                    } else if let Some(outline) = scaler.scale_outline(cast::u32_to_u16(glyph.id)) {
                         self.draw_outline(&outline, glyph_x, glyph_y, params.color, image)?;
                     }
                 }
@@ -319,16 +315,16 @@ impl ImageRenderer {
         color: Rgba<u8>,
         image: &mut RgbaImage,
     ) {
-        let x_start = x.max(0.0) as u32;
-        let x_end = ((x + width) as u32).min(self.width);
-        let y_start = y.max(0.0) as u32;
-        let y_end = ((y + thickness) as u32).min(self.height);
+        let x_start = cast::f32_to_u32(x.max(0.0));
+        let x_end = cast::f32_to_u32(x + width).min(self.width);
+        let y_start = cast::f32_to_u32(y.max(0.0));
+        let y_end = cast::f32_to_u32(y + thickness).min(self.height);
 
         for py in y_start..y_end {
             for px in x_start..x_end {
                 if px < self.width && py < self.height {
                     let bg = image.get_pixel(px, py);
-                    let blended = self.alpha_blend(*bg, color);
+                    let blended = Self::alpha_blend(*bg, color);
                     image.put_pixel(px, py, blended);
                 }
             }
@@ -341,22 +337,30 @@ impl ImageRenderer {
 
         for row in 0..placement.height {
             for col in 0..placement.width {
-                let pixel_x = (x + placement.left as f32 + col as f32) as i32;
-                let pixel_y = (y - placement.top as f32 + row as f32) as i32;
+                let pixel_x = cast::f32_to_i32(
+                    x + float::i32_to_f32(placement.left) + float::u32_to_f32(col),
+                );
+                let pixel_y =
+                    cast::f32_to_i32(y - float::i32_to_f32(placement.top) + float::u32_to_f32(row));
 
                 if pixel_x >= 0
-                    && pixel_x < self.width as i32
+                    && pixel_x < self.width.cast_signed()
                     && pixel_y >= 0
-                    && pixel_y < self.height as i32
+                    && pixel_y < self.height.cast_signed()
                 {
                     let idx = ((row * placement.width + col) * 4) as usize;
                     if idx + 3 < data.len() {
                         let pixel = Rgba([data[idx], data[idx + 1], data[idx + 2], data[idx + 3]]);
 
                         if pixel[3] > 0 {
-                            let bg = image.get_pixel(pixel_x as u32, pixel_y as u32);
-                            let blended = self.alpha_blend(*bg, pixel);
-                            image.put_pixel(pixel_x as u32, pixel_y as u32, blended);
+                            let bg =
+                                image.get_pixel(pixel_x.cast_unsigned(), pixel_y.cast_unsigned());
+                            let blended = Self::alpha_blend(*bg, pixel);
+                            image.put_pixel(
+                                pixel_x.cast_unsigned(),
+                                pixel_y.cast_unsigned(),
+                                blended,
+                            );
                         }
                     }
                 }
@@ -462,23 +466,28 @@ impl ImageRenderer {
 
         for row in 0..placement.height {
             for col in 0..placement.width {
-                let mask_x = placement.left + col as i32;
-                let mask_y = placement.top + row as i32;
+                let mask_x = placement.left + col.cast_signed();
+                let mask_y = placement.top + row.cast_signed();
 
                 if mask_x >= 0
-                    && mask_x < self.width as i32
+                    && mask_x < self.width.cast_signed()
                     && mask_y >= 0
-                    && mask_y < self.height as i32
+                    && mask_y < self.height.cast_signed()
                 {
                     let idx = (row * placement.width + col) as usize;
                     if idx < buffer.len() {
                         let alpha = buffer[idx];
 
                         if alpha > 0 {
-                            let bg = image.get_pixel(mask_x as u32, mask_y as u32);
+                            let bg =
+                                image.get_pixel(mask_x.cast_unsigned(), mask_y.cast_unsigned());
                             let fg = Rgba([color[0], color[1], color[2], alpha]);
-                            let blended = self.alpha_blend(*bg, fg);
-                            image.put_pixel(mask_x as u32, mask_y as u32, blended);
+                            let blended = Self::alpha_blend(*bg, fg);
+                            image.put_pixel(
+                                mask_x.cast_unsigned(),
+                                mask_y.cast_unsigned(),
+                                blended,
+                            );
                         }
                     }
                 }

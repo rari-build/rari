@@ -111,7 +111,7 @@ pub struct MemoryCacheHandler {
 }
 
 impl MemoryCacheHandler {
-    pub fn with_config(config: MemoryConfig) -> Self {
+    pub fn with_config(config: &MemoryConfig) -> Self {
         #[expect(clippy::expect_used, reason = "Value is clamped to >= 1, guaranteed non-zero")]
         let max_entries = NonZeroUsize::new(config.max_entries.max(1)).expect("clamped to >= 1");
         tracing::debug!(
@@ -193,7 +193,7 @@ impl MemoryCacheHandler {
 
 impl Default for MemoryCacheHandler {
     fn default() -> Self {
-        Self::with_config(MemoryConfig::default())
+        Self::with_config(&MemoryConfig::default())
     }
 }
 
@@ -498,7 +498,7 @@ mod tests {
     #[tokio::test]
     async fn test_memory_lru_eviction() {
         let handler =
-            MemoryCacheHandler::with_config(MemoryConfig { max_entries: 2, default_ttl: 60 });
+            MemoryCacheHandler::with_config(&MemoryConfig { max_entries: 2, default_ttl: 60 });
         handler.set("a", b"1".to_vec(), 60).await.unwrap();
         handler.set("b", b"2".to_vec(), 60).await.unwrap();
         let _ = handler.get("a").await.unwrap();

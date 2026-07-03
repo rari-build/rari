@@ -177,8 +177,9 @@ async fn execute_as_script(
     promise_timeout_ms: u64,
 ) -> Result<Value, RariError> {
     let transpiled_code = if script_name.ends_with(".ts") || script_name.ends_with(".tsx") {
+        let module_name = deno_core::ModuleName::from(script_name.to_string());
         match transpile::maybe_transpile_source(
-            deno_core::ModuleName::from(script_name.to_string()),
+            &module_name,
             deno_core::ModuleCodeString::from(script_code.to_string()),
         ) {
             Ok((code, _source_map)) => Some(code.to_string()),
@@ -231,12 +232,9 @@ async fn handle_promise_result(
         let local_v8_val = deno_core::v8::Local::new(scope, &global_v8_val);
         let context = scope.get_current_context();
         let global = context.global(scope);
-        let key = match v8::String::new(scope, "__temp_promise_ref__") {
-            Some(key) => key,
-            None => {
-                error!("Failed to create V8 string for __temp_promise_ref__");
-                return Err(RariError::internal("Failed to create V8 string".to_string()));
-            }
+        let Some(key) = v8::String::new(scope, "__temp_promise_ref__") else {
+            error!("Failed to create V8 string for __temp_promise_ref__");
+            return Err(RariError::internal("Failed to create V8 string".to_string()));
         };
         global.set(scope, key.into(), local_v8_val);
         Ok::<(), RariError>(())

@@ -7,6 +7,7 @@ use super::constants::{
     DEFAULT_MAX_CACHE_SIZE, DEFAULT_MAX_CONCURRENT_RENDERS, DEFAULT_MAX_MEMORY_PER_COMPONENT_MB,
     DEFAULT_MAX_RENDER_TIME_MS, DEFAULT_MAX_SCRIPT_EXECUTION_TIME_MS,
 };
+use crate::utils::{cast, float};
 
 #[derive(Debug, Clone)]
 #[non_exhaustive]
@@ -67,7 +68,7 @@ impl ResourceTracker {
             active_renders: self.active_renders.load(Ordering::Relaxed),
             total_renders,
             average_render_time_ms: if total_renders > 0 {
-                total_time as f64 / total_renders as f64
+                float::u64_ratio(total_time, total_renders)
             } else {
                 0.0
             },
@@ -75,7 +76,7 @@ impl ResourceTracker {
                 let hits = self.cache_hits.load(Ordering::Relaxed);
                 let misses = self.cache_misses.load(Ordering::Relaxed);
                 let total = hits + misses;
-                if total > 0 { hits as f64 / total as f64 } else { 0.0 }
+                if total > 0 { float::u64_ratio(hits, total) } else { 0.0 }
             },
             timeout_errors: self.timeout_errors.load(Ordering::Relaxed),
             memory_pressure_events: self.memory_pressure_events.load(Ordering::Relaxed),
@@ -92,7 +93,7 @@ impl ResourceTracker {
 
     pub fn record_render_completion(&self, duration: Duration) {
         self.total_renders.fetch_add(1, Ordering::Relaxed);
-        self.total_render_time_ms.fetch_add(duration.as_millis() as u64, Ordering::Relaxed);
+        self.total_render_time_ms.fetch_add(cast::duration_millis_u64(duration), Ordering::Relaxed);
     }
 
     pub fn record_cache_hit(&self) {

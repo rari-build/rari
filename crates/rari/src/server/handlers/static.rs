@@ -15,12 +15,9 @@ use crate::server::{
 };
 
 pub async fn root_handler(State(_state): State<ServerState>) -> Result<Response, StatusCode> {
-    let config = match Config::get() {
-        Some(config) => config,
-        None => {
-            error!("Failed to get global configuration for root_handler");
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
-        }
+    let Some(config) = Config::get() else {
+        error!("Failed to get global configuration for root_handler");
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
     };
 
     let index_path = config.public_dir().join("index.html");
@@ -61,19 +58,13 @@ pub async fn static_or_spa_handler(
         }
     }
 
-    let config = match Config::get() {
-        Some(config) => config,
-        None => {
-            error!("Failed to get global configuration for static_or_spa_handler");
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
-        }
+    let Some(config) = Config::get() else {
+        error!("Failed to get global configuration for static_or_spa_handler");
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
     };
 
-    let file_path = match validate_safe_path(config.public_dir(), &path) {
-        Ok(path) => path,
-        Err(_) => {
-            return Err(StatusCode::NOT_FOUND);
-        }
+    let Ok(file_path) = validate_safe_path(config.public_dir(), &path) else {
+        return Err(StatusCode::NOT_FOUND);
     };
 
     if file_path.is_file() {
@@ -153,11 +144,8 @@ pub async fn serve_static_asset(
 
     let assets_dir = state.config.public_dir().join("assets");
 
-    let file_path = match validate_safe_path(&assets_dir, &asset_path) {
-        Ok(path) => path,
-        Err(_) => {
-            return Err(StatusCode::NOT_FOUND);
-        }
+    let Ok(file_path) = validate_safe_path(&assets_dir, &asset_path) else {
+        return Err(StatusCode::NOT_FOUND);
     };
 
     if !file_path.is_file() {

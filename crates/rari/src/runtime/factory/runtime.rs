@@ -124,17 +124,14 @@ impl RariRuntime {
 
             runtime.block_on(async {
                 loop {
-                    let (mut js_runtime, module_loader) =
-                        match build_js_runtime(env_vars.clone()) {
-                            Ok(rt) => rt,
-                            Err(_) => {
-                                time::sleep(Duration::from_millis(
-                                    RUNTIME_RESTART_DELAY_MS,
-                                ))
-                                .await;
-                                continue;
-                            }
-                        };
+                    let Ok((mut js_runtime, module_loader)) = build_js_runtime(env_vars.clone())
+                    else {
+                        time::sleep(Duration::from_millis(
+                            RUNTIME_RESTART_DELAY_MS,
+                        ))
+                        .await;
+                        continue;
+                    };
 
                     let mut continue_processing = true;
                     let mut pending_batches: Vec<PendingBatch> = Vec::new();
@@ -408,8 +405,7 @@ async fn handle_js_request(
                 })
                 .collect();
 
-            if let Some(pending_batch) =
-                setup_concurrent_batch(js_runtime, batch, batch_id_counter).await
+            if let Some(pending_batch) = setup_concurrent_batch(js_runtime, batch, batch_id_counter)
             {
                 pending_batches.push(pending_batch);
             }
@@ -499,7 +495,7 @@ async fn handle_js_request(
     Ok(())
 }
 
-async fn setup_concurrent_batch(
+fn setup_concurrent_batch(
     js_runtime: &mut deno_core::JsRuntime,
     batch: Vec<ScriptBatchItem>,
     batch_id_counter: &mut u64,

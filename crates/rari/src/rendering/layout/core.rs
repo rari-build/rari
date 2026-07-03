@@ -1,8 +1,4 @@
-use std::{
-    env,
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::{env, sync::Arc};
 
 use base64::{Engine, engine::general_purpose::STANDARD};
 use cow_utils::CowUtils;
@@ -88,7 +84,7 @@ impl Default for LayoutHtmlCache {
 impl LayoutHtmlCache {
     pub fn new() -> Self {
         Self::with_ttl(
-            Arc::new(MemoryCacheHandler::with_config(MemoryConfig {
+            Arc::new(MemoryCacheHandler::with_config(&MemoryConfig {
                 max_entries: 5000,
                 default_ttl: 3600,
             })),
@@ -183,53 +179,16 @@ impl LayoutRenderer {
         let page_props = utils::create_page_props(route_match, context)?;
         let page_props_json = serde_json::to_string(&page_props)?;
 
-        fn component_dist_path(
-            base_path: &Path,
-            file_path: &str,
-            component_id: Option<&str>,
-        ) -> PathBuf {
-            if let Some(component_id) = component_id {
-                return base_path.join(format!("{component_id}.js"));
-            }
-
-            fn convert_route_path_to_dist_path(path: &str) -> String {
-                let (base, ext) = if let Some(pos) = path.rfind('.') {
-                    (&path[..pos], &path[pos..])
-                } else {
-                    (path, "")
-                };
-
-                let converted_base = base
-                    .chars()
-                    .map(|c| {
-                        if c.is_alphanumeric() || c == '/' || c == '-' || c == '_' {
-                            c
-                        } else {
-                            '_'
-                        }
-                    })
-                    .collect::<String>();
-
-                format!("{converted_base}{ext}")
-            }
-
-            let js_filename =
-                file_path.cow_replace(".tsx", ".js").cow_replace(".ts", ".js").into_owned();
-            let dist_filename = convert_route_path_to_dist_path(&js_filename);
-            base_path.join("app").join(&dist_filename)
-        }
-
         let dist_server_path = env::current_dir()
             .ok()
             .map(|p| p.join("dist/server"))
             .and_then(|p| p.canonicalize().ok());
 
-        let base_path = match dist_server_path {
-            Some(path) => path,
-            None => return Ok(false),
+        let Some(base_path) = dist_server_path else {
+            return Ok(false);
         };
 
-        let page_file_path = component_dist_path(
+        let page_file_path = utils::component_dist_path(
             &base_path,
             &route_match.route.file_path,
             route_match.route.component_id.as_deref(),
@@ -377,6 +336,7 @@ impl LayoutRenderer {
         self.render_route(route_match, context, request_context).await
     }
 
+    #[expect(clippy::too_many_lines)]
     pub async fn render_route_with_streaming(
         &self,
         route_match: &AppRouteMatch,
@@ -1062,6 +1022,7 @@ impl LayoutRenderer {
         Ok(RscStream::new(rx))
     }
 
+    #[expect(clippy::too_many_lines)]
     pub fn build_composition_script(
         &self,
         route_match: &AppRouteMatch,
@@ -1232,7 +1193,7 @@ impl LayoutRenderer {
     ) -> Result<String, RariError> {
         let component_id = utils::get_component_id(loading_path);
 
-        let mut renderer = self.renderer.lock().await;
+        let renderer = self.renderer.lock().await;
         renderer.render_to_string(&component_id, None).await
     }
 
@@ -1254,7 +1215,7 @@ impl LayoutRenderer {
         let props_json = serde_json::to_string(&props)
             .map_err(|e| RariError::internal(format!("Failed to serialize error props: {e}")))?;
 
-        let mut renderer = self.renderer.lock().await;
+        let renderer = self.renderer.lock().await;
         renderer.render_to_string(&component_id, Some(&props_json)).await
     }
 
@@ -1265,7 +1226,7 @@ impl LayoutRenderer {
     ) -> Result<String, RariError> {
         let component_id = utils::get_component_id(not_found_path);
 
-        let mut renderer = self.renderer.lock().await;
+        let renderer = self.renderer.lock().await;
         renderer.render_to_string(&component_id, None).await
     }
 

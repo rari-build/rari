@@ -399,7 +399,7 @@ impl ComponentRegistry {
             return Some(component.source.clone());
         }
 
-        let further_normalized_id = self.normalize_component_id(normalized_id.as_ref());
+        let further_normalized_id = Self::normalize_component_id(normalized_id.as_ref());
         if let Some(component) = self.components.get(&further_normalized_id) {
             return Some(component.source.clone());
         }
@@ -428,7 +428,7 @@ impl ComponentRegistry {
         }
     }
 
-    fn normalize_component_id(&self, id: &str) -> String {
+    fn normalize_component_id(id: &str) -> String {
         let mut clean_id = id;
         let is_relative = id.starts_with("./") || id.starts_with("../");
 
@@ -588,12 +588,13 @@ mod tests {
 
     #[test]
     fn test_normalize_component_id() {
-        let registry = ComponentRegistry::new();
-
-        assert_eq!(registry.normalize_component_id("./component.tsx"), "component");
-        assert_eq!(registry.normalize_component_id("../utils/helper.js"), "helper");
-        assert_eq!(registry.normalize_component_id("Button"), "Button");
-        assert_eq!(registry.normalize_component_id("components/Button.jsx"), "components/Button");
+        assert_eq!(ComponentRegistry::normalize_component_id("./component.tsx"), "component");
+        assert_eq!(ComponentRegistry::normalize_component_id("../utils/helper.js"), "helper");
+        assert_eq!(ComponentRegistry::normalize_component_id("Button"), "Button");
+        assert_eq!(
+            ComponentRegistry::normalize_component_id("components/Button.jsx"),
+            "components/Button"
+        );
     }
 
     #[test]

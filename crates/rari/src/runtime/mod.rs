@@ -1,3 +1,5 @@
+#![expect(clippy::missing_errors_doc, clippy::too_many_lines)]
+
 use std::{
     future::Future,
     sync::{Arc, OnceLock},

@@ -4,10 +4,11 @@ use image::{RgbaImage, imageops};
 use reqwest::blocking::Client;
 
 use super::{super::layout::ComputedLayout, border::BorderRadius, renderer::ImageRenderer};
+use crate::utils::{cast, float};
 
 impl ImageRenderer {
     pub(super) fn render_image(
-        &mut self,
+        &self,
         layout: &ComputedLayout,
         canvas: &mut RgbaImage,
     ) -> Result<(), String> {
@@ -18,20 +19,20 @@ impl ImageRenderer {
             .and_then(|v| v.as_str())
             .ok_or("Image element missing src attribute")?;
 
-        let source_image = self.load_image(src)?;
+        let source_image = Self::load_image(src)?;
 
         let object_fit = layout.style.get("objectFit").map(String::as_str).unwrap_or("fill");
 
-        let border_radius = self.parse_border_radius(&layout.style);
+        let border_radius = Self::parse_border_radius(&layout.style);
 
-        let target_width = layout.width as u32;
-        let target_height = layout.height as u32;
+        let target_width = cast::f32_to_u32(layout.width);
+        let target_height = cast::f32_to_u32(layout.height);
 
         let (processed_image, offset_x, offset_y) =
-            self.process_object_fit(source_image, target_width, target_height, object_fit)?;
+            Self::process_object_fit(source_image, target_width, target_height, object_fit)?;
 
-        let x_start = layout.x as u32 + offset_x;
-        let y_start = layout.y as u32 + offset_y;
+        let x_start = cast::f32_to_u32(layout.x) + offset_x;
+        let y_start = cast::f32_to_u32(layout.y) + offset_y;
 
         if border_radius.top_left > 0.0
             || border_radius.top_right > 0.0
@@ -52,7 +53,7 @@ impl ImageRenderer {
 
                 if canvas_x < self.width && canvas_y < self.height {
                     let bg = canvas.get_pixel(canvas_x, canvas_y);
-                    let blended = self.alpha_blend(*bg, *pixel);
+                    let blended = Self::alpha_blend(*bg, *pixel);
                     canvas.put_pixel(canvas_x, canvas_y, blended);
                 }
             }
@@ -62,22 +63,21 @@ impl ImageRenderer {
     }
 
     fn process_object_fit(
-        &self,
         source_image: RgbaImage,
         target_width: u32,
         target_height: u32,
         object_fit: &str,
     ) -> Result<(RgbaImage, u32, u32), String> {
-        let src_width = source_image.width() as f32;
-        let src_height = source_image.height() as f32;
-        let target_w = target_width as f32;
-        let target_h = target_height as f32;
+        let src_width = float::u32_to_f32(source_image.width());
+        let src_height = float::u32_to_f32(source_image.height());
+        let target_w = float::u32_to_f32(target_width);
+        let target_h = float::u32_to_f32(target_height);
 
         match object_fit {
             "contain" => {
                 let scale = (target_w / src_width).min(target_h / src_height);
-                let new_width = (src_width * scale) as u32;
-                let new_height = (src_height * scale) as u32;
+                let new_width = cast::f32_to_u32(src_width * scale);
+                let new_height = cast::f32_to_u32(src_height * scale);
 
                 let resized = imageops::resize(
                     &source_image,
@@ -93,8 +93,8 @@ impl ImageRenderer {
             }
             "cover" => {
                 let scale = (target_w / src_width).max(target_h / src_height);
-                let new_width = (src_width * scale) as u32;
-                let new_height = (src_height * scale) as u32;
+                let new_width = cast::f32_to_u32(src_width * scale);
+                let new_height = cast::f32_to_u32(src_height * scale);
 
                 let resized = imageops::resize(
                     &source_image,
@@ -114,8 +114,8 @@ impl ImageRenderer {
             }
             "scale-down" => {
                 let scale = (target_w / src_width).min(target_h / src_height).min(1.0);
-                let new_width = (src_width * scale) as u32;
-                let new_height = (src_height * scale) as u32;
+                let new_width = cast::f32_to_u32(src_width * scale);
+                let new_height = cast::f32_to_u32(src_height * scale);
 
                 let resized = if scale < 1.0 {
                     imageops::resize(
@@ -134,25 +134,31 @@ impl ImageRenderer {
                 Ok((resized, offset_x, offset_y))
             }
             "none" => {
-                let offset_x =
-                    if src_width < target_w { ((target_w - src_width) / 2.0) as u32 } else { 0 };
-                let offset_y =
-                    if src_height < target_h { ((target_h - src_height) / 2.0) as u32 } else { 0 };
+                let offset_x = if src_width < target_w {
+                    cast::f32_to_u32((target_w - src_width) / 2.0)
+                } else {
+                    0
+                };
+                let offset_y = if src_height < target_h {
+                    cast::f32_to_u32((target_h - src_height) / 2.0)
+                } else {
+                    0
+                };
 
                 if src_width > target_w || src_height > target_h {
                     let crop_x = if src_width > target_w {
-                        ((src_width - target_w) / 2.0) as u32
+                        cast::f32_to_u32((src_width - target_w) / 2.0)
                     } else {
                         0
                     };
                     let crop_y = if src_height > target_h {
-                        ((src_height - target_h) / 2.0) as u32
+                        cast::f32_to_u32((src_height - target_h) / 2.0)
                     } else {
                         0
                     };
 
-                    let crop_width = src_width.min(target_w) as u32;
-                    let crop_height = src_height.min(target_h) as u32;
+                    let crop_width = cast::f32_to_u32(src_width.min(target_w));
+                    let crop_height = cast::f32_to_u32(src_height.min(target_h));
 
                     let cropped =
                         imageops::crop_imm(&source_image, crop_x, crop_y, crop_width, crop_height)
@@ -190,8 +196,8 @@ impl ImageRenderer {
         y_start: u32,
         radius: BorderRadius,
     ) {
-        let img_width = image.width() as f32;
-        let img_height = image.height() as f32;
+        let img_width = float::u32_to_f32(image.width());
+        let img_height = float::u32_to_f32(image.height());
 
         for (x, y, pixel) in image.enumerate_pixels() {
             let canvas_x = x_start + x;
@@ -201,8 +207,8 @@ impl ImageRenderer {
                 continue;
             }
 
-            let fx = x as f32;
-            let fy = y as f32;
+            let fx = float::u32_to_f32(x);
+            let fy = float::u32_to_f32(y);
 
             let in_corner = if fx < radius.top_left && fy < radius.top_left {
                 let dx = radius.top_left - fx;
@@ -228,23 +234,23 @@ impl ImageRenderer {
 
             if in_corner {
                 let bg = canvas.get_pixel(canvas_x, canvas_y);
-                let blended = self.alpha_blend(*bg, *pixel);
+                let blended = Self::alpha_blend(*bg, *pixel);
                 canvas.put_pixel(canvas_x, canvas_y, blended);
             }
         }
     }
 
-    fn load_image(&self, src: &str) -> Result<RgbaImage, String> {
+    fn load_image(src: &str) -> Result<RgbaImage, String> {
         if src.starts_with("http://") || src.starts_with("https://") {
-            self.load_remote_image(src)
+            Self::load_remote_image(src)
         } else if src.starts_with("data:") {
-            self.load_data_url(src)
+            Self::load_data_url(src)
         } else {
             Ok(image::open(src).map_err(|e| format!("Failed to load image {src}: {e}"))?.to_rgba8())
         }
     }
 
-    fn load_remote_image(&self, url: &str) -> Result<RgbaImage, String> {
+    fn load_remote_image(url: &str) -> Result<RgbaImage, String> {
         use std::io::Read;
 
         let client = Client::builder()
@@ -259,14 +265,13 @@ impl ImageRenderer {
             return Err(format!("Failed to fetch image: HTTP {}", response.status()));
         }
 
-        const MAX_IMAGE_SIZE: usize = 10 * 1024 * 1024;
         let mut buffer = Vec::new();
         response
-            .take((MAX_IMAGE_SIZE + 1) as u64)
+            .take((super::super::MAX_OG_IMAGE_BYTES + 1) as u64)
             .read_to_end(&mut buffer)
             .map_err(|e| format!("Failed to read image data: {e}"))?;
 
-        if buffer.len() > MAX_IMAGE_SIZE {
+        if buffer.len() > super::super::MAX_OG_IMAGE_BYTES {
             return Err("Image too large (max 10MB)".to_string());
         }
 
@@ -275,7 +280,7 @@ impl ImageRenderer {
             .to_rgba8())
     }
 
-    fn load_data_url(&self, data_url: &str) -> Result<RgbaImage, String> {
+    fn load_data_url(data_url: &str) -> Result<RgbaImage, String> {
         let parts: Vec<&str> = data_url.splitn(2, ',').collect();
         if parts.len() != 2 {
             return Err("Invalid data URL format".to_string());

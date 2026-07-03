@@ -14,7 +14,7 @@ pub use deno_permissions::PermissionDeniedError;
 use parking_lot::RwLock;
 use rustc_hash::FxHashSet;
 
-fn to_io_err(err: PermissionDeniedError) -> Error {
+fn to_io_err(err: &PermissionDeniedError) -> Error {
     Error::new(PermissionDenied, err.to_string())
 }
 
