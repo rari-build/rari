@@ -147,6 +147,7 @@ impl AppRouter {
         Self { manifest: Arc::new(manifest) }
     }
 
+    #[expect(clippy::missing_errors_doc)]
     pub async fn from_file(path: &str) -> Result<Self, RariError> {
         let content = fs::read_to_string(path)
             .await
@@ -158,6 +159,7 @@ impl AppRouter {
         Ok(Self::new(manifest))
     }
 
+    #[expect(clippy::missing_errors_doc)]
     pub fn match_route(&self, path: &str) -> Result<AppRouteMatch, RariError> {
         let normalized_path = Self::normalize_path(path);
 

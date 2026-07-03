@@ -681,5 +681,5 @@ pub struct ComputedLayout {
     pub padding: taffy::Rect<f32>,
     pub element: JsxElement,
     pub style: FxHashMap<String, String>,
-    pub children: Vec<ComputedLayout>,
+    pub children: Vec<Self>,
 }

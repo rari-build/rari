@@ -25,7 +25,7 @@ pub enum RscElement {
     Reference(String),
     Text(String),
     Fragment {
-        children: Vec<RscElement>,
+        children: Vec<Self>,
     },
 }
 

@@ -4,7 +4,7 @@ use super::ExtensionTrait;
 
 impl ExtensionTrait<()> for deno_node_sqlite::deno_node_sqlite {
     fn init((): ()) -> Extension {
-        deno_node_sqlite::deno_node_sqlite::init()
+        Self::init()
     }
 }
 

@@ -4,7 +4,7 @@ use super::ExtensionTrait;
 
 impl ExtensionTrait<()> for deno_node_crypto::deno_node_crypto {
     fn init((): ()) -> Extension {
-        deno_node_crypto::deno_node_crypto::init()
+        Self::init()
     }
 }
 

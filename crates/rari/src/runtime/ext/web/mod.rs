@@ -19,7 +19,7 @@ extension!(
 impl ExtensionTrait<WebOptions> for init_fetch {
     #[expect(unused_variables)]
     fn init(options: WebOptions) -> Extension {
-        init_fetch::init()
+        Self::init()
     }
 }
 impl ExtensionTrait<WebOptions> for deno_fetch::deno_fetch {
@@ -36,7 +36,7 @@ impl ExtensionTrait<WebOptions> for deno_fetch::deno_fetch {
             resolver: options.resolver.clone(),
         };
 
-        deno_fetch::deno_fetch::init(options)
+        Self::init(options)
     }
 }
 
@@ -49,12 +49,12 @@ extension!(
 impl ExtensionTrait<WebOptions> for init_net {
     #[expect(unused_variables)]
     fn init(options: WebOptions) -> Extension {
-        init_net::init()
+        Self::init()
     }
 }
 impl ExtensionTrait<WebOptions> for deno_net::deno_net {
     fn init(options: WebOptions) -> Extension {
-        deno_net::deno_net::init(
+        Self::init(
             options.root_cert_store_provider.clone(),
             options.unsafely_ignore_certificate_errors.clone(),
         )
@@ -69,13 +69,13 @@ extension!(
 );
 impl ExtensionTrait<()> for init_telemetry {
     fn init((): ()) -> Extension {
-        init_telemetry::init()
+        Self::init()
     }
 }
 
 impl ExtensionTrait<()> for deno_telemetry::deno_telemetry {
     fn init((): ()) -> Extension {
-        deno_telemetry::deno_telemetry::init()
+        Self::init()
     }
 }
 
@@ -91,24 +91,19 @@ extension!(
 );
 impl ExtensionTrait<WebOptions> for init_web {
     fn init(options: WebOptions) -> Extension {
-        init_web::init(options.permissions)
+        Self::init(options.permissions)
     }
 }
 
 impl ExtensionTrait<WebOptions> for deno_web::deno_web {
     fn init(options: WebOptions) -> Extension {
-        deno_web::deno_web::init(
-            options.blob_store,
-            options.base_url,
-            false,
-            options.broadcast_channel,
-        )
+        Self::init(options.blob_store, options.base_url, false, options.broadcast_channel)
     }
 }
 
 impl ExtensionTrait<()> for deno_tls::deno_tls {
     fn init((): ()) -> Extension {
-        deno_tls::deno_tls::init()
+        Self::init()
     }
 }
 

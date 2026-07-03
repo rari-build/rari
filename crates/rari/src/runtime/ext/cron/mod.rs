@@ -11,12 +11,12 @@ extension!(
 );
 impl ExtensionTrait<()> for init_cron {
     fn init((): ()) -> Extension {
-        init_cron::init()
+        Self::init()
     }
 }
 impl ExtensionTrait<()> for deno_cron::deno_cron {
     fn init((): ()) -> Extension {
-        deno_cron::deno_cron::init(Box::new(LocalCronHandler::new()))
+        Self::init(Box::new(LocalCronHandler::new()))
     }
 }
 

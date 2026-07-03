@@ -10,7 +10,7 @@ extension!(
 
 impl ExtensionTrait<()> for init_utilities {
     fn init((): ()) -> Extension {
-        init_utilities::init()
+        Self::init()
     }
 }
 

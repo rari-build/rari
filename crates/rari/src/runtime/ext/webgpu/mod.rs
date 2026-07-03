@@ -4,7 +4,7 @@ use super::ExtensionTrait;
 
 impl ExtensionTrait<()> for deno_webgpu::deno_webgpu {
     fn init((): ()) -> Extension {
-        deno_webgpu::deno_webgpu::init()
+        Self::init()
     }
 }
 

@@ -12,13 +12,13 @@ extension!(
 
 impl ExtensionTrait<()> for init_fs {
     fn init((): ()) -> Extension {
-        init_fs::init()
+        Self::init()
     }
 }
 
 impl ExtensionTrait<FileSystemRc> for deno_fs::deno_fs {
     fn init(fs: FileSystemRc) -> Extension {
-        deno_fs::deno_fs::init(fs)
+        Self::init(fs)
     }
 }
 

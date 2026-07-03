@@ -22,7 +22,7 @@ extension!(
 
 impl ExtensionTrait<()> for rari_redis_cache {
     fn init((): ()) -> Extension {
-        rari_redis_cache::init()
+        Self::init()
     }
 }
 

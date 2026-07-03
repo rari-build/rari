@@ -19,7 +19,7 @@ extension!(
 
 impl ExtensionTrait<()> for init_node {
     fn init((): ()) -> Extension {
-        init_node::init()
+        Self::init()
     }
 }
 
@@ -29,7 +29,7 @@ impl ExtensionTrait<Arc<Resolver>> for deno_node::deno_node {
 
         let fs = resolver.filesystem();
 
-        deno_node::deno_node::init::<DenoInNpmPackageChecker, NpmPackageFolderResolverImpl, RealSys>(
+        Self::init::<DenoInNpmPackageChecker, NpmPackageFolderResolverImpl, RealSys>(
             Some(services),
             fs,
         )

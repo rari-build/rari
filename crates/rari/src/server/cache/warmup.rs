@@ -81,6 +81,7 @@ pub async fn warm_cache(state: &ServerState) {
     );
 }
 
+#[expect(clippy::too_many_lines)]
 async fn warm_route(
     state: &ServerState,
     app_router: &Arc<AppRouter>,

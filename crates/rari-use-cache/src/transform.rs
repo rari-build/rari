@@ -41,7 +41,7 @@ struct TransformVisitor {
 
 impl TransformVisitor {
     fn new(filename: &str, hash_salt: &str) -> Self {
-        TransformVisitor {
+        Self {
             filename: filename.to_string(),
             hash_salt: hash_salt.to_string(),
             index: 0,

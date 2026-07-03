@@ -12,9 +12,9 @@ pub enum StopPosition {
 impl StopPosition {
     pub fn to_px(self, axis_length: f32) -> f32 {
         match self {
-            StopPosition::Percentage(pct) => (pct / 100.0) * axis_length,
-            StopPosition::Px(px) => px,
-            StopPosition::Normalized(n) => n * axis_length,
+            Self::Percentage(pct) => (pct / 100.0) * axis_length,
+            Self::Px(px) => px,
+            Self::Normalized(n) => n * axis_length,
         }
     }
 }
@@ -66,7 +66,7 @@ impl LinearGradient {
             return None;
         }
 
-        Some(LinearGradient { angle_deg, stops })
+        Some(Self { angle_deg, stops })
     }
 
     fn split_gradient_parts(s: &str) -> Vec<String> {

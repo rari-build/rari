@@ -10,12 +10,12 @@ extension!(
 );
 impl ExtensionTrait<()> for init_websocket {
     fn init((): ()) -> Extension {
-        init_websocket::init()
+        Self::init()
     }
 }
 impl ExtensionTrait<WebOptions> for deno_websocket::deno_websocket {
     fn init(_options: WebOptions) -> Extension {
-        deno_websocket::deno_websocket::init()
+        Self::init()
     }
 }
 

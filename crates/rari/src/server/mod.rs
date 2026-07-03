@@ -1,5 +1,3 @@
-#![expect(clippy::missing_errors_doc, clippy::too_many_lines)]
-
 pub mod cache;
 pub mod compression;
 pub mod config;

@@ -12,6 +12,7 @@ use crate::server::ServerState;
 pub struct CacheLoader;
 
 impl CacheLoader {
+    #[expect(clippy::missing_errors_doc)]
     pub async fn load_page_cache_configs(state: &ServerState) -> Result<(), RariError> {
         let pages_dir = Path::new("src/pages");
         if !pages_dir.exists() {

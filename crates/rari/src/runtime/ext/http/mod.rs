@@ -6,7 +6,7 @@ mod runtime;
 use runtime::deno_http_runtime;
 impl ExtensionTrait<()> for deno_http_runtime {
     fn init((): ()) -> Extension {
-        deno_http_runtime::init()
+        Self::init()
     }
 }
 
@@ -18,12 +18,12 @@ extension!(
 );
 impl ExtensionTrait<()> for init_http {
     fn init((): ()) -> Extension {
-        init_http::init()
+        Self::init()
     }
 }
 impl ExtensionTrait<()> for deno_http::deno_http {
     fn init((): ()) -> Extension {
-        deno_http::deno_http::init(deno_http::Options {
+        Self::init(deno_http::Options {
             http2_builder_hook: None,
             no_legacy_abort: false,
             automatic_compression: false,

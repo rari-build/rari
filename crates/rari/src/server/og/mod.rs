@@ -19,6 +19,7 @@ pub use generator::OgImageGenerator;
 use rari_error::RariError;
 pub use types::{OgImageParams, OgImageResult};
 
+#[expect(clippy::missing_errors_doc)]
 pub async fn handle_og_image_request(
     State(generator): State<Arc<OgImageGenerator>>,
     Path(route_path): Path<String>,
@@ -69,19 +70,19 @@ pub enum OgImageError {
 
 impl From<RariError> for OgImageError {
     fn from(err: RariError) -> Self {
-        OgImageError::InternalError(err.to_string())
+        Self::InternalError(err.to_string())
     }
 }
 
 impl IntoResponse for OgImageError {
     fn into_response(self) -> Response {
         let (status, message) = match self {
-            OgImageError::ComponentNotFound(_) => (StatusCode::NOT_FOUND, self.to_string()),
-            OgImageError::InvalidParams(_) => (StatusCode::BAD_REQUEST, self.to_string()),
-            OgImageError::ExecutionError(_) | OgImageError::GenerationError(_) => {
+            Self::ComponentNotFound(_) => (StatusCode::NOT_FOUND, self.to_string()),
+            Self::InvalidParams(_) => (StatusCode::BAD_REQUEST, self.to_string()),
+            Self::ExecutionError(_) | Self::GenerationError(_) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, self.to_string())
             }
-            OgImageError::InternalError(_) => {
+            Self::InternalError(_) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error".to_string())
             }
         };

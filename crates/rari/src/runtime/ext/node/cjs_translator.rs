@@ -37,13 +37,13 @@ impl From<ExtNodeCjsAnalysis<'_>> for CjsAnalysis {
     fn from(analysis: ExtNodeCjsAnalysis) -> Self {
         match analysis {
             ExtNodeCjsAnalysis::Esm(_, Some(exports)) => {
-                CjsAnalysis::EsmAnalysis(ModuleExportsAndReExports {
+                Self::EsmAnalysis(ModuleExportsAndReExports {
                     exports: exports.exports,
                     reexports: exports.reexports,
                 })
             }
-            ExtNodeCjsAnalysis::Esm(_, None) => CjsAnalysis::Esm,
-            ExtNodeCjsAnalysis::Cjs(analysis) => CjsAnalysis::Cjs(ModuleExportsAndReExports {
+            ExtNodeCjsAnalysis::Esm(_, None) => Self::Esm,
+            ExtNodeCjsAnalysis::Cjs(analysis) => Self::Cjs(ModuleExportsAndReExports {
                 exports: analysis.exports,
                 reexports: analysis.reexports,
             }),

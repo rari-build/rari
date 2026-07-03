@@ -1,3 +1,5 @@
+#![expect(clippy::missing_errors_doc, clippy::too_many_lines)]
+
 use std::{
     cmp::Ordering,
     env,
@@ -27,8 +29,8 @@ pub enum Mode {
 impl Display for Mode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            Mode::Development => write!(f, "development"),
-            Mode::Production => write!(f, "production"),
+            Self::Development => write!(f, "development"),
+            Self::Production => write!(f, "production"),
         }
     }
 }
@@ -226,26 +228,24 @@ enum RoutePattern {
 impl RoutePattern {
     fn from_pattern(pattern: &str) -> Self {
         if let Some(prefix) = pattern.strip_suffix("/*") {
-            RoutePattern::Prefix(prefix.to_string())
+            Self::Prefix(prefix.to_string())
         } else if pattern.contains('*') {
             let escaped = regex::escape(pattern);
             let regex_pattern = escaped.cow_replace(r"\*", ".*");
             match regex::Regex::new(&format!("^{regex_pattern}$")) {
-                Ok(regex) => RoutePattern::Regex(regex),
-                Err(_) => RoutePattern::Exact(pattern.to_string()),
+                Ok(regex) => Self::Regex(regex),
+                Err(_) => Self::Exact(pattern.to_string()),
             }
         } else {
-            RoutePattern::Exact(pattern.to_string())
+            Self::Exact(pattern.to_string())
         }
     }
 
     fn matches(&self, path: &str) -> bool {
         match self {
-            RoutePattern::Exact(pattern) => pattern == path,
-            RoutePattern::Prefix(prefix) => {
-                path == prefix || path.starts_with(&format!("{prefix}/"))
-            }
-            RoutePattern::Regex(regex) => regex.is_match(path),
+            Self::Exact(pattern) => pattern == path,
+            Self::Prefix(prefix) => path == prefix || path.starts_with(&format!("{prefix}/")),
+            Self::Regex(regex) => regex.is_match(path),
         }
     }
 }
@@ -291,7 +291,7 @@ impl From<&CacheControlConfig> for CompiledCacheControlConfig {
             }
         });
 
-        CompiledCacheControlConfig { routes }
+        Self { routes }
     }
 }
 
@@ -674,11 +674,11 @@ impl Config {
         Ok(config)
     }
 
-    pub fn get() -> Option<&'static Config> {
+    pub fn get() -> Option<&'static Self> {
         GLOBAL_CONFIG.get()
     }
 
-    pub fn set_global(config: Config) -> Result<(), Box<Config>> {
+    pub fn set_global(config: Self) -> Result<(), Box<Self>> {
         GLOBAL_CONFIG.set(config).map_err(Box::new)
     }
 

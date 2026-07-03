@@ -21,7 +21,6 @@ use deno_runtime::{
         worker_host::{CreateWebWorkerCb, deno_worker_host},
     },
     permissions::RuntimePermissionDescriptorParser,
-    runtime,
     web_worker::{WebWorker, WebWorkerOptions, WebWorkerServiceOptions},
 };
 use deno_telemetry::OtelConfig;
@@ -72,19 +71,19 @@ extension!(
 impl ExtensionTrait<()> for init_console {
     fn init((): ()) -> Extension {
         colors::set_use_color(true);
-        init_console::init()
+        Self::init()
     }
 }
 
 impl ExtensionTrait<()> for init_runtime {
     fn init((): ()) -> Extension {
-        init_runtime::init()
+        Self::init()
     }
 }
 
 impl ExtensionTrait<()> for deno_runtime::runtime {
     fn init((): ()) -> Extension {
-        let mut ext = runtime::init();
+        let mut ext = Self::init();
 
         ext.esm_files = ext
             .esm_files
@@ -107,7 +106,7 @@ impl ExtensionTrait<()> for deno_runtime::runtime {
 
 impl ExtensionTrait<()> for deno_permissions {
     fn init((): ()) -> Extension {
-        deno_permissions::init()
+        Self::init()
     }
 }
 
@@ -119,37 +118,37 @@ impl ExtensionTrait<(&ExtensionOptions, Option<CrossIsolateStore<SharedRef<Backi
     ) -> Extension {
         let options = WebWorkerCallbackOptions::new(options.0, options.1);
         let callback = create_web_worker_callback(options);
-        deno_worker_host::init(callback, None)
+        Self::init(callback, None)
     }
 }
 
 impl ExtensionTrait<()> for deno_web_worker {
     fn init((): ()) -> Extension {
-        deno_web_worker::init()
+        Self::init()
     }
 }
 
 impl ExtensionTrait<Arc<Resolver>> for deno_process {
     fn init(resolver: Arc<Resolver>) -> Extension {
-        deno_process::init(Some(resolver))
+        Self::init(Some(resolver))
     }
 }
 
 impl ExtensionTrait<()> for deno_os {
     fn init((): ()) -> Extension {
-        deno_os::init(Some(ExitCode::default()))
+        Self::init(Some(ExitCode::default()))
     }
 }
 
 impl ExtensionTrait<()> for deno_bootstrap {
     fn init((): ()) -> Extension {
-        deno_bootstrap::init(None, false)
+        Self::init(None, false)
     }
 }
 
 impl ExtensionTrait<()> for deno_fs_events {
     fn init((): ()) -> Extension {
-        deno_fs_events::init()
+        Self::init()
     }
 }
 

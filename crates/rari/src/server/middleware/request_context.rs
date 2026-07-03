@@ -187,6 +187,7 @@ impl RequestContext {
         }
     }
 
+    #[expect(clippy::missing_errors_doc)]
     pub async fn fetch_with_cache(
         &self,
         url: &str,

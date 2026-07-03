@@ -25,8 +25,8 @@ pub(super) struct BorderRadius {
 }
 
 impl BorderRadius {
-    pub fn inset_by(&self, border: &BorderWidth) -> BorderRadius {
-        BorderRadius {
+    pub fn inset_by(&self, border: &BorderWidth) -> Self {
+        Self {
             top_left: (self.top_left - border.top.max(border.left)).max(0.0),
             top_right: (self.top_right - border.top.max(border.right)).max(0.0),
             bottom_right: (self.bottom_right - border.bottom.max(border.right)).max(0.0),
