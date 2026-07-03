@@ -14,11 +14,6 @@ pub struct Target {
     pub platform: &'static str,
     pub binary_name: &'static str,
     pub package_dir: &'static str,
-    #[allow(
-        clippy::allow_attributes,
-        reason = "Field naming follows convention, clippy suggestion less clear"
-    )]
-    #[allow(clippy::struct_field_names)]
     pub addon_package_dir: &'static str,
 }
 
@@ -67,10 +62,12 @@ pub const TARGETS: &[Target] = &[
     },
 ];
 
+#[expect(clippy::print_stdout)]
 pub fn log(message: &str) {
     println!("{} {}", "➜".cyan(), message);
 }
 
+#[expect(clippy::print_stdout)]
 pub fn log_success(message: &str) {
     println!("{} {}", "✓".green(), message);
 }
@@ -79,6 +76,7 @@ pub fn log_error(message: &str) {
     eprintln!("{} {}", "✗".red(), message);
 }
 
+#[expect(clippy::print_stdout)]
 pub fn log_warning(message: &str) {
     println!("{} {}", "⚠".yellow(), message);
 }

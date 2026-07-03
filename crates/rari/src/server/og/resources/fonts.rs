@@ -124,7 +124,7 @@ impl FontContext {
 }
 
 #[cfg(test)]
-#[allow(clippy::allow_attributes, clippy::expect_used, clippy::print_stdout)]
+#[expect(clippy::expect_used, clippy::print_stdout)]
 mod tests {
     use parley::PositionedLayoutItem::GlyphRun;
     use swash::scale::StrikeWith::BestFit;

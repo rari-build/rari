@@ -74,6 +74,7 @@ impl ComponentRegistry {
         id.cow_replace('\\', "/")
     }
 
+    #[expect(clippy::missing_errors_doc)]
     pub fn register_component(
         &mut self,
         id: &str,
@@ -454,7 +455,7 @@ impl Default for ComponentRegistry {
 }
 
 #[cfg(test)]
-#[allow(clippy::allow_attributes, clippy::expect_used, clippy::unwrap_used)]
+#[expect(clippy::expect_used, clippy::unwrap_used)]
 mod tests {
     use smallvec::smallvec;
 

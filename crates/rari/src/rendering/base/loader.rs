@@ -18,6 +18,7 @@ fn create_js_wrapper(js_code: &str) -> String {
 }
 
 impl RscJsLoader {
+    #[expect(clippy::missing_errors_doc)]
     pub fn load_component_render_with_data(
         component_id: &str,
         component_hash: &str,

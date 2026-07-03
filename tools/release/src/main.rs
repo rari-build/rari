@@ -1,5 +1,3 @@
-#![expect(clippy::print_stdout)]
-
 mod app;
 mod changelog;
 mod git;
@@ -43,6 +41,7 @@ struct Args {
     no_push: bool,
 }
 
+#[expect(clippy::print_stdout)]
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
@@ -112,10 +111,7 @@ async fn run_app(
     Ok(())
 }
 
-#[expect(
-    clippy::too_many_lines,
-    reason = "Non-interactive release orchestration requires comprehensive workflow steps"
-)]
+#[expect(clippy::too_many_lines, clippy::print_stdout)]
 async fn run_non_interactive(
     only: Option<Vec<String>>,
     dry_run: bool,

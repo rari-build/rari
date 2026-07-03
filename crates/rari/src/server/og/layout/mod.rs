@@ -1,5 +1,3 @@
-#![allow(clippy::match_wildcard_for_single_variants)]
-
 use std::time::Duration;
 
 use parley::style::FontWeight;
@@ -458,6 +456,7 @@ fn measure_node(
         return Size::ZERO;
     }
 
+    #[expect(clippy::match_wildcard_for_single_variants)]
     let text: String = node_data
         .element
         .children

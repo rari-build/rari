@@ -1,5 +1,3 @@
-#![expect(clippy::print_stdout)]
-
 mod common;
 mod rari_binary;
 mod use_cache_addon;
@@ -35,6 +33,7 @@ struct Args {
     bin: bool,
 }
 
+#[expect(clippy::print_stdout)]
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();

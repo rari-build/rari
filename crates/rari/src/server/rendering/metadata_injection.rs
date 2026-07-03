@@ -541,7 +541,7 @@ pub fn inject_metadata(
 }
 
 #[cfg(test)]
-#[allow(clippy::allow_attributes, clippy::expect_used)]
+#[expect(clippy::expect_used)]
 mod tests {
     use rustc_hash::FxHashMap;
 

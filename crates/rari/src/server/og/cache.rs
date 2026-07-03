@@ -158,7 +158,7 @@ impl OgImageCache {
 }
 
 #[cfg(test)]
-#[allow(clippy::allow_attributes, clippy::expect_used, clippy::unwrap_used)]
+#[expect(clippy::expect_used, clippy::unwrap_used)]
 mod tests {
     use std::env::temp_dir;
 

@@ -112,6 +112,7 @@ pub struct RariRuntime {
 }
 
 impl RariRuntime {
+    #[expect(clippy::too_many_lines)]
     pub fn new(env_vars: Option<FxHashMap<String, String>>) -> Self {
         let (request_sender, mut request_receiver) = mpsc::channel(CHANNEL_CAPACITY);
 
@@ -370,6 +371,7 @@ async fn handle_get_module_namespace(
     Ok::<(), RariError>(())
 }
 
+#[expect(clippy::too_many_lines)]
 async fn handle_js_request(
     request: JsRequest,
     js_runtime: &mut deno_core::JsRuntime,
@@ -600,6 +602,7 @@ fn setup_concurrent_batch(
     })
 }
 
+#[expect(clippy::too_many_lines)]
 fn check_pending_batches(
     js_runtime: &mut deno_core::JsRuntime,
     pending_batches: &mut [PendingBatch],

@@ -26,8 +26,11 @@ pub struct TransformResult {
 }
 
 #[napi]
-#[allow(clippy::allow_attributes, reason = "NAPI macro interface requires this pattern")]
-#[allow(clippy::needless_pass_by_value)]
+#[allow(
+    clippy::allow_attributes,
+    clippy::needless_pass_by_value,
+    reason = "NAPI macro interface requires this pattern"
+)]
 pub fn detect_use_cache(source: String) -> bool {
     directive::detect_use_cache(&source)
 }
@@ -38,8 +41,11 @@ pub fn detect_use_cache(source: String) -> bool {
 ///
 /// Returns an error if transformation fails due to parsing or code generation errors.
 #[napi]
-#[allow(clippy::allow_attributes, reason = "NAPI macro interface requires this pattern")]
-#[allow(clippy::needless_pass_by_value)]
+#[allow(
+    clippy::allow_attributes,
+    clippy::needless_pass_by_value,
+    reason = "NAPI macro interface requires this pattern"
+)]
 pub fn transform_use_cache(source: String, options: TransformOptions) -> Result<TransformResult> {
     let hash_salt = options.hash_salt.unwrap_or_else(|| "rari-use-cache-v1".to_string());
 

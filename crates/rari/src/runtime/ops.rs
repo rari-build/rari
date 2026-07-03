@@ -86,8 +86,6 @@ fn parse_hex_row_id(row_id: &str, context: &str) -> Result<u32, JsErrorBox> {
     })
 }
 
-#[allow(clippy::allow_attributes)]
-#[allow(clippy::disallowed_methods)]
 #[op2]
 pub async fn op_send_chunk_to_rust(
     state: Rc<RefCell<OpState>>,
@@ -254,8 +252,6 @@ pub fn get_streaming_ops() -> Vec<OpDecl> {
     ]
 }
 
-#[allow(clippy::allow_attributes)]
-#[allow(clippy::disallowed_methods)]
 #[op2]
 pub async fn op_fizz_chunk(
     state: Rc<RefCell<OpState>>,
@@ -284,8 +280,6 @@ pub async fn op_fizz_chunk(
     }
 }
 
-#[allow(clippy::allow_attributes)]
-#[allow(clippy::disallowed_methods)]
 #[op2(fast)]
 pub fn op_fizz_done(state: &mut OpState) {
     if let Some(stream_op_state) = state.try_borrow_mut::<StreamOpState>() {
@@ -340,8 +334,6 @@ fn headers_to_json(headers: &HeaderMap) -> serde_json::Map<String, serde_json::V
     headers_obj
 }
 
-#[allow(clippy::allow_attributes)]
-#[allow(clippy::disallowed_methods)]
 #[op2]
 #[serde]
 pub async fn op_fetch_with_cache(

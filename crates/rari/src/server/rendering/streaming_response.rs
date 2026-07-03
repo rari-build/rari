@@ -77,7 +77,7 @@ impl IntoResponse for StreamingHtmlResponse {
 }
 
 #[cfg(test)]
-#[allow(clippy::allow_attributes, clippy::unwrap_used)]
+#[expect(clippy::unwrap_used)]
 mod tests {
     use async_stream::stream;
     use axum::body::to_bytes;

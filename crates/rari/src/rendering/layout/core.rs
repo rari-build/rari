@@ -1,3 +1,5 @@
+#![expect(clippy::missing_errors_doc)]
+
 use std::{env, sync::Arc};
 
 use base64::{Engine, engine::general_purpose::STANDARD};
@@ -1245,7 +1247,7 @@ impl LayoutRenderer {
 }
 
 #[cfg(test)]
-#[allow(clippy::allow_attributes, clippy::expect_used, clippy::unwrap_used)]
+#[expect(clippy::expect_used, clippy::unwrap_used)]
 mod tests {
     use super::*;
     use crate::server::cache::handler::NoOpCacheHandler;

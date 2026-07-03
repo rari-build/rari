@@ -928,7 +928,7 @@ pub fn build_set_cookie_header(cookie: &PendingCookie) -> Result<String, String>
 }
 
 #[cfg(test)]
-#[allow(clippy::allow_attributes, clippy::unwrap_used, clippy::float_cmp, clippy::approx_constant)]
+#[expect(clippy::unwrap_used, clippy::float_cmp, clippy::approx_constant)]
 mod tests {
     use serde_json::json;
 

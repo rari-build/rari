@@ -2,7 +2,6 @@
     clippy::unnecessary_wraps,
     reason = "Generator methods return Result for API consistency with error-handling variants"
 )]
-#![allow(clippy::explicit_counter_loop)]
 
 use std::{path::PathBuf, string::ToString, sync::Arc, vec::Vec};
 
@@ -206,6 +205,7 @@ impl OgImageGenerator {
                 let mut matches = true;
                 let mut path_idx = 0;
 
+                #[expect(clippy::explicit_counter_loop)]
                 for pattern_seg in &pattern_segments {
                     if pattern_seg.starts_with("[...") && pattern_seg.ends_with(']') {
                         let param_name = &pattern_seg[4..pattern_seg.len() - 1];
@@ -407,7 +407,7 @@ impl OgImageGenerator {
 }
 
 #[cfg(test)]
-#[allow(clippy::allow_attributes, clippy::unwrap_used)]
+#[expect(clippy::unwrap_used)]
 mod tests {
     use std::env;
 

@@ -767,6 +767,7 @@ export default {{}};
         None
     }
 
+    #[expect(clippy::too_many_lines)]
     fn wrap_cjs_module(content: &str, file_path: &str) -> String {
         let file_dir = if let Some(last_slash) = file_path.rfind('/') {
             &file_path[..last_slash]
@@ -1387,6 +1388,7 @@ impl Default for RariModuleLoader {
 }
 
 impl ModuleLoader for RariModuleLoader {
+    #[expect(clippy::too_many_lines)]
     fn resolve(
         &self,
         specifier: &str,

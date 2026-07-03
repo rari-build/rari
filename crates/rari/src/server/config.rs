@@ -880,7 +880,7 @@ pub enum ConfigError {
 }
 
 #[cfg(test)]
-#[allow(clippy::allow_attributes, clippy::unwrap_used)]
+#[expect(clippy::unwrap_used)]
 mod tests {
     use std::{fs::File, io::Write, process};
 
