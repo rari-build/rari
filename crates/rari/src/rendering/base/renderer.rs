@@ -845,12 +845,12 @@ globalThis['~errors'].batch.push({{
             ))
         })?;
 
-        if let Some(wire_format) = rsc_data.as_str() {
-            return Ok(wire_format.to_string());
+        if let Some(flight_protocol) = rsc_data.as_str() {
+            return Ok(flight_protocol.to_string());
         }
 
         Err(RariError::js_execution(format!(
-            "RSC data for component '{component_id}' is not a wire format string"
+            "RSC data for component '{component_id}' is not a Flight protocol string"
         )))
     }
 

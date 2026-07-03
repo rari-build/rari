@@ -34,7 +34,7 @@ if (typeof window !== 'undefined') {
 
               if (error.message.includes('Unexpected non-whitespace character after JSON')) {
                 const stack = error.stack || ''
-                if (stack.includes('parseRscWireFormat') || stack.includes('AppRouter')) {
+                if (stack.includes('parseRscFlightProtocol') || stack.includes('AppRouter')) {
                   console.warn('[Sentry] Skipping RSC parsing error (likely userscript corruption)')
                   return null
                 }

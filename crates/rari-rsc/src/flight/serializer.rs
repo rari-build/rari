@@ -1826,7 +1826,7 @@ mod tests {
         assert_eq!(result, "$La", "Reference should use hexadecimal format");
 
         let output = serializer.output_lines.join("\n");
-        assert!(output.contains("a:["), "Wire format row should use hex ID 'a'");
+        assert!(output.contains("a:["), "Flight protocol row should use hex ID 'a'");
         assert!(output.contains("Test Content"), "Should contain the element content");
 
         let element2 = LoadingReactElement::with_props("div", FxHashMap::default());
@@ -2160,7 +2160,7 @@ mod tests {
     }
 
     #[test]
-    fn test_suspense_wire_format_structure() {
+    fn test_suspense_flight_protocol_structure() {
         let mut serializer = RscSerializer::new();
 
         let fallback = LoadingReactElement::with_props("div", {
@@ -2190,7 +2190,7 @@ mod tests {
         let output = serializer.output_lines.join("\n");
 
         let lines: Vec<&str> = output.lines().collect();
-        assert_eq!(lines.len(), 3, "Should have 3 rows in wire format");
+        assert_eq!(lines.len(), 3, "Should have 3 rows in Flight protocol");
 
         assert!(lines[0].contains(r#"["$","div""#), "First row should be fallback div");
         assert!(lines[0].contains("loading-spinner"), "Should contain fallback className");

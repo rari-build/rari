@@ -9,7 +9,10 @@ use std::{
 
 use deno_core::url::Url;
 use deno_fs::FsError;
-use deno_permissions::{PermissionCheckError, PermissionDeniedError, PermissionState};
+use deno_permissions::{
+    PermissionCheckError, PermissionDeniedError, PermissionDescriptorParser, PermissionState,
+    Permissions, PermissionsFromOptionsError, PermissionsOptions,
+};
 use parking_lot::{RwLock, RwLockReadGuard};
 use rustc_hash::FxHashSet;
 
@@ -147,6 +150,21 @@ impl AllowlistWebPermissions {
     fn borrow(&self) -> RwLockReadGuard<'_, AllowlistWebPermissionsSet> {
         self.0.read()
     }
+
+    fn to_deno_permissions_options(&self) -> PermissionsOptions {
+        let inst = self.borrow();
+        PermissionsOptions {
+            allow_read: inst.read_all.then(|| inst.read_paths.iter().cloned().collect()),
+            allow_write: inst.write_all.then(|| inst.write_paths.iter().cloned().collect()),
+            allow_net: (!inst.hosts.is_empty()).then(|| inst.hosts.iter().cloned().collect()),
+            allow_env: (!inst.envs.is_empty()).then(|| inst.envs.iter().cloned().collect()),
+            allow_sys: (!inst.sys.is_empty())
+                .then(|| inst.sys.iter().map(|kind| kind.as_str().to_string()).collect()),
+            allow_ffi: inst.exec.then(|| vec!["all".to_string()]),
+            prompt: false,
+            ..PermissionsOptions::default()
+        }
+    }
 }
 
 impl WebPermissions for AllowlistWebPermissions {
@@ -266,6 +284,13 @@ impl WebPermissions for AllowlistWebPermissions {
     fn check_exec(&self) -> Result<(), PermissionDeniedError> {
         if self.borrow().exec { Ok(()) } else { oops("ffi")? }
     }
+
+    fn to_deno_permissions(
+        &self,
+        parser: &dyn PermissionDescriptorParser,
+    ) -> Result<Permissions, PermissionsFromOptionsError> {
+        Permissions::from_options(parser, &self.to_deno_permissions_options())
+    }
 }
 
 pub trait WebPermissions: Debug + Send + Sync {
@@ -334,6 +359,14 @@ pub trait WebPermissions: Debug + Send + Sync {
     fn check_env(&self, var: &str) -> Result<(), PermissionDeniedError>;
 
     fn check_exec(&self) -> Result<(), PermissionDeniedError>;
+
+    fn to_deno_permissions(
+        &self,
+        parser: &dyn PermissionDescriptorParser,
+    ) -> Result<Permissions, PermissionsFromOptionsError> {
+        let _ = parser;
+        Ok(Permissions::allow_all())
+    }
 }
 
 macro_rules! impl_sys_permission_kinds {

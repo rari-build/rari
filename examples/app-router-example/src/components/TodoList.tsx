@@ -6,7 +6,7 @@ export default function TodoList() {
   const [todos, setTodos] = useState<
     Array<{ id: number, text: string, done: boolean }>
   >([
-    { id: 1, text: 'Test RSC wire format', done: true },
+    { id: 1, text: 'Test RSC Flight protocol', done: true },
     { id: 2, text: 'Add client components', done: true },
     { id: 3, text: 'Verify streaming works', done: false },
   ])

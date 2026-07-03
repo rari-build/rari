@@ -40,9 +40,14 @@ fn format_js_error(error: &JsError) -> String {
     deno_format_js_error(error, None)
 }
 
-fn build_permissions(_permissions_container: &WebPermissionsContainer) -> DenoPermissionsContainer {
+fn build_permissions(permissions_container: &WebPermissionsContainer) -> DenoPermissionsContainer {
     let parser = Arc::new(RuntimePermissionDescriptorParser::<RealSys>::new(RealSys));
-    DenoPermissionsContainer::new(parser, Permissions::allow_all())
+    let permissions =
+        permissions_container.0.to_deno_permissions(parser.as_ref()).unwrap_or_else(|err| {
+            tracing::warn!("Failed to derive Deno permissions from web permissions: {err}");
+            Permissions::allow_all()
+        });
+    DenoPermissionsContainer::new(parser, permissions)
 }
 
 extension!(

@@ -705,24 +705,24 @@ impl RscHtmlRenderer {
         let is_dev_mode = config.is_development();
         let css_links = Self::css_links_for_route(route_match);
 
-        let html_content = self.render_wire_to_fizz_html(rsc_flight_protocol).await?;
+        let html_content = self.render_flight_to_fizz_html(rsc_flight_protocol).await?;
 
         self.assemble_document(html_content, cache_template, is_dev_mode, &css_links).await
     }
 
-    async fn render_wire_to_fizz_html(
+    async fn render_flight_to_fizz_html(
         &self,
         rsc_flight_protocol: &str,
     ) -> Result<String, RariError> {
-        let wire_json =
+        let flight_json =
             serde_json::to_string(rsc_flight_protocol).unwrap_or_else(|_| "\"\"".to_string());
 
         let script = format!(
             r"(async function() {{
-                const fn = globalThis['~rari'] && globalThis['~rari'].renderWireToHtml;
-                if (!fn) return {{ ok: false, error: 'renderWireToHtml unavailable' }};
+                const fn = globalThis['~rari'] && globalThis['~rari'].renderFlightToHtml;
+                if (!fn) return {{ ok: false, error: 'renderFlightToHtml unavailable' }};
                 try {{
-                    const html = await fn({wire_json});
+                    const html = await fn({flight_json});
                     return {{ ok: true, html: html }};
                 }} catch (e) {{
                     return {{ ok: false, error: String((e && e.message) || e) }};
@@ -730,7 +730,8 @@ impl RscHtmlRenderer {
             }})()",
         );
 
-        let result = self.runtime.execute_script("render_wire_to_fizz".to_string(), script).await?;
+        let result =
+            self.runtime.execute_script("render_flight_to_fizz".to_string(), script).await?;
 
         let ok = result.get("ok").and_then(serde_json::Value::as_bool).unwrap_or(false);
         if !ok {
@@ -804,12 +805,12 @@ impl RscHtmlRenderer {
 
         let render_future = async {
             tracing::info!(
-                "RSC->HTML: Starting wire format parsing, length: {}",
+                "RSC->HTML: Starting Flight protocol parsing, length: {}",
                 rsc_flight_protocol.len()
             );
             let rsc_rows = self.parse_rsc_flight_protocol(rsc_flight_protocol).map_err(|e| {
-                tracing::error!("RSC->HTML: Failed to parse wire format: {}", e);
-                RariError::internal(format!("Failed to parse RSC wire format: {e}"))
+                tracing::error!("RSC->HTML: Failed to parse Flight protocol: {}", e);
+                RariError::internal(format!("Failed to parse RSC Flight protocol: {e}"))
             })?;
 
             tracing::info!("RSC->HTML: Parsed {} rows", rsc_rows.len());

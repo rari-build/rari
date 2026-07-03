@@ -269,7 +269,7 @@ impl LayoutRenderer {
 
         let renderer = self.renderer.lock().await;
 
-        let wire_result: Result<String, RariError> = async {
+        let flight_result: Result<String, RariError> = async {
             let rsc_flight_protocol =
                 Self::execute_composition_and_serialize(&renderer, composition_script).await?;
             Self::validate_rsc_flight_protocol(&rsc_flight_protocol)?;
@@ -279,7 +279,7 @@ impl LayoutRenderer {
 
         drop(request_context);
 
-        wire_result
+        flight_result
     }
 
     async fn render_route_with_mode_internal(
@@ -711,7 +711,7 @@ impl LayoutRenderer {
                 }
             };
 
-            let (rsc_wire_format, html) = match render_result {
+            let (rsc_flight_protocol, html) = match render_result {
                 Ok(v) => v,
                 Err(e) if needs_streaming => {
                     tracing::warn!("Fizz render failed for streaming route: {e}");
@@ -725,7 +725,7 @@ impl LayoutRenderer {
                 }
             };
 
-            let has_binary_rows = rsc_wire_format.lines().any(|line| {
+            let has_binary_rows = rsc_flight_protocol.lines().any(|line| {
                 let trimmed = line.trim();
                 if let Some(colon_pos) = trimmed.find(':') {
                     let header = &trimmed[..colon_pos];
@@ -766,10 +766,10 @@ impl LayoutRenderer {
                         r#"<script id="__RARI_RSC_PAYLOAD__" type="application/octet-stream" data-encoding="base64">{b64}</script>"#
                     )
                 } else {
-                    let rsc_payload = if rsc_wire_format.ends_with('\n') {
-                        rsc_wire_format.clone()
+                    let rsc_payload = if rsc_flight_protocol.ends_with('\n') {
+                        rsc_flight_protocol.clone()
                     } else {
-                        format!("{rsc_wire_format}\n")
+                        format!("{rsc_flight_protocol}\n")
                     };
                     let escaped_payload = rsc_payload.cow_replace("</", "<\\/");
                     format!(
@@ -777,10 +777,10 @@ impl LayoutRenderer {
                     )
                 }
             } else {
-                let rsc_payload = if rsc_wire_format.ends_with('\n') {
-                    rsc_wire_format.clone()
+                let rsc_payload = if rsc_flight_protocol.ends_with('\n') {
+                    rsc_flight_protocol.clone()
                 } else {
-                    format!("{rsc_wire_format}\n")
+                    format!("{rsc_flight_protocol}\n")
                 };
                 let escaped_payload = rsc_payload.cow_replace("</", "<\\/");
                 format!(
@@ -938,12 +938,12 @@ impl LayoutRenderer {
             RariError::internal("No RSC data in render result")
         })?;
 
-        if let Some(wire_format_str) = rsc_data.as_str() {
-            return Ok(wire_format_str.to_string());
+        if let Some(flight_protocol_str) = rsc_data.as_str() {
+            return Ok(flight_protocol_str.to_string());
         }
 
         Err(RariError::internal(
-            "RSC render did not produce a wire format string. The renderer may not be loaded."
+            "RSC render did not produce a Flight protocol string. The renderer may not be loaded."
                 .to_string(),
         ))
     }
@@ -963,7 +963,7 @@ impl LayoutRenderer {
 
         if !looks_like_flight {
             return Err(RariError::internal(
-                "RSC output does not look like a valid Flight wire format".to_string(),
+                "RSC output does not look like a valid Flight protocol".to_string(),
             ));
         }
 
@@ -1330,10 +1330,7 @@ mod tests {
         let result = LayoutRenderer::validate_rsc_flight_protocol("Error: composition failed");
         assert!(result.is_err());
         assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("does not look like a valid Flight wire format")
+            result.unwrap_err().to_string().contains("does not look like a valid Flight protocol")
         );
     }
 }

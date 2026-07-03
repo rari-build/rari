@@ -1,6 +1,6 @@
 /// <reference path="../../types.d.ts" />
 
-async function renderWireToHtml(wireFormat: string): Promise<string> {
+async function renderFlightToHtml(flightProtocol: string): Promise<string> {
   const React = g.React
   const ReactDOMServer = g['~reactServer']
   const FlightClient = g['~flightClient']
@@ -15,10 +15,10 @@ async function renderWireToHtml(wireFormat: string): Promise<string> {
   // Use the raw binary if available (avoids text re-encoding overhead
   // and preserves T row framing). Falls back to text splitting.
   const rawBinary = g['~rari']?.lastRscBinary
-  let wireStream: ReadableStream
+  let flightStream: ReadableStream
 
   if (rawBinary && rawBinary.byteLength > 0) {
-    wireStream = new ReadableStream({
+    flightStream = new ReadableStream({
       start(controller) {
         controller.enqueue(rawBinary)
         controller.close()
@@ -26,8 +26,8 @@ async function renderWireToHtml(wireFormat: string): Promise<string> {
     })
   }
   else {
-    const lines = wireFormat.split('\n').filter(line => line.trim().length > 0)
-    wireStream = new ReadableStream({
+    const lines = flightProtocol.split('\n').filter(line => line.trim().length > 0)
+    flightStream = new ReadableStream({
       start(controller) {
         for (const line of lines) {
           controller.enqueue(new TextEncoder().encode(`${line}\n`))
@@ -39,7 +39,7 @@ async function renderWireToHtml(wireFormat: string): Promise<string> {
 
   let rootElement
   try {
-    rootElement = await FlightClient.createFromReadableStream(wireStream, {
+    rootElement = await FlightClient.createFromReadableStream(flightStream, {
       ssrManifest: {
         moduleMap: g['~rari']?.ssrModules || {},
         moduleLoading: null,
@@ -72,4 +72,4 @@ async function renderWireToHtml(wireFormat: string): Promise<string> {
 
 if (!g['~rari'])
   g['~rari'] = {}
-g['~rari'].renderWireToHtml = renderWireToHtml
+g['~rari'].renderFlightToHtml = renderFlightToHtml
