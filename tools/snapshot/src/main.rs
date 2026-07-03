@@ -1,5 +1,3 @@
-#![allow(clippy::too_many_lines, clippy::cast_precision_loss)]
-
 use std::{
     env,
     fmt::Write,
@@ -25,6 +23,7 @@ type Transpiler = dyn Fn(
     ModuleCodeString,
 ) -> Result<(ModuleCodeString, Option<SourceMapData>), JsErrorBox>;
 
+#[expect(clippy::too_many_lines, clippy::cast_precision_loss)]
 fn main() {
     let output_dir = env::args()
         .nth(1)

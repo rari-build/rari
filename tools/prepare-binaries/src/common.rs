@@ -67,10 +67,12 @@ pub const TARGETS: &[Target] = &[
     },
 ];
 
+#[expect(clippy::print_stdout)]
 pub fn log(message: &str) {
     println!("{} {}", "➜".cyan(), message);
 }
 
+#[expect(clippy::print_stdout)]
 pub fn log_success(message: &str) {
     println!("{} {}", "✓".green(), message);
 }
@@ -79,6 +81,7 @@ pub fn log_error(message: &str) {
     eprintln!("{} {}", "✗".red(), message);
 }
 
+#[expect(clippy::print_stdout)]
 pub fn log_warning(message: &str) {
     println!("{} {}", "⚠".yellow(), message);
 }
