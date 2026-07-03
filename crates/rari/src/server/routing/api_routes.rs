@@ -258,7 +258,7 @@ impl ApiRouteHandler {
 
         let dist_path = Self::resolve_route_dist_path(route)?;
 
-        if !dist_path.exists() {
+        if !fs::try_exists(&dist_path).await.unwrap_or(false) {
             tracing::error!(
                 file_path = %file_path,
                 dist_path = %dist_path.display(),

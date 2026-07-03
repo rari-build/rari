@@ -173,15 +173,14 @@ pub(crate) async fn collect_page_metadata(
         return None;
     };
 
-    let layout_paths: Vec<String> = route_match
-        .layouts
-        .iter()
-        .filter_map(|layout| {
-            let file_path =
-                component_dist_path(&base_path, &layout.file_path, layout.component_id.as_deref());
-            if file_path.exists() { Some(path_to_file_url(&file_path)) } else { None }
-        })
-        .collect();
+    let mut layout_paths = Vec::with_capacity(route_match.layouts.len());
+    for layout in &route_match.layouts {
+        let file_path =
+            component_dist_path(&base_path, &layout.file_path, layout.component_id.as_deref());
+        if fs::try_exists(&file_path).await.unwrap_or(false) {
+            layout_paths.push(path_to_file_url(&file_path));
+        }
+    }
 
     let page_file_path = component_dist_path(
         &base_path,
@@ -189,7 +188,7 @@ pub(crate) async fn collect_page_metadata(
         route_match.route.component_id.as_deref(),
     );
 
-    if !page_file_path.exists() {
+    if !fs::try_exists(&page_file_path).await.unwrap_or(false) {
         return None;
     }
 
@@ -922,12 +921,16 @@ pub async fn render_fallback_html(
 ) -> Result<Response, StatusCode> {
     let index_path = if state.config.is_development() {
         let root_index = PathBuf::from("index.html");
-        if root_index.exists() { root_index } else { state.config.public_dir().join("index.html") }
+        if fs::try_exists(&root_index).await.unwrap_or(false) {
+            root_index
+        } else {
+            state.config.public_dir().join("index.html")
+        }
     } else {
         state.config.public_dir().join("index.html")
     };
 
-    if index_path.exists() {
+    if fs::try_exists(&index_path).await.unwrap_or(false) {
         if state.config.is_production()
             && let Some(cached_html) = state.html_cache.get(path)
         {
