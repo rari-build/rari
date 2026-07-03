@@ -5,8 +5,10 @@ use std::{
 };
 
 use cow_utils::CowUtils;
+use deno_core::ModuleId;
 use rari_error::RariError;
 use regex::Regex;
+use rustc_hash::FxHashMap;
 use serde_json::{Value, json};
 use tokio::{
     sync::mpsc::{Sender, UnboundedReceiver},
@@ -22,14 +24,17 @@ pub mod transpile;
 
 use factory::JsRuntimeInterface;
 
-use crate::server::{
-    middleware::request_context::RequestContext,
-    rendering::metadata::{finalize_metadata, merge_metadata},
-    routing::types::ParamValue,
+use crate::{
+    runtime::factory::RariRuntime,
+    server::{
+        middleware::request_context::RequestContext,
+        rendering::metadata::{finalize_metadata, merge_metadata},
+        routing::types::ParamValue,
+    },
 };
 
 pub struct JsExecutionRuntime {
-    runtime: Arc<factory::RariRuntime>,
+    runtime: Arc<RariRuntime>,
     timeout_ms: u64,
 }
 
@@ -58,7 +63,7 @@ fn is_esm_code(code: &str) -> bool {
 
 #[expect(clippy::missing_errors_doc)]
 impl JsExecutionRuntime {
-    pub fn new(env_vars: Option<rustc_hash::FxHashMap<String, String>>) -> Self {
+    pub fn new(env_vars: Option<FxHashMap<String, String>>) -> Self {
         let runtime = if let Some(env_vars) = env_vars {
             factory::create_runtime_with_env(env_vars)
         } else {
@@ -112,8 +117,8 @@ impl JsExecutionRuntime {
         &self,
         layout_paths: Vec<String>,
         page_path: String,
-        params: rustc_hash::FxHashMap<String, ParamValue>,
-        search_params: rustc_hash::FxHashMap<String, Vec<String>>,
+        params: FxHashMap<String, ParamValue>,
+        search_params: FxHashMap<String, Vec<String>>,
     ) -> Result<Value, RariError> {
         let data = json!({
             "layoutPaths": layout_paths,
@@ -175,7 +180,7 @@ impl JsExecutionRuntime {
         }
     }
 
-    pub async fn load_es_module(&self, specifier: &str) -> Result<deno_core::ModuleId, RariError> {
+    pub async fn load_es_module(&self, specifier: &str) -> Result<ModuleId, RariError> {
         let runtime = Arc::clone(&self.runtime);
         let specifier = specifier.to_string();
 
@@ -193,10 +198,7 @@ impl JsExecutionRuntime {
         }
     }
 
-    pub async fn evaluate_module(
-        &self,
-        module_id: deno_core::ModuleId,
-    ) -> Result<Value, RariError> {
+    pub async fn evaluate_module(&self, module_id: ModuleId) -> Result<Value, RariError> {
         let runtime = Arc::clone(&self.runtime);
 
         match time::timeout(
@@ -253,10 +255,7 @@ impl JsExecutionRuntime {
         }
     }
 
-    pub async fn get_module_namespace(
-        &self,
-        module_id: deno_core::ModuleId,
-    ) -> Result<Value, RariError> {
+    pub async fn get_module_namespace(&self, module_id: ModuleId) -> Result<Value, RariError> {
         let runtime = Arc::clone(&self.runtime);
 
         match time::timeout(
@@ -455,8 +454,7 @@ impl JsExecutionRuntime {
                     RariError::js_execution(error_msg)
                 })?;
 
-            let success =
-                result.get("success").and_then(serde_json::Value::as_bool).unwrap_or(false);
+            let success = result.get("success").and_then(Value::as_bool).unwrap_or(false);
 
             if !success {
                 let error_msg =

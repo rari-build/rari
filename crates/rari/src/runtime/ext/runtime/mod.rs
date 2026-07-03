@@ -45,7 +45,7 @@ fn build_permissions(permissions_container: &WebPermissionsContainer) -> DenoPer
     let permissions =
         permissions_container.0.to_deno_permissions(parser.as_ref()).unwrap_or_else(|err| {
             tracing::warn!("Failed to derive Deno permissions from web permissions: {err}");
-            Permissions::allow_all()
+            Permissions::none_without_prompt()
         });
     DenoPermissionsContainer::new(parser, permissions)
 }

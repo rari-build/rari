@@ -125,6 +125,14 @@ impl WebPermissions for DefaultWebPermissions {
     fn check_exec(&self) -> Result<(), PermissionDeniedError> {
         Ok(())
     }
+
+    fn to_deno_permissions(
+        &self,
+        parser: &dyn PermissionDescriptorParser,
+    ) -> Result<Permissions, PermissionsFromOptionsError> {
+        let _ = parser;
+        Ok(Permissions::allow_all())
+    }
 }
 
 #[derive(Clone, Default, Debug)]
@@ -154,8 +162,10 @@ impl AllowlistWebPermissions {
     fn to_deno_permissions_options(&self) -> PermissionsOptions {
         let inst = self.borrow();
         PermissionsOptions {
-            allow_read: inst.read_all.then(|| inst.read_paths.iter().cloned().collect()),
-            allow_write: inst.write_all.then(|| inst.write_paths.iter().cloned().collect()),
+            allow_read: (inst.read_all && !inst.read_paths.is_empty())
+                .then(|| inst.read_paths.iter().cloned().collect()),
+            allow_write: (inst.write_all && !inst.write_paths.is_empty())
+                .then(|| inst.write_paths.iter().cloned().collect()),
             allow_net: (!inst.hosts.is_empty()).then(|| inst.hosts.iter().cloned().collect()),
             allow_env: (!inst.envs.is_empty()).then(|| inst.envs.iter().cloned().collect()),
             allow_sys: (!inst.sys.is_empty())
@@ -363,10 +373,7 @@ pub trait WebPermissions: Debug + Send + Sync {
     fn to_deno_permissions(
         &self,
         parser: &dyn PermissionDescriptorParser,
-    ) -> Result<Permissions, PermissionsFromOptionsError> {
-        let _ = parser;
-        Ok(Permissions::allow_all())
-    }
+    ) -> Result<Permissions, PermissionsFromOptionsError>;
 }
 
 macro_rules! impl_sys_permission_kinds {

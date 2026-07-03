@@ -766,26 +766,10 @@ impl LayoutRenderer {
                         r#"<script id="__RARI_RSC_PAYLOAD__" type="application/octet-stream" data-encoding="base64">{b64}</script>"#
                     )
                 } else {
-                    let rsc_payload = if rsc_flight_protocol.ends_with('\n') {
-                        rsc_flight_protocol.clone()
-                    } else {
-                        format!("{rsc_flight_protocol}\n")
-                    };
-                    let escaped_payload = rsc_payload.cow_replace("</", "<\\/");
-                    format!(
-                        r#"<script id="__RARI_RSC_PAYLOAD__" type="text/x-component">{escaped_payload}</script>"#
-                    )
+                    Self::build_text_payload_script(&rsc_flight_protocol)
                 }
             } else {
-                let rsc_payload = if rsc_flight_protocol.ends_with('\n') {
-                    rsc_flight_protocol.clone()
-                } else {
-                    format!("{rsc_flight_protocol}\n")
-                };
-                let escaped_payload = rsc_payload.cow_replace("</", "<\\/");
-                format!(
-                    r#"<script id="__RARI_RSC_PAYLOAD__" type="text/x-component">{escaped_payload}</script>"#
-                )
+                Self::build_text_payload_script(&rsc_flight_protocol)
             };
             let completion_script = r"<script>if(!window['~rari'])window['~rari']={};window['~rari'].streaming={complete:true}</script>";
 
@@ -946,6 +930,18 @@ impl LayoutRenderer {
             "RSC render did not produce a Flight protocol string. The renderer may not be loaded."
                 .to_string(),
         ))
+    }
+
+    fn build_text_payload_script(rsc_flight_protocol: &str) -> String {
+        let rsc_payload = if rsc_flight_protocol.ends_with('\n') {
+            rsc_flight_protocol.to_string()
+        } else {
+            format!("{rsc_flight_protocol}\n")
+        };
+        let escaped_payload = rsc_payload.cow_replace("</", "<\\/");
+        format!(
+            r#"<script id="__RARI_RSC_PAYLOAD__" type="text/x-component">{escaped_payload}</script>"#
+        )
     }
 
     fn validate_rsc_flight_protocol(rsc_data: &str) -> Result<(), RariError> {
