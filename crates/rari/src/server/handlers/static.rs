@@ -1,11 +1,10 @@
-use std::fs;
-
 use axum::{
     body::Body,
     extract::{Path, State},
     http::StatusCode,
     response::Response,
 };
+use tokio::fs;
 
 use crate::server::{
     ServerState,
@@ -20,8 +19,8 @@ pub async fn root_handler(State(_state): State<ServerState>) -> Result<Response,
     };
 
     let index_path = config.public_dir().join("index.html");
-    if index_path.exists() {
-        match fs::read_to_string(&index_path) {
+    if fs::try_exists(&index_path).await.unwrap_or(false) {
+        match fs::read_to_string(&index_path).await {
             Ok(content) => {
                 let cache_control = config.get_cache_control_for_route("/");
                 let response_builder = Response::builder()
@@ -66,8 +65,10 @@ pub async fn static_or_spa_handler(
         return Err(StatusCode::NOT_FOUND);
     };
 
-    if file_path.is_file() {
-        match fs::read(&file_path) {
+    if let Ok(metadata) = fs::metadata(&file_path).await
+        && metadata.is_file()
+    {
+        match fs::read(&file_path).await {
             Ok(content) => {
                 let content_type = get_content_type(&path);
                 let cache_control = &config.caching.static_files;
@@ -105,8 +106,8 @@ pub async fn static_or_spa_handler(
     let route_path = if path.is_empty() { "/" } else { &format!("/{path}") };
 
     let index_path = config.public_dir().join("index.html");
-    if index_path.exists() {
-        match fs::read_to_string(&index_path) {
+    if fs::try_exists(&index_path).await.unwrap_or(false) {
+        match fs::read_to_string(&index_path).await {
             Ok(content) => {
                 let cache_control = config.get_cache_control_for_route(route_path);
                 let response_builder = Response::builder()
@@ -147,11 +148,15 @@ pub async fn serve_static_asset(
         return Err(StatusCode::NOT_FOUND);
     };
 
-    if !file_path.is_file() {
+    let Ok(metadata) = fs::metadata(&file_path).await else {
+        return Err(StatusCode::NOT_FOUND);
+    };
+
+    if !metadata.is_file() {
         return Err(StatusCode::NOT_FOUND);
     }
 
-    match fs::read(&file_path) {
+    match fs::read(&file_path).await {
         Ok(content) => {
             let content_type = get_content_type(&asset_path);
             let cache_control = &state.config.caching.static_files;

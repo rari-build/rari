@@ -134,7 +134,7 @@ pub async fn reload_component_from_dist(
         }
     };
 
-    if !dist_path.exists() {
+    if !fs::try_exists(&dist_path).await.unwrap_or(false) {
         return Err(format!(
             "Dist file not found: {}. Vite may not have finished building yet. Last known good version will be preserved.",
             dist_path.display()

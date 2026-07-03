@@ -1,9 +1,10 @@
-use std::{fs, path::Path};
+use std::path::Path;
 
 use cow_utils::CowUtils;
 use rari_error::RariError;
 use regex::Regex;
 use rustc_hash::FxHashMap;
+use tokio::fs;
 
 use crate::server::ServerState;
 
@@ -14,7 +15,7 @@ impl CacheLoader {
     #[expect(clippy::missing_errors_doc)]
     pub async fn load_page_cache_configs(state: &ServerState) -> Result<(), RariError> {
         let pages_dir = Path::new("src/pages");
-        if !pages_dir.exists() {
+        if !fs::try_exists(pages_dir).await.unwrap_or(false) {
             return Ok(());
         }
 
@@ -32,18 +33,30 @@ impl CacheLoader {
         let mut dirs_to_scan = vec![dir.to_path_buf()];
 
         while let Some(current_dir) = dirs_to_scan.pop() {
-            let entries = fs::read_dir(&current_dir)
+            let mut entries = fs::read_dir(&current_dir)
+                .await
                 .map_err(|e| RariError::io(format!("Failed to read pages directory: {e}")))?;
 
-            for entry in entries {
-                let entry = entry
-                    .map_err(|e| RariError::io(format!("Failed to read directory entry: {e}")))?;
+            while let Some(entry) = entries
+                .next_entry()
+                .await
+                .map_err(|e| RariError::io(format!("Failed to read directory entry: {e}")))?
+            {
                 let path = entry.path();
+                let file_type = entry
+                    .file_type()
+                    .await
+                    .map_err(|e| RariError::io(format!("Failed to read file type: {e}")))?;
 
-                if path.is_dir() {
+                if file_type.is_dir() {
                     dirs_to_scan.push(path);
-                } else if path.is_file()
-                    && let Some(extension) = path.extension()
+                } else if {
+                    #[expect(
+                        clippy::filetype_is_file,
+                        reason = "Page cache config is only read from regular source files"
+                    )]
+                    file_type.is_file()
+                } && let Some(extension) = path.extension()
                     && (extension == "tsx"
                         || extension == "jsx"
                         || extension == "ts"
@@ -65,6 +78,7 @@ impl CacheLoader {
         state: &ServerState,
     ) -> Result<(), RariError> {
         let content = fs::read_to_string(page_path)
+            .await
             .map_err(|e| RariError::io(format!("Failed to read page file: {e}")))?;
 
         if let Some(cache_config) = Self::extract_cache_config_from_content(&content) {

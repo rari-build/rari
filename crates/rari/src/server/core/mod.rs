@@ -2,7 +2,7 @@ pub mod types;
 pub mod utils;
 
 use std::{
-    env, fs,
+    env,
     net::SocketAddr,
     path::PathBuf,
     sync::{Arc, atomic::AtomicU64},
@@ -21,6 +21,7 @@ use dashmap::DashMap;
 use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use tokio::{
+    fs,
     net::TcpListener,
     sync::{Mutex, RwLock},
 };
@@ -230,7 +231,7 @@ impl Server {
         let mut config = config;
         let config_path = "dist/server/image.json";
 
-        if let Ok(image_config_str) = fs::read_to_string(config_path)
+        if let Ok(image_config_str) = fs::read_to_string(config_path).await
             && let Ok(image_config) = serde_json::from_str::<ImageConfig>(&image_config_str)
         {
             config.images = image_config;
