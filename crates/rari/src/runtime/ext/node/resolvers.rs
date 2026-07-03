@@ -469,7 +469,7 @@ impl NpmProcessStateProvider for Resolver {
 #[derive(Debug)]
 struct RequireLoader(Arc<dyn FileSystem + Send + Sync>);
 impl NodeRequireLoader for RequireLoader {
-    fn load_text_file_lossy(&self, path: &Path) -> Result<deno_core::FastString, JsErrorBox> {
+    fn load_text_file_lossy(&self, path: &Path) -> Result<FastString, JsErrorBox> {
         let path_checked = CheckedPath::unsafe_new(Cow::Borrowed(path));
         let text = self.0.read_text_file_lossy_sync(&path_checked).map_err(JsErrorBox::from_err)?;
         Ok(FastString::from(text.into_owned()))

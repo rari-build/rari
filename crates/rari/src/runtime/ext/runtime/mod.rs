@@ -1,6 +1,6 @@
 use std::{num::NonZero, rc::Rc, sync::Arc, thread};
 
-use ::deno_permissions::{Permissions, PermissionsContainer};
+use ::deno_permissions::{Permissions, PermissionsContainer as DenoPermissionsContainer};
 use deno_core::{
     CrossIsolateStore, Extension,
     error::JsError,
@@ -30,16 +30,19 @@ use deno_tls::RootCertStoreProvider;
 use deno_web::{BlobStore, InMemoryBroadcastChannel};
 use sys_traits::impls::RealSys;
 
-use super::{ExtensionOptions, ExtensionTrait, node::resolvers::Resolver};
+use super::{
+    ExtensionOptions, ExtensionTrait, node::resolvers::Resolver,
+    web::PermissionsContainer as WebPermissionsContainer,
+};
 use crate::runtime::module_loader::RariModuleLoader;
 
 fn format_js_error(error: &JsError) -> String {
     deno_format_js_error(error, None)
 }
 
-fn build_permissions(_permissions_container: &PermissionsContainer) -> PermissionsContainer {
+fn build_permissions(_permissions_container: &WebPermissionsContainer) -> DenoPermissionsContainer {
     let parser = Arc::new(RuntimePermissionDescriptorParser::<RealSys>::new(RealSys));
-    PermissionsContainer::new(parser, Permissions::allow_all())
+    DenoPermissionsContainer::new(parser, Permissions::allow_all())
 }
 
 extension!(
@@ -62,7 +65,7 @@ extension!(
         };
         state.put(options);
 
-        let container = state.borrow::<PermissionsContainer>();
+        let container = state.borrow::<WebPermissionsContainer>();
         let permissions = build_permissions(container);
         state.put(permissions);
     },
