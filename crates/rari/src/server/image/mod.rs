@@ -23,6 +23,7 @@ pub struct ImageState {
     pub optimizer: Arc<ImageOptimizer>,
 }
 
+#[expect(clippy::missing_errors_doc)]
 pub async fn handle_image_request(
     State(state): State<ImageState>,
     Query(params): Query<OptimizeParams>,

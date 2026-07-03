@@ -96,6 +96,7 @@ pub struct Server {
 }
 
 impl Server {
+    #[expect(clippy::missing_errors_doc, clippy::too_many_lines)]
     pub async fn new(config: Config) -> Result<Self, RariError> {
         Config::set_global(config.clone())
             .map_err(|_| RariError::configuration("Failed to set global config".to_string()))?;
@@ -367,6 +368,7 @@ impl Server {
         Ok(router)
     }
 
+    #[expect(clippy::missing_errors_doc)]
     pub async fn start(self) -> Result<(), RariError> {
         self.display_startup_message();
 

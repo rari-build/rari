@@ -86,6 +86,7 @@ impl OgImageCache {
         None
     }
 
+    #[expect(clippy::missing_errors_doc)]
     pub async fn insert(&self, key: String, value: Vec<u8>) -> Result<(), Box<dyn Error>> {
         self.ensure_cache_dir().await;
 
@@ -96,6 +97,7 @@ impl OgImageCache {
         Ok(())
     }
 
+    #[expect(clippy::missing_errors_doc)]
     pub async fn remove(&self, key: &str) -> Result<Option<Vec<u8>>, CacheError> {
         let prev = match self.handler.get(&Self::ns(key)).await {
             Ok(Some(bytes)) => Some(bytes),
@@ -118,6 +120,7 @@ impl OgImageCache {
         }
     }
 
+    #[expect(clippy::missing_errors_doc)]
     pub async fn clear(&self) -> Result<(), CacheError> {
         self.handler.clear_prefix(KEY_PREFIX).await?;
 

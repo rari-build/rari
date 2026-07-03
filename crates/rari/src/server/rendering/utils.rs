@@ -179,6 +179,7 @@ pub async fn extract_body_scripts_from_index_html() -> Option<String> {
     None
 }
 
+#[expect(clippy::missing_errors_doc)]
 pub async fn inject_assets_into_html(html: &str, config: &Config) -> Result<String, StatusCode> {
     let has_root_before = html.contains(r#"id="root""#);
     let is_complete_document = is_complete_html_document(html);
@@ -224,6 +225,7 @@ fn is_complete_html_document(html: &str) -> bool {
     has_doctype_or_html && has_body
 }
 
+#[expect(clippy::too_many_lines)]
 async fn inject_assets_into_complete_document(
     html: &str,
     config: &Config,

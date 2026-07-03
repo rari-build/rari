@@ -331,6 +331,7 @@ fn create_error_response(status: StatusCode, message: &str) -> Response<Body> {
         })
 }
 
+#[expect(clippy::missing_errors_doc)]
 pub async fn check_vite_server_health() -> Result<(), RariError> {
     let config = Config::get().ok_or_else(|| {
         RariError::configuration("Global configuration not available".to_string())

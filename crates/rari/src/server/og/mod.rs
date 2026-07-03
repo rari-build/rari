@@ -19,6 +19,7 @@ pub use generator::OgImageGenerator;
 use rari_error::RariError;
 pub use types::{OgImageParams, OgImageResult};
 
+#[expect(clippy::missing_errors_doc)]
 pub async fn handle_og_image_request(
     State(generator): State<Arc<OgImageGenerator>>,
     Path(route_path): Path<String>,

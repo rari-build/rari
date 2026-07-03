@@ -1,3 +1,4 @@
+#![expect(clippy::missing_errors_doc, clippy::too_many_lines)]
 use std::{fs, future::Future, path::Path, pin::Pin, sync::Arc};
 
 use cow_utils::CowUtils;

@@ -8,6 +8,7 @@ use crate::{
     server::image::ImageOptimizer,
 };
 
+#[expect(clippy::too_many_lines)]
 pub fn inject_metadata(
     html: &str,
     metadata: &PageMetadata,

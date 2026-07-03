@@ -78,6 +78,7 @@ impl ApiRouteHandler {
         Self { runtime, manifest: Arc::new(manifest), handler_cache: Arc::new(DashMap::new()) }
     }
 
+    #[expect(clippy::missing_errors_doc)]
     pub async fn from_file(
         runtime: Arc<JsExecutionRuntime>,
         manifest_path: &str,
@@ -134,6 +135,7 @@ impl ApiRouteHandler {
         None
     }
 
+    #[expect(clippy::missing_errors_doc)]
     pub fn match_route(&self, path: &str, method: &str) -> Result<ApiRouteMatch, RariError> {
         let normalized_path = Self::normalize_path(path);
 
@@ -378,6 +380,7 @@ impl ApiRouteHandler {
         Ok(dist_path)
     }
 
+    #[expect(clippy::missing_errors_doc, clippy::too_many_lines)]
     pub async fn execute_handler(
         &self,
         route_match: &ApiRouteMatch,

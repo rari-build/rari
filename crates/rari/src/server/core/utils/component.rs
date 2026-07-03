@@ -113,6 +113,7 @@ if (!globalThis.{module_key}) {{
     )
 }
 
+#[expect(clippy::missing_errors_doc)]
 pub fn extract_component_id(file_path: &str) -> Result<String, Box<dyn Error + Send + Sync>> {
     let path = Path::new(file_path);
 
@@ -142,6 +143,7 @@ pub fn extract_component_id(file_path: &str) -> Result<String, Box<dyn Error + S
     ))
 }
 
+#[expect(clippy::missing_errors_doc)]
 pub fn get_dist_path_for_component(
     file_path: &str,
 ) -> Result<PathBuf, Box<dyn Error + Send + Sync>> {

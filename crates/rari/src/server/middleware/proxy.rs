@@ -242,6 +242,7 @@ fn resolve_rari_package_dir() -> Option<PathBuf> {
     }
 }
 
+#[expect(clippy::missing_errors_doc)]
 pub async fn initialize_proxy(state: &ServerState) -> Result<(), Box<dyn Error>> {
     if !is_proxy_enabled() {
         return Ok(());

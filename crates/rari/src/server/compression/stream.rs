@@ -40,6 +40,7 @@ impl CompressionEncoding {
     }
 }
 
+#[expect(clippy::too_many_lines)]
 pub fn compress_stream<S>(
     input: S,
     encoding: CompressionEncoding,

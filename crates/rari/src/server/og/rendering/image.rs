@@ -62,6 +62,7 @@ impl ImageRenderer {
         Ok(())
     }
 
+    #[expect(clippy::too_many_lines)]
     fn process_object_fit(
         source_image: RgbaImage,
         target_width: u32,

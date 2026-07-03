@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use cow_utils::CowUtils;
 use rari_error::RariError;
 
+#[expect(clippy::missing_errors_doc)]
 pub fn validate_safe_path(base: &Path, requested: &str) -> Result<PathBuf, RariError> {
     if requested.contains("..") {
         return Err(RariError::bad_request("Invalid path: contains '..' pattern"));
@@ -71,6 +72,7 @@ pub fn normalize_component_path(file_path: &str) -> String {
     file_path.cow_replace('\\', "/").into_owned()
 }
 
+#[expect(clippy::missing_errors_doc)]
 pub fn validate_component_path(file_path: &str) -> Result<(), RariError> {
     let normalized = normalize_component_path(file_path);
 

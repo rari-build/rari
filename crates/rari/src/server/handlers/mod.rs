@@ -1,3 +1,4 @@
+#![expect(clippy::missing_errors_doc, clippy::too_many_lines)]
 pub mod actions;
 pub mod api;
 pub mod app;

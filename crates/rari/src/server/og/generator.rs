@@ -71,6 +71,7 @@ impl OgImageGenerator {
         }
     }
 
+    #[expect(clippy::missing_errors_doc)]
     pub async fn load_manifest(&self, manifest_path: &str) -> Result<(), OgImageError> {
         let content = fs::read_to_string(manifest_path)
             .await
@@ -125,6 +126,7 @@ impl OgImageGenerator {
         Self::find_matching_entry(&manifest, route_path).map(|(entry, _)| entry.clone())
     }
 
+    #[expect(clippy::missing_errors_doc)]
     pub async fn generate(&self, route_path: &str) -> Result<(Vec<u8>, bool), OgImageError> {
         const MAX_OG_WIDTH: u32 = 2400;
         const MAX_OG_HEIGHT: u32 = 1260;
@@ -401,6 +403,7 @@ impl OgImageGenerator {
         self.cache.clear().await.expect("clear");
     }
 
+    #[expect(clippy::missing_errors_doc)]
     pub async fn invalidate(&self, route_path: &str) -> Result<(), CacheError> {
         self.cache.remove(route_path).await.map(|_| ())
     }
