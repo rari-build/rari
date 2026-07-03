@@ -1,15 +1,16 @@
 use std::{num::NonZero, rc::Rc, sync::Arc, thread};
 
-use ::deno_permissions::Permissions;
+use ::deno_permissions::{Permissions, PermissionsContainer as DenoPermissionsContainer};
 use deno_core::{
     CrossIsolateStore, Extension,
     error::JsError,
     extension,
     v8::{BackingStore, SharedRef, icu},
 };
+use deno_io::Stdio;
 use deno_process::deno_process;
 use deno_runtime::{
-    BootstrapOptions, WorkerExecutionMode, WorkerLogLevel, colors,
+    BootstrapOptions, FeatureChecker, WorkerExecutionMode, WorkerLogLevel, colors,
     deno_inspector_server::MainInspectorSessionChannel,
     deno_os::{ExitCode, deno_os},
     fmt_errors::format_js_error as deno_format_js_error,
@@ -21,13 +22,17 @@ use deno_runtime::{
         worker_host::{CreateWebWorkerCb, deno_worker_host},
     },
     permissions::RuntimePermissionDescriptorParser,
+    runtime,
     web_worker::{WebWorker, WebWorkerOptions, WebWorkerServiceOptions},
 };
 use deno_telemetry::OtelConfig;
+use deno_tls::RootCertStoreProvider;
+use deno_web::{BlobStore, InMemoryBroadcastChannel};
 use sys_traits::impls::RealSys;
 
 use super::{
-    ExtensionOptions, ExtensionTrait, node::resolvers::Resolver, web::PermissionsContainer,
+    ExtensionOptions, ExtensionTrait, node::resolvers::Resolver,
+    web::PermissionsContainer as WebPermissionsContainer,
 };
 use crate::runtime::module_loader::RariModuleLoader;
 
@@ -35,11 +40,14 @@ fn format_js_error(error: &JsError) -> String {
     deno_format_js_error(error, None)
 }
 
-fn build_permissions(
-    _permissions_container: &PermissionsContainer,
-) -> ::deno_permissions::PermissionsContainer {
+fn build_permissions(permissions_container: &WebPermissionsContainer) -> DenoPermissionsContainer {
     let parser = Arc::new(RuntimePermissionDescriptorParser::<RealSys>::new(RealSys));
-    ::deno_permissions::PermissionsContainer::new(parser, Permissions::allow_all())
+    let permissions =
+        permissions_container.0.to_deno_permissions(parser.as_ref()).unwrap_or_else(|err| {
+            tracing::warn!("Failed to derive Deno permissions from web permissions: {err}");
+            Permissions::none_without_prompt()
+        });
+    DenoPermissionsContainer::new(parser, permissions)
 }
 
 extension!(
@@ -62,7 +70,7 @@ extension!(
         };
         state.put(options);
 
-        let container = state.borrow::<PermissionsContainer>();
+        let container = state.borrow::<WebPermissionsContainer>();
         let permissions = build_permissions(container);
         state.put(permissions);
     },
@@ -81,7 +89,7 @@ impl ExtensionTrait<()> for init_runtime {
     }
 }
 
-impl ExtensionTrait<()> for deno_runtime::runtime {
+impl ExtensionTrait<()> for runtime {
     fn init((): ()) -> Extension {
         let mut ext = Self::init();
 
@@ -165,7 +173,7 @@ pub fn extensions(
         deno_web_worker::build((), is_snapshot),
         deno_worker_host::build((options, shared_array_buffer_store), is_snapshot),
         deno_permissions::build((), is_snapshot),
-        deno_runtime::runtime::build((), is_snapshot),
+        runtime::build((), is_snapshot),
         init_console::build((), is_snapshot),
         init_runtime::build((), is_snapshot),
     ]
@@ -175,12 +183,12 @@ pub fn extensions(
 pub struct WebWorkerCallbackOptions {
     shared_array_buffer_store: Option<CrossIsolateStore<SharedRef<BackingStore>>>,
     node_resolver: Arc<Resolver>,
-    root_cert_store_provider: Option<Arc<dyn deno_tls::RootCertStoreProvider>>,
-    broadcast_channel: deno_web::InMemoryBroadcastChannel,
+    root_cert_store_provider: Option<Arc<dyn RootCertStoreProvider>>,
+    broadcast_channel: InMemoryBroadcastChannel,
     unsafely_ignore_certificate_errors: Option<Vec<String>>,
     seed: Option<u64>,
-    stdio: deno_io::Stdio,
-    blob_store: Arc<deno_web::BlobStore>,
+    stdio: Stdio,
+    blob_store: Arc<BlobStore>,
 }
 
 impl WebWorkerCallbackOptions {
@@ -211,7 +219,7 @@ fn create_web_worker_callback(options: WebWorkerCallbackOptions) -> Arc<CreateWe
 
         let create_web_worker_cb = create_web_worker_callback(options.clone());
 
-        let mut feature_checker = deno_features::FeatureChecker::default();
+        let mut feature_checker = FeatureChecker::default();
         feature_checker.set_exit_cb(Box::new(|_, _| {}));
 
         let services = WebWorkerServiceOptions {

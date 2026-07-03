@@ -1,11 +1,12 @@
 use std::{
     borrow::Cow,
     env, fs,
-    io::{Error, ErrorKind::InvalidInput},
+    io::{Error, ErrorKind},
     path::{Path, PathBuf},
     rc::Rc,
     string::ToString,
     sync::{Arc, OnceLock},
+    time::Instant,
 };
 
 use cow_utils::CowUtils;
@@ -20,7 +21,6 @@ use rari_rsc::utils::{DependencyList, extract_dependencies};
 use rari_utils::path_to_file_url;
 use regex::Regex;
 use rustc_hash::FxHashMap;
-use tokio::time::Instant;
 
 use super::{
     cache::{DEFAULT_TTL_SECS, ModuleCaching},
@@ -314,7 +314,7 @@ export default {{}};
             match ModuleSpecifier::parse(specifier.as_str()) {
                 Ok(_) => transpile::maybe_transpile_source(&specifier, code),
                 Err(e) => Err(JsErrorBox::from_err(Box::new(Error::new(
-                    InvalidInput,
+                    ErrorKind::InvalidInput,
                     format!("Failed to parse module specifier '{specifier}': {e}"),
                 )))),
             }

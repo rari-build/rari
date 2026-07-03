@@ -1,7 +1,7 @@
 use std::{
     env,
     error::Error,
-    fs, mem,
+    fs as std_fs, mem,
     path::{Path, PathBuf},
     task::{Context, Poll},
 };
@@ -17,8 +17,8 @@ use rari_error::RariError;
 use rari_utils::path_to_file_url;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
+use tokio::fs;
 use tower::{Layer, Service};
-use tracing::error;
 
 use crate::server::core::types::ServerState;
 
@@ -53,7 +53,7 @@ use std::sync::OnceLock;
 static PROXY_ENABLED: OnceLock<bool> = OnceLock::new();
 
 fn is_proxy_enabled() -> bool {
-    *PROXY_ENABLED.get_or_init(|| fs::metadata("dist/server/proxy.js").is_ok())
+    *PROXY_ENABLED.get_or_init(|| std_fs::metadata("dist/server/proxy.js").is_ok())
 }
 
 async fn execute_proxy(
@@ -171,7 +171,7 @@ where
                                 *request.uri_mut() = uri;
                             }
                             Err(e) => {
-                                error!("Failed to parse rewrite path: {}", e);
+                                tracing::error!("Failed to parse rewrite path: {}", e);
                                 return inner.call(request).await;
                             }
                         }
@@ -221,7 +221,7 @@ where
                     inner.call(request).await
                 }
                 Err(e) => {
-                    error!("Proxy execution failed: {}", e);
+                    tracing::error!("Proxy execution failed: {}", e);
                     inner.call(request).await
                 }
             }
@@ -229,13 +229,13 @@ where
     }
 }
 
-fn resolve_rari_package_dir() -> Option<PathBuf> {
+async fn resolve_rari_package_dir() -> Option<PathBuf> {
     let cwd = env::current_dir().ok()?;
     let mut search_dir = cwd.as_path();
 
     loop {
         let candidate = search_dir.join("node_modules").join("rari");
-        if candidate.exists() {
+        if fs::try_exists(&candidate).await.unwrap_or(false) {
             return Some(candidate);
         }
         search_dir = search_dir.parent()?;
@@ -251,14 +251,14 @@ pub async fn initialize_proxy(state: &ServerState) -> Result<(), Box<dyn Error>>
     let renderer = state.renderer.lock().await;
     let runtime = &renderer.runtime;
 
-    let Some(rari_pkg_dir) = resolve_rari_package_dir() else {
+    let Some(rari_pkg_dir) = resolve_rari_package_dir().await else {
         tracing::debug!("Proxy: rari package directory not found in node_modules");
         return Ok(());
     };
 
     let executor_path = rari_pkg_dir.join("dist/proxy/runtime-executor.mjs");
 
-    if !executor_path.exists() {
+    if !fs::try_exists(&executor_path).await.unwrap_or(false) {
         tracing::debug!(
             "Proxy: executor not found at {}, skipping proxy setup",
             executor_path.display()
@@ -266,23 +266,18 @@ pub async fn initialize_proxy(state: &ServerState) -> Result<(), Box<dyn Error>>
         return Ok(());
     }
 
-    let executor_absolute =
-        if let Ok(canonical) = executor_path.canonicalize() { canonical } else { executor_path };
+    let executor_absolute = fs::canonicalize(&executor_path).await.unwrap_or(executor_path);
     let executor_specifier = path_to_file_url(&executor_absolute);
 
     let rari_request_path = rari_pkg_dir.join("dist/proxy/RariRequest.mjs");
-    let rari_request_absolute = if let Ok(canonical) = rari_request_path.canonicalize() {
-        canonical
-    } else {
-        rari_request_path
-    };
+    let rari_request_absolute =
+        fs::canonicalize(&rari_request_path).await.unwrap_or(rari_request_path);
     let rari_request_specifier = path_to_file_url(&rari_request_absolute);
 
     let proxy_file_path = Path::new("dist/server/proxy.js");
-    let proxy_absolute = if let Ok(canonical) = proxy_file_path.canonicalize() {
-        canonical
-    } else {
-        env::current_dir()?.join(proxy_file_path)
+    let proxy_absolute = match fs::canonicalize(proxy_file_path).await {
+        Ok(canonical) => canonical,
+        Err(_) => env::current_dir()?.join(proxy_file_path),
     };
     let proxy_specifier = path_to_file_url(&proxy_absolute);
 
@@ -309,18 +304,18 @@ pub async fn initialize_proxy(state: &ServerState) -> Result<(), Box<dyn Error>>
                         .get("error")
                         .and_then(|v| v.as_str())
                         .unwrap_or("Unknown error during proxy initialization");
-                    error!("Proxy initialization failed: {error_msg}");
+                    tracing::error!("Proxy initialization failed: {error_msg}");
                     Err(RariError::js_runtime(format!("Proxy initialization failed: {error_msg}"))
                         .into())
                 }
             } else {
-                error!("Proxy initialization returned invalid result format");
+                tracing::error!("Proxy initialization returned invalid result format");
                 Err(RariError::js_runtime("Proxy initialization returned invalid result format")
                     .into())
             }
         }
         Err(e) => {
-            error!("Failed to register proxy function: {}", e);
+            tracing::error!("Failed to register proxy function: {}", e);
             Err(e.into())
         }
     }

@@ -1,6 +1,12 @@
 use std::{rc::Rc, sync::Arc};
 
+use ::deno_fetch::Options;
 use deno_core::{Extension, extension};
+use deno_fetch::deno_fetch;
+use deno_net::deno_net;
+use deno_telemetry::deno_telemetry;
+use deno_tls::deno_tls;
+use deno_web::deno_web;
 
 use super::ExtensionTrait;
 
@@ -22,9 +28,9 @@ impl ExtensionTrait<WebOptions> for init_fetch {
         Self::init()
     }
 }
-impl ExtensionTrait<WebOptions> for deno_fetch::deno_fetch {
+impl ExtensionTrait<WebOptions> for deno_fetch {
     fn init(options: WebOptions) -> Extension {
-        let options = deno_fetch::Options {
+        let options = Options {
             user_agent: options.user_agent.clone(),
             root_cert_store_provider: options.root_cert_store_provider.clone(),
             proxy: options.proxy.clone(),
@@ -52,7 +58,7 @@ impl ExtensionTrait<WebOptions> for init_net {
         Self::init()
     }
 }
-impl ExtensionTrait<WebOptions> for deno_net::deno_net {
+impl ExtensionTrait<WebOptions> for deno_net {
     fn init(options: WebOptions) -> Extension {
         Self::init(
             options.root_cert_store_provider.clone(),
@@ -73,7 +79,7 @@ impl ExtensionTrait<()> for init_telemetry {
     }
 }
 
-impl ExtensionTrait<()> for deno_telemetry::deno_telemetry {
+impl ExtensionTrait<()> for deno_telemetry {
     fn init((): ()) -> Extension {
         Self::init()
     }
@@ -95,13 +101,13 @@ impl ExtensionTrait<WebOptions> for init_web {
     }
 }
 
-impl ExtensionTrait<WebOptions> for deno_web::deno_web {
+impl ExtensionTrait<WebOptions> for deno_web {
     fn init(options: WebOptions) -> Extension {
         Self::init(options.blob_store, options.base_url, false, options.broadcast_channel)
     }
 }
 
-impl ExtensionTrait<()> for deno_tls::deno_tls {
+impl ExtensionTrait<()> for deno_tls {
     fn init((): ()) -> Extension {
         Self::init()
     }
@@ -115,11 +121,11 @@ pub fn extensions(options: WebOptions, is_snapshot: bool) -> Vec<Extension> {
     // applyToGlobal side effects on top of V8-built-in globals).
     let fetch_is_snapshot = false;
     vec![
-        deno_web::deno_web::build(options.clone(), is_snapshot),
-        deno_telemetry::deno_telemetry::build((), is_snapshot),
-        deno_net::deno_net::build(options.clone(), is_snapshot),
-        deno_fetch::deno_fetch::build(options.clone(), is_snapshot),
-        deno_tls::deno_tls::build((), is_snapshot),
+        deno_web::build(options.clone(), is_snapshot),
+        deno_telemetry::build((), is_snapshot),
+        deno_net::build(options.clone(), is_snapshot),
+        deno_fetch::build(options.clone(), is_snapshot),
+        deno_tls::build((), is_snapshot),
         init_web::build(options.clone(), is_snapshot),
         init_telemetry::build((), is_snapshot),
         init_net::build(options.clone(), is_snapshot),

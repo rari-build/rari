@@ -947,10 +947,10 @@ impl ImageOptimizer {
             let public_path = self.project_path.join("public");
             let file_path = public_path.join(url.trim_start_matches('/'));
 
-            let canonical_public = public_path.canonicalize().map_err(|e| {
+            let canonical_public = fs::canonicalize(&public_path).await.map_err(|e| {
                 ImageError::FetchError(format!("Failed to canonicalize public directory: {e}"))
             })?;
-            let canonical_file = file_path.canonicalize().map_err(|e| {
+            let canonical_file = fs::canonicalize(&file_path).await.map_err(|e| {
                 ImageError::FetchError(format!(
                     "Failed to canonicalize file path {}: {}",
                     file_path.display(),

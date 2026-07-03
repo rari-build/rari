@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react'
 // @ts-expect-error - virtual module resolved by Vite
 import { createFromReadableStream } from 'virtual:react-flight-client'
 import { PATH_TRAILING_SLASH_REGEX } from '../shared/regex-constants'
-import { preloadModulesFromWireFormat } from './shared/preload-modules'
+import { preloadModulesFromFlightProtocol } from './shared/preload-modules'
 
 const TIMESTAMP_REGEX = /"timestamp":(\d+)/
 const STALE_PAYLOAD_THRESHOLD_MS = 5000
@@ -24,7 +24,7 @@ interface NavigationDetail {
   options: any
   routeInfo?: any
   abortSignal?: AbortSignal
-  rscWireFormat?: string
+  rscFlightProtocol?: string
   rscResponse?: Response
   rscResponsePromise?: Promise<Response>
   isStreaming?: boolean
@@ -147,14 +147,14 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       consecutiveFailuresRef.current = 0
   }
 
-  const isStaleContent = (wireFormat: string): boolean => {
+  const isStaleContent = (flightProtocol: string): boolean => {
     if (!lastSuccessfulPayloadRef.current)
       return false
 
-    if (wireFormat === lastSuccessfulPayloadRef.current)
+    if (flightProtocol === lastSuccessfulPayloadRef.current)
       return true
 
-    const timestampMatch = wireFormat.match(TIMESTAMP_REGEX)
+    const timestampMatch = flightProtocol.match(TIMESTAMP_REGEX)
     if (timestampMatch) {
       const payloadTimestamp = Number.parseInt(timestampMatch[1], 10)
       const now = Date.now()
@@ -165,12 +165,12 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     return false
   }
 
-  const parseRscWireFormat = async (wireFormat: string) => {
-    await preloadModulesFromWireFormat(wireFormat, preloadedModuleIdsRef.current)
+  const parseRscFlightProtocol = async (flightProtocol: string) => {
+    await preloadModulesFromFlightProtocol(flightProtocol, preloadedModuleIdsRef.current)
 
     const stream = new ReadableStream({
       start(controller) {
-        controller.enqueue(new TextEncoder().encode(wireFormat))
+        controller.enqueue(new TextEncoder().encode(flightProtocol))
         controller.close()
       },
     })
@@ -182,7 +182,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     return {
       element,
       rawElement: element,
-      wireFormat,
+      flightProtocol,
     }
   }
 
@@ -197,13 +197,13 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       return {
         element,
         rawElement: element,
-        wireFormat: '',
+        flightProtocol: '',
       }
     }
 
     const clonedResponse = response.clone()
-    const wireFormat = await clonedResponse.text()
-    await preloadModulesFromWireFormat(wireFormat, preloadedModuleIdsRef.current)
+    const flightProtocol = await clonedResponse.text()
+    await preloadModulesFromFlightProtocol(flightProtocol, preloadedModuleIdsRef.current)
 
     const buffer = new Uint8Array(await response.arrayBuffer())
     const stream = new ReadableStream({
@@ -217,7 +217,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     return {
       element,
       rawElement: element,
-      wireFormat,
+      flightProtocol,
     }
   }
 
@@ -259,17 +259,17 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         }
 
         let parsedPayload
-        let rscWireFormat = ''
+        let rscFlightProtocol = ''
         try {
           const clonedResponse = response.clone()
-          rscWireFormat = await clonedResponse.text()
+          rscFlightProtocol = await clonedResponse.text()
 
-          if (isStaleContent(rscWireFormat)) {
+          if (isStaleContent(rscFlightProtocol)) {
             if (rscPayload)
               return rscPayload
           }
 
-          await preloadModulesFromWireFormat(rscWireFormat, preloadedModuleIdsRef.current)
+          await preloadModulesFromFlightProtocol(rscFlightProtocol, preloadedModuleIdsRef.current)
 
           const buffer = new Uint8Array(await response.arrayBuffer())
           const stream = new ReadableStream({
@@ -279,14 +279,14 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
             },
           })
           const element = await createFromReadableStream(stream)
-          parsedPayload = { element, rawElement: element, wireFormat: rscWireFormat }
+          parsedPayload = { element, rawElement: element, flightProtocol: rscFlightProtocol }
         }
         catch (parseError) {
           const error = parseError instanceof Error ? parseError : new Error(String(parseError))
           trackHMRFailure(
             error,
             'parse',
-            `Failed to parse RSC wire format: ${error.message}`,
+            `Failed to parse RSC Flight protocol: ${error.message}`,
             window.location.pathname,
           )
           throw error
@@ -294,7 +294,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
         if (currentNavigationIdRef.current === navigationId) {
           setRscPayload(parsedPayload)
-          lastSuccessfulPayloadRef.current = rscWireFormat
+          lastSuccessfulPayloadRef.current = rscFlightProtocol
           resetFailureTracking()
         }
 
@@ -322,12 +322,12 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     return fetchPromise
   }
 
-  const parseRscWireFormatRef = useRef<(wireFormat: string) => Promise<any>>(parseRscWireFormat)
+  const parseRscFlightProtocolRef = useRef<(flightProtocol: string) => Promise<any>>(parseRscFlightProtocol)
   const parseRscResponseRef = useRef<(responsePromise: Promise<Response>, isStreaming?: boolean) => Promise<any>>(parseRscResponse)
   const refetchRscPayloadRef = useRef<(targetPath?: string, abortSignal?: AbortSignal) => Promise<any>>(refetchRscPayload)
 
   useEffect(() => {
-    parseRscWireFormatRef.current = parseRscWireFormat
+    parseRscFlightProtocolRef.current = parseRscFlightProtocol
     parseRscResponseRef.current = parseRscResponse
     refetchRscPayloadRef.current = refetchRscPayload
   })
@@ -369,8 +369,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           if (currentNavigationIdRef.current !== detail.navigationId)
             return
         }
-        else if (detail.rscWireFormat) {
-          parsedPayload = await parseRscWireFormatRef.current!(detail.rscWireFormat)
+        else if (detail.rscFlightProtocol) {
+          parsedPayload = await parseRscFlightProtocolRef.current!(detail.rscFlightProtocol)
         }
         else if (!detail.isStreaming) {
           parsedPayload = await refetchRscPayloadRef.current!(
@@ -426,8 +426,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
             setHmrError(null)
           })
         }
-        if (detail.rscWireFormat)
-          lastSuccessfulPayloadRef.current = detail.rscWireFormat
+        if (detail.rscFlightProtocol)
+          lastSuccessfulPayloadRef.current = detail.rscFlightProtocol
 
         resetFailureTracking()
 

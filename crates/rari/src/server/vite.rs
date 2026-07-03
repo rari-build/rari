@@ -16,8 +16,7 @@ use http::uri::PathAndQuery;
 use rari_error::RariError;
 use reqwest::Client;
 use tokio::time;
-use tokio_tungstenite::{connect_async, tungstenite::Message};
-use tracing::error;
+use tokio_tungstenite::tungstenite::Message;
 use tungstenite::{client::IntoClientRequest, http::Request as HttpRequest};
 
 use crate::server::config::Config;
@@ -35,7 +34,7 @@ fn create_client() -> Client {
 
 pub async fn vite_src_proxy(req: Request) -> impl IntoResponse {
     let Some(config) = Config::get() else {
-        error!("Failed to get global configuration for Vite proxy");
+        tracing::error!("Failed to get global configuration for Vite proxy");
         return create_error_response(
             StatusCode::INTERNAL_SERVER_ERROR,
             "Configuration not available",
@@ -57,7 +56,7 @@ pub async fn vite_src_proxy(req: Request) -> impl IntoResponse {
     let body_bytes = match body::to_bytes(req.into_body(), usize::MAX).await {
         Ok(bytes) => bytes,
         Err(e) => {
-            error!("Failed to read request body: {}", e);
+            tracing::error!("Failed to read request body: {}", e);
             return create_error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Failed to read request body",
@@ -84,7 +83,7 @@ pub async fn vite_src_proxy(req: Request) -> impl IntoResponse {
             match response_builder.body(Body::from_stream(response.bytes_stream())) {
                 Ok(response) => response,
                 Err(e) => {
-                    error!("Failed to build proxy response: {}", e);
+                    tracing::error!("Failed to build proxy response: {}", e);
                     create_error_response(
                         StatusCode::INTERNAL_SERVER_ERROR,
                         "Failed to build response",
@@ -112,7 +111,7 @@ pub async fn vite_src_proxy(req: Request) -> impl IntoResponse {
 
 pub async fn vite_reverse_proxy(req: Request) -> impl IntoResponse {
     let Some(config) = Config::get() else {
-        error!("Failed to get global configuration for Vite proxy");
+        tracing::error!("Failed to get global configuration for Vite proxy");
         return create_error_response(
             StatusCode::INTERNAL_SERVER_ERROR,
             "Configuration not available",
@@ -134,7 +133,7 @@ pub async fn vite_reverse_proxy(req: Request) -> impl IntoResponse {
     let body_bytes = match body::to_bytes(req.into_body(), usize::MAX).await {
         Ok(bytes) => bytes,
         Err(e) => {
-            error!("Failed to read request body: {}", e);
+            tracing::error!("Failed to read request body: {}", e);
             return create_error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Failed to read request body",
@@ -161,7 +160,7 @@ pub async fn vite_reverse_proxy(req: Request) -> impl IntoResponse {
             match response_builder.body(Body::from_stream(response.bytes_stream())) {
                 Ok(response) => response,
                 Err(e) => {
-                    error!("Failed to build proxy response: {}", e);
+                    tracing::error!("Failed to build proxy response: {}", e);
                     create_error_response(
                         StatusCode::INTERNAL_SERVER_ERROR,
                         "Failed to build response",
@@ -193,12 +192,12 @@ pub async fn vite_websocket_proxy(ws: WebSocketUpgrade, uri: Uri) -> impl IntoRe
 
 async fn handle_websocket(mut client_socket: WebSocket, uri: Uri) {
     if let Err(e) = client_socket.send(WsMessage::Ping("rari-vite-proxy".into())).await {
-        error!("Failed to send initial ping to client: {}", e);
+        tracing::error!("Failed to send initial ping to client: {}", e);
         return;
     }
 
     let Some(config) = Config::get() else {
-        error!("Failed to get global configuration for WebSocket proxy");
+        tracing::error!("Failed to get global configuration for WebSocket proxy");
         let _ = client_socket.send(WsMessage::Close(None)).await;
         return;
     };
@@ -217,16 +216,16 @@ async fn handle_websocket(mut client_socket: WebSocket, uri: Uri) {
     {
         Ok(request) => request,
         Err(e) => {
-            error!("Failed to create Vite WebSocket request: {}", e);
+            tracing::error!("Failed to create Vite WebSocket request: {}", e);
             let _ = client_socket.send(WsMessage::Close(None)).await;
             return;
         }
     };
 
-    let vite_socket = match connect_async(vite_ws_request).await {
+    let vite_socket = match tokio_tungstenite::connect_async(vite_ws_request).await {
         Ok((stream, _)) => stream,
         Err(e) => {
-            error!("Failed to connect to Vite WebSocket server: {}", e);
+            tracing::error!("Failed to connect to Vite WebSocket server: {}", e);
 
             let error_msg = serde_json::json!({
                 "type": "error",

@@ -170,7 +170,7 @@ export default async function ActionsPage() {
               <div className="w-8 h-8 bg-indigo-100 rounded flex items-center justify-center">
                 <span className="text-indigo-600 font-bold">4</span>
               </div>
-              <h4 className="text-gray-900 font-semibold">Wire Format</h4>
+              <h4 className="text-gray-900 font-semibold">Flight Protocol</h4>
             </div>
             <p className="text-sm text-gray-600 leading-relaxed">
               Actions return JSON responses that can include redirects, error

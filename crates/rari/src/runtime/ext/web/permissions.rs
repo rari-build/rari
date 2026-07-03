@@ -9,9 +9,11 @@ use std::{
 
 use deno_core::url::Url;
 use deno_fs::FsError;
-use deno_permissions::PermissionCheckError;
-pub use deno_permissions::PermissionDeniedError;
-use parking_lot::RwLock;
+use deno_permissions::{
+    PermissionCheckError, PermissionDeniedError, PermissionDescriptorParser, PermissionState,
+    Permissions, PermissionsFromOptionsError, PermissionsOptions,
+};
+use parking_lot::{RwLock, RwLockReadGuard};
 use rustc_hash::FxHashSet;
 
 fn to_io_err(err: &PermissionDeniedError) -> Error {
@@ -19,12 +21,11 @@ fn to_io_err(err: &PermissionDeniedError) -> Error {
 }
 
 pub fn oops<T>(msg: impl Display) -> Result<T, PermissionDeniedError> {
-    use deno_permissions::PermissionDeniedError;
     Err(PermissionDeniedError {
         access: msg.to_string(),
         name: "oops",
         custom_message: None,
-        state: deno_permissions::PermissionState::Denied,
+        state: PermissionState::Denied,
     })
 }
 
@@ -124,6 +125,14 @@ impl WebPermissions for DefaultWebPermissions {
     fn check_exec(&self) -> Result<(), PermissionDeniedError> {
         Ok(())
     }
+
+    fn to_deno_permissions(
+        &self,
+        parser: &dyn PermissionDescriptorParser,
+    ) -> Result<Permissions, PermissionsFromOptionsError> {
+        let _ = parser;
+        Ok(Permissions::allow_all())
+    }
 }
 
 #[derive(Clone, Default, Debug)]
@@ -146,8 +155,25 @@ struct AllowlistWebPermissionsSet {
 #[derive(Clone, Default, Debug)]
 pub struct AllowlistWebPermissions(Arc<RwLock<AllowlistWebPermissionsSet>>);
 impl AllowlistWebPermissions {
-    fn borrow(&self) -> parking_lot::RwLockReadGuard<'_, AllowlistWebPermissionsSet> {
+    fn borrow(&self) -> RwLockReadGuard<'_, AllowlistWebPermissionsSet> {
         self.0.read()
+    }
+
+    fn to_deno_permissions_options(&self) -> PermissionsOptions {
+        let inst = self.borrow();
+        PermissionsOptions {
+            allow_read: (inst.read_all && !inst.read_paths.is_empty())
+                .then(|| inst.read_paths.iter().cloned().collect()),
+            allow_write: (inst.write_all && !inst.write_paths.is_empty())
+                .then(|| inst.write_paths.iter().cloned().collect()),
+            allow_net: (!inst.hosts.is_empty()).then(|| inst.hosts.iter().cloned().collect()),
+            allow_env: (!inst.envs.is_empty()).then(|| inst.envs.iter().cloned().collect()),
+            allow_sys: (!inst.sys.is_empty())
+                .then(|| inst.sys.iter().map(|kind| kind.as_str().to_string()).collect()),
+            allow_ffi: inst.exec.then(Vec::new),
+            prompt: false,
+            ..PermissionsOptions::default()
+        }
     }
 }
 
@@ -268,6 +294,13 @@ impl WebPermissions for AllowlistWebPermissions {
     fn check_exec(&self) -> Result<(), PermissionDeniedError> {
         if self.borrow().exec { Ok(()) } else { oops("ffi")? }
     }
+
+    fn to_deno_permissions(
+        &self,
+        parser: &dyn PermissionDescriptorParser,
+    ) -> Result<Permissions, PermissionsFromOptionsError> {
+        Permissions::from_options(parser, &self.to_deno_permissions_options())
+    }
 }
 
 pub trait WebPermissions: Debug + Send + Sync {
@@ -336,6 +369,11 @@ pub trait WebPermissions: Debug + Send + Sync {
     fn check_env(&self, var: &str) -> Result<(), PermissionDeniedError>;
 
     fn check_exec(&self) -> Result<(), PermissionDeniedError>;
+
+    fn to_deno_permissions(
+        &self,
+        parser: &dyn PermissionDescriptorParser,
+    ) -> Result<Permissions, PermissionsFromOptionsError>;
 }
 
 macro_rules! impl_sys_permission_kinds {

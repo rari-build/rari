@@ -1,4 +1,5 @@
 use deno_core::{Extension, extension};
+use deno_websocket::deno_websocket;
 
 use super::{ExtensionTrait, web::WebOptions};
 
@@ -13,15 +14,12 @@ impl ExtensionTrait<()> for init_websocket {
         Self::init()
     }
 }
-impl ExtensionTrait<WebOptions> for deno_websocket::deno_websocket {
+impl ExtensionTrait<WebOptions> for deno_websocket {
     fn init(_options: WebOptions) -> Extension {
         Self::init()
     }
 }
 
 pub fn extensions(options: WebOptions, is_snapshot: bool) -> Vec<Extension> {
-    vec![
-        deno_websocket::deno_websocket::build(options, is_snapshot),
-        init_websocket::build((), is_snapshot),
-    ]
+    vec![deno_websocket::build(options, is_snapshot), init_websocket::build((), is_snapshot)]
 }

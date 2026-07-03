@@ -1,9 +1,12 @@
+use ::deno_http::Options;
 use deno_core::{Extension, extension};
+use deno_http::deno_http;
 
 use super::ExtensionTrait;
 
 mod runtime;
 use runtime::deno_http_runtime;
+
 impl ExtensionTrait<()> for deno_http_runtime {
     fn init((): ()) -> Extension {
         Self::init()
@@ -21,9 +24,9 @@ impl ExtensionTrait<()> for init_http {
         Self::init()
     }
 }
-impl ExtensionTrait<()> for deno_http::deno_http {
+impl ExtensionTrait<()> for deno_http {
     fn init((): ()) -> Extension {
-        Self::init(deno_http::Options {
+        Self::init(Options {
             http2_builder_hook: None,
             no_legacy_abort: false,
             automatic_compression: false,
@@ -34,7 +37,7 @@ impl ExtensionTrait<()> for deno_http::deno_http {
 pub fn extensions((): (), is_snapshot: bool) -> Vec<Extension> {
     vec![
         deno_http_runtime::build((), is_snapshot),
-        deno_http::deno_http::build((), is_snapshot),
+        deno_http::build((), is_snapshot),
         init_http::build((), is_snapshot),
     ]
 }

@@ -21,7 +21,7 @@ test.describe('RSC Streaming Infrastructure Tests', () => {
     await page.waitForLoadState('networkidle')
 
     const rscErrors = consoleErrors.filter(err =>
-      err.includes('RSC') || err.includes('wire format') || err.includes('streaming') || err.includes('parse'),
+      err.includes('RSC') || err.includes('Flight protocol') || err.includes('streaming') || err.includes('parse'),
     )
 
     expect(rscErrors.length).toBe(0)
@@ -234,7 +234,7 @@ test.describe('RSC Protocol Tests', () => {
     await page.waitForLoadState('networkidle')
 
     const parsingErrors = consoleErrors.filter(err =>
-      err.includes('parse') || err.includes('JSON') || err.includes('wire'),
+      err.includes('parse') || err.includes('JSON') || err.includes('Flight') || err.includes('flight'),
     )
 
     expect(parsingErrors.length).toBe(0)
@@ -354,7 +354,7 @@ test.describe('Client-Side Navigation Tests', () => {
     await expect(page.locator('h1')).toBeVisible()
   })
 
-  test('should receive RSC wire format on navigation', async ({ page }) => {
+  test('should receive RSC Flight protocol on navigation', async ({ page }) => {
     await page.goto('/')
     await page.waitForLoadState('networkidle')
 

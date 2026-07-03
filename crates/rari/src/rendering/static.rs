@@ -14,12 +14,11 @@ use std::{
 
 use cow_utils::CowUtils;
 use rari_error::{RariError, StreamingError};
-use rari_rsc::flight::escape::unescape_rsc_value;
+use rari_rsc::flight::escape;
 use regex::Regex;
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde_json::Value;
 use tokio::{fs, time};
-use tracing::error;
 
 use crate::{
     RscElement,
@@ -115,7 +114,7 @@ pub fn test_is_valid_attribute_name(name: &str) -> bool {
 }
 
 #[expect(clippy::too_many_lines)]
-fn serialize_style_object(style_obj: &serde_json::Map<String, serde_json::Value>) -> String {
+fn serialize_style_object(style_obj: &serde_json::Map<String, Value>) -> String {
     const UNITLESS_PROPERTIES: &[&str] = &[
         "animation-iteration-count",
         "border-image-outset",
@@ -276,11 +275,11 @@ impl RscHtmlRenderer {
         }
     }
 
-    fn value_looks_like_rsc(value: &serde_json::Value) -> bool {
+    fn value_looks_like_rsc(value: &Value) -> bool {
         match value {
-            serde_json::Value::String(s) => Self::string_looks_like_rsc(s),
-            serde_json::Value::Array(arr) => arr.iter().any(Self::value_looks_like_rsc),
-            serde_json::Value::Object(obj) => obj.values().any(Self::value_looks_like_rsc),
+            Value::String(s) => Self::string_looks_like_rsc(s),
+            Value::Array(arr) => arr.iter().any(Self::value_looks_like_rsc),
+            Value::Object(obj) => obj.values().any(Self::value_looks_like_rsc),
             _ => false,
         }
     }
@@ -586,7 +585,7 @@ impl RscHtmlRenderer {
             .map_err(|e| RariError::internal(format!("Invalid row ID '{id_str}': {e}")))?;
 
         if let Some(json_str) = data_str.strip_prefix('I') {
-            if let Ok(import_data) = serde_json::from_str::<serde_json::Value>(json_str) {
+            if let Ok(import_data) = serde_json::from_str::<Value>(json_str) {
                 let module_path =
                     import_data.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
                 let export_name = import_data
@@ -705,24 +704,24 @@ impl RscHtmlRenderer {
         let is_dev_mode = config.is_development();
         let css_links = Self::css_links_for_route(route_match);
 
-        let html_content = self.render_wire_to_fizz_html(rsc_flight_protocol).await?;
+        let html_content = self.render_flight_to_fizz_html(rsc_flight_protocol).await?;
 
         self.assemble_document(html_content, cache_template, is_dev_mode, &css_links).await
     }
 
-    async fn render_wire_to_fizz_html(
+    async fn render_flight_to_fizz_html(
         &self,
         rsc_flight_protocol: &str,
     ) -> Result<String, RariError> {
-        let wire_json =
+        let flight_json =
             serde_json::to_string(rsc_flight_protocol).unwrap_or_else(|_| "\"\"".to_string());
 
         let script = format!(
             r"(async function() {{
-                const fn = globalThis['~rari'] && globalThis['~rari'].renderWireToHtml;
-                if (!fn) return {{ ok: false, error: 'renderWireToHtml unavailable' }};
+                const fn = globalThis['~rari'] && globalThis['~rari'].renderFlightToHtml;
+                if (!fn) return {{ ok: false, error: 'renderFlightToHtml unavailable' }};
                 try {{
-                    const html = await fn({wire_json});
+                    const html = await fn({flight_json});
                     return {{ ok: true, html: html }};
                 }} catch (e) {{
                     return {{ ok: false, error: String((e && e.message) || e) }};
@@ -730,9 +729,10 @@ impl RscHtmlRenderer {
             }})()",
         );
 
-        let result = self.runtime.execute_script("render_wire_to_fizz".to_string(), script).await?;
+        let result =
+            self.runtime.execute_script("render_flight_to_fizz".to_string(), script).await?;
 
-        let ok = result.get("ok").and_then(serde_json::Value::as_bool).unwrap_or(false);
+        let ok = result.get("ok").and_then(Value::as_bool).unwrap_or(false);
         if !ok {
             let err = result.get("error").and_then(|v| v.as_str()).unwrap_or("unknown");
             return Err(RariError::js_execution(format!("Fizz reviver failed: {err}")));
@@ -804,12 +804,12 @@ impl RscHtmlRenderer {
 
         let render_future = async {
             tracing::info!(
-                "RSC->HTML: Starting wire format parsing, length: {}",
+                "RSC->HTML: Starting Flight protocol parsing, length: {}",
                 rsc_flight_protocol.len()
             );
             let rsc_rows = self.parse_rsc_flight_protocol(rsc_flight_protocol).map_err(|e| {
-                tracing::error!("RSC->HTML: Failed to parse wire format: {}", e);
-                RariError::internal(format!("Failed to parse RSC wire format: {e}"))
+                tracing::error!("RSC->HTML: Failed to parse Flight protocol: {}", e);
+                RariError::internal(format!("Failed to parse RSC Flight protocol: {e}"))
             })?;
 
             tracing::info!("RSC->HTML: Parsed {} rows", rsc_rows.len());
@@ -992,9 +992,8 @@ impl RscHtmlRenderer {
                 }
 
                 RscElement::Component { tag, key: _, props } => {
-                    let props_value = serde_json::Value::Object(
-                        props.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
-                    );
+                    let props_value =
+                        Value::Object(props.iter().map(|(k, v)| (k.clone(), v.clone())).collect());
                     self.render_component_to_html(tag, &props_value, row_map, row_cache).await
                 }
 
@@ -1047,7 +1046,7 @@ impl RscHtmlRenderer {
     fn render_component_to_html<'a>(
         &'a self,
         tag: &'a str,
-        props: &'a serde_json::Value,
+        props: &'a Value,
         row_map: &'a FxHashMap<u32, &RscElement>,
         row_cache: &'a mut FxHashMap<u32, String>,
     ) -> Pin<Box<dyn Future<Output = Result<String, RariError>> + Send + 'a>> {
@@ -1179,7 +1178,7 @@ impl RscHtmlRenderer {
 
     fn render_json_to_html<'a>(
         &'a self,
-        json: &'a serde_json::Value,
+        json: &'a Value,
         row_map: &'a FxHashMap<u32, &RscElement>,
         row_cache: &'a mut FxHashMap<u32, String>,
     ) -> Pin<Box<dyn Future<Output = Result<String, RariError>> + Send + 'a>> {
@@ -1365,7 +1364,7 @@ impl RscToHtmlConverter {
                 if parts.len() == 2
                     && let Ok(row_id) = u32::from_str_radix(parts[0], 16)
                     && let Some(i_data) = parts[1].trim().strip_prefix('I')
-                    && let Ok(import_data) = serde_json::from_str::<serde_json::Value>(i_data)
+                    && let Ok(import_data) = serde_json::from_str::<Value>(i_data)
                 {
                     let module_path =
                         import_data.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
@@ -1385,7 +1384,7 @@ impl RscToHtmlConverter {
                     match self.parse_and_render_rsc(&chunk.data, chunk.row_id).await {
                         Ok(rsc_html) => rsc_html,
                         Err(e) => {
-                            error!("Error parsing RSC: {}", e);
+                            tracing::error!("Error parsing RSC: {}", e);
                             Vec::new()
                         }
                     }
@@ -1398,7 +1397,7 @@ impl RscToHtmlConverter {
                             output.extend(rsc_html);
                         }
                         Err(e) => {
-                            error!("Error parsing initial RSC shell: {}", e);
+                            tracing::error!("Error parsing initial RSC shell: {}", e);
                         }
                     }
 
@@ -1426,7 +1425,7 @@ impl RscToHtmlConverter {
                         Ok(html)
                     }
                     Err(e) => {
-                        error!("Error generating boundary replacement: {}", e);
+                        tracing::error!("Error generating boundary replacement: {}", e);
                         Ok(html)
                     }
                 }
@@ -1445,7 +1444,7 @@ impl RscToHtmlConverter {
                     let parts: Vec<&str> = rsc_line.trim().splitn(2, ':').collect();
                     let error_msg = if parts.len() == 2 {
                         let json_part = parts[1].strip_prefix('E').unwrap_or(parts[1]);
-                        serde_json::from_str::<serde_json::Value>(json_part)
+                        serde_json::from_str::<Value>(json_part)
                             .ok()
                             .and_then(|error_data| {
                                 error_data["error"].as_str().map(ToString::to_string)
@@ -1487,7 +1486,7 @@ impl RscToHtmlConverter {
         };
 
         if let Err(ref e) = result {
-            error!("Chunk conversion error for {:?}: {}", chunk.chunk_type, e);
+            tracing::error!("Chunk conversion error for {:?}: {}", chunk.chunk_type, e);
             return Err(StreamingError::ChunkConversionError {
                 message: e.to_string(),
                 chunk_type: Some(chunk_type_str),
@@ -1660,7 +1659,7 @@ if (typeof window !== 'undefined') {{
         }
 
         if let Some(i_data) = json_str.strip_prefix('I') {
-            if let Ok(import_data) = serde_json::from_str::<serde_json::Value>(i_data) {
+            if let Ok(import_data) = serde_json::from_str::<Value>(i_data) {
                 let module_path =
                     import_data.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
                 let export_name = import_data
@@ -1682,7 +1681,7 @@ if (typeof window !== 'undefined') {{
         }
 
         if json_str.starts_with('"')
-            && let Ok(serde_json::Value::String(s)) = serde_json::from_str(json_str)
+            && let Ok(Value::String(s)) = serde_json::from_str(json_str)
             && RscHtmlRenderer::is_rsc_payload(&s)
         {
             return Ok(Vec::new());
@@ -1692,7 +1691,7 @@ if (typeof window !== 'undefined') {{
             return Ok(Vec::new());
         }
 
-        let rsc_data: serde_json::Value = serde_json::from_str(json_str)
+        let rsc_data: Value = serde_json::from_str(json_str)
             .map_err(|e| RariError::internal(format!("Invalid RSC JSON: {e}")))?;
 
         let html = self.rsc_element_to_html(&rsc_data).await?;
@@ -1705,7 +1704,7 @@ if (typeof window !== 'undefined') {{
     #[expect(clippy::too_many_lines)]
     fn rsc_element_to_html<'a>(
         &'a self,
-        element: &'a serde_json::Value,
+        element: &'a Value,
     ) -> Pin<Box<dyn Future<Output = Result<String, RariError>> + Send + 'a>> {
         Box::pin(async move {
             if let Some(s) = element.as_str() {
@@ -1741,7 +1740,7 @@ if (typeof window !== 'undefined') {{
                     let after_colon = &s[colon_pos + 1..];
                     if !after_colon.is_empty()
                         && (after_colon.starts_with('[') || after_colon.starts_with('{'))
-                        && serde_json::from_str::<serde_json::Value>(after_colon).is_ok()
+                        && serde_json::from_str::<Value>(after_colon).is_ok()
                     {
                         return Ok(String::new());
                     }
@@ -1844,7 +1843,7 @@ if (typeof window !== 'undefined') {{
     async fn render_client_component_placeholder(
         &self,
         component_ref: &str,
-        props: Option<&serde_json::Map<String, serde_json::Value>>,
+        props: Option<&serde_json::Map<String, Value>>,
     ) -> Result<String, RariError> {
         let props_are_rsc =
             props.is_some_and(|p| p.values().any(RscHtmlRenderer::value_looks_like_rsc));
@@ -1856,7 +1855,7 @@ if (typeof window !== 'undefined') {{
             && let Some((module_path, export_name)) = self.module_imports.get(&module_row_id)
         {
             let props_json = if let Some(p) = props {
-                serde_json::to_string(&unescape_rsc_value(&serde_json::Value::Object(p.clone())))
+                serde_json::to_string(&escape::unescape_rsc_value(&Value::Object(p.clone())))
                     .unwrap_or_default()
             } else {
                 "{}".to_string()
@@ -1882,7 +1881,7 @@ if (typeof window !== 'undefined') {{
     async fn render_suspense_boundary(
         &self,
         _element_type: &str,
-        props: Option<&serde_json::Map<String, serde_json::Value>>,
+        props: Option<&serde_json::Map<String, Value>>,
     ) -> Result<String, RariError> {
         if let Some(props) = props {
             let rari_boundary_id =
@@ -1949,7 +1948,7 @@ if (typeof window !== 'undefined') {{
     async fn render_html_element(
         &self,
         tag: &str,
-        props: Option<&serde_json::Map<String, serde_json::Value>>,
+        props: Option<&serde_json::Map<String, Value>>,
     ) -> Result<String, RariError> {
         if tag == "$Sreact.suspense" || tag == "react.suspense" || tag == "suspense" {
             return self.render_suspense_boundary(tag, props).await;
@@ -2080,7 +2079,7 @@ if (typeof window !== 'undefined') {{
         let parts: Vec<&str> = line_for_parsing.splitn(2, ':').collect();
 
         if parts.len() != 2 {
-            error!("Invalid boundary update format: {}", rsc_line);
+            tracing::error!("Invalid boundary update format: {}", rsc_line);
             return Ok(Vec::new());
         }
 
@@ -2100,7 +2099,7 @@ if (typeof window !== 'undefined') {{
             let rendered_html = if let Some(text) = content_json.strip_prefix('T') {
                 escape_html(text)
             } else {
-                match serde_json::from_str::<serde_json::Value>(content_json) {
+                match serde_json::from_str::<Value>(content_json) {
                     Ok(content) => match self.rsc_element_to_html(&content).await {
                         Ok(html) if !html.is_empty() => html,
                         _ => String::new(),
@@ -2143,10 +2142,10 @@ if (typeof window !== 'undefined') {{
 
         let json_part = parts[1].strip_prefix('E').unwrap_or(parts[1]);
 
-        let error_data = match serde_json::from_str::<serde_json::Value>(json_part) {
+        let error_data = match serde_json::from_str::<Value>(json_part) {
             Ok(data) => data,
             Err(e) => {
-                error!("Failed to parse error data from stream, using fallback: {}", e);
+                tracing::error!("Failed to parse error data from stream, using fallback: {}", e);
                 return Self::generate_fallback_error_html();
             }
         };

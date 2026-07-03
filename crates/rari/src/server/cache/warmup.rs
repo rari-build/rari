@@ -10,7 +10,6 @@ use axum::http::HeaderMap;
 use futures::stream::{self, StreamExt};
 use rustc_hash::FxHashMap;
 use tokio::sync::{Mutex, OnceCell};
-use tracing::{error, info};
 
 use crate::{
     rendering::layout::{LayoutRenderContext, LayoutRenderer, types::RenderResult},
@@ -37,18 +36,18 @@ async fn warmup_render_lock() -> &'static Mutex<()> {
 
 pub async fn warm_cache(state: &ServerState) {
     let Some(app_router) = &state.app_router else {
-        info!("[rari] Cache warmup: No app router available, skipping");
+        tracing::info!("[rari] Cache warmup: No app router available, skipping");
         return;
     };
 
     let paths = app_router.warmup_paths();
 
     if paths.is_empty() {
-        info!("[rari] Cache warmup: No routes to warm");
+        tracing::info!("[rari] Cache warmup: No routes to warm");
         return;
     }
 
-    info!("[rari] Cache warmup: Pre-rendering {} routes...", paths.len());
+    tracing::info!("[rari] Cache warmup: Pre-rendering {} routes...", paths.len());
     let start = Instant::now();
 
     let success_count = Arc::new(AtomicUsize::new(0));
@@ -64,7 +63,7 @@ pub async fn warm_cache(state: &ServerState) {
                         success_count.fetch_add(1, Ordering::Relaxed);
                     }
                     Err(e) => {
-                        error!("[rari] Cache warmup: Failed to warm '{}': {}", path, e);
+                        tracing::error!("[rari] Cache warmup: Failed to warm '{}': {}", path, e);
                         error_count.fetch_add(1, Ordering::Relaxed);
                     }
                 }
@@ -73,7 +72,7 @@ pub async fn warm_cache(state: &ServerState) {
         .await;
 
     let elapsed = start.elapsed();
-    info!(
+    tracing::info!(
         "[rari] Cache warmup: Completed in {:.1}ms ({} succeeded, {} failed)",
         elapsed.as_secs_f64() * 1000.0,
         success_count.load(Ordering::Relaxed),

@@ -2,9 +2,11 @@
 
 use std::{borrow::Cow, cell::RefCell, sync::Arc};
 
-use deno_ast::{MediaType, ModuleExportsAndReExports, ModuleSpecifier};
+use deno_ast::{MediaType, ModuleExportsAndReExports, ModuleSpecifier, ParseParams};
 use deno_core::unsync;
 use deno_error::JsErrorBox;
+use deno_fs::FileSystemRc;
+use deno_permissions::CheckedPathBuf;
 use deno_resolver::npm::DenoInNpmPackageChecker;
 use deno_runtime::deno_fs;
 use node_resolver::{
@@ -52,13 +54,13 @@ impl From<ExtNodeCjsAnalysis<'_>> for CjsAnalysis {
 }
 
 pub struct CjsCodeAnalyzer {
-    fs: deno_fs::FileSystemRc,
+    fs: FileSystemRc,
     cache: RefCell<FxHashMap<String, CjsAnalysis>>,
     cjs_tracker: Arc<Resolver>,
 }
 
 impl CjsCodeAnalyzer {
-    pub fn new(fs: deno_fs::FileSystemRc, cjs_tracker: Arc<Resolver>) -> Self {
+    pub fn new(fs: FileSystemRc, cjs_tracker: Arc<Resolver>) -> Self {
         Self { fs, cache: RefCell::new(FxHashMap::default()), cjs_tracker }
     }
 
@@ -76,7 +78,7 @@ impl CjsCodeAnalyzer {
         let media_type = MediaType::from_specifier(specifier);
 
         if media_type == MediaType::Json {
-            return Ok(CjsAnalysis::Cjs(deno_ast::ModuleExportsAndReExports::default()));
+            return Ok(CjsAnalysis::Cjs(ModuleExportsAndReExports::default()));
         }
 
         let cjs_tracker = Arc::clone(&self.cjs_tracker);
@@ -86,7 +88,7 @@ impl CjsCodeAnalyzer {
         let analysis = unsync::spawn_blocking({
             let source: Arc<str> = source.into();
             move || -> Result<CjsAnalysis, JsErrorBox> {
-                let parsed_source = deno_ast::parse_program(deno_ast::ParseParams {
+                let parsed_source = deno_ast::parse_program(ParseParams {
                     specifier: specifier_clone.clone(),
                     text: source,
                     media_type,
@@ -166,12 +168,8 @@ impl analyze::CjsCodeAnalyzer for CjsCodeAnalyzer {
             Some(source) => source,
             None => {
                 if let Ok(path) = specifier.to_file_path() {
-                    if let Ok(source_from_file) = self
-                        .fs
-                        .read_text_file_lossy_async(deno_permissions::CheckedPathBuf::unsafe_new(
-                            path,
-                        ))
-                        .await
+                    if let Ok(source_from_file) =
+                        self.fs.read_text_file_lossy_async(CheckedPathBuf::unsafe_new(path)).await
                     {
                         source_from_file
                     } else {

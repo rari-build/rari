@@ -1,6 +1,6 @@
 use std::{env, error};
 
-use clap::{Arg, ArgAction::SetTrue, Command};
+use clap::{Arg, ArgAction, Command};
 use rari::server::{
     Server,
     config::{Config, Mode},
@@ -9,7 +9,6 @@ use rari::server::{
 use rari_error::RariError;
 use rustls::crypto::{CryptoProvider, aws_lc_rs};
 use tokio::{fs, signal};
-use tracing::error;
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
@@ -27,13 +26,13 @@ async fn main() -> Result<(), Box<dyn error::Error + Send + Sync>> {
                         .short('v')
                         .long("verbose")
                         .help("Enable verbose logging")
-                        .action(SetTrue),
+                        .action(ArgAction::SetTrue),
                 )
                 .arg(
                     Arg::new("dry-run")
                         .long("dry-run")
                         .help("Preview images that would be optimized without performing writes")
-                        .action(SetTrue),
+                        .action(ArgAction::SetTrue),
                 ),
         )
         .arg(
@@ -67,9 +66,15 @@ async fn main() -> Result<(), Box<dyn error::Error + Send + Sync>> {
                 .short('v')
                 .long("verbose")
                 .help("Enable verbose logging")
-                .action(SetTrue),
+                .action(ArgAction::SetTrue),
         )
-        .arg(Arg::new("quiet").short('q').long("quiet").help("Reduce log output").action(SetTrue))
+        .arg(
+            Arg::new("quiet")
+                .short('q')
+                .long("quiet")
+                .help("Reduce log output")
+                .action(ArgAction::SetTrue),
+        )
         .get_matches();
 
     if let Some(("optimize-images", sub_matches)) = matches.subcommand() {
@@ -88,7 +93,7 @@ async fn main() -> Result<(), Box<dyn error::Error + Send + Sync>> {
     let config = load_configuration(&matches)?;
 
     let server = Server::new(config).await.map_err(|e| {
-        error!("Failed to create server: {}", e);
+        tracing::error!("Failed to create server: {}", e);
         e
     })?;
 
@@ -99,7 +104,7 @@ async fn main() -> Result<(), Box<dyn error::Error + Send + Sync>> {
             match result {
                 Ok(()) => {}
                 Err(e) => {
-                    error!("Server error: {}", e);
+                    tracing::error!("Server error: {}", e);
                     return Err(e.into());
                 }
             }

@@ -1,3 +1,4 @@
+use deno_cache::deno_cache;
 use deno_core::{Extension, extension};
 
 use super::ExtensionTrait;
@@ -14,12 +15,12 @@ impl ExtensionTrait<()> for init_cache {
     }
 }
 
-impl ExtensionTrait<()> for deno_cache::deno_cache {
+impl ExtensionTrait<()> for deno_cache {
     fn init((): ()) -> Extension {
         Self::init(None)
     }
 }
 
 pub fn extensions(_options: Option<()>, is_snapshot: bool) -> Vec<Extension> {
-    vec![deno_cache::deno_cache::build((), is_snapshot), init_cache::build((), is_snapshot)]
+    vec![deno_cache::build((), is_snapshot), init_cache::build((), is_snapshot)]
 }

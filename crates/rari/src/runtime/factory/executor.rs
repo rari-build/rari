@@ -3,8 +3,7 @@ use std::{env, rc::Rc, string::ToString, time::Duration};
 use deno_core::{JsRuntime, error::AnyError, v8};
 use rari_error::RariError;
 use serde_json::Value;
-use tokio::{sync::mpsc, time::timeout};
-use tracing::error;
+use tokio::{sync::mpsc, time};
 
 use crate::{
     runtime::{
@@ -126,7 +125,7 @@ async fn execute_as_module(
 
     match eval_result {
         Ok(()) => {
-            match timeout(
+            match time::timeout(
                 Duration::from_millis(10),
                 run_event_loop_with_error_handling(
                     runtime,
@@ -233,7 +232,7 @@ async fn handle_promise_result(
         let context = scope.get_current_context();
         let global = context.global(scope);
         let Some(key) = v8::String::new(scope, "__temp_promise_ref__") else {
-            error!("Failed to create V8 string for __temp_promise_ref__");
+            tracing::error!("Failed to create V8 string for __temp_promise_ref__");
             return Err(RariError::internal("Failed to create V8 string".to_string()));
         };
         global.set(scope, key.into(), local_v8_val);

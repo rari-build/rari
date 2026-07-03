@@ -12,13 +12,12 @@ use base64::{Engine, engine::general_purpose::STANDARD};
 use cow_utils::CowUtils;
 use rari_error::RariError;
 use rustc_hash::{FxHashMap, FxHashSet};
-use serde_json::{Map, Value, json};
+use serde_json::{Map, Value};
 use smallvec::SmallVec;
-use tracing::error;
 
 use crate::{
     core::{RscFlightTag, ServerComponentExecutor},
-    flight::escape::escape_rsc_value,
+    flight::escape,
     types::{RSCTree, ReactElement},
 };
 
@@ -394,7 +393,7 @@ impl RscSerializer {
 
                 let props_value =
                     Value::Object(error_props.into_iter().collect::<Map<String, Value>>());
-                let escaped_props = escape_rsc_value(&props_value);
+                let escaped_props = escape::escape_rsc_value(&props_value);
                 let props_json =
                     serde_json::to_string(&escaped_props).unwrap_or_else(|_| "{}".to_string());
                 format!(r#"["$","div",{key_json},{props_json}]"#)
@@ -438,7 +437,7 @@ impl RscSerializer {
 
         let props_value =
             Value::Object(processed_props.into_iter().collect::<Map<String, Value>>());
-        let escaped_props = escape_rsc_value(&props_value);
+        let escaped_props = escape::escape_rsc_value(&props_value);
         let props_json = serde_json::to_string(&escaped_props).unwrap_or_else(|_| "{}".to_string());
 
         format!(r#"["$","{module_ref}",{key_json},{props_json}]"#)
@@ -541,7 +540,7 @@ impl RscSerializer {
         };
 
         let props_value = Value::Object(element_props.into_iter().collect::<Map<String, Value>>());
-        let escaped_props = escape_rsc_value(&props_value);
+        let escaped_props = escape::escape_rsc_value(&props_value);
         let props_json = serde_json::to_string(&escaped_props).unwrap_or_else(|_| "{}".to_string());
 
         format!(r#"["$","{tag}",{key_json},{props_json}]"#)
@@ -575,7 +574,7 @@ impl RscSerializer {
         let error_id = self.get_next_row_id();
 
         let digest = Self::generate_error_digest(component_name, message);
-        let error_data = json!({
+        let error_data = serde_json::json!({
             "digest": digest,
             "message": message
         });
@@ -618,7 +617,7 @@ impl RscSerializer {
 
         let chunk_name = module_ref.path.clone();
 
-        let module_data = json!([module_ref.path, [chunk_name], export_name]);
+        let module_data = serde_json::json!([module_ref.path, [chunk_name], export_name]);
 
         let import_line =
             RscFlightTag::ModuleImport.format_row(module_id, &module_data.to_string());
@@ -861,7 +860,9 @@ impl RscSerializer {
                     result.insert(key.clone(), validated_value);
                 }
                 Err(_) => {
-                    error!("[rari] RSC: Prop validation error for '{key}': {validation_errors:?}");
+                    tracing::error!(
+                        "[rari] RSC: Prop validation error for '{key}': {validation_errors:?}"
+                    );
                     result.insert(key.clone(), Value::Null);
                 }
             }
@@ -869,12 +870,16 @@ impl RscSerializer {
         }
 
         if !validation_errors.is_empty() {
-            error!(
+            tracing::error!(
                 "[rari] RSC: Props validation completed with {} errors",
                 validation_errors.len()
             );
             for error in &validation_errors {
-                error!("[rari] RSC: Validation error: {} - {}", error.field_path, error.message);
+                tracing::error!(
+                    "[rari] RSC: Validation error: {} - {}",
+                    error.field_path,
+                    error.message
+                );
             }
         }
 
@@ -1114,7 +1119,7 @@ impl RscSerializer {
                 data_array.iter().filter_map(|v| v.as_u64().map(|n| n as u8)).collect();
 
             let base64_data = base64_encode(&bytes);
-            let blob_model = json!([blob_type, base64_data]);
+            let blob_model = serde_json::json!([blob_type, base64_data]);
             let blob_json = serde_json::to_string(&blob_model).unwrap_or_else(|_| "[]".to_string());
             let chunk_line = format!("{chunk_id:x}:{blob_json}");
             self.output_lines.push(chunk_line);
@@ -1272,7 +1277,7 @@ impl RscSerializer {
     ) -> String {
         let boundary_row_id = self.get_next_row_id();
 
-        let boundary_data = json!([
+        let boundary_data = serde_json::json!([
             "$",
             "$Sreact.suspense",
             null,
@@ -1360,7 +1365,7 @@ impl RscSerializer {
     ) -> Result<String, RariError> {
         let boundary_row_id = self.get_next_row_id();
 
-        let boundary_data = json!([
+        let boundary_data = serde_json::json!([
             "$",
             "$Sreact.suspense",
             null,
@@ -1460,8 +1465,8 @@ mod tests {
         let mut serializer = RscSerializer::new();
 
         let mut props = FxHashMap::default();
-        props.insert("className".to_string(), json!("test-class"));
-        props.insert("children".to_string(), json!("Hello World"));
+        props.insert("className".to_string(), serde_json::json!("test-class"));
+        props.insert("children".to_string(), serde_json::json!("Hello World"));
 
         let element = SerializedReactElement::create_html_element("div", Some(props));
         let result = serializer.serialize_to_rsc_format(&element);
@@ -1477,8 +1482,8 @@ mod tests {
         serializer.register_client_component("Button", "./components/Button.client.js", "default");
 
         let mut props = FxHashMap::default();
-        props.insert("onClick".to_string(), json!("handleClick"));
-        props.insert("children".to_string(), json!("Click me"));
+        props.insert("onClick".to_string(), serde_json::json!("handleClick"));
+        props.insert("children".to_string(), serde_json::json!("Click me"));
 
         let element = SerializedReactElement::create_client_component("Button", Some(props));
         let result = serializer.serialize_to_rsc_format(&element);
@@ -1505,7 +1510,7 @@ mod tests {
         let mut serializer = RscSerializer::new();
 
         let mut props = FxHashMap::default();
-        props.insert("userId".to_string(), json!(123));
+        props.insert("userId".to_string(), serde_json::json!(123));
 
         let element = SerializedReactElement::create_server_component("UserProfile", Some(props));
         let result = serializer.serialize_to_rsc_format(&element);
@@ -1517,7 +1522,7 @@ mod tests {
     fn test_serialize_fragment() {
         let mut serializer = RscSerializer::new();
 
-        let children = vec![json!("First child"), json!("Second child")];
+        let children = vec![serde_json::json!("First child"), serde_json::json!("Second child")];
 
         let element = SerializedReactElement::create_fragment(Some(children));
         let result = serializer.serialize_to_rsc_format(&element);
@@ -1551,7 +1556,7 @@ mod tests {
         serializer.register_client_component("Button", "./components/Button.client.js", "default");
 
         let mut div_props = FxHashMap::default();
-        div_props.insert("className".to_string(), json!("container"));
+        div_props.insert("className".to_string(), serde_json::json!("container"));
 
         let div_element = SerializedReactElement::create_html_element("div", Some(div_props));
 
@@ -1587,18 +1592,18 @@ mod tests {
         let mut serializer = RscSerializer::new();
 
         let mut complex_props = FxHashMap::default();
-        complex_props.insert("valid_string".to_string(), json!("Hello"));
-        complex_props.insert("valid_number".to_string(), json!(42));
-        complex_props.insert("valid_boolean".to_string(), json!(true));
-        complex_props.insert("valid_null".to_string(), json!(null));
+        complex_props.insert("valid_string".to_string(), serde_json::json!("Hello"));
+        complex_props.insert("valid_number".to_string(), serde_json::json!(42));
+        complex_props.insert("valid_boolean".to_string(), serde_json::json!(true));
+        complex_props.insert("valid_null".to_string(), serde_json::json!(null));
         complex_props.insert(
             "nested_object".to_string(),
-            json!({
+            serde_json::json!({
                 "inner": "value",
                 "count": 10
             }),
         );
-        complex_props.insert("array_prop".to_string(), json!([1, 2, 3]));
+        complex_props.insert("array_prop".to_string(), serde_json::json!([1, 2, 3]));
 
         let element = SerializedReactElement::create_html_element("div", Some(complex_props));
         let result = serializer.serialize_to_rsc_format(&element);
@@ -1615,9 +1620,11 @@ mod tests {
         let mut serializer = RscSerializer::new();
 
         let mut props_with_function = FxHashMap::default();
-        props_with_function
-            .insert("onClick".to_string(), json!("function handleClick() { return true; }"));
-        props_with_function.insert("valid_prop".to_string(), json!("valid value"));
+        props_with_function.insert(
+            "onClick".to_string(),
+            serde_json::json!("function handleClick() { return true; }"),
+        );
+        props_with_function.insert("valid_prop".to_string(), serde_json::json!("valid value"));
 
         let element =
             SerializedReactElement::create_html_element("button", Some(props_with_function));
@@ -1633,11 +1640,11 @@ mod tests {
         let mut serializer = RscSerializer::new();
 
         let mut props = FxHashMap::default();
-        props.insert("safe_prop".to_string(), json!("safe"));
+        props.insert("safe_prop".to_string(), serde_json::json!("safe"));
 
         props.insert(
             "nested".to_string(),
-            json!({
+            serde_json::json!({
                 "level1": {
                     "level2": {
                         "data": "deep value"
@@ -1658,9 +1665,9 @@ mod tests {
         let mut serializer = RscSerializer::new();
 
         let mut props = FxHashMap::default();
-        props.insert("symbol_prop".to_string(), json!("Symbol(test)"));
-        props.insert("object_prop".to_string(), json!("Object [object Object]"));
-        props.insert("valid_prop".to_string(), json!("normal string"));
+        props.insert("symbol_prop".to_string(), serde_json::json!("Symbol(test)"));
+        props.insert("object_prop".to_string(), serde_json::json!("Object [object Object]"));
+        props.insert("valid_prop".to_string(), serde_json::json!("normal string"));
 
         let element = SerializedReactElement::create_html_element("div", Some(props));
         let result = serializer.serialize_to_rsc_format(&element);
@@ -1679,15 +1686,15 @@ mod tests {
             _props: Option<&FxHashMap<String, Value>>,
         ) -> Result<Value, RariError> {
             match component_name {
-                "SuccessfulComponent" => {
-                    Ok(json!(["$", "h1", null, {"children": "Server rendered content"}]))
-                }
-                "HTMLComponent" => Ok(json!("<p>HTML from server</p>")),
+                "SuccessfulComponent" => Ok(
+                    serde_json::json!(["$", "h1", null, {"children": "Server rendered content"}]),
+                ),
+                "HTMLComponent" => Ok(serde_json::json!("<p>HTML from server</p>")),
                 "FailingComponent" => {
                     Err(RariError::js_execution("Component execution failed".to_string()))
                 }
                 _ => Ok(
-                    json!({"type": "div", "props": {"children": format!("Component: {}", component_name)}}),
+                    serde_json::json!({"type": "div", "props": {"children": format!("Component: {}", component_name)}}),
                 ),
             }
         }
@@ -1746,8 +1753,8 @@ mod tests {
         serializer.set_server_component_executor(Box::new(MockServerComponentExecutor));
 
         let mut props = FxHashMap::default();
-        props.insert("title".to_string(), json!("Test Title"));
-        props.insert("count".to_string(), json!(5));
+        props.insert("title".to_string(), serde_json::json!("Test Title"));
+        props.insert("count".to_string(), serde_json::json!(5));
 
         let element =
             SerializedReactElement::create_server_component("GenericComponent", Some(props));
@@ -1762,17 +1769,17 @@ mod tests {
         let mut serializer = RscSerializer::new();
 
         let mut fallback_props = FxHashMap::default();
-        fallback_props.insert("children".to_string(), json!("Loading..."));
+        fallback_props.insert("children".to_string(), serde_json::json!("Loading..."));
         let fallback = LoadingReactElement::with_props("div", fallback_props);
 
         let mut children_props = FxHashMap::default();
-        children_props.insert("children".to_string(), json!("Content loaded"));
+        children_props.insert("children".to_string(), serde_json::json!("Content loaded"));
         let children = LoadingReactElement::with_props("div", children_props);
 
         let mut suspense_props = FxHashMap::default();
         suspense_props.insert("fallback".to_string(), serde_json::to_value(&fallback).unwrap());
         suspense_props.insert("children".to_string(), serde_json::to_value(&children).unwrap());
-        suspense_props.insert("~boundaryId".to_string(), json!("test-boundary"));
+        suspense_props.insert("~boundaryId".to_string(), serde_json::json!("test-boundary"));
 
         let suspense = LoadingReactElement::with_props("react.suspense", suspense_props);
 
@@ -1792,8 +1799,8 @@ mod tests {
         let mut serializer = RscSerializer::new();
 
         let mut props = FxHashMap::default();
-        props.insert("className".to_string(), json!("test-class"));
-        props.insert("children".to_string(), json!("Hello World"));
+        props.insert("className".to_string(), serde_json::json!("test-class"));
+        props.insert("children".to_string(), serde_json::json!("Hello World"));
 
         let element = LoadingReactElement::with_props("div", props).with_key("test-key");
 
@@ -1817,7 +1824,7 @@ mod tests {
         }
 
         let mut props = FxHashMap::default();
-        props.insert("children".to_string(), json!("Test Content"));
+        props.insert("children".to_string(), serde_json::json!("Test Content"));
 
         let element = LoadingReactElement::with_props("span", props);
 
@@ -1826,7 +1833,7 @@ mod tests {
         assert_eq!(result, "$La", "Reference should use hexadecimal format");
 
         let output = serializer.output_lines.join("\n");
-        assert!(output.contains("a:["), "Wire format row should use hex ID 'a'");
+        assert!(output.contains("a:["), "Flight protocol row should use hex ID 'a'");
         assert!(output.contains("Test Content"), "Should contain the element content");
 
         let element2 = LoadingReactElement::with_props("div", FxHashMap::default());
@@ -1859,10 +1866,8 @@ mod tests {
 
     #[test]
     fn test_serialize_map_object() {
-        use serde_json::json;
-
         let mut serializer = RscSerializer::new();
-        let value = json!({"$map": [["key1", "value1"], ["key2", "value2"]]});
+        let value = serde_json::json!({"$map": [["key1", "value1"], ["key2", "value2"]]});
         let processed = serializer.process_special_values_with_outlining(&value);
 
         assert!(
@@ -1887,10 +1892,8 @@ mod tests {
 
     #[test]
     fn test_serialize_set_object() {
-        use serde_json::json;
-
         let mut serializer = RscSerializer::new();
-        let value = json!({"$set": ["value1", "value2", "value3"]});
+        let value = serde_json::json!({"$set": ["value1", "value2", "value3"]});
         let processed = serializer.process_special_values_with_outlining(&value);
 
         assert!(processed.as_str().unwrap().starts_with("$W"));
@@ -1908,10 +1911,8 @@ mod tests {
 
     #[test]
     fn test_serialize_formdata_object() {
-        use serde_json::json;
-
         let mut serializer = RscSerializer::new();
-        let value = json!({"$formdata": [["field1", "value1"], ["field2", "value2"]]});
+        let value = serde_json::json!({"$formdata": [["field1", "value1"], ["field2", "value2"]]});
         let processed = serializer.process_special_values_with_outlining(&value);
 
         assert!(processed.as_str().unwrap().starts_with("$K"));
@@ -1930,10 +1931,8 @@ mod tests {
 
     #[test]
     fn test_serialize_nested_collections() {
-        use serde_json::json;
-
         let mut serializer = RscSerializer::new();
-        let value = json!({
+        let value = serde_json::json!({
             "map": {"$map": [["key1", "value1"]]},
             "set": {"$set": ["item1", "item2"]},
             "nested": {
@@ -1952,10 +1951,8 @@ mod tests {
 
     #[test]
     fn test_serialize_map_with_special_values() {
-        use serde_json::json;
-
         let mut serializer = RscSerializer::new();
-        let value = json!({
+        let value = serde_json::json!({
             "$map": [
                 ["date", {"$date": "2025-12-09T18:00:00.000Z"}],
                 ["bigint", {"$bigint": "123"}],
@@ -1977,10 +1974,8 @@ mod tests {
 
     #[test]
     fn test_serialize_multiple_maps_unique_ids() {
-        use serde_json::json;
-
         let mut serializer = RscSerializer::new();
-        let value = json!({
+        let value = serde_json::json!({
             "map1": {"$map": [["a", "1"]]},
             "map2": {"$map": [["b", "2"]]},
             "map3": {"$map": [["c", "3"]]}
@@ -2005,10 +2000,8 @@ mod tests {
 
     #[test]
     fn test_serialize_promise_object() {
-        use serde_json::json;
-
         let mut serializer = RscSerializer::new();
-        let value = json!({"$promise": {"status": "pending", "value": null}});
+        let value = serde_json::json!({"$promise": {"status": "pending", "value": null}});
         let processed = serializer.process_special_values_with_outlining(&value);
 
         assert!(processed.as_str().unwrap().starts_with("$@"));
@@ -2024,10 +2017,8 @@ mod tests {
 
     #[test]
     fn test_serialize_server_function() {
-        use serde_json::json;
-
         let mut serializer = RscSerializer::new();
-        let value = json!({
+        let value = serde_json::json!({
             "$function": {
                 "id": "actions/todo-actions#addTodo",
                 "bound": null
@@ -2045,10 +2036,8 @@ mod tests {
 
     #[test]
     fn test_serialize_temporary_reference() {
-        use serde_json::json;
-
         let mut serializer = RscSerializer::new();
-        let value = json!({"$temp": "ref_123"});
+        let value = serde_json::json!({"$temp": "ref_123"});
         let processed = serializer.process_special_values_with_outlining(&value);
 
         assert_eq!(processed, "$Tref_123");
@@ -2058,10 +2047,8 @@ mod tests {
 
     #[test]
     fn test_serialize_symbol_reference() {
-        use serde_json::json;
-
         let mut serializer = RscSerializer::new();
-        let value = json!({"$symbol": "iterator"});
+        let value = serde_json::json!({"$symbol": "iterator"});
         let processed = serializer.process_special_values_with_outlining(&value);
 
         assert_eq!(processed, "$Siterator");
@@ -2071,10 +2058,8 @@ mod tests {
 
     #[test]
     fn test_serialize_deferred_object() {
-        use serde_json::json;
-
         let mut serializer = RscSerializer::new();
-        let value = json!({"$deferred": {"type": "debug", "data": "some data"}});
+        let value = serde_json::json!({"$deferred": {"type": "debug", "data": "some data"}});
         let processed = serializer.process_special_values_with_outlining(&value);
 
         assert!(processed.as_str().unwrap().starts_with("$Y"));
@@ -2087,10 +2072,8 @@ mod tests {
 
     #[test]
     fn test_serialize_iterator_object() {
-        use serde_json::json;
-
         let mut serializer = RscSerializer::new();
-        let value = json!({"$iterator": ["value1", "value2", "value3"]});
+        let value = serde_json::json!({"$iterator": ["value1", "value2", "value3"]});
         let processed = serializer.process_special_values_with_outlining(&value);
 
         assert!(processed.as_str().unwrap().starts_with("$i"));
@@ -2104,10 +2087,8 @@ mod tests {
 
     #[test]
     fn test_serialize_mixed_advanced_markers() {
-        use serde_json::json;
-
         let mut serializer = RscSerializer::new();
-        let value = json!({
+        let value = serde_json::json!({
             "promise": {"$promise": {"status": "fulfilled", "value": 42}},
             "function": {"$function": {"id": "myAction"}},
             "temp": {"$temp": "temp_ref"},
@@ -2130,10 +2111,8 @@ mod tests {
 
     #[test]
     fn test_serialize_nested_advanced_markers() {
-        use serde_json::json;
-
         let mut serializer = RscSerializer::new();
-        let value = json!({
+        let value = serde_json::json!({
             "$promise": {
                 "status": "fulfilled",
                 "value": {
@@ -2160,20 +2139,20 @@ mod tests {
     }
 
     #[test]
-    fn test_suspense_wire_format_structure() {
+    fn test_suspense_flight_protocol_structure() {
         let mut serializer = RscSerializer::new();
 
         let fallback = LoadingReactElement::with_props("div", {
             let mut props = FxHashMap::default();
-            props.insert("className".to_string(), json!("loading-spinner"));
-            props.insert("children".to_string(), json!("Loading..."));
+            props.insert("className".to_string(), serde_json::json!("loading-spinner"));
+            props.insert("children".to_string(), serde_json::json!("Loading..."));
             props
         });
 
         let children = LoadingReactElement::with_props("article", {
             let mut props = FxHashMap::default();
-            props.insert("className".to_string(), json!("content"));
-            props.insert("children".to_string(), json!("Article content"));
+            props.insert("className".to_string(), serde_json::json!("content"));
+            props.insert("children".to_string(), serde_json::json!("Article content"));
             props
         });
 
@@ -2181,7 +2160,7 @@ mod tests {
             let mut props = FxHashMap::default();
             props.insert("fallback".to_string(), serde_json::to_value(&fallback).unwrap());
             props.insert("children".to_string(), serde_json::to_value(&children).unwrap());
-            props.insert("~boundaryId".to_string(), json!("article-boundary"));
+            props.insert("~boundaryId".to_string(), serde_json::json!("article-boundary"));
             props
         });
 
@@ -2190,7 +2169,7 @@ mod tests {
         let output = serializer.output_lines.join("\n");
 
         let lines: Vec<&str> = output.lines().collect();
-        assert_eq!(lines.len(), 3, "Should have 3 rows in wire format");
+        assert_eq!(lines.len(), 3, "Should have 3 rows in Flight protocol");
 
         assert!(lines[0].contains(r#"["$","div""#), "First row should be fallback div");
         assert!(lines[0].contains("loading-spinner"), "Should contain fallback className");
@@ -2209,8 +2188,8 @@ mod tests {
         let mut serializer = RscSerializer::new();
 
         let mut props = FxHashMap::default();
-        props.insert("children".to_string(), json!({"tag": "div", "props": {}}));
-        props.insert("~boundaryId".to_string(), json!("test"));
+        props.insert("children".to_string(), serde_json::json!({"tag": "div", "props": {}}));
+        props.insert("~boundaryId".to_string(), serde_json::json!("test"));
 
         let suspense = LoadingReactElement::with_props("react.suspense", props);
 
@@ -2227,8 +2206,8 @@ mod tests {
         let mut serializer = RscSerializer::new();
 
         let mut props = FxHashMap::default();
-        props.insert("fallback".to_string(), json!({"tag": "div", "props": {}}));
-        props.insert("~boundaryId".to_string(), json!("test"));
+        props.insert("fallback".to_string(), serde_json::json!({"tag": "div", "props": {}}));
+        props.insert("~boundaryId".to_string(), serde_json::json!("test"));
 
         let suspense = LoadingReactElement::with_props("react.suspense", props);
 
@@ -2247,7 +2226,7 @@ mod tests {
         let mut props = FxHashMap::default();
         props.insert(
             "buffer".to_string(),
-            json!({
+            serde_json::json!({
                 "$typedarray": {
                     "type": "Uint8Array",
                     "data": [1, 2, 3, 4, 5]
@@ -2270,7 +2249,7 @@ mod tests {
         let mut props = FxHashMap::default();
         props.insert(
             "data".to_string(),
-            json!({
+            serde_json::json!({
                 "$typedarray": {
                     "type": "Int32Array",
                     "data": [100, 200, 300]
@@ -2293,7 +2272,7 @@ mod tests {
         let mut props = FxHashMap::default();
         props.insert(
             "floats".to_string(),
-            json!({
+            serde_json::json!({
                 "$typedarray": {
                     "type": "Float64Array",
                     "data": [1, 2, 3]
@@ -2316,7 +2295,7 @@ mod tests {
         let mut props = FxHashMap::default();
         props.insert(
             "file".to_string(),
-            json!({
+            serde_json::json!({
                 "$blob": {
                     "type": "image/png",
                     "data": [137, 80, 78, 71]
@@ -2339,7 +2318,7 @@ mod tests {
         let mut props = FxHashMap::default();
         props.insert(
             "data".to_string(),
-            json!({
+            serde_json::json!({
                 "$blob": {
                     "data": [1, 2, 3, 4]
                 }
@@ -2361,7 +2340,7 @@ mod tests {
         let mut props = FxHashMap::default();
         props.insert(
             "stream".to_string(),
-            json!({
+            serde_json::json!({
                 "$stream": {
                     "chunks": [
                         [1, 2, 3],
@@ -2393,7 +2372,7 @@ mod tests {
         let mut props = FxHashMap::default();
         props.insert(
             "byteStream".to_string(),
-            json!({
+            serde_json::json!({
                 "$stream": {
                     "byteStream": true,
                     "chunks": [
@@ -2421,7 +2400,7 @@ mod tests {
         let mut props = FxHashMap::default();
         props.insert(
             "data".to_string(),
-            json!({
+            serde_json::json!({
                 "buffer": {
                     "$typedarray": {
                         "type": "Uint8Array",
@@ -2470,7 +2449,7 @@ mod tests {
             let mut props = FxHashMap::default();
             props.insert(
                 "data".to_string(),
-                json!({
+                serde_json::json!({
                     "$typedarray": {
                         "type": type_name,
                         "data": [1, 2, 3]
@@ -2497,7 +2476,7 @@ mod tests {
         let mut props = FxHashMap::default();
         props.insert(
             "stream".to_string(),
-            json!({
+            serde_json::json!({
                 "$stream": {
                     "chunks": []
                 }
@@ -2518,7 +2497,7 @@ mod tests {
         let mut props = FxHashMap::default();
         props.insert(
             "mixed".to_string(),
-            json!({
+            serde_json::json!({
                 "nan": "$NaN",
                 "buffer": {
                     "$typedarray": {
@@ -2547,13 +2526,13 @@ mod tests {
         let mut props = FxHashMap::default();
         props.insert(
             "data".to_string(),
-            json!({
+            serde_json::json!({
                 "map": {"$map": [["key1", "value1"], ["key2", "value2"]]},
                 "set": {"$set": ["a", "b", "c"]},
                 "promise": {"$promise": {"status": "pending", "value": null}}
             }),
         );
-        props.insert("className".to_string(), json!("container"));
+        props.insert("className".to_string(), serde_json::json!("container"));
 
         let parent_element = SerializedReactElement::create_html_element("div", Some(props));
 

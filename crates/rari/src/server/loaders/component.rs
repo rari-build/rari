@@ -1,12 +1,12 @@
 #![expect(clippy::missing_errors_doc, clippy::too_many_lines)]
-use std::{fs, future::Future, path::Path, pin::Pin, sync::Arc};
+use std::{future::Future, path::Path, pin::Pin, sync::Arc};
 
 use cow_utils::CowUtils;
 use rari_error::RariError;
 use rari_rsc::utils::extract_dependencies;
 use rari_utils::path_to_file_url;
 use serde_json::Value;
-use tracing::error;
+use tokio::fs;
 
 use crate::{
     rendering::base::RscRenderer,
@@ -24,11 +24,11 @@ pub struct ComponentLoader;
 impl ComponentLoader {
     pub async fn load_production_components(renderer: &mut RscRenderer) -> Result<(), RariError> {
         let manifest_path = Path::new(DIST_DIR).join("server").join("manifest.json");
-        if !manifest_path.exists() {
+        if !fs::try_exists(&manifest_path).await.unwrap_or(false) {
             return Ok(());
         }
 
-        let manifest = Self::read_manifest(&manifest_path)?;
+        let manifest = Self::read_manifest(&manifest_path).await?;
         let components = Self::parse_manifest_components(&manifest)?;
 
         let mut sorted_components: Vec<_> = components.iter().collect();
@@ -47,12 +47,13 @@ impl ComponentLoader {
                 })?;
 
             let component_file = Path::new(DIST_DIR).join(bundle_path);
-            if !component_file.exists() {
-                error!("Component file not found: {}", component_file.display());
+            if !fs::try_exists(&component_file).await.unwrap_or(false) {
+                tracing::error!("Component file not found: {}", component_file.display());
                 continue;
             }
 
             let component_code = fs::read_to_string(&component_file)
+                .await
                 .map_err(|_e| RariError::io("Failed to read component file".to_string()))?;
 
             let is_server_action = has_use_server_directive(&component_code);
@@ -61,16 +62,22 @@ impl ComponentLoader {
                 if let Err(e) =
                     renderer.runtime.add_module_to_loader(specifier, component_code.clone()).await
                 {
-                    error!("Failed to add component {} to module loader: {}", component_id, e);
+                    tracing::error!(
+                        "Failed to add component {} to module loader: {}",
+                        component_id,
+                        e
+                    );
                     continue;
                 }
 
                 match renderer.runtime.load_es_module(component_id).await {
                     Ok(module_id) => {
                         if let Err(e) = renderer.runtime.evaluate_module(module_id).await {
-                            error!(
+                            tracing::error!(
                                 "Failed to evaluate module {} (id: {}): {}",
-                                component_id, module_id, e
+                                component_id,
+                                module_id,
+                                e
                             );
                             continue;
                         }
@@ -79,17 +86,19 @@ impl ComponentLoader {
                             Ok(_namespace) => {
                                 let specifier_json = serde_json::to_string(specifier)
                                     .unwrap_or_else(|e| {
-                                        error!(
+                                        tracing::error!(
                                             "Failed to serialize module specifier for {}: {}",
-                                            component_id, e
+                                            component_id,
+                                            e
                                         );
                                         "\"\"".to_string()
                                     });
                                 let component_id_json = serde_json::to_string(component_id)
                                     .unwrap_or_else(|e| {
-                                        error!(
+                                        tracing::error!(
                                             "Failed to serialize component_id {}: {}",
-                                            component_id, e
+                                            component_id,
+                                            e
                                         );
                                         "\"\"".to_string()
                                     });
@@ -140,7 +149,7 @@ impl ComponentLoader {
                                                 .and_then(serde_json::Value::as_bool)
                                                 && !success
                                             {
-                                                error!(
+                                                tracing::error!(
                                                     "Failed to register server action {}: {:?}",
                                                     component_id,
                                                     result.get("error")
@@ -148,9 +157,10 @@ impl ComponentLoader {
                                             }
                                         }
                                         Err(e) => {
-                                            error!(
+                                            tracing::error!(
                                                 "Failed to register server action {}: {}",
-                                                component_id, e
+                                                component_id,
+                                                e
                                             );
                                         }
                                     }
@@ -179,7 +189,7 @@ impl ComponentLoader {
                                                 .and_then(serde_json::Value::as_bool)
                                                 && !success
                                             {
-                                                error!(
+                                                tracing::error!(
                                                     "Failed to register component {} to globalThis: {:?}",
                                                     component_id,
                                                     result.get("error")
@@ -187,28 +197,34 @@ impl ComponentLoader {
                                             }
                                         }
                                         Err(e) => {
-                                            error!(
+                                            tracing::error!(
                                                 "Failed to register component {} to globalThis: {}",
-                                                component_id, e
+                                                component_id,
+                                                e
                                             );
                                         }
                                     }
                                 }
                             }
                             Err(e) => {
-                                error!(
+                                tracing::error!(
                                     "Failed to get module namespace for {}: {}",
-                                    component_id, e
+                                    component_id,
+                                    e
                                 );
                             }
                         }
                     }
                     Err(e) => {
-                        error!("Failed to load component {} as ESM module: {}", component_id, e);
+                        tracing::error!(
+                            "Failed to load component {} as ESM module: {}",
+                            component_id,
+                            e
+                        );
                     }
                 }
             } else {
-                error!("Component {} missing moduleSpecifier in manifest.", component_id);
+                tracing::error!("Component {} missing moduleSpecifier in manifest.", component_id);
             }
         }
 
@@ -219,7 +235,7 @@ impl ComponentLoader {
         renderer: &mut RscRenderer,
     ) -> Result<(), RariError> {
         let src_dir = Path::new("src");
-        if !src_dir.exists() {
+        if !fs::try_exists(src_dir).await.unwrap_or(false) {
             return Ok(());
         }
 
@@ -233,16 +249,22 @@ impl ComponentLoader {
         renderer: &'a mut RscRenderer,
     ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + 'a>> {
         Box::pin(async move {
-            let entries = fs::read_dir(dir).map_err(|e| {
+            let mut entries = fs::read_dir(dir).await.map_err(|e| {
                 RariError::io(format!("Failed to read directory {}: {}", dir.display(), e))
             })?;
 
-            for entry in entries {
-                let entry = entry
-                    .map_err(|e| RariError::io(format!("Failed to read directory entry: {e}")))?;
+            while let Some(entry) = entries
+                .next_entry()
+                .await
+                .map_err(|e| RariError::io(format!("Failed to read directory entry: {e}")))?
+            {
                 let path = entry.path();
+                let file_type = entry
+                    .file_type()
+                    .await
+                    .map_err(|e| RariError::io(format!("Failed to read file type: {e}")))?;
 
-                if path.is_dir() {
+                if file_type.is_dir() {
                     Self::scan_for_server_actions(&path, renderer).await?;
                 } else if path
                     .extension()
@@ -250,7 +272,7 @@ impl ComponentLoader {
                     .map(|s| s == "ts" || s == "tsx" || s == "js" || s == "jsx")
                     .unwrap_or(false)
                 {
-                    let Ok(code) = fs::read_to_string(&path) else {
+                    let Ok(code) = fs::read_to_string(&path).await else {
                         continue;
                     };
 
@@ -270,11 +292,11 @@ impl ComponentLoader {
                         let dist_path =
                             Path::new(DIST_DIR).join("server").join(format!("{action_id}.js"));
 
-                        if dist_path.exists() {
-                            match fs::read_to_string(&dist_path) {
+                        if fs::try_exists(&dist_path).await.unwrap_or(false) {
+                            match fs::read_to_string(&dist_path).await {
                                 Ok(dist_code) => {
                                     let canonical_path =
-                                        dist_path.canonicalize().unwrap_or(dist_path.clone());
+                                        fs::canonicalize(&dist_path).await.unwrap_or(dist_path);
                                     let module_specifier = path_to_file_url(&canonical_path);
 
                                     let esm_load_result = renderer
@@ -290,23 +312,25 @@ impl ComponentLoader {
                                                     .evaluate_module(module_id)
                                                     .await
                                                 {
-                                                    error!(
+                                                    tracing::error!(
                                                         "Failed to evaluate server action module {}: {}",
-                                                        action_id, e
+                                                        action_id,
+                                                        e
                                                     );
                                                 } else {
                                                     let module_specifier_json = serde_json::to_string(&module_specifier)
                                                         .map_err(|e| {
-                                                            error!("Failed to serialize module_specifier for {}: {}", action_id, e);
+                                                            tracing::error!("Failed to serialize module_specifier for {}: {}", action_id, e);
                                                             RariError::internal(format!("Failed to serialize module_specifier: {e}"))
                                                         })?;
                                                     let action_id_json = serde_json::to_string(
                                                         &action_id,
                                                     )
                                                     .map_err(|e| {
-                                                        error!(
+                                                        tracing::error!(
                                                             "Failed to serialize action_id {}: {}",
-                                                            action_id, e
+                                                            action_id,
+                                                            e
                                                         );
                                                         RariError::internal(format!(
                                                             "Failed to serialize action_id: {e}"
@@ -363,12 +387,13 @@ impl ComponentLoader {
                                                                     .get("error")
                                                                     .and_then(|v| v.as_str())
                                                                 {
-                                                                    error!(
+                                                                    tracing::error!(
                                                                         "Failed to register server action {}: {}",
-                                                                        action_id, error_msg
+                                                                        action_id,
+                                                                        error_msg
                                                                     );
                                                                 } else {
-                                                                    error!(
+                                                                    tracing::error!(
                                                                         "Failed to register server action {}: unknown error",
                                                                         action_id
                                                                     );
@@ -376,18 +401,20 @@ impl ComponentLoader {
                                                             }
                                                         }
                                                         Err(e) => {
-                                                            error!(
+                                                            tracing::error!(
                                                                 "Failed to register server action {}: {}",
-                                                                action_id, e
+                                                                action_id,
+                                                                e
                                                             );
                                                         }
                                                     }
                                                 }
                                             }
                                             Err(e) => {
-                                                error!(
+                                                tracing::error!(
                                                     "Failed to load server action {} as ESM module: {}",
-                                                    action_id, e
+                                                    action_id,
+                                                    e
                                                 );
                                             }
                                         }
@@ -407,18 +434,20 @@ impl ComponentLoader {
                                         {
                                             Ok(_) => {}
                                             Err(e) => {
-                                                error!(
+                                                tracing::error!(
                                                     "Failed to load server action {}: {}",
-                                                    action_id, e
+                                                    action_id,
+                                                    e
                                                 );
                                             }
                                         }
                                     }
                                 }
                                 Err(e) => {
-                                    error!(
+                                    tracing::error!(
                                         "Failed to read built server action {:?}: {}",
-                                        dist_path, e
+                                        dist_path,
+                                        e
                                     );
                                 }
                             }
@@ -433,7 +462,7 @@ impl ComponentLoader {
 
     pub async fn load_app_router_components(renderer: &mut RscRenderer) -> Result<(), RariError> {
         let server_dir = Path::new(DIST_DIR).join("server");
-        if !server_dir.exists() {
+        if !fs::try_exists(&server_dir).await.unwrap_or(false) {
             return Ok(());
         }
 
@@ -448,16 +477,22 @@ impl ComponentLoader {
         renderer: &'a mut RscRenderer,
     ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + 'a>> {
         Box::pin(async move {
-            let entries = fs::read_dir(dir).map_err(|e| {
+            let mut entries = fs::read_dir(dir).await.map_err(|e| {
                 RariError::io(format!("Failed to read directory {}: {}", dir.display(), e))
             })?;
 
-            for entry in entries {
-                let entry = entry
-                    .map_err(|e| RariError::io(format!("Failed to read directory entry: {e}")))?;
+            while let Some(entry) = entries
+                .next_entry()
+                .await
+                .map_err(|e| RariError::io(format!("Failed to read directory entry: {e}")))?
+            {
                 let path = entry.path();
+                let file_type = entry
+                    .file_type()
+                    .await
+                    .map_err(|e| RariError::io(format!("Failed to read file type: {e}")))?;
 
-                if path.is_dir() {
+                if file_type.is_dir() {
                     Self::load_server_components_recursive(&path, base_dir, renderer).await?;
                 } else if path.extension().and_then(|s| s.to_str()) == Some("js") {
                     let file_name = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
@@ -465,7 +500,7 @@ impl ComponentLoader {
                         continue;
                     }
 
-                    let component_code = fs::read_to_string(&path).map_err(|e| {
+                    let component_code = fs::read_to_string(&path).await.map_err(|e| {
                         RariError::io(format!("Failed to read component file: {e}"))
                     })?;
 
@@ -478,7 +513,8 @@ impl ComponentLoader {
                             .cow_replace('\\', "/")
                             .into_owned();
 
-                        let canonical_path = path.canonicalize().unwrap_or(path.clone());
+                        let canonical_path =
+                            fs::canonicalize(&path).await.unwrap_or_else(|_| path.clone());
                         let module_specifier = path_to_file_url(&canonical_path);
 
                         let esm_load_result = renderer
@@ -492,18 +528,20 @@ impl ComponentLoader {
                                     if let Err(e) =
                                         renderer.runtime.evaluate_module(module_id).await
                                     {
-                                        error!(
+                                        tracing::error!(
                                             "Failed to evaluate server action module {}: {}",
-                                            relative_str, e
+                                            relative_str,
+                                            e
                                         );
                                     } else {
                                         let module_specifier_json = serde_json::to_string(
                                             &module_specifier,
                                         )
                                         .map_err(|e| {
-                                            error!(
+                                            tracing::error!(
                                                 "Failed to serialize module_specifier for {}: {}",
-                                                relative_str, e
+                                                relative_str,
+                                                e
                                             );
                                             RariError::internal(format!(
                                                 "Failed to serialize module_specifier: {e}"
@@ -511,9 +549,10 @@ impl ComponentLoader {
                                         })?;
                                         let relative_str_json =
                                             serde_json::to_string(&relative_str).map_err(|e| {
-                                                error!(
+                                                tracing::error!(
                                                     "Failed to serialize relative_str {}: {}",
-                                                    relative_str, e
+                                                    relative_str,
+                                                    e
                                                 );
                                                 RariError::internal(format!(
                                                     "Failed to serialize relative_str: {e}"
@@ -568,12 +607,13 @@ impl ComponentLoader {
                                                     if let Some(error_msg) =
                                                         result.get("error").and_then(|v| v.as_str())
                                                     {
-                                                        error!(
+                                                        tracing::error!(
                                                             "Failed to register server functions from {}: {}",
-                                                            relative_str, error_msg
+                                                            relative_str,
+                                                            error_msg
                                                         );
                                                     } else {
-                                                        error!(
+                                                        tracing::error!(
                                                             "Failed to register server functions from {}: unknown error",
                                                             relative_str
                                                         );
@@ -581,18 +621,20 @@ impl ComponentLoader {
                                                 }
                                             }
                                             Err(e) => {
-                                                error!(
+                                                tracing::error!(
                                                     "Failed to register server functions from {}: {}",
-                                                    relative_str, e
+                                                    relative_str,
+                                                    e
                                                 );
                                             }
                                         }
                                     }
                                 }
                                 Err(e) => {
-                                    error!(
+                                    tracing::error!(
                                         "Failed to load server action {} as ESM module: {}",
-                                        relative_str, e
+                                        relative_str,
+                                        e
                                     );
                                 }
                             }
@@ -609,9 +651,10 @@ impl ComponentLoader {
                             {
                                 Ok(_) => {}
                                 Err(e) => {
-                                    error!(
+                                    tracing::error!(
                                         "Failed to load server actions from {}: {}",
-                                        relative_str, e
+                                        relative_str,
+                                        e
                                     );
                                 }
                             }
@@ -645,7 +688,8 @@ impl ComponentLoader {
                         );
                     }
 
-                    let canonical_path = path.canonicalize().unwrap_or(path.clone());
+                    let canonical_path =
+                        fs::canonicalize(&path).await.unwrap_or_else(|_| path.clone());
                     let module_specifier = path_to_file_url(&canonical_path);
 
                     let esm_load_result = renderer
@@ -657,17 +701,20 @@ impl ComponentLoader {
                         match renderer.runtime.load_es_module(&component_id).await {
                             Ok(module_id) => {
                                 if let Err(e) = renderer.runtime.evaluate_module(module_id).await {
-                                    error!(
+                                    tracing::error!(
                                         "Failed to evaluate ESM module {} (id: {}): {}",
-                                        component_id, module_id, e
+                                        component_id,
+                                        module_id,
+                                        e
                                     );
                                 } else {
                                     let skip_global_binding = component_id.starts_with("lib/");
                                     let module_specifier_json =
                                         serde_json::to_string(&module_specifier).map_err(|e| {
-                                            error!(
+                                            tracing::error!(
                                                 "Failed to serialize module_specifier for {}: {}",
-                                                component_id, e
+                                                component_id,
+                                                e
                                             );
                                             RariError::internal(format!(
                                                 "Failed to serialize module_specifier: {e}"
@@ -675,9 +722,10 @@ impl ComponentLoader {
                                         })?;
                                     let component_id_json = serde_json::to_string(&component_id)
                                         .map_err(|e| {
-                                            error!(
+                                            tracing::error!(
                                                 "Failed to serialize component_id {}: {}",
-                                                component_id, e
+                                                component_id,
+                                                e
                                             );
                                             RariError::internal(format!(
                                                 "Failed to serialize component_id: {e}"
@@ -705,7 +753,7 @@ impl ComponentLoader {
                                                 .unwrap_or(false);
 
                                             if !registration_succeeded {
-                                                error!(
+                                                tracing::error!(
                                                     "Failed to register component {} to globalThis: {:?}",
                                                     component_id,
                                                     result.get("error")
@@ -717,9 +765,10 @@ impl ComponentLoader {
                                                     &component_id,
                                                 )
                                                 .unwrap_or_else(|e| {
-                                                    error!(
+                                                    tracing::error!(
                                                         "Failed to serialize component_id {}: {}",
-                                                        component_id, e
+                                                        component_id,
+                                                        e
                                                     );
                                                     "\"\"".to_string()
                                                 });
@@ -761,26 +810,29 @@ impl ComponentLoader {
                                                     )
                                                     .await
                                                 {
-                                                    error!(
+                                                    tracing::error!(
                                                         "Failed to mark component {} as client: {}",
-                                                        component_id, e
+                                                        component_id,
+                                                        e
                                                     );
                                                 }
                                             }
                                         }
                                         Err(e) => {
-                                            error!(
+                                            tracing::error!(
                                                 "Failed to register component {}: {}",
-                                                component_id, e
+                                                component_id,
+                                                e
                                             );
                                         }
                                     }
                                 }
                             }
                             Err(e) => {
-                                error!(
+                                tracing::error!(
                                     "Failed to load component {} as ESM module: {}",
-                                    component_id, e
+                                    component_id,
+                                    e
                                 );
                             }
                         }
@@ -798,9 +850,10 @@ impl ComponentLoader {
                                     let skip_global_binding = component_id.starts_with("lib/");
                                     let component_id_json = serde_json::to_string(&component_id)
                                         .unwrap_or_else(|e| {
-                                            error!(
+                                            tracing::error!(
                                                 "Failed to serialize component_id {}: {}",
-                                                component_id, e
+                                                component_id,
+                                                e
                                             );
                                             "\"\"".to_string()
                                         });
@@ -843,15 +896,20 @@ impl ComponentLoader {
                                         )
                                         .await
                                     {
-                                        error!(
+                                        tracing::error!(
                                             "Failed to mark component {} as client: {}",
-                                            component_id, e
+                                            component_id,
+                                            e
                                         );
                                     }
                                 }
                             }
                             Err(e) => {
-                                error!("Failed to execute component {}: {}", component_id, e);
+                                tracing::error!(
+                                    "Failed to execute component {}: {}",
+                                    component_id,
+                                    e
+                                );
                             }
                         }
                     }
@@ -862,8 +920,9 @@ impl ComponentLoader {
         })
     }
 
-    fn read_manifest(manifest_path: &Path) -> Result<serde_json::Value, RariError> {
+    async fn read_manifest(manifest_path: &Path) -> Result<serde_json::Value, RariError> {
         let manifest_content = fs::read_to_string(manifest_path)
+            .await
             .map_err(|e| RariError::io(format!("Failed to read server manifest: {e}")))?;
 
         serde_json::from_str(&manifest_content)
@@ -890,7 +949,7 @@ impl ComponentLoader {
 
         let component_file = Path::new(DIST_DIR).join(bundle_path);
 
-        if !component_file.exists() {
+        if !fs::try_exists(&component_file).await.unwrap_or(false) {
             return Err(RariError::not_found(format!(
                 "Component file not found: {}",
                 component_file.display()
@@ -898,6 +957,7 @@ impl ComponentLoader {
         }
 
         let component_code = fs::read_to_string(&component_file)
+            .await
             .map_err(|e| RariError::io(format!("Failed to read component file: {e}")))?;
 
         renderer
@@ -910,7 +970,7 @@ impl ComponentLoader {
         runtime: &Arc<JsExecutionRuntime>,
     ) -> Result<(), RariError> {
         let manifest_path = Path::new(DIST_DIR).join("ssr").join("manifest.json");
-        if !manifest_path.exists() {
+        if !fs::try_exists(&manifest_path).await.unwrap_or(false) {
             return Ok(());
         }
 
@@ -927,7 +987,8 @@ impl ComponentLoader {
             .await
             .map_err(|e| RariError::internal(format!("Failed to initialize ssrModules: {e}")))?;
 
-        let manifest_content = fs::read_to_string(manifest_path)
+        let manifest_content = fs::read_to_string(&manifest_path)
+            .await
             .map_err(|e| RariError::io(format!("Failed to read SSR manifest: {e}")))?;
 
         let manifest: serde_json::Value = serde_json::from_str(&manifest_content)
@@ -942,17 +1003,17 @@ impl ComponentLoader {
             let bundle_path = info.get("bundlePath").and_then(|v| v.as_str()).unwrap_or_default();
 
             let component_file = Path::new(DIST_DIR).join(bundle_path);
-            if !component_file.exists() {
+            if !fs::try_exists(&component_file).await.unwrap_or(false) {
                 continue;
             }
 
-            let Ok(code) = fs::read_to_string(&component_file) else {
+            let Ok(code) = fs::read_to_string(&component_file).await else {
                 continue;
             };
 
             let module_specifier = format!("file:///{}", bundle_path.cow_replace('\\', "/"));
             if let Err(e) = runtime.add_module_to_loader(&module_specifier, code).await {
-                error!("Failed to add SSR module {}: {}", module_path, e);
+                tracing::error!("Failed to add SSR module {}: {}", module_path, e);
                 continue;
             }
 
@@ -1006,7 +1067,7 @@ impl ComponentLoader {
                 )
                 .await
             {
-                error!("Failed to load SSR module {}: {}", module_path, e);
+                tracing::error!("Failed to load SSR module {}: {}", module_path, e);
             }
         }
 
@@ -1018,11 +1079,12 @@ impl ComponentLoader {
     ) -> Result<(), RariError> {
         let manifest_path =
             Path::new(DIST_DIR).join("server").join("client-reference-manifest.json");
-        if !manifest_path.exists() {
+        if !fs::try_exists(&manifest_path).await.unwrap_or(false) {
             return Ok(());
         }
 
-        let manifest_content = fs::read_to_string(manifest_path)
+        let manifest_content = fs::read_to_string(&manifest_path)
+            .await
             .map_err(|e| RariError::io(format!("Failed to read client reference manifest: {e}")))?;
 
         let manifest: Value = serde_json::from_str(&manifest_content).map_err(|e| {

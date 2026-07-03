@@ -14,7 +14,7 @@ import { AppRouterProvider } from 'virtual:app-router-provider'
 import { createFromReadableStream } from 'virtual:react-flight-client'
 import { NUMERIC_REGEX } from '../shared/regex-constants'
 import { getClientComponent, getClientComponentAsync, getComponentFromInfo } from './shared/get-client-component'
-import { preloadModulesFromWireFormat } from './shared/preload-modules'
+import { preloadModulesFromFlightProtocol } from './shared/preload-modules'
 import { isSuspenseType } from './shared/suspense'
 // eslint-disable-next-line ts/ban-ts-comment
 // @ts-ignore - virtual module resolved by Vite
@@ -377,7 +377,7 @@ export async function renderApp(): Promise<void> {
             buffer[i] = binaryString.charCodeAt(i)
 
           const textForPreload = new TextDecoder().decode(buffer)
-          await preloadModulesFromWireFormat(textForPreload)
+          await preloadModulesFromFlightProtocol(textForPreload)
 
           const stream = new ReadableStream({
             start(controller) {
@@ -389,7 +389,7 @@ export async function renderApp(): Promise<void> {
         }
         else {
           const payloadText = payloadScript.textContent!
-          await preloadModulesFromWireFormat(payloadText)
+          await preloadModulesFromFlightProtocol(payloadText)
 
           const stream = new ReadableStream({
             start(controller) {
@@ -514,7 +514,7 @@ export async function renderApp(): Promise<void> {
       try {
         const payloadJson = payloadScript.textContent
 
-        await preloadModulesFromWireFormat(payloadJson)
+        await preloadModulesFromFlightProtocol(payloadJson)
 
         const hasBufferedRows = getWindow()['~rari']?.streaming?.bufferedRows && getWindow()['~rari'].streaming!.bufferedRows!.length > 0
         const isStreaming = getWindow()['~rari']?.streaming?.complete === undefined || hasBufferedRows

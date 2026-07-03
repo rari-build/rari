@@ -131,7 +131,7 @@ declare global {
       readStream?: (stream: ReadableStream) => Promise<string>
       ssrModules?: Record<string, { default?: unknown, [key: string]: unknown }>
       ssrRenderComponent?: (modulePath: string, exportName: string, props: unknown) => Promise<string>
-      renderWireToHtml?: (wireFormat: string) => Promise<string>
+      renderFlightToHtml?: (flightProtocol: string) => Promise<string>
       clientReferenceManifest?: Record<string, { id: string, chunks: string, name: string }>
       lastRscBinary?: Uint8Array
       capturedElement?: unknown

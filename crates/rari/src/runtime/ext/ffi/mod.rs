@@ -1,4 +1,5 @@
 use deno_core::{Extension, extension};
+use deno_ffi::deno_ffi;
 
 use super::ExtensionTrait;
 
@@ -13,12 +14,12 @@ impl ExtensionTrait<()> for init_ffi {
         Self::init()
     }
 }
-impl ExtensionTrait<()> for deno_ffi::deno_ffi {
+impl ExtensionTrait<()> for deno_ffi {
     fn init((): ()) -> Extension {
         Self::init(None)
     }
 }
 
 pub fn extensions(is_snapshot: bool) -> Vec<Extension> {
-    vec![deno_ffi::deno_ffi::build((), is_snapshot), init_ffi::build((), is_snapshot)]
+    vec![deno_ffi::build((), is_snapshot), init_ffi::build((), is_snapshot)]
 }

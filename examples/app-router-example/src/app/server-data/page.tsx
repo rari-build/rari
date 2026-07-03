@@ -70,10 +70,10 @@ export default async function ServerDataPage() {
 
       <div className="mt-8 p-6 bg-amber-50 border border-amber-200 rounded-lg">
         <h3 className="text-amber-700 mb-2 text-xl font-semibold">
-          💡 With RSC Wire Format
+          💡 With RSC Flight Protocol
         </h3>
         <p className="text-gray-600 leading-relaxed">
-          If we implemented the full RSC wire format, this server component
+          If we implemented the full RSC Flight protocol, this server component
           could:
         </p>
         <ul className="leading-loose text-gray-600 pl-6 mt-2">

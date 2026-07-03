@@ -5,13 +5,11 @@ use std::{env, sync::Arc};
 use base64::{Engine, engine::general_purpose::STANDARD};
 use cow_utils::CowUtils;
 use rari_error::RariError;
-use rari_utils::path_to_file_url;
 use serde_json::Value;
 use tokio::{
     sync::{Mutex, mpsc},
     task,
 };
-use tracing::{debug, error};
 
 use super::{
     error_messages,
@@ -117,14 +115,14 @@ impl LayoutHtmlCache {
             Ok(Some(b)) => b,
             Ok(None) => return None,
             Err(e) => {
-                debug!(key = %ns_key, error = %e, "layout cache get failed");
+                tracing::debug!(key = %ns_key, error = %e, "layout cache get failed");
                 return None;
             }
         };
         match String::from_utf8(bytes) {
             Ok(s) => Some(s),
             Err(e) => {
-                debug!(key = %ns_key, error = %e, "layout cache value not valid utf-8");
+                tracing::debug!(key = %ns_key, error = %e, "layout cache value not valid utf-8");
                 None
             }
         }
@@ -200,7 +198,7 @@ impl LayoutRenderer {
             return Ok(false);
         }
 
-        let page_path = path_to_file_url(&page_file_path);
+        let page_path = rari_utils::path_to_file_url(&page_file_path);
 
         let check_script = format!(
             r#"
@@ -269,7 +267,7 @@ impl LayoutRenderer {
 
         let renderer = self.renderer.lock().await;
 
-        let wire_result: Result<String, RariError> = async {
+        let flight_result: Result<String, RariError> = async {
             let rsc_flight_protocol =
                 Self::execute_composition_and_serialize(&renderer, composition_script).await?;
             Self::validate_rsc_flight_protocol(&rsc_flight_protocol)?;
@@ -279,7 +277,7 @@ impl LayoutRenderer {
 
         drop(request_context);
 
-        wire_result
+        flight_result
     }
 
     async fn render_route_with_mode_internal(
@@ -711,7 +709,7 @@ impl LayoutRenderer {
                 }
             };
 
-            let (rsc_wire_format, html) = match render_result {
+            let (rsc_flight_protocol, html) = match render_result {
                 Ok(v) => v,
                 Err(e) if needs_streaming => {
                     tracing::warn!("Fizz render failed for streaming route: {e}");
@@ -725,7 +723,7 @@ impl LayoutRenderer {
                 }
             };
 
-            let has_binary_rows = rsc_wire_format.lines().any(|line| {
+            let has_binary_rows = rsc_flight_protocol.lines().any(|line| {
                 let trimmed = line.trim();
                 if let Some(colon_pos) = trimmed.find(':') {
                     let header = &trimmed[..colon_pos];
@@ -766,26 +764,10 @@ impl LayoutRenderer {
                         r#"<script id="__RARI_RSC_PAYLOAD__" type="application/octet-stream" data-encoding="base64">{b64}</script>"#
                     )
                 } else {
-                    let rsc_payload = if rsc_wire_format.ends_with('\n') {
-                        rsc_wire_format.clone()
-                    } else {
-                        format!("{rsc_wire_format}\n")
-                    };
-                    let escaped_payload = rsc_payload.cow_replace("</", "<\\/");
-                    format!(
-                        r#"<script id="__RARI_RSC_PAYLOAD__" type="text/x-component">{escaped_payload}</script>"#
-                    )
+                    Self::build_text_payload_script(&rsc_flight_protocol)
                 }
             } else {
-                let rsc_payload = if rsc_wire_format.ends_with('\n') {
-                    rsc_wire_format.clone()
-                } else {
-                    format!("{rsc_wire_format}\n")
-                };
-                let escaped_payload = rsc_payload.cow_replace("</", "<\\/");
-                format!(
-                    r#"<script id="__RARI_RSC_PAYLOAD__" type="text/x-component">{escaped_payload}</script>"#
-                )
+                Self::build_text_payload_script(&rsc_flight_protocol)
             };
             let completion_script = r"<script>if(!window['~rari'])window['~rari']={};window['~rari'].streaming={complete:true}</script>";
 
@@ -938,14 +920,26 @@ impl LayoutRenderer {
             RariError::internal("No RSC data in render result")
         })?;
 
-        if let Some(wire_format_str) = rsc_data.as_str() {
-            return Ok(wire_format_str.to_string());
+        if let Some(flight_protocol_str) = rsc_data.as_str() {
+            return Ok(flight_protocol_str.to_string());
         }
 
         Err(RariError::internal(
-            "RSC render did not produce a wire format string. The renderer may not be loaded."
+            "RSC render did not produce a Flight protocol string. The renderer may not be loaded."
                 .to_string(),
         ))
+    }
+
+    fn build_text_payload_script(rsc_flight_protocol: &str) -> String {
+        let rsc_payload = if rsc_flight_protocol.ends_with('\n') {
+            rsc_flight_protocol.to_string()
+        } else {
+            format!("{rsc_flight_protocol}\n")
+        };
+        let escaped_payload = rsc_payload.cow_replace("</", "<\\/");
+        format!(
+            r#"<script id="__RARI_RSC_PAYLOAD__" type="text/x-component">{escaped_payload}</script>"#
+        )
     }
 
     fn validate_rsc_flight_protocol(rsc_data: &str) -> Result<(), RariError> {
@@ -963,7 +957,7 @@ impl LayoutRenderer {
 
         if !looks_like_flight {
             return Err(RariError::internal(
-                "RSC output does not look like a valid Flight wire format".to_string(),
+                "RSC output does not look like a valid Flight protocol".to_string(),
             ));
         }
 
@@ -1034,7 +1028,11 @@ impl LayoutRenderer {
         defer_rsc: bool,
     ) -> Result<String, RariError> {
         let page_props = utils::create_page_props(route_match, context).map_err(|e| {
-            error!("Failed to create page props for route '{}': {}", route_match.route.path, e);
+            tracing::error!(
+                "Failed to create page props for route '{}': {}",
+                route_match.route.path,
+                e
+            );
             RariError::internal(format!(
                 "Failed to create page props for route '{}' (component: {}): {}",
                 route_match.route.path, route_match.route.file_path, e
@@ -1042,7 +1040,11 @@ impl LayoutRenderer {
         })?;
 
         let page_props_json = serde_json::to_string(&page_props).map_err(|e| {
-            error!("Failed to serialize page props for route '{}': {}", route_match.route.path, e);
+            tracing::error!(
+                "Failed to serialize page props for route '{}': {}",
+                route_match.route.path,
+                e
+            );
             RariError::internal(format!(
                 "Failed to serialize page props for route '{}' (component: {}): {}",
                 route_match.route.path, route_match.route.file_path, e
@@ -1330,10 +1332,7 @@ mod tests {
         let result = LayoutRenderer::validate_rsc_flight_protocol("Error: composition failed");
         assert!(result.is_err());
         assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("does not look like a valid Flight wire format")
+            result.unwrap_err().to_string().contains("does not look like a valid Flight protocol")
         );
     }
 }

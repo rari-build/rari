@@ -156,7 +156,7 @@ A message channel between the HTTP server and a single JS thread sounds like a b
 
 When a request arrives, axum checks the response cache first. Hit? Served from memory on the HTTP thread. V8 doesn't wake up. Under load, most requests follow this path, which means throughput scales with the HTTP layer's capacity rather than JavaScript's execution speed.
 
-V8 only runs when there's rendering to do. In practice that means the first request for a route. That sends a message to the JS thread, which runs the composition script, renders the tree, and hands back the RSC wire format. That result gets converted to HTML, compressed with <a href="https://github.com/facebook/zstd" target="_blank" rel="noopener noreferrer">zstd</a>, and cached. From that point forward, the JS thread is idle for that route.
+V8 only runs when there's rendering to do. In practice that means the first request for a route. That sends a message to the JS thread, which runs the composition script, renders the tree, and hands back the RSC Flight protocol. That result gets converted to HTML, compressed with <a href="https://github.com/facebook/zstd" target="_blank" rel="noopener noreferrer">zstd</a>, and cached. From that point forward, the JS thread is idle for that route.
 
 The usual Node API surface (fetch, fs, crypto) works because we're using Deno's extension crates under the hood. Module resolution from `node_modules` happens at runtime when V8 first imports a package, but results are cached and most server code is pre-bundled by Vite.
 
@@ -168,7 +168,7 @@ After warmup, the server is a Rust HTTP server with an in-memory cache. V8 sits 
 
 Most of the throughput gain comes from the response cache. The full lifecycle of a request looks like this:
 
-On the first request for a route, the HTTP thread sees a cache miss and sends the composition script to the JS thread. V8 renders the component tree, produces RSC wire format, and sends it back. The HTTP thread converts that to HTML, compresses it with zstd, stores both the raw HTML and the compressed bytes in a `DashMap`, and serves the compressed response to the client.
+On the first request for a route, the HTTP thread sees a cache miss and sends the composition script to the JS thread. V8 renders the component tree, produces RSC Flight protocol, and sends it back. The HTTP thread converts that to HTML, compresses it with zstd, stores both the raw HTML and the compressed bytes in a `DashMap`, and serves the compressed response to the client.
 
 On every subsequent request for that route, the HTTP thread finds the pre-compressed bytes in the `DashMap` and writes them to the socket. No JSON parsing, no HTML conversion, no compression, no V8. The response path is a hash lookup and a `memcpy`.
 
