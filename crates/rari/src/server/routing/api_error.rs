@@ -134,27 +134,27 @@ impl From<ApiRouteError> for RariError {
     fn from(error: ApiRouteError) -> Self {
         match error {
             ApiRouteError::NotFound { message, .. } => {
-                RariError::not_found(message).with_property("error_type", "api_route_not_found")
+                Self::not_found(message).with_property("error_type", "api_route_not_found")
             }
             ApiRouteError::MethodNotAllowed { message, allowed_methods, .. } => {
-                RariError::bad_request(message)
+                Self::bad_request(message)
                     .with_property("error_type", "method_not_allowed")
                     .with_property("allowed_methods", &allowed_methods.join(","))
             }
             ApiRouteError::HandlerError { message, .. } => {
-                RariError::js_execution(message).with_property("error_type", "handler_error")
+                Self::js_execution(message).with_property("error_type", "handler_error")
             }
             ApiRouteError::InvalidResponse { message, .. } => {
-                RariError::internal(message).with_property("error_type", "invalid_response")
+                Self::internal(message).with_property("error_type", "invalid_response")
             }
             ApiRouteError::HandlerFileNotFound { message, .. } => {
-                RariError::not_found(message).with_property("error_type", "handler_file_not_found")
+                Self::not_found(message).with_property("error_type", "handler_file_not_found")
             }
             ApiRouteError::HandlerLoadError { message, .. } => {
-                RariError::internal(message).with_property("error_type", "handler_load_error")
+                Self::internal(message).with_property("error_type", "handler_load_error")
             }
             ApiRouteError::BodyParseError { message, .. } => {
-                RariError::bad_request(message).with_property("error_type", "body_parse_error")
+                Self::bad_request(message).with_property("error_type", "body_parse_error")
             }
         }
     }

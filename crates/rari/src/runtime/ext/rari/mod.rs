@@ -34,7 +34,7 @@ extension!(
 
 impl ExtensionTrait<()> for rari {
     fn init((): ()) -> Extension {
-        rari::init()
+        Self::init()
     }
 }
 

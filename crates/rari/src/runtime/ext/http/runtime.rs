@@ -41,14 +41,14 @@ pub enum HttpStartError {
 impl Display for HttpStartError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            HttpStartError::TcpStreamInUse => write!(f, "TCP stream is currently in use"),
-            HttpStartError::TlsStreamInUse => write!(f, "TLS stream is currently in use"),
-            HttpStartError::UnixSocketInUse => write!(f, "Unix socket is currently in use"),
-            HttpStartError::ReuniteTcp(err) => write!(f, "{err}"),
+            Self::TcpStreamInUse => write!(f, "TCP stream is currently in use"),
+            Self::TlsStreamInUse => write!(f, "TLS stream is currently in use"),
+            Self::UnixSocketInUse => write!(f, "Unix socket is currently in use"),
+            Self::ReuniteTcp(err) => write!(f, "{err}"),
             #[cfg(unix)]
-            HttpStartError::ReuniteUnix(err) => write!(f, "{err}"),
-            HttpStartError::Io(err) => write!(f, "{err}"),
-            HttpStartError::Resource(err) => write!(f, "{err}"),
+            Self::ReuniteUnix(err) => write!(f, "{err}"),
+            Self::Io(err) => write!(f, "{err}"),
+            Self::Resource(err) => write!(f, "{err}"),
         }
     }
 }
@@ -56,11 +56,11 @@ impl Display for HttpStartError {
 impl error::Error for HttpStartError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
-            HttpStartError::ReuniteTcp(err) => Some(err),
+            Self::ReuniteTcp(err) => Some(err),
             #[cfg(unix)]
-            HttpStartError::ReuniteUnix(err) => Some(err),
-            HttpStartError::Io(err) => Some(err),
-            HttpStartError::Resource(err) => Some(err),
+            Self::ReuniteUnix(err) => Some(err),
+            Self::Io(err) => Some(err),
+            Self::Resource(err) => Some(err),
             _ => None,
         }
     }
@@ -68,26 +68,26 @@ impl error::Error for HttpStartError {
 
 impl From<tcp::ReuniteError> for HttpStartError {
     fn from(err: tcp::ReuniteError) -> Self {
-        HttpStartError::ReuniteTcp(err)
+        Self::ReuniteTcp(err)
     }
 }
 
 #[cfg(unix)]
 impl From<unix::ReuniteError> for HttpStartError {
     fn from(err: unix::ReuniteError) -> Self {
-        HttpStartError::ReuniteUnix(err)
+        Self::ReuniteUnix(err)
     }
 }
 
 impl From<io::Error> for HttpStartError {
     fn from(err: io::Error) -> Self {
-        HttpStartError::Io(err)
+        Self::Io(err)
     }
 }
 
 impl From<ResourceError> for HttpStartError {
     fn from(err: ResourceError) -> Self {
-        HttpStartError::Resource(err)
+        Self::Resource(err)
     }
 }
 

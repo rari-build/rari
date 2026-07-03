@@ -49,15 +49,15 @@ pub enum RSCTree {
     ServerElement {
         tag: String,
         props: Option<FxHashMap<String, Value>>,
-        children: Option<Vec<RSCTree>>,
+        children: Option<Vec<Self>>,
         key: Option<String>,
     },
     Text(String),
     Fragment {
-        children: Vec<RSCTree>,
+        children: Vec<Self>,
         key: Option<String>,
     },
-    Array(Vec<RSCTree>),
+    Array(Vec<Self>),
     Null,
     Primitive(Value),
     Error {
@@ -70,17 +70,17 @@ pub enum RSCTree {
 impl RSCTree {
     #[cfg(test)]
     pub fn client_reference(id: &str, key: Option<&str>, props: FxHashMap<String, Value>) -> Self {
-        RSCTree::ClientReference { id: id.to_string(), key: key.map(ToString::to_string), props }
+        Self::ClientReference { id: id.to_string(), key: key.map(ToString::to_string), props }
     }
 
     #[cfg(test)]
     pub fn server_element(
         tag: &str,
         props: Option<FxHashMap<String, Value>>,
-        children: Option<Vec<RSCTree>>,
+        children: Option<Vec<Self>>,
         key: Option<&str>,
     ) -> Self {
-        RSCTree::ServerElement {
+        Self::ServerElement {
             tag: tag.to_string(),
             props,
             children,
@@ -89,27 +89,27 @@ impl RSCTree {
     }
 
     pub fn text(content: &str) -> Self {
-        RSCTree::Text(content.to_string())
+        Self::Text(content.to_string())
     }
 
-    pub fn fragment(children: Vec<RSCTree>, key: Option<&str>) -> Self {
-        RSCTree::Fragment { children, key: key.map(ToString::to_string) }
+    pub fn fragment(children: Vec<Self>, key: Option<&str>) -> Self {
+        Self::Fragment { children, key: key.map(ToString::to_string) }
     }
 
-    pub fn array(elements: Vec<RSCTree>) -> Self {
-        RSCTree::Array(elements)
+    pub fn array(elements: Vec<Self>) -> Self {
+        Self::Array(elements)
     }
 
     pub fn null() -> Self {
-        RSCTree::Null
+        Self::Null
     }
 
     pub fn primitive(value: Value) -> Self {
-        RSCTree::Primitive(value)
+        Self::Primitive(value)
     }
 
     pub fn error(message: &str, component_name: &str, stack: Option<&str>) -> Self {
-        RSCTree::Error {
+        Self::Error {
             message: message.to_string(),
             component_name: component_name.to_string(),
             stack: stack.map(ToString::to_string),
@@ -118,14 +118,12 @@ impl RSCTree {
 
     pub fn has_client_components(&self) -> bool {
         match self {
-            RSCTree::ClientReference { .. } => true,
-            RSCTree::ServerElement { children, .. } => {
-                children.as_ref().is_some_and(|c| c.iter().any(RSCTree::has_client_components))
+            Self::ClientReference { .. } => true,
+            Self::ServerElement { children, .. } => {
+                children.as_ref().is_some_and(|c| c.iter().any(Self::has_client_components))
             }
-            RSCTree::Fragment { children, .. } => {
-                children.iter().any(RSCTree::has_client_components)
-            }
-            RSCTree::Array(elements) => elements.iter().any(RSCTree::has_client_components),
+            Self::Fragment { children, .. } => children.iter().any(Self::has_client_components),
+            Self::Array(elements) => elements.iter().any(Self::has_client_components),
             _ => false,
         }
     }
@@ -138,30 +136,30 @@ impl RSCTree {
 
     fn collect_client_component_ids_recursive(&self, ids: &mut Vec<String>) {
         match self {
-            RSCTree::ClientReference { id, .. } => {
+            Self::ClientReference { id, .. } => {
                 ids.push(id.clone());
             }
-            RSCTree::ServerElement { children: Some(children), .. }
-            | RSCTree::Fragment { children, .. } => {
+            Self::ServerElement { children: Some(children), .. }
+            | Self::Fragment { children, .. } => {
                 for child in children {
                     child.collect_client_component_ids_recursive(ids);
                 }
             }
-            RSCTree::Array(elements) => {
+            Self::Array(elements) => {
                 for element in elements {
                     element.collect_client_component_ids_recursive(ids);
                 }
             }
-            RSCTree::ServerElement { children: None, .. } | _ => {}
+            Self::ServerElement { children: None, .. } | _ => {}
         }
     }
 
     pub fn to_json(&self) -> Value {
         match self {
-            RSCTree::ClientReference { id, key, props } => {
+            Self::ClientReference { id, key, props } => {
                 serde_json::json!(["$", id, key, props])
             }
-            RSCTree::ServerElement { tag, props, children, key } => {
+            Self::ServerElement { tag, props, children, key } => {
                 let mut element = serde_json::json!({
                     "$$typeof": "react.transitional.element",
                     "type": tag,
@@ -170,7 +168,7 @@ impl RSCTree {
                 });
 
                 if let Some(children) = children {
-                    let children_json: Vec<Value> = children.iter().map(RSCTree::to_json).collect();
+                    let children_json: Vec<Value> = children.iter().map(Self::to_json).collect();
                     if let Some(props) = element.get_mut("props")
                         && let Some(props_obj) = props.as_object_mut()
                     {
@@ -180,18 +178,18 @@ impl RSCTree {
 
                 element
             }
-            RSCTree::Text(content) => Value::String(content.clone()),
-            RSCTree::Fragment { children, .. } => {
-                let children_json: Vec<Value> = children.iter().map(RSCTree::to_json).collect();
+            Self::Text(content) => Value::String(content.clone()),
+            Self::Fragment { children, .. } => {
+                let children_json: Vec<Value> = children.iter().map(Self::to_json).collect();
                 Value::Array(children_json)
             }
-            RSCTree::Array(elements) => {
-                let elements_json: Vec<Value> = elements.iter().map(RSCTree::to_json).collect();
+            Self::Array(elements) => {
+                let elements_json: Vec<Value> = elements.iter().map(Self::to_json).collect();
                 Value::Array(elements_json)
             }
-            RSCTree::Null => Value::Null,
-            RSCTree::Primitive(value) => value.clone(),
-            RSCTree::Error { message, component_name, .. } => {
+            Self::Null => Value::Null,
+            Self::Primitive(value) => value.clone(),
+            Self::Error { message, component_name, .. } => {
                 serde_json::json!({
                     "$$typeof": "react.transitional.element",
                     "type": "div",
@@ -231,10 +229,10 @@ impl RSCTree {
     /// Returns an error if the JSON structure is invalid or cannot be parsed as an RSCTree.
     pub fn from_json(value: &Value) -> Result<Self, String> {
         match value {
-            Value::String(s) => Ok(RSCTree::Text(s.clone())),
-            Value::Number(n) => Ok(RSCTree::Primitive(Value::Number(n.clone()))),
-            Value::Bool(b) => Ok(RSCTree::Primitive(Value::Bool(*b))),
-            Value::Null => Ok(RSCTree::Null),
+            Value::String(s) => Ok(Self::Text(s.clone())),
+            Value::Number(n) => Ok(Self::Primitive(Value::Number(n.clone()))),
+            Value::Bool(b) => Ok(Self::Primitive(Value::Bool(*b))),
+            Value::Null => Ok(Self::Null),
             Value::Array(arr) => {
                 if arr.len() == 4 && arr[0] == "$" {
                     let id = arr[1].as_str().ok_or("Invalid reference ID")?;
@@ -249,7 +247,7 @@ impl RSCTree {
                             .map(|(k, v)| (k.clone(), v.clone()))
                             .collect();
 
-                        Ok(RSCTree::ClientReference { id: id.to_string(), key, props })
+                        Ok(Self::ClientReference { id: id.to_string(), key, props })
                     } else {
                         let tag = id;
                         let key = arr[2].as_str().map(ToString::to_string);
@@ -265,15 +263,15 @@ impl RSCTree {
                                     c.as_array()
                                         .ok_or("Invalid children array")?
                                         .iter()
-                                        .map(RSCTree::from_json)
-                                        .collect::<Result<Vec<RSCTree>, String>>()
+                                        .map(Self::from_json)
+                                        .collect::<Result<Vec<Self>, String>>()
                                 } else {
-                                    Ok(vec![RSCTree::from_json(&c)?])
+                                    Ok(vec![Self::from_json(&c)?])
                                 }
                             })
                             .transpose()?;
 
-                        Ok(RSCTree::ServerElement {
+                        Ok(Self::ServerElement {
                             tag: tag.to_string(),
                             props: if props.is_empty() { None } else { Some(props) },
                             children,
@@ -281,20 +279,20 @@ impl RSCTree {
                         })
                     }
                 } else {
-                    let elements: Result<Vec<RSCTree>, String> =
-                        arr.iter().map(RSCTree::from_json).collect();
-                    Ok(RSCTree::Array(elements?))
+                    let elements: Result<Vec<Self>, String> =
+                        arr.iter().map(Self::from_json).collect();
+                    Ok(Self::Array(elements?))
                 }
             }
             Value::Object(obj) => {
                 if obj.contains_key("~preSerializedSuspense") && obj.contains_key("rscArray") {
                     if let Some(rsc_array) = obj.get("rscArray") {
-                        return RSCTree::from_json(rsc_array);
+                        return Self::from_json(rsc_array);
                     }
                     tracing::error!(
                         "Pre-serialized Suspense marker found but rscArray is missing or invalid"
                     );
-                    return Ok(RSCTree::Primitive(value.clone()));
+                    return Ok(Self::Primitive(value.clone()));
                 }
 
                 if obj.contains_key("$$typeof") && obj.contains_key("type") {
@@ -315,22 +313,22 @@ impl RSCTree {
                                 c.as_array()
                                     .ok_or("Invalid children array")?
                                     .iter()
-                                    .map(RSCTree::from_json)
-                                    .collect::<Result<Vec<RSCTree>, String>>()
+                                    .map(Self::from_json)
+                                    .collect::<Result<Vec<Self>, String>>()
                             } else {
-                                Ok(vec![RSCTree::from_json(c)?])
+                                Ok(vec![Self::from_json(c)?])
                             }
                         })
                         .transpose()?;
 
-                    Ok(RSCTree::ServerElement {
+                    Ok(Self::ServerElement {
                         tag: tag.to_string(),
                         props: Some(props),
                         children,
                         key,
                     })
                 } else {
-                    Ok(RSCTree::Primitive(value.clone()))
+                    Ok(Self::Primitive(value.clone()))
                 }
             }
         }
@@ -362,7 +360,7 @@ impl RSCRenderResult {
         let client_components = tree.collect_client_component_ids();
         let has_client_components = !client_components.is_empty();
 
-        RSCRenderResult {
+        Self {
             tree,
             has_suspense: false,
             client_components,
@@ -378,7 +376,7 @@ impl RSCRenderResult {
     }
 
     pub fn error(error: &str, component_id: &str) -> Self {
-        RSCRenderResult {
+        Self {
             tree: RSCTree::error(error, component_id, None),
             has_suspense: false,
             client_components: vec![],

@@ -81,12 +81,12 @@ pub enum ImageError {
 impl IntoResponse for ImageError {
     fn into_response(self) -> Response {
         let (status, message) = match self {
-            ImageError::InvalidUrl(_) | ImageError::InvalidParams(_) => {
+            Self::InvalidUrl(_) | Self::InvalidParams(_) => {
                 (StatusCode::BAD_REQUEST, self.to_string())
             }
-            ImageError::UnauthorizedDomain(_) => (StatusCode::FORBIDDEN, self.to_string()),
-            ImageError::FetchError(_) => (StatusCode::BAD_GATEWAY, self.to_string()),
-            ImageError::ProcessingError(_) => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
+            Self::UnauthorizedDomain(_) => (StatusCode::FORBIDDEN, self.to_string()),
+            Self::FetchError(_) => (StatusCode::BAD_GATEWAY, self.to_string()),
+            Self::ProcessingError(_) => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
         };
 
         (status, message).into_response()

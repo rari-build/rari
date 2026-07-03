@@ -515,10 +515,7 @@ impl RscHtmlRenderer {
             .iter()
             .filter(|href| !template.contains(href.as_str()))
             .map(|href| {
-                format!(
-                    r#"<link rel="stylesheet" href="{}">"#,
-                    RscHtmlRenderer::escape_html_attribute(href)
-                )
+                format!(r#"<link rel="stylesheet" href="{}">"#, Self::escape_html_attribute(href))
             })
             .collect::<Vec<_>>();
 

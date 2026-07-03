@@ -11,7 +11,7 @@ extension!(
 
 impl ExtensionTrait<()> for init_webidl {
     fn init((): ()) -> Extension {
-        init_webidl::init()
+        Self::init()
     }
 }
 

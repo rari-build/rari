@@ -20,17 +20,17 @@ extension!(
 );
 impl ExtensionTrait<()> for init_io {
     fn init((): ()) -> Extension {
-        init_io::init()
+        Self::init()
     }
 }
 impl ExtensionTrait<Option<deno_io::Stdio>> for deno_io::deno_io {
     fn init(pipes: Option<deno_io::Stdio>) -> Extension {
-        deno_io::deno_io::init(pipes)
+        Self::init(pipes)
     }
 }
 impl ExtensionTrait<()> for tty::deno_tty {
     fn init((): ()) -> Extension {
-        tty::deno_tty::init()
+        Self::init()
     }
 }
 

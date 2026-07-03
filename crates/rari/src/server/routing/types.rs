@@ -33,8 +33,8 @@ pub enum ParamValue {
 impl fmt::Display for ParamValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ParamValue::Single(s) => write!(f, "{s}"),
-            ParamValue::Multiple(v) => write!(f, "{}", v.join("/")),
+            Self::Single(s) => write!(f, "{s}"),
+            Self::Multiple(v) => write!(f, "{}", v.join("/")),
         }
     }
 }
@@ -43,16 +43,16 @@ impl ParamValue {
     #[cfg(test)]
     pub fn as_string(&self) -> Option<&String> {
         match self {
-            ParamValue::Single(s) => Some(s),
-            ParamValue::Multiple(_) => None,
+            Self::Single(s) => Some(s),
+            Self::Multiple(_) => None,
         }
     }
 
     #[cfg(test)]
     pub fn as_vec(&self) -> Option<&Vec<String>> {
         match self {
-            ParamValue::Single(_) => None,
-            ParamValue::Multiple(v) => Some(v),
+            Self::Single(_) => None,
+            Self::Multiple(v) => Some(v),
         }
     }
 }

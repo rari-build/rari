@@ -10,12 +10,12 @@ extension!(
 );
 impl ExtensionTrait<()> for init_crypto {
     fn init((): ()) -> Extension {
-        init_crypto::init()
+        Self::init()
     }
 }
 impl ExtensionTrait<Option<u64>> for deno_crypto::deno_crypto {
     fn init(seed: Option<u64>) -> Extension {
-        deno_crypto::deno_crypto::init(seed)
+        Self::init(seed)
     }
 }
 

@@ -20,11 +20,11 @@ impl<'de> Deserialize<'de> for ImageFormat {
     {
         let s = String::deserialize(deserializer)?;
         match s.cow_to_lowercase().as_ref() {
-            "avif" => Ok(ImageFormat::Avif),
-            "webp" => Ok(ImageFormat::WebP),
-            "jpeg" | "jpg" => Ok(ImageFormat::Jpeg),
-            "png" => Ok(ImageFormat::Png),
-            "gif" => Ok(ImageFormat::Gif),
+            "avif" => Ok(Self::Avif),
+            "webp" => Ok(Self::WebP),
+            "jpeg" | "jpg" => Ok(Self::Jpeg),
+            "png" => Ok(Self::Png),
+            "gif" => Ok(Self::Gif),
             _ => Err(Error::unknown_variant(&s, &["avif", "webp", "jpeg", "jpg", "png", "gif"])),
         }
     }
@@ -33,22 +33,22 @@ impl<'de> Deserialize<'de> for ImageFormat {
 impl ImageFormat {
     pub fn from_mime(mime: &str) -> Option<Self> {
         match mime {
-            "image/avif" => Some(ImageFormat::Avif),
-            "image/webp" => Some(ImageFormat::WebP),
-            "image/jpeg" | "image/jpg" => Some(ImageFormat::Jpeg),
-            "image/png" => Some(ImageFormat::Png),
-            "image/gif" => Some(ImageFormat::Gif),
+            "image/avif" => Some(Self::Avif),
+            "image/webp" => Some(Self::WebP),
+            "image/jpeg" | "image/jpg" => Some(Self::Jpeg),
+            "image/png" => Some(Self::Png),
+            "image/gif" => Some(Self::Gif),
             _ => None,
         }
     }
 
     pub fn extension(&self) -> &'static str {
         match self {
-            ImageFormat::Avif => "avif",
-            ImageFormat::WebP => "webp",
-            ImageFormat::Jpeg => "jpg",
-            ImageFormat::Png => "png",
-            ImageFormat::Gif => "gif",
+            Self::Avif => "avif",
+            Self::WebP => "webp",
+            Self::Jpeg => "jpg",
+            Self::Png => "png",
+            Self::Gif => "gif",
         }
     }
 }

@@ -59,10 +59,10 @@ pub enum TtyError {
 impl Display for TtyError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            TtyError::Resource(err) => write!(f, "{err}"),
-            TtyError::Io(err) => write!(f, "{err}"),
-            TtyError::Nix(err) => write!(f, "{err}"),
-            TtyError::Other(err) => write!(f, "{err}"),
+            Self::Resource(err) => write!(f, "{err}"),
+            Self::Io(err) => write!(f, "{err}"),
+            Self::Nix(err) => write!(f, "{err}"),
+            Self::Other(err) => write!(f, "{err}"),
         }
     }
 }
@@ -70,23 +70,23 @@ impl Display for TtyError {
 impl error::Error for TtyError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
-            TtyError::Resource(err) => Some(err),
-            TtyError::Io(err) => Some(err),
-            TtyError::Nix(err) => Some(err),
-            TtyError::Other(err) => Some(err),
+            Self::Resource(err) => Some(err),
+            Self::Io(err) => Some(err),
+            Self::Nix(err) => Some(err),
+            Self::Other(err) => Some(err),
         }
     }
 }
 
 impl From<ResourceError> for TtyError {
     fn from(err: ResourceError) -> Self {
-        TtyError::Resource(err)
+        Self::Resource(err)
     }
 }
 
 impl From<Error> for TtyError {
     fn from(err: Error) -> Self {
-        TtyError::Io(err)
+        Self::Io(err)
     }
 }
 

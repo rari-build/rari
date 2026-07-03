@@ -10,12 +10,12 @@ extension!(
 );
 impl ExtensionTrait<()> for init_ffi {
     fn init((): ()) -> Extension {
-        init_ffi::init()
+        Self::init()
     }
 }
 impl ExtensionTrait<()> for deno_ffi::deno_ffi {
     fn init((): ()) -> Extension {
-        deno_ffi::deno_ffi::init(None)
+        Self::init(None)
     }
 }
 

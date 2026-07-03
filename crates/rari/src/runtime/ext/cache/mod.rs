@@ -10,13 +10,13 @@ extension!(
 );
 impl ExtensionTrait<()> for init_cache {
     fn init((): ()) -> Extension {
-        init_cache::init()
+        Self::init()
     }
 }
 
 impl ExtensionTrait<()> for deno_cache::deno_cache {
     fn init((): ()) -> Extension {
-        deno_cache::deno_cache::init(None)
+        Self::init(None)
     }
 }
 

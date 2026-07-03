@@ -17,12 +17,12 @@ extension!(
 );
 impl ExtensionTrait<()> for init_kv {
     fn init((): ()) -> Extension {
-        init_kv::init()
+        Self::init()
     }
 }
 impl ExtensionTrait<KvStore> for deno_kv::deno_kv {
     fn init(store: KvStore) -> Extension {
-        deno_kv::deno_kv::init(Box::new(store.handler()), store.config())
+        Self::init(Box::new(store.handler()), store.config())
     }
 }
 
@@ -76,7 +76,7 @@ impl Default for KvConfig {
         const MAX_TOTAL_MUTATION_SIZE_BYTES: usize = 800 * 1024;
         const MAX_TOTAL_KEY_SIZE_BYTES: usize = 80 * 1024;
 
-        KvConfig {
+        Self {
             max_write_key_size_bytes: MAX_WRITE_KEY_SIZE_BYTES,
             max_value_size_bytes: MAX_VALUE_SIZE_BYTES,
             max_read_ranges: MAX_READ_RANGES,

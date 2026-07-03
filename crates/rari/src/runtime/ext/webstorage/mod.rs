@@ -12,12 +12,12 @@ extension!(
 );
 impl ExtensionTrait<()> for init_webstorage {
     fn init((): ()) -> Extension {
-        init_webstorage::init()
+        Self::init()
     }
 }
 impl ExtensionTrait<Option<PathBuf>> for deno_webstorage::deno_webstorage {
     fn init(origin_storage_dir: Option<PathBuf>) -> Extension {
-        deno_webstorage::deno_webstorage::init(origin_storage_dir)
+        Self::init(origin_storage_dir)
     }
 }
 

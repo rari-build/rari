@@ -44,37 +44,37 @@ pub enum Error {
 
 impl From<CoreError> for Error {
     fn from(e: CoreError) -> Self {
-        Error::Runtime(e.to_string())
+        Self::Runtime(e.to_string())
     }
 }
 
 impl From<JsError> for Error {
     fn from(e: JsError) -> Self {
-        Error::Js(Box::new(e))
+        Self::Js(Box::new(e))
     }
 }
 
 impl From<BorrowMutError> for Error {
     fn from(e: BorrowMutError) -> Self {
-        Error::Runtime(e.to_string())
+        Self::Runtime(e.to_string())
     }
 }
 
 impl From<serde_json::Error> for Error {
     fn from(e: serde_json::Error) -> Self {
-        Error::JsonDecode(e.to_string())
+        Self::JsonDecode(e.to_string())
     }
 }
 
 impl From<String> for Error {
     fn from(e: String) -> Self {
-        Error::Runtime(e)
+        Self::Runtime(e)
     }
 }
 
 impl From<&str> for Error {
     fn from(e: &str) -> Self {
-        Error::Runtime(e.to_string())
+        Self::Runtime(e.to_string())
     }
 }
 
@@ -488,7 +488,7 @@ impl From<StreamingError> for RariError {
             }
         }
 
-        RariError::Internal(
+        Self::Internal(
             message,
             Some(Box::new(ErrorMetadata {
                 code: "STREAMING_ERROR".to_string(),
@@ -574,7 +574,7 @@ impl From<LoadingStateError> for RariError {
             }
         }
 
-        RariError::Internal(
+        Self::Internal(
             message,
             Some(Box::new(ErrorMetadata {
                 code: "LOADING_STATE_ERROR".to_string(),
@@ -640,13 +640,13 @@ impl RariError {
 
 impl From<RariError> for JsErrorBox {
     fn from(err: RariError) -> Self {
-        JsErrorBox::generic(err.to_string())
+        Self::generic(err.to_string())
     }
 }
 
 impl From<DataError> for RariError {
     fn from(err: DataError) -> Self {
-        RariError::JsRuntime(format!("V8 Data Error: {err}"), None)
+        Self::JsRuntime(format!("V8 Data Error: {err}"), None)
     }
 }
 
