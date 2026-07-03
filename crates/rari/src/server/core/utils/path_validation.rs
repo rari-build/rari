@@ -2,9 +2,10 @@ use std::path::{Path, PathBuf};
 
 use cow_utils::CowUtils;
 use rari_error::RariError;
+use tokio::fs;
 
 #[expect(clippy::missing_errors_doc)]
-pub fn validate_safe_path(base: &Path, requested: &str) -> Result<PathBuf, RariError> {
+pub async fn validate_safe_path(base: &Path, requested: &str) -> Result<PathBuf, RariError> {
     if requested.contains("..") {
         return Err(RariError::bad_request("Invalid path: contains '..' pattern"));
     }
@@ -39,13 +40,12 @@ pub fn validate_safe_path(base: &Path, requested: &str) -> Result<PathBuf, RariE
 
     let path = base.join(requested_clean);
 
-    let Ok(canonical_path) = path.canonicalize() else {
-        return Err(RariError::not_found("File not found"));
-    };
+    let canonical_path =
+        fs::canonicalize(&path).await.map_err(|_| RariError::not_found("File not found"))?;
 
-    let Ok(canonical_base) = base.canonicalize() else {
-        return Err(RariError::internal("Invalid base directory configuration"));
-    };
+    let canonical_base = fs::canonicalize(base)
+        .await
+        .map_err(|_| RariError::internal("Invalid base directory configuration"))?;
 
     if !canonical_path.starts_with(&canonical_base) {
         return Err(RariError::bad_request("Path traversal detected"));
@@ -119,67 +119,67 @@ mod tests {
         env::temp_dir().join(format!("rari-test-path-validation-{name}"))
     }
 
-    #[test]
-    fn test_rejects_parent_directory_traversal() {
+    #[tokio::test]
+    async fn test_rejects_parent_directory_traversal() {
         let base = test_temp_dir("parent-traversal");
         fs::create_dir_all(&base).unwrap();
 
-        let result = validate_safe_path(&base, "../etc/passwd");
+        let result = validate_safe_path(&base, "../etc/passwd").await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("'..'"));
     }
 
-    #[test]
-    fn test_rejects_multiple_parent_traversal() {
+    #[tokio::test]
+    async fn test_rejects_multiple_parent_traversal() {
         let base = test_temp_dir("multiple-parent");
         fs::create_dir_all(&base).unwrap();
 
-        let result = validate_safe_path(&base, "../../etc/passwd");
+        let result = validate_safe_path(&base, "../../etc/passwd").await;
         assert!(result.is_err());
     }
 
-    #[test]
-    fn test_rejects_hidden_traversal() {
+    #[tokio::test]
+    async fn test_rejects_hidden_traversal() {
         let base = test_temp_dir("hidden-traversal");
         fs::create_dir_all(&base).unwrap();
 
-        let result = validate_safe_path(&base, "foo/../../../etc/passwd");
+        let result = validate_safe_path(&base, "foo/../../../etc/passwd").await;
         assert!(result.is_err());
     }
 
-    #[test]
-    fn test_rejects_double_slash() {
+    #[tokio::test]
+    async fn test_rejects_double_slash() {
         let base = test_temp_dir("double-slash");
         fs::create_dir_all(&base).unwrap();
 
-        let result = validate_safe_path(&base, "foo//bar");
+        let result = validate_safe_path(&base, "foo//bar").await;
         assert!(result.is_err());
     }
 
-    #[test]
-    fn test_rejects_null_byte() {
+    #[tokio::test]
+    async fn test_rejects_null_byte() {
         let base = test_temp_dir("null-byte");
         fs::create_dir_all(&base).unwrap();
 
-        let result = validate_safe_path(&base, "foo\0bar");
+        let result = validate_safe_path(&base, "foo\0bar").await;
         assert!(result.is_err());
     }
 
-    #[test]
-    fn test_accepts_valid_path() {
+    #[tokio::test]
+    async fn test_accepts_valid_path() {
         let base = test_temp_dir("valid-path");
         fs::create_dir_all(&base).unwrap();
 
         let test_file = base.join("test.txt");
         fs::write(&test_file, "test content").unwrap();
 
-        let result = validate_safe_path(&base, "test.txt");
+        let result = validate_safe_path(&base, "test.txt").await;
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), test_file.canonicalize().unwrap());
     }
 
-    #[test]
-    fn test_accepts_nested_valid_path() {
+    #[tokio::test]
+    async fn test_accepts_nested_valid_path() {
         let base = test_temp_dir("nested-path");
         fs::create_dir_all(&base).unwrap();
 
@@ -188,14 +188,14 @@ mod tests {
         let test_file = nested_dir.join("test.txt");
         fs::write(&test_file, "test content").unwrap();
 
-        let result = validate_safe_path(&base, "foo/bar/test.txt");
+        let result = validate_safe_path(&base, "foo/bar/test.txt").await;
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), test_file.canonicalize().unwrap());
     }
 
     #[cfg(unix)]
-    #[test]
-    fn test_rejects_symlink_escape() {
+    #[tokio::test]
+    async fn test_rejects_symlink_escape() {
         let base = test_temp_dir("symlink-escape");
         let _ = fs::remove_dir_all(&base);
         fs::create_dir_all(&base).unwrap();
@@ -210,7 +210,7 @@ mod tests {
         let _ = fs::remove_file(&link_path);
         symlink(&outside_dir, &link_path).expect("Failed to create symlink for security test");
 
-        let result = validate_safe_path(&base, "escape/secret.txt");
+        let result = validate_safe_path(&base, "escape/secret.txt").await;
         assert!(result.is_err(), "Security failure: symlink escape was not rejected");
     }
 
@@ -232,24 +232,24 @@ mod tests {
         assert!(validate_component_path("app/page\0.tsx").is_err());
     }
 
-    #[test]
-    fn test_handles_leading_slash() {
+    #[tokio::test]
+    async fn test_handles_leading_slash() {
         let base = test_temp_dir("leading-slash");
         fs::create_dir_all(&base).unwrap();
 
         let test_file = base.join("test.txt");
         fs::write(&test_file, "test content").unwrap();
 
-        let result = validate_safe_path(&base, "/test.txt");
+        let result = validate_safe_path(&base, "/test.txt").await;
         assert!(result.is_ok());
     }
 
-    #[test]
-    fn test_rejects_nonexistent_path() {
+    #[tokio::test]
+    async fn test_rejects_nonexistent_path() {
         let base = test_temp_dir("nonexistent");
         fs::create_dir_all(&base).unwrap();
 
-        let result = validate_safe_path(&base, "nonexistent.txt");
+        let result = validate_safe_path(&base, "nonexistent.txt").await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
     }

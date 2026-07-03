@@ -425,7 +425,7 @@ impl ApiRouteHandler {
         self.runtime
             .execute_with_request_context(request_context, async {
                 let dist_path = Self::resolve_route_dist_path(&route_match.route)?;
-                let canonical_path = dist_path.canonicalize().map_err(|e| {
+                let canonical_path = fs::canonicalize(&dist_path).await.map_err(|e| {
                     RariError::io(format!(
                         "Failed to canonicalize API route path {}: {e}",
                         dist_path.display()

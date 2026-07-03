@@ -165,8 +165,13 @@ pub(crate) async fn collect_page_metadata(
     route_match: &AppRouteMatch,
     context: &LayoutRenderContext,
 ) -> Option<PageMetadata> {
-    let dist_server_path =
-        env::current_dir().ok().map(|p| p.join("dist/server")).and_then(|p| p.canonicalize().ok());
+    let dist_server_path = match env::current_dir() {
+        Ok(cwd) => {
+            let path = cwd.join("dist/server");
+            fs::canonicalize(&path).await.ok()
+        }
+        Err(_) => None,
+    };
 
     let Some(base_path) = dist_server_path else {
         tracing::error!("Could not determine dist/server path for metadata collection");
@@ -1065,7 +1070,7 @@ pub async fn handle_app_route(
             }
 
             if let Ok(file_path) =
-                validate_safe_path(state.config.public_dir(), path_without_leading_slash)
+                validate_safe_path(state.config.public_dir(), path_without_leading_slash).await
                 && let Ok(metadata) = fs::metadata(&file_path).await
                 && metadata.is_file()
             {

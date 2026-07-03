@@ -471,7 +471,7 @@ async fn handle_reload_component(
 ) -> Result<Json<Value>, StatusCode> {
     let project_root = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
 
-    let bundle_full_path = match validate_safe_path(&project_root, &bundle_path) {
+    let bundle_full_path = match validate_safe_path(&project_root, &bundle_path).await {
         Ok(path) => path,
         Err(e) => {
             tracing::error!(

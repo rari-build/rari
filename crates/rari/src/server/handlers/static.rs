@@ -61,7 +61,7 @@ pub async fn static_or_spa_handler(
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     };
 
-    let Ok(file_path) = validate_safe_path(config.public_dir(), &path) else {
+    let Ok(file_path) = validate_safe_path(config.public_dir(), &path).await else {
         return Err(StatusCode::NOT_FOUND);
     };
 
@@ -144,7 +144,7 @@ pub async fn serve_static_asset(
 
     let assets_dir = state.config.public_dir().join("assets");
 
-    let Ok(file_path) = validate_safe_path(&assets_dir, &asset_path) else {
+    let Ok(file_path) = validate_safe_path(&assets_dir, &asset_path).await else {
         return Err(StatusCode::NOT_FOUND);
     };
 

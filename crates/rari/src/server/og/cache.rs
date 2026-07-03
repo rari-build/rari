@@ -1,7 +1,7 @@
 use std::{
     collections::hash_map::DefaultHasher,
     error::Error,
-    fs as StdFs,
+    fs as std_fs,
     hash::{Hash, Hasher},
     io::ErrorKind::NotFound,
     path::{Path, PathBuf},
@@ -56,7 +56,7 @@ impl OgImageCache {
 
     async fn ensure_cache_dir(&self) {
         let dir = self.cache_dir.clone();
-        let result = task::spawn_blocking(move || StdFs::create_dir_all(&dir)).await;
+        let result = task::spawn_blocking(move || std_fs::create_dir_all(&dir)).await;
         if let Ok(Err(e)) = result {
             tracing::error!("Failed to create OG cache directory: {}", e);
         }
@@ -225,7 +225,7 @@ mod tests {
     #[tokio::test]
     async fn test_handler_fallback_to_disk() {
         let project_path = test_project_path("fallback-to-disk");
-        let _ = StdFs::remove_dir_all(&project_path);
+        let _ = std_fs::remove_dir_all(&project_path);
 
         let handler_a = Arc::new(MemoryCacheHandler::with_config(&MemoryConfig {
             max_entries: 8,
@@ -254,6 +254,6 @@ mod tests {
         assert_eq!(in_new_handler, Some(payload.clone()), "write-through to new handler missing");
 
         cache_b.clear().await.expect("clear");
-        let _ = StdFs::remove_dir_all(&project_path);
+        let _ = std_fs::remove_dir_all(&project_path);
     }
 }

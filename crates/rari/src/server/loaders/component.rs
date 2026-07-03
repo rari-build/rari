@@ -259,8 +259,12 @@ impl ComponentLoader {
                 .map_err(|e| RariError::io(format!("Failed to read directory entry: {e}")))?
             {
                 let path = entry.path();
+                let file_type = entry
+                    .file_type()
+                    .await
+                    .map_err(|e| RariError::io(format!("Failed to read file type: {e}")))?;
 
-                if path.is_dir() {
+                if file_type.is_dir() {
                     Self::scan_for_server_actions(&path, renderer).await?;
                 } else if path
                     .extension()
@@ -292,7 +296,7 @@ impl ComponentLoader {
                             match fs::read_to_string(&dist_path).await {
                                 Ok(dist_code) => {
                                     let canonical_path =
-                                        dist_path.canonicalize().unwrap_or(dist_path.clone());
+                                        fs::canonicalize(&dist_path).await.unwrap_or(dist_path);
                                     let module_specifier = path_to_file_url(&canonical_path);
 
                                     let esm_load_result = renderer
@@ -483,8 +487,12 @@ impl ComponentLoader {
                 .map_err(|e| RariError::io(format!("Failed to read directory entry: {e}")))?
             {
                 let path = entry.path();
+                let file_type = entry
+                    .file_type()
+                    .await
+                    .map_err(|e| RariError::io(format!("Failed to read file type: {e}")))?;
 
-                if path.is_dir() {
+                if file_type.is_dir() {
                     Self::load_server_components_recursive(&path, base_dir, renderer).await?;
                 } else if path.extension().and_then(|s| s.to_str()) == Some("js") {
                     let file_name = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
@@ -505,7 +513,8 @@ impl ComponentLoader {
                             .cow_replace('\\', "/")
                             .into_owned();
 
-                        let canonical_path = path.canonicalize().unwrap_or(path.clone());
+                        let canonical_path =
+                            fs::canonicalize(&path).await.unwrap_or_else(|_| path.clone());
                         let module_specifier = path_to_file_url(&canonical_path);
 
                         let esm_load_result = renderer
@@ -679,7 +688,8 @@ impl ComponentLoader {
                         );
                     }
 
-                    let canonical_path = path.canonicalize().unwrap_or(path.clone());
+                    let canonical_path =
+                        fs::canonicalize(&path).await.unwrap_or_else(|_| path.clone());
                     let module_specifier = path_to_file_url(&canonical_path);
 
                     let esm_load_result = renderer
