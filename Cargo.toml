@@ -1,10 +1,9 @@
 [workspace]
 members = [
   "crates/*",
-  "tools/prepare-binaries",
-  "tools/release",
-  "tools/snapshot",
+  "tools/*",
 ]
+exclude = [ "tools/bundle-react-esm" ]
 resolver = "2"
 
 [workspace.package]
@@ -91,6 +90,9 @@ redundant_clone = "warn"
 redundant_pub_crate = "warn"
 significant_drop_in_scrutinee = "warn"
 unused_peekable = "warn"
+
+[workspace.lints.rust]
+linker_messages = "allow"
 
 [workspace.dependencies]
 anyhow = "1.0.103"

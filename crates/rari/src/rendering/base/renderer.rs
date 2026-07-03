@@ -326,7 +326,7 @@ globalThis['~errors'].batch.push({{
     }
 
     pub async fn register_component(
-        &mut self,
+        &self,
         component_id: &str,
         component_code: &str,
     ) -> Result<(), RariError> {
@@ -709,7 +709,7 @@ globalThis['~errors'].batch.push({{
     }
 
     pub async fn render_to_rsc_format(
-        &mut self,
+        &self,
         component_id: &str,
         props: Option<&str>,
     ) -> Result<String, RariError> {
@@ -717,7 +717,7 @@ globalThis['~errors'].batch.push({{
     }
 
     pub async fn render_to_rsc_format_with_context(
-        &mut self,
+        &self,
         component_id: &str,
         props: Option<&str>,
         request_context: Option<Arc<RequestContext>>,
@@ -730,7 +730,7 @@ globalThis['~errors'].batch.push({{
     }
 
     pub async fn render_to_string(
-        &mut self,
+        &self,
         component_id: &str,
         props: Option<&str>,
     ) -> Result<String, RariError> {
@@ -738,7 +738,7 @@ globalThis['~errors'].batch.push({{
     }
 
     pub async fn render_to_string_with_context(
-        &mut self,
+        &self,
         component_id: &str,
         props: Option<&str>,
         request_context: Option<Arc<RequestContext>>,

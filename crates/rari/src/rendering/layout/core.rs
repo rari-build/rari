@@ -1193,7 +1193,7 @@ impl LayoutRenderer {
     ) -> Result<String, RariError> {
         let component_id = utils::get_component_id(loading_path);
 
-        let mut renderer = self.renderer.lock().await;
+        let renderer = self.renderer.lock().await;
         renderer.render_to_string(&component_id, None).await
     }
 
@@ -1215,7 +1215,7 @@ impl LayoutRenderer {
         let props_json = serde_json::to_string(&props)
             .map_err(|e| RariError::internal(format!("Failed to serialize error props: {e}")))?;
 
-        let mut renderer = self.renderer.lock().await;
+        let renderer = self.renderer.lock().await;
         renderer.render_to_string(&component_id, Some(&props_json)).await
     }
 
@@ -1226,7 +1226,7 @@ impl LayoutRenderer {
     ) -> Result<String, RariError> {
         let component_id = utils::get_component_id(not_found_path);
 
-        let mut renderer = self.renderer.lock().await;
+        let renderer = self.renderer.lock().await;
         renderer.render_to_string(&component_id, None).await
     }
 

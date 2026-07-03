@@ -158,20 +158,15 @@ impl RscFlightParser {
         let key = arr[2].as_str();
 
         let props_value = &arr[3];
-        if tag == "Suspense" || tag == "react.suspense" {
-            let props = if let Value::Object(obj) = props_value {
-                obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
-            } else {
-                FxHashMap::default()
-            };
-            return Self::parse_suspense_element(key, props);
-        }
-
         let props = if let Value::Object(obj) = props_value {
             obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
         } else {
             FxHashMap::default()
         };
+
+        if tag == "Suspense" || tag == "react.suspense" {
+            return Self::parse_suspense_element(key, props);
+        }
 
         if tag == "Promise" || tag == "react.promise" {
             return Self::parse_promise_element(&props);
