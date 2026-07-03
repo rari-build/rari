@@ -9,12 +9,11 @@ use deno_core::ModuleId;
 use rari_error::RariError;
 use regex::Regex;
 use rustc_hash::FxHashMap;
-use serde_json::{Value, json};
+use serde_json::Value;
 use tokio::{
     sync::mpsc::{Sender, UnboundedReceiver},
     time,
 };
-use tracing::error;
 
 pub mod ext;
 pub mod factory;
@@ -27,8 +26,7 @@ use factory::JsRuntimeInterface;
 use crate::{
     runtime::factory::RariRuntime,
     server::{
-        middleware::request_context::RequestContext,
-        rendering::metadata::{finalize_metadata, merge_metadata},
+        middleware::request_context::RequestContext, rendering::metadata,
         routing::types::ParamValue,
     },
 };
@@ -120,7 +118,7 @@ impl JsExecutionRuntime {
         params: FxHashMap<String, ParamValue>,
         search_params: FxHashMap<String, Vec<String>>,
     ) -> Result<Value, RariError> {
-        let data = json!({
+        let data = serde_json::json!({
             "layoutPaths": layout_paths,
             "pagePath": page_path,
             "params": params,
@@ -148,12 +146,12 @@ impl JsExecutionRuntime {
             RariError::serialization("Expected metadata list to be an array".to_string())
         })?;
 
-        let mut merged_metadata = json!({});
+        let mut merged_metadata = serde_json::json!({});
         for metadata_item in metadata_array {
-            merged_metadata = merge_metadata(&merged_metadata, metadata_item);
+            merged_metadata = metadata::merge_metadata(&merged_metadata, metadata_item);
         }
 
-        finalize_metadata(&mut merged_metadata);
+        metadata::finalize_metadata(&mut merged_metadata);
 
         Ok(merged_metadata)
     }
@@ -555,11 +553,17 @@ impl JsExecutionRuntime {
         match (result, clear_result) {
             (Ok(value), Ok(())) => Ok(value),
             (Ok(value), Err(clear_err)) => {
-                error!("Failed to clear request context after successful operation: {}", clear_err);
+                tracing::error!(
+                    "Failed to clear request context after successful operation: {}",
+                    clear_err
+                );
                 Ok(value)
             }
             (Err(op_err), Err(clear_err)) => {
-                error!("Failed to clear request context after operation error: {}", clear_err);
+                tracing::error!(
+                    "Failed to clear request context after operation error: {}",
+                    clear_err
+                );
                 Err(op_err)
             }
             (Err(op_err), Ok(())) => Err(op_err),
