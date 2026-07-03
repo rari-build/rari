@@ -170,7 +170,7 @@ impl AllowlistWebPermissions {
             allow_env: (!inst.envs.is_empty()).then(|| inst.envs.iter().cloned().collect()),
             allow_sys: (!inst.sys.is_empty())
                 .then(|| inst.sys.iter().map(|kind| kind.as_str().to_string()).collect()),
-            allow_ffi: inst.exec.then(|| vec!["all".to_string()]),
+            allow_ffi: inst.exec.then(Vec::new),
             prompt: false,
             ..PermissionsOptions::default()
         }
