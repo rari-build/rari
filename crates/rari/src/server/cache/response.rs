@@ -546,12 +546,7 @@ mod header_map_serde {
 }
 
 #[cfg(test)]
-#[allow(
-    clippy::allow_attributes,
-    clippy::expect_used,
-    clippy::unwrap_used,
-    clippy::clone_on_ref_ptr
-)]
+#[expect(clippy::expect_used, clippy::unwrap_used, clippy::clone_on_ref_ptr)]
 mod tests {
     use std::{sync::Arc, time::Duration};
 

@@ -40,6 +40,7 @@ impl RscFlightParser {
         }
     }
 
+    #[expect(clippy::missing_errors_doc)]
     pub fn parse(&mut self) -> Result<(), RariError> {
         for line in &self.lines {
             let line = line.trim();
@@ -287,7 +288,7 @@ impl RscFlightParser {
 }
 
 #[cfg(test)]
-#[allow(clippy::allow_attributes, clippy::panic)]
+#[expect(clippy::panic)]
 mod tests {
     use super::*;
 

@@ -254,7 +254,7 @@ impl RouteComposer {
 }
 
 #[cfg(test)]
-#[allow(clippy::allow_attributes, clippy::expect_used)]
+#[expect(clippy::expect_used)]
 mod tests {
     use super::*;
 

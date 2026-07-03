@@ -105,7 +105,7 @@ pub fn validate_component_path(file_path: &str) -> Result<(), RariError> {
 }
 
 #[cfg(test)]
-#[allow(clippy::allow_attributes, clippy::expect_used, clippy::unwrap_used)]
+#[expect(clippy::expect_used, clippy::unwrap_used)]
 mod tests {
     #[cfg(unix)]
     use std::os::unix::fs::symlink;

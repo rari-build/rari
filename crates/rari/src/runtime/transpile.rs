@@ -1,4 +1,4 @@
-#![allow(clippy::exhaustive_structs)]
+#![expect(clippy::exhaustive_structs)]
 
 use std::{
     borrow::Cow,
@@ -38,6 +38,7 @@ fn maybe_substitute_version_placeholders(name: &str, source: ModuleCodeString) -
     result.into_owned().into()
 }
 
+#[expect(clippy::missing_errors_doc)]
 pub fn maybe_transpile_source(
     name: &ModuleName,
     source: ModuleCodeString,

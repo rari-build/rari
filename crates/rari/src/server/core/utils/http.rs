@@ -246,7 +246,7 @@ pub fn add_api_security_headers(headers: &mut HeaderMap) {
 }
 
 #[cfg(test)]
-#[allow(clippy::allow_attributes, clippy::unwrap_used)]
+#[expect(clippy::unwrap_used)]
 mod tests {
     use super::*;
 

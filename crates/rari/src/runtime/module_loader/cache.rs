@@ -75,6 +75,7 @@ impl ModuleCaching {
         }
     }
 
+    #[expect(clippy::missing_errors_doc)]
     pub async fn insert(&self, key: String, value: Value) -> result::Result<(), RariError> {
         let bytes = serde_json::to_vec(&value)
             .map_err(|e| RariError::cache(format!("json serialize: {e}")))?;
@@ -118,7 +119,7 @@ impl ModuleCaching {
 }
 
 #[cfg(test)]
-#[allow(clippy::allow_attributes, clippy::unwrap_used, clippy::clone_on_ref_ptr)]
+#[expect(clippy::unwrap_used, clippy::clone_on_ref_ptr)]
 mod tests {
     use super::*;
 

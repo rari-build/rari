@@ -364,7 +364,7 @@ pub struct GradientParams {
 }
 
 #[cfg(test)]
-#[allow(clippy::allow_attributes, clippy::unwrap_used, clippy::float_cmp)]
+#[expect(clippy::unwrap_used, clippy::float_cmp)]
 mod tests {
     use super::*;
 

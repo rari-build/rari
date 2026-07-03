@@ -1,5 +1,3 @@
-#![expect(clippy::missing_errors_doc, clippy::too_many_lines)]
-
 use std::{
     future::Future,
     sync::{Arc, OnceLock},
@@ -58,6 +56,7 @@ fn is_esm_code(code: &str) -> bool {
     regex.is_match(code)
 }
 
+#[expect(clippy::missing_errors_doc)]
 impl JsExecutionRuntime {
     pub fn new(env_vars: Option<rustc_hash::FxHashMap<String, String>>) -> Self {
         let runtime = if let Some(env_vars) = env_vars {
@@ -361,6 +360,7 @@ impl JsExecutionRuntime {
         }
     }
 
+    #[expect(clippy::too_many_lines)]
     pub async fn load_component_code(
         &self,
         component_id: &str,

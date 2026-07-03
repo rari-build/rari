@@ -1,3 +1,5 @@
+#![expect(clippy::missing_errors_doc)]
+
 use std::{
     fmt::Write,
     future::Future,
@@ -2189,7 +2191,7 @@ impl Default for RscToHtmlConverter {
 }
 
 #[cfg(test)]
-#[allow(clippy::allow_attributes, clippy::panic, clippy::unwrap_used, clippy::clone_on_ref_ptr)]
+#[expect(clippy::panic, clippy::unwrap_used, clippy::clone_on_ref_ptr)]
 mod tests {
     use super::*;
     use crate::server::config::Mode;

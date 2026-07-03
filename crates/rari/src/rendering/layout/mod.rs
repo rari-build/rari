@@ -12,7 +12,7 @@ pub(crate) use utils::component_dist_path;
 pub use utils::create_layout_context;
 
 #[cfg(test)]
-#[allow(clippy::allow_attributes, clippy::unwrap_used)]
+#[expect(clippy::unwrap_used)]
 mod tests {
     use std::sync::Arc;
 

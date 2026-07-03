@@ -1,5 +1,3 @@
-#![allow(clippy::exhaustive_structs)]
-
 use std::{cell::RefCell, fmt::Display, rc::Rc, sync::Arc, time::Duration};
 
 use deno_core::{Extension, OpState, extension, op2};

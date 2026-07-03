@@ -1,5 +1,3 @@
-#![expect(clippy::missing_errors_doc)]
-
 pub mod components;
 pub mod core;
 pub mod flight;

@@ -1,4 +1,4 @@
-#![allow(unused)]
+#![expect(unused)]
 use std::{
     borrow::Cow,
     fmt::{Debug, Display},

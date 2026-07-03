@@ -14,11 +14,6 @@ pub struct Target {
     pub platform: &'static str,
     pub binary_name: &'static str,
     pub package_dir: &'static str,
-    #[allow(
-        clippy::allow_attributes,
-        reason = "Field naming follows convention, clippy suggestion less clear"
-    )]
-    #[allow(clippy::struct_field_names)]
     pub addon_package_dir: &'static str,
 }
 

@@ -404,7 +404,7 @@ impl RSCRenderResult {
 }
 
 #[cfg(test)]
-#[allow(clippy::allow_attributes, clippy::panic, clippy::unwrap_used)]
+#[expect(clippy::panic, clippy::unwrap_used)]
 mod tests {
     use serde_json::json;
 
