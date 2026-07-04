@@ -515,10 +515,15 @@ async fn handle_js_request(
             script_code,
             result_tx,
         } => {
+            let previous_context =
+                js_runtime.op_state().borrow_mut().try_take::<Arc<RequestContext>>();
             js_runtime.op_state().borrow_mut().put(request_context);
             let result =
                 execute_script(js_runtime, module_loader, &script_name, &script_code).await;
             js_runtime.op_state().borrow_mut().try_take::<Arc<RequestContext>>();
+            if let Some(previous_context) = previous_context {
+                js_runtime.op_state().borrow_mut().put(previous_context);
+            }
             if let Err(e) = &result
                 && is_runtime_restart_needed(e)
             {

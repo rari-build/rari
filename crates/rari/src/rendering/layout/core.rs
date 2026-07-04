@@ -26,6 +26,7 @@ use crate::{
             route_composer::{ErrorBoundaryInfo, TemplateInfo},
         },
     },
+    runtime::JsExecutionRuntime,
     server::{
         cache::handler::{
             CacheError, CacheHandler, CacheHandlerRegistry, MemoryCacheHandler, MemoryConfig,
@@ -141,6 +142,23 @@ impl LayoutHtmlCache {
 
     pub async fn invalidate_by_tag(&self, tag: &str) -> Result<(), CacheError> {
         self.handler.invalidate_by_tag(tag).await
+    }
+}
+
+async fn run_streaming_script(
+    runtime: &Arc<JsExecutionRuntime>,
+    request_context: Option<Arc<RequestContext>>,
+    script_name: String,
+    script: String,
+    chunk_sender: mpsc::Sender<Result<Vec<u8>, String>>,
+) -> Result<(), RariError> {
+    let execute_stream =
+        async { runtime.execute_script_for_streaming(script_name, script, chunk_sender).await };
+
+    if let Some(context) = request_context {
+        runtime.execute_with_request_context(context, execute_stream).await
+    } else {
+        execute_stream.await
     }
 }
 
@@ -430,14 +448,16 @@ impl LayoutRenderer {
                 );
 
                 let runtime_clone = Arc::clone(&runtime);
+                let request_context_for_stream = request_context.clone();
                 tokio::spawn(async move {
-                    if let Err(e) = runtime_clone
-                        .execute_script_for_streaming(
-                            "rsc_streaming_nav".to_string(),
-                            script,
-                            chunk_sender,
-                        )
-                        .await
+                    if let Err(e) = run_streaming_script(
+                        &runtime_clone,
+                        request_context_for_stream,
+                        "rsc_streaming_nav".to_string(),
+                        script,
+                        chunk_sender,
+                    )
+                    .await
                     {
                         tracing::error!("RSC streaming navigation failed: {e}");
                     }
@@ -598,15 +618,17 @@ impl LayoutRenderer {
                 let closing = Bytes::new();
 
                 let runtime_clone = Arc::clone(&runtime);
+                let request_context_for_stream = request_context.clone();
                 tokio::spawn(async move {
                     task::yield_now().await;
-                    if let Err(e) = runtime_clone
-                        .execute_script_for_streaming(
-                            "fizz_direct_stream".to_string(),
-                            script,
-                            chunk_sender,
-                        )
-                        .await
+                    if let Err(e) = run_streaming_script(
+                        &runtime_clone,
+                        request_context_for_stream,
+                        "fizz_direct_stream".to_string(),
+                        script,
+                        chunk_sender,
+                    )
+                    .await
                     {
                         tracing::error!("Fizz direct streaming error: {e}");
                     }

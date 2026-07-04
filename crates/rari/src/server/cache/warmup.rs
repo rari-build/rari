@@ -126,7 +126,13 @@ async fn warm_route(
             shell,
             closing,
             mut chunks,
-        } => drain_chunked_stream(shell, closing, &mut chunks).await,
+        } => match drain_chunked_stream(shell, closing, &mut chunks).await {
+            Ok(html) => html,
+            Err(error) => {
+                tracing::warn!("Skipping cache warmup for {path}: chunked stream failed: {error}");
+                return Ok(());
+            }
+        },
         _ => return Ok(()),
     };
 

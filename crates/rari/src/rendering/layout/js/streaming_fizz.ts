@@ -26,14 +26,16 @@ function rariStripLeadingDoctype(text: string): string {
 
 let rariStreamDisconnected = false
 
-type RariHtmlStreamState = 'outside' | 'in_tag' | 'in_inline_script'
+type RariHtmlStreamState = 'outside' | 'in_tag' | 'in_inline_script' | 'in_raw_text'
 
 let rariHtmlStreamState: RariHtmlStreamState = 'outside'
 let rariPendingTagStart = -1
+let rariPendingRawTextClose = ''
 
 function rariResetHtmlStreamState() {
   rariHtmlStreamState = 'outside'
   rariPendingTagStart = -1
+  rariPendingRawTextClose = ''
 }
 
 function rariSafeToInjectFlight(): boolean {
@@ -60,10 +62,27 @@ function rariTrackHtmlStreamBoundaries(text: string): boolean {
         if (closeAt === -1)
           return false
         const openTag = text.slice(rariPendingTagStart, closeAt + 1)
-        const isInlineScript = /^<script/i.test(openTag) && !/\bsrc\s*=/.test(openTag)
-        rariHtmlStreamState = isInlineScript ? 'in_inline_script' : 'outside'
+        const rawTextTag = /^<(style|title|textarea|xmp)\b/i.exec(openTag)
+        if (rawTextTag) {
+          rariHtmlStreamState = 'in_raw_text'
+          rariPendingRawTextClose = `</${rawTextTag[1]!.toLowerCase()}>`
+        }
+        else {
+          const isInlineScript = /^<script/i.test(openTag) && !/\bsrc\s*=/.test(openTag)
+          rariHtmlStreamState = isInlineScript ? 'in_inline_script' : 'outside'
+        }
         rariPendingTagStart = -1
         i = closeAt + 1
+        break
+      }
+      case 'in_raw_text': {
+        const closeTag = rariPendingRawTextClose
+        const closeAt = lower.indexOf(closeTag, i)
+        if (closeAt === -1)
+          return false
+        rariHtmlStreamState = 'outside'
+        rariPendingRawTextClose = ''
+        i = closeAt + closeTag.length
         break
       }
       case 'in_inline_script': {
@@ -157,6 +176,7 @@ function rariCreateLiveFlightSource() {
   const waiters: Array<() => void> = []
   let pendingText = ''
   const rawChunks: Uint8Array[] = []
+  const textDecoder = new TextDecoder()
   let totalBytes = 0
   let chunksConsumed = 0
 
@@ -218,7 +238,7 @@ function rariCreateLiveFlightSource() {
       chunksConsumed++
       rawChunks.push(value)
       totalBytes += value.byteLength
-      pendingText += new TextDecoder().decode(value, { stream: true })
+      pendingText += textDecoder.decode(value, { stream: true })
       let newline = pendingText.indexOf('\n')
       while (newline !== -1) {
         const line = pendingText.slice(0, newline)
@@ -232,7 +252,7 @@ function rariCreateLiveFlightSource() {
     markStreamEnd() {
       if (complete)
         return
-      pendingText += new TextDecoder().decode()
+      pendingText += textDecoder.decode()
       flushPendingText()
       // Only synthesize row 0 if it was never received/pumped.
       if (nextExpectedId === 0)

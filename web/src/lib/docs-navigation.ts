@@ -43,7 +43,7 @@ export const docsNavigation: NavItem[] = [
 
 export function getBreadcrumbs(path: string): Array<{ label: string, href?: string }> {
   const breadcrumbs: Array<{ label: string, href?: string }> = [
-    { label: 'Docs', href: '/docs' },
+    { label: 'Docs', href: '/docs/getting-started' },
   ]
 
   function pushCrumb(crumb: { label: string, href?: string }) {
@@ -72,6 +72,6 @@ export function getBreadcrumbs(path: string): Array<{ label: string, href?: stri
     return false
   }
 
-  findPath(docsNavigation, [{ label: 'Docs', href: '/docs' }])
+  findPath(docsNavigation, [{ label: 'Docs', href: '/docs/getting-started' }])
   return breadcrumbs
 }

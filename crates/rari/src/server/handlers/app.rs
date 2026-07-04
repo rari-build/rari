@@ -487,8 +487,8 @@ fn render_chunked_response(
             }
             ChunkedContentType::RscFlight => {
                 loop {
-                    match chunks.recv().await {
-                        Some(Ok(chunk_bytes)) => {
+                    match time::timeout(stall_timeout, chunks.recv()).await {
+                        Ok(Some(Ok(chunk_bytes))) => {
                             if chunk_bytes.is_empty() {
                                 continue;
                             }
@@ -498,12 +498,20 @@ fn render_chunked_response(
                             }
                             yield Ok(Bytes::from(chunk_bytes));
                         }
-                        Some(Err(e)) => {
+                        Ok(Some(Err(e))) => {
                             tracing::error!("Error in chunked RSC stream: {}", e);
                             yield Err(Error::other(e));
                             break;
                         }
-                        None => break,
+                        Ok(None) => break,
+                        Err(_) => {
+                            tracing::error!(
+                                "Chunked RSC stream stalled: no chunk received within {} ms",
+                                stall_timeout.as_millis()
+                            );
+                            yield Err(Error::other("RSC stream timed out waiting for content"));
+                            break;
+                        }
                     }
                 }
             }
@@ -542,7 +550,9 @@ fn render_chunked_response(
     }
 
     if let Some(encoding_header) = encoding.as_header_value() {
-        response_builder = response_builder.header("content-encoding", encoding_header);
+        response_builder = response_builder
+            .header("content-encoding", encoding_header)
+            .header("vary", "Accept, Accept-Encoding");
     }
 
     let body = Body::from_stream(compressed_stream);
@@ -1446,7 +1456,20 @@ pub async fn handle_app_route(
                     closing,
                     mut chunks,
                 } => {
-                    let html = drain_chunked_stream(shell, closing, &mut chunks).await;
+                    let html = match drain_chunked_stream(shell, closing, &mut chunks).await {
+                        Ok(html) => html,
+                        Err(error) => {
+                            tracing::error!(
+                                "Failed to drain chunked HTML stream for build cache: {error}"
+                            );
+                            return render_fallback_html(
+                                &state,
+                                path,
+                                route_match.not_found.is_some(),
+                            )
+                            .await;
+                        }
+                    };
                     let etag = response::ResponseCache::generate_etag(html.as_bytes());
                     (html, etag)
                 }

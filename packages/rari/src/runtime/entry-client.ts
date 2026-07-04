@@ -100,7 +100,7 @@ function decodeEmbeddedFlightPayload(): Uint8Array | null {
     return null
 
   let text = ''
-  let binaryB64: string | null = null
+  const binaryChunks: string[] = []
 
   for (const item of queue) {
     if (item === 0)
@@ -108,11 +108,21 @@ function decodeEmbeddedFlightPayload(): Uint8Array | null {
     if (typeof item === 'string')
       text += item
     else if (Array.isArray(item) && item[0] === 2 && typeof item[1] === 'string')
-      binaryB64 = item[1]
+      binaryChunks.push(item[1])
   }
 
-  if (binaryB64)
-    return Uint8Array.from(atob(binaryB64), char => char.charCodeAt(0))
+  if (binaryChunks.length > 0) {
+    const parts = binaryChunks.map(b64 => Uint8Array.from(atob(b64), char => char.charCodeAt(0)))
+    const totalLength = parts.reduce((sum, part) => sum + part.length, 0)
+    const combined = new Uint8Array(totalLength)
+    let offset = 0
+    for (const part of parts) {
+      combined.set(part, offset)
+      offset += part.length
+    }
+
+    return combined
+  }
   if (text)
     return new TextEncoder().encode(text)
 
@@ -134,15 +144,22 @@ async function createElementFromFlightBytes(
   if (isStreaming) {
     const stream = new ReadableStream({
       start(controller) {
+        let streamClosed = false
+
         controller.enqueue(payloadBytes)
 
         const handleStreamUpdate = (event: Event) => {
+          if (streamClosed)
+            return
           const customEvent = event as CustomEvent
           if (customEvent.detail?.rscRow)
             controller.enqueue(new TextEncoder().encode(`\n${customEvent.detail.rscRow}`))
         }
 
         const handleStreamComplete = () => {
+          if (streamClosed)
+            return
+          streamClosed = true
           controller.close()
           window.removeEventListener('rari:html-stream-row', handleStreamUpdate)
           window.removeEventListener('rari:stream-complete', handleStreamComplete)
@@ -153,8 +170,11 @@ async function createElementFromFlightBytes(
 
         if (getWindow()['~rari']?.streaming?.bufferedRows) {
           const initialRows = [...getWindow()['~rari'].streaming!.bufferedRows!]
-          for (const row of initialRows)
+          for (const row of initialRows) {
+            if (streamClosed)
+              break
             controller.enqueue(new TextEncoder().encode(`\n${row}`))
+          }
 
           getWindow()['~rari'].streaming!.bufferedRows = []
         }

@@ -234,20 +234,12 @@ impl RscHtmlRenderer {
     fn extract_script_tags(template: &str) -> String {
         #[expect(clippy::unwrap_used, reason = "Hardcoded regex pattern is guaranteed to be valid")]
         let script_regex = Regex::new(r"(?s)<script[^>]*>.*?</script>|<script[^>]*/>").unwrap();
-        #[expect(clippy::unwrap_used, reason = "Hardcoded regex pattern is guaranteed to be valid")]
-        let link_regex = Regex::new(r"<link[^>]*/?>").unwrap();
 
-        let mut tags = Vec::new();
-
-        for m in link_regex.find_iter(template) {
-            tags.push(m.as_str().to_string());
-        }
-
-        for m in script_regex.find_iter(template) {
-            tags.push(m.as_str().to_string());
-        }
-
-        tags.join("\n")
+        script_regex
+            .find_iter(template)
+            .map(|m| m.as_str().to_string())
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     pub fn runtime(&self) -> &Arc<JsExecutionRuntime> {
@@ -462,14 +454,14 @@ impl RscHtmlRenderer {
                 continue;
             }
 
-            let row = Self::parse_rsc_line(line)?;
+            let Some(row) = Self::parse_rsc_line(line)? else { continue };
             rows.push(row);
         }
 
         Ok(rows)
     }
 
-    fn parse_rsc_line(line: &str) -> Result<RscRow, RariError> {
+    fn parse_rsc_line(line: &str) -> Result<Option<RscRow>, RariError> {
         let colon_pos = line.find(':').ok_or_else(|| {
             RariError::internal(format!("Invalid RSC line format: missing colon in '{line}'"))
         })?;
@@ -489,12 +481,16 @@ impl RscHtmlRenderer {
                     .and_then(|v| v.as_str())
                     .unwrap_or("default")
                     .to_string();
-                return Ok(RscRow {
+                return Ok(Some(RscRow {
                     id,
                     data: RscElement::ModuleImport { module_path, export_name },
-                });
+                }));
             }
-            return Ok(RscRow { id, data: RscElement::Text(data_str.to_string()) });
+            return Ok(Some(RscRow { id, data: RscElement::Text(data_str.to_string()) }));
+        }
+
+        if Self::is_non_renderable_flight_row(data_str) {
+            return Ok(None);
         }
 
         let json_value: Value = serde_json::from_str(data_str)
@@ -502,7 +498,15 @@ impl RscHtmlRenderer {
 
         let data = Self::parse_rsc_element(&json_value)?;
 
-        Ok(RscRow { id, data })
+        Ok(Some(RscRow { id, data }))
+    }
+
+    fn is_non_renderable_flight_row(data_str: &str) -> bool {
+        if data_str.starts_with('{') || data_str.starts_with('[') || data_str.starts_with('"') {
+            return false;
+        }
+
+        data_str.chars().next().is_some_and(|character| character.is_ascii_uppercase())
     }
 
     fn parse_rsc_element(value: &Value) -> Result<RscElement, RariError> {

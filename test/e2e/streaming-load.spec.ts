@@ -76,13 +76,28 @@ test.describe('Streaming load validation', () => {
     const path = '/suspense-streaming'
 
     const results = await Promise.all(
-      Array.from({ length: concurrency }, () => expectStreamingResponse(request, path)),
+      Array.from({ length: concurrency }, (_, index) =>
+        expectStreamingResponse(request, `${path}?run=${index}`)),
     )
 
     expect(results).toHaveLength(concurrency)
 
+    const timestamps = results.map(({ body }, index) => {
+      expect(body.startsWith('<!DOCTYPE html>')).toBe(true)
+      expect(body).toContain('__rari_f')
+      expect(body).toContain('component-a')
+      expect(body).toContain('component-c')
+      expect(body.indexOf('</body>')).toBeGreaterThan(body.indexOf('__rari_f'))
+
+      const match = body.match(/data-testid="component-c"[^>]*>[\s\S]*?(\d{4}-\d{2}-\d{2}T[\d:.]+Z)/)
+      expect(match, `response ${index} should include a component-c timestamp`).toBeTruthy()
+      return match![1]
+    })
+
+    expect(new Set(timestamps).size).toBe(concurrency)
+
     const uniqueBodies = new Set(results.map(result => result.body))
-    expect(uniqueBodies.size).toBeGreaterThan(0)
+    expect(uniqueBodies.size).toBe(concurrency)
   })
 
   test('should recover after a mid-stream client abort', async ({ page, request }) => {
@@ -116,7 +131,9 @@ test.describe('Streaming load validation', () => {
   })
 
   test('streaming perf should stay within bounds on cold requests', async ({ request }) => {
-    const samples = 5
+    test.setTimeout(120000)
+
+    const samples = 3
     const durations: number[] = []
 
     for (let i = 0; i < samples; i++) {

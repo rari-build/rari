@@ -10,8 +10,8 @@ if (typeof window !== 'undefined') {
         Sentry.init({
           dsn,
           sendDefaultPii: false,
-          tracesSampleRate: import.meta.env.DEV ? 1.0 : 0.1,
-          environment: import.meta.env.DEV ? 'development' : 'production',
+          tracesSampleRate: 0.1,
+          environment: 'production',
           integrations: [
             Sentry.browserTracingIntegration(),
             Sentry.replayIntegration({
@@ -19,7 +19,7 @@ if (typeof window !== 'undefined') {
               blockAllMedia: false,
             }),
           ],
-          replaysSessionSampleRate: import.meta.env.DEV ? 1.0 : 0.1,
+          replaysSessionSampleRate: 0.1,
           replaysOnErrorSampleRate: 1.0,
           beforeSend(event, hint) {
             const error = hint.originalException

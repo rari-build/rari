@@ -1,4 +1,5 @@
 import type { ComponentInfo, GlobalWithRari } from './types'
+import * as React from 'react'
 
 interface GlobalAccessor {
   '~clientComponents': Record<string, ComponentInfo>
@@ -29,10 +30,6 @@ function getLookupPathCandidates(path: string): string[] {
   if (componentsIndex !== -1)
     candidates.add(normalized.slice(componentsIndex + 1))
 
-  const basename = normalized.split('/').pop()
-  if (basename)
-    candidates.add(basename)
-
   return [...candidates]
 }
 
@@ -47,23 +44,28 @@ function resolveExportName(componentInfo: LazyComponentInfo, exportNameFromId?: 
   return undefined
 }
 
-function pathsMatch(registryPath: string, candidatePath: string): boolean {
+export function pathsMatch(registryPath: string, candidatePath: string): boolean {
   const normalizedRegistryPath = registryPath.replace(/\\/g, '/')
   const normalizedCandidatePath = candidatePath.replace(/\\/g, '/')
 
   if (normalizedRegistryPath === normalizedCandidatePath)
     return true
 
-  if (normalizedRegistryPath.endsWith(`/${normalizedCandidatePath}`))
+  if (
+    normalizedCandidatePath.includes('/')
+    && normalizedRegistryPath.endsWith(`/${normalizedCandidatePath}`)
+  ) {
     return true
+  }
 
-  if (normalizedCandidatePath.endsWith(`/${normalizedRegistryPath}`))
+  if (
+    normalizedRegistryPath.includes('/')
+    && normalizedCandidatePath.endsWith(`/${normalizedRegistryPath}`)
+  ) {
     return true
+  }
 
-  const registryBasename = normalizedRegistryPath.split('/').pop()
-  const candidateBasename = normalizedCandidatePath.split('/').pop()
-
-  return registryBasename != null && registryBasename === candidateBasename
+  return false
 }
 
 function findComponentInfoByPath(
@@ -320,7 +322,7 @@ function createSuspenseModule(
       if (Component == null)
         throw new Error(`[rari] Lazy component "${id}" loaded but export "${exportKey}" is missing`)
 
-      return Component(props)
+      return React.createElement(Component, props)
     }
     throw loadPromise
   }

@@ -154,16 +154,16 @@ pub async fn drain_chunked_stream(
     shell: Bytes,
     closing: Bytes,
     chunks: &mut Receiver<Result<Vec<u8>, String>>,
-) -> String {
+) -> Result<String, String> {
     let mut output = String::from_utf8_lossy(&shell).into_owned();
 
     while let Some(chunk_result) = chunks.recv().await {
         match chunk_result {
             Ok(data) => output.push_str(&String::from_utf8_lossy(&data)),
-            Err(_) => break,
+            Err(error) => return Err(error),
         }
     }
 
     output.push_str(&String::from_utf8_lossy(&closing));
-    output
+    Ok(output)
 }

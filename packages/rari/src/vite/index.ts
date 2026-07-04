@@ -56,6 +56,54 @@ const JSX_TEST_REGEX = /\bJSX\b/
 const IMPORT_SPECIFIERS_REGEX = /\{([^}]*)\}/
 const USE_CLIENT_DIRECTIVE_LINE_REGEX = /^['"]use client['"];?\s*\n/
 
+interface ClientReferenceSpecifier {
+  bindingName: string
+  exportName: string
+}
+
+function parseClientImportSpecifiers(line: string, importedDefault?: string): ClientReferenceSpecifier[] {
+  const specifiers: ClientReferenceSpecifier[] = []
+
+  if (importedDefault)
+    specifiers.push({ bindingName: importedDefault, exportName: 'default' })
+
+  const namedBlock = line.match(/\{([^}]+)\}/)?.[1]
+  if (namedBlock) {
+    for (const part of namedBlock.split(',')) {
+      const trimmed = part.trim()
+      if (!trimmed)
+        continue
+
+      const asParts = trimmed.split(/\s+as\s+/i)
+      if (asParts.length === 2 && asParts[0] && asParts[1]) {
+        specifiers.push({
+          bindingName: asParts[1].trim(),
+          exportName: asParts[0].trim(),
+        })
+      }
+      else {
+        specifiers.push({ bindingName: trimmed, exportName: trimmed })
+      }
+    }
+  }
+
+  return specifiers
+}
+
+function buildClientReferenceReplacement(
+  specifiers: ClientReferenceSpecifier[],
+  resolvedImportPath: string,
+): string {
+  return `import { registerClientReference } from "react-server-dom-rari/server";
+${specifiers.map(({ bindingName, exportName }) => `const ${bindingName} = registerClientReference(
+  function() {
+    throw new Error("Attempted to call ${bindingName} from the server but it's on the client. It can only be rendered as a Component or passed to props of a Client Component.");
+  },
+  ${JSON.stringify(resolvedImportPath)},
+  ${JSON.stringify(exportName)}
+);`).join('\n')}`
+}
+
 export interface RouterPluginOptions {
   appDir?: string
   extensions?: string[]
@@ -1077,7 +1125,6 @@ ${clientTransformedCode}`
           continue
 
         const importedDefault = importMatch[1]
-        const importedNamed = importMatch[3]
         const importPath = importMatch[4]
         const resolvedImportPath = resolveImportToFilePath(importPath, id)
 
@@ -1098,18 +1145,14 @@ ${clientTransformedCode}`
         ) {
           if (!importingFileIsClient) {
             const originalImport = line
-            const bindingName = importedDefault || importedNamed?.split(',')[0]?.trim() || 'default'
-            const exportName = importedDefault ? 'default' : bindingName
+            const specifiers = parseClientImportSpecifiers(line, importedDefault)
+            if (specifiers.length === 0)
+              continue
 
-            const clientRefReplacement = `
-import { registerClientReference } from "react-server-dom-rari/server";
-const ${bindingName} = registerClientReference(
-  function() {
-    throw new Error("Attempted to call ${bindingName} from the server but it's on the client. It can only be rendered as a Component or passed to props of a Client Component.");
-  },
-  ${JSON.stringify(resolvedImportPath)},
-  ${JSON.stringify(exportName)}
-);`
+            const clientRefReplacement = buildClientReferenceReplacement(
+              specifiers,
+              resolvedImportPath,
+            )
 
             modifiedCode = modifiedCode.replace(
               originalImport,

@@ -25,6 +25,8 @@ if (typeof window !== 'undefined') {
 
   if (!(window as unknown as WindowWithRari)['~rari'].streaming)
     (window as unknown as WindowWithRari)['~rari'].streaming = { bufferedRows: [] }
+  else if (!(window as unknown as WindowWithRari)['~rari'].streaming!.bufferedRows)
+    (window as unknown as WindowWithRari)['~rari'].streaming!.bufferedRows = []
 }
 
 if (import.meta.hot) {

@@ -1029,7 +1029,8 @@ globalThis['~errors'].batch.push({{
         component_id: &str,
         _props: Option<&str>,
     ) -> impl Future<Output = Result<String, RariError>> {
-        future::ready(Ok(format!(r"<!-- rari:client-component-ref:{component_id} -->")))
+        let encoded_id = urlencoding::encode(component_id);
+        future::ready(Ok(format!(r"<!-- rari:client-component-ref:{encoded_id} -->")))
     }
 
     fn sanitize_html_output(html: &str, component_id: &str) -> String {
