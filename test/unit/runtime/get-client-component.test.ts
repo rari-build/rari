@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vite-plus/test'
-import { pathsMatch } from '../../../packages/rari/src/runtime/shared/get-client-component'
+import type { ComponentInfo, GlobalWithRari } from '../../../packages/rari/src/runtime/shared/types'
+import { describe, expect, it, vi } from 'vite-plus/test'
+import { pathsMatch, requireClientComponent } from '../../../packages/rari/src/runtime/shared/get-client-component'
 
 describe('pathsMatch', () => {
   it('matches identical normalized paths', () => {
@@ -25,5 +26,63 @@ describe('pathsMatch', () => {
   it('rejects partial segment matches without a path boundary', () => {
     expect(pathsMatch('src/components/Foo.tsx', 'Foo.tsx')).toBe(false)
     expect(pathsMatch('src/components/FooBar.tsx', 'Foo.tsx')).toBe(false)
+  })
+})
+
+describe('requireClientComponent lazy load errors', () => {
+  it('throws the stored error synchronously after a failed load', async () => {
+    const loadError = new Error('network failure')
+    const componentInfo: ComponentInfo = {
+      id: 'BrokenWidget',
+      path: 'src/components/BrokenWidget.tsx',
+      type: 'client',
+      registered: false,
+      loader: () => Promise.reject(loadError),
+    }
+
+    ;(globalThis as unknown as GlobalWithRari)['~clientComponents'] = {
+      BrokenWidget: componentInfo,
+    }
+
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const suspenseModule = requireClientComponent('BrokenWidget')
+    const loadPromise = componentInfo.loadPromise!
+    await expect(loadPromise).rejects.toBe(loadError)
+    expect(componentInfo.loadError).toBe(loadError)
+
+    const Suspended = suspenseModule.default
+    expect(() => Suspended({})).toThrow(loadError)
+
+    const moduleAfterFailure = requireClientComponent('BrokenWidget')
+    expect(() => moduleAfterFailure.default({})).toThrow(loadError)
+
+    vi.restoreAllMocks()
+    ;(globalThis as unknown as GlobalWithRari)['~clientComponents'] = {}
+  })
+
+  it('throws the pending load promise while the chunk is loading', () => {
+    let resolveLoad!: (value: { default: () => null }) => void
+    const pendingLoad = new Promise<{ default: () => null }>((resolve) => {
+      resolveLoad = resolve
+    })
+
+    const componentInfo: ComponentInfo = {
+      id: 'PendingWidget',
+      path: 'src/components/PendingWidget.tsx',
+      type: 'client',
+      registered: false,
+      loader: () => pendingLoad,
+    }
+
+    ;(globalThis as unknown as GlobalWithRari)['~clientComponents'] = {
+      PendingWidget: componentInfo,
+    }
+
+    const suspenseModule = requireClientComponent('PendingWidget')
+    expect(() => suspenseModule.default({})).toThrow(componentInfo.loadPromise)
+
+    resolveLoad({ default: () => null })
+    ;(globalThis as unknown as GlobalWithRari)['~clientComponents'] = {}
   })
 })

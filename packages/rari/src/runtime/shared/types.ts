@@ -33,6 +33,7 @@ export interface ComponentInfo {
   loader?: () => Promise<any>
   loading?: boolean
   loadPromise?: Promise<any>
+  loadError?: unknown
 }
 
 export interface GlobalWithRari {

@@ -5,7 +5,11 @@ import {
 
 export { registerServerReference }
 
-export function registerClientReference(clientReference: any, id: string, exportName: string): any {
+export function registerClientReference<T>(
+  clientReference: T,
+  id: string,
+  exportName: string,
+): T {
   const key = `${id}#${exportName}`
   const reference = registerClientReferenceBase(
     clientReference ?? (() => {}),
@@ -22,5 +26,5 @@ export function registerClientReference(clientReference: any, id: string, export
     console.error('[rari] Failed to register client reference:', error)
   }
 
-  return reference
+  return reference as T
 }

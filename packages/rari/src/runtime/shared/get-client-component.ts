@@ -132,9 +132,10 @@ function executeLoader(componentInfo: LazyComponentInfo): Promise<any> {
       componentInfo.loading = false
       return module
     })
-    .catch((error: Error) => {
+    .catch((error: unknown) => {
       console.error(`[rari] Failed to load component ${componentInfo.id}:`, error)
       componentInfo.loading = false
+      componentInfo.loadError = error
       componentInfo.loadPromise = undefined
       throw error
     })
@@ -272,6 +273,9 @@ function startComponentLoad(componentInfo: LazyComponentInfo): Promise<any> | un
   if (componentInfo.component || !componentInfo.loader)
     return componentInfo.loadPromise
 
+  if (componentInfo.loadError)
+    return undefined
+
   if (!componentInfo.loadPromise)
     return executeLoader(componentInfo)
 
@@ -317,6 +321,9 @@ function createSuspenseModule(
   const exportKey = resolvedExport || 'default'
 
   const SuspendingComponent = (props: any) => {
+    if (componentInfo.loadError)
+      throw componentInfo.loadError
+
     if (componentInfo.component) {
       const Component = getComponentFromInfo(componentInfo, resolvedExport)
       if (Component == null)
@@ -350,6 +357,9 @@ export function requireClientComponent(id: string): any {
     return formatLoadedModule(componentInfo, componentInfo.component, exportName)
 
   if (componentInfo.loader) {
+    if (componentInfo.loadError)
+      return createSuspenseModule(componentInfo, id, Promise.resolve(), exportName)
+
     const loadPromise = startComponentLoad(componentInfo)
     if (loadPromise)
       return createSuspenseModule(componentInfo, id, loadPromise, exportName)
