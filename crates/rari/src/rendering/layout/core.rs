@@ -594,8 +594,8 @@ impl LayoutRenderer {
                     }})()",
                 );
 
-                let shell = bytes::Bytes::new();
-                let closing = bytes::Bytes::new();
+                let shell = Bytes::from_static(b"<!DOCTYPE html>");
+                let closing = Bytes::new();
 
                 let runtime_clone = Arc::clone(&runtime);
                 tokio::spawn(async move {

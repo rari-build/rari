@@ -287,7 +287,7 @@ pub fn op_fizz_done(state: &mut OpState) {
 
 #[op2(fast)]
 pub fn op_internal_log(#[string] message: &str) {
-    tracing::error!("[rari] {message}");
+    tracing::debug!("[rari] {message}");
 }
 
 #[op2]

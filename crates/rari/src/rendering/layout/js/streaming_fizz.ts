@@ -16,7 +16,69 @@ function rariAtLeastOneTask(): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, 0))
 }
 
+function rariStripLeadingDoctype(text: string): string {
+  const match = /^\s*<!doctype[^>]*>/i.exec(text)
+  if (!match)
+    return text
+
+  return text.slice(match[0].length)
+}
+
 let rariStreamDisconnected = false
+
+type RariHtmlStreamState = 'outside' | 'in_tag' | 'in_inline_script'
+
+let rariHtmlStreamState: RariHtmlStreamState = 'outside'
+let rariPendingTagStart = -1
+
+function rariResetHtmlStreamState() {
+  rariHtmlStreamState = 'outside'
+  rariPendingTagStart = -1
+}
+
+function rariSafeToInjectFlight(): boolean {
+  return rariHtmlStreamState === 'outside'
+}
+
+function rariTrackHtmlStreamBoundaries(text: string): boolean {
+  let i = 0
+  const lower = text.toLowerCase()
+
+  while (i < text.length) {
+    switch (rariHtmlStreamState) {
+      case 'outside': {
+        const openAt = lower.indexOf('<', i)
+        if (openAt === -1)
+          return true
+        rariHtmlStreamState = 'in_tag'
+        rariPendingTagStart = openAt
+        i = openAt + 1
+        break
+      }
+      case 'in_tag': {
+        const closeAt = text.indexOf('>', i)
+        if (closeAt === -1)
+          return false
+        const openTag = text.slice(rariPendingTagStart, closeAt + 1)
+        const isInlineScript = /^<script/i.test(openTag) && !/\bsrc\s*=/.test(openTag)
+        rariHtmlStreamState = isInlineScript ? 'in_inline_script' : 'outside'
+        rariPendingTagStart = -1
+        i = closeAt + 1
+        break
+      }
+      case 'in_inline_script': {
+        const closeAt = lower.indexOf('</script>', i)
+        if (closeAt === -1)
+          return false
+        rariHtmlStreamState = 'outside'
+        i = closeAt + 9
+        break
+      }
+    }
+  }
+
+  return rariSafeToInjectFlight()
+}
 
 async function rariPumpFizzChunk(text: string): Promise<boolean> {
   if (!text || rariStreamDisconnected)
@@ -303,27 +365,49 @@ async function rariPumpLiveMux(
   fizzStream: ReadableStream & { allReady?: Promise<void> },
   liveFlight: ReturnType<typeof rariCreateLiveFlightSource>,
 ) {
-  if (!(await rariPumpFlightScriptPush(0)))
-    return
-
   const reader = fizzStream.getReader()
   const decoder = new TextDecoder()
   const allReady = fizzStream.allReady
   let htmlChunkCount = 0
   let flightPumpCount = 0
   let htmlStreamFinished = false
+  let flightBootstrapped = false
+  let strippedDoctype = false
 
-  const pumpNextFlight = async () => {
-    await rariAtLeastOneTask()
-    const item = liveFlight.tryDrainNext()
-    if (!item)
+  const ensureFlightBootstrap = async (): Promise<boolean> => {
+    if (flightBootstrapped)
       return true
-    flightPumpCount++
-    rariStreamLog('mux.flightRow', `n=${flightPumpCount}`)
-    if (item.type === 'line')
-      return await rariPumpFlightScriptPush(`${item.line}\n`)
-    if (item.type === 'binary')
-      return await rariPumpFlightBinaryPush(item.b64)
+    flightBootstrapped = true
+    return await rariPumpFlightScriptPush(0)
+  }
+
+  const prepareFizzChunk = (text: string): string => {
+    let chunk = text
+    if (!strippedDoctype) {
+      strippedDoctype = true
+      chunk = rariStripLeadingDoctype(chunk)
+    }
+
+    return chunk
+  }
+
+  const pumpPendingFlight = async (): Promise<boolean> => {
+    while (rariSafeToInjectFlight()) {
+      await rariAtLeastOneTask()
+      const item = liveFlight.tryDrainNext()
+      if (!item)
+        return true
+      flightPumpCount++
+      rariStreamLog('mux.flightRow', `n=${flightPumpCount}`)
+      if (item.type === 'line') {
+        if (!(await rariPumpFlightScriptPush(`${item.line}\n`)))
+          return false
+      }
+      else if (item.type === 'binary') {
+        if (!(await rariPumpFlightBinaryPush(item.b64)))
+          return false
+      }
+    }
 
     return true
   }
@@ -332,13 +416,26 @@ async function rariPumpLiveMux(
     if (!text || rariStreamDisconnected)
       return true
 
-    const bodyClose = text.indexOf('</body>')
-    if (bodyClose === -1)
-      return await rariPumpFizzChunk(text)
+    const chunk = prepareFizzChunk(text)
+    if (!chunk)
+      return true
 
-    const before = text.slice(0, bodyClose)
-    const after = text.slice(bodyClose)
-    if (before && !(await rariPumpFizzChunk(before)))
+    const bodyClose = chunk.indexOf('</body>')
+    if (bodyClose === -1) {
+      if (!(await rariPumpFizzChunk(chunk)))
+        return false
+      rariTrackHtmlStreamBoundaries(chunk)
+      return true
+    }
+
+    const before = chunk.slice(0, bodyClose)
+    const after = chunk.slice(bodyClose)
+    if (before) {
+      if (!(await rariPumpFizzChunk(before)))
+        return false
+      rariTrackHtmlStreamBoundaries(before)
+    }
+    if (!(await ensureFlightBootstrap()))
       return false
     if (!(await liveFlight.drainAllRemaining()))
       return false
@@ -356,6 +453,12 @@ async function rariPumpLiveMux(
         if (tail) {
           if (!(await pumpFizzText(tail)))
             return
+          if (rariSafeToInjectFlight()) {
+            if (!(await ensureFlightBootstrap()))
+              return
+            if (!(await pumpPendingFlight()))
+              return
+          }
         }
         rariStreamLog('mux.fizzLoop.done', `htmlChunks=${htmlChunkCount}`)
         break
@@ -365,8 +468,12 @@ async function rariPumpLiveMux(
       rariStreamLog('mux.htmlChunk', `n=${htmlChunkCount} bytes=${value.byteLength}`)
       if (!(await pumpFizzText(chunkText)))
         return
-      if (!(await pumpNextFlight()))
-        return
+      if (rariSafeToInjectFlight()) {
+        if (!(await ensureFlightBootstrap()))
+          return
+        if (!(await pumpPendingFlight()))
+          return
+      }
     }
     if (htmlStreamFinished) {
       rariStreamLog('mux.drainRemaining.start')
@@ -433,6 +540,7 @@ async function renderStreamingDocument(options: RenderStreamingDocumentOptions) 
     throw new Error('[rari] React not loaded')
 
   rariStreamDisconnected = false
+  rariResetHtmlStreamState()
   rariStreamLog('render.start')
 
   const bundlerConfig = g['~rari']?.clientReferenceManifest || {}
