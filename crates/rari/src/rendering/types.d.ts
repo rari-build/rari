@@ -24,6 +24,7 @@ declare global {
         function op_sanitize_html(html: string, componentId: string): string
         function op_fizz_chunk(text: string): Promise<void>
         function op_fizz_done(): void
+        function op_internal_log(message: string): void
       }
     }
   }

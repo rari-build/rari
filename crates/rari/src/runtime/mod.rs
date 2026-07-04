@@ -482,6 +482,28 @@ impl JsExecutionRuntime {
         }
     }
 
+    pub async fn execute_script_with_request_context(
+        &self,
+        request_context: Arc<RequestContext>,
+        script_name: String,
+        script_code: String,
+    ) -> Result<Value, RariError> {
+        let runtime = Arc::clone(&self.runtime);
+
+        match time::timeout(
+            Duration::from_millis(self.timeout_ms),
+            runtime.execute_script_with_request_context(request_context, script_name, script_code),
+        )
+        .await
+        {
+            Ok(result) => result,
+            Err(_) => Err(RariError::timeout(format!(
+                "Script execution with request context timed out after {} ms",
+                self.timeout_ms
+            ))),
+        }
+    }
+
     pub async fn set_request_context(
         &self,
         request_context: Arc<RequestContext>,

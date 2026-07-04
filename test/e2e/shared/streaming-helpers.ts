@@ -1,14 +1,14 @@
 import type { Page, Response } from '@playwright/test'
 import { expect } from '@playwright/test'
 
-export async function gotoWithRetry(page: Page, url: string, maxRetries = 5, retryDelayMs = 1000): Promise<Response | null> {
+export async function gotoWithRetry(page: Page, url: string, maxRetries = 3, retryDelayMs = 500): Promise<Response | null> {
   let lastError: Error | undefined
   let response: Response | null = null
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 })
-      await page.waitForSelector('#root > *', { timeout: 5000 })
+      response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 })
+      await page.waitForSelector('#root > *, [data-testid="loading"], .rari-error', { timeout: 10000 })
 
       return response
     }
@@ -36,7 +36,7 @@ export async function getServerTimestamps(
         return /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/.test(el?.textContent || '')
       }),
     ids,
-    { timeout: 40000 },
+    { timeout: 20000 },
   )
 
   return page.evaluate((selectorIds: string[]) => {

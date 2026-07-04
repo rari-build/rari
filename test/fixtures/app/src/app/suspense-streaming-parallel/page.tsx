@@ -1,12 +1,11 @@
 import { Suspense } from 'react'
-import { sleep } from '../../utils/test-helpers'
 
 export default function ParallelSuspensePage() {
   return (
     <div>
       <h1>Parallel Suspense Test</h1>
       <Suspense fallback={<div data-testid="loading-fast">Loading fast...</div>}>
-        <SlowComponent name="Fast" delay={300} />
+        <SlowComponent name="Fast" delay={1000} />
       </Suspense>
       <Suspense fallback={<div data-testid="loading-slow">Loading slow...</div>}>
         <SlowComponent name="Slow" delay={2000} />
@@ -21,7 +20,7 @@ interface SlowProps {
 }
 
 async function SlowComponent({ name, delay }: SlowProps) {
-  await sleep(delay)
+  await new Promise(resolve => setTimeout(resolve, delay))
   // eslint-disable-next-line react/purity
   const timestamp = new Date().toISOString()
   return (

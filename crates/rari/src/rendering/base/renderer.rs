@@ -312,6 +312,18 @@ globalThis['~errors'].batch.push({{
                     {
                         tracing::warn!("Failed to initialize Flight renderer: {e}");
                     }
+
+                    let streaming_fizz_script = include_str!("../layout/js/streaming_fizz.ts");
+                    if let Err(e) = self
+                        .runtime
+                        .execute_script(
+                            "streaming_fizz.ts".to_string(),
+                            streaming_fizz_script.to_string(),
+                        )
+                        .await
+                    {
+                        tracing::warn!("Failed to initialize streaming Fizz pipeline: {e}");
+                    }
                 } else {
                     let err = result.get("error").and_then(|v| v.as_str()).unwrap_or("unknown");
                     tracing::warn!("React Fizz module load returned failure: {err}");
@@ -1099,6 +1111,16 @@ globalThis['~errors'].batch.push({{
         export_name: &str,
         args: &[Value],
     ) -> Result<Value, RariError> {
+        Self::execute_server_function_on_runtime(&self.runtime, function_id, export_name, args)
+            .await
+    }
+
+    pub async fn execute_server_function_on_runtime(
+        runtime: &Arc<JsExecutionRuntime>,
+        function_id: &str,
+        export_name: &str,
+        args: &[Value],
+    ) -> Result<Value, RariError> {
         let args_json = serde_json::to_string(args)
             .map_err(|e| RariError::serialization(format!("Failed to serialize args: {e}")))?;
 
@@ -1107,8 +1129,33 @@ globalThis['~errors'].batch.push({{
             .cow_replace("{args_json}", &args_json)
             .into_owned();
 
-        self.runtime
+        runtime
             .execute_script(
+                format!("execute_action_{}_{}.ts", function_id.cow_replace('/', "_"), export_name),
+                script,
+            )
+            .await
+            .map_err(|e| RariError::js_execution(format!("Server function execution failed: {e}")))
+    }
+
+    pub async fn execute_server_function_with_context(
+        runtime: &Arc<JsExecutionRuntime>,
+        request_context: Arc<RequestContext>,
+        function_id: &str,
+        export_name: &str,
+        args: &[Value],
+    ) -> Result<Value, RariError> {
+        let args_json = serde_json::to_string(args)
+            .map_err(|e| RariError::serialization(format!("Failed to serialize args: {e}")))?;
+
+        let script = SERVER_ACTION_INVOCATION_SCRIPT
+            .cow_replace("{function_name}", export_name)
+            .cow_replace("{args_json}", &args_json)
+            .into_owned();
+
+        runtime
+            .execute_script_with_request_context(
+                request_context,
                 format!("execute_action_{}_{}.ts", function_id.cow_replace('/', "_"), export_name),
                 script,
             )

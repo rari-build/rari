@@ -45,12 +45,8 @@ const FIZZ_STREAM_ERROR_HELPER: &str = r"
                         let rariErrorInjected = false;
                         async function injectRariErrorFromCaught() {
                             if (rariErrorInjected || caughtErrors.length === 0) return;
-                            const displayError = caughtErrors.find((e) => e?.message && !String(e.message).includes('omitted in production')) || caughtErrors[0];
-                            const errMsg = String(displayError?.message || 'Unknown error').split('<').join('&lt;');
-                            const errorHtml = '<div class=rari-error style=color:red;border:1px_solid_red;padding:10px;border-radius:4px;background-color:#fff5f5><strong>Error loading content: </strong>' + errMsg + '</div>';
-                            const replaceScript = '<script>!function(h){var l=document.querySelector(\'[data-testid=loading]\');l?l.outerHTML=h:document.getElementById(\'root\')?.insertAdjacentHTML(\'beforeend\',h)}(' + JSON.stringify(errorHtml) + ')</script>';
                             rariErrorInjected = true;
-                            await Deno.core.ops.op_fizz_chunk(replaceScript);
+                            await globalThis['~rari']?.injectStreamError?.(caughtErrors);
                         }
 ";
 
@@ -74,84 +70,6 @@ const FIZZ_CHUNK_PUMP_HELPER: &str = r"
                             }
                         }
 ";
-
-const FIZZ_PAYLOAD_EMBED_HELPER: &str = r#"
-                        let rariFizzCloseHeld = '';
-
-                        async function rariPumpFizzHtml(text) {
-                            if (!text) return true;
-                            let combined = rariFizzCloseHeld + text;
-                            rariFizzCloseHeld = '';
-                            const lower = combined.toLowerCase();
-                            let closeIdx = -1;
-                            for (const marker of ['</body>', '</html>']) {
-                                const idx = lower.indexOf(marker);
-                                if (idx !== -1 && (closeIdx === -1 || idx < closeIdx)) closeIdx = idx;
-                            }
-                            if (closeIdx !== -1) {
-                                rariFizzCloseHeld = combined.slice(closeIdx);
-                                combined = combined.slice(0, closeIdx);
-                            }
-                            if (!combined) return true;
-                            return await rariPumpFizzChunk(combined);
-                        }
-
-                        async function rariReleaseFizzClose() {
-                            if (!rariFizzCloseHeld) return true;
-                            const held = rariFizzCloseHeld;
-                            rariFizzCloseHeld = '';
-                            return await rariPumpFizzChunk(held);
-                        }
-
-                        async function rariPumpFlightScriptPush(payload) {
-                            const escaped = JSON.stringify(payload).split('</').join('<\\/');
-                            return await rariPumpFizzChunk(
-                                '<script>(self.__rari_f=self.__rari_f||[]).push(' + escaped + ')<\/script>'
-                            );
-                        }
-
-                        async function rariPumpRscFlightStream(stream) {
-                            if (!(await rariPumpFizzChunk('<script>(self.__rari_f=self.__rari_f||[]).push(0)<\/script>'))) {
-                                return;
-                            }
-
-                            const reader = stream.getReader();
-                            const decoder = new TextDecoder();
-                            let pending = '';
-
-                            const pumpLine = async (line) => {
-                                if (!line) return true;
-                                return await rariPumpFlightScriptPush(line + '\n');
-                            };
-
-                            while (true) {
-                                const { done, value } = await reader.read();
-                                if (done) break;
-                                pending += decoder.decode(value, { stream: true });
-                                let newline;
-                                while ((newline = pending.indexOf('\n')) !== -1) {
-                                    const line = pending.slice(0, newline);
-                                    pending = pending.slice(newline + 1);
-                                    if (!(await pumpLine(line))) return;
-                                }
-                            }
-
-                            pending += decoder.decode();
-                            if (pending.length > 0) {
-                                if (pending.endsWith('\n')) {
-                                    for (const line of pending.split('\n')) {
-                                        if (!(await pumpLine(line))) return;
-                                    }
-                                } else {
-                                    if (!(await pumpLine(pending))) return;
-                                }
-                            }
-                        }
-
-                        async function rariPumpStreamingCompleteScript() {
-                            await rariPumpFizzChunk("<script>if(!window['~rari'])window['~rari']={};window['~rari'].streaming={complete:true}<\/script>");
-                        }
-"#;
 
 pub struct LayoutHtmlCache {
     handler: Arc<dyn CacheHandler>,
@@ -604,8 +522,9 @@ impl LayoutRenderer {
                 )?;
 
                 let runtime = {
-                    let renderer = self.renderer.lock().await;
-                    Self::ensure_react_server_loaded(&renderer).await?;
+                    let mut renderer = self.renderer.lock().await;
+                    renderer.initialize().await?;
+                    Self::ensure_streaming_fizz_loaded(&renderer).await?;
                     Arc::clone(&renderer.runtime)
                 };
 
@@ -631,10 +550,8 @@ impl LayoutRenderer {
                     r"(async function() {{
                         let caughtErrors = [];
                         {FIZZ_STREAM_ERROR_HELPER}
-                        {FIZZ_CHUNK_PUMP_HELPER}
-                        {FIZZ_PAYLOAD_EMBED_HELPER}
                         try {{
-                        try {{ {composition_script} }} catch(e) {{
+                        try {{ await ({composition_script}); }} catch(e) {{
                             console.error('[rari] Composition error in streaming:', e);
                         }}
 
@@ -644,74 +561,34 @@ impl LayoutRenderer {
                             return;
                         }}
 
-                        const ReactServerRenderer = globalThis['~reactServerRenderer'];
-                        const bundlerConfig = globalThis['~rari']?.clientReferenceManifest || {{}};
-                        const ReactDOMServer = globalThis['~reactServer'];
-                        const headContent = {head_content_json};
-                        const R = globalThis.React;
+                        const renderStreaming = globalThis['~rari']?.renderStreamingDocument;
+                        if (typeof renderStreaming !== 'function') {{
+                            throw new Error('[rari] streaming_fizz.ts not loaded');
+                        }}
 
-                        const fullDoc = R.createElement('html', {{ lang: 'en' }},
-                            R.createElement('head', {{ dangerouslySetInnerHTML: {{ __html: headContent }} }}),
-                            R.createElement('body', null,
-                                R.createElement('div', {{ id: 'root' }}, capturedElement)
-                            )
-                        );
-
-                        const fizzStream = await ReactDOMServer.renderToReadableStream(fullDoc, {{
-                            onError(e) {{
-                                console.error('[rari] Fizz streaming error:', e);
-                                caughtErrors.push(e);
-                            }}
+                        await renderStreaming({{
+                            capturedElement,
+                            headContent: {head_content_json},
+                            caughtErrors,
                         }});
-
-                        const reader = fizzStream.getReader();
-                        const decoder = new TextDecoder();
-                        const allReady = fizzStream.allReady;
-                        const pumpFizzStream = (async () => {{
-                            while (true) {{
-                                const {{ done, value }} = await reader.read();
-                                if (done) break;
-                                const text = decoder.decode(value, {{ stream: true }});
-                                if (!(await rariPumpFizzHtml(text))) return;
-                            }}
-                            if (!rariStreamDisconnected) {{
-                                const tail = decoder.decode();
-                                if (!(await rariPumpFizzHtml(tail))) return;
-                            }}
-                        }})();
-
-                        await Promise.all([
-                            pumpFizzStream,
-                            allReady ?? Promise.resolve(),
-                        ]);
 
                         {FIZZ_STREAM_ERROR_INJECTION}
 
-                        if (!rariStreamDisconnected) {{
-                            const rscStream = await ReactServerRenderer.renderToReadableStream(
-                                capturedElement, bundlerConfig,
-                                {{ onError(e) {{
-                                    console.error('[rari] RSC error:', e);
-                                    caughtErrors.push(e);
-                                }} }}
-                            );
-                            await rariPumpRscFlightStream(rscStream);
-                            await rariReleaseFizzClose();
-                            await rariPumpStreamingCompleteScript();
-                        }}
+                        await globalThis['~rari']?.pumpStreamingCompleteScript?.();
 
                         Deno.core.ops.op_fizz_done();
 
                         }} catch(outerError) {{
-                            if (String(outerError?.message || outerError).includes('disconnected')) {{
-                                Deno.core.ops.op_fizz_done();
-                                return;
-                            }}
                             console.error('[rari] Fizz streaming pipeline fatal error:', outerError);
                             const displayError = caughtErrors.length > 0 ? caughtErrors[0] : outerError;
                             const errMsg = String(displayError?.message || outerError?.message || 'Unknown error').split('<').join('&lt;');
                             const errorHtml = '<!doctype html><html><head></head><body><div id=root><div class=rari-error style=color:red;border:1px_solid_red;padding:10px;border-radius:4px;background-color:#fff5f5><strong>Error loading content: </strong>' + errMsg + '</div></div></body></html>';
-                            await rariPumpFizzChunk(errorHtml);
+                            const pump = globalThis['~rari']?.pumpFizzChunk;
+                            if (typeof pump === 'function') {{
+                                await pump(errorHtml);
+                            }} else {{
+                                await Deno.core.ops.op_fizz_chunk(errorHtml);
+                            }}
                             Deno.core.ops.op_fizz_done();
                         }}
                     }})()",
@@ -959,6 +836,31 @@ impl LayoutRenderer {
         Ok(())
     }
 
+    async fn ensure_streaming_fizz_loaded(renderer: &RscRenderer) -> Result<(), RariError> {
+        let check = renderer
+            .runtime
+            .execute_script(
+                "check_streaming_fizz".to_string(),
+                "typeof globalThis['~rari']?.renderStreamingDocument === 'function'".to_string(),
+            )
+            .await?;
+
+        if check.as_bool() == Some(true) {
+            return Ok(());
+        }
+
+        let streaming_fizz_script = include_str!("js/streaming_fizz.ts");
+        renderer
+            .runtime
+            .execute_script("streaming_fizz.ts".to_string(), streaming_fizz_script.to_string())
+            .await
+            .map_err(|e| {
+                RariError::internal(format!("Failed to load streaming Fizz pipeline: {e}"))
+            })?;
+
+        Ok(())
+    }
+
     async fn execute_composition_and_serialize(
         renderer: &RscRenderer,
         composition_script: String,
@@ -1001,14 +903,50 @@ impl LayoutRenderer {
         json.cow_replace("</", r"\u003c/").into_owned()
     }
 
+    fn sort_flight_protocol_lines(flight_protocol: &str) -> String {
+        let mut rows_with_ids: Vec<(u32, String)> = Vec::new();
+
+        for row in flight_protocol.lines() {
+            if let Some(colon_pos) = row.find(':') {
+                if let Ok(row_id) = u32::from_str_radix(&row[..colon_pos], 16) {
+                    rows_with_ids.push((row_id, row.to_string()));
+                } else {
+                    rows_with_ids.push((u32::MAX, row.to_string()));
+                }
+            } else {
+                rows_with_ids.push((u32::MAX, row.to_string()));
+            }
+        }
+
+        rows_with_ids.sort_by_key(|(id, _)| *id);
+
+        let mut sorted =
+            rows_with_ids.iter().map(|(_, row)| row.as_str()).collect::<Vec<_>>().join("\n");
+
+        if !sorted.is_empty() && !sorted.ends_with('\n') {
+            sorted.push('\n');
+        }
+
+        let has_row_0 = rows_with_ids.iter().any(|(id, row)| *id == 0 && row.starts_with("0:"));
+
+        if !has_row_0
+            && let Some((max_id, _)) =
+                rows_with_ids.iter().filter(|(id, _)| *id != u32::MAX).max_by_key(|(id, _)| *id)
+            && *max_id > 0
+        {
+            let row_0 = format!("0:\"${max_id:x}\"\n");
+            sorted.insert_str(0, &row_0);
+        }
+
+        sorted
+    }
+
+    /// Builds `__rari_f` push scripts for client hydration. Used by the static Fizz
+    /// fallback path; the streaming pipeline uses pull fanout + live mux helpers instead.
     fn build_flight_push_scripts(rsc_flight_protocol: &str) -> String {
         let mut scripts =
             String::from(r"<script>(self.__rari_f=self.__rari_f||[]).push(0)</script>");
-        let payload = if rsc_flight_protocol.ends_with('\n') {
-            rsc_flight_protocol.to_string()
-        } else {
-            format!("{rsc_flight_protocol}\n")
-        };
+        let payload = Self::sort_flight_protocol_lines(rsc_flight_protocol);
 
         for line in payload.lines() {
             if line.is_empty() {

@@ -11,7 +11,7 @@ interface FormState {
 }
 
 interface TodoFormProps {
-  onSuccess?: () => void
+  onSuccess?: (todos?: Todo[]) => void
 }
 
 export default function TodoForm({ onSuccess }: TodoFormProps) {
@@ -21,12 +21,9 @@ export default function TodoForm({ onSuccess }: TodoFormProps) {
     async (_prevState, formData) => {
       const result = await addTodo(formData)
       if (result.success) {
-        queueMicrotask(() => {
-          setResetKey(prev => prev + 1)
-          if (onSuccess) {
-            onSuccess()
-          }
-        })
+        setResetKey(prev => prev + 1)
+        if (onSuccess)
+          onSuccess(result.todos)
       }
 
       return result

@@ -24,7 +24,7 @@ async function expectStreamingResponse(request: APIRequestContext, path: string)
 }
 
 test.describe('Streaming load validation', () => {
-  test.setTimeout(120000)
+  test.setTimeout(60000)
 
   test('streaming routes should use the Fizz path', async ({ request }) => {
     for (const path of STREAMING_ROUTES) {
@@ -40,6 +40,34 @@ test.describe('Streaming load validation', () => {
     else {
       const staticBody = await staticResponse.text()
       expect(staticBody).toContain('<html')
+    }
+  })
+
+  test('streaming HTML should interleave __rari_f hydration before </body>', async ({ request }) => {
+    const { body } = await expectStreamingResponse(request, '/suspense-streaming')
+
+    const bodyCloseIdx = body.lastIndexOf('</body>')
+    expect(bodyCloseIdx).toBeGreaterThan(-1)
+
+    const flightQueueIdx = body.indexOf('__rari_f')
+    expect(flightQueueIdx).toBeGreaterThan(-1)
+    expect(flightQueueIdx).toBeLessThan(bodyCloseIdx)
+
+    const push0Idx = body.indexOf(').push(0)')
+    expect(push0Idx).toBeGreaterThan(-1)
+    expect(push0Idx).toBeLessThan(bodyCloseIdx)
+
+    const flightRowIds: number[] = []
+    const pushPattern = /__rari_f[^<]*\.push\("([0-9a-fA-F]+):/g
+    for (const match of body.matchAll(pushPattern)) {
+      const rowId = Number.parseInt(match[1], 16)
+      if (!Number.isNaN(rowId))
+        flightRowIds.push(rowId)
+    }
+
+    expect(flightRowIds.length).toBeGreaterThan(0)
+    for (let i = 1; i < flightRowIds.length; i++) {
+      expect(flightRowIds[i]).toBeGreaterThanOrEqual(flightRowIds[i - 1])
     }
   })
 
@@ -168,10 +196,11 @@ test.describe('RSC soft navigation', () => {
       link.href = '/suspense-streaming'
       link.id = 'temp-streaming-link'
       link.textContent = 'Streaming'
+      link.style.cssText = 'position:fixed;top:0;left:0;z-index:99999'
       document.body.appendChild(link)
     })
 
-    await page.click('#temp-streaming-link')
+    await page.locator('#temp-streaming-link').click()
     await page.waitForURL('**/suspense-streaming', { timeout: 15000 })
     await page.waitForSelector('[data-testid="component-c"]', { timeout: 30000 })
 

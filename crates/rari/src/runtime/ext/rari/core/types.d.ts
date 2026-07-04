@@ -116,6 +116,15 @@ declare global {
         registerComponent: (moduleSpecifier: string, componentId: string, skipGlobalBinding?: boolean) => Promise<unknown>
       }
       cookies?: (req: Request) => unknown
+      renderStreamingDocument?: (options: {
+        capturedElement: unknown
+        headContent: string
+        caughtErrors: unknown[]
+      }) => Promise<void>
+      pumpStreamingCompleteScript?: () => Promise<void>
+      injectStreamError?: (caughtErrors: unknown[]) => Promise<void>
+      pumpFizzChunk?: (text: string) => Promise<boolean>
+      streaming?: { complete?: boolean }
     }
   }
 
