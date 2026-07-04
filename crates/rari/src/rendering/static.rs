@@ -242,6 +242,52 @@ impl RscHtmlRenderer {
             .join("\n")
     }
 
+    fn is_stylesheet_link_tag(tag: &str) -> bool {
+        let lower = tag.to_lowercase();
+        lower.contains("stylesheet") || lower.contains("text/css")
+    }
+
+    fn extract_non_stylesheet_link_tags(template: &str) -> String {
+        #[expect(clippy::unwrap_used, reason = "Hardcoded regex pattern is guaranteed to be valid")]
+        let link_regex = Regex::new(r"(?i)<link\b[^>]*/?>").unwrap();
+
+        link_regex
+            .find_iter(template)
+            .map(|m| m.as_str())
+            .filter(|tag| !Self::is_stylesheet_link_tag(tag))
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    fn inject_head_tags(template: &str, tags: &str) -> String {
+        let tags = tags.trim();
+        if tags.is_empty() {
+            return template.to_string();
+        }
+
+        let tag_block = tags
+            .lines()
+            .filter(|line| !line.trim().is_empty() && !template.contains(line))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        if tag_block.is_empty() {
+            return template.to_string();
+        }
+
+        let tag_block = format!("{tag_block}\n");
+        if let Some(head_end) = template.find("</head>") {
+            let mut result = String::with_capacity(template.len() + tag_block.len());
+            result.push_str(&template[..head_end]);
+            result.push_str(&tag_block);
+            result.push_str(&template[head_end..]);
+            result
+        } else {
+            format!("{tag_block}{template}")
+        }
+    }
+
     pub fn runtime(&self) -> &Arc<JsExecutionRuntime> {
         &self.runtime
     }
@@ -652,11 +698,14 @@ impl RscHtmlRenderer {
             || html_content.trim_start().cow_to_lowercase().starts_with("<html");
 
         if is_complete_document {
-            let script_tags = if is_dev_mode {
-                String::new()
+            let (script_tags, head_link_tags) = if is_dev_mode {
+                (String::new(), String::new())
             } else {
                 let template = self.load_template(cache_template, is_dev_mode).await?;
-                Self::extract_script_tags(&template)
+                (
+                    Self::extract_script_tags(&template),
+                    Self::extract_non_stylesheet_link_tags(&template),
+                )
             };
 
             let mut final_html = html_content;
@@ -668,6 +717,7 @@ impl RscHtmlRenderer {
             }
 
             final_html = Self::inject_css_links(&final_html, css_links);
+            final_html = Self::inject_head_tags(&final_html, &head_link_tags);
 
             let trimmed_lower = final_html.trim_start().cow_to_lowercase();
             if !trimmed_lower.starts_with("<!doctype") {
@@ -729,14 +779,17 @@ impl RscHtmlRenderer {
                 || html_content.trim_start().cow_to_lowercase().starts_with("<html");
 
             if is_complete_document {
-                let script_tags = if is_dev_mode {
-                    String::new()
+                let (script_tags, head_link_tags) = if is_dev_mode {
+                    (String::new(), String::new())
                 } else {
                     let template =
                         self.load_template(cache_template, is_dev_mode).await.map_err(|e| {
                             RariError::internal(format!("Failed to load HTML template: {e}"))
                         })?;
-                    Self::extract_script_tags(&template)
+                    (
+                        Self::extract_script_tags(&template),
+                        Self::extract_non_stylesheet_link_tags(&template),
+                    )
                 };
 
                 let mut final_html = html_content.clone();
@@ -748,6 +801,7 @@ impl RscHtmlRenderer {
                 }
 
                 final_html = Self::inject_css_links(&final_html, &css_links);
+                final_html = Self::inject_head_tags(&final_html, &head_link_tags);
 
                 let trimmed_lower = final_html.trim_start().cow_to_lowercase();
                 if !trimmed_lower.starts_with("<!doctype") {
@@ -1422,6 +1476,37 @@ mod tests {
 
         let html = result.unwrap();
         assert!(html.contains(r#"<div id="root"><p>Content</p></div>"#));
+    }
+
+    #[test]
+    fn test_extract_non_stylesheet_link_tags() {
+        let template = r#"<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="icon" href="/favicon.ico">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preload" href="/font.woff2" as="font" type="font/woff2" crossorigin>
+</head>
+<body></body>
+</html>"#;
+
+        let links = RscHtmlRenderer::extract_non_stylesheet_link_tags(template);
+        assert!(links.contains(r#"<link rel="icon" href="/favicon.ico">"#));
+        assert!(links.contains(r#"<link rel="preconnect" href="https://fonts.googleapis.com">"#));
+        assert!(links.contains(r#"rel="preload""#));
+        assert!(!links.contains(r#"/styles.css"#));
+    }
+
+    #[test]
+    fn test_inject_head_tags_skips_duplicates() {
+        let html = r#"<!DOCTYPE html><html><head><link rel="icon" href="/favicon.ico"></head><body></body></html>"#;
+        let tags = r#"<link rel="icon" href="/favicon.ico">
+<link rel="preconnect" href="https://cdn.example.com">"#;
+
+        let result = RscHtmlRenderer::inject_head_tags(html, tags);
+        assert_eq!(result.matches("favicon.ico").count(), 1);
+        assert!(result.contains("preconnect"));
     }
 
     #[test]

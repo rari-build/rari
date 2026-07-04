@@ -1,6 +1,6 @@
 import type { ComponentInfo, GlobalWithRari } from '../../../packages/rari/src/runtime/shared/types'
 import { describe, expect, it, vi } from 'vite-plus/test'
-import { pathsMatch, requireClientComponent } from '../../../packages/rari/src/runtime/shared/get-client-component'
+import { installRscChunkLoader, pathsMatch, requireClientComponent } from '../../../packages/rari/src/runtime/shared/get-client-component'
 
 describe('pathsMatch', () => {
   it('matches identical normalized paths', () => {
@@ -83,6 +83,31 @@ describe('requireClientComponent lazy load errors', () => {
     expect(() => suspenseModule.default({})).toThrow(componentInfo.loadPromise)
 
     resolveLoad({ default: () => null })
+    ;(globalThis as unknown as GlobalWithRari)['~clientComponents'] = {}
+  })
+
+  it('rejects cached chunk load failures from __rari_chunk_load__', async () => {
+    vi.stubGlobal('window', {})
+
+    const loadError = new Error('chunk load failed')
+    const componentInfo: ComponentInfo = {
+      id: 'BrokenChunk',
+      path: 'src/components/BrokenChunk.tsx',
+      type: 'client',
+      registered: false,
+      loadError,
+      loader: () => Promise.reject(loadError),
+    }
+
+    ;(globalThis as unknown as GlobalWithRari)['~clientComponents'] = {
+      BrokenChunk: componentInfo,
+    }
+
+    installRscChunkLoader()
+
+    await expect((globalThis as any).__rari_chunk_load__('BrokenChunk')).rejects.toBe(loadError)
+
+    vi.unstubAllGlobals()
     ;(globalThis as unknown as GlobalWithRari)['~clientComponents'] = {}
   })
 })

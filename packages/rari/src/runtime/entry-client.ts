@@ -11,6 +11,7 @@ import { createRoot, hydrateRoot } from 'react-dom/client'
 import { AppRouterProvider } from 'virtual:app-router-provider'
 import { createFromReadableStream } from 'virtual:react-flight-client'
 import { getClientComponent } from './shared/get-client-component'
+import { clearServerInjectedErrors, hasFizzMarkers } from './shared/hydration-utils'
 import { preloadModulesFromFlightProtocol } from './shared/preload-modules'
 // eslint-disable-next-line ts/ban-ts-comment
 // @ts-ignore - virtual module resolved by Vite
@@ -44,7 +45,8 @@ function showHydrationFailureMessage(container: Element, message: string): void 
 }
 
 function mountApp(rootElement: HTMLElement, content: React.ReactNode) {
-  if (rootElement.children.length > 0) {
+  if (hasFizzMarkers(rootElement)) {
+    clearServerInjectedErrors(rootElement)
     hydrateRoot(rootElement, content, {
       onRecoverableError(error) {
         if (import.meta.env.DEV)
@@ -53,6 +55,8 @@ function mountApp(rootElement: HTMLElement, content: React.ReactNode) {
     })
   }
   else {
+    if (rootElement.children.length > 0)
+      rootElement.replaceChildren()
     createRoot(rootElement).render(content)
   }
 }
@@ -206,7 +210,7 @@ export async function renderApp(): Promise<void> {
 
   const hasEmbeddedPayload = hasEmbeddedFlightPayload()
   const embeddedPayloadBytes = decodeEmbeddedFlightPayload()
-  const hasServerRenderedContent = rootElement.children.length > 0
+  const hasServerRenderedContent = hasFizzMarkers(rootElement)
   const hasBufferedRows = getWindow()['~rari']?.streaming?.bufferedRows && getWindow()['~rari'].streaming!.bufferedRows!.length > 0
 
   try {

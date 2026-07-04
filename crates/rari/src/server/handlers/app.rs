@@ -520,6 +520,8 @@ fn render_chunked_response(
 
     let encoding = CompressionEncoding::from_accept_encoding(accept_encoding);
     let compressed_stream = compress_stream(byte_stream, encoding);
+    let vary =
+        if encoding.as_header_value().is_some() { "Accept, Accept-Encoding" } else { "Accept" };
 
     let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
     let cache_control = state.config.get_cache_control_for_route(&context.pathname);
@@ -529,7 +531,7 @@ fn render_chunked_response(
         .header("transfer-encoding", "chunked")
         .header("x-render-mode", "streaming")
         .header("cache-control", cache_control)
-        .header("vary", "Accept")
+        .header("vary", vary)
         .header("x-content-type-options", "nosniff");
 
     match content_type {
@@ -550,9 +552,7 @@ fn render_chunked_response(
     }
 
     if let Some(encoding_header) = encoding.as_header_value() {
-        response_builder = response_builder
-            .header("content-encoding", encoding_header)
-            .header("vary", "Accept, Accept-Encoding");
+        response_builder = response_builder.header("content-encoding", encoding_header);
     }
 
     let body = Body::from_stream(compressed_stream);

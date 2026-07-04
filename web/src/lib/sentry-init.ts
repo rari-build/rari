@@ -11,7 +11,7 @@ if (typeof window !== 'undefined') {
           dsn,
           sendDefaultPii: false,
           tracesSampleRate: 0.1,
-          environment: 'production',
+          environment: import.meta.env.VITE_SENTRY_ENV ?? import.meta.env.MODE,
           integrations: [
             Sentry.browserTracingIntegration(),
             Sentry.replayIntegration({

@@ -249,23 +249,6 @@ function findComponentInfo(id: string, globalAccessor: GlobalAccessor): Componen
   if (pathMatch)
     return pathMatch
 
-  const matchingKey = Object.keys(clientComponents).find(key =>
-    key === normalizedId
-    || key.startsWith(`${baseId}#`)
-    || key.endsWith(`/${baseId}`)
-    || key.includes(baseId),
-  )
-
-  if (matchingKey) {
-    const componentInfo = clientComponents[matchingKey] as LazyComponentInfo
-    if (componentInfo) {
-      return {
-        info: componentInfo,
-        exportName: resolveExportName(componentInfo, exportName),
-      }
-    }
-  }
-
   return null
 }
 
@@ -274,7 +257,7 @@ function startComponentLoad(componentInfo: LazyComponentInfo): Promise<any> | un
     return componentInfo.loadPromise
 
   if (componentInfo.loadError)
-    return undefined
+    return Promise.reject(componentInfo.loadError)
 
   if (!componentInfo.loadPromise)
     return executeLoader(componentInfo)
