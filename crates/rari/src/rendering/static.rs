@@ -1013,7 +1013,7 @@ impl RscHtmlRenderer {
                     Ok(String::new())
                 }
 
-                RscElement::Suspense { fallback_ref, children_ref, boundary_id, props: _ } => {
+                RscElement::Suspense { fallback_ref, children_ref, boundary_id: _, props: _ } => {
                     if let Ok(row_id) = Self::parse_reference(children_ref) {
                         let html = self.render_row(row_id, row_map, row_cache).await?;
                         if !html.is_empty() {
@@ -1023,11 +1023,7 @@ impl RscHtmlRenderer {
 
                     if let Ok(row_id) = Self::parse_reference(fallback_ref) {
                         let html = self.render_row(row_id, row_map, row_cache).await?;
-                        return Ok(format!(
-                            r#"<div data-boundary-id="{}" class="rari-suspense-boundary">{}</div>"#,
-                            Self::escape_html_attribute(boundary_id),
-                            html
-                        ));
+                        return Ok(format!(r#"<div class="rari-suspense-boundary">{html}</div>"#));
                     }
 
                     Ok(String::new())
@@ -1933,10 +1929,7 @@ if (typeof window !== 'undefined') {{
             };
 
             let html = format!(
-                "<!--$?--><template id=\"{}\"></template><div data-boundary-id=\"{}\">{}</div><!--/$-->",
-                react_boundary_id,
-                RscHtmlRenderer::escape_html_attribute(rari_boundary_id),
-                content_html
+                "<!--$?--><template id=\"{react_boundary_id}\"></template><div>{content_html}</div><!--/$-->",
             );
 
             Ok(html)

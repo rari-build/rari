@@ -550,7 +550,7 @@ async function getData(id) {
     expect(result).not.toBeNull()
     expect(result).not.toContain('import { cache as $$reactCache__ } from \'react\'')
     expect(result).toContain('import { $$cache__, encodeBoundArgs } from \'@rari/use-cache/runtime/cache-wrapper\'')
-    expect(result).toContain('import { registerServerReference } from \'rari/runtime/react-server-dom-shim\'')
+    expect(result).toContain('import { registerServerReference } from \'react-server-dom-rari/server\'')
     expect(result).not.toContain('$$reactCache__')
     expect(result).toContain('$$cache__')
     expect(result).toContain('registerServerReference')

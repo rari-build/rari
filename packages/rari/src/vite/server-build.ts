@@ -13,10 +13,10 @@ import {
   FILE_PROTOCOL_REGEX,
   TSX_EXT_REGEX,
 } from '../shared/regex-constants'
-import { resolveAlias } from './alias-resolver'
+import { resolveAlias } from '../shared/utils/alias-resolver'
+import { resolveIndexFile, resolveWithExtensions } from '../shared/utils/file-resolver'
 import { getReadableComponentId, getComponentId as getSharedComponentId, getProjectRelativePath as getSharedProjectRelativePath, hashString as sharedHashString } from './component-ids'
 import { getDirectives, hasDefaultExport, hasTopLevelUseClientDirective, hasTopLevelUseServerDirective } from './directives'
-import { resolveIndexFile, resolveWithExtensions } from './file-resolver'
 import { getUseCacheTransform } from './use-cache-loader'
 
 const HTML_IMPORT_REGEX = /import\s*\(\s*["']([^"']+)["']\s*\)|import\s+["']([^"']+)["']/g
@@ -28,6 +28,7 @@ const PROXY_FILE_REGEX = /^proxy\.(?:tsx?|jsx?|mts|mjs)$/
 const COMPONENTS_PATH_REGEX = /\/components\/(\w+)(?:\.tsx?|\.jsx?)?$/
 const COMPONENTS_PATH_ALT_REGEX = /[/\\]components[/\\](\w+)(?:\.tsx?|\.jsx?)?$/
 const SPECIAL_FILE_REGEX = /^(?:robots|sitemap|feed)\.(?:tsx?|jsx?)$/
+const RSC_REFERENCES_IMPORT = 'react-server-dom-rari/server'
 const NODE_PROTOCOL_REGEX = /^node:/
 const NODE_BUILTINS = new Set([
   'fs',
@@ -202,10 +203,6 @@ export class ServerComponentBuilder {
     return new Set(this.htmlOnlyImports)
   }
 
-  private hashString(value: string, length = 8): string {
-    return sharedHashString(value, length)
-  }
-
   private async writeComponentCssAsset(componentId: string, cssModules: string[]): Promise<string[]> {
     if (cssModules.length === 0)
       return []
@@ -214,7 +211,7 @@ export class ServerComponentBuilder {
     await fs.promises.mkdir(assetsDir, { recursive: true })
 
     const cssContent = `${cssModules.join('\n')}\n`
-    const cssFileName = `${this.hashString(componentId + cssContent, 12)}.css`
+    const cssFileName = `${sharedHashString(componentId + cssContent, 12)}.css`
     const cssPath = path.join(assetsDir, cssFileName)
     await fs.promises.writeFile(cssPath, cssContent, 'utf-8')
 
@@ -225,7 +222,7 @@ export class ServerComponentBuilder {
     return this.getComponentId(path.join(this.projectRoot, 'src', 'app', filePath))
   }
 
-  private getLegacyComponentReferenceId(filePath: string): string {
+  private getComponentReferenceId(filePath: string): string {
     return this.getReadableComponentId(this.getProjectRelativePath(filePath))
   }
 
@@ -660,7 +657,7 @@ const ${importName} = (props) => {
           if (!isClient)
             continue
 
-          const componentId = this.getLegacyComponentReferenceId(actualPath)
+          const componentId = this.getComponentReferenceId(actualPath)
 
           const replacement = `// Component reference: ${componentName}
 const ${importName} = (props) => {
@@ -822,25 +819,7 @@ const ${importName} = (props) => {
             const componentId = (clientComponentRefs.get(filePath) || (relativePath.startsWith('..') ? filePath : relativePath)).replace(BACKSLASH_REGEX, '/')
 
             return {
-              code: `
-function registerClientReference(clientReference, id, exportName) {
-  const key = id + '#' + exportName;
-  const clientProxy = {};
-  Object.defineProperty(clientProxy, '$$typeof', {
-    value: Symbol.for('react.client.reference'),
-    enumerable: false
-  });
-  Object.defineProperty(clientProxy, '$$id', {
-    value: key,
-    enumerable: false
-  });
-  Object.defineProperty(clientProxy, '$$async', {
-    value: false,
-    enumerable: false
-  });
-  return clientProxy;
-}
-
+              code: `import { registerClientReference } from ${JSON.stringify(RSC_REFERENCES_IMPORT)};
 export default registerClientReference(null, ${JSON.stringify(componentId)}, "default");
 `,
               moduleType: 'js',
@@ -1058,7 +1037,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
 
           const externalPackageMappings: Record<string, string | null> = {
             'rari/runtime/cache-wrapper': 'node_modules/rari/dist/runtime/cache-wrapper.mjs',
-            'react-server-dom-rari/server': 'node_modules/rari/dist/runtime/react-server-dom-shim.mjs',
+            'react-server-dom-rari/server': 'node_modules/rari/dist/runtime/rsc-references.mjs',
           }
 
           if (source in externalPackageMappings) {
@@ -1742,40 +1721,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     }
 
     if (hasClientComponents) {
-      const functionDefinition = `
-function registerClientReference(clientReference, id, exportName) {
-  const key = id + '#' + exportName;
-
-  const clientProxy = {};
-
-  Object.defineProperty(clientProxy, '$$typeof', {
-    value: Symbol.for('react.client.reference'),
-    enumerable: false
-  });
-
-  Object.defineProperty(clientProxy, '$$id', {
-    value: key,
-    enumerable: false
-  });
-
-  Object.defineProperty(clientProxy, '$$async', {
-    value: false,
-    enumerable: false
-  });
-
-  try {
-    if (typeof globalThis.registerClientComponent === 'function') {
-      globalThis.registerClientComponent(key, id, clientProxy);
-    }
-  } catch (error) {
-    console.error('[rari] Build: Failed to register client reference:', error);
-  }
-
-  return clientProxy;
-}
-
-`
-      transformedCode = functionDefinition + transformedCode
+      transformedCode = `import { registerClientReference } from ${JSON.stringify(RSC_REFERENCES_IMPORT)};\n\n${transformedCode}`
     }
 
     for (const { original, replacement } of replacements)

@@ -19,9 +19,9 @@ import {
   TSX_EXT_REGEX,
   WINDOWS_PATH_REGEX,
 } from '../shared/regex-constants'
+import { resolveIndexFile, resolveWithExtensions } from '../shared/utils/file-resolver'
 import { getComponentId } from './component-ids'
 import { getDirectives, hasDefaultExport, hasTopLevelUseClientDirective, hasTopLevelUseServerDirective } from './directives'
-import { resolveIndexFile, resolveWithExtensions } from './file-resolver'
 import { HMRCoordinator } from './hmr-coordinator'
 import { scanForImageUsage } from './image-scanner'
 import { createServerBuildPlugin, RARI_CSS_MODULES_PATTERN, scanDirectory, ServerComponentBuilder } from './server-build'
@@ -218,8 +218,8 @@ async function loadEntryClient(imports: string, registrations: string): Promise<
     .replace('/*! @preserve CLIENT_COMPONENT_REGISTRATIONS_PLACEHOLDER */', registrations)
 }
 
-async function loadReactServerDomShim(): Promise<string> {
-  return loadRuntimeFile('react-server-dom-shim.mjs')
+async function loadRscReferences(): Promise<string> {
+  return loadRuntimeFile('rsc-references.mjs')
 }
 
 async function writeImageConfig(projectRoot: string, options: RariOptions): Promise<void> {
@@ -1077,6 +1077,7 @@ ${clientTransformedCode}`
           continue
 
         const importedDefault = importMatch[1]
+        const importedNamed = importMatch[3]
         const importPath = importMatch[4]
         const resolvedImportPath = resolveImportToFilePath(importPath, id)
 
@@ -1097,16 +1098,17 @@ ${clientTransformedCode}`
         ) {
           if (!importingFileIsClient) {
             const originalImport = line
-            const componentName = importedDefault || 'default'
+            const bindingName = importedDefault || importedNamed?.split(',')[0]?.trim() || 'default'
+            const exportName = importedDefault ? 'default' : bindingName
 
             const clientRefReplacement = `
 import { registerClientReference } from "react-server-dom-rari/server";
-const ${componentName} = registerClientReference(
+const ${bindingName} = registerClientReference(
   function() {
-    throw new Error("Attempted to call ${componentName} from the server but it's on the client. It can only be rendered as a Component or passed to props of a Client Component.");
+    throw new Error("Attempted to call ${bindingName} from the server but it's on the client. It can only be rendered as a Component or passed to props of a Client Component.");
   },
   ${JSON.stringify(resolvedImportPath)},
-  ${JSON.stringify(importedDefault || 'default')}
+  ${JSON.stringify(exportName)}
 );`
 
             modifiedCode = modifiedCode.replace(
@@ -1841,7 +1843,8 @@ const ${componentName} = registerClientReference(
             }
           }
 
-          const componentName = hasNamedExport ? namedExportName : path.basename(componentPath, path.extname(componentPath))
+          const exportName = hasNamedExport ? namedExportName : 'default'
+          const displayName = hasNamedExport ? namedExportName : path.basename(componentPath, path.extname(componentPath))
 
           const normalizedPath = registrationPath.replace(BACKSLASH_REGEX, '/')
           const importPath = normalizedPath.startsWith('/') || WINDOWS_PATH_REGEX.test(normalizedPath)
@@ -1852,7 +1855,8 @@ const ${componentName} = registerClientReference(
           return `  "${registrationPath}": {
     id: "${componentId}",
     path: "${registrationPath}",
-    exportName: "${componentName}",
+    exportName: "${exportName}",
+    displayName: "${displayName}",
     type: "client",
     loader: () => ${importStatement},
     component: null,
@@ -1905,7 +1909,7 @@ for (const [path, config] of Object.entries(lazyComponentRegistry)) {
       }
 
       if (id === 'react-server-dom-rari/server')
-        return await loadReactServerDomShim()
+        return await loadRscReferences()
 
       if (id === 'virtual:app-router-provider.tsx') {
         const runtimeFile = resolveRuntimeDistFile('AppRouterProvider.mjs')

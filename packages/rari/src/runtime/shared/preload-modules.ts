@@ -1,4 +1,4 @@
-import { getClientComponentAsync } from './get-client-component'
+import { getClientComponent } from './get-client-component'
 
 export async function preloadModulesFromFlightProtocol(
   flightProtocol: string,
@@ -49,7 +49,7 @@ export async function preloadModulesFromFlightProtocol(
   if (moduleIds.size > 0) {
     await Promise.all(Array.from(moduleIds, async (id) => {
       try {
-        const component = await getClientComponentAsync(id)
+        const component = await getClientComponent(id)
 
         if (!component) {
           console.warn(`[rari] Failed to preload component: ${id}`)

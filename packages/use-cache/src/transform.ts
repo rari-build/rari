@@ -85,7 +85,7 @@ export function transformUseCacheModule(
       imports.push(`import { $$cache__, encodeBoundArgs } from '@rari/use-cache/runtime/cache-wrapper'`)
 
     if (result.needsRegisterRef)
-      imports.push(`import { registerServerReference } from 'rari/runtime/react-server-dom-shim'`)
+      imports.push(`import { registerServerReference } from 'react-server-dom-rari/server'`)
 
     const prologueLines = extractPrologueLines(result.code)
     const importBlock = imports.length ? `${imports.join(';\n')};\n` : ''

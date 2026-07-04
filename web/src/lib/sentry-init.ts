@@ -4,7 +4,7 @@ if (typeof window !== 'undefined') {
   const EXTENSION_PATTERN = /chrome-extension:\/\/|moz-extension:\/\/|safari-extension:|edge-extension:|extensions::/
   const SENTRY_SDK_PATTERN = /@sentry|node_modules\/@sentry/
 
-  if (dsn) {
+  if (dsn && !import.meta.env.DEV) {
     import('@sentry/react').then((Sentry) => {
       try {
         Sentry.init({

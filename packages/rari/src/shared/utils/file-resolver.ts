@@ -71,3 +71,13 @@ export function resolveIndexFile(
 
   return null
 }
+
+const DEFAULT_RESOLVE_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx', '.mjs']
+
+export function resolveWithExtensionsAndIndex(
+  resolvedPath: string,
+  extensions: string[] = DEFAULT_RESOLVE_EXTENSIONS,
+): string | null {
+  return resolveWithExtensions(resolvedPath, extensions)
+    ?? resolveIndexFile(resolvedPath, extensions)
+}

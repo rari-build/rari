@@ -3,7 +3,6 @@
 import type { GlobalWithRari } from './shared/types'
 import * as React from 'react'
 import { useEffect, useRef, useState } from 'react'
-// @ts-expect-error - virtual module resolved by Vite
 import { createFromReadableStream } from 'virtual:react-flight-client'
 import { PATH_TRAILING_SLASH_REGEX } from '../shared/regex-constants'
 import { preloadModulesFromFlightProtocol } from './shared/preload-modules'
