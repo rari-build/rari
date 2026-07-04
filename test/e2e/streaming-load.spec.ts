@@ -1,0 +1,183 @@
+import type { APIRequestContext } from '@playwright/test'
+import { expect, test } from '@playwright/test'
+import { gotoWithRetry } from './shared/streaming-helpers'
+
+const STREAMING_ROUTES = [
+  '/suspense-streaming',
+  '/suspense-streaming-nested',
+  '/suspense-streaming-parallel',
+] as const
+
+const STATIC_ROUTE = '/about'
+
+async function expectStreamingResponse(request: APIRequestContext, path: string) {
+  const response = await request.get(path)
+  expect(response.status()).toBe(200)
+  expect(response.headers()['x-render-mode']).toBe('streaming')
+  expect(response.headers()['transfer-encoding']).toBe('chunked')
+
+  const body = await response.text()
+  expect(body.length).toBeGreaterThan(100)
+  expect(body).toContain('<html')
+
+  return { response, body }
+}
+
+test.describe('Streaming load validation', () => {
+  test.setTimeout(120000)
+
+  test('streaming routes should use the Fizz path', async ({ request }) => {
+    for (const path of STREAMING_ROUTES) {
+      await expectStreamingResponse(request, path)
+    }
+
+    const staticResponse = await request.get(STATIC_ROUTE)
+    expect(staticResponse.status()).toBe(200)
+    const staticRenderMode = staticResponse.headers()['x-render-mode']
+    if (staticRenderMode) {
+      expect(['static', 'synchronous']).toContain(staticRenderMode)
+    }
+    else {
+      const staticBody = await staticResponse.text()
+      expect(staticBody).toContain('<html')
+    }
+  })
+
+  test('should serve concurrent streaming requests without errors', async ({ request }) => {
+    const concurrency = 12
+    const path = '/suspense-streaming'
+
+    const results = await Promise.all(
+      Array.from({ length: concurrency }, () => expectStreamingResponse(request, path)),
+    )
+
+    expect(results).toHaveLength(concurrency)
+
+    const uniqueBodies = new Set(results.map(result => result.body))
+    expect(uniqueBodies.size).toBeGreaterThan(0)
+  })
+
+  test('should recover after a mid-stream client abort', async ({ page, request }) => {
+    const path = '/suspense-streaming'
+
+    const navigation = page.goto(path, { waitUntil: 'commit', timeout: 30000 }).catch(() => undefined)
+    await page.waitForTimeout(150)
+    await page.evaluate(() => window.stop()).catch(() => undefined)
+    await navigation
+
+    const recovery = await expectStreamingResponse(request, path)
+    expect(recovery.body).toContain('Suspense Streaming Test')
+  })
+
+  test('should recover after aborting via route interception', async ({ page, request }) => {
+    const path = '/suspense-streaming'
+    let intercepted = false
+
+    await page.route(`**${path}`, async (route) => {
+      intercepted = true
+      await route.abort('connectionfailed')
+    })
+
+    await page.goto(path, { waitUntil: 'commit', timeout: 10000 }).catch(() => undefined)
+    expect(intercepted).toBe(true)
+
+    await page.unroute(`**${path}`)
+
+    const recovery = await expectStreamingResponse(request, path)
+    expect(recovery.body).toContain('component-a')
+  })
+
+  test('streaming perf should stay within bounds on cold requests', async ({ request }) => {
+    const samples = 5
+    const durations: number[] = []
+
+    for (let i = 0; i < samples; i++) {
+      const start = Date.now()
+      const response = await request.get(`/suspense-streaming?cold=${i}`)
+      const elapsed = Date.now() - start
+
+      expect(response.status()).toBe(200)
+      expect(response.headers()['x-render-mode']).toBe('streaming')
+
+      const body = await response.text()
+      expect(body).toContain('component-c')
+
+      durations.push(elapsed)
+    }
+
+    const sorted = [...durations].sort((a, b) => a - b)
+    const median = sorted[Math.floor(sorted.length / 2)]
+
+    expect(median).toBeLessThan(20000)
+    expect(Math.max(...durations)).toBeLessThan(60000)
+  })
+
+  test('streaming page should render progressively under throttled network', async ({ page, browserName }) => {
+    test.skip(browserName !== 'chromium', 'CDP network emulation is Chromium-only')
+
+    const client = await page.context().newCDPSession(page)
+    await client.send('Network.emulateNetworkConditions', {
+      offline: false,
+      downloadThroughput: 256 * 1024 / 8,
+      uploadThroughput: 256 * 1024 / 8,
+      latency: 300,
+    })
+
+    const firstVisible = Date.now()
+    await gotoWithRetry(page, '/suspense-streaming')
+
+    await page.waitForSelector('[data-testid="component-a"]', { timeout: 20000 })
+    const componentATime = Date.now() - firstVisible
+
+    await page.waitForSelector('[data-testid="component-c"]', { timeout: 30000 })
+    const componentCTime = Date.now() - firstVisible
+
+    expect(componentATime).toBeLessThan(componentCTime)
+    expect(componentCTime).toBeLessThan(35000)
+
+    await client.send('Network.emulateNetworkConditions', {
+      offline: false,
+      downloadThroughput: -1,
+      uploadThroughput: -1,
+      latency: 0,
+    })
+  })
+})
+
+test.describe('RSC soft navigation', () => {
+  test('should stream RSC flight on client navigation to a loading route', async ({ page }) => {
+    await gotoWithRetry(page, '/')
+
+    const rscResponses: Array<{ status: number, renderMode?: string, chunked?: string }> = []
+
+    page.on('response', (response) => {
+      const contentType = response.headers()['content-type'] || ''
+      if (!contentType.includes('text/x-component')) {
+        return
+      }
+
+      rscResponses.push({
+        status: response.status(),
+        renderMode: response.headers()['x-render-mode'],
+        chunked: response.headers()['transfer-encoding'],
+      })
+    })
+
+    await page.evaluate(() => {
+      const link = document.createElement('a')
+      link.href = '/suspense-streaming'
+      link.id = 'temp-streaming-link'
+      link.textContent = 'Streaming'
+      document.body.appendChild(link)
+    })
+
+    await page.click('#temp-streaming-link')
+    await page.waitForURL('**/suspense-streaming', { timeout: 15000 })
+    await page.waitForSelector('[data-testid="component-c"]', { timeout: 30000 })
+
+    const streamingRsc = rscResponses.find(response => response.renderMode === 'streaming')
+    expect(streamingRsc).toBeDefined()
+    expect(streamingRsc?.status).toBe(200)
+    expect(streamingRsc?.chunked).toBe('chunked')
+  })
+})

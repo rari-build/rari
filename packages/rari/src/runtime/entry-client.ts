@@ -16,24 +16,6 @@ import { preloadModulesFromFlightProtocol } from './shared/preload-modules'
 // @ts-ignore - virtual module resolved by Vite
 import 'virtual:rsc-integration.ts'
 
-function hasFizzMarkers(root: Element): boolean {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_COMMENT)
-  while (walker.nextNode()) {
-    const comment = walker.currentNode as Comment
-    if (comment.data === '$' || comment.data === '$?' || comment.data === '/$')
-      return true
-  }
-
-  if (root.querySelector('[data-reactroot]'))
-    return true
-
-  const scripts = root.querySelectorAll('template[data-rri]')
-  if (scripts.length > 0)
-    return true
-
-  return false
-}
-
 function getRariGlobal(): GlobalWithRari['~rari'] {
   return (globalThis as unknown as GlobalWithRari)['~rari']
 }
@@ -59,6 +41,20 @@ function showHydrationFailureMessage(container: Element, message: string): void 
   messageEl.textContent = 'Failed to load page: '
   banner.append(messageEl, document.createTextNode(message))
   container.prepend(banner)
+}
+
+function mountApp(rootElement: HTMLElement, content: React.ReactNode) {
+  if (rootElement.children.length > 0) {
+    hydrateRoot(rootElement, content, {
+      onRecoverableError(error) {
+        if (import.meta.env.DEV)
+          console.warn('[rari] Hydration mismatch:', error)
+      },
+    })
+  }
+  else {
+    createRoot(rootElement).render(content)
+  }
 }
 
 if (typeof getRariGlobal() === 'undefined')
@@ -89,6 +85,98 @@ if (typeof getGlobalThis()['~clientComponentPaths'] === 'undefined')
 
 /*! @preserve CLIENT_COMPONENT_REGISTRATIONS_PLACEHOLDER */
 
+function getFlightPushQueue(): ReadonlyArray<0 | string | readonly [2, string]> | undefined {
+  return (globalThis as unknown as { __rari_f?: ReadonlyArray<0 | string | readonly [2, string]> }).__rari_f
+}
+
+function hasEmbeddedFlightPayload(): boolean {
+  const queue = getFlightPushQueue()
+  return !!queue?.some(item => item !== 0)
+}
+
+function decodeEmbeddedFlightPayload(): Uint8Array | null {
+  const queue = getFlightPushQueue()
+  if (!queue?.length)
+    return null
+
+  let text = ''
+  let binaryB64: string | null = null
+
+  for (const item of queue) {
+    if (item === 0)
+      continue
+    if (typeof item === 'string')
+      text += item
+    else if (Array.isArray(item) && item[0] === 2 && typeof item[1] === 'string')
+      binaryB64 = item[1]
+  }
+
+  if (binaryB64)
+    return Uint8Array.from(atob(binaryB64), char => char.charCodeAt(0))
+  if (text)
+    return new TextEncoder().encode(text)
+
+  return null
+}
+
+async function createElementFromFlightBytes(
+  payloadBytes: Uint8Array,
+  options: { streaming: boolean },
+): Promise<React.ReactNode> {
+  const payloadText = new TextDecoder().decode(payloadBytes)
+  await preloadModulesFromFlightProtocol(payloadText)
+
+  const hasBufferedRows = getWindow()['~rari']?.streaming?.bufferedRows && getWindow()['~rari'].streaming!.bufferedRows!.length > 0
+  const isStreaming = options.streaming && (
+    getWindow()['~rari']?.streaming?.complete === undefined || hasBufferedRows
+  )
+
+  if (isStreaming) {
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(payloadBytes)
+
+        const handleStreamUpdate = (event: Event) => {
+          const customEvent = event as CustomEvent
+          if (customEvent.detail?.rscRow)
+            controller.enqueue(new TextEncoder().encode(`\n${customEvent.detail.rscRow}`))
+        }
+
+        const handleStreamComplete = () => {
+          controller.close()
+          window.removeEventListener('rari:html-stream-row', handleStreamUpdate)
+          window.removeEventListener('rari:stream-complete', handleStreamComplete)
+        }
+
+        window.addEventListener('rari:html-stream-row', handleStreamUpdate)
+        window.addEventListener('rari:stream-complete', handleStreamComplete)
+
+        if (getWindow()['~rari']?.streaming?.bufferedRows) {
+          const initialRows = [...getWindow()['~rari'].streaming!.bufferedRows!]
+          for (const row of initialRows)
+            controller.enqueue(new TextEncoder().encode(`\n${row}`))
+
+          getWindow()['~rari'].streaming!.bufferedRows = []
+        }
+
+        if (getWindow()['~rari']?.streaming?.complete)
+          handleStreamComplete()
+      },
+    })
+
+    return createFromReadableStream(stream)
+  }
+
+  const stream = new ReadableStream({
+    start(controller) {
+      controller.enqueue(payloadBytes)
+      controller.close()
+    },
+  })
+
+  return createFromReadableStream(stream)
+}
+
 export async function renderApp(): Promise<void> {
   const rootElement = document.getElementById('root')
   if (!rootElement) {
@@ -96,48 +184,21 @@ export async function renderApp(): Promise<void> {
     return
   }
 
-  const payloadScript = document.getElementById('__RARI_RSC_PAYLOAD__')
+  const hasEmbeddedPayload = hasEmbeddedFlightPayload()
+  const embeddedPayloadBytes = decodeEmbeddedFlightPayload()
   const hasServerRenderedContent = rootElement.children.length > 0
   const hasBufferedRows = getWindow()['~rari']?.streaming?.bufferedRows && getWindow()['~rari'].streaming!.bufferedRows!.length > 0
 
   try {
     let element
 
-    const needsInitialFetch = !payloadScript && !hasBufferedRows && !hasServerRenderedContent
+    const needsInitialFetch = !hasEmbeddedPayload && !hasBufferedRows && !hasServerRenderedContent
 
-    if (hasServerRenderedContent && payloadScript) {
+    if (hasServerRenderedContent && hasEmbeddedPayload && embeddedPayloadBytes) {
       let hydrationErrorMessage = 'Could not load interactive page data.'
 
       try {
-        const isBase64 = payloadScript.getAttribute('data-encoding') === 'base64'
-
-        if (isBase64) {
-          const b64 = payloadScript.textContent!
-          const buffer = Uint8Array.from(atob(b64), char => char.charCodeAt(0))
-
-          const textForPreload = new TextDecoder().decode(buffer)
-          await preloadModulesFromFlightProtocol(textForPreload)
-
-          const stream = new ReadableStream({
-            start(controller) {
-              controller.enqueue(buffer)
-              controller.close()
-            },
-          })
-          element = await createFromReadableStream(stream)
-        }
-        else {
-          const payloadText = payloadScript.textContent!
-          await preloadModulesFromFlightProtocol(payloadText)
-
-          const stream = new ReadableStream({
-            start(controller) {
-              controller.enqueue(new TextEncoder().encode(payloadText))
-              controller.close()
-            },
-          })
-          element = await createFromReadableStream(stream)
-        }
+        element = await createElementFromFlightBytes(embeddedPayloadBytes, { streaming: false })
       }
       catch (parseErr) {
         hydrationErrorMessage = parseErr instanceof Error
@@ -193,19 +254,7 @@ export async function renderApp(): Promise<void> {
           { initialPathname: window.location.pathname, children: hydrationContent },
         )
 
-        if (hasFizzMarkers(rootElement)) {
-          hydrateRoot(rootElement, hydrationContent, {
-            onRecoverableError(error) {
-              if (import.meta.env.DEV) {
-                console.warn('[rari] Hydration mismatch:', error)
-              }
-            },
-          })
-        }
-        else {
-          rootElement.replaceChildren()
-          createRoot(rootElement).render(hydrationContent)
-        }
+        mountApp(rootElement, hydrationContent)
       }
       else {
         showHydrationFailureMessage(
@@ -249,61 +298,9 @@ export async function renderApp(): Promise<void> {
         element = null
       }
     }
-    else if (payloadScript && payloadScript.textContent) {
+    else if (hasEmbeddedPayload && embeddedPayloadBytes) {
       try {
-        const payloadJson = payloadScript.textContent
-
-        await preloadModulesFromFlightProtocol(payloadJson)
-
-        const hasBufferedRows = getWindow()['~rari']?.streaming?.bufferedRows && getWindow()['~rari'].streaming!.bufferedRows!.length > 0
-        const isStreaming = getWindow()['~rari']?.streaming?.complete === undefined || hasBufferedRows
-
-        if (isStreaming) {
-          const stream = new ReadableStream({
-            start(controller) {
-              controller.enqueue(new TextEncoder().encode(payloadJson))
-
-              const handleStreamUpdate = (event: Event) => {
-                const customEvent = event as CustomEvent
-                if (customEvent.detail?.rscRow)
-                  controller.enqueue(new TextEncoder().encode(`\n${customEvent.detail.rscRow}`))
-              }
-
-              const handleStreamComplete = () => {
-                controller.close()
-                window.removeEventListener('rari:html-stream-row', handleStreamUpdate)
-                window.removeEventListener('rari:stream-complete', handleStreamComplete)
-              }
-
-              window.addEventListener('rari:html-stream-row', handleStreamUpdate)
-              window.addEventListener('rari:stream-complete', handleStreamComplete)
-
-              if (getWindow()['~rari']?.streaming?.bufferedRows) {
-                const initialRows = [...getWindow()['~rari'].streaming!.bufferedRows!]
-                for (const row of initialRows) {
-                  controller.enqueue(new TextEncoder().encode(`\n${row}`))
-                }
-
-                getWindow()['~rari'].streaming!.bufferedRows = []
-              }
-
-              if (getWindow()['~rari']?.streaming?.complete)
-                handleStreamComplete()
-            },
-          })
-
-          element = await createFromReadableStream(stream)
-        }
-        else {
-          const stream = new ReadableStream({
-            start(controller) {
-              controller.enqueue(new TextEncoder().encode(payloadJson))
-              controller.close()
-            },
-          })
-
-          element = await createFromReadableStream(stream)
-        }
+        element = await createElementFromFlightBytes(embeddedPayloadBytes, { streaming: true })
       }
       catch (e) {
         console.error('[rari] Failed to parse embedded RSC payload:', e)
@@ -372,20 +369,7 @@ export async function renderApp(): Promise<void> {
       { initialPathname: window.location.pathname, children: content },
     )
 
-    if (hasServerRenderedContent && hasFizzMarkers(rootElement)) {
-      hydrateRoot(rootElement, content, {
-        onRecoverableError(error) {
-          if (import.meta.env.DEV)
-            console.warn('[rari] Hydration mismatch:', error)
-        },
-      })
-    }
-    else {
-      if (hasServerRenderedContent)
-        rootElement.replaceChildren()
-      const root = createRoot(rootElement)
-      root.render(content)
-    }
+    mountApp(rootElement, content)
   }
   catch (error) {
     console.error('[rari] Error rendering app:', error)

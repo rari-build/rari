@@ -1,8 +1,9 @@
 #![expect(clippy::missing_errors_doc)]
 
-use std::{env, sync::Arc};
+use std::{env, fmt::Write, sync::Arc};
 
 use base64::{Engine, engine::general_purpose::STANDARD};
+use bytes::Bytes;
 use cow_utils::CowUtils;
 use rari_error::RariError;
 use serde_json::Value;
@@ -13,18 +14,17 @@ use tokio::{
 
 use super::{
     error_messages,
-    types::{LayoutRenderContext, RenderResult},
+    types::{ChunkedContentType, LayoutRenderContext, RenderResult},
     utils,
 };
 use crate::{
-    RscHtmlRenderer, RscStreamChunk,
+    RscHtmlRenderer,
     rendering::{
         base::RscRenderer,
         layout::{
             LayoutInfo, RouteComposer,
             route_composer::{ErrorBoundaryInfo, TemplateInfo},
         },
-        streaming::{RscChunkType, RscStream},
     },
     server::{
         cache::handler::{
@@ -59,16 +59,99 @@ const FIZZ_STREAM_ERROR_INJECTION: &str = r"
 ";
 
 const FIZZ_CHUNK_PUMP_HELPER: &str = r"
+                        let rariStreamDisconnected = false;
                         async function rariPumpFizzChunk(text) {
-                            if (!text) return;
+                            if (!text || rariStreamDisconnected) return false;
                             try {
                                 await Deno.core.ops.op_fizz_chunk(text);
+                                return true;
                             } catch (e) {
-                                console.warn('[rari] Fizz stream consumer disconnected');
+                                if (String(e?.message || e).includes('disconnected')) {
+                                    rariStreamDisconnected = true;
+                                    return false;
+                                }
                                 throw e;
                             }
                         }
 ";
+
+const FIZZ_PAYLOAD_EMBED_HELPER: &str = r#"
+                        let rariFizzCloseHeld = '';
+
+                        async function rariPumpFizzHtml(text) {
+                            if (!text) return true;
+                            let combined = rariFizzCloseHeld + text;
+                            rariFizzCloseHeld = '';
+                            const lower = combined.toLowerCase();
+                            let closeIdx = -1;
+                            for (const marker of ['</body>', '</html>']) {
+                                const idx = lower.indexOf(marker);
+                                if (idx !== -1 && (closeIdx === -1 || idx < closeIdx)) closeIdx = idx;
+                            }
+                            if (closeIdx !== -1) {
+                                rariFizzCloseHeld = combined.slice(closeIdx);
+                                combined = combined.slice(0, closeIdx);
+                            }
+                            if (!combined) return true;
+                            return await rariPumpFizzChunk(combined);
+                        }
+
+                        async function rariReleaseFizzClose() {
+                            if (!rariFizzCloseHeld) return true;
+                            const held = rariFizzCloseHeld;
+                            rariFizzCloseHeld = '';
+                            return await rariPumpFizzChunk(held);
+                        }
+
+                        async function rariPumpFlightScriptPush(payload) {
+                            const escaped = JSON.stringify(payload).split('</').join('<\\/');
+                            return await rariPumpFizzChunk(
+                                '<script>(self.__rari_f=self.__rari_f||[]).push(' + escaped + ')<\/script>'
+                            );
+                        }
+
+                        async function rariPumpRscFlightStream(stream) {
+                            if (!(await rariPumpFizzChunk('<script>(self.__rari_f=self.__rari_f||[]).push(0)<\/script>'))) {
+                                return;
+                            }
+
+                            const reader = stream.getReader();
+                            const decoder = new TextDecoder();
+                            let pending = '';
+
+                            const pumpLine = async (line) => {
+                                if (!line) return true;
+                                return await rariPumpFlightScriptPush(line + '\n');
+                            };
+
+                            while (true) {
+                                const { done, value } = await reader.read();
+                                if (done) break;
+                                pending += decoder.decode(value, { stream: true });
+                                let newline;
+                                while ((newline = pending.indexOf('\n')) !== -1) {
+                                    const line = pending.slice(0, newline);
+                                    pending = pending.slice(newline + 1);
+                                    if (!(await pumpLine(line))) return;
+                                }
+                            }
+
+                            pending += decoder.decode();
+                            if (pending.length > 0) {
+                                if (pending.endsWith('\n')) {
+                                    for (const line of pending.split('\n')) {
+                                        if (!(await pumpLine(line))) return;
+                                    }
+                                } else {
+                                    if (!(await pumpLine(pending))) return;
+                                }
+                            }
+                        }
+
+                        async function rariPumpStreamingCompleteScript() {
+                            await rariPumpFizzChunk("<script>if(!window['~rari'])window['~rari']={};window['~rari'].streaming={complete:true}<\/script>");
+                        }
+"#;
 
 pub struct LayoutHtmlCache {
     handler: Arc<dyn CacheHandler>,
@@ -414,10 +497,12 @@ impl LayoutRenderer {
                             const {{ done, value }} = await reader.read();
                             if (done) break;
                             const text = decoder.decode(value, {{ stream: true }});
-                            await rariPumpFizzChunk(text);
+                            if (!(await rariPumpFizzChunk(text))) break;
                         }}
-                        const tail = decoder.decode();
-                        await rariPumpFizzChunk(tail);
+                        if (!rariStreamDisconnected) {{
+                            const tail = decoder.decode();
+                            await rariPumpFizzChunk(tail);
+                        }}
                         }} catch(e) {{
                             console.error('[rari] RSC streaming navigation fatal error:', e);
                         }} finally {{
@@ -440,29 +525,12 @@ impl LayoutRenderer {
                     }
                 });
 
-                let (rsc_tx, rsc_rx) = mpsc::channel::<RscStreamChunk>(32);
-                tokio::spawn(async move {
-                    let mut receiver = chunk_receiver;
-                    while let Some(chunk_result) = receiver.recv().await {
-                        match chunk_result {
-                            Ok(data) => {
-                                let chunk = RscStreamChunk {
-                                    chunk_type: RscChunkType::InitialShell,
-                                    data,
-                                    row_id: 0,
-                                    is_final: false,
-                                    boundary_id: None,
-                                };
-                                if rsc_tx.send(chunk).await.is_err() {
-                                    break;
-                                }
-                            }
-                            Err(_) => break,
-                        }
-                    }
+                return Ok(RenderResult::Chunked {
+                    content_type: ChunkedContentType::RscFlight,
+                    shell: Bytes::new(),
+                    closing: Bytes::new(),
+                    chunks: chunk_receiver,
                 });
-
-                return Ok(RenderResult::Streaming(RscStream::new(rsc_rx)));
             }
 
             let (rsc_flight_protocol, binary) = {
@@ -564,6 +632,7 @@ impl LayoutRenderer {
                         let caughtErrors = [];
                         {FIZZ_STREAM_ERROR_HELPER}
                         {FIZZ_CHUNK_PUMP_HELPER}
+                        {FIZZ_PAYLOAD_EMBED_HELPER}
                         try {{
                         try {{ {composition_script} }} catch(e) {{
                             console.error('[rari] Composition error in streaming:', e);
@@ -577,30 +646,6 @@ impl LayoutRenderer {
 
                         const ReactServerRenderer = globalThis['~reactServerRenderer'];
                         const bundlerConfig = globalThis['~rari']?.clientReferenceManifest || {{}};
-                        const rscStream = await ReactServerRenderer.renderToReadableStream(
-                            capturedElement, bundlerConfig,
-                            {{ onError(e) {{
-                                console.error('[rari] RSC error:', e);
-                                caughtErrors.push(e);
-                            }} }}
-                        );
-
-                        const FlightClient = globalThis['~flightClient'];
-                        const rootElement = await FlightClient.createFromReadableStream(rscStream, {{
-                            ssrManifest: {{
-                                moduleMap: globalThis['~rari']?.ssrModules || {{}},
-                                moduleLoading: null,
-                            }}
-                        }});
-
-                        if (rootElement == null) {{
-                            Deno.core.ops.op_fizz_done();
-                            return;
-                        }}
-                        if (rootElement.status === 'rejected') {{
-                            throw rootElement.reason ?? new Error('Flight payload rejected');
-                        }}
-
                         const ReactDOMServer = globalThis['~reactServer'];
                         const headContent = {head_content_json};
                         const R = globalThis.React;
@@ -608,7 +653,7 @@ impl LayoutRenderer {
                         const fullDoc = R.createElement('html', {{ lang: 'en' }},
                             R.createElement('head', {{ dangerouslySetInnerHTML: {{ __html: headContent }} }}),
                             R.createElement('body', null,
-                                R.createElement('div', {{ id: 'root' }}, rootElement)
+                                R.createElement('div', {{ id: 'root' }}, capturedElement)
                             )
                         );
 
@@ -627,10 +672,12 @@ impl LayoutRenderer {
                                 const {{ done, value }} = await reader.read();
                                 if (done) break;
                                 const text = decoder.decode(value, {{ stream: true }});
-                                await rariPumpFizzChunk(text);
+                                if (!(await rariPumpFizzHtml(text))) return;
                             }}
-                            const tail = decoder.decode();
-                            await rariPumpFizzChunk(tail);
+                            if (!rariStreamDisconnected) {{
+                                const tail = decoder.decode();
+                                if (!(await rariPumpFizzHtml(tail))) return;
+                            }}
                         }})();
 
                         await Promise.all([
@@ -640,9 +687,26 @@ impl LayoutRenderer {
 
                         {FIZZ_STREAM_ERROR_INJECTION}
 
+                        if (!rariStreamDisconnected) {{
+                            const rscStream = await ReactServerRenderer.renderToReadableStream(
+                                capturedElement, bundlerConfig,
+                                {{ onError(e) {{
+                                    console.error('[rari] RSC error:', e);
+                                    caughtErrors.push(e);
+                                }} }}
+                            );
+                            await rariPumpRscFlightStream(rscStream);
+                            await rariReleaseFizzClose();
+                            await rariPumpStreamingCompleteScript();
+                        }}
+
                         Deno.core.ops.op_fizz_done();
 
                         }} catch(outerError) {{
+                            if (String(outerError?.message || outerError).includes('disconnected')) {{
+                                Deno.core.ops.op_fizz_done();
+                                return;
+                            }}
                             console.error('[rari] Fizz streaming pipeline fatal error:', outerError);
                             const displayError = caughtErrors.length > 0 ? caughtErrors[0] : outerError;
                             const errMsg = String(displayError?.message || outerError?.message || 'Unknown error').split('<').join('&lt;');
@@ -671,7 +735,12 @@ impl LayoutRenderer {
                     }
                 });
 
-                return Ok(RenderResult::FizzHtmlStream { shell, closing, chunks: chunk_receiver });
+                return Ok(RenderResult::Chunked {
+                    content_type: ChunkedContentType::Html,
+                    shell,
+                    closing,
+                    chunks: chunk_receiver,
+                });
             }
 
             let render_result = {
@@ -760,14 +829,12 @@ impl LayoutRenderer {
                     }
                 };
                 if let Some(b64) = binary_b64 {
-                    format!(
-                        r#"<script id="__RARI_RSC_PAYLOAD__" type="application/octet-stream" data-encoding="base64">{b64}</script>"#
-                    )
+                    Self::build_binary_flight_push_script(&b64)
                 } else {
-                    Self::build_text_payload_script(&rsc_flight_protocol)
+                    Self::build_flight_push_scripts(&rsc_flight_protocol)
                 }
             } else {
-                Self::build_text_payload_script(&rsc_flight_protocol)
+                Self::build_flight_push_scripts(&rsc_flight_protocol)
             };
             let completion_script = r"<script>if(!window['~rari'])window['~rari']={};window['~rari'].streaming={complete:true}</script>";
 
@@ -882,7 +949,7 @@ impl LayoutRenderer {
             ));
         }
 
-        let renderer_script = include_str!("../streaming/js/rsc_renderer.ts");
+        let renderer_script = include_str!("../base/js/rsc_renderer.ts");
         renderer
             .runtime
             .execute_script("load_rsc_renderer.ts".to_string(), renderer_script.to_string())
@@ -930,15 +997,41 @@ impl LayoutRenderer {
         ))
     }
 
-    fn build_text_payload_script(rsc_flight_protocol: &str) -> String {
-        let rsc_payload = if rsc_flight_protocol.ends_with('\n') {
+    fn escape_json_for_html_script(json: &str) -> String {
+        json.cow_replace("</", r"\u003c/").into_owned()
+    }
+
+    fn build_flight_push_scripts(rsc_flight_protocol: &str) -> String {
+        let mut scripts =
+            String::from(r"<script>(self.__rari_f=self.__rari_f||[]).push(0)</script>");
+        let payload = if rsc_flight_protocol.ends_with('\n') {
             rsc_flight_protocol.to_string()
         } else {
             format!("{rsc_flight_protocol}\n")
         };
-        let escaped_payload = rsc_payload.cow_replace("</", "<\\/");
+
+        for line in payload.lines() {
+            if line.is_empty() {
+                continue;
+            }
+            let row = format!("{line}\n");
+            let json_row = serde_json::to_string(&row).unwrap_or_else(|_| "\"\"".to_string());
+            let escaped_row = Self::escape_json_for_html_script(&json_row);
+            let _ = write!(
+                scripts,
+                r"<script>(self.__rari_f=self.__rari_f||[]).push({escaped_row})</script>"
+            );
+        }
+
+        scripts
+    }
+
+    fn build_binary_flight_push_script(b64: &str) -> String {
+        let json_payload = serde_json::to_string(&serde_json::json!([2, b64]))
+            .unwrap_or_else(|_| "[]".to_string());
+        let escaped_payload = Self::escape_json_for_html_script(&json_payload);
         format!(
-            r#"<script id="__RARI_RSC_PAYLOAD__" type="text/x-component">{escaped_payload}</script>"#
+            r"<script>(self.__rari_f=self.__rari_f||[]).push(0)</script><script>(self.__rari_f=self.__rari_f||[]).push({escaped_payload})</script>"
         )
     }
 
@@ -962,60 +1055,6 @@ impl LayoutRenderer {
         }
 
         Ok(())
-    }
-
-    pub async fn render_route_streaming(
-        &self,
-        route_match: &AppRouteMatch,
-        context: &LayoutRenderContext,
-    ) -> Result<RscStream, RariError> {
-        let has_root_layout = route_match.layouts.iter().any(|l| l.is_root);
-
-        if has_root_layout {
-            let html = self.render_route(route_match, context, None).await?;
-
-            Self::validate_rsc_flight_protocol(&html)?;
-
-            let (tx, rx) = mpsc::channel(1);
-            let _ = tx
-                .send(RscStreamChunk {
-                    data: html.into_bytes(),
-                    chunk_type: RscChunkType::InitialShell,
-                    row_id: 0,
-                    is_final: true,
-                    boundary_id: None,
-                })
-                .await;
-            drop(tx);
-
-            Ok(RscStream::new(rx))
-        } else {
-            self.render_route_streaming_progressive(route_match, context).await
-        }
-    }
-
-    async fn render_route_streaming_progressive(
-        &self,
-        route_match: &AppRouteMatch,
-        context: &LayoutRenderContext,
-    ) -> Result<RscStream, RariError> {
-        let html = self.render_route(route_match, context, None).await?;
-
-        Self::validate_rsc_flight_protocol(&html)?;
-
-        let (tx, rx) = mpsc::channel(1);
-        let _ = tx
-            .send(RscStreamChunk {
-                data: html.into_bytes(),
-                chunk_type: RscChunkType::InitialShell,
-                row_id: 0,
-                is_final: true,
-                boundary_id: None,
-            })
-            .await;
-        drop(tx);
-
-        Ok(RscStream::new(rx))
     }
 
     #[expect(clippy::too_many_lines)]

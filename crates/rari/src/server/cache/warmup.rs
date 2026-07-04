@@ -12,7 +12,10 @@ use rustc_hash::FxHashMap;
 use tokio::sync::{Mutex, OnceCell};
 
 use crate::{
-    rendering::layout::{LayoutRenderContext, LayoutRenderer, types::RenderResult},
+    rendering::layout::{
+        ChunkedContentType, LayoutRenderContext, LayoutRenderer, drain_chunked_stream,
+        types::RenderResult,
+    },
     server::{
         ServerState,
         cache::response,
@@ -118,17 +121,12 @@ async fn warm_route(
 
     let html = match render_result {
         RenderResult::Static(html) => html,
-        RenderResult::FizzHtmlStream { shell, closing, mut chunks } => {
-            let mut html = String::from_utf8_lossy(&shell).into_owned();
-            while let Some(chunk_result) = chunks.recv().await {
-                match chunk_result {
-                    Ok(data) => html.push_str(&String::from_utf8_lossy(&data)),
-                    Err(_) => break,
-                }
-            }
-            html.push_str(&String::from_utf8_lossy(&closing));
-            html
-        }
+        RenderResult::Chunked {
+            content_type: ChunkedContentType::Html,
+            shell,
+            closing,
+            mut chunks,
+        } => drain_chunked_stream(shell, closing, &mut chunks).await,
         _ => return Ok(()),
     };
 

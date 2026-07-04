@@ -269,6 +269,7 @@ pub async fn op_fizz_chunk(
                 if let Some(stream_op_state) = op_state_ref.try_borrow_mut::<StreamOpState>() {
                     stream_op_state.chunk_sender.take();
                 }
+                tracing::debug!("Fizz stream client disconnected before chunk was sent");
                 return Err(JsErrorBox::generic("Fizz stream receiver disconnected"));
             }
             Ok(())

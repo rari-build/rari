@@ -4,10 +4,12 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use bytes::Bytes;
 use cow_utils::CowUtils;
 use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use serde_json::Value;
+use tokio::sync::mpsc::Receiver;
 
 use super::LayoutRenderContext;
 use crate::server::{
@@ -146,4 +148,22 @@ pub fn create_layout_context(
     pathname: String,
 ) -> LayoutRenderContext {
     LayoutRenderContext { params, search_params, headers, pathname, metadata: None }
+}
+
+pub async fn drain_chunked_stream(
+    shell: Bytes,
+    closing: Bytes,
+    chunks: &mut Receiver<Result<Vec<u8>, String>>,
+) -> String {
+    let mut output = String::from_utf8_lossy(&shell).into_owned();
+
+    while let Some(chunk_result) = chunks.recv().await {
+        match chunk_result {
+            Ok(data) => output.push_str(&String::from_utf8_lossy(&data)),
+            Err(_) => break,
+        }
+    }
+
+    output.push_str(&String::from_utf8_lossy(&closing));
+    output
 }
