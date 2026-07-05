@@ -28,6 +28,7 @@ import { getComponentId } from './component-ids'
 import { getDirectives, hasDefaultExport, hasTopLevelUseClientDirective, hasTopLevelUseServerDirective } from './directives'
 import { HMRCoordinator } from './hmr-coordinator'
 import { scanForImageUsage } from './image-scanner'
+import { ModuleAnalysisCache } from './module-analysis-cache'
 import { createServerBuildPlugin, RARI_CSS_MODULES_PATTERN, scanDirectory, ServerComponentBuilder } from './server-build'
 import { getUseCacheTransform } from './use-cache-loader'
 
@@ -343,34 +344,25 @@ export function defineRariOptions(config: RariOptions): RariOptions {
 export function rari(options: RariOptions = {}): Plugin[] {
   const componentTypeCache = new Map<string, 'client' | 'server' | 'unknown'>()
   const clientComponents = new Set<string>()
-  const directiveCache = new Map<string, { hasUseServer: boolean, hasUseClient: boolean }>()
+  const moduleAnalysisCache = new ModuleAnalysisCache()
   let rustServerProcess: any = null
 
   let hmrCoordinator: HMRCoordinator | null = null
   const resolvedAlias: Record<string, string> = {}
 
   function getModuleDirectives(id: string): { hasUseServer: boolean, hasUseClient: boolean } {
-    if (directiveCache.has(id))
-      return directiveCache.get(id)!
-
     const result = { hasUseServer: false, hasUseClient: false }
 
     const normalizedId = id.replace(BACKSLASH_REGEX, '/')
-    if (!TSX_EXT_REGEX.test(normalizedId) || !normalizedId.includes('/src/')) {
-      directiveCache.set(id, result)
+    if (!TSX_EXT_REGEX.test(normalizedId) || !normalizedId.includes('/src/'))
       return result
-    }
 
     try {
-      const code = fs.readFileSync(id, 'utf-8')
-      const directives = getDirectives(code)
-      result.hasUseServer = directives.hasUseServer
-      result.hasUseClient = directives.hasUseClient
-      directiveCache.set(id, result)
+      const analysis = moduleAnalysisCache.get(id)
+      result.hasUseServer = analysis.directives.hasUseServer
+      result.hasUseClient = analysis.directives.hasUseClient
     }
-    catch {
-      directiveCache.set(id, result)
-    }
+    catch {}
 
     return result
   }
@@ -2087,6 +2079,8 @@ export const createFromReadableStream = module.exports.createFromReadableStream;
 
       if (!isReactFile)
         return undefined
+
+      moduleAnalysisCache.invalidate(file)
 
       if (file.includes('/dist/') || file.includes('\\dist\\'))
         return []

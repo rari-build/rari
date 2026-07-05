@@ -16,12 +16,11 @@ import {
 import { resolveAlias } from '../shared/utils/alias-resolver'
 import { resolveIndexFile, resolveWithExtensions } from '../shared/utils/file-resolver'
 import { getReadableComponentId, getComponentId as getSharedComponentId, getProjectRelativePath as getSharedProjectRelativePath, hashString as sharedHashString } from './component-ids'
-import { getDirectives, hasDefaultExport, hasTopLevelUseClientDirective, hasTopLevelUseServerDirective } from './directives'
+import { analyzeModuleSource } from './directives'
+import { filterExternalDependencies, filterRelativeImportSources, ModuleAnalysisCache } from './module-analysis-cache'
 import { getUseCacheTransform } from './use-cache-loader'
 
 const HTML_IMPORT_REGEX = /import\s*\(\s*["']([^"']+)["']\s*\)|import\s+["']([^"']+)["']/g
-const CODE_IMPORT_REGEX = /from\s+['"]([^'"]+)['"]|import\s*\(\s*['"]([^'"]+)['"]\s*\)|import\s+['"]([^'"]+)['"]/g
-const EXTRACT_DEPENDENCIES_REGEX = /import(?:\s+(?:\w+|\{[^}]*\}|\*\s+as\s+\w+)(?:\s*,\s*(?:\w+|\{[^}]*\}|\*\s+as\s+\w+))*\s+from\s+)?['"]([^'"]+)['"]/g
 const COMPONENT_IMPORT_REGEX = /import\s+(\w+)\s+from\s+['"]([^'"]+)['"]/g
 const CLIENT_IMPORT_REGEX = /import\s+(?:(\w+)|\{([^}]+)\})\s+from\s+['"]([^'"]+)['"];?\s*$/gm
 const PROXY_FILE_REGEX = /^proxy\.(?:tsx?|jsx?|mts|mjs)$/
@@ -173,7 +172,7 @@ export class ServerComponentBuilder {
 
   private htmlOnlyImports = new Set<string>()
   private fileImporters = new Map<string, Set<string>>()
-  private directiveResultCache = new Map<string, { hasUseClient: boolean, hasUseServer: boolean, error: boolean }>()
+  private moduleAnalysisCache = new ModuleAnalysisCache()
   private discoveredExternalClientComponents = new Set<string>()
 
   getComponentCount(): number {
@@ -187,7 +186,7 @@ export class ServerComponentBuilder {
   removeComponent(filePath: string): void {
     this.serverComponents.delete(filePath)
     this.serverActions.delete(filePath)
-    this.directiveResultCache.delete(filePath)
+    this.moduleAnalysisCache.invalidate(filePath)
   }
 
   getImportGraph(): ReadonlyMap<string, ReadonlySet<string>> {
@@ -317,18 +316,13 @@ export class ServerComponentBuilder {
   }
 
   private getDirectivesCached(filePath: string, source?: string): { hasUseClient: boolean, hasUseServer: boolean, error: boolean } {
-    if (!source) {
-      const cached = this.directiveResultCache.get(filePath)
-      if (cached)
-        return cached
-    }
-
     try {
-      const code = source ?? fs.readFileSync(filePath, 'utf-8')
-      const directives = getDirectives(code)
-      const result = { hasUseClient: directives.hasUseClient, hasUseServer: directives.hasUseServer, error: false }
-      this.directiveResultCache.set(filePath, result)
-      return result
+      const analysis = this.moduleAnalysisCache.get(filePath, source)
+      return {
+        hasUseClient: analysis.directives.hasUseClient,
+        hasUseServer: analysis.directives.hasUseServer,
+        error: false,
+      }
     }
     catch {
       return { hasUseClient: false, hasUseServer: false, error: true }
@@ -372,13 +366,9 @@ export class ServerComponentBuilder {
         }
         else if (entry.isFile() && TSX_EXT_REGEX.test(entry.name)) {
           try {
-            const code = fs.readFileSync(fullPath, 'utf-8')
-            let match
+            const analysis = this.moduleAnalysisCache.get(fullPath)
 
-            CODE_IMPORT_REGEX.lastIndex = 0
-            match = CODE_IMPORT_REGEX.exec(code)
-            while (match !== null) {
-              const importPath = match[1] || match[2] || match[3]
+            for (const importPath of filterRelativeImportSources(analysis.importSources)) {
               let resolvedPath: string | null = null
 
               if (importPath.startsWith('./') || importPath.startsWith('../')) {
@@ -412,8 +402,6 @@ export class ServerComponentBuilder {
                   this.fileImporters.get(foundPath)!.add(fullPath)
                 }
               }
-
-              match = CODE_IMPORT_REGEX.exec(code)
             }
           }
           catch (err) {
@@ -446,11 +434,11 @@ export class ServerComponentBuilder {
 
   addServerComponent(filePath: string, source?: string) {
     const code = source ?? fs.readFileSync(filePath, 'utf-8')
+    const analysis = this.moduleAnalysisCache.get(filePath, code)
+    const dependencies = filterExternalDependencies(analysis.importSources, NODE_BUILTINS)
+    const hasNodeImports = this.hasNodeImports(code)
 
-    if (this.isServerAction(code)) {
-      const dependencies = this.extractDependencies(code)
-      const hasNodeImports = this.hasNodeImports(code)
-
+    if (analysis.directives.hasUseServer) {
       this.serverActions.set(filePath, {
         filePath,
         originalCode: code,
@@ -463,9 +451,6 @@ export class ServerComponentBuilder {
     if (!this.isServerComponent(filePath, code))
       return
 
-    const dependencies = this.extractDependencies(code)
-    const hasNodeImports = this.hasNodeImports(code)
-
     this.serverComponents.set(filePath, {
       filePath,
       originalCode: code,
@@ -474,32 +459,19 @@ export class ServerComponentBuilder {
     })
   }
 
-  private isServerAction(code: string): boolean {
-    return getDirectives(code).hasUseServer
+  private isServerAction(code: string, filePath?: string): boolean {
+    if (filePath)
+      return this.moduleAnalysisCache.get(filePath, code).directives.hasUseServer
+
+    return analyzeModuleSource(code).directives.hasUseServer
   }
 
-  private extractDependencies(code: string): string[] {
-    const dependencies: string[] = []
-    let match
+  private extractDependencies(code: string, filePath?: string): string[] {
+    const analysis = filePath
+      ? this.moduleAnalysisCache.get(filePath, code)
+      : analyzeModuleSource(code)
 
-    EXTRACT_DEPENDENCIES_REGEX.lastIndex = 0
-    while (true) {
-      match = EXTRACT_DEPENDENCIES_REGEX.exec(code)
-      if (match === null)
-        break
-
-      const importPath = match[1]
-      if (
-        !importPath.startsWith('.')
-        && !importPath.startsWith('/')
-        && !importPath.startsWith('node:')
-        && !this.isNodeBuiltin(importPath)
-      ) {
-        dependencies.push(importPath)
-      }
-    }
-
-    return [...new Set(dependencies)]
+    return filterExternalDependencies(analysis.importSources, NODE_BUILTINS)
   }
 
   private isNodeBuiltin(moduleName: string): boolean {
@@ -694,6 +666,39 @@ const ${importName} = (props) => {
     return inputPath.includes('/app/') || inputPath.includes('\\app\\')
   }
 
+  private createRolldownModuleInfoPlugin(filePath: string): Plugin {
+    const self = this
+    const externalDeps = new Set<string>()
+
+    return {
+      name: 'rari-rolldown-module-info',
+      moduleParsed(moduleInfo) {
+        for (const id of moduleInfo.importedIds) {
+          if (!id.startsWith('.') && !id.startsWith('/') && !id.startsWith('node:') && !self.isNodeBuiltin(id))
+            externalDeps.add(id)
+        }
+
+        for (const id of moduleInfo.dynamicallyImportedIds) {
+          if (!id.startsWith('.') && !id.startsWith('/') && !id.startsWith('node:') && !self.isNodeBuiltin(id))
+            externalDeps.add(id)
+        }
+      },
+      buildEnd() {
+        if (externalDeps.size === 0)
+          return
+
+        const dependencies = [...externalDeps].sort()
+        const component = self.serverComponents.get(filePath) || self.serverActions.get(filePath)
+        if (component)
+          component.dependencies = dependencies
+
+        const cached = self.buildCache.get(filePath)
+        if (cached)
+          cached.dependencies = dependencies
+      },
+    }
+  }
+
   private createBuildPlugins(
     virtualModuleId: string,
     transformedCode: string,
@@ -795,10 +800,13 @@ const ${importName} = (props) => {
 
                 try {
                   const content = fs.readFileSync(pathWithExt, 'utf-8')
-                  if (hasTopLevelUseServerDirective(content)) {
+                  const analysis = self.moduleAnalysisCache.get(pathWithExt, content)
+                  if (analysis.topLevelUseServer) {
                     const actionId = self.getComponentId(pathWithExt)
-                    const hasDefault = hasDefaultExport(content)
-                    serverActionRefs.set(pathWithExt, { actionId, hasDefaultExport: hasDefault })
+                    serverActionRefs.set(pathWithExt, {
+                      actionId,
+                      hasDefaultExport: analysis.hasDefaultExport,
+                    })
                     return { id: `\0server-action:${pathWithExt}` }
                   }
                 }
@@ -1053,6 +1061,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
           return null
         },
       },
+      self.createRolldownModuleInfoPlugin(inputPath),
       {
         name: 'use-cache',
         async transform(code: string, id: string) {
@@ -1306,9 +1315,9 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
         }
         else if (entry.isFile() && TSX_EXT_REGEX.test(entry.name)) {
           try {
-            const code = fs.readFileSync(fullPath, 'utf-8')
-            if (hasTopLevelUseClientDirective(code))
-              clientFiles.push({ filePath: fullPath, code })
+            const analysis = this.moduleAnalysisCache.get(fullPath)
+            if (analysis.topLevelUseClient)
+              clientFiles.push({ filePath: fullPath, code: fs.readFileSync(fullPath, 'utf-8') })
           }
           catch {}
         }
@@ -1773,7 +1782,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     const componentId = this.getComponentId(filePath)
 
     const code = await fs.promises.readFile(filePath, 'utf-8')
-    const dependencies = this.extractDependencies(code)
+    const dependencies = this.extractDependencies(code, filePath)
     const hasNodeImports = this.hasNodeImports(code)
 
     const componentData = {
@@ -1783,7 +1792,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
       hasNodeImports,
     }
 
-    if (this.isServerAction(code)) {
+    if (this.isServerAction(code, filePath)) {
       this.serverActions.set(filePath, componentData)
       this.serverComponents.delete(filePath)
     }
@@ -1884,7 +1893,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
         relativePath: path.relative(this.projectRoot, filePath),
         bundlePath,
         moduleSpecifier,
-        dependencies: this.extractDependencies(code),
+        dependencies: this.extractDependencies(code, filePath),
         hasNodeImports: this.hasNodeImports(code),
         css,
       }
@@ -1929,7 +1938,8 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
 }
 
 export function hasComponentExport(code: string): boolean {
-  return hasDefaultExport(code)
+  const analysis = analyzeModuleSource(code)
+  return analysis.hasComponentExport
     || EXPORTED_FUNCTION_REGEX.test(code)
     || EXPORTED_DEFAULT_ARROW_REGEX.test(code)
     || EXPORTED_CONST_FUNCTION_REGEX.test(code)
@@ -1944,10 +1954,12 @@ export function isEligibleServerComponent(
   if (SPECIAL_FILE_REGEX.test(fileName) || fileName.endsWith('.d.ts'))
     return false
 
-  if (hasTopLevelUseClientDirective(code))
+  const analysis = analyzeModuleSource(code)
+
+  if (analysis.topLevelUseClient)
     return false
 
-  if (hasTopLevelUseServerDirective(code))
+  if (analysis.topLevelUseServer)
     return true
 
   if (builder.isOnlyImportedByClientComponents(filePath))
