@@ -27,6 +27,59 @@ fn addon_napi_output_path(target_info: &Target, project_root: &Path) -> PathBuf 
     project_root.join(ADDON_BUILD_DIR).join(format!("rari_use_cache.{}.node", target_info.platform))
 }
 
+fn napi_artifact_name(platform: &str) -> String {
+    let abi = if platform.starts_with("linux") {
+        "-gnu"
+    } else if platform.starts_with("win32") {
+        "-msvc"
+    } else {
+        ""
+    };
+    format!("rari_use_cache.{platform}{abi}.node")
+}
+
+fn find_fresh_napi_build_output(manifest_dir: &Path, target_info: &Target) -> Option<PathBuf> {
+    let primary = manifest_dir.join(napi_artifact_name(target_info.platform));
+    if primary.exists() {
+        return Some(primary);
+    }
+
+    if let Ok(entries) = fs::read_dir(manifest_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().is_some_and(|ext| ext == "node")
+                && path
+                    .file_name()
+                    .is_some_and(|name| name.to_string_lossy().starts_with("rari_use_cache"))
+            {
+                return Some(path);
+            }
+        }
+    }
+
+    None
+}
+
+fn cleanup_manifest_build_outputs(manifest_dir: &Path, target_info: &Target) {
+    let primary = manifest_dir.join(napi_artifact_name(target_info.platform));
+    let _ = fs::remove_file(&primary);
+    for name in ["index.js", "index.d.ts"] {
+        let _ = fs::remove_file(manifest_dir.join(name));
+    }
+    if let Ok(entries) = fs::read_dir(manifest_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().is_some_and(|ext| ext == "node")
+                && path
+                    .file_name()
+                    .is_some_and(|name| name.to_string_lossy().starts_with("rari_use_cache"))
+            {
+                let _ = fs::remove_file(path);
+            }
+        }
+    }
+}
+
 fn addon_stable_output_path(target_info: &Target, project_root: &Path) -> PathBuf {
     project_root.join(ADDON_BUILD_DIR).join(target_info.platform).join(ADDON_OUTPUT_FILE)
 }
@@ -35,10 +88,6 @@ fn addon_platform_package_path(target_info: &Target, project_root: &Path) -> Pat
     project_root.join(target_info.addon_package_dir).join(ADDON_OUTPUT_FILE)
 }
 
-#[expect(
-    clippy::too_many_lines,
-    reason = "Addon build orchestration requires comprehensive error handling and validation steps"
-)]
 pub async fn build_addon(
     target_info: &Target,
     project_root: &Path,
@@ -51,35 +100,22 @@ pub async fn build_addon(
     ));
 
     let manifest_dir = project_root.join("crates/rari_use_cache");
-    let out_dir = project_root.join(ADDON_BUILD_DIR);
-    fs::create_dir_all(&out_dir).context("Failed to create addon build dir")?;
-
-    let abs_out_dir = out_dir.canonicalize().unwrap_or(out_dir.clone());
 
     let current_platform = get_current_platform_target();
     let is_current_platform = current_platform.is_some_and(|t| t.platform == target_info.platform);
 
-    let mut args: Vec<String> = vec![
-        "build".to_string(),
-        "--platform".to_string(),
-        "--cwd".to_string(),
-        manifest_dir.to_string_lossy().to_string(),
-    ];
+    let mut args: Vec<String> =
+        vec!["build".to_string(), "--strip".to_string(), "--platform".to_string()];
     if !dev_mode {
         args.push("--release".to_string());
     }
-    args.push("--strip".to_string());
-    args.push("--no-js".to_string());
 
     if !is_current_platform {
         args.push("--target".to_string());
         args.push(target_info.target.to_string());
     }
 
-    args.push("--output-dir".to_string());
-    args.push(abs_out_dir.to_string_lossy().to_string());
-
-    log(&format!("running: pnpm exec napi {}", args.join(" ")));
+    log(&format!("running: (cd {}) pnpm exec napi {}", manifest_dir.display(), args.join(" ")));
 
     let target_parts: Vec<&str> = target_info.target.split('-').collect();
     let target_arch = target_parts.first().unwrap_or(&"unknown");
@@ -105,7 +141,7 @@ pub async fn build_addon(
     cmd.arg("exec")
         .arg("napi")
         .args(&args)
-        .current_dir(project_root)
+        .current_dir(&manifest_dir)
         .env("CARGO_CFG_TARGET_ARCH", target_arch)
         .env("CARGO_CFG_TARGET_OS", target_os)
         .env("CARGO_CFG_TARGET_ENV", target_env);
@@ -125,24 +161,27 @@ pub async fn build_addon(
         return Ok(false);
     }
 
-    let stable = addon_stable_output_path(target_info, project_root);
-    let legacy = addon_napi_output_path(target_info, project_root);
+    let Some(src) = find_fresh_napi_build_output(&manifest_dir, target_info) else {
+        log_error(&format!("expected addon artifact not found under {}", manifest_dir.display()));
+        return Ok(false);
+    };
 
-    if !stable.exists() {
-        if legacy.exists() {
-            if let Some(parent) = stable.parent() {
-                fs::create_dir_all(parent)
-                    .context("Failed to create per-platform addon build dir")?;
-            }
-            fs::rename(&legacy, &stable).context("Failed to rename addon artifact")?;
-        } else {
-            log_error(&format!(
-                "expected addon artifact not found at {} or {}",
-                stable.display(),
-                legacy.display()
-            ));
-            return Ok(false);
-        }
+    let stable = addon_stable_output_path(target_info, project_root);
+    if let Some(parent) = stable.parent() {
+        fs::create_dir_all(parent).context("Failed to create per-platform addon build dir")?;
+    }
+    if stable.exists() {
+        fs::remove_file(&stable).context("Failed to remove stale addon artifact")?;
+    }
+    if src != stable {
+        fs::copy(&src, &stable).context("Failed to copy addon artifact")?;
+    }
+
+    cleanup_manifest_build_outputs(&manifest_dir, target_info);
+
+    let legacy = addon_napi_output_path(target_info, project_root);
+    if legacy.exists() {
+        let _ = fs::remove_file(&legacy);
     }
 
     if let Some(parent) = stable.parent() {
