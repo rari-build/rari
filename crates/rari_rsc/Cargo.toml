@@ -1,5 +1,5 @@
 [package]
-name = "rari-error"
+name = "rari_rsc"
 edition = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -10,13 +10,17 @@ publish = false
 crate-type = [ "rlib" ]
 
 [dependencies]
-deno_core = { workspace = true }
-deno_error = { workspace = true }
+base64 = { workspace = true }
+cow-utils = { workspace = true }
+parking_lot = { workspace = true }
+rari_error = { workspace = true }
+regex = { workspace = true }
 rustc-hash = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-thiserror = { workspace = true }
-tokio = { workspace = true }
+smallvec = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
 
 [lints]
 workspace = true

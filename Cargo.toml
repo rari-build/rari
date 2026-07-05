@@ -45,9 +45,9 @@ deno_node = "0.191.0"
 hex = "0.4.3"
 parking_lot = "0.12.5"
 rari = { path = "crates/rari" }
-rari-error = { path = "crates/rari-error" }
-rari-rsc = { path = "crates/rari-rsc" }
-rari-utils = { path = "crates/rari-utils" }
+rari_error = { path = "crates/rari_error" }
+rari_rsc = { path = "crates/rari_rsc" }
+rari_utils = { path = "crates/rari_utils" }
 regex = "1.12.4"
 rustc-hash = "2.1.2"
 serde = { version = "1.0.228", features = [ "derive" ] }

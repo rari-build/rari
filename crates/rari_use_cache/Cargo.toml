@@ -1,5 +1,5 @@
 [package]
-name = "rari-use-cache"
+name = "rari_use_cache"
 edition = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }

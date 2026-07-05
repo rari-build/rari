@@ -464,7 +464,7 @@ jobs:
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
           shared-key: release-addon-${{ matrix.target }}
-          workspaces: crates/rari-use-cache
+          workspaces: crates/rari_use_cache
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -472,7 +472,7 @@ jobs:
       - name: Build addon (Linux)
         if: runner.os == 'Linux'
         run: |
-          cd crates/rari-use-cache
+          cd crates/rari_use_cache
           pnpm exec napi build --release --strip --platform --target ${{ matrix.target }}
         env:
           RUSTFLAGS: -C link-arg=-fuse-ld=mold
@@ -480,13 +480,13 @@ jobs:
       - name: Build addon (macOS)
         if: runner.os == 'macOS'
         run: |
-          cd crates/rari-use-cache
+          cd crates/rari_use_cache
           pnpm exec napi build --release --strip --platform --target ${{ matrix.target }}
 
       - name: Build addon (Windows)
         if: runner.os == 'Windows'
         run: |
-          cd crates/rari-use-cache
+          cd crates/rari_use_cache
           pnpm exec napi build --release --strip --platform --target ${{ matrix.target }}
         env:
           AWS_LC_SYS_PREBUILT_NASM: 1
@@ -495,7 +495,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p addon-output
-          find crates/rari-use-cache -name "*.node" -exec cp {} addon-output/rari_use_cache.node \;
+          find crates/rari_use_cache -name "*.node" -exec cp {} addon-output/rari_use_cache.node \;
           ls -la addon-output/
 
       - name: Upload addon artifact

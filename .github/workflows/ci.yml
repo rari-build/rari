@@ -72,7 +72,7 @@ jobs:
               - 'pnpm-lock.yaml'
             use_cache_crate:
               - '.github/workflows/ci.yml'
-              - 'crates/rari-use-cache/**'
+              - 'crates/rari_use_cache/**'
               - 'Cargo.toml'
               - 'Cargo.lock'
               - 'rust-toolchain.toml'
@@ -383,7 +383,7 @@ jobs:
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
           shared-key: use-cache-${{ runner.os }}
-          workspaces: crates/rari-use-cache
+          workspaces: crates/rari_use_cache
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -391,13 +391,13 @@ jobs:
       - name: Build rari_use_cache.node (Linux)
         if: runner.os == 'Linux'
         run: |
-          cd crates/rari-use-cache
+          cd crates/rari_use_cache
           pnpm exec napi build --release --strip --platform
 
       - name: Build rari_use_cache.node (Windows)
         if: runner.os == 'Windows'
         run: |
-          cd crates/rari-use-cache
+          cd crates/rari_use_cache
           pnpm exec napi build --release --strip --platform
 
       - name: Write use-cache index.js template
@@ -420,7 +420,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           mkdir -p packages/use-cache-linux-x64
-          cp crates/rari-use-cache/*.linux-x64-gnu.node packages/use-cache-linux-x64/rari_use_cache.node
+          cp crates/rari_use_cache/*.linux-x64-gnu.node packages/use-cache-linux-x64/rari_use_cache.node
           cp "${RUNNER_TEMP}/use-cache-index.js" packages/use-cache-linux-x64/index.js
           sed -e 's/{PLATFORM}/linux-x64/g' \
               -e 's/{VERSION}/0.0.0/g' \
@@ -433,7 +433,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path packages/use-cache-win32-x64
-          Copy-Item crates/rari-use-cache/*.win32-x64-msvc.node packages/use-cache-win32-x64/rari_use_cache.node
+          Copy-Item crates/rari_use_cache/*.win32-x64-msvc.node packages/use-cache-win32-x64/rari_use_cache.node
           Copy-Item "$env:RUNNER_TEMP/use-cache-index.js" packages/use-cache-win32-x64/index.js
           (Get-Content .github/templates/package-json/use-cache-platform.json) `
             -replace '\{PLATFORM\}', 'win32-x64' `
@@ -459,7 +459,7 @@ jobs:
         uses: actions/cache/save@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
         with:
           path: packages/use-cache-linux-x64
-          key: use-cache-linux-x64-${{ hashFiles('crates/rari-use-cache/**', 'Cargo.lock') }}
+          key: use-cache-linux-x64-${{ hashFiles('crates/rari_use_cache/**', 'Cargo.lock') }}
 
       - name: Upload addon (Windows)
         if: runner.os == 'Windows'
@@ -478,7 +478,7 @@ jobs:
         uses: actions/cache/save@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
         with:
           path: packages/use-cache-win32-x64
-          key: use-cache-win32-x64-${{ hashFiles('crates/rari-use-cache/**', 'Cargo.lock') }}
+          key: use-cache-win32-x64-${{ hashFiles('crates/rari_use_cache/**', 'Cargo.lock') }}
 
   build:
     needs: [changes, build-use-cache-addon]
@@ -508,7 +508,7 @@ jobs:
         uses: actions/cache/restore@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
         with:
           path: packages/use-cache-linux-x64
-          key: use-cache-linux-x64-${{ hashFiles('crates/rari-use-cache/**', 'Cargo.lock') }}
+          key: use-cache-linux-x64-${{ hashFiles('crates/rari_use_cache/**', 'Cargo.lock') }}
           restore-keys: |
             use-cache-linux-x64-
 
@@ -594,7 +594,7 @@ jobs:
         uses: actions/cache/restore@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
         with:
           path: packages/use-cache-linux-x64
-          key: use-cache-linux-x64-${{ hashFiles('crates/rari-use-cache/**', 'Cargo.lock') }}
+          key: use-cache-linux-x64-${{ hashFiles('crates/rari_use_cache/**', 'Cargo.lock') }}
           restore-keys: |
             use-cache-linux-x64-
 
@@ -684,7 +684,7 @@ jobs:
         uses: actions/cache/restore@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
         with:
           path: packages/use-cache-linux-x64
-          key: use-cache-linux-x64-${{ hashFiles('crates/rari-use-cache/**', 'Cargo.lock') }}
+          key: use-cache-linux-x64-${{ hashFiles('crates/rari_use_cache/**', 'Cargo.lock') }}
           restore-keys: |
             use-cache-linux-x64-
 
@@ -694,7 +694,7 @@ jobs:
         uses: actions/cache/restore@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
         with:
           path: packages/use-cache-win32-x64
-          key: use-cache-win32-x64-${{ hashFiles('crates/rari-use-cache/**', 'Cargo.lock') }}
+          key: use-cache-win32-x64-${{ hashFiles('crates/rari_use_cache/**', 'Cargo.lock') }}
           restore-keys: |
             use-cache-win32-x64-
 
