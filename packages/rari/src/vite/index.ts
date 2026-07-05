@@ -2189,8 +2189,8 @@ export function defineRariConfig(
   config: UserConfig & { plugins?: RariPlugin[] },
 ): UserConfig {
   return {
-    plugins: [rari(), ...(config.plugins || [])],
     ...config,
+    plugins: [rari(), ...(config.plugins || [])],
   }
 }
 
