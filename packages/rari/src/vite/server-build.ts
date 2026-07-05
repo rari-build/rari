@@ -21,9 +21,7 @@ import { getReadableComponentId, getComponentId as getSharedComponentId, getProj
 import { analyzeModuleSource } from './directives'
 import { parseHtmlEntryImports } from './html-entry-imports'
 import {
-  collectMdxComponentScanDirs,
-  discoverMdxRegistryEntries,
-  resolveMdxPluginOptions,
+  resolveMdxRegistryEntries,
 } from './mdx-registry'
 import { filterExternalDependencies, filterRelativeImportSources, hasNodeImportsFromAnalysis, isNodeBuiltinModule, ModuleAnalysisCache, resolveModuleCachePath } from './module-analysis-cache'
 import { collectSourceFilePaths, normalizeScanDirs } from './source-file-walker'
@@ -1023,7 +1021,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
             return { id: source, external: true }
           }
 
-          if (source === 'rari' || source === 'rari/client')
+          if (source === 'rari')
             return null
 
           if (!source.startsWith('.') && !source.startsWith('/'))
@@ -1267,19 +1265,11 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
   }
 
   async buildMdxRegistry(mdxOptions?: MdxPluginOptions): Promise<void> {
-    const mdxOpts = resolveMdxPluginOptions(this.projectRoot, mdxOptions)
-    const componentScanDirs = collectMdxComponentScanDirs(
-      this.projectRoot,
-      mdxOpts.componentsDir,
-      normalizeScanDirs(path.join(this.projectRoot, 'src'), Object.values(this.options.alias || {})),
-    )
-
-    const entries = discoverMdxRegistryEntries({
+    const entries = resolveMdxRegistryEntries({
       projectRoot: this.projectRoot,
-      componentsDir: mdxOpts.componentsDir,
-      contentDirs: mdxOpts.contentDirs,
+      mdxOptions,
+      alias: this.options.alias || {},
       cache: this.moduleAnalysisCache,
-      componentScanDirs,
     })
 
     const manifestPath = path.join(this.options.outDir, this.options.manifestPath)

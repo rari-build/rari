@@ -72,6 +72,38 @@ export function resolveIndexFile(
   return null
 }
 
+const DEFAULT_IMPORT_RESOLVE_EXTENSIONS = ['.tsx', '.jsx', '.ts', '.js']
+
+export function resolveImportToFilePath(
+  importPath: string,
+  importerPath: string,
+  resolvedAlias: Record<string, string> = {},
+  extensions: string[] = DEFAULT_IMPORT_RESOLVE_EXTENSIONS,
+): string {
+  let resolvedImportPath = importPath
+  for (const [alias, replacement] of Object.entries(resolvedAlias)) {
+    if (importPath.startsWith(`${alias}/`)) {
+      resolvedImportPath = importPath.replace(alias, replacement)
+      break
+    }
+    else if (importPath === alias) {
+      resolvedImportPath = replacement
+      break
+    }
+  }
+
+  const resolvedPath = path.resolve(path.dirname(importerPath), resolvedImportPath)
+  const withExt = resolveWithExtensions(resolvedPath, extensions)
+  if (withExt)
+    return withExt
+
+  const indexFile = resolveIndexFile(resolvedPath, extensions)
+  if (indexFile)
+    return indexFile
+
+  return `${resolvedPath}.tsx`
+}
+
 const DEFAULT_RESOLVE_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx', '.mjs']
 
 export function resolveWithExtensionsAndIndex(

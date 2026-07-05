@@ -5,6 +5,7 @@ import { scanMdxComponentNames } from '../mdx/scan'
 import { BACKSLASH_REGEX, EXPORT_NAMED_DECLARATION_REGEX } from '../shared/regex-constants'
 import { getProjectRelativePath } from './component-ids'
 import { collectClientComponentPaths } from './module-analysis-cache'
+import { normalizeScanDirs } from './source-file-walker'
 
 const MDX_FILE_REGEX = /\.mdx$/
 
@@ -120,6 +121,30 @@ export function discoverMdxRegistryEntries(options: DiscoverMdxRegistryOptions):
   }
 
   return entries.sort((a, b) => a.name.localeCompare(b.name))
+}
+
+export function resolveMdxRegistryEntries(options: {
+  projectRoot: string
+  mdxOptions?: MdxPluginOptions
+  alias?: Record<string, string>
+  cache: ModuleAnalysisCache
+  srcDir?: string
+}): MdxRegistryEntry[] {
+  const mdxOpts = resolveMdxPluginOptions(options.projectRoot, options.mdxOptions)
+  const srcDir = options.srcDir ?? path.join(options.projectRoot, 'src')
+  const componentScanDirs = collectMdxComponentScanDirs(
+    options.projectRoot,
+    mdxOpts.componentsDir,
+    normalizeScanDirs(srcDir, Object.values(options.alias ?? {})),
+  )
+
+  return discoverMdxRegistryEntries({
+    projectRoot: options.projectRoot,
+    componentsDir: mdxOpts.componentsDir,
+    contentDirs: mdxOpts.contentDirs,
+    cache: options.cache,
+    componentScanDirs,
+  })
 }
 
 export function generateMdxRegistryModule(

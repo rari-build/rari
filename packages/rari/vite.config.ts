@@ -4,13 +4,12 @@ export default defineConfig({
   pack: {
     entry: {
       'index': 'src/index.ts',
-      'client': 'src/client.ts',
       'router': 'src/router/index.ts',
       'vite': 'src/vite/index.ts',
       'cli': 'src/cli/index.ts',
       'platform': 'src/cli/platform.ts',
-      'image/index': 'src/image/index.ts',
-      'og/index': 'src/og/index.ts',
+      'image': 'src/image/index.ts',
+      'og': 'src/og/index.ts',
       'mdx': 'src/mdx/index.ts',
       'mdx/define': 'src/mdx/define.ts',
       'mdx/registry': 'src/mdx/registry.ts',
@@ -42,7 +41,6 @@ export default defineConfig({
         'virtual:react-flight-client',
         'virtual:react-flight-client.ts',
         'virtual:rsc-integration.ts',
-        'rari/client',
         'rari/router',
         'rari/mdx/registry',
       ],

@@ -37,7 +37,7 @@ function findContentFile(filePath: string): string | null {
 }
 
 function PageHeaderWithFilePath({ filePath, blogMetadata, ...props }: ComponentProps<typeof PageHeader> & { filePath: string, blogMetadata?: BlogMetadata }) {
-  return <PageHeader {...props} filePath={filePath} {...blogMetadata} />
+  return <PageHeader {...blogMetadata} {...props} filePath={filePath} />
 }
 
 function createMdxComponents(filePath: string, blogMetadata?: BlogMetadata) {
