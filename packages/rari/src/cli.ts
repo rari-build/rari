@@ -199,8 +199,10 @@ function crossPlatformSpawn(command: string, args: string[], options: SpawnOptio
 
 function spawnTool(binName: string, args: string[], options: SpawnOptions = {}) {
   const localBin = resolveLocalBin(binName)
-  if (localBin)
-    return spawn(localBin, args, options)
+  if (localBin) {
+    const needsShell = process.platform === 'win32' && localBin.endsWith('.cmd')
+    return spawn(localBin, args, needsShell ? { ...options, shell: true } : options)
+  }
 
   return crossPlatformSpawn('npx', [binName, ...args], options)
 }

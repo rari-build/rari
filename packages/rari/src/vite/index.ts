@@ -407,6 +407,7 @@ export function rari(options: RariOptions = {}): Plugin[] {
         resolvedPath,
         analysis,
         getHtmlEntryImports(),
+        resolvedPath,
       )
     }
     catch {

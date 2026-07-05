@@ -42,6 +42,24 @@ describe('source-file-walker', () => {
 
     fs.rmSync(dir, { recursive: true, force: true })
   })
+
+  it('excludes additional dirs nested under the primary dir', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-walk-nested-'))
+    const srcDir = path.join(dir, 'src')
+    const nestedDir = path.join(srcDir, 'components')
+
+    fs.mkdirSync(nestedDir, { recursive: true })
+    fs.writeFileSync(path.join(srcDir, 'page.tsx'), 'export default function Page() {}')
+    fs.writeFileSync(path.join(nestedDir, 'Button.tsx'), 'export default function Button() {}')
+
+    const dirs = normalizeScanDirs(srcDir, [nestedDir])
+    const paths = collectSourceFilePaths(dirs)
+
+    expect(dirs).toEqual([srcDir])
+    expect(paths).toHaveLength(2)
+
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
 })
 
 describe('html-entry-imports', () => {

@@ -1,5 +1,6 @@
 import fsSync from 'node:fs'
 import path from 'node:path'
+import { resolveModuleCachePath } from '@rari/vite/module-analysis-cache'
 import { hasComponentExport, ServerComponentBuilder } from '@rari/vite/server-build'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 
@@ -107,11 +108,14 @@ describe('ServerComponentBuilder', () => {
 `
       vi.mocked(fsSync.existsSync).mockReturnValue(true)
       vi.mocked(fsSync.readFileSync).mockReturnValue(htmlContent)
+      vi.mocked(fsSync.realpathSync).mockImplementation(() => {
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+      })
 
       const builderWithHtml = new ServerComponentBuilder(mockProjectRoot, mockOptions)
 
       const htmlImports = builderWithHtml.getHtmlOnlyImports()
-      const expectedPath = path.join(mockProjectRoot, 'src', 'main.tsx')
+      const expectedPath = resolveModuleCachePath(path.join(mockProjectRoot, 'src', 'main.tsx'))
 
       expect(htmlImports.has(expectedPath)).toBe(true)
       expect(htmlImports.size).toBe(1)

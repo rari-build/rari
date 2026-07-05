@@ -126,11 +126,12 @@ export function isServerComponentFromAnalysis(
   filePath: string,
   analysis: ModuleAnalysis,
   htmlOnlyImports: ReadonlySet<string>,
+  cacheKey?: string,
 ): boolean {
   if (filePath.includes('node_modules'))
     return false
 
-  if (htmlOnlyImports.has(resolveModuleCachePath(filePath)))
+  if (htmlOnlyImports.has(cacheKey ?? resolveModuleCachePath(filePath)))
     return false
 
   return !analysis.directives.hasUseClient && !analysis.directives.hasUseServer
@@ -1883,6 +1884,7 @@ export interface DirectoryScanResult {
 
 interface ScannedFile {
   filePath: string
+  cacheKey: string
   code: string
   analysis: ModuleAnalysis
 }
@@ -1895,9 +1897,10 @@ function collectScannedFiles(
 
   for (const fullPath of collectSourceFilePaths(dirs)) {
     try {
+      const cacheKey = resolveModuleCachePath(fullPath)
       const code = fs.readFileSync(fullPath, 'utf-8')
       const analysis = builder.getModuleAnalysis(fullPath, code)
-      files.push({ filePath: fullPath, code, analysis })
+      files.push({ filePath: fullPath, cacheKey, code, analysis })
     }
     catch (error) {
       console.warn(
@@ -1923,6 +1926,7 @@ export function isEligibleServerComponent(
   code: string,
   builder: ServerComponentBuilder,
   analysis?: ModuleAnalysis,
+  cacheKey?: string,
 ): boolean {
   const fileName = path.basename(filePath)
   if (SPECIAL_FILE_REGEX.test(fileName) || fileName.endsWith('.d.ts'))
@@ -1939,7 +1943,7 @@ export function isEligibleServerComponent(
   if (builder.isOnlyImportedByClientComponents(filePath))
     return false
 
-  return isServerComponentFromAnalysis(filePath, moduleAnalysis, builder.getHtmlOnlyImports())
+  return isServerComponentFromAnalysis(filePath, moduleAnalysis, builder.getHtmlOnlyImports(), cacheKey)
     && hasComponentExport(code, moduleAnalysis)
 }
 
@@ -1957,13 +1961,13 @@ export function scanDirectory(
   const serverComponentPaths: string[] = []
   const clientComponentPaths: string[] = []
 
-  for (const { filePath, code, analysis } of files) {
+  for (const { filePath, cacheKey, code, analysis } of files) {
     if (analysis.directives.hasUseClient) {
       clientComponentPaths.push(filePath)
       builder.recordClientComponent(filePath, code)
     }
 
-    if (isEligibleServerComponent(filePath, code, builder, analysis)) {
+    if (isEligibleServerComponent(filePath, code, builder, analysis, cacheKey)) {
       builder.addServerComponent(filePath, code, analysis)
       serverComponentPaths.push(filePath)
     }

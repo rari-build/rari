@@ -57,9 +57,18 @@ export function collectSourceFilePaths(dirs: readonly string[]): string[] {
 
 export function normalizeScanDirs(primaryDir: string, additionalDirs: readonly string[] = []): string[] {
   const dirs = [primaryDir]
+  const resolvedPrimaryDir = path.resolve(primaryDir)
 
   for (const additionalDir of additionalDirs) {
-    if (!additionalDir || additionalDir === primaryDir)
+    if (!additionalDir)
+      continue
+
+    const resolvedAdditionalDir = path.resolve(additionalDir)
+    if (resolvedAdditionalDir === resolvedPrimaryDir)
+      continue
+
+    const relativePath = path.relative(resolvedPrimaryDir, resolvedAdditionalDir)
+    if (relativePath === '' || (!relativePath.startsWith('..') && !path.isAbsolute(relativePath)))
       continue
 
     try {
