@@ -11,9 +11,9 @@ inputs:
     required: false
     default: 'true'
   cache:
-    description: Enable pnpm cache in actions/setup-node
+    description: Enable pnpm cache in actions/setup-node (disable when using setup-namespace-cache)
     required: false
-    default: 'true'
+    default: 'false'
 
 runs:
   using: composite

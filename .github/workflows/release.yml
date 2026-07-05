@@ -23,7 +23,14 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: ./.github/actions/checkout
+
+      - uses: ./.github/actions/setup-namespace-cache
+        with:
+          cache: |
+            rust
+            pnpm
+            apt
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
@@ -31,11 +38,6 @@ jobs:
           toolchain: nightly
 
       - uses: ./.github/actions/setup-rust-build-deps
-
-      - name: Cache Rust
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
-        with:
-          shared-key: release-snapshot-linux
 
       - name: Bundle React ESM vendor files
         uses: ./.github/actions/bundle-react-esm
@@ -53,7 +55,7 @@ jobs:
           RUSTFLAGS: -C link-arg=-fuse-ld=mold
 
       - name: Upload snapshot
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: namespace-actions/upload-artifact@f6ccaacc655aec41b93af180d1d7eef21af862d2 # v1.0.3
         with:
           name: v8-snapshot
           path: |
@@ -99,7 +101,30 @@ jobs:
             platform: win32-arm64
 
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: ./.github/actions/checkout
+
+      - uses: ./.github/actions/setup-namespace-cache
+        if: runner.os == 'Linux'
+        with:
+          cache: |
+            rust
+            pnpm
+            apt
+
+      - uses: ./.github/actions/setup-namespace-cache
+        if: runner.os == 'macOS'
+        with:
+          cache: |
+            rust
+            pnpm
+            brew
+
+      - uses: ./.github/actions/setup-namespace-cache
+        if: runner.os == 'Windows'
+        with:
+          cache: |
+            rust
+            pnpm
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
@@ -111,16 +136,11 @@ jobs:
         with:
           vcpkg-triplet: ${{ matrix.vcpkg_triplet }}
 
-      - name: Cache Rust
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
-        with:
-          shared-key: release-binary-${{ matrix.target }}
-
       - name: Bundle React ESM vendor files
         uses: ./.github/actions/bundle-react-esm
 
       - name: Download V8 snapshot
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: namespace-actions/download-artifact@7cbad919e4b0e09f17e9d6311a444ff002992b5b # v2.0.1
         with:
           name: v8-snapshot
           path: crates/rari/snapshots
@@ -160,7 +180,7 @@ jobs:
           copy target\${{ matrix.target }}\release\rari.exe binaries\${{ matrix.name }}
 
       - name: Upload binary
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: namespace-actions/upload-artifact@f6ccaacc655aec41b93af180d1d7eef21af862d2 # v1.0.3
         with:
           name: ${{ matrix.name }}
           path: binaries/${{ matrix.name }}
@@ -192,7 +212,7 @@ jobs:
             binary: rari-win32-arm64.exe
 
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: ./.github/actions/checkout
 
       - name: Setup Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
@@ -204,7 +224,7 @@ jobs:
         run: npm install -g npm@latest
 
       - name: Download platform binary
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: namespace-actions/download-artifact@7cbad919e4b0e09f17e9d6311a444ff002992b5b # v2.0.1
         with:
           name: ${{ matrix.binary }}
           path: platform-binary
@@ -335,9 +355,13 @@ jobs:
           echo "version=${VERSION}"     >> "$GITHUB_OUTPUT"
           echo "📦 Publishing ${PACKAGE_NAME}@${VERSION}"
 
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: ./.github/actions/checkout
         with:
           ref: ${{ github.ref }}
+
+      - uses: ./.github/actions/setup-namespace-cache
+        with:
+          cache: pnpm
 
       - name: Setup Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
@@ -415,7 +439,30 @@ jobs:
             platform: win32-arm64
 
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: ./.github/actions/checkout
+
+      - uses: ./.github/actions/setup-namespace-cache
+        if: runner.os == 'Linux'
+        with:
+          cache: |
+            rust
+            pnpm
+            apt
+
+      - uses: ./.github/actions/setup-namespace-cache
+        if: runner.os == 'macOS'
+        with:
+          cache: |
+            rust
+            pnpm
+            brew
+
+      - uses: ./.github/actions/setup-namespace-cache
+        if: runner.os == 'Windows'
+        with:
+          cache: |
+            rust
+            pnpm
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
@@ -427,28 +474,10 @@ jobs:
         with:
           fontconfig: 'false'
 
-      - name: Setup Node.js
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      - uses: ./.github/actions/setup-pnpm
         with:
           node-version: ${{ env.NODE_VERSION }}
-
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
-
-      - name: Cache pnpm store
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.pnpm-store
-          key: pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: pnpm-${{ runner.os }}-
-
-      - name: Cache Rust
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
-        with:
-          shared-key: release-addon-${{ matrix.target }}
-          workspaces: crates/rari_use_cache
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+          cache: 'false'
 
       - name: Build addon (Linux)
         if: runner.os == 'Linux'
@@ -480,7 +509,7 @@ jobs:
           ls -la addon-output/
 
       - name: Upload addon artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: namespace-actions/upload-artifact@f6ccaacc655aec41b93af180d1d7eef21af862d2 # v1.0.3
         with:
           name: use-cache-addon-${{ matrix.platform }}
           path: addon-output/rari_use_cache.node
@@ -506,7 +535,7 @@ jobs:
           - win32-arm64
 
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: ./.github/actions/checkout
 
       - name: Setup Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
@@ -518,7 +547,7 @@ jobs:
         run: npm install -g npm@latest
 
       - name: Download platform addon
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: namespace-actions/download-artifact@7cbad919e4b0e09f17e9d6311a444ff002992b5b # v2.0.1
         with:
           name: use-cache-addon-${{ matrix.platform }}
           path: platform-addon
@@ -611,9 +640,13 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "📦 Publishing @rari/use-cache@${VERSION}"
 
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: ./.github/actions/checkout
         with:
           ref: ${{ github.ref }}
+
+      - uses: ./.github/actions/setup-namespace-cache
+        with:
+          cache: pnpm
 
       - name: Setup Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
