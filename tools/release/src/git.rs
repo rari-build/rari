@@ -84,7 +84,7 @@ pub async fn get_commits_since_tag(package_name: &str, package_path: &Path) -> R
                     "--grep=^release:",
                     "--invert-grep",
                     "--",
-                    "crates/rari-use-cache/",
+                    "crates/rari_use_cache/",
                     "packages/use-cache-darwin-arm64/",
                     "packages/use-cache-darwin-x64/",
                     "packages/use-cache-linux-arm64/",

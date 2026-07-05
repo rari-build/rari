@@ -7475,9 +7475,9 @@ dependencies = [
  "node_resolver",
  "parking_lot",
  "parley",
- "rari-error",
- "rari-rsc",
- "rari-utils",
+ "rari_error",
+ "rari_rsc",
+ "rari_utils",
  "redis",
  "regex",
  "reqwest",
@@ -7511,19 +7511,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rari-error"
-version = "0.0.0"
-dependencies = [
- "deno_core",
- "deno_error",
- "rustc-hash 2.1.2",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
- "tokio",
-]
-
-[[package]]
 name = "rari-prepare-binaries"
 version = "0.0.0"
 dependencies = [
@@ -7553,23 +7540,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rari-rsc"
-version = "0.0.0"
-dependencies = [
- "base64 0.22.1",
- "cow-utils",
- "parking_lot",
- "rari-error",
- "regex",
- "rustc-hash 2.1.2",
- "serde",
- "serde_json",
- "smallvec",
- "tracing",
- "uuid",
-]
-
-[[package]]
 name = "rari-snapshot"
 version = "0.0.0"
 dependencies = [
@@ -7583,7 +7553,37 @@ dependencies = [
 ]
 
 [[package]]
-name = "rari-use-cache"
+name = "rari_error"
+version = "0.0.0"
+dependencies = [
+ "deno_core",
+ "deno_error",
+ "rustc-hash 2.1.2",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+]
+
+[[package]]
+name = "rari_rsc"
+version = "0.0.0"
+dependencies = [
+ "base64 0.22.1",
+ "cow-utils",
+ "parking_lot",
+ "rari_error",
+ "regex",
+ "rustc-hash 2.1.2",
+ "serde",
+ "serde_json",
+ "smallvec",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "rari_use_cache"
 version = "0.0.0"
 dependencies = [
  "deno_ast",
@@ -7596,7 +7596,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rari-utils"
+name = "rari_utils"
 version = "0.0.0"
 dependencies = [
  "cow-utils",

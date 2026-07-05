@@ -18,12 +18,12 @@ use use_cache_addon::{
 
 #[derive(Parser, Debug)]
 #[command(name = "prepare-binaries")]
-#[command(about = "Prepare rari binaries and rari-use-cache addon for the current platform", long_about = None)]
+#[command(about = "Prepare rari binaries and rari_use_cache addon for the current platform", long_about = None)]
 struct Args {
     #[arg(long, help = "Build in debug mode (faster, for development)")]
     dev: bool,
 
-    #[arg(long, help = "Build the rari-use-cache native addon in addition to the main binary")]
+    #[arg(long, help = "Build the rari_use_cache native addon in addition to the main binary")]
     addon: bool,
 
     #[arg(
@@ -111,7 +111,7 @@ async fn main() -> Result<()> {
 
     // ---- Addon ----
     if do_build_addon {
-        log("Building rari-use-cache addon...");
+        log("Building rari_use_cache addon...");
         let success = build_addon(current_target, &project_root, args.dev).await?;
         if !success {
             log_error(&format!(

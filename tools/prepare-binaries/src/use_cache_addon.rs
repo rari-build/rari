@@ -9,7 +9,7 @@ use tokio::process::Command;
 
 use crate::common::{Target, get_current_platform_target, log, log_error, log_success};
 
-const ADDON_BUILD_DIR: &str = ".build/rari-use-cache";
+const ADDON_BUILD_DIR: &str = ".build/rari_use_cache";
 const ADDON_OUTPUT_FILE: &str = "rari_use_cache.node";
 const USE_CACHE_INDEX_JS: &str = r"import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
@@ -24,7 +24,7 @@ export default addon
 ";
 
 fn addon_napi_output_path(target_info: &Target, project_root: &Path) -> PathBuf {
-    project_root.join(ADDON_BUILD_DIR).join(format!("rari-use-cache.{}.node", target_info.platform))
+    project_root.join(ADDON_BUILD_DIR).join(format!("rari_use_cache.{}.node", target_info.platform))
 }
 
 fn addon_stable_output_path(target_info: &Target, project_root: &Path) -> PathBuf {
@@ -45,12 +45,12 @@ pub async fn build_addon(
     dev_mode: bool,
 ) -> Result<bool> {
     log(&format!(
-        "Building rari-use-cache addon for {} ({})",
+        "Building rari_use_cache addon for {} ({})",
         target_info.platform,
         if dev_mode { "debug" } else { "release" }
     ));
 
-    let manifest_dir = project_root.join("crates/rari-use-cache");
+    let manifest_dir = project_root.join("crates/rari_use_cache");
     let out_dir = project_root.join(ADDON_BUILD_DIR);
     fs::create_dir_all(&out_dir).context("Failed to create addon build dir")?;
 

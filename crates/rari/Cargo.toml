@@ -61,7 +61,7 @@ deno_ffi = "0.240.0"
 deno_napi = "0.184.0"
 
 # === Error Handling ===
-rari-error = { workspace = true }
+rari_error = { workspace = true }
 thiserror = { workspace = true }
 
 # === Async & Concurrency ===
@@ -86,7 +86,7 @@ async-compression = { version = "0.4.42", features = [
 ] }
 
 # === Serialization ===
-rari-rsc = { workspace = true }
+rari_rsc = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 base64 = { workspace = true }
@@ -115,7 +115,7 @@ tokio-tungstenite = "0.29.0"
 tungstenite = "0.29.0"
 
 # === Utilities ===
-rari-utils = { workspace = true }
+rari_utils = { workspace = true }
 bytes = { version = "1.12.0", features = [ "serde" ] }
 cow-utils = { workspace = true }
 dashmap = "6.2.1"

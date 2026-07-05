@@ -18,7 +18,7 @@ pub async fn generate(tag: &str, package_name: &str, package_path: &Path) -> Res
         args.push("crates/rari/**".to_string());
     } else if package_name == "@rari/use-cache" {
         args.push("--include-path".to_string());
-        args.push("crates/rari-use-cache/**".to_string());
+        args.push("crates/rari_use_cache/**".to_string());
     }
 
     args.push("--output".to_string());
@@ -78,12 +78,12 @@ pub async fn generate_release_notes(
             args.push("--include-path".to_string());
             args.push("packages/use-cache/**".to_string());
             args.push("--include-path".to_string());
-            args.push("crates/rari-use-cache/**".to_string());
+            args.push("crates/rari_use_cache/**".to_string());
             args.push("--tag-pattern".to_string());
             args.push("^@rari/use-cache@".to_string());
         } else if package_name == "@rari/use-cache-binaries" {
             args.push("--include-path".to_string());
-            args.push("crates/rari-use-cache/**".to_string());
+            args.push("crates/rari_use_cache/**".to_string());
             args.push("--include-path".to_string());
             args.push("packages/use-cache-*/**".to_string());
             args.push("--tag-pattern".to_string());

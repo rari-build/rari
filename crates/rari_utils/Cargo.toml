@@ -1,5 +1,5 @@
 [package]
-name = "rari-utils"
+name = "rari_utils"
 edition = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
