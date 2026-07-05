@@ -1,0 +1,15 @@
+name: Setup Namespace cache
+description: Configure Namespace cache volumes for dependencies and build outputs
+
+inputs:
+  cache:
+    description: Newline-separated cache modes passed to nscloud-cache-action
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Configure Namespace cache
+      uses: namespacelabs/nscloud-cache-action@58bf6e08898e88803c098e2b522668541cd3b2e3 # v1.6.0
+      with:
+        cache: ${{ inputs.cache }}

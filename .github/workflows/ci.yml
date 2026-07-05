@@ -35,9 +35,9 @@ jobs:
       snapshot: ${{ steps.filter.outputs.snapshot }}
       use_cache_crate: ${{ steps.filter.outputs.use_cache_crate }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: ./.github/actions/checkout
         with:
-          fetch-depth: 0
+          fetch-depth: '0'
 
       - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
         id: filter
@@ -87,7 +87,14 @@ jobs:
       actions: write
       contents: read
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: ./.github/actions/checkout
+
+      - uses: ./.github/actions/setup-namespace-cache
+        with:
+          cache: |
+            rust
+            pnpm
+            apt
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
@@ -96,40 +103,19 @@ jobs:
 
       - uses: ./.github/actions/setup-rust-build-deps
 
-      - name: Cache Rust
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
-        with:
-          shared-key: rust-linux
-
       - name: Bundle React ESM vendor files
         uses: ./.github/actions/bundle-react-esm
 
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
 
-      - name: Restore snapshot from cache
-        id: cache-snapshot
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: crates/rari/snapshots
-          key: v8-snapshot-${{ hashFiles('crates/rari/src/runtime/ext/**', 'tools/snapshot/**', 'tools/bundle-react-esm/**', 'pnpm-lock.yaml') }}
-
       - name: Create snapshot placeholder
-        if: steps.cache-snapshot.outputs.cache-hit != 'true'
         run: just ci-create-snapshot-placeholder
 
       - name: Generate V8 snapshot
-        if: steps.cache-snapshot.outputs.cache-hit != 'true'
         run: just ci-generate-snapshot
 
-      - name: Save snapshot to cache
-        if: steps.cache-snapshot.outputs.cache-hit != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: crates/rari/snapshots
-          key: v8-snapshot-${{ hashFiles('crates/rari/src/runtime/ext/**', 'tools/snapshot/**', 'tools/bundle-react-esm/**', 'pnpm-lock.yaml') }}
-
       - name: Upload snapshot
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: namespace-actions/upload-artifact@f6ccaacc655aec41b93af180d1d7eef21af862d2 # v1.0.3
         with:
           name: v8-snapshot
           path: |
@@ -152,7 +138,14 @@ jobs:
       actions: write
       contents: read
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: ./.github/actions/checkout
+
+      - uses: ./.github/actions/setup-namespace-cache
+        with:
+          cache: |
+            rust
+            pnpm
+            apt
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
@@ -162,35 +155,20 @@ jobs:
 
       - uses: ./.github/actions/setup-rust-build-deps
 
-      - name: Cache Rust
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
-        with:
-          shared-key: rust-linux
-
       - name: Bundle React ESM vendor files
         uses: ./.github/actions/bundle-react-esm
 
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
 
-      - name: Restore snapshot from cache
-        if: needs.build-snapshot.result != 'success'
-        id: cache-snapshot
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: crates/rari/snapshots
-          key: v8-snapshot-${{ hashFiles('crates/rari/src/runtime/ext/**', 'tools/snapshot/**', 'tools/bundle-react-esm/**', 'pnpm-lock.yaml') }}
-          restore-keys: |
-            v8-snapshot-
-
       - name: Download snapshot
         if: needs.build-snapshot.result == 'success'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: namespace-actions/download-artifact@7cbad919e4b0e09f17e9d6311a444ff002992b5b # v2.0.1
         with:
           name: v8-snapshot
           path: crates/rari/snapshots
 
       - name: Generate snapshot if needed
-        if: needs.build-snapshot.result != 'success' && steps.cache-snapshot.outputs.cache-hit != 'true'
+        if: needs.build-snapshot.result != 'success'
         run: just ci-generate-snapshot
 
       - name: Rust check
@@ -218,7 +196,22 @@ jobs:
         exclude:
           - os: ${{ github.event_name == 'merge_group' && 'namespace-profile-rari-windows-amd64' || '' }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: ./.github/actions/checkout
+
+      - uses: ./.github/actions/setup-namespace-cache
+        if: runner.os == 'Linux'
+        with:
+          cache: |
+            rust
+            pnpm
+            apt
+
+      - uses: ./.github/actions/setup-namespace-cache
+        if: runner.os == 'Windows'
+        with:
+          cache: |
+            rust
+            pnpm
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
@@ -229,29 +222,26 @@ jobs:
         with:
           vcpkg-triplet: x64-windows
 
-      - name: Cache Rust
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
-        with:
-          shared-key: rust-${{ runner.os }}
-
       - name: Bundle React ESM vendor files
         uses: ./.github/actions/bundle-react-esm
 
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
 
-      - name: Restore binary from cache
+      - name: Check for existing binary
         if: needs.changes.outputs.rust != 'true'
         id: cache-binary
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: target/debug/rari${{ runner.os == 'Windows' && '.exe' || '' }}
-          key: rari-binary-${{ runner.os }}-${{ hashFiles('crates/**', 'Cargo.lock') }}
-          restore-keys: |
-            rari-binary-${{ runner.os }}-
+        shell: bash
+        run: |
+          bin="target/debug/rari${{ runner.os == 'Windows' && '.exe' || '' }}"
+          if [ -f "$bin" ]; then
+            echo "cache-hit=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "cache-hit=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Download snapshot
         if: needs.build-snapshot.result == 'success'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: namespace-actions/download-artifact@7cbad919e4b0e09f17e9d6311a444ff002992b5b # v2.0.1
         with:
           name: v8-snapshot
           path: crates/rari/snapshots
@@ -272,16 +262,9 @@ jobs:
         if: runner.os != 'Windows' && (needs.changes.outputs.rust == 'true' || steps.cache-binary.outputs.cache-hit != 'true')
         run: cargo build --bin rari
 
-      - name: Save binary to cache
-        if: needs.changes.outputs.rust == 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: target/debug/rari${{ runner.os == 'Windows' && '.exe' || '' }}
-          key: rari-binary-${{ runner.os }}-${{ hashFiles('crates/**', 'Cargo.lock') }}
-
       - name: Upload binary (Linux)
         if: runner.os == 'Linux'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: namespace-actions/upload-artifact@f6ccaacc655aec41b93af180d1d7eef21af862d2 # v1.0.3
         with:
           name: rari-binary-linux
           path: target/debug/rari
@@ -290,7 +273,7 @@ jobs:
 
       - name: Upload binary (Windows)
         if: runner.os == 'Windows'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: namespace-actions/upload-artifact@f6ccaacc655aec41b93af180d1d7eef21af862d2 # v1.0.3
         with:
           name: rari-binary-windows
           path: target/debug/rari.exe
@@ -312,11 +295,26 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [namespace-profile-rari-linux-amd64, namespace-profile-rari-windows-amd64]
         exclude:
-          - os: ${{ github.event_name == 'merge_group' && 'windows-latest' || '' }}
+          - os: ${{ github.event_name == 'merge_group' && 'namespace-profile-rari-windows-amd64' || '' }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: ./.github/actions/checkout
+
+      - uses: ./.github/actions/setup-namespace-cache
+        if: runner.os == 'Linux'
+        with:
+          cache: |
+            rust
+            pnpm
+            apt
+
+      - uses: ./.github/actions/setup-namespace-cache
+        if: runner.os == 'Windows'
+        with:
+          cache: |
+            rust
+            pnpm
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
@@ -327,29 +325,10 @@ jobs:
         with:
           fontconfig: 'false'
 
-      - name: Setup Node.js
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      - uses: ./.github/actions/setup-pnpm
         with:
           node-version: 22.18.0
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
-
-      - name: Cache pnpm store
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.pnpm-store
-          key: pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: pnpm-${{ runner.os }}-
-
-      - name: Cache Rust (use-cache crate only)
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
-        with:
-          shared-key: use-cache-${{ runner.os }}
-          workspaces: crates/rari_use_cache
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+          cache: 'false'
 
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
 
@@ -358,7 +337,7 @@ jobs:
 
       - name: Upload addon (Linux)
         if: runner.os == 'Linux'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: namespace-actions/upload-artifact@f6ccaacc655aec41b93af180d1d7eef21af862d2 # v1.0.3
         with:
           name: use-cache-linux-x64
           path: |
@@ -368,16 +347,9 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-      - name: Cache addon (Linux)
-        if: runner.os == 'Linux'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: packages/use-cache-linux-x64
-          key: use-cache-linux-x64-${{ hashFiles('crates/rari_use_cache/**', 'Cargo.lock') }}
-
       - name: Upload addon (Windows)
         if: runner.os == 'Windows'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: namespace-actions/upload-artifact@f6ccaacc655aec41b93af180d1d7eef21af862d2 # v1.0.3
         with:
           name: use-cache-win32-x64
           path: |
@@ -386,13 +358,6 @@ jobs:
             packages/use-cache-win32-x64/package.json
           if-no-files-found: error
           retention-days: 1
-
-      - name: Cache addon (Windows)
-        if: runner.os == 'Windows'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: packages/use-cache-win32-x64
-          key: use-cache-win32-x64-${{ hashFiles('crates/rari_use_cache/**', 'Cargo.lock') }}
 
   build:
     needs: [changes, build-use-cache-addon]
@@ -405,11 +370,16 @@ jobs:
       actions: write
       contents: read
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: ./.github/actions/checkout
+
+      - uses: ./.github/actions/setup-namespace-cache
+        with:
+          cache: pnpm
 
       - uses: ./.github/actions/setup-pnpm
         with:
           node-version: 22.18.0
+          cache: 'false'
 
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
 
@@ -427,7 +397,7 @@ jobs:
         run: just ci-verify-dist
 
       - name: Upload dist artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: namespace-actions/upload-artifact@f6ccaacc655aec41b93af180d1d7eef21af862d2 # v1.0.3
         with:
           if-no-files-found: error
           retention-days: 3
@@ -453,11 +423,16 @@ jobs:
       actions: write
       contents: read
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: ./.github/actions/checkout
+
+      - uses: ./.github/actions/setup-namespace-cache
+        with:
+          cache: pnpm
 
       - uses: ./.github/actions/setup-pnpm
         with:
           node-version: 22.18.0
+          cache: 'false'
 
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
 
@@ -490,29 +465,45 @@ jobs:
           - os: ${{ github.event_name == 'merge_group' && 'namespace-profile-rari-windows-amd64' || '' }}
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: ./.github/actions/checkout
+
+      - uses: ./.github/actions/setup-namespace-cache
+        if: runner.os == 'Linux'
+        with:
+          cache: |
+            playwright
+            pnpm
+            apt
+
+      - uses: ./.github/actions/setup-namespace-cache
+        if: runner.os == 'Windows'
+        with:
+          cache: |
+            playwright
+            pnpm
 
       - uses: ./.github/actions/setup-pnpm
         with:
           node-version: ${{ matrix.node }}
           install: 'false'
+          cache: 'false'
 
       - name: Restore dist cache
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: namespace-actions/download-artifact@7cbad919e4b0e09f17e9d6311a444ff002992b5b # v2.0.1
         with:
           name: dist
           path: packages
 
       - name: Download rari binary (Linux)
         if: runner.os == 'Linux'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: namespace-actions/download-artifact@7cbad919e4b0e09f17e9d6311a444ff002992b5b # v2.0.1
         with:
           name: rari-binary-linux
           path: packages/rari-linux-x64/bin
 
       - name: Download rari binary (Windows)
         if: runner.os == 'Windows'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: namespace-actions/download-artifact@7cbad919e4b0e09f17e9d6311a444ff002992b5b # v2.0.1
         with:
           name: rari-binary-windows
           path: packages/rari-win32-x64/bin
@@ -531,23 +522,6 @@ jobs:
         if: runner.os == 'Linux'
         run: chmod +x packages/rari-linux-x64/bin/rari
 
-      - name: Set up cache (Linux)
-        if: runner.os == 'Linux'
-        uses: namespacelabs/nscloud-cache-action@58bf6e08898e88803c098e2b522668541cd3b2e3 # v1.6.0
-        with:
-          cache: |
-            playwright
-            apt
-            pnpm
-
-      - name: Cache Playwright browsers (Windows)
-        if: runner.os == 'Windows'
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~\AppData\Local\ms-playwright
-          key: playwright-win-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: playwright-win-
-
       - uses: ./.github/actions/setup-redis
 
       - name: Install dependencies
@@ -561,7 +535,7 @@ jobs:
 
       - name: Upload Playwright report
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: namespace-actions/upload-artifact@f6ccaacc655aec41b93af180d1d7eef21af862d2 # v1.0.3
         with:
           name: playwright-report-${{ matrix.os }}
           path: |
