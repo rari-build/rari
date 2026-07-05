@@ -35,6 +35,7 @@ import { scanForImageUsage } from './image-scanner'
 import { transformDefineMdxComponents } from './mdx-components-transform'
 import {
   generateMdxRegistryModule,
+  isMdxRegistryModuleId,
   resolveMdxRegistryEntries,
 } from './mdx-registry'
 import { collectClientComponentPaths, invalidateModuleCachePath, ModuleAnalysisCache, resolveModuleCachePath } from './module-analysis-cache'
@@ -44,13 +45,6 @@ import { normalizeScanDirs } from './source-file-walker'
 import { getUseCacheTransform } from './use-cache-loader'
 
 const DIST_NOT_BUILT_ERROR = '[rari] Runtime dist not built. Run `pnpm build` in the rari package first.'
-
-function isMdxRegistryModule(id: string): boolean {
-  const normalized = id.replace(BACKSLASH_REGEX, '/')
-  return normalized.endsWith('/mdx/registry.ts')
-    || normalized.endsWith('/mdx/registry.mjs')
-    || normalized.endsWith('/mdx/registry')
-}
 
 const IMPORT_TYPE_SPECIFIER_REGEX = /import\s+type\s+(\{[^}]+\})\s+from\s+["']\.\.?\/([^"']+)["'];?/g
 const IMPORT_TYPE_NAMESPACE_REGEX = /import\s+type\s+(\*\s+as\s+\w+)\s+from\s+["']\.\.?\/([^"']+)["'];?/g
@@ -1734,7 +1728,7 @@ ${clientTransformedCode}`
         return 'virtual:app-router-provider.tsx'
       if (id === 'virtual:error-boundary-wrapper' || id === 'virtual:error-boundary-wrapper.tsx')
         return 'virtual:error-boundary-wrapper.tsx'
-      if (isMdxRegistryModule(id) || id === 'rari/mdx/registry')
+      if (isMdxRegistryModuleId(id))
         return 'virtual:rari-mdx-components.ts'
       if (id === 'virtual:rari-mdx-components' || id === 'virtual:rari-mdx-components.ts')
         return 'virtual:rari-mdx-components.ts'

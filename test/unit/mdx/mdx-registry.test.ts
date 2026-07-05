@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vite-plus/test'
-import { discoverMdxRegistryEntries, generateMdxRegistryModule } from '../../../packages/rari/src/vite/mdx-registry'
+import { discoverMdxRegistryEntries, generateMdxRegistryModule, isMdxRegistryModuleId } from '../../../packages/rari/src/vite/mdx-registry'
 import { ModuleAnalysisCache } from '../../../packages/rari/src/vite/module-analysis-cache'
 
 describe('mdx registry', () => {
@@ -49,5 +49,15 @@ describe('mdx registry', () => {
     expect(moduleSource).toContain(`component: null`)
     expect(moduleSource).toContain(`id: "src/components/CodeBlock.tsx"`)
     expect(moduleSource).not.toContain('import CodeBlock')
+  })
+
+  it('matches only rari package MDX registry module ids', () => {
+    expect(isMdxRegistryModuleId('rari/mdx/registry')).toBe(true)
+    expect(isMdxRegistryModuleId('/app/node_modules/rari/dist/mdx/registry.mjs')).toBe(true)
+    expect(isMdxRegistryModuleId('/repo/packages/rari/src/mdx/registry.ts')).toBe(true)
+
+    expect(isMdxRegistryModuleId('./mdx/registry.ts')).toBe(false)
+    expect(isMdxRegistryModuleId('/app/src/mdx/registry.ts')).toBe(false)
+    expect(isMdxRegistryModuleId('../content/mdx/registry')).toBe(false)
   })
 })
