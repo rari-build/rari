@@ -38,7 +38,7 @@ export const writeable = (value: unknown): PropertyDescriptor => ObjectPropertie
 export function getterOnly(getter: () => unknown): PropertyDescriptor {
   return {
     get: getter,
-    set() { },
+    set() {},
     ...ObjectProperties.getterOnly,
   }
 }

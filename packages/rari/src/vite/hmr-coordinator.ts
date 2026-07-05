@@ -1,10 +1,8 @@
 import type { ViteDevServer } from 'vite-plus'
 import type { ServerComponentBuilder } from './server-build'
-import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { throwIfNotOk } from '../shared/utils/http'
-import { hasTopLevelUseClientDirective } from './directives'
 import { HMRErrorHandler } from './hmr-error-handler'
 
 export interface ComponentRebuildResult {
@@ -290,8 +288,8 @@ export class HMRCoordinator {
 
   detectComponentType(filePath: string): 'client' | 'server' | 'unknown' {
     try {
-      const code = fs.readFileSync(filePath, 'utf-8')
-      return hasTopLevelUseClientDirective(code) ? 'client' : 'server'
+      const analysis = this.serverComponentBuilder.getModuleAnalysis(filePath)
+      return analysis.topLevelUseClient ? 'client' : 'server'
     }
     catch {
       return 'unknown'

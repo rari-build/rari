@@ -1,90 +1,54 @@
-import type { SpawnOptions } from 'node:child_process'
+import type { ChildProcess, SpawnOptions } from 'node:child_process'
 import { spawn } from 'node:child_process'
-import { existsSync, readFileSync, realpathSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, realpathSync, rmSync } from 'node:fs'
 import { resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
-import { styleText } from 'node:util'
+import { parseArgs, styleText } from 'node:util'
 import { logError, logInfo, logSuccess, logWarn } from '@rari/logger'
 import { getBinaryPath, getInstallationInstructions } from './platform'
 
-const ENV_LINE_REGEX = /^([^=]+)=(.*)$/
+type PackageManager = 'pnpm' | 'yarn' | 'bun' | 'npm'
 
-function parseEnvLine(line: string): { key: string, value: string } | null {
-  const trimmed = line.trim()
-
-  if (!trimmed || trimmed.startsWith('#'))
-    return null
-
-  const match = trimmed.match(ENV_LINE_REGEX)
-  if (!match)
-    return null
-
-  const [, key, value] = match
-  const cleanKey = key.trim()
-  let cleanValue = value.trim()
-
-  if ((cleanValue.startsWith('"') && cleanValue.endsWith('"'))
-    || (cleanValue.startsWith('\'') && cleanValue.endsWith('\''))) {
-    cleanValue = cleanValue.slice(1, -1)
-  }
-
-  return { key: cleanKey, value: cleanValue }
+interface ProjectContext {
+  cwd: string
+  packageManager: PackageManager
+  viteBin: 'vp' | 'vite'
 }
 
-function loadEnvFile() {
-  const envPath = resolve(process.cwd(), '.env')
-  if (!existsSync(envPath))
-    return
+let cachedProjectContext: ProjectContext | null = null
 
-  const envContent = readFileSync(envPath, 'utf-8')
-  for (const line of envContent.split('\n')) {
-    const parsed = parseEnvLine(line)
-    if (parsed && !process.env[parsed.key])
-      process.env[parsed.key] = parsed.value
-  }
-}
+function detectPackageManagerFromDir(dir: string): PackageManager | null {
+  const entries = existsSync(dir) ? new Set(readDirNames(dir)) : new Set<string>()
 
-loadEnvFile()
-
-const [, , command, ...args] = process.argv
-
-function walkUpDirectories<T>(callback: (dir: string) => T | null): T | null {
-  let currentDir = process.cwd()
-
-  while (true) {
-    const result = callback(currentDir)
-    if (result !== null)
-      return result
-    const parentDir = resolve(currentDir, '..')
-    if (parentDir === currentDir)
-      break
-    currentDir = parentDir
-  }
-
-  return null
-}
-
-function checkLockFiles(dir: string): 'pnpm' | 'yarn' | 'bun' | 'npm' | null {
-  if (existsSync(resolve(dir, 'pnpm-lock.yaml')))
+  if (entries.has('pnpm-lock.yaml'))
     return 'pnpm'
-  if (existsSync(resolve(dir, 'yarn.lock')))
+  if (entries.has('yarn.lock'))
     return 'yarn'
-  if (existsSync(resolve(dir, 'bun.lockb')))
+  if (entries.has('bun.lockb') || entries.has('bun.lock'))
     return 'bun'
-  if (existsSync(resolve(dir, 'package-lock.json')))
+  if (entries.has('package-lock.json'))
     return 'npm'
 
-  return null
+  return readPackageManagerField(dir)
 }
 
-function checkPackageJson(dir: string): 'pnpm' | 'yarn' | 'bun' | 'npm' | null {
+function readDirNames(dir: string): string[] {
+  try {
+    return readdirSync(dir)
+  }
+  catch {
+    return []
+  }
+}
+
+function readPackageManagerField(dir: string): PackageManager | null {
   try {
     const pkgPath = resolve(dir, 'package.json')
     if (!existsSync(pkgPath))
       return null
 
-    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'))
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as { packageManager?: string }
     if (pkg.packageManager?.startsWith('pnpm'))
       return 'pnpm'
     if (pkg.packageManager?.startsWith('yarn'))
@@ -99,12 +63,71 @@ function checkPackageJson(dir: string): 'pnpm' | 'yarn' | 'bun' | 'npm' | null {
   return null
 }
 
-function detectPackageManager(): 'pnpm' | 'yarn' | 'bun' | 'npm' {
-  return walkUpDirectories(dir => checkLockFiles(dir) ?? checkPackageJson(dir)) ?? 'npm'
+function detectViteBinFromDir(dir: string): 'vp' | 'vite' | null {
+  try {
+    const pkgPath = resolve(dir, 'package.json')
+    if (!existsSync(pkgPath))
+      return null
+
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as {
+      dependencies?: Record<string, string>
+      devDependencies?: Record<string, string>
+    }
+    const deps = { ...pkg.dependencies, ...pkg.devDependencies }
+    if (deps['vite-plus'])
+      return 'vp'
+    if (deps.vite)
+      return 'vite'
+  }
+  catch {}
+
+  return null
+}
+
+function discoverProjectContext(cwd: string): ProjectContext {
+  let currentDir = cwd
+  let packageManager: PackageManager | null = null
+  let viteBin: 'vp' | 'vite' | null = null
+
+  while (true) {
+    if (!packageManager)
+      packageManager = detectPackageManagerFromDir(currentDir)
+
+    if (!viteBin)
+      viteBin = detectViteBinFromDir(currentDir)
+
+    if (packageManager && viteBin)
+      break
+
+    const parentDir = resolve(currentDir, '..')
+    if (parentDir === currentDir)
+      break
+
+    currentDir = parentDir
+  }
+
+  return {
+    cwd,
+    packageManager: packageManager ?? 'npm',
+    viteBin: viteBin ?? 'vite',
+  }
+}
+
+function getProjectContext(): ProjectContext {
+  const cwd = process.cwd()
+  if (cachedProjectContext?.cwd === cwd)
+    return cachedProjectContext
+
+  cachedProjectContext = discoverProjectContext(cwd)
+  return cachedProjectContext
+}
+
+function detectPackageManager(): PackageManager {
+  return getProjectContext().packageManager
 }
 
 function getPackageExecutor(): string {
-  const pm = detectPackageManager()
+  const pm = getProjectContext().packageManager
   const isWindows = process.platform === 'win32'
 
   switch (pm) {
@@ -119,23 +142,33 @@ function getPackageExecutor(): string {
   }
 }
 
-function detectViteBin(): 'vp' | 'vite' {
-  return walkUpDirectories((dir) => {
-    try {
-      const pkgPath = resolve(dir, 'package.json')
-      if (existsSync(pkgPath)) {
-        const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'))
-        const deps = { ...pkg.dependencies, ...pkg.devDependencies }
-        if (deps['vite-plus'])
-          return 'vp'
-        if (deps.vite)
-          return 'vite'
-      }
-    }
-    catch {}
+function resolveLocalBin(binName: string, startDir = process.cwd()): string | null {
+  const isWindows = process.platform === 'win32'
+  let currentDir = startDir
 
-    return null
-  }) ?? 'vite'
+  while (true) {
+    const binDir = resolve(currentDir, 'node_modules', '.bin')
+    const candidates = isWindows
+      ? [
+          resolve(binDir, `${binName}.cmd`),
+          resolve(binDir, `${binName}.exe`),
+          resolve(binDir, binName),
+        ]
+      : [resolve(binDir, binName)]
+
+    for (const candidate of candidates) {
+      if (existsSync(candidate))
+        return candidate
+    }
+
+    const parentDir = resolve(currentDir, '..')
+    if (parentDir === currentDir)
+      break
+
+    currentDir = parentDir
+  }
+
+  return null
 }
 
 function crossPlatformSpawn(command: string, args: string[], options: SpawnOptions = {}) {
@@ -164,6 +197,36 @@ function crossPlatformSpawn(command: string, args: string[], options: SpawnOptio
   return spawn(command, args, options)
 }
 
+function spawnTool(binName: string, args: string[], options: SpawnOptions = {}) {
+  const localBin = resolveLocalBin(binName)
+  if (localBin) {
+    const needsShell = process.platform === 'win32' && localBin.endsWith('.cmd')
+    return spawn(localBin, args, needsShell ? { ...options, shell: true } : options)
+  }
+
+  return crossPlatformSpawn('npx', [binName, ...args], options)
+}
+
+async function waitForProcess(
+  child: ChildProcess,
+  options: { tolerateErrors?: boolean } = {},
+): Promise<number | null> {
+  return new Promise((resolve, reject) => {
+    child.on('exit', (code) => {
+      resolve(code)
+    })
+    child.on('error', (error) => {
+      if (options.tolerateErrors) {
+        logWarn(normalizeError(error))
+        resolve(1)
+      }
+      else {
+        reject(error)
+      }
+    })
+  })
+}
+
 function normalizeError(error: unknown): string {
   if (error instanceof Error)
     return error.message
@@ -175,6 +238,29 @@ function normalizeError(error: unknown): string {
   catch {
     return String(error)
   }
+}
+
+function loadProjectEnv() {
+  const envPath = resolve(process.cwd(), '.env')
+  if (existsSync(envPath))
+    process.loadEnvFile(envPath)
+}
+
+function parseCliArgv(argv: string[]) {
+  const { values, positionals } = parseArgs({
+    args: argv,
+    options: {
+      help: { type: 'boolean', short: 'h', default: false },
+    },
+    allowPositionals: true,
+    strict: false,
+  })
+
+  if (values.help)
+    return { command: 'help', args: [] as string[] }
+
+  const [command, ...args] = positionals
+  return { command, args }
 }
 
 function isRailwayEnvironment(): boolean {
@@ -216,46 +302,37 @@ function getDeploymentConfig() {
 
 async function runViteBuild() {
   await cleanDistFolder()
+  const viteBin = getProjectContext().viteBin
 
   logInfo('Type checking...')
-  const typecheckProcess = crossPlatformSpawn('npx', ['tsgo'], {
+  const typecheckProcess = spawnTool('tsgo', [], {
     stdio: 'inherit',
     cwd: process.cwd(),
   })
 
-  await new Promise<void>((resolve, reject) => {
-    typecheckProcess.on('exit', (code) => {
-      if (code === 0) {
-        logSuccess('Type check passed')
-        resolve()
-      }
-      else {
-        logError(`Type check failed with code ${code}`)
-        reject(new Error(`Type check failed with code ${code}`))
-      }
-    })
-    typecheckProcess.on('error', reject)
-  })
+  const typecheckCode = await waitForProcess(typecheckProcess)
+  if (typecheckCode === 0) {
+    logSuccess('Type check passed')
+  }
+  else {
+    logError(`Type check failed with code ${typecheckCode}`)
+    throw new Error(`Type check failed with code ${typecheckCode}`)
+  }
 
   logInfo('Building for production...')
-  const buildProcess = crossPlatformSpawn('npx', [detectViteBin(), 'build'], {
+  const buildProcess = spawnTool(viteBin, ['build'], {
     stdio: 'inherit',
     cwd: process.cwd(),
   })
 
-  await new Promise<void>((resolve, reject) => {
-    buildProcess.on('exit', (code) => {
-      if (code === 0) {
-        logSuccess('Build complete')
-        resolve()
-      }
-      else {
-        logError(`Build failed with code ${code}`)
-        reject(new Error(`Build failed with code ${code}`))
-      }
-    })
-    buildProcess.on('error', reject)
-  })
+  const buildCode = await waitForProcess(buildProcess)
+  if (buildCode === 0) {
+    logSuccess('Build complete')
+  }
+  else {
+    logError(`Build failed with code ${buildCode}`)
+    throw new Error(`Build failed with code ${buildCode}`)
+  }
 
   await preOptimizeImages()
 }
@@ -273,28 +350,15 @@ async function preOptimizeImages() {
 
   try {
     const binaryPath = getBinaryPath()
-
     const optimizeProcess = spawn(binaryPath, ['optimize-images'], {
       stdio: 'inherit',
       cwd: process.cwd(),
       shell: false,
     })
 
-    await new Promise<void>((resolve) => {
-      optimizeProcess.on('exit', (code) => {
-        if (code === 0) {
-          resolve()
-        }
-        else {
-          logWarn(`Image pre-optimization exited with code ${code}`)
-          resolve()
-        }
-      })
-      optimizeProcess.on('error', (err) => {
-        logWarn(`Image pre-optimization error: ${normalizeError(err)}`)
-        resolve()
-      })
-    })
+    const code = await waitForProcess(optimizeProcess, { tolerateErrors: true })
+    if (code !== 0)
+      logWarn(`Image pre-optimization exited with code ${code}`)
   }
   catch (error) {
     logWarn(`Could not pre-optimize images: ${normalizeError(error)}`)
@@ -302,37 +366,29 @@ async function preOptimizeImages() {
 }
 
 async function runViteDev() {
-  const { existsSync } = await import('node:fs')
-  const { resolve } = await import('node:path')
-
-  const viteBin = detectViteBin()
+  const viteBin = getProjectContext().viteBin
   const distPath = resolve(process.cwd(), 'dist')
 
   if (!existsSync(distPath)) {
     logInfo('First run detected - building project...')
 
-    const buildProcess = crossPlatformSpawn('npx', [viteBin, 'build', '--mode', 'development'], {
+    const buildProcess = spawnTool(viteBin, ['build', '--mode', 'development'], {
       stdio: 'inherit',
       cwd: process.cwd(),
     })
 
-    await new Promise<void>((resolve, reject) => {
-      buildProcess.on('exit', (code) => {
-        if (code === 0) {
-          logSuccess('Initial build complete')
-          resolve()
-        }
-        else {
-          logError(`Build failed with code ${code}`)
-          reject(new Error(`Build failed with code ${code}`))
-        }
-      })
-      buildProcess.on('error', reject)
-    })
+    const buildCode = await waitForProcess(buildProcess)
+    if (buildCode === 0) {
+      logSuccess('Initial build complete')
+    }
+    else {
+      logError(`Build failed with code ${buildCode}`)
+      throw new Error(`Build failed with code ${buildCode}`)
+    }
   }
 
   logInfo(`Starting Vite${viteBin === 'vp' ? '+' : ''} dev server...`)
-  const viteProcess = crossPlatformSpawn('npx', [viteBin, 'dev'], {
+  const viteProcess = spawnTool(viteBin, ['dev'], {
     stdio: 'inherit',
     cwd: process.cwd(),
   })
@@ -350,14 +406,14 @@ async function runViteDev() {
     process.exit(1)
   })
 
-  viteProcess.on('exit', (code: number) => {
+  viteProcess.on('exit', (code: number | null) => {
     if (code !== 0 && code !== null) {
       logError(`Vite exited with code ${code}`)
       process.exit(code)
     }
   })
 
-  return new Promise(() => { })
+  return new Promise(() => {})
 }
 
 async function startRustServer(): Promise<void> {
@@ -408,7 +464,7 @@ async function startRustServer(): Promise<void> {
     process.exit(1)
   })
 
-  rustServer.on('exit', (code: number, signal: string) => {
+  rustServer.on('exit', (code: number | null, signal: string | null) => {
     if (signal) {
       logInfo(`server stopped by signal ${signal}`)
     }
@@ -421,7 +477,7 @@ async function startRustServer(): Promise<void> {
     }
   })
 
-  return new Promise(() => { })
+  return new Promise(() => {})
 }
 
 async function deployToRailway() {
@@ -449,9 +505,6 @@ async function deployToRender() {
 }
 
 async function cleanDistFolder() {
-  const { existsSync, rmSync } = await import('node:fs')
-  const { resolve } = await import('node:path')
-
   const distPath = resolve(process.cwd(), 'dist')
 
   if (existsSync(distPath)) {
@@ -464,13 +517,8 @@ async function cleanDistFolder() {
   }
 }
 
-async function main() {
-  switch (command) {
-    case undefined:
-    case 'help':
-    case '--help':
-    case '-h':
-      console.warn(`${styleText('bold', 'rari CLI')}
+function printHelp() {
+  console.warn(`${styleText('bold', 'rari CLI')}
 
 ${styleText('bold', 'Usage:')}
   ${styleText('cyan', 'rari dev')}                 Start the development server with Vite
@@ -538,6 +586,17 @@ ${styleText('bold', 'Notes:')}
   - Use Ctrl+C to stop the server gracefully
 
 `)
+}
+
+async function main() {
+  loadProjectEnv()
+
+  const { command, args } = parseCliArgv(process.argv.slice(2))
+
+  switch (command) {
+    case undefined:
+    case 'help':
+      printHelp()
       break
 
     case 'dev':
@@ -576,11 +635,13 @@ ${styleText('bold', 'Notes:')}
   }
 }
 
-const invokedPath = process.argv[1] ? realpathSync(resolve(process.argv[1])) : ''
-const currentPath = realpathSync(fileURLToPath(import.meta.url))
-const isMainModule = Boolean(invokedPath) && currentPath === invokedPath
+function isCliMainModule(): boolean {
+  const invokedPath = process.argv[1] ? realpathSync(resolve(process.argv[1])) : ''
+  const currentPath = realpathSync(fileURLToPath(import.meta.url))
+  return Boolean(invokedPath) && currentPath === invokedPath
+}
 
-if (isMainModule) {
+if (isCliMainModule()) {
   main().catch((error) => {
     logError(`CLI Error: ${normalizeError(error)}`)
     console.error(error)

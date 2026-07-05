@@ -77,7 +77,9 @@ function getPlatformInfo(): PlatformInfo {
   }
 }
 
-export function getBinaryPath(): string {
+let cachedBinaryPath: string | null = null
+
+function resolveBinaryPath(): string {
   const { packageName, binaryName } = getPlatformInfo()
 
   const selfDir = dirname(fileURLToPath(import.meta.url))
@@ -111,6 +113,14 @@ export function getBinaryPath(): string {
       + `Please ensure the platform package is installed: npm install ${packageName}`,
     )
   }
+}
+
+export function getBinaryPath(): string {
+  if (cachedBinaryPath)
+    return cachedBinaryPath
+
+  cachedBinaryPath = resolveBinaryPath()
+  return cachedBinaryPath
 }
 
 export function getInstallationInstructions(): string {
