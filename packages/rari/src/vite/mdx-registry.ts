@@ -9,6 +9,25 @@ import { normalizeScanDirs } from './source-file-walker'
 
 const MDX_FILE_REGEX = /\.mdx$/
 
+export function isMdxRegistryModuleId(id: string): boolean {
+  const normalized = id.replace(BACKSLASH_REGEX, '/')
+
+  if (normalized === 'rari/mdx/registry' || normalized.startsWith('rari/mdx/registry?'))
+    return true
+
+  const isRegistrySuffix = normalized.endsWith('/mdx/registry.ts')
+    || normalized.endsWith('/mdx/registry.mts')
+    || normalized.endsWith('/mdx/registry.mjs')
+    || normalized.endsWith('/mdx/registry.js')
+    || normalized.endsWith('/mdx/registry')
+
+  if (!isRegistrySuffix)
+    return false
+
+  return normalized.includes('/node_modules/rari/')
+    || normalized.includes('/packages/rari/')
+}
+
 export interface MdxPluginOptions {
   componentsDir?: string
   contentDirs?: string[]
