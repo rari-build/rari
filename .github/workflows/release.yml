@@ -119,12 +119,12 @@ jobs:
             pnpm
             brew
 
-      - uses: ./.github/actions/setup-namespace-cache
+      - uses: ./.github/actions/setup-windows-cache
         if: runner.os == 'Windows'
         with:
-          cache: |
-            rust
-            pnpm
+          rust: 'true'
+          rust-shared-key: rust-Windows
+          pnpm: 'true'
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
@@ -457,12 +457,14 @@ jobs:
             pnpm
             brew
 
-      - uses: ./.github/actions/setup-namespace-cache
+      - uses: ./.github/actions/setup-windows-cache
         if: runner.os == 'Windows'
         with:
-          cache: |
-            rust
-            pnpm
+          rust: 'true'
+          rust-shared-key: rust-Windows
+          rust-workspaces: crates/rari_use_cache
+          pnpm: 'true'
+          node-version: ${{ env.NODE_VERSION }}
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
