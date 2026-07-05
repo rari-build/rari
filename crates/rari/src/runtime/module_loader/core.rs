@@ -1,6 +1,8 @@
 use std::{
     borrow::Cow,
-    env, fs,
+    env,
+    fmt::Write,
+    fs,
     io::{Error, ErrorKind},
     path::{Path, PathBuf},
     rc::Rc,
@@ -54,6 +56,9 @@ const RELATIVE_UP_PATH: &str = "../";
 const RARI_INTERNAL_PATH: &str = "/rari_internal/";
 const LOADER_STUB_PREFIX: &str = "load_";
 const RSC_REFERENCES_SPECIFIER: &str = "react-server-dom-rari/server";
+const RARI_MDX_REGISTRY_SPECIFIER: &str = "rari/mdx/registry";
+const RARI_MDX_REGISTRY_INTERNAL: &str = "file:///rari_internal/mdx-registry.js";
+const RARI_MDX_REGISTRY_MANIFEST: &str = "dist/server/manifest.json";
 const RARI_RSC_REFERENCES_PATH: &str = "dist/runtime/rsc-references.mjs";
 
 #[derive(Debug)]
@@ -523,11 +528,54 @@ export default {{}};
         None
     }
 
+    fn is_rari_mdx_registry_stub(path: &Path) -> bool {
+        path.to_string_lossy().replace('\\', "/").contains("rari/dist/mdx/registry.mjs")
+    }
+
+    fn synthesize_mdx_registry_module() -> String {
+        let cwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let manifest_path = cwd.join(RARI_MDX_REGISTRY_MANIFEST);
+
+        let entries = fs::read_to_string(&manifest_path)
+            .ok()
+            .and_then(|content| serde_json::from_str::<serde_json::Value>(&content).ok())
+            .and_then(|manifest| manifest.get("mdxRegistry").cloned())
+            .and_then(|value| value.as_array().cloned())
+            .unwrap_or_default();
+
+        let mut registry_items = String::new();
+        for entry in &entries {
+            let Some(name) = entry.get("name").and_then(|value| value.as_str()) else {
+                continue;
+            };
+            let Some(id) = entry.get("id").and_then(|value| value.as_str()) else {
+                continue;
+            };
+            let client = entry.get("client").and_then(serde_json::Value::as_bool).unwrap_or(true);
+
+            let _ = writeln!(
+                registry_items,
+                "  {{ name: {name:?}, component: null, id: {id:?}, client: {client} }},"
+            );
+        }
+
+        format!(
+            "import {{ defineMdxComponents }} from 'rari/mdx/define'\n\n\
+             export const getMDXComponents = defineMdxComponents([\n\
+             {registry_items}\
+             ])\n"
+        )
+    }
+
     fn resolve_from_node_modules_with_dir(
         &self,
         package_specifier: &str,
         start_dir: &Path,
     ) -> Option<String> {
+        if package_specifier == RARI_MDX_REGISTRY_SPECIFIER {
+            return Some(RARI_MDX_REGISTRY_INTERNAL.to_string());
+        }
+
         if let Some(slash_pos) = package_specifier.find('/') {
             if package_specifier.starts_with('@') {
                 if let Some(second_slash_pos) = package_specifier[slash_pos + 1..].find('/') {
@@ -719,6 +767,17 @@ export default {{}};
                 return Some(ModuleLoadResponse::Sync(Ok(ModuleSource::new(
                     ModuleType::JavaScript,
                     ModuleSourceCode::String(code.into()),
+                    module_specifier,
+                    None,
+                ))));
+            }
+
+            if module_name == "mdx-registry" {
+                let stub_code = Self::synthesize_mdx_registry_module();
+
+                return Some(ModuleLoadResponse::Sync(Ok(ModuleSource::new(
+                    ModuleType::JavaScript,
+                    ModuleSourceCode::String(stub_code.into()),
                     module_specifier,
                     None,
                 ))));
@@ -970,6 +1029,16 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
             let Ok(file_path) = module_specifier.to_file_path() else {
                 return None;
             };
+
+            if Self::is_rari_mdx_registry_stub(&file_path) {
+                let code = Self::synthesize_mdx_registry_module();
+                return Some(ModuleLoadResponse::Sync(Ok(ModuleSource::new(
+                    ModuleType::JavaScript,
+                    ModuleSourceCode::String(code.into()),
+                    module_specifier,
+                    None,
+                ))));
+            }
 
             let file_path_str = file_path.to_string_lossy();
             let file_path_for_wrapper = file_path_str.cow_replace('\\', "/").into_owned();
@@ -1474,10 +1543,15 @@ impl ModuleLoader for RariModuleLoader {
                 };
                 let resolved_path = referrer_dir.join(specifier);
 
-                if let Ok(canonical) = resolved_path.canonicalize()
-                    && let Ok(url) = ModuleSpecifier::from_file_path(canonical)
-                {
-                    return Ok(url);
+                if let Ok(canonical) = resolved_path.canonicalize() {
+                    if Self::is_rari_mdx_registry_stub(&canonical) {
+                        return ModuleSpecifier::parse(RARI_MDX_REGISTRY_INTERNAL)
+                            .map_err(|err| JsErrorBox::generic(format!("Invalid URL: {err}")));
+                    }
+
+                    if let Ok(url) = ModuleSpecifier::from_file_path(canonical) {
+                        return Ok(url);
+                    }
                 }
             }
         }
@@ -1668,6 +1742,11 @@ impl ModuleLoader for RariModuleLoader {
                 if let Some(resolved_path) = Self::resolve_rsc_references(referrer) {
                     return self.resolve(&resolved_path, referrer, kind);
                 }
+            }
+
+            if specifier == RARI_MDX_REGISTRY_SPECIFIER {
+                return ModuleSpecifier::parse(RARI_MDX_REGISTRY_INTERNAL)
+                    .map_err(|err| JsErrorBox::generic(format!("Invalid URL: {err}")));
             }
 
             if let Some(resolved_path) = self.resolve_from_node_modules(specifier, referrer) {

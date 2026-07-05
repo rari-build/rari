@@ -1,5 +1,6 @@
 import type { Plugin } from 'vite-plus'
 import type { ModuleAnalysis } from './directives'
+import type { MdxPluginOptions } from './mdx-registry'
 import type { ServerCacheConfig, ServerCacheControlConfig, ServerCacheLayerConfig, ServerConfig, ServerCSPConfig } from './server-config'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -19,6 +20,11 @@ import { resolveIndexFile, resolveWithExtensions, resolveWithExtensionsAndIndex 
 import { getReadableComponentId, getComponentId as getSharedComponentId, getProjectRelativePath as getSharedProjectRelativePath, hashString as sharedHashString } from './component-ids'
 import { analyzeModuleSource } from './directives'
 import { parseHtmlEntryImports } from './html-entry-imports'
+import {
+  collectMdxComponentScanDirs,
+  discoverMdxRegistryEntries,
+  resolveMdxPluginOptions,
+} from './mdx-registry'
 import { filterExternalDependencies, filterRelativeImportSources, hasNodeImportsFromAnalysis, isNodeBuiltinModule, ModuleAnalysisCache, resolveModuleCachePath } from './module-analysis-cache'
 import { collectSourceFilePaths, normalizeScanDirs } from './source-file-walker'
 import { getUseCacheTransform } from './use-cache-loader'
@@ -69,6 +75,11 @@ interface ServerComponentManifest {
       css?: string[]
     }
   >
+  mdxRegistry?: Array<{
+    name: string
+    id: string
+    client: boolean
+  }>
   buildTime: string
 }
 
@@ -103,6 +114,7 @@ export interface ServerBuildOptions {
     useCache?: boolean
     useCacheRemote?: ServerCacheLayerConfig
   }
+  mdx?: MdxPluginOptions
 }
 
 export interface ComponentRebuildResult {
@@ -112,7 +124,7 @@ export interface ComponentRebuildResult {
   error?: string
 }
 
-type ResolvedServerBuildOptions = Required<Omit<ServerBuildOptions, 'csp' | 'cacheControl' | 'cache' | 'define' | 'serverConfigPath' | 'experimental' | 'moduleAnalysisCache'>> & {
+type ResolvedServerBuildOptions = Required<Omit<ServerBuildOptions, 'csp' | 'cacheControl' | 'cache' | 'define' | 'serverConfigPath' | 'experimental' | 'moduleAnalysisCache' | 'mdx'>> & {
   serverConfigPath: string
   csp?: ServerBuildOptions['csp']
   cacheControl?: ServerBuildOptions['cacheControl']
@@ -120,6 +132,7 @@ type ResolvedServerBuildOptions = Required<Omit<ServerBuildOptions, 'csp' | 'cac
   define?: ServerBuildOptions['define']
   experimental?: ServerBuildOptions['experimental']
   moduleAnalysisCache?: ModuleAnalysisCache
+  mdx?: ServerBuildOptions['mdx']
 }
 
 export function isServerComponentFromAnalysis(
@@ -310,6 +323,7 @@ export class ServerComponentBuilder {
       csp: options.csp,
       cacheControl: options.cacheControl,
       experimental: options.experimental,
+      mdx: options.mdx,
     }
 
     this.parseHtmlImports()
@@ -1252,6 +1266,49 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     return manifest
   }
 
+  async buildMdxRegistry(mdxOptions?: MdxPluginOptions): Promise<void> {
+    const mdxOpts = resolveMdxPluginOptions(this.projectRoot, mdxOptions)
+    const componentScanDirs = collectMdxComponentScanDirs(
+      this.projectRoot,
+      mdxOpts.componentsDir,
+      normalizeScanDirs(path.join(this.projectRoot, 'src'), Object.values(this.options.alias || {})),
+    )
+
+    const entries = discoverMdxRegistryEntries({
+      projectRoot: this.projectRoot,
+      componentsDir: mdxOpts.componentsDir,
+      contentDirs: mdxOpts.contentDirs,
+      cache: this.moduleAnalysisCache,
+      componentScanDirs,
+    })
+
+    const manifestPath = path.join(this.options.outDir, this.options.manifestPath)
+    let manifest: ServerComponentManifest
+
+    if (fs.existsSync(manifestPath)) {
+      const content = await fs.promises.readFile(manifestPath, 'utf-8')
+      manifest = JSON.parse(content) as ServerComponentManifest
+    }
+    else {
+      manifest = {
+        components: {},
+        buildTime: new Date().toISOString(),
+      }
+    }
+
+    manifest.mdxRegistry = entries.map(entry => ({
+      name: entry.name,
+      id: entry.moduleId,
+      client: entry.client,
+    }))
+
+    await fs.promises.writeFile(
+      manifestPath,
+      JSON.stringify(manifest, null, 2),
+      'utf-8',
+    )
+  }
+
   async buildSSRClientComponents(): Promise<void> {
     const ssrOutDir = path.join(this.options.outDir, 'ssr')
     await fs.promises.mkdir(ssrOutDir, { recursive: true })
@@ -2046,6 +2103,13 @@ export function createServerBuildPlugin(
       if (builder) {
         await builder.buildServerComponents()
         await builder.buildSSRClientComponents()
+
+        try {
+          await builder.buildMdxRegistry(options.mdx)
+        }
+        catch (error) {
+          console.warn('[rari] Failed to build MDX component registry:', error)
+        }
 
         try {
           const { generateRobotsFile } = await import('../router/robots-generator')

@@ -80,11 +80,17 @@
         "src/**/*.{ts,tsx}"
       ],
       "ignore": [
-        "src/proxy.ts" // Proxy configuration file is used via Vite plugin
+        "src/proxy.ts", // Proxy configuration file is used via Vite plugin
+        "src/components/CodeBlock.tsx", // MDX client component
+        "src/components/MermaidChart.tsx", // MDX client component
+        "src/components/TerminalBlock.tsx", // MDX client component
+        "src/components/icons/File.tsx", // MDX client component
+        "src/components/icons/Terminal2.tsx" // MDX client component
       ],
       "ignoreDependencies": [
         "tailwindcss",
-        "@tailwindcss/vite" // Used by Tailwind CSS
+        "@tailwindcss/vite", // Used by Tailwind CSS
+        "mermaid" // Used by MermaidChart MDX client component
       ]
     },
     "tools/bundle-react-esm": {

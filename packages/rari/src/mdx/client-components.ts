@@ -1,7 +1,7 @@
+import { registerClientReference } from '../runtime/rsc-references'
 import { EXTENSION_REGEX } from '../shared/regex-constants'
-import { registerClientReference } from './rsc-references'
 
-export interface MDXClientComponentConfig {
+interface MDXClientComponentConfig {
   component: any
   id: string
   exportName?: string

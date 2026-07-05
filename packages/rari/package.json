@@ -55,6 +55,14 @@
       "types": "./dist/mdx.d.mts",
       "default": "./dist/mdx.mjs"
     },
+    "./mdx/define": {
+      "types": "./dist/mdx/define.d.mts",
+      "default": "./dist/mdx/define.mjs"
+    },
+    "./mdx/registry": {
+      "types": "./dist/mdx/registry.d.mts",
+      "default": "./dist/mdx/registry.mjs"
+    },
     "./og": {
       "types": "./dist/og/index.d.mts",
       "default": "./dist/og/index.mjs"
@@ -110,8 +118,14 @@
     "typecheck": "tsgo"
   },
   "peerDependencies": {
+    "@mdx-js/mdx": "catalog:mdx",
     "react": "catalog:react",
     "react-dom": "catalog:react"
+  },
+  "peerDependenciesMeta": {
+    "@mdx-js/mdx": {
+      "optional": true
+    }
   },
   "dependencies": {
     "lightningcss": "catalog:build",
@@ -128,6 +142,7 @@
     "rari-win32-x64": "0.14.12"
   },
   "devDependencies": {
+    "@mdx-js/mdx": "catalog:mdx",
     "@rari/deploy": "workspace:*",
     "@rari/logger": "workspace:*",
     "@types/node": "catalog:typescript",
