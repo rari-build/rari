@@ -985,6 +985,7 @@ if (import.meta.hot) {
       if (!TSX_EXT_REGEX.test(id))
         return null
 
+      const originalCode = code
       let wasUseCacheTransformed = false
       if (options.experimental?.useCache) {
         const transform = await getUseCacheTransform()
@@ -998,7 +999,7 @@ if (import.meta.hot) {
       }
 
       const environment = (this as any).environment
-      const moduleAnalysis = moduleAnalysisCache.get(id, code)
+      const moduleAnalysis = moduleAnalysisCache.get(id, originalCode)
 
       if (moduleAnalysis.topLevelUseClient) {
         setComponentType(id, 'client')
@@ -1094,9 +1095,7 @@ ${clientTransformedCode}`
       let modifiedCode = code
       let hasServerImports = false
       let needsReactImport = false
-      const importingFileIsClient = moduleAnalysis.topLevelUseClient
-        || getComponentType(id) === 'client'
-        || id.includes('entry-client')
+      const importingFileIsClient = id.includes('entry-client')
 
       for (const line of lines) {
         const namespaceMatch = line.match(NAMESPACE_IMPORT_LINE_REGEX)
@@ -1199,10 +1198,7 @@ ${clientTransformedCode}`
             || modifiedCode.includes('/>')
             || JSX_TEST_REGEX.test(modifiedCode)
 
-        if (
-          !moduleAnalysis.topLevelUseClient
-          && hasJsx
-        ) {
+        if (hasJsx) {
           if (isDevMode) {
             modifiedCode = `'use client';\n\n${modifiedCode}`
             setComponentType(id, 'client')
