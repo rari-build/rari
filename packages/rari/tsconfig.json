@@ -1,7 +1,11 @@
 {
   "extends": "../../.config/typescript/package.json",
   "compilerOptions": {
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "paths": {
+      "rari/mdx/registry": ["./src/mdx/registry.ts"],
+      "rari/mdx/define": ["./src/mdx/define.ts"]
+    }
   },
   "include": ["src"]
 }

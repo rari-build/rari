@@ -31,6 +31,13 @@ import { hasDefaultExport } from './directives'
 import { HMRCoordinator } from './hmr-coordinator'
 import { parseHtmlEntryImports } from './html-entry-imports'
 import { scanForImageUsage } from './image-scanner'
+import { transformDefineMdxComponents } from './mdx-components-transform'
+import {
+  collectMdxComponentScanDirs,
+  discoverMdxRegistryEntries,
+  generateMdxRegistryModule,
+  resolveMdxPluginOptions,
+} from './mdx-registry'
 import { collectClientComponentPaths, invalidateModuleCachePath, ModuleAnalysisCache, resolveModuleCachePath } from './module-analysis-cache'
 import { toRariPlugins } from './plugin-types'
 import { createServerBuildPlugin, isServerComponentFromAnalysis, RARI_CSS_MODULES_PATTERN, scanDirectory, ServerComponentBuilder } from './server-build'
@@ -38,6 +45,13 @@ import { normalizeScanDirs } from './source-file-walker'
 import { getUseCacheTransform } from './use-cache-loader'
 
 const DIST_NOT_BUILT_ERROR = '[rari] Runtime dist not built. Run `pnpm build` in the rari package first.'
+
+function isMdxRegistryModule(id: string): boolean {
+  const normalized = id.replace(BACKSLASH_REGEX, '/')
+  return normalized.endsWith('/mdx/registry.ts')
+    || normalized.endsWith('/mdx/registry.mjs')
+    || normalized.endsWith('/mdx/registry')
+}
 
 const IMPORT_TYPE_SPECIFIER_REGEX = /import\s+type\s+(\{[^}]+\})\s+from\s+["']\.\.?\/([^"']+)["'];?/g
 const IMPORT_TYPE_NAMESPACE_REGEX = /import\s+type\s+(\*\s+as\s+\w+)\s+from\s+["']\.\.?\/([^"']+)["'];?/g
@@ -159,6 +173,10 @@ export interface RariOptions {
   experimental?: {
     useCache?: boolean
     useCacheRemote?: ServerCacheLayerConfig
+  }
+  mdx?: {
+    componentsDir?: string
+    contentDirs?: string[]
   }
 }
 
@@ -311,6 +329,26 @@ export function rari(options: RariOptions = {}): RariPlugin[] {
 
   let hmrCoordinator: HMRCoordinator | null = null
   const resolvedAlias: Record<string, string> = {}
+
+  function buildMdxRegistryModule(): string {
+    const projectRoot = options.projectRoot || process.cwd()
+    const mdxOptions = resolveMdxPluginOptions(projectRoot, options.mdx)
+    const componentScanDirs = collectMdxComponentScanDirs(
+      projectRoot,
+      mdxOptions.componentsDir,
+      normalizeScanDirs(path.join(projectRoot, 'src'), Object.values(resolvedAlias)),
+    )
+
+    const entries = discoverMdxRegistryEntries({
+      projectRoot,
+      componentsDir: mdxOptions.componentsDir,
+      contentDirs: mdxOptions.contentDirs,
+      cache: moduleAnalysisCache,
+      componentScanDirs,
+    })
+
+    return generateMdxRegistryModule(entries)
+  }
 
   function getComponentType(filePath: string): 'client' | 'server' | 'unknown' | undefined {
     return componentTypeCache.get(resolveModuleCachePath(filePath))
@@ -984,6 +1022,17 @@ if (import.meta.hot) {
     },
 
     async transform(code, id) {
+      if (/\.(?:tsx?|jsx?|mts|mjs)$/.test(id) && code.includes('defineMdxComponents')) {
+        const mdxTransformed = transformDefineMdxComponents({
+          code,
+          id,
+          projectRoot: options.projectRoot || process.cwd(),
+          resolvedAlias,
+        })
+        if (mdxTransformed)
+          return { code: mdxTransformed, map: null }
+      }
+
       if (!TSX_EXT_REGEX.test(id))
         return null
 
@@ -1715,6 +1764,10 @@ ${clientTransformedCode}`
         return 'virtual:app-router-provider.tsx'
       if (id === 'virtual:error-boundary-wrapper' || id === 'virtual:error-boundary-wrapper.tsx')
         return 'virtual:error-boundary-wrapper.tsx'
+      if (isMdxRegistryModule(id) || id === 'rari/mdx/registry')
+        return 'virtual:rari-mdx-components.ts'
+      if (id === 'virtual:rari-mdx-components' || id === 'virtual:rari-mdx-components.ts')
+        return 'virtual:rari-mdx-components.ts'
 
       if ((id === 'react-server-dom-webpack/client' || id === 'react-server-dom-webpack/client.browser') && importer?.startsWith('virtual:')) {
         try {
@@ -1805,6 +1858,9 @@ ${clientTransformedCode}`
           }
         }
       }
+
+      if (id === 'virtual:rari-mdx-components.ts')
+        return buildMdxRegistryModule()
 
       if (id === 'virtual:rari-entry-client.ts') {
         const projectRoot = options.projectRoot || process.cwd()
@@ -2144,6 +2200,7 @@ export const createFromReadableStream = module.exports.createFromReadableStream;
     cache: options.cache,
     experimental: options.experimental,
     moduleAnalysisCache,
+    mdx: options.mdx,
   })
 
   const webpackRequirePatchPlugin: Plugin = {

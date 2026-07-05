@@ -11,7 +11,9 @@ export default defineConfig({
       'platform': 'src/cli/platform.ts',
       'image/index': 'src/image/index.ts',
       'og/index': 'src/og/index.ts',
-      'mdx': 'src/mdx.ts',
+      'mdx': 'src/mdx/index.ts',
+      'mdx/define': 'src/mdx/define.ts',
+      'mdx/registry': 'src/mdx/registry.ts',
       'headers': 'src/headers.ts',
       'runtime/actions': 'src/runtime/actions.ts',
       'runtime/entry-client': 'src/runtime/entry-client.ts',
@@ -27,6 +29,7 @@ export default defineConfig({
     minify: true,
     deps: {
       neverBundle: [
+        '@mdx-js/mdx',
         'lightningcss',
         'vite',
         'vite-plus',
@@ -41,6 +44,7 @@ export default defineConfig({
         'virtual:rsc-integration.ts',
         'rari/client',
         'rari/router',
+        'rari/mdx/registry',
       ],
     },
   },
