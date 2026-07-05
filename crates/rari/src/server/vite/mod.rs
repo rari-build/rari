@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 pub mod hmr;
+pub mod rsc;
 
 use axum::{
     body,

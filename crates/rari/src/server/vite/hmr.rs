@@ -22,7 +22,7 @@ use crate::server::{
         component::extract_component_id,
         path_validation::{normalize_component_path, validate_component_path, validate_safe_path},
     },
-    loaders::rsc::{immediate_component_reregistration, reload_component_from_dist},
+    vite::rsc::{immediate_component_reregistration, reload_component_from_dist},
 };
 
 #[derive(Debug, Deserialize)]

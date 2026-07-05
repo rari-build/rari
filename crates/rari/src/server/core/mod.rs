@@ -37,16 +37,15 @@ use crate::{
     runtime::JsExecutionRuntime,
     server::{
         actions::{handle_form_action, handle_server_action},
-        cache::{handler::CacheHandlerRegistry, response, revalidate::revalidate_by_path, warmup},
+        cache::{
+            handler::CacheHandlerRegistry, loader::CacheLoader, response,
+            revalidate::revalidate_by_path, warmup,
+        },
         config::{
             CACHE_LAYER_IMAGE, CACHE_LAYER_LAYOUT, CACHE_LAYER_OG, CACHE_LAYER_RESPONSE, Config,
         },
         image::{ImageCache, ImageConfig, ImageOptimizer, ImageState, handle_image_request},
-        loaders::{
-            cache::CacheLoader,
-            component::ComponentLoader,
-            rsc::{health_check, register_client_component, register_component},
-        },
+        loader::ComponentLoader,
         middleware::{
             proxy::{self, ProxyLayer},
             request::{cors_middleware, security_headers_middleware},
@@ -63,8 +62,10 @@ use crate::{
             cors_preflight_ok, root_handler, serve_static_asset, static_or_spa_handler,
         },
         vite::{
-            check_vite_server_health, hmr::handle_hmr_action, vite_reverse_proxy, vite_src_proxy,
-            vite_websocket_proxy,
+            check_vite_server_health,
+            hmr::handle_hmr_action,
+            rsc::{health_check, register_client_component, register_component},
+            vite_reverse_proxy, vite_src_proxy, vite_websocket_proxy,
         },
     },
 };
