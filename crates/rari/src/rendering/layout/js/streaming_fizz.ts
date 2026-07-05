@@ -497,6 +497,10 @@ async function rariPumpLiveMux(
     }
     if (htmlStreamFinished) {
       rariStreamLog('mux.drainRemaining.start')
+      if (!rariSafeToInjectFlight())
+        rariResetHtmlStreamState()
+      if (!(await ensureFlightBootstrap()))
+        return
       await liveFlight.drainAllRemaining()
       rariStreamLog('mux.drainRemaining.done')
     }

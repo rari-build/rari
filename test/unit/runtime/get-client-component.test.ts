@@ -51,9 +51,12 @@ describe('requireClientComponent path resolution', () => {
       'btn-b': componentB,
     }
 
-    expect(requireClientComponent('Button.tsx')).toEqual({})
-
-    ;(globalThis as unknown as GlobalWithRari)['~clientComponents'] = {}
+    try {
+      expect(requireClientComponent('Button.tsx')).toEqual({})
+    }
+    finally {
+      ;(globalThis as unknown as GlobalWithRari)['~clientComponents'] = {}
+    }
   })
 
   it('resolves components by boundary-aware path suffix', () => {
@@ -69,10 +72,13 @@ describe('requireClientComponent path resolution', () => {
       'btn-a': componentInfo,
     }
 
-    const module = requireClientComponent('a/Button.tsx')
-    expect(module.default).toBeTypeOf('function')
-
-    ;(globalThis as unknown as GlobalWithRari)['~clientComponents'] = {}
+    try {
+      const module = requireClientComponent('a/Button.tsx')
+      expect(module.default).toBeTypeOf('function')
+    }
+    finally {
+      ;(globalThis as unknown as GlobalWithRari)['~clientComponents'] = {}
+    }
   })
 })
 
