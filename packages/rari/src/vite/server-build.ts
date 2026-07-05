@@ -19,7 +19,7 @@ import { resolveIndexFile, resolveWithExtensions, resolveWithExtensionsAndIndex 
 import { getReadableComponentId, getComponentId as getSharedComponentId, getProjectRelativePath as getSharedProjectRelativePath, hashString as sharedHashString } from './component-ids'
 import { analyzeModuleSource } from './directives'
 import { parseHtmlEntryImports } from './html-entry-imports'
-import { filterExternalDependencies, filterRelativeImportSources, hasNodeImportsFromAnalysis, isNodeBuiltinModule, ModuleAnalysisCache } from './module-analysis-cache'
+import { filterExternalDependencies, filterRelativeImportSources, hasNodeImportsFromAnalysis, isNodeBuiltinModule, ModuleAnalysisCache, resolveModuleCachePath } from './module-analysis-cache'
 import { collectSourceFilePaths, normalizeScanDirs } from './source-file-walker'
 import { getUseCacheTransform } from './use-cache-loader'
 
@@ -130,7 +130,7 @@ export function isServerComponentFromAnalysis(
   if (filePath.includes('node_modules'))
     return false
 
-  if (htmlOnlyImports.has(filePath))
+  if (htmlOnlyImports.has(resolveModuleCachePath(filePath)))
     return false
 
   return !analysis.directives.hasUseClient && !analysis.directives.hasUseServer
@@ -1987,18 +1987,20 @@ export function createServerBuildPlugin(
       projectRoot = config.root
       isDev = config.command === 'serve'
 
+      const excludeAliases = new Set(['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime', 'react-dom/client'])
+
       const alias: Record<string, string> = {}
       if (config.resolve?.alias) {
         const aliasConfig = config.resolve.alias
         if (Array.isArray(aliasConfig)) {
           aliasConfig.forEach((entry) => {
-            if (typeof entry.find === 'string' && typeof entry.replacement === 'string')
+            if (typeof entry.find === 'string' && typeof entry.replacement === 'string' && !excludeAliases.has(entry.find))
               alias[entry.find] = entry.replacement
           })
         }
         else if (typeof aliasConfig === 'object') {
           Object.entries(aliasConfig).forEach(([key, value]) => {
-            if (typeof value === 'string')
+            if (typeof value === 'string' && !excludeAliases.has(key))
               alias[key] = value
           })
         }
@@ -2033,7 +2035,7 @@ export function createServerBuildPlugin(
 
       const srcDir = path.join(projectRoot, 'src')
       if (fs.existsSync(srcDir))
-        scanDirectory(srcDir, builder)
+        scanDirectory(srcDir, builder, Object.values(resolvedAliases))
     },
 
     async closeBundle() {

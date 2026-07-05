@@ -5,9 +5,8 @@ import { TSX_EXT_REGEX } from '../shared/regex-constants'
 const SKIPPED_DIRECTORIES = new Set([
   'node_modules',
   '.git',
-  'dist',
-  'build',
   '.cache',
+  'dist',
 ])
 
 export function walkSourceFiles(
@@ -60,8 +59,14 @@ export function normalizeScanDirs(primaryDir: string, additionalDirs: readonly s
   const dirs = [primaryDir]
 
   for (const additionalDir of additionalDirs) {
-    if (additionalDir && additionalDir !== primaryDir && fs.existsSync(additionalDir))
-      dirs.push(additionalDir)
+    if (!additionalDir || additionalDir === primaryDir)
+      continue
+
+    try {
+      if (fs.statSync(additionalDir).isDirectory())
+        dirs.push(additionalDir)
+    }
+    catch {}
   }
 
   return dirs

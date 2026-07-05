@@ -3,7 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { analyzeModuleSource, getDirectives, hasDefaultExport, hasTopLevelUseClientDirective, hasTopLevelUseServerDirective } from '@rari/vite/directives'
 import { collectClientComponentPaths, filterExternalDependencies, hasNodeImportsFromAnalysis, invalidateModuleCachePath, isNodeBuiltinModule, ModuleAnalysisCache, resolveModuleCachePath } from '@rari/vite/module-analysis-cache'
-import { describe, expect, it } from 'vite-plus/test'
+import { describe, expect, it, vi } from 'vite-plus/test'
 
 describe('analyzeModuleSource', () => {
   it('detects directives, exports, and imports in one pass', () => {
@@ -208,6 +208,25 @@ describe('moduleAnalysisCache', () => {
 
     expect(cache.has(resolveModuleCachePath(linkPath))).toBe(false)
 
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('skips mtime reads on inline source cache hits', () => {
+    const statSpy = vi.spyOn(fs, 'statSync')
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-analysis-'))
+    const filePath = path.join(dir, 'Component.tsx')
+    fs.writeFileSync(filePath, `export default function C() {}\n`)
+
+    const source = `"use client"\nexport default function C() {}\n`
+    const cache = new ModuleAnalysisCache()
+    cache.get(filePath, source)
+    const statCallsAfterFirst = statSpy.mock.calls.length
+
+    cache.get(filePath, source)
+
+    expect(statSpy.mock.calls.length).toBe(statCallsAfterFirst)
+
+    statSpy.mockRestore()
     fs.rmSync(dir, { recursive: true, force: true })
   })
 

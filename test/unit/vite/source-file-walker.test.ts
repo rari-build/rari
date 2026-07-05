@@ -74,4 +74,26 @@ describe('html-entry-imports', () => {
 
     fs.rmSync(dir, { recursive: true, force: true })
   })
+
+  it('normalizes symlinked html entry import paths', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-html-symlink-'))
+    const realSrc = path.join(dir, 'real-src')
+    const linkSrc = path.join(dir, 'src')
+
+    fs.mkdirSync(realSrc, { recursive: true })
+    fs.symlinkSync(realSrc, linkSrc)
+    fs.writeFileSync(path.join(realSrc, 'main.tsx'), 'export default function Main() {}')
+    fs.writeFileSync(path.join(dir, 'index.html'), `<!doctype html>
+<script type="module" src="/src/main.tsx"></script>
+`)
+
+    const imports = parseHtmlEntryImports(dir)
+    const symlinkPath = path.join(linkSrc, 'main.tsx')
+    const realPath = fs.realpathSync(symlinkPath)
+
+    expect(imports.has(realPath)).toBe(true)
+    expect(imports.has(symlinkPath)).toBe(false)
+
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
 })

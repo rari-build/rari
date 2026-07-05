@@ -1,12 +1,16 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { resolveModuleCachePath } from './module-analysis-cache'
 
 const HTML_IMPORT_REGEX = /import\s*\(\s*["']([^"']+)["']\s*\)|import\s+["']([^"']+)["']/g
 const HTML_MODULE_SCRIPT_REGEX = /<script\b[^>]*>/gi
 
 function addHtmlEntryPath(htmlOnlyImports: Set<string>, projectRoot: string, importPath: string | null | undefined): void {
-  if (importPath?.startsWith('/src/'))
-    htmlOnlyImports.add(path.join(projectRoot, importPath.slice(1)))
+  if (importPath?.startsWith('/src/')) {
+    htmlOnlyImports.add(
+      resolveModuleCachePath(path.join(projectRoot, importPath.slice(1))),
+    )
+  }
 }
 
 function extractModuleScriptSrc(tag: string): string | null {

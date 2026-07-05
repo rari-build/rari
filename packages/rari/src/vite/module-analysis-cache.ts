@@ -102,20 +102,22 @@ export class ModuleAnalysisCache {
 
   get(filePath: string, source?: string): ModuleAnalysis {
     const cacheKey = resolveModuleCachePath(filePath)
-    const mtimeMs = this.readMtimeMs(cacheKey)
     const cached = this.cache.get(cacheKey)
 
-    if (source === undefined) {
-      if (cached && mtimeMs >= 0 && cached.mtimeMs === mtimeMs)
-        return cached.analysis
-
-      source = fs.readFileSync(cacheKey, 'utf-8')
-    }
-    else {
+    if (source !== undefined) {
       if (cached && cached.source === source)
         return cached.analysis
     }
+    else if (cached) {
+      const mtimeMs = this.readMtimeMs(cacheKey)
+      if (mtimeMs >= 0 && cached.mtimeMs === mtimeMs)
+        return cached.analysis
+    }
 
+    if (source === undefined)
+      source = fs.readFileSync(cacheKey, 'utf-8')
+
+    const mtimeMs = this.readMtimeMs(cacheKey)
     const analysis = analyzeModuleSource(source)
     this.cache.set(cacheKey, {
       mtimeMs,
