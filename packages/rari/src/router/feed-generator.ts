@@ -2,11 +2,9 @@ import type { Feed, FeedEntry } from './metadata-route'
 import { Buffer } from 'node:buffer'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import {
-  HTML_ESCAPE_REGEXES,
-} from '../shared/regex-constants'
-import { resolveWithExtensionsAndIndex } from '../shared/utils/resolve'
-import { resolveAlias } from '../vite/alias-resolver'
+import { resolveAlias } from '../shared/utils/alias-resolver'
+import { resolveWithExtensionsAndIndex } from '../shared/utils/file-resolver'
+import { escapeXml } from '../shared/utils/xml'
 
 const VIRTUAL_FEED_ID = '\0virtual:feed'
 
@@ -15,15 +13,6 @@ export interface FeedGeneratorOptions {
   outDir: string
   extensions?: string[]
   aliases?: Record<string, string>
-}
-
-function escapeXml(str: string): string {
-  return str
-    .replace(HTML_ESCAPE_REGEXES.AMPERSAND, '&amp;')
-    .replace(HTML_ESCAPE_REGEXES.LT, '&lt;')
-    .replace(HTML_ESCAPE_REGEXES.GT, '&gt;')
-    .replace(HTML_ESCAPE_REGEXES.QUOTE, '&quot;')
-    .replace(HTML_ESCAPE_REGEXES.APOS, '&apos;')
 }
 
 function formatRfc822Date(date: string | Date): string {

@@ -11,16 +11,12 @@ export default function Breadcrumbs({ pathname }: BreadcrumbsProps) {
   if (breadcrumbs.length <= 1)
     return null
 
-  const isGettingStarted = pathname === '/docs/getting-started'
-
   return (
     <nav aria-label="Breadcrumb" className="not-prose mb-6 pt-1 pl-1 overflow-x-auto scrollbar-none">
       <ol className="flex items-center space-x-2 text-sm whitespace-nowrap">
         {breadcrumbs.map((crumb, index) => {
           const isLast = index === breadcrumbs.length - 1
-          const isDocsLink = crumb.href === '/docs/getting-started'
-          const shouldDisableDocsLink = isDocsLink && isGettingStarted
-          const uniqueKey = crumb.href ? `breadcrumb-${crumb.href}` : `breadcrumb-${crumb.label}-${breadcrumbs.length}-${isLast}`
+          const uniqueKey = `breadcrumb-${index}-${crumb.href ?? crumb.label}`
 
           return (
             <li key={uniqueKey} className="flex items-center">
@@ -29,18 +25,16 @@ export default function Breadcrumbs({ pathname }: BreadcrumbsProps) {
                   className="w-4 h-4 mx-2 text-gray-600"
                 />
               )}
-              {(isLast || shouldDisableDocsLink)
+              {isLast || !crumb.href
                 ? <span className="text-gray-300">{crumb.label}</span>
-                : crumb.href
-                  ? (
-                      <a
-                        href={crumb.href}
-                        className="text-gray-300 hover:text-white transition-colors"
-                      >
-                        {crumb.label}
-                      </a>
-                    )
-                  : <span className="text-gray-300">{crumb.label}</span>}
+                : (
+                    <a
+                      href={crumb.href}
+                      className="text-gray-300 hover:text-white transition-colors"
+                    >
+                      {crumb.label}
+                    </a>
+                  )}
             </li>
           )
         })}

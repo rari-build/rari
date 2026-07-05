@@ -1,11 +1,13 @@
 import crypto from 'node:crypto'
 import path from 'node:path'
 import process from 'node:process'
+import {
+  BACKSLASH_REGEX,
+  COMPONENT_ID_REGEX,
+  SRC_PREFIX_REGEX,
+  TSX_EXT_REGEX,
+} from '../shared/regex-constants'
 
-const BACKSLASH_REGEX = /\\/g
-const COMPONENT_ID_REGEX = /[^\w/-]/g
-const SRC_PREFIX_REGEX = /^src\//
-const TS_JS_EXTENSION_REGEX = /\.(tsx?|jsx?)$/
 const PATH_OUTSIDE_ROOT_REGEX = /^\.\.(?:[/\\]|$)/
 
 export function hashString(value: string, length = 8): string {
@@ -26,7 +28,7 @@ export function getProjectRelativePath(filePath: string, projectRoot = process.c
 
 export function getReadableComponentId(projectRelativePath: string): string {
   return projectRelativePath
-    .replace(TS_JS_EXTENSION_REGEX, '')
+    .replace(TSX_EXT_REGEX, '')
     .replace(COMPONENT_ID_REGEX, '_')
     .replace(SRC_PREFIX_REGEX, '')
 }

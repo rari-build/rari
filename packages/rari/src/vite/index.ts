@@ -19,9 +19,13 @@ import {
   TSX_EXT_REGEX,
   WINDOWS_PATH_REGEX,
 } from '../shared/regex-constants'
+import { resolveIndexFile, resolveWithExtensions } from '../shared/utils/file-resolver'
+import {
+  buildNamespaceClientReferenceReplacement,
+  NAMESPACE_IMPORT_LINE_REGEX,
+} from './client-import-transform'
 import { getComponentId } from './component-ids'
 import { getDirectives, hasDefaultExport, hasTopLevelUseClientDirective, hasTopLevelUseServerDirective } from './directives'
-import { resolveIndexFile, resolveWithExtensions } from './file-resolver'
 import { HMRCoordinator } from './hmr-coordinator'
 import { scanForImageUsage } from './image-scanner'
 import { createServerBuildPlugin, RARI_CSS_MODULES_PATTERN, scanDirectory, ServerComponentBuilder } from './server-build'
@@ -55,6 +59,54 @@ const RSC_CLIENT_IMPORT_REGEX = /from(\s*)(['"])(?:\.\/vendor\/react-flight-clie
 const JSX_TEST_REGEX = /\bJSX\b/
 const IMPORT_SPECIFIERS_REGEX = /\{([^}]*)\}/
 const USE_CLIENT_DIRECTIVE_LINE_REGEX = /^['"]use client['"];?\s*\n/
+
+interface ClientReferenceSpecifier {
+  bindingName: string
+  exportName: string
+}
+
+function parseClientImportSpecifiers(line: string, importedDefault?: string): ClientReferenceSpecifier[] {
+  const specifiers: ClientReferenceSpecifier[] = []
+
+  if (importedDefault)
+    specifiers.push({ bindingName: importedDefault, exportName: 'default' })
+
+  const namedBlock = line.match(/\{([^}]+)\}/)?.[1]
+  if (namedBlock) {
+    for (const part of namedBlock.split(',')) {
+      const trimmed = part.trim()
+      if (!trimmed)
+        continue
+
+      const asParts = trimmed.split(/\s+as\s+/i)
+      if (asParts.length === 2 && asParts[0] && asParts[1]) {
+        specifiers.push({
+          bindingName: asParts[1].trim(),
+          exportName: asParts[0].trim(),
+        })
+      }
+      else {
+        specifiers.push({ bindingName: trimmed, exportName: trimmed })
+      }
+    }
+  }
+
+  return specifiers
+}
+
+function buildClientReferenceReplacement(
+  specifiers: ClientReferenceSpecifier[],
+  resolvedImportPath: string,
+): string {
+  return `import { registerClientReference } from "react-server-dom-rari/server";
+${specifiers.map(({ bindingName, exportName }) => `const ${bindingName} = registerClientReference(
+  function() {
+    throw new Error("Attempted to call ${bindingName} from the server but it's on the client. It can only be rendered as a Component or passed to props of a Client Component.");
+  },
+  ${JSON.stringify(resolvedImportPath)},
+  ${JSON.stringify(exportName)}
+);`).join('\n')}`
+}
 
 export interface RouterPluginOptions {
   appDir?: string
@@ -218,8 +270,8 @@ async function loadEntryClient(imports: string, registrations: string): Promise<
     .replace('/*! @preserve CLIENT_COMPONENT_REGISTRATIONS_PLACEHOLDER */', registrations)
 }
 
-async function loadReactServerDomShim(): Promise<string> {
-  return loadRuntimeFile('react-server-dom-shim.mjs')
+async function loadRscReferences(): Promise<string> {
+  return loadRuntimeFile('rsc-references.mjs')
 }
 
 async function writeImageConfig(projectRoot: string, options: RariOptions): Promise<void> {
@@ -981,11 +1033,12 @@ if (import.meta.hot) {
         const lines = code.split('\n')
 
         for (const line of lines) {
-          const importMatch = line.match(IMPORT_LINE_REGEX)
-          if (!importMatch)
+          const namespaceMatch = line.match(NAMESPACE_IMPORT_LINE_REGEX)
+          const importMatch = namespaceMatch ? null : line.match(IMPORT_LINE_REGEX)
+          if (!namespaceMatch && !importMatch)
             continue
 
-          const importPath = importMatch[4]
+          const importPath = namespaceMatch?.[2] ?? importMatch![4]
           if (!importPath)
             continue
 
@@ -1072,12 +1125,13 @@ ${clientTransformedCode}`
         || id.includes('entry-client')
 
       for (const line of lines) {
-        const importMatch = line.match(IMPORT_LINE_REGEX)
-        if (!importMatch)
+        const namespaceMatch = line.match(NAMESPACE_IMPORT_LINE_REGEX)
+        const importMatch = namespaceMatch ? null : line.match(IMPORT_LINE_REGEX)
+        if (!namespaceMatch && !importMatch)
           continue
 
-        const importedDefault = importMatch[1]
-        const importPath = importMatch[4]
+        const importedDefault = importMatch?.[1]
+        const importPath = namespaceMatch?.[2] ?? importMatch![4]
         const resolvedImportPath = resolveImportToFilePath(importPath, id)
 
         const isClientComponent
@@ -1097,17 +1151,30 @@ ${clientTransformedCode}`
         ) {
           if (!importingFileIsClient) {
             const originalImport = line
-            const componentName = importedDefault || 'default'
 
-            const clientRefReplacement = `
-import { registerClientReference } from "react-server-dom-rari/server";
-const ${componentName} = registerClientReference(
-  function() {
-    throw new Error("Attempted to call ${componentName} from the server but it's on the client. It can only be rendered as a Component or passed to props of a Client Component.");
-  },
-  ${JSON.stringify(resolvedImportPath)},
-  ${JSON.stringify(importedDefault || 'default')}
-);`
+            if (namespaceMatch) {
+              const clientRefReplacement = buildNamespaceClientReferenceReplacement(
+                namespaceMatch[1],
+                resolvedImportPath,
+              )
+
+              modifiedCode = modifiedCode.replace(
+                originalImport,
+                clientRefReplacement,
+              )
+              hasServerImports = true
+              needsReactImport = true
+              continue
+            }
+
+            const specifiers = parseClientImportSpecifiers(line, importedDefault)
+            if (specifiers.length === 0)
+              continue
+
+            const clientRefReplacement = buildClientReferenceReplacement(
+              specifiers,
+              resolvedImportPath,
+            )
 
             modifiedCode = modifiedCode.replace(
               originalImport,
@@ -1841,7 +1908,8 @@ const ${componentName} = registerClientReference(
             }
           }
 
-          const componentName = hasNamedExport ? namedExportName : path.basename(componentPath, path.extname(componentPath))
+          const exportName = hasNamedExport ? namedExportName : 'default'
+          const displayName = hasNamedExport ? namedExportName : path.basename(componentPath, path.extname(componentPath))
 
           const normalizedPath = registrationPath.replace(BACKSLASH_REGEX, '/')
           const importPath = normalizedPath.startsWith('/') || WINDOWS_PATH_REGEX.test(normalizedPath)
@@ -1852,7 +1920,8 @@ const ${componentName} = registerClientReference(
           return `  "${registrationPath}": {
     id: "${componentId}",
     path: "${registrationPath}",
-    exportName: "${componentName}",
+    exportName: "${exportName}",
+    displayName: "${displayName}",
     type: "client",
     loader: () => ${importStatement},
     component: null,
@@ -1905,7 +1974,7 @@ for (const [path, config] of Object.entries(lazyComponentRegistry)) {
       }
 
       if (id === 'react-server-dom-rari/server')
-        return await loadReactServerDomShim()
+        return await loadRscReferences()
 
       if (id === 'virtual:app-router-provider.tsx') {
         const runtimeFile = resolveRuntimeDistFile('AppRouterProvider.mjs')

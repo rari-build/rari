@@ -53,6 +53,8 @@ const RELATIVE_CURRENT_PATH: &str = "./";
 const RELATIVE_UP_PATH: &str = "../";
 const RARI_INTERNAL_PATH: &str = "/rari_internal/";
 const LOADER_STUB_PREFIX: &str = "load_";
+const RSC_REFERENCES_SPECIFIER: &str = "react-server-dom-rari/server";
+const RARI_RSC_REFERENCES_PATH: &str = "dist/runtime/rsc-references.mjs";
 
 #[derive(Debug)]
 struct AsyncFileManager {
@@ -475,6 +477,50 @@ export default {{}};
         }
 
         result
+    }
+
+    fn resolve_rsc_references(referrer_path: &str) -> Option<String> {
+        let start_dir = if referrer_path.is_empty() {
+            env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+        } else {
+            let clean_referrer_path = if referrer_path.starts_with(FILE_PROTOCOL) {
+                file_url_to_path(referrer_path).unwrap_or_else(|| PathBuf::from(referrer_path))
+            } else {
+                PathBuf::from(referrer_path)
+            };
+
+            let clean_referrer_str = clean_referrer_path.to_string_lossy();
+
+            if clean_referrer_str.contains("/rari_component/")
+                || clean_referrer_str.contains("/rari_internal/")
+            {
+                env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+            } else {
+                let dir_path = clean_referrer_path
+                    .parent()
+                    .map(Path::to_path_buf)
+                    .unwrap_or_else(|| env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+                dir_path.canonicalize().unwrap_or(dir_path)
+            }
+        };
+
+        let mut search_dirs = vec![start_dir.clone()];
+        let cwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let cwd_canonical = fs::canonicalize(&cwd).unwrap_or(cwd);
+        if cwd_canonical != start_dir {
+            search_dirs.push(cwd_canonical);
+        }
+
+        for dir in search_dirs {
+            if let Some(package_dir) = Self::find_package_directory(&dir, "rari") {
+                let references_path = package_dir.join(RARI_RSC_REFERENCES_PATH);
+                if references_path.exists() {
+                    return Some(path_to_file_url(&references_path));
+                }
+            }
+        }
+
+        None
     }
 
     fn resolve_from_node_modules_with_dir(
@@ -1574,14 +1620,29 @@ impl ModuleLoader for RariModuleLoader {
 
             if matches!(
                 specifier,
-                "react-dom/server"
-                    | "react-dom/server.browser"
-                    | "react-dom/server.node"
-                    | "react-dom"
+                "react-dom/server" | "react-dom/server.browser" | "react-dom/server.node"
             ) || (specifier.starts_with("react-dom/")
-                && !matches!(specifier, "react-dom/client" | "react-dom/client.js"))
+                && !matches!(specifier, "react-dom/client" | "react-dom/client.js" | "react-dom"))
             {
                 return self.resolve("file:///react_vendor/react-dom-server.js", referrer, kind);
+            }
+
+            if matches!(specifier, "react-dom") {
+                return self.resolve("file:///react_vendor/react-dom.js", referrer, kind);
+            }
+
+            if matches!(
+                specifier,
+                "react-server-dom-webpack/server"
+                    | "react-server-dom-webpack/server.browser"
+                    | "react-server-dom-webpack/server.node"
+                    | "react-server-dom-webpack/server.edge"
+            ) {
+                return self.resolve(
+                    "file:///react_vendor/react-server-dom-webpack-server.js",
+                    referrer,
+                    kind,
+                );
             }
 
             if matches!(specifier, "react-dom/client" | "react-dom/client.js")
@@ -1600,6 +1661,12 @@ impl ModuleLoader for RariModuleLoader {
                         if subpath.is_empty() { "/index" } else { subpath }
                     );
                     return self.resolve(&rari_url, referrer, kind);
+                }
+            }
+
+            if specifier == RSC_REFERENCES_SPECIFIER {
+                if let Some(resolved_path) = Self::resolve_rsc_references(referrer) {
+                    return self.resolve(&resolved_path, referrer, kind);
                 }
             }
 

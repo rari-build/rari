@@ -24,12 +24,6 @@ export interface CookieStore {
   toString: () => string
 }
 
-export interface ModuleData {
-  id: string
-  chunks: string[]
-  name: string
-}
-
 export interface ComponentInfo {
   id: string
   path: string
@@ -39,6 +33,7 @@ export interface ComponentInfo {
   loader?: () => Promise<any>
   loading?: boolean
   loadPromise?: Promise<any>
+  loadError?: unknown
 }
 
 export interface GlobalWithRari {
@@ -47,32 +42,16 @@ export interface GlobalWithRari {
     navigationId?: number
     AppRouterProvider?: any
     ClientRouter?: any
-    getClientComponent?: (id: string) => any
+    getClientComponent?: (id: string) => Promise<any>
     preloadClientComponent?: (id: string) => Promise<void>
-    hydrateClientComponents?: (boundaryId: string, content: any, boundaryElement: Element) => void
-    lazy?: {
-      pending: Map<string, any>
-      resolved: Map<string, any>
-      counter: number
-      resolve: (promiseId: string) => Promise<any>
-      clear: (promiseId?: string) => void
-    }
     streaming?: {
       enabled?: boolean
       complete?: boolean
       bufferedRows: string[]
-      bufferedEvents: any[]
       streamingBridgeInstalled?: boolean
     }
-    hmr?: {
-      refreshCounters: Record<string, number>
-    }
-    processBoundaryUpdate?: (boundaryId: string, rscRow: string, rowId: string) => void
-    boundaryModules?: Map<string, ModuleData>
-    pendingBoundaryHydrations?: Map<string, any>
     serverComponents?: Set<string>
     routeInfoCache?: Map<string, any>
-    bridge?: any
     cookies?: () => CookieStore
   }
   '~clientComponents': Record<string, ComponentInfo>

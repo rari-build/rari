@@ -3,10 +3,7 @@ use std::{
     io::{Cursor, Error},
     path::PathBuf,
     string::String,
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering::Relaxed},
-    },
+    sync::Arc,
     time::Instant,
 };
 
@@ -18,25 +15,21 @@ use axum::{
     http::{HeaderMap, HeaderValue, StatusCode, Uri, header::CACHE_CONTROL},
     response::Response,
 };
+use bytes::Bytes;
 use cow_utils::CowUtils;
 use rari_utils::path_to_file_url;
 use rustc_hash::FxHashMap;
 use tokio::{
     fs,
-    sync::{Mutex, mpsc::Receiver},
+    sync::mpsc::Receiver,
     time::{self, Duration},
 };
 
 use crate::{
-    RscHtmlRenderer,
-    rendering::{
-        layout::{
-            LayoutRenderContext, LayoutRenderer, OpenGraphImage, OpenGraphImageDescriptor,
-            OpenGraphMetadata, PageMetadata, RenderResult, TwitterMetadata, component_dist_path,
-            create_layout_context,
-        },
-        r#static::RscToHtmlConverter,
-        streaming::stream::RscStream,
+    rendering::layout::{
+        ChunkedContentType, LayoutRenderContext, LayoutRenderer, OpenGraphImage,
+        OpenGraphImageDescriptor, OpenGraphMetadata, PageMetadata, RenderResult, TwitterMetadata,
+        component_dist_path, create_layout_context, drain_chunked_stream,
     },
     server::{
         ServerState,
@@ -56,19 +49,13 @@ use crate::{
         middleware::request_context::RequestContext,
         rendering::{
             metadata_injection::inject_metadata,
-            utils::{
-                self, extract_asset_links_from_index_html, extract_body_scripts_from_index_html,
-                inject_assets_into_html, inject_vite_client,
-            },
+            utils::{inject_assets_into_html, inject_vite_client},
         },
         routing::app_router::AppRouteMatch,
     },
 };
 
-async fn decompress_bytes(
-    data: &bytes::Bytes,
-    encoding: CompressionEncoding,
-) -> Result<bytes::Bytes, Error> {
+async fn decompress_bytes(data: &Bytes, encoding: CompressionEncoding) -> Result<Bytes, Error> {
     use tokio::io::AsyncReadExt;
 
     let data = data.clone();
@@ -77,19 +64,19 @@ async fn decompress_bytes(
             let mut decoder = GzipDecoder::new(Cursor::new(&data[..]));
             let mut decompressed = Vec::new();
             decoder.read_to_end(&mut decompressed).await?;
-            Ok(bytes::Bytes::from(decompressed))
+            Ok(Bytes::from(decompressed))
         }
         CompressionEncoding::Brotli => {
             let mut decoder = BrotliDecoder::new(Cursor::new(&data[..]));
             let mut decompressed = Vec::new();
             decoder.read_to_end(&mut decompressed).await?;
-            Ok(bytes::Bytes::from(decompressed))
+            Ok(Bytes::from(decompressed))
         }
         CompressionEncoding::Zstd => {
             let mut decoder = ZstdDecoder::new(Cursor::new(&data[..]));
             let mut decompressed = Vec::new();
             decoder.read_to_end(&mut decompressed).await?;
-            Ok(bytes::Bytes::from(decompressed))
+            Ok(Bytes::from(decompressed))
         }
         CompressionEncoding::Identity => Ok(data),
     }
@@ -380,26 +367,24 @@ pub async fn render_rsc_navigation_streaming(
     };
 
     match render_result {
-        RenderResult::Streaming(rsc_stream) => Ok(render_rsc_streaming_response(
+        RenderResult::Chunked {
+            content_type: ChunkedContentType::RscFlight,
+            shell,
+            closing,
+            chunks,
+        } => Ok(render_chunked_response(
             &state,
-            route_match,
             &context,
-            rsc_stream,
+            ChunkedContentType::RscFlight,
+            shell,
+            closing,
+            chunks,
             is_not_found,
             accept_encoding,
         )),
-        RenderResult::FizzHtmlStream { .. } => {
-            tracing::error!("FizzHtmlStream not supported in RSC-only mode");
-            let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
-            #[expect(
-                clippy::expect_used,
-                reason = "Response::builder() with valid components never fails"
-            )]
-            Ok(Response::builder()
-                .status(status_code)
-                .header("content-type", "text/x-component")
-                .body(Body::from("0:\"Error: FizzHtmlStream not supported in RSC mode\"\n"))
-                .expect("Valid error response"))
+        RenderResult::Chunked { content_type: ChunkedContentType::Html, .. } => {
+            tracing::error!("HTML chunked render not supported in RSC-only mode");
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
         RenderResult::Static(rsc_flight_protocol) => {
             let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
@@ -456,62 +441,141 @@ pub async fn render_rsc_navigation_streaming(
     }
 }
 
-fn render_rsc_streaming_response(
+#[expect(clippy::too_many_arguments)]
+fn render_chunked_response(
     state: &Arc<ServerState>,
-    _route_match: AppRouteMatch,
     context: &LayoutRenderContext,
-    mut rsc_stream: RscStream,
+    content_type: ChunkedContentType,
+    shell: Bytes,
+    closing: Bytes,
+    mut chunks: Receiver<Result<Vec<u8>, String>>,
     is_not_found: bool,
     accept_encoding: Option<&str>,
 ) -> http::Response<Body> {
-    let should_continue = Arc::new(AtomicBool::new(true));
-    let should_continue_clone = should_continue;
+    let stall_timeout = Duration::from_millis(chunked_stream_stall_timeout_ms());
 
-    let rsc_flight_stream = async_stream::stream! {
-        while should_continue_clone.load(Relaxed) {
-            match rsc_stream.next_chunk().await {
-                Some(chunk) => {
-                    let data = String::from_utf8_lossy(&chunk.data).to_string();
-                    if data.trim() != "STREAM_COMPLETE" {
-                        yield Ok::<_, Error>(bytes::Bytes::from(data));
+    let byte_stream = async_stream::stream! {
+        match content_type {
+            ChunkedContentType::Html => {
+                yield Ok::<_, Error>(shell);
+
+                loop {
+                    match time::timeout(stall_timeout, chunks.recv()).await {
+                        Ok(Some(Ok(chunk_bytes))) => {
+                            if !chunk_bytes.is_empty() {
+                                yield Ok(Bytes::from(chunk_bytes));
+                            }
+                        }
+                        Ok(Some(Err(e))) => {
+                            tracing::error!("Error in chunked HTML stream: {}", e);
+                            yield Err(Error::other(e));
+                            break;
+                        }
+                        Ok(None) => break,
+                        Err(_) => {
+                            tracing::error!(
+                                "Chunked HTML stream stalled: no chunk received within {} ms",
+                                stall_timeout.as_millis()
+                            );
+                            yield Ok(chunked_stream_error_chunk("Stream timed out waiting for content"));
+                            break;
+                        }
                     }
                 }
-                None => {
-                    break;
+
+                yield Ok(closing);
+            }
+            ChunkedContentType::RscFlight => {
+                loop {
+                    match time::timeout(stall_timeout, chunks.recv()).await {
+                        Ok(Some(Ok(chunk_bytes))) => {
+                            if chunk_bytes.is_empty() {
+                                continue;
+                            }
+                            let data = String::from_utf8_lossy(&chunk_bytes);
+                            if data.trim() == "STREAM_COMPLETE" {
+                                continue;
+                            }
+                            yield Ok(Bytes::from(chunk_bytes));
+                        }
+                        Ok(Some(Err(e))) => {
+                            tracing::error!("Error in chunked RSC stream: {}", e);
+                            yield Err(Error::other(e));
+                            break;
+                        }
+                        Ok(None) => break,
+                        Err(_) => {
+                            tracing::error!(
+                                "Chunked RSC stream stalled: no chunk received within {} ms",
+                                stall_timeout.as_millis()
+                            );
+                            yield Err(Error::other("RSC stream timed out waiting for content"));
+                            break;
+                        }
+                    }
                 }
             }
         }
     };
 
     let encoding = CompressionEncoding::from_accept_encoding(accept_encoding);
-    let compressed_stream = compress_stream(rsc_flight_stream, encoding);
+    let compressed_stream = compress_stream(byte_stream, encoding);
+    let vary =
+        if encoding.as_header_value().is_some() { "Accept, Accept-Encoding" } else { "Accept" };
 
     let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
     let cache_control = state.config.get_cache_control_for_route(&context.pathname);
 
     let mut response_builder = Response::builder()
         .status(status_code)
-        .header("content-type", "text/x-component")
         .header("transfer-encoding", "chunked")
         .header("x-render-mode", "streaming")
         .header("cache-control", cache_control)
-        .header("vary", "Accept")
+        .header("vary", vary)
         .header("x-content-type-options", "nosniff");
+
+    match content_type {
+        ChunkedContentType::Html => {
+            response_builder = response_builder.header("content-type", "text/html; charset=utf-8");
+        }
+        ChunkedContentType::RscFlight => {
+            response_builder = response_builder.header("content-type", "text/x-component");
+
+            if let Some(ref metadata) = context.metadata
+                && let Ok(metadata_json) = serde_json::to_string(metadata)
+            {
+                let encoded_metadata = urlencoding::encode(&metadata_json);
+                response_builder =
+                    response_builder.header("x-rari-metadata", encoded_metadata.as_ref());
+            }
+        }
+    }
 
     if let Some(encoding_header) = encoding.as_header_value() {
         response_builder = response_builder.header("content-encoding", encoding_header);
     }
 
-    if let Some(ref metadata) = context.metadata
-        && let Ok(metadata_json) = serde_json::to_string(metadata)
-    {
-        let encoded_metadata = urlencoding::encode(&metadata_json);
-        response_builder = response_builder.header("x-rari-metadata", encoded_metadata.as_ref());
-    }
-
     let body = Body::from_stream(compressed_stream);
     #[expect(clippy::expect_used, reason = "Response::builder() with valid components never fails")]
-    response_builder.body(body).expect("Valid RSC streaming response")
+    response_builder.body(body).expect("Valid chunked response")
+}
+
+fn chunked_stream_stall_timeout_ms() -> u64 {
+    env::var("RARI_STREAMING_STALL_TIMEOUT_MS")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(60_000)
+}
+
+fn chunked_stream_error_chunk(message: &str) -> Bytes {
+    let escaped = message
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;");
+    Bytes::from(format!(
+        r#"<div class="rari-error" style="color: red; border: 1px solid red; padding: 10px; border-radius: 4px; background-color: #fff5f5;"><strong>Error loading content: </strong>{escaped}</div>"#
+    ))
 }
 
 pub async fn render_synchronous(
@@ -562,27 +626,21 @@ pub async fn render_synchronous(
                     .body(Body::from(final_html))
                     .expect("Valid HTML response"))
             }
-            RenderResult::FizzHtmlStream { shell, closing, chunks } => Ok(render_fizz_html_stream(
+            RenderResult::Chunked {
+                content_type: ChunkedContentType::Html,
+                shell,
+                closing,
+                chunks,
+            } => Ok(render_chunked_response(
                 &state,
-                route_match,
                 &context,
+                ChunkedContentType::Html,
                 shell,
                 closing,
                 chunks,
                 is_not_found,
                 accept_encoding,
             )),
-            RenderResult::Streaming(stream) => {
-                render_streaming_response(
-                    state,
-                    route_match,
-                    context,
-                    stream,
-                    is_not_found,
-                    accept_encoding,
-                )
-                .await
-            }
             RenderResult::StaticBinary(bytes) => {
                 let html_content = String::from_utf8_lossy(&bytes).into_owned();
                 let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
@@ -597,215 +655,16 @@ pub async fn render_synchronous(
                     .body(Body::from(html_content))
                     .expect("Valid response"))
             }
+            RenderResult::Chunked { content_type: ChunkedContentType::RscFlight, .. } => {
+                tracing::error!("RSC chunked render not supported in HTML synchronous mode");
+                Err(StatusCode::INTERNAL_SERVER_ERROR)
+            }
         },
         Err(e) => {
             tracing::error!("Synchronous rendering failed: {}", e);
             render_fallback_html(&state, &route_match.route.path, is_not_found).await
         }
     }
-}
-
-#[expect(clippy::too_many_arguments)]
-fn render_fizz_html_stream(
-    state: &Arc<ServerState>,
-    _route_match: AppRouteMatch,
-    context: &LayoutRenderContext,
-    shell: bytes::Bytes,
-    closing: bytes::Bytes,
-    mut chunks: Receiver<Result<Vec<u8>, String>>,
-    is_not_found: bool,
-    accept_encoding: Option<&str>,
-) -> http::Response<Body> {
-    use crate::server::compression::compress_stream;
-
-    let stall_timeout = Duration::from_millis(fizz_stream_stall_timeout_ms());
-
-    let fizz_stream = async_stream::stream! {
-        yield Ok::<_, Error>(shell);
-
-        loop {
-            match time::timeout(stall_timeout, chunks.recv()).await {
-                Ok(Some(Ok(chunk_bytes))) => {
-                    if !chunk_bytes.is_empty() {
-                        yield Ok(bytes::Bytes::from(chunk_bytes));
-                    }
-                }
-                Ok(Some(Err(e))) => {
-                    tracing::error!("Error in Fizz stream chunk: {}", e);
-                    yield Err(Error::other(e));
-                    break;
-                }
-                Ok(None) => break,
-                Err(_) => {
-                    tracing::error!(
-                        "Fizz stream stalled: no chunk received within {} ms",
-                        stall_timeout.as_millis()
-                    );
-                    yield Ok(fizz_stream_error_chunk("Stream timed out waiting for content"));
-                    break;
-                }
-            }
-        }
-
-        yield Ok(closing);
-    };
-
-    let encoding = CompressionEncoding::from_accept_encoding(accept_encoding);
-    let compressed_stream = compress_stream(fizz_stream, encoding);
-
-    let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
-    let cache_control = state.config.get_cache_control_for_route(&context.pathname);
-
-    let mut response_builder = Response::builder()
-        .status(status_code)
-        .header("content-type", "text/html; charset=utf-8")
-        .header("transfer-encoding", "chunked")
-        .header("x-content-type-options", "nosniff")
-        .header("x-render-mode", "streaming")
-        .header("cache-control", cache_control)
-        .header("vary", "Accept");
-
-    if let Some(encoding_header) = encoding.as_header_value() {
-        response_builder = response_builder.header("content-encoding", encoding_header);
-    }
-
-    let body = Body::from_stream(compressed_stream);
-    #[expect(clippy::expect_used, reason = "Response::builder() with valid components never fails")]
-    response_builder.body(body).expect("Valid Fizz streaming response")
-}
-
-fn fizz_stream_stall_timeout_ms() -> u64 {
-    env::var("RARI_STREAMING_STALL_TIMEOUT_MS")
-        .ok()
-        .and_then(|value| value.parse().ok())
-        .unwrap_or(60_000)
-}
-
-fn fizz_stream_error_chunk(message: &str) -> bytes::Bytes {
-    let escaped = message
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;");
-    bytes::Bytes::from(format!(
-        r#"<div class="rari-error" style="color: red; border: 1px solid red; padding: 10px; border-radius: 4px; background-color: #fff5f5;"><strong>Error loading content: </strong>{escaped}</div>"#
-    ))
-}
-
-async fn render_streaming_response(
-    state: Arc<ServerState>,
-    _route_match: AppRouteMatch,
-    context: LayoutRenderContext,
-    mut rsc_stream: RscStream,
-    is_not_found: bool,
-    accept_encoding: Option<&str>,
-) -> Result<Response, StatusCode> {
-    let asset_links = extract_asset_links_from_index_html().await;
-    let body_scripts = extract_body_scripts_from_index_html().await;
-
-    let html_renderer = {
-        let renderer = state.renderer.lock().await;
-        Arc::new(RscHtmlRenderer::new(Arc::clone(&renderer.runtime)))
-    };
-
-    let asset_tags = asset_links.as_deref().unwrap_or("");
-
-    let title = context
-        .metadata
-        .as_ref()
-        .and_then(|m| m.title.as_ref())
-        .map(String::as_str)
-        .unwrap_or("rari App");
-
-    let base_shell = format!(
-        r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{title}</title>
-    {asset_tags}
-    <style>
-        .rari-loading {{
-            animation: rari-pulse 1.5s ease-in-out infinite;
-        }}
-        @keyframes rari-pulse {{
-            0%, 100% {{ opacity: 1; }}
-            50% {{ opacity: 0.5; }}
-        }}
-    </style>
-</head>
-<body>
-<div id="root">
-"#
-    );
-
-    let base_shell = if let Some(ref metadata) = context.metadata {
-        inject_metadata(&base_shell, metadata, state.image_optimizer.as_deref())
-    } else {
-        base_shell
-    };
-
-    let converter = Arc::new(Mutex::new(RscToHtmlConverter::with_custom_shell(
-        base_shell,
-        body_scripts,
-        html_renderer,
-    )));
-
-    let should_continue = Arc::new(AtomicBool::new(true));
-    let should_continue_clone = should_continue;
-
-    let html_stream = async_stream::stream! {
-        while should_continue_clone.load(Relaxed) {
-            match rsc_stream.next_chunk().await {
-                Some(chunk) => {
-                    let mut conv = converter.lock().await;
-
-                    match conv.convert_chunk(chunk).await {
-                        Ok(html_bytes) => {
-                            if !html_bytes.is_empty() {
-                                yield Ok::<_, Error>(bytes::Bytes::from(html_bytes));
-                            }
-                        }
-                        Err(e) => {
-                            if e.to_string().contains("disconnected") || e.to_string().contains("broken pipe") {
-                                should_continue_clone.store(false, Relaxed);
-                                break;
-                            }
-
-                            tracing::error!("Error converting RSC chunk to HTML: {}", e);
-                            yield Err(Error::other(e.to_string()));
-                        }
-                    }
-                }
-                None => {
-                    break;
-                }
-            }
-        }
-    };
-
-    let encoding = CompressionEncoding::from_accept_encoding(accept_encoding);
-    let compressed_stream = compress_stream(html_stream, encoding);
-
-    let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
-    let cache_control = state.config.get_cache_control_for_route(&context.pathname);
-
-    let mut response_builder = Response::builder()
-        .status(status_code)
-        .header("content-type", "text/html; charset=utf-8")
-        .header("transfer-encoding", "chunked")
-        .header("x-content-type-options", "nosniff")
-        .header("cache-control", cache_control)
-        .header("vary", "Accept");
-
-    if let Some(encoding_header) = encoding.as_header_value() {
-        response_builder = response_builder.header("content-encoding", encoding_header);
-    }
-
-    let body = Body::from_stream(compressed_stream);
-    #[expect(clippy::expect_used, reason = "Response::builder() with valid components never fails")]
-    Ok(response_builder.body(body).expect("Valid streaming response"))
 }
 
 pub async fn render_streaming_with_layout(
@@ -851,20 +710,22 @@ pub async fn render_streaming_with_layout(
         }
     };
 
-    let rsc_stream = match render_result {
-        RenderResult::Streaming(stream) => stream,
-        RenderResult::FizzHtmlStream { shell, closing, chunks } => {
-            return Ok(render_fizz_html_stream(
-                &state,
-                route_match,
-                &context,
-                shell,
-                closing,
-                chunks,
-                is_not_found,
-                accept_encoding,
-            ));
-        }
+    match render_result {
+        RenderResult::Chunked {
+            content_type: ChunkedContentType::Html,
+            shell,
+            closing,
+            chunks,
+        } => Ok(render_chunked_response(
+            &state,
+            &context,
+            ChunkedContentType::Html,
+            shell,
+            closing,
+            chunks,
+            is_not_found,
+            accept_encoding,
+        )),
         RenderResult::Static(html) => {
             use crate::server::compression::compress_body;
 
@@ -884,7 +745,7 @@ pub async fn render_streaming_with_layout(
 
             let encoding = CompressionEncoding::from_accept_encoding(accept_encoding);
             let (body_bytes, actual_encoding) =
-                compress_body(bytes::Bytes::from(final_html), encoding).await;
+                compress_body(Bytes::from(final_html), encoding).await;
 
             let mut response_builder = Response::builder()
                 .status(status_code)
@@ -901,22 +762,14 @@ pub async fn render_streaming_with_layout(
                 clippy::expect_used,
                 reason = "Response::builder() with valid components never fails"
             )]
-            return Ok(response_builder.body(Body::from(body_bytes)).expect("Valid HTML response"));
+            Ok(response_builder.body(Body::from(body_bytes)).expect("Valid HTML response"))
         }
-        RenderResult::StaticBinary(_bytes) => {
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        RenderResult::StaticBinary(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+        RenderResult::Chunked { content_type: ChunkedContentType::RscFlight, .. } => {
+            tracing::error!("RSC chunked render not supported in HTML streaming mode");
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
-    };
-
-    render_streaming_response(
-        state,
-        route_match,
-        context,
-        rsc_stream,
-        is_not_found,
-        accept_encoding,
-    )
-    .await
+    }
 }
 
 pub async fn render_fallback_html(
@@ -1211,14 +1064,13 @@ pub async fn handle_app_route(
             if use_streaming {
                 context.metadata = collect_page_metadata(&state, &route_match, &context).await;
 
-                let result = render_rsc_navigation_streaming(
+                return render_rsc_navigation_streaming(
                     Arc::new(state),
                     route_match,
                     context,
                     accept_encoding,
                 )
                 .await;
-                return result;
             }
             let cache_key = response::ResponseCache::generate_cache_key_with_mode(
                 path,
@@ -1298,7 +1150,7 @@ pub async fn handle_app_route(
 
                     if cache_policy.enabled && state.response_cache.config.enabled {
                         let cached_response = response::CachedResponse {
-                            body: bytes::Bytes::from(rsc_flight_protocol.clone()),
+                            body: Bytes::from(rsc_flight_protocol.clone()),
                             headers: cache_headers,
                             metadata: response::CacheMetadata {
                                 cached_at: Instant::now(),
@@ -1598,106 +1450,38 @@ pub async fn handle_app_route(
 
                     (final_html, etag)
                 }
-                RenderResult::FizzHtmlStream { shell, closing, mut chunks } => {
-                    let mut html = String::from_utf8_lossy(&shell).into_owned();
-
-                    while let Some(chunk_result) = chunks.recv().await {
-                        match chunk_result {
-                            Ok(chunk_data) => {
-                                html.push_str(&String::from_utf8_lossy(&chunk_data));
-                            }
-                            Err(e) => {
-                                tracing::error!("FizzHtmlStream chunk error in build mode: {e}");
-                                break;
-                            }
+                RenderResult::Chunked {
+                    content_type: ChunkedContentType::Html,
+                    shell,
+                    closing,
+                    mut chunks,
+                } => {
+                    let html = match drain_chunked_stream(shell, closing, &mut chunks).await {
+                        Ok(html) => html,
+                        Err(error) => {
+                            tracing::error!(
+                                "Failed to drain chunked HTML stream for build cache: {error}"
+                            );
+                            return render_fallback_html(
+                                &state,
+                                path,
+                                route_match.not_found.is_some(),
+                            )
+                            .await;
                         }
-                    }
-
-                    html.push_str(&String::from_utf8_lossy(&closing));
-
+                    };
                     let etag = response::ResponseCache::generate_etag(html.as_bytes());
                     (html, etag)
                 }
-                RenderResult::Streaming(stream) => {
-                    let asset_links = extract_asset_links_from_index_html().await;
-
-                    let html_renderer = {
-                        let renderer = state.renderer.lock().await;
-                        Arc::new(RscHtmlRenderer::new(Arc::clone(&renderer.runtime)))
-                    };
-
-                    let title = context
-                        .metadata
-                        .as_ref()
-                        .and_then(|m| m.title.as_ref())
-                        .map(String::as_str)
-                        .unwrap_or("rari App");
-
-                    let asset_tags = asset_links.as_deref().unwrap_or("");
-                    let base_shell = format!(
-                        r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{title}</title>
-    {asset_tags}
-    <style>
-        .rari-loading {{
-            animation: rari-pulse 1.5s ease-in-out infinite;
-        }}
-        @keyframes rari-pulse {{
-            0%, 100% {{ opacity: 1; }}
-            50% {{ opacity: 0.5; }}
-        }}
-    </style>
-</head>
-<body>
-<div id="root">"#
-                    );
-
-                    let base_shell = if let Some(ref metadata) = context.metadata {
-                        inject_metadata(&base_shell, metadata, state.image_optimizer.as_deref())
-                    } else {
-                        base_shell
-                    };
-
-                    let body_scripts = utils::extract_body_scripts_from_index_html().await;
-                    let mut converter = RscToHtmlConverter::with_custom_shell(
-                        base_shell,
-                        body_scripts,
-                        html_renderer,
-                    );
-
-                    let mut rsc_stream = stream;
-                    let mut buffered_html = String::new();
-
-                    while let Some(chunk) = rsc_stream.next_chunk().await {
-                        match converter.convert_chunk(chunk).await {
-                            Ok(html_bytes) => {
-                                if !html_bytes.is_empty() {
-                                    buffered_html.push_str(&String::from_utf8_lossy(&html_bytes));
-                                }
-                            }
-                            Err(e) => {
-                                tracing::error!("Error converting RSC chunk to HTML: {}", e);
-                                return render_fallback_html(
-                                    &state,
-                                    path,
-                                    route_match.not_found.is_some(),
-                                )
-                                .await;
-                            }
-                        }
-                    }
-
-                    let final_html = buffered_html;
-                    let etag = response::ResponseCache::generate_etag(final_html.as_bytes());
-
-                    (final_html, etag)
-                }
                 RenderResult::StaticBinary(_bytes) => {
                     tracing::error!("StaticBinary not supported in build mode");
+                    return render_fallback_html(&state, path, route_match.not_found.is_some())
+                        .await;
+                }
+                RenderResult::Chunked { content_type: ChunkedContentType::RscFlight, .. } => {
+                    tracing::error!(
+                        "RSC chunked render not supported in build mode HTML rendering"
+                    );
                     return render_fallback_html(&state, path, route_match.not_found.is_some())
                         .await;
                 }
@@ -1728,7 +1512,7 @@ pub async fn handle_app_route(
                 response::RouteCachePolicy::from_cache_control(cache_control_value, path);
 
             if cache_policy.enabled && state.response_cache.config.enabled {
-                let body_bytes = bytes::Bytes::from(final_html.clone());
+                let body_bytes = Bytes::from(final_html.clone());
 
                 let (compressed_gzip, compressed_zstd, compressed_br) = {
                     let (gz, gz_enc) =
@@ -1791,7 +1575,7 @@ pub async fn handle_app_route(
                 use crate::server::compression::{CompressionEncoding, compress_body};
                 let encoding = CompressionEncoding::from_accept_encoding(accept_encoding);
                 let (body_bytes, actual_encoding) =
-                    compress_body(bytes::Bytes::from(final_html), encoding).await;
+                    compress_body(Bytes::from(final_html), encoding).await;
 
                 if let Some(encoding_header) = actual_encoding.as_header_value() {
                     response_builder = response_builder.header("content-encoding", encoding_header);

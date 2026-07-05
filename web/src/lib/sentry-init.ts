@@ -4,14 +4,14 @@ if (typeof window !== 'undefined') {
   const EXTENSION_PATTERN = /chrome-extension:\/\/|moz-extension:\/\/|safari-extension:|edge-extension:|extensions::/
   const SENTRY_SDK_PATTERN = /@sentry|node_modules\/@sentry/
 
-  if (dsn) {
+  if (dsn && !import.meta.env.DEV) {
     import('@sentry/react').then((Sentry) => {
       try {
         Sentry.init({
           dsn,
           sendDefaultPii: false,
-          tracesSampleRate: import.meta.env.DEV ? 1.0 : 0.1,
-          environment: import.meta.env.DEV ? 'development' : 'production',
+          tracesSampleRate: 0.1,
+          environment: import.meta.env.VITE_SENTRY_ENV ?? import.meta.env.MODE,
           integrations: [
             Sentry.browserTracingIntegration(),
             Sentry.replayIntegration({
@@ -19,7 +19,7 @@ if (typeof window !== 'undefined') {
               blockAllMedia: false,
             }),
           ],
-          replaysSessionSampleRate: import.meta.env.DEV ? 1.0 : 0.1,
+          replaysSessionSampleRate: 0.1,
           replaysOnErrorSampleRate: 1.0,
           beforeSend(event, hint) {
             const error = hint.originalException

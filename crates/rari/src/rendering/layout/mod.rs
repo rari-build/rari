@@ -8,8 +8,8 @@ pub use core::{LayoutHtmlCache, LayoutRenderer};
 
 pub use route_composer::{LayoutInfo, RouteComposer};
 pub use types::*;
-pub(crate) use utils::component_dist_path;
 pub use utils::create_layout_context;
+pub(crate) use utils::{component_dist_path, drain_chunked_stream};
 
 #[cfg(test)]
 #[expect(clippy::unwrap_used)]

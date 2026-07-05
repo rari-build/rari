@@ -62,6 +62,13 @@ pub trait JsRuntimeInterface: Send + Sync {
         expected_context: Arc<RequestContext>,
     ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>>;
 
+    fn execute_script_with_request_context(
+        &self,
+        request_context: Arc<RequestContext>,
+        script_name: String,
+        script_code: String,
+    ) -> Pin<Box<dyn Future<Output = Result<Value, RariError>> + Send>>;
+
     fn execute_script_for_streaming(
         &self,
         script_name: String,

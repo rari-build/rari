@@ -13,7 +13,12 @@ interface TodoAppProps {
 export default function TodoApp({ initialTodos }: TodoAppProps) {
   const [todos, setTodos] = useState<Todo[]>(initialTodos)
 
-  const refreshTodos = async () => {
+  const refreshTodos = async (todos?: Todo[]) => {
+    if (todos) {
+      setTodos(todos)
+      return
+    }
+
     const updatedTodos = await getTodos()
     setTodos(updatedTodos)
   }

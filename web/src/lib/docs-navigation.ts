@@ -46,13 +46,22 @@ export function getBreadcrumbs(path: string): Array<{ label: string, href?: stri
     { label: 'Docs', href: '/docs/getting-started' },
   ]
 
+  function pushCrumb(crumb: { label: string, href?: string }) {
+    if (crumb.href && breadcrumbs.some(existing => existing.href === crumb.href))
+      return
+
+    breadcrumbs.push(crumb)
+  }
+
   function findPath(items: NavItem[], currentPath: Array<{ label: string, href?: string }>): boolean {
     for (const item of items) {
       const newPath = [...currentPath, { label: item.label, href: item.href }]
 
       if (item.href === path) {
-        breadcrumbs.push(...currentPath.slice(1))
-        breadcrumbs.push({ label: item.label })
+        for (const crumb of currentPath.slice(1))
+          pushCrumb(crumb)
+
+        pushCrumb({ label: item.label })
         return true
       }
 

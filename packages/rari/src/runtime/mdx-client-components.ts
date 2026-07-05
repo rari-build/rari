@@ -1,5 +1,5 @@
 import { EXTENSION_REGEX } from '../shared/regex-constants'
-import { registerClientComponent, registerClientReference } from './react-server-dom-shim'
+import { registerClientReference } from './rsc-references'
 
 export interface MDXClientComponentConfig {
   component: any
@@ -13,8 +13,6 @@ export function createMDXClientReference(
   exportName: string = 'default',
 ): any {
   const key = `${id}#${exportName}`
-
-  registerClientComponent(component, id, exportName)
 
   if (typeof globalThis !== 'undefined') {
     const globalAny = globalThis as any

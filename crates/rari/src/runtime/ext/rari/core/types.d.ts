@@ -101,33 +101,6 @@ declare global {
       apiHandler?: {
         callHandler: (requestData: any, moduleSpecifier: string, methodName: string) => Promise<any>
       }
-      lazy?: {
-        pending: Map<string, {
-          isDeferred?: boolean
-          component?: (props: unknown) => Promise<unknown>
-          props?: unknown
-          promise?: Promise<unknown>
-        }>
-        resolved: Map<string, {
-          success: boolean
-          data?: unknown
-          error?: string
-          stack?: string
-        } | Promise<{
-          success: boolean
-          data?: unknown
-          error?: string
-          stack?: string
-        }>>
-        counter: number
-        clear: (promiseId?: string) => void
-        resolve: (promiseId: string) => Promise<{
-          success: boolean
-          data?: unknown
-          error?: string
-          stack?: string
-        }>
-      }
       readStream?: (stream: ReadableStream) => Promise<string>
       ssrModules?: Record<string, { default?: unknown, [key: string]: unknown }>
       ssrRenderComponent?: (modulePath: string, exportName: string, props: unknown) => Promise<string>
@@ -143,6 +116,15 @@ declare global {
         registerComponent: (moduleSpecifier: string, componentId: string, skipGlobalBinding?: boolean) => Promise<unknown>
       }
       cookies?: (req: Request) => unknown
+      renderStreamingDocument?: (options: {
+        capturedElement: unknown
+        headContent: string
+        caughtErrors: unknown[]
+      }) => Promise<void>
+      pumpStreamingCompleteScript?: () => Promise<void>
+      injectStreamError?: (caughtErrors: unknown[]) => Promise<void>
+      pumpFizzChunk?: (text: string) => Promise<boolean>
+      streaming?: { complete?: boolean }
     }
   }
 

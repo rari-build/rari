@@ -1,3 +1,5 @@
+import { throwIfNotOk } from '../shared/utils/http'
+
 export type NavigationErrorType
   = | 'fetch-error'
     | 'timeout'
@@ -160,29 +162,23 @@ export async function fetchWithTimeout(
   options: RequestInit & { timeout?: number } = {},
 ): Promise<Response> {
   const timeout = options.timeout ?? DEFAULT_TIMEOUT
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), timeout)
+  const { timeout: _timeout, signal: userSignal, ...fetchOptions } = options
+  const timeoutSignal = AbortSignal.timeout(timeout)
+  const signal = userSignal
+    ? AbortSignal.any([userSignal, timeoutSignal])
+    : timeoutSignal
 
   try {
     const response = await fetch(url, {
-      ...options,
-      signal: controller.signal,
+      ...fetchOptions,
+      signal,
     })
 
-    clearTimeout(timeoutId)
-
-    if (!response.ok) {
-      const error = new Error(`HTTP ${response.status}: ${response.statusText}`) as Error & { status: number }
-      error.status = response.status
-      throw error
-    }
-
+    await throwIfNotOk(response)
     return response
   }
   catch (error) {
-    clearTimeout(timeoutId)
-
-    if (error instanceof Error && error.name === 'AbortError') {
+    if (error instanceof DOMException && error.name === 'TimeoutError') {
       const timeoutError = new Error(`Request timeout after ${timeout}ms`)
       timeoutError.name = 'TimeoutError'
       throw timeoutError

@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { resolveAlias } from '@rari/vite/alias-resolver'
+import { resolveAlias } from '@rari/shared/utils/alias-resolver'
 import { describe, expect, it } from 'vite-plus/test'
 
 describe('alias-resolver', () => {

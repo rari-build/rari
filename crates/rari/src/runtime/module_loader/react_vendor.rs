@@ -13,10 +13,12 @@
 
 pub const REACT_ESM: &str = include_str!("../ext/rari/react/vendor/react.js");
 
-pub const REACT_SERVER_ESM: &str = include_str!("../ext/rari/react/vendor/react-server.js");
+pub const REACT_DOM_ESM: &str = include_str!("../ext/rari/react/vendor/react-dom.js");
 
 pub const REACT_JSX_RUNTIME_ESM: &str =
     include_str!("../ext/rari/react/vendor/react-jsx-runtime.js");
+
+pub const REACT_SERVER_ESM: &str = include_str!("../ext/rari/react/vendor/react-server.js");
 
 pub const REACT_DOM_SERVER_ESM: &str = include_str!("../ext/rari/react/vendor/react-dom-server.js");
 

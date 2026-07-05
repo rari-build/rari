@@ -1,20 +1,9 @@
 #![expect(clippy::missing_errors_doc)]
 
-use std::{
-    fmt::Write,
-    future::Future,
-    pin::Pin,
-    string::ToString,
-    sync::{
-        Arc,
-        atomic::{AtomicU32, Ordering},
-    },
-    time::Duration,
-};
+use std::{future::Future, pin::Pin, string::ToString, sync::Arc, time::Duration};
 
 use cow_utils::CowUtils;
-use rari_error::{RariError, StreamingError};
-use rari_rsc::flight::escape;
+use rari_error::RariError;
 use regex::Regex;
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde_json::Value;
@@ -22,7 +11,6 @@ use tokio::{fs, time};
 
 use crate::{
     RscElement,
-    rendering::streaming::{RscChunkType, RscStreamChunk},
     runtime::JsExecutionRuntime,
     server::{config::Config, routing::app_router::AppRouteMatch},
 };
@@ -31,8 +19,6 @@ const SELF_CLOSING_TAGS: &[&str] = &[
     "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source",
     "track", "wbr",
 ];
-
-const PAYLOAD_SIZE_LIMIT: usize = 50000;
 
 pub fn escape_html(text: &str) -> String {
     text.cow_replace('&', "&amp;")
@@ -228,28 +214,6 @@ fn serialize_style_object(style_obj: &serde_json::Map<String, Value>) -> String 
     style_parts.join(";")
 }
 
-#[derive(Debug)]
-pub struct BoundaryIdGenerator {
-    counter: AtomicU32,
-}
-
-impl BoundaryIdGenerator {
-    pub fn new() -> Self {
-        Self { counter: AtomicU32::new(0) }
-    }
-
-    pub fn next(&self) -> String {
-        let id = self.counter.fetch_add(1, Ordering::SeqCst);
-        format!("B:{id}")
-    }
-}
-
-impl Default for BoundaryIdGenerator {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub struct RscRow {
@@ -267,69 +231,61 @@ impl RscHtmlRenderer {
         Self { runtime, template_cache: parking_lot::Mutex::new(None) }
     }
 
-    fn string_looks_like_rsc(s: &str) -> bool {
-        if let Some(rest) = s.strip_prefix("$L").or_else(|| s.strip_prefix("$@")) {
-            !rest.is_empty() && rest.chars().all(|c| c.is_ascii_hexdigit())
-        } else {
-            false
-        }
-    }
-
-    fn value_looks_like_rsc(value: &Value) -> bool {
-        match value {
-            Value::String(s) => Self::string_looks_like_rsc(s),
-            Value::Array(arr) => arr.iter().any(Self::value_looks_like_rsc),
-            Value::Object(obj) => obj.values().any(Self::value_looks_like_rsc),
-            _ => false,
-        }
-    }
-
-    async fn ssr_render_client_component(
-        &self,
-        module_path: &str,
-        export_name: &str,
-        props_json: &str,
-    ) -> Result<String, RariError> {
-        let script = format!(
-            r"(async function() {{
-                const ssrRender = globalThis['~rari']?.ssrRenderComponent;
-                if (!ssrRender) return '';
-                try {{
-                    return await ssrRender({module_path}, {export_name}, {props_json});
-                }} catch (e) {{
-                    return '';
-                }}
-            }})()",
-            module_path = serde_json::to_string(module_path).unwrap_or_default(),
-            export_name = serde_json::to_string(export_name).unwrap_or_default(),
-            props_json = props_json,
-        );
-
-        let result = self.runtime.execute_script("ssr_render_client".to_string(), script).await?;
-
-        match result.as_str() {
-            Some(html) if !html.is_empty() => Ok(html.to_string()),
-            _ => Ok(String::new()),
-        }
-    }
-
     fn extract_script_tags(template: &str) -> String {
         #[expect(clippy::unwrap_used, reason = "Hardcoded regex pattern is guaranteed to be valid")]
         let script_regex = Regex::new(r"(?s)<script[^>]*>.*?</script>|<script[^>]*/>").unwrap();
+
+        script_regex
+            .find_iter(template)
+            .map(|m| m.as_str().to_string())
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    fn is_stylesheet_link_tag(tag: &str) -> bool {
+        let lower = tag.to_lowercase();
+        lower.contains("stylesheet") || lower.contains("text/css")
+    }
+
+    fn extract_non_stylesheet_link_tags(template: &str) -> String {
         #[expect(clippy::unwrap_used, reason = "Hardcoded regex pattern is guaranteed to be valid")]
-        let link_regex = Regex::new(r"<link[^>]*/?>").unwrap();
+        let link_regex = Regex::new(r"(?i)<link\b[^>]*/?>").unwrap();
 
-        let mut tags = Vec::new();
+        link_regex
+            .find_iter(template)
+            .map(|m| m.as_str())
+            .filter(|tag| !Self::is_stylesheet_link_tag(tag))
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
 
-        for m in link_regex.find_iter(template) {
-            tags.push(m.as_str().to_string());
+    fn inject_head_tags(template: &str, tags: &str) -> String {
+        let tags = tags.trim();
+        if tags.is_empty() {
+            return template.to_string();
         }
 
-        for m in script_regex.find_iter(template) {
-            tags.push(m.as_str().to_string());
+        let tag_block = tags
+            .lines()
+            .filter(|line| !line.trim().is_empty() && !template.contains(line))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        if tag_block.is_empty() {
+            return template.to_string();
         }
 
-        tags.join("\n")
+        let tag_block = format!("{tag_block}\n");
+        if let Some(head_end) = template.find("</head>") {
+            let mut result = String::with_capacity(template.len() + tag_block.len());
+            result.push_str(&template[..head_end]);
+            result.push_str(&tag_block);
+            result.push_str(&template[head_end..]);
+            result
+        } else {
+            format!("{tag_block}{template}")
+        }
     }
 
     pub fn runtime(&self) -> &Arc<JsExecutionRuntime> {
@@ -544,36 +500,14 @@ impl RscHtmlRenderer {
                 continue;
             }
 
-            let row = Self::parse_rsc_line(line)?;
+            let Some(row) = Self::parse_rsc_line(line)? else { continue };
             rows.push(row);
         }
 
         Ok(rows)
     }
 
-    fn looks_like_rsc_payload(value: &Value) -> bool {
-        match value {
-            Value::Array(arr) => arr.first().and_then(|v| v.as_str()) == Some("$"),
-            Value::Object(obj) => {
-                obj.contains_key("Suspense")
-                    || obj.contains_key("Component")
-                    || obj.contains_key("Text")
-                    || obj.contains_key("Reference")
-                    || obj.contains_key("Promise")
-            }
-            _ => false,
-        }
-    }
-
-    fn is_rsc_payload(s: &str) -> bool {
-        if let Ok(value) = serde_json::from_str::<Value>(s) {
-            Self::looks_like_rsc_payload(&value)
-        } else {
-            false
-        }
-    }
-
-    fn parse_rsc_line(line: &str) -> Result<RscRow, RariError> {
+    fn parse_rsc_line(line: &str) -> Result<Option<RscRow>, RariError> {
         let colon_pos = line.find(':').ok_or_else(|| {
             RariError::internal(format!("Invalid RSC line format: missing colon in '{line}'"))
         })?;
@@ -593,12 +527,16 @@ impl RscHtmlRenderer {
                     .and_then(|v| v.as_str())
                     .unwrap_or("default")
                     .to_string();
-                return Ok(RscRow {
+                return Ok(Some(RscRow {
                     id,
                     data: RscElement::ModuleImport { module_path, export_name },
-                });
+                }));
             }
-            return Ok(RscRow { id, data: RscElement::Text(data_str.to_string()) });
+            return Ok(Some(RscRow { id, data: RscElement::Text(data_str.to_string()) }));
+        }
+
+        if Self::is_non_renderable_flight_row(data_str) {
+            return Ok(None);
         }
 
         let json_value: Value = serde_json::from_str(data_str)
@@ -606,7 +544,15 @@ impl RscHtmlRenderer {
 
         let data = Self::parse_rsc_element(&json_value)?;
 
-        Ok(RscRow { id, data })
+        Ok(Some(RscRow { id, data }))
+    }
+
+    fn is_non_renderable_flight_row(data_str: &str) -> bool {
+        if data_str.starts_with('{') || data_str.starts_with('[') || data_str.starts_with('"') {
+            return false;
+        }
+
+        data_str.chars().next().is_some_and(|character| character.is_ascii_uppercase())
     }
 
     fn parse_rsc_element(value: &Value) -> Result<RscElement, RariError> {
@@ -752,11 +698,14 @@ impl RscHtmlRenderer {
             || html_content.trim_start().cow_to_lowercase().starts_with("<html");
 
         if is_complete_document {
-            let script_tags = if is_dev_mode {
-                String::new()
+            let (script_tags, head_link_tags) = if is_dev_mode {
+                (String::new(), String::new())
             } else {
                 let template = self.load_template(cache_template, is_dev_mode).await?;
-                Self::extract_script_tags(&template)
+                (
+                    Self::extract_script_tags(&template),
+                    Self::extract_non_stylesheet_link_tags(&template),
+                )
             };
 
             let mut final_html = html_content;
@@ -768,6 +717,7 @@ impl RscHtmlRenderer {
             }
 
             final_html = Self::inject_css_links(&final_html, css_links);
+            final_html = Self::inject_head_tags(&final_html, &head_link_tags);
 
             let trimmed_lower = final_html.trim_start().cow_to_lowercase();
             if !trimmed_lower.starts_with("<!doctype") {
@@ -829,14 +779,17 @@ impl RscHtmlRenderer {
                 || html_content.trim_start().cow_to_lowercase().starts_with("<html");
 
             if is_complete_document {
-                let script_tags = if is_dev_mode {
-                    String::new()
+                let (script_tags, head_link_tags) = if is_dev_mode {
+                    (String::new(), String::new())
                 } else {
                     let template =
                         self.load_template(cache_template, is_dev_mode).await.map_err(|e| {
                             RariError::internal(format!("Failed to load HTML template: {e}"))
                         })?;
-                    Self::extract_script_tags(&template)
+                    (
+                        Self::extract_script_tags(&template),
+                        Self::extract_non_stylesheet_link_tags(&template),
+                    )
                 };
 
                 let mut final_html = html_content.clone();
@@ -848,6 +801,7 @@ impl RscHtmlRenderer {
                 }
 
                 final_html = Self::inject_css_links(&final_html, &css_links);
+                final_html = Self::inject_head_tags(&final_html, &head_link_tags);
 
                 let trimmed_lower = final_html.trim_start().cow_to_lowercase();
                 if !trimmed_lower.starts_with("<!doctype") {
@@ -1013,7 +967,7 @@ impl RscHtmlRenderer {
                     Ok(String::new())
                 }
 
-                RscElement::Suspense { fallback_ref, children_ref, boundary_id, props: _ } => {
+                RscElement::Suspense { fallback_ref, children_ref, boundary_id: _, props: _ } => {
                     if let Ok(row_id) = Self::parse_reference(children_ref) {
                         let html = self.render_row(row_id, row_map, row_cache).await?;
                         if !html.is_empty() {
@@ -1023,11 +977,7 @@ impl RscHtmlRenderer {
 
                     if let Ok(row_id) = Self::parse_reference(fallback_ref) {
                         let html = self.render_row(row_id, row_map, row_cache).await?;
-                        return Ok(format!(
-                            r#"<div data-boundary-id="{}" class="rari-suspense-boundary">{}</div>"#,
-                            Self::escape_html_attribute(boundary_id),
-                            html
-                        ));
+                        return Ok(format!(r#"<div class="rari-suspense-boundary">{html}</div>"#));
                     }
 
                     Ok(String::new())
@@ -1248,942 +1198,6 @@ impl RscHtmlRenderer {
             .cow_replace('>', "&gt;")
             .into_owned()
     }
-
-    fn escape_js_string(text: &str) -> String {
-        text.cow_replace('\\', "\\\\")
-            .cow_replace('\'', "\\'")
-            .cow_replace('"', "\\\"")
-            .cow_replace('\n', "\\n")
-            .cow_replace('\r', "\\r")
-            .cow_replace('\t', "\\t")
-            .cow_replace("</", "<\\/")
-            .cow_replace('\u{2028}', "\\u2028")
-            .cow_replace('\u{2029}', "\\u2029")
-            .cow_replace('\0', "\\0")
-            .into_owned()
-    }
-}
-
-pub struct RscToHtmlConverter {
-    row_cache: FxHashMap<u32, String>,
-    module_imports: FxHashMap<u32, (String, String)>,
-    renderer: Arc<RscHtmlRenderer>,
-    shell_sent: bool,
-    asset_links: Option<String>,
-    boundary_id_generator: BoundaryIdGenerator,
-    rari_to_react_boundary_map: parking_lot::Mutex<FxHashMap<String, String>>,
-    custom_shell: Option<String>,
-    body_scripts: Option<String>,
-    rsc_flight_protocol: Vec<String>,
-    payload_embedding_disabled: bool,
-    root_div_closed: bool,
-    content_id_counter: AtomicU32,
-}
-
-impl RscToHtmlConverter {
-    pub fn new(renderer: Arc<RscHtmlRenderer>) -> Self {
-        Self {
-            row_cache: FxHashMap::default(),
-            module_imports: FxHashMap::default(),
-            renderer,
-            shell_sent: false,
-            asset_links: None,
-            boundary_id_generator: BoundaryIdGenerator::new(),
-            rari_to_react_boundary_map: parking_lot::Mutex::new(FxHashMap::default()),
-            custom_shell: None,
-            body_scripts: None,
-            rsc_flight_protocol: Vec::new(),
-            payload_embedding_disabled: false,
-            root_div_closed: false,
-            content_id_counter: AtomicU32::new(0),
-        }
-    }
-
-    pub fn with_assets(asset_links: String, renderer: Arc<RscHtmlRenderer>) -> Self {
-        Self {
-            row_cache: FxHashMap::default(),
-            module_imports: FxHashMap::default(),
-            renderer,
-            shell_sent: false,
-            asset_links: Some(asset_links),
-            boundary_id_generator: BoundaryIdGenerator::new(),
-            rari_to_react_boundary_map: parking_lot::Mutex::new(FxHashMap::default()),
-            custom_shell: None,
-            body_scripts: None,
-            rsc_flight_protocol: Vec::new(),
-            payload_embedding_disabled: false,
-            root_div_closed: false,
-            content_id_counter: AtomicU32::new(0),
-        }
-    }
-
-    pub fn with_custom_shell(
-        custom_shell: String,
-        body_scripts: Option<String>,
-        renderer: Arc<RscHtmlRenderer>,
-    ) -> Self {
-        Self {
-            row_cache: FxHashMap::default(),
-            module_imports: FxHashMap::default(),
-            renderer,
-            shell_sent: false,
-            asset_links: None,
-            boundary_id_generator: BoundaryIdGenerator::new(),
-            rari_to_react_boundary_map: parking_lot::Mutex::new(FxHashMap::default()),
-            custom_shell: Some(custom_shell),
-            body_scripts,
-            rsc_flight_protocol: Vec::new(),
-            payload_embedding_disabled: false,
-            root_div_closed: false,
-            content_id_counter: AtomicU32::new(0),
-        }
-    }
-
-    pub fn disable_payload_embedding(&mut self) {
-        self.rsc_flight_protocol.clear();
-        self.payload_embedding_disabled = true;
-    }
-
-    fn next_boundary_id(&self) -> String {
-        self.boundary_id_generator.next()
-    }
-
-    #[expect(clippy::too_many_lines)]
-    pub async fn convert_chunk(&mut self, chunk: RscStreamChunk) -> Result<Vec<u8>, RariError> {
-        let chunk_type_str = format!("{:?}", chunk.chunk_type);
-
-        let result: Result<Vec<u8>, RariError> = match chunk.chunk_type {
-            RscChunkType::ModuleImport => {
-                let rsc_line = String::from_utf8_lossy(&chunk.data);
-
-                if !self.payload_embedding_disabled {
-                    self.rsc_flight_protocol.push(rsc_line.trim().to_string());
-                }
-
-                let parts: Vec<&str> = rsc_line.trim().splitn(2, ':').collect();
-                if parts.len() == 2
-                    && let Ok(row_id) = u32::from_str_radix(parts[0], 16)
-                    && let Some(i_data) = parts[1].trim().strip_prefix('I')
-                    && let Ok(import_data) = serde_json::from_str::<Value>(i_data)
-                {
-                    let module_path =
-                        import_data.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                    let export_name = import_data
-                        .get("name")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("default")
-                        .to_string();
-                    self.module_imports.insert(row_id, (module_path, export_name));
-                }
-
-                Ok(Vec::new())
-            }
-
-            RscChunkType::InitialShell => {
-                let html = if self.shell_sent {
-                    match self.parse_and_render_rsc(&chunk.data, chunk.row_id).await {
-                        Ok(rsc_html) => rsc_html,
-                        Err(e) => {
-                            tracing::error!("Error parsing RSC: {}", e);
-                            Vec::new()
-                        }
-                    }
-                } else {
-                    self.shell_sent = true;
-                    let mut output = self.generate_html_shell();
-
-                    match self.parse_and_render_rsc(&chunk.data, chunk.row_id).await {
-                        Ok(rsc_html) => {
-                            output.extend(rsc_html);
-                        }
-                        Err(e) => {
-                            tracing::error!("Error parsing initial RSC shell: {}", e);
-                        }
-                    }
-
-                    output
-                };
-                Ok(html)
-            }
-
-            RscChunkType::BoundaryUpdate => {
-                let mut html = Vec::new();
-
-                if !self.root_div_closed {
-                    self.root_div_closed = true;
-                    html.extend(b"</div>\n");
-                }
-
-                if !self.payload_embedding_disabled {
-                    let rsc_line = String::from_utf8_lossy(&chunk.data);
-                    self.rsc_flight_protocol.push(rsc_line.trim().to_string());
-                }
-
-                match self.generate_boundary_replacement(&chunk).await {
-                    Ok(boundary_html) => {
-                        html.extend(boundary_html);
-                        Ok(html)
-                    }
-                    Err(e) => {
-                        tracing::error!("Error generating boundary replacement: {}", e);
-                        Ok(html)
-                    }
-                }
-            }
-
-            RscChunkType::BoundaryError => {
-                let mut html = Vec::new();
-
-                if !self.root_div_closed {
-                    self.root_div_closed = true;
-                    html.extend(b"</div>\n");
-                }
-
-                if !self.payload_embedding_disabled {
-                    let rsc_line = String::from_utf8_lossy(&chunk.data);
-                    let parts: Vec<&str> = rsc_line.trim().splitn(2, ':').collect();
-                    let error_msg = if parts.len() == 2 {
-                        let json_part = parts[1].strip_prefix('E').unwrap_or(parts[1]);
-                        serde_json::from_str::<Value>(json_part)
-                            .ok()
-                            .and_then(|error_data| {
-                                error_data["error"].as_str().map(ToString::to_string)
-                            })
-                            .unwrap_or_else(|| "Error loading content".to_string())
-                    } else {
-                        "Error loading content".to_string()
-                    };
-
-                    let placeholder_payload = serde_json::json!([
-                        "$",
-                        "div",
-                        null,
-                        {
-                            "className": "rari-error",
-                            "children": ["Error loading content: ", error_msg],
-                        }
-                    ]);
-                    let placeholder_row = format!("{:x}:{}\n", chunk.row_id, placeholder_payload);
-                    self.rsc_flight_protocol.push(placeholder_row.trim().to_string());
-                }
-
-                let error_html = self.generate_error_replacement(&chunk);
-                html.extend(error_html);
-                Ok(html)
-            }
-
-            RscChunkType::StreamComplete => {
-                let mut html = Vec::new();
-
-                if !self.root_div_closed {
-                    self.root_div_closed = true;
-                    html.extend(b"</div>\n");
-                }
-
-                html.extend(self.generate_html_closing());
-                Ok(html)
-            }
-        };
-
-        if let Err(ref e) = result {
-            tracing::error!("Chunk conversion error for {:?}: {}", chunk.chunk_type, e);
-            return Err(StreamingError::ChunkConversionError {
-                message: e.to_string(),
-                chunk_type: Some(chunk_type_str),
-            }
-            .into());
-        }
-
-        result
-    }
-
-    fn generate_fallback_error_html() -> Vec<u8> {
-        r#"<div style="color: red; border: 1px solid red; padding: 10px; margin: 10px 0;">
-            An error occurred while loading content.
-        </div>"#
-            .as_bytes()
-            .to_vec()
-    }
-
-    fn streaming_bridge_script() -> &'static str {
-        r"<script>
-(function(){
-  if(window['~rari']&&window['~rari'].streamingBridgeInstalled)return;
-  if(!window['~rari'])window['~rari']={};
-  window['~rari'].streamingBridgeInstalled=true;
-  window.addEventListener('rari:html-stream-row',function(e){
-    var detail=e.detail;
-    if(!detail||!detail.rscRow)return;
-    var navigationId=window['~rari']&&window['~rari'].navigationId;
-    window.dispatchEvent(new CustomEvent('rari:rsc-row',{detail:{rscRow:detail.rscRow,navigationId:navigationId}}));
-  });
-})();
-</script>"
-    }
-
-    fn generate_html_shell(&self) -> Vec<u8> {
-        if let Some(custom_shell) = &self.custom_shell {
-            let bridge_script = Self::streaming_bridge_script();
-
-            let custom_shell_with_bridge = if let Some(body_pos) = custom_shell.find("<body") {
-                if let Some(body_end) = custom_shell[body_pos..].find('>') {
-                    let insert_pos = body_pos + body_end + 1;
-                    format!(
-                        "{}{}{}",
-                        &custom_shell[..insert_pos],
-                        bridge_script,
-                        &custom_shell[insert_pos..]
-                    )
-                } else {
-                    format!("{custom_shell}{bridge_script}")
-                }
-            } else {
-                format!("{custom_shell}{bridge_script}")
-            };
-
-            return custom_shell_with_bridge.as_bytes().to_vec();
-        }
-
-        let asset_tags = self.asset_links.as_deref().unwrap_or("");
-        let bridge_script = Self::streaming_bridge_script();
-
-        format!(
-            r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>rari App</title>
-    {asset_tags}
-    <style>
-        .rari-loading {{
-            animation: rari-pulse 1.5s ease-in-out infinite;
-        }}
-        @keyframes rari-pulse {{
-            0%, 100% {{ opacity: 1; }}
-            50% {{ opacity: 0.5; }}
-        }}
-    </style>
-</head>
-<body>
-{bridge_script}
-<div id="root">"#
-        )
-        .as_bytes()
-        .to_vec()
-    }
-
-    pub fn generate_html_closing(&self) -> Vec<u8> {
-        let body_scripts = self.body_scripts.as_deref().unwrap_or("");
-
-        let mut rows_with_ids: Vec<(u32, String)> = Vec::new();
-        for row in &self.rsc_flight_protocol {
-            if let Some(colon_pos) = row.find(':') {
-                if let Ok(row_id) = u32::from_str_radix(&row[..colon_pos], 16) {
-                    rows_with_ids.push((row_id, row.clone()));
-                } else {
-                    rows_with_ids.push((u32::MAX, row.clone()));
-                }
-            } else {
-                rows_with_ids.push((u32::MAX, row.clone()));
-            }
-        }
-
-        rows_with_ids.sort_by_key(|(id, _)| if *id == 0 { u32::MAX - 1 } else { *id });
-
-        let mut rsc_payload = String::new();
-        for (_, row) in &rows_with_ids {
-            rsc_payload.push_str(row);
-            rsc_payload.push('\n');
-        }
-
-        let has_row_0 = rows_with_ids.iter().any(|(id, _)| *id == 0);
-
-        if !has_row_0
-            && let Some((max_id, _)) =
-                rows_with_ids.iter().filter(|(id, _)| *id != u32::MAX).max_by_key(|(id, _)| *id)
-            && *max_id > 0
-        {
-            let row_0 = format!("0:\"${max_id:x}\"\n");
-            rsc_payload.insert_str(0, &row_0);
-        }
-
-        let escaped_payload = rsc_payload.cow_replace("</", "<\\/");
-
-        let rsc_script = if rsc_payload.is_empty() {
-            String::new()
-        } else {
-            format!(
-                r#"<script id="__RARI_RSC_PAYLOAD__" type="text/x-component">{escaped_payload}</script>"#
-            )
-        };
-
-        format!(
-            r"{rsc_script}
-{body_scripts}
-<script>
-if (typeof window !== 'undefined') {{
-    if (!window['~rari']) window['~rari'] = {{}};
-    if (!window['~rari'].streaming) window['~rari'].streaming = {{}};
-    window['~rari'].streaming.complete = true;
-    window.dispatchEvent(new Event('rari:stream-complete'));
-    window.dispatchEvent(new CustomEvent('rari:html-stream-row', {{ detail: {{ rscRow: 'STREAM_COMPLETE' }} }}));
-}}
-</script>
-</body>
-</html>"
-        )
-        .as_bytes()
-        .to_vec()
-    }
-
-    async fn parse_and_render_rsc(
-        &mut self,
-        data: &[u8],
-        row_id: u32,
-    ) -> Result<Vec<u8>, RariError> {
-        let rsc_line = String::from_utf8_lossy(data);
-
-        let parts: Vec<&str> = rsc_line.trim().splitn(2, ':').collect();
-        if parts.len() != 2 {
-            return Ok(Vec::new());
-        }
-
-        if !self.payload_embedding_disabled {
-            self.rsc_flight_protocol.push(rsc_line.trim().to_string());
-        }
-
-        let json_str = parts[1].trim();
-        if json_str.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        if let Some(i_data) = json_str.strip_prefix('I') {
-            if let Ok(import_data) = serde_json::from_str::<Value>(i_data) {
-                let module_path =
-                    import_data.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                let export_name = import_data
-                    .get("name")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("default")
-                    .to_string();
-                self.module_imports.insert(row_id, (module_path, export_name));
-            }
-            return Ok(Vec::new());
-        }
-
-        if json_str.starts_with('S') || json_str.starts_with('E') {
-            return Ok(Vec::new());
-        }
-
-        if json_str.starts_with('"') && json_str.contains("$S") {
-            return Ok(Vec::new());
-        }
-
-        if json_str.starts_with('"')
-            && let Ok(Value::String(s)) = serde_json::from_str(json_str)
-            && RscHtmlRenderer::is_rsc_payload(&s)
-        {
-            return Ok(Vec::new());
-        }
-
-        if json_str.starts_with("[[") || json_str.len() > PAYLOAD_SIZE_LIMIT {
-            return Ok(Vec::new());
-        }
-
-        let rsc_data: Value = serde_json::from_str(json_str)
-            .map_err(|e| RariError::internal(format!("Invalid RSC JSON: {e}")))?;
-
-        let html = self.rsc_element_to_html(&rsc_data).await?;
-
-        self.row_cache.insert(row_id, html.clone());
-
-        Ok(html.into_bytes())
-    }
-
-    #[expect(clippy::too_many_lines)]
-    fn rsc_element_to_html<'a>(
-        &'a self,
-        element: &'a Value,
-    ) -> Pin<Box<dyn Future<Output = Result<String, RariError>> + Send + 'a>> {
-        Box::pin(async move {
-            if let Some(s) = element.as_str() {
-                if s.starts_with("$$") {
-                    return Ok(escape_html(&s[1..]));
-                }
-
-                if let Some(stripped) = s.strip_prefix("$L").or_else(|| s.strip_prefix("$@"))
-                    && let Ok(row_id) = u32::from_str_radix(stripped, 16)
-                {
-                    let cached = self.row_cache.get(&row_id).cloned().unwrap_or_default();
-                    return Ok(cached);
-                }
-
-                if s.starts_with('$')
-                    && s.len() > 1
-                    && s[1..].chars().all(|c| c.is_ascii_hexdigit())
-                {
-                    let row_id: u32 = u32::from_str_radix(&s[1..], 16).map_err(|_| {
-                        RariError::internal(format!("Invalid chunk reference: {s}"))
-                    })?;
-                    let cached = self.row_cache.get(&row_id).cloned().unwrap_or_default();
-                    return Ok(cached);
-                }
-
-                if s.starts_with("I[") || s.starts_with("S[") || s.starts_with("E[") {
-                    return Ok(String::new());
-                }
-
-                if let Some(colon_pos) = s.find(':')
-                    && s[..colon_pos].chars().all(|c| c.is_ascii_hexdigit())
-                {
-                    let after_colon = &s[colon_pos + 1..];
-                    if !after_colon.is_empty()
-                        && (after_colon.starts_with('[') || after_colon.starts_with('{'))
-                        && serde_json::from_str::<Value>(after_colon).is_ok()
-                    {
-                        return Ok(String::new());
-                    }
-                }
-
-                return Ok(escape_html(s));
-            }
-
-            if let Some(arr) = element.as_array() {
-                if arr.len() >= 4 && arr[0].as_str() == Some("$") {
-                    let element_type = arr[1].as_str().unwrap_or("div");
-                    let props = arr[3].as_object();
-
-                    let is_rsc_reference = element_type.starts_with('$')
-                        && element_type.len() > 1
-                        && !element_type.starts_with("$S")
-                        && element_type[1..].chars().all(|c| c.is_ascii_hexdigit());
-
-                    let is_client_component = element_type.starts_with("$L")
-                        || element_type.starts_with("$@")
-                        || element_type.contains('#')
-                        || element_type.contains('/');
-
-                    if element_type == "$Sreact.suspense"
-                        || element_type == "react.suspense"
-                        || element_type == "suspense"
-                        || element_type.starts_with("$S")
-                    {
-                        return self.render_suspense_boundary(element_type, props).await;
-                    }
-
-                    if is_rsc_reference {
-                        let row_id = u32::from_str_radix(&element_type[1..], 16).map_err(|_| {
-                            RariError::internal(format!("Invalid chunk reference: {element_type}"))
-                        })?;
-                        return Ok(self.row_cache.get(&row_id).cloned().unwrap_or_default());
-                    }
-
-                    if is_client_component {
-                        return self.render_client_component_placeholder(element_type, props).await;
-                    }
-
-                    return self.render_html_element(element_type, props).await;
-                }
-
-                let mut html = String::new();
-                for child in arr {
-                    let child_html = self.rsc_element_to_html(child).await?;
-                    html.push_str(&child_html);
-                }
-                return Ok(html);
-            }
-
-            if let Some(obj) = element.as_object() {
-                if let (Some(element_type), Some(props)) = (obj.get("type"), obj.get("props"))
-                    && let Some(type_str) = element_type.as_str()
-                {
-                    let props_obj = props.as_object();
-
-                    let is_rsc_reference = type_str.starts_with('$')
-                        && type_str.len() > 1
-                        && !type_str.starts_with("$S")
-                        && type_str[1..].chars().all(|c| c.is_ascii_hexdigit());
-
-                    let is_client_component = type_str.starts_with("$L")
-                        || type_str.starts_with("$@")
-                        || type_str.contains('#')
-                        || type_str.contains('/');
-
-                    if type_str == "$Sreact.suspense"
-                        || type_str == "react.suspense"
-                        || type_str == "suspense"
-                        || type_str.starts_with("$S")
-                    {
-                        return self.render_suspense_boundary(type_str, props_obj).await;
-                    }
-
-                    if is_rsc_reference {
-                        let row_id = u32::from_str_radix(&type_str[1..], 16).map_err(|_| {
-                            RariError::internal(format!("Invalid chunk reference: {type_str}"))
-                        })?;
-                        return Ok(self.row_cache.get(&row_id).cloned().unwrap_or_default());
-                    }
-
-                    if is_client_component {
-                        return self.render_client_component_placeholder(type_str, props_obj).await;
-                    }
-
-                    return self.render_html_element(type_str, props_obj).await;
-                }
-                if let Some(children) = obj.get("children") {
-                    return self.rsc_element_to_html(children).await;
-                }
-            }
-
-            Ok(String::new())
-        })
-    }
-
-    async fn render_client_component_placeholder(
-        &self,
-        component_ref: &str,
-        props: Option<&serde_json::Map<String, Value>>,
-    ) -> Result<String, RariError> {
-        let props_are_rsc =
-            props.is_some_and(|p| p.values().any(RscHtmlRenderer::value_looks_like_rsc));
-
-        if !props_are_rsc
-            && let Some(stripped) =
-                component_ref.strip_prefix("$L").or_else(|| component_ref.strip_prefix("$@"))
-            && let Ok(module_row_id) = u32::from_str_radix(stripped, 16)
-            && let Some((module_path, export_name)) = self.module_imports.get(&module_row_id)
-        {
-            let props_json = if let Some(p) = props {
-                serde_json::to_string(&escape::unescape_rsc_value(&Value::Object(p.clone())))
-                    .unwrap_or_default()
-            } else {
-                "{}".to_string()
-            };
-            if let Ok(html) = self
-                .renderer
-                .ssr_render_client_component(module_path, export_name, &props_json)
-                .await
-                && !html.is_empty()
-            {
-                return Ok(html);
-            }
-        }
-
-        if let Some(props) = props
-            && let Some(children) = props.get("children")
-        {
-            return self.rsc_element_to_html(children).await;
-        }
-        Ok(String::new())
-    }
-
-    async fn render_suspense_boundary(
-        &self,
-        _element_type: &str,
-        props: Option<&serde_json::Map<String, Value>>,
-    ) -> Result<String, RariError> {
-        if let Some(props) = props {
-            let rari_boundary_id =
-                props.get("~boundaryId").and_then(|v| v.as_str()).unwrap_or("unknown");
-
-            let (react_boundary_id, is_duplicate) = {
-                let map = self.rari_to_react_boundary_map.lock();
-                if let Some(existing_id) = map.get(rari_boundary_id) {
-                    (existing_id.clone(), true)
-                } else {
-                    drop(map);
-                    let new_id = self.next_boundary_id();
-                    self.rari_to_react_boundary_map
-                        .lock()
-                        .insert(rari_boundary_id.to_string(), new_id.clone());
-                    (new_id, false)
-                }
-            };
-
-            if is_duplicate {
-                return Ok(String::new());
-            }
-
-            let children = props.get("children");
-            let children_html = if let Some(child) = children {
-                if child.is_null() {
-                    None
-                } else {
-                    let rendered = self.rsc_element_to_html(child).await?;
-                    if !rendered.is_empty() && rendered.trim() != "null" {
-                        Some(rendered)
-                    } else {
-                        None
-                    }
-                }
-            } else {
-                None
-            };
-
-            let content_html = if let Some(children_html) = children_html {
-                children_html
-            } else {
-                let fallback = props.get("fallback");
-                if let Some(fb) = fallback {
-                    self.rsc_element_to_html(fb).await?
-                } else {
-                    String::from("<div class=\"rari-loading\">Loading...</div>")
-                }
-            };
-
-            let html = format!(
-                "<!--$?--><template id=\"{}\"></template><div data-boundary-id=\"{}\">{}</div><!--/$-->",
-                react_boundary_id,
-                RscHtmlRenderer::escape_html_attribute(rari_boundary_id),
-                content_html
-            );
-
-            Ok(html)
-        } else {
-            Ok(String::from("<div class=\"rari-loading\">Loading...</div>"))
-        }
-    }
-
-    async fn render_html_element(
-        &self,
-        tag: &str,
-        props: Option<&serde_json::Map<String, Value>>,
-    ) -> Result<String, RariError> {
-        if tag == "$Sreact.suspense" || tag == "react.suspense" || tag == "suspense" {
-            return self.render_suspense_boundary(tag, props).await;
-        }
-
-        if !tag.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ':') {
-            return Err(RariError::internal(format!("Invalid tag name: {tag}")));
-        }
-
-        let mut html = format!("<{tag}");
-
-        if let Some(props) = props {
-            for (key, value) in props {
-                if key == "children" || key == "key" || key == "ref" {
-                    continue;
-                }
-
-                if value.is_null() {
-                    continue;
-                }
-
-                let attr_name = match key.as_str() {
-                    "className" => "class",
-                    "htmlFor" => "for",
-                    _ => key.as_str(),
-                };
-
-                if !is_valid_attribute_name(attr_name) {
-                    continue;
-                }
-
-                if key == "style" && value.is_object() {
-                    if let Some(style_obj) = value.as_object() {
-                        let style_str = serialize_style_object(style_obj);
-                        #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
-                        write!(
-                            html,
-                            " style=\"{}\"",
-                            RscHtmlRenderer::escape_html_attribute(&style_str)
-                        )
-                        .unwrap();
-                    }
-                    continue;
-                }
-
-                if let Some(b) = value.as_bool() {
-                    if is_boolean_html_attribute(attr_name) {
-                        if b {
-                            #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
-                            write!(&mut html, " {attr_name}").unwrap();
-                        }
-                    } else {
-                        #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
-                        write!(html, " {}=\"{}\"", attr_name, if b { "true" } else { "false" })
-                            .unwrap();
-                    }
-                    continue;
-                }
-
-                if let Some(s) = value.as_str() {
-                    #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
-                    write!(
-                        html,
-                        " {}=\"{}\"",
-                        attr_name,
-                        RscHtmlRenderer::escape_html_attribute(s)
-                    )
-                    .unwrap();
-                    continue;
-                }
-
-                if value.is_number() {
-                    #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
-                    write!(
-                        html,
-                        " {}=\"{}\"",
-                        attr_name,
-                        RscHtmlRenderer::escape_html_attribute(&value.to_string())
-                    )
-                    .unwrap();
-                }
-            }
-        }
-
-        if SELF_CLOSING_TAGS.contains(&tag) {
-            html.push_str(" />");
-            return Ok(html);
-        }
-
-        html.push('>');
-
-        if let Some(props) = props
-            && let Some(children) = props.get("children")
-        {
-            let children_html = self.rsc_element_to_html(children).await?;
-            html.push_str(&children_html);
-        }
-
-        #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
-        write!(&mut html, "</{tag}>").unwrap();
-
-        Ok(html)
-    }
-
-    async fn generate_boundary_replacement(
-        &self,
-        chunk: &RscStreamChunk,
-    ) -> Result<Vec<u8>, RariError> {
-        let rsc_line = String::from_utf8_lossy(&chunk.data);
-
-        let boundary_id = match &chunk.boundary_id {
-            Some(id) => id.clone(),
-            None => {
-                let escaped_row = RscHtmlRenderer::escape_js_string(rsc_line.as_ref());
-                let script = format!(
-                    r"<script>(function(){{if(!window['~rari'])window['~rari']={{}};if(!window['~rari'].streaming)window['~rari'].streaming={{}};if(!window['~rari'].streaming.bufferedRows)window['~rari'].streaming.bufferedRows=[];window['~rari'].streaming.bufferedRows.push('{escaped_row}');window.dispatchEvent(new CustomEvent('rari:html-stream-row',{{detail:{{rscRow:'{escaped_row}'}}}}));}})();</script>"
-                );
-                return Ok(script.into_bytes());
-            }
-        };
-
-        let line_for_parsing = rsc_line
-            .strip_suffix("\r\n")
-            .or_else(|| rsc_line.strip_suffix('\n'))
-            .or_else(|| rsc_line.strip_suffix('\r'))
-            .unwrap_or(rsc_line.as_ref());
-
-        let parts: Vec<&str> = line_for_parsing.splitn(2, ':').collect();
-
-        if parts.len() != 2 {
-            tracing::error!("Invalid boundary update format: {}", rsc_line);
-            return Ok(Vec::new());
-        }
-
-        let row_id = chunk.row_id;
-        let escaped_row = RscHtmlRenderer::escape_js_string(rsc_line.as_ref());
-
-        let react_boundary_id = {
-            let map = self.rari_to_react_boundary_map.lock();
-            map.get(&boundary_id).cloned()
-        };
-
-        let dom_swap_html = if let Some(ref react_id) = react_boundary_id {
-            let content_id =
-                format!("S:{}", self.content_id_counter.fetch_add(1, Ordering::SeqCst));
-
-            let content_json = parts[1];
-            let rendered_html = if let Some(text) = content_json.strip_prefix('T') {
-                escape_html(text)
-            } else {
-                match serde_json::from_str::<Value>(content_json) {
-                    Ok(content) => match self.rsc_element_to_html(&content).await {
-                        Ok(html) if !html.is_empty() => html,
-                        _ => String::new(),
-                    },
-                    Err(_) => String::new(),
-                }
-            };
-
-            if rendered_html.is_empty() {
-                String::new()
-            } else {
-                format!(
-                    "<div hidden id=\"{content_id}\">{rendered_html}</div>\n<script>$RC=window.$RC||function(b,c){{var t=document.getElementById(b);var s=document.getElementById(c);if(t&&s){{var p=t.parentNode;var f=document.createDocumentFragment();Array.from(s.childNodes).forEach(function(n){{f.appendChild(n)}});var d=t.nextSibling;while(d&&!(d.nodeType===8&&d.data==='/$')){{var next=d.nextSibling;d.remove();d=next;}}if(d)d.remove();p.insertBefore(f,t.nextSibling);t.remove();s.remove();}}}};$RC(\"{react_id}\",\"{content_id}\")</script>",
-                )
-            }
-        } else {
-            String::new()
-        };
-
-        let rsc_buffer_script = format!(
-            "<script data-rsc-boundary=\"{}\" data-row-id=\"{}\">\n(function(){{\n  if(!window['~rari'])window['~rari']={{}};\n  if(!window['~rari'].streaming)window['~rari'].streaming={{}};\n  if(!window['~rari'].streaming.bufferedRows)window['~rari'].streaming.bufferedRows=[];\n  window['~rari'].streaming.bufferedRows.push('{}');\n  window.dispatchEvent(new CustomEvent('rari:html-stream-row', {{detail: {{rscRow: '{}'}}}}));\n}})();\n</script>",
-            RscHtmlRenderer::escape_html_attribute(&boundary_id),
-            row_id,
-            escaped_row,
-            escaped_row,
-        );
-
-        let output = format!("{rsc_buffer_script}{dom_swap_html}");
-
-        Ok(output.into_bytes())
-    }
-
-    fn generate_error_replacement(&self, chunk: &RscStreamChunk) -> Vec<u8> {
-        let rsc_line = String::from_utf8_lossy(&chunk.data);
-        let parts: Vec<&str> = rsc_line.trim().splitn(2, ':').collect();
-
-        if parts.len() != 2 {
-            return Self::generate_fallback_error_html();
-        }
-
-        let json_part = parts[1].strip_prefix('E').unwrap_or(parts[1]);
-
-        let error_data = match serde_json::from_str::<Value>(json_part) {
-            Ok(data) => data,
-            Err(e) => {
-                tracing::error!("Failed to parse error data from stream, using fallback: {}", e);
-                return Self::generate_fallback_error_html();
-            }
-        };
-
-        let rari_boundary_id = error_data["boundary_id"].as_str().unwrap_or("unknown").to_string();
-        let error_message =
-            error_data["error"].as_str().unwrap_or("Error loading content").to_string();
-
-        let react_boundary_id =
-            self.rari_to_react_boundary_map.lock().get(&rari_boundary_id).cloned();
-
-        if let Some(react_boundary_id) = react_boundary_id {
-            let error_html = format!(
-                r#"<div class="rari-error" style="color: red; border: 1px solid red; padding: 10px; border-radius: 4px; background-color: #fff5f5;">
-                <strong>Error loading content:</strong> {}
-            </div>"#,
-                escape_html(&error_message)
-            );
-
-            let content_id = format!("E:{}", react_boundary_id.trim_start_matches("B:"));
-
-            let error_update = format!(
-                r#"<div hidden id="{content_id}">{error_html}</div><script>$RC=window.$RC||function(b,c){{const t=document.getElementById(b);const s=document.getElementById(c);if(t&&s){{const p=t.parentNode;Array.from(s.childNodes).forEach(n=>p.insertBefore(n,t));t.remove();s.remove();}}}};$RC("{react_boundary_id}","{content_id}");</script>"#
-            );
-
-            error_update.into_bytes()
-        } else {
-            Self::generate_fallback_error_html()
-        }
-    }
-}
-
-impl Default for RscToHtmlConverter {
-    fn default() -> Self {
-        let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = Arc::new(RscHtmlRenderer::new(runtime));
-        Self::new(renderer)
-    }
 }
 
 #[cfg(test)]
@@ -2313,34 +1327,6 @@ mod tests {
         } else {
             panic!("Expected Reference element");
         }
-    }
-
-    #[test]
-    fn test_boundary_id_generator_sequential() {
-        let generator = BoundaryIdGenerator::new();
-
-        assert_eq!(generator.next(), "B:0");
-        assert_eq!(generator.next(), "B:1");
-        assert_eq!(generator.next(), "B:2");
-        assert_eq!(generator.next(), "B:3");
-    }
-
-    #[test]
-    fn test_boundary_id_generator_default() {
-        let generator = BoundaryIdGenerator::default();
-
-        assert_eq!(generator.next(), "B:0");
-    }
-
-    #[test]
-    fn test_rsc_to_html_converter_uses_boundary_generator() {
-        let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = Arc::new(RscHtmlRenderer::new(runtime));
-        let converter = RscToHtmlConverter::new(renderer);
-
-        assert_eq!(converter.next_boundary_id(), "B:0");
-        assert_eq!(converter.next_boundary_id(), "B:1");
-        assert_eq!(converter.next_boundary_id(), "B:2");
     }
 
     #[test]
@@ -2490,6 +1476,37 @@ mod tests {
 
         let html = result.unwrap();
         assert!(html.contains(r#"<div id="root"><p>Content</p></div>"#));
+    }
+
+    #[test]
+    fn test_extract_non_stylesheet_link_tags() {
+        let template = r#"<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="icon" href="/favicon.ico">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preload" href="/font.woff2" as="font" type="font/woff2" crossorigin>
+</head>
+<body></body>
+</html>"#;
+
+        let links = RscHtmlRenderer::extract_non_stylesheet_link_tags(template);
+        assert!(links.contains(r#"<link rel="icon" href="/favicon.ico">"#));
+        assert!(links.contains(r#"<link rel="preconnect" href="https://fonts.googleapis.com">"#));
+        assert!(links.contains(r#"rel="preload""#));
+        assert!(!links.contains(r"/styles.css"));
+    }
+
+    #[test]
+    fn test_inject_head_tags_skips_duplicates() {
+        let html = r#"<!DOCTYPE html><html><head><link rel="icon" href="/favicon.ico"></head><body></body></html>"#;
+        let tags = r#"<link rel="icon" href="/favicon.ico">
+<link rel="preconnect" href="https://cdn.example.com">"#;
+
+        let result = RscHtmlRenderer::inject_head_tags(html, tags);
+        assert_eq!(result.matches("favicon.ico").count(), 1);
+        assert!(result.contains("preconnect"));
     }
 
     #[test]
@@ -2830,176 +1847,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_render_suspense_with_fallback() {
-        let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = Arc::new(RscHtmlRenderer::new(runtime));
-        let mut converter = RscToHtmlConverter::new(renderer);
-
-        let fallback_html = r#"<div class="loading">Loading...</div>"#;
-        converter.row_cache.insert(1, fallback_html.to_string());
-
-        let suspense_element = serde_json::json!([
-            "$",
-            "react.suspense",
-            null,
-            {
-                "fallback": "$L1",
-                "children": "$L999",
-                "~boundaryId": "suspense_test"
-            }
-        ]);
-
-        let html = converter.rsc_element_to_html(&suspense_element).await.unwrap();
-
-        assert!(html.contains("Loading..."), "Should render fallback content");
-        assert!(html.contains("class=\"loading\""), "Should have loading class");
-        assert!(html.contains("<!--$?-->"), "Should have React boundary start marker");
-        assert!(
-            html.contains("<template id=\"B:0\">"),
-            "Should have React template with boundary ID B:0"
-        );
-        assert!(html.contains("<!--/$-->"), "Should have React boundary end marker");
-    }
-
-    #[tokio::test]
-    async fn test_render_suspense_with_resolved_children() {
-        let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = Arc::new(RscHtmlRenderer::new(runtime));
-        let mut converter = RscToHtmlConverter::new(renderer);
-
-        converter.row_cache.insert(1, r#"<div class="loading">Loading...</div>"#.to_string());
-        converter.row_cache.insert(2, r#"<div class="content">Actual Content</div>"#.to_string());
-
-        let suspense_element = serde_json::json!([
-            "$",
-            "react.suspense",
-            null,
-            {
-                "fallback": "$L1",
-                "children": "$L2",
-                "~boundaryId": "suspense_test"
-            }
-        ]);
-
-        let html = converter.rsc_element_to_html(&suspense_element).await.unwrap();
-
-        assert!(html.contains("Actual Content"), "Should render resolved children");
-        assert!(html.contains("class=\"content\""), "Should have content class");
-        assert!(
-            !html.contains("Loading..."),
-            "Should not render fallback when children are resolved"
-        );
-        assert!(html.contains("<!--$?-->"), "Should have React boundary start marker");
-        assert!(
-            html.contains("<template id=\"B:0\">"),
-            "Should have React template with boundary ID"
-        );
-        assert!(html.contains("<!--/$-->"), "Should have React boundary end marker");
-    }
-
-    #[tokio::test]
-    async fn test_render_nested_suspense_boundaries() {
-        let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = Arc::new(RscHtmlRenderer::new(runtime));
-        let mut converter = RscToHtmlConverter::new(renderer);
-
-        converter.row_cache.insert(1, r"<div>Outer Loading</div>".to_string());
-        converter.row_cache.insert(2, r"<div>Inner Loading</div>".to_string());
-        converter.row_cache.insert(3, r"<div>Inner Content</div>".to_string());
-
-        let inner_suspense = serde_json::json!([
-            "$",
-            "react.suspense",
-            null,
-            {
-                "fallback": "$L2",
-                "children": "$L3",
-                "~boundaryId": "inner"
-            }
-        ]);
-        let inner_html = converter.rsc_element_to_html(&inner_suspense).await.unwrap();
-        converter.row_cache.insert(4, inner_html);
-
-        let outer_suspense = serde_json::json!([
-            "$",
-            "react.suspense",
-            null,
-            {
-                "fallback": "$L1",
-                "children": "$L4",
-                "~boundaryId": "outer"
-            }
-        ]);
-        let html = converter.rsc_element_to_html(&outer_suspense).await.unwrap();
-
-        assert!(html.contains("Inner Content"), "Should render inner content");
-        assert!(!html.contains("Inner Loading"), "Should not render inner fallback");
-        assert!(!html.contains("Outer Loading"), "Should not render outer fallback");
-        assert!(html.contains("<!--$?-->"), "Should have React boundary markers");
-        assert!(html.contains("<template id=\"B:0\">"), "Should have inner boundary ID B:0");
-        assert!(html.contains("<template id=\"B:1\">"), "Should have outer boundary ID B:1");
-        assert!(html.contains("<!--/$-->"), "Should have React boundary end markers");
-    }
-
-    #[tokio::test]
-    async fn test_render_suspense_missing_fallback() {
-        let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = Arc::new(RscHtmlRenderer::new(runtime));
-        let converter = RscToHtmlConverter::new(renderer);
-
-        let suspense_element = serde_json::json!([
-            "$",
-            "react.suspense",
-            null,
-            {
-                "children": "$L999",
-                "~boundaryId": "suspense_test"
-            }
-        ]);
-
-        let html = converter.rsc_element_to_html(&suspense_element).await.unwrap();
-
-        assert!(html.contains("<!--$?-->"), "Should have React boundary start marker");
-        assert!(
-            html.contains("<template id=\"B:0\">"),
-            "Should have React template with boundary ID"
-        );
-        assert!(html.contains("<!--/$-->"), "Should have React boundary end marker");
-        assert!(html.contains("rari-loading"), "Should have default loading fallback");
-    }
-
-    #[tokio::test]
-    async fn test_render_suspense_inline_children() {
-        let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = Arc::new(RscHtmlRenderer::new(runtime));
-        let mut converter = RscToHtmlConverter::new(renderer);
-
-        converter.row_cache.insert(1, r"<div>Loading</div>".to_string());
-
-        let suspense_element = serde_json::json!([
-            "$",
-            "react.suspense",
-            null,
-            {
-                "fallback": "$L1",
-                "children": ["$", "div", null, {"children": "Inline Content"}],
-                "~boundaryId": "suspense_test"
-            }
-        ]);
-
-        let html = converter.rsc_element_to_html(&suspense_element).await.unwrap();
-
-        assert!(html.contains("Inline Content"), "Should render inline children");
-        assert!(!html.contains("Loading"), "Should not render fallback when children are inline");
-        assert!(html.contains("<!--$?-->"), "Should have React boundary start marker");
-        assert!(
-            html.contains("<template id=\"B:0\">"),
-            "Should have React template with boundary ID"
-        );
-        assert!(html.contains("<!--/$-->"), "Should have React boundary end marker");
-    }
-
-    #[tokio::test]
     async fn test_render_rsc_to_html_string_row_0_as_root() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
         let renderer = RscHtmlRenderer::new(runtime);
@@ -3251,40 +2098,6 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
     }
 
     #[tokio::test]
-    async fn test_converter_filters_invalid_attribute_names() {
-        let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = Arc::new(RscHtmlRenderer::new(runtime));
-        let converter = RscToHtmlConverter::new(renderer);
-
-        let element = serde_json::json!([
-            "$",
-            "button",
-            null,
-            {
-                "type": "button",
-                "class": "btn",
-                "onclick='alert(1)'": "malicious",
-                "on load": "bad",
-                "data-id": "123",
-                "1invalid": "bad",
-                "@bad": "bad"
-            }
-        ]);
-
-        let html = converter.rsc_element_to_html(&element).await.unwrap();
-
-        assert!(html.contains("type=\"button\""), "Valid type attribute should be rendered");
-        assert!(html.contains("class=\"btn\""), "Valid class attribute should be rendered");
-        assert!(html.contains("data-id=\"123\""), "Valid data attribute should be rendered");
-
-        assert!(!html.contains("onclick"), "Invalid onclick attribute should be filtered");
-        assert!(!html.contains("alert(1)"), "Malicious code should not be in output");
-        assert!(!html.contains("on load"), "Attribute with space should be filtered");
-        assert!(!html.contains("1invalid"), "Attribute starting with number should be filtered");
-        assert!(!html.contains("@bad"), "Attribute starting with @ should be filtered");
-    }
-
-    #[tokio::test]
     async fn test_attribute_validation_with_classname_mapping() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
         let renderer = RscHtmlRenderer::new(runtime);
@@ -3296,58 +2109,6 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
 
         assert!(html.contains("class=\"container\""), "className should be mapped to class");
         assert!(html.contains("for=\"input1\""), "htmlFor should be mapped to for");
-    }
-
-    #[tokio::test]
-    async fn test_attribute_validation_edge_cases() {
-        let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = Arc::new(RscHtmlRenderer::new(runtime));
-        let converter = RscToHtmlConverter::new(renderer);
-
-        let element = serde_json::json!([
-            "$",
-            "div",
-            null,
-            {
-                "a": "single char valid",
-                "A": "uppercase valid",
-                "_": "underscore only valid",
-                ":": "colon only - expected invalid",
-                "a-b-c": "multiple hyphens valid",
-                "a.b.c": "multiple periods valid",
-                "a:b:c": "multiple colons valid",
-                "a_b_c": "multiple underscores valid",
-                "": "empty invalid",
-                "-": "hyphen only invalid",
-                ".": "period only invalid"
-            }
-        ]);
-
-        let html = converter.rsc_element_to_html(&element).await.unwrap();
-
-        assert!(html.contains("a=\"single char valid\""), "Single letter should be valid");
-        assert!(html.contains("A=\"uppercase valid\""), "Uppercase letter should be valid");
-        assert!(html.contains("_=\"underscore only valid\""), "Underscore only should be valid");
-        assert!(
-            html.contains("a-b-c=\"multiple hyphens valid\""),
-            "Multiple hyphens should be valid"
-        );
-        assert!(
-            html.contains("a.b.c=\"multiple periods valid\""),
-            "Multiple periods should be valid"
-        );
-        assert!(
-            html.contains("a:b:c=\"multiple colons valid\""),
-            "Multiple colons should be valid"
-        );
-        assert!(
-            html.contains("a_b_c=\"multiple underscores valid\""),
-            "Multiple underscores should be valid"
-        );
-
-        assert!(!html.contains(":=\"colon only"), "Colon only should be invalid");
-        assert!(!html.contains("-=\"hyphen only invalid\""), "Hyphen only should be invalid");
-        assert!(!html.contains(".=\"period only invalid\""), "Period only should be invalid");
     }
 
     #[tokio::test]
@@ -3440,44 +2201,6 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
     }
 
     #[tokio::test]
-    async fn test_render_html_element_validates_tag_names() {
-        let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = Arc::new(RscHtmlRenderer::new(runtime));
-        let converter = RscToHtmlConverter::new(renderer);
-
-        let valid_element = serde_json::json!(["$", "div", null, {"class": "test"}]);
-        let result = converter.rsc_element_to_html(&valid_element).await;
-        assert!(result.is_ok(), "Valid tag 'div' should be accepted");
-
-        let valid_custom = serde_json::json!(["$", "custom-element", null, {}]);
-        let result = converter.rsc_element_to_html(&valid_custom).await;
-        assert!(result.is_ok(), "Valid custom element with hyphen should be accepted");
-
-        let valid_namespace = serde_json::json!(["$", "svg:circle", null, {}]);
-        let result = converter.rsc_element_to_html(&valid_namespace).await;
-        assert!(result.is_ok(), "Valid namespaced element should be accepted");
-
-        let invalid_space = serde_json::json!(["$", "div onclick", null, {}]);
-        let result = converter.rsc_element_to_html(&invalid_space).await;
-        assert!(result.is_err(), "Tag with space should be rejected");
-        assert!(
-            result.unwrap_err().to_string().contains("Invalid tag name"),
-            "Error should mention invalid tag"
-        );
-
-        let invalid_angle = serde_json::json!(["$", "div>script", null, {}]);
-        let result = converter.rsc_element_to_html(&invalid_angle).await;
-        if let Ok(html) = result {
-            panic!("Tag with angle bracket should be rejected, but got: {html:?}");
-        }
-        assert!(result.is_err(), "Tag with angle bracket should be rejected");
-
-        let invalid_quote = serde_json::json!(["$", "div\"onclick=\"alert(1)", null, {}]);
-        let result = converter.rsc_element_to_html(&invalid_quote).await;
-        assert!(result.is_err(), "Tag with quotes should be rejected");
-    }
-
-    #[tokio::test]
     async fn test_render_component_to_html_validates_tag_names() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
         let renderer = RscHtmlRenderer::new(runtime);
@@ -3500,29 +2223,6 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
         let rows = renderer.parse_rsc_flight_protocol(rsc_data_injection).unwrap();
         let result = renderer.render_rsc_to_html_string(&rows).await;
         assert!(result.is_err(), "Tag with injection attempt should be rejected");
-    }
-
-    #[tokio::test]
-    async fn test_tag_validation_prevents_xss() {
-        let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = Arc::new(RscHtmlRenderer::new(runtime));
-        let converter = RscToHtmlConverter::new(renderer);
-
-        let xss_attempts = vec![
-            "div onload=alert(1)",
-            "div>script",
-            "div style=xss:expression(alert(1))",
-            "div\nonclick=alert(1)",
-            "div'onclick='alert(1)",
-            "div\"onclick=\"alert(1)",
-        ];
-
-        for malicious_tag in xss_attempts {
-            let element = serde_json::json!(["$", malicious_tag, null, {}]);
-            let result = converter.rsc_element_to_html(&element).await;
-
-            assert!(result.is_err(), "Malicious tag '{malicious_tag}' should be rejected");
-        }
     }
 
     #[tokio::test]
@@ -3704,41 +2404,6 @@ b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
         assert!(
             html.contains("aria-pressed=\"false\""),
             "aria-pressed=false should render as \"false\": {html}"
-        );
-    }
-
-    #[tokio::test]
-    async fn test_converter_boolean_attributes() {
-        let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = Arc::new(RscHtmlRenderer::new(runtime));
-        let converter = RscToHtmlConverter::new(renderer);
-
-        let element = serde_json::json!([
-            "$",
-            "input",
-            null,
-            {
-                "type": "checkbox",
-                "checked": true,
-                "disabled": false,
-                "aria-checked": true,
-                "aria-disabled": false
-            }
-        ]);
-
-        let html = converter.rsc_element_to_html(&element).await.unwrap();
-
-        assert!(html.contains(" checked"), "checked=true should be presence-only: {html}");
-        assert!(!html.contains(" checked="), "checked should not have a value: {html}");
-        assert!(!html.contains(" disabled"), "disabled=false should be omitted: {html}");
-
-        assert!(
-            html.contains("aria-checked=\"true\""),
-            "aria-checked=true should render as \"true\": {html}"
-        );
-        assert!(
-            html.contains("aria-disabled=\"false\""),
-            "aria-disabled=false should render as \"false\": {html}"
         );
     }
 

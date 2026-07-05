@@ -1,7 +1,8 @@
+use bytes::Bytes;
 use rustc_hash::FxHashMap;
-use tokio::sync::mpsc;
+use tokio::sync::mpsc::Receiver;
 
-use crate::{rendering::streaming::RscStream, server::routing::types::ParamValue};
+use crate::server::routing::types::ParamValue;
 
 #[derive(Debug, Clone)]
 #[non_exhaustive]
@@ -196,15 +197,22 @@ pub struct SuspenseDetectionResult {
     pub boundaries: Vec<BoundaryInfo>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum ChunkedContentType {
+    Html,
+    RscFlight,
+}
+
 #[non_exhaustive]
 pub enum RenderResult {
     Static(String),
     StaticBinary(Vec<u8>),
-    Streaming(RscStream),
-    FizzHtmlStream {
-        shell: bytes::Bytes,
-        closing: bytes::Bytes,
-        chunks: mpsc::Receiver<Result<Vec<u8>, String>>,
+    Chunked {
+        content_type: ChunkedContentType,
+        shell: Bytes,
+        closing: Bytes,
+        chunks: Receiver<Result<Vec<u8>, String>>,
     },
 }
 

@@ -76,9 +76,9 @@
       "types": "./dist/runtime/entry-client.d.mts",
       "default": "./dist/runtime/entry-client.mjs"
     },
-    "./runtime/react-server-dom-shim": {
-      "types": "./dist/runtime/react-server-dom-shim.d.mts",
-      "default": "./dist/runtime/react-server-dom-shim.mjs"
+    "./runtime/rsc-references": {
+      "types": "./dist/runtime/rsc-references.d.mts",
+      "default": "./dist/runtime/rsc-references.mjs"
     },
     "./runtime/rsc-client-runtime": {
       "types": "./dist/runtime/rsc-client-runtime.d.mts",

@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{
+    rendering::base::RscRenderer,
     server::{
         ServerState,
         config::RedirectConfig,
@@ -340,16 +341,19 @@ pub async fn handle_server_action(
     let request_context =
         Arc::new(RequestContext::new("/_rari/action".to_string()).with_cookies(cookie_header));
 
-    let renderer = state.renderer.lock().await;
+    let runtime = {
+        let renderer = state.renderer.lock().await;
+        Arc::clone(&renderer.runtime)
+    };
 
-    let result = renderer
-        .runtime
-        .execute_with_request_context(Arc::clone(&request_context), async {
-            renderer
-                .execute_server_function(&request.id, &request.export_name, &sanitized_args)
-                .await
-        })
-        .await;
+    let result = RscRenderer::execute_server_function_with_context(
+        &runtime,
+        Arc::clone(&request_context),
+        &request.id,
+        &request.export_name,
+        &sanitized_args,
+    )
+    .await;
 
     match result {
         Ok(value) => {
@@ -454,14 +458,19 @@ pub async fn handle_form_action(
     let request_context =
         Arc::new(RequestContext::new("/_rari/action".to_string()).with_cookies(cookie_header));
 
-    let renderer = state.renderer.lock().await;
+    let runtime = {
+        let renderer = state.renderer.lock().await;
+        Arc::clone(&renderer.runtime)
+    };
 
-    let result = renderer
-        .runtime
-        .execute_with_request_context(Arc::clone(&request_context), async {
-            renderer.execute_server_function(action_id, export_name, &sanitized_args).await
-        })
-        .await;
+    let result = RscRenderer::execute_server_function_with_context(
+        &runtime,
+        Arc::clone(&request_context),
+        action_id,
+        export_name,
+        &sanitized_args,
+    )
+    .await;
 
     match result {
         Ok(value) => {

@@ -99,6 +99,12 @@ enum JsRequest {
         expected_context: Arc<RequestContext>,
         result_tx: oneshot::Sender<Result<(), RariError>>,
     },
+    ExecuteScriptWithRequestContext {
+        request_context: Arc<RequestContext>,
+        script_name: String,
+        script_code: String,
+        result_tx: oneshot::Sender<Result<Value, RariError>>,
+    },
     ExecuteScriptForStreaming {
         script_name: String,
         script_code: String,
@@ -107,14 +113,46 @@ enum JsRequest {
     },
 }
 
+#[derive(Clone)]
 pub struct RariRuntime {
     request_sender: mpsc::Sender<JsRequest>,
+    priority_sender: mpsc::Sender<JsRequest>,
+}
+
+fn is_priority_js_request(req: &JsRequest) -> bool {
+    match req {
+        JsRequest::ExecuteScriptWithRequestContext { .. } => true,
+        JsRequest::ExecuteScript { script_name, .. } => script_name.starts_with("execute_action_"),
+        _ => false,
+    }
+}
+
+async fn recv_js_request(
+    priority_receiver: &mut mpsc::Receiver<JsRequest>,
+    request_receiver: &mut mpsc::Receiver<JsRequest>,
+) -> Option<JsRequest> {
+    tokio::select! {
+        biased;
+        req = priority_receiver.recv() => req,
+        req = request_receiver.recv() => req,
+    }
 }
 
 impl RariRuntime {
+    async fn send_js_request(&self, req: JsRequest) -> Result<(), RariError> {
+        let sender =
+            if is_priority_js_request(&req) { &self.priority_sender } else { &self.request_sender };
+
+        sender
+            .send(req)
+            .await
+            .map_err(|_| RariError::js_runtime(JS_EXECUTOR_CHANNEL_CLOSED_ERROR.to_string()))
+    }
+
     #[expect(clippy::too_many_lines)]
     pub fn new(env_vars: Option<FxHashMap<String, String>>) -> Self {
         let (request_sender, mut request_receiver) = mpsc::channel(CHANNEL_CAPACITY);
+        let (priority_sender, mut priority_receiver) = mpsc::channel(CHANNEL_CAPACITY);
 
         thread::spawn(move || {
             #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
@@ -140,7 +178,7 @@ impl RariRuntime {
 
                     while continue_processing {
                         if pending_batches.is_empty() {
-                            match request_receiver.recv().await {
+                            match recv_js_request(&mut priority_receiver, &mut request_receiver).await {
                                 Some(req) => {
                                     let result = handle_js_request(
                                         req,
@@ -162,7 +200,7 @@ impl RariRuntime {
                         } else {
                             tokio::select! {
                                 biased;
-                                request = request_receiver.recv() => {
+                                request = recv_js_request(&mut priority_receiver, &mut request_receiver) => {
                                     match request {
                                         Some(req) => {
                                             let result = handle_js_request(
@@ -225,7 +263,7 @@ impl RariRuntime {
             });
         });
 
-        Self { request_sender }
+        Self { request_sender, priority_sender }
     }
 }
 
@@ -470,6 +508,29 @@ async fn handle_js_request(
                 js_runtime.op_state().borrow_mut().try_take::<Arc<RequestContext>>();
             }
             let _ = result_tx.send(Ok(()));
+        }
+        JsRequest::ExecuteScriptWithRequestContext {
+            request_context,
+            script_name,
+            script_code,
+            result_tx,
+        } => {
+            let previous_context =
+                js_runtime.op_state().borrow_mut().try_take::<Arc<RequestContext>>();
+            js_runtime.op_state().borrow_mut().put(request_context);
+            let result =
+                execute_script(js_runtime, module_loader, &script_name, &script_code).await;
+            js_runtime.op_state().borrow_mut().try_take::<Arc<RequestContext>>();
+            if let Some(previous_context) = previous_context {
+                js_runtime.op_state().borrow_mut().put(previous_context);
+            }
+            if let Err(e) = &result
+                && is_runtime_restart_needed(e)
+            {
+                let _ = result_tx.send(Err(create_graceful_error()));
+                return Err(RariError::internal("Runtime restart needed".to_string()));
+            }
+            let _ = result_tx.send(result);
         }
         JsRequest::ExecuteScriptForStreaming {
             script_name,
@@ -814,19 +875,18 @@ impl JsRuntimeInterface for RariRuntime {
         script_name: String,
         script_code: String,
     ) -> Pin<Box<dyn Future<Output = Result<Value, RariError>> + Send>> {
-        let request_sender = self.request_sender.clone();
+        let runtime = self.clone();
 
         Box::pin(async move {
             let (response_sender, response_receiver) = oneshot::channel();
 
-            request_sender
-                .send(JsRequest::ExecuteScript {
+            runtime
+                .send_js_request(JsRequest::ExecuteScript {
                     script_name,
                     script_code,
                     result_tx: response_sender,
                 })
-                .await
-                .map_err(|_| RariError::js_runtime(JS_EXECUTOR_CHANNEL_CLOSED_ERROR.to_string()))?;
+                .await?;
 
             response_receiver
                 .await
@@ -1097,6 +1157,33 @@ impl JsRuntimeInterface for RariRuntime {
             response_receiver.await.map_err(|_| {
                 RariError::js_runtime(
                     "JS executor failed to respond (clear_request_context_if_matches)".to_string(),
+                )
+            })?
+        })
+    }
+
+    fn execute_script_with_request_context(
+        &self,
+        request_context: Arc<RequestContext>,
+        script_name: String,
+        script_code: String,
+    ) -> Pin<Box<dyn Future<Output = Result<Value, RariError>> + Send>> {
+        let runtime = self.clone();
+
+        Box::pin(async move {
+            let (response_sender, response_receiver) = oneshot::channel();
+            runtime
+                .send_js_request(JsRequest::ExecuteScriptWithRequestContext {
+                    request_context,
+                    script_name,
+                    script_code,
+                    result_tx: response_sender,
+                })
+                .await?;
+            response_receiver.await.map_err(|_| {
+                RariError::js_runtime(
+                    "JS executor failed to respond (execute_script_with_request_context)"
+                        .to_string(),
                 )
             })?
         })

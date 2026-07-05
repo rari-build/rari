@@ -124,20 +124,6 @@ async fn handle_register(state: ServerState, file_path: String) -> Result<Json<V
             let mut registry = renderer.component_registry.lock();
             registry.mark_module_stale(&component_id);
         }
-
-        let clear_cache_script = r"
-            if (typeof globalThis['~rari']?.lazy?.clear === 'function') {
-                globalThis['~rari'].lazy.clear();
-            }
-        ";
-
-        if let Err(e) = renderer
-            .runtime
-            .execute_script("clear_resolved_cache".to_string(), clear_cache_script.to_string())
-            .await
-        {
-            tracing::error!("Failed to clear resolved cache: {}", e);
-        }
     }
 
     let reload_result = reload_component_from_dist(&state, &file_path, &component_id).await;

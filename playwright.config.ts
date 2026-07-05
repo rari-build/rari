@@ -8,7 +8,10 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  workers: (() => {
+    const parsed = Number(process.env.E2E_WORKERS)
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 1
+  })(),
   reporter: process.env.CI ? 'github' : 'html',
 
   use: {
