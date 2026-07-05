@@ -276,9 +276,65 @@ ci-rust-check:
     cargo clippy --all-targets --all-features -- -D warnings
     cargo test --all-features
 
-# Build and install the use-cache native addon for the current platform
+# Build the use-cache native addon and stage the platform package for CI
 ci-prepare-use-cache-addon:
-    cargo run --release --manifest-path tools/prepare-binaries/Cargo.toml -- --addon
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    os_name="$(uname -s)"
+    case "$os_name" in
+      Linux)
+        platform=linux-x64
+        napi_glob="*.linux-x64-gnu.node"
+        package_dir="packages/use-cache-linux-x64"
+        pkg_os=linux
+        pkg_cpu=x64
+        ;;
+      MINGW*|MSYS*|CYGWIN*)
+        platform=win32-x64
+        napi_glob="*.win32-x64-msvc.node"
+        package_dir="packages/use-cache-win32-x64"
+        pkg_os=win32
+        pkg_cpu=x64
+        ;;
+      *)
+        echo "ci-prepare-use-cache-addon: unsupported OS: $os_name"
+        exit 1
+        ;;
+    esac
+
+    (cd crates/rari_use_cache && pnpm exec napi build --release --strip --platform)
+
+    mkdir -p "$package_dir"
+    shopt -s nullglob
+    napi_files=(crates/rari_use_cache/$napi_glob)
+    if [ ${#napi_files[@]} -eq 0 ]; then
+      echo "expected napi artifact matching crates/rari_use_cache/$napi_glob"
+      exit 1
+    fi
+    cp "${napi_files[0]}" "$package_dir/rari_use_cache.node"
+
+    cat > "$package_dir/index.js" << 'EOF'
+    import { createRequire } from 'node:module'
+    import { dirname, join } from 'node:path'
+    import { fileURLToPath } from 'node:url'
+
+    const require = createRequire(import.meta.url)
+    const __dirname = dirname(fileURLToPath(import.meta.url))
+
+    const addon = require(join(__dirname, 'rari_use_cache.node'))
+
+    export default addon
+    EOF
+
+    sed -e "s/{PLATFORM}/$platform/g" \
+        -e 's/{VERSION}/0.0.0/g' \
+        -e "s/{OS}/$pkg_os/g" \
+        -e "s/{CPU}/$pkg_cpu/g" \
+        .github/templates/package-json/use-cache-platform.json \
+        > "$package_dir/package.json"
+
+    rm -f crates/rari_use_cache/*.node crates/rari_use_cache/index.js crates/rari_use_cache/index.d.ts
 
 # Build the Node packages required by CI
 ci-build-packages:
