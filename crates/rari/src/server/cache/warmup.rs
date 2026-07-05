@@ -19,9 +19,12 @@ use crate::{
     server::{
         ServerState,
         cache::response,
-        handlers::app::{collect_page_metadata, wrap_html_with_metadata},
         middleware::request_context::RequestContext,
-        routing::{AppRouteMatch, AppRouter, types::ParamValue},
+        routing::{
+            AppRouteMatch, AppRouter,
+            app::{collect_page_metadata, wrap_html_with_metadata},
+            types::ParamValue,
+        },
     },
 };
 

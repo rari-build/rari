@@ -36,33 +36,35 @@ use crate::{
     rendering::{base::ResourceLimits, layout::LayoutRenderer},
     runtime::JsExecutionRuntime,
     server::{
-        cache::{handler::CacheHandlerRegistry, response, warmup},
+        actions::{handle_form_action, handle_server_action},
+        cache::{handler::CacheHandlerRegistry, response, revalidate::revalidate_by_path, warmup},
         config::{
             CACHE_LAYER_IMAGE, CACHE_LAYER_LAYOUT, CACHE_LAYER_OG, CACHE_LAYER_RESPONSE, Config,
         },
-        handlers::{
-            actions::{handle_form_action, handle_server_action},
-            api::{api_cors_preflight, handle_api_route},
-            app::handle_app_route,
-            hmr::handle_hmr_action,
-            og::{og_image_handler, og_image_handler_root},
-            revalidate::revalidate_by_path,
-            route_info::get_route_info,
-            rsc::{health_check, register_client_component, register_component},
-            r#static::{
-                cors_preflight_ok, root_handler, serve_static_asset, static_or_spa_handler,
-            },
-        },
         image::{ImageCache, ImageConfig, ImageOptimizer, ImageState, handle_image_request},
-        loaders::{cache::CacheLoader, component::ComponentLoader},
+        loaders::{
+            cache::CacheLoader,
+            component::ComponentLoader,
+            rsc::{health_check, register_client_component, register_component},
+        },
         middleware::{
             proxy::{self, ProxyLayer},
             request::{cors_middleware, security_headers_middleware},
         },
-        og::{OgImageCache, OgImageGenerator},
-        routing::{api_routes, app_router},
+        og::{OgImageCache, OgImageGenerator, og_image_handler, og_image_handler_root},
+        routing::{
+            api::{api_cors_preflight, handle_api_route},
+            api_routes,
+            app::handle_app_route,
+            app_router,
+            route_info::get_route_info,
+        },
+        static_assets::{
+            cors_preflight_ok, root_handler, serve_static_asset, static_or_spa_handler,
+        },
         vite::{
-            check_vite_server_health, vite_reverse_proxy, vite_src_proxy, vite_websocket_proxy,
+            check_vite_server_health, hmr::handle_hmr_action, vite_reverse_proxy, vite_src_proxy,
+            vite_websocket_proxy,
         },
     },
 };

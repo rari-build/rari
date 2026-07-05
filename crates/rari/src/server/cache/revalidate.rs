@@ -1,3 +1,5 @@
+#![expect(clippy::missing_errors_doc)]
+
 use std::env;
 
 use axum::{extract::State, http::StatusCode, response::Json};

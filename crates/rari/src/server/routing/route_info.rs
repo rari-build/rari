@@ -1,3 +1,5 @@
+#![expect(clippy::missing_errors_doc)]
+
 use axum::{Json, extract::State, http::StatusCode};
 use serde::{Deserialize, Serialize};
 

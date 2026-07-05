@@ -9,8 +9,8 @@ use tokio::sync::mpsc;
 use crate::{
     rendering::base,
     server::{
+        actions,
         core::utils::client,
-        handlers::actions,
         middleware::request_context::{PendingCookie, PendingCookieKey, RequestContext},
     },
 };

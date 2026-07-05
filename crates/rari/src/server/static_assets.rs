@@ -1,3 +1,5 @@
+#![expect(clippy::missing_errors_doc)]
+
 use axum::{
     body::Body,
     extract::{Path, State},
