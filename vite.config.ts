@@ -69,6 +69,10 @@ export default defineConfig({
       '**/dist',
       '**/node_modules',
       'packages/*/bin',
+      'packages/rari-*/',
+      'packages/use-cache-*/',
+      '**/.pnpm-store/',
+      '**/.build',
       '**/.cache',
       '**/coverage',
       '**/test-results',
@@ -480,6 +484,10 @@ export default defineConfig({
               prefer: 'type-imports',
             },
           ],
+          'typescript/method-signature-style': [
+            'error',
+            'property',
+          ],
           'typescript/no-import-type-side-effects': 'error',
         },
         plugins: [
@@ -630,7 +638,11 @@ export default defineConfig({
           'no-undef': 'off',
           'no-unused-vars': 'off',
           'no-use-before-define': 'off',
+          'typescript/ban-ts-comment': 'off',
         },
+        plugins: [
+          'typescript',
+        ],
       },
     ],
     options: {
