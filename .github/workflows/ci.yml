@@ -104,6 +104,8 @@ jobs:
       - name: Bundle React ESM vendor files
         uses: ./.github/actions/bundle-react-esm
 
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+
       - name: Restore snapshot from cache
         id: cache-snapshot
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -234,6 +236,8 @@ jobs:
 
       - name: Bundle React ESM vendor files
         uses: ./.github/actions/bundle-react-esm
+
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
 
       - name: Restore binary from cache
         if: needs.changes.outputs.rust != 'true'
