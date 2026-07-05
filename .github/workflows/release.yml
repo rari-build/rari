@@ -27,10 +27,7 @@ jobs:
         with:
           toolchain: nightly
 
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y pkg-config libfontconfig1-dev mold
+      - uses: ./.github/actions/setup-rust-build-deps
 
       - name: Cache Rust
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
@@ -107,22 +104,9 @@ jobs:
           toolchain: nightly
           targets: ${{ matrix.target }}
 
-      - name: Install system dependencies (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y pkg-config libfontconfig1-dev mold
-
-      - name: Install system dependencies (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          brew list pkg-config &>/dev/null || brew install pkg-config
-          brew list fontconfig &>/dev/null || brew install fontconfig
-
-      - name: Install system dependencies (Windows)
-        if: runner.os == 'Windows'
-        run: vcpkg install fontconfig:${{ matrix.vcpkg_triplet }}
-        shell: pwsh
+      - uses: ./.github/actions/setup-rust-build-deps
+        with:
+          vcpkg-triplet: ${{ matrix.vcpkg_triplet }}
 
       - name: Cache Rust
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
@@ -436,15 +420,9 @@ jobs:
           toolchain: nightly
           targets: ${{ matrix.target }}
 
-      - name: Install system dependencies (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y pkg-config mold
-
-      - name: Install system dependencies (macOS)
-        if: runner.os == 'macOS'
-        run: brew list pkg-config &>/dev/null || brew install pkg-config
+      - uses: ./.github/actions/setup-rust-build-deps
+        with:
+          fontconfig: 'false'
 
       - name: Setup Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
@@ -454,7 +432,7 @@ jobs:
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
 
       - name: Cache pnpm store
-        uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.pnpm-store
           key: pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}

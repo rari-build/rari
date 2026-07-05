@@ -1,0 +1,28 @@
+name: Setup Redis
+description: Install and start Redis for e2e tests
+
+runs:
+  using: composite
+  steps:
+    - name: Install Redis (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: choco install redis -y --no-progress
+
+    - name: Install Redis (Linux)
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        set -euo pipefail
+        sudo apt-get update
+        sudo apt-get install -y redis-server
+
+    - name: Start Redis (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: '& "${{ github.action_path }}/start-redis-windows.ps1"'
+
+    - name: Start Redis (Linux)
+      if: runner.os == 'Linux'
+      shell: bash
+      run: bash "${{ github.action_path }}/start-redis-linux.sh"
