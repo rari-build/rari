@@ -40,24 +40,7 @@ fn napi_artifact_name(platform: &str) -> String {
 
 fn find_fresh_napi_build_output(manifest_dir: &Path, target_info: &Target) -> Option<PathBuf> {
     let primary = manifest_dir.join(napi_artifact_name(target_info.platform));
-    if primary.exists() {
-        return Some(primary);
-    }
-
-    if let Ok(entries) = fs::read_dir(manifest_dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().is_some_and(|ext| ext == "node")
-                && path
-                    .file_name()
-                    .is_some_and(|name| name.to_string_lossy().starts_with("rari_use_cache"))
-            {
-                return Some(path);
-            }
-        }
-    }
-
-    None
+    primary.exists().then_some(primary)
 }
 
 fn cleanup_manifest_build_outputs(manifest_dir: &Path, target_info: &Target) {
@@ -170,10 +153,10 @@ pub async fn build_addon(
     if let Some(parent) = stable.parent() {
         fs::create_dir_all(parent).context("Failed to create per-platform addon build dir")?;
     }
-    if stable.exists() {
-        fs::remove_file(&stable).context("Failed to remove stale addon artifact")?;
-    }
     if src != stable {
+        if stable.exists() {
+            fs::remove_file(&stable).context("Failed to remove stale addon artifact")?;
+        }
         fs::copy(&src, &stable).context("Failed to copy addon artifact")?;
     }
 
