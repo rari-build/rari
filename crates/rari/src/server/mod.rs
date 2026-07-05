@@ -4,7 +4,7 @@ pub mod compression;
 pub mod config;
 pub mod core;
 pub mod image;
-pub mod loaders;
+pub mod loader;
 pub mod middleware;
 pub mod og;
 pub mod rendering;
