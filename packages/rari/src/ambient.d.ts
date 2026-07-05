@@ -37,3 +37,13 @@ declare module 'virtual:react-flight-client' {
     },
   ): Thenable<T>
 }
+
+declare global {
+  interface RequestInit {
+    rari?: {
+      revalidate?: number | false
+      tags?: string[]
+      timeout?: number
+    }
+  }
+}

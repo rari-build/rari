@@ -1,4 +1,4 @@
-import { ApiResponse } from '@rari/api-routes'
+import { ApiResponse } from '@rari/router/api-routes'
 import { describe, expect, it } from 'vite-plus/test'
 
 describe('ApiResponse', () => {

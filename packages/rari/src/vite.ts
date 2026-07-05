@@ -1,19 +1,13 @@
 import { rari as _rari } from './vite/index'
-import './fetch-cache'
 
-export type {
-  ApiRouteHandlers,
-  RouteContext,
-  RouteHandler,
-} from './api-routes'
+export type {} from './ambient'
 
-export { ApiResponse } from './api-routes'
+export { RariRequest } from './proxy/RariRequest'
+
+export { RariResponse } from './proxy/RariResponse'
 
 export type Request = globalThis.Request
 export type Response = globalThis.Response
-
-export { RariRequest } from './proxy/RariRequest'
-export { RariResponse } from './proxy/RariResponse'
 
 export type {
   CookieOptions,
@@ -27,10 +21,17 @@ export type {
   RequestCookies,
   ResponseCookies,
 } from './proxy/types'
-
 export { rariProxy } from './proxy/vite-plugin'
 
 export type { ProxyPluginOptions } from './proxy/vite-plugin'
+
+export type {
+  ApiRouteHandlers,
+  RouteContext,
+  RouteHandler,
+} from './router/api-routes'
+
+export { ApiResponse } from './router/api-routes'
 
 export type { Robots, RobotsRule, Sitemap, SitemapEntry, SitemapImage, SitemapVideo } from './router/metadata-route'
 
