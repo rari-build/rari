@@ -209,6 +209,21 @@ pub fn addon_stable_output_path_public(target_info: &Target, project_root: &Path
     addon_stable_output_path(target_info, project_root)
 }
 
+fn render_use_cache_platform_package_json(
+    template: &str,
+    platform: &str,
+    version: &str,
+    os: &str,
+    cpu: &str,
+) -> String {
+    template
+        .cow_replace("{PLATFORM}", platform)
+        .cow_replace("{VERSION}", version)
+        .cow_replace("{OS}", os)
+        .cow_replace("{CPU}", cpu)
+        .into_owned()
+}
+
 fn generate_platform_package_files(
     target_info: &Target,
     package_dir: &Path,
@@ -237,13 +252,13 @@ fn generate_platform_package_files(
     let package_json_template = fs::read_to_string(&template_package_json_path)
         .context("Failed to read package.json template")?;
 
-    let package_json = package_json_template
-        .cow_replace("{NAME}", &package_name)
-        .cow_replace("{VERSION}", "0.0.0-dev")
-        .cow_replace("{DESCRIPTION}", target_info.platform)
-        .cow_replace("{OS}", os)
-        .cow_replace("{CPU}", cpu)
-        .into_owned();
+    let package_json = render_use_cache_platform_package_json(
+        &package_json_template,
+        target_info.platform,
+        "0.0.0-dev",
+        os,
+        cpu,
+    );
 
     fs::write(package_dir.join("package.json"), package_json)
         .context("Failed to write platform package.json")?;
