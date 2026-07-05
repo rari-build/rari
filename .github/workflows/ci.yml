@@ -216,19 +216,13 @@ jobs:
       - uses: namespacelabs/nscloud-checkout-action@445c25d7009680597d73eb03c4e1cd5be522ed73 # v9.0.0
         if: runner.os != 'Windows'
 
-      - uses: ./.github/actions/setup-namespace-cache
-        if: runner.os == 'Linux'
+      - uses: ./.github/actions/setup-platform-cache
         with:
-          cache: |
+          linux-cache: |
             rust
             pnpm
             apt
-
-      - uses: ./.github/actions/setup-windows-cache
-        if: runner.os == 'Windows'
-        with:
           rust: 'true'
-          rust-shared-key: rust-Windows
           pnpm: 'true'
 
       - name: Install Rust
@@ -323,19 +317,13 @@ jobs:
       - uses: namespacelabs/nscloud-checkout-action@445c25d7009680597d73eb03c4e1cd5be522ed73 # v9.0.0
         if: runner.os != 'Windows'
 
-      - uses: ./.github/actions/setup-namespace-cache
-        if: runner.os == 'Linux'
+      - uses: ./.github/actions/setup-platform-cache
         with:
-          cache: |
+          linux-cache: |
             rust
             pnpm
             apt
-
-      - uses: ./.github/actions/setup-windows-cache
-        if: runner.os == 'Windows'
-        with:
           rust: 'true'
-          rust-shared-key: rust-Windows
           rust-workspaces: crates/rari_use_cache
           pnpm: 'true'
 
@@ -352,6 +340,7 @@ jobs:
         with:
           node-version: 22.18.0
           cache: 'false'
+          setup-toolchain: 'false'
 
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
 
@@ -407,6 +396,7 @@ jobs:
         with:
           node-version: 22.18.0
           cache: 'false'
+          setup-toolchain: 'false'
 
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
 
@@ -464,6 +454,7 @@ jobs:
         with:
           node-version: 22.18.0
           cache: 'false'
+          setup-toolchain: 'false'
 
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
 
@@ -502,26 +493,15 @@ jobs:
       - uses: namespacelabs/nscloud-checkout-action@445c25d7009680597d73eb03c4e1cd5be522ed73 # v9.0.0
         if: runner.os != 'Windows'
 
-      - uses: ./.github/actions/setup-namespace-cache
-        if: runner.os == 'Linux'
+      - uses: ./.github/actions/setup-platform-cache
         with:
-          cache: |
+          linux-cache: |
             playwright
             pnpm
             apt
-
-      - uses: ./.github/actions/setup-windows-cache
-        if: runner.os == 'Windows'
-        with:
           playwright: 'true'
           pnpm: 'true'
           node-version: ${{ matrix.node }}
-
-      - uses: ./.github/actions/setup-pnpm
-        with:
-          node-version: ${{ matrix.node }}
-          install: 'false'
-          cache: 'false'
 
       - name: Restore dist cache
         uses: namespace-actions/download-artifact@7cbad919e4b0e09f17e9d6311a444ff002992b5b # v2.0.1

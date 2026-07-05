@@ -1,0 +1,61 @@
+name: Setup platform cache
+description: OS-aware cache setup via setup-namespace-cache (Linux/macOS) or setup-windows-cache (Windows)
+
+inputs:
+  linux-cache:
+    description: Newline-separated cache modes for Linux (setup-namespace-cache)
+    required: false
+    default: ''
+  macos-cache:
+    description: Newline-separated cache modes for macOS (setup-namespace-cache)
+    required: false
+    default: ''
+  rust:
+    description: Enable Rust cache on Windows (setup-windows-cache)
+    required: false
+    default: 'false'
+  rust-shared-key:
+    description: shared-key passed to setup-windows-cache
+    required: false
+    default: rust-Windows
+  rust-workspaces:
+    description: Optional workspaces filter for setup-windows-cache
+    required: false
+    default: ''
+  pnpm:
+    description: Enable pnpm cache on Windows (setup-windows-cache)
+    required: false
+    default: 'false'
+  playwright:
+    description: Enable Playwright cache on Windows (setup-windows-cache)
+    required: false
+    default: 'false'
+  node-version:
+    description: Node.js version for pnpm cache planning
+    required: false
+    default: 22.18.0
+
+runs:
+  using: composite
+  steps:
+    - uses: ./.github/actions/setup-namespace-cache
+      if: runner.os == 'Linux' && inputs.linux-cache != ''
+      with:
+        cache: ${{ inputs.linux-cache }}
+        node-version: ${{ inputs.node-version }}
+
+    - uses: ./.github/actions/setup-namespace-cache
+      if: runner.os == 'macOS' && inputs.macos-cache != ''
+      with:
+        cache: ${{ inputs.macos-cache }}
+        node-version: ${{ inputs.node-version }}
+
+    - uses: ./.github/actions/setup-windows-cache
+      if: runner.os == 'Windows'
+      with:
+        rust: ${{ inputs.rust }}
+        rust-shared-key: ${{ inputs.rust-shared-key }}
+        rust-workspaces: ${{ inputs.rust-workspaces }}
+        pnpm: ${{ inputs.pnpm }}
+        playwright: ${{ inputs.playwright }}
+        node-version: ${{ inputs.node-version }}

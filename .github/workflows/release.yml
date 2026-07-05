@@ -111,27 +111,17 @@ jobs:
       - uses: namespacelabs/nscloud-checkout-action@445c25d7009680597d73eb03c4e1cd5be522ed73 # v9.0.0
         if: runner.os != 'Windows'
 
-      - uses: ./.github/actions/setup-namespace-cache
-        if: runner.os == 'Linux'
+      - uses: ./.github/actions/setup-platform-cache
         with:
-          cache: |
+          linux-cache: |
             rust
             pnpm
             apt
-
-      - uses: ./.github/actions/setup-namespace-cache
-        if: runner.os == 'macOS'
-        with:
-          cache: |
+          macos-cache: |
             rust
             pnpm
             brew
-
-      - uses: ./.github/actions/setup-windows-cache
-        if: runner.os == 'Windows'
-        with:
           rust: 'true'
-          rust-shared-key: rust-Windows
           pnpm: 'true'
 
       - name: Install Rust
@@ -463,27 +453,17 @@ jobs:
       - uses: namespacelabs/nscloud-checkout-action@445c25d7009680597d73eb03c4e1cd5be522ed73 # v9.0.0
         if: runner.os != 'Windows'
 
-      - uses: ./.github/actions/setup-namespace-cache
-        if: runner.os == 'Linux'
+      - uses: ./.github/actions/setup-platform-cache
         with:
-          cache: |
+          linux-cache: |
             rust
             pnpm
             apt
-
-      - uses: ./.github/actions/setup-namespace-cache
-        if: runner.os == 'macOS'
-        with:
-          cache: |
+          macos-cache: |
             rust
             pnpm
             brew
-
-      - uses: ./.github/actions/setup-windows-cache
-        if: runner.os == 'Windows'
-        with:
           rust: 'true'
-          rust-shared-key: rust-Windows
           rust-workspaces: crates/rari_use_cache
           pnpm: 'true'
           node-version: ${{ env.NODE_VERSION }}
@@ -502,6 +482,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'false'
+          setup-toolchain: 'false'
 
       - name: Build addon (Linux)
         if: runner.os == 'Linux'
