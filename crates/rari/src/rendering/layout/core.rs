@@ -13,7 +13,6 @@ use tokio::{
 };
 
 use super::{
-    error_messages,
     types::{ChunkedContentType, LayoutRenderContext, RenderResult},
     utils,
 };
@@ -286,13 +285,9 @@ impl LayoutRenderer {
 
         let renderer = self.renderer.lock().await;
 
-        let flight_result: Result<String, RariError> = async {
-            let rsc_flight_protocol =
-                Self::execute_composition_and_serialize(&renderer, composition_script).await?;
-            Self::validate_rsc_flight_protocol(&rsc_flight_protocol)?;
-            Ok(rsc_flight_protocol)
-        }
-        .await;
+        let flight_result: Result<String, RariError> =
+            async { Self::execute_composition_and_serialize(&renderer, composition_script).await }
+                .await;
 
         drop(request_context);
 
@@ -331,13 +326,8 @@ impl LayoutRenderer {
 
         let renderer = self.renderer.lock().await;
 
-        let render_operation = async {
-            let rsc_flight_protocol =
-                Self::execute_composition_and_serialize(&renderer, composition_script).await?;
-            Self::validate_rsc_flight_protocol(&rsc_flight_protocol)?;
-            Self::validate_html_structure(&rsc_flight_protocol, route_match)?;
-            Ok(rsc_flight_protocol)
-        };
+        let render_operation =
+            async { Self::execute_composition_and_serialize(&renderer, composition_script).await };
 
         if let Some(ctx) = request_context {
             renderer.runtime.execute_with_request_context(ctx, render_operation).await
@@ -488,8 +478,6 @@ impl LayoutRenderer {
                     let rsc_flight_protocol =
                         Self::execute_composition_and_serialize(&renderer, composition_script)
                             .await?;
-                    Self::validate_rsc_flight_protocol(&rsc_flight_protocol)?;
-                    Self::validate_html_structure(&rsc_flight_protocol, route_match)?;
 
                     let b64_result = renderer
                         .runtime
@@ -659,8 +647,6 @@ impl LayoutRenderer {
                     let rsc_flight_protocol =
                         Self::execute_composition_and_serialize(&renderer, composition_script)
                             .await?;
-                    Self::validate_rsc_flight_protocol(&rsc_flight_protocol)?;
-                    Self::validate_html_structure(&rsc_flight_protocol, route_match)?;
 
                     let html_renderer = RscHtmlRenderer::new(Arc::clone(&renderer.runtime));
                     let html = html_renderer
@@ -751,60 +737,6 @@ impl LayoutRenderer {
 
             Ok(RenderResult::Static(html))
         }
-    }
-
-    fn validate_html_structure(html: &str, route_match: &AppRouteMatch) -> Result<(), RariError> {
-        let root_layout_path =
-            route_match.layouts.iter().find(|l| l.is_root).map(|l| l.file_path.as_str());
-
-        let trimmed = html.trim_start();
-
-        if let Some(first_char) = trimmed.chars().next()
-            && first_char.is_ascii_digit()
-        {
-            if trimmed.contains("\"div\"")
-                && trimmed.contains("\"html\"")
-                && let Some(div_pos) = trimmed.find("[\"$\",\"div\"")
-                && let Some(html_pos) = trimmed.find("[\"$\",\"html\"")
-                && div_pos < html_pos
-            {
-                let error_msg = error_messages::create_wrapped_html_error_message(
-                    route_match,
-                    root_layout_path,
-                );
-                return Err(RariError::internal(error_msg));
-            }
-            return Ok(());
-        }
-
-        let first_tag_name = if let Some(tag_start) = trimmed.strip_prefix('<') {
-            if tag_start.starts_with('!') || tag_start.starts_with('?') {
-                if let Some(next_tag_pos) = tag_start.find('<') {
-                    let after_special = &tag_start[next_tag_pos + 1..];
-                    after_special
-                        .split(|c: char| c.is_whitespace() || c == '>' || c == '/')
-                        .next()
-                        .unwrap_or("")
-                } else {
-                    ""
-                }
-            } else {
-                tag_start
-                    .split(|c: char| c.is_whitespace() || c == '>' || c == '/')
-                    .next()
-                    .unwrap_or("")
-            }
-        } else {
-            ""
-        };
-
-        if !first_tag_name.is_empty() && (html.contains("<html") || html.contains("\"html\"")) {
-            let error_msg =
-                error_messages::create_wrapped_html_error_message(route_match, root_layout_path);
-            return Err(RariError::internal(error_msg));
-        }
-
-        Ok(())
     }
 
     async fn ensure_react_server_loaded(renderer: &RscRenderer) -> Result<(), RariError> {
@@ -912,6 +844,9 @@ impl LayoutRenderer {
         })?;
 
         if let Some(flight_protocol_str) = rsc_data.as_str() {
+            if flight_protocol_str.trim().is_empty() {
+                return Err(RariError::internal("No RSC data in render result"));
+            }
             return Ok(flight_protocol_str.to_string());
         }
 
@@ -993,28 +928,6 @@ impl LayoutRenderer {
         format!(
             r"<script>(self.__rari_f=self.__rari_f||[]).push(0)</script><script>(self.__rari_f=self.__rari_f||[]).push({escaped_payload})</script>"
         )
-    }
-
-    fn validate_rsc_flight_protocol(rsc_data: &str) -> Result<(), RariError> {
-        if rsc_data.trim().is_empty() {
-            let error_msg = error_messages::create_empty_rsc_error_message();
-            return Err(RariError::internal(error_msg));
-        }
-
-        let looks_like_flight = rsc_data.lines().any(|line| {
-            let line = line.trim();
-            line.find(':').is_some_and(|colon| {
-                !line[..colon].is_empty() && line[..colon].chars().all(|c| c.is_ascii_hexdigit())
-            })
-        });
-
-        if !looks_like_flight {
-            return Err(RariError::internal(
-                "RSC output does not look like a valid Flight protocol".to_string(),
-            ));
-        }
-
-        Ok(())
     }
 
     #[expect(clippy::too_many_lines)]
@@ -1310,28 +1223,5 @@ mod tests {
         for i in 0..50 {
             assert!(cache.get(i).await.is_none(), "key {i} survived clear");
         }
-    }
-
-    #[test]
-    fn test_validate_rsc_flight_protocol_accepts_flight_rows() {
-        assert!(
-            LayoutRenderer::validate_rsc_flight_protocol("0:\"$1\"\n1:[\"$\",\"div\",null,{}]\n")
-                .is_ok()
-        );
-    }
-
-    #[test]
-    fn test_validate_rsc_flight_protocol_rejects_empty() {
-        assert!(LayoutRenderer::validate_rsc_flight_protocol("").is_err());
-        assert!(LayoutRenderer::validate_rsc_flight_protocol("   \n").is_err());
-    }
-
-    #[test]
-    fn test_validate_rsc_flight_protocol_rejects_non_flight_output() {
-        let result = LayoutRenderer::validate_rsc_flight_protocol("Error: composition failed");
-        assert!(result.is_err());
-        assert!(
-            result.unwrap_err().to_string().contains("does not look like a valid Flight protocol")
-        );
     }
 }
