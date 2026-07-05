@@ -10,17 +10,12 @@ publish = false
 crate-type = [ "rlib" ]
 
 [dependencies]
-base64 = { workspace = true }
 cow-utils = { workspace = true }
 parking_lot = { workspace = true }
-rari_error = { workspace = true }
 regex = { workspace = true }
 rustc-hash = { workspace = true }
 serde = { workspace = true }
-serde_json = { workspace = true }
 smallvec = { workspace = true }
-tracing = { workspace = true }
-uuid = { workspace = true }
 
 [lints]
 workspace = true

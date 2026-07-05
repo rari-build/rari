@@ -47,8 +47,7 @@ async function renderToRsc(element: unknown): Promise<string> {
     g['~rari'] = {}
   g['~rari'].lastRscBinary = fullBuffer
 
-  // Return text version for Rust-side Flight protocol validation and
-  // for the Fizz path (which re-encodes to binary via its own stream).
+  // Return text version for the Fizz path (which re-encodes to binary via its own stream).
   // Note: this text is NOT valid for direct client consumption if it
   // contains T rows. The binary should be used instead.
   return new TextDecoder().decode(fullBuffer)
