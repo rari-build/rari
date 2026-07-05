@@ -3,17 +3,10 @@
   "workspaces": {
     ".": {
       "entry": [
-        "test/setup.ts",
         "test/**/*.test.ts"
       ],
       "project": [
         "test/**/*.ts"
-      ],
-      "ignore": [
-        "test/unit/vite/__mocks__/rolldown.ts"
-      ],
-      "ignoreDependencies": [
-        "@vitest/coverage-v8" // Used by vitest for coverage
       ]
     },
     "packages/rari": {
@@ -73,8 +66,7 @@
     },
     "web": {
       "entry": [
-        "src/app/**/*.{ts,tsx}",
-        "src/lib/sentry-init.ts"
+        "src/app/**/*.{ts,tsx}"
       ],
       "project": [
         "src/**/*.{ts,tsx}"
@@ -88,8 +80,6 @@
         "src/components/icons/Terminal2.tsx" // MDX client component
       ],
       "ignoreDependencies": [
-        "tailwindcss",
-        "@tailwindcss/vite", // Used by Tailwind CSS
         "mermaid" // Used by MermaidChart MDX client component
       ]
     },
