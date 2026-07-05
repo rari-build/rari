@@ -6,7 +6,7 @@ runs:
   steps:
     - uses: ./.github/actions/setup-pnpm
       with:
-        node-version: '22'
+        node-version: 22.18.0
 
     - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
 

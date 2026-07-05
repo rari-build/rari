@@ -296,6 +296,7 @@ ci-build-packages:
     pnpm --filter=create-rari-app run build
 
 ci-typecheck-packages:
+    # @rari/logger and @rari/deploy have no typecheck script (build-only via vp pack)
     pnpm --filter=rari run typecheck
     pnpm --filter=create-rari-app run typecheck
 
@@ -306,7 +307,8 @@ ci-lint-test: ci-build-packages
 ci-verify-dist:
     #!/usr/bin/env bash
     set -euo pipefail
-    if [ -f packages/use-cache-linux-x64/rari_use_cache.node ]; then
+    if [ -f packages/use-cache-linux-x64/rari_use_cache.node ] \
+      || [ -f packages/use-cache-win32-x64/rari_use_cache.node ]; then
       test -d packages/use-cache/dist
     fi
     test -d packages/logger/dist

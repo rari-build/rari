@@ -137,6 +137,7 @@ jobs:
           retention-days: 1
 
       - uses: ./.github/actions/cancel-merge-group-on-failure
+        if: always()
 
   rust-check:
     needs: [changes, build-snapshot]
@@ -194,6 +195,7 @@ jobs:
         run: just ci-rust-check
 
       - uses: ./.github/actions/cancel-merge-group-on-failure
+        if: always()
 
   build-rari-binary:
     name: Build rari binary (${{ matrix.os }})
@@ -292,6 +294,7 @@ jobs:
           retention-days: 1
 
       - uses: ./.github/actions/cancel-merge-group-on-failure
+        if: always()
 
   build-use-cache-addon:
     name: Build rari_use_cache.node (${{ matrix.os }})
@@ -323,7 +326,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
-          node-version: 22
+          node-version: 22.18.0
 
       - name: Install pnpm
         uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
@@ -401,6 +404,8 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - uses: ./.github/actions/setup-pnpm
+        with:
+          node-version: 22.18.0
 
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
 
@@ -431,6 +436,7 @@ jobs:
             packages/create-rari-app/dist/**
 
       - uses: ./.github/actions/cancel-merge-group-on-failure
+        if: always()
 
   lint-and-test:
     needs: [changes, build-use-cache-addon]
@@ -446,6 +452,8 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - uses: ./.github/actions/setup-pnpm
+        with:
+          node-version: 22.18.0
 
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
 
@@ -457,6 +465,7 @@ jobs:
         run: just ci-lint-test
 
       - uses: ./.github/actions/cancel-merge-group-on-failure
+        if: always()
 
   test-e2e:
     if: (needs.changes.outputs.src == 'true' || needs.changes.outputs.rust == 'true') && (github.event_name != 'push' || github.ref_name != 'main')
@@ -472,7 +481,7 @@ jobs:
       fail-fast: ${{ github.event_name == 'merge_group' }}
       matrix:
         os: [namespace-profile-rari-linux-amd64, namespace-profile-rari-windows-amd64]
-        node: ['lts/*']
+        node: [22.18.0]
         exclude:
           - os: ${{ github.event_name == 'merge_group' && 'namespace-profile-rari-windows-amd64' || '' }}
     timeout-minutes: 15
@@ -558,6 +567,7 @@ jobs:
           retention-days: 7
 
       - uses: ./.github/actions/cancel-merge-group-on-failure
+        if: always()
 
   ci-ok:
     if: always()

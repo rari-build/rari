@@ -18,6 +18,13 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Validate Windows fontconfig inputs
+      if: runner.os == 'Windows' && inputs.fontconfig == 'true' && inputs.vcpkg-triplet == ''
+      shell: bash
+      run: |
+        echo "fontconfig is enabled but vcpkg-triplet is empty; set vcpkg-triplet (e.g. x64-windows)"
+        exit 1
+
     - name: Install system dependencies (Linux)
       if: runner.os == 'Linux'
       shell: bash
