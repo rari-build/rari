@@ -30,10 +30,11 @@ export async function evaluate(source: string, options: EvaluateOptions = {}): P
   const { components: userComponents = {}, ...evaluateOptions } = options
   const compiled = await evaluateMdx(source, evaluateOptions as MdxEvaluateOptions)
   const MDXContent = compiled.default
+  const registryComponents = getMDXComponents(source)
 
   function RariMDXContent(props: { components?: Record<string, any> }) {
     const mergedComponents = {
-      ...getMDXComponents(source),
+      ...registryComponents,
       ...userComponents,
       ...props.components,
     }

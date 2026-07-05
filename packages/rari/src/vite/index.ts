@@ -1,6 +1,7 @@
 import type { CSSModulesOptions, Plugin, UserConfig } from 'vite-plus'
 import type { ProxyPluginOptions } from '../proxy/vite-plugin'
 import type { ModuleAnalysis } from './directives'
+import type { MdxPluginOptions } from './mdx-registry'
 import type { RariPlugin } from './plugin-types'
 import type { ServerBuildOptions } from './server-build'
 import type { ServerCacheConfig, ServerCacheLayerConfig } from './server-config'
@@ -21,7 +22,7 @@ import {
   TSX_EXT_REGEX,
   WINDOWS_PATH_REGEX,
 } from '../shared/regex-constants'
-import { resolveIndexFile, resolveWithExtensions } from '../shared/utils/file-resolver'
+import { resolveImportToFilePath } from '../shared/utils/file-resolver'
 import {
   buildNamespaceClientReferenceReplacement,
   NAMESPACE_IMPORT_LINE_REGEX,
@@ -33,10 +34,8 @@ import { parseHtmlEntryImports } from './html-entry-imports'
 import { scanForImageUsage } from './image-scanner'
 import { transformDefineMdxComponents } from './mdx-components-transform'
 import {
-  collectMdxComponentScanDirs,
-  discoverMdxRegistryEntries,
   generateMdxRegistryModule,
-  resolveMdxPluginOptions,
+  resolveMdxRegistryEntries,
 } from './mdx-registry'
 import { collectClientComponentPaths, invalidateModuleCachePath, ModuleAnalysisCache, resolveModuleCachePath } from './module-analysis-cache'
 import { toRariPlugins } from './plugin-types'
@@ -174,10 +173,7 @@ export interface RariOptions {
     useCache?: boolean
     useCacheRemote?: ServerCacheLayerConfig
   }
-  mdx?: {
-    componentsDir?: string
-    contentDirs?: string[]
-  }
+  mdx?: MdxPluginOptions
 }
 
 const DEFAULT_IMAGE_CONFIG = {
@@ -329,25 +325,26 @@ export function rari(options: RariOptions = {}): RariPlugin[] {
 
   let hmrCoordinator: HMRCoordinator | null = null
   const resolvedAlias: Record<string, string> = {}
+  let cachedMdxRegistryModule: string | null = null
+
+  function invalidateMdxRegistryModuleCache(): void {
+    cachedMdxRegistryModule = null
+  }
 
   function buildMdxRegistryModule(): string {
-    const projectRoot = options.projectRoot || process.cwd()
-    const mdxOptions = resolveMdxPluginOptions(projectRoot, options.mdx)
-    const componentScanDirs = collectMdxComponentScanDirs(
-      projectRoot,
-      mdxOptions.componentsDir,
-      normalizeScanDirs(path.join(projectRoot, 'src'), Object.values(resolvedAlias)),
-    )
+    if (cachedMdxRegistryModule)
+      return cachedMdxRegistryModule
 
-    const entries = discoverMdxRegistryEntries({
+    const projectRoot = options.projectRoot || process.cwd()
+    const entries = resolveMdxRegistryEntries({
       projectRoot,
-      componentsDir: mdxOptions.componentsDir,
-      contentDirs: mdxOptions.contentDirs,
+      mdxOptions: options.mdx,
+      alias: resolvedAlias,
       cache: moduleAnalysisCache,
-      componentScanDirs,
     })
 
-    return generateMdxRegistryModule(entries)
+    cachedMdxRegistryModule = generateMdxRegistryModule(entries)
+    return cachedMdxRegistryModule
   }
 
   function getComponentType(filePath: string): 'client' | 'server' | 'unknown' | undefined {
@@ -614,36 +611,6 @@ if (import.meta.hot) {
       return code
 
     return code.replace(USE_CLIENT_DIRECTIVE_REGEX, '')
-  }
-
-  function resolveImportToFilePath(
-    importPath: string,
-    importerPath: string,
-  ): string {
-    let resolvedImportPath = importPath
-    for (const [alias, replacement] of Object.entries(resolvedAlias)) {
-      if (importPath.startsWith(`${alias}/`)) {
-        resolvedImportPath = importPath.replace(alias, replacement)
-        break
-      }
-      else if (importPath === alias) {
-        resolvedImportPath = replacement
-        break
-      }
-    }
-
-    const resolvedPath = path.resolve(path.dirname(importerPath), resolvedImportPath)
-
-    const extensions = ['.tsx', '.jsx', '.ts', '.js']
-    const withExt = resolveWithExtensions(resolvedPath, extensions)
-    if (withExt)
-      return withExt
-
-    const indexFile = resolveIndexFile(resolvedPath, extensions)
-    if (indexFile)
-      return indexFile
-
-    return `${resolvedPath}.tsx`
   }
 
   let rustServerReady = false
@@ -1022,6 +989,9 @@ if (import.meta.hot) {
     },
 
     async transform(code, id) {
+      if (id.endsWith('.mdx'))
+        invalidateMdxRegistryModuleCache()
+
       if (/\.(?:tsx?|jsx?|mts|mjs)$/.test(id) && code.includes('defineMdxComponents')) {
         const mdxTransformed = transformDefineMdxComponents({
           code,
@@ -1068,7 +1038,7 @@ if (import.meta.hot) {
           if (!importPath)
             continue
 
-          const resolvedImportPath = resolveImportToFilePath(importPath, id)
+          const resolvedImportPath = resolveImportToFilePath(importPath, id, resolvedAlias)
 
           if (fs.existsSync(resolvedImportPath)) {
             setComponentType(resolvedImportPath, 'client')
@@ -1156,7 +1126,7 @@ ${clientTransformedCode}`
 
         const importedDefault = importMatch?.[1]
         const importPath = namespaceMatch?.[2] ?? importMatch![4]
-        const resolvedImportPath = resolveImportToFilePath(importPath, id)
+        const resolvedImportPath = resolveImportToFilePath(importPath, id, resolvedAlias)
 
         const isClientComponent
           = getComponentType(resolvedImportPath) === 'client'
@@ -2091,6 +2061,9 @@ export const createFromReadableStream = module.exports.createFromReadableStream;
     },
 
     async handleHotUpdate({ file, server }) {
+      if (file.endsWith('.mdx'))
+        invalidateMdxRegistryModuleCache()
+
       const isReactFile = TSX_EXT_REGEX.test(file)
 
       if (!isReactFile)
@@ -2099,6 +2072,7 @@ export const createFromReadableStream = module.exports.createFromReadableStream;
       deleteComponentType(file)
       removeTrackedClientComponent(file)
       moduleAnalysisCache.invalidate(file)
+      invalidateMdxRegistryModuleCache()
 
       if (file.includes('/dist/') || file.includes('\\dist\\'))
         return []

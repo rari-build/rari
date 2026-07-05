@@ -59,6 +59,7 @@ const RSC_REFERENCES_SPECIFIER: &str = "react-server-dom-rari/server";
 const RARI_MDX_REGISTRY_SPECIFIER: &str = "rari/mdx/registry";
 const RARI_MDX_REGISTRY_INTERNAL: &str = "file:///rari_internal/mdx-registry.js";
 const RARI_MDX_REGISTRY_MANIFEST: &str = "dist/server/manifest.json";
+const RARI_MDX_REGISTRY_EXPORT_PATH: &str = "dist/mdx/registry.mjs";
 const RARI_RSC_REFERENCES_PATH: &str = "dist/runtime/rsc-references.mjs";
 
 #[derive(Debug)]
@@ -529,19 +530,63 @@ export default {{}};
     }
 
     fn is_rari_mdx_registry_stub(path: &Path) -> bool {
-        path.to_string_lossy().replace('\\', "/").contains("rari/dist/mdx/registry.mjs")
+        path.to_string_lossy().replace('\\', "/").contains(RARI_MDX_REGISTRY_EXPORT_PATH)
     }
 
-    fn synthesize_mdx_registry_module() -> String {
+    fn synthesize_mdx_registry_module(&self) -> String {
+        if let Some(code) = self.storage.get_module_code(RARI_MDX_REGISTRY_INTERNAL) {
+            return code;
+        }
+
         let cwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
         let manifest_path = cwd.join(RARI_MDX_REGISTRY_MANIFEST);
 
-        let entries = fs::read_to_string(&manifest_path)
-            .ok()
-            .and_then(|content| serde_json::from_str::<serde_json::Value>(&content).ok())
-            .and_then(|manifest| manifest.get("mdxRegistry").cloned())
-            .and_then(|value| value.as_array().cloned())
-            .unwrap_or_default();
+        let entries = match fs::read_to_string(&manifest_path) {
+            Ok(content) => match serde_json::from_str::<serde_json::Value>(&content) {
+                Ok(manifest) => match manifest.get("mdxRegistry") {
+                    Some(value) => match value.as_array() {
+                        Some(array) => array.clone(),
+                        None => {
+                            tracing::warn!(
+                                path = %manifest_path.display(),
+                                "manifest.json mdxRegistry is not an array; using empty registry"
+                            );
+                            Vec::new()
+                        }
+                    },
+                    None => {
+                        tracing::warn!(
+                            path = %manifest_path.display(),
+                            "manifest.json missing mdxRegistry; using empty registry"
+                        );
+                        Vec::new()
+                    }
+                },
+                Err(err) => {
+                    tracing::warn!(
+                        path = %manifest_path.display(),
+                        error = %err,
+                        "failed to parse manifest.json; using empty mdxRegistry"
+                    );
+                    Vec::new()
+                }
+            },
+            Err(err) => {
+                if err.kind() == ErrorKind::NotFound {
+                    tracing::warn!(
+                        path = %manifest_path.display(),
+                        "manifest.json not found; using empty mdxRegistry"
+                    );
+                } else {
+                    tracing::warn!(
+                        path = %manifest_path.display(),
+                        error = %err,
+                        "failed to read manifest.json; using empty mdxRegistry"
+                    );
+                }
+                Vec::new()
+            }
+        };
 
         let mut registry_items = String::new();
         for entry in &entries {
@@ -559,12 +604,14 @@ export default {{}};
             );
         }
 
-        format!(
+        let code = format!(
             "import {{ defineMdxComponents }} from 'rari/mdx/define'\n\n\
              export const getMDXComponents = defineMdxComponents([\n\
              {registry_items}\
              ])\n"
-        )
+        );
+        self.storage.set_module_code(RARI_MDX_REGISTRY_INTERNAL.to_string(), code.clone());
+        code
     }
 
     fn resolve_from_node_modules_with_dir(
@@ -572,10 +619,6 @@ export default {{}};
         package_specifier: &str,
         start_dir: &Path,
     ) -> Option<String> {
-        if package_specifier == RARI_MDX_REGISTRY_SPECIFIER {
-            return Some(RARI_MDX_REGISTRY_INTERNAL.to_string());
-        }
-
         if let Some(slash_pos) = package_specifier.find('/') {
             if package_specifier.starts_with('@') {
                 if let Some(second_slash_pos) = package_specifier[slash_pos + 1..].find('/') {
@@ -773,7 +816,7 @@ export default {{}};
             }
 
             if module_name == "mdx-registry" {
-                let stub_code = Self::synthesize_mdx_registry_module();
+                let stub_code = self.synthesize_mdx_registry_module();
 
                 return Some(ModuleLoadResponse::Sync(Ok(ModuleSource::new(
                     ModuleType::JavaScript,
@@ -1031,7 +1074,7 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
             };
 
             if Self::is_rari_mdx_registry_stub(&file_path) {
-                let code = Self::synthesize_mdx_registry_module();
+                let code = self.synthesize_mdx_registry_module();
                 return Some(ModuleLoadResponse::Sync(Ok(ModuleSource::new(
                     ModuleType::JavaScript,
                     ModuleSourceCode::String(code.into()),

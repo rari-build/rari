@@ -38,18 +38,13 @@
   ],
   "exports": {
     ".": {
-      "browser": "./dist/client.mjs",
       "node": "./dist/index.mjs",
       "types": "./dist/index.d.mts",
       "default": "./dist/index.mjs"
     },
-    "./client": {
-      "types": "./dist/client.d.mts",
-      "default": "./dist/client.mjs"
-    },
     "./image": {
-      "types": "./dist/image/index.d.mts",
-      "default": "./dist/image/index.mjs"
+      "types": "./dist/image.d.mts",
+      "default": "./dist/image.mjs"
     },
     "./mdx": {
       "types": "./dist/mdx.d.mts",
@@ -64,8 +59,8 @@
       "default": "./dist/mdx/registry.mjs"
     },
     "./og": {
-      "types": "./dist/og/index.d.mts",
-      "default": "./dist/og/index.mjs"
+      "types": "./dist/og.d.mts",
+      "default": "./dist/og.mjs"
     },
     "./package.json": "./package.json",
     "./router": {

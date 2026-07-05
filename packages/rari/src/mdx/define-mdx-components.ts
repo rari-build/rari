@@ -1,6 +1,6 @@
 import type { ComponentType } from 'react'
 import { createMDXClientReferences } from './client-components'
-import { isComponentUsedInMdx } from './scan'
+import { scanMdxComponentNames } from './scan'
 
 export interface MdxComponentEntry {
   name: string
@@ -46,9 +46,10 @@ export function defineMdxComponents(
   return (content: string) => {
     const result: Record<string, any> = {}
     const clientComponents: Record<string, { component: any, id: string, exportName?: string }> = {}
+    const usedComponentNames = new Set(scanMdxComponentNames(content))
 
     for (const entry of registry) {
-      if (!isComponentUsedInMdx(content, entry.name))
+      if (!usedComponentNames.has(entry.name))
         continue
 
       if (entry.client === false) {

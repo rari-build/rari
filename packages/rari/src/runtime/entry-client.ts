@@ -1,15 +1,11 @@
 import type { GlobalWithRari, WindowWithRari } from './shared/types'
-// eslint-disable-next-line ts/ban-ts-comment
-// @ts-ignore - rari/client is resolved from the built package (circular reference)
-import { ClientRouter } from 'rari/client'
-// eslint-disable-next-line ts/ban-ts-comment
-// @ts-ignore - rari/router is resolved from the built package (circular reference)
-import { RouterProvider } from 'rari/router'
 import * as React from 'react'
 import { createRoot, hydrateRoot } from 'react-dom/client'
 // @ts-expect-error - virtual module resolved by Vite
 import { AppRouterProvider } from 'virtual:app-router-provider'
 import { createFromReadableStream } from 'virtual:react-flight-client'
+import { RouterProvider } from '../router'
+import { ClientRouter } from '../router/ClientRouter'
 import { getClientComponent } from './shared/get-client-component'
 import { clearServerInjectedErrors, hasFizzMarkers } from './shared/hydration'
 import { preloadModulesFromFlightProtocol } from './shared/preload-modules'
