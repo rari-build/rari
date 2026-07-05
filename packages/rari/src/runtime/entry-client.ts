@@ -11,7 +11,7 @@ import { createRoot, hydrateRoot } from 'react-dom/client'
 import { AppRouterProvider } from 'virtual:app-router-provider'
 import { createFromReadableStream } from 'virtual:react-flight-client'
 import { getClientComponent } from './shared/get-client-component'
-import { clearServerInjectedErrors, hasFizzMarkers } from './shared/hydration-utils'
+import { clearServerInjectedErrors, hasFizzMarkers } from './shared/hydration'
 import { preloadModulesFromFlightProtocol } from './shared/preload-modules'
 // eslint-disable-next-line ts/ban-ts-comment
 // @ts-ignore - virtual module resolved by Vite

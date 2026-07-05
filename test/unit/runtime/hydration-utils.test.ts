@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
-import { clearServerInjectedErrors, hasFizzMarkers } from '../../../packages/rari/src/runtime/shared/hydration-utils'
+import { clearServerInjectedErrors, hasFizzMarkers } from '../../../packages/rari/src/runtime/shared/hydration'
 
 function mockRoot(options: {
   comments?: string[]

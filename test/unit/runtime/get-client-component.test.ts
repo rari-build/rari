@@ -29,6 +29,53 @@ describe('pathsMatch', () => {
   })
 })
 
+describe('requireClientComponent path resolution', () => {
+  it('does not resolve ambiguous basename-only component ids', () => {
+    const componentA: ComponentInfo = {
+      id: 'btn-a',
+      path: 'src/a/Button.tsx',
+      type: 'client',
+      registered: false,
+      loader: () => Promise.resolve({ default: () => null }),
+    }
+    const componentB: ComponentInfo = {
+      id: 'btn-b',
+      path: 'src/b/Button.tsx',
+      type: 'client',
+      registered: false,
+      loader: () => Promise.resolve({ default: () => null }),
+    }
+
+    ;(globalThis as unknown as GlobalWithRari)['~clientComponents'] = {
+      'btn-a': componentA,
+      'btn-b': componentB,
+    }
+
+    expect(requireClientComponent('Button.tsx')).toEqual({})
+
+    ;(globalThis as unknown as GlobalWithRari)['~clientComponents'] = {}
+  })
+
+  it('resolves components by boundary-aware path suffix', () => {
+    const componentInfo: ComponentInfo = {
+      id: 'btn-a',
+      path: 'src/a/Button.tsx',
+      type: 'client',
+      registered: false,
+      loader: () => Promise.resolve({ default: () => null }),
+    }
+
+    ;(globalThis as unknown as GlobalWithRari)['~clientComponents'] = {
+      'btn-a': componentInfo,
+    }
+
+    const module = requireClientComponent('a/Button.tsx')
+    expect(module.default).toBeTypeOf('function')
+
+    ;(globalThis as unknown as GlobalWithRari)['~clientComponents'] = {}
+  })
+})
+
 describe('requireClientComponent lazy load errors', () => {
   it('throws the stored error synchronously after a failed load', async () => {
     const loadError = new Error('network failure')
@@ -103,11 +150,14 @@ describe('requireClientComponent lazy load errors', () => {
       BrokenChunk: componentInfo,
     }
 
-    installRscChunkLoader()
+    try {
+      installRscChunkLoader()
 
-    await expect((globalThis as any).__rari_chunk_load__('BrokenChunk')).rejects.toBe(loadError)
-
-    vi.unstubAllGlobals()
-    ;(globalThis as unknown as GlobalWithRari)['~clientComponents'] = {}
+      await expect((globalThis as any).__rari_chunk_load__('BrokenChunk')).rejects.toBe(loadError)
+    }
+    finally {
+      vi.unstubAllGlobals()
+      ;(globalThis as unknown as GlobalWithRari)['~clientComponents'] = {}
+    }
   })
 })

@@ -4,7 +4,7 @@ import { HMRCoordinator } from '@rari/vite/hmr-coordinator'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 
 vi.mock('node:fs')
-vi.mock('@rari/shared/http-utils', () => ({
+vi.mock('@rari/shared/http', () => ({
   throwIfNotOk: vi.fn(),
 }))
 

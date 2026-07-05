@@ -89,35 +89,6 @@ function findComponentInfoByPath(
         }
       }
     }
-
-    const nameMatch = candidateBaseId.match(/\/([A-Z][\w$]*)(?:[_.]|$)/)
-      || candidateBaseId.match(/\/([\w$-]+)(?:[_.]|$)/)
-
-    if (nameMatch) {
-      const componentName = nameMatch[1]
-      const componentInfo = Object.values(clientComponents).find((info) => {
-        if (!info?.path)
-          return false
-
-        const normalizedPath = info.path.replace(/\\/g, '/')
-        return (
-          normalizedPath.endsWith(`/${componentName}.tsx`)
-          || normalizedPath.endsWith(`/${componentName}.ts`)
-          || normalizedPath.endsWith(`/${componentName}.jsx`)
-          || normalizedPath.endsWith(`/${componentName}.js`)
-          || normalizedPath.includes(`/${componentName}/index.`)
-          || info.id === componentName
-          || (info as any).exportName === componentName
-        )
-      }) as LazyComponentInfo | undefined
-
-      if (componentInfo) {
-        return {
-          info: componentInfo,
-          exportName: resolveExportName(componentInfo, exportName),
-        }
-      }
-    }
   }
 
   return null
@@ -374,28 +345,6 @@ export function installRscChunkLoader(): void {
         || Object.values(clientComponents).find((info: any) =>
           info && (info.path === chunkId || info.path === normalized),
         )
-
-      if (!componentInfo) {
-        const nameMatch = chunkId.match(/\/([A-Z][a-zA-Z0-9]*)(?:[_.]|$)/)
-          || chunkId.match(/\/([a-z][a-zA-Z0-9-]*)(?:[_.]|$)/)
-        if (nameMatch) {
-          const componentName = nameMatch[1]
-          componentInfo = Object.values(clientComponents).find((info: any) => {
-            if (!info || !info.path)
-              return false
-            const p = info.path.replace(/\\/g, '/')
-            return (
-              p.endsWith(`/${componentName}.tsx`)
-              || p.endsWith(`/${componentName}.ts`)
-              || p.endsWith(`/${componentName}.jsx`)
-              || p.endsWith(`/${componentName}.js`)
-              || p.includes(`/${componentName}/index.`)
-              || info.id === componentName
-              || (info as any).exportName === componentName
-            )
-          }) as any
-        }
-      }
     }
 
     if (componentInfo && !componentInfo.component && componentInfo.loader) {

@@ -1495,7 +1495,7 @@ mod tests {
         assert!(links.contains(r#"<link rel="icon" href="/favicon.ico">"#));
         assert!(links.contains(r#"<link rel="preconnect" href="https://fonts.googleapis.com">"#));
         assert!(links.contains(r#"rel="preload""#));
-        assert!(!links.contains(r#"/styles.css"#));
+        assert!(!links.contains(r"/styles.css"));
     }
 
     #[test]
