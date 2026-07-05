@@ -1,3 +1,5 @@
+#![expect(clippy::missing_errors_doc, clippy::too_many_lines)]
+
 use std::{
     env,
     path::PathBuf,
@@ -20,7 +22,7 @@ use crate::server::{
         component::extract_component_id,
         path_validation::{normalize_component_path, validate_component_path, validate_safe_path},
     },
-    handlers::rsc::{immediate_component_reregistration, reload_component_from_dist},
+    loaders::rsc::{immediate_component_reregistration, reload_component_from_dist},
 };
 
 #[derive(Debug, Deserialize)]

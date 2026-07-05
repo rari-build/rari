@@ -1,3 +1,5 @@
+#![expect(clippy::missing_errors_doc, clippy::too_many_lines)]
+
 use std::string::ToString;
 
 use axum::{
@@ -9,8 +11,8 @@ use axum::{
 use crate::server::{
     ServerState,
     core::utils::http::{add_api_cors_headers, add_api_security_headers},
-    handlers::r#static::cors_preflight_response,
     routing::api_error::{ApiRouteError, create_generic_error_response},
+    static_assets::cors_preflight_response,
 };
 
 fn add_cors_headers(
