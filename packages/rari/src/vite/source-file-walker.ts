@@ -2,6 +2,14 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { TSX_EXT_REGEX } from '../shared/regex-constants'
 
+const SKIPPED_DIRECTORIES = new Set([
+  'node_modules',
+  '.git',
+  'dist',
+  'build',
+  '.cache',
+])
+
 export function walkSourceFiles(
   dirs: readonly string[],
   visit: (filePath: string) => void,
@@ -18,7 +26,7 @@ export function walkSourceFiles(
       const fullPath = path.join(currentDir, entry.name)
 
       if (entry.isDirectory()) {
-        if (entry.name === 'node_modules')
+        if (SKIPPED_DIRECTORIES.has(entry.name))
           continue
         walk(fullPath)
       }

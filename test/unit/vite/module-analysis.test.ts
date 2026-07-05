@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { analyzeModuleSource, getDirectives, hasDefaultExport, hasTopLevelUseClientDirective, hasTopLevelUseServerDirective } from '@rari/vite/directives'
-import { filterExternalDependencies, hasNodeImportsFromAnalysis, isNodeBuiltinModule, ModuleAnalysisCache } from '@rari/vite/module-analysis-cache'
+import { collectClientComponentPaths, filterExternalDependencies, hasNodeImportsFromAnalysis, invalidateModuleCachePath, isNodeBuiltinModule, ModuleAnalysisCache, resolveModuleCachePath } from '@rari/vite/module-analysis-cache'
 import { describe, expect, it } from 'vite-plus/test'
 
 describe('analyzeModuleSource', () => {
@@ -24,6 +24,24 @@ export default function App() {
     expect(analysis.hasDefaultExport).toBe(true)
     expect(analysis.hasComponentExport).toBe(true)
     expect(analysis.importSources).toEqual(['react'])
+  })
+
+  it('ignores import.meta and still collects real imports', () => {
+    const source = `import React from 'react'
+
+if (import.meta.hot) {
+  import.meta.hot.accept()
+}
+
+export default function App() {
+  return import.meta.env.DEV ? <div /> : null
+}
+`
+
+    const analysis = analyzeModuleSource(source)
+
+    expect(analysis.importSources).toEqual(['react'])
+    expect(analysis.hasDefaultExport).toBe(true)
   })
 
   it('detects dynamic imports', () => {
@@ -61,6 +79,17 @@ const mod = await import('@acme/dynamic')
     const external = filterExternalDependencies(analysis.importSources)
 
     expect(external).toEqual(['react', '@acme/dynamic'])
+  })
+
+  it('excludes @/ aliased imports from external dependencies', () => {
+    const source = `
+import react from 'react'
+import { Button } from '@/components/Button'
+`
+    const analysis = analyzeModuleSource(source)
+    const external = filterExternalDependencies(analysis.importSources)
+
+    expect(external).toEqual(['react'])
   })
 })
 
@@ -133,6 +162,55 @@ describe('moduleAnalysisCache', () => {
     expect(isNodeBuiltinModule('react')).toBe(false)
   })
 
+  it('does not treat missing files as mtime cache hits', () => {
+    const cache = new ModuleAnalysisCache()
+    const missingPath = path.join(os.tmpdir(), `missing-${Date.now()}.tsx`)
+
+    cache.get(missingPath, `"use client"\nexport default function C() {}\n`)
+
+    expect(() => cache.get(missingPath)).toThrow()
+  })
+
+  it('invalidates symlink and real paths', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-analysis-'))
+    const targetPath = path.join(dir, 'Component.tsx')
+    const linkPath = path.join(dir, 'Component.link.tsx')
+
+    fs.writeFileSync(targetPath, `export default function C() {}\n`)
+    fs.symlinkSync(targetPath, linkPath)
+
+    const cache = new ModuleAnalysisCache()
+    const first = cache.get(linkPath)
+
+    cache.invalidate(targetPath)
+
+    fs.writeFileSync(targetPath, `"use client"\nexport default function C() {}\n`)
+    const second = cache.get(linkPath)
+
+    expect(first.hasDefaultExport).toBe(true)
+    expect(second.topLevelUseClient).toBe(true)
+
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('invalidateModuleCachePath clears symlink and real keys', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-analysis-'))
+    const targetPath = path.join(dir, 'Component.tsx')
+    const linkPath = path.join(dir, 'Component.link.tsx')
+
+    fs.writeFileSync(targetPath, `export default function C() {}\n`)
+    fs.symlinkSync(targetPath, linkPath)
+
+    const cache = new Map<string, string>()
+    cache.set(resolveModuleCachePath(linkPath), 'client')
+
+    invalidateModuleCachePath(cache, targetPath)
+
+    expect(cache.has(resolveModuleCachePath(linkPath))).toBe(false)
+
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
   it('returns cached source after analysis', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-analysis-'))
     const filePath = path.join(dir, 'Component.tsx')
@@ -142,6 +220,21 @@ describe('moduleAnalysisCache', () => {
     cache.get(filePath)
 
     expect(cache.getSource(filePath)).toBe(`export default function C() {}\n`)
+
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('collectClientComponentPaths finds use client files in a directory tree', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-analysis-'))
+    const srcDir = path.join(dir, 'src')
+    fs.mkdirSync(path.join(srcDir, 'app'), { recursive: true })
+    fs.writeFileSync(path.join(srcDir, 'app', 'template.tsx'), `"use client"\nexport default function T() {}\n`)
+    fs.writeFileSync(path.join(srcDir, 'app', 'page.tsx'), `export default function P() {}\n`)
+
+    const cache = new ModuleAnalysisCache()
+    const clientPaths = collectClientComponentPaths([srcDir], cache)
+
+    expect(clientPaths).toEqual([path.join(srcDir, 'app', 'template.tsx')])
 
     fs.rmSync(dir, { recursive: true, force: true })
   })

@@ -30,8 +30,9 @@ import { hasDefaultExport } from './directives'
 import { HMRCoordinator } from './hmr-coordinator'
 import { parseHtmlEntryImports } from './html-entry-imports'
 import { scanForImageUsage } from './image-scanner'
-import { ModuleAnalysisCache } from './module-analysis-cache'
+import { collectClientComponentPaths, invalidateModuleCachePath, ModuleAnalysisCache, resolveModuleCachePath } from './module-analysis-cache'
 import { createServerBuildPlugin, isServerComponentFromAnalysis, RARI_CSS_MODULES_PATTERN, scanDirectory, ServerComponentBuilder } from './server-build'
+import { normalizeScanDirs } from './source-file-walker'
 import { getUseCacheTransform } from './use-cache-loader'
 
 const DIST_NOT_BUILT_ERROR = '[rari] Runtime dist not built. Run `pnpm build` in the rari package first.'
@@ -309,6 +310,36 @@ export function rari(options: RariOptions = {}): Plugin[] {
   let hmrCoordinator: HMRCoordinator | null = null
   const resolvedAlias: Record<string, string> = {}
 
+  function getComponentType(filePath: string): 'client' | 'server' | 'unknown' | undefined {
+    return componentTypeCache.get(resolveModuleCachePath(filePath))
+  }
+
+  function setComponentType(filePath: string, type: 'client' | 'server' | 'unknown'): void {
+    componentTypeCache.set(resolveModuleCachePath(filePath), type)
+  }
+
+  function deleteComponentType(filePath: string): void {
+    invalidateModuleCachePath(componentTypeCache, filePath)
+  }
+
+  function addTrackedClientComponent(filePath: string): void {
+    clientComponents.add(resolveModuleCachePath(filePath))
+  }
+
+  function hasTrackedClientComponent(filePath: string): boolean {
+    return clientComponents.has(resolveModuleCachePath(filePath))
+  }
+
+  function removeTrackedClientComponent(filePath: string): void {
+    clientComponents.delete(filePath)
+    try {
+      clientComponents.delete(fs.realpathSync(filePath))
+    }
+    catch {
+      clientComponents.delete(path.resolve(filePath))
+    }
+  }
+
   function getKnownClientComponentPaths(): Set<string> {
     const paths = new Set(clientComponents)
 
@@ -368,18 +399,12 @@ export function rari(options: RariOptions = {}): Plugin[] {
     if (filePath.includes('node_modules') || isRariInternalFile(filePath))
       return false
 
-    let pathForFsOperations
-    try {
-      pathForFsOperations = fs.realpathSync(filePath)
-    }
-    catch {
-      return false
-    }
+    const resolvedPath = resolveModuleCachePath(filePath)
 
     try {
-      const analysis = moduleAnalysisCache.get(pathForFsOperations)
+      const analysis = moduleAnalysisCache.get(filePath)
       return isServerComponentFromAnalysis(
-        pathForFsOperations,
+        resolvedPath,
         analysis,
         getHtmlEntryImports(),
       )
@@ -975,8 +1000,8 @@ if (import.meta.hot) {
       const moduleAnalysis = moduleAnalysisCache.get(id, code)
 
       if (moduleAnalysis.topLevelUseClient) {
-        componentTypeCache.set(id, 'client')
-        clientComponents.add(id)
+        setComponentType(id, 'client')
+        addTrackedClientComponent(id)
 
         const lines = code.split('\n')
 
@@ -993,19 +1018,19 @@ if (import.meta.hot) {
           const resolvedImportPath = resolveImportToFilePath(importPath, id)
 
           if (fs.existsSync(resolvedImportPath)) {
-            componentTypeCache.set(resolvedImportPath, 'client')
-            clientComponents.add(resolvedImportPath)
+            setComponentType(resolvedImportPath, 'client')
+            addTrackedClientComponent(resolvedImportPath)
           }
         }
 
         return transformClientModuleForClient(code, id, moduleAnalysis)
       }
 
-      if (componentTypeCache.get(id) === 'client' || clientComponents.has(id))
+      if (getComponentType(id) === 'client' || hasTrackedClientComponent(id))
         return transformClientModuleForClient(code, id, moduleAnalysis)
 
       if (isServerComponent(id)) {
-        componentTypeCache.set(id, 'server')
+        setComponentType(id, 'server')
 
         if (
           environment
@@ -1034,7 +1059,7 @@ ${clientTransformedCode}`
       }
 
       if (moduleAnalysis.topLevelUseServer) {
-        componentTypeCache.set(id, 'server')
+        setComponentType(id, 'server')
 
         if (
           environment
@@ -1047,7 +1072,7 @@ ${clientTransformedCode}`
         }
       }
 
-      const cachedType = componentTypeCache.get(id)
+      const cachedType = getComponentType(id)
       if (cachedType === 'server') {
         if (
           environment
@@ -1062,14 +1087,14 @@ ${clientTransformedCode}`
       if (cachedType === 'client')
         return transformClientModuleForClient(code, id, moduleAnalysis)
 
-      componentTypeCache.set(id, 'unknown')
+      setComponentType(id, 'unknown')
 
       const lines = code.split('\n')
       let modifiedCode = code
       let hasServerImports = false
       let needsReactImport = false
       const importingFileIsClient = moduleAnalysis.topLevelUseClient
-        || componentTypeCache.get(id) === 'client'
+        || getComponentType(id) === 'client'
         || id.includes('entry-client')
 
       for (const line of lines) {
@@ -1083,13 +1108,13 @@ ${clientTransformedCode}`
         const resolvedImportPath = resolveImportToFilePath(importPath, id)
 
         const isClientComponent
-          = componentTypeCache.get(resolvedImportPath) === 'client'
+          = getComponentType(resolvedImportPath) === 'client'
             || (fs.existsSync(resolvedImportPath)
               && moduleAnalysisCache.get(resolvedImportPath).topLevelUseClient)
 
         if (isClientComponent) {
-          componentTypeCache.set(resolvedImportPath, 'client')
-          clientComponents.add(resolvedImportPath)
+          setComponentType(resolvedImportPath, 'client')
+          addTrackedClientComponent(resolvedImportPath)
         }
 
         if (
@@ -1179,7 +1204,7 @@ ${clientTransformedCode}`
         ) {
           if (isDevMode) {
             modifiedCode = `'use client';\n\n${modifiedCode}`
-            componentTypeCache.set(id, 'client')
+            setComponentType(id, 'client')
           }
         }
 
@@ -1417,8 +1442,8 @@ ${clientTransformedCode}`
         }
 
         if (serverReady) {
-          await ensureClientComponentsRegistered()
           await discoverAndRegisterComponents()
+          await ensureClientComponentsRegistered()
         }
         else {
           console.error(
@@ -1598,7 +1623,8 @@ ${clientTransformedCode}`
 
       server.watcher.on('change', async (filePath) => {
         if (TSX_EXT_REGEX.test(filePath)) {
-          componentTypeCache.delete(filePath)
+          deleteComponentType(filePath)
+          removeTrackedClientComponent(filePath)
           moduleAnalysisCache.invalidate(filePath)
         }
 
@@ -1782,7 +1808,17 @@ ${clientTransformedCode}`
       }
 
       if (id === 'virtual:rari-entry-client.ts') {
-        const allClientComponents = getKnownClientComponentPaths()
+        const projectRoot = options.projectRoot || process.cwd()
+        const srcDir = path.join(projectRoot, 'src')
+        const scannedClientComponents = collectClientComponentPaths(
+          normalizeScanDirs(srcDir, Object.values(resolvedAlias)),
+          moduleAnalysisCache,
+        )
+
+        const allClientComponents = new Set([
+          ...getKnownClientComponentPaths(),
+          ...scannedClientComponents,
+        ])
 
         const externalClientComponents = [
           { path: 'rari/image', exports: ['Image'] },
@@ -2005,6 +2041,8 @@ export const createFromReadableStream = module.exports.createFromReadableStream;
       if (!isReactFile)
         return undefined
 
+      deleteComponentType(file)
+      removeTrackedClientComponent(file)
       moduleAnalysisCache.invalidate(file)
 
       if (file.includes('/dist/') || file.includes('\\dist\\'))

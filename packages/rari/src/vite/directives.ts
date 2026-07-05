@@ -297,6 +297,20 @@ function collectImportSourcesAt(source: string, i: number, len: number): { sourc
   if (isKeywordAt(source, pos, 'type'))
     pos = skipTrivia(source, pos + 4, len)
 
+  if (source.charCodeAt(pos) === CH_DOT) {
+    pos++
+    while (pos < len && isIdentifierPartCode(source.charCodeAt(pos)))
+      pos++
+
+    while (pos < len && source.charCodeAt(pos) === CH_DOT) {
+      pos++
+      while (pos < len && isIdentifierPartCode(source.charCodeAt(pos)))
+        pos++
+    }
+
+    return { sources: [], end: pos }
+  }
+
   if (source.charCodeAt(pos) === CH_OPEN_PAREN) {
     pos++
     const specifier = readImportModuleSpecifier(source, pos, len)

@@ -2,6 +2,20 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 const HTML_IMPORT_REGEX = /import\s*\(\s*["']([^"']+)["']\s*\)|import\s+["']([^"']+)["']/g
+const HTML_MODULE_SCRIPT_REGEX = /<script\b[^>]*>/gi
+
+function addHtmlEntryPath(htmlOnlyImports: Set<string>, projectRoot: string, importPath: string | null | undefined): void {
+  if (importPath?.startsWith('/src/'))
+    htmlOnlyImports.add(path.join(projectRoot, importPath.slice(1)))
+}
+
+function extractModuleScriptSrc(tag: string): string | null {
+  if (!/\btype\s*=\s*["']module["']/i.test(tag))
+    return null
+
+  const srcMatch = tag.match(/\bsrc\s*=\s*["']([^"']+)["']/i)
+  return srcMatch?.[1] ?? null
+}
 
 export function parseHtmlEntryImports(projectRoot: string): Set<string> {
   const htmlOnlyImports = new Set<string>()
@@ -13,9 +27,11 @@ export function parseHtmlEntryImports(projectRoot: string): Set<string> {
   try {
     const htmlContent = fs.readFileSync(indexHtmlPath, 'utf-8')
     for (const match of htmlContent.matchAll(HTML_IMPORT_REGEX)) {
-      const importPath = match[1] || match[2]
-      if (importPath?.startsWith('/src/'))
-        htmlOnlyImports.add(path.join(projectRoot, importPath.slice(1)))
+      addHtmlEntryPath(htmlOnlyImports, projectRoot, match[1] || match[2])
+    }
+
+    for (const match of htmlContent.matchAll(HTML_MODULE_SCRIPT_REGEX)) {
+      addHtmlEntryPath(htmlOnlyImports, projectRoot, extractModuleScriptSrc(match[0]))
     }
   }
   catch {}

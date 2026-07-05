@@ -1,28 +1,11 @@
 import type { ModuleAnalysis } from './directives'
 import fs from 'node:fs'
+import { builtinModules } from 'node:module'
+import path from 'node:path'
 import { analyzeModuleSource } from './directives'
+import { collectSourceFilePaths } from './source-file-walker'
 
-export const NODE_BUILTIN_MODULES = new Set([
-  'fs',
-  'path',
-  'os',
-  'crypto',
-  'util',
-  'stream',
-  'events',
-  'process',
-  'buffer',
-  'url',
-  'querystring',
-  'zlib',
-  'http',
-  'https',
-  'net',
-  'tls',
-  'child_process',
-  'cluster',
-  'worker_threads',
-])
+export const NODE_BUILTIN_MODULES: ReadonlySet<string> = new Set(builtinModules)
 
 export function isNodeBuiltinModule(moduleName: string): boolean {
   return NODE_BUILTIN_MODULES.has(moduleName)
@@ -47,6 +30,7 @@ export function filterExternalDependencies(
     if (
       !importPath.startsWith('.')
       && !importPath.startsWith('/')
+      && !importPath.startsWith('@/')
       && !importPath.startsWith('node:')
       && !nodeBuiltins.has(importPath)
     ) {
@@ -70,43 +54,71 @@ export function filterRelativeImportSources(importSources: readonly string[]): s
 
 interface CacheEntry {
   mtimeMs: number
-  sourceHash: number
   source: string
   analysis: ModuleAnalysis
 }
 
-function hashSource(source: string): number {
-  let hash = 5381
-  for (let i = 0; i < source.length; i++)
-    hash = ((hash << 5) + hash) ^ source.charCodeAt(i)
+export function resolveModuleCachePath(filePath: string): string {
+  try {
+    return fs.realpathSync(filePath)
+  }
+  catch {
+    return path.resolve(filePath)
+  }
+}
 
-  return hash >>> 0
+export function invalidateModuleCachePath(
+  cache: Map<string, unknown>,
+  filePath: string,
+): void {
+  cache.delete(filePath)
+  try {
+    cache.delete(fs.realpathSync(filePath))
+  }
+  catch {
+    cache.delete(path.resolve(filePath))
+  }
+}
+
+export function collectClientComponentPaths(
+  dirs: readonly string[],
+  cache: ModuleAnalysisCache,
+): string[] {
+  const paths: string[] = []
+
+  for (const filePath of collectSourceFilePaths(dirs)) {
+    try {
+      if (cache.get(filePath).directives.hasUseClient)
+        paths.push(filePath)
+    }
+    catch {}
+  }
+
+  return paths
 }
 
 export class ModuleAnalysisCache {
   private cache = new Map<string, CacheEntry>()
 
   get(filePath: string, source?: string): ModuleAnalysis {
-    const mtimeMs = this.readMtimeMs(filePath)
-    const cached = this.cache.get(filePath)
+    const cacheKey = resolveModuleCachePath(filePath)
+    const mtimeMs = this.readMtimeMs(cacheKey)
+    const cached = this.cache.get(cacheKey)
 
     if (source === undefined) {
-      if (cached && cached.mtimeMs === mtimeMs)
+      if (cached && mtimeMs >= 0 && cached.mtimeMs === mtimeMs)
         return cached.analysis
 
-      source = fs.readFileSync(filePath, 'utf-8')
+      source = fs.readFileSync(cacheKey, 'utf-8')
     }
     else {
-      const sourceHash = hashSource(source)
-      if (cached && cached.sourceHash === sourceHash)
+      if (cached && cached.source === source)
         return cached.analysis
     }
 
-    const sourceHash = hashSource(source)
     const analysis = analyzeModuleSource(source)
-    this.cache.set(filePath, {
+    this.cache.set(cacheKey, {
       mtimeMs,
-      sourceHash,
       source,
       analysis,
     })
@@ -115,11 +127,11 @@ export class ModuleAnalysisCache {
 
   getSource(filePath: string): string {
     this.get(filePath)
-    return this.cache.get(filePath)!.source
+    return this.cache.get(resolveModuleCachePath(filePath))!.source
   }
 
   invalidate(filePath: string): void {
-    this.cache.delete(filePath)
+    invalidateModuleCachePath(this.cache, filePath)
   }
 
   clear(): void {

@@ -15,7 +15,7 @@ import {
   TSX_EXT_REGEX,
 } from '../shared/regex-constants'
 import { resolveAlias } from '../shared/utils/alias-resolver'
-import { resolveIndexFile, resolveWithExtensions } from '../shared/utils/file-resolver'
+import { resolveIndexFile, resolveWithExtensions, resolveWithExtensionsAndIndex } from '../shared/utils/file-resolver'
 import { getReadableComponentId, getComponentId as getSharedComponentId, getProjectRelativePath as getSharedProjectRelativePath, hashString as sharedHashString } from './component-ids'
 import { analyzeModuleSource } from './directives'
 import { parseHtmlEntryImports } from './html-entry-imports'
@@ -164,7 +164,8 @@ export class ServerComponentBuilder {
     code: string
     css: string[]
     timestamp: number
-    dependencies: string[]
+    sourceDependencies: string[]
+    bundledDependencies: string[]
   }>()
 
   private htmlOnlyImports = new Set<string>()
@@ -348,25 +349,18 @@ export class ServerComponentBuilder {
       const importerDir = path.dirname(importerPath)
       resolvedPath = path.resolve(importerDir, importPath)
     }
-    else if (importPath.startsWith('@/')) {
-      const relativePath = importPath.slice(2)
-      resolvedPath = path.join(this.projectRoot, 'src', relativePath)
+    else {
+      resolvedPath = resolveAlias(importPath, this.options.alias, this.projectRoot)
+      if (!resolvedPath && importPath.startsWith('@/')) {
+        const relativePath = importPath.slice(2)
+        resolvedPath = path.join(this.projectRoot, 'src', relativePath)
+      }
     }
 
     if (!resolvedPath)
       return null
 
-    const extensions = ['', '.ts', '.tsx', '.js', '.jsx']
-    for (const ext of extensions) {
-      const pathWithExt = resolvedPath + ext
-      try {
-        if (fs.statSync(pathWithExt).isFile())
-          return pathWithExt
-      }
-      catch {}
-    }
-
-    return null
+    return resolveWithExtensionsAndIndex(resolvedPath, ['', '.ts', '.tsx', '.js', '.jsx'])
   }
 
   populateImportGraphFromFiles(
@@ -657,7 +651,7 @@ const ${importName} = (props) => {
 
         const cached = self.buildCache.get(filePath)
         if (cached)
-          cached.dependencies = dependencies
+          cached.bundledDependencies = dependencies
       },
     }
   }
@@ -763,7 +757,7 @@ const ${importName} = (props) => {
 
                 try {
                   const analysis = self.moduleAnalysisCache.get(pathWithExt)
-                  if (analysis.topLevelUseServer) {
+                  if (analysis.directives.hasUseServer) {
                     const actionId = self.getComponentId(pathWithExt)
                     serverActionRefs.set(pathWithExt, {
                       actionId,
@@ -1721,13 +1715,13 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     const componentId = this.getComponentId(filePath)
 
     const code = await fs.promises.readFile(filePath, 'utf-8')
-    const dependencies = this.extractDependencies(code, filePath)
+    const sourceDependencies = this.extractDependencies(code, filePath)
     const hasNodeImports = this.hasNodeImports(code, filePath)
 
     const componentData = {
       filePath,
       originalCode: code,
-      dependencies,
+      dependencies: sourceDependencies,
       hasNodeImports,
     }
 
@@ -1753,8 +1747,12 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     if (
       cached
       && cached.timestamp >= fileTimestamp
-      && JSON.stringify(cached.dependencies) === JSON.stringify(dependencies)
+      && JSON.stringify(cached.sourceDependencies) === JSON.stringify(sourceDependencies)
     ) {
+      const storedComponent = this.serverActions.get(filePath) || this.serverComponents.get(filePath)
+      if (storedComponent && cached.bundledDependencies.length > 0)
+        storedComponent.dependencies = cached.bundledDependencies
+
       await fs.promises.writeFile(fullBundlePath, cached.code, 'utf-8')
       await this.updateManifestForComponent(componentId, filePath, relativeBundlePath, cached.css)
       return {
@@ -1773,11 +1771,13 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     )
     const css = await this.writeComponentCssAsset(componentId, built.css)
 
+    const storedComponent = this.serverActions.get(filePath) || this.serverComponents.get(filePath)
     this.buildCache.set(filePath, {
       code: built.code,
       css,
       timestamp: Date.now(),
-      dependencies,
+      sourceDependencies,
+      bundledDependencies: storedComponent?.dependencies ?? sourceDependencies,
     })
 
     await this.updateManifestForComponent(componentId, filePath, relativeBundlePath, css)
@@ -1930,10 +1930,10 @@ export function isEligibleServerComponent(
 
   const moduleAnalysis = analysis ?? builder.getModuleAnalysis(filePath, code)
 
-  if (moduleAnalysis.topLevelUseClient)
+  if (moduleAnalysis.directives.hasUseClient)
     return false
 
-  if (moduleAnalysis.topLevelUseServer)
+  if (moduleAnalysis.directives.hasUseServer)
     return true
 
   if (builder.isOnlyImportedByClientComponents(filePath))
@@ -1958,7 +1958,7 @@ export function scanDirectory(
   const clientComponentPaths: string[] = []
 
   for (const { filePath, code, analysis } of files) {
-    if (analysis.topLevelUseClient) {
+    if (analysis.directives.hasUseClient) {
       clientComponentPaths.push(filePath)
       builder.recordClientComponent(filePath, code)
     }

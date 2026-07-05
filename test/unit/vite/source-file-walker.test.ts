@@ -25,6 +25,23 @@ describe('source-file-walker', () => {
 
     fs.rmSync(dir, { recursive: true, force: true })
   })
+
+  it('skips generated and metadata directories', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-walk-'))
+    const srcDir = path.join(dir, 'src')
+
+    fs.mkdirSync(path.join(srcDir, 'dist', 'nested'), { recursive: true })
+    fs.mkdirSync(path.join(srcDir, '.git', 'nested'), { recursive: true })
+    fs.writeFileSync(path.join(srcDir, 'page.tsx'), 'export default function Page() {}')
+    fs.writeFileSync(path.join(srcDir, 'dist', 'nested', 'ignored.tsx'), 'export default 1')
+    fs.writeFileSync(path.join(srcDir, '.git', 'nested', 'ignored.tsx'), 'export default 1')
+
+    const paths = collectSourceFilePaths([srcDir])
+
+    expect(paths).toEqual([path.join(srcDir, 'page.tsx')])
+
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
 })
 
 describe('html-entry-imports', () => {
@@ -39,6 +56,21 @@ describe('html-entry-imports', () => {
 
     expect(imports.has(path.join(dir, 'src', 'main.tsx'))).toBe(true)
     expect(imports.has(path.join(dir, 'src', 'app', 'page.tsx'))).toBe(true)
+
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('parses module script src attributes under /src/', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-html-'))
+    fs.writeFileSync(path.join(dir, 'index.html'), `<!doctype html>
+<script type="module" src="/src/main.tsx"></script>
+<script src="/src/legacy.js"></script>
+`)
+
+    const imports = parseHtmlEntryImports(dir)
+
+    expect(imports.has(path.join(dir, 'src', 'main.tsx'))).toBe(true)
+    expect(imports.has(path.join(dir, 'src', 'legacy.js'))).toBe(false)
 
     fs.rmSync(dir, { recursive: true, force: true })
   })
