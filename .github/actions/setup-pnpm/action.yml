@@ -11,7 +11,7 @@ inputs:
     required: false
     default: 'true'
   cache:
-    description: Enable pnpm cache in actions/setup-node (disable when using setup-namespace-cache)
+    description: Enable pnpm cache in actions/setup-node (disable when using setup-namespace-cache or setup-windows-cache)
     required: false
     default: 'false'
 
