@@ -1,0 +1,27 @@
+name: Checkout
+description: Namespace cached checkout on Linux/macOS; standard checkout on Windows (no cache volumes)
+
+inputs:
+  fetch-depth:
+    description: Number of commits to fetch (0 = full history)
+    required: false
+    default: '1'
+  ref:
+    description: Git ref to checkout
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@11bd7191bbe5b1630ceea73bd2757704a3f6d59e # v4.2.2
+      if: runner.os == 'Windows'
+      with:
+        fetch-depth: ${{ inputs.fetch-depth }}
+        ref: ${{ inputs.ref }}
+
+    - uses: namespacelabs/nscloud-checkout-action@445c25d7009680597d73eb03c4e1cd5be522ed73 # v9.0.0
+      if: runner.os != 'Windows'
+      with:
+        fetch-depth: ${{ inputs.fetch-depth }}
+        ref: ${{ inputs.ref }}
