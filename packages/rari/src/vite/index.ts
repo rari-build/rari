@@ -22,7 +22,7 @@ import {
   TSX_EXT_REGEX,
   WINDOWS_PATH_REGEX,
 } from '../shared/regex-constants'
-import { resolveImportToFilePath } from '../shared/utils/file-resolver'
+import { clearFileResolverCache, resolveImportToFilePath } from '../shared/utils/file-resolver'
 import {
   buildNamespaceClientReferenceReplacement,
   NAMESPACE_IMPORT_LINE_REGEX,
@@ -2061,6 +2061,8 @@ export const createFromReadableStream = module.exports.createFromReadableStream;
     },
 
     async handleHotUpdate({ file, server }) {
+      clearFileResolverCache()
+
       if (file.endsWith('.mdx'))
         invalidateMdxRegistryModuleCache()
 
