@@ -254,3 +254,62 @@ ci: check build
 # Quick development check (faster than full CI)
 quick-check: lint-rust typecheck
     cargo check --workspace
+
+# --- CI commands ---
+
+# Create empty snapshot placeholders before generating or compiling against snapshot paths
+ci-create-snapshot-placeholder:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p crates/rari/snapshots
+    touch crates/rari/snapshots/RARI_SNAPSHOT.bin
+    echo 'pub static RESIDUAL_LAZY_ESM_SOURCES: &[(&str, &str)] = &[];' > crates/rari/snapshots/residual_lazy_sources.rs
+    echo 'pub static RESIDUAL_LAZY_JS_SOURCES: &[(&str, &str)] = &[];' >> crates/rari/snapshots/residual_lazy_sources.rs
+
+# Generate V8 snapshot (CI caches snapshot artifacts separately)
+ci-generate-snapshot: ci-create-snapshot-placeholder
+    cargo run --manifest-path tools/snapshot/Cargo.toml -- crates/rari/snapshots
+
+# Rust fmt, clippy, and tests
+ci-rust-check:
+    cargo fmt --all -- --check
+    cargo clippy --all-targets --all-features -- -D warnings
+    cargo test --all-features
+
+# Build and install the use-cache native addon for the current platform
+ci-prepare-use-cache-addon:
+    cargo run --release --manifest-path tools/prepare-binaries/Cargo.toml -- --addon
+
+# Build the Node packages required by CI
+ci-build-packages:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -f packages/use-cache-linux-x64/rari_use_cache.node ] \
+      || [ -f packages/use-cache-win32-x64/rari_use_cache.node ]; then
+      pnpm --filter=@rari/use-cache run build
+    else
+      echo "Skipping @rari/use-cache build (addon not available)"
+    fi
+    pnpm --filter=@rari/logger run build
+    pnpm --filter=@rari/deploy run build
+    pnpm --filter=rari run build
+    pnpm --filter=create-rari-app run build
+
+ci-typecheck-packages:
+    pnpm --filter=rari run typecheck
+    pnpm --filter=create-rari-app run typecheck
+
+ci-lint-test: ci-build-packages
+    pnpm lint
+    pnpm test:unit:run
+
+ci-verify-dist:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -f packages/use-cache-linux-x64/rari_use_cache.node ]; then
+      test -d packages/use-cache/dist
+    fi
+    test -d packages/logger/dist
+    test -d packages/deploy/dist
+    test -d packages/rari/dist
+    test -d packages/create-rari-app/dist

@@ -1,0 +1,27 @@
+name: Setup just
+description: Install the just command runner for CI workflows
+
+runs:
+  using: composite
+  steps:
+    - name: Install just (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        if (Get-Command just -ErrorAction SilentlyContinue) {
+          just --version
+          exit 0
+        }
+        cargo install just --locked --quiet
+
+    - name: Install just (Unix)
+      if: runner.os != 'Windows'
+      shell: bash
+      run: |
+        if command -v just >/dev/null 2>&1; then
+          just --version
+          exit 0
+        fi
+        curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to "$HOME/.local/bin"
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        "$HOME/.local/bin/just" --version

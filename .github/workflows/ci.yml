@@ -39,7 +39,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
         id: filter
         with:
           filters: |
@@ -94,10 +94,7 @@ jobs:
         with:
           toolchain: nightly
 
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y pkg-config libfontconfig1-dev mold
+      - uses: ./.github/actions/setup-rust-build-deps
 
       - name: Cache Rust
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
@@ -109,26 +106,22 @@ jobs:
 
       - name: Restore snapshot from cache
         id: cache-snapshot
-        uses: actions/cache/restore@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: crates/rari/snapshots
           key: v8-snapshot-${{ hashFiles('crates/rari/src/runtime/ext/**', 'tools/snapshot/**', 'tools/bundle-react-esm/**', 'pnpm-lock.yaml') }}
 
       - name: Create snapshot placeholder
         if: steps.cache-snapshot.outputs.cache-hit != 'true'
-        run: |
-          mkdir -p crates/rari/snapshots
-          touch crates/rari/snapshots/RARI_SNAPSHOT.bin
-          echo 'pub static RESIDUAL_LAZY_ESM_SOURCES: &[(&str, &str)] = &[];' > crates/rari/snapshots/residual_lazy_sources.rs
-          echo 'pub static RESIDUAL_LAZY_JS_SOURCES: &[(&str, &str)] = &[];' >> crates/rari/snapshots/residual_lazy_sources.rs
+        run: just ci-create-snapshot-placeholder
 
       - name: Generate V8 snapshot
         if: steps.cache-snapshot.outputs.cache-hit != 'true'
-        run: cargo run --manifest-path tools/snapshot/Cargo.toml -- crates/rari/snapshots
+        run: just ci-generate-snapshot
 
       - name: Save snapshot to cache
         if: steps.cache-snapshot.outputs.cache-hit != 'true'
-        uses: actions/cache/save@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: crates/rari/snapshots
           key: v8-snapshot-${{ hashFiles('crates/rari/src/runtime/ext/**', 'tools/snapshot/**', 'tools/bundle-react-esm/**', 'pnpm-lock.yaml') }}
@@ -143,11 +136,7 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-      - name: Cancel workflow on failure
-        if: failure() && github.event_name == 'merge_group'
-        run: gh run cancel ${{ github.run_id }} --repo ${{ github.repository }}
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - uses: ./.github/actions/cancel-merge-group-on-failure
 
   rust-check:
     needs: [changes, build-snapshot]
@@ -168,10 +157,7 @@ jobs:
           toolchain: nightly
           components: rustfmt, clippy
 
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y pkg-config libfontconfig1-dev mold
+      - uses: ./.github/actions/setup-rust-build-deps
 
       - name: Cache Rust
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
@@ -181,10 +167,12 @@ jobs:
       - name: Bundle React ESM vendor files
         uses: ./.github/actions/bundle-react-esm
 
+      - uses: ./.github/actions/setup-just
+
       - name: Restore snapshot from cache
         if: needs.build-snapshot.result != 'success'
         id: cache-snapshot
-        uses: actions/cache/restore@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: crates/rari/snapshots
           key: v8-snapshot-${{ hashFiles('crates/rari/src/runtime/ext/**', 'tools/snapshot/**', 'tools/bundle-react-esm/**', 'pnpm-lock.yaml') }}
@@ -200,27 +188,12 @@ jobs:
 
       - name: Generate snapshot if needed
         if: needs.build-snapshot.result != 'success' && steps.cache-snapshot.outputs.cache-hit != 'true'
-        run: |
-          mkdir -p crates/rari/snapshots
-          touch crates/rari/snapshots/RARI_SNAPSHOT.bin
-          echo 'pub static RESIDUAL_LAZY_ESM_SOURCES: &[(&str, &str)] = &[];' > crates/rari/snapshots/residual_lazy_sources.rs
-          echo 'pub static RESIDUAL_LAZY_JS_SOURCES: &[(&str, &str)] = &[];' >> crates/rari/snapshots/residual_lazy_sources.rs
-          cargo run --manifest-path tools/snapshot/Cargo.toml -- crates/rari/snapshots
+        run: just ci-generate-snapshot
 
-      - name: Check formatting
-        run: cargo fmt --all -- --check
+      - name: Rust check
+        run: just ci-rust-check
 
-      - name: Run clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
-
-      - name: Test Rust
-        run: cargo test --all-features
-
-      - name: Cancel workflow on failure
-        if: failure() && github.event_name == 'merge_group'
-        run: gh run cancel ${{ github.run_id }} --repo ${{ github.repository }}
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - uses: ./.github/actions/cancel-merge-group-on-failure
 
   build-rari-binary:
     name: Build rari binary (${{ matrix.os }})
@@ -248,16 +221,9 @@ jobs:
         with:
           toolchain: nightly
 
-      - name: Install system dependencies (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y pkg-config libfontconfig1-dev mold
-
-      - name: Install system dependencies (Windows)
-        if: runner.os == 'Windows'
-        run: vcpkg install fontconfig:x64-windows
-        shell: pwsh
+      - uses: ./.github/actions/setup-rust-build-deps
+        with:
+          vcpkg-triplet: x64-windows
 
       - name: Cache Rust
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
@@ -270,7 +236,7 @@ jobs:
       - name: Restore binary from cache
         if: needs.changes.outputs.rust != 'true'
         id: cache-binary
-        uses: actions/cache/restore@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: target/debug/rari${{ runner.os == 'Windows' && '.exe' || '' }}
           key: rari-binary-${{ runner.os }}-${{ hashFiles('crates/**', 'Cargo.lock') }}
@@ -286,11 +252,7 @@ jobs:
 
       - name: Create snapshot placeholder
         if: needs.build-snapshot.result != 'success'
-        run: |
-          mkdir -p crates/rari/snapshots
-          touch crates/rari/snapshots/RARI_SNAPSHOT.bin
-          echo 'pub static RESIDUAL_LAZY_ESM_SOURCES: &[(&str, &str)] = &[];' > crates/rari/snapshots/residual_lazy_sources.rs
-          echo 'pub static RESIDUAL_LAZY_JS_SOURCES: &[(&str, &str)] = &[];' >> crates/rari/snapshots/residual_lazy_sources.rs
+        run: just ci-create-snapshot-placeholder
 
       - name: Build rari binary (Windows)
         if: runner.os == 'Windows' && (needs.changes.outputs.rust == 'true' || steps.cache-binary.outputs.cache-hit != 'true')
@@ -306,7 +268,7 @@ jobs:
 
       - name: Save binary to cache
         if: needs.changes.outputs.rust == 'true'
-        uses: actions/cache/save@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: target/debug/rari${{ runner.os == 'Windows' && '.exe' || '' }}
           key: rari-binary-${{ runner.os }}-${{ hashFiles('crates/**', 'Cargo.lock') }}
@@ -329,11 +291,7 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-      - name: Cancel workflow on failure
-        if: failure() && github.event_name == 'merge_group'
-        run: gh run cancel ${{ github.run_id }} --repo ${{ github.repository }}
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - uses: ./.github/actions/cancel-merge-group-on-failure
 
   build-use-cache-addon:
     name: Build rari_use_cache.node (${{ matrix.os }})
@@ -358,11 +316,9 @@ jobs:
         with:
           toolchain: nightly
 
-      - name: Install system dependencies (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y pkg-config mold
+      - uses: ./.github/actions/setup-rust-build-deps
+        with:
+          fontconfig: 'false'
 
       - name: Setup Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
@@ -373,7 +329,7 @@ jobs:
         uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
 
       - name: Cache pnpm store
-        uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.pnpm-store
           key: pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
@@ -388,59 +344,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build rari_use_cache.node (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          cd crates/rari_use_cache
-          pnpm exec napi build --release --strip --platform
+      - uses: ./.github/actions/setup-just
 
-      - name: Build rari_use_cache.node (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          cd crates/rari_use_cache
-          pnpm exec napi build --release --strip --platform
-
-      - name: Write use-cache index.js template
-        shell: bash
-        run: |
-          cat > "${RUNNER_TEMP}/use-cache-index.js" << 'EOF'
-          import { createRequire } from 'node:module'
-          import { dirname, join } from 'node:path'
-          import { fileURLToPath } from 'node:url'
-
-          const require = createRequire(import.meta.url)
-          const __dirname = dirname(fileURLToPath(import.meta.url))
-
-          const addon = require(join(__dirname, 'rari_use_cache.node'))
-
-          export default addon
-          EOF
-
-      - name: Copy addon to platform package (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          mkdir -p packages/use-cache-linux-x64
-          cp crates/rari_use_cache/*.linux-x64-gnu.node packages/use-cache-linux-x64/rari_use_cache.node
-          cp "${RUNNER_TEMP}/use-cache-index.js" packages/use-cache-linux-x64/index.js
-          sed -e 's/{PLATFORM}/linux-x64/g' \
-              -e 's/{VERSION}/0.0.0/g' \
-              -e 's/{OS}/linux/g' \
-              -e 's/{CPU}/x64/g' \
-              .github/templates/package-json/use-cache-platform.json > packages/use-cache-linux-x64/package.json
-
-      - name: Copy addon to platform package (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path packages/use-cache-win32-x64
-          Copy-Item crates/rari_use_cache/*.win32-x64-msvc.node packages/use-cache-win32-x64/rari_use_cache.node
-          Copy-Item "$env:RUNNER_TEMP/use-cache-index.js" packages/use-cache-win32-x64/index.js
-          (Get-Content .github/templates/package-json/use-cache-platform.json) `
-            -replace '\{PLATFORM\}', 'win32-x64' `
-            -replace '\{VERSION\}', '0.0.0' `
-            -replace '\{OS\}', 'win32' `
-            -replace '\{CPU\}', 'x64' |
-            Out-File -FilePath packages/use-cache-win32-x64/package.json -Encoding UTF8
+      - name: Prepare use-cache platform package
+        run: just ci-prepare-use-cache-addon
 
       - name: Upload addon (Linux)
         if: runner.os == 'Linux'
@@ -456,7 +363,7 @@ jobs:
 
       - name: Cache addon (Linux)
         if: runner.os == 'Linux'
-        uses: actions/cache/save@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: packages/use-cache-linux-x64
           key: use-cache-linux-x64-${{ hashFiles('crates/rari_use_cache/**', 'Cargo.lock') }}
@@ -475,7 +382,7 @@ jobs:
 
       - name: Cache addon (Windows)
         if: runner.os == 'Windows'
-        uses: actions/cache/save@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: packages/use-cache-win32-x64
           key: use-cache-win32-x64-${{ hashFiles('crates/rari_use_cache/**', 'Cargo.lock') }}
@@ -493,59 +400,22 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: ./.github/actions/setup-pnpm
 
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      - uses: ./.github/actions/setup-just
+
+      - uses: ./.github/actions/restore-use-cache-addon
         with:
-          node-version: lts/*
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Restore use-cache addon from cache
-        id: cache-addon
-        uses: actions/cache/restore@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
-        with:
-          path: packages/use-cache-linux-x64
-          key: use-cache-linux-x64-${{ hashFiles('crates/rari_use_cache/**', 'Cargo.lock') }}
-          restore-keys: |
-            use-cache-linux-x64-
-
-      - name: Download use-cache addon
-        if: steps.cache-addon.outputs.cache-hit != 'true'
-        continue-on-error: true
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: use-cache-linux-x64
-          path: packages/use-cache-linux-x64
+          platform: linux-x64
 
       - name: Build packages
-        run: |
-          if [ -f packages/use-cache-linux-x64/rari_use_cache.node ]; then
-            pnpm --filter=@rari/use-cache run build
-          else
-            echo "Skipping @rari/use-cache build (addon not available)"
-          fi
-          pnpm --filter=@rari/logger run build
-          pnpm --filter=@rari/deploy run build
-          pnpm --filter=rari run build
-          pnpm --filter=create-rari-app run build
+        run: just ci-build-packages
 
       - name: Typecheck packages
-        run: |
-          pnpm --filter=rari run typecheck
-          pnpm --filter=create-rari-app run typecheck
+        run: just ci-typecheck-packages
 
       - name: Verify dist outputs
-        run: |
-          if [ -f packages/use-cache-linux-x64/rari_use_cache.node ]; then
-            test -d packages/use-cache/dist
-          fi
-          test -d packages/logger/dist
-          test -d packages/deploy/dist
-          test -d packages/rari/dist
-          test -d packages/create-rari-app/dist
+        run: just ci-verify-dist
 
       - name: Upload dist artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -560,11 +430,7 @@ jobs:
             packages/rari/dist/**
             packages/create-rari-app/dist/**
 
-      - name: Cancel workflow on failure
-        if: failure() && github.event_name == 'merge_group'
-        run: gh run cancel ${{ github.run_id }} --repo ${{ github.repository }}
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - uses: ./.github/actions/cancel-merge-group-on-failure
 
   lint-and-test:
     needs: [changes, build-use-cache-addon]
@@ -579,56 +445,18 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: ./.github/actions/setup-pnpm
 
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      - uses: ./.github/actions/setup-just
+
+      - uses: ./.github/actions/restore-use-cache-addon
         with:
-          node-version: lts/*
-          cache: pnpm
+          platform: linux-x64
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Lint and test
+        run: just ci-lint-test
 
-      - name: Restore use-cache addon from cache
-        id: cache-addon
-        uses: actions/cache/restore@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
-        with:
-          path: packages/use-cache-linux-x64
-          key: use-cache-linux-x64-${{ hashFiles('crates/rari_use_cache/**', 'Cargo.lock') }}
-          restore-keys: |
-            use-cache-linux-x64-
-
-      - name: Download use-cache addon
-        if: steps.cache-addon.outputs.cache-hit != 'true'
-        continue-on-error: true
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: use-cache-linux-x64
-          path: packages/use-cache-linux-x64
-
-      - name: Build packages
-        run: |
-          if [ -f packages/use-cache-linux-x64/rari_use_cache.node ]; then
-            pnpm --filter=@rari/use-cache run build
-          else
-            echo "Skipping @rari/use-cache build (addon not available)"
-          fi
-          pnpm --filter=@rari/logger run build
-          pnpm --filter=@rari/deploy run build
-          pnpm --filter=rari run build
-          pnpm --filter=create-rari-app run build
-
-      - name: Lint
-        run: pnpm lint
-
-      - name: Test (unit)
-        run: pnpm test:unit:run
-
-      - name: Cancel workflow on failure
-        if: failure() && github.event_name == 'merge_group'
-        run: gh run cancel ${{ github.run_id }} --repo ${{ github.repository }}
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - uses: ./.github/actions/cancel-merge-group-on-failure
 
   test-e2e:
     if: (needs.changes.outputs.src == 'true' || needs.changes.outputs.rust == 'true') && (github.event_name != 'push' || github.ref_name != 'main')
@@ -651,12 +479,10 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
-
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      - uses: ./.github/actions/setup-pnpm
         with:
           node-version: ${{ matrix.node }}
-          cache: pnpm
+          install: 'false'
 
       - name: Restore dist cache
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -678,41 +504,15 @@ jobs:
           name: rari-binary-windows
           path: packages/rari-win32-x64/bin
 
-      - name: Restore use-cache addon from cache (Linux)
+      - uses: ./.github/actions/restore-use-cache-addon
         if: runner.os == 'Linux'
-        id: cache-addon-linux
-        uses: actions/cache/restore@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
         with:
-          path: packages/use-cache-linux-x64
-          key: use-cache-linux-x64-${{ hashFiles('crates/rari_use_cache/**', 'Cargo.lock') }}
-          restore-keys: |
-            use-cache-linux-x64-
+          platform: linux-x64
 
-      - name: Restore use-cache addon from cache (Windows)
+      - uses: ./.github/actions/restore-use-cache-addon
         if: runner.os == 'Windows'
-        id: cache-addon-windows
-        uses: actions/cache/restore@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
         with:
-          path: packages/use-cache-win32-x64
-          key: use-cache-win32-x64-${{ hashFiles('crates/rari_use_cache/**', 'Cargo.lock') }}
-          restore-keys: |
-            use-cache-win32-x64-
-
-      - name: Download rari_use_cache addon (Linux)
-        if: runner.os == 'Linux' && steps.cache-addon-linux.outputs.cache-hit != 'true'
-        continue-on-error: true
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: use-cache-linux-x64
-          path: packages/use-cache-linux-x64
-
-      - name: Download rari_use_cache addon (Windows)
-        if: runner.os == 'Windows' && steps.cache-addon-windows.outputs.cache-hit != 'true'
-        continue-on-error: true
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: use-cache-win32-x64
-          path: packages/use-cache-win32-x64
+          platform: win32-x64
 
       - name: Make binary executable (Linux)
         if: runner.os == 'Linux'
@@ -720,7 +520,7 @@ jobs:
 
       - name: Set up cache (Linux)
         if: runner.os == 'Linux'
-        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0 # v1.4.3
+        uses: namespacelabs/nscloud-cache-action@58bf6e08898e88803c098e2b522668541cd3b2e3 # v1.6.0
         with:
           cache: |
             playwright
@@ -729,98 +529,13 @@ jobs:
 
       - name: Cache Playwright browsers (Windows)
         if: runner.os == 'Windows'
-        uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~\AppData\Local\ms-playwright
           key: playwright-win-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: playwright-win-
 
-      - name: Install Redis (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: choco install redis -y --no-progress
-
-      - name: Install Redis (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y redis-server
-
-      - name: Start Redis (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-
-          $searchRoots = @(
-            "$env:ChocolateyInstall\lib\redis",
-            "$env:ChocolateyInstall\lib\redis-64",
-            "C:\ProgramData\chocolatey\lib\redis",
-            "C:\ProgramData\chocolatey\lib\redis-64"
-          ) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique
-
-          function Find-RedisExecutable {
-            param([string[]] $Names)
-
-            foreach ($name in $Names) {
-              $command = Get-Command $name -ErrorAction SilentlyContinue
-              if ($command) {
-                return $command.Source
-              }
-            }
-
-            foreach ($root in $searchRoots) {
-              foreach ($name in $Names) {
-                $file = Get-ChildItem -Path $root -Filter $name -Recurse -File -ErrorAction SilentlyContinue |
-                  Select-Object -First 1
-                if ($file) {
-                  return $file.FullName
-                }
-              }
-            }
-
-            return $null
-          }
-
-          $redisService = Find-RedisExecutable @('RedisService.exe')
-          $redisServer = Find-RedisExecutable @('redis-server.exe', 'redis-server')
-          $redisCli = Find-RedisExecutable @('redis-cli.exe', 'redis-cli')
-
-          Write-Host "RedisService: $redisService"
-          Write-Host "redis-server: $redisServer"
-          Write-Host "redis-cli: $redisCli"
-
-          if (-not $redisCli) {
-            throw 'redis-cli was not found'
-          }
-
-          if ($redisService) {
-            Start-Process -FilePath $redisService -ArgumentList @('run', '--foreground', '--port', '6379') -WindowStyle Hidden
-          }
-          elseif ($redisServer) {
-            Start-Process -FilePath $redisServer -ArgumentList @('--port', '6379') -WindowStyle Hidden
-          }
-          else {
-            throw 'Redis server executable was not found'
-          }
-
-          $deadline = (Get-Date).AddSeconds(30)
-          do {
-            & $redisCli -p 6379 ping
-            if ($LASTEXITCODE -eq 0) {
-              Write-Host 'Redis is ready'
-              exit 0
-            }
-            Start-Sleep -Seconds 1
-          } while ((Get-Date) -lt $deadline)
-
-          throw 'Redis did not become ready'
-
-      - name: Start Redis (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          redis-server --daemonize yes || true
-          until redis-cli ping > /dev/null 2>&1; do sleep 1; done
+      - uses: ./.github/actions/setup-redis
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -842,11 +557,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      - name: Cancel workflow on failure
-        if: failure() && github.event_name == 'merge_group'
-        run: gh run cancel ${{ github.run_id }} --repo ${{ github.repository }}
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - uses: ./.github/actions/cancel-merge-group-on-failure
 
   ci-ok:
     if: always()
