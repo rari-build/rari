@@ -138,7 +138,7 @@ image = { version = "0.25.10", default-features = false, features = [
 webp = "0.3.1"
 
 # Layout and text rendering
-taffy = "0.11.0"
+taffy = "0.12.1"
 parley = "0.11.0"
 swash = "0.2.9"
 zeno = "0.3.3"
