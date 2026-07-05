@@ -1161,7 +1161,7 @@ impl LayoutRenderer {
 }
 
 #[cfg(test)]
-#[expect(clippy::expect_used, clippy::unwrap_used)]
+#[expect(clippy::expect_used)]
 mod tests {
     use super::*;
     use crate::server::cache::handler::NoOpCacheHandler;
