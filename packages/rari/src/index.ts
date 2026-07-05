@@ -1,6 +1,4 @@
-import './fetch-cache'
-
-export type {} from './fetch-cache'
+export type {} from './ambient'
 
 export { RariRequest } from './proxy/RariRequest'
 export { RariResponse } from './proxy/RariResponse'

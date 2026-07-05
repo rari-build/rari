@@ -1,6 +1,6 @@
 import nodePath from 'node:path'
 import process from 'node:process'
-import { getBinaryPath, getInstallationInstructions } from '@rari/platform'
+import { getBinaryPath, getInstallationInstructions } from '@rari/cli/platform'
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 
 const UNSUPPORTED_PLATFORM_REGEX = /Unsupported platform: sunos.*rari supports Linux, macOS, and Windows/

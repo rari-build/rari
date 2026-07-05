@@ -1355,7 +1355,7 @@ ${clientTransformedCode}`
           return
 
         const { getBinaryPath, getInstallationInstructions } = await import(
-          '../platform',
+          '../cli/platform',
         )
 
         let binaryPath: string
