@@ -18,7 +18,11 @@ interface TransformDefineMdxComponentsOptions {
 
 function parseNamedImportBindings(source: string, namedImports: string, bindings: Map<string, string>): void {
   for (const part of namedImports.split(',')) {
-    const trimmed = part.trim()
+    let trimmed = part.trim()
+    if (!trimmed)
+      continue
+
+    trimmed = trimmed.replace(/^type\s+/i, '').trim()
     if (!trimmed)
       continue
 
