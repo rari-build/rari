@@ -71,4 +71,37 @@ export const getMDXComponents = defineMdxComponents({
 
     fs.rmSync(projectRoot, { recursive: true, force: true })
   })
+
+  it('ignores inline type imports when resolving component bindings', () => {
+    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-mdx-transform-'))
+    const srcDir = path.join(projectRoot, 'src', 'components')
+    fs.mkdirSync(srcDir, { recursive: true })
+
+    const componentsPath = path.join(srcDir, 'CodeBlock.tsx')
+    fs.writeFileSync(componentsPath, `'use client'
+export default function CodeBlock() {}
+export type CodeBlockProps = { language?: string }
+`)
+
+    const registryPath = path.join(projectRoot, 'src', 'mdx-components.ts')
+    fs.writeFileSync(registryPath, `import { defineMdxComponents } from 'rari/mdx'
+import CodeBlock, { type CodeBlockProps } from './components/CodeBlock'
+
+export const getMDXComponents = defineMdxComponents({
+  CodeBlock,
+})
+`)
+
+    const transformed = transformDefineMdxComponents({
+      code: fs.readFileSync(registryPath, 'utf-8'),
+      id: registryPath,
+      projectRoot,
+      resolvedAlias: {},
+    })
+
+    expect(transformed).toContain('__RARI_MDX_RESOLVED__')
+    expect(transformed).toContain('name: "CodeBlock"')
+
+    fs.rmSync(projectRoot, { recursive: true, force: true })
+  })
 })
