@@ -20,6 +20,10 @@ import {
   WINDOWS_PATH_REGEX,
 } from '../shared/regex-constants'
 import { resolveIndexFile, resolveWithExtensions } from '../shared/utils/file-resolver'
+import {
+  buildNamespaceClientReferenceReplacement,
+  NAMESPACE_IMPORT_LINE_REGEX,
+} from './client-import-transform'
 import { getComponentId } from './component-ids'
 import { getDirectives, hasDefaultExport, hasTopLevelUseClientDirective, hasTopLevelUseServerDirective } from './directives'
 import { HMRCoordinator } from './hmr-coordinator'
@@ -1029,11 +1033,12 @@ if (import.meta.hot) {
         const lines = code.split('\n')
 
         for (const line of lines) {
-          const importMatch = line.match(IMPORT_LINE_REGEX)
-          if (!importMatch)
+          const namespaceMatch = line.match(NAMESPACE_IMPORT_LINE_REGEX)
+          const importMatch = namespaceMatch ? null : line.match(IMPORT_LINE_REGEX)
+          if (!namespaceMatch && !importMatch)
             continue
 
-          const importPath = importMatch[4]
+          const importPath = namespaceMatch?.[2] ?? importMatch![4]
           if (!importPath)
             continue
 
@@ -1120,12 +1125,13 @@ ${clientTransformedCode}`
         || id.includes('entry-client')
 
       for (const line of lines) {
-        const importMatch = line.match(IMPORT_LINE_REGEX)
-        if (!importMatch)
+        const namespaceMatch = line.match(NAMESPACE_IMPORT_LINE_REGEX)
+        const importMatch = namespaceMatch ? null : line.match(IMPORT_LINE_REGEX)
+        if (!namespaceMatch && !importMatch)
           continue
 
-        const importedDefault = importMatch[1]
-        const importPath = importMatch[4]
+        const importedDefault = importMatch?.[1]
+        const importPath = namespaceMatch?.[2] ?? importMatch![4]
         const resolvedImportPath = resolveImportToFilePath(importPath, id)
 
         const isClientComponent
@@ -1145,6 +1151,22 @@ ${clientTransformedCode}`
         ) {
           if (!importingFileIsClient) {
             const originalImport = line
+
+            if (namespaceMatch) {
+              const clientRefReplacement = buildNamespaceClientReferenceReplacement(
+                namespaceMatch[1],
+                resolvedImportPath,
+              )
+
+              modifiedCode = modifiedCode.replace(
+                originalImport,
+                clientRefReplacement,
+              )
+              hasServerImports = true
+              needsReactImport = true
+              continue
+            }
+
             const specifiers = parseClientImportSpecifiers(line, importedDefault)
             if (specifiers.length === 0)
               continue

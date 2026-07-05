@@ -1,9 +1,12 @@
 import {
+  createClientModuleProxy as createClientModuleProxyBase,
   registerClientReference as registerClientReferenceBase,
   registerServerReference,
 } from 'react-server-dom-webpack/server'
 
 export { registerServerReference }
+
+export const createClientModuleProxy = createClientModuleProxyBase
 
 export function registerClientReference<T>(
   clientReference: T,

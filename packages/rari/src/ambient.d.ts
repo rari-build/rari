@@ -12,6 +12,8 @@ declare module 'react-server-dom-webpack/server' {
     exportName: string,
   ): T
 
+  export function createClientModuleProxy<T>(moduleId: string): T
+
   export function registerServerReference<T>(
     serverReference: T,
     id: string,
