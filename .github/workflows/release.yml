@@ -23,7 +23,11 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     timeout-minutes: 30
     steps:
-      - uses: ./.github/actions/checkout
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        if: runner.os == 'Windows'
+
+      - uses: namespacelabs/nscloud-checkout-action@445c25d7009680597d73eb03c4e1cd5be522ed73 # v9.0.0
+        if: runner.os != 'Windows'
 
       - uses: ./.github/actions/setup-namespace-cache
         with:
@@ -101,7 +105,11 @@ jobs:
             platform: win32-arm64
 
     steps:
-      - uses: ./.github/actions/checkout
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        if: runner.os == 'Windows'
+
+      - uses: namespacelabs/nscloud-checkout-action@445c25d7009680597d73eb03c4e1cd5be522ed73 # v9.0.0
+        if: runner.os != 'Windows'
 
       - uses: ./.github/actions/setup-namespace-cache
         if: runner.os == 'Linux'
@@ -212,7 +220,11 @@ jobs:
             binary: rari-win32-arm64.exe
 
     steps:
-      - uses: ./.github/actions/checkout
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        if: runner.os == 'Windows'
+
+      - uses: namespacelabs/nscloud-checkout-action@445c25d7009680597d73eb03c4e1cd5be522ed73 # v9.0.0
+        if: runner.os != 'Windows'
 
       - name: Setup Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
@@ -355,7 +367,13 @@ jobs:
           echo "version=${VERSION}"     >> "$GITHUB_OUTPUT"
           echo "📦 Publishing ${PACKAGE_NAME}@${VERSION}"
 
-      - uses: ./.github/actions/checkout
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        if: runner.os == 'Windows'
+        with:
+          ref: ${{ github.ref }}
+
+      - uses: namespacelabs/nscloud-checkout-action@445c25d7009680597d73eb03c4e1cd5be522ed73 # v9.0.0
+        if: runner.os != 'Windows'
         with:
           ref: ${{ github.ref }}
 
@@ -439,7 +457,11 @@ jobs:
             platform: win32-arm64
 
     steps:
-      - uses: ./.github/actions/checkout
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        if: runner.os == 'Windows'
+
+      - uses: namespacelabs/nscloud-checkout-action@445c25d7009680597d73eb03c4e1cd5be522ed73 # v9.0.0
+        if: runner.os != 'Windows'
 
       - uses: ./.github/actions/setup-namespace-cache
         if: runner.os == 'Linux'
@@ -537,7 +559,11 @@ jobs:
           - win32-arm64
 
     steps:
-      - uses: ./.github/actions/checkout
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        if: runner.os == 'Windows'
+
+      - uses: namespacelabs/nscloud-checkout-action@445c25d7009680597d73eb03c4e1cd5be522ed73 # v9.0.0
+        if: runner.os != 'Windows'
 
       - name: Setup Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
@@ -642,7 +668,13 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "📦 Publishing @rari/use-cache@${VERSION}"
 
-      - uses: ./.github/actions/checkout
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        if: runner.os == 'Windows'
+        with:
+          ref: ${{ github.ref }}
+
+      - uses: namespacelabs/nscloud-checkout-action@445c25d7009680597d73eb03c4e1cd5be522ed73 # v9.0.0
+        if: runner.os != 'Windows'
         with:
           ref: ${{ github.ref }}
 
