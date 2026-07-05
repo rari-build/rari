@@ -24,7 +24,7 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.2",
-    "@types/node": "^25.9.4",
+    "@types/node": "^26.1.0",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@typescript/native-preview": "^7.0.0-dev.20260704.1",
