@@ -125,21 +125,24 @@ pub async fn build_addon(
         return Ok(false);
     }
 
-    let src = addon_napi_output_path(target_info, project_root);
-    if !src.exists() {
-        log_error(&format!("expected addon artifact not found: {}", src.display()));
-        return Ok(false);
-    }
-
     let stable = addon_stable_output_path(target_info, project_root);
-    if let Some(parent) = stable.parent() {
-        fs::create_dir_all(parent).context("Failed to create per-platform addon build dir")?;
-    }
-    if src != stable {
-        if stable.exists() {
-            fs::remove_file(&stable).context("Failed to remove stale addon artifact")?;
+    let legacy = addon_napi_output_path(target_info, project_root);
+
+    if !stable.exists() {
+        if legacy.exists() {
+            if let Some(parent) = stable.parent() {
+                fs::create_dir_all(parent)
+                    .context("Failed to create per-platform addon build dir")?;
+            }
+            fs::rename(&legacy, &stable).context("Failed to rename addon artifact")?;
+        } else {
+            log_error(&format!(
+                "expected addon artifact not found at {} or {}",
+                stable.display(),
+                legacy.display()
+            ));
+            return Ok(false);
         }
-        fs::rename(&src, &stable).context("Failed to rename addon artifact")?;
     }
 
     if let Some(parent) = stable.parent() {
