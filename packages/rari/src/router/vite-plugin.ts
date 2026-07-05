@@ -1,8 +1,10 @@
 import type { Plugin, ViteDevServer } from 'vite-plus'
+import type { RariPlugin } from '../vite/plugin-types'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { BACKSLASH_REGEX, QUOTE_REGEX, TSX_EXT_REGEX } from '../shared/regex-constants'
+import { toRariPlugin } from '../vite/plugin-types'
 import { generateAppRouteManifest } from './routes'
 
 const METADATA_EXPORT_REGEX = /export\s+const\s+metadata\s*(?::\s*\w+\s*)?=\s*(\{[\s\S]*?\n\})/
@@ -196,7 +198,7 @@ async function notifyApiRouteInvalidation(filePath: string): Promise<void> {
   }
 }
 
-export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
+export function rariRouter(options: RariRouterPluginOptions = {}): RariPlugin {
   const opts = { ...DEFAULT_OPTIONS, ...options }
 
   let cachedManifestContent: string | null = null
@@ -314,7 +316,7 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
 
   let viteRoot: string
 
-  return {
+  const plugin = {
     name: 'rari-router',
 
     configResolved(config) {
@@ -485,5 +487,7 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
       }
       catch {}
     },
-  }
+  } satisfies Plugin
+
+  return toRariPlugin(plugin)
 }

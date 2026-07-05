@@ -1,6 +1,7 @@
 import type { CSSModulesOptions, Plugin, UserConfig } from 'vite-plus'
 import type { ProxyPluginOptions } from '../proxy/vite-plugin'
 import type { ModuleAnalysis } from './directives'
+import type { RariPlugin } from './plugin-types'
 import type { ServerBuildOptions } from './server-build'
 import type { ServerCacheConfig, ServerCacheLayerConfig } from './server-config'
 import { Buffer } from 'node:buffer'
@@ -31,6 +32,7 @@ import { HMRCoordinator } from './hmr-coordinator'
 import { parseHtmlEntryImports } from './html-entry-imports'
 import { scanForImageUsage } from './image-scanner'
 import { collectClientComponentPaths, invalidateModuleCachePath, ModuleAnalysisCache, resolveModuleCachePath } from './module-analysis-cache'
+import { toRariPlugins } from './plugin-types'
 import { createServerBuildPlugin, isServerComponentFromAnalysis, RARI_CSS_MODULES_PATTERN, scanDirectory, ServerComponentBuilder } from './server-build'
 import { normalizeScanDirs } from './source-file-walker'
 import { getUseCacheTransform } from './use-cache-loader'
@@ -300,7 +302,7 @@ export function defineRariOptions(config: RariOptions): RariOptions {
   return config
 }
 
-export function rari(options: RariOptions = {}): Plugin[] {
+export function rari(options: RariOptions = {}): RariPlugin[] {
   const componentTypeCache = new Map<string, 'client' | 'server' | 'unknown'>()
   const clientComponents = new Set<string>()
   const moduleAnalysisCache = new ModuleAnalysisCache()
@@ -2180,11 +2182,11 @@ export const createFromReadableStream = module.exports.createFromReadableStream;
   if (options.router !== false)
     plugins.push(rariRouter(options.router || {}))
 
-  return plugins
+  return toRariPlugins(plugins)
 }
 
 export function defineRariConfig(
-  config: UserConfig & { plugins?: Plugin[] },
+  config: UserConfig & { plugins?: RariPlugin[] },
 ): UserConfig {
   return {
     plugins: [rari(), ...(config.plugins || [])],
@@ -2192,4 +2194,86 @@ export function defineRariConfig(
   }
 }
 
+export type {} from '../ambient'
+
+export type Request = globalThis.Request
+export type Response = globalThis.Response
+
+export type {
+  CookieOptions,
+  ProxyConfig,
+  ProxyFunction,
+  ProxyMatcher,
+  ProxyModule,
+  ProxyResult,
+  RariFetchEvent,
+  RariURL,
+  RequestCookies,
+  ResponseCookies,
+} from '../proxy/types'
 export { rariProxy } from '../proxy/vite-plugin'
+
+export type { ProxyPluginOptions } from '../proxy/vite-plugin'
+
+export type {
+  ApiRouteHandlers,
+  RouteContext,
+  RouteHandler,
+} from '../router/api-routes'
+
+export { ApiResponse } from '../router/api-routes'
+
+export type { Robots, RobotsRule, Sitemap, SitemapEntry, SitemapImage, SitemapVideo } from '../router/metadata-route'
+
+export {
+  clearPropsCache,
+  clearPropsCacheForComponent,
+  extractMetadata,
+  extractServerProps,
+  extractServerPropsWithCache,
+  extractStaticParams,
+  hasServerSideDataFetching,
+} from '../router/props-extractor'
+
+export type {
+  MetadataResult,
+  ServerSidePropsResult,
+  StaticParamsResult,
+} from '../router/props-extractor'
+
+export {
+  generateAppRouteManifest,
+} from '../router/routes'
+
+export type {
+  AppRouteEntry,
+  AppRouteManifest,
+  AppRouteMatch,
+  ErrorEntry,
+  ErrorProps,
+  GenerateMetadata,
+  GenerateStaticParams,
+  LayoutEntry,
+  LayoutProps,
+  LoadingEntry,
+  NotFoundEntry,
+  PageProps,
+  RouteSegment,
+  RouteSegmentType,
+  TemplateEntry,
+} from '../router/types'
+
+export type { Metadata } from '../router/types'
+
+export { rariRouter } from '../router/vite-plugin'
+
+export type { RariPlugin } from './plugin-types'
+
+export type {
+  ServerCacheConfig,
+  ServerCacheControlConfig,
+  ServerCacheLayerConfig,
+  ServerConfig,
+  ServerCSPConfig,
+  ServerUseCacheConfig,
+} from './server-config'

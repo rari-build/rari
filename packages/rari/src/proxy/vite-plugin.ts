@@ -1,7 +1,9 @@
 import type { Plugin } from 'vite-plus'
+import type { RariPlugin } from '../vite/plugin-types'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
+import { toRariPlugin } from '../vite/plugin-types'
 
 export interface ProxyPluginOptions {
   root?: string
@@ -17,7 +19,7 @@ interface ProxyFileInfo {
   relativePath: string
 }
 
-export function rariProxy(options: ProxyPluginOptions = {}): Plugin {
+export function rariProxy(options: ProxyPluginOptions = {}): RariPlugin {
   const {
     root = process.cwd(),
     srcDir = 'src',
@@ -75,7 +77,7 @@ export function rariProxy(options: ProxyPluginOptions = {}): Plugin {
     return null
   }
 
-  return {
+  const plugin = {
     name: 'rari:proxy',
 
     async buildStart() {
@@ -119,7 +121,9 @@ export function rariProxy(options: ProxyPluginOptions = {}): Plugin {
         return []
       }
     },
-  }
+  } satisfies Plugin
+
+  return toRariPlugin(plugin)
 }
 
 export async function hasProxyFile(

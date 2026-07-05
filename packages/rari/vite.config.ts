@@ -5,8 +5,8 @@ export default defineConfig({
     entry: {
       'index': 'src/index.ts',
       'client': 'src/client.ts',
-      'router': 'src/router.ts',
-      'vite': 'src/vite.ts',
+      'router': 'src/router/index.ts',
+      'vite': 'src/vite/index.ts',
       'cli': 'src/cli/index.ts',
       'platform': 'src/cli/platform.ts',
       'image/index': 'src/image/index.ts',
