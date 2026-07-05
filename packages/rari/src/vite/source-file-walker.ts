@@ -1,0 +1,60 @@
+import fs from 'node:fs'
+import path from 'node:path'
+import { TSX_EXT_REGEX } from '../shared/regex-constants'
+
+export function walkSourceFiles(
+  dirs: readonly string[],
+  visit: (filePath: string) => void,
+): void {
+  const seen = new Set<string>()
+
+  const walk = (currentDir: string) => {
+    if (!fs.existsSync(currentDir))
+      return
+
+    const entries = fs.readdirSync(currentDir, { withFileTypes: true })
+
+    for (const entry of entries) {
+      const fullPath = path.join(currentDir, entry.name)
+
+      if (entry.isDirectory()) {
+        if (entry.name === 'node_modules')
+          continue
+        walk(fullPath)
+      }
+      else if (entry.isFile() && TSX_EXT_REGEX.test(entry.name)) {
+        if (seen.has(fullPath))
+          continue
+
+        seen.add(fullPath)
+        visit(fullPath)
+      }
+    }
+  }
+
+  for (const dir of dirs) {
+    if (dir && fs.existsSync(dir))
+      walk(dir)
+  }
+}
+
+export function collectSourceFilePaths(dirs: readonly string[]): string[] {
+  const paths: string[] = []
+
+  walkSourceFiles(dirs, (filePath) => {
+    paths.push(filePath)
+  })
+
+  return paths
+}
+
+export function normalizeScanDirs(primaryDir: string, additionalDirs: readonly string[] = []): string[] {
+  const dirs = [primaryDir]
+
+  for (const additionalDir of additionalDirs) {
+    if (additionalDir && additionalDir !== primaryDir && fs.existsSync(additionalDir))
+      dirs.push(additionalDir)
+  }
+
+  return dirs
+}

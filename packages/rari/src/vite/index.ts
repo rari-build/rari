@@ -1,5 +1,6 @@
 import type { CSSModulesOptions, Plugin, UserConfig } from 'vite-plus'
 import type { ProxyPluginOptions } from '../proxy/vite-plugin'
+import type { ModuleAnalysis } from './directives'
 import type { ServerBuildOptions } from './server-build'
 import type { ServerCacheConfig, ServerCacheLayerConfig } from './server-config'
 import { Buffer } from 'node:buffer'
@@ -25,11 +26,12 @@ import {
   NAMESPACE_IMPORT_LINE_REGEX,
 } from './client-import-transform'
 import { getComponentId } from './component-ids'
-import { getDirectives, hasDefaultExport, hasTopLevelUseClientDirective, hasTopLevelUseServerDirective } from './directives'
+import { hasDefaultExport } from './directives'
 import { HMRCoordinator } from './hmr-coordinator'
+import { parseHtmlEntryImports } from './html-entry-imports'
 import { scanForImageUsage } from './image-scanner'
 import { ModuleAnalysisCache } from './module-analysis-cache'
-import { createServerBuildPlugin, RARI_CSS_MODULES_PATTERN, scanDirectory, ServerComponentBuilder } from './server-build'
+import { createServerBuildPlugin, isServerComponentFromAnalysis, RARI_CSS_MODULES_PATTERN, scanDirectory, ServerComponentBuilder } from './server-build'
 import { getUseCacheTransform } from './use-cache-loader'
 
 const DIST_NOT_BUILT_ERROR = '[rari] Runtime dist not built. Run `pnpm build` in the rari package first.'
@@ -41,7 +43,6 @@ const IMPORT_SPECIFIER_REGEX = /import\s+(\{[^}]+\})\s+from\s+["']\.\.?\/([^"']+
 const IMPORT_NAMESPACE_REGEX = /import\s+(\*\s+as\s+\w+)\s+from\s+["']\.\.?\/([^"']+)["'];?/g
 const IMPORT_DEFAULT_REGEX = /import\s+(\w+)\s+from\s+["']\.\.?\/([^"']+)["'];?/g
 const IMPORT_SIDE_EFFECT_REGEX = /import\s+["']\.\.?\/([^"']+)["'];?/g
-const HTML_IMPORT_REGEX = /import\s*(?:\(\s*)?["']([^"']+)["']\)?/g
 const NAMED_EXPORT_REGEX = /export\s*\{([^}]+)\}/g
 const AS_SPLIT_REGEX = /\s+as\s+/
 const EXPORT_DEFAULT_FUNCTION_OR_CLASS_REGEX = /export\s+default\s+(?:function|class)\s+\w+/
@@ -294,49 +295,6 @@ async function writeImageConfig(projectRoot: string, options: RariOptions): Prom
   fs.writeFileSync(configPath, JSON.stringify(imageConfig, null, 2))
 }
 
-function scanForClientComponents(srcDir: string, additionalDirs: string[] = []): Set<string> {
-  const clientComponents = new Set<string>()
-
-  function scanDirectory(dir: string) {
-    if (!fs.existsSync(dir))
-      return
-
-    const entries = fs.readdirSync(dir, { withFileTypes: true })
-
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name)
-
-      if (entry.isDirectory()) {
-        if (entry.name === 'node_modules')
-          continue
-        scanDirectory(fullPath)
-      }
-      else if (entry.isFile() && TSX_EXT_REGEX.test(entry.name)) {
-        try {
-          const content = fs.readFileSync(fullPath, 'utf8')
-          if (hasTopLevelUseClientDirective(content)) {
-            clientComponents.add(fullPath)
-          }
-        }
-        catch (err) {
-          if ((err as any)?.code !== 'ENOENT') {
-            console.warn('[rari] Unexpected error during file scan:', fullPath, err)
-          }
-        }
-      }
-    }
-  }
-
-  scanDirectory(srcDir)
-
-  for (const dir of additionalDirs) {
-    if (fs.existsSync(dir))
-      scanDirectory(dir)
-  }
-
-  return clientComponents
-}
-
 export function defineRariOptions(config: RariOptions): RariOptions {
   return config
 }
@@ -345,10 +303,22 @@ export function rari(options: RariOptions = {}): Plugin[] {
   const componentTypeCache = new Map<string, 'client' | 'server' | 'unknown'>()
   const clientComponents = new Set<string>()
   const moduleAnalysisCache = new ModuleAnalysisCache()
+  let devServerComponentBuilder: ServerComponentBuilder | null = null
   let rustServerProcess: any = null
 
   let hmrCoordinator: HMRCoordinator | null = null
   const resolvedAlias: Record<string, string> = {}
+
+  function getKnownClientComponentPaths(): Set<string> {
+    const paths = new Set(clientComponents)
+
+    if (devServerComponentBuilder) {
+      for (const componentPath of devServerComponentBuilder.getClientComponentPaths())
+        paths.add(componentPath)
+    }
+
+    return paths
+  }
 
   function getModuleDirectives(id: string): { hasUseServer: boolean, hasUseClient: boolean } {
     const result = { hasUseServer: false, hasUseClient: false }
@@ -370,7 +340,10 @@ export function rari(options: RariOptions = {}): Plugin[] {
   let htmlEntryImports: Set<string> | null = null
   let lastIndexHtmlMtime: number | null = null
 
-  function getHtmlEntryImports(): Set<string> {
+  function getHtmlEntryImports(): ReadonlySet<string> {
+    if (devServerComponentBuilder)
+      return devServerComponentBuilder.getHtmlOnlyImports()
+
     const projectRoot = options.projectRoot || process.cwd()
     const indexHtmlPath = path.join(projectRoot, 'index.html')
 
@@ -387,26 +360,12 @@ export function rari(options: RariOptions = {}): Plugin[] {
       return htmlEntryImports
     }
 
-    htmlEntryImports = new Set()
-    try {
-      const htmlContent = fs.readFileSync(indexHtmlPath, 'utf-8')
-      for (const match of htmlContent.matchAll(HTML_IMPORT_REGEX)) {
-        const importPath = match[1]
-        if (importPath.startsWith('/src/')) {
-          htmlEntryImports.add(path.join(projectRoot, importPath.slice(1)))
-        }
-      }
-    }
-    catch {}
-
+    htmlEntryImports = parseHtmlEntryImports(projectRoot)
     return htmlEntryImports
   }
 
   function isServerComponent(filePath: string): boolean {
     if (filePath.includes('node_modules') || isRariInternalFile(filePath))
-      return false
-
-    if (getHtmlEntryImports().has(filePath))
       return false
 
     let pathForFsOperations
@@ -418,20 +377,19 @@ export function rari(options: RariOptions = {}): Plugin[] {
     }
 
     try {
-      const code = fs.readFileSync(pathForFsOperations, 'utf-8')
-      const directives = getDirectives(code)
-
-      if (directives.hasUseServer)
-        return false
-
-      return !directives.hasUseClient
+      const analysis = moduleAnalysisCache.get(pathForFsOperations)
+      return isServerComponentFromAnalysis(
+        pathForFsOperations,
+        analysis,
+        getHtmlEntryImports(),
+      )
     }
     catch {
       return false
     }
   }
 
-  function parseExportedNames(code: string): string[] {
+  function parseExportedNames(code: string, analysis?: ModuleAnalysis): string[] {
     try {
       const exportedNames: string[] = []
       const namedExportMatch = code.matchAll(NAMED_EXPORT_REGEX)
@@ -448,7 +406,7 @@ export function rari(options: RariOptions = {}): Plugin[] {
 
       if (EXPORT_DEFAULT_FUNCTION_OR_CLASS_REGEX.test(code))
         exportedNames.push('default')
-      else if (hasDefaultExport(code))
+      else if (analysis?.hasDefaultExport ?? hasDefaultExport(code))
         exportedNames.push('default')
 
       const declarationExports = code.matchAll(EXPORT_DECLARATION_REGEX)
@@ -464,13 +422,11 @@ export function rari(options: RariOptions = {}): Plugin[] {
     }
   }
 
-  function transformServerModule(code: string, id: string): string {
-    const hasUseServer = hasTopLevelUseServerDirective(code)
-
-    if (!hasUseServer)
+  function transformServerModule(code: string, id: string, analysis: ModuleAnalysis): string {
+    if (!analysis.topLevelUseServer)
       return code
 
-    const exportedNames = parseExportedNames(code)
+    const exportedNames = parseExportedNames(code, analysis)
     if (exportedNames.length === 0)
       return code
 
@@ -522,13 +478,12 @@ if (import.meta.hot) {
     return newCode
   }
 
-  function transformClientModule(code: string, id: string): string {
+  function transformClientModule(code: string, id: string, analysis: ModuleAnalysis): string {
     const projectRoot = options.projectRoot || process.cwd()
-    const isServerFunction = hasTopLevelUseServerDirective(code)
     const isServerComp = isServerComponent(id)
 
-    if (isServerFunction) {
-      const exportedNames = parseExportedNames(code)
+    if (analysis.topLevelUseServer) {
+      const exportedNames = parseExportedNames(code, analysis)
       if (exportedNames.length === 0)
         return ''
 
@@ -552,10 +507,10 @@ if (import.meta.hot) {
       return ''
     }
 
-    if (!hasTopLevelUseClientDirective(code))
+    if (!analysis.topLevelUseClient)
       return code
 
-    const exportedNames = parseExportedNames(code)
+    const exportedNames = parseExportedNames(code, analysis)
     if (exportedNames.length === 0)
       return ''
 
@@ -584,11 +539,11 @@ if (import.meta.hot) {
     return newCode
   }
 
-  function transformClientModuleForClient(code: string, _id: string): string {
-    if (!hasTopLevelUseClientDirective(code))
+  function transformClientModuleForClient(code: string, _id: string, analysis: ModuleAnalysis): string {
+    if (!analysis.topLevelUseClient)
       return code
 
-    const exportedNames = parseExportedNames(code)
+    const exportedNames = parseExportedNames(code, analysis)
     if (exportedNames.length === 0)
       return code
 
@@ -1017,8 +972,9 @@ if (import.meta.hot) {
       }
 
       const environment = (this as any).environment
+      const moduleAnalysis = moduleAnalysisCache.get(id, code)
 
-      if (hasTopLevelUseClientDirective(code)) {
+      if (moduleAnalysis.topLevelUseClient) {
         componentTypeCache.set(id, 'client')
         clientComponents.add(id)
 
@@ -1042,11 +998,11 @@ if (import.meta.hot) {
           }
         }
 
-        return transformClientModuleForClient(code, id)
+        return transformClientModuleForClient(code, id, moduleAnalysis)
       }
 
       if (componentTypeCache.get(id) === 'client' || clientComponents.has(id))
-        return transformClientModuleForClient(code, id)
+        return transformClientModuleForClient(code, id, moduleAnalysis)
 
       if (isServerComponent(id)) {
         componentTypeCache.set(id, 'server')
@@ -1055,10 +1011,10 @@ if (import.meta.hot) {
           environment
           && (environment.name === 'rsc' || environment.name === 'ssr')
         ) {
-          return transformServerModule(code, id)
+          return transformServerModule(code, id, moduleAnalysis)
         }
         else {
-          let clientTransformedCode = transformClientModule(code, id)
+          let clientTransformedCode = transformClientModule(code, id, moduleAnalysis)
 
           clientTransformedCode = `// HMR acceptance for server component
 if (import.meta.hot) {
@@ -1077,17 +1033,17 @@ ${clientTransformedCode}`
         }
       }
 
-      if (hasTopLevelUseServerDirective(code)) {
+      if (moduleAnalysis.topLevelUseServer) {
         componentTypeCache.set(id, 'server')
 
         if (
           environment
           && (environment.name === 'rsc' || environment.name === 'ssr')
         ) {
-          return transformServerModule(code, id)
+          return transformServerModule(code, id, moduleAnalysis)
         }
         else {
-          return transformClientModule(code, id)
+          return transformClientModule(code, id, moduleAnalysis)
         }
       }
 
@@ -1097,14 +1053,14 @@ ${clientTransformedCode}`
           environment
           && (environment.name === 'rsc' || environment.name === 'ssr')
         ) {
-          return transformServerModule(code, id)
+          return transformServerModule(code, id, moduleAnalysis)
         }
         else {
-          return transformClientModule(code, id)
+          return transformClientModule(code, id, moduleAnalysis)
         }
       }
       if (cachedType === 'client')
-        return transformClientModuleForClient(code, id)
+        return transformClientModuleForClient(code, id, moduleAnalysis)
 
       componentTypeCache.set(id, 'unknown')
 
@@ -1112,7 +1068,7 @@ ${clientTransformedCode}`
       let modifiedCode = code
       let hasServerImports = false
       let needsReactImport = false
-      const importingFileIsClient = hasTopLevelUseClientDirective(code)
+      const importingFileIsClient = moduleAnalysis.topLevelUseClient
         || componentTypeCache.get(id) === 'client'
         || id.includes('entry-client')
 
@@ -1129,7 +1085,7 @@ ${clientTransformedCode}`
         const isClientComponent
           = componentTypeCache.get(resolvedImportPath) === 'client'
             || (fs.existsSync(resolvedImportPath)
-              && hasTopLevelUseClientDirective(fs.readFileSync(resolvedImportPath, 'utf-8')))
+              && moduleAnalysisCache.get(resolvedImportPath).topLevelUseClient)
 
         if (isClientComponent) {
           componentTypeCache.set(resolvedImportPath, 'client')
@@ -1218,7 +1174,7 @@ ${clientTransformedCode}`
             || JSX_TEST_REGEX.test(modifiedCode)
 
         if (
-          !hasTopLevelUseClientDirective(modifiedCode)
+          !moduleAnalysis.topLevelUseClient
           && hasJsx
         ) {
           if (isDevMode) {
@@ -1241,8 +1197,6 @@ ${clientTransformedCode}`
       const srcDir = path.join(projectRoot, 'src')
       await writeImageConfig(projectRoot, options)
 
-      let serverComponentBuilder: any = null
-
       const discoverAndRegisterComponents = async () => {
         try {
           const builder = new ServerComponentBuilder(projectRoot, {
@@ -1255,50 +1209,28 @@ ${clientTransformedCode}`
             cacheControl: options.cacheControl,
             cache: options.cache,
             experimental: options.experimental,
+            moduleAnalysisCache,
           })
 
-          serverComponentBuilder = builder
+          devServerComponentBuilder = builder
 
-          if (!hmrCoordinator && serverComponentBuilder) {
+          if (!hmrCoordinator) {
             const serverPort = process.env.SERVER_PORT
               ? Number(process.env.SERVER_PORT)
               : Number(process.env.PORT || process.env.RSC_PORT || 3000)
-            hmrCoordinator = new HMRCoordinator(serverComponentBuilder, serverPort)
+            hmrCoordinator = new HMRCoordinator(builder, serverPort)
           }
-
-          const srcDir = path.join(projectRoot, 'src')
-          const serverComponentPaths: string[] = []
 
           if (fs.existsSync(srcDir)) {
-            const collectServerComponents = (dir: string) => {
-              const entries = fs.readdirSync(dir, { withFileTypes: true })
-              for (const entry of entries) {
-                const fullPath = path.join(dir, entry.name)
-                if (entry.isDirectory()) {
-                  collectServerComponents(fullPath)
-                }
-                else if (entry.isFile() && TSX_EXT_REGEX.test(entry.name)) {
-                  try {
-                    if (isServerComponent(fullPath))
-                      serverComponentPaths.push(fullPath)
-                  }
-                  catch (error) {
-                    console.error(`[rari] Error checking ${fullPath}:`, error)
-                  }
-                }
-              }
+            const scanResult = scanDirectory(srcDir, builder, Object.values(resolvedAlias))
+
+            if (scanResult.serverComponentPaths.length > 0) {
+              server.ws.send({
+                type: 'custom',
+                event: 'rari:server-components-registry',
+                data: { serverComponents: scanResult.serverComponentPaths },
+              })
             }
-
-            collectServerComponents(srcDir)
-            scanDirectory(srcDir, builder)
-          }
-
-          if (serverComponentPaths.length > 0) {
-            server.ws.send({
-              type: 'custom',
-              event: 'rari:server-components-registry',
-              data: { serverComponents: serverComponentPaths },
-            })
           }
 
           const components
@@ -1315,7 +1247,7 @@ ${clientTransformedCode}`
               if (isAppRouterComponent)
                 continue
 
-              if (hasTopLevelUseServerDirective(component.code))
+              if (component.isAction)
                 continue
 
               const registerResponse = await fetch(
@@ -1362,7 +1294,7 @@ ${clientTransformedCode}`
             : Number(process.env.PORT || process.env.RSC_PORT || 3000)
           const baseUrl = `http://localhost:${serverPort}`
 
-          const clientComponentFiles = scanForClientComponents(srcDir, Object.values(resolvedAlias))
+          const clientComponentFiles = getKnownClientComponentPaths()
 
           for (const componentPath of clientComponentFiles) {
             const relativePath = path.relative(process.cwd(), componentPath)
@@ -1500,22 +1432,17 @@ ${clientTransformedCode}`
           if (!isServerComponent(filePath))
             return
 
-          const builder = new ServerComponentBuilder(projectRoot, {
-            outDir: 'dist',
-            rscDir: 'server',
-            manifestPath: 'server/manifest.json',
-            serverConfigPath: 'server/config.json',
-            alias: resolvedAlias,
-            csp: options.csp,
-            cacheControl: options.cacheControl,
-            cache: options.cache,
-            experimental: options.experimental,
-          })
+          if (!devServerComponentBuilder) {
+            await discoverAndRegisterComponents()
+            if (!devServerComponentBuilder)
+              return
+          }
 
-          builder.addServerComponent(filePath)
+          const code = moduleAnalysisCache.getSource(filePath)
+          devServerComponentBuilder.addServerComponent(filePath, code)
 
           const components
-            = await builder.getTransformedComponentsForDevelopment()
+            = await devServerComponentBuilder.getTransformedComponentsForDevelopment()
 
           if (components.length === 0)
             return
@@ -1670,8 +1597,10 @@ ${clientTransformedCode}`
       })
 
       server.watcher.on('change', async (filePath) => {
-        if (TSX_EXT_REGEX.test(filePath))
+        if (TSX_EXT_REGEX.test(filePath)) {
           componentTypeCache.delete(filePath)
+          moduleAnalysisCache.invalidate(filePath)
+        }
 
         if (TSX_EXT_REGEX.test(filePath) && filePath.includes(srcDir)) {
           if (isServerComponent(filePath)) {
@@ -1842,10 +1771,9 @@ ${clientTransformedCode}`
 
         if (environment && environment.name === 'client') {
           try {
-            const code = fs.readFileSync(id, 'utf-8')
-            if (hasTopLevelUseServerDirective(code)) {
-              return transformClientModule(code, id)
-            }
+            const analysis = moduleAnalysisCache.get(id)
+            if (analysis.topLevelUseServer)
+              return transformClientModule(moduleAnalysisCache.getSource(id), id, analysis)
           }
           catch {
             // File doesn't exist or can't be read
@@ -1854,13 +1782,7 @@ ${clientTransformedCode}`
       }
 
       if (id === 'virtual:rari-entry-client.ts') {
-        const srcDir = path.join(process.cwd(), 'src')
-        const scannedClientComponents = scanForClientComponents(srcDir, Object.values(resolvedAlias))
-
-        const allClientComponents = new Set([
-          ...clientComponents,
-          ...scannedClientComponents,
-        ])
+        const allClientComponents = getKnownClientComponentPaths()
 
         const externalClientComponents = [
           { path: 'rari/image', exports: ['Image'] },
@@ -1869,8 +1791,7 @@ ${clientTransformedCode}`
 
         const clientComponentsArray = [...allClientComponents].filter((componentPath) => {
           try {
-            const code = fs.readFileSync(componentPath, 'utf-8')
-            return hasTopLevelUseClientDirective(code)
+            return moduleAnalysisCache.get(componentPath).topLevelUseClient
           }
           catch {
             return false
@@ -1885,13 +1806,17 @@ ${clientTransformedCode}`
           let hasNamedExport = false
           let namedExportName = ''
           try {
-            const code = fs.readFileSync(componentPath, 'utf-8')
-            const hasDefault = hasDefaultExport(code)
-            const namedExportMatch = code.match(EXPORT_NAMED_DECLARATION_REGEX)
+            const analysis = moduleAnalysisCache.get(componentPath)
+            const hasDefault = analysis.hasDefaultExport
 
-            if (!hasDefault && namedExportMatch) {
-              hasNamedExport = true
-              namedExportName = namedExportMatch[1]
+            if (!hasDefault) {
+              const code = moduleAnalysisCache.getSource(componentPath)
+              const namedExportMatch = code.match(EXPORT_NAMED_DECLARATION_REGEX)
+
+              if (namedExportMatch) {
+                hasNamedExport = true
+                namedExportName = namedExportMatch[1]
+              }
             }
           }
           catch (err) {
@@ -2181,6 +2106,7 @@ export const createFromReadableStream = module.exports.createFromReadableStream;
     cacheControl: options.cacheControl,
     cache: options.cache,
     experimental: options.experimental,
+    moduleAnalysisCache,
   })
 
   const webpackRequirePatchPlugin: Plugin = {

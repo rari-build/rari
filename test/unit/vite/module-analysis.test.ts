@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { analyzeModuleSource, getDirectives, hasDefaultExport, hasTopLevelUseClientDirective, hasTopLevelUseServerDirective } from '@rari/vite/directives'
-import { filterExternalDependencies, ModuleAnalysisCache } from '@rari/vite/module-analysis-cache'
+import { filterExternalDependencies, hasNodeImportsFromAnalysis, isNodeBuiltinModule, ModuleAnalysisCache } from '@rari/vite/module-analysis-cache'
 import { describe, expect, it } from 'vite-plus/test'
 
 describe('analyzeModuleSource', () => {
@@ -58,7 +58,7 @@ import react from 'react'
 const mod = await import('@acme/dynamic')
 `
     const analysis = analyzeModuleSource(source)
-    const external = filterExternalDependencies(analysis.importSources, new Set(['fs']))
+    const external = filterExternalDependencies(analysis.importSources)
 
     expect(external).toEqual(['react', '@acme/dynamic'])
   })
@@ -98,6 +98,50 @@ describe('moduleAnalysisCache', () => {
 
     expect(first.hasDefaultExport).toBe(true)
     expect(second.topLevelUseClient).toBe(true)
+
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('re-analyzes same-length inline source edits', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-analysis-'))
+    const filePath = path.join(dir, 'Component.tsx')
+    fs.writeFileSync(filePath, `export default function C() {}\n`)
+
+    const targetLength = 80
+    const clientSource = `"use client";\nexport default function ComponentA() { return 1; }\n`.padEnd(targetLength, ' ')
+    const serverSource = `"use server";\nexport async function actionHandler() { return 1; }\n`.padEnd(targetLength, ' ')
+    expect(clientSource.length).toBe(serverSource.length)
+
+    const cache = new ModuleAnalysisCache()
+    const clientAnalysis = cache.get(filePath, clientSource)
+    const serverAnalysis = cache.get(filePath, serverSource)
+
+    expect(clientAnalysis.topLevelUseClient).toBe(true)
+    expect(serverAnalysis.topLevelUseServer).toBe(true)
+    expect(clientAnalysis).not.toBe(serverAnalysis)
+
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('detects node imports from extracted import sources', () => {
+    const source = `import fs from 'node:fs'\nimport path from 'path'\nexport default function C() {}\n`
+    const analysis = analyzeModuleSource(source)
+
+    expect(analysis.importSources).toEqual(['node:fs', 'path'])
+    expect(hasNodeImportsFromAnalysis(analysis)).toBe(true)
+    expect(isNodeBuiltinModule('fs')).toBe(true)
+    expect(isNodeBuiltinModule('react')).toBe(false)
+  })
+
+  it('returns cached source after analysis', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-analysis-'))
+    const filePath = path.join(dir, 'Component.tsx')
+    fs.writeFileSync(filePath, `export default function C() {}\n`)
+
+    const cache = new ModuleAnalysisCache()
+    cache.get(filePath)
+
+    expect(cache.getSource(filePath)).toBe(`export default function C() {}\n`)
 
     fs.rmSync(dir, { recursive: true, force: true })
   })

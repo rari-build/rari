@@ -1,5 +1,6 @@
 import type { ViteDevServer } from 'vite-plus'
 import fs from 'node:fs'
+import { analyzeModuleSource } from '@rari/vite/directives'
 import { HMRCoordinator } from '@rari/vite/hmr-coordinator'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 
@@ -26,6 +27,10 @@ describe('HMRCoordinator', () => {
       rebuildComponent: vi.fn(),
       getImportGraph: vi.fn(() => new Map()),
       invalidateBuildCacheFor: vi.fn(),
+      getModuleAnalysis: vi.fn((filePath: string, source?: string) => {
+        const code = source ?? fs.readFileSync(filePath, 'utf-8')
+        return analyzeModuleSource(String(code))
+      }),
     }
 
     mockServer = {
@@ -340,7 +345,7 @@ export default function Component() {
     it('should return unknown on file read error', () => {
       const filePath = '/test/src/components/Error.tsx'
 
-      vi.mocked(fs.readFileSync).mockImplementation(() => {
+      vi.mocked(mockBuilder.getModuleAnalysis).mockImplementation(() => {
         throw new Error('File not found')
       })
 

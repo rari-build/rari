@@ -1,4 +1,5 @@
 import type { Plugin } from 'vite-plus'
+import type { ModuleAnalysis } from './directives'
 import type { ServerCacheConfig, ServerCacheControlConfig, ServerCacheLayerConfig, ServerConfig, ServerCSPConfig } from './server-config'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -17,10 +18,11 @@ import { resolveAlias } from '../shared/utils/alias-resolver'
 import { resolveIndexFile, resolveWithExtensions } from '../shared/utils/file-resolver'
 import { getReadableComponentId, getComponentId as getSharedComponentId, getProjectRelativePath as getSharedProjectRelativePath, hashString as sharedHashString } from './component-ids'
 import { analyzeModuleSource } from './directives'
-import { filterExternalDependencies, filterRelativeImportSources, ModuleAnalysisCache } from './module-analysis-cache'
+import { parseHtmlEntryImports } from './html-entry-imports'
+import { filterExternalDependencies, filterRelativeImportSources, hasNodeImportsFromAnalysis, isNodeBuiltinModule, ModuleAnalysisCache } from './module-analysis-cache'
+import { collectSourceFilePaths, normalizeScanDirs } from './source-file-walker'
 import { getUseCacheTransform } from './use-cache-loader'
 
-const HTML_IMPORT_REGEX = /import\s*\(\s*["']([^"']+)["']\s*\)|import\s+["']([^"']+)["']/g
 const COMPONENT_IMPORT_REGEX = /import\s+(\w+)\s+from\s+['"]([^'"]+)['"]/g
 const CLIENT_IMPORT_REGEX = /import\s+(?:(\w+)|\{([^}]+)\})\s+from\s+['"]([^'"]+)['"];?\s*$/gm
 const PROXY_FILE_REGEX = /^proxy\.(?:tsx?|jsx?|mts|mjs)$/
@@ -29,27 +31,6 @@ const COMPONENTS_PATH_ALT_REGEX = /[/\\]components[/\\](\w+)(?:\.tsx?|\.jsx?)?$/
 const SPECIAL_FILE_REGEX = /^(?:robots|sitemap|feed)\.(?:tsx?|jsx?)$/
 const RSC_REFERENCES_IMPORT = 'react-server-dom-rari/server'
 const NODE_PROTOCOL_REGEX = /^node:/
-const NODE_BUILTINS = new Set([
-  'fs',
-  'path',
-  'os',
-  'crypto',
-  'util',
-  'stream',
-  'events',
-  'process',
-  'buffer',
-  'url',
-  'querystring',
-  'zlib',
-  'http',
-  'https',
-  'net',
-  'tls',
-  'child_process',
-  'cluster',
-  'worker_threads',
-])
 export const RARI_CSS_MODULES_PATTERN = '[hash]_[local]'
 
 const RARI_DIST_DIR = path.dirname(fileURLToPath(import.meta.url))
@@ -117,6 +98,7 @@ export interface ServerBuildOptions {
   csp?: ServerCSPConfig
   cacheControl?: ServerCacheControlConfig
   cache?: ServerCacheConfig
+  moduleAnalysisCache?: ModuleAnalysisCache
   experimental?: {
     useCache?: boolean
     useCacheRemote?: ServerCacheLayerConfig
@@ -130,13 +112,28 @@ export interface ComponentRebuildResult {
   error?: string
 }
 
-type ResolvedServerBuildOptions = Required<Omit<ServerBuildOptions, 'csp' | 'cacheControl' | 'cache' | 'define' | 'serverConfigPath' | 'experimental'>> & {
+type ResolvedServerBuildOptions = Required<Omit<ServerBuildOptions, 'csp' | 'cacheControl' | 'cache' | 'define' | 'serverConfigPath' | 'experimental' | 'moduleAnalysisCache'>> & {
   serverConfigPath: string
   csp?: ServerBuildOptions['csp']
   cacheControl?: ServerBuildOptions['cacheControl']
   cache?: ServerBuildOptions['cache']
   define?: ServerBuildOptions['define']
   experimental?: ServerBuildOptions['experimental']
+  moduleAnalysisCache?: ModuleAnalysisCache
+}
+
+export function isServerComponentFromAnalysis(
+  filePath: string,
+  analysis: ModuleAnalysis,
+  htmlOnlyImports: ReadonlySet<string>,
+): boolean {
+  if (filePath.includes('node_modules'))
+    return false
+
+  if (htmlOnlyImports.has(filePath))
+    return false
+
+  return !analysis.directives.hasUseClient && !analysis.directives.hasUseServer
 }
 
 export class ServerComponentBuilder {
@@ -172,8 +169,32 @@ export class ServerComponentBuilder {
 
   private htmlOnlyImports = new Set<string>()
   private fileImporters = new Map<string, Set<string>>()
-  private moduleAnalysisCache = new ModuleAnalysisCache()
+  private moduleAnalysisCache: ModuleAnalysisCache
   private discoveredExternalClientComponents = new Set<string>()
+  private clientComponentFiles = new Map<string, string>()
+
+  recordClientComponent(filePath: string, code: string): void {
+    this.clientComponentFiles.set(filePath, code)
+  }
+
+  getClientComponentFiles(): Array<{ filePath: string, code: string }> {
+    return [...this.clientComponentFiles.entries()].map(([filePath, code]) => ({
+      filePath,
+      code,
+    }))
+  }
+
+  getClientComponentPaths(): string[] {
+    return [...this.clientComponentFiles.keys()]
+  }
+
+  getModuleAnalysisCache(): ModuleAnalysisCache {
+    return this.moduleAnalysisCache
+  }
+
+  clearClientComponentFiles(): void {
+    this.clientComponentFiles.clear()
+  }
 
   getComponentCount(): number {
     return this.serverComponents.size + this.serverActions.size
@@ -274,6 +295,7 @@ export class ServerComponentBuilder {
 
   constructor(projectRoot: string, options: ServerBuildOptions = {}) {
     this.projectRoot = projectRoot
+    this.moduleAnalysisCache = options.moduleAnalysisCache ?? new ModuleAnalysisCache()
     const rscDir = options.rscDir || 'server'
     this.options = {
       outDir: options.outDir || path.join(projectRoot, 'dist'),
@@ -292,127 +314,83 @@ export class ServerComponentBuilder {
   }
 
   private parseHtmlImports() {
-    const indexHtmlPath = path.join(this.projectRoot, 'index.html')
-    if (!fs.existsSync(indexHtmlPath))
-      return
-
-    try {
-      const htmlContent = fs.readFileSync(indexHtmlPath, 'utf-8')
-      for (const match of htmlContent.matchAll(HTML_IMPORT_REGEX)) {
-        const importPath = match[1] || match[2]
-        if (importPath.startsWith('/src/')) {
-          const absolutePath = path.join(this.projectRoot, importPath.slice(1))
-          this.htmlOnlyImports.add(absolutePath)
-        }
-      }
-    }
-    catch (error) {
-      console.warn('[server-build] Error parsing index.html:', error)
-    }
+    for (const importPath of parseHtmlEntryImports(this.projectRoot))
+      this.htmlOnlyImports.add(importPath)
   }
 
-  private isHtmlOnlyImport(filePath: string): boolean {
-    return this.htmlOnlyImports.has(filePath)
-  }
-
-  private getDirectivesCached(filePath: string, source?: string): { hasUseClient: boolean, hasUseServer: boolean, error: boolean } {
-    try {
-      const analysis = this.moduleAnalysisCache.get(filePath, source)
-      return {
-        hasUseClient: analysis.directives.hasUseClient,
-        hasUseServer: analysis.directives.hasUseServer,
-        error: false,
-      }
-    }
-    catch {
-      return { hasUseClient: false, hasUseServer: false, error: true }
-    }
+  getModuleAnalysis(filePath: string, source?: string): ModuleAnalysis {
+    return this.moduleAnalysisCache.get(filePath, source)
   }
 
   isServerComponent(filePath: string, source?: string): boolean {
-    if (filePath.includes('node_modules'))
+    try {
+      const analysis = this.moduleAnalysisCache.get(filePath, source)
+      return isServerComponentFromAnalysis(filePath, analysis, this.htmlOnlyImports)
+    }
+    catch {
       return false
-
-    if (this.isHtmlOnlyImport(filePath))
-      return false
-
-    const directives = this.getDirectivesCached(filePath, source)
-    if (directives.error)
-      return false
-
-    return !directives.hasUseClient && !directives.hasUseServer
+    }
   }
 
   private isClientComponent(filePath: string, source?: string): boolean {
-    return this.getDirectivesCached(filePath, source).hasUseClient
+    try {
+      return this.moduleAnalysisCache.get(filePath, source).directives.hasUseClient
+    }
+    catch {
+      return false
+    }
   }
 
-  buildImportGraph(srcDir: string) {
-    this.fileImporters.clear()
+  resolveImportedFilePath(importerPath: string, importPath: string): string | null {
+    let resolvedPath: string | null = null
 
-    const scanForImports = (dir: string) => {
-      if (!fs.existsSync(dir))
-        return
-
-      const entries = fs.readdirSync(dir, { withFileTypes: true })
-
-      for (const entry of entries) {
-        const fullPath = path.join(dir, entry.name)
-
-        if (entry.isDirectory()) {
-          if (entry.name === 'node_modules')
-            continue
-          scanForImports(fullPath)
-        }
-        else if (entry.isFile() && TSX_EXT_REGEX.test(entry.name)) {
-          try {
-            const analysis = this.moduleAnalysisCache.get(fullPath)
-
-            for (const importPath of filterRelativeImportSources(analysis.importSources)) {
-              let resolvedPath: string | null = null
-
-              if (importPath.startsWith('./') || importPath.startsWith('../')) {
-                const importerDir = path.dirname(fullPath)
-                resolvedPath = path.resolve(importerDir, importPath)
-              }
-              else if (importPath.startsWith('@/')) {
-                const relativePath = importPath.slice(2)
-                resolvedPath = path.join(this.projectRoot, 'src', relativePath)
-              }
-
-              if (resolvedPath) {
-                const extensions = ['', '.ts', '.tsx', '.js', '.jsx']
-                let foundPath: string | null = null
-
-                for (const ext of extensions) {
-                  const pathWithExt = resolvedPath + ext
-                  try {
-                    if (fs.statSync(pathWithExt).isFile()) {
-                      foundPath = pathWithExt
-                      break
-                    }
-                  }
-                  catch {}
-                }
-
-                if (foundPath) {
-                  if (!this.fileImporters.has(foundPath))
-                    this.fileImporters.set(foundPath, new Set())
-
-                  this.fileImporters.get(foundPath)!.add(fullPath)
-                }
-              }
-            }
-          }
-          catch (err) {
-            if ((err as any)?.code !== 'ENOENT')
-              console.warn('[rari] Unexpected error building import graph:', fullPath, err)
-          }
-        }
-      }
+    if (importPath.startsWith('./') || importPath.startsWith('../')) {
+      const importerDir = path.dirname(importerPath)
+      resolvedPath = path.resolve(importerDir, importPath)
+    }
+    else if (importPath.startsWith('@/')) {
+      const relativePath = importPath.slice(2)
+      resolvedPath = path.join(this.projectRoot, 'src', relativePath)
     }
 
-    scanForImports(srcDir)
+    if (!resolvedPath)
+      return null
+
+    const extensions = ['', '.ts', '.tsx', '.js', '.jsx']
+    for (const ext of extensions) {
+      const pathWithExt = resolvedPath + ext
+      try {
+        if (fs.statSync(pathWithExt).isFile())
+          return pathWithExt
+      }
+      catch {}
+    }
+
+    return null
+  }
+
+  populateImportGraphFromFiles(
+    files: ReadonlyArray<{ filePath: string, analysis: ModuleAnalysis }>,
+  ): void {
+    this.fileImporters.clear()
+
+    for (const { filePath, analysis } of files) {
+      for (const importPath of filterRelativeImportSources(analysis.importSources)) {
+        const foundPath = this.resolveImportedFilePath(filePath, importPath)
+        if (!foundPath)
+          continue
+
+        if (!this.fileImporters.has(foundPath))
+          this.fileImporters.set(foundPath, new Set())
+
+        this.fileImporters.get(foundPath)!.add(filePath)
+      }
+    }
+  }
+
+  buildImportGraph(srcDir: string): void {
+    const files = collectScannedFiles(this, [srcDir])
+    this.populateImportGraphFromFiles(files)
   }
 
   isOnlyImportedByClientComponents(filePath: string): boolean {
@@ -432,13 +410,13 @@ export class ServerComponentBuilder {
     return true
   }
 
-  addServerComponent(filePath: string, source?: string) {
+  addServerComponent(filePath: string, source?: string, analysis?: ModuleAnalysis) {
     const code = source ?? fs.readFileSync(filePath, 'utf-8')
-    const analysis = this.moduleAnalysisCache.get(filePath, code)
-    const dependencies = filterExternalDependencies(analysis.importSources, NODE_BUILTINS)
-    const hasNodeImports = this.hasNodeImports(code)
+    const moduleAnalysis = analysis ?? this.moduleAnalysisCache.get(filePath, code)
+    const dependencies = filterExternalDependencies(moduleAnalysis.importSources)
+    const hasNodeImports = hasNodeImportsFromAnalysis(moduleAnalysis)
 
-    if (analysis.directives.hasUseServer) {
+    if (moduleAnalysis.directives.hasUseServer) {
       this.serverActions.set(filePath, {
         filePath,
         originalCode: code,
@@ -448,7 +426,7 @@ export class ServerComponentBuilder {
       return
     }
 
-    if (!this.isServerComponent(filePath, code))
+    if (!isServerComponentFromAnalysis(filePath, moduleAnalysis, this.htmlOnlyImports))
       return
 
     this.serverComponents.set(filePath, {
@@ -471,36 +449,19 @@ export class ServerComponentBuilder {
       ? this.moduleAnalysisCache.get(filePath, code)
       : analyzeModuleSource(code)
 
-    return filterExternalDependencies(analysis.importSources, NODE_BUILTINS)
+    return filterExternalDependencies(analysis.importSources)
   }
 
-  private isNodeBuiltin(moduleName: string): boolean {
-    return NODE_BUILTINS.has(moduleName)
+  private hasNodeImports(code: string, filePath?: string): boolean {
+    const analysis = filePath
+      ? this.moduleAnalysisCache.get(filePath, code)
+      : analyzeModuleSource(code)
+
+    return hasNodeImportsFromAnalysis(analysis)
   }
 
-  private hasNodeImports(code: string): boolean {
-    return (
-      code.includes('from \'node:')
-      || code.includes('from "node:')
-      || code.includes('from \'fs\'')
-      || code.includes('from "fs"')
-      || code.includes('from \'path\'')
-      || code.includes('from "path"')
-      || code.includes('from \'os\'')
-      || code.includes('from "os"')
-      || code.includes('from \'crypto\'')
-      || code.includes('from "crypto"')
-      || code.includes('from \'util\'')
-      || code.includes('from "util"')
-      || code.includes('from \'stream\'')
-      || code.includes('from "stream"')
-      || code.includes('from \'events\'')
-      || code.includes('from "events"')
-    )
-  }
-
-  async getTransformedComponentsForDevelopment(): Promise<Array<{ id: string, code: string }>> {
-    const components: Array<{ id: string, code: string }> = []
+  async getTransformedComponentsForDevelopment(): Promise<Array<{ id: string, code: string, isAction: boolean }>> {
+    const components: Array<{ id: string, code: string, isAction: boolean }> = []
 
     for (const [filePath] of this.serverComponents) {
       const relativePath = path.relative(this.projectRoot, filePath)
@@ -511,6 +472,7 @@ export class ServerComponentBuilder {
       components.push({
         id: componentId,
         code: transformedCode,
+        isAction: false,
       })
     }
 
@@ -523,6 +485,7 @@ export class ServerComponentBuilder {
       components.push({
         id: actionId,
         code: transformedCode,
+        isAction: true,
       })
     }
 
@@ -674,12 +637,12 @@ const ${importName} = (props) => {
       name: 'rari-rolldown-module-info',
       moduleParsed(moduleInfo) {
         for (const id of moduleInfo.importedIds) {
-          if (!id.startsWith('.') && !id.startsWith('/') && !id.startsWith('node:') && !self.isNodeBuiltin(id))
+          if (!id.startsWith('.') && !id.startsWith('/') && !id.startsWith('node:') && !isNodeBuiltinModule(id))
             externalDeps.add(id)
         }
 
         for (const id of moduleInfo.dynamicallyImportedIds) {
-          if (!id.startsWith('.') && !id.startsWith('/') && !id.startsWith('node:') && !self.isNodeBuiltin(id))
+          if (!id.startsWith('.') && !id.startsWith('/') && !id.startsWith('node:') && !isNodeBuiltinModule(id))
             externalDeps.add(id)
         }
       },
@@ -763,7 +726,7 @@ const ${importName} = (props) => {
 
           if (
             source.startsWith('node:')
-            || self.isNodeBuiltin(source)
+            || isNodeBuiltinModule(source)
             || source === 'react'
             || source === 'react-dom'
             || source === 'react/jsx-runtime'
@@ -799,8 +762,7 @@ const ${importName} = (props) => {
                 }
 
                 try {
-                  const content = fs.readFileSync(pathWithExt, 'utf-8')
-                  const analysis = self.moduleAnalysisCache.get(pathWithExt, content)
+                  const analysis = self.moduleAnalysisCache.get(pathWithExt)
                   if (analysis.topLevelUseServer) {
                     const actionId = self.getComponentId(pathWithExt)
                     serverActionRefs.set(pathWithExt, {
@@ -1029,7 +991,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
           if (source.startsWith('\0'))
             return null
 
-          if (source.startsWith('node:') || self.isNodeBuiltin(source))
+          if (source.startsWith('node:') || isNodeBuiltinModule(source))
             return { id: source, external: true }
 
           const externalPackages = [
@@ -1299,32 +1261,9 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     const ssrOutDir = path.join(this.options.outDir, 'ssr')
     await fs.promises.mkdir(ssrOutDir, { recursive: true })
 
-    const clientFiles: Array<{ filePath: string, code: string }> = []
-    const srcDir = path.join(this.projectRoot, 'src')
-
-    const scanForClientComponents = (dir: string) => {
-      if (!fs.existsSync(dir))
-        return
-      const entries = fs.readdirSync(dir, { withFileTypes: true })
-      for (const entry of entries) {
-        const fullPath = path.join(dir, entry.name)
-        if (entry.isDirectory()) {
-          if (entry.name === 'node_modules')
-            continue
-          scanForClientComponents(fullPath)
-        }
-        else if (entry.isFile() && TSX_EXT_REGEX.test(entry.name)) {
-          try {
-            const analysis = this.moduleAnalysisCache.get(fullPath)
-            if (analysis.topLevelUseClient)
-              clientFiles.push({ filePath: fullPath, code: fs.readFileSync(fullPath, 'utf-8') })
-          }
-          catch {}
-        }
-      }
-    }
-
-    scanForClientComponents(srcDir)
+    const clientFiles: Array<{ filePath: string, code: string }> = [
+      ...this.getClientComponentFiles(),
+    ]
 
     for (const extPath of this.discoveredExternalClientComponents) {
       if (clientFiles.some(f => f.filePath === extPath))
@@ -1783,7 +1722,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
 
     const code = await fs.promises.readFile(filePath, 'utf-8')
     const dependencies = this.extractDependencies(code, filePath)
-    const hasNodeImports = this.hasNodeImports(code)
+    const hasNodeImports = this.hasNodeImports(code, filePath)
 
     const componentData = {
       filePath,
@@ -1894,7 +1833,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
         bundlePath,
         moduleSpecifier,
         dependencies: this.extractDependencies(code, filePath),
-        hasNodeImports: this.hasNodeImports(code),
+        hasNodeImports: this.hasNodeImports(code, filePath),
         css,
       }
     }
@@ -1937,9 +1876,43 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
   }
 }
 
-export function hasComponentExport(code: string): boolean {
-  const analysis = analyzeModuleSource(code)
-  return analysis.hasComponentExport
+export interface DirectoryScanResult {
+  serverComponentPaths: string[]
+  clientComponentPaths: string[]
+}
+
+interface ScannedFile {
+  filePath: string
+  code: string
+  analysis: ModuleAnalysis
+}
+
+function collectScannedFiles(
+  builder: ServerComponentBuilder,
+  dirs: string[],
+): ScannedFile[] {
+  const files: ScannedFile[] = []
+
+  for (const fullPath of collectSourceFilePaths(dirs)) {
+    try {
+      const code = fs.readFileSync(fullPath, 'utf-8')
+      const analysis = builder.getModuleAnalysis(fullPath, code)
+      files.push({ filePath: fullPath, code, analysis })
+    }
+    catch (error) {
+      console.warn(
+        `[server-build] Error reading ${fullPath}:`,
+        error instanceof Error ? error.message : error,
+      )
+    }
+  }
+
+  return files
+}
+
+export function hasComponentExport(code: string, analysis?: ModuleAnalysis): boolean {
+  const moduleAnalysis = analysis ?? analyzeModuleSource(code)
+  return moduleAnalysis.hasComponentExport
     || EXPORTED_FUNCTION_REGEX.test(code)
     || EXPORTED_DEFAULT_ARROW_REGEX.test(code)
     || EXPORTED_CONST_FUNCTION_REGEX.test(code)
@@ -1949,52 +1922,54 @@ export function isEligibleServerComponent(
   filePath: string,
   code: string,
   builder: ServerComponentBuilder,
+  analysis?: ModuleAnalysis,
 ): boolean {
   const fileName = path.basename(filePath)
   if (SPECIAL_FILE_REGEX.test(fileName) || fileName.endsWith('.d.ts'))
     return false
 
-  const analysis = analyzeModuleSource(code)
+  const moduleAnalysis = analysis ?? builder.getModuleAnalysis(filePath, code)
 
-  if (analysis.topLevelUseClient)
+  if (moduleAnalysis.topLevelUseClient)
     return false
 
-  if (analysis.topLevelUseServer)
+  if (moduleAnalysis.topLevelUseServer)
     return true
 
   if (builder.isOnlyImportedByClientComponents(filePath))
     return false
 
-  return builder.isServerComponent(filePath, code) && hasComponentExport(code)
+  return isServerComponentFromAnalysis(filePath, moduleAnalysis, builder.getHtmlOnlyImports())
+    && hasComponentExport(code, moduleAnalysis)
 }
 
-export function scanDirectory(dir: string, builder: ServerComponentBuilder, isTopLevel = true) {
-  if (isTopLevel)
-    builder.buildImportGraph(dir)
+export function scanDirectory(
+  dir: string,
+  builder: ServerComponentBuilder,
+  additionalDirs: string[] = [],
+): DirectoryScanResult {
+  const dirs = normalizeScanDirs(dir, additionalDirs)
 
-  const entries = fs.readdirSync(dir, { withFileTypes: true })
+  const files = collectScannedFiles(builder, dirs)
+  builder.clearClientComponentFiles()
+  builder.populateImportGraphFromFiles(files)
 
-  for (const entry of entries) {
-    const fullPath = path.join(dir, entry.name)
+  const serverComponentPaths: string[] = []
+  const clientComponentPaths: string[] = []
 
-    if (entry.isDirectory()) {
-      scanDirectory(fullPath, builder, false)
+  for (const { filePath, code, analysis } of files) {
+    if (analysis.topLevelUseClient) {
+      clientComponentPaths.push(filePath)
+      builder.recordClientComponent(filePath, code)
     }
-    else if (entry.isFile() && TSX_EXT_REGEX.test(entry.name)) {
-      try {
-        const code = fs.readFileSync(fullPath, 'utf-8')
 
-        if (isEligibleServerComponent(fullPath, code, builder))
-          builder.addServerComponent(fullPath, code)
-      }
-      catch (error) {
-        console.warn(
-          `[server-build] Error checking ${fullPath}:`,
-          error instanceof Error ? error.message : error,
-        )
-      }
+    if (isEligibleServerComponent(filePath, code, builder, analysis)) {
+      builder.addServerComponent(filePath, code, analysis)
+      serverComponentPaths.push(filePath)
     }
   }
+
+  return { serverComponentPaths, clientComponentPaths }
 }
 
 export function createServerBuildPlugin(
@@ -2113,8 +2088,9 @@ export function createServerBuildPlugin(
 
       try {
         const content = await fs.promises.readFile(file, 'utf-8')
+        const analysis = builder.getModuleAnalysis(file, content)
         const isTracked = builder.hasComponent(file)
-        const eligible = isEligibleServerComponent(file, content, builder)
+        const eligible = isEligibleServerComponent(file, content, builder, analysis)
 
         if (!eligible) {
           if (isTracked)
@@ -2124,7 +2100,7 @@ export function createServerBuildPlugin(
         }
 
         if (!isTracked)
-          builder.addServerComponent(file, content)
+          builder.addServerComponent(file, content, analysis)
 
         await builder.rebuildComponent(file)
       }
