@@ -340,12 +340,7 @@ ci-prepare-use-cache-addon:
 ci-build-packages:
     #!/usr/bin/env bash
     set -euo pipefail
-    if [ -f packages/use-cache-linux-x64/rari_use_cache.node ] \
-      || [ -f packages/use-cache-win32-x64/rari_use_cache.node ]; then
-      pnpm --filter=@rari/use-cache run build
-    else
-      echo "Skipping @rari/use-cache build (addon not available)"
-    fi
+    pnpm --filter=@rari/use-cache run build
     pnpm --filter=@rari/logger run build
     pnpm --filter=@rari/deploy run build
     pnpm --filter=rari run build
@@ -363,10 +358,7 @@ ci-lint-test: ci-build-packages
 ci-verify-dist:
     #!/usr/bin/env bash
     set -euo pipefail
-    if [ -f packages/use-cache-linux-x64/rari_use_cache.node ] \
-      || [ -f packages/use-cache-win32-x64/rari_use_cache.node ]; then
-      test -d packages/use-cache/dist
-    fi
+    test -d packages/use-cache/dist
     test -d packages/logger/dist
     test -d packages/deploy/dist
     test -d packages/rari/dist
