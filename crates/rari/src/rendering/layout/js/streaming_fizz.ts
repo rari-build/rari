@@ -40,6 +40,20 @@ async function rariReadStream(stream: ReadableStream): Promise<string> {
   return html
 }
 
+async function rariDrainReadable(stream: ReadableStream): Promise<void> {
+  const reader = stream.getReader()
+  try {
+    while (true) {
+      const { done } = await reader.read()
+      if (done)
+        break
+    }
+  }
+  finally {
+    await reader.cancel().catch(() => {})
+  }
+}
+
 let rariStreamDisconnected = false
 
 type RariHtmlStreamState = 'outside' | 'in_tag' | 'in_inline_script' | 'in_raw_text'
@@ -342,6 +356,10 @@ function rariCreatePullFlightFanout(sourceStream: ReadableStream) {
     cancel(reason) {
       rariStreamLog('fanout.cancel', String(reason))
       sourceReader.cancel(reason)
+      if (!sourceDone) {
+        sourceDone = true
+        liveFlight.markStreamEnd()
+      }
     },
   })
 
@@ -700,6 +718,7 @@ async function renderStaticDocument(options: RenderStreamingDocumentOptions): Pr
   }) as ReadableStream & { allReady?: Promise<void> }
 
   await fizzStream.allReady
+  await rariDrainReadable(flightReadable)
 
   let html = await rariReadStream(fizzStream)
   html = rariStripLeadingDoctype(html)

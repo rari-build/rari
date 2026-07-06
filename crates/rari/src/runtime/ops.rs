@@ -1,8 +1,16 @@
-use std::{cell::RefCell, cmp::Ordering, collections::BTreeMap, rc::Rc, sync::Arc, time::Duration};
+use std::{
+    cell::RefCell,
+    cmp::Ordering,
+    collections::BTreeMap,
+    rc::Rc,
+    sync::{Arc, OnceLock},
+    time::Duration,
+};
 
 use axum::http::HeaderMap;
-use deno_core::{OpDecl, OpState, op2};
+use deno_core::{ModuleSpecifier, OpDecl, OpState, op2};
 use deno_error::JsErrorBox;
+use deno_runtime::BootstrapOptions;
 use serde::Deserialize;
 use tokio::sync::mpsc;
 
@@ -236,8 +244,84 @@ pub fn create_error_operation(
     .to_string()
 }
 
+#[op2(fast)]
+pub fn op_rari_has_node_modules_dir(state: &OpState) -> bool {
+    state.try_borrow::<BootstrapOptions>().is_some_and(|options| options.has_node_modules_dir)
+}
+
+#[op2]
+#[string]
+pub fn op_main_module(state: &OpState) -> String {
+    state.borrow::<ModuleSpecifier>().to_string()
+}
+
+/// Expensive on Windows; mirrors `deno_runtime::ops::runtime::op_ppid`.
+#[op2(fast)]
+#[number]
+pub fn op_ppid() -> i64 {
+    #[cfg(windows)]
+    {
+        use std::mem;
+
+        use windows_sys::Win32::{
+            Foundation::{CloseHandle, INVALID_HANDLE_VALUE},
+            System::{
+                Diagnostics::ToolHelp::{
+                    CreateToolhelp32Snapshot, PROCESSENTRY32, Process32First, Process32Next,
+                    TH32CS_SNAPPROCESS,
+                },
+                Threading::GetCurrentProcessId,
+            },
+        };
+
+        // SAFETY: Win32 calls
+        unsafe {
+            let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+            if snapshot == INVALID_HANDLE_VALUE {
+                return -1;
+            }
+
+            let mut entry: PROCESSENTRY32 = mem::zeroed();
+            entry.dwSize = mem::size_of::<PROCESSENTRY32>() as u32;
+
+            let success = Process32First(snapshot, &mut entry);
+            if success == 0 {
+                CloseHandle(snapshot);
+                return -1;
+            }
+
+            let this_pid = GetCurrentProcessId();
+            while entry.th32ProcessID != this_pid {
+                let success = Process32Next(snapshot, &mut entry);
+                if success == 0 {
+                    CloseHandle(snapshot);
+                    return -1;
+                }
+            }
+            CloseHandle(snapshot);
+
+            entry.th32ParentProcessID.into()
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        use std::os::unix::process::parent_id;
+        parent_id().into()
+    }
+}
+
+pub fn rari_main_module() -> ModuleSpecifier {
+    static MAIN: OnceLock<ModuleSpecifier> = OnceLock::new();
+    #[expect(clippy::expect_used, reason = "Static main module URL is valid")]
+    MAIN.get_or_init(|| ModuleSpecifier::parse("file:///rari").expect("valid rari main module url"))
+        .clone()
+}
+
 pub fn get_streaming_ops() -> Vec<OpDecl> {
     vec![
+        op_rari_has_node_modules_dir(),
+        op_main_module(),
+        op_ppid(),
         op_send_chunk_to_rust(),
         op_fizz_chunk(),
         op_fizz_done(),

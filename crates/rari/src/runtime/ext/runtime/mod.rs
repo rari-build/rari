@@ -61,6 +61,7 @@ extension!(
     init_runtime,
     esm_entry_point = "ext:init_runtime/init_runtime.ts",
     esm = [ dir "src/runtime/ext/runtime",  "init_runtime.ts" ],
+    lazy_loaded_esm = [ dir "src/runtime/ext/runtime", "init_node_bootstrap.ts" ],
     state = |state| {
         let options = BootstrapOptions {
             args: vec![

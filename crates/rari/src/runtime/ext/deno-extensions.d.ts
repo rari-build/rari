@@ -7,6 +7,12 @@ declare module 'ext:core/mod.js' {
       op_ppid: () => number
       op_bootstrap_no_color: () => boolean
       op_main_module: () => string
+      op_rari_has_node_modules_dir: () => boolean
+      op_snapshot_options: () => {
+        tsVersion: string
+        v8Version: string
+        target: string
+      }
     }
     BadResource: typeof Error
     Interrupted: typeof Error
@@ -17,6 +23,8 @@ declare module 'ext:core/mod.js' {
     setHandledPromiseRejectionHandler: (handler: (promise: Promise<unknown>, reason: unknown) => void) => void
     setReportExceptionCallback: (callback: (error: unknown) => void) => void
     isNativeError: (value: unknown) => boolean
+    createLazyLoader: <T = { default: unknown }>(specifier: string) => () => T
+    setBuildInfo: (target: string) => void
     [key: string]: unknown
   }
   export const internals: any

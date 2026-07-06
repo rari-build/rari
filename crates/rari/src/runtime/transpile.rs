@@ -14,28 +14,29 @@ use deno_error::JsErrorBox;
 deno_error::js_error_wrapper!(deno_ast::ParseDiagnostic, JsParseDiagnostic, "Error");
 deno_error::js_error_wrapper!(deno_ast::TranspileError, JsTranspileError, "Error");
 
-fn maybe_substitute_version_placeholders(name: &str, source: ModuleCodeString) -> ModuleCodeString {
-    const NODE_VERSION_TOKEN: &str = "__NODE_VERSION__";
-    const V8_VERSION_TOKEN: &str = "__V8_VERSION__";
+const NODE_VERSION_TOKEN: &str = "__NODE_VERSION__";
+const V8_VERSION_TOKEN: &str = "__V8_VERSION__";
 
-    if name != "ext:init_node/init_node.ts" {
-        return source;
+pub fn substitute_version_placeholders_in_source(source: &str) -> String {
+    if !source.contains(NODE_VERSION_TOKEN) && !source.contains(V8_VERSION_TOKEN) {
+        return source.to_string();
     }
 
-    let source_str = source.as_str();
-
-    if !source_str.contains(NODE_VERSION_TOKEN) && !source_str.contains(V8_VERSION_TOKEN) {
-        return source;
-    }
-
-    let result: Cow<str> = source_str.cow_replace(NODE_VERSION_TOKEN, deno_node::NODE_VERSION);
+    let result: Cow<str> = source.cow_replace(NODE_VERSION_TOKEN, deno_node::NODE_VERSION);
 
     if result.contains(V8_VERSION_TOKEN) {
-        let final_result: Cow<str> = result.cow_replace(V8_VERSION_TOKEN, VERSION_STRING);
-        return final_result.into_owned().into();
+        return result.cow_replace(V8_VERSION_TOKEN, VERSION_STRING).into_owned();
     }
 
-    result.into_owned().into()
+    result.into_owned()
+}
+
+fn maybe_substitute_version_placeholders(name: &str, source: ModuleCodeString) -> ModuleCodeString {
+    if !name.ends_with("init_node.ts") {
+        return source;
+    }
+
+    substitute_version_placeholders_in_source(source.as_str()).into()
 }
 
 #[expect(clippy::missing_errors_doc)]
