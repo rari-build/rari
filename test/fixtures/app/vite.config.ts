@@ -18,7 +18,6 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, 'src'),
-      '@rari/use-cache': path.resolve(import.meta.dirname, '../../../packages/use-cache/src'),
     },
   },
 })
