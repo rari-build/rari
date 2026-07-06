@@ -477,7 +477,7 @@ async fn handle_js_request(
                 .map(|spec| spec.contains("/rari_hmr/"))
                 .unwrap_or(false);
             if is_hmr_specifier || !has_existing_hmr_mapping {
-                module_loader.component_specifiers.insert(component_id, specifier);
+                module_loader.register_component_specifier(&component_id, &specifier);
             }
             let _ = result_tx.send(Ok(()));
         }
