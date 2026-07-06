@@ -125,11 +125,6 @@ fn component_id_aliases(component_id: &str) -> Vec<String> {
     } else {
         aliases.push(format!("/{component_id}"));
     }
-    if let Some(stem) = component_id.rsplit('/').next() {
-        if !aliases.iter().any(|alias| alias == stem) {
-            aliases.push(stem.to_string());
-        }
-    }
     aliases
 }
 
@@ -313,7 +308,9 @@ export default {{}};
             .unwrap_or(true);
 
         if should_remove_mapping {
-            self.component_specifiers.remove(component_id);
+            for alias in component_id_aliases(component_id) {
+                self.component_specifiers.remove(&alias);
+            }
         }
 
         self.storage.set_module_meta(format!("hmr_{component_specifier}"), false);
