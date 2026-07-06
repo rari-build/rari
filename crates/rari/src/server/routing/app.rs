@@ -31,7 +31,7 @@ use crate::{
     rendering::layout::{
         ChunkedContentType, LayoutRenderContext, LayoutRenderer, OpenGraphImage,
         OpenGraphImageDescriptor, OpenGraphMetadata, PageMetadata, RenderResult, TwitterMetadata,
-        component_dist_path, create_layout_context, drain_chunked_stream,
+        component_dist_path, create_layout_context, drain_chunked_stream, sort_flight_protocol,
     },
     server::{
         ServerState,
@@ -82,44 +82,6 @@ async fn decompress_bytes(data: &Bytes, encoding: CompressionEncoding) -> Result
         }
         CompressionEncoding::Identity => Ok(data),
     }
-}
-
-fn sort_rsc_rows(flight_protocol: &str) -> String {
-    let mut rows_with_ids: Vec<(u32, String)> = Vec::new();
-
-    for row in flight_protocol.lines() {
-        if let Some(colon_pos) = row.find(':') {
-            if let Ok(row_id) = u32::from_str_radix(&row[..colon_pos], 16) {
-                rows_with_ids.push((row_id, row.to_string()));
-            } else {
-                rows_with_ids.push((u32::MAX, row.to_string()));
-            }
-        } else {
-            rows_with_ids.push((u32::MAX, row.to_string()));
-        }
-    }
-
-    rows_with_ids.sort_by_key(|(id, _)| *id);
-
-    let mut sorted =
-        rows_with_ids.iter().map(|(_, row)| row.as_str()).collect::<Vec<_>>().join("\n");
-
-    if !sorted.is_empty() && !sorted.ends_with('\n') {
-        sorted.push('\n');
-    }
-
-    let has_row_0 = rows_with_ids.iter().any(|(id, row)| *id == 0 && row.starts_with("0:"));
-
-    if !has_row_0
-        && let Some((max_id, _)) =
-            rows_with_ids.iter().filter(|(id, _)| *id != u32::MAX).max_by_key(|(id, _)| *id)
-        && *max_id > 0
-    {
-        let row_0 = format!("0:\"${max_id:x}\"\n");
-        sorted.insert_str(0, &row_0);
-    }
-
-    sorted
 }
 
 pub(crate) fn wrap_html_with_metadata(
@@ -391,7 +353,7 @@ pub async fn render_rsc_navigation_streaming(
         RenderResult::Static(rsc_flight_protocol) => {
             let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
 
-            let sorted_flight_protocol = sort_rsc_rows(&rsc_flight_protocol);
+            let sorted_flight_protocol = sort_flight_protocol(&rsc_flight_protocol);
 
             let final_payload = if sorted_flight_protocol.ends_with('\n') {
                 sorted_flight_protocol

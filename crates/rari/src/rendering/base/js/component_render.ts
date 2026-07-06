@@ -6,7 +6,6 @@ interface SuspenseError {
 }
 
 (async function () {
-  const REACT_ELEMENT_TYPE = Symbol.for('react.transitional.element')
   const REACT_SUSPENSE_PENDING = Symbol.for('react.suspense.pending')
 
   let Component: (props: unknown) => unknown
@@ -36,36 +35,52 @@ interface SuspenseError {
     return Deno.core.ops.op_sanitize_html(html, componentId)
   }
 
-  const elementToRSC = async (element: unknown, componentId: string): Promise<unknown> => {
+  const elementToHtml = async (element: unknown, componentId: string): Promise<string | null> => {
     try {
-      let rscResult: unknown
-      if (typeof g.renderToRsc === 'function') {
-        rscResult = await g.renderToRsc(element)
-      }
-      else {
-        rscResult = {
-          $$typeof: REACT_ELEMENT_TYPE,
-          type: 'div',
-          props: {
-            'data-rsc-component': componentId,
-            'children': element,
-          },
-        }
-      }
+      let htmlResult: string | null = null
+      if (g.renderToHtmlFizz)
+        htmlResult = await g.renderToHtmlFizz(element)
 
-      return rscResult
+      return sanitizeComponentOutput(htmlResult, componentId) as string | null
     }
-    catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      return {
-        $$typeof: REACT_ELEMENT_TYPE,
-        type: 'div',
-        props: {
-          'data-rsc-component': componentId,
-          'children': `Error: ${errorMessage}`,
+    catch (htmlError) {
+      console.warn('HTML generation failed:', htmlError)
+      return `<div data-rsc-component="${componentId}">RSC Component</div>`
+    }
+  }
+
+  const storeResult = (result: Record<string, unknown>) => {
+    if (!g['~render'])
+      g['~render'] = {}
+    g['~render'].lastResult = result
+    return result
+  }
+
+  const renderOutputs = async (element: unknown, options?: { resolvedFromSuspense?: boolean }) => {
+    const htmlResult = await elementToHtml(element, '{component_id}')
+
+    if (!htmlResult) {
+      return storeResult({
+        html: '',
+        hasSuspense: false,
+        debug: {
+          component_id: componentSource,
+          success: false,
+          reason: 'empty_html',
         },
-      }
+      })
     }
+
+    return storeResult({
+      html: htmlResult,
+      hasSuspense: options?.resolvedFromSuspense ?? false,
+      debug: {
+        component_id: componentSource,
+        success: true,
+        resolvedFromSuspense: options?.resolvedFromSuspense ?? false,
+        htmlLength: htmlResult.length,
+      },
+    })
   }
 
   const props = {props_json}
@@ -81,22 +96,15 @@ interface SuspenseError {
     catch (asyncError: unknown) {
       const errorMessage = asyncError instanceof Error ? asyncError.message : String(asyncError)
       console.error(`[rari] Error rendering ${componentSource}:`, asyncError)
-      const errorResult = {
+      return storeResult({
         html: '',
-        rsc: null,
         hasSuspense: false,
         debug: {
           component_id: componentSource,
           success: false,
           error: errorMessage,
         },
-      }
-
-      if (!g['~render'])
-        g['~render'] = {}
-      g['~render'].lastResult = errorResult
-
-      return errorResult
+      })
     }
   }
   else {
@@ -104,54 +112,7 @@ interface SuspenseError {
   }
 
   try {
-    const rscResult = await elementToRSC(element, '{component_id}')
-
-    let htmlResult: string | null = null
-    try {
-      htmlResult = g.renderToHtmlFizz ? await g.renderToHtmlFizz(element) : null
-      htmlResult = sanitizeComponentOutput(htmlResult, '{component_id}') as string
-    }
-    catch (htmlError) {
-      console.warn('HTML generation failed, using RSC only:', htmlError)
-      htmlResult = `<div data-rsc-component="{component_id}">RSC Component</div>`
-    }
-
-    if (!rscResult) {
-      const emptyResult = {
-        html: htmlResult || '',
-        rsc: null,
-        hasSuspense: false,
-        debug: {
-          component_id: componentSource,
-          success: false,
-          reason: 'empty_rsc',
-        },
-      }
-
-      if (!g['~render'])
-        g['~render'] = {}
-      g['~render'].lastResult = emptyResult
-
-      return emptyResult
-    }
-
-    const finalResult = {
-      html: htmlResult,
-      rsc: rscResult,
-      hasSuspense: false,
-      debug: {
-        component_id: componentSource,
-        success: true,
-        htmlLength: htmlResult ? htmlResult.length : 0,
-        hasRSC: !!rscResult,
-      },
-    }
-
-    if (!g['~render'])
-      g['~render'] = {}
-    g['~render'].lastResult = finalResult
-
-    return finalResult
+    return await renderOutputs(element)
   }
   catch (error: unknown) {
     const suspenseError = error as SuspenseError
@@ -159,83 +120,35 @@ interface SuspenseError {
       if (suspenseError.promise && typeof suspenseError.promise.then === 'function') {
         try {
           await suspenseError.promise
-
           const newElement = isAsyncComponent ? await Component(props) : Component(props)
-
-          const rscResult = await elementToRSC(newElement, '{component_id}')
-
-          let htmlResult: string | null = null
-          try {
-            htmlResult = g.renderToHtmlFizz ? await g.renderToHtmlFizz(newElement) : null
-            htmlResult = sanitizeComponentOutput(htmlResult, '{component_id}') as string
-          }
-          catch (htmlError) {
-            console.warn(
-              'HTML generation failed after suspense, using RSC only:',
-              htmlError,
-            )
-            htmlResult = `<div data-rsc-component="{component_id}">RSC Component (Suspense Resolved)</div>`
-          }
-
-          const suspenseResolvedResult = {
-            html: htmlResult,
-            rsc: rscResult,
-            hasSuspense: true,
-            debug: {
-              component_id: componentSource,
-              success: true,
-              resolvedFromSuspense: true,
-              htmlLength: htmlResult ? htmlResult.length : 0,
-              hasRSC: !!rscResult,
-            },
-          }
-
-          if (!g['~render'])
-            g['~render'] = {}
-          g['~render'].lastResult = suspenseResolvedResult
-
-          return suspenseResolvedResult
+          return await renderOutputs(newElement, { resolvedFromSuspense: true })
         }
         catch (resolveError: unknown) {
           const errorMessage = resolveError instanceof Error ? resolveError.message : String(resolveError)
           console.error(`[rari] Error rendering ${componentSource} after suspense:`, resolveError)
-          const errorResult = {
+          return storeResult({
             html: '',
-            rsc: null,
             hasSuspense: false,
             debug: {
               component_id: componentSource,
               success: false,
               error: errorMessage,
             },
-          }
-
-          if (!g['~render'])
-            g['~render'] = {}
-          g['~render'].lastResult = errorResult
-
-          return errorResult
+          })
         }
       }
     }
 
     const errorMessage = error instanceof Error ? error.message : String(error)
     console.error(`[rari] Error rendering ${componentSource}:`, error)
-    const errorResult = {
+    return storeResult({
       html: '',
-      rsc: null,
       hasSuspense: false,
       debug: {
         component_id: componentSource,
         success: false,
         error: errorMessage,
       },
-    }
-
-    if (!g['~render'])
-      g['~render'] = {}
-    g['~render'].lastResult = errorResult
-
-    return errorResult
+    })
   }
 })()

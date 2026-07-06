@@ -56,49 +56,4 @@
   }
 
   g.renderToHtmlFizz = renderToHtmlFizz
-
-  if (g['~rari']) {
-    if (!g['~rari'].ssrModules)
-      g['~rari'].ssrModules = {}
-
-    g['~rari'].ssrRenderComponent = async function (modulePath: string, exportName: string, props: unknown): Promise<string> {
-      const mod = g['~rari']?.ssrModules?.[modulePath.replace(/\\/g, '/')]
-        || g['~rari']?.ssrModules?.[modulePath]
-      if (!mod) {
-        if (g.__RARI_DEV__)
-          console.warn(`[rari] SSR: Module not loaded: ${modulePath}`)
-
-        return ''
-      }
-
-      const Component = exportName === 'default' ? (mod.default || mod) : mod[exportName]
-      if (typeof Component !== 'function') {
-        if (g.__RARI_DEV__)
-          console.warn(`[rari] SSR: Export '${exportName}' is not a function in ${modulePath} (got ${typeof Component})`)
-
-        return ''
-      }
-
-      try {
-        const React = g.React
-        if (!React || typeof React.createElement !== 'function') {
-          if (g.__RARI_DEV__)
-            console.warn('[rari] SSR: React not available for createElement')
-
-          return ''
-        }
-
-        const element = React.createElement(Component, props)
-        return await renderToHtmlFizz(element)
-      }
-      catch (error: unknown) {
-        if (g.__RARI_DEV__) {
-          const errorMessage = error && typeof error === 'object' && 'message' in error ? (error as { message: string }).message : String(error)
-          console.warn(`[rari] SSR: Fizz render fallback for ${modulePath}:${exportName}:`, errorMessage)
-        }
-
-        return ''
-      }
-    }
-  }
 })()

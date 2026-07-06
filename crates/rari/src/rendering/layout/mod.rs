@@ -7,8 +7,8 @@ pub use core::{LayoutHtmlCache, LayoutRenderer};
 
 pub use route_composer::{LayoutInfo, RouteComposer};
 pub use types::*;
-pub use utils::create_layout_context;
 pub(crate) use utils::{component_dist_path, drain_chunked_stream};
+pub use utils::{create_layout_context, sort_flight_protocol};
 
 #[cfg(test)]
 #[expect(clippy::unwrap_used)]
@@ -182,75 +182,6 @@ mod tests {
         assert!(
             script.contains("const isAsync = PageComponent.constructor.name === 'AsyncFunction'")
         );
-    }
-
-    #[test]
-    fn test_layout_structure_new() {
-        let layout_structure = LayoutStructure::new();
-        assert!(!layout_structure.has_navigation);
-        assert!(layout_structure.navigation_position.is_none());
-        assert!(layout_structure.content_position.is_none());
-        assert_eq!(layout_structure.suspense_boundaries.len(), 0);
-    }
-
-    #[test]
-    fn test_layout_structure_is_valid_empty() {
-        let layout_structure = LayoutStructure::new();
-        assert!(layout_structure.is_valid());
-    }
-
-    #[test]
-    fn test_layout_structure_is_valid_navigation_before_content() {
-        let layout_structure = LayoutStructure {
-            has_navigation: true,
-            navigation_position: Some(0),
-            content_position: Some(1),
-            suspense_boundaries: Vec::new(),
-        };
-        assert!(layout_structure.is_valid());
-    }
-
-    #[test]
-    fn test_layout_structure_is_invalid_navigation_after_content() {
-        let layout_structure = LayoutStructure {
-            has_navigation: true,
-            navigation_position: Some(1),
-            content_position: Some(0),
-            suspense_boundaries: Vec::new(),
-        };
-        assert!(!layout_structure.is_valid());
-    }
-
-    #[test]
-    fn test_layout_structure_is_invalid_boundary_outside_content() {
-        let layout_structure = LayoutStructure {
-            has_navigation: true,
-            navigation_position: Some(0),
-            content_position: Some(1),
-            suspense_boundaries: vec![BoundaryPosition {
-                boundary_id: "test_boundary".to_string(),
-                parent_path: vec![0],
-                is_in_content_area: false,
-                dom_path: vec![0],
-            }],
-        };
-        assert!(!layout_structure.is_valid());
-    }
-
-    #[test]
-    fn test_layout_structure_is_valid_boundary_in_content() {
-        let layout_structure = LayoutStructure {
-            has_navigation: true,
-            navigation_position: Some(0),
-            content_position: Some(1),
-            suspense_boundaries: vec![BoundaryPosition {
-                boundary_id: "test_boundary".to_string(),
-                parent_path: vec![1, 0],
-                is_in_content_area: true,
-                dom_path: vec![1, 1, 0],
-            }],
-        };
-        assert!(layout_structure.is_valid());
     }
 
     #[test]

@@ -118,18 +118,22 @@ async function rariPumpFizzChunk(text: string): Promise<boolean> {
   }
 }
 
-async function rariPumpFlightScriptPush(payload: string | number): Promise<boolean> {
+function rariFormatFlightScriptPush(payload: string | number): string {
   const escaped = JSON.stringify(payload).split('</').join('<\\/')
-  return await rariPumpFizzChunk(
-    `<script>(self.__rari_f=self.__rari_f||[]).push(${escaped})<\/script>`,
-  )
+  return `<script>(self.__rari_f=self.__rari_f||[]).push(${escaped})<\/script>`
+}
+
+function rariFormatFlightBinaryPush(b64: string): string {
+  const payload = JSON.stringify([2, b64]).split('</').join('<\\/')
+  return `<script>(self.__rari_f=self.__rari_f||[]).push(${payload})<\/script>`
+}
+
+async function rariPumpFlightScriptPush(payload: string | number): Promise<boolean> {
+  return await rariPumpFizzChunk(rariFormatFlightScriptPush(payload))
 }
 
 async function rariPumpFlightBinaryPush(b64: string): Promise<boolean> {
-  const payload = JSON.stringify([2, b64]).split('</').join('<\\/')
-  return await rariPumpFizzChunk(
-    `<script>(self.__rari_f=self.__rari_f||[]).push(${payload})<\/script>`,
-  )
+  return await rariPumpFizzChunk(rariFormatFlightBinaryPush(b64))
 }
 
 function rariParseFlightRowId(line: string): number {
@@ -607,9 +611,134 @@ async function renderStreamingDocument(options: RenderStreamingDocumentOptions) 
   rariStreamLog('render.done')
 }
 
+async function rariCollectFlightEmbedScripts(
+  liveFlight: ReturnType<typeof rariCreateLiveFlightSource>,
+): Promise<string> {
+  let scripts = rariFormatFlightScriptPush(0)
+  while (true) {
+    const item = await liveFlight.drainNext()
+    if (!item)
+      break
+    if (item.type === 'line')
+      scripts += rariFormatFlightScriptPush(`${item.line}\n`)
+    else if (item.type === 'binary')
+      scripts += rariFormatFlightBinaryPush(item.b64)
+  }
+
+  return scripts
+}
+
+function rariInjectBeforeBodyClose(html: string, injection: string): string {
+  const bodyClose = html.lastIndexOf('</body>')
+  if (bodyClose === -1)
+    return `${html}${injection}`
+
+  return `${html.slice(0, bodyClose)}${injection}\n${html.slice(bodyClose)}`
+}
+
+async function renderStaticDocument(options: RenderStreamingDocumentOptions): Promise<string> {
+  const { capturedElement, headContent, caughtErrors } = options
+
+  const ReactServerRenderer = g['~reactServerRenderer']
+  const ReactDOMServer = g['~reactServer']
+  const R = g.React
+  const readStream = g['~rari']?.readStream
+
+  if (!ReactServerRenderer?.renderToReadableStream)
+    throw new Error('[rari] RSC renderer not loaded')
+  if (!ReactDOMServer?.renderToReadableStream)
+    throw new Error('[rari] Fizz renderer not loaded')
+  if (!R?.createElement)
+    throw new Error('[rari] React not loaded')
+  if (!readStream)
+    throw new Error('[rari] readStream utility not available')
+
+  const bundlerConfig = g['~rari']?.clientReferenceManifest || {}
+
+  const rscStream = await ReactServerRenderer.renderToReadableStream(
+    capturedElement,
+    bundlerConfig,
+    {
+      onError(error: unknown) {
+        console.error('[rari] RSC error:', error)
+        caughtErrors.push(error)
+      },
+    },
+  )
+
+  const { flightReadable, liveFlight } = rariCreatePullFlightFanout(rscStream)
+
+  const fullDoc = R.createElement(
+    'html',
+    { lang: 'en' },
+    R.createElement('head', { dangerouslySetInnerHTML: { __html: headContent } }),
+    R.createElement(
+      'body',
+      null,
+      R.createElement('div', { id: 'root' }, rariCreateStreamingRoot(flightReadable)),
+    ),
+  )
+
+  const fizzStream = await ReactDOMServer.renderToReadableStream(fullDoc, {
+    onError(error: unknown) {
+      console.error('[rari] Fizz static error:', error)
+      caughtErrors.push(error)
+    },
+  }) as ReadableStream & { allReady?: Promise<void> }
+
+  await fizzStream.allReady
+
+  let html = await readStream(fizzStream)
+  html = rariStripLeadingDoctype(html)
+  if (!html.trimStart().toLowerCase().startsWith('<!doctype'))
+    html = `<!DOCTYPE html>\n${html}`
+
+  const flightScripts = await rariCollectFlightEmbedScripts(liveFlight)
+  const completionScript = `<script>if(!window['~rari'])window['~rari']={};window['~rari'].streaming={complete:true}<\/script>`
+
+  return rariInjectBeforeBodyClose(html, `${flightScripts}\n${completionScript}`)
+}
+
+async function pumpRscElementStream(
+  element: unknown,
+  pumpChunk: (text: string) => Promise<boolean>,
+): Promise<void> {
+  const ReactServerRenderer = g['~reactServerRenderer']
+  if (!ReactServerRenderer?.renderToReadableStream)
+    throw new Error('[rari] RSC renderer not loaded')
+
+  const bundlerConfig = g['~rari']?.clientReferenceManifest || {}
+  const stream = await ReactServerRenderer.renderToReadableStream(
+    element,
+    bundlerConfig,
+    {
+      onError(error: unknown) {
+        console.error('[rari] RSC stream error:', error)
+      },
+    },
+  )
+
+  const reader = stream.getReader()
+  const decoder = new TextDecoder()
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done)
+      break
+    const text = decoder.decode(value, { stream: true })
+    if (!(await pumpChunk(text)))
+      break
+  }
+  if (!rariStreamDisconnected) {
+    const tail = decoder.decode()
+    await pumpChunk(tail)
+  }
+}
+
 if (!g['~rari'])
   g['~rari'] = {}
 g['~rari'].renderStreamingDocument = renderStreamingDocument
+g['~rari'].renderStaticDocument = renderStaticDocument
 g['~rari'].pumpStreamingCompleteScript = pumpStreamingCompleteScript
 g['~rari'].injectStreamError = injectStreamError
 g['~rari'].pumpFizzChunk = rariPumpFizzChunk
+g['~rari'].pumpRscElementStream = pumpRscElementStream

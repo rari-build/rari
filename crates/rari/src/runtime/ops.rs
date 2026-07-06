@@ -293,7 +293,7 @@ pub fn op_internal_log(#[string] message: &str) {
 #[op2]
 #[string]
 pub fn op_sanitize_html(#[string] html: &str, #[string] _component_id: &str) -> String {
-    base::sanitize_component_output(html)
+    base::sanitize_html_output(html)
 }
 
 fn http_status_text(status: u16) -> &'static str {
