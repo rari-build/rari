@@ -1,8 +1,27 @@
 /// <reference path="../types.d.ts" />
 
-import { core } from 'ext:core/mod.js'
+import { lazyExtScript, loadExtScriptOnce } from 'ext:init_utilities/utilities.ts'
 
-core.loadExtScript('ext:deno_telemetry/util.ts')
-const telemetry = core.loadExtScript('ext:deno_telemetry/telemetry.ts')
+const lazyTelemetry = lazyExtScript<DenoTelemetryModule>('ext:deno_telemetry/telemetry.ts')
 
-g.Deno.telemetry = telemetry.telemetry
+let telemetryUtilLoaded = false
+
+function ensureTelemetryModule(): DenoTelemetryModule {
+  if (!telemetryUtilLoaded) {
+    loadExtScriptOnce('ext:deno_telemetry/util.ts')
+    telemetryUtilLoaded = true
+  }
+
+  return lazyTelemetry()
+}
+
+Object.defineProperties(g.Deno, {
+  telemetry: {
+    get() {
+      return ensureTelemetryModule().telemetry
+    },
+    set() {},
+    enumerable: false,
+    configurable: true,
+  },
+})

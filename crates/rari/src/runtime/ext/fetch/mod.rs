@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use deno_core::{Extension, extension};
+use deno_core::{Extension, ExtensionArguments, extension};
 
-use super::ExtensionTrait;
+use super::{ExtensionTrait, lazy};
 use crate::{runtime::ops, server::middleware::request_context::RequestContext};
 
 extension!(
@@ -31,6 +31,14 @@ impl ExtensionTrait<Option<Arc<RequestContext>>> for rari_fetch {
 pub fn extensions(
     is_snapshot: bool,
     request_context: Option<Arc<RequestContext>>,
-) -> Vec<Extension> {
-    vec![rari_fetch::build(request_context, is_snapshot)]
+) -> (Vec<Extension>, Vec<ExtensionArguments>) {
+    let mut extensions = Vec::new();
+    let mut lazy_args = Vec::new();
+    lazy::register::<Option<Arc<RequestContext>>, rari_fetch>(
+        request_context,
+        is_snapshot,
+        &mut extensions,
+        &mut lazy_args,
+    );
+    (extensions, lazy_args)
 }

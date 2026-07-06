@@ -1,7 +1,7 @@
-use deno_core::{Extension, extension};
+use deno_core::{Extension, ExtensionArguments, extension};
 use deno_ffi::deno_ffi;
 
-use super::ExtensionTrait;
+use super::{ExtensionTrait, lazy};
 
 extension!(
     init_ffi,
@@ -14,12 +14,27 @@ impl ExtensionTrait<()> for init_ffi {
         Self::init()
     }
 }
+
 impl ExtensionTrait<()> for deno_ffi {
+    const LAZY_INIT: bool = true;
+
     fn init((): ()) -> Extension {
         Self::init(None)
     }
+
+    fn lazy_init() -> Extension {
+        Self::lazy_init()
+    }
+
+    fn lazy_args((): ()) -> ExtensionArguments {
+        Self::args(None)
+    }
 }
 
-pub fn extensions(is_snapshot: bool) -> Vec<Extension> {
-    vec![deno_ffi::build((), is_snapshot), init_ffi::build((), is_snapshot)]
+pub fn extensions(is_snapshot: bool) -> (Vec<Extension>, Vec<ExtensionArguments>) {
+    let mut extensions = Vec::new();
+    let mut lazy_args = Vec::new();
+    lazy::register::<(), deno_ffi>((), is_snapshot, &mut extensions, &mut lazy_args);
+    lazy::register::<(), init_ffi>((), is_snapshot, &mut extensions, &mut lazy_args);
+    (extensions, lazy_args)
 }

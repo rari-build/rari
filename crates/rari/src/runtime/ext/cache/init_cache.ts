@@ -1,16 +1,27 @@
 /// <reference path="../types.d.ts" />
 
-import { core } from 'ext:core/mod.js'
-import { applyToGlobal, nonEnumerable } from 'ext:init_utilities/utilities.ts'
+import {
+  applyToGlobal,
+  lazyExtScript,
+  propNonEnumerableLazyLoaded,
+} from 'ext:init_utilities/utilities.ts'
 
-const caches = core.loadExtScript('ext:deno_cache/01_cache.js')
+const lazyCache = lazyExtScript<DenoCacheModule>('ext:deno_cache/01_cache.js')
 
 applyToGlobal({
   caches: {
     enumerable: true,
     configurable: true,
-    get: caches.cacheStorage,
+    get() {
+      return lazyCache().cacheStorage()
+    },
   },
-  CacheStorage: nonEnumerable(caches.CacheStorage),
-  Cache: nonEnumerable(caches.Cache),
+  CacheStorage: propNonEnumerableLazyLoaded(
+    c => c.CacheStorage,
+    lazyCache,
+  ),
+  Cache: propNonEnumerableLazyLoaded(
+    c => c.Cache,
+    lazyCache,
+  ),
 })

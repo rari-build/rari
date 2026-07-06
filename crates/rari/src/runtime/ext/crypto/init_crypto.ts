@@ -1,13 +1,23 @@
 /// <reference path="../types.d.ts" />
 
-import { core } from 'ext:core/mod.js'
-import { applyToGlobal, getterOnly, nonEnumerable } from 'ext:init_utilities/utilities.ts'
+import {
+  applyToGlobal,
+  lazyExtScript,
+  propNonEnumerableLazyLoaded,
+} from 'ext:init_utilities/utilities.ts'
 
-const crypto = core.loadExtScript('ext:deno_crypto/00_crypto.js')
+const lazyCrypto = lazyExtScript<DenoCryptoModule>('ext:deno_crypto/00_crypto.js')
 
 applyToGlobal({
-  CryptoKey: nonEnumerable(crypto.CryptoKey),
-  crypto: getterOnly(() => crypto.crypto),
-  Crypto: nonEnumerable(crypto.Crypto),
-  SubtleCrypto: nonEnumerable(crypto.SubtleCrypto),
+  CryptoKey: propNonEnumerableLazyLoaded(m => m.CryptoKey, lazyCrypto),
+  crypto: {
+    get() {
+      return lazyCrypto().crypto
+    },
+    set() {},
+    enumerable: true,
+    configurable: true,
+  },
+  Crypto: propNonEnumerableLazyLoaded(m => m.Crypto, lazyCrypto),
+  SubtleCrypto: propNonEnumerableLazyLoaded(m => m.SubtleCrypto, lazyCrypto),
 })

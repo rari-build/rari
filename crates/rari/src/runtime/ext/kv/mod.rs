@@ -6,10 +6,10 @@ use ::deno_kv::{
     remote::{HttpOptions, RemoteDbHandler},
     sqlite::SqliteDbHandler,
 };
-use deno_core::{Extension, extension};
+use deno_core::{Extension, ExtensionArguments, extension};
 use deno_kv::deno_kv;
 
-use super::ExtensionTrait;
+use super::{ExtensionTrait, lazy};
 
 extension!(
     init_kv,
@@ -25,13 +25,27 @@ impl ExtensionTrait<()> for init_kv {
 }
 
 impl ExtensionTrait<KvStore> for deno_kv {
+    const LAZY_INIT: bool = true;
+
     fn init(store: KvStore) -> Extension {
         Self::init(Box::new(store.handler()), store.config())
     }
+
+    fn lazy_init() -> Extension {
+        Self::lazy_init()
+    }
+
+    fn lazy_args(store: KvStore) -> ExtensionArguments {
+        Self::args(Box::new(store.handler()), store.config())
+    }
 }
 
-pub fn extensions(store: KvStore, is_snapshot: bool) -> Vec<Extension> {
-    vec![deno_kv::build(store, is_snapshot), init_kv::build((), is_snapshot)]
+pub fn extensions(store: KvStore, is_snapshot: bool) -> (Vec<Extension>, Vec<ExtensionArguments>) {
+    let mut extensions = Vec::new();
+    let mut lazy_args = Vec::new();
+    lazy::register::<KvStore, deno_kv>(store, is_snapshot, &mut extensions, &mut lazy_args);
+    lazy::register::<(), init_kv>((), is_snapshot, &mut extensions, &mut lazy_args);
+    (extensions, lazy_args)
 }
 
 #[derive(Clone)]

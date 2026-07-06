@@ -26,42 +26,18 @@ pub const STREAMING_PIPELINE_READY_CHECK: &str = "typeof globalThis['~rari']?.re
         && typeof globalThis['~rari']?.renderStaticDocument === 'function'";
 
 pub const LOAD_FULL_REACT_VENDORS_SCRIPT: &str = r"
-(async function() {
-    try {
-        const [react, reactDomServer, flightClient, flightServer] = await Promise.all([
-            import('file:///react_vendor/react.js'),
-            import('file:///react_vendor/react-dom-server.js'),
-            import('file:///react_vendor/react-server-dom-webpack-client.js'),
-            import('file:///react_vendor/react-server-dom-webpack-server.js'),
-        ]);
-        if (!globalThis.React?.createElement) {
-            globalThis.React = react.default && react.default.createElement ? react.default : react;
-        }
-        globalThis['~reactServer'] = reactDomServer;
-        globalThis['~flightClient'] = flightClient;
-        globalThis['~reactServerRenderer'] = flightServer;
-        return !!(globalThis.React.createElement
-            && globalThis['~reactServer'].renderToReadableStream
-            && globalThis['~flightClient'].createFromReadableStream
-            && globalThis['~reactServerRenderer'].renderToReadableStream);
-    } catch (e) {
-        console.warn('[rari] Could not load React server modules:', e?.message || e);
-        return false;
-    }
+(function() {
+    if (typeof globalThis['~rari']?.loadFullReactVendors === 'function')
+        return globalThis['~rari'].loadFullReactVendors();
+    return false;
 })()
 ";
 
 pub const LOAD_RSC_VENDORS_SCRIPT: &str = r"
-(async function() {
-    const [react, flightServer] = await Promise.all([
-        import('file:///react_vendor/react.js'),
-        import('file:///react_vendor/react-server-dom-webpack-server.js'),
-    ]);
-    if (!globalThis.React?.createElement) {
-        globalThis.React = react.default && react.default.createElement ? react.default : react;
-    }
-    globalThis['~reactServerRenderer'] = flightServer;
-    return !!(globalThis.React.createElement && globalThis['~reactServerRenderer'].renderToReadableStream);
+(function() {
+    if (typeof globalThis['~rari']?.loadRscReactVendors === 'function')
+        return globalThis['~rari'].loadRscReactVendors();
+    return false;
 })()
 ";
 
