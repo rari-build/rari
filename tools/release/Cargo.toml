@@ -1,5 +1,5 @@
 [package]
-name = "rari-release"
+name = "rari_release"
 edition = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -17,10 +17,10 @@ semver = "1.0.28"
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = [
-  "rt-multi-thread",
+  "fs",
   "macros",
   "process",
-  "fs",
+  "rt-multi-thread"
 ] }
 urlencoding = "2.1.3"
 

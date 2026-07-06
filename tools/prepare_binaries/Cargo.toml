@@ -1,5 +1,5 @@
 [package]
-name = "rari-prepare-binaries"
+name = "rari_prepare_binaries"
 edition = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -11,9 +11,9 @@ clap = { workspace = true }
 colored = { workspace = true }
 cow-utils = { workspace = true }
 tokio = { workspace = true, features = [
-  "rt-multi-thread",
   "macros",
   "process",
+  "rt-multi-thread"
 ] }
 
 [lints]
