@@ -84,18 +84,19 @@ export function lazyExtModule<T>(specifier: string): () => T {
   return loader
 }
 
+export function nonEnumerableGetter(get: () => unknown): PropertyDescriptor {
+  return {
+    get,
+    enumerable: false,
+    configurable: true,
+  }
+}
+
 export function propNonEnumerableLazyLoaded<T, V>(
   select: (mod: T) => V,
   load: () => T,
 ): PropertyDescriptor {
-  return {
-    get(): V {
-      return select(load())
-    },
-    set() {},
-    enumerable: false,
-    configurable: true,
-  }
+  return nonEnumerableGetter((): V => select(load()))
 }
 
 export function propWritableLazyLoaded<T, V>(
@@ -120,14 +121,7 @@ export function defineDenoLazyProps<T>(
   const descriptors: PropertyDescriptorMap = {}
 
   for (const key of keys) {
-    descriptors[key] = {
-      get() {
-        return load()[key]
-      },
-      set() {},
-      enumerable: false,
-      configurable: true,
-    }
+    descriptors[key] = propNonEnumerableLazyLoaded(m => m[key], load)
   }
 
   Object.defineProperties(g.Deno, descriptors)

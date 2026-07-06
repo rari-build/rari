@@ -3,21 +3,8 @@
 import { op_net_listen_udp, op_net_listen_unixpacket } from 'ext:core/ops'
 import { lazyExtScript } from 'ext:init_utilities/utilities.ts'
 
-interface NetModule {
-  connect: typeof Deno.connect
-  listen: typeof Deno.listen
-  resolveDns: typeof Deno.resolveDns
-  createListenDatagram: (
-    opListenUdp: typeof op_net_listen_udp,
-    opListenUnixpacket: typeof op_net_listen_unixpacket,
-  ) => typeof Deno.listenDatagram
-}
-
-interface TlsModule {
-  connectTls: typeof Deno.connectTls
-  listenTls: typeof Deno.listenTls
-  startTls: typeof Deno.startTls
-}
+type NetModule = typeof import('ext:deno_net/01_net.js')
+type TlsModule = typeof import('ext:deno_net/02_tls.js')
 
 const lazyNet = lazyExtScript<NetModule>('ext:deno_net/01_net.js')
 const lazyTls = lazyExtScript<TlsModule>('ext:deno_net/02_tls.js')

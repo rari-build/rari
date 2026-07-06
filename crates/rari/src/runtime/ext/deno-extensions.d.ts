@@ -49,6 +49,7 @@ declare module 'ext:init_utilities/utilities.ts' {
   export function lazyExtModule<T>(specifier: string): () => T
   export function propNonEnumerableLazyLoaded<T, V>(select: (mod: T) => V, load: () => T): PropertyDescriptor
   export function propWritableLazyLoaded<T, V>(select: (mod: T) => V, load: () => T): PropertyDescriptor
+  export function nonEnumerableGetter(get: () => unknown): PropertyDescriptor
   export function defineDenoLazyProps<T>(load: () => T, keys: (keyof T & string)[]): void
 }
 
@@ -60,6 +61,22 @@ declare module 'ext:deno_websocket/01_websocket.js' {
 declare module 'ext:deno_websocket/02_websocketstream.js' {
   const websocketStream: Record<string, any>
   export = websocketStream
+}
+
+declare module 'ext:deno_net/01_net.js' {
+  export function connect(options: unknown): unknown
+  export function listen(options: unknown): unknown
+  export function resolveDns(name: string, recordType: string, options?: unknown): Promise<string[]>
+  export function createListenDatagram(
+    opListenUdp: (...args: unknown[]) => unknown,
+    opListenUnixpacket: (...args: unknown[]) => unknown,
+  ): typeof Deno.listenDatagram
+}
+
+declare module 'ext:deno_net/02_tls.js' {
+  export function connectTls(options: unknown): unknown
+  export function listenTls(options: unknown): unknown
+  export function startTls(tcpConn: unknown, options?: unknown): unknown
 }
 
 declare module 'ext:runtime/98_global_scope_shared.js' {

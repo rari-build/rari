@@ -2,7 +2,7 @@
 
 import { primordials } from 'ext:core/mod.js'
 
-import { lazyExtScript } from 'ext:init_utilities/utilities.ts'
+import { lazyExtScript, nonEnumerableGetter } from 'ext:init_utilities/utilities.ts'
 
 const lazyEventMod = lazyExtScript<DenoWebEventModule>('ext:deno_web/02_event.js')
 const lazyGlobalInterfacesMod = lazyExtScript<DenoWebGlobalInterfacesModule>(
@@ -44,16 +44,32 @@ export const lazyImageData = lazyExtScript<DenoWebImageDataModule>('ext:deno_web
 export const lazyMessagePort = lazyExtScript<DenoWebMessagePortModule>('ext:deno_web/13_message_port.js')
 export const lazyPerformance = lazyExtScript<DenoWebPerformanceModule>('ext:deno_web/15_performance.js')
 
-function lazyLoadedEventProperty<V>(select: (mod: DenoWebEventModule) => V): PropertyDescriptor {
+function lazyEventTargetMethod(
+  method: 'addEventListener' | 'removeEventListener' | 'dispatchEvent',
+): PropertyDescriptor {
   return {
-    get(): V {
+    value(...args: unknown[]) {
       ensureEventTargetReady()
-      return select(lazyEventMod())
+      const { EventTarget } = lazyEventMod()
+      return (EventTarget.prototype[method] as (...args: unknown[]) => unknown).apply(globalThis, args)
     },
-    set() {},
-    enumerable: false,
+    writable: true,
+    enumerable: true,
     configurable: true,
   }
+}
+
+export const lazyEventTargetMethods = {
+  addEventListener: lazyEventTargetMethod('addEventListener'),
+  removeEventListener: lazyEventTargetMethod('removeEventListener'),
+  dispatchEvent: lazyEventTargetMethod('dispatchEvent'),
+} satisfies PropertyDescriptorMap
+
+function lazyLoadedEventProperty<V>(select: (mod: DenoWebEventModule) => V): PropertyDescriptor {
+  return nonEnumerableGetter((): V => {
+    ensureEventTargetReady()
+    return select(lazyEventMod())
+  })
 }
 
 export const lazyEventGlobalProps = {

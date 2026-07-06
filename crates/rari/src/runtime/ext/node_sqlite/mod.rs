@@ -4,8 +4,18 @@ use deno_node_sqlite::deno_node_sqlite;
 use super::{ExtensionTrait, lazy};
 
 impl ExtensionTrait<()> for deno_node_sqlite {
+    const LAZY_INIT: bool = true;
+
     fn init((): ()) -> Extension {
         Self::init()
+    }
+
+    fn lazy_init() -> Extension {
+        Self::lazy_init()
+    }
+
+    fn lazy_args((): ()) -> ExtensionArguments {
+        Self::args()
     }
 }
 

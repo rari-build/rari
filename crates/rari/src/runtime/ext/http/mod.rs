@@ -26,15 +26,15 @@ impl ExtensionTrait<()> for init_http {
     }
 }
 
+fn http_options() -> Options {
+    Options { http2_builder_hook: None, no_legacy_abort: false, automatic_compression: false }
+}
+
 impl ExtensionTrait<()> for deno_http {
     const LAZY_INIT: bool = true;
 
     fn init((): ()) -> Extension {
-        Self::init(Options {
-            http2_builder_hook: None,
-            no_legacy_abort: false,
-            automatic_compression: false,
-        })
+        Self::init(http_options())
     }
 
     fn lazy_init() -> Extension {
@@ -42,11 +42,7 @@ impl ExtensionTrait<()> for deno_http {
     }
 
     fn lazy_args((): ()) -> ExtensionArguments {
-        Self::args(Options {
-            http2_builder_hook: None,
-            no_legacy_abort: false,
-            automatic_compression: false,
-        })
+        Self::args(http_options())
     }
 }
 
