@@ -1,12 +1,15 @@
 [package]
-name = "rari-snapshot"
+name = "rari_snapshot"
 edition = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
 publish = false
 
 [dependencies]
-deno_ast = { workspace = true, features = [ "transpiling", "codegen" ] }
+deno_ast = { workspace = true, features = [
+  "codegen",
+  "transpiling"
+] }
 deno_core = { workspace = true }
 deno_error = { workspace = true }
 deno_node = { workspace = true }

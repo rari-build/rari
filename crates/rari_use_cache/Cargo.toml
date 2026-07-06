@@ -12,8 +12,8 @@ crate-type = [ "cdylib" ]
 [dependencies]
 deno_ast = { workspace = true, features = [
   "codegen",
-  "visit",
-  "transforms"
+  "transforms",
+  "visit"
 ] }
 hex = { workspace = true }
 napi = { version = "3.10.3", features = [

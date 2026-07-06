@@ -82,7 +82,7 @@ build-web: _ensure-node-deps
     pnpm --filter @rari/web build
 
 build-addon-dev:
-    cargo run --manifest-path tools/prepare-binaries/Cargo.toml -- --addon --dev
+    cargo run --manifest-path tools/prepare_binaries/Cargo.toml -- --addon --dev
 
 # --- Test commands ---
 
@@ -211,11 +211,11 @@ release-dry:
 
 # Prepare binaries for current platform (release build)
 prepare-binaries:
-    cargo run --release --manifest-path tools/prepare-binaries/Cargo.toml
+    cargo run --release --manifest-path tools/prepare_binaries/Cargo.toml
 
 # Prepare binaries for development (fast debug build)
 prepare-binaries-dev:
-    cargo run --manifest-path tools/prepare-binaries/Cargo.toml -- --dev
+    cargo run --manifest-path tools/prepare_binaries/Cargo.toml -- --dev
 
 # Bundle React CJS into ESM for rari's V8 runtime (emits .js into the rari crate)
 bundle-react-esm: _ensure-node-deps
