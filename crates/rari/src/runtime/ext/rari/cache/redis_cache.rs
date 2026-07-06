@@ -11,9 +11,11 @@ const DEFAULT_TTL_SECS: u64 = 60;
 const MS_PER_SEC: u64 = 1_000;
 const REDIS_TIMEOUT: Duration = Duration::from_secs(2);
 
+pub const TEST_REDIS_URL: &str = "redis://localhost:6379";
+
 extension!(
     rari_redis_cache,
-    ops = [op_cache_remote_get, op_cache_remote_set],
+    ops = [op_cache_remote_get, op_cache_remote_set, op_use_cache_remote_handler],
     options = {},
     state = |state, _options| {
         state.put(Arc::new(RedisCacheState::from_config()));
@@ -40,7 +42,10 @@ impl RedisCacheState {
     pub fn from_config() -> Self {
         let remote = Config::get().and_then(|config| config.use_cache.remote.as_ref());
 
-        let url = remote.and_then(|remote| remote.url.clone());
+        let url = remote.and_then(|remote| match remote.handler.as_str() {
+            "test" => Some(TEST_REDIS_URL.to_string()),
+            _ => remote.url.clone(),
+        });
         let default_ttl_secs =
             remote.map(|remote| remote.default_ttl_secs).unwrap_or(DEFAULT_TTL_SECS);
 
@@ -92,6 +97,14 @@ fn js_error(error: &impl Display) -> JsErrorBox {
     JsErrorBox::generic(error.to_string())
 }
 
+#[op2]
+#[string]
+pub fn op_use_cache_remote_handler() -> Option<String> {
+    Config::get()
+        .and_then(|config| config.use_cache.remote.as_ref())
+        .and_then(|layer| super::configured_remote_handler(layer).map(str::to_string))
+}
+
 fn get_redis_state(state: &Rc<RefCell<OpState>>) -> Result<Arc<RedisCacheState>, RedisCacheError> {
     state
         .borrow()
@@ -128,7 +141,13 @@ pub async fn op_cache_remote_set(
     let redis_state = get_redis_state(&state).map_err(|e| js_error(&e))?;
     let mut connection = redis_state.connection().await.map_err(|e| js_error(&e))?;
     let ttl_secs = if ttl_ms == 0 { redis_state.default_ttl_secs } else { ttl_ms_to_secs(ttl_ms) };
-    time::timeout(REDIS_TIMEOUT, connection.set_ex::<_, _, ()>(&key, value.into_bytes(), ttl_secs))
+    let bytes = value.into_bytes();
+    let fut: redis::RedisFuture<'_, ()> = if ttl_secs == 0 {
+        connection.set::<_, _, ()>(&key, bytes)
+    } else {
+        connection.set_ex::<_, _, ()>(&key, bytes, ttl_secs)
+    };
+    time::timeout(REDIS_TIMEOUT, fut)
         .await
         .map_err(|_| js_error(&"redis set timeout"))?
         .map_err(|e| js_error(&e))

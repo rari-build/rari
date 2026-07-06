@@ -1,9 +1,8 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { detectPackageManager } from '@rari/cli'
 import { describe, expect, it } from 'vite-plus/test'
-// eslint-disable-next-line antfu/no-import-dist
-import { detectPackageManager } from '../../packages/rari/dist/cli.mjs'
 
 describe('cli project context', () => {
   it('detects bun from bun.lock', () => {

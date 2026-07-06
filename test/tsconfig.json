@@ -3,6 +3,9 @@
   "compilerOptions": {
     "jsx": "react-jsx",
     "paths": {
+      "@rari/logger": ["../packages/logger/src/index"],
+      "@rari/use-cache/runtime/*": ["../packages/use-cache/src/runtime/*"],
+      "@rari/use-cache": ["../packages/use-cache/src/index"],
       "@rari/*": ["../packages/rari/src/*"]
     },
     "types": ["node"]

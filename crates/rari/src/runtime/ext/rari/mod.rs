@@ -1,6 +1,5 @@
 pub mod cache;
 
-use cache::redis_cache;
 use deno_core::{Extension, extension};
 
 use super::ExtensionTrait;
@@ -41,8 +40,4 @@ impl ExtensionTrait<()> for rari {
 
 pub fn extensions(is_snapshot: bool) -> Vec<Extension> {
     vec![rari::build((), is_snapshot)]
-}
-
-pub fn redis_cache_extensions(is_snapshot: bool) -> Vec<Extension> {
-    redis_cache::extensions(None, is_snapshot)
 }

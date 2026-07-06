@@ -1,8 +1,8 @@
-import { describe, expect, it } from 'vite-plus/test'
 import {
   buildNamespaceClientReferenceReplacement,
   NAMESPACE_IMPORT_LINE_REGEX,
-} from '../../../packages/rari/src/vite/client-import-transform'
+} from '@rari/vite/client-import-transform'
+import { describe, expect, it } from 'vite-plus/test'
 
 describe('namespace client import transform', () => {
   it('matches namespace import lines', () => {

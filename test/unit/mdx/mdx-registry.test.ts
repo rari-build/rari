@@ -1,9 +1,9 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { discoverMdxRegistryEntries, generateMdxRegistryModule, isMdxRegistryModuleId } from '@rari/vite/mdx-registry'
+import { ModuleAnalysisCache } from '@rari/vite/module-analysis-cache'
 import { describe, expect, it } from 'vite-plus/test'
-import { discoverMdxRegistryEntries, generateMdxRegistryModule, isMdxRegistryModuleId } from '../../../packages/rari/src/vite/mdx-registry'
-import { ModuleAnalysisCache } from '../../../packages/rari/src/vite/module-analysis-cache'
 
 describe('mdx registry', () => {
   it('discovers only client components referenced in MDX content', () => {

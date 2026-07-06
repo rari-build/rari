@@ -85,7 +85,7 @@ pub fn extensions(options: &ExtensionOptions, is_snapshot: bool) -> Vec<Extensio
     extensions.extend(webidl::extensions(is_snapshot));
     extensions.extend(web::extensions(options.web.clone(), is_snapshot));
     extensions.extend(rari::extensions(is_snapshot));
-    extensions.extend(rari::redis_cache_extensions(is_snapshot));
+    extensions.extend(rari::cache::extensions(is_snapshot));
     extensions.extend(cache::extensions(options.cache, is_snapshot));
     extensions.extend(crypto::extensions(options.crypto_seed, is_snapshot));
     extensions.extend(fs::extensions(Arc::clone(&options.filesystem), is_snapshot));

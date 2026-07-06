@@ -2,7 +2,9 @@
   "extends": "../../../.config/typescript/app.json",
   "compilerOptions": {
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@rari/use-cache/runtime/*": ["../../../packages/use-cache/src/runtime/*"],
+      "@rari/use-cache": ["../../../packages/use-cache/src/index"]
     }
   },
   "include": ["src"]

@@ -648,14 +648,28 @@ impl Config {
                         let trimmed_url = layer.url.as_deref().map(str::trim);
                         let missing_url = trimmed_url.is_none_or(str::is_empty);
 
-                        if layer.handler == "redis" && missing_url {
-                            tracing::warn!(
-                                "Invalid useCache.remote: handler=redis requires a non-empty url. Ignoring remote cache config."
-                            );
-                        } else {
-                            // Store the trimmed URL
-                            layer.url = trimmed_url.map(String::from);
-                            config.use_cache.remote = Some(layer);
+                        match layer.handler.as_str() {
+                            "test" if config.mode == Mode::Production => {
+                                tracing::warn!(
+                                    "Invalid useCache.remote: handler='test' is for e2e tests only and is not allowed in production. Ignoring remote cache config."
+                                );
+                            }
+                            "redis" | "redb" if missing_url => {
+                                tracing::warn!(
+                                    "Invalid useCache.remote: handler={} requires a non-empty url. Ignoring remote cache config.",
+                                    layer.handler
+                                );
+                            }
+                            "redis" | "redb" | "test" => {
+                                layer.url = trimmed_url.map(String::from);
+                                config.use_cache.remote = Some(layer);
+                            }
+                            _ => {
+                                tracing::warn!(
+                                    "Invalid useCache.remote: handler='{}' is not supported (allowed: test, redis, redb). Ignoring remote cache config.",
+                                    layer.handler
+                                );
+                            }
                         }
                     }
                     Err(e) => {

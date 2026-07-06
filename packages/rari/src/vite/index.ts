@@ -1002,7 +1002,7 @@ if (import.meta.hot) {
 
       const originalCode = code
       let wasUseCacheTransformed = false
-      if (options.experimental?.useCache) {
+      if (options.experimental?.useCache || options.experimental?.useCacheRemote) {
         const transform = await getUseCacheTransform()
         if (transform) {
           const useCacheResult = transform(code, id)

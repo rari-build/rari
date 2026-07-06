@@ -1,6 +1,6 @@
-import type { ComponentInfo, GlobalWithRari } from '../../../packages/rari/src/runtime/shared/types'
+import type { ComponentInfo, GlobalWithRari } from '@rari/runtime/shared/types'
+import { installRscChunkLoader, pathsMatch, requireClientComponent } from '@rari/runtime/shared/get-client-component'
 import { describe, expect, it, vi } from 'vite-plus/test'
-import { installRscChunkLoader, pathsMatch, requireClientComponent } from '../../../packages/rari/src/runtime/shared/get-client-component'
 
 describe('pathsMatch', () => {
   it('matches identical normalized paths', () => {
