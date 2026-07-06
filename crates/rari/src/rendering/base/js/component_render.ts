@@ -35,17 +35,30 @@ interface SuspenseError {
     return Deno.core.ops.op_sanitize_html(html, componentId)
   }
 
+  const isSuspensePending = (error: unknown): error is SuspenseError => {
+    return !!error
+      && typeof error === 'object'
+      && (error as SuspenseError).$$typeof === REACT_SUSPENSE_PENDING
+  }
+
   const elementToHtml = async (element: unknown, componentId: string): Promise<string | null> => {
     try {
-      let htmlResult: string | null = null
-      if (g.renderToHtmlFizz)
-        htmlResult = await g.renderToHtmlFizz(element)
+      if (!g.renderToHtmlFizz)
+        return null
 
-      return sanitizeComponentOutput(htmlResult, componentId) as string | null
+      const htmlResult = await g.renderToHtmlFizz(element)
+      const sanitized = sanitizeComponentOutput(htmlResult, componentId)
+      if (typeof sanitized !== 'string' || sanitized.length === 0)
+        return null
+
+      return sanitized
     }
     catch (htmlError) {
+      if (isSuspensePending(htmlError))
+        throw htmlError
+
       console.warn('HTML generation failed:', htmlError)
-      return `<div data-rsc-component="${componentId}">RSC Component</div>`
+      return null
     }
   }
 
