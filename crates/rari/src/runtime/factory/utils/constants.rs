@@ -26,11 +26,7 @@ pub const ENV_INJECTION_SCRIPT: &str = r"
 
 pub const NODE_BOOTSTRAP_SCRIPT: &str = r"
 (() => {
-    try {
-        globalThis.Deno.core.createLazyLoader('ext:init_runtime/init_node_bootstrap.ts')();
-    } catch (error) {
-        console.error('[rari] Failed to stash node bootstrap args:', error);
-    }
+    globalThis.Deno.core.createLazyLoader('ext:init_runtime/init_node_bootstrap.ts')();
 })();
 ";
 

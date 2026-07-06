@@ -31,8 +31,12 @@ pub fn substitute_version_placeholders_in_source(source: &str) -> String {
     result.into_owned()
 }
 
+fn is_init_node_module(name: &str) -> bool {
+    name.ends_with("/init_node.ts") || name == "init_node.ts"
+}
+
 fn maybe_substitute_version_placeholders(name: &str, source: ModuleCodeString) -> ModuleCodeString {
-    if !name.ends_with("init_node.ts") {
+    if !is_init_node_module(name) {
         return source;
     }
 
