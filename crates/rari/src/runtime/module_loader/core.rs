@@ -118,6 +118,21 @@ fn append_extension_only(path: &str) -> (String, &str) {
     (base_with_ext, suffix)
 }
 
+fn component_id_aliases(component_id: &str) -> Vec<String> {
+    let mut aliases = vec![component_id.to_string()];
+    if let Some(stripped) = component_id.strip_prefix('/') {
+        aliases.push(stripped.to_string());
+    } else {
+        aliases.push(format!("/{component_id}"));
+    }
+    if let Some(stem) = component_id.rsplit('/').next() {
+        if !aliases.iter().any(|alias| alias == stem) {
+            aliases.push(stem.to_string());
+        }
+    }
+    aliases
+}
+
 #[derive(Debug)]
 pub struct RariModuleLoader {
     storage: ModuleStorage,
@@ -239,9 +254,17 @@ export default {{}};
         self.storage.set_module_code(specifier, code);
     }
 
+    pub fn register_component_specifier(&self, component_id: &str, specifier: &str) {
+        for alias in component_id_aliases(component_id) {
+            self.component_specifiers.insert(alias, specifier.to_string());
+        }
+    }
+
     pub fn get_component_specifier(&self, component_id: &str) -> Option<String> {
-        if let Some(spec) = self.component_specifiers.get(component_id) {
-            return Some(spec.value().clone());
+        for alias in component_id_aliases(component_id) {
+            if let Some(spec) = self.component_specifiers.get(&alias) {
+                return Some(spec.value().clone());
+            }
         }
 
         let component_stub = format!("file://{RARI_COMPONENT_PATH}component_{component_id}.js");
