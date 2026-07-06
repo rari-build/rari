@@ -150,11 +150,11 @@ hyper-util = { version = "0.1.20", features = [
   "client-legacy"
 ] }
 libc = "0.2.182"
-nix = { version = "=0.30.1", features = [ "term" ] }
+nix = { workspace = true, features = [ "term" ] }
 sys_traits = { workspace = true }
 
 # === Development Tools ===
-rustyline = "=17.0.0"
+rustyline = { workspace = true }
 deno_ast = { workspace = true, features = [
   "transpiling",
   "codegen",
@@ -165,7 +165,7 @@ deno_package_json = { workspace = true }
 deno_semver = { workspace = true }
 
 # === Platform-specific Dependencies ===
-windows-sys = { version = "=0.59.0", features = [
+windows-sys = { workspace = true, features = [
   "Win32_Foundation",
   "Win32_Storage_FileSystem",
   "Win32_System_Console",
@@ -178,7 +178,7 @@ tracing = { workspace = true }
 tracing-subscriber = { version = "0.3.23", features = [ "env-filter" ] }
 
 # === TLS & Crypto ===
-rustls = { version = "=0.23.40", default-features = false, features = [
+rustls = { workspace = true, features = [
   "std",
   "aws_lc_rs",
 ] }

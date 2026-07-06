@@ -11,6 +11,7 @@ crate-type = [ "cdylib" ]
 
 [dependencies]
 deno_ast = { workspace = true, features = [
+  "codegen",
   "visit",
   "transforms"
 ] }
