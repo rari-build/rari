@@ -7476,7 +7476,6 @@ dependencies = [
  "parking_lot",
  "parley",
  "rari_error",
- "rari_rsc",
  "redis",
  "regex",
  "reqwest",
@@ -7562,18 +7561,6 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.18",
  "tokio",
-]
-
-[[package]]
-name = "rari_rsc"
-version = "0.0.0"
-dependencies = [
- "cow-utils",
- "parking_lot",
- "regex",
- "rustc-hash 2.1.3",
- "serde",
- "smallvec",
 ]
 
 [[package]]

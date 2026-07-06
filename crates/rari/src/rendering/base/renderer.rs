@@ -14,10 +14,6 @@ use cow_utils::CowUtils;
 use dashmap::DashMap;
 use parking_lot::Mutex;
 use rari_error::RariError;
-use rari_rsc::{
-    components::ComponentRegistry,
-    utils::{self},
-};
 use rustc_hash::FxHashSet;
 use serde_json::Value;
 use tokio::{fs, time};
@@ -36,6 +32,7 @@ use super::{
 };
 use crate::{
     rendering::base::loader::{RscJsLoader, RscModuleOperation},
+    rsc::{self, ComponentRegistry},
     runtime::JsExecutionRuntime,
     server::middleware::request_context::RequestContext,
     utils::cast,
@@ -420,7 +417,7 @@ globalThis['~errors'].batch.push({{
             )
             .await?;
 
-        let dependencies = utils::extract_dependencies(component_code);
+        let dependencies = rsc::extract_dependencies(component_code);
 
         for dep in &dependencies {
             let dep_owned = dep.clone();
@@ -570,7 +567,7 @@ globalThis['~errors'].batch.push({{
                         };
 
                         if !already_registered && Self::is_react_component_file(&content) {
-                            let sub_dependencies = utils::extract_dependencies(&content);
+                            let sub_dependencies = rsc::extract_dependencies(&content);
                             for sub_dep in sub_dependencies {
                                 stack.push(sub_dep);
                             }
@@ -593,7 +590,7 @@ globalThis['~errors'].batch.push({{
     ) -> Result<(), RariError> {
         let transformed_module_code = component_code.to_string();
 
-        let dependencies = utils::extract_dependencies(component_code);
+        let dependencies = rsc::extract_dependencies(component_code);
 
         {
             let mut registry = self.component_registry.lock();
@@ -709,7 +706,7 @@ globalThis['~errors'].batch.push({{
     }
 
     fn create_component_verification_script(component_id: &str) -> String {
-        let hashed_component_id = format!("Component_{}", utils::hash_string(component_id));
+        let hashed_component_id = format!("Component_{}", rsc::hash_string(component_id));
         RscJsLoader::create_component_verification_script(component_id, &hashed_component_id)
     }
 
@@ -881,7 +878,7 @@ globalThis['~errors'].batch.push({{
         )
         .await?;
 
-        let component_hash = utils::hash_string(component_id);
+        let component_hash = rsc::hash_string(component_id);
         let props_json = props.filter(|p| !p.trim().is_empty()).unwrap_or("{}");
 
         let render_script =
@@ -1056,7 +1053,7 @@ globalThis['~errors'].batch.push({{
                     ))
                 })?;
 
-                let dependencies = utils::extract_dependencies(&component_code);
+                let dependencies = rsc::extract_dependencies(&component_code);
 
                 {
                     let mut registry = self.component_registry.lock();

@@ -8,21 +8,25 @@ use std::{
 
 use axum::{extract::State, http::StatusCode, response::Json};
 use cow_utils::CowUtils;
-use rari_rsc::utils;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::{fs, time};
 
-use crate::server::{
-    ServerState,
-    cache::response::ResponseCache,
-    config::Config,
-    core::utils::{
-        component::extract_component_id,
-        path_validation::{normalize_component_path, validate_component_path, validate_safe_path},
+use crate::{
+    rsc::extract_dependencies,
+    server::{
+        ServerState,
+        cache::response::ResponseCache,
+        config::Config,
+        core::utils::{
+            component::extract_component_id,
+            path_validation::{
+                normalize_component_path, validate_component_path, validate_safe_path,
+            },
+        },
+        vite::rsc::{immediate_component_reregistration, reload_component_from_dist},
     },
-    vite::rsc::{immediate_component_reregistration, reload_component_from_dist},
 };
 
 #[derive(Debug, Deserialize)]
@@ -520,7 +524,7 @@ async fn handle_reload_component(
 
                 registry.remove_component(&component_id);
 
-                let dependencies = utils::extract_dependencies(&bundle_code);
+                let dependencies = extract_dependencies(&bundle_code);
 
                 match registry.register_component(
                     &component_id,

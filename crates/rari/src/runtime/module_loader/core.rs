@@ -19,7 +19,6 @@ use deno_core::{
 };
 use deno_error::JsErrorBox;
 use parking_lot::RwLock;
-use rari_rsc::utils::{DependencyList, extract_dependencies};
 use regex::Regex;
 use rustc_hash::FxHashMap;
 
@@ -36,6 +35,7 @@ use super::{
     transpiler::{needs_jsx_transpilation, needs_typescript_transpilation},
 };
 use crate::{
+    rsc::{DependencyList, extract_dependencies},
     runtime::transpile,
     server::{cache::handler::CacheHandlerRegistry, config::CacheLayerConfig},
     utils::path::path_to_file_url,

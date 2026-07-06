@@ -8,15 +8,17 @@ use std::{
 
 use axum::{extract::State, http::StatusCode, response::Json};
 use cow_utils::CowUtils;
-use rari_rsc::utils;
 use serde_json::Value;
 use tokio::{fs, time};
 
-use crate::server::{
-    RegisterClientRequest, RegisterRequest, ServerState,
-    core::utils::{
-        component::{get_dist_path_for_component, wrap_server_action_module},
-        path_validation::{normalize_component_path, validate_component_path},
+use crate::{
+    rsc::extract_dependencies,
+    server::{
+        RegisterClientRequest, RegisterRequest, ServerState,
+        core::utils::{
+            component::{get_dist_path_for_component, wrap_server_action_module},
+            path_validation::{normalize_component_path, validate_component_path},
+        },
     },
 };
 
@@ -352,7 +354,7 @@ pub async fn reload_component_from_dist(
 
         renderer.clear_script_cache();
 
-        let dependencies = utils::extract_dependencies(&dist_code);
+        let dependencies = extract_dependencies(&dist_code);
 
         {
             let mut registry = renderer.component_registry.lock();

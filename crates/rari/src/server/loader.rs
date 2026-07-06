@@ -3,12 +3,12 @@ use std::{future::Future, path::Path, pin::Pin, sync::Arc};
 
 use cow_utils::CowUtils;
 use rari_error::RariError;
-use rari_rsc::utils::extract_dependencies;
 use serde_json::Value;
 use tokio::fs;
 
 use crate::{
     rendering::base::RscRenderer,
+    rsc::extract_dependencies,
     runtime::JsExecutionRuntime,
     server::core::utils::component::{
         has_use_client_directive, has_use_server_directive, wrap_server_action_module,
