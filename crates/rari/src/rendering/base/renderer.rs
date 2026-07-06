@@ -301,18 +301,6 @@ globalThis['~errors'].batch.push({{
                         tracing::warn!("Failed to initialize Fizz renderer: {e}");
                     }
 
-                    let flight_render_script = include_str!("../layout/js/flight_render.ts");
-                    if let Err(e) = self
-                        .runtime
-                        .execute_script(
-                            "flight_render.ts".to_string(),
-                            flight_render_script.to_string(),
-                        )
-                        .await
-                    {
-                        tracing::warn!("Failed to initialize Flight renderer: {e}");
-                    }
-
                     let streaming_fizz_script = include_str!("../layout/js/streaming_fizz.ts");
                     if let Err(e) = self
                         .runtime
@@ -323,6 +311,18 @@ globalThis['~errors'].batch.push({{
                         .await
                     {
                         tracing::warn!("Failed to initialize streaming Fizz pipeline: {e}");
+                    }
+
+                    let rsc_renderer_script = include_str!("js/rsc_renderer.ts");
+                    if let Err(e) = self
+                        .runtime
+                        .execute_script(
+                            "rsc_renderer.ts".to_string(),
+                            rsc_renderer_script.to_string(),
+                        )
+                        .await
+                    {
+                        tracing::warn!("Failed to initialize RSC renderer: {e}");
                     }
                 } else {
                     let err = result.get("error").and_then(|v| v.as_str()).unwrap_or("unknown");
@@ -337,6 +337,138 @@ globalThis['~errors'].batch.push({{
         }
 
         self.initialized = true;
+
+        Ok(())
+    }
+
+    pub async fn ensure_rsc_pipeline(&self) -> Result<(), RariError> {
+        let check_result = self
+            .runtime
+            .execute_script(
+                "<check_rsc>".to_string(),
+                "typeof globalThis.renderToRsc === 'function'".to_string(),
+            )
+            .await?;
+
+        if check_result.as_bool() == Some(true) {
+            return Ok(());
+        }
+
+        let setup_script = r"
+            (async function() {
+                const [react, flightServer] = await Promise.all([
+                    import('file:///react_vendor/react.js'),
+                    import('file:///react_vendor/react-server-dom-webpack-server.js'),
+                ]);
+                if (!globalThis.React?.createElement) {
+                    globalThis.React = react.default && react.default.createElement ? react.default : react;
+                }
+                globalThis['~reactServerRenderer'] = flightServer;
+                return !!(globalThis.React.createElement && globalThis['~reactServerRenderer'].renderToReadableStream);
+            })()
+        ";
+
+        let result = self
+            .runtime
+            .execute_script("<load_react_server>".to_string(), setup_script.to_string())
+            .await
+            .map_err(|e| {
+                RariError::internal(format!("Failed to load React Server renderer: {e}"))
+            })?;
+
+        if result.as_bool() != Some(true) {
+            return Err(RariError::internal(
+                "React Server renderer module failed to initialize".to_string(),
+            ));
+        }
+
+        let renderer_script = include_str!("js/rsc_renderer.ts");
+        self.runtime
+            .execute_script("load_rsc_renderer.ts".to_string(), renderer_script.to_string())
+            .await
+            .map_err(|e| RariError::internal(format!("Failed to load RSC renderer: {e}")))?;
+
+        Ok(())
+    }
+
+    pub async fn ensure_streaming_pipeline(&self) -> Result<(), RariError> {
+        let check = self
+            .runtime
+            .execute_script(
+                "check_streaming_fizz".to_string(),
+                "typeof globalThis['~rari']?.renderStreamingDocument === 'function'".to_string(),
+            )
+            .await?;
+
+        if check.as_bool() == Some(true) {
+            return Ok(());
+        }
+
+        let fizz_check = self
+            .runtime
+            .execute_script(
+                "check_fizz_vendor".to_string(),
+                "typeof globalThis['~reactServer']?.renderToReadableStream === 'function'"
+                    .to_string(),
+            )
+            .await?;
+
+        if fizz_check.as_bool() == Some(true) {
+            self.ensure_rsc_pipeline().await?;
+        } else {
+            let setup_script = r"
+                (async function() {
+                    const [react, reactDomServer, flightClient, flightServer] = await Promise.all([
+                        import('file:///react_vendor/react.js'),
+                        import('file:///react_vendor/react-dom-server.js'),
+                        import('file:///react_vendor/react-server-dom-webpack-client.js'),
+                        import('file:///react_vendor/react-server-dom-webpack-server.js'),
+                    ]);
+                    if (!globalThis.React?.createElement) {
+                        globalThis.React = react.default && react.default.createElement ? react.default : react;
+                    }
+                    globalThis['~reactServer'] = reactDomServer;
+                    globalThis['~flightClient'] = flightClient;
+                    globalThis['~reactServerRenderer'] = flightServer;
+                    return !!(globalThis['~reactServer'].renderToReadableStream
+                        && globalThis['~flightClient'].createFromReadableStream
+                        && globalThis['~reactServerRenderer'].renderToReadableStream);
+                })()
+            ";
+
+            let result = self
+                .runtime
+                .execute_script("setup_streaming_vendors".to_string(), setup_script.to_string())
+                .await
+                .map_err(|e| {
+                    RariError::internal(format!("Failed to load React streaming vendors: {e}"))
+                })?;
+
+            if result.as_bool() != Some(true) {
+                return Err(RariError::internal(
+                    "React streaming vendor modules failed to initialize".to_string(),
+                ));
+            }
+
+            for (name, script) in [
+                ("fizz_render.ts", include_str!("../layout/js/fizz_render.ts")),
+                ("rsc_renderer.ts", include_str!("js/rsc_renderer.ts")),
+            ] {
+                if let Err(e) =
+                    self.runtime.execute_script(name.to_string(), script.to_string()).await
+                {
+                    tracing::warn!("Failed to load {name}: {e}");
+                }
+            }
+        }
+
+        let streaming_fizz_script = include_str!("../layout/js/streaming_fizz.ts");
+        self.runtime
+            .execute_script("streaming_fizz.ts".to_string(), streaming_fizz_script.to_string())
+            .await
+            .map_err(|e| {
+                RariError::internal(format!("Failed to load streaming Fizz pipeline: {e}"))
+            })?;
 
         Ok(())
     }
@@ -711,40 +843,6 @@ globalThis['~errors'].batch.push({{
         registry.list_component_ids()
     }
 
-    fn get_or_cache_script<F>(&self, cache_key: &str, generator: F) -> String
-    where
-        F: FnOnce() -> String,
-    {
-        if let Some(cached) = self.get_cached_script(cache_key) {
-            cached
-        } else {
-            let script = generator();
-            self.cache_script(cache_key.to_string(), script.clone());
-            script
-        }
-    }
-
-    pub async fn render_to_rsc_format(
-        &self,
-        component_id: &str,
-        props: Option<&str>,
-    ) -> Result<String, RariError> {
-        self.render_to_rsc_format_with_context(component_id, props, None).await
-    }
-
-    pub async fn render_to_rsc_format_with_context(
-        &self,
-        component_id: &str,
-        props: Option<&str>,
-        request_context: Option<Arc<RequestContext>>,
-    ) -> Result<String, RariError> {
-        self.resource_tracker.increment_active_renders();
-        let result =
-            self.internal_render_to_rsc_with_context(component_id, props, request_context).await;
-        self.resource_tracker.decrement_active_renders();
-        result
-    }
-
     pub async fn render_to_string(
         &self,
         component_id: &str,
@@ -764,117 +862,6 @@ globalThis['~errors'].batch.push({{
             self.internal_render_to_string_with_context(component_id, props, request_context).await;
         self.resource_tracker.decrement_active_renders();
         result
-    }
-
-    async fn internal_render_to_rsc(
-        &self,
-        component_id: &str,
-        props: Option<&str>,
-    ) -> Result<String, RariError> {
-        let render_start = Instant::now();
-
-        if !self.initialized {
-            return Err(RariError::internal("RSC renderer not initialized"));
-        }
-
-        if self.is_client_reference(component_id).await {
-            return Self::handle_client_reference(component_id, props).await;
-        }
-
-        if !self.component_exists(component_id) {
-            return Err(RariError::not_found(format!("Component not found: {component_id}")));
-        }
-
-        let component_hash = utils::hash_string(component_id);
-        let props_json = props.filter(|p| !p.trim().is_empty()).unwrap_or("{}");
-
-        let clear_environment_script = self
-            .get_or_cache_script(&format!("clear_env_{component_id}"), || {
-                RscJsLoader::create_component_environment_setup(component_id)
-            });
-
-        let setup_scripts = vec![("clear_environment", clear_environment_script)];
-
-        self.execute_batched_scripts(setup_scripts).await?;
-
-        let render_script =
-            RscJsLoader::load_component_render_with_data(component_id, &component_hash, props_json)
-                .map_err(|e| {
-                    RariError::js_execution(format!("Failed to load component render script: {e}"))
-                })?;
-
-        self.execute_script_with_timeout(format!("render_{component_id}.ts"), render_script)
-            .await?;
-
-        let rsc_extraction_script = self
-            .get_or_cache_script(&format!("extract_rsc_{component_id}"), || {
-                RscJsLoader::create_rsc_extraction_script(component_id)
-            });
-
-        let extraction_result = self
-            .execute_script_with_timeout(
-                format!("extract_rsc_{component_id}.js"),
-                rsc_extraction_script,
-            )
-            .await?;
-
-        let render_duration = render_start.elapsed();
-        self.resource_tracker.record_render_completion(render_duration);
-
-        Self::process_rsc_extraction_result(component_id, &extraction_result)
-    }
-
-    fn process_rsc_extraction_result(
-        component_id: &str,
-        extraction_result: &Value,
-    ) -> Result<String, RariError> {
-        let parsed_result: Value = if let Some(obj) = extraction_result.as_object() {
-            Value::Object(obj.clone())
-        } else {
-            let rsc_result = extraction_result.as_str().unwrap_or("");
-            if rsc_result.is_empty() {
-                return Err(RariError::js_execution(format!(
-                    "Empty RSC result for component '{component_id}'. Component may have failed to render properly."
-                )));
-            }
-            serde_json::from_str(rsc_result)
-                .map_err(|e| RariError::js_execution(format!("Failed to parse RSC result: {e}")))?
-        };
-
-        if let Some(error) = parsed_result.get("error")
-            && error.as_bool().unwrap_or(false)
-        {
-            let message = parsed_result
-                .get("message")
-                .and_then(|m| m.as_str())
-                .unwrap_or("Unknown RSC error");
-            return Err(RariError::js_execution(format!(
-                "RSC rendering error for component '{component_id}': {message}"
-            )));
-        }
-
-        let rsc_data = parsed_result.get("rsc").ok_or_else(|| {
-            RariError::js_execution(format!(
-                "No RSC data found in result for component '{component_id}'"
-            ))
-        })?;
-
-        if let Some(flight_protocol) = rsc_data.as_str() {
-            return Ok(flight_protocol.to_string());
-        }
-
-        Err(RariError::js_execution(format!(
-            "RSC data for component '{component_id}' is not a Flight protocol string"
-        )))
-    }
-
-    async fn internal_render_to_rsc_with_context(
-        &self,
-        component_id: &str,
-        props: Option<&str>,
-        _request_context: Option<Arc<RequestContext>>,
-    ) -> Result<String, RariError> {
-        self.internal_render_to_rsc(component_id, props).await
     }
 
     async fn internal_render_to_string_with_context(
@@ -962,6 +949,18 @@ globalThis['~errors'].batch.push({{
         )
         .await?;
 
+        let component_hash = utils::hash_string(component_id);
+        let props_json = props.filter(|p| !p.trim().is_empty()).unwrap_or("{}");
+
+        let render_script =
+            RscJsLoader::load_component_render_with_data(component_id, &component_hash, props_json)
+                .map_err(|e| {
+                    RariError::js_execution(format!("Failed to load component render script: {e}"))
+                })?;
+
+        self.execute_script_with_timeout(format!("render_html_{component_id}.ts"), render_script)
+            .await?;
+
         let html_extraction_script = {
             let cache_key = format!("extract_html_{component_id}");
             if let Some(cached) = self.get_cached_script(&cache_key) {
@@ -982,10 +981,8 @@ globalThis['~errors'].batch.push({{
 
         match extraction_result {
             Ok(value) => {
-                let mut html =
+                let html =
                     value.get("html").and_then(|h| h.as_str()).unwrap_or_default().to_string();
-
-                html = Self::sanitize_html_output(&html, component_id);
 
                 let render_duration = render_start.elapsed();
 
@@ -1031,79 +1028,6 @@ globalThis['~errors'].batch.push({{
     ) -> impl Future<Output = Result<String, RariError>> {
         let encoded_id = urlencoding::encode(component_id);
         future::ready(Ok(format!(r"<!-- rari:client-component-ref:{encoded_id} -->")))
-    }
-
-    fn sanitize_html_output(html: &str, component_id: &str) -> String {
-        let mut sanitized_html = html.to_string();
-
-        let sanitization_rules =
-            [(r#"\{"id".*?\}"#, ""), (r"<pre>\{.*?\}</pre>", ""), (r#"\[(\{".*?},?)+\]"#, "[]")];
-
-        for (pattern, replacement) in &sanitization_rules {
-            if let Ok(regex) = regex::Regex::new(pattern)
-                && regex.is_match(&sanitized_html)
-            {
-                sanitized_html = regex.replace_all(&sanitized_html, *replacement).to_string();
-            }
-        }
-
-        let boundary_markers = [
-            format!(r#"<div[^>]*?data-component-id=["']{component_id}["'][^>]*?>(.*?)</div>"#),
-            format!(r#"<div[^>]*?id=["']{component_id}-wrapper["'][^>]*?>(.*?)</div>"#),
-            format!(r#"<div[^>]*?data-rsc-component=["']{component_id}["'][^>]*?>(.*?)</div>"#),
-        ];
-
-        for marker in &boundary_markers {
-            if let Ok(regex) = regex::Regex::new(marker)
-                && regex.is_match(&sanitized_html)
-            {
-                break;
-            }
-        }
-
-        let mut result_contains_foreign_data = false;
-
-        let leakage_indicators = [
-            (r#"=".*?\{"id".*?\}.*?""#, true),
-            (r#">.*?\{"id".*?\}.*?<"#, true),
-            (r#"=".*?\[.*?\{.*?\}.*?\].*?""#, true),
-        ];
-
-        for (pattern, _) in &leakage_indicators {
-            if let Ok(regex) = regex::Regex::new(pattern)
-                && regex.is_match(&sanitized_html)
-            {
-                result_contains_foreign_data = true;
-                break;
-            }
-        }
-
-        if result_contains_foreign_data {
-            if let Ok(regex) = regex::Regex::new(r#">\s*\{[^{]*"id"[^}]*\}\s*<"#) {
-                sanitized_html = regex.replace_all(&sanitized_html, "><").to_string();
-            }
-
-            if let Ok(regex) = regex::Regex::new(r"<pre>.*?\{.*?\}.*?</pre>") {
-                sanitized_html = regex.replace_all(&sanitized_html, "").to_string();
-            }
-        }
-
-        let calculation_patterns = [(
-            r"([a-zA-Z ]+: [0-9]+ \+ [0-9]+ =)\s*(\d+)([^0-9])",
-            |captures: &regex::Captures| {
-                format!("{}{}{}", &captures[1], &captures[2], &captures[3])
-            },
-        )];
-
-        for (pattern, replacement) in &calculation_patterns {
-            if let Ok(regex) = regex::Regex::new(pattern)
-                && regex.is_match(&sanitized_html)
-            {
-                sanitized_html = regex.replace_all(&sanitized_html, *replacement).to_string();
-            }
-        }
-
-        sanitized_html
     }
 
     pub async fn execute_server_function(

@@ -6,13 +6,9 @@ use cow_utils::CowUtils;
 use rari_error::RariError;
 use regex::Regex;
 use rustc_hash::FxHashSet;
-use serde_json::Value;
 use tokio::fs;
 
-use crate::{
-    runtime::JsExecutionRuntime,
-    server::{config::Config, routing::app_router::AppRouteMatch},
-};
+use crate::{runtime::JsExecutionRuntime, server::routing::app_router::AppRouteMatch};
 
 pub fn escape_html(text: &str) -> String {
     text.cow_replace('&', "&amp;")
@@ -293,54 +289,7 @@ impl RscHtmlRenderer {
         }
     }
 
-    pub async fn render_to_html_for_route_fizz(
-        &self,
-        rsc_flight_protocol: &str,
-        config: &Config,
-        route_match: &AppRouteMatch,
-    ) -> Result<String, RariError> {
-        let cache_template = config.rsc_html.cache_template;
-        let is_dev_mode = config.is_development();
-        let css_links = Self::css_links_for_route(route_match);
-
-        let html_content = self.render_flight_to_fizz_html(rsc_flight_protocol).await?;
-
-        self.assemble_document(html_content, cache_template, is_dev_mode, &css_links).await
-    }
-
-    async fn render_flight_to_fizz_html(
-        &self,
-        rsc_flight_protocol: &str,
-    ) -> Result<String, RariError> {
-        let flight_json =
-            serde_json::to_string(rsc_flight_protocol).unwrap_or_else(|_| "\"\"".to_string());
-
-        let script = format!(
-            r"(async function() {{
-                const fn = globalThis['~rari'] && globalThis['~rari'].renderFlightToHtml;
-                if (!fn) return {{ ok: false, error: 'renderFlightToHtml unavailable' }};
-                try {{
-                    const html = await fn({flight_json});
-                    return {{ ok: true, html: html }};
-                }} catch (e) {{
-                    return {{ ok: false, error: String((e && e.message) || e) }};
-                }}
-            }})()",
-        );
-
-        let result =
-            self.runtime.execute_script("render_flight_to_fizz".to_string(), script).await?;
-
-        let ok = result.get("ok").and_then(Value::as_bool).unwrap_or(false);
-        if !ok {
-            let err = result.get("error").and_then(|v| v.as_str()).unwrap_or("unknown");
-            return Err(RariError::js_execution(format!("Fizz reviver failed: {err}")));
-        }
-
-        Ok(result.get("html").and_then(|v| v.as_str()).unwrap_or_default().to_string())
-    }
-
-    async fn assemble_document(
+    pub(crate) async fn assemble_document(
         &self,
         html_content: String,
         cache_template: bool,
@@ -584,23 +533,5 @@ mod tests {
 
         assert!(html.contains(r#"<link rel="stylesheet" href="/extra.css">"#));
         assert!(html.contains("<main>Page</main>"));
-    }
-
-    #[tokio::test]
-    async fn test_render_flight_to_fizz_html_errors_without_renderer() {
-        let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = RscHtmlRenderer::new(runtime);
-
-        let result = renderer
-            .render_flight_to_fizz_html("0:[\"$\",\"div\",null,{\"children\":\"Hi\"}]")
-            .await;
-
-        let err = result.expect_err("expected missing renderFlightToHtml to fail");
-        let message = err.to_string();
-        assert!(
-            message.contains("Fizz reviver failed")
-                && message.contains("renderFlightToHtml unavailable"),
-            "unexpected error: {message}"
-        );
     }
 }

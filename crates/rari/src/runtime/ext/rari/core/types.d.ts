@@ -103,8 +103,6 @@ declare global {
       }
       readStream?: (stream: ReadableStream) => Promise<string>
       ssrModules?: Record<string, { default?: unknown, [key: string]: unknown }>
-      ssrRenderComponent?: (modulePath: string, exportName: string, props: unknown) => Promise<string>
-      renderFlightToHtml?: (flightProtocol: string) => Promise<string>
       clientReferenceManifest?: Record<string, { id: string, chunks: string, name: string }>
       lastRscBinary?: Uint8Array
       capturedElement?: unknown
@@ -121,9 +119,15 @@ declare global {
         headContent: string
         caughtErrors: unknown[]
       }) => Promise<void>
+      renderStaticDocument?: (options: {
+        capturedElement: unknown
+        headContent: string
+        caughtErrors: unknown[]
+      }) => Promise<string>
       pumpStreamingCompleteScript?: () => Promise<void>
       injectStreamError?: (caughtErrors: unknown[]) => Promise<void>
       pumpFizzChunk?: (text: string) => Promise<boolean>
+      pumpRscElementStream?: (element: unknown, pumpChunk: (text: string) => Promise<boolean>) => Promise<void>
       streaming?: { complete?: boolean }
     }
   }

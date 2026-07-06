@@ -346,59 +346,6 @@ impl RscJsLoader {
         create_js_wrapper(&extraction_code)
     }
 
-    pub fn create_rsc_extraction_script(component_id: &str) -> String {
-        let extraction_code = format!(
-            r#"
-            if (typeof globalThis['~render']?.lastResult === 'undefined') {{
-                return {{
-                    error: true,
-                    message: "No rendered result available. The component may have suspended.",
-                    rsc: ["$", "div", null, {{
-                        children: [
-                            "Component: {component_id}",
-                            "Component suspended or failed to render"
-                        ]
-                    }}]
-                }};
-            }}
-
-            const renderResult = globalThis['~render'].lastResult;
-            let extractedRsc = null;
-
-            if (renderResult && renderResult.rsc) {{
-                extractedRsc = renderResult.rsc;
-            }} else if (renderResult && renderResult.html) {{
-                extractedRsc = ["$", "div", null, {{
-                    "data-rsc-component": "{component_id}",
-                    children: "Component rendered but RSC data unavailable"
-                }}];
-            }} else {{
-                extractedRsc = ["$", "div", null, {{
-                    children: [
-                        "Component: {component_id}",
-                        "Failed to extract RSC content"
-                    ]
-                }}];
-            }}
-
-            return {{
-                success: true,
-                rsc: extractedRsc,
-                debug: {{
-                    component_id: "{component_id}",
-                    rscType: typeof extractedRsc,
-                    hasRscData: !!renderResult?.rsc,
-                    hasHtmlData: !!renderResult?.html,
-                    hasRenderResult: !!renderResult,
-                    renderResultKeys: renderResult ? Object.keys(renderResult) : []
-                }}
-            }};
-            "#
-        );
-
-        create_js_wrapper(&extraction_code)
-    }
-
     pub fn create_component_verification_script(
         component_id: &str,
         hashed_component_id: &str,

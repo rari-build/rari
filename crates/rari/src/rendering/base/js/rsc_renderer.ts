@@ -40,16 +40,13 @@ async function renderToRsc(element: unknown): Promise<string> {
     offset += chunk.byteLength
   }
 
-  // Store the raw binary — this is what should be served to clients
-  // and what Fizz consumes on the server. Text decoding of T rows
-  // is lossy because T row content can contain newlines.
+  // Store raw Flight bytes for RSC navigation responses. Text decoding is lossy
+  // when the payload contains T rows (newlines inside row content).
   if (!g['~rari'])
     g['~rari'] = {}
   g['~rari'].lastRscBinary = fullBuffer
 
-  // Return text version for the Fizz path (which re-encodes to binary via its own stream).
-  // Note: this text is NOT valid for direct client consumption if it
-  // contains T rows. The binary should be used instead.
+  // Text fallback for composition metadata when binary is unavailable.
   return new TextDecoder().decode(fullBuffer)
 }
 
