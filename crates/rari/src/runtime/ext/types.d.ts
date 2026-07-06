@@ -1,6 +1,10 @@
 /// <reference path="./deno-extensions.d.ts" />
+/// <reference path="./extension-module-types.d.ts" />
 
 declare global {
+  // Deno websocket extension; not in lib.dom.
+  class WebSocketStream {}
+
   interface GlobalThis {
     [K: string]: unknown
     Deno: typeof Deno
@@ -309,6 +313,88 @@ declare global {
     function refTimer(id: number): void
     function unrefTimer(id: number): void
     function exit(code?: number): never
+
+    interface Env {
+      get: (name: string) => string | undefined
+      set: (name: string, value: string) => void
+      has: (name: string) => boolean
+      delete: (name: string) => void
+      toObject: () => Record<string, string>
+      [Symbol.iterator]: () => IterableIterator<[string, string]>
+    }
+
+    const env: Env
+
+    function loadavg(): number[]
+    function osRelease(): string
+    function osUptime(): number
+    function hostname(): string
+
+    interface SystemMemoryInfo {
+      total: number
+      free: number
+      available: number
+      buffers: number
+      cached: number
+      swapTotal: number
+      swapFree: number
+    }
+
+    function systemMemoryInfo(): SystemMemoryInfo
+
+    interface NetworkInterfaceInfo {
+      address: string
+      netmask: string
+      family: 'IPv4' | 'IPv6'
+      mac: string
+      scopeid: number | null
+      cidr: string
+    }
+
+    function networkInterfaces(): Record<string, NetworkInterfaceInfo[]>
+    function gid(): number | null
+    function uid(): number | null
+
+    class PermissionStatus {
+      readonly state: 'granted' | 'denied' | 'prompt'
+      readonly name: string
+    }
+
+    class Permissions {
+      query(permission: { name: string }): Promise<PermissionStatus>
+    }
+
+    const permissions: Permissions
+
+    const errors: Record<string, ErrorConstructor>
+
+    class ChildProcess {}
+    class Command {
+      constructor(command: string, argsOrOptions?: string[] | CommandOptions)
+    }
+    interface CommandOptions {
+      args?: string[]
+      cwd?: string
+      env?: Record<string, string>
+      stdin?: 'inherit' | 'piped' | 'null' | number
+      stdout?: 'inherit' | 'piped' | 'null' | number
+      stderr?: 'inherit' | 'piped' | 'null' | number
+    }
+    class Process {}
+    function run(...args: any[]): any
+    function kill(pid: number, signal?: string): void
+
+    function addSignalListener(
+      signal: 'SIGINT' | 'SIGBREAK' | 'SIGTERM' | 'SIGUSR1' | 'SIGUSR2',
+      handler: () => void,
+    ): void
+    function removeSignalListener(
+      signal: 'SIGINT' | 'SIGBREAK' | 'SIGTERM' | 'SIGUSR1' | 'SIGUSR2',
+      handler: () => void,
+    ): void
+
+    function isatty(rid: number): boolean
+    function consoleSize(): { columns: number, rows: number } | null
 
     function connect(options: ConnectOptions): Promise<Conn>
     function listen(options: ListenOptions): Listener

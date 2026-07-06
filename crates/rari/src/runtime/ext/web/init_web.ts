@@ -1,101 +1,149 @@
 /// <reference path="../types.d.ts" />
 
-import { core } from 'ext:core/mod.js'
-import { applyToGlobal, nonEnumerable, writeable } from 'ext:init_utilities/utilities.ts'
+import {
+  applyToDeno,
+  applyToGlobal,
+  propNonEnumerableLazyLoaded,
+  propWritableLazyLoaded,
+} from 'ext:init_utilities/utilities.ts'
+import {
+  lazyAbortSignal,
+  lazyBase64,
+  lazyCompression,
+  lazyDomException,
+  lazyEncoding,
+  lazyEventGlobalProps,
+  lazyFile,
+  lazyFileReader,
+  lazyImageData,
+  lazyMessagePort,
+  lazyPerformance,
+  lazyStreams,
+  lazyTimers,
+  lazyUrl,
+} from './shared_loaders.ts'
 import './init_errors.ts'
 
-const url = core.loadExtScript('ext:deno_web/00_url.js')
-const { DOMException } = core.loadExtScript('ext:deno_web/01_dom_exception.js')
-const event = core.loadExtScript('ext:deno_web/02_event.js')
-const timers = core.loadExtScript('ext:deno_web/02_timers.js')
-const abortSignal = core.loadExtScript('ext:deno_web/03_abort_signal.js')
-const base64 = core.loadExtScript('ext:deno_web/05_base64.js')
-const streams = core.loadExtScript('ext:deno_web/06_streams.js')
-const encoding = core.loadExtScript('ext:deno_web/08_text_encoding.js')
-const file = core.loadExtScript('ext:deno_web/09_file.js')
-const fileReader = core.loadExtScript('ext:deno_web/10_filereader.js')
-const messagePort = core.loadExtScript('ext:deno_web/13_message_port.js')
-const compression = core.loadExtScript('ext:deno_web/14_compression.js')
-const performance = core.loadExtScript('ext:deno_web/15_performance.js')
-const imageData = core.loadExtScript('ext:deno_web/16_image_data.js')
-
-g.Deno.refTimer = timers.refTimer
-g.Deno.unrefTimer = timers.unrefTimer
+applyToDeno({
+  refTimer: propWritableLazyLoaded(t => t.refTimer, lazyTimers),
+  unrefTimer: propWritableLazyLoaded(t => t.unrefTimer, lazyTimers),
+})
 
 applyToGlobal({
-  AbortController: nonEnumerable(abortSignal.AbortController),
-  AbortSignal: nonEnumerable(abortSignal.AbortSignal),
-  Blob: nonEnumerable(file.Blob),
-  ByteLengthQueuingStrategy: nonEnumerable(
-    streams.ByteLengthQueuingStrategy,
+  ...lazyEventGlobalProps,
+  AbortController: propNonEnumerableLazyLoaded(m => m.AbortController, lazyAbortSignal),
+  AbortSignal: propNonEnumerableLazyLoaded(m => m.AbortSignal, lazyAbortSignal),
+  Blob: propNonEnumerableLazyLoaded(m => m.Blob, lazyFile),
+  ByteLengthQueuingStrategy: propNonEnumerableLazyLoaded(
+    s => s.ByteLengthQueuingStrategy,
+    lazyStreams,
   ),
-  CloseEvent: nonEnumerable(event.CloseEvent),
-  CompressionStream: nonEnumerable(compression.CompressionStream),
-  CountQueuingStrategy: nonEnumerable(
-    streams.CountQueuingStrategy,
+  CompressionStream: propNonEnumerableLazyLoaded(
+    c => c.CompressionStream,
+    lazyCompression,
   ),
-  CustomEvent: nonEnumerable(event.CustomEvent),
-  DecompressionStream: nonEnumerable(compression.DecompressionStream),
-  DOMException: nonEnumerable(DOMException),
-  ErrorEvent: nonEnumerable(event.ErrorEvent),
-  Event: nonEnumerable(event.Event),
-  EventTarget: nonEnumerable(event.EventTarget),
-  File: nonEnumerable(file.File),
-  FileReader: nonEnumerable(fileReader.FileReader),
-  MessageEvent: nonEnumerable(event.MessageEvent),
-  Performance: nonEnumerable(performance.Performance),
-  PerformanceEntry: nonEnumerable(performance.PerformanceEntry),
-  PerformanceMark: nonEnumerable(performance.PerformanceMark),
-  PerformanceMeasure: nonEnumerable(performance.PerformanceMeasure),
-  PromiseRejectionEvent: nonEnumerable(event.PromiseRejectionEvent),
-  ProgressEvent: nonEnumerable(event.ProgressEvent),
-  ReadableStream: nonEnumerable(streams.ReadableStream),
-  ReadableStreamDefaultReader: nonEnumerable(
-    streams.ReadableStreamDefaultReader,
+  CountQueuingStrategy: propNonEnumerableLazyLoaded(
+    s => s.CountQueuingStrategy,
+    lazyStreams,
   ),
-  TextDecoder: nonEnumerable(encoding.TextDecoder),
-  TextEncoder: nonEnumerable(encoding.TextEncoder),
-  TextDecoderStream: nonEnumerable(encoding.TextDecoderStream),
-  TextEncoderStream: nonEnumerable(encoding.TextEncoderStream),
-  TransformStream: nonEnumerable(streams.TransformStream),
-  MessageChannel: nonEnumerable(messagePort.MessageChannel),
-  MessagePort: nonEnumerable(messagePort.MessagePort),
-  WritableStream: nonEnumerable(streams.WritableStream),
-  WritableStreamDefaultWriter: nonEnumerable(
-    streams.WritableStreamDefaultWriter,
+  DecompressionStream: propNonEnumerableLazyLoaded(
+    c => c.DecompressionStream,
+    lazyCompression,
   ),
-  WritableStreamDefaultController: nonEnumerable(
-    streams.WritableStreamDefaultController,
+  DOMException: propNonEnumerableLazyLoaded(m => m.DOMException, lazyDomException),
+  File: propNonEnumerableLazyLoaded(m => m.File, lazyFile),
+  FileReader: propNonEnumerableLazyLoaded(
+    m => m.FileReader,
+    lazyFileReader,
   ),
-  ReadableByteStreamController: nonEnumerable(
-    streams.ReadableByteStreamController,
+  Performance: propNonEnumerableLazyLoaded(m => m.Performance, lazyPerformance),
+  PerformanceEntry: propNonEnumerableLazyLoaded(m => m.PerformanceEntry, lazyPerformance),
+  PerformanceMark: propNonEnumerableLazyLoaded(m => m.PerformanceMark, lazyPerformance),
+  PerformanceMeasure: propNonEnumerableLazyLoaded(m => m.PerformanceMeasure, lazyPerformance),
+  ReadableStream: propNonEnumerableLazyLoaded(
+    s => s.ReadableStream,
+    lazyStreams,
   ),
-  ReadableStreamBYOBReader: nonEnumerable(
-    streams.ReadableStreamBYOBReader,
+  ReadableStreamDefaultReader: propNonEnumerableLazyLoaded(
+    s => s.ReadableStreamDefaultReader,
+    lazyStreams,
   ),
-  ReadableStreamBYOBRequest: nonEnumerable(
-    streams.ReadableStreamBYOBRequest,
+  TextDecoder: propNonEnumerableLazyLoaded(
+    m => m.TextDecoder,
+    lazyEncoding,
   ),
-  ReadableStreamDefaultController: nonEnumerable(
-    streams.ReadableStreamDefaultController,
+  TextEncoder: propNonEnumerableLazyLoaded(
+    m => m.TextEncoder,
+    lazyEncoding,
   ),
-  TransformStreamDefaultController: nonEnumerable(
-    streams.TransformStreamDefaultController,
+  TextDecoderStream: propNonEnumerableLazyLoaded(
+    m => m.TextDecoderStream,
+    lazyEncoding,
   ),
-  atob: writeable(base64.atob),
-  btoa: writeable(base64.btoa),
-  clearInterval: writeable(timers.clearInterval),
-  clearTimeout: writeable(timers.clearTimeout),
-  performance: writeable(performance.performance),
-  reportError: writeable(event.reportError),
-  refTimer: writeable(timers.refTimer),
-  setImmediate: writeable(timers.setImmediate),
-  setInterval: writeable(timers.setInterval),
-  setTimeout: writeable(timers.setTimeout),
-  unrefTimer: writeable(timers.unrefTimer),
-
-  structuredClone: writeable(messagePort.structuredClone),
-  ImageData: nonEnumerable(imageData.ImageData),
-  URL: nonEnumerable(url.URL),
-  URLSearchParams: nonEnumerable(url.URLSearchParams),
+  TextEncoderStream: propNonEnumerableLazyLoaded(
+    m => m.TextEncoderStream,
+    lazyEncoding,
+  ),
+  TransformStream: propNonEnumerableLazyLoaded(
+    s => s.TransformStream,
+    lazyStreams,
+  ),
+  MessageChannel: propNonEnumerableLazyLoaded(m => m.MessageChannel, lazyMessagePort),
+  MessagePort: propNonEnumerableLazyLoaded(m => m.MessagePort, lazyMessagePort),
+  WritableStream: propNonEnumerableLazyLoaded(
+    s => s.WritableStream,
+    lazyStreams,
+  ),
+  WritableStreamDefaultWriter: propNonEnumerableLazyLoaded(
+    s => s.WritableStreamDefaultWriter,
+    lazyStreams,
+  ),
+  WritableStreamDefaultController: propNonEnumerableLazyLoaded(
+    s => s.WritableStreamDefaultController,
+    lazyStreams,
+  ),
+  ReadableByteStreamController: propNonEnumerableLazyLoaded(
+    s => s.ReadableByteStreamController,
+    lazyStreams,
+  ),
+  ReadableStreamBYOBReader: propNonEnumerableLazyLoaded(
+    s => s.ReadableStreamBYOBReader,
+    lazyStreams,
+  ),
+  ReadableStreamBYOBRequest: propNonEnumerableLazyLoaded(
+    s => s.ReadableStreamBYOBRequest,
+    lazyStreams,
+  ),
+  ReadableStreamDefaultController: propNonEnumerableLazyLoaded(
+    s => s.ReadableStreamDefaultController,
+    lazyStreams,
+  ),
+  TransformStreamDefaultController: propNonEnumerableLazyLoaded(
+    s => s.TransformStreamDefaultController,
+    lazyStreams,
+  ),
+  atob: propWritableLazyLoaded(m => m.atob, lazyBase64),
+  btoa: propWritableLazyLoaded(m => m.btoa, lazyBase64),
+  clearInterval: propWritableLazyLoaded(t => t.clearInterval, lazyTimers),
+  clearTimeout: propWritableLazyLoaded(t => t.clearTimeout, lazyTimers),
+  performance: {
+    get() {
+      return lazyPerformance().performance
+    },
+    set() {},
+    enumerable: true,
+    configurable: true,
+  },
+  refTimer: propWritableLazyLoaded(t => t.refTimer, lazyTimers),
+  setImmediate: propWritableLazyLoaded(t => t.setImmediate, lazyTimers),
+  setInterval: propWritableLazyLoaded(t => t.setInterval, lazyTimers),
+  setTimeout: propWritableLazyLoaded(t => t.setTimeout, lazyTimers),
+  unrefTimer: propWritableLazyLoaded(t => t.unrefTimer, lazyTimers),
+  structuredClone: propWritableLazyLoaded(m => m.structuredClone, lazyMessagePort),
+  ImageData: propNonEnumerableLazyLoaded(
+    m => m.ImageData,
+    lazyImageData,
+  ),
+  URL: propNonEnumerableLazyLoaded(m => m.URL, lazyUrl),
+  URLSearchParams: propNonEnumerableLazyLoaded(m => m.URLSearchParams, lazyUrl),
 })

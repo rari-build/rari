@@ -15,6 +15,16 @@ categories = { workspace = true }
 [lib]
 crate-type = [ "rlib" ]
 
+[features]
+default = []
+# Optional Deno leaf extensions (webgpu, kv, ffi, etc.).
+ext-full = [
+  "dep:deno_webgpu",
+  "dep:deno_kv",
+  "dep:deno_cron",
+  "dep:deno_node_sqlite",
+]
+
 [dependencies]
 # === Core Runtime Dependencies ===
 deno_core = { workspace = true }
@@ -45,14 +55,14 @@ deno_io = { workspace = true }
 
 # === Advanced Features ===
 deno_telemetry = { workspace = true }
-deno_webgpu = { workspace = true }
-deno_kv = { workspace = true }
-deno_cron = { workspace = true }
+deno_webgpu = { workspace = true, optional = true }
+deno_kv = { workspace = true, optional = true }
+deno_cron = { workspace = true, optional = true }
 
 # === Node.js Integration ===
 deno_node = { workspace = true }
 deno_node_crypto = { workspace = true }
-deno_node_sqlite = { workspace = true }
+deno_node_sqlite = { workspace = true, optional = true }
 deno_resolver = { workspace = true }
 node_resolver = { workspace = true }
 

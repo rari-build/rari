@@ -1,25 +1,42 @@
 /// <reference path="../types.d.ts" />
 
 import { core } from 'ext:core/mod.js'
-import { applyToDeno, getterOnly, nonEnumerable, readOnly } from 'ext:init_utilities/utilities.ts'
+import {
+  applyToDeno,
+  getterOnly,
+  lazyExtScript,
+  loadExtScriptOnce,
+  nonEnumerable,
+  readOnly,
+} from 'ext:init_utilities/utilities.ts'
 import * as scopeWindow from 'ext:runtime/98_global_scope_window.js'
 
-const os = core.loadExtScript('ext:deno_os/30_os.js')
-const signals = core.loadExtScript('ext:deno_os/40_signals.js')
-const process = core.loadExtScript('ext:deno_process/40_process.js')
-const _console = core.loadExtScript('ext:deno_web/01_console.js')
-const errors = core.loadExtScript('ext:runtime/01_errors.js')
-const version = core.loadExtScript('ext:runtime/01_version.ts')
-const util = core.loadExtScript('ext:runtime/06_util.js')
-const permissions = core.loadExtScript('ext:runtime/10_permissions.js')
-const workers = core.loadExtScript('ext:runtime/11_workers.js')
-const tty = core.loadExtScript('ext:runtime/40_tty.js')
-const prompt = core.loadExtScript('ext:runtime/41_prompt.js')
+const os = loadExtScriptOnce('ext:deno_os/30_os.js') as DenoOsModule
+const _console = loadExtScriptOnce('ext:deno_web/01_console.js') as ConsoleModule
+const errors = loadExtScriptOnce('ext:runtime/01_errors.js') as DenoRuntimeErrorsModule
+const version = loadExtScriptOnce('ext:runtime/01_version.ts') as DenoRuntimeVersionModule
+const permissions = loadExtScriptOnce('ext:runtime/10_permissions.js') as DenoRuntimePermissionsModule
+
+interface ConsoleModule {
+  setNoColorFns: (get: () => boolean, set: () => boolean) => void
+}
+
+const lazyProcess = lazyExtScript<DenoProcessModule>('ext:deno_process/40_process.js')
+const lazySignals = lazyExtScript<DenoSignalsModule>('ext:deno_os/40_signals.js')
+const lazyTty = lazyExtScript<DenoTtyModule>('ext:runtime/40_tty.js')
 
 const opArgs = scopeWindow.memoizeLazy(() => core.ops.op_bootstrap_args())
 const opPid = scopeWindow.memoizeLazy(() => core.ops.op_bootstrap_pid())
 
-// applyToDeno(denoNs);
+function denoLazyProp<T>(select: () => T): PropertyDescriptor {
+  return {
+    get: select,
+    set() {},
+    enumerable: false,
+    configurable: true,
+  }
+}
+
 applyToDeno({
   pid: getterOnly(opPid),
 
@@ -38,14 +55,14 @@ applyToDeno({
     },
   },
 
-  Process: nonEnumerable(process.Process),
-  run: nonEnumerable(process.run),
-  kill: nonEnumerable(process.kill),
-  Command: nonEnumerable(process.Command),
-  ChildProcess: nonEnumerable(process.ChildProcess),
+  Process: denoLazyProp(() => lazyProcess().Process),
+  run: denoLazyProp(() => lazyProcess().run),
+  kill: denoLazyProp(() => lazyProcess().kill),
+  Command: denoLazyProp(() => lazyProcess().Command),
+  ChildProcess: denoLazyProp(() => lazyProcess().ChildProcess),
 
-  isatty: nonEnumerable(tty.isatty),
-  consoleSize: nonEnumerable(tty.consoleSize),
+  isatty: denoLazyProp(() => lazyTty().isatty),
+  consoleSize: denoLazyProp(() => lazyTty().consoleSize),
 
   memoryUsage: nonEnumerable(() => ({})),
   version: nonEnumerable(version.version),
@@ -56,8 +73,8 @@ applyToDeno({
   Permissions: nonEnumerable(permissions.Permissions),
   PermissionStatus: nonEnumerable(permissions.PermissionStatus),
 
-  addSignalListener: nonEnumerable(signals.addSignalListener),
-  removeSignalListener: nonEnumerable(signals.removeSignalListener),
+  addSignalListener: denoLazyProp(() => lazySignals().addSignalListener),
+  removeSignalListener: denoLazyProp(() => lazySignals().removeSignalListener),
 
   env: nonEnumerable(os.env),
   exit: nonEnumerable(os.exit),

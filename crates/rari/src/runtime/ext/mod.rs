@@ -1,16 +1,33 @@
 use std::{borrow::Cow::Borrowed, option::Option::None, path::PathBuf, sync::Arc};
 
-use deno_bundle_runtime::deno_bundle_runtime;
-use deno_core::Extension;
+use ::deno_bundle_runtime::{BundleProvider, deno_bundle_runtime};
+use deno_core::{Extension, ExtensionArguments};
 use deno_fs::{FileSystemRc, RealFs, sync::MaybeArc};
 use deno_io::Stdio;
-use deno_runtime::deno_canvas::deno_canvas;
 use deno_web::InMemoryBroadcastChannel;
 
-use crate::runtime::ext::{kv::KvStore, node::resolvers::Resolver, web::WebOptions};
+use crate::runtime::ext::{node::resolvers::Resolver, web::WebOptions};
 
 pub trait ExtensionTrait<A> {
+    const LAZY_INIT: bool = false;
+
     fn init(options: A) -> Extension;
+
+    #[expect(
+        clippy::panic,
+        reason = "Only called when LAZY_INIT is true; lazy extensions override this"
+    )]
+    fn lazy_init() -> Extension {
+        panic!("lazy_init is not implemented for this extension")
+    }
+
+    #[expect(
+        clippy::panic,
+        reason = "Only called when LAZY_INIT is true; lazy extensions override this"
+    )]
+    fn lazy_args(_options: A) -> ExtensionArguments {
+        panic!("lazy_args is not implemented for this extension")
+    }
 
     fn for_warmup(mut ext: Extension) -> Extension {
         ext.js_files = Borrowed(&[]);
@@ -21,32 +38,68 @@ pub trait ExtensionTrait<A> {
     }
 
     fn build(options: A, is_snapshot: bool) -> Extension {
-        let ext: Extension = Self::init(options);
+        let ext = if Self::LAZY_INIT { Self::lazy_init() } else { Self::init(options) };
         if is_snapshot { Self::for_warmup(ext) } else { ext }
+    }
+
+    fn register(
+        options: A,
+        is_snapshot: bool,
+        extensions: &mut Vec<Extension>,
+        lazy_args: &mut Vec<ExtensionArguments>,
+    ) where
+        A: Clone,
+    {
+        if Self::LAZY_INIT {
+            lazy_args.push(Self::lazy_args(options.clone()));
+        }
+        extensions.push(Self::build(options, is_snapshot));
     }
 }
 
 mod cache;
-mod cron;
 mod crypto;
 mod fetch;
 mod ffi;
 mod fs;
 mod http;
 mod io;
-mod kv;
+mod lazy;
 mod napi;
 mod node;
 mod node_crypto;
-mod node_sqlite;
 mod rari;
 mod runtime;
 mod utilities;
 mod web;
-mod webgpu;
 mod webidl;
 mod websocket;
 mod webstorage;
+
+#[cfg(feature = "ext-full")]
+mod cron;
+#[cfg(feature = "ext-full")]
+mod kv;
+#[cfg(feature = "ext-full")]
+mod node_sqlite;
+#[cfg(feature = "ext-full")]
+mod webgpu;
+
+impl ExtensionTrait<Option<Arc<dyn BundleProvider>>> for deno_bundle_runtime {
+    const LAZY_INIT: bool = true;
+
+    fn init(provider: Option<Arc<dyn BundleProvider>>) -> Extension {
+        Self::init(provider)
+    }
+
+    fn lazy_init() -> Extension {
+        Self::lazy_init()
+    }
+
+    fn lazy_args(provider: Option<Arc<dyn BundleProvider>>) -> ExtensionArguments {
+        Self::args(provider)
+    }
+}
 
 #[derive(Clone)]
 #[non_exhaustive]
@@ -59,7 +112,8 @@ pub struct ExtensionOptions {
     pub node_resolver: Arc<Resolver>,
     pub broadcast_channel: InMemoryBroadcastChannel,
     pub webstorage_origin_storage_dir: Option<PathBuf>,
-    pub kv_store: KvStore,
+    #[cfg(feature = "ext-full")]
+    pub kv_store: kv::KvStore,
 }
 
 impl Default for ExtensionOptions {
@@ -67,38 +121,75 @@ impl Default for ExtensionOptions {
         Self {
             web: WebOptions::default(),
             io_pipes: Some(Stdio::default()),
-            filesystem: MaybeArc::new(RealFs),
             cache: Some(()),
+            filesystem: MaybeArc::new(RealFs),
             crypto_seed: None,
             node_resolver: Arc::new(Resolver::default()),
             broadcast_channel: InMemoryBroadcastChannel::default(),
             webstorage_origin_storage_dir: None,
-            kv_store: KvStore::default(),
+            #[cfg(feature = "ext-full")]
+            kv_store: kv::KvStore::default(),
         }
     }
 }
 
 pub fn extensions(options: &ExtensionOptions, is_snapshot: bool) -> Vec<Extension> {
-    let mut extensions = Vec::new();
+    extensions_with_lazy_args(options, is_snapshot).0
+}
 
-    extensions.extend(utilities::extensions(is_snapshot));
-    extensions.extend(webidl::extensions(is_snapshot));
-    extensions.extend(web::extensions(options.web.clone(), is_snapshot));
-    extensions.extend(rari::extensions(is_snapshot));
-    extensions.extend(rari::cache::extensions(is_snapshot));
-    extensions.extend(cache::extensions(options.cache, is_snapshot));
-    extensions.extend(crypto::extensions(options.crypto_seed, is_snapshot));
-    extensions.extend(fs::extensions(Arc::clone(&options.filesystem), is_snapshot));
-    extensions.extend(io::extensions(options.io_pipes.clone(), is_snapshot));
-    extensions
-        .extend(webstorage::extensions(options.webstorage_origin_storage_dir.clone(), is_snapshot));
-    extensions.extend(websocket::extensions(options.web.clone(), is_snapshot));
-    extensions.extend(http::extensions((), is_snapshot));
-    extensions.extend(fetch::extensions(is_snapshot, None));
-    extensions.extend(ffi::extensions(is_snapshot));
-    extensions.extend(kv::extensions(options.kv_store.clone(), is_snapshot));
-    extensions.extend(webgpu::extensions(is_snapshot));
+pub fn extensions_with_lazy_args(
+    options: &ExtensionOptions,
+    is_snapshot: bool,
+) -> (Vec<Extension>, Vec<ExtensionArguments>) {
+    let mut extensions = Vec::new();
+    let mut lazy_args = Vec::new();
+
+    lazy::merge(&mut extensions, &mut lazy_args, utilities::extensions(is_snapshot));
+    lazy::merge(&mut extensions, &mut lazy_args, webidl::extensions(is_snapshot));
+    lazy::merge(&mut extensions, &mut lazy_args, web::extensions(options.web.clone(), is_snapshot));
+    lazy::merge(&mut extensions, &mut lazy_args, rari::extensions(is_snapshot));
+    lazy::merge(&mut extensions, &mut lazy_args, rari::cache::extensions(is_snapshot));
+    lazy::merge(&mut extensions, &mut lazy_args, cache::extensions(options.cache, is_snapshot));
+    lazy::merge(
+        &mut extensions,
+        &mut lazy_args,
+        crypto::extensions(options.crypto_seed, is_snapshot),
+    );
+    lazy::merge(
+        &mut extensions,
+        &mut lazy_args,
+        fs::extensions(Arc::clone(&options.filesystem), is_snapshot),
+    );
+    lazy::merge(
+        &mut extensions,
+        &mut lazy_args,
+        io::extensions(options.io_pipes.clone(), is_snapshot),
+    );
+    lazy::merge(
+        &mut extensions,
+        &mut lazy_args,
+        webstorage::extensions(options.webstorage_origin_storage_dir.clone(), is_snapshot),
+    );
+    lazy::merge(
+        &mut extensions,
+        &mut lazy_args,
+        websocket::extensions(options.web.clone(), is_snapshot),
+    );
+    lazy::merge(&mut extensions, &mut lazy_args, http::extensions((), is_snapshot));
+    lazy::merge(&mut extensions, &mut lazy_args, fetch::extensions(is_snapshot, None));
+    lazy::merge(&mut extensions, &mut lazy_args, ffi::extensions(is_snapshot));
+    #[cfg(feature = "ext-full")]
+    lazy::merge(
+        &mut extensions,
+        &mut lazy_args,
+        kv::extensions(options.kv_store.clone(), is_snapshot),
+    );
+    #[cfg(feature = "ext-full")]
+    lazy::merge(&mut extensions, &mut lazy_args, webgpu::extensions(is_snapshot));
+    #[cfg(feature = "ext-full")]
     {
+        use deno_runtime::deno_canvas::deno_canvas;
+
         let mut canvas_ext = deno_canvas::init();
         if is_snapshot {
             canvas_ext.js_files = Borrowed(&[]);
@@ -107,18 +198,32 @@ pub fn extensions(options: &ExtensionOptions, is_snapshot: bool) -> Vec<Extensio
         }
         extensions.push(canvas_ext);
     }
-    extensions.extend(cron::extensions(is_snapshot));
-    extensions.extend(napi::extensions(is_snapshot));
-    extensions.extend(node_crypto::extensions(is_snapshot));
-    extensions.extend(node_sqlite::extensions(is_snapshot));
-    extensions.extend(node::extensions(Arc::clone(&options.node_resolver), is_snapshot));
-    {
-        let mut bundle_ext = deno_bundle_runtime::init(None);
+    #[cfg(feature = "ext-full")]
+    lazy::merge(&mut extensions, &mut lazy_args, cron::extensions(is_snapshot));
+    lazy::merge(&mut extensions, &mut lazy_args, napi::extensions(is_snapshot));
+    lazy::merge(&mut extensions, &mut lazy_args, node_crypto::extensions(is_snapshot));
+    #[cfg(feature = "ext-full")]
+    lazy::merge(&mut extensions, &mut lazy_args, node_sqlite::extensions(is_snapshot));
+    lazy::merge(
+        &mut extensions,
+        &mut lazy_args,
+        node::extensions(Arc::clone(&options.node_resolver), is_snapshot),
+    );
+    lazy::register::<Option<Arc<dyn BundleProvider>>, deno_bundle_runtime>(
+        None,
+        is_snapshot,
+        &mut extensions,
+        &mut lazy_args,
+    );
+    if let Some(bundle_ext) = extensions.last_mut() {
         bundle_ext.esm_files = Borrowed(&[]);
         bundle_ext.esm_entry_point = None;
-        extensions.push(bundle_ext);
     }
-    extensions.extend(runtime::extensions(options, None, is_snapshot));
+    lazy::merge(&mut extensions, &mut lazy_args, runtime::extensions(options, None, is_snapshot));
 
-    extensions
+    (extensions, lazy_args)
+}
+
+pub fn lazy_extension_args(options: &ExtensionOptions) -> Vec<ExtensionArguments> {
+    extensions_with_lazy_args(options, false).1
 }

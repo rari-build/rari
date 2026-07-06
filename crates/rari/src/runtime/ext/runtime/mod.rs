@@ -2,7 +2,7 @@ use std::{num::NonZero, rc::Rc, sync::Arc, thread};
 
 use ::deno_permissions::{Permissions, PermissionsContainer as DenoPermissionsContainer};
 use deno_core::{
-    CrossIsolateStore, Extension,
+    CrossIsolateStore, Extension, ExtensionArguments,
     error::JsError,
     extension,
     v8::{BackingStore, SharedRef, icu},
@@ -24,6 +24,7 @@ use deno_runtime::{
     permissions::RuntimePermissionDescriptorParser,
     runtime,
     web_worker::{WebWorker, WebWorkerOptions, WebWorkerServiceOptions},
+    worker::FormatJsErrorFn,
 };
 use deno_telemetry::OtelConfig;
 use deno_tls::RootCertStoreProvider;
@@ -31,10 +32,12 @@ use deno_web::{BlobStore, InMemoryBroadcastChannel};
 use sys_traits::impls::RealSys;
 
 use super::{
-    ExtensionOptions, ExtensionTrait, node::resolvers::Resolver,
+    ExtensionOptions, ExtensionTrait, lazy, node::resolvers::Resolver,
     web::PermissionsContainer as WebPermissionsContainer,
 };
 use crate::runtime::module_loader::RariModuleLoader;
+
+type WorkerHostOptions = (Arc<CreateWebWorkerCb>, Option<Arc<FormatJsErrorFn>>);
 
 fn format_js_error(error: &JsError) -> String {
     deno_format_js_error(error, None)
@@ -119,33 +122,57 @@ impl ExtensionTrait<()> for deno_permissions {
     }
 }
 
-impl ExtensionTrait<(&ExtensionOptions, Option<CrossIsolateStore<SharedRef<BackingStore>>>)>
-    for deno_worker_host
-{
-    fn init(
-        options: (&ExtensionOptions, Option<CrossIsolateStore<SharedRef<BackingStore>>>),
-    ) -> Extension {
-        let options = WebWorkerCallbackOptions::new(options.0, options.1);
-        let callback = create_web_worker_callback(options);
-        Self::init(callback, None)
+impl ExtensionTrait<WorkerHostOptions> for deno_worker_host {
+    const LAZY_INIT: bool = true;
+
+    fn init(options: WorkerHostOptions) -> Extension {
+        Self::init(options.0, options.1)
+    }
+
+    fn lazy_init() -> Extension {
+        Self::lazy_init()
+    }
+
+    fn lazy_args(options: WorkerHostOptions) -> ExtensionArguments {
+        Self::args(options.0, options.1)
     }
 }
 
 impl ExtensionTrait<()> for deno_web_worker {
     fn init((): ()) -> Extension {
-        Self::init()
+        Self::init().disable()
     }
 }
 
 impl ExtensionTrait<Arc<Resolver>> for deno_process {
+    const LAZY_INIT: bool = true;
+
     fn init(resolver: Arc<Resolver>) -> Extension {
         Self::init(Some(resolver))
+    }
+
+    fn lazy_init() -> Extension {
+        Self::lazy_init()
+    }
+
+    fn lazy_args(resolver: Arc<Resolver>) -> ExtensionArguments {
+        Self::args(Some(resolver))
     }
 }
 
 impl ExtensionTrait<()> for deno_os {
+    const LAZY_INIT: bool = true;
+
     fn init((): ()) -> Extension {
         Self::init(Some(ExitCode::default()))
+    }
+
+    fn lazy_init() -> Extension {
+        Self::lazy_init()
+    }
+
+    fn lazy_args((): ()) -> ExtensionArguments {
+        Self::args(Some(ExitCode::default()))
     }
 }
 
@@ -165,19 +192,40 @@ pub fn extensions(
     options: &ExtensionOptions,
     shared_array_buffer_store: Option<CrossIsolateStore<SharedRef<BackingStore>>>,
     is_snapshot: bool,
-) -> Vec<Extension> {
-    vec![
-        deno_fs_events::build((), is_snapshot),
-        deno_bootstrap::build((), is_snapshot),
-        deno_os::build((), is_snapshot),
-        deno_process::build(Arc::clone(&options.node_resolver), is_snapshot),
-        deno_web_worker::build((), is_snapshot),
-        deno_worker_host::build((options, shared_array_buffer_store), is_snapshot),
-        deno_permissions::build((), is_snapshot),
-        runtime::build((), is_snapshot),
-        init_console::build((), is_snapshot),
-        init_runtime::build((), is_snapshot),
-    ]
+) -> (Vec<Extension>, Vec<ExtensionArguments>) {
+    let worker_host_options = (
+        create_web_worker_callback(WebWorkerCallbackOptions::new(
+            options,
+            shared_array_buffer_store,
+        )),
+        Some(Arc::new(format_js_error) as Arc<FormatJsErrorFn>),
+    );
+
+    let mut extensions = Vec::new();
+    let mut lazy_args = Vec::new();
+
+    lazy::register::<(), deno_fs_events>((), is_snapshot, &mut extensions, &mut lazy_args);
+    lazy::register::<(), deno_bootstrap>((), is_snapshot, &mut extensions, &mut lazy_args);
+    lazy::register::<(), deno_os>((), is_snapshot, &mut extensions, &mut lazy_args);
+    lazy::register::<Arc<Resolver>, deno_process>(
+        Arc::clone(&options.node_resolver),
+        is_snapshot,
+        &mut extensions,
+        &mut lazy_args,
+    );
+    lazy::register::<(), deno_web_worker>((), is_snapshot, &mut extensions, &mut lazy_args);
+    lazy::register::<WorkerHostOptions, deno_worker_host>(
+        worker_host_options,
+        is_snapshot,
+        &mut extensions,
+        &mut lazy_args,
+    );
+    lazy::register::<(), deno_permissions>((), is_snapshot, &mut extensions, &mut lazy_args);
+    lazy::register::<(), runtime>((), is_snapshot, &mut extensions, &mut lazy_args);
+    lazy::register::<(), init_console>((), is_snapshot, &mut extensions, &mut lazy_args);
+    lazy::register::<(), init_runtime>((), is_snapshot, &mut extensions, &mut lazy_args);
+
+    (extensions, lazy_args)
 }
 
 #[derive(Clone)]

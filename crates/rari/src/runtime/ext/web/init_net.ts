@@ -1,20 +1,95 @@
 /// <reference path="../types.d.ts" />
 
-import { core } from 'ext:core/mod.js'
 import { op_net_listen_udp, op_net_listen_unixpacket } from 'ext:core/ops'
+import { lazyExtScript } from 'ext:init_utilities/utilities.ts'
 
-const net = core.loadExtScript('ext:deno_net/01_net.js')
-const tls = core.loadExtScript('ext:deno_net/02_tls.js')
+interface NetModule {
+  connect: typeof Deno.connect
+  listen: typeof Deno.listen
+  resolveDns: typeof Deno.resolveDns
+  createListenDatagram: (
+    opListenUdp: typeof op_net_listen_udp,
+    opListenUnixpacket: typeof op_net_listen_unixpacket,
+  ) => typeof Deno.listenDatagram
+}
 
-g.Deno.connect = net.connect
-g.Deno.listen = net.listen
-g.Deno.resolveDns = net.resolveDns
+interface TlsModule {
+  connectTls: typeof Deno.connectTls
+  listenTls: typeof Deno.listenTls
+  startTls: typeof Deno.startTls
+}
 
-g.Deno.listenDatagram = net.createListenDatagram(
-  op_net_listen_udp,
-  op_net_listen_unixpacket,
-)
+const lazyNet = lazyExtScript<NetModule>('ext:deno_net/01_net.js')
+const lazyTls = lazyExtScript<TlsModule>('ext:deno_net/02_tls.js')
 
-g.Deno.connectTls = tls.connectTls
-g.Deno.listenTls = tls.listenTls
-g.Deno.startTls = tls.startTls
+let listenDatagramFn: typeof Deno.listenDatagram | undefined
+
+function getListenDatagram(): typeof Deno.listenDatagram {
+  if (!listenDatagramFn) {
+    listenDatagramFn = lazyNet().createListenDatagram(
+      op_net_listen_udp,
+      op_net_listen_unixpacket,
+    )
+  }
+
+  return listenDatagramFn
+}
+
+Object.defineProperties(g.Deno, {
+  connect: {
+    get() {
+      return lazyNet().connect
+    },
+    set() {},
+    enumerable: false,
+    configurable: true,
+  },
+  listen: {
+    get() {
+      return lazyNet().listen
+    },
+    set() {},
+    enumerable: false,
+    configurable: true,
+  },
+  resolveDns: {
+    get() {
+      return lazyNet().resolveDns
+    },
+    set() {},
+    enumerable: false,
+    configurable: true,
+  },
+  listenDatagram: {
+    get() {
+      return getListenDatagram()
+    },
+    set() {},
+    enumerable: false,
+    configurable: true,
+  },
+  connectTls: {
+    get() {
+      return lazyTls().connectTls
+    },
+    set() {},
+    enumerable: false,
+    configurable: true,
+  },
+  listenTls: {
+    get() {
+      return lazyTls().listenTls
+    },
+    set() {},
+    enumerable: false,
+    configurable: true,
+  },
+  startTls: {
+    get() {
+      return lazyTls().startTls
+    },
+    set() {},
+    enumerable: false,
+    configurable: true,
+  },
+})

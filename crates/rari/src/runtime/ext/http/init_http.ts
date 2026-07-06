@@ -1,11 +1,34 @@
 /// <reference path="../types.d.ts" />
 
-import { core } from 'ext:core/mod.js'
+import { lazyExtScript } from 'ext:init_utilities/utilities.ts'
 
-const serve = core.loadExtScript('ext:deno_http/00_serve.ts')
-const http = core.loadExtScript('ext:deno_http/01_http.js')
-const websocket = core.loadExtScript('ext:deno_http/02_websocket.ts')
+const lazyServe = lazyExtScript<DenoHttpServeModule>('ext:deno_http/00_serve.ts')
+const lazyHttp = lazyExtScript<DenoHttpConnModule>('ext:deno_http/01_http.js')
+const lazyWebsocket = lazyExtScript<DenoHttpUpgradeModule>('ext:deno_http/02_websocket.ts')
 
-g.Deno.serve = serve.serve
-g.Deno.serveHttp = http.serveHttp
-g.Deno.upgradeWebSocket = websocket.upgradeWebSocket
+Object.defineProperties(g.Deno, {
+  serve: {
+    get() {
+      return lazyServe().serve
+    },
+    set() {},
+    enumerable: false,
+    configurable: true,
+  },
+  serveHttp: {
+    get() {
+      return lazyHttp().serveHttp
+    },
+    set() {},
+    enumerable: false,
+    configurable: true,
+  },
+  upgradeWebSocket: {
+    get() {
+      return lazyWebsocket().upgradeWebSocket
+    },
+    set() {},
+    enumerable: false,
+    configurable: true,
+  },
+})

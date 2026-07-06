@@ -129,6 +129,8 @@ declare global {
       pumpFizzChunk?: (text: string) => Promise<boolean>
       pumpRscElementStream?: (element: unknown, pumpChunk: (text: string) => Promise<boolean>) => Promise<void>
       streaming?: { complete?: boolean }
+      loadFullReactVendors?: () => boolean
+      loadRscReactVendors?: () => boolean
     }
   }
 
@@ -153,10 +155,6 @@ declare global {
         function op_cache_get(key: string): any
         function op_cache_set(key: string, value: any): void
       }
-    }
-
-    const env: {
-      get: (key: string) => string | undefined
     }
   }
 }

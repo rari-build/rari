@@ -1,4 +1,4 @@
-use deno_core::Extension;
+use deno_core::{Extension, ExtensionArguments};
 
 use crate::server::config::CacheLayerConfig;
 
@@ -18,11 +18,11 @@ fn configured_remote_handler(layer: &CacheLayerConfig) -> Option<&'static str> {
     }
 }
 
-pub fn extensions(is_snapshot: bool) -> Vec<Extension> {
+pub fn extensions(is_snapshot: bool) -> (Vec<Extension>, Vec<ExtensionArguments>) {
     let mut extensions = Vec::new();
     extensions.extend(redis_cache::extensions(None, is_snapshot));
     extensions.extend(redb_cache::extensions(None, is_snapshot));
-    extensions
+    (extensions, Vec::new())
 }
 
 #[cfg(test)]

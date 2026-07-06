@@ -1,19 +1,34 @@
 /// <reference path="../types.d.ts" />
 
-import { core } from 'ext:core/mod.js'
-import { applyToGlobal, nonEnumerable, writeable } from 'ext:init_utilities/utilities.ts'
+import {
+  applyToGlobal,
+  lazyExtScript,
+  propNonEnumerableLazyLoaded,
+  writeable,
+} from 'ext:init_utilities/utilities.ts'
 
-const headers = core.loadExtScript('ext:deno_fetch/20_headers.js')
-const formData = core.loadExtScript('ext:deno_fetch/21_formdata.js')
-const httpClient = core.loadExtScript('ext:deno_fetch/22_http_client.js')
-const request = core.loadExtScript('ext:deno_fetch/23_request.js')
-const response = core.loadExtScript('ext:deno_fetch/23_response.js')
-const fetch = core.loadExtScript('ext:deno_fetch/26_fetch.js')
-const eventSource = core.loadExtScript('ext:deno_fetch/27_eventsource.js')
+const lazyHeaders = lazyExtScript<DenoFetchHeadersModule>('ext:deno_fetch/20_headers.js')
+const lazyFormData = lazyExtScript<DenoFetchFormDataModule>('ext:deno_fetch/21_formdata.js')
+const lazyHttpClient = lazyExtScript<DenoFetchHttpClientModule>('ext:deno_fetch/22_http_client.js')
+const lazyRequest = lazyExtScript<DenoFetchRequestModule>('ext:deno_fetch/23_request.js')
+const lazyResponse = lazyExtScript<DenoFetchResponseModule>('ext:deno_fetch/23_response.js')
+const lazyFetch = lazyExtScript<DenoFetchWasmModule>('ext:deno_fetch/26_fetch.js')
+const lazyEventSource = lazyExtScript<DenoFetchEventSourceModule>('ext:deno_fetch/27_eventsource.js')
 
-Deno.core.setWasmStreamingCallback(fetch.handleWasmStreaming)
+let fetchModuleInitialized = false
+let originalFetch: typeof fetch
 
-const originalFetch = fetch.fetch
+function ensureFetchModule(): DenoFetchWasmModule {
+  const fetchModule = lazyFetch()
+  if (!fetchModuleInitialized) {
+    Deno.core.setWasmStreamingCallback(fetchModule.handleWasmStreaming)
+    originalFetch = fetchModule.fetch as typeof fetch
+    fetchModuleInitialized = true
+  }
+
+  return fetchModule
+}
+
 const requestDedupeMap = new Map<string, Promise<Response>>()
 const FILE_EXTENSION_REGEX = /\.([^./]+)$/
 
@@ -129,6 +144,7 @@ function shouldCache(input: RequestInfo | URL, init: RequestInit & { rari?: { re
 }
 
 async function fetchWithRustCache(input: RequestInfo | URL, init: RequestInit & { rari?: { revalidate?: number, timeout?: number, tags?: unknown }, next?: { revalidate?: number, tags?: unknown }, fetchOptions?: { timeout?: number } }, meta?: RequestMeta): Promise<Response> {
+  ensureFetchModule()
   const { url, headers } = meta || resolveRequestMeta(input, init)
   const options: Record<string, string> = {}
 
@@ -209,6 +225,7 @@ async function fetchWithRustCache(input: RequestInfo | URL, init: RequestInit & 
 }
 
 async function cachedFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+  ensureFetchModule()
   const meta = resolveRequestMeta(input, init)
 
   if (!shouldCache(input, init, meta))
@@ -236,12 +253,28 @@ async function cachedFetch(input: RequestInfo | URL, init: RequestInit = {}): Pr
 
 applyToGlobal({
   fetch: writeable(cachedFetch),
-  Request: nonEnumerable(request.Request),
-  Response: nonEnumerable(response.Response),
-  Headers: nonEnumerable(headers.Headers),
-  FormData: nonEnumerable(formData.FormData),
-  EventSource: nonEnumerable(eventSource.EventSource),
+  Request: propNonEnumerableLazyLoaded(m => m.Request, lazyRequest),
+  Response: propNonEnumerableLazyLoaded(m => m.Response, lazyResponse),
+  Headers: propNonEnumerableLazyLoaded(m => m.Headers, lazyHeaders),
+  FormData: propNonEnumerableLazyLoaded(m => m.FormData, lazyFormData),
+  EventSource: propNonEnumerableLazyLoaded(m => m.EventSource, lazyEventSource),
 })
 
-g.Deno.HttpClient = httpClient.HttpClient
-g.Deno.createHttpClient = httpClient.createHttpClient
+Object.defineProperties(g.Deno, {
+  HttpClient: {
+    get() {
+      return lazyHttpClient().HttpClient
+    },
+    set() {},
+    enumerable: false,
+    configurable: true,
+  },
+  createHttpClient: {
+    get() {
+      return lazyHttpClient().createHttpClient
+    },
+    set() {},
+    enumerable: false,
+    configurable: true,
+  },
+})

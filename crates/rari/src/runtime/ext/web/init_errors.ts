@@ -3,15 +3,7 @@
 import { core, internals, primordials } from 'ext:core/mod.js'
 import { op_set_format_exception_callback } from 'ext:core/ops'
 
-const {
-  getDefaultInspectOptions,
-  getStderrNoColor,
-  inspectArgs,
-  quoteString,
-} = core.loadExtScript('ext:deno_web/01_console.js')
-const { DOMException } = core.loadExtScript('ext:deno_web/01_dom_exception.js')
-const event = core.loadExtScript('ext:deno_web/02_event.js')
-const { DedicatedWorkerGlobalScope } = core.loadExtScript('ext:deno_web/04_global_interfaces.js')
+import { ensureEventTargetReady, lazyConsole, lazyDomException, lazyEvent } from './shared_loaders.ts'
 
 const { BadResource, Interrupted, NotCapable } = core
 
@@ -219,69 +211,32 @@ class NotADirectory extends Error {
 }
 core.registerErrorClass('NotADirectory', NotADirectory)
 
-core.registerErrorBuilder(
-  'DOMExceptionOperationError',
-  (msg?: string) => {
-    return new DOMException(msg, 'OperationError')
-  },
-)
+function domException(name: string, msg?: string): DOMException {
+  const { DOMException } = lazyDomException()
+  return new DOMException(msg, name)
+}
 
-core.registerErrorBuilder(
-  'DOMExceptionQuotaExceededError',
-  (msg?: string) => {
-    return new DOMException(msg, 'QuotaExceededError')
-  },
-)
-
-core.registerErrorBuilder(
-  'DOMExceptionNotSupportedError',
-  (msg?: string) => {
-    return new DOMException(msg, 'NotSupported')
-  },
-)
-
-core.registerErrorBuilder(
-  'DOMExceptionNetworkError',
-  (msg?: string) => {
-    return new DOMException(msg, 'NetworkError')
-  },
-)
-
-core.registerErrorBuilder(
-  'DOMExceptionAbortError',
-  (msg?: string) => {
-    return new DOMException(msg, 'AbortError')
-  },
-)
-
-core.registerErrorBuilder(
-  'DOMExceptionInvalidCharacterError',
-  (msg?: string) => {
-    return new DOMException(msg, 'InvalidCharacterError')
-  },
-)
-
-core.registerErrorBuilder(
-  'DOMExceptionDataError',
-  (msg?: string) => {
-    return new DOMException(msg, 'DataError')
-  },
-)
-
-// Declare globalThis_ at the top level to avoid hoisting issues
-let globalThis_: typeof globalThis
+core.registerErrorBuilder('DOMExceptionOperationError', msg => domException('OperationError', msg))
+core.registerErrorBuilder('DOMExceptionQuotaExceededError', msg => domException('QuotaExceededError', msg))
+core.registerErrorBuilder('DOMExceptionNotSupportedError', msg => domException('NotSupported', msg))
+core.registerErrorBuilder('DOMExceptionNetworkError', msg => domException('NetworkError', msg))
+core.registerErrorBuilder('DOMExceptionAbortError', msg => domException('AbortError', msg))
+core.registerErrorBuilder('DOMExceptionInvalidCharacterError', msg => domException('InvalidCharacterError', msg))
+core.registerErrorBuilder('DOMExceptionDataError', msg => domException('DataError', msg))
 
 // Notification that the core received an unhandled promise rejection that is about to
 // terminate the runtime. If we can handle it, attempt to do so.
 core.setUnhandledPromiseRejectionHandler(processUnhandledPromiseRejection)
 function processUnhandledPromiseRejection(promise: Promise<unknown>, reason: unknown): boolean {
+  ensureEventTargetReady()
+  const event = lazyEvent()
   const rejectionEvent = new event.PromiseRejectionEvent(
     'unhandledrejection',
     { cancelable: true, promise, reason },
   )
 
   // Note that the handler may throw, causing a recursive "error" event
-  globalThis_.dispatchEvent(rejectionEvent)
+  globalThis.dispatchEvent(rejectionEvent)
 
   // If event was not yet prevented, try handing it off to Node compat layer
   // (if it was initialized)
@@ -299,21 +254,33 @@ function processUnhandledPromiseRejection(promise: Promise<unknown>, reason: unk
 
 core.setHandledPromiseRejectionHandler(processRejectionHandled)
 function processRejectionHandled(promise: Promise<unknown>, reason: unknown): void {
+  ensureEventTargetReady()
+  const event = lazyEvent()
   const rejectionHandledEvent = new event.PromiseRejectionEvent(
     'rejectionhandled',
     { promise, reason },
   )
 
   // Note that the handler may throw, causing a recursive "error" event
-  globalThis_.dispatchEvent(rejectionHandledEvent)
+  globalThis.dispatchEvent(rejectionHandledEvent)
 
   if (typeof internals.nodeProcessRejectionHandledCallback !== 'undefined')
     internals.nodeProcessRejectionHandledCallback(rejectionHandledEvent)
 }
 
-core.setReportExceptionCallback(event.reportException)
+core.setReportExceptionCallback((error) => {
+  ensureEventTargetReady()
+  lazyEvent().reportException(error)
+})
 op_set_format_exception_callback(formatException)
 function formatException(errorParam: unknown): string | null {
+  const {
+    getDefaultInspectOptions,
+    getStderrNoColor,
+    inspectArgs,
+    quoteString,
+  } = lazyConsole()
+
   if (core.isNativeError(errorParam) || ObjectPrototypeIsPrototypeOf(ErrorPrototype, errorParam)) {
     return null
   }
@@ -365,9 +332,3 @@ const errors = {
   NotADirectory,
   NotCapable,
 }
-
-globalThis_ = globalThis
-
-primordials.ObjectSetPrototypeOf(globalThis, DedicatedWorkerGlobalScope.prototype)
-event.saveGlobalThisReference(globalThis)
-event.setEventTargetData(globalThis)

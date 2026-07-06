@@ -1,10 +1,19 @@
 /// <reference path="../types.d.ts" />
 
-import * as websocket from 'ext:deno_websocket/01_websocket.js'
-import * as websocketStream from 'ext:deno_websocket/02_websocketstream.js'
-import { applyToGlobal, nonEnumerable } from 'ext:init_utilities/utilities.ts'
+import {
+  applyToGlobal,
+  lazyExtScript,
+  propNonEnumerableLazyLoaded,
+} from 'ext:init_utilities/utilities.ts'
+
+const lazyWebsocket = lazyExtScript<{ WebSocket: typeof WebSocket }>(
+  'ext:deno_websocket/01_websocket.js',
+)
+const lazyWebsocketStream = lazyExtScript<{ WebSocketStream: typeof WebSocketStream }>(
+  'ext:deno_websocket/02_websocketstream.js',
+)
 
 applyToGlobal({
-  WebSocket: nonEnumerable(websocket.WebSocket),
-  WebSocketStream: nonEnumerable(websocketStream.WebSocketStream),
+  WebSocket: propNonEnumerableLazyLoaded(m => m.WebSocket, lazyWebsocket),
+  WebSocketStream: propNonEnumerableLazyLoaded(m => m.WebSocketStream, lazyWebsocketStream),
 })

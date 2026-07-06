@@ -39,7 +39,7 @@ pub fn build_js_runtime(
 
     let ext_options = ext::ExtensionOptions::default();
     let has_node_modules_dir = ext_options.node_resolver.has_node_modules_dir();
-    let mut extensions = ext::extensions(&ext_options, true);
+    let (mut extensions, lazy_args) = ext::extensions_with_lazy_args(&ext_options, true);
 
     extensions.push(Extension {
         name: "rari:streaming",
@@ -69,6 +69,10 @@ pub fn build_js_runtime(
     };
 
     let mut runtime = JsRuntime::new(options);
+
+    runtime
+        .lazy_init_extensions(lazy_args)
+        .map_err(|err| RariError::js_runtime(format!("Failed to lazy-init extensions: {err}")))?;
 
     sync_bootstrap_options(&runtime, has_node_modules_dir);
 

@@ -1,5 +1,7 @@
 /// <reference path="../types.d.ts" />
 
+import { core } from 'ext:core/mod.js'
+
 if (typeof g === 'undefined') {
   Object.defineProperty(globalThis, 'g', {
     value: globalThis,
@@ -45,3 +47,88 @@ export function getterOnly(getter: () => unknown): PropertyDescriptor {
 
 export const applyToGlobal = (properties: PropertyDescriptorMap) => Object.defineProperties(globalThis, properties)
 export const applyToDeno = (properties: PropertyDescriptorMap) => Object.defineProperties(g.Deno, properties)
+
+const extScriptCache = new Map<string, unknown>()
+
+export function loadExtScriptOnce(specifier: string): unknown {
+  let cached = extScriptCache.get(specifier)
+  if (cached === undefined) {
+    cached = core.loadExtScript(specifier)
+    extScriptCache.set(specifier, cached)
+  }
+
+  return cached
+}
+
+export function lazyExtScript<T>(
+  specifier: string,
+): () => T {
+  let mod: T | undefined
+  return () => {
+    if (!mod)
+      mod = loadExtScriptOnce(specifier) as T
+
+    return mod
+  }
+}
+
+const extModuleLoaderCache = new Map<string, () => unknown>()
+
+export function lazyExtModule<T>(specifier: string): () => T {
+  let loader = extModuleLoaderCache.get(specifier) as (() => T) | undefined
+  if (!loader) {
+    loader = core.createLazyLoader<T>(specifier)
+    extModuleLoaderCache.set(specifier, loader as () => unknown)
+  }
+
+  return loader
+}
+
+export function propNonEnumerableLazyLoaded<T, V>(
+  select: (mod: T) => V,
+  load: () => T,
+): PropertyDescriptor {
+  return {
+    get(): V {
+      return select(load())
+    },
+    set() {},
+    enumerable: false,
+    configurable: true,
+  }
+}
+
+export function propWritableLazyLoaded<T, V>(
+  select: (mod: T) => V,
+  load: () => T,
+): PropertyDescriptor {
+  return {
+    value(...args: unknown[]) {
+      const fn = select(load()) as (...args: unknown[]) => unknown
+      return fn(...args)
+    },
+    writable: true,
+    enumerable: true,
+    configurable: true,
+  }
+}
+
+export function defineDenoLazyProps<T>(
+  load: () => T,
+  keys: (keyof T & string)[],
+): void {
+  const descriptors: PropertyDescriptorMap = {}
+
+  for (const key of keys) {
+    descriptors[key] = {
+      get() {
+        return load()[key]
+      },
+      set() {},
+      enumerable: false,
+      configurable: true,
+    }
+  }
+
+  Object.defineProperties(g.Deno, descriptors)
+}

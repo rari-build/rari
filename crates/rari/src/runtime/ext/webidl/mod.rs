@@ -1,7 +1,7 @@
-use deno_core::{Extension, extension};
+use deno_core::{Extension, ExtensionArguments, extension};
 use deno_webidl::deno_webidl;
 
-use super::ExtensionTrait;
+use super::{ExtensionTrait, lazy};
 
 extension!(
     init_webidl,
@@ -16,6 +16,16 @@ impl ExtensionTrait<()> for init_webidl {
     }
 }
 
-pub fn extensions(is_snapshot: bool) -> Vec<Extension> {
-    vec![deno_webidl::init(), init_webidl::build((), is_snapshot)]
+impl ExtensionTrait<()> for deno_webidl {
+    fn init((): ()) -> Extension {
+        Self::init()
+    }
+}
+
+pub fn extensions(is_snapshot: bool) -> (Vec<Extension>, Vec<ExtensionArguments>) {
+    let mut extensions = Vec::new();
+    let mut lazy_args = Vec::new();
+    lazy::register::<(), deno_webidl>((), is_snapshot, &mut extensions, &mut lazy_args);
+    lazy::register::<(), init_webidl>((), is_snapshot, &mut extensions, &mut lazy_args);
+    (extensions, lazy_args)
 }

@@ -1,56 +1,111 @@
 /// <reference path="../types.d.ts" />
 
-import { core } from 'ext:core/mod.js'
+import { defineDenoLazyProps, lazyExtScript } from 'ext:init_utilities/utilities.ts'
 
-const fs = core.loadExtScript('ext:deno_fs/30_fs.js')
+interface FsModule {
+  writeFileSync: typeof Deno.writeFileSync
+  writeFile: typeof Deno.writeFile
+  writeTextFileSync: typeof Deno.writeTextFileSync
+  writeTextFile: typeof Deno.writeTextFile
+  readTextFile: typeof Deno.readTextFile
+  readTextFileSync: typeof Deno.readTextFileSync
+  readFile: typeof Deno.readFile
+  readFileSync: typeof Deno.readFileSync
+  chmodSync: typeof Deno.chmodSync
+  chmod: typeof Deno.chmod
+  chown: typeof Deno.chown
+  chownSync: typeof Deno.chownSync
+  copyFileSync: typeof Deno.copyFileSync
+  cwd: typeof Deno.cwd
+  makeTempDirSync: typeof Deno.makeTempDirSync
+  makeTempDir: typeof Deno.makeTempDir
+  makeTempFileSync: typeof Deno.makeTempFileSync
+  makeTempFile: typeof Deno.makeTempFile
+  mkdirSync: typeof Deno.mkdirSync
+  mkdir: typeof Deno.mkdir
+  chdir: typeof Deno.chdir
+  copyFile: typeof Deno.copyFile
+  readDirSync: typeof Deno.readDirSync
+  readDir: typeof Deno.readDir
+  readLinkSync: typeof Deno.readLinkSync
+  readLink: typeof Deno.readLink
+  realPathSync: typeof Deno.realPathSync
+  realPath: typeof Deno.realPath
+  removeSync: typeof Deno.removeSync
+  remove: typeof Deno.remove
+  renameSync: typeof Deno.renameSync
+  rename: typeof Deno.rename
+  statSync: typeof Deno.statSync
+  lstatSync: typeof Deno.lstatSync
+  stat: typeof Deno.stat
+  lstat: typeof Deno.lstat
+  truncateSync: typeof Deno.truncateSync
+  truncate: typeof Deno.truncate
+  FsFile: typeof Deno.FsFile
+  open: typeof Deno.open
+  openSync: typeof Deno.openSync
+  create: typeof Deno.create
+  createSync: typeof Deno.createSync
+  symlink: typeof Deno.symlink
+  symlinkSync: typeof Deno.symlinkSync
+  link: typeof Deno.link
+  linkSync: typeof Deno.linkSync
+  utime: typeof Deno.utime
+  utimeSync: typeof Deno.utimeSync
+  umask: typeof Deno.umask
+}
 
-g.Deno.writeFileSync = fs.writeFileSync
-g.Deno.writeFile = fs.writeFile
-g.Deno.writeTextFileSync = fs.writeTextFileSync
-g.Deno.writeTextFile = fs.writeTextFile
-g.Deno.readTextFile = fs.readTextFile
-g.Deno.readTextFileSync = fs.readTextFileSync
-g.Deno.readFile = fs.readFile
-g.Deno.readFileSync = fs.readFileSync
-g.Deno.chmodSync = fs.chmodSync
-g.Deno.chmod = fs.chmod
-g.Deno.chown = fs.chown
-g.Deno.chownSync = fs.chownSync
-g.Deno.copyFileSync = fs.copyFileSync
-g.Deno.cwd = fs.cwd
-g.Deno.makeTempDirSync = fs.makeTempDirSync
-g.Deno.makeTempDir = fs.makeTempDir
-g.Deno.makeTempFileSync = fs.makeTempFileSync
-g.Deno.makeTempFile = fs.makeTempFile
-g.Deno.mkdirSync = fs.mkdirSync
-g.Deno.mkdir = fs.mkdir
-g.Deno.chdir = fs.chdir
-g.Deno.copyFile = fs.copyFile
-g.Deno.readDirSync = fs.readDirSync
-g.Deno.readDir = fs.readDir
-g.Deno.readLinkSync = fs.readLinkSync
-g.Deno.readLink = fs.readLink
-g.Deno.realPathSync = fs.realPathSync
-g.Deno.realPath = fs.realPath
-g.Deno.removeSync = fs.removeSync
-g.Deno.remove = fs.remove
-g.Deno.renameSync = fs.renameSync
-g.Deno.rename = fs.rename
-g.Deno.statSync = fs.statSync
-g.Deno.lstatSync = fs.lstatSync
-g.Deno.stat = fs.stat
-g.Deno.lstat = fs.lstat
-g.Deno.truncateSync = fs.truncateSync
-g.Deno.truncate = fs.truncate
-g.Deno.FsFile = fs.FsFile
-g.Deno.open = fs.open
-g.Deno.openSync = fs.openSync
-g.Deno.create = fs.create
-g.Deno.createSync = fs.createSync
-g.Deno.symlink = fs.symlink
-g.Deno.symlinkSync = fs.symlinkSync
-g.Deno.link = fs.link
-g.Deno.linkSync = fs.linkSync
-g.Deno.utime = fs.utime
-g.Deno.utimeSync = fs.utimeSync
-g.Deno.umask = fs.umask
+const lazyFs = lazyExtScript<FsModule>('ext:deno_fs/30_fs.js')
+
+defineDenoLazyProps(lazyFs, [
+  'writeFileSync',
+  'writeFile',
+  'writeTextFileSync',
+  'writeTextFile',
+  'readTextFile',
+  'readTextFileSync',
+  'readFile',
+  'readFileSync',
+  'chmodSync',
+  'chmod',
+  'chown',
+  'chownSync',
+  'copyFileSync',
+  'cwd',
+  'makeTempDirSync',
+  'makeTempDir',
+  'makeTempFileSync',
+  'makeTempFile',
+  'mkdirSync',
+  'mkdir',
+  'chdir',
+  'copyFile',
+  'readDirSync',
+  'readDir',
+  'readLinkSync',
+  'readLink',
+  'realPathSync',
+  'realPath',
+  'removeSync',
+  'remove',
+  'renameSync',
+  'rename',
+  'statSync',
+  'lstatSync',
+  'stat',
+  'lstat',
+  'truncateSync',
+  'truncate',
+  'FsFile',
+  'open',
+  'openSync',
+  'create',
+  'createSync',
+  'symlink',
+  'symlinkSync',
+  'link',
+  'linkSync',
+  'utime',
+  'utimeSync',
+  'umask',
+])
