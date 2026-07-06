@@ -46,7 +46,7 @@ export class RemoteOpsCacheStorage implements CacheStorage {
   async write(key: string, value: unknown, ttlMs: number) {
     const fn = runtime.Deno?.core?.ops?.[this.ops.set]
 
-    let serialized: string
+    let serialized: string | undefined
     try {
       serialized = JSON.stringify(value)
     }

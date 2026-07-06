@@ -7,6 +7,12 @@ export default defineConfig({
       '@rari/use-cache/runtime/cache-wrapper': fileURLToPath(
         new URL('./packages/use-cache/dist/runtime/cache-wrapper.mjs', import.meta.url),
       ),
+      '@rari/use-cache/runtime/cache-storage-redb': fileURLToPath(
+        new URL('./packages/use-cache/dist/runtime/cache-storage-redb.mjs', import.meta.url),
+      ),
+      '@rari/use-cache/runtime/cache-storage-remote-ops': fileURLToPath(
+        new URL('./packages/use-cache/dist/runtime/cache-storage-remote-ops.mjs', import.meta.url),
+      ),
       '@rari/use-cache/runtime/deterministic-stringify': fileURLToPath(
         new URL('./packages/use-cache/dist/runtime/deterministic-stringify.mjs', import.meta.url),
       ),

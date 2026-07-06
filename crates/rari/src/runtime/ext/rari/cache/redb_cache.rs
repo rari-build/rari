@@ -5,6 +5,7 @@ use std::{
     fs::create_dir_all,
     io::Error,
     path::PathBuf,
+    process,
     rc::Rc,
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
@@ -22,7 +23,7 @@ const EXPIRY_NEVER: u64 = 0;
 const TABLE_NAME: &str = "use_cache_remote_entries";
 
 fn test_redb_path() -> PathBuf {
-    env::temp_dir().join("rari-use-cache-redb-test.redb")
+    env::temp_dir().join(format!("rari-use-cache-redb-test-{}.redb", process::id()))
 }
 
 const TABLE_DEFINITION: redb::TableDefinition<&str, &[u8]> = redb::TableDefinition::new(TABLE_NAME);
