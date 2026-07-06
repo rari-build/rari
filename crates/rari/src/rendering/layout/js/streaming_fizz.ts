@@ -40,20 +40,6 @@ async function rariReadStream(stream: ReadableStream): Promise<string> {
   return html
 }
 
-async function rariDrainReadable(stream: ReadableStream): Promise<void> {
-  const reader = stream.getReader()
-  try {
-    while (true) {
-      const { done } = await reader.read()
-      if (done)
-        break
-    }
-  }
-  finally {
-    await reader.cancel().catch(() => {})
-  }
-}
-
 let rariStreamDisconnected = false
 
 type RariHtmlStreamState = 'outside' | 'in_tag' | 'in_inline_script' | 'in_raw_text'
@@ -363,9 +349,27 @@ function rariCreatePullFlightFanout(sourceStream: ReadableStream) {
     },
   })
 
+  async function ensureSourceComplete() {
+    if (sourceDone)
+      return
+    while (true) {
+      const { done, value } = await sourceReader.read()
+      if (done) {
+        sourceDone = true
+        liveFlight.markStreamEnd()
+        rariStreamLog('fanout.sourceDone', `pulls=${pullCount} drained=true`)
+        return
+      }
+      pullCount++
+      liveFlight.consumeChunk(value)
+      rariStreamLog('fanout.chunk', `bytes=${value.byteLength} drained=true`)
+    }
+  }
+
   return {
     flightReadable,
     liveFlight,
+    ensureSourceComplete,
     get sourceDone() {
       return sourceDone
     },
@@ -697,7 +701,7 @@ async function renderStaticDocument(options: RenderStreamingDocumentOptions): Pr
     },
   )
 
-  const { flightReadable, liveFlight } = rariCreatePullFlightFanout(rscStream)
+  const { flightReadable, liveFlight, ensureSourceComplete } = rariCreatePullFlightFanout(rscStream)
 
   const fullDoc = R.createElement(
     'html',
@@ -718,7 +722,7 @@ async function renderStaticDocument(options: RenderStreamingDocumentOptions): Pr
   }) as ReadableStream & { allReady?: Promise<void> }
 
   await fizzStream.allReady
-  await rariDrainReadable(flightReadable)
+  await ensureSourceComplete()
 
   let html = await rariReadStream(fizzStream)
   html = rariStripLeadingDoctype(html)

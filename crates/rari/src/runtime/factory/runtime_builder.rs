@@ -30,10 +30,6 @@ fn sync_bootstrap_options(runtime: &JsRuntime, has_node_modules_dir: bool) {
 static RUNTIME_SNAPSHOT: &[u8] = include_bytes!("../../../snapshots/RARI_SNAPSHOT.bin");
 include!("../../../snapshots/residual_lazy_sources.rs");
 
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "Result enables graceful runtime restart on JsRuntime::new() panic from TypeScript transpilation failures"
-)]
 pub fn build_js_runtime(
     env_vars: Option<FxHashMap<String, String>>,
 ) -> Result<(JsRuntime, Rc<RariModuleLoader>), RariError> {
@@ -76,10 +72,9 @@ pub fn build_js_runtime(
 
     sync_bootstrap_options(&runtime, has_node_modules_dir);
 
-    if let Err(err) = runtime.execute_script("node_bootstrap.js", NODE_BOOTSTRAP_SCRIPT.to_string())
-    {
-        eprintln!("[rari] Failed to stash node bootstrap args: {err}");
-    }
+    runtime.execute_script("node_bootstrap.js", NODE_BOOTSTRAP_SCRIPT.to_string()).map_err(
+        |err| RariError::js_runtime(format!("Failed to stash node bootstrap args: {err}")),
+    )?;
 
     if let Some(env_vars) = env_vars {
         let env_script = ENV_INJECTION_SCRIPT.cow_replace(
