@@ -4,7 +4,6 @@ use std::{future::Future, path::Path, pin::Pin, sync::Arc};
 use cow_utils::CowUtils;
 use rari_error::RariError;
 use rari_rsc::utils::extract_dependencies;
-use rari_utils::path_to_file_url;
 use serde_json::Value;
 use tokio::fs;
 
@@ -14,6 +13,7 @@ use crate::{
     server::core::utils::component::{
         has_use_client_directive, has_use_server_directive, wrap_server_action_module,
     },
+    utils::path::path_to_file_url,
 };
 
 const DIST_DIR: &str = "dist";

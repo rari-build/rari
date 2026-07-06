@@ -14,13 +14,12 @@ use axum::{
 };
 use futures_util::future::BoxFuture;
 use rari_error::RariError;
-use rari_utils::path_to_file_url;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 use tower::{Layer, Service};
 
-use crate::server::core::types::ServerState;
+use crate::{server::core::types::ServerState, utils::path::path_to_file_url};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ProxyResult {

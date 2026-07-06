@@ -47,7 +47,6 @@ parking_lot = "0.12.5"
 rari = { path = "crates/rari" }
 rari_error = { path = "crates/rari_error" }
 rari_rsc = { path = "crates/rari_rsc" }
-rari_utils = { path = "crates/rari_utils" }
 regex = "1.12.4"
 rustc-hash = "2.1.3"
 serde = { version = "1.0.228", features = [ "derive" ] }

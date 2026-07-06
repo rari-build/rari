@@ -33,6 +33,7 @@ use crate::{
         middleware::request_context::RequestContext,
         routing::app_router::AppRouteMatch,
     },
+    utils::path::path_to_file_url,
 };
 
 const LAYOUT_KEY_PREFIX: &str = "layout:";
@@ -230,7 +231,7 @@ impl LayoutRenderer {
             return Ok(false);
         }
 
-        let page_path = rari_utils::path_to_file_url(&page_file_path);
+        let page_path = path_to_file_url(&page_file_path);
 
         let check_script = format!(
             r#"
