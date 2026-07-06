@@ -295,27 +295,17 @@ jobs:
       - uses: ./.github/actions/cancel-merge-group-on-failure
         if: always()
 
-  build-use-cache-addon:
-    name: Build rari_use_cache.node (${{ matrix.os }})
+  build-use-cache-addon-linux:
+    name: Build rari_use_cache.node (linux-x64)
     needs: [changes]
     if: needs.changes.outputs.use_cache_crate == 'true' || needs.changes.outputs.src == 'true'
-    runs-on: ${{ matrix.os }}
+    runs-on: namespace-profile-rari-linux-amd64
     timeout-minutes: 20
     permissions:
       actions: write
       contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [namespace-profile-rari-linux-amd64, namespace-profile-rari-windows-amd64]
-        exclude:
-          - os: ${{ github.event_name == 'merge_group' && 'namespace-profile-rari-windows-amd64' || '' }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        if: runner.os == 'Windows'
-
       - uses: namespacelabs/nscloud-checkout-action@445c25d7009680597d73eb03c4e1cd5be522ed73 # v9.0.0
-        if: runner.os != 'Windows'
 
       - uses: ./.github/actions/setup-platform-cache
         with:
@@ -347,8 +337,7 @@ jobs:
       - name: Prepare use-cache platform package
         run: just ci-prepare-use-cache-addon
 
-      - name: Upload addon (Linux)
-        if: runner.os == 'Linux'
+      - name: Upload addon
         uses: namespace-actions/upload-artifact@f6ccaacc655aec41b93af180d1d7eef21af862d2 # v1.0.3
         with:
           name: use-cache-linux-x64
@@ -359,8 +348,45 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-      - name: Upload addon (Windows)
-        if: runner.os == 'Windows'
+  build-use-cache-addon-windows:
+    name: Build rari_use_cache.node (win32-x64)
+    needs: [changes]
+    if: needs.changes.outputs.use_cache_crate == 'true' && github.event_name != 'merge_group'
+    runs-on: namespace-profile-rari-windows-amd64
+    timeout-minutes: 20
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: ./.github/actions/setup-platform-cache
+        with:
+          rust: 'true'
+          rust-workspaces: crates/rari_use_cache
+          pnpm: 'true'
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: nightly
+
+      - uses: ./.github/actions/setup-rust-build-deps
+        with:
+          fontconfig: 'false'
+
+      - uses: ./.github/actions/setup-pnpm
+        with:
+          node-version: 22.18.0
+          cache: 'false'
+          setup-toolchain: 'false'
+
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+
+      - name: Prepare use-cache platform package
+        run: just ci-prepare-use-cache-addon
+
+      - name: Upload addon
         uses: namespace-actions/upload-artifact@f6ccaacc655aec41b93af180d1d7eef21af862d2 # v1.0.3
         with:
           name: use-cache-win32-x64
@@ -372,7 +398,7 @@ jobs:
           retention-days: 1
 
   build:
-    needs: [changes, build-use-cache-addon]
+    needs: [changes, build-use-cache-addon-linux]
     if: |
       (always() && !cancelled()) &&
       (needs.changes.outputs.src == 'true' || needs.changes.outputs.rust == 'true')
@@ -430,7 +456,7 @@ jobs:
         if: always()
 
   lint-and-test:
-    needs: [changes, build-use-cache-addon]
+    needs: [changes, build-use-cache-addon-linux]
     if: |
       (always() && !cancelled()) &&
       (needs.changes.outputs.src == 'true' || needs.changes.outputs.rust == 'true')
@@ -571,7 +597,8 @@ jobs:
       - rust-check
       - build
       - build-rari-binary
-      - build-use-cache-addon
+      - build-use-cache-addon-linux
+      - build-use-cache-addon-windows
       - lint-and-test
       - test-e2e
     steps:
@@ -583,7 +610,8 @@ jobs:
             "${{ needs.rust-check.result }}"
             "${{ needs.build.result }}"
             "${{ needs.build-rari-binary.result }}"
-            "${{ needs.build-use-cache-addon.result }}"
+            "${{ needs.build-use-cache-addon-linux.result }}"
+            "${{ needs.build-use-cache-addon-windows.result }}"
             "${{ needs.lint-and-test.result }}"
             "${{ needs.test-e2e.result }}"
           )
