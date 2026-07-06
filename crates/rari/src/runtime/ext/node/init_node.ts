@@ -6,8 +6,42 @@ const { initializeDebugEnv } = core.loadExtScript('ext:deno_node/internal/util/d
 
 initializeDebugEnv('rari')
 
-if (!g.process) {
-  g.process = {
+function getPlatform(): string {
+  try {
+    const os = g.Deno?.build?.os
+
+    if (os === 'darwin')
+      return 'darwin'
+    if (os === 'linux')
+      return 'linux'
+    if (os === 'windows')
+      return 'win32'
+
+    return 'linux'
+  }
+  catch {
+    return 'linux'
+  }
+}
+
+function getArch(): string {
+  try {
+    const arch = g.Deno?.build?.arch
+
+    if (arch === 'x86_64')
+      return 'x64'
+    if (arch === 'aarch64')
+      return 'arm64'
+
+    return 'x64'
+  }
+  catch {
+    return 'x64'
+  }
+}
+
+function createProcessShim() {
+  return {
     env: {},
     cwd: () => {
       try {
@@ -18,38 +52,8 @@ if (!g.process) {
       }
     },
     nextTick: (fn: () => void) => queueMicrotask(fn),
-    platform: (() => {
-      try {
-        const os = g.Deno?.build?.os
-
-        if (os === 'darwin')
-          return 'darwin'
-        if (os === 'linux')
-          return 'linux'
-        if (os === 'windows')
-          return 'win32'
-
-        return 'linux'
-      }
-      catch {
-        return 'linux'
-      }
-    })(),
-    arch: (() => {
-      try {
-        const arch = g.Deno?.build?.arch
-
-        if (arch === 'x86_64')
-          return 'x64'
-        if (arch === 'aarch64')
-          return 'arm64'
-
-        return 'x64'
-      }
-      catch {
-        return 'x64'
-      }
-    })(),
+    platform: getPlatform(),
+    arch: getArch(),
     version: 'v__NODE_VERSION__',
     versions: {
       node: '__NODE_VERSION__',
@@ -97,7 +101,7 @@ if (!g.process) {
       arrayBuffers: 0,
     }),
     uptime: () => 0,
-    hrtime: () => [0, 0],
+    hrtime: () => [0, 0] as [number, number],
     binding: () => ({}),
     stdout: {
       write: (data: string) => console.warn(data),
@@ -111,6 +115,38 @@ if (!g.process) {
       isTTY: false,
     },
   }
+}
+
+function patchProcessShim(process: Record<string, unknown>) {
+  if (typeof process.platform !== 'string' || !process.platform)
+    process.platform = getPlatform()
+
+  if (typeof process.arch !== 'string' || !process.arch)
+    process.arch = getArch()
+
+  if (!process.env || typeof process.env !== 'object')
+    process.env = {}
+
+  if (typeof process.cwd !== 'function') {
+    process.cwd = () => {
+      try {
+        return g.Deno?.cwd() || '/'
+      }
+      catch {
+        return '/'
+      }
+    }
+  }
+
+  if (typeof process.nextTick !== 'function')
+    process.nextTick = (fn: () => void) => queueMicrotask(fn)
+}
+
+if (!g.process) {
+  g.process = createProcessShim()
+}
+else {
+  patchProcessShim(g.process as Record<string, unknown>)
 }
 
 if (!g.Buffer) {

@@ -2,6 +2,7 @@ use std::{borrow::Cow, rc::Rc, sync::Arc};
 
 use cow_utils::CowUtils;
 use deno_core::{Extension, JsRuntime, RuntimeOptions};
+use deno_runtime::BootstrapOptions;
 use rari_error::RariError;
 use rustc_hash::FxHashMap;
 
@@ -9,11 +10,22 @@ use crate::runtime::{
     ext,
     factory::{
         create_params::runtime_create_params,
-        utils::constants::{ENV_INJECTION_SCRIPT, MODULE_CHECK_SCRIPT},
+        utils::constants::{ENV_INJECTION_SCRIPT, MODULE_CHECK_SCRIPT, NODE_BOOTSTRAP_SCRIPT},
     },
     module_loader::RariModuleLoader,
     ops::{self, StreamOpState},
 };
+
+fn sync_bootstrap_options(runtime: &JsRuntime, has_node_modules_dir: bool) {
+    let state = runtime.op_state();
+    let mut state = state.borrow_mut();
+    let mut options = state.try_take::<BootstrapOptions>().unwrap_or_else(|| BootstrapOptions {
+        args: vec!["--colors".to_string()],
+        ..BootstrapOptions::default()
+    });
+    options.has_node_modules_dir = has_node_modules_dir;
+    state.put(options);
+}
 
 static RUNTIME_SNAPSHOT: &[u8] = include_bytes!("../../../snapshots/RARI_SNAPSHOT.bin");
 include!("../../../snapshots/residual_lazy_sources.rs");
@@ -30,6 +42,7 @@ pub fn build_js_runtime(
     let streaming_ops = get_streaming_ops();
 
     let ext_options = ext::ExtensionOptions::default();
+    let has_node_modules_dir = ext_options.node_resolver.has_node_modules_dir();
     let mut extensions = ext::extensions(&ext_options, true);
 
     extensions.push(Extension {
@@ -37,6 +50,7 @@ pub fn build_js_runtime(
         ops: Cow::Owned(streaming_ops),
         op_state_fn: Some(Box::new(|state| {
             state.put(StreamOpState::default());
+            state.put(ops::rari_main_module());
             let feature_checker = deno_features::FeatureChecker::default();
             state.put(Arc::new(feature_checker));
         })),
@@ -59,6 +73,13 @@ pub fn build_js_runtime(
     };
 
     let mut runtime = JsRuntime::new(options);
+
+    sync_bootstrap_options(&runtime, has_node_modules_dir);
+
+    if let Err(err) = runtime.execute_script("node_bootstrap.js", NODE_BOOTSTRAP_SCRIPT.to_string())
+    {
+        eprintln!("[rari] Failed to stash node bootstrap args: {err}");
+    }
 
     if let Some(env_vars) = env_vars {
         let env_script = ENV_INJECTION_SCRIPT.cow_replace(

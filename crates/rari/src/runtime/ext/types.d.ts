@@ -37,6 +37,8 @@ declare global {
 
     const pid: number
     const ppid: number
+    const args: readonly string[]
+    const version: Record<string, string>
 
     function cron(
       name: string,
@@ -439,6 +441,7 @@ declare global {
           tags: string[]
         }>
         function op_bootstrap_no_color(): boolean
+        function op_rari_has_node_modules_dir(): boolean
       }
       function setWasmStreamingCallback(callback: (source: any, rid: number) => void): void
       function print(msg: string, isErr?: boolean): void
