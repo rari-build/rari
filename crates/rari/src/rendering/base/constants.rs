@@ -18,6 +18,53 @@ pub const DEFAULT_MAX_CACHE_SIZE: usize = 1000;
 pub const V8_CACHE_CLEAR_SCRIPT: &str = include_str!("js/v8_cache_clear.ts");
 pub const SERVER_ACTION_INVOCATION_SCRIPT: &str = include_str!("js/server_action_invocation.ts");
 
+pub const FIZZ_RENDER_SCRIPT: &str = include_str!("../layout/js/fizz_render.ts");
+pub const STREAMING_FIZZ_SCRIPT: &str = include_str!("../layout/js/streaming_fizz.ts");
+pub const RSC_RENDERER_SCRIPT: &str = include_str!("js/rsc_renderer.ts");
+
+pub const STREAMING_PIPELINE_READY_CHECK: &str = "typeof globalThis['~rari']?.renderStreamingDocument === 'function' \
+        && typeof globalThis['~rari']?.renderStaticDocument === 'function'";
+
+pub const LOAD_FULL_REACT_VENDORS_SCRIPT: &str = r"
+(async function() {
+    try {
+        const [react, reactDomServer, flightClient, flightServer] = await Promise.all([
+            import('file:///react_vendor/react.js'),
+            import('file:///react_vendor/react-dom-server.js'),
+            import('file:///react_vendor/react-server-dom-webpack-client.js'),
+            import('file:///react_vendor/react-server-dom-webpack-server.js'),
+        ]);
+        if (!globalThis.React?.createElement) {
+            globalThis.React = react.default && react.default.createElement ? react.default : react;
+        }
+        globalThis['~reactServer'] = reactDomServer;
+        globalThis['~flightClient'] = flightClient;
+        globalThis['~reactServerRenderer'] = flightServer;
+        return !!(globalThis.React.createElement
+            && globalThis['~reactServer'].renderToReadableStream
+            && globalThis['~flightClient'].createFromReadableStream
+            && globalThis['~reactServerRenderer'].renderToReadableStream);
+    } catch (e) {
+        console.warn('[rari] Could not load React server modules:', e?.message || e);
+        return false;
+    }
+})()
+";
+
+pub const LOAD_RSC_VENDORS_SCRIPT: &str = r"
+(async function() {
+    const [react, flightServer] = await Promise.all([
+        import('file:///react_vendor/react.js'),
+        import('file:///react_vendor/react-server-dom-webpack-server.js'),
+    ]);
+    if (!globalThis.React?.createElement) {
+        globalThis.React = react.default && react.default.createElement ? react.default : react;
+    }
+    globalThis['~reactServerRenderer'] = flightServer;
+    return !!(globalThis.React.createElement && globalThis['~reactServerRenderer'].renderToReadableStream);
+})()
+";
+
 pub const EXTENSION_CHECKS: &str = r"(function () {
   const checks = {};
   checks.rsc_renderer = true;

@@ -24,6 +24,22 @@ function rariStripLeadingDoctype(text: string): string {
   return text.slice(match[0].length)
 }
 
+async function rariReadStream(stream: ReadableStream): Promise<string> {
+  const reader = stream.getReader()
+  const decoder = new TextDecoder()
+  let html = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done)
+      break
+    html += decoder.decode(value, { stream: true })
+  }
+
+  html += decoder.decode()
+  return html
+}
+
 let rariStreamDisconnected = false
 
 type RariHtmlStreamState = 'outside' | 'in_tag' | 'in_inline_script' | 'in_raw_text'
@@ -642,7 +658,6 @@ async function renderStaticDocument(options: RenderStreamingDocumentOptions): Pr
   const ReactServerRenderer = g['~reactServerRenderer']
   const ReactDOMServer = g['~reactServer']
   const R = g.React
-  const readStream = g['~rari']?.readStream
 
   if (!ReactServerRenderer?.renderToReadableStream)
     throw new Error('[rari] RSC renderer not loaded')
@@ -650,8 +665,6 @@ async function renderStaticDocument(options: RenderStreamingDocumentOptions): Pr
     throw new Error('[rari] Fizz renderer not loaded')
   if (!R?.createElement)
     throw new Error('[rari] React not loaded')
-  if (!readStream)
-    throw new Error('[rari] readStream utility not available')
 
   const bundlerConfig = g['~rari']?.clientReferenceManifest || {}
 
@@ -688,7 +701,7 @@ async function renderStaticDocument(options: RenderStreamingDocumentOptions): Pr
 
   await fizzStream.allReady
 
-  let html = await readStream(fizzStream)
+  let html = await rariReadStream(fizzStream)
   html = rariStripLeadingDoctype(html)
   if (!html.trimStart().toLowerCase().startsWith('<!doctype'))
     html = `<!DOCTYPE html>\n${html}`
@@ -703,6 +716,8 @@ async function pumpRscElementStream(
   element: unknown,
   pumpChunk: (text: string) => Promise<boolean>,
 ): Promise<void> {
+  rariStreamDisconnected = false
+
   const ReactServerRenderer = g['~reactServerRenderer']
   if (!ReactServerRenderer?.renderToReadableStream)
     throw new Error('[rari] RSC renderer not loaded')
@@ -720,17 +735,22 @@ async function pumpRscElementStream(
 
   const reader = stream.getReader()
   const decoder = new TextDecoder()
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done)
-      break
-    const text = decoder.decode(value, { stream: true })
-    if (!(await pumpChunk(text)))
-      break
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done)
+        break
+      const text = decoder.decode(value, { stream: true })
+      if (!(await pumpChunk(text)))
+        break
+    }
+    if (!rariStreamDisconnected) {
+      const tail = decoder.decode()
+      await pumpChunk(tail)
+    }
   }
-  if (!rariStreamDisconnected) {
-    const tail = decoder.decode()
-    await pumpChunk(tail)
+  finally {
+    await reader.cancel().catch(() => {})
   }
 }
 

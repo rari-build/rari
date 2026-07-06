@@ -24,9 +24,11 @@ use tokio::{fs, time};
 
 use super::{
     constants::{
-        BATCH_ERROR_COLLECTION, CACHE_CLEANUP_INTERVAL, EXTENSION_CHECKS,
+        BATCH_ERROR_COLLECTION, CACHE_CLEANUP_INTERVAL, EXTENSION_CHECKS, FIZZ_RENDER_SCRIPT,
+        LOAD_FULL_REACT_VENDORS_SCRIPT, LOAD_RSC_VENDORS_SCRIPT,
         MEMORY_PRESSURE_RENDER_THRESHOLD_DEN, MEMORY_PRESSURE_RENDER_THRESHOLD_NUM,
-        SERVER_ACTION_INVOCATION_SCRIPT, SERVER_FUNCTION_RESOLVER, V8_CACHE_CLEAR_SCRIPT,
+        RSC_RENDERER_SCRIPT, SERVER_ACTION_INVOCATION_SCRIPT, SERVER_FUNCTION_RESOLVER,
+        STREAMING_FIZZ_SCRIPT, STREAMING_PIPELINE_READY_CHECK, V8_CACHE_CLEAR_SCRIPT,
         module_registration_script, resolve_server_functions_for_component,
     },
     types::{ResourceLimits, ResourceMetrics, ResourceTracker},
@@ -233,6 +235,92 @@ globalThis['~errors'].batch.push({{
         Ok(result)
     }
 
+    async fn load_js_script(&self, name: &str, script: &str) -> Result<(), RariError> {
+        self.runtime
+            .execute_script(name.to_string(), script.to_string())
+            .await
+            .map(|_| ())
+            .map_err(|e| RariError::internal(format!("Failed to load {name}: {e}")))
+    }
+
+    async fn is_streaming_pipeline_ready(&self) -> Result<bool, RariError> {
+        let check = self
+            .runtime
+            .execute_script(
+                "check_streaming_fizz".to_string(),
+                STREAMING_PIPELINE_READY_CHECK.to_string(),
+            )
+            .await?;
+
+        Ok(check.as_bool() == Some(true))
+    }
+
+    async fn has_fizz_vendors(&self) -> Result<bool, RariError> {
+        let check = self
+            .runtime
+            .execute_script(
+                "check_fizz_vendor".to_string(),
+                "typeof globalThis['~reactServer']?.renderToReadableStream === 'function'"
+                    .to_string(),
+            )
+            .await?;
+
+        Ok(check.as_bool() == Some(true))
+    }
+
+    async fn try_load_full_react_vendors(&self) -> Result<bool, RariError> {
+        let result = self
+            .runtime
+            .execute_script(
+                "setup_react_vendors".to_string(),
+                LOAD_FULL_REACT_VENDORS_SCRIPT.to_string(),
+            )
+            .await
+            .map_err(|e| RariError::internal(format!("Failed to load React vendors: {e}")))?;
+
+        Ok(result.as_bool() == Some(true))
+    }
+
+    async fn load_full_react_vendors(&self) -> Result<(), RariError> {
+        if !self.try_load_full_react_vendors().await? {
+            return Err(RariError::internal(
+                "React vendor modules failed to initialize".to_string(),
+            ));
+        }
+        Ok(())
+    }
+
+    async fn load_fizz_and_rsc_scripts(&self) -> Result<(), RariError> {
+        self.load_js_script("fizz_render.ts", FIZZ_RENDER_SCRIPT).await?;
+        self.load_js_script("rsc_renderer.ts", RSC_RENDERER_SCRIPT).await
+    }
+
+    async fn load_streaming_fizz_script(&self) -> Result<(), RariError> {
+        self.load_js_script("streaming_fizz.ts", STREAMING_FIZZ_SCRIPT).await
+    }
+
+    async fn load_all_layout_scripts(&self) -> Result<(), RariError> {
+        self.load_fizz_and_rsc_scripts().await?;
+        self.load_streaming_fizz_script().await
+    }
+
+    async fn verify_streaming_pipeline_ready(&self) -> Result<(), RariError> {
+        let ready = self
+            .runtime
+            .execute_script(
+                "verify_streaming_fizz".to_string(),
+                STREAMING_PIPELINE_READY_CHECK.to_string(),
+            )
+            .await?;
+
+        if ready.as_bool() != Some(true) {
+            return Err(RariError::internal(
+                "Streaming Fizz pipeline loaded but render functions are unavailable".to_string(),
+            ));
+        }
+        Ok(())
+    }
+
     pub async fn initialize(&mut self) -> Result<(), RariError> {
         if self.initialized {
             return Ok(());
@@ -254,80 +342,10 @@ globalThis['~errors'].batch.push({{
             .execute_script("extension-checks".to_string(), EXTENSION_CHECKS.to_string())
             .await?;
 
-        let setup_fizz_script = r"
-            (async function() {
-                try {
-                    const [react, reactDomServer, flightClient, flightServer] = await Promise.all([
-                        import('file:///react_vendor/react.js'),
-                        import('file:///react_vendor/react-dom-server.js'),
-                        import('file:///react_vendor/react-server-dom-webpack-client.js'),
-                        import('file:///react_vendor/react-server-dom-webpack-server.js'),
-                    ]);
-                    globalThis.React = react.default && react.default.createElement ? react.default : react;
-                    globalThis['~reactServer'] = reactDomServer;
-                    globalThis['~flightClient'] = flightClient;
-                    globalThis['~reactServerRenderer'] = flightServer;
-                    return {
-                        success: !!(globalThis.React.createElement
-                            && globalThis['~reactServer'].renderToReadableStream
-                            && globalThis['~flightClient'].createFromReadableStream
-                            && globalThis['~reactServerRenderer'].renderToReadableStream),
-                    };
-                } catch (e) {
-                    console.warn('[rari] Could not load React server modules:', e?.message || e);
-                    return { success: false, error: String(e?.message || e) };
-                }
-            })()
-        ";
-
-        match self
-            .runtime
-            .execute_script("setup_react_server".to_string(), setup_fizz_script.to_string())
-            .await
-        {
-            Ok(result) => {
-                let success =
-                    result.get("success").and_then(serde_json::Value::as_bool).unwrap_or(false);
-                if success {
-                    let fizz_render_script = include_str!("../layout/js/fizz_render.ts");
-                    if let Err(e) = self
-                        .runtime
-                        .execute_script(
-                            "fizz_render.ts".to_string(),
-                            fizz_render_script.to_string(),
-                        )
-                        .await
-                    {
-                        tracing::warn!("Failed to initialize Fizz renderer: {e}");
-                    }
-
-                    let streaming_fizz_script = include_str!("../layout/js/streaming_fizz.ts");
-                    if let Err(e) = self
-                        .runtime
-                        .execute_script(
-                            "streaming_fizz.ts".to_string(),
-                            streaming_fizz_script.to_string(),
-                        )
-                        .await
-                    {
-                        tracing::warn!("Failed to initialize streaming Fizz pipeline: {e}");
-                    }
-
-                    let rsc_renderer_script = include_str!("js/rsc_renderer.ts");
-                    if let Err(e) = self
-                        .runtime
-                        .execute_script(
-                            "rsc_renderer.ts".to_string(),
-                            rsc_renderer_script.to_string(),
-                        )
-                        .await
-                    {
-                        tracing::warn!("Failed to initialize RSC renderer: {e}");
-                    }
-                } else {
-                    let err = result.get("error").and_then(|v| v.as_str()).unwrap_or("unknown");
-                    tracing::warn!("React Fizz module load returned failure: {err}");
-                }
+        match self.try_load_full_react_vendors().await {
+            Ok(true) => self.load_all_layout_scripts().await?,
+            Ok(false) => {
+                tracing::warn!("React Fizz module load returned failure");
             }
             Err(e) => {
                 tracing::warn!(
@@ -354,23 +372,9 @@ globalThis['~errors'].batch.push({{
             return Ok(());
         }
 
-        let setup_script = r"
-            (async function() {
-                const [react, flightServer] = await Promise.all([
-                    import('file:///react_vendor/react.js'),
-                    import('file:///react_vendor/react-server-dom-webpack-server.js'),
-                ]);
-                if (!globalThis.React?.createElement) {
-                    globalThis.React = react.default && react.default.createElement ? react.default : react;
-                }
-                globalThis['~reactServerRenderer'] = flightServer;
-                return !!(globalThis.React.createElement && globalThis['~reactServerRenderer'].renderToReadableStream);
-            })()
-        ";
-
         let result = self
             .runtime
-            .execute_script("<load_react_server>".to_string(), setup_script.to_string())
+            .execute_script("<load_react_server>".to_string(), LOAD_RSC_VENDORS_SCRIPT.to_string())
             .await
             .map_err(|e| {
                 RariError::internal(format!("Failed to load React Server renderer: {e}"))
@@ -382,95 +386,23 @@ globalThis['~errors'].batch.push({{
             ));
         }
 
-        let renderer_script = include_str!("js/rsc_renderer.ts");
-        self.runtime
-            .execute_script("load_rsc_renderer.ts".to_string(), renderer_script.to_string())
-            .await
-            .map_err(|e| RariError::internal(format!("Failed to load RSC renderer: {e}")))?;
-
-        Ok(())
+        self.load_js_script("load_rsc_renderer.ts", RSC_RENDERER_SCRIPT).await
     }
 
     pub async fn ensure_streaming_pipeline(&self) -> Result<(), RariError> {
-        let check = self
-            .runtime
-            .execute_script(
-                "check_streaming_fizz".to_string(),
-                "typeof globalThis['~rari']?.renderStreamingDocument === 'function'".to_string(),
-            )
-            .await?;
-
-        if check.as_bool() == Some(true) {
+        if self.is_streaming_pipeline_ready().await? {
             return Ok(());
         }
 
-        let fizz_check = self
-            .runtime
-            .execute_script(
-                "check_fizz_vendor".to_string(),
-                "typeof globalThis['~reactServer']?.renderToReadableStream === 'function'"
-                    .to_string(),
-            )
-            .await?;
-
-        if fizz_check.as_bool() == Some(true) {
+        if self.has_fizz_vendors().await? {
             self.ensure_rsc_pipeline().await?;
         } else {
-            let setup_script = r"
-                (async function() {
-                    const [react, reactDomServer, flightClient, flightServer] = await Promise.all([
-                        import('file:///react_vendor/react.js'),
-                        import('file:///react_vendor/react-dom-server.js'),
-                        import('file:///react_vendor/react-server-dom-webpack-client.js'),
-                        import('file:///react_vendor/react-server-dom-webpack-server.js'),
-                    ]);
-                    if (!globalThis.React?.createElement) {
-                        globalThis.React = react.default && react.default.createElement ? react.default : react;
-                    }
-                    globalThis['~reactServer'] = reactDomServer;
-                    globalThis['~flightClient'] = flightClient;
-                    globalThis['~reactServerRenderer'] = flightServer;
-                    return !!(globalThis['~reactServer'].renderToReadableStream
-                        && globalThis['~flightClient'].createFromReadableStream
-                        && globalThis['~reactServerRenderer'].renderToReadableStream);
-                })()
-            ";
-
-            let result = self
-                .runtime
-                .execute_script("setup_streaming_vendors".to_string(), setup_script.to_string())
-                .await
-                .map_err(|e| {
-                    RariError::internal(format!("Failed to load React streaming vendors: {e}"))
-                })?;
-
-            if result.as_bool() != Some(true) {
-                return Err(RariError::internal(
-                    "React streaming vendor modules failed to initialize".to_string(),
-                ));
-            }
-
-            for (name, script) in [
-                ("fizz_render.ts", include_str!("../layout/js/fizz_render.ts")),
-                ("rsc_renderer.ts", include_str!("js/rsc_renderer.ts")),
-            ] {
-                if let Err(e) =
-                    self.runtime.execute_script(name.to_string(), script.to_string()).await
-                {
-                    tracing::warn!("Failed to load {name}: {e}");
-                }
-            }
+            self.load_full_react_vendors().await?;
+            self.load_fizz_and_rsc_scripts().await?;
         }
 
-        let streaming_fizz_script = include_str!("../layout/js/streaming_fizz.ts");
-        self.runtime
-            .execute_script("streaming_fizz.ts".to_string(), streaming_fizz_script.to_string())
-            .await
-            .map_err(|e| {
-                RariError::internal(format!("Failed to load streaming Fizz pipeline: {e}"))
-            })?;
-
-        Ok(())
+        self.load_streaming_fizz_script().await?;
+        self.verify_streaming_pipeline_ready().await
     }
 
     pub async fn register_component(
