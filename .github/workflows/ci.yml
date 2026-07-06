@@ -298,7 +298,7 @@ jobs:
   build-use-cache-addon:
     name: Build rari_use_cache.node (${{ matrix.os }})
     needs: [changes]
-    if: needs.changes.outputs.use_cache_crate == 'true'
+    if: needs.changes.outputs.use_cache_crate == 'true' || needs.changes.outputs.src == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     permissions:

@@ -4,8 +4,7 @@
     "jsx": "react-jsx",
     "paths": {
       "rari/mdx/registry": ["./src/mdx/registry.ts"],
-      "rari/mdx/define": ["./src/mdx/define.ts"],
-      "@rari/use-cache": ["../use-cache/src/index.ts"]
+      "rari/mdx/define": ["./src/mdx/define.ts"]
     }
   },
   "include": ["src"]
