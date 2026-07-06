@@ -39,9 +39,6 @@ function remoteStorageFromAvailableOps(): CacheStorage | undefined {
 
 export function getStorage(kind: string): CacheStorage {
   if (kind === 'remote') {
-    if (getTestStorageBackend() !== undefined)
-      return backends.test()
-
     const configured = remoteStorageFromConfiguredHandler()
     if (configured)
       return configured
