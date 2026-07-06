@@ -20,7 +20,6 @@ use deno_core::{
 use deno_error::JsErrorBox;
 use parking_lot::RwLock;
 use rari_rsc::utils::{DependencyList, extract_dependencies};
-use rari_utils::path_to_file_url;
 use regex::Regex;
 use rustc_hash::FxHashMap;
 
@@ -39,6 +38,7 @@ use super::{
 use crate::{
     runtime::transpile,
     server::{cache::handler::CacheHandlerRegistry, config::CacheLayerConfig},
+    utils::path::path_to_file_url,
 };
 
 type ExtensionTranspilerResult = Result<(FastString, Option<Cow<'static, [u8]>>), JsErrorBox>;

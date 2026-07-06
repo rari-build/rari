@@ -7477,7 +7477,6 @@ dependencies = [
  "parley",
  "rari_error",
  "rari_rsc",
- "rari_utils",
  "redis",
  "regex",
  "reqwest",
@@ -7588,14 +7587,6 @@ dependencies = [
  "napi-derive",
  "rustc-hash 2.1.3",
  "sha2 0.11.0",
-]
-
-[[package]]
-name = "rari_utils"
-version = "0.0.0"
-dependencies = [
- "cow-utils",
- "url",
 ]
 
 [[package]]

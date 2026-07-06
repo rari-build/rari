@@ -6,7 +6,6 @@
 use std::{path::PathBuf, string::ToString, sync::Arc, vec::Vec};
 
 use cow_utils::CowUtils;
-use rari_utils::path_to_file_url;
 use rustc_hash::FxHashMap;
 use serde_json::{Map, Value};
 use tokio::{fs, sync::RwLock, task};
@@ -21,7 +20,7 @@ use super::{
 use crate::{
     runtime::JsExecutionRuntime,
     server::{cache::handler::CacheError, routing::types::ParamValue},
-    utils::float,
+    utils::{float, path::path_to_file_url},
 };
 
 pub struct OgImageGenerator {

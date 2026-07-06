@@ -19,7 +19,6 @@ use axum::{
 };
 use bytes::Bytes;
 use cow_utils::CowUtils;
-use rari_utils::path_to_file_url;
 use rustc_hash::FxHashMap;
 use tokio::{
     fs,
@@ -55,6 +54,7 @@ use crate::{
         },
         routing::app_router::AppRouteMatch,
     },
+    utils::path::path_to_file_url,
 };
 
 async fn decompress_bytes(data: &Bytes, encoding: CompressionEncoding) -> Result<Bytes, Error> {
