@@ -28,24 +28,11 @@ function remoteStorageFromConfiguredHandler(): CacheStorage | undefined {
   return undefined
 }
 
-function remoteStorageFromAvailableOps(): CacheStorage | undefined {
-  if (hasRedbOps())
-    return backends.redb()
-  if (hasRedisOps())
-    return backends.redis()
-
-  return undefined
-}
-
 export function getStorage(kind: string): CacheStorage {
   if (kind === 'remote') {
     const configured = remoteStorageFromConfiguredHandler()
     if (configured)
       return configured
-
-    const fallback = remoteStorageFromAvailableOps()
-    if (fallback)
-      return fallback
   }
 
   return backends.memory()
