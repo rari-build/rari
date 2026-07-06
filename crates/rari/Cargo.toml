@@ -17,7 +17,7 @@ crate-type = [ "rlib" ]
 
 [features]
 default = []
-# Optional Deno leaf extensions (webgpu, kv, ffi, etc.).
+# Optional Deno leaf extensions (webgpu, kv, cron, node_sqlite).
 ext-full = [
   "dep:deno_webgpu",
   "dep:deno_kv",

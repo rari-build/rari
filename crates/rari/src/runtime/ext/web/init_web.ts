@@ -13,6 +13,7 @@ import {
   lazyDomException,
   lazyEncoding,
   lazyEventGlobalProps,
+  lazyEventTargetMethods,
   lazyFile,
   lazyFileReader,
   lazyImageData,
@@ -30,6 +31,7 @@ applyToDeno({
 })
 
 applyToGlobal({
+  ...lazyEventTargetMethods,
   ...lazyEventGlobalProps,
   AbortController: propNonEnumerableLazyLoaded(m => m.AbortController, lazyAbortSignal),
   AbortSignal: propNonEnumerableLazyLoaded(m => m.AbortSignal, lazyAbortSignal),

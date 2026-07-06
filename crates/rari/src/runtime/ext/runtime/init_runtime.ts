@@ -7,6 +7,7 @@ import {
   lazyExtScript,
   loadExtScriptOnce,
   nonEnumerable,
+  nonEnumerableGetter,
   readOnly,
 } from 'ext:init_utilities/utilities.ts'
 import * as scopeWindow from 'ext:runtime/98_global_scope_window.js'
@@ -28,15 +29,6 @@ const lazyTty = lazyExtScript<DenoTtyModule>('ext:runtime/40_tty.js')
 const opArgs = scopeWindow.memoizeLazy(() => core.ops.op_bootstrap_args())
 const opPid = scopeWindow.memoizeLazy(() => core.ops.op_bootstrap_pid())
 
-function denoLazyProp<T>(select: () => T): PropertyDescriptor {
-  return {
-    get: select,
-    set() {},
-    enumerable: false,
-    configurable: true,
-  }
-}
-
 applyToDeno({
   pid: getterOnly(opPid),
 
@@ -55,14 +47,14 @@ applyToDeno({
     },
   },
 
-  Process: denoLazyProp(() => lazyProcess().Process),
-  run: denoLazyProp(() => lazyProcess().run),
-  kill: denoLazyProp(() => lazyProcess().kill),
-  Command: denoLazyProp(() => lazyProcess().Command),
-  ChildProcess: denoLazyProp(() => lazyProcess().ChildProcess),
+  Process: nonEnumerableGetter(() => lazyProcess().Process),
+  run: nonEnumerableGetter(() => lazyProcess().run),
+  kill: nonEnumerableGetter(() => lazyProcess().kill),
+  Command: nonEnumerableGetter(() => lazyProcess().Command),
+  ChildProcess: nonEnumerableGetter(() => lazyProcess().ChildProcess),
 
-  isatty: denoLazyProp(() => lazyTty().isatty),
-  consoleSize: denoLazyProp(() => lazyTty().consoleSize),
+  isatty: nonEnumerableGetter(() => lazyTty().isatty),
+  consoleSize: nonEnumerableGetter(() => lazyTty().consoleSize),
 
   memoryUsage: nonEnumerable(() => ({})),
   version: nonEnumerable(version.version),
@@ -73,8 +65,8 @@ applyToDeno({
   Permissions: nonEnumerable(permissions.Permissions),
   PermissionStatus: nonEnumerable(permissions.PermissionStatus),
 
-  addSignalListener: denoLazyProp(() => lazySignals().addSignalListener),
-  removeSignalListener: denoLazyProp(() => lazySignals().removeSignalListener),
+  addSignalListener: nonEnumerableGetter(() => lazySignals().addSignalListener),
+  removeSignalListener: nonEnumerableGetter(() => lazySignals().removeSignalListener),
 
   env: nonEnumerable(os.env),
   exit: nonEnumerable(os.exit),
