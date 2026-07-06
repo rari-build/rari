@@ -40,7 +40,7 @@
     "templates"
   ],
   "scripts": {
-    "build": "pnpm --silent clean && pnpm typecheck && vp pack",
+    "build": "pnpm typecheck && vp pack",
     "dev": "vp pack --watch",
     "clean": "node --eval \"import('node:fs').then(fs => fs.rmSync('dist', { recursive: true, force: true }))\"",
     "lint": "vp lint",
