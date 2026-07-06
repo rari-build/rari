@@ -31,6 +31,9 @@ export default defineConfig({
       '@rari/use-cache': fileURLToPath(
         new URL('./packages/use-cache/src', import.meta.url),
       ),
+      '@rari/logger': fileURLToPath(
+        new URL('./packages/logger/src', import.meta.url),
+      ),
       '@rari': fileURLToPath(new URL('./packages/rari/src', import.meta.url)),
     },
   },

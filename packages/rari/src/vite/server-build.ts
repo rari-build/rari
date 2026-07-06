@@ -1034,7 +1034,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
       {
         name: 'use-cache',
         async transform(code: string, id: string) {
-          if (!self.options.experimental?.useCache)
+          if (!self.options.experimental?.useCache && !self.options.experimental?.useCacheRemote)
             return null
 
           const transform = await getUseCacheTransform()
@@ -1235,6 +1235,11 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     if (this.options.experimental?.useCacheRemote) {
       serverConfig.useCache = {
         remote: this.options.experimental.useCacheRemote,
+      }
+      if (!this.options.experimental.useCache) {
+        console.warn(
+          '[server-build] experimental.useCacheRemote is set without experimental.useCache; the \'use cache\' transform will still run because useCacheRemote is configured.',
+        )
       }
     }
 

@@ -176,6 +176,7 @@ dashmap = "6.2.1"
 lru = "0.18.0"
 parking_lot = { workspace = true }
 redis = { version = "1.3.0", default-features = false, features = [ "tokio-comp" ] }
+redb = "4.1.0"
 regex = { workspace = true }
 rustc-hash = { workspace = true }
 smallvec = { workspace = true }
