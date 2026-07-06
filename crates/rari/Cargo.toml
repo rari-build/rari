@@ -19,46 +19,46 @@ crate-type = [ "rlib" ]
 # === Core Runtime Dependencies ===
 deno_core = { workspace = true }
 deno_error = { workspace = true }
-deno_features = "0.50.0"
-deno_bundle_runtime = "0.40.0"
-deno_runtime = "0.261.0"
-deno_permissions = "0.112.0"
-deno_process = "0.68.0"
+deno_features = { workspace = true }
+deno_bundle_runtime = { workspace = true }
+deno_runtime = { workspace = true }
+deno_permissions = { workspace = true }
+deno_process = { workspace = true }
 
 # === Essential Web APIs ===
-deno_cache = "0.186.0"
-deno_crypto = "0.267.0"
-deno_fetch = "0.277.0"
-deno_web = "0.284.0"
-deno_webidl = "0.253.0"
-deno_webstorage = "0.248.0"
+deno_cache = { workspace = true }
+deno_crypto = { workspace = true }
+deno_fetch = { workspace = true }
+deno_web = { workspace = true }
+deno_webidl = { workspace = true }
+deno_webstorage = { workspace = true }
 
 # === Network & HTTP ===
-deno_http = "0.251.0"
-deno_net = "0.245.0"
-deno_tls = "0.240.0"
-deno_websocket = "0.258.0"
+deno_http = { workspace = true }
+deno_net = { workspace = true }
+deno_tls = { workspace = true }
+deno_websocket = { workspace = true }
 
 # === File System & I/O ===
-deno_fs = "0.163.0"
-deno_io = "0.163.0"
+deno_fs = { workspace = true }
+deno_io = { workspace = true }
 
 # === Advanced Features ===
-deno_telemetry = "0.75.0"
-deno_webgpu = "0.220.0"
-deno_kv = "0.161.0"
-deno_cron = "0.133.0"
+deno_telemetry = { workspace = true }
+deno_webgpu = { workspace = true }
+deno_kv = { workspace = true }
+deno_cron = { workspace = true }
 
 # === Node.js Integration ===
 deno_node = { workspace = true }
-deno_node_crypto = "0.23.0"
-deno_node_sqlite = "0.23.0"
-deno_resolver = "0.84.0"
-node_resolver = "0.91.0"
+deno_node_crypto = { workspace = true }
+deno_node_sqlite = { workspace = true }
+deno_resolver = { workspace = true }
+node_resolver = { workspace = true }
 
 # === FFI & NAPI ===
-deno_ffi = "0.240.0"
-deno_napi = "0.184.0"
+deno_ffi = { workspace = true }
+deno_napi = { workspace = true }
 
 # === Error Handling ===
 rari_error = { workspace = true }
@@ -151,13 +151,18 @@ hyper-util = { version = "0.1.20", features = [
 ] }
 libc = "0.2.182"
 nix = { version = "=0.30.1", features = [ "term" ] }
-sys_traits = "=0.1.28"
+sys_traits = { workspace = true }
 
 # === Development Tools ===
 rustyline = "=17.0.0"
-deno_ast = { workspace = true }
-deno_package_json = { version = "0.55.0", default-features = false }
-deno_semver = "=0.10.0"
+deno_ast = { workspace = true, features = [
+  "transpiling",
+  "codegen",
+  "visit",
+  "transforms",
+] }
+deno_package_json = { workspace = true }
+deno_semver = { workspace = true }
 
 # === Platform-specific Dependencies ===
 windows-sys = { version = "=0.59.0", features = [

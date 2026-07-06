@@ -10,7 +10,10 @@ publish = false
 crate-type = [ "cdylib" ]
 
 [dependencies]
-deno_ast = { workspace = true }
+deno_ast = { workspace = true, features = [
+  "visit",
+  "transforms"
+] }
 hex = { workspace = true }
 napi = { version = "3.10.3", features = [
   "napi6",
