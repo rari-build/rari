@@ -3,6 +3,9 @@ import { serialize } from 'node:v8'
 import { getStorage } from './cache-storage-registry'
 import { deterministicStringify } from './deterministic-stringify'
 
+export { setTestStorageBackend } from './cache-storage-test'
+export type { TestStorageBackend } from './cache-storage-test'
+
 type CacheableFunction<Args extends unknown[]> = (...args: Args) => unknown | Promise<unknown>
 
 const CACHE_ENTRY_TTL_MS = 5 * 60 * 1000

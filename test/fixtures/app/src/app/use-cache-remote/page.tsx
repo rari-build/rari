@@ -1,6 +1,6 @@
-import type { TestStorageBackend } from '@rari/use-cache/runtime/cache-storage-test'
+import type { TestStorageBackend } from '@rari/use-cache/runtime/cache-wrapper'
 import type { Metadata } from 'rari'
-import { setTestStorageBackend } from '@rari/use-cache/runtime/cache-storage-test'
+import { setTestStorageBackend } from '@rari/use-cache/runtime/cache-wrapper'
 
 type SearchBackend = TestStorageBackend | undefined
 
