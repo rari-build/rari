@@ -7,7 +7,10 @@ repository = { workspace = true }
 publish = false
 
 [lib]
-crate-type = [ "cdylib" ]
+crate-type = [
+  "cdylib",
+  "rlib",
+]
 
 [dependencies]
 deno_ast = { workspace = true, features = [
@@ -26,6 +29,13 @@ sha2 = { workspace = true }
 
 [build-dependencies]
 napi-build = "2.3.2"
+
+[dev-dependencies]
+divan = { package = "codspeed-divan-compat", version = "5.0.1" }
+
+[[bench]]
+name = "transform"
+harness = false
 
 [lints]
 workspace = true
