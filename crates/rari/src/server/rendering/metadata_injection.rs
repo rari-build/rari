@@ -541,6 +541,67 @@ pub fn inject_metadata(
     result
 }
 
+/// Rich page metadata fixture for CodSpeed head-injection benchmarks.
+#[doc(hidden)]
+pub fn bench_page_metadata() -> PageMetadata {
+    use rustc_hash::FxHashMap;
+
+    use crate::rendering::layout::types::{
+        AlternatesMetadata, OpenGraphImage, OpenGraphImageDescriptor, OpenGraphMetadata,
+        RobotsMetadata, TwitterMetadata,
+    };
+
+    let mut languages = FxHashMap::default();
+    languages.insert("en".to_string(), "https://example.com/en".to_string());
+    languages.insert("es".to_string(), "https://example.com/es".to_string());
+
+    PageMetadata {
+        title: Some("Benchmark Page".to_string()),
+        description: Some("A page used for CodSpeed metadata injection benchmarks.".to_string()),
+        keywords: Some(vec!["rari".to_string(), "benchmark".to_string()]),
+        open_graph: Some(OpenGraphMetadata {
+            title: Some("OG Title".to_string()),
+            description: Some("OG Description".to_string()),
+            url: Some("https://example.com/blog/post".to_string()),
+            site_name: Some("Example Site".to_string()),
+            images: Some(vec![
+                OpenGraphImage::Simple("https://example.com/simple.jpg".to_string()),
+                OpenGraphImage::Detailed(OpenGraphImageDescriptor {
+                    url: "https://example.com/image.jpg".to_string(),
+                    width: Some(1200),
+                    height: Some(630),
+                    alt: Some("Example Image".to_string()),
+                }),
+            ]),
+            og_type: Some("article".to_string()),
+        }),
+        twitter: Some(TwitterMetadata {
+            card: Some("summary_large_image".to_string()),
+            site: Some("@example".to_string()),
+            creator: Some("@creator".to_string()),
+            title: Some("Twitter Title".to_string()),
+            description: Some("Twitter Description".to_string()),
+            images: Some(vec!["https://example.com/twitter.jpg".to_string()]),
+        }),
+        robots: Some(RobotsMetadata {
+            index: Some(true),
+            follow: Some(true),
+            nocache: Some(false),
+        }),
+        viewport: None,
+        canonical: Some("https://example.com/blog/post".to_string()),
+        icons: None,
+        manifest: Some("/site.webmanifest".to_string()),
+        theme_color: None,
+        apple_web_app: None,
+        alternates: Some(AlternatesMetadata {
+            canonical: Some("https://example.com/blog/post".to_string()),
+            languages: Some(languages),
+            types: None,
+        }),
+    }
+}
+
 #[cfg(test)]
 #[expect(clippy::expect_used)]
 mod tests {

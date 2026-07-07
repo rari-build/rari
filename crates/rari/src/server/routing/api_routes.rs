@@ -20,8 +20,9 @@ use tokio::fs;
 use crate::{
     runtime::JsExecutionRuntime,
     server::{
-        core::utils::http::extract_headers, middleware::request_context::RequestContext,
-        routing::types::RouteSegment,
+        core::utils::http::extract_headers,
+        middleware::request_context::RequestContext,
+        routing::types::{RouteSegment, RouteSegmentType},
     },
 };
 
@@ -139,30 +140,7 @@ impl ApiRouteHandler {
 
     #[expect(clippy::missing_errors_doc)]
     pub fn match_route(&self, path: &str, method: &str) -> Result<ApiRouteMatch, RariError> {
-        let normalized_path = Self::normalize_path(path);
-
-        for route in &self.manifest.api_routes {
-            if let Some(params) = Self::match_route_pattern(route, &normalized_path) {
-                if !route.methods.iter().any(|m| m.eq_ignore_ascii_case(method)) {
-                    return Err(RariError::bad_request(format!(
-                        "Method {} not allowed for route {}. Supported methods: {}",
-                        method,
-                        route.path,
-                        route.methods.join(", ")
-                    ))
-                    .with_property("error_type", "method_not_allowed")
-                    .with_property("allowed_methods", &route.methods.join(",")));
-                }
-
-                return Ok(ApiRouteMatch {
-                    route: route.clone(),
-                    params,
-                    method: method.to_string(),
-                });
-            }
-        }
-
-        Err(RariError::not_found(format!("No API route found for path: {path}")))
+        match_api_routes(&self.manifest, path, method)
     }
 
     fn match_route_pattern(route: &ApiRouteEntry, path: &str) -> Option<FxHashMap<String, String>> {
@@ -632,6 +610,122 @@ impl ApiRouteHandler {
                 .map_err(|e| RariError::internal(format!("Failed to build response: {e}")))
         }
     }
+}
+
+fn match_api_routes(
+    manifest: &ApiRouteManifest,
+    path: &str,
+    method: &str,
+) -> Result<ApiRouteMatch, RariError> {
+    let normalized_path = ApiRouteHandler::normalize_path(path);
+
+    for route in &manifest.api_routes {
+        if let Some(params) = ApiRouteHandler::match_route_pattern(route, &normalized_path) {
+            if !route.methods.iter().any(|m| m.eq_ignore_ascii_case(method)) {
+                return Err(RariError::bad_request(format!(
+                    "Method {} not allowed for route {}. Supported methods: {}",
+                    method,
+                    route.path,
+                    route.methods.join(", ")
+                ))
+                .with_property("error_type", "method_not_allowed")
+                .with_property("allowed_methods", &route.methods.join(",")));
+            }
+
+            return Ok(ApiRouteMatch { route: route.clone(), params, method: method.to_string() });
+        }
+    }
+
+    Err(RariError::not_found(format!("No API route found for path: {path}")))
+}
+
+/// API route manifest with ~50 filler routes for CodSpeed routing benchmarks.
+#[doc(hidden)]
+pub fn bench_api_route_manifest() -> ApiRouteManifest {
+    let mut api_routes = Vec::with_capacity(53);
+    for index in 0..50 {
+        api_routes.push(ApiRouteEntry {
+            path: format!("/api/section-{index}"),
+            file_path: format!("api/section-{index}/route.ts"),
+            component_id: None,
+            segments: vec![RouteSegment {
+                segment_type: RouteSegmentType::Static,
+                value: format!("section-{index}"),
+                param: None,
+            }],
+            params: vec![],
+            is_dynamic: false,
+            methods: vec!["GET".to_string()],
+        });
+    }
+
+    api_routes.extend([
+        ApiRouteEntry {
+            path: "/api/health".to_string(),
+            file_path: "api/health/route.ts".to_string(),
+            component_id: None,
+            segments: vec![RouteSegment {
+                segment_type: RouteSegmentType::Static,
+                value: "health".to_string(),
+                param: None,
+            }],
+            params: vec![],
+            is_dynamic: false,
+            methods: vec!["GET".to_string()],
+        },
+        ApiRouteEntry {
+            path: "/api/users/[id]".to_string(),
+            file_path: "api/users/[id]/route.ts".to_string(),
+            component_id: None,
+            segments: vec![
+                RouteSegment {
+                    segment_type: RouteSegmentType::Static,
+                    value: "users".to_string(),
+                    param: None,
+                },
+                RouteSegment {
+                    segment_type: RouteSegmentType::Dynamic,
+                    value: "[id]".to_string(),
+                    param: Some("id".to_string()),
+                },
+            ],
+            params: vec!["id".to_string()],
+            is_dynamic: true,
+            methods: vec!["GET".to_string(), "POST".to_string()],
+        },
+        ApiRouteEntry {
+            path: "/api/files/[...path]".to_string(),
+            file_path: "api/files/[...path]/route.ts".to_string(),
+            component_id: None,
+            segments: vec![
+                RouteSegment {
+                    segment_type: RouteSegmentType::Static,
+                    value: "files".to_string(),
+                    param: None,
+                },
+                RouteSegment {
+                    segment_type: RouteSegmentType::CatchAll,
+                    value: "[...path]".to_string(),
+                    param: Some("path".to_string()),
+                },
+            ],
+            params: vec!["path".to_string()],
+            is_dynamic: true,
+            methods: vec!["GET".to_string()],
+        },
+    ]);
+
+    ApiRouteManifest { api_routes }
+}
+
+/// Match API routes without constructing a full `ApiRouteHandler` (CodSpeed benchmarks).
+#[doc(hidden)]
+pub fn bench_match_api_route(
+    manifest: &ApiRouteManifest,
+    path: &str,
+    method: &str,
+) -> Result<ApiRouteMatch, RariError> {
+    match_api_routes(manifest, path, method)
 }
 
 #[cfg(test)]

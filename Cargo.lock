@@ -7515,6 +7515,7 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "clap",
+ "codspeed-divan-compat",
  "colored",
  "cow-utils",
  "dashmap 6.2.1",

@@ -39,10 +39,10 @@ jobs:
         run: cargo install cargo-codspeed --locked
 
       - name: Build the benchmarks
-        run: cargo codspeed build -p rari_use_cache
+        run: cargo codspeed build -p rari_use_cache -p rari
 
       - name: Run the benchmarks
         uses: CodSpeedHQ/action@a4a36bb07c0638b0b4ca52bf1f3dad1b4289e52f # v4.18.1
         with:
           mode: simulation
-          run: cargo codspeed run -p rari_use_cache
+          run: cargo codspeed run -p rari_use_cache -p rari

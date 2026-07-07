@@ -197,6 +197,12 @@ impl Default for MemoryCacheHandler {
     }
 }
 
+/// Memory cache handler for CodSpeed benchmarks.
+#[doc(hidden)]
+pub fn bench_memory_cache_handler() -> MemoryCacheHandler {
+    MemoryCacheHandler::with_config(&MemoryConfig { max_entries: 1000, default_ttl: 3600 })
+}
+
 #[async_trait::async_trait]
 impl CacheHandler for MemoryCacheHandler {
     async fn get(&self, key: &str) -> Result<Option<Vec<u8>>, CacheError> {

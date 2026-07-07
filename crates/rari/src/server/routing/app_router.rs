@@ -6,9 +6,7 @@ use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 
-#[cfg(test)]
-use crate::server::routing::types::RouteSegmentType;
-use crate::server::routing::types::{ParamValue, RouteSegment};
+use crate::server::routing::types::{ParamValue, RouteSegment, RouteSegmentType};
 
 fn parse_decoded_path_segments(path: &str) -> Vec<String> {
     path.split('/')
@@ -654,6 +652,127 @@ impl AppRouter {
         } else {
             Some(format!("/{}", result_segments.join("/")))
         }
+    }
+}
+
+/// Route manifest with ~50 filler routes for CodSpeed routing benchmarks.
+#[doc(hidden)]
+#[expect(clippy::too_many_lines)]
+pub fn bench_route_manifest() -> AppRouteManifest {
+    let mut routes = Vec::with_capacity(53);
+    for index in 0..50 {
+        routes.push(AppRouteEntry {
+            path: format!("/section-{index}"),
+            file_path: format!("section-{index}/page.tsx"),
+            component_id: None,
+            css: vec![],
+            segments: vec![RouteSegment {
+                segment_type: RouteSegmentType::Static,
+                value: format!("section-{index}"),
+                param: None,
+            }],
+            params: vec![],
+            is_dynamic: false,
+            static_params: None,
+        });
+    }
+
+    routes.extend([
+        AppRouteEntry {
+            path: "/".to_string(),
+            file_path: "page.tsx".to_string(),
+            component_id: None,
+            css: vec![],
+            segments: vec![],
+            params: vec![],
+            is_dynamic: false,
+            static_params: None,
+        },
+        AppRouteEntry {
+            path: "/about".to_string(),
+            file_path: "about/page.tsx".to_string(),
+            component_id: None,
+            css: vec![],
+            segments: vec![RouteSegment {
+                segment_type: RouteSegmentType::Static,
+                value: "about".to_string(),
+                param: None,
+            }],
+            params: vec![],
+            is_dynamic: false,
+            static_params: None,
+        },
+        AppRouteEntry {
+            path: "/blog/[slug]".to_string(),
+            file_path: "blog/[slug]/page.tsx".to_string(),
+            component_id: None,
+            css: vec![],
+            segments: vec![
+                RouteSegment {
+                    segment_type: RouteSegmentType::Static,
+                    value: "blog".to_string(),
+                    param: None,
+                },
+                RouteSegment {
+                    segment_type: RouteSegmentType::Dynamic,
+                    value: "[slug]".to_string(),
+                    param: Some("slug".to_string()),
+                },
+            ],
+            params: vec!["slug".to_string()],
+            is_dynamic: true,
+            static_params: None,
+        },
+        AppRouteEntry {
+            path: "/docs/[...slug]".to_string(),
+            file_path: "docs/[...slug]/page.tsx".to_string(),
+            component_id: None,
+            css: vec![],
+            segments: vec![
+                RouteSegment {
+                    segment_type: RouteSegmentType::Static,
+                    value: "docs".to_string(),
+                    param: None,
+                },
+                RouteSegment {
+                    segment_type: RouteSegmentType::CatchAll,
+                    value: "[...slug]".to_string(),
+                    param: Some("slug".to_string()),
+                },
+            ],
+            params: vec!["slug".to_string()],
+            is_dynamic: true,
+            static_params: None,
+        },
+    ]);
+
+    AppRouteManifest {
+        routes,
+        layouts: vec![
+            LayoutEntry {
+                path: "/".to_string(),
+                file_path: "layout.tsx".to_string(),
+                component_id: None,
+                css: vec![],
+                parent_path: None,
+                additional_paths: None,
+                is_root: false,
+            },
+            LayoutEntry {
+                path: "/blog".to_string(),
+                file_path: "blog/layout.tsx".to_string(),
+                component_id: None,
+                css: vec![],
+                parent_path: Some("/".to_string()),
+                additional_paths: None,
+                is_root: false,
+            },
+        ],
+        loading: vec![],
+        errors: vec![],
+        not_found: vec![],
+        templates: vec![],
+        generated: "2026-01-01T00:00:00.000Z".to_string(),
     }
 }
 
