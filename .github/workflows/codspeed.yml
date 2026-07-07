@@ -35,14 +35,19 @@ jobs:
 
       - uses: ./.github/actions/setup-rust-build-deps
 
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+
+      - name: Create snapshot placeholder
+        run: just ci-create-snapshot-placeholder
+
       - name: Install cargo-codspeed
         run: cargo install cargo-codspeed --locked
 
       - name: Build the benchmarks
-        run: cargo codspeed build -p rari_use_cache -p rari
+        run: cargo codspeed build -p rari_use_cache -p rari --features rari/bench
 
       - name: Run the benchmarks
         uses: CodSpeedHQ/action@a4a36bb07c0638b0b4ca52bf1f3dad1b4289e52f # v4.18.1
         with:
           mode: simulation
-          run: cargo codspeed run -p rari_use_cache -p rari
+          run: cargo codspeed run -p rari_use_cache -p rari --features rari/bench

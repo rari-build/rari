@@ -198,6 +198,7 @@ impl Default for MemoryCacheHandler {
 }
 
 /// Memory cache handler for CodSpeed benchmarks.
+#[cfg(feature = "bench")]
 #[doc(hidden)]
 pub fn bench_memory_cache_handler() -> MemoryCacheHandler {
     MemoryCacheHandler::with_config(&MemoryConfig { max_entries: 1000, default_ttl: 3600 })

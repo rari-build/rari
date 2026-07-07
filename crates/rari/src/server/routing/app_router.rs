@@ -6,7 +6,9 @@ use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 
-use crate::server::routing::types::{ParamValue, RouteSegment, RouteSegmentType};
+#[cfg(any(test, feature = "bench"))]
+use crate::server::routing::types::RouteSegmentType;
+use crate::server::routing::types::{ParamValue, RouteSegment};
 
 fn parse_decoded_path_segments(path: &str) -> Vec<String> {
     path.split('/')
@@ -656,6 +658,7 @@ impl AppRouter {
 }
 
 /// Route manifest with ~50 filler routes for CodSpeed routing benchmarks.
+#[cfg(feature = "bench")]
 #[doc(hidden)]
 #[expect(clippy::too_many_lines)]
 pub fn bench_route_manifest() -> AppRouteManifest {

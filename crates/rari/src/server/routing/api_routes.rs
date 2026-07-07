@@ -17,12 +17,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tokio::fs;
 
+#[cfg(feature = "bench")]
+use crate::server::routing::types::RouteSegmentType;
 use crate::{
     runtime::JsExecutionRuntime,
     server::{
-        core::utils::http::extract_headers,
-        middleware::request_context::RequestContext,
-        routing::types::{RouteSegment, RouteSegmentType},
+        core::utils::http::extract_headers, middleware::request_context::RequestContext,
+        routing::types::RouteSegment,
     },
 };
 
@@ -640,6 +641,7 @@ fn match_api_routes(
 }
 
 /// API route manifest with ~50 filler routes for CodSpeed routing benchmarks.
+#[cfg(feature = "bench")]
 #[doc(hidden)]
 pub fn bench_api_route_manifest() -> ApiRouteManifest {
     let mut api_routes = Vec::with_capacity(53);
@@ -719,6 +721,7 @@ pub fn bench_api_route_manifest() -> ApiRouteManifest {
 }
 
 /// Match API routes without constructing a full `ApiRouteHandler` (CodSpeed benchmarks).
+#[cfg(feature = "bench")]
 #[doc(hidden)]
 pub fn bench_match_api_route(
     manifest: &ApiRouteManifest,

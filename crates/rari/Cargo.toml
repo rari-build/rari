@@ -17,6 +17,7 @@ crate-type = [ "rlib" ]
 
 [features]
 default = []
+bench = []
 # Optional Deno leaf extensions
 ext-full = [
   "dep:deno_webgpu",
@@ -196,14 +197,9 @@ uuid = { workspace = true }
 workspace = true
 
 [dev-dependencies]
-deno_core = { workspace = true }
 divan = { workspace = true }
-serde_json = { workspace = true }
-tokio = { workspace = true, features = [
-  "rt",
-  "rt-multi-thread"
-] }
 
 [[bench]]
 name = "hot_paths"
 harness = false
+required-features = [ "bench" ]

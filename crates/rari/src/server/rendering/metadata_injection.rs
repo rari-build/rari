@@ -542,6 +542,7 @@ pub fn inject_metadata(
 }
 
 /// Rich page metadata fixture for CodSpeed head-injection benchmarks.
+#[cfg(feature = "bench")]
 #[doc(hidden)]
 pub fn bench_page_metadata() -> PageMetadata {
     use rustc_hash::FxHashMap;
