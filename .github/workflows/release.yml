@@ -45,6 +45,8 @@ jobs:
 
       - name: Bundle React ESM vendor files
         uses: ./.github/actions/bundle-react-esm
+        with:
+          setup-toolchain: 'false'
 
       - name: Create snapshot placeholder
         run: |
@@ -136,6 +138,8 @@ jobs:
 
       - name: Bundle React ESM vendor files
         uses: ./.github/actions/bundle-react-esm
+        with:
+          setup-toolchain: 'false'
 
       - name: Download V8 snapshot
         uses: namespace-actions/download-artifact@7cbad919e4b0e09f17e9d6311a444ff002992b5b # v2.0.1

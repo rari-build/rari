@@ -1,6 +1,12 @@
 name: Bundle React ESM
 description: Generate React vendor files required by the rari crate
 
+inputs:
+  setup-toolchain:
+    description: Install pnpm and Node.js before bundling (disable when setup-namespace-cache already ran)
+    required: false
+    default: 'true'
+
 runs:
   using: composite
   steps:
@@ -8,7 +14,7 @@ runs:
       with:
         node-version: 22.18.0
         cache: 'false'
-        setup-toolchain: 'false'
+        setup-toolchain: ${{ inputs.setup-toolchain }}
 
     - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
 
