@@ -1,9 +1,9 @@
 import type { Plugin } from 'vite-plus'
-import type { RariPlugin } from '../vite/plugin-types'
+import type { RariPlugin } from '@/vite/plugin-types'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
-import { toRariPlugin } from '../vite/plugin-types'
+import { toRariPlugin } from '@/vite/plugin-types'
 
 export interface ProxyPluginOptions {
   root?: string

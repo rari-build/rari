@@ -1,7 +1,7 @@
 import type { CacheStorage, CacheStorageEntry, CacheWriteOptions } from './types'
 import QuickLRU from 'quick-lru'
 
-import { registerUseCacheEntryTags } from '../invalidation/cache-tag-registry'
+import { registerUseCacheEntryTags } from '@/runtime/invalidation/cache-tag-registry'
 
 export class MemoryCacheStorage implements CacheStorage {
   private readonly cache: QuickLRU<string, CacheStorageEntry>

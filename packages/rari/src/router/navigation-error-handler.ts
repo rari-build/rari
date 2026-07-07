@@ -1,4 +1,4 @@
-import { throwIfNotOk } from '../shared/utils/http'
+import { throwIfNotOk } from '@/shared/utils/http'
 
 export type NavigationErrorType
   = | 'fetch-error'

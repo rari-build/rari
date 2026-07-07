@@ -1,7 +1,7 @@
-import { markUseCacheDynamicContext } from '../cache-dynamic-context'
-import { invalidateUseCacheByTag } from '../invalidation/cache-invalidation'
-import { getActiveUseCacheTags } from '../invalidation/cache-tag-registry'
-import { getRariGlobal, getRariGlobalRoot } from '../shared/rari-global'
+import { markUseCacheDynamicContext } from '@/runtime/cache-dynamic-context'
+import { invalidateUseCacheByTag } from '@/runtime/invalidation/cache-invalidation'
+import { getActiveUseCacheTags } from '@/runtime/invalidation/cache-tag-registry'
+import { getRariGlobal, getRariGlobalRoot } from '@/runtime/shared/rari-global'
 
 export function registerUseCacheRuntimeGlobals(): void {
   const root = getRariGlobalRoot()

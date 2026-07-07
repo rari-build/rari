@@ -1,4 +1,4 @@
-import { HTML_ESCAPE_REGEXES } from '../regex-constants'
+import { HTML_ESCAPE_REGEXES } from '@/shared/regex-constants'
 
 export function escapeXml(str: string): string {
   return str

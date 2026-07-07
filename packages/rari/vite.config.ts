@@ -1,6 +1,12 @@
+import path from 'node:path'
 import { defineConfig } from 'vite-plus'
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      '@': path.resolve(import.meta.dirname, 'src'),
+    },
+  },
   pack: {
     entry: {
       'index': 'src/index.ts',
@@ -43,6 +49,7 @@ export default defineConfig({
         'virtual:rsc-integration.ts',
         'rari/router',
         'rari/mdx/registry',
+        'rari/mdx/define',
       ],
     },
   },

@@ -13,7 +13,7 @@ import type {
 } from './types'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { BACKSLASH_REGEX, PATH_SEPARATOR_REGEX } from '../shared/regex-constants'
+import { BACKSLASH_REGEX, PATH_SEPARATOR_REGEX } from '@/shared/regex-constants'
 
 export interface AppRouteGeneratorOptions {
   appDir: string

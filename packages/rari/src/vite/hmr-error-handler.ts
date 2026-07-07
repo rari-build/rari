@@ -1,4 +1,4 @@
-import { clearTimer } from '../shared/utils/timer'
+import { clearTimer } from '@/shared/utils/timer'
 
 export interface HMRErrorHandlerOptions {
   maxErrors?: number

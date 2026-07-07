@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { TSX_EXT_REGEX } from '../shared/regex-constants'
+import { TSX_EXT_REGEX } from '@/shared/regex-constants'
 
 const SKIPPED_DIRECTORIES = new Set([
   'node_modules',

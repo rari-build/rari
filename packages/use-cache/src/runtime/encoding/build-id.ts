@@ -1,4 +1,4 @@
-import { getRariGlobal } from '../shared/rari-global'
+import { getRariGlobal } from '@/runtime/shared/rari-global'
 
 declare global {
   // eslint-disable-next-line vars-on-top
