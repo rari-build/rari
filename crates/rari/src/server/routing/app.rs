@@ -1130,10 +1130,10 @@ pub async fn handle_app_route(
                     let cache_control = state.config.get_cache_control_for_route(path);
                     let cache_policy =
                         response::RouteCachePolicy::from_cache_control(cache_control, path);
-                    let response_cache_tags =
-                        merge_response_cache_tags(&state, cache_policy.tags.clone()).await;
 
                     if cache_policy.enabled && state.response_cache.config.enabled {
+                        let response_cache_tags =
+                            merge_response_cache_tags(&state, cache_policy.tags.clone()).await;
                         let cached_response = response::CachedResponse {
                             body: Bytes::from(rsc_flight_protocol.clone()),
                             headers: cache_headers,
@@ -1498,10 +1498,10 @@ pub async fn handle_app_route(
 
             let cache_policy =
                 response::RouteCachePolicy::from_cache_control(cache_control_value, path);
-            let response_cache_tags =
-                merge_response_cache_tags(&state, cache_policy.tags.clone()).await;
 
             if cache_policy.enabled && state.response_cache.config.enabled {
+                let response_cache_tags =
+                    merge_response_cache_tags(&state, cache_policy.tags.clone()).await;
                 let body_bytes = Bytes::from(final_html.clone());
 
                 let (compressed_gzip, compressed_zstd, compressed_br) = {
@@ -1551,7 +1551,7 @@ pub async fn handle_app_route(
                         cached_at: Instant::now(),
                         ttl: cache_policy.ttl,
                         etag: Some(etag.clone()),
-                        tags: response_cache_tags.clone(),
+                        tags: response_cache_tags,
                     },
                     compressed_zstd,
                     compressed_br,
