@@ -6,7 +6,7 @@ import type { ServerBuildOptions } from './server-build'
 import type { ServerCacheConfig, ServerCacheLayerConfig } from './server-config'
 import type { ProxyPluginOptions } from '@/proxy/vite-plugin'
 import { Buffer } from 'node:buffer'
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
@@ -31,7 +31,6 @@ import { getComponentId } from './component-ids'
 import { hasDefaultExport } from './directives'
 import { HMRCoordinator } from './hmr-coordinator'
 import { parseHtmlEntryImports } from './html-entry-imports'
-import { scanForImageUsage } from './image-scanner'
 import { transformDefineMdxComponents } from './mdx-components-transform'
 import {
   generateMdxRegistryModule,
@@ -289,7 +288,22 @@ async function loadRscReferences(): Promise<string> {
 
 async function writeImageConfig(projectRoot: string, options: RariOptions): Promise<void> {
   const srcDir = path.join(projectRoot, 'src')
-  const imageManifest = await scanForImageUsage(srcDir)
+  const { getBinaryPath } = await import('../cli/platform')
+  const binaryPath = getBinaryPath()
+
+  const result = spawnSync(binaryPath, ['scan-images', '--src', srcDir], {
+    encoding: 'utf8',
+    cwd: projectRoot,
+    shell: false,
+  })
+
+  if (result.status !== 0) {
+    throw new Error(
+      `Failed to scan for image usage: ${result.stderr || result.stdout || `exit code ${result.status}`}`,
+    )
+  }
+
+  const imageManifest = JSON.parse(result.stdout) as { images: Array<Record<string, unknown>> }
 
   const imageConfig = {
     ...DEFAULT_IMAGE_CONFIG,
