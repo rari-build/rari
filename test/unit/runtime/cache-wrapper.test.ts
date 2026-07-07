@@ -302,12 +302,12 @@ describe('$$cache__', () => {
     await runWithUseCacheDynamicContext(async () => {
       await call('default', 'dynamic-default', defaultFn)
       await call('default', 'dynamic-default', defaultFn)
-      await call('remote', 'dynamic-remote', remoteFn)
-      await call('remote', 'dynamic-remote', remoteFn)
+      await call('remote', 'dynamic-remote-a', remoteFn)
+      await call('remote', 'dynamic-remote-b', remoteFn)
     })
 
     expect(defaultCalls).toBe(2)
-    expect(remoteCalls).toBe(1)
+    expect(remoteCalls).toBe(2)
     resetUseCacheDynamicContextForTests()
   })
 })

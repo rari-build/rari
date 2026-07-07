@@ -89,6 +89,9 @@ pub fn extract_file_level_cache_kind(items: &[ModuleItem]) -> Option<String> {
                 if let Some(kind) = cache_kind_from_string_literal(expr) {
                     return Some(kind);
                 }
+                if matches!(expr.as_ref(), Expr::Lit(Lit::Str(_))) {
+                    continue;
+                }
                 return None;
             }
             ModuleItem::Stmt(Stmt::Empty(..)) => {}
@@ -217,6 +220,30 @@ mod tests {
         };
         assert!(has_use_cache_directive(&body));
         assert_eq!(extract_cache_kind(&body), Some("remote".to_string()));
+    }
+
+    #[test]
+    fn test_file_level_skips_non_cache_string_literals() {
+        let items = vec![
+            ModuleItem::Stmt(Stmt::Expr(ExprStmt {
+                span: Default::default(),
+                expr: Box::new(Expr::Lit(Lit::Str(Str {
+                    span: Default::default(),
+                    value: "use strict".into(),
+                    raw: None,
+                }))),
+            })),
+            ModuleItem::Stmt(Stmt::Expr(ExprStmt {
+                span: Default::default(),
+                expr: Box::new(Expr::Lit(Lit::Str(Str {
+                    span: Default::default(),
+                    value: "use cache".into(),
+                    raw: None,
+                }))),
+            })),
+        ];
+
+        assert_eq!(extract_file_level_cache_kind(&items), Some("default".to_string()));
     }
 
     #[test]

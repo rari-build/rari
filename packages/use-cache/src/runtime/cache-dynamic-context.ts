@@ -1,16 +1,12 @@
-interface RariGlobal {
-  '~rari'?: {
-    useCacheDynamicDepth?: number
-  }
-}
+import { getRariGlobal } from './shared/rari-global'
 
 export function markUseCacheDynamicContext(): void {
-  const rari = (globalThis as RariGlobal)['~rari'] ??= {}
+  const rari = getRariGlobal()
   rari.useCacheDynamicDepth = (rari.useCacheDynamicDepth ?? 0) + 1
 }
 
 export function getDynamicContextDepth(): number {
-  return (globalThis as RariGlobal)['~rari']?.useCacheDynamicDepth ?? 0
+  return getRariGlobal().useCacheDynamicDepth ?? 0
 }
 
 export function isUseCacheDynamicContext(): boolean {
@@ -18,9 +14,8 @@ export function isUseCacheDynamicContext(): boolean {
 }
 
 export function resetUseCacheDynamicContextForTests(): void {
-  const rari = (globalThis as RariGlobal)['~rari']
-  if (rari)
-    rari.useCacheDynamicDepth = 0
+  const rari = getRariGlobal()
+  rari.useCacheDynamicDepth = 0
 }
 
 export function runWithUseCacheDynamicContext<T>(fn: () => T | Promise<T>): Promise<T> {

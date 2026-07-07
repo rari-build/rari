@@ -1205,10 +1205,6 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     }
 
     const useCacheEnabled = this.options.experimental?.useCache || this.options.experimental?.useCacheRemote
-    if (useCacheEnabled) {
-      this.useCacheBuildId = sharedHashString(`${this.projectRoot}:${manifest.buildTime}`, 16)
-      manifest.useCacheBuildId = this.useCacheBuildId
-    }
 
     const concurrency = Math.min(8, Math.max(1, (await import('node:os')).cpus().length))
 
@@ -1224,6 +1220,11 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     ])
 
     await this.buildComponentBatch(pageComponents, manifest, concurrency)
+
+    if (useCacheEnabled) {
+      this.useCacheBuildId = sharedHashString(JSON.stringify(manifest.components), 16)
+      manifest.useCacheBuildId = this.useCacheBuildId
+    }
 
     const manifestPath = path.join(
       this.options.outDir,

@@ -732,12 +732,16 @@ impl LayoutRenderer {
             };
 
             if layout_cache_enabled && route_match.not_found.is_none() {
-                let renderer = self.renderer.lock().await;
-                let is_dynamic_render = renderer.runtime.is_dynamic_render().await.unwrap_or(false);
+                let runtime = {
+                    let renderer = self.renderer.lock().await;
+                    Arc::clone(&renderer.runtime)
+                };
+
+                let is_dynamic_render = runtime.is_dynamic_render().await.unwrap_or(false);
 
                 if !is_dynamic_render {
                     let page_cache_tags =
-                        renderer.runtime.collect_page_cache_tags().await.unwrap_or_default();
+                        runtime.collect_page_cache_tags().await.unwrap_or_default();
                     let mut layout_cache_tags = page_cache_tags;
                     let route_path = route_match.route.path.clone();
                     if !layout_cache_tags.iter().any(|tag| tag == &route_path) {

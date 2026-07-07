@@ -1,6 +1,7 @@
 import {
   cacheLife,
   cacheTag,
+  resetUseCacheBuildIdForTests,
   revalidateTag,
   setUseCacheBuildId,
 } from '@rari/use-cache/runtime/cache-wrapper'
@@ -36,6 +37,7 @@ describe('cache API', () => {
 
   afterEach(() => {
     resetTestStorageBackend()
+    resetUseCacheBuildIdForTests()
     setUseCacheBuildId('development')
     resetUseCacheTagRegistryForTests()
     resetPrivateStorageForTests()

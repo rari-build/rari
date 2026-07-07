@@ -1,5 +1,6 @@
 import type { CacheStorage, CacheWriteOptions } from './types'
 import { registerUseCacheEntryTags } from '../invalidation/cache-tag-registry'
+import { getRariGlobal } from '../shared/rari-global'
 
 type CacheOpFn = ((...args: unknown[]) => unknown) | undefined
 
@@ -63,8 +64,7 @@ export class RemoteOpsCacheStorage implements CacheStorage {
 
     try {
       await fn?.(key, serialized, options.ttlMs)
-      if (options.tags?.length)
-        registerUseCacheEntryTags(key, options.tags)
+      registerUseCacheEntryTags(key, options.tags ?? [])
     }
     catch (err) {
       console.error(`[rari] ${this.ops.set} write failed for key="${key}":`, err)
@@ -108,16 +108,10 @@ export function getConfiguredRemoteHandler(): RemoteCacheHandler | undefined {
   return undefined
 }
 
-interface RuntimeLikeWithCookies extends RuntimeLike {
-  '~rari'?: {
-    useCachePrivateKey?: string
-  }
-}
-
 export function getPrivateCachePartitionKey(): string {
-  const rariGlobal = (globalThis as RuntimeLikeWithCookies)['~rari']
-  if (rariGlobal?.useCachePrivateKey)
-    return rariGlobal.useCachePrivateKey
+  const privateKey = getRariGlobal().useCachePrivateKey
+  if (privateKey)
+    return privateKey
 
   const cookiesOp = runtime.Deno?.core?.ops?.op_get_cookies
   if (typeof cookiesOp === 'function') {

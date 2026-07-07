@@ -49,13 +49,22 @@ export async function invalidateUseCacheTag(
     return 0
 
   const snapshot = [...keys]
+  let invalidated = 0
   for (const key of snapshot) {
-    await deleteKey(key)
-    removeKeyTags(key)
+    try {
+      await deleteKey(key)
+      removeKeyTags(key)
+      invalidated += 1
+    }
+    catch (error) {
+      console.error(`[rari] failed to invalidate use cache key "${key}" for tag "${tag}":`, error)
+    }
   }
 
-  tagToKeys.delete(tag)
-  return snapshot.length
+  if (!tagToKeys.get(tag)?.size)
+    tagToKeys.delete(tag)
+
+  return invalidated
 }
 
 export async function invalidateUseCacheKey(

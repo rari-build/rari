@@ -11,7 +11,7 @@ import { connection } from './api/connection'
 import { isUseCacheDynamicContext, markUseCacheDynamicContext, resetUseCacheDynamicContextForTests } from './cache-dynamic-context'
 import { getCacheContext, registerPageCacheTags, runWithCacheContext } from './context/cache-context'
 import { cacheLifeToTtlMs } from './context/cache-life'
-import { getUseCacheBuildId, setUseCacheBuildId } from './encoding/build-id'
+import { getUseCacheBuildId, resetUseCacheBuildIdForTests, setUseCacheBuildId } from './encoding/build-id'
 import { encodeCacheKeyParts } from './encoding/rsc-encoding'
 import { registerUseCacheRuntimeGlobals } from './globals/use-cache-runtime-globals'
 import { nullCacheStorage } from './storage/null'
@@ -23,7 +23,7 @@ import { deterministicStringify } from './utils/deterministic-stringify'
 
 registerUseCacheRuntimeGlobals()
 
-export { getUseCacheBuildId, setUseCacheBuildId }
+export { getUseCacheBuildId, resetUseCacheBuildIdForTests, setUseCacheBuildId }
 export {
   cacheLife,
   cacheTag,
@@ -85,11 +85,14 @@ export function $$cache__<Args extends unknown[]>(
   const keyArgs = buildCacheKeyArgs(args, argCount)
 
   const promise = getCacheKeyPromise(buildId, kind, id, keyArgs).then(async (key) => {
-    const inflight = pending.get(key)
-    if (inflight)
-      return inflight
+    const dynamic = isUseCacheDynamicContext()
+    if (!dynamic) {
+      const inflight = pending.get(key)
+      if (inflight)
+        return inflight
+    }
 
-    const storage = kind === 'default' && isUseCacheDynamicContext()
+    const storage = dynamic && (kind === 'default' || kind === 'remote')
       ? nullCacheStorage
       : getStorage(kind)
 
@@ -107,10 +110,13 @@ export function $$cache__<Args extends unknown[]>(
       registerPageCacheTags(...ctx.tags)
       return value
     }).finally(() => {
-      pending.delete(key)
+      if (!dynamic)
+        pending.delete(key)
     })
 
-    pending.set(key, entryPromise)
+    if (!dynamic)
+      pending.set(key, entryPromise)
+
     return entryPromise
   })
 

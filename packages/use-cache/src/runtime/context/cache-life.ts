@@ -54,7 +54,10 @@ export function cacheLifeToTtlMs(profile: CacheLifeProfile | undefined): number 
   if (expire !== undefined && expire > 0)
     return expire * 1000
 
-  const revalidate = profile.revalidate ?? DEFAULT_PROFILE.revalidate
+  if (profile.revalidate !== undefined)
+    return profile.revalidate * 1000
+
+  const revalidate = DEFAULT_PROFILE.revalidate
   if (revalidate > 0)
     return revalidate * 1000
 

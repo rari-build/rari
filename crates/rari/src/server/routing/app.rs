@@ -1353,6 +1353,9 @@ pub async fn handle_app_route(
                             }
                         }
 
+                        let merged_tags =
+                            merge_response_cache_tags(&state, cache_policy.tags.clone()).await;
+
                         let cached_response = response::CachedResponse {
                             body: raw_body,
                             headers: response_headers,
@@ -1360,7 +1363,7 @@ pub async fn handle_app_route(
                                 cached_at: Instant::now(),
                                 ttl: cache_policy.ttl,
                                 etag: Some(etag.clone()),
-                                tags: cache_policy.tags,
+                                tags: merged_tags,
                             },
                             compressed_zstd,
                             compressed_br,
