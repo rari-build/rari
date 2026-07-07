@@ -8,18 +8,11 @@ export async function encodeFormData(formData: FormData): Promise<string> {
     }
     else {
       const arrayBuffer = await value.arrayBuffer()
-      if (arrayBuffer.byteLength % 2 === 0) {
-        stringValue = String.fromCodePoint(...new Uint16Array(arrayBuffer))
-      }
-      else {
-        stringValue
-          = String.fromCodePoint(
-            ...new Uint16Array(arrayBuffer, 0, (arrayBuffer.byteLength - 1) / 2),
-          )
-          + String.fromCodePoint(
-            new Uint8Array(arrayBuffer, arrayBuffer.byteLength - 1, 1)[0]!,
-          )
-      }
+      const bytes = new Uint8Array(arrayBuffer)
+      let binary = ''
+      for (const byte of bytes)
+        binary += String.fromCharCode(byte)
+      stringValue = `base64:${btoa(binary)}`
     }
     result += `${stringValue.length.toString(16)}:${stringValue}`
   }

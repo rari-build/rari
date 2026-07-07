@@ -402,7 +402,25 @@ impl Config {
         };
         config.mode = mode;
         config.apply_mode_cache_control();
+        config.sanitize_use_cache_for_mode();
         Ok(config)
+    }
+
+    fn sanitize_use_cache_for_mode(&mut self) {
+        if self.mode != Mode::Production {
+            return;
+        }
+
+        let Some(remote) = self.use_cache.remote.as_ref() else {
+            return;
+        };
+
+        if remote.handler == "test" {
+            tracing::warn!(
+                "Invalid useCache.remote: handler='test' is for e2e tests only and is not allowed in production. Ignoring remote cache config."
+            );
+            self.use_cache.remote = None;
+        }
     }
 
     pub fn new(mode: Mode) -> Self {

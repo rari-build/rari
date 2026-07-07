@@ -1,7 +1,19 @@
 import type { CookieStore, GlobalWithRari, ReadonlyHeaders } from './runtime/shared/types'
-import { markUseCacheDynamicContext } from '@rari/use-cache/runtime/cache-dynamic-context'
 
 export type { CookieOptions, CookieStore, ReadonlyCookie, ReadonlyHeaders } from './runtime/shared/types'
+
+function markUseCacheDynamicContext(): void {
+  const rari = (globalThis as unknown as GlobalWithRari)['~rari']
+  if (!rari)
+    return
+
+  if (rari.markUseCacheDynamic) {
+    rari.markUseCacheDynamic()
+    return
+  }
+
+  rari.useCacheDynamicDepth = (rari.useCacheDynamicDepth ?? 0) + 1
+}
 
 export async function cookies(): Promise<CookieStore> {
   markUseCacheDynamicContext()

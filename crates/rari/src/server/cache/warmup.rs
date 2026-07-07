@@ -40,6 +40,17 @@ async fn warmup_render_lock() -> &'static Mutex<()> {
     WARMUP_RENDER_LOCK.get_or_init(|| async { Mutex::new(()) }).await
 }
 
+async fn merge_warmup_cache_tags(state: &ServerState, base_tags: Vec<String>) -> Vec<String> {
+    let page_cache_tags = {
+        let renderer = state.renderer.lock().await;
+        let runtime = Arc::clone(&renderer.runtime);
+        drop(renderer);
+        runtime.collect_page_cache_tags().await.unwrap_or_default()
+    };
+
+    response::RouteCachePolicy::merge_cache_tags(base_tags, &page_cache_tags)
+}
+
 pub async fn warm_cache(state: &ServerState) {
     let Some(app_router) = &state.app_router else {
         tracing::info!("[rari] Cache warmup: No app router available, skipping");
@@ -148,6 +159,7 @@ async fn warm_route(
     let cache_policy = response::RouteCachePolicy::from_cache_control(cache_control, path);
 
     if cache_policy.enabled && state.response_cache.config.enabled {
+        let merged_tags = merge_warmup_cache_tags(state, cache_policy.tags.clone()).await;
         let body_bytes = bytes::Bytes::from(html);
 
         let compressed_gzip = {
@@ -192,7 +204,7 @@ async fn warm_route(
                 cached_at: Instant::now(),
                 ttl: cache_policy.ttl,
                 etag: Some(etag),
-                tags: cache_policy.tags.clone(),
+                tags: merged_tags.clone(),
             },
             compressed_zstd,
             compressed_br,
@@ -210,6 +222,7 @@ async fn warm_route(
             response::ResponseCache::generate_cache_key_with_mode(path, None, Some("rsc"));
 
         if cache_policy.enabled && state.response_cache.config.enabled {
+            let merged_tags = merge_warmup_cache_tags(state, cache_policy.tags.clone()).await;
             let mut cache_headers = HeaderMap::new();
 
             if let Some(ref metadata) = context.metadata
@@ -228,7 +241,7 @@ async fn warm_route(
                     cached_at: Instant::now(),
                     ttl: cache_policy.ttl,
                     etag: None,
-                    tags: cache_policy.tags,
+                    tags: merged_tags,
                 },
                 compressed_zstd: None,
                 compressed_br: None,

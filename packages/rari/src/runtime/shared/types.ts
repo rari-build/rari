@@ -63,6 +63,12 @@ export interface GlobalWithRari {
     routeInfoCache?: Map<string, any>
     cookies?: () => CookieStore
     headers?: () => ReadonlyHeaders
+    useCacheDynamicDepth?: number
+    useCacheBuildId?: string
+    useCachePrivateKey?: string
+    pageCacheTags?: Set<string>
+    invalidateUseCache?: (input: { tag?: string, path?: string }) => Promise<void>
+    markUseCacheDynamic?: () => void
   }
   '~clientComponents': Record<string, ComponentInfo>
   '~clientComponentPaths': Record<string, string>

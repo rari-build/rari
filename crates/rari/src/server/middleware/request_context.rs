@@ -17,7 +17,7 @@ use serde_json::Value;
 use tokio::sync::Mutex as TokioMutex;
 use uuid::Uuid;
 
-use crate::server::core::utils::client::get_http_client;
+use crate::server::core::utils::{client::get_http_client, http};
 
 #[derive(Clone, Debug)]
 #[non_exhaustive]
@@ -131,7 +131,7 @@ impl RequestContext {
     #[must_use]
     pub fn with_http_headers(mut self, headers: FxHashMap<String, String>) -> Self {
         self.cookie_header = headers.get("cookie").cloned();
-        self.request_headers = headers;
+        self.request_headers = http::filter_headers_for_components(headers);
         self
     }
 
