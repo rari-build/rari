@@ -25,6 +25,7 @@ export interface ServerCacheConfig {
 
 export interface ServerUseCacheConfig {
   remote?: ServerCacheLayerConfig
+  buildId?: string
 }
 
 export interface ServerConfig {

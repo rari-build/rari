@@ -59,6 +59,18 @@ fn is_esm_code(code: &str) -> bool {
     regex.is_match(code)
 }
 
+fn parse_string_array_value(value: &Value) -> Vec<String> {
+    if let Some(items) = value.as_array() {
+        return items.iter().filter_map(|item| item.as_str().map(ToString::to_string)).collect();
+    }
+
+    if let Some(text) = value.as_str() {
+        return serde_json::from_str(text).unwrap_or_default();
+    }
+
+    Vec::new()
+}
+
 #[expect(clippy::missing_errors_doc)]
 impl JsExecutionRuntime {
     pub fn new(env_vars: Option<FxHashMap<String, String>>) -> Self {
@@ -154,6 +166,33 @@ impl JsExecutionRuntime {
         metadata::finalize_metadata(&mut merged_metadata);
 
         Ok(merged_metadata)
+    }
+
+    pub async fn collect_page_cache_tags(&self) -> Result<Vec<String>, RariError> {
+        const SCRIPT: &str = r"(() => {
+            const tags = new Set(
+                globalThis['~rari']?.pageCacheTags ? [...globalThis['~rari'].pageCacheTags] : [],
+            );
+            globalThis['~rari']?.pageCacheTags?.clear();
+            const fromRegistry = globalThis.__rariGetActiveUseCacheTags?.() ?? [];
+            for (const tag of fromRegistry)
+                tags.add(tag);
+            return [...tags];
+        })()";
+
+        let result =
+            self.execute_script("collect_page_cache_tags".to_string(), SCRIPT.to_string()).await?;
+
+        Ok(parse_string_array_value(&result))
+    }
+
+    pub async fn is_dynamic_render(&self) -> Result<bool, RariError> {
+        const SCRIPT: &str = "((globalThis['~rari']?.useCacheDynamicDepth ?? 0) > 0)";
+
+        let result =
+            self.execute_script("is_dynamic_render".to_string(), SCRIPT.to_string()).await?;
+
+        Ok(result.as_bool().unwrap_or(false))
     }
 
     pub async fn execute_function(

@@ -1,7 +1,7 @@
-import type { CacheStorage } from './cache-storage'
-import { createRedbCacheStorage, REDB_CACHE_OPS } from './cache-storage-redb'
-import { createRedisCacheStorage, REDIS_CACHE_OPS } from './cache-storage-redis'
-import { hasRemoteOps } from './cache-storage-remote-ops'
+import type { CacheStorage, CacheWriteOptions } from './types'
+import { createRedbCacheStorage, REDB_CACHE_OPS } from './redb'
+import { createRedisCacheStorage, REDIS_CACHE_OPS } from './redis'
+import { hasRemoteOps } from './remote-ops'
 
 export type TestStorageBackend = 'redb' | 'redis'
 
@@ -37,7 +37,11 @@ export class TestCacheStorage implements CacheStorage {
     return this.storage.read(key)
   }
 
-  write(key: string, value: unknown, ttlMs: number) {
-    return this.storage.write(key, value, ttlMs)
+  write(key: string, value: unknown, options: CacheWriteOptions) {
+    return this.storage.write(key, value, options)
+  }
+
+  async delete(key: string): Promise<void> {
+    await this.storage.delete?.(key)
   }
 }

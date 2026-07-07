@@ -30,7 +30,7 @@ const TABLE_DEFINITION: redb::TableDefinition<&str, &[u8]> = redb::TableDefiniti
 
 extension!(
     rari_redb_cache,
-    ops = [op_redb_cache_get, op_redb_cache_set],
+    ops = [op_redb_cache_get, op_redb_cache_set, op_redb_cache_delete],
     options = {},
     state = |state, _options| {
         state.put(Arc::new(RedbCacheState::from_config()));
@@ -254,6 +254,20 @@ pub async fn op_redb_cache_set(
     run_redb(move || {
         let database = redb_state.database()?;
         write_to_database(&database, &key, &payload, expires_at_ms)
+    })
+    .await
+}
+
+#[op2]
+pub async fn op_redb_cache_delete(
+    state: Rc<RefCell<OpState>>,
+    #[string] key: String,
+) -> Result<(), JsErrorBox> {
+    let redb_state = get_redb_state(&state).map_err(|e| js_error(&e))?;
+
+    run_redb(move || {
+        let database = redb_state.database()?;
+        remove_expired(&database, &key)
     })
     .await
 }

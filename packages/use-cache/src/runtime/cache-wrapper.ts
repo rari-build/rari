@@ -1,60 +1,118 @@
+import type { TestStorageBackend } from './storage/test'
 import { createHash } from 'node:crypto'
-import { serialize } from 'node:v8'
-import { getStorage } from './cache-storage-registry'
-import { deterministicStringify } from './deterministic-stringify'
+import {
+  cacheLife,
+  cacheTag,
+  revalidatePath,
+  revalidateTag,
+  updateTag,
+} from './api/cache-api'
+import { connection } from './api/connection'
+import { isUseCacheDynamicContext, markUseCacheDynamicContext, resetUseCacheDynamicContextForTests } from './cache-dynamic-context'
+import { getCacheContext, registerPageCacheTags, runWithCacheContext } from './context/cache-context'
+import { cacheLifeToTtlMs } from './context/cache-life'
+import { getUseCacheBuildId, setUseCacheBuildId } from './encoding/build-id'
+import { encodeCacheKeyParts } from './encoding/rsc-encoding'
+import { registerUseCacheRuntimeGlobals } from './globals/use-cache-runtime-globals'
+import { nullCacheStorage } from './storage/null'
+import { getStorage } from './storage/registry'
+import { getPrivateCachePartitionKey } from './storage/remote-ops'
+import { setTestStorageBackend } from './storage/test'
+import { buildCacheKeyArgs } from './utils/cache-key-args'
+import { deterministicStringify } from './utils/deterministic-stringify'
 
-export { setTestStorageBackend } from './cache-storage-test'
-export type { TestStorageBackend } from './cache-storage-test'
+registerUseCacheRuntimeGlobals()
+
+export { getUseCacheBuildId, setUseCacheBuildId }
+export {
+  cacheLife,
+  cacheTag,
+  revalidatePath,
+  revalidateTag,
+  updateTag,
+}
+export { markUseCacheDynamicContext, resetUseCacheDynamicContextForTests }
+export type { CacheLifeProfile, CacheLifeProfileName } from './context/cache-life'
+export { setTestStorageBackend }
+export type { TestStorageBackend }
+export { connection }
 
 type CacheableFunction<Args extends unknown[]> = (...args: Args) => unknown | Promise<unknown>
 
-const CACHE_ENTRY_TTL_MS = 5 * 60 * 1000
-
 const pending = new Map<string, Promise<unknown>>()
+const keyComputeInflight = new Map<string, Promise<string>>()
 
-function cacheKey(kind: string, id: string, args: readonly unknown[]): string {
-  const str = deterministicStringify({ kind, id, args })
-  return createHash('sha256').update(str, 'utf8').digest('hex')
+async function cacheKey(
+  buildId: string,
+  kind: string,
+  id: string,
+  args: readonly unknown[],
+): Promise<string> {
+  const parts: unknown[] = [buildId, kind, id, args]
+  if (kind === 'private')
+    parts.push(getPrivateCachePartitionKey())
+
+  const serialized = await encodeCacheKeyParts(parts)
+  return createHash('sha256').update(serialized, 'utf8').digest('hex')
+}
+
+function getCacheKeyPromise(
+  buildId: string,
+  kind: string,
+  id: string,
+  args: readonly unknown[],
+): Promise<string> {
+  const coalesceKey = `${buildId}\0${kind}\0${id}\0${deterministicStringify(args)}`
+  const existing = keyComputeInflight.get(coalesceKey)
+  if (existing)
+    return existing
+
+  const promise = cacheKey(buildId, kind, id, args).finally(() => {
+    keyComputeInflight.delete(coalesceKey)
+  })
+  keyComputeInflight.set(coalesceKey, promise)
+  return promise
 }
 
 export function $$cache__<Args extends unknown[]>(
   kind: string,
   id: string,
-  _argCount: number,
+  argCount: number,
   fn: CacheableFunction<Args>,
   args: Args,
 ): unknown {
-  const key = cacheKey(kind, id, args)
+  const buildId = getUseCacheBuildId()
+  const keyArgs = buildCacheKeyArgs(args, argCount)
 
-  const inflight = pending.get(key)
-  if (inflight) {
-    throw inflight
-  }
+  const promise = getCacheKeyPromise(buildId, kind, id, keyArgs).then(async (key) => {
+    const inflight = pending.get(key)
+    if (inflight)
+      return inflight
 
-  const storage = getStorage(kind)
+    const storage = kind === 'default' && isUseCacheDynamicContext()
+      ? nullCacheStorage
+      : getStorage(kind)
 
-  const promise = Promise.resolve()
-    .then(async () => {
+    const entryPromise = runWithCacheContext(async () => {
       const cached = await storage.read(key)
-      if (cached !== null) {
+      if (cached !== null)
         return cached.value
-      }
 
       const value = await fn(...args)
-      await storage.write(key, value, CACHE_ENTRY_TTL_MS)
+      const ctx = getCacheContext()
+      await storage.write(key, value, {
+        ttlMs: cacheLifeToTtlMs(ctx.life),
+        tags: ctx.tags,
+      })
+      registerPageCacheTags(...ctx.tags)
       return value
-    })
-    .finally(() => {
+    }).finally(() => {
       pending.delete(key)
     })
 
-  pending.set(key, promise)
-  throw promise
-}
+    pending.set(key, entryPromise)
+    return entryPromise
+  })
 
-export function encodeBoundArgs(
-  refId: string,
-  ...args: unknown[]
-): string {
-  return serialize([refId, ...args]).toString('base64')
+  throw promise
 }

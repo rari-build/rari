@@ -328,6 +328,7 @@ pub fn get_streaming_ops() -> Vec<OpDecl> {
         op_internal_log(),
         op_sanitize_html(),
         op_get_cookies(),
+        op_get_request_headers(),
         op_set_cookie(),
         op_delete_cookie(),
     ]
@@ -565,6 +566,18 @@ pub fn op_get_cookies(state: Rc<RefCell<OpState>>) -> String {
     }
 
     cookies.iter().map(|(k, v)| format!("{k}={v}")).collect::<Vec<_>>().join("; ")
+}
+
+#[allow(clippy::allow_attributes, clippy::needless_pass_by_value)]
+#[op2]
+#[string]
+pub fn op_get_request_headers(state: Rc<RefCell<OpState>>) -> String {
+    let op_state_ref = state.borrow();
+    let Some(ctx) = op_state_ref.try_borrow::<Arc<RequestContext>>() else {
+        return "{}".to_string();
+    };
+
+    serde_json::to_string(&ctx.request_headers).unwrap_or_else(|_| "{}".to_string())
 }
 
 #[derive(serde::Deserialize)]

@@ -42,6 +42,30 @@ use crate::{
     with_scope,
 };
 
+const RESET_USE_CACHE_DYNAMIC_DEPTH_SCRIPT: &str =
+    "if (globalThis['~rari']) globalThis['~rari'].useCacheDynamicDepth = 0;";
+
+const CLEAR_PAGE_CACHE_TAGS_SCRIPT: &str = r"
+if (globalThis['~rari']) {
+    globalThis['~rari'].pageCacheTags ??= new Set();
+    globalThis['~rari'].pageCacheTags.clear();
+}
+";
+
+fn reset_use_cache_dynamic_context(js_runtime: &mut deno_core::JsRuntime) {
+    let _ = js_runtime.execute_script(
+        "reset_use_cache_dynamic_context".to_string(),
+        RESET_USE_CACHE_DYNAMIC_DEPTH_SCRIPT.to_string(),
+    );
+}
+
+fn clear_page_cache_tags(js_runtime: &mut deno_core::JsRuntime) {
+    let _ = js_runtime.execute_script(
+        "clear_page_cache_tags".to_string(),
+        CLEAR_PAGE_CACHE_TAGS_SCRIPT.to_string(),
+    );
+}
+
 type ScriptBatchItem = (String, String, oneshot::Sender<Result<Value, RariError>>);
 type BatchResultSender = mpsc::UnboundedSender<(usize, Result<Value, RariError>)>;
 type PendingScript =
@@ -486,6 +510,8 @@ async fn handle_js_request(
             let _ = result_tx.send(Ok(()));
         }
         JsRequest::SetRequestContext { request_context, result_tx } => {
+            clear_page_cache_tags(js_runtime);
+            reset_use_cache_dynamic_context(js_runtime);
             js_runtime.op_state().borrow_mut().put(request_context);
             let _ = result_tx.send(Ok(()));
         }
@@ -517,6 +543,8 @@ async fn handle_js_request(
         } => {
             let previous_context =
                 js_runtime.op_state().borrow_mut().try_take::<Arc<RequestContext>>();
+            clear_page_cache_tags(js_runtime);
+            reset_use_cache_dynamic_context(js_runtime);
             js_runtime.op_state().borrow_mut().put(request_context);
             let result =
                 execute_script(js_runtime, module_loader, &script_name, &script_code).await;

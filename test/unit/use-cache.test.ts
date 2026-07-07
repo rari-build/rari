@@ -11,12 +11,15 @@ let useCacheAddon = null
 try {
   const repoRoot = process.cwd()
   const ext = process.platform === 'win32' ? '.dll' : process.platform === 'darwin' ? '.dylib' : '.so'
+  const platform = `${process.platform}-${process.arch}`
 
   const candidates = [
-    path.join(repoRoot, 'target/release/rari_use_cache.node'),
-    path.join(repoRoot, `target/release/librari_use_cache${ext}`),
+    path.join(repoRoot, '.build/rari_use_cache', platform, 'rari_use_cache.node'),
+    path.join(repoRoot, 'packages', `use-cache-${platform}`, 'rari_use_cache.node'),
     path.join(repoRoot, 'target/debug/rari_use_cache.node'),
     path.join(repoRoot, `target/debug/librari_use_cache${ext}`),
+    path.join(repoRoot, 'target/release/rari_use_cache.node'),
+    path.join(repoRoot, `target/release/librari_use_cache${ext}`),
   ]
 
   for (const addonPath of candidates) {
@@ -148,7 +151,7 @@ async function fetchUser(name) {
       expect(result.code).toContain('$$RSC_SERVER_CACHE_1_fetchUser')
     })
 
-    it('transforms non-async function with use cache', () => {
+    it('does not transform non-async functions with use cache', () => {
       const src = `
 function add(a, b) {
   "use cache";
@@ -158,7 +161,7 @@ function add(a, b) {
       const result = useCacheAddon.transformUseCache(src, defaultOpts)
 
       expect(result.code).not.toContain('$$reactCache__')
-      expect(result.code).toContain('$$cache__')
+      expect(result.code).not.toContain('$$cache__')
     })
 
     it('strips directive from inner function body but preserves other strings', () => {
@@ -230,7 +233,7 @@ async function fn(a, b, c) {
       expect(result.code).not.toContain('Array.prototype.slice.call(arguments, 0, 3)')
     })
 
-    it('reports inner-function arity (params + bound args) when capturing module-level variables', () => {
+    it('passes user parameter count (excluding bound closure slot) to cache wrapper', () => {
       const src = `
 const prefix = 'test_';
 async function getData(id) {
@@ -240,7 +243,7 @@ async function getData(id) {
 `
       const result = useCacheAddon.transformUseCache(src, defaultOpts)
 
-      expect(result.code).toContain(', 2, $$RSC_SERVER_CACHE_0_getData_INNER,')
+      expect(result.code).toContain(', 1, $$RSC_SERVER_CACHE_0_getData_INNER,')
     })
 
     it('passes all actual call arguments through the cache wrapper', () => {
@@ -266,7 +269,6 @@ async function fn(id = 1, { slug }, [...items]) {
       const result = useCacheAddon.transformUseCache(src, defaultOpts)
 
       expect(result.code).toContain('async function fn(id = 1, { slug }, [...items])')
-      expect(result.code).not.toContain('encodeBoundArgs')
     })
 
     it('handles local destructuring rest and defaults', () => {
@@ -282,7 +284,6 @@ async function fn(input) {
 
       expect(result.code).toContain('const { id = 1 } = input')
       expect(result.code).toContain('const [...items] = input.items')
-      expect(result.code).not.toContain('encodeBoundArgs')
     })
 
     it('generates different ref IDs for different exports', () => {
@@ -319,12 +320,36 @@ async function getData(id) {
 `
       const result = useCacheAddon.transformUseCache(src, defaultOpts)
 
-      expect(result.code).toContain('encodeBoundArgs')
+      expect(result.code).toMatch(/\(\[\s*"[\da-f]{66}",\s*prefix\s*\]\)/)
       expect(result.code).toContain('var getData = ((')
       expect(result.code).toContain('$$ACTION_BOUND_ARGS)=>async (...args)=>')
-      expect(result.code).toContain('encodeBoundArgs(')
       expect(result.code).not.toContain('async function getData([$$ACTION_ARG_0], id)')
       expect(result.code).toMatch(/"[\da-f]{66}"/)
+    })
+
+    it('transforms file-level use cache for all async exports', () => {
+      const src = `
+"use cache";
+
+export async function getData(id) {
+  return id;
+}
+
+export async function getOther() {
+  return 42;
+}
+
+function syncHelper() {
+  return 1;
+}
+`
+      const result = useCacheAddon.transformUseCache(src, defaultOpts)
+
+      expect(result.code).toContain('$$cache__("default"')
+      expect(result.code).not.toContain('"use cache"')
+      expect(result.code).toMatch(/getData[\s\S]*\$\$cache__\("default"/)
+      expect(result.code).toMatch(/getOther[\s\S]*\$\$cache__\("default"/)
+      expect(result.code).not.toMatch(/syncHelper[\s\S]{0,200}\$\$cache__/)
     })
 
     it('does not capture body-level bindings that shadow module bindings', () => {
@@ -338,7 +363,6 @@ async function getData() {
 `
       const result = useCacheAddon.transformUseCache(src, defaultOpts)
 
-      expect(result.code).not.toContain('encodeBoundArgs')
       expect(result.code).toContain('var getData = async function(...args)')
     })
 
@@ -351,7 +375,6 @@ async function getData(depth) {
 `
       const result = useCacheAddon.transformUseCache(src, defaultOpts)
 
-      expect(result.code).not.toContain('encodeBoundArgs')
       expect(result.code).toContain('var getData = async function(...args)')
     })
 
@@ -368,7 +391,6 @@ async function getData() {
 `
       const result = useCacheAddon.transformUseCache(src, defaultOpts)
 
-      expect(result.code).not.toContain('encodeBoundArgs')
       expect(result.code).toContain('function helper()')
       expect(result.code).toContain('var getData = async function(...args)')
     })
@@ -384,7 +406,6 @@ async function getData() {
 `
       const result = useCacheAddon.transformUseCache(src, defaultOpts)
 
-      expect(result.code).not.toContain('encodeBoundArgs')
       expect(result.code).toContain('class Model')
       expect(result.code).toContain('var getData = async function(...args)')
     })
@@ -469,7 +490,7 @@ async function getData({ id, nested: { slug }, ...props }, [head], ...tail) {
 `
       const result = useCacheAddon.transformUseCache(src, defaultOpts)
 
-      expect(result.code).toContain('encodeBoundArgs')
+      expect(result.code).toMatch(/\(\[\s*"[\da-f]{66}",/)
       for (const name of ['React', 'reactCache', 'model', 'token', 'alias', 'others', 'first', 'second']) {
         expect(result.code).toContain(name)
       }
@@ -508,7 +529,6 @@ async function getData(input) {
 `
       const result = useCacheAddon.transformUseCache(src, defaultOpts)
 
-      expect(result.code).not.toContain('encodeBoundArgs')
       expect(result.code).toContain('var getData = async function(...args)')
     })
   })
@@ -549,7 +569,7 @@ async function getData(id) {
 
     expect(result).not.toBeNull()
     expect(result).not.toContain('import { cache as $$reactCache__ } from \'react\'')
-    expect(result).toContain('import { $$cache__, encodeBoundArgs } from \'@rari/use-cache/runtime/cache-wrapper\'')
+    expect(result).toContain('import { $$cache__ } from \'@rari/use-cache/runtime/cache-wrapper\'')
     expect(result).toContain('import { registerServerReference } from \'react-server-dom-rari/server\'')
     expect(result).not.toContain('$$reactCache__')
     expect(result).toContain('$$cache__')

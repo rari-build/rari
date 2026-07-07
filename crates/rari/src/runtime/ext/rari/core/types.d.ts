@@ -96,6 +96,8 @@ declare global {
       clear: () => void
     }
     '__RARI_DEV__'?: boolean
+    '__rariInvalidateUseCache'?: (tag: string) => Promise<number>
+    '__rariGetActiveUseCacheTags'?: () => string[]
     '~rari'?: {
       isDevelopment?: boolean
       apiHandler?: {
@@ -113,7 +115,13 @@ declare global {
       componentLoader?: {
         registerComponent: (moduleSpecifier: string, componentId: string, skipGlobalBinding?: boolean) => Promise<unknown>
       }
-      cookies?: (req: Request) => unknown
+      cookies?: () => unknown
+      headers?: () => unknown
+      pageCacheTags?: Set<string>
+      useCacheBuildId?: string
+      useCacheDynamicDepth?: number
+      markUseCacheDynamic?: () => void
+      invalidateUseCache?: (input: { tag?: string, path?: string }) => Promise<void>
       renderStreamingDocument?: (options: {
         capturedElement: unknown
         headContent: string
@@ -138,6 +146,7 @@ declare global {
     namespace core {
       namespace ops {
         function op_get_cookies(): string
+        function op_get_request_headers(): string
         function op_set_cookie(options: {
           name: string
           value: string

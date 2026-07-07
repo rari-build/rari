@@ -147,7 +147,7 @@ const entries: BundleEntry[] = [
   {
     name: 'react-server-dom-webpack-client',
     cjsFile: resolveReactCjs('react-server-dom-webpack', 'react-server-dom-webpack-client.browser'),
-    namedExports: ['createFromFetch', 'createFromReadableStream', 'encodeReply'],
+    namedExports: ['createFromFetch', 'createFromReadableStream', 'createTemporaryReferenceSet', 'encodeReply'],
     // Stub out webpack-specific module loading since we're bundling to a single ESM file
     banner: `
 // Stub webpack's module loading system (not needed in our bundled ESM context)

@@ -1,4 +1,5 @@
-import type { CacheStorage } from './cache-storage'
+import type { CacheStorage, CacheWriteOptions } from './types'
+import { registerUseCacheEntryTags } from '../invalidation/cache-tag-registry'
 
 type CacheOpFn = ((...args: unknown[]) => unknown) | undefined
 
@@ -15,6 +16,7 @@ const runtime = globalThis as RuntimeLike
 export interface RemoteCacheOps {
   get: string
   set: string
+  delete?: string
 }
 
 export class RemoteOpsCacheStorage implements CacheStorage {
@@ -43,7 +45,7 @@ export class RemoteOpsCacheStorage implements CacheStorage {
     }
   }
 
-  async write(key: string, value: unknown, ttlMs: number) {
+  async write(key: string, value: unknown, options: CacheWriteOptions) {
     const fn = runtime.Deno?.core?.ops?.[this.ops.set]
 
     let serialized: string | undefined
@@ -60,10 +62,26 @@ export class RemoteOpsCacheStorage implements CacheStorage {
     }
 
     try {
-      await fn?.(key, serialized, ttlMs)
+      await fn?.(key, serialized, options.ttlMs)
+      if (options.tags?.length)
+        registerUseCacheEntryTags(key, options.tags)
     }
     catch (err) {
       console.error(`[rari] ${this.ops.set} write failed for key="${key}":`, err)
+    }
+  }
+
+  async delete(key: string) {
+    const deleteOp = this.ops.delete
+    if (!deleteOp)
+      return
+
+    const fn = runtime.Deno?.core?.ops?.[deleteOp]
+    try {
+      await fn?.(key)
+    }
+    catch (err) {
+      console.error(`[rari] ${deleteOp} delete failed for key="${key}":`, err)
     }
   }
 }
@@ -88,4 +106,41 @@ export function getConfiguredRemoteHandler(): RemoteCacheHandler | undefined {
     return handler
 
   return undefined
+}
+
+interface RuntimeLikeWithCookies extends RuntimeLike {
+  '~rari'?: {
+    useCachePrivateKey?: string
+  }
+}
+
+export function getPrivateCachePartitionKey(): string {
+  const rariGlobal = (globalThis as RuntimeLikeWithCookies)['~rari']
+  if (rariGlobal?.useCachePrivateKey)
+    return rariGlobal.useCachePrivateKey
+
+  const cookiesOp = runtime.Deno?.core?.ops?.op_get_cookies
+  if (typeof cookiesOp === 'function') {
+    const raw = cookiesOp()
+    if (typeof raw === 'string' && raw.length > 0)
+      return raw
+  }
+
+  return 'anonymous'
+}
+
+export async function invalidateUseCacheViaOp(input: {
+  tag?: string
+  path?: string
+}): Promise<void> {
+  const fn = runtime.Deno?.core?.ops?.op_use_cache_invalidate
+  if (typeof fn !== 'function')
+    return
+
+  try {
+    await fn(input)
+  }
+  catch (err) {
+    console.error('[rari] op_use_cache_invalidate failed:', err)
+  }
 }

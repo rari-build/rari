@@ -138,6 +138,8 @@ impl CacheConfig {
 pub struct UseCacheConfig {
     #[serde(default)]
     pub remote: Option<CacheLayerConfig>,
+    #[serde(default, rename = "buildId")]
+    pub build_id: Option<String>,
 }
 
 impl Default for RedirectConfig {
@@ -640,40 +642,49 @@ impl Config {
                 }
             }
 
-            if let Some(use_cache_data) = config_data.get("useCache")
-                && let Some(remote_value) = use_cache_data.get("remote")
-            {
-                match serde_json::from_value::<CacheLayerConfig>(remote_value.clone()) {
-                    Ok(mut layer) => {
-                        let trimmed_url = layer.url.as_deref().map(str::trim);
-                        let missing_url = trimmed_url.is_none_or(str::is_empty);
+            if let Some(use_cache_data) = config_data.get("useCache") {
+                if let Some(build_id) =
+                    use_cache_data.get("buildId").and_then(|value| value.as_str())
+                {
+                    config.use_cache.build_id = Some(build_id.to_string());
+                }
 
-                        match layer.handler.as_str() {
-                            "test" if config.mode == Mode::Production => {
-                                tracing::warn!(
-                                    "Invalid useCache.remote: handler='test' is for e2e tests only and is not allowed in production. Ignoring remote cache config."
-                                );
-                            }
-                            "redis" | "redb" if missing_url => {
-                                tracing::warn!(
-                                    "Invalid useCache.remote: handler={} requires a non-empty url. Ignoring remote cache config.",
-                                    layer.handler
-                                );
-                            }
-                            "redis" | "redb" | "test" => {
-                                layer.url = trimmed_url.map(String::from);
-                                config.use_cache.remote = Some(layer);
-                            }
-                            _ => {
-                                tracing::warn!(
-                                    "Invalid useCache.remote: handler='{}' is not supported (allowed: test, redis, redb). Ignoring remote cache config.",
-                                    layer.handler
-                                );
+                if let Some(remote_value) = use_cache_data.get("remote") {
+                    match serde_json::from_value::<CacheLayerConfig>(remote_value.clone()) {
+                        Ok(mut layer) => {
+                            let trimmed_url = layer.url.as_deref().map(str::trim);
+                            let missing_url = trimmed_url.is_none_or(str::is_empty);
+
+                            match layer.handler.as_str() {
+                                "test" if config.mode == Mode::Production => {
+                                    tracing::warn!(
+                                        "Invalid useCache.remote: handler='test' is for e2e tests only and is not allowed in production. Ignoring remote cache config."
+                                    );
+                                }
+                                "redis" | "redb" if missing_url => {
+                                    tracing::warn!(
+                                        "Invalid useCache.remote: handler={} requires a non-empty url. Ignoring remote cache config.",
+                                        layer.handler
+                                    );
+                                }
+                                "redis" | "redb" | "test" => {
+                                    layer.url = trimmed_url.map(String::from);
+                                    config.use_cache.remote = Some(layer);
+                                }
+                                _ => {
+                                    tracing::warn!(
+                                        "Invalid useCache.remote: handler='{}' is not supported (allowed: test, redis, redb). Ignoring remote cache config.",
+                                        layer.handler
+                                    );
+                                }
                             }
                         }
-                    }
-                    Err(e) => {
-                        tracing::warn!("Failed to parse useCache.remote: {}. Using default.", e);
+                        Err(e) => {
+                            tracing::warn!(
+                                "Failed to parse useCache.remote: {}. Using default.",
+                                e
+                            );
+                        }
                     }
                 }
             }

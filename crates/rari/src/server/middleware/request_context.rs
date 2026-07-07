@@ -100,6 +100,8 @@ pub struct RequestContext {
     start_time: Instant,
     route_path: String,
     pub cookie_header: Option<String>,
+    pub request_headers: FxHashMap<String, String>,
+    pub skip_layout_html_cache: bool,
     pub pending_cookies: Arc<DashMap<PendingCookieKey, PendingCookie>>,
     pub function_cache: Arc<DashMap<String, Value>>,
 }
@@ -113,6 +115,8 @@ impl RequestContext {
             start_time: Instant::now(),
             route_path,
             cookie_header: None,
+            request_headers: FxHashMap::default(),
+            skip_layout_html_cache: false,
             pending_cookies: Arc::new(DashMap::new()),
             function_cache: Arc::new(DashMap::new()),
         }
@@ -121,6 +125,19 @@ impl RequestContext {
     #[must_use]
     pub fn with_cookies(mut self, cookie_header: Option<String>) -> Self {
         self.cookie_header = cookie_header;
+        self
+    }
+
+    #[must_use]
+    pub fn with_http_headers(mut self, headers: FxHashMap<String, String>) -> Self {
+        self.cookie_header = headers.get("cookie").cloned();
+        self.request_headers = headers;
+        self
+    }
+
+    #[must_use]
+    pub fn without_layout_html_cache(mut self) -> Self {
+        self.skip_layout_html_cache = true;
         self
     }
 

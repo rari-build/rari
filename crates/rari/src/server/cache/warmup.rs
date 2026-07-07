@@ -106,7 +106,8 @@ async fn warm_route(
         Arc::clone(&state.layout_html_cache),
     );
 
-    let request_context = Arc::new(RequestContext::new(route_match.route.path.clone()));
+    let request_context =
+        Arc::new(RequestContext::new(route_match.route.path.clone()).without_layout_html_cache());
 
     let _render_guard = warmup_render_lock().await.lock().await;
 

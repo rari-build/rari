@@ -84,6 +84,14 @@ async fn decompress_bytes(data: &Bytes, encoding: CompressionEncoding) -> Result
     }
 }
 
+async fn merge_response_cache_tags(state: &ServerState, base_tags: Vec<String>) -> Vec<String> {
+    let page_cache_tags = {
+        let renderer = state.renderer.lock().await;
+        renderer.runtime.collect_page_cache_tags().await.unwrap_or_default()
+    };
+    response::RouteCachePolicy::merge_cache_tags(base_tags, &page_cache_tags)
+}
+
 pub(crate) fn wrap_html_with_metadata(
     html_content: String,
     metadata: Option<&PageMetadata>,
@@ -308,7 +316,10 @@ pub async fn render_rsc_navigation_streaming(
     );
     let is_not_found = route_match.not_found.is_some();
 
-    let request_context = Arc::new(RequestContext::new(route_match.route.path.clone()));
+    let request_context = Arc::new(
+        RequestContext::new(route_match.route.path.clone())
+            .with_http_headers(context.headers.clone()),
+    );
 
     let render_result = match layout_renderer
         .render_route_with_streaming(
@@ -552,7 +563,10 @@ pub async fn render_synchronous(
         Arc::clone(&state.renderer),
         Arc::clone(&state.layout_html_cache),
     );
-    let request_context = Arc::new(RequestContext::new(route_match.route.path.clone()));
+    let request_context = Arc::new(
+        RequestContext::new(route_match.route.path.clone())
+            .with_http_headers(context.headers.clone()),
+    );
 
     let is_not_found = route_match.not_found.is_some();
 
@@ -641,7 +655,10 @@ pub async fn render_streaming_with_layout(
     let layout_count = route_match.layouts.len();
     let is_not_found = route_match.not_found.is_some();
 
-    let request_context = Arc::new(RequestContext::new(route_match.route.path.clone()));
+    let request_context = Arc::new(
+        RequestContext::new(route_match.route.path.clone())
+            .with_http_headers(context.headers.clone()),
+    );
 
     let render_result = match layout_renderer
         .render_route_with_streaming(&route_match, &context, Some(request_context), false)
@@ -933,7 +950,9 @@ pub async fn handle_app_route(
         },
     };
 
-    let request_context = Arc::new(RequestContext::new(path.to_string()));
+    let request_context = Arc::new(
+        RequestContext::new(path.to_string()).with_http_headers(extract_headers(&headers)),
+    );
 
     let render_mode = RequestTypeDetector::detect_render_mode(&headers);
     let accept_encoding = headers.get("accept-encoding").and_then(|v| v.to_str().ok());
@@ -1111,6 +1130,8 @@ pub async fn handle_app_route(
                     let cache_control = state.config.get_cache_control_for_route(path);
                     let cache_policy =
                         response::RouteCachePolicy::from_cache_control(cache_control, path);
+                    let response_cache_tags =
+                        merge_response_cache_tags(&state, cache_policy.tags.clone()).await;
 
                     if cache_policy.enabled && state.response_cache.config.enabled {
                         let cached_response = response::CachedResponse {
@@ -1120,7 +1141,7 @@ pub async fn handle_app_route(
                                 cached_at: Instant::now(),
                                 ttl: cache_policy.ttl,
                                 etag: None,
-                                tags: cache_policy.tags,
+                                tags: response_cache_tags,
                             },
                             compressed_zstd: None,
                             compressed_br: None,
@@ -1474,6 +1495,8 @@ pub async fn handle_app_route(
 
             let cache_policy =
                 response::RouteCachePolicy::from_cache_control(cache_control_value, path);
+            let response_cache_tags =
+                merge_response_cache_tags(&state, cache_policy.tags.clone()).await;
 
             if cache_policy.enabled && state.response_cache.config.enabled {
                 let body_bytes = Bytes::from(final_html.clone());
@@ -1525,7 +1548,7 @@ pub async fn handle_app_route(
                         cached_at: Instant::now(),
                         ttl: cache_policy.ttl,
                         etag: Some(etag.clone()),
-                        tags: cache_policy.tags,
+                        tags: response_cache_tags.clone(),
                     },
                     compressed_zstd,
                     compressed_br,

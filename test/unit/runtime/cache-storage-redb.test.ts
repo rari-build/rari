@@ -1,5 +1,5 @@
 import type { MockBackend } from './deno-mock'
-import { createRedbCacheStorage, hasRedbOps } from '@rari/use-cache/runtime/cache-storage-redb'
+import { createRedbCacheStorage, hasRedbOps } from '@rari/use-cache/runtime/storage/redb'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { patchDenoBackend, restoreDeno } from './deno-mock'
 
@@ -48,7 +48,7 @@ describe('redbCacheStorage', () => {
   it('write then read roundtrips a serializable value', async () => {
     const redbCacheStorage = createRedbCacheStorage()
     installRedbOpsMock(makeBackend())
-    await redbCacheStorage.write('k1', { hello: 'world' }, 60_000)
+    await redbCacheStorage.write('k1', { hello: 'world' }, { ttlMs: 60_000 })
     const got = await redbCacheStorage.read('k1')
     expect(got).toEqual({ value: { hello: 'world' } })
   })
@@ -84,7 +84,7 @@ describe('redbCacheStorage', () => {
       },
     }
     installRedbOpsMock(backend)
-    await expect(redbCacheStorage.write('k', 'v', 1000)).resolves.toBeUndefined()
+    await expect(redbCacheStorage.write('k', 'v', { ttlMs: 1000 })).resolves.toBeUndefined()
   })
 
   it('write short-circuits when value is not serializable', async () => {
@@ -99,7 +99,7 @@ describe('redbCacheStorage', () => {
     installRedbOpsMock(backend)
     await redbCacheStorage.write('k', () => {
       throw new Error('not json')
-    }, 1000)
+    }, { ttlMs: 1000 })
     expect(written).toBe(false)
   })
 })

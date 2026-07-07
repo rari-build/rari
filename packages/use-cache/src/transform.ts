@@ -82,7 +82,7 @@ export function transformUseCacheModule(
       imports.push(`import { cache as $$reactCache__ } from 'react'`)
 
     if (result.needsCacheWrapper)
-      imports.push(`import { $$cache__, encodeBoundArgs } from '@rari/use-cache/runtime/cache-wrapper'`)
+      imports.push(`import { $$cache__ } from '@rari/use-cache/runtime/cache-wrapper'`)
 
     if (result.needsRegisterRef)
       imports.push(`import { registerServerReference } from 'react-server-dom-rari/server'`)

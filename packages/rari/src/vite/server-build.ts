@@ -79,6 +79,7 @@ interface ServerComponentManifest {
     client: boolean
   }>
   buildTime: string
+  useCacheBuildId?: string
 }
 
 interface RouteManifestEntry {
@@ -179,6 +180,8 @@ export class ServerComponentBuilder {
     sourceDependencies: string[]
     bundledDependencies: string[]
   }>()
+
+  private useCacheBuildId: string | null = null
 
   private htmlOnlyImports = new Set<string>()
   private fileImporters = new Map<string, Set<string>>()
@@ -1042,7 +1045,9 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
             return null
           }
 
-          return transform(code, id)
+          return transform(code, id, {
+            hashSalt: `${self.useCacheBuildId ?? 'development'}:rari-use-cache-v1`,
+          })
         },
       },
     ]
@@ -1199,6 +1204,12 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
       buildTime: new Date().toISOString(),
     }
 
+    const useCacheEnabled = this.options.experimental?.useCache || this.options.experimental?.useCacheRemote
+    if (useCacheEnabled) {
+      this.useCacheBuildId = sharedHashString(`${this.projectRoot}:${manifest.buildTime}`, 16)
+      manifest.useCacheBuildId = this.useCacheBuildId
+    }
+
     const concurrency = Math.min(8, Math.max(1, (await import('node:os')).cpus().length))
 
     const nonPageComponents = [...this.serverComponents.entries()]
@@ -1232,11 +1243,14 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
       serverConfig.cacheControl = this.options.cacheControl
     if (this.options.cache)
       serverConfig.cache = this.options.cache
-    if (this.options.experimental?.useCacheRemote) {
+    if (this.options.experimental?.useCacheRemote || this.useCacheBuildId) {
       serverConfig.useCache = {
-        remote: this.options.experimental.useCacheRemote,
+        ...(this.options.experimental?.useCacheRemote
+          ? { remote: this.options.experimental.useCacheRemote }
+          : {}),
+        ...(this.useCacheBuildId ? { buildId: this.useCacheBuildId } : {}),
       }
-      if (!this.options.experimental.useCache) {
+      if (!this.options.experimental?.useCache && this.options.experimental?.useCacheRemote) {
         console.warn(
           '[server-build] experimental.useCacheRemote is set without experimental.useCache; the \'use cache\' transform will still run because useCacheRemote is configured.',
         )

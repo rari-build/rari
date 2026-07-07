@@ -19,7 +19,10 @@ use tokio::fs;
 
 use crate::{
     runtime::JsExecutionRuntime,
-    server::{middleware::request_context::RequestContext, routing::types::RouteSegment},
+    server::{
+        core::utils::http::extract_headers, middleware::request_context::RequestContext,
+        routing::types::RouteSegment,
+    },
 };
 
 fn parse_decoded_path_segments(path: &str) -> Vec<String> {
@@ -420,7 +423,10 @@ impl ApiRouteHandler {
             &route_match.params,
         )?;
 
-        let request_context = Arc::new(RequestContext::new(route_match.route.path.clone()));
+        let request_context = Arc::new(
+            RequestContext::new(route_match.route.path.clone())
+                .with_http_headers(extract_headers(&parts.headers)),
+        );
 
         self.runtime
             .execute_with_request_context(request_context, async {
