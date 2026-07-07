@@ -2,6 +2,8 @@ use cow_utils::CowUtils;
 use rkyv::{Archive, Deserialize as RkyvDeserialize, Serialize as RkyvSerialize};
 use serde::{Deserialize, Deserializer, Serialize, de::Error};
 
+pub const DEFAULT_IMAGE_QUALITY: u8 = 75;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Archive, RkyvDeserialize, RkyvSerialize)]
 #[rkyv(compare(PartialEq), derive(Debug))]
 #[non_exhaustive]
@@ -66,7 +68,7 @@ pub struct OptimizeParams {
 }
 
 fn default_quality() -> u8 {
-    75
+    DEFAULT_IMAGE_QUALITY
 }
 
 #[derive(Debug, Clone)]

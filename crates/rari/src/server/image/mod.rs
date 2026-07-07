@@ -3,6 +3,7 @@ use std::env;
 pub mod cache;
 mod config;
 mod optimizer;
+mod scanner;
 mod types;
 
 use std::sync::Arc;
@@ -15,7 +16,8 @@ use axum::{
 pub use cache::ImageCache;
 pub use config::{ImageConfig, ImageVariant, LocalPattern, RemotePattern};
 pub use optimizer::{ImageOptimizer, PreloadImage};
-pub use types::{ImageFormat, OptimizeParams, OptimizedImage};
+pub use scanner::{ImageUsageManifest, ScanError, scan_for_image_usage};
+pub use types::{DEFAULT_IMAGE_QUALITY, ImageFormat, OptimizeParams, OptimizedImage};
 
 #[derive(Clone)]
 #[non_exhaustive]
