@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { build } from 'rolldown'
-import { TSX_EXT_REGEX } from '../shared/regex-constants'
+import { TSX_EXT_REGEX } from '@/shared/regex-constants'
 
 const DEFAULT_IMPORT_REGEX = /import\s+(\w+)\s+from\s+['"]rari\/image['"]/g
 const NAMED_IMPORT_REGEX = /import\s+\{[^}]*\b(?:Image\s+as\s+(\w+)|Image)\b[^}]*\}\s+from\s+['"]rari\/image['"]/g

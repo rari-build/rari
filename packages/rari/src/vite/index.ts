@@ -1,19 +1,19 @@
 import type { CSSModulesOptions, Plugin, UserConfig } from 'vite-plus'
-import type { ProxyPluginOptions } from '../proxy/vite-plugin'
 import type { ModuleAnalysis } from './directives'
 import type { MdxPluginOptions } from './mdx-registry'
 import type { RariPlugin } from './plugin-types'
 import type { ServerBuildOptions } from './server-build'
 import type { ServerCacheConfig, ServerCacheLayerConfig } from './server-config'
+import type { ProxyPluginOptions } from '@/proxy/vite-plugin'
 import { Buffer } from 'node:buffer'
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
-import { DEFAULT_DEVICE_SIZES, DEFAULT_FORMATS, DEFAULT_IMAGE_SIZES, DEFAULT_MAX_CACHE_SIZE, DEFAULT_MINIMUM_CACHE_TTL, DEFAULT_QUALITY_LEVELS } from '../image/constants'
-import { rariProxy } from '../proxy/vite-plugin'
-import { rariRouter } from '../router/vite-plugin'
+import { DEFAULT_DEVICE_SIZES, DEFAULT_FORMATS, DEFAULT_IMAGE_SIZES, DEFAULT_MAX_CACHE_SIZE, DEFAULT_MINIMUM_CACHE_TTL, DEFAULT_QUALITY_LEVELS } from '@/image/constants'
+import { rariProxy } from '@/proxy/vite-plugin'
+import { rariRouter } from '@/router/vite-plugin'
 import {
   BACKSLASH_REGEX,
   EXPORT_NAMED_DECLARATION_REGEX,
@@ -21,8 +21,8 @@ import {
   HTTP_PROTOCOL_REGEX,
   TSX_EXT_REGEX,
   WINDOWS_PATH_REGEX,
-} from '../shared/regex-constants'
-import { clearFileResolverCache, resolveImportToFilePath } from '../shared/utils/file-resolver'
+} from '@/shared/regex-constants'
+import { clearFileResolverCache, resolveImportToFilePath } from '@/shared/utils/file-resolver'
 import {
   buildNamespaceClientReferenceReplacement,
   NAMESPACE_IMPORT_LINE_REGEX,
@@ -2221,10 +2221,20 @@ export function defineRariConfig(
   }
 }
 
-export type {} from '../ambient'
+export type { RariPlugin } from './plugin-types'
 
 export type Request = globalThis.Request
 export type Response = globalThis.Response
+
+export type {
+  ServerCacheConfig,
+  ServerCacheControlConfig,
+  ServerCacheLayerConfig,
+  ServerConfig,
+  ServerCSPConfig,
+  ServerUseCacheConfig,
+} from './server-config'
+export type {} from '@/ambient'
 
 export type {
   CookieOptions,
@@ -2237,20 +2247,21 @@ export type {
   RariURL,
   RequestCookies,
   ResponseCookies,
-} from '../proxy/types'
-export { rariProxy } from '../proxy/vite-plugin'
+} from '@/proxy/types'
 
-export type { ProxyPluginOptions } from '../proxy/vite-plugin'
+export { rariProxy } from '@/proxy/vite-plugin'
+
+export type { ProxyPluginOptions } from '@/proxy/vite-plugin'
 
 export type {
   ApiRouteHandlers,
   RouteContext,
   RouteHandler,
-} from '../router/api-routes'
+} from '@/router/api-routes'
 
-export { ApiResponse } from '../router/api-routes'
+export { ApiResponse } from '@/router/api-routes'
 
-export type { Robots, RobotsRule, Sitemap, SitemapEntry, SitemapImage, SitemapVideo } from '../router/metadata-route'
+export type { Robots, RobotsRule, Sitemap, SitemapEntry, SitemapImage, SitemapVideo } from '@/router/metadata-route'
 
 export {
   clearPropsCache,
@@ -2260,17 +2271,17 @@ export {
   extractServerPropsWithCache,
   extractStaticParams,
   hasServerSideDataFetching,
-} from '../router/props-extractor'
+} from '@/router/props-extractor'
 
 export type {
   MetadataResult,
   ServerSidePropsResult,
   StaticParamsResult,
-} from '../router/props-extractor'
+} from '@/router/props-extractor'
 
 export {
   generateAppRouteManifest,
-} from '../router/routes'
+} from '@/router/routes'
 
 export type {
   AppRouteEntry,
@@ -2288,19 +2299,8 @@ export type {
   RouteSegment,
   RouteSegmentType,
   TemplateEntry,
-} from '../router/types'
+} from '@/router/types'
 
-export type { Metadata } from '../router/types'
+export type { Metadata } from '@/router/types'
 
-export { rariRouter } from '../router/vite-plugin'
-
-export type { RariPlugin } from './plugin-types'
-
-export type {
-  ServerCacheConfig,
-  ServerCacheControlConfig,
-  ServerCacheLayerConfig,
-  ServerConfig,
-  ServerCSPConfig,
-  ServerUseCacheConfig,
-} from './server-config'
+export { rariRouter } from '@/router/vite-plugin'

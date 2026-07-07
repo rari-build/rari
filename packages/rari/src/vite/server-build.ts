@@ -14,9 +14,9 @@ import {
   EXPORTED_FUNCTION_REGEX,
   FILE_PROTOCOL_REGEX,
   TSX_EXT_REGEX,
-} from '../shared/regex-constants'
-import { resolveAlias } from '../shared/utils/alias-resolver'
-import { resolveIndexFile, resolveWithExtensions, resolveWithExtensionsAndIndex } from '../shared/utils/file-resolver'
+} from '@/shared/regex-constants'
+import { resolveAlias } from '@/shared/utils/alias-resolver'
+import { resolveIndexFile, resolveWithExtensions, resolveWithExtensionsAndIndex } from '@/shared/utils/file-resolver'
 import { getReadableComponentId, getComponentId as getSharedComponentId, getProjectRelativePath as getSharedProjectRelativePath, hashString as sharedHashString } from './component-ids'
 import { analyzeModuleSource } from './directives'
 import { parseHtmlEntryImports } from './html-entry-imports'
@@ -640,7 +640,6 @@ const ${importName} = (props) => {
   }
 
   private createRolldownModuleInfoPlugin(filePath: string): Plugin {
-    const self = this
     const externalDeps = new Set<string>()
 
     return {
@@ -656,16 +655,16 @@ const ${importName} = (props) => {
             externalDeps.add(id)
         }
       },
-      buildEnd() {
+      buildEnd: () => {
         if (externalDeps.size === 0)
           return
 
         const dependencies = [...externalDeps].sort()
-        const component = self.serverComponents.get(filePath) || self.serverActions.get(filePath)
+        const component = this.serverComponents.get(filePath) || this.serverActions.get(filePath)
         if (component)
           component.dependencies = dependencies
 
-        const cached = self.buildCache.get(filePath)
+        const cached = this.buildCache.get(filePath)
         if (cached)
           cached.bundledDependencies = dependencies
       },
@@ -682,7 +681,6 @@ const ${importName} = (props) => {
   ) {
     const resolveDir = path.dirname(inputPath)
     const isProxyFile = PROXY_FILE_REGEX.test(path.basename(inputPath))
-    const self = this
 
     const clientComponentRefs = new Map<string, string>()
     const serverActionRefs = new Map<string, { actionId: string, hasDefaultExport: boolean }>()
@@ -746,9 +744,9 @@ const ${importName} = (props) => {
           }
 
           let resolvedPath: string | null = null
-          const aliases = self.options.alias || {}
+          const aliases = this.options.alias || {}
 
-          resolvedPath = resolveAlias(source, aliases, self.projectRoot)
+          resolvedPath = resolveAlias(source, aliases, this.projectRoot)
 
           if (!resolvedPath && (source.startsWith('./') || source.startsWith('../'))) {
             const importerDir = importer === virtualModuleId ? resolveDir : path.dirname(importer)
@@ -760,21 +758,21 @@ const ${importName} = (props) => {
             for (const ext of extensions) {
               const pathWithExt = resolvedPath + ext
               if (fs.existsSync(pathWithExt) && fs.statSync(pathWithExt).isFile()) {
-                if (self.isClientComponent(pathWithExt)) {
-                  const relativePath = path.relative(self.projectRoot, pathWithExt)
+                if (this.isClientComponent(pathWithExt)) {
+                  const relativePath = path.relative(this.projectRoot, pathWithExt)
                   const componentId = (relativePath.startsWith('..') ? pathWithExt : relativePath).replace(BACKSLASH_REGEX, '/')
                   clientComponentRefs.set(pathWithExt, componentId)
 
                   if (relativePath.startsWith('..'))
-                    self.discoveredExternalClientComponents.add(pathWithExt)
+                    this.discoveredExternalClientComponents.add(pathWithExt)
 
                   return { id: `\0client-ref:${pathWithExt}` }
                 }
 
                 try {
-                  const analysis = self.moduleAnalysisCache.get(pathWithExt)
+                  const analysis = this.moduleAnalysisCache.get(pathWithExt)
                   if (analysis.directives.hasUseServer) {
-                    const actionId = self.getComponentId(pathWithExt)
+                    const actionId = this.getComponentId(pathWithExt)
                     serverActionRefs.set(pathWithExt, {
                       actionId,
                       hasDefaultExport: analysis.hasDefaultExport,
@@ -792,10 +790,10 @@ const ${importName} = (props) => {
 
           return null
         },
-        load(id: string) {
+        load: (id: string) => {
           if (id.startsWith('\0client-ref:')) {
             const filePath = id.slice('\0client-ref:'.length)
-            const relativePath = path.relative(self.projectRoot, filePath)
+            const relativePath = path.relative(this.projectRoot, filePath)
             const componentId = (clientComponentRefs.get(filePath) || (relativePath.startsWith('..') ? filePath : relativePath)).replace(BACKSLASH_REGEX, '/')
 
             return {
@@ -809,9 +807,9 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
           if (id.startsWith('\0server-action:')) {
             const filePath = id.slice('\0server-action:'.length)
 
-            const actionId = serverActionRefs.get(filePath)?.actionId ?? self.getComponentId(filePath)
-            const builtPath = path.join(self.options.outDir, self.options.rscDir, `${actionId}.js`)
-            const absoluteBuiltPath = path.resolve(self.projectRoot, builtPath)
+            const actionId = serverActionRefs.get(filePath)?.actionId ?? this.getComponentId(filePath)
+            const builtPath = path.join(this.options.outDir, this.options.rscDir, `${actionId}.js`)
+            const absoluteBuiltPath = path.resolve(this.projectRoot, builtPath)
 
             const builtFileUrl = pathToFileURL(absoluteBuiltPath).href
 
@@ -846,9 +844,9 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
           }
 
           let resolvedPath: string | null = null
-          const aliases = self.options.alias || {}
+          const aliases = this.options.alias || {}
 
-          resolvedPath = resolveAlias(source, aliases, self.projectRoot)
+          resolvedPath = resolveAlias(source, aliases, this.projectRoot)
 
           const importerDir = importer?.startsWith('\0') ? resolveDir : (importer ? path.dirname(importer) : resolveDir)
           if (!resolvedPath && (source.startsWith('./') || source.startsWith('../')))
@@ -864,15 +862,15 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
           for (const ext of extensions) {
             const pathWithExt = resolvedPath + ext
             if (fs.existsSync(pathWithExt) && fs.statSync(pathWithExt).isFile()) {
-              if (self.isClientComponent(pathWithExt))
+              if (this.isClientComponent(pathWithExt))
                 return null
 
-              const srcDir = path.join(self.projectRoot, 'src')
+              const srcDir = path.join(this.projectRoot, 'src')
               if (!pathWithExt.startsWith(srcDir))
                 return null
 
-              const componentId = self.getComponentId(pathWithExt)
-              const distPath = path.join(self.options.outDir, self.options.rscDir, `${componentId}.js`)
+              const componentId = this.getComponentId(pathWithExt)
+              const distPath = path.join(this.options.outDir, this.options.rscDir, `${componentId}.js`)
 
               if (fs.existsSync(distPath))
                 return { id: `\0transformed:${distPath}` }
@@ -902,14 +900,14 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
           if (source.startsWith('\0'))
             return null
 
-          const aliases = self.options.alias || {}
+          const aliases = this.options.alias || {}
           for (const [alias, replacement] of Object.entries(aliases)) {
             if (source.startsWith(`${alias}/`) || source === alias) {
               const relativePath = source.slice(alias.length)
               const resolvedPath = path.join(replacement, relativePath)
               const absolutePath = path.isAbsolute(resolvedPath)
                 ? resolvedPath
-                : path.resolve(self.projectRoot, resolvedPath)
+                : path.resolve(this.projectRoot, resolvedPath)
 
               const extensions = ['', '.ts', '.tsx', '.js', '.jsx']
               for (const ext of extensions) {
@@ -1033,11 +1031,11 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
           return null
         },
       },
-      self.createRolldownModuleInfoPlugin(inputPath),
+      this.createRolldownModuleInfoPlugin(inputPath),
       {
         name: 'use-cache',
-        async transform(code: string, id: string) {
-          if (!self.options.experimental?.useCache && !self.options.experimental?.useCacheRemote)
+        transform: async (code: string, id: string) => {
+          if (!this.options.experimental?.useCache && !this.options.experimental?.useCacheRemote)
             return null
 
           const transform = await getUseCacheTransform()
@@ -1046,7 +1044,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
           }
 
           return transform(code, id, {
-            hashSalt: `${self.useCacheBuildId ?? 'development'}:rari-use-cache-v1`,
+            hashSalt: `${this.useCacheBuildId ?? 'development'}:rari-use-cache-v1`,
           })
         },
       },

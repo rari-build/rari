@@ -1,10 +1,10 @@
 import type { Plugin, ViteDevServer } from 'vite-plus'
-import type { RariPlugin } from '../vite/plugin-types'
+import type { RariPlugin } from '@/vite/plugin-types'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
-import { BACKSLASH_REGEX, QUOTE_REGEX, TSX_EXT_REGEX } from '../shared/regex-constants'
-import { toRariPlugin } from '../vite/plugin-types'
+import { BACKSLASH_REGEX, QUOTE_REGEX, TSX_EXT_REGEX } from '@/shared/regex-constants'
+import { toRariPlugin } from '@/vite/plugin-types'
 import { generateAppRouteManifest } from './routes'
 
 const METADATA_EXPORT_REGEX = /export\s+const\s+metadata\s*(?::\s*\w+\s*)?=\s*(\{[\s\S]*?\n\})/

@@ -1,6 +1,6 @@
 import type { CacheStorage, CacheWriteOptions } from './types'
-import { registerUseCacheEntryTags } from '../invalidation/cache-tag-registry'
-import { getRariGlobal } from '../shared/rari-global'
+import { registerUseCacheEntryTags } from '@/runtime/invalidation/cache-tag-registry'
+import { getRariGlobal } from '@/runtime/shared/rari-global'
 
 type CacheOpFn = ((...args: unknown[]) => unknown) | undefined
 

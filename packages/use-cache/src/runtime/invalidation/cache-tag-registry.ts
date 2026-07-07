@@ -1,4 +1,4 @@
-import type { CacheStorage } from '../storage/types'
+import type { CacheStorage } from '@/runtime/storage/types'
 
 const tagToKeys = new Map<string, Set<string>>()
 const keyToTags = new Map<string, Set<string>>()

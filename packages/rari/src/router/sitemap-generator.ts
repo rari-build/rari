@@ -2,9 +2,9 @@ import type { Sitemap, SitemapImage, SitemapVideo } from './metadata-route'
 import { Buffer } from 'node:buffer'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { resolveAlias } from '../shared/utils/alias-resolver'
-import { resolveWithExtensionsAndIndex } from '../shared/utils/file-resolver'
-import { escapeXml } from '../shared/utils/xml'
+import { resolveAlias } from '@/shared/utils/alias-resolver'
+import { resolveWithExtensionsAndIndex } from '@/shared/utils/file-resolver'
+import { escapeXml } from '@/shared/utils/xml'
 
 const SANITIZE_ID_REGEX = /[^\w-]/g
 const VIRTUAL_SITEMAP_ID = '\0virtual:sitemap'

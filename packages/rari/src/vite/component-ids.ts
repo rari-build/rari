@@ -6,7 +6,7 @@ import {
   COMPONENT_ID_REGEX,
   SRC_PREFIX_REGEX,
   TSX_EXT_REGEX,
-} from '../shared/regex-constants'
+} from '@/shared/regex-constants'
 
 const PATH_OUTSIDE_ROOT_REGEX = /^\.\.(?:[/\\]|$)/
 

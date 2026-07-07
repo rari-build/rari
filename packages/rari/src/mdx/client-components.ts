@@ -1,5 +1,5 @@
-import { registerClientReference } from '../runtime/rsc-references'
-import { EXTENSION_REGEX } from '../shared/regex-constants'
+import { registerClientReference } from '@/runtime/rsc-references'
+import { EXTENSION_REGEX } from '@/shared/regex-constants'
 
 interface MDXClientComponentConfig {
   component: any

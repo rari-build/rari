@@ -2,7 +2,7 @@ import type { ViteDevServer } from 'vite-plus'
 import type { ServerComponentBuilder } from './server-build'
 import path from 'node:path'
 import process from 'node:process'
-import { throwIfNotOk } from '../shared/utils/http'
+import { throwIfNotOk } from '@/shared/utils/http'
 import { HMRErrorHandler } from './hmr-error-handler'
 
 export interface ComponentRebuildResult {

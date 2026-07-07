@@ -1,6 +1,6 @@
 import fs from 'node:fs'
-import { BACKSLASH_REGEX } from '../shared/regex-constants'
-import { resolveImportToFilePath } from '../shared/utils/file-resolver'
+import { BACKSLASH_REGEX } from '@/shared/regex-constants'
+import { resolveImportToFilePath } from '@/shared/utils/file-resolver'
 import { getProjectRelativePath } from './component-ids'
 import { analyzeModuleSource } from './directives'
 

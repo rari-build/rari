@@ -2,9 +2,9 @@ import type { Feed, FeedEntry } from './metadata-route'
 import { Buffer } from 'node:buffer'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { resolveAlias } from '../shared/utils/alias-resolver'
-import { resolveWithExtensionsAndIndex } from '../shared/utils/file-resolver'
-import { escapeXml } from '../shared/utils/xml'
+import { resolveAlias } from '@/shared/utils/alias-resolver'
+import { resolveWithExtensionsAndIndex } from '@/shared/utils/file-resolver'
+import { escapeXml } from '@/shared/utils/xml'
 
 const VIRTUAL_FEED_ID = '\0virtual:feed'
 

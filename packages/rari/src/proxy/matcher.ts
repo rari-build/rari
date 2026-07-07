@@ -2,7 +2,7 @@ import type { ProxyConfig, ProxyMatcher, ProxyRuleCondition, RariRequest } from 
 import {
   MULTIPLE_SLASHES_REGEX,
   PATH_TRAILING_SLASH_REGEX,
-} from '../shared/regex-constants'
+} from '@/shared/regex-constants'
 
 const ESCAPE_CHARS_REGEX = /[.+?^${}()|[\]\\]/g
 const ASTERISK_REGEX = /\*/g

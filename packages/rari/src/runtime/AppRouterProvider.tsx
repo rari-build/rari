@@ -4,7 +4,7 @@ import type { GlobalWithRari } from './shared/types'
 import * as React from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { createFromReadableStream } from 'virtual:react-flight-client'
-import { PATH_TRAILING_SLASH_REGEX } from '../shared/regex-constants'
+import { PATH_TRAILING_SLASH_REGEX } from '@/shared/regex-constants'
 import { preloadModulesFromFlightProtocol } from './shared/preload-modules'
 
 const TIMESTAMP_REGEX = /"timestamp":(\d+)/

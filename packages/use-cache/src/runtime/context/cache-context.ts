@@ -1,7 +1,7 @@
 import type { CacheLifeProfile } from './cache-life'
 
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { getRariGlobal } from '../shared/rari-global'
+import { getRariGlobal } from '@/runtime/shared/rari-global'
 import { normalizeCacheLife } from './cache-life'
 
 export interface CacheScopeContext {

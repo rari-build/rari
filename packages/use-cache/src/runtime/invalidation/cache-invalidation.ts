@@ -1,5 +1,5 @@
-import { getAllUseCacheStorages } from '../storage/registry'
-import { invalidateUseCacheViaOp } from '../storage/remote-ops'
+import { getAllUseCacheStorages } from '@/runtime/storage/registry'
+import { invalidateUseCacheViaOp } from '@/runtime/storage/remote-ops'
 import {
   createRegistryBackedDelete,
   invalidateUseCacheTag,

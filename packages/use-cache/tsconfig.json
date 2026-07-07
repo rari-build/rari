@@ -1,4 +1,9 @@
 {
   "extends": "../../.config/typescript/package.json",
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
   "include": ["src"]
 }
