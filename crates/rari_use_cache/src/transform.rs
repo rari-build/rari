@@ -33,6 +33,7 @@ struct TransformVisitor {
     hash_salt: String,
     index: usize,
     has_cache_fns: bool,
+    file_cache_kind: Option<String>,
     module_idents: FxHashSet<Id>,
     needs_react_cache: bool,
     needs_cache_wrapper: bool,
@@ -46,6 +47,7 @@ impl TransformVisitor {
             hash_salt: hash_salt.to_string(),
             index: 0,
             has_cache_fns: false,
+            file_cache_kind: None,
             module_idents: FxHashSet::default(),
             needs_react_cache: false,
             needs_cache_wrapper: false,
@@ -56,6 +58,8 @@ impl TransformVisitor {
 
 impl VisitMut for TransformVisitor {
     fn visit_mut_module(&mut self, module: &mut Module) {
+        self.file_cache_kind = directive::extract_file_level_cache_kind(&module.body);
+
         for item in &module.body {
             for ident in closure::collect_module_level_idents(item) {
                 self.module_idents.insert(ident);
@@ -63,6 +67,7 @@ impl VisitMut for TransformVisitor {
         }
 
         let mut items = mem::take(&mut module.body);
+        items.retain(|item| !directive::is_file_level_cache_directive_item(item));
         self.visit_mut_module_items(&mut items);
         module.body = items;
     }
@@ -140,13 +145,23 @@ impl TransformVisitor {
 
         let body = fn_decl.function.body.as_ref()?;
 
-        if !directive::has_use_cache_directive(body) {
+        if !fn_decl.function.is_async {
+            return None;
+        }
+
+        let body_has_directive = directive::has_use_cache_directive(body);
+        if !body_has_directive && self.file_cache_kind.is_none() {
             return None;
         }
 
         self.has_cache_fns = true;
-        let cache_kind =
-            directive::extract_cache_kind(body).unwrap_or_else(|| "default".to_string());
+        let cache_kind = if body_has_directive {
+            directive::extract_cache_kind(body)
+                .map(|kind| if kind.is_empty() { "default".to_string() } else { kind })
+                .unwrap_or_else(|| "default".to_string())
+        } else {
+            self.file_cache_kind.clone().unwrap_or_else(|| "default".to_string())
+        };
 
         let fn_params = closure::collect_fn_params(&fn_decl.function);
         let closure_vars = closure::collect_closure_idents(

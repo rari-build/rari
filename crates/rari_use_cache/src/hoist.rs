@@ -160,7 +160,7 @@ fn create_cache_wrapper(
     inner_name: &str,
     ref_id: &str,
     cache_kind: &str,
-    param_count: usize,
+    cache_key_arg_count: usize,
 ) -> ModuleItem {
     let inner_fn = Expr::Fn(FnExpr {
         ident: None,
@@ -189,7 +189,9 @@ fn create_cache_wrapper(
                             },
                             ExprOrSpread {
                                 spread: None,
-                                expr: Box::new(Expr::Lit(Lit::Num(num(param_count as f64)))),
+                                expr: Box::new(Expr::Lit(Lit::Num(
+                                    num(cache_key_arg_count as f64),
+                                ))),
                             },
                             ExprOrSpread { spread: None, expr: ident_expr(inner_name) },
                             ExprOrSpread { spread: None, expr: create_args_slice_expr() },
@@ -284,8 +286,7 @@ pub fn create_cache_declarations(
     extra_items: &mut Vec<ModuleItem>,
     input: CacheDeclarationInput<'_>,
 ) {
-    let param_count =
-        input.fn_decl.function.params.len() + usize::from(!input.closure_vars.is_empty());
+    let cache_key_arg_count = input.fn_decl.function.params.len();
 
     extra_items.push(create_inner_function(input.fn_decl, input.closure_vars, input.inner_name));
     extra_items.push(create_name_define_statement(input.inner_name, input.export_name));
@@ -294,7 +295,7 @@ pub fn create_cache_declarations(
         input.inner_name,
         input.ref_id,
         input.cache_kind,
-        param_count,
+        cache_key_arg_count,
     ));
     extra_items.push(create_register_ref_statement(input.cache_name, input.ref_id));
 }
@@ -444,21 +445,15 @@ pub fn create_bound_replacement(
         //
         // ($$ba => async (...args) => { try { return cacheName.apply(null, [$$ba, ...args]); }
         //                              catch (e) { if (e && typeof e.then === 'function') { await e; } throw e; } })
-        // (encodeBoundArgs(refId, ...closure_vars))
-        let mut enc_args = vec![ExprOrSpread {
+        // ([refId, ...closure_vars])
+        let mut bound_arg_elems = vec![Some(ExprOrSpread {
             spread: None,
             expr: Box::new(Expr::Lit(Lit::Str(str_lit(ref_id)))),
-        }];
+        })];
         for var_name in closure_vars {
-            enc_args.push(ExprOrSpread { spread: None, expr: ident_expr(var_name) });
+            bound_arg_elems.push(Some(ExprOrSpread { spread: None, expr: ident_expr(var_name) }));
         }
-        let bound_arg_call = Expr::Call(CallExpr {
-            span: DUMMY_SP,
-            ctxt: SyntaxContext::default(),
-            callee: Callee::Expr(ident_expr("encodeBoundArgs")),
-            args: enc_args,
-            type_args: None,
-        });
+        let bound_arg_call = Expr::Array(ArrayLit { span: DUMMY_SP, elems: bound_arg_elems });
 
         // Inner async arrow: async (...args) => { ... }
         let inner_async = Expr::Arrow(ArrowExpr {
@@ -492,7 +487,7 @@ pub fn create_bound_replacement(
             return_type: None,
         });
 
-        // IIFE: (outer_arrow)(encodeBoundArgs(...))
+        // IIFE: (outer_arrow)([refId, ...closure_vars])
         Box::new(Expr::Call(CallExpr {
             span: DUMMY_SP,
             ctxt: SyntaxContext::default(),

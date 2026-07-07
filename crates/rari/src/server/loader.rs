@@ -10,8 +10,11 @@ use crate::{
     rendering::base::RscRenderer,
     rsc::extract_dependencies,
     runtime::JsExecutionRuntime,
-    server::core::utils::component::{
-        has_use_client_directive, has_use_server_directive, wrap_server_action_module,
+    server::{
+        config::Config,
+        core::utils::component::{
+            has_use_client_directive, has_use_server_directive, wrap_server_action_module,
+        },
     },
     utils::path::path_to_file_url,
 };
@@ -29,6 +32,7 @@ impl ComponentLoader {
         }
 
         let manifest = Self::read_manifest(&manifest_path).await?;
+        Self::init_use_cache_build_id(renderer, &manifest).await?;
         let components = Self::parse_manifest_components(&manifest)?;
 
         let mut sorted_components: Vec<_> = components.iter().collect();
@@ -1108,6 +1112,42 @@ impl ComponentLoader {
             .map_err(|e| {
                 RariError::internal(format!("Failed to initialize client reference manifest: {e}"))
             })?;
+
+        Ok(())
+    }
+
+    async fn init_use_cache_build_id(
+        renderer: &RscRenderer,
+        manifest: &Value,
+    ) -> Result<(), RariError> {
+        let build_id = manifest
+            .get("useCacheBuildId")
+            .and_then(|value| value.as_str())
+            .or_else(|| Config::get().and_then(|config| config.use_cache.build_id.as_deref()));
+
+        let Some(build_id) = build_id else {
+            return Ok(());
+        };
+
+        let build_id_json =
+            serde_json::to_string(build_id).unwrap_or_else(|_| "\"development\"".to_string());
+
+        let init_script = format!(
+            r"(function() {{
+                if (!globalThis['~rari']) {{
+                    globalThis['~rari'] = {{}};
+                }}
+                globalThis['~rari'].useCacheBuildId = {build_id_json};
+            }})()"
+        );
+
+        renderer
+            .runtime
+            .execute_script("init_use_cache_build_id".to_string(), init_script)
+            .await
+            .map_err(|e| {
+            RariError::internal(format!("Failed to initialize use cache build id: {e}"))
+        })?;
 
         Ok(())
     }

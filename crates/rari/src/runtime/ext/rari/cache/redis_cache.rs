@@ -15,7 +15,12 @@ pub const TEST_REDIS_URL: &str = "redis://localhost:6379";
 
 extension!(
     rari_redis_cache,
-    ops = [op_cache_remote_get, op_cache_remote_set, op_use_cache_remote_handler],
+    ops = [
+        op_cache_remote_get,
+        op_cache_remote_set,
+        op_cache_remote_delete,
+        op_use_cache_remote_handler
+    ],
     options = {},
     state = |state, _options| {
         state.put(Arc::new(RedisCacheState::from_config()));
@@ -151,4 +156,21 @@ pub async fn op_cache_remote_set(
         .await
         .map_err(|_| js_error(&"redis set timeout"))?
         .map_err(|e| js_error(&e))
+}
+
+#[op2]
+pub async fn op_cache_remote_delete(
+    state: Rc<RefCell<OpState>>,
+    #[string] key: String,
+) -> Result<(), JsErrorBox> {
+    let mut connection = get_redis_state(&state)
+        .map_err(|e| js_error(&e))?
+        .connection()
+        .await
+        .map_err(|e| js_error(&e))?;
+    time::timeout(REDIS_TIMEOUT, connection.del::<_, ()>(&key))
+        .await
+        .map_err(|_| js_error(&"redis delete timeout"))?
+        .map_err(|e| js_error(&e))?;
+    Ok(())
 }

@@ -304,6 +304,9 @@ importers:
       quick-lru:
         specifier: catalog:runtime
         version: 7.3.0
+      react-server-dom-webpack:
+        specifier: catalog:react
+        version: 19.2.7(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(webpack@5.107.2)
     devDependencies:
       '@types/node':
         specifier: catalog:typescript

@@ -26,8 +26,11 @@ use crate::{
     },
     runtime::JsExecutionRuntime,
     server::{
-        cache::handler::{
-            CacheError, CacheHandler, CacheHandlerRegistry, MemoryCacheHandler, MemoryConfig,
+        cache::{
+            handler::{
+                CacheError, CacheHandler, CacheHandlerRegistry, MemoryCacheHandler, MemoryConfig,
+            },
+            response::RouteCachePolicy,
         },
         config::{CacheLayerConfig, Config},
         middleware::request_context::RequestContext,
@@ -37,6 +40,22 @@ use crate::{
 };
 
 const LAYOUT_KEY_PREFIX: &str = "layout:";
+
+fn should_use_layout_html_cache(
+    context: &LayoutRenderContext,
+    request_context: Option<&RequestContext>,
+) -> bool {
+    if request_context.is_some_and(|ctx| ctx.skip_layout_html_cache) {
+        return false;
+    }
+
+    let Some(config) = Config::get() else {
+        return true;
+    };
+
+    let cache_control = config.get_cache_control_for_route(&context.pathname);
+    RouteCachePolicy::from_cache_control(cache_control, &context.pathname).enabled
+}
 const JS_GET_RESULT: &str = r"
 globalThis['~rsc'].renderResult
 ";
@@ -145,7 +164,18 @@ impl LayoutHtmlCache {
     }
 
     pub async fn insert(&self, key: u64, html: String) -> Result<(), CacheError> {
-        self.handler.set(&Self::namespaced(key), html.into_bytes(), self.default_ttl_secs).await?;
+        self.insert_with_tags(key, html, &[]).await
+    }
+
+    pub async fn insert_with_tags(
+        &self,
+        key: u64,
+        html: String,
+        tags: &[String],
+    ) -> Result<(), CacheError> {
+        self.handler
+            .set_with_tags(&Self::namespaced(key), html.into_bytes(), self.default_ttl_secs, tags)
+            .await?;
         Ok(())
     }
 
@@ -369,8 +399,13 @@ impl LayoutRenderer {
         return_rsc_on_fallback: bool,
     ) -> Result<RenderResult, RariError> {
         let cache_key = utils::generate_cache_key(route_match, context);
+        let layout_cache_enabled =
+            should_use_layout_html_cache(context, request_context.as_deref());
 
-        if !return_rsc_on_fallback && let Some(cached_html) = self.html_cache.get(cache_key).await {
+        if layout_cache_enabled
+            && !return_rsc_on_fallback
+            && let Some(cached_html) = self.html_cache.get(cache_key).await
+        {
             return Ok(RenderResult::Static(cached_html));
         }
 
@@ -696,8 +731,23 @@ impl LayoutRenderer {
                 }
             };
 
-            if route_match.not_found.is_none() {
-                let _ = self.html_cache.insert(cache_key, html.clone()).await;
+            if layout_cache_enabled && route_match.not_found.is_none() {
+                let renderer = self.renderer.lock().await;
+                let is_dynamic_render = renderer.runtime.is_dynamic_render().await.unwrap_or(false);
+
+                if !is_dynamic_render {
+                    let page_cache_tags =
+                        renderer.runtime.collect_page_cache_tags().await.unwrap_or_default();
+                    let mut layout_cache_tags = page_cache_tags;
+                    let route_path = route_match.route.path.clone();
+                    if !layout_cache_tags.iter().any(|tag| tag == &route_path) {
+                        layout_cache_tags.push(route_path);
+                    }
+                    let _ = self
+                        .html_cache
+                        .insert_with_tags(cache_key, html.clone(), &layout_cache_tags)
+                        .await;
+                }
             }
 
             Ok(RenderResult::Static(html))
@@ -1045,6 +1095,19 @@ mod tests {
         let cache = LayoutHtmlCache::with_ttl(handler, 60);
         cache.insert(7, "alive".to_string()).await.expect("insert");
         assert!(cache.get(7).await.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_layout_invalidate_by_tag() {
+        let cache = LayoutHtmlCache::new();
+        cache
+            .insert_with_tags(42, "tagged".to_string(), &["products".to_string()])
+            .await
+            .expect("insert");
+        assert!(cache.get(42).await.is_some());
+
+        cache.invalidate_by_tag("products").await.expect("invalidate");
+        assert!(cache.get(42).await.is_none());
     }
 
     #[tokio::test]

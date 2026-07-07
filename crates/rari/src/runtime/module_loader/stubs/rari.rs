@@ -33,6 +33,23 @@ export async function cookies() {
 export default { cookies };
 ";
 
+pub const RARI_CACHE_STUB: &str = r"
+export function cacheLife() {}
+export function cacheTag() {}
+export async function connection() {}
+export async function revalidateTag() {}
+export async function revalidatePath() {}
+export async function updateTag() {}
+export default {
+  cacheLife,
+  cacheTag,
+  connection,
+  revalidateTag,
+  revalidatePath,
+  updateTag,
+};
+";
+
 pub const RARI_IMAGE_STUB: &str = r"
 export function Image(props) {
   const { src, alt, width, height, className, style, ...rest } = props || {};

@@ -15,6 +15,15 @@ export interface ReadonlyCookie {
   value: string
 }
 
+export interface ReadonlyHeaders {
+  get: (name: string) => string | null
+  has: (name: string) => boolean
+  entries: () => IterableIterator<[string, string]>
+  forEach: (callback: (value: string, key: string) => void) => void
+  keys: () => IterableIterator<string>
+  values: () => IterableIterator<string>
+}
+
 export interface CookieStore {
   get: (name: string) => ReadonlyCookie | undefined
   getAll: (name?: string) => ReadonlyCookie[]
@@ -53,6 +62,7 @@ export interface GlobalWithRari {
     serverComponents?: Set<string>
     routeInfoCache?: Map<string, any>
     cookies?: () => CookieStore
+    headers?: () => ReadonlyHeaders
   }
   '~clientComponents': Record<string, ComponentInfo>
   '~clientComponentPaths': Record<string, string>

@@ -16,6 +16,8 @@ extension!(
         "react/component_loader.ts",
         "react/vendor_loaders.ts",
         "http/cookies.ts",
+        "http/headers.ts",
+        "cache/use_cache.ts",
         "react/metadata_collector.ts",
         "rsc/rsc_modules.ts",
         "rsc/server_functions.ts"

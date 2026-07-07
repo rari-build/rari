@@ -175,6 +175,15 @@ impl RouteCachePolicy {
         Self { ttl, enabled, tags }
     }
 
+    pub fn merge_cache_tags(mut base: Vec<String>, extra: &[String]) -> Vec<String> {
+        for tag in extra {
+            if !base.iter().any(|existing| existing == tag) {
+                base.push(tag.clone());
+            }
+        }
+        base
+    }
+
     pub fn from_cache_control(cache_control: &str, route_path: &str) -> Self {
         let mut policy = Self::default();
         policy.tags.push(route_path.to_string());

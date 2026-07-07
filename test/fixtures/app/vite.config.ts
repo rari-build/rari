@@ -6,6 +6,12 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [
     rari({
+      cacheControl: {
+        routes: {
+          '/headers-test': 'no-store',
+          '/use-cache-revalidate': 'no-store',
+        },
+      },
       experimental: {
         useCache: true,
         useCacheRemote: {

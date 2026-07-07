@@ -1,5 +1,5 @@
 use deno_ast::swc::{
-    ast::{BlockStmt, Expr, ExprStmt, Lit, Stmt, Str},
+    ast::{BlockStmt, Expr, ExprStmt, Lit, ModuleItem, Stmt, Str},
     ecma_visit::Visit,
 };
 
@@ -66,6 +66,43 @@ pub fn extract_cache_kind(body: &BlockStmt) -> Option<String> {
         }
     }
     None
+}
+
+fn cache_kind_from_directive_value(value: &str) -> Option<String> {
+    if value == "use cache" {
+        return Some("default".to_string());
+    }
+    value.strip_prefix("use cache: ").map(str::to_string)
+}
+
+fn cache_kind_from_string_literal(expr: &Expr) -> Option<String> {
+    if let Expr::Lit(Lit::Str(Str { value, .. })) = expr {
+        return cache_kind_from_directive_value(&value.to_string_lossy());
+    }
+    None
+}
+
+pub fn extract_file_level_cache_kind(items: &[ModuleItem]) -> Option<String> {
+    for item in items {
+        match item {
+            ModuleItem::Stmt(Stmt::Expr(ExprStmt { expr, .. })) => {
+                if let Some(kind) = cache_kind_from_string_literal(expr) {
+                    return Some(kind);
+                }
+                return None;
+            }
+            ModuleItem::Stmt(Stmt::Empty(..)) => {}
+            _ => return None,
+        }
+    }
+    None
+}
+
+pub fn is_file_level_cache_directive_item(item: &ModuleItem) -> bool {
+    matches!(
+        item,
+        ModuleItem::Stmt(Stmt::Expr(ExprStmt { expr, .. })) if cache_kind_from_string_literal(expr).is_some()
+    )
 }
 
 pub fn detect_use_cache(source: &str) -> bool {

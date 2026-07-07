@@ -19,7 +19,7 @@ use crate::{
     server::{
         ServerState,
         config::RedirectConfig,
-        core::utils::http::is_origin_allowed,
+        core::utils::http::{extract_headers, is_origin_allowed},
         middleware::request_context::{PendingCookie, PendingCookieKey, RequestContext},
     },
     utils::cast,
@@ -337,11 +337,10 @@ pub async fn handle_server_action(
         }
     };
 
-    let cookie_header =
-        headers.get(header::COOKIE).and_then(|v| v.to_str().ok()).map(ToString::to_string);
-
-    let request_context =
-        Arc::new(RequestContext::new("/_rari/action".to_string()).with_cookies(cookie_header));
+    let request_context = Arc::new(
+        RequestContext::new("/_rari/action".to_string())
+            .with_http_headers(extract_headers(&headers)),
+    );
 
     let runtime = {
         let renderer = state.renderer.lock().await;
@@ -454,11 +453,10 @@ pub async fn handle_form_action(
         }
     };
 
-    let cookie_header =
-        headers.get(header::COOKIE).and_then(|v| v.to_str().ok()).map(ToString::to_string);
-
-    let request_context =
-        Arc::new(RequestContext::new("/_rari/action".to_string()).with_cookies(cookie_header));
+    let request_context = Arc::new(
+        RequestContext::new("/_rari/action".to_string())
+            .with_http_headers(extract_headers(&headers)),
+    );
 
     let runtime = {
         let renderer = state.renderer.lock().await;

@@ -34,6 +34,11 @@
       "types": "./dist/runtime/cache-wrapper.d.mts",
       "import": "./dist/runtime/cache-wrapper.mjs",
       "default": "./dist/runtime/cache-wrapper.mjs"
+    },
+    "./runtime/cache-dynamic-context": {
+      "types": "./dist/runtime/cache-dynamic-context.d.mts",
+      "import": "./dist/runtime/cache-dynamic-context.mjs",
+      "default": "./dist/runtime/cache-dynamic-context.mjs"
     }
   },
   "main": "./dist/index.mjs",
@@ -53,6 +58,9 @@
     "lint": "vp lint",
     "lint:fix": "vp lint --fix",
     "typecheck": "tsgo"
+  },
+  "peerDependencies": {
+    "react-server-dom-webpack": "catalog:react"
   },
   "dependencies": {
     "quick-lru": "catalog:runtime"
