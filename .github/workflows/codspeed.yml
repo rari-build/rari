@@ -17,16 +17,58 @@ concurrency:
   cancel-in-progress: ${{ github.event_name != 'push' }}
 
 jobs:
-  benchmarks:
-    name: Run benchmarks
+  changes:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write # for OpenID Connect authentication with CodSpeed
+      pull-requests: read
+    outputs:
+      benchmarks: ${{ steps.filter.outputs.benchmarks }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
+
+      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
+        id: filter
+        with:
+          filters: |
+            benchmarks:
+              - '.github/workflows/codspeed.yml'
+              - 'crates/rari/benches/**'
+              - 'crates/rari/Cargo.toml'
+              - 'crates/rari/src/**'
+              - 'crates/rari_use_cache/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+
+  benchmarks:
+    name: Run benchmarks
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.benchmarks == 'true'
+    runs-on: namespace-profile-rari-linux-amd64
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write # for OpenID Connect authentication with CodSpeed
+    env:
+      # Keep bench artifacts separate from CI's shared Namespace rust cache.
+      CARGO_TARGET_DIR: target/codspeed
+    steps:
+      - uses: namespacelabs/nscloud-checkout-action@445c25d7009680597d73eb03c4e1cd5be522ed73 # v9.0.0
+
+      - uses: ./.github/actions/setup-namespace-cache
+        with:
+          cache: |
+            apt
+            pnpm
+
+      - name: Configure CodSpeed Rust cache
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          shared-key: codspeed
+          cache-targets: true
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
@@ -37,6 +79,8 @@ jobs:
 
       - name: Bundle React ESM vendor files
         uses: ./.github/actions/bundle-react-esm
+        with:
+          setup-toolchain: 'false'
 
       - name: Create snapshot placeholder
         run: just ci-create-snapshot-placeholder
