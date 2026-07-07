@@ -173,7 +173,6 @@ impl JsExecutionRuntime {
             const tags = new Set(
                 globalThis['~rari']?.pageCacheTags ? [...globalThis['~rari'].pageCacheTags] : [],
             );
-            globalThis['~rari']?.pageCacheTags?.clear();
             const fromRegistry = globalThis.__rariGetActiveUseCacheTags?.() ?? [];
             for (const tag of fromRegistry)
                 tags.add(tag);
