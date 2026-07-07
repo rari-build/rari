@@ -87,7 +87,9 @@ async fn decompress_bytes(data: &Bytes, encoding: CompressionEncoding) -> Result
 async fn merge_response_cache_tags(state: &ServerState, base_tags: Vec<String>) -> Vec<String> {
     let page_cache_tags = {
         let renderer = state.renderer.lock().await;
-        renderer.runtime.collect_page_cache_tags().await.unwrap_or_default()
+        let runtime = Arc::clone(&renderer.runtime);
+        drop(renderer);
+        runtime.collect_page_cache_tags().await.unwrap_or_default()
     };
     response::RouteCachePolicy::merge_cache_tags(base_tags, &page_cache_tags)
 }
