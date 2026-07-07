@@ -291,11 +291,23 @@ async function writeImageConfig(projectRoot: string, options: RariOptions): Prom
   const { getBinaryPath } = await import('../cli/platform')
   const binaryPath = getBinaryPath()
 
+  const scanImagesTimeoutMs = 60_000
   const result = spawnSync(binaryPath, ['scan-images', '--src', srcDir], {
     encoding: 'utf8',
     cwd: projectRoot,
     shell: false,
+    timeout: scanImagesTimeoutMs,
   })
+
+  if (result.error) {
+    throw new Error(`Failed to scan for image usage: ${result.error.message}`)
+  }
+
+  if (result.signal) {
+    throw new Error(
+      `Failed to scan for image usage: process terminated by signal ${result.signal}`,
+    )
+  }
 
   if (result.status !== 0) {
     throw new Error(
