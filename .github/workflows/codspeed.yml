@@ -55,6 +55,8 @@ jobs:
     env:
       # Keep bench artifacts separate from CI's shared Namespace rust cache.
       CARGO_TARGET_DIR: target/codspeed
+      # Fat LTO on the full rari crate exceeds runner memory when multiple targets link in parallel.
+      CARGO_BUILD_JOBS: 1
     steps:
       - uses: namespacelabs/nscloud-checkout-action@445c25d7009680597d73eb03c4e1cd5be522ed73 # v9.0.0
 
@@ -89,10 +91,14 @@ jobs:
         run: cargo install cargo-codspeed --locked
 
       - name: Build the benchmarks
-        run: cargo codspeed build -p rari_use_cache -p rari --features rari/bench
+        run: |
+          cargo codspeed build -p rari_use_cache --benches
+          cargo codspeed build -p rari --features rari/bench --benches --bench hot_paths
 
       - name: Run the benchmarks
         uses: CodSpeedHQ/action@a4a36bb07c0638b0b4ca52bf1f3dad1b4289e52f # v4.18.1
         with:
           mode: simulation
-          run: cargo codspeed run -p rari_use_cache -p rari --features rari/bench
+          run: |
+            cargo codspeed run -p rari_use_cache --benches --bench transform
+            cargo codspeed run -p rari --features rari/bench --benches --bench hot_paths
