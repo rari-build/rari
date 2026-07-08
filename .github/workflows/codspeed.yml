@@ -46,7 +46,7 @@ jobs:
   benchmarks:
     name: Run benchmarks
     needs: changes
-    if: github.event_name != 'pull_request' || needs.changes.outputs.benchmarks == 'true'
+    if: always() && (github.event_name != 'pull_request' || needs.changes.outputs.benchmarks == 'true')
     runs-on: namespace-profile-rari-linux-amd64
     timeout-minutes: 45
     permissions:
@@ -92,13 +92,13 @@ jobs:
 
       - name: Build the benchmarks
         run: |
-          cargo codspeed build -p rari_use_cache --benches
-          cargo codspeed build -p rari --features rari/bench --benches --bench hot_paths
+          cargo codspeed build -p rari_use_cache --bench transform
+          cargo codspeed build -p rari --features rari/bench --bench hot_paths
 
       - name: Run the benchmarks
         uses: CodSpeedHQ/action@a4a36bb07c0638b0b4ca52bf1f3dad1b4289e52f # v4.18.1
         with:
           mode: simulation
           run: |
-            cargo codspeed run -p rari_use_cache --benches --bench transform
-            cargo codspeed run -p rari --features rari/bench --benches --bench hot_paths
+            cargo codspeed run -p rari_use_cache --bench transform
+            cargo codspeed run -p rari --features rari/bench --bench hot_paths
