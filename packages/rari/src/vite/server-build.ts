@@ -37,6 +37,14 @@ const RSC_REFERENCES_IMPORT = 'react-server-dom-rari/server'
 const NODE_PROTOCOL_REGEX = /^node:/
 export const RARI_CSS_MODULES_PATTERN = '[hash]_[local]'
 
+const EXTERNAL_CLIENT_COMPONENT_MANIFESTS: Array<{
+  componentId: string
+  sourceSegments: string[]
+  exports: string[]
+}> = [
+  { componentId: 'rari/image', sourceSegments: ['src', 'image', 'Image.tsx'], exports: ['Image'] },
+]
+
 const RARI_DIST_DIR = path.dirname(fileURLToPath(import.meta.url))
 const RARI_PACKAGE_ROOT = path.dirname(RARI_DIST_DIR)
 function isRariInternalPath(filePath: string): boolean {
@@ -1346,8 +1354,9 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     catch {}
 
     if (clientFiles.length === 0) {
-      const manifestPath = path.join(ssrOutDir, 'manifest.json')
-      await fs.promises.writeFile(manifestPath, '{}', 'utf-8')
+      const manifest: Record<string, { id: string, filePath: string, bundlePath: string, exports: string[] }> = {}
+      await this.buildExternalClientComponents(manifest, new Map())
+      await this.writeClientReferenceManifest(ssrOutDir, manifest)
       return
     }
 
@@ -1411,7 +1420,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
       next()
     })
 
-    const manifestPath = path.join(ssrOutDir, 'manifest.json')
+    await this.buildExternalClientComponents(manifest, clientModuleSpecifiers)
 
     const ebEntry = Object.entries(manifest).find(([_, v]) =>
       v.filePath?.includes('ErrorBoundaryWrapper'),
@@ -1426,6 +1435,15 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
       }
     }
 
+    await this.writeClientReferenceManifest(ssrOutDir, manifest, ebEntry)
+  }
+
+  private async writeClientReferenceManifest(
+    ssrOutDir: string,
+    manifest: Record<string, { id: string, filePath: string, bundlePath: string, exports: string[] }>,
+    ebEntry?: [string, { id: string, filePath: string, bundlePath: string, exports: string[] }],
+  ): Promise<void> {
+    const manifestPath = path.join(ssrOutDir, 'manifest.json')
     await fs.promises.writeFile(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8')
 
     const clientReferenceManifest: Record<string, { id: string, chunks: string, name: string }> = {}
@@ -1453,6 +1471,38 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     await fs.promises.mkdir(serverOutDir, { recursive: true })
     const clientRefManifestPath = path.join(serverOutDir, 'client-reference-manifest.json')
     await fs.promises.writeFile(clientRefManifestPath, JSON.stringify(clientReferenceManifest, null, 2), 'utf-8')
+  }
+
+  private async buildExternalClientComponents(
+    manifest: Record<string, { id: string, filePath: string, bundlePath: string, exports: string[] }>,
+    clientModuleSpecifiers: Map<string, string>,
+  ): Promise<void> {
+    for (const { componentId, sourceSegments, exports } of EXTERNAL_CLIENT_COMPONENT_MANIFESTS) {
+      const sourcePath = path.join(RARI_PACKAGE_ROOT, ...sourceSegments)
+      if (!fs.existsSync(sourcePath))
+        continue
+
+      try {
+        const bundleName = `external_${sharedHashString(componentId)}`
+        const bundlePath = `ssr/${bundleName}.js`
+        const fullBundlePath = path.join(this.options.outDir, bundlePath)
+        await fs.promises.mkdir(path.dirname(fullBundlePath), { recursive: true })
+        await this.buildSSRSingleClient(sourcePath, fullBundlePath, clientModuleSpecifiers)
+
+        manifest[componentId] = {
+          id: componentId,
+          filePath: sourcePath,
+          bundlePath,
+          exports: [...exports],
+        }
+      }
+      catch (error) {
+        console.warn(
+          `[rari] SSR build failed for ${componentId}:`,
+          error instanceof Error ? error.message : error,
+        )
+      }
+    }
   }
 
   private extractExportNames(code: string): string[] {
@@ -1671,7 +1721,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     const replacements: Array<{ original: string, replacement: string }> = []
     let hasClientComponents = false
 
-    const externalClientComponents = ['rari/image']
+    const externalClientComponents = EXTERNAL_CLIENT_COMPONENT_MANIFESTS.map(entry => entry.componentId)
 
     CLIENT_IMPORT_REGEX.lastIndex = 0
     while (true) {
