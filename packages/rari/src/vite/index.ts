@@ -344,7 +344,7 @@ async function writeImageConfig(projectRoot: string, options: RariOptions): Prom
     fs.mkdirSync(serverDir, { recursive: true })
 
   const configPath = path.join(serverDir, 'image.json')
-  fs.writeFileSync(configPath, JSON.stringify(imageConfig, null, 2))
+  fs.writeFileSync(configPath, JSON.stringify(imageConfig))
 }
 
 export function defineRariOptions(config: RariOptions): RariOptions {

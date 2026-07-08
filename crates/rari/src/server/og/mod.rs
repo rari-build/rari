@@ -19,7 +19,7 @@ use axum::{
 pub use cache::OgImageCache;
 pub use generator::OgImageGenerator;
 use rari_error::RariError;
-pub use types::{OgImageParams, OgImageResult};
+pub use types::{OgImageEntry, OgImageParams, OgImageResult};
 
 use crate::server::ServerState;
 

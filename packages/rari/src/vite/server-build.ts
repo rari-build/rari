@@ -365,7 +365,7 @@ export class ServerComponentBuilder {
       }
     }
 
-    await fs.promises.writeFile(routesPath, JSON.stringify(routeManifest, null, 2), 'utf-8')
+    await fs.promises.writeFile(routesPath, JSON.stringify(routeManifest), 'utf-8')
   }
 
   constructor(projectRoot: string, options: ServerBuildOptions = {}) {
@@ -1289,7 +1289,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     )
     await fs.promises.writeFile(
       manifestPath,
-      JSON.stringify(manifest, null, 2),
+      JSON.stringify(manifest),
       'utf-8',
     )
     await this.writeRouteCssEntries(manifest)
@@ -1333,7 +1333,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     else {
       await fs.promises.writeFile(
         serverConfigPath,
-        JSON.stringify(serverConfig, null, 2),
+        JSON.stringify(serverConfig),
         'utf-8',
       )
     }
@@ -1371,7 +1371,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
 
     await fs.promises.writeFile(
       manifestPath,
-      JSON.stringify(manifest, null, 2),
+      JSON.stringify(manifest),
       'utf-8',
     )
   }
@@ -1479,7 +1479,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     manifest: Record<string, { id: string, filePath: string, bundlePath: string, exports: string[] }>,
   ): Promise<void> {
     const manifestPath = path.join(ssrOutDir, 'manifest.json')
-    await fs.promises.writeFile(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8')
+    await fs.promises.writeFile(manifestPath, JSON.stringify(manifest), 'utf-8')
 
     const clientReferenceManifest: Record<string, { id: string, chunks: string, name: string }> = {}
     for (const [componentId, entry] of Object.entries(manifest)) {
@@ -1496,7 +1496,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     const serverOutDir = path.join(this.options.outDir, 'server')
     await fs.promises.mkdir(serverOutDir, { recursive: true })
     const clientRefManifestPath = path.join(serverOutDir, 'client-reference-manifest.json')
-    await fs.promises.writeFile(clientRefManifestPath, JSON.stringify(clientReferenceManifest, null, 2), 'utf-8')
+    await fs.promises.writeFile(clientRefManifestPath, JSON.stringify(clientReferenceManifest), 'utf-8')
   }
 
   private resolveExternalClientSourcePath(
@@ -2015,7 +2015,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
 
     await fs.promises.writeFile(
       manifestPath,
-      JSON.stringify(manifest, null, 2),
+      JSON.stringify(manifest),
       'utf-8',
     )
     await this.writeRouteCssEntries(manifest)

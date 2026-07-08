@@ -53,6 +53,7 @@ use crate::{
         },
         og::{OgImageCache, OgImageGenerator, og_image_handler, og_image_handler_root},
         routing::{
+            RoutesManifest,
             api::{api_cors_preflight, handle_api_route},
             api_routes,
             app::handle_app_route,
@@ -93,6 +94,8 @@ impl Predicate for NotStreamingResponse {
     }
 }
 
+const ROUTES_MANIFEST_PATH: &str = "dist/server/routes.json";
+
 pub struct Server {
     router: Router,
     config: Config,
@@ -117,8 +120,16 @@ impl Server {
             RscRenderer::with_resource_limits(Arc::clone(&js_runtime), resource_limits);
         renderer.initialize().await?;
 
+        let server_manifest = if config.is_production() {
+            ComponentLoader::load_server_manifest_file().await?
+        } else {
+            None
+        };
+
         if config.is_production() {
-            ComponentLoader::load_production_components(&mut renderer).await?;
+            if let Some(ref manifest) = server_manifest {
+                ComponentLoader::load_production_components(&mut renderer, manifest).await?;
+            }
         } else {
             ComponentLoader::load_app_router_components(&mut renderer).await?;
             ComponentLoader::load_server_actions_from_source(&mut renderer).await?;
@@ -127,34 +138,26 @@ impl Server {
         ComponentLoader::load_ssr_client_components(&renderer.runtime).await?;
         ComponentLoader::load_client_reference_manifest(&renderer.runtime).await?;
 
-        let app_router = {
-            let manifest_path = "dist/server/routes.json";
+        let routes_manifest = RoutesManifest::load_from_file(ROUTES_MANIFEST_PATH).await;
 
-            match app_router::AppRouter::from_file(manifest_path).await {
-                Ok(router) => Some(Arc::new(router)),
-                Err(e) => {
-                    tracing::error!(
-                        "Failed to load app router from {}: {}. All routes will return 404.",
-                        manifest_path,
-                        e
-                    );
-                    None
-                }
+        let app_router = match &routes_manifest {
+            Ok(manifest) => Some(Arc::new(app_router::AppRouter::new(manifest.app.clone()))),
+            Err(e) => {
+                tracing::error!(
+                    "Failed to load app router from {}: {}. All routes will return 404.",
+                    ROUTES_MANIFEST_PATH,
+                    e
+                );
+                None
             }
         };
 
-        let api_route_handler = {
-            let manifest_path = "dist/server/routes.json";
-
-            match api_routes::ApiRouteHandler::from_file(
+        let api_route_handler = match &routes_manifest {
+            Ok(manifest) => Some(Arc::new(api_routes::ApiRouteHandler::new(
                 Arc::clone(&renderer.runtime),
-                manifest_path,
-            )
-            .await
-            {
-                Ok(handler) => Some(Arc::new(handler)),
-                Err(_) => None,
-            }
+                manifest.api_manifest(),
+            ))),
+            Err(_) => None,
         };
 
         let ssr_renderer = {
@@ -190,9 +193,12 @@ impl Server {
                 og_cache,
             ));
 
-            let manifest_path = "dist/server/routes.json";
-            if let Err(e) = generator.load_manifest(manifest_path).await {
-                tracing::error!("Failed to load OG image manifest: {}", e);
+            if let Ok(manifest) = &routes_manifest {
+                if let Err(e) =
+                    generator.load_og_entries(&manifest.og_images, server_manifest.as_ref()).await
+                {
+                    tracing::error!("Failed to load OG image manifest: {}", e);
+                }
             }
 
             Some(generator)

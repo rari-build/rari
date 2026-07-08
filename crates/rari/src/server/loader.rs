@@ -20,20 +20,28 @@ use crate::{
 };
 
 const DIST_DIR: &str = "dist";
+pub const SERVER_MANIFEST_PATH: &str = "dist/server/manifest.json";
 
 #[non_exhaustive]
 pub struct ComponentLoader;
 
 impl ComponentLoader {
-    pub async fn load_production_components(renderer: &mut RscRenderer) -> Result<(), RariError> {
-        let manifest_path = Path::new(DIST_DIR).join("server").join("manifest.json");
-        if !fs::try_exists(&manifest_path).await.unwrap_or(false) {
-            return Ok(());
+    #[expect(clippy::missing_errors_doc)]
+    pub async fn load_server_manifest_file() -> Result<Option<Value>, RariError> {
+        let manifest_path = Path::new(SERVER_MANIFEST_PATH);
+        if !fs::try_exists(manifest_path).await.unwrap_or(false) {
+            return Ok(None);
         }
 
-        let manifest = Self::read_manifest(&manifest_path).await?;
-        Self::init_use_cache_build_id(renderer, &manifest).await?;
-        let components = Self::parse_manifest_components(&manifest)?;
+        Self::read_manifest(manifest_path).await.map(Some)
+    }
+
+    pub async fn load_production_components(
+        renderer: &mut RscRenderer,
+        manifest: &Value,
+    ) -> Result<(), RariError> {
+        Self::init_use_cache_build_id(renderer, manifest).await?;
+        let components = Self::parse_manifest_components(manifest)?;
 
         let mut sorted_components: Vec<_> = components.iter().collect();
         sorted_components.sort_by_key(|(id, _)| i32::from(!id.starts_with("components/")));
@@ -1091,18 +1099,12 @@ impl ComponentLoader {
             .await
             .map_err(|e| RariError::io(format!("Failed to read client reference manifest: {e}")))?;
 
-        let manifest: Value = serde_json::from_str(&manifest_content).map_err(|e| {
-            RariError::internal(format!("Failed to parse client reference manifest: {e}"))
-        })?;
-
-        let manifest_json = serde_json::to_string(&manifest).unwrap_or_else(|_| "{}".to_string());
-
         let init_script = format!(
             r"(function() {{
                 if (!globalThis['~rari']) {{
                     globalThis['~rari'] = {{}};
                 }}
-                globalThis['~rari'].clientReferenceManifest = {manifest_json};
+                globalThis['~rari'].clientReferenceManifest = {manifest_content};
             }})()"
         );
 
