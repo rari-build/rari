@@ -414,6 +414,9 @@ fn extract_image_usages(
     match transpiled {
         Ok((transformed_code, _)) => {
             process_create_element_aliases(&transformed_code, &aliases, images, alias_cache);
+            if transformed_code.as_str() == content {
+                process_jsx_aliases(content, &aliases, images, alias_cache);
+            }
         }
         Err(_) => process_jsx_aliases(content, &aliases, images, alias_cache),
     }
@@ -589,6 +592,31 @@ mod tests {
         fs::create_dir_all(&dir).expect("create dir");
         let manifest = scan_for_image_usage(&dir, &[]).expect("scan");
         assert!(manifest.images.is_empty());
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn scans_default_import_jsx_in_js_files() {
+        let dir = test_dir("default-import-js");
+        fs::create_dir_all(&dir).expect("create dir");
+        write_source(
+            &dir,
+            "Component.js",
+            r#"
+import Image from 'rari/image'
+
+export default function MyComponent() {
+  return <Image src="/test.js.jpg" width={800} quality={90} preload />
+}
+"#,
+        );
+
+        let manifest = scan_for_image_usage(&dir, &[]).expect("scan");
+        assert_eq!(manifest.images.len(), 1);
+        assert_eq!(manifest.images[0].src, "/test.js.jpg");
+        assert_eq!(manifest.images[0].width, Some(800));
+        assert_eq!(manifest.images[0].quality, Some(90));
+        assert_eq!(manifest.images[0].preload, Some(true));
         cleanup(&dir);
     }
 
