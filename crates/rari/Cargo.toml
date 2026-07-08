@@ -163,7 +163,6 @@ hyper-util = { version = "0.1.20", features = [
 libc = "0.2.182"
 nix = { workspace = true, features = [ "term" ] }
 rustyline = { workspace = true }
-signal-hook = "0.4.4"
 sys_traits = { workspace = true }
 windows-sys = { workspace = true, features = [
   "Win32_Foundation",
@@ -192,6 +191,9 @@ regex = { workspace = true }
 rustc-hash = { workspace = true }
 smallvec = { workspace = true }
 uuid = { workspace = true }
+
+[target.'cfg(unix)'.dependencies]
+signal-hook = { version = "0.4.4", features = [ "iterator" ] }
 
 [lints]
 workspace = true

@@ -311,38 +311,69 @@ fn validate_configuration(config: &Config) -> Result<(), RariError> {
 }
 
 async fn setup_shutdown_signal() {
-    use std::thread;
+    #[cfg(unix)]
+    {
+        setup_shutdown_signal_unix().await;
+    }
 
-    use tokio::sync::oneshot;
+    #[cfg(windows)]
+    {
+        let _ = tokio::signal::ctrl_c().await;
+    }
+}
 
-    let (tx, rx) = oneshot::channel();
+#[cfg(unix)]
+async fn setup_shutdown_signal_unix() {
+    use signal_hook::{
+        consts::{SIGINT, SIGTERM},
+        iterator::Signals,
+    };
+    use tokio::task;
 
-    thread::spawn(move || {
-        #[cfg(unix)]
-        {
-            use signal_hook::{
-                consts::{SIGINT, SIGTERM},
-                iterator::Signals,
-            };
+    let received = task::spawn_blocking(move || {
+        let mut signals = Signals::new([SIGTERM, SIGINT]).ok()?;
+        signals.forever().next();
+        Some(())
+    })
+    .await;
 
-            if let Ok(mut signals) = Signals::new([SIGTERM, SIGINT]) {
-                if signals.forever().next().is_some() {
-                    let _ = tx.send(());
-                }
-            }
+    let use_fallback = match received {
+        Ok(Some(())) => false,
+        Ok(None) | Err(_) => true,
+    };
+
+    if use_fallback {
+        tracing::error!("Failed to register Unix shutdown signal handler, falling back to tokio");
+        setup_shutdown_signal_tokio().await;
+    }
+}
+
+#[cfg(unix)]
+async fn setup_shutdown_signal_tokio() {
+    use tokio::signal::unix::{SignalKind, signal};
+
+    let mut sigterm = match signal(SignalKind::terminate()) {
+        Ok(sigterm) => sigterm,
+        Err(error) => {
+            use std::future;
+
+            tracing::error!("Failed to create SIGTERM handler: {error}");
+            future::pending::<()>().await;
+            return;
         }
+    };
 
-        #[cfg(windows)]
-        {
-            use signal_hook::{consts::SIGTERM, iterator::Signals};
-
-            if let Ok(mut signals) = Signals::new([SIGTERM]) {
-                if signals.forever().next().is_some() {
-                    let _ = tx.send(());
-                }
-            }
+    let mut sigint = match signal(SignalKind::interrupt()) {
+        Ok(sigint) => sigint,
+        Err(error) => {
+            tracing::error!("Failed to create SIGINT handler: {error}");
+            sigterm.recv().await;
+            return;
         }
-    });
+    };
 
-    let _ = rx.await;
+    tokio::select! {
+        _ = sigterm.recv() => {}
+        _ = sigint.recv() => {}
+    }
 }
