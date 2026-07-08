@@ -39,10 +39,16 @@ export const RARI_CSS_MODULES_PATTERN = '[hash]_[local]'
 
 const EXTERNAL_CLIENT_COMPONENT_MANIFESTS: Array<{
   componentId: string
-  sourceSegments: string[]
+  devSourceSegments: string[]
+  publishedExport: string
   exports: string[]
 }> = [
-  { componentId: 'rari/image', sourceSegments: ['src', 'image', 'Image.tsx'], exports: ['Image'] },
+  {
+    componentId: 'rari/image',
+    devSourceSegments: ['src', 'image', 'Image.tsx'],
+    publishedExport: 'rari/image',
+    exports: ['Image'],
+  },
 ]
 
 const RARI_DIST_DIR = path.dirname(fileURLToPath(import.meta.url))
@@ -1473,13 +1479,31 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     await fs.promises.writeFile(clientRefManifestPath, JSON.stringify(clientReferenceManifest, null, 2), 'utf-8')
   }
 
+  private resolveExternalClientSourcePath(
+    devSourceSegments: string[],
+    publishedExport: string,
+  ): string | null {
+    const devPath = path.join(RARI_PACKAGE_ROOT, ...devSourceSegments)
+    if (fs.existsSync(devPath))
+      return devPath
+
+    try {
+      const publishedPath = fileURLToPath(import.meta.resolve(publishedExport))
+      if (fs.existsSync(publishedPath))
+        return publishedPath
+    }
+    catch {}
+
+    return null
+  }
+
   private async buildExternalClientComponents(
     manifest: Record<string, { id: string, filePath: string, bundlePath: string, exports: string[] }>,
     clientModuleSpecifiers: Map<string, string>,
   ): Promise<void> {
-    for (const { componentId, sourceSegments, exports } of EXTERNAL_CLIENT_COMPONENT_MANIFESTS) {
-      const sourcePath = path.join(RARI_PACKAGE_ROOT, ...sourceSegments)
-      if (!fs.existsSync(sourcePath))
+    for (const { componentId, devSourceSegments, publishedExport, exports } of EXTERNAL_CLIENT_COMPONENT_MANIFESTS) {
+      const sourcePath = this.resolveExternalClientSourcePath(devSourceSegments, publishedExport)
+      if (!sourcePath)
         continue
 
       try {

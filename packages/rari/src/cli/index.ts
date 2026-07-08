@@ -484,8 +484,12 @@ async function startRustServer(): Promise<void> {
       clearTimeout(forceKillTimer)
 
     if (signal) {
-      logInfo(`server stopped by signal ${signal}`)
-      process.exit(0)
+      if (shuttingDown) {
+        logInfo(`server stopped by signal ${signal}`)
+        process.exit(0)
+      }
+      logError(`server stopped unexpectedly by signal ${signal}`)
+      process.exit(1)
     }
     else if (code === 0) {
       logSuccess('server stopped successfully')
