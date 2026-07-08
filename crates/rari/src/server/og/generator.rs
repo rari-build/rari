@@ -19,7 +19,9 @@ use super::{
 };
 use crate::{
     runtime::JsExecutionRuntime,
-    server::{cache::handler::CacheError, routing::types::ParamValue},
+    server::{
+        cache::handler::CacheError, loader::SERVER_MANIFEST_PATH, routing::types::ParamValue,
+    },
     utils::{float, path::path_to_file_url},
 };
 
@@ -79,37 +81,72 @@ impl OgImageGenerator {
         let manifest_data: Value = serde_json::from_str(&content)
             .map_err(|e| OgImageError::InternalError(format!("Failed to parse manifest: {e}")))?;
 
-        let mut manifest = self.manifest.write().await;
-        manifest.clear();
+        let og_images: Vec<OgImageEntry> = manifest_data
+            .get("ogImages")
+            .and_then(|v| v.as_array())
+            .map(|entries| {
+                entries
+                    .iter()
+                    .filter_map(|entry| serde_json::from_value::<OgImageEntry>(entry.clone()).ok())
+                    .collect()
+            })
+            .unwrap_or_default();
 
-        if let Some(og_images) = manifest_data.get("ogImages").and_then(|v| v.as_array()) {
+        self.load_og_entries(&og_images, None).await
+    }
+
+    #[expect(clippy::missing_errors_doc)]
+    pub async fn load_og_entries(
+        &self,
+        og_images: &[OgImageEntry],
+        server_manifest: Option<&Value>,
+    ) -> Result<(), OgImageError> {
+        {
+            let mut manifest = self.manifest.write().await;
+            manifest.clear();
+
             for entry in og_images {
-                if let Ok(og_entry) = serde_json::from_value::<OgImageEntry>(entry.clone()) {
-                    if let Some(existing) = manifest.get(&og_entry.path) {
-                        tracing::warn!(
-                            "OG image path collision: '{}' is already used by '{}', overwriting with '{}'",
-                            og_entry.path,
-                            existing.file_path,
-                            og_entry.file_path
-                        );
-                    }
-                    manifest.insert(og_entry.path.clone(), og_entry);
+                if let Some(existing) = manifest.get(&entry.path) {
+                    tracing::warn!(
+                        "OG image path collision: '{}' is already used by '{}', overwriting with '{}'",
+                        entry.path,
+                        existing.file_path,
+                        entry.file_path
+                    );
                 }
+                manifest.insert(entry.path.clone(), entry.clone());
             }
         }
 
-        let server_manifest_path =
-            manifest_path.cow_replace("routes.json", "manifest.json").into_owned();
-        if let Ok(server_content) = fs::read_to_string(&server_manifest_path).await
-            && let Ok(server_data) = serde_json::from_str::<Value>(&server_content)
-            && let Some(components) = server_data.get("components").and_then(|v| v.as_object())
-        {
+        if let Some(manifest) = server_manifest {
+            self.apply_server_manifest(manifest).await
+        } else {
+            self.load_server_manifest_from_file(SERVER_MANIFEST_PATH).await
+        }
+    }
+
+    async fn apply_server_manifest(&self, server_data: &Value) -> Result<(), OgImageError> {
+        if let Some(components) = server_data.get("components").and_then(|v| v.as_object()) {
             let mut server_manifest = self.server_manifest.write().await;
+            server_manifest.clear();
             for (id, component) in components {
                 if let Some(bundle_path) = component.get("bundlePath").and_then(|v| v.as_str()) {
                     server_manifest.insert(id.clone(), bundle_path.to_string());
                 }
             }
+        }
+
+        Ok(())
+    }
+
+    async fn load_server_manifest_from_file(
+        &self,
+        manifest_path: &str,
+    ) -> Result<(), OgImageError> {
+        if let Ok(server_content) = fs::read_to_string(manifest_path).await
+            && let Ok(server_data) = serde_json::from_str::<Value>(&server_content)
+        {
+            self.apply_server_manifest(&server_data).await?;
         }
 
         Ok(())

@@ -46,6 +46,7 @@ pub enum JsxChild {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct OgImageEntry {
     pub path: String,
     #[serde(rename = "filePath")]

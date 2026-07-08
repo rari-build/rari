@@ -262,7 +262,7 @@ export function rariRouter(options: RariRouterPluginOptions = {}): RariPlugin {
         extensions: opts.extensions,
       })
 
-      const manifestContent = JSON.stringify(manifest, null, 2)
+      const manifestContent = JSON.stringify(manifest)
 
       const outDir = path.resolve(root, opts.outDir)
       await fs.mkdir(outDir, { recursive: true })
@@ -483,7 +483,7 @@ export function rariRouter(options: RariRouterPluginOptions = {}): RariPlugin {
         }
 
         if (updated)
-          await fs.writeFile(routesPath, JSON.stringify(manifest, null, 2), 'utf-8')
+          await fs.writeFile(routesPath, JSON.stringify(manifest), 'utf-8')
       }
       catch {}
     },
