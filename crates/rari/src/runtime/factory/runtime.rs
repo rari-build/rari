@@ -275,6 +275,10 @@ impl RariRuntime {
                         ).await;
                     }
 
+                    if !continue_processing {
+                        break;
+                    }
+
                     #[expect(clippy::print_stdout, reason = "Runtime restart notification for debugging")]
                     {
                         println!("[rari] Restarting JS runtime due to error or forced restart");

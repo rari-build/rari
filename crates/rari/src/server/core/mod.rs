@@ -3,6 +3,7 @@ pub mod utils;
 
 use std::{
     env,
+    future::{self, Future},
     net::SocketAddr,
     path::PathBuf,
     sync::{Arc, atomic::AtomicU64},
@@ -376,9 +377,18 @@ impl Server {
 
     #[expect(clippy::missing_errors_doc)]
     pub async fn start(self) -> Result<(), RariError> {
+        self.start_with_shutdown(future::pending()).await
+    }
+
+    #[expect(clippy::missing_errors_doc)]
+    pub async fn start_with_shutdown(
+        self,
+        shutdown: impl Future<Output = ()> + Send + 'static,
+    ) -> Result<(), RariError> {
         self.display_startup_message();
 
         axum::serve(self.listener, self.router.into_make_service_with_connect_info::<SocketAddr>())
+            .with_graceful_shutdown(shutdown)
             .await
             .map_err(|e| RariError::network(format!("Server error: {e}")))?;
 

@@ -443,15 +443,30 @@ async function startRustServer(): Promise<void> {
   const rustServer = spawn(binaryPath, args, {
     stdio: 'inherit',
     cwd: process.cwd(),
+    // Keep the Rust server out of the terminal's process group so Ctrl+C
+    // only reaches this Node process. Deno intercepts SIGINT and won't shut
+    // down cleanly, but it does handle SIGTERM.
+    detached: process.platform !== 'win32',
     env: {
       ...process.env,
       RUST_LOG: process.env.RUST_LOG || 'error',
     },
   })
 
+  let shuttingDown = false
+  let forceKillTimer: NodeJS.Timeout | undefined
+
   const shutdown = () => {
+    if (shuttingDown)
+      return
+    shuttingDown = true
     logInfo('shutting down...')
     rustServer.kill('SIGTERM')
+    forceKillTimer = setTimeout(() => {
+      rustServer.kill('SIGKILL')
+      process.exit(1)
+    }, 5000)
+    forceKillTimer.unref?.()
   }
 
   process.on('SIGINT', shutdown)
@@ -465,11 +480,16 @@ async function startRustServer(): Promise<void> {
   })
 
   rustServer.on('exit', (code: number | null, signal: string | null) => {
+    if (forceKillTimer)
+      clearTimeout(forceKillTimer)
+
     if (signal) {
       logInfo(`server stopped by signal ${signal}`)
+      process.exit(0)
     }
     else if (code === 0) {
       logSuccess('server stopped successfully')
+      process.exit(0)
     }
     else {
       logError(`server exited with code ${code}`)

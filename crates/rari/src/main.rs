@@ -12,7 +12,7 @@ use rari::server::{
 };
 use rari_error::RariError;
 use rustls::crypto::{CryptoProvider, aws_lc_rs};
-use tokio::{fs, signal};
+use tokio::fs;
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
@@ -43,20 +43,10 @@ async fn main() -> Result<(), Box<dyn error::Error + Send + Sync>> {
         e
     })?;
 
-    let shutdown_signal = setup_shutdown_signal();
-
-    tokio::select! {
-        result = server.start() => {
-            match result {
-                Ok(()) => {}
-                Err(e) => {
-                    tracing::error!("Server error: {}", e);
-                    return Err(e.into());
-                }
-            }
-        }
-        () = shutdown_signal => {}
-    }
+    server.start_with_shutdown(setup_shutdown_signal()).await.map_err(|e| {
+        tracing::error!("Server error: {}", e);
+        e
+    })?;
 
     Ok(())
 }
@@ -321,34 +311,38 @@ fn validate_configuration(config: &Config) -> Result<(), RariError> {
 }
 
 async fn setup_shutdown_signal() {
-    #[cfg(unix)]
-    {
-        use tokio::signal::unix::{SignalKind, signal};
+    use std::thread;
 
-        #[expect(
-            clippy::expect_used,
-            reason = "Signal handler initialization always succeeds on Unix"
-        )]
-        let mut sigterm =
-            signal(SignalKind::terminate()).expect("Failed to create SIGTERM handler");
+    use tokio::sync::oneshot;
 
-        #[expect(
-            clippy::expect_used,
-            reason = "Signal handler initialization always succeeds on Unix"
-        )]
-        let mut sigint = signal(SignalKind::interrupt()).expect("Failed to create SIGINT handler");
+    let (tx, rx) = oneshot::channel();
 
-        tokio::select! {
-            _ = sigterm.recv() => {}
-            _ = sigint.recv() => {}
-            _ = signal::ctrl_c() => {}
+    thread::spawn(move || {
+        #[cfg(unix)]
+        {
+            use signal_hook::{
+                consts::{SIGINT, SIGTERM},
+                iterator::Signals,
+            };
+
+            if let Ok(mut signals) = Signals::new([SIGTERM, SIGINT]) {
+                if signals.forever().next().is_some() {
+                    let _ = tx.send(());
+                }
+            }
         }
-    }
 
-    #[cfg(windows)]
-    {
-        tokio::select! {
-            _ = signal::ctrl_c() => {}
+        #[cfg(windows)]
+        {
+            use signal_hook::{consts::SIGTERM, iterator::Signals};
+
+            if let Ok(mut signals) = Signals::new([SIGTERM]) {
+                if signals.forever().next().is_some() {
+                    let _ = tx.send(());
+                }
+            }
         }
-    }
+    });
+
+    let _ = rx.await;
 }
