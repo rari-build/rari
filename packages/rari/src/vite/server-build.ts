@@ -57,6 +57,51 @@ function isRariInternalPath(filePath: string): boolean {
   return filePath.startsWith(RARI_PACKAGE_ROOT)
 }
 
+function aliasRootForPath(filePath: string, projectRoot: string): string {
+  if (isRariInternalPath(filePath))
+    return path.join(RARI_PACKAGE_ROOT, 'src')
+
+  return path.join(projectRoot, 'src')
+}
+
+function resolveErrorBoundarySourcePath(): string | null {
+  const devSource = path.join(RARI_PACKAGE_ROOT, 'src', 'runtime', 'ErrorBoundaryWrapper.tsx')
+  if (fs.existsSync(devSource))
+    return devSource
+
+  try {
+    const publishedPath = fileURLToPath(import.meta.resolve('rari/runtime/ErrorBoundaryWrapper'))
+    if (fs.existsSync(publishedPath))
+      return publishedPath
+  }
+  catch {}
+
+  return null
+}
+
+function ssrClientComponentId(filePath: string, projectRoot: string): string {
+  if (filePath.includes('ErrorBoundaryWrapper'))
+    return 'virtual:error-boundary-wrapper.tsx'
+
+  const relativePath = path.relative(projectRoot, filePath).replace(BACKSLASH_REGEX, '/')
+  if (relativePath.startsWith('..') || path.isAbsolute(relativePath))
+    return filePath.replace(BACKSLASH_REGEX, '/')
+
+  return relativePath
+}
+
+function ssrClientBundleName(filePath: string, projectRoot: string): string {
+  if (filePath.includes('ErrorBoundaryWrapper'))
+    return `error_boundary_wrapper_${sharedHashString('virtual:error-boundary-wrapper.tsx')}`
+
+  if (isRariInternalPath(filePath)) {
+    const relative = path.relative(RARI_PACKAGE_ROOT, filePath).replace(BACKSLASH_REGEX, '/')
+    return `${getReadableComponentId(relative)}_${sharedHashString(relative)}`
+  }
+
+  return getSharedComponentId(filePath, projectRoot)
+}
+
 let lightningcssTransform: typeof import('lightningcss').transform | null = null
 
 async function getLightningcssTransform() {
@@ -1350,9 +1395,8 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     }
 
     try {
-      const rariPkgDir = path.dirname(fileURLToPath(import.meta.resolve('rari/package.json')))
-      const errorBoundarySource = path.join(rariPkgDir, 'src', 'runtime', 'ErrorBoundaryWrapper.tsx')
-      if (fs.existsSync(errorBoundarySource)) {
+      const errorBoundarySource = resolveErrorBoundarySourcePath()
+      if (errorBoundarySource) {
         const code = fs.readFileSync(errorBoundarySource, 'utf-8')
         clientFiles.push({ filePath: errorBoundarySource, code })
       }
@@ -1368,7 +1412,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
 
     const clientModuleSpecifiers = new Map<string, string>()
     for (const { filePath } of clientFiles) {
-      const bundleName = this.getComponentId(filePath)
+      const bundleName = ssrClientBundleName(filePath, this.projectRoot)
       clientModuleSpecifiers.set(
         path.resolve(filePath),
         `file:///ssr/${bundleName}.js`,
@@ -1384,9 +1428,8 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
       const next = () => {
         while (active < concurrency && index < clientFiles.length) {
           const { filePath, code } = clientFiles[index++]
-          const relativePath = path.relative(this.projectRoot, filePath).replace(BACKSLASH_REGEX, '/')
-          const componentId = relativePath.startsWith('..') ? filePath.replace(BACKSLASH_REGEX, '/') : relativePath
-          const bundleName = this.getComponentId(filePath)
+          const componentId = ssrClientComponentId(filePath, this.projectRoot)
+          const bundleName = ssrClientBundleName(filePath, this.projectRoot)
           const bundlePath = `ssr/${bundleName}.js`
           const fullBundlePath = path.join(this.options.outDir, bundlePath)
 
@@ -1428,26 +1471,12 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
 
     await this.buildExternalClientComponents(manifest, clientModuleSpecifiers)
 
-    const ebEntry = Object.entries(manifest).find(([_, v]) =>
-      v.filePath?.includes('ErrorBoundaryWrapper'),
-    )
-    if (ebEntry) {
-      const [, ebInfo] = ebEntry
-      manifest['virtual:error-boundary-wrapper.tsx'] = {
-        id: 'virtual:error-boundary-wrapper.tsx',
-        filePath: 'virtual:error-boundary-wrapper.tsx',
-        bundlePath: ebInfo.bundlePath,
-        exports: ['ErrorBoundaryWrapper'],
-      }
-    }
-
-    await this.writeClientReferenceManifest(ssrOutDir, manifest, ebEntry)
+    await this.writeClientReferenceManifest(ssrOutDir, manifest)
   }
 
   private async writeClientReferenceManifest(
     ssrOutDir: string,
     manifest: Record<string, { id: string, filePath: string, bundlePath: string, exports: string[] }>,
-    ebEntry?: [string, { id: string, filePath: string, bundlePath: string, exports: string[] }],
   ): Promise<void> {
     const manifestPath = path.join(ssrOutDir, 'manifest.json')
     await fs.promises.writeFile(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8')
@@ -1461,15 +1490,6 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
           chunks: `/${entry.bundlePath}`,
           name: exportName,
         }
-      }
-    }
-
-    if (ebEntry) {
-      const [, ebInfo] = ebEntry
-      clientReferenceManifest['virtual:error-boundary-wrapper.tsx#ErrorBoundaryWrapper'] = {
-        id: 'virtual:error-boundary-wrapper.tsx#ErrorBoundaryWrapper',
-        chunks: `/${ebInfo.bundlePath}`,
-        name: 'ErrorBoundaryWrapper',
       }
     }
 
@@ -1562,6 +1582,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
 
     const virtualModuleId = `\0ssr-virtual:${inputPath}`
     const projectRoot = this.projectRoot
+    const aliasRoot = aliasRootForPath(inputPath, projectRoot)
 
     const result = await build({
       input: virtualModuleId,
@@ -1615,7 +1636,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
             if (id.startsWith('.') || id.startsWith('/') || id.startsWith('@/')) {
               let resolved = id
               if (id.startsWith('@/'))
-                resolved = path.join(projectRoot, 'src', id.slice(2))
+                resolved = path.join(aliasRoot, id.slice(2))
               else if (importer === virtualModuleId)
                 resolved = path.resolve(path.dirname(inputPath), id)
               else if (importer)
