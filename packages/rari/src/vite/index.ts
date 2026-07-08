@@ -315,7 +315,22 @@ async function writeImageConfig(projectRoot: string, options: RariOptions): Prom
     )
   }
 
-  const imageManifest = JSON.parse(result.stdout) as { images: Array<Record<string, unknown>> }
+  let imageManifest: { images: Array<Record<string, unknown>> }
+  try {
+    imageManifest = JSON.parse(result.stdout) as { images: Array<Record<string, unknown>> }
+  }
+  catch (error) {
+    const parseMessage = error instanceof SyntaxError
+      ? error.message
+      : error instanceof Error
+        ? error.message
+        : String(error)
+    const outputPreview = (result.stdout || result.stderr || '(empty)').slice(0, 500)
+    throw new Error(
+      `Failed to parse image scanner output as JSON: ${parseMessage}. Scanner output: ${outputPreview}`,
+      { cause: error },
+    )
+  }
 
   const imageConfig = {
     ...DEFAULT_IMAGE_CONFIG,
