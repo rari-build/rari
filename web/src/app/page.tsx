@@ -90,7 +90,7 @@ export default function HomePage() {
               {
                 id: 'typescript',
                 title: 'TypeScript First',
-                description: 'Full type safety across the server/client boundary, with tsgo for faster type checking during development',
+                description: 'Full type safety across the server/client boundary, with TypeScript 7 for faster type checking during development',
                 icon: 'typescript',
               },
               {

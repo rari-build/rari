@@ -57,7 +57,7 @@
     "clean": "node --eval \"import('node:fs').then(fs => fs.rmSync('dist', { recursive: true, force: true }))\"",
     "lint": "vp lint",
     "lint:fix": "vp lint --fix",
-    "typecheck": "tsgo"
+    "typecheck": "tsc"
   },
   "peerDependencies": {
     "react-server-dom-webpack": "catalog:react"
@@ -75,6 +75,8 @@
   },
   "devDependencies": {
     "@types/node": "catalog:typescript",
+    "typescript": "catalog:typescript",
+    "typescript-7": "catalog:typescript",
     "vite-plus": "catalog:build"
   }
 }

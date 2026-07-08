@@ -511,7 +511,7 @@ Note: Text truncation properties like `textOverflow`, `whiteSpace`, and webkit-s
 Generated images are automatically cached with the following strategy:
 
 - **In-memory cache**: Stores up to 20 recently generated images
-- **Disk cache**: Persists images to `.rari/cache/og/` for faster subsequent loads
+- **Disk cache**: Persists images to `.cache/og/` during development (`/tmp/rari-og-cache` in production) for faster subsequent loads
 - **HTTP caching**: Serves images with `Cache-Control: public, max-age=31536000, immutable`
 - **Cache headers**: Includes `X-Cache: HIT` or `X-Cache: MISS` to indicate cache status
 

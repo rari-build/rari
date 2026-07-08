@@ -114,7 +114,7 @@
     "clean": "node --eval \"import('node:fs').then(fs => fs.rmSync('dist', { recursive: true, force: true }))\"",
     "lint": "vp lint",
     "lint:fix": "vp lint --fix",
-    "typecheck": "tsgo"
+    "typecheck": "tsc"
   },
   "peerDependencies": {
     "@mdx-js/mdx": "catalog:mdx",
@@ -147,7 +147,8 @@
     "@types/node": "catalog:typescript",
     "@types/react": "catalog:react",
     "@types/react-dom": "catalog:react",
-    "@typescript/native-preview": "catalog:typescript",
+    "typescript": "catalog:typescript",
+    "typescript-7": "catalog:typescript",
     "vite-plus": "catalog:build"
   }
 }
