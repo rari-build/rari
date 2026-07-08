@@ -87,6 +87,10 @@
       "types": "./dist/runtime/rsc-client-runtime.d.mts",
       "default": "./dist/runtime/rsc-client-runtime.mjs"
     },
+    "./runtime/ErrorBoundaryWrapper": {
+      "types": "./dist/runtime/ErrorBoundaryWrapper.d.mts",
+      "default": "./dist/runtime/ErrorBoundaryWrapper.mjs"
+    },
     "./vite": {
       "types": "./dist/vite.d.mts",
       "default": "./dist/vite.mjs"
