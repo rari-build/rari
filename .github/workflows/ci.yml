@@ -351,7 +351,7 @@ jobs:
   build-use-cache-addon-windows:
     name: Build rari_use_cache.node (win32-x64)
     needs: [changes]
-    if: needs.changes.outputs.use_cache_crate == 'true' && github.event_name != 'merge_group'
+    if: (needs.changes.outputs.use_cache_crate == 'true' || needs.changes.outputs.src == 'true') && github.event_name != 'merge_group'
     runs-on: namespace-profile-rari-windows-amd64
     timeout-minutes: 20
     permissions:
@@ -427,6 +427,7 @@ jobs:
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
 
       - uses: ./.github/actions/restore-use-cache-addon
+        if: needs.build-use-cache-addon-linux.result == 'success'
         with:
           platform: linux-x64
 
@@ -485,6 +486,7 @@ jobs:
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
 
       - uses: ./.github/actions/restore-use-cache-addon
+        if: needs.build-use-cache-addon-linux.result == 'success'
         with:
           platform: linux-x64
 
@@ -495,7 +497,15 @@ jobs:
         if: always()
 
   test-e2e:
-    if: (needs.changes.outputs.src == 'true' || needs.changes.outputs.rust == 'true') && (github.event_name != 'push' || github.ref_name != 'main')
+    if: |
+      always() &&
+      !cancelled() &&
+      (needs.changes.outputs.src == 'true' || needs.changes.outputs.rust == 'true') &&
+      (github.event_name != 'push' || github.ref_name != 'main') &&
+      needs.build.result == 'success' &&
+      needs.build-rari-binary.result == 'success' &&
+      (needs.build-use-cache-addon-linux.result == 'success' || needs.build-use-cache-addon-linux.result == 'skipped') &&
+      (needs.build-use-cache-addon-windows.result == 'success' || needs.build-use-cache-addon-windows.result == 'skipped')
     runs-on: ${{ matrix.os }}
     permissions:
       actions: write
@@ -504,6 +514,8 @@ jobs:
       - changes
       - build
       - build-rari-binary
+      - build-use-cache-addon-linux
+      - build-use-cache-addon-windows
     strategy:
       fail-fast: ${{ github.event_name == 'merge_group' }}
       matrix:
@@ -550,12 +562,12 @@ jobs:
           path: packages/rari-win32-x64/bin
 
       - uses: ./.github/actions/restore-use-cache-addon
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && needs.build-use-cache-addon-linux.result == 'success'
         with:
           platform: linux-x64
 
       - uses: ./.github/actions/restore-use-cache-addon
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && needs.build-use-cache-addon-windows.result == 'success'
         with:
           platform: win32-x64
 

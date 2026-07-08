@@ -10,7 +10,6 @@ runs:
   using: composite
   steps:
     - name: Download use-cache addon
-      continue-on-error: true
       uses: namespace-actions/download-artifact@7cbad919e4b0e09f17e9d6311a444ff002992b5b # v2.0.1
       with:
         name: use-cache-${{ inputs.platform }}
