@@ -23,13 +23,13 @@
     "@napi-rs/cli": "catalog:build",
     "@playwright/test": "catalog:testing",
     "@types/node": "catalog:typescript",
-    "@typescript/native-preview": "catalog:typescript",
     "@vitest/coverage-v8": "catalog:testing",
     "eslint": "catalog:eslint",
     "eslint-plugin-de-morgan": "catalog:eslint",
     "eslint-plugin-oxlint": "catalog:eslint",
     "eslint-plugin-react-refresh": "catalog:eslint",
     "knip": "catalog:eslint",
+    "typescript": "catalog:typescript",
     "vite-plus": "catalog:build"
   }
 }

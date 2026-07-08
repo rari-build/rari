@@ -16,7 +16,7 @@
     "clean": "rari clean",
     "lint": "vp lint",
     "lint:fix": "vp lint --fix",
-    "typecheck": "tsgo"
+    "typecheck": "tsc"
   },
   "dependencies": {
     "@mdx-js/mdx": "catalog:mdx",
@@ -38,8 +38,8 @@
     "@types/node": "catalog:typescript",
     "@types/react": "catalog:react",
     "@types/react-dom": "catalog:react",
-    "@typescript/native-preview": "catalog:typescript",
     "tailwindcss": "catalog:tailwind",
+    "typescript-7": "catalog:typescript",
     "vite-plus": "catalog:build"
   }
 }

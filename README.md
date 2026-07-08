@@ -13,7 +13,7 @@
 [![Discord](https://img.shields.io/badge/chat-discord-blue?style=flat&logo=discord)](https://discord.gg/GSh2Ak3b8Q)
 [![CodSpeed](https://img.shields.io/endpoint?url=https://codspeed.io/badge.json)](https://app.codspeed.io/rari-build/rari?utm_source=badge)
 
-**rari** is a React Server Components framework running on a Rust runtime. It has three layers: a Rust runtime (HTTP server, RSC renderer, and router with embedded V8), a React framework (app router, server actions, streaming/Suspense), and a build toolchain (Rolldown-powered Vite bundling, tsgo type checking). You write standard React, the runtime underneath is Rust instead of Node.
+**rari** is a React Server Components framework running on a Rust runtime. It has three layers: a Rust runtime (HTTP server, RSC renderer, and router with embedded V8), a React framework (app router, server actions, streaming/Suspense), and a build toolchain (Rolldown-powered Vite bundling, TypeScript 7 type checking). You write standard React, the runtime underneath is Rust instead of Node.
 
 ## Features
 
@@ -105,14 +105,6 @@ We welcome contributions! Here's how you can help:
 rari is made possible by the support of these companies:
 
 <div>
-  <a href="https://get.neon.com/KDQudHN" target="_blank">
-    <img width="250px" alt="Neon - Serverless Postgres" src=".github/assets/neon.svg">
-  </a>
-</div>
-
-**[Neon](https://get.neon.com/KDQudHN)** - Serverless Postgres. Autoscaling, branching, and scale to zero.
-
-<div>
   <a href="https://namespace.so" target="_blank">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset=".github/assets/namespace-dark.svg">
@@ -123,6 +115,14 @@ rari is made possible by the support of these companies:
 </div>
 
 **[Namespace](https://namespace.so)** - High-performance cloud infrastructure. CI/CD runners, remote Docker builders, and managed dev environments on bare-metal hardware.
+
+<div>
+  <a href="https://get.neon.com/KDQudHN" target="_blank">
+    <img width="250px" alt="Neon - Serverless Postgres" src=".github/assets/neon.svg">
+  </a>
+</div>
+
+**[Neon](https://get.neon.com/KDQudHN)** - Serverless Postgres. Autoscaling, branching, and scale to zero.
 
 ---
 

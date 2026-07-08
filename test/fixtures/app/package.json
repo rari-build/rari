@@ -6,7 +6,7 @@
     "dev": "rari dev",
     "build": "rari build",
     "start": "rari start",
-    "typecheck": "tsgo"
+    "typecheck": "tsc"
   },
   "dependencies": {
     "rari": "workspace:*",
@@ -20,8 +20,8 @@
     "@tailwindcss/vite": "catalog:tailwind",
     "@types/react": "catalog:react",
     "@types/react-dom": "catalog:react",
-    "@typescript/native-preview": "catalog:typescript",
     "tailwindcss": "catalog:tailwind",
+    "typescript-7": "catalog:typescript",
     "vite": "catalog:build"
   }
 }

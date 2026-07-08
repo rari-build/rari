@@ -305,7 +305,7 @@ async function runViteBuild() {
   const viteBin = getProjectContext().viteBin
 
   logInfo('Type checking...')
-  const typecheckProcess = spawnTool('tsgo', [], {
+  const typecheckProcess = spawnTool('tsc', [], {
     stdio: 'inherit',
     cwd: process.cwd(),
   })
