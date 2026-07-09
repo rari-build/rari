@@ -38,9 +38,22 @@ use crate::{
         },
         module_loader::RariModuleLoader,
     },
-    server::middleware::request_context::RequestContext,
+    server::{actions::action_form_state_sync_script, middleware::request_context::RequestContext},
     with_scope,
 };
+
+fn sync_action_form_state_for_context(
+    js_runtime: &mut deno_core::JsRuntime,
+    request_context: &RequestContext,
+) {
+    let script = action_form_state_sync_script(request_context.action_form_state.as_ref());
+    let _ = js_runtime.execute_script("sync_action_form_state".to_string(), script);
+}
+
+fn clear_action_form_state(js_runtime: &mut deno_core::JsRuntime) {
+    let script = action_form_state_sync_script(None);
+    let _ = js_runtime.execute_script("clear_action_form_state".to_string(), script);
+}
 
 const RESET_USE_CACHE_DYNAMIC_DEPTH_SCRIPT: &str =
     "if (globalThis['~rari']) globalThis['~rari'].useCacheDynamicDepth = 0;";
@@ -516,11 +529,13 @@ async fn handle_js_request(
         JsRequest::SetRequestContext { request_context, result_tx } => {
             clear_page_cache_tags(js_runtime);
             reset_use_cache_dynamic_context(js_runtime);
+            sync_action_form_state_for_context(js_runtime, &request_context);
             js_runtime.op_state().borrow_mut().put(request_context);
             let _ = result_tx.send(Ok(()));
         }
         JsRequest::ClearRequestContext { result_tx } => {
             js_runtime.op_state().borrow_mut().try_take::<Arc<RequestContext>>();
+            clear_action_form_state(js_runtime);
             let _ = result_tx.send(Ok(()));
         }
         JsRequest::ClearRequestContextIfMatches { expected_context, result_tx } => {
@@ -536,6 +551,7 @@ async fn handle_js_request(
 
             if should_clear {
                 js_runtime.op_state().borrow_mut().try_take::<Arc<RequestContext>>();
+                clear_action_form_state(js_runtime);
             }
             let _ = result_tx.send(Ok(()));
         }
@@ -549,12 +565,16 @@ async fn handle_js_request(
                 js_runtime.op_state().borrow_mut().try_take::<Arc<RequestContext>>();
             clear_page_cache_tags(js_runtime);
             reset_use_cache_dynamic_context(js_runtime);
+            sync_action_form_state_for_context(js_runtime, &request_context);
             js_runtime.op_state().borrow_mut().put(request_context);
             let result =
                 execute_script(js_runtime, module_loader, &script_name, &script_code).await;
             js_runtime.op_state().borrow_mut().try_take::<Arc<RequestContext>>();
             if let Some(previous_context) = previous_context {
+                sync_action_form_state_for_context(js_runtime, &previous_context);
                 js_runtime.op_state().borrow_mut().put(previous_context);
+            } else {
+                clear_action_form_state(js_runtime);
             }
             if let Err(e) = &result
                 && is_runtime_restart_needed(e)

@@ -392,27 +392,19 @@ pub fn response_cache_cookie_partition(cookie_header: Option<&str>) -> Option<St
     Some(format!("{ACTION_FORM_STATE_COOKIE}={form_state}"))
 }
 
-pub async fn inject_action_form_state_from_cookie(
-    runtime: &JsExecutionRuntime,
-    cookie_header: Option<&str>,
-) {
-    let Some(cookie_header) = cookie_header else {
-        return;
-    };
+pub fn parse_action_form_state_from_cookie(cookie_header: Option<&str>) -> Option<Value> {
+    let cookie_header = cookie_header.filter(|value| !value.is_empty())?;
+    let encoded = read_cookie_value(cookie_header, ACTION_FORM_STATE_COOKIE)?;
+    decode_action_form_state_cookie_value(&encoded)
+}
 
-    let Some(encoded) = read_cookie_value(cookie_header, ACTION_FORM_STATE_COOKIE) else {
-        return;
-    };
-
-    let Some(form_state) = decode_action_form_state_cookie_value(&encoded) else {
-        return;
-    };
-
-    let script = format!(
-        "globalThis['~rari'] = globalThis['~rari'] || {{}}; globalThis['~rari'].actionFormState = {form_state};"
-    );
-
-    let _ = runtime.execute_script("inject_action_form_state".to_string(), script).await;
+pub fn action_form_state_sync_script(form_state: Option<&Value>) -> String {
+    match form_state {
+        Some(state) => format!(
+            "globalThis['~rari'] = globalThis['~rari'] || {{}}; globalThis['~rari'].actionFormState = {state};"
+        ),
+        None => "if (globalThis['~rari']) delete globalThis['~rari'].actionFormState;".to_string(),
+    }
 }
 
 fn action_export_name(action_id: &str) -> &str {
@@ -653,8 +645,13 @@ async fn handle_server_action_at_path(
     let page_form_redirect_path =
         if request_path == "/_rari/action" { None } else { Some(request_path.clone()) };
 
-    let request_context =
-        Arc::new(RequestContext::new(request_path).with_http_headers(extract_headers(&headers)));
+    let request_context = Arc::new(
+        RequestContext::new(request_path)
+            .with_http_headers(extract_headers(&headers))
+            .with_action_form_state(parse_action_form_state_from_cookie(
+                headers.get(header::COOKIE).and_then(|value| value.to_str().ok()),
+            )),
+    );
 
     if let Some(action_id) = action_id {
         let export_name = action_export_name(action_id);
