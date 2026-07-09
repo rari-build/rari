@@ -214,17 +214,22 @@ fn is_form_content_type(content_type: &str) -> bool {
         || content_type.starts_with("application/x-www-form-urlencoded")
 }
 
-fn action_script_name(action_id: Option<&str>) -> String {
+fn request_unique_script_name(base: &str) -> String {
     static SCRIPT_COUNTER: AtomicU64 = AtomicU64::new(0);
     let nonce = SCRIPT_COUNTER.fetch_add(1, Ordering::Relaxed);
+    // Request-scoped suffix avoids module-cache / already-evaluated shortcuts.
+    // `#` in names also breaks TypeScript transpilation.
+    format!("{base}_req{nonce}.ts")
+}
+
+fn action_script_name(action_id: Option<&str>) -> String {
     let base = match action_id {
         Some(action_id) => {
             format!("official_action_{}", action_id.cow_replace('/', "_").cow_replace('#', "_"))
         }
         None => "official_action_form".to_string(),
     };
-    // Use a request-scoped suffix for cache keys. `#` breaks TypeScript transpilation.
-    format!("{base}_req{nonce}.ts")
+    request_unique_script_name(&base)
 }
 
 fn build_action_script(
@@ -790,7 +795,7 @@ async fn handle_server_action_at_path(
     runtime
         .execute_script_with_request_context(
             Arc::clone(&request_context),
-            "official_action_flight_encode.ts".to_string(),
+            request_unique_script_name("official_action_flight_encode"),
             ACTION_FLIGHT_ENCODE_SCRIPT.to_string(),
         )
         .await
