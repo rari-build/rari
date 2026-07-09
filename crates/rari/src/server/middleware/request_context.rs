@@ -104,6 +104,7 @@ pub struct RequestContext {
     pub skip_layout_html_cache: bool,
     pub pending_cookies: Arc<DashMap<PendingCookieKey, PendingCookie>>,
     pub function_cache: Arc<DashMap<String, Value>>,
+    pub action_form_state: Option<Value>,
 }
 
 impl RequestContext {
@@ -119,6 +120,7 @@ impl RequestContext {
             skip_layout_html_cache: false,
             pending_cookies: Arc::new(DashMap::new()),
             function_cache: Arc::new(DashMap::new()),
+            action_form_state: None,
         }
     }
 
@@ -138,6 +140,12 @@ impl RequestContext {
     #[must_use]
     pub fn without_layout_html_cache(mut self) -> Self {
         self.skip_layout_html_cache = true;
+        self
+    }
+
+    #[must_use]
+    pub fn with_action_form_state(mut self, form_state: Option<Value>) -> Self {
+        self.action_form_state = form_state;
         self
     }
 

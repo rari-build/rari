@@ -35,7 +35,7 @@ use crate::{
     server::{
         ServerState,
         actions::{
-            has_action_form_state_cookie, inject_action_form_state_from_cookie,
+            has_action_form_state_cookie, parse_action_form_state_from_cookie,
             response_cache_cookie_partition,
         },
         cache::response,
@@ -100,6 +100,21 @@ fn response_cache_key(
         render_mode,
         cache_cookie.as_deref(),
     )
+}
+
+fn insert_response_cache_vary_header(
+    headers: &mut HeaderMap,
+    cookie_header: Option<&str>,
+    html: bool,
+) {
+    let merged =
+        if html { static_html_vary_header(cookie_header) } else { rsc_vary_header(cookie_header) };
+
+    if html || cookie_header.is_some() {
+        if let Ok(value) = HeaderValue::from_str(&merged) {
+            headers.insert("vary", value);
+        }
+    }
 }
 
 fn rsc_vary_header(cookie_header: Option<&str>) -> String {
@@ -1022,14 +1037,12 @@ pub async fn handle_app_route(
     };
 
     let request_context = Arc::new(
-        RequestContext::new(path.to_string()).with_http_headers(extract_headers(&headers)),
+        RequestContext::new(path.to_string())
+            .with_http_headers(extract_headers(&headers))
+            .with_action_form_state(parse_action_form_state_from_cookie(request_cookie_header(
+                &headers,
+            ))),
     );
-
-    let runtime = {
-        let renderer = state.renderer.lock().await;
-        Arc::clone(&renderer.runtime)
-    };
-    inject_action_form_state_from_cookie(&runtime, request_cookie_header(&headers)).await;
 
     let render_mode = RequestTypeDetector::detect_render_mode(&headers);
     let accept_encoding = headers.get("accept-encoding").and_then(|v| v.to_str().ok());
@@ -1203,7 +1216,11 @@ pub async fn handle_app_route(
                         let response_cache_tags =
                             merge_response_cache_tags(&state, cache_policy.tags.clone()).await;
                         if cookie_header.is_some() {
-                            cache_headers.insert("vary", HeaderValue::from_static("Cookie"));
+                            insert_response_cache_vary_header(
+                                &mut cache_headers,
+                                cookie_header,
+                                false,
+                            );
                         }
                         let cached_response = response::CachedResponse {
                             body: Bytes::from(rsc_flight_protocol.clone()),
@@ -1416,9 +1433,11 @@ pub async fn handle_app_route(
                                 response_headers.insert(key.clone(), value.clone());
                             }
                         }
-                        if cookie_header.is_some() {
-                            response_headers.insert("vary", HeaderValue::from_static("Cookie"));
-                        }
+                        insert_response_cache_vary_header(
+                            &mut response_headers,
+                            cookie_header,
+                            true,
+                        );
 
                         let merged_tags =
                             merge_response_cache_tags(&state, cache_policy.tags.clone()).await;
@@ -1439,7 +1458,7 @@ pub async fn handle_app_route(
 
                         state.response_cache.set(cache_key.clone(), cached_response).await;
 
-                        let merged_vary = merge_vary_with_accept(parts.headers.get("vary"));
+                        let merged_vary = static_html_vary_header(cookie_header);
 
                         let mut response_builder = Response::builder().status(parts.status);
 
@@ -1552,7 +1571,7 @@ pub async fn handle_app_route(
                 .status(status_code)
                 .header("content-type", "text/html; charset=utf-8")
                 .header("etag", &etag)
-                .header("vary", rsc_vary_header(cookie_header))
+                .header("vary", static_html_vary_header(cookie_header))
                 .header("x-cache", "MISS");
 
             let cache_control_value = state.config.get_cache_control_for_route(path);
@@ -1562,9 +1581,7 @@ pub async fn handle_app_route(
             if let Ok(header_value) = HeaderValue::from_str(cache_control_value) {
                 response_headers.insert(CACHE_CONTROL, header_value);
             }
-            if cookie_header.is_some() {
-                response_headers.insert("vary", HeaderValue::from_static("Cookie"));
-            }
+            insert_response_cache_vary_header(&mut response_headers, cookie_header, true);
 
             let cache_policy =
                 response::RouteCachePolicy::from_cache_control(cache_control_value, path);
