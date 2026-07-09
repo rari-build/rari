@@ -37,7 +37,7 @@ use crate::{
     rendering::{base::ResourceLimits, layout::LayoutRenderer},
     runtime::JsExecutionRuntime,
     server::{
-        actions::handle_server_action,
+        actions::{handle_page_server_action, handle_server_action},
         cache::{
             handler::CacheHandlerRegistry, loader::CacheLoader, response,
             revalidate::revalidate_by_path, warmup,
@@ -349,8 +349,10 @@ impl Server {
 
             router = router
                 .route("/", routing::get(handle_app_route))
+                .route("/", routing::post(handle_page_server_action))
                 .route("/", routing::options(cors_preflight_ok))
                 .route("/{*path}", routing::get(handle_app_route))
+                .route("/{*path}", routing::post(handle_page_server_action))
                 .route("/{*path}", routing::options(cors_preflight_ok));
         } else if config.is_production() {
             router = router

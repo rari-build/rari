@@ -62,6 +62,7 @@ mod tests {
             search_params: search_params.clone(),
             headers: FxHashMap::default(),
             pathname: "/test".to_string(),
+            template_navigation_id: None,
             metadata: None,
         };
 
@@ -121,6 +122,7 @@ mod tests {
             search_params: FxHashMap::default(),
             headers: FxHashMap::default(),
             pathname: "/test".to_string(),
+            template_navigation_id: None,
             metadata: None,
         };
 
@@ -165,6 +167,7 @@ mod tests {
             search_params: FxHashMap::default(),
             headers: FxHashMap::default(),
             pathname: "/test".to_string(),
+            template_navigation_id: None,
             metadata: None,
         };
 
@@ -223,6 +226,7 @@ mod tests {
             search_params: FxHashMap::default(),
             headers: FxHashMap::default(),
             pathname: "/test".to_string(),
+            template_navigation_id: None,
             metadata: None,
         };
 
@@ -266,6 +270,7 @@ mod tests {
             search_params: FxHashMap::default(),
             headers: FxHashMap::default(),
             pathname: "/test".to_string(),
+            template_navigation_id: None,
             metadata: None,
         };
 
@@ -318,6 +323,7 @@ mod tests {
             search_params: FxHashMap::default(),
             headers: FxHashMap::default(),
             pathname: "/test".to_string(),
+            template_navigation_id: None,
             metadata: None,
         };
 
@@ -378,6 +384,7 @@ mod tests {
             search_params: FxHashMap::default(),
             headers: FxHashMap::default(),
             pathname: "/test".to_string(),
+            template_navigation_id: None,
             metadata: None,
         };
 
@@ -429,6 +436,7 @@ mod tests {
             search_params: FxHashMap::default(),
             headers: FxHashMap::default(),
             pathname: "/test".to_string(),
+            template_navigation_id: None,
             metadata: None,
         };
 

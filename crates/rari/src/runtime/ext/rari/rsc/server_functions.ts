@@ -27,7 +27,8 @@ interface ServerFunctionOptions {
     const manifest = g['~rari']!.serverManifest || {}
     const functionNames = Object.keys(manifest).filter(key => key.includes('#') || key.includes(':'))
 
-    let registeredCount = 0
+    const registered = g['~rari']!.registeredServerFunctions!
+    const newlyRegistered: string[] = []
 
     for (const functionName of functionNames) {
       if (functionName.startsWith('~rari_'))
@@ -38,15 +39,18 @@ interface ServerFunctionOptions {
       if (!exportName || exportName === 'default')
         continue
 
-      g['~rari']!.registeredServerFunctions!.add(functionName)
-      registeredCount++
+      if (registered.has(functionName))
+        continue
+
+      registered.add(functionName)
+      newlyRegistered.push(functionName)
     }
 
     return {
       success: true,
-      registered: registeredCount,
+      registered: newlyRegistered.length,
       component: currentComponent,
-      functions: [...g['~rari']!.registeredServerFunctions!],
+      functions: newlyRegistered,
     }
   }
 

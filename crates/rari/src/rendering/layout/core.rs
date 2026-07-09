@@ -60,15 +60,7 @@ const JS_GET_RESULT: &str = r"
 globalThis['~rsc'].renderResult
 ";
 
-const GET_RSC_BINARY_B64: &str = r"(function() {
-    const bin = globalThis['~rari']?.lastRscBinary;
-    if (!bin || bin.length === 0) return null;
-    let str = '';
-    for (let i = 0; i < bin.length; i++) {
-        str += String.fromCharCode(bin[i]);
-    }
-    return btoa(str);
-})()";
+use crate::rendering::base::constants::GET_RSC_BINARY_B64;
 
 const FIZZ_STREAM_ERROR_HELPER: &str = r"
                         let rariErrorInjected = false;
@@ -388,6 +380,45 @@ impl LayoutRenderer {
         request_context: Option<Arc<RequestContext>>,
     ) -> Result<String, RariError> {
         self.render_route(route_match, context, request_context).await
+    }
+
+    pub async fn compose_route_for_action_refresh(
+        &self,
+        route_match: &AppRouteMatch,
+        context: &LayoutRenderContext,
+        request_context: Arc<RequestContext>,
+    ) -> Result<(), RariError> {
+        let loading_enabled = Config::get().map(|config| config.loading.enabled).unwrap_or(true);
+
+        let loading_component_id = if loading_enabled {
+            route_match.loading.as_ref().map(|loading_entry| {
+                loading_entry
+                    .component_id
+                    .clone()
+                    .unwrap_or_else(|| utils::create_component_id(&loading_entry.file_path))
+            })
+        } else {
+            None
+        };
+
+        let composition_script = self.build_composition_script(
+            route_match,
+            context,
+            loading_component_id.as_deref(),
+            false,
+            true,
+        )?;
+
+        let renderer = self.renderer.lock().await;
+        let compose_operation = async {
+            renderer
+                .runtime
+                .execute_script("action_refresh_compose".to_string(), composition_script)
+                .await?;
+            Ok(())
+        };
+
+        renderer.runtime.execute_with_request_context(request_context, compose_operation).await
     }
 
     #[expect(clippy::too_many_lines)]
@@ -931,6 +962,11 @@ impl LayoutRenderer {
 
         let pathname_json =
             serde_json::to_string(&context.pathname).unwrap_or_else(|_| "null".to_string());
+        let template_key_json = utils::template_key_json(context);
+        let action_post_url =
+            utils::format_action_post_url(&context.pathname, &context.search_params);
+        let action_post_url_json =
+            serde_json::to_string(&action_post_url).unwrap_or_else(|_| "\"/\"".to_string());
 
         let layouts: Vec<LayoutInfo> = route_match
             .layouts
@@ -983,9 +1019,11 @@ impl LayoutRenderer {
             &layouts,
             &templates,
             &pathname_json,
+            &template_key_json,
             error_boundary.as_ref(),
             &metadata_json,
             defer_rsc,
+            &action_post_url_json,
         );
 
         Ok(script)

@@ -577,7 +577,10 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
           window.history.pushState(historyState, '', urlWithHash)
 
         const fetchPromise = fetch(fetchUrl, {
-          headers: { Accept: 'text/x-component' },
+          headers: {
+            'Accept': 'text/x-component',
+            'rari-navigation-id': String(navigationId),
+          },
           signal: abortController.signal,
         })
 

@@ -16,7 +16,7 @@ function resolveReactCjs(pkg: string, cjsFile: string): string {
 }
 
 describe('patchBrowserClientForFormActions', () => {
-  it('injects form-action helpers with /_rari/action from the edge client', () => {
+  it('injects form-action helpers with page URL resolver from the edge client', () => {
     const browserSource = fs.readFileSync(
       resolveReactCjs('react-server-dom-webpack', 'react-server-dom-webpack-client.browser'),
       'utf-8',
@@ -31,7 +31,7 @@ describe('patchBrowserClientForFormActions', () => {
     )
 
     expect(patched).toContain('var boundCache = new WeakMap();')
-    expect(patched).toContain('action: "/_rari/action"')
+    expect(patched).toContain('action: resolveRariFormActionUrl()')
     expect(patched).toContain('$$FORM_ACTION')
     expect(patched).not.toContain('function registerBoundServerReference(reference, id, bound) {')
   })

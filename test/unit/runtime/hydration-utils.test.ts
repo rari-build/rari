@@ -105,6 +105,15 @@ describe('hasServerRenderedDom', () => {
 
     expect(hasServerRenderedDom(root)).toBe(true)
   })
+
+  it('returns false when the first child is a script tag', () => {
+    const root = mockRoot({})
+    Object.defineProperty(root, 'firstElementChild', {
+      value: { tagName: 'SCRIPT', classList: { contains: () => false } },
+    })
+
+    expect(hasServerRenderedDom(root)).toBe(false)
+  })
 })
 
 describe('clearServerInjectedErrors', () => {

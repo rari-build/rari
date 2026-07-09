@@ -2,6 +2,16 @@ import type { Page } from '@playwright/test'
 import process from 'node:process'
 import { expect } from '@playwright/test'
 
+function isActionPostResponse(response: {
+  url: () => string
+  request: () => { method: () => string }
+  headers: () => Record<string, string>
+}) {
+  return response.request().method() === 'POST'
+    && (response.headers()['content-type']?.includes('text/x-component')
+      || response.url().includes('/_rari/action'))
+}
+
 async function waitForClientActions(page: Page) {
   const mainSrc = await page.locator('script[src*="/assets/main-"]').first().getAttribute('src')
   if (mainSrc) {
@@ -39,10 +49,7 @@ export async function resetActionsFixture(
   const resetButton = page.getByTestId('reset-button')
   await expect(resetButton).toBeVisible({ timeout: 30_000 })
   await Promise.all([
-    page.waitForResponse(
-      response => response.url().includes('/_rari/action') && response.request().method() === 'POST',
-      { timeout: 15_000 },
-    ),
+    page.waitForResponse(isActionPostResponse, { timeout: 15_000 }),
     resetButton.click(),
   ])
 
@@ -55,10 +62,7 @@ export async function submitAndWaitForAction(page: Page, clickSelector: string) 
   await waitForClientActions(page)
 
   await Promise.all([
-    page.waitForResponse(
-      response => response.url().includes('/_rari/action') && response.request().method() === 'POST',
-      { timeout: 15_000 },
-    ),
+    page.waitForResponse(isActionPostResponse, { timeout: 15_000 }),
     page.click(clickSelector),
   ])
 }

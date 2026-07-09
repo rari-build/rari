@@ -5,6 +5,9 @@ import * as React from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { createFromReadableStream } from 'virtual:react-flight-client'
 import { PATH_TRAILING_SLASH_REGEX } from '@/shared/regex-constants'
+import { ActionDidRevalidateStaticAndDynamic } from './action-revalidation-kind'
+import { currentRouteLocation, flightRouteCache } from './flight-route-cache'
+import { mergeFlightRefresh } from './merge-flight-refresh'
 import { preloadModulesFromFlightProtocol } from './shared/preload-modules'
 
 const TIMESTAMP_REGEX = /"timestamp":(\d+)/
@@ -39,6 +42,7 @@ interface HMRFailure {
 
 export function AppRouterProvider({ children, initialPayload, onNavigate }: AppRouterProviderProps) {
   const [rscPayload, setRscPayload] = useState(initialPayload)
+  const rscPayloadRef = useRef(initialPayload)
   // eslint-disable-next-line react/use-state
   const setRenderKey = useState(0)[1]
   const scrollPositionRef = useRef<{ x: number, y: number }>({ x: 0, y: 0 })
@@ -57,6 +61,20 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
   useEffect(() => {
     onNavigateRef.current = onNavigate
   }, [onNavigate])
+
+  const rememberRouteCache = (element: React.ReactNode) => {
+    if (element == null)
+      return
+
+    const { pathname, search } = currentRouteLocation()
+    flightRouteCache.set(pathname, search, element)
+  }
+
+  useEffect(() => {
+    rscPayloadRef.current = rscPayload
+    if (rscPayload?.element != null)
+      rememberRouteCache(rscPayload.element)
+  }, [rscPayload])
 
   useEffect(() => {
     if (rscPayload?.element != null) {
@@ -240,7 +258,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
         const response = await fetch(url, {
           headers: {
-            Accept: 'text/x-component',
+            'Accept': 'text/x-component',
+            'rari-navigation-id': String(currentNavigationIdRef.current),
           },
           cache: 'no-store',
           signal: abortSignal,
@@ -472,6 +491,52 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       }
     }
 
+    const handleActionFlightRefresh = (event: Event) => {
+      const customEvent = event as CustomEvent<{
+        element: unknown
+        revalidationKind?: number
+        revalidatedPath?: string
+      }>
+      if (customEvent.detail?.element == null)
+        return
+
+      scrollPositionRef.current = {
+        x: window.scrollX,
+        y: window.scrollY,
+      }
+
+      saveFormState()
+
+      const { pathname, search } = currentRouteLocation()
+      if (customEvent.detail.revalidationKind === ActionDidRevalidateStaticAndDynamic)
+        flightRouteCache.clear()
+      else if (customEvent.detail.revalidatedPath)
+        flightRouteCache.invalidate(customEvent.detail.revalidatedPath, search)
+      else
+        flightRouteCache.invalidate(pathname, search)
+
+      const cachedElement = flightRouteCache.getElement(pathname, search) ?? rscPayloadRef.current?.element
+      const merged = mergeFlightRefresh(
+        cachedElement as React.ReactNode,
+        customEvent.detail.element as React.ReactNode,
+      )
+
+      React.startTransition(() => {
+        setRscPayload({
+          element: merged,
+          rawElement: merged,
+        })
+        setHmrError(null)
+      })
+
+      rememberRouteCache(merged)
+
+      requestAnimationFrame(() => {
+        window.scrollTo(scrollPositionRef.current.x, scrollPositionRef.current.y)
+        restoreFormState()
+      })
+    }
+
     const handleRscInvalidate = async () => {
       try {
         await refetchRscPayloadRef.current!()
@@ -514,6 +579,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     window.addEventListener('rari:navigation-start', handleNavigationStart)
     window.addEventListener('rari:navigate', handleNavigate)
     window.addEventListener('rari:app-router-rerender', handleAppRouterRerender)
+    window.addEventListener('rari:action-flight-refresh', handleActionFlightRefresh)
     window.addEventListener('rari:rsc-invalidate', handleRscInvalidate)
     window.addEventListener('rari:app-router-manifest-updated', handleManifestUpdated)
 
@@ -521,6 +587,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       window.removeEventListener('rari:navigation-start', handleNavigationStart)
       window.removeEventListener('rari:navigate', handleNavigate)
       window.removeEventListener('rari:app-router-rerender', handleAppRouterRerender)
+      window.removeEventListener('rari:action-flight-refresh', handleActionFlightRefresh)
       window.removeEventListener('rari:rsc-invalidate', handleRscInvalidate)
       window.removeEventListener('rari:app-router-manifest-updated', handleManifestUpdated)
     }

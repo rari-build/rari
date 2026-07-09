@@ -75,6 +75,26 @@
       "types": "./dist/runtime/call-server.d.mts",
       "default": "./dist/runtime/call-server.mjs"
     },
+    "./runtime/action-flight-refresh": {
+      "types": "./dist/runtime/action-flight-refresh.d.mts",
+      "default": "./dist/runtime/action-flight-refresh.mjs"
+    },
+    "./runtime/merge-flight-refresh": {
+      "types": "./dist/runtime/merge-flight-refresh.d.mts",
+      "default": "./dist/runtime/merge-flight-refresh.mjs"
+    },
+    "./runtime/flight-route-cache": {
+      "types": "./dist/runtime/flight-route-cache.d.mts",
+      "default": "./dist/runtime/flight-route-cache.mjs"
+    },
+    "./runtime/flight-router-state": {
+      "types": "./dist/runtime/flight-router-state.d.mts",
+      "default": "./dist/runtime/flight-router-state.mjs"
+    },
+    "./runtime/action-revalidation-kind": {
+      "types": "./dist/runtime/action-revalidation-kind.d.mts",
+      "default": "./dist/runtime/action-revalidation-kind.mjs"
+    },
     "./runtime/entry-client": {
       "types": "./dist/runtime/entry-client.d.mts",
       "default": "./dist/runtime/entry-client.mjs"

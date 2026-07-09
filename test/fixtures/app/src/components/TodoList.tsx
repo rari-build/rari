@@ -6,7 +6,7 @@ import { clearCompleted, deleteTodo, resetTodos, toggleTodo } from '@/actions/to
 
 interface TodoListProps {
   initialTodos: Todo[]
-  onUpdate?: () => void
+  onUpdate?: (todos?: Todo[]) => void
 }
 
 export default function TodoList({ initialTodos, onUpdate }: TodoListProps) {
@@ -31,7 +31,7 @@ export default function TodoList({ initialTodos, onUpdate }: TodoListProps) {
         setError(null)
         setTodos(result.todos)
         if (onUpdate)
-          onUpdate()
+          onUpdate(result.todos)
       }
       else {
         const errorMsg = ('error' in result && typeof result.error === 'string') ? result.error : 'Action failed'
@@ -50,7 +50,7 @@ export default function TodoList({ initialTodos, onUpdate }: TodoListProps) {
         setError(null)
         setTodos(result.todos)
         if (onUpdate)
-          onUpdate()
+          onUpdate(result.todos)
       }
       else {
         const errorMsg = ('error' in result && typeof result.error === 'string') ? result.error : 'Action failed'
@@ -67,7 +67,7 @@ export default function TodoList({ initialTodos, onUpdate }: TodoListProps) {
         setError(null)
         setTodos(result.todos)
         if (onUpdate)
-          onUpdate()
+          onUpdate(result.todos)
       }
       else {
         const errorMsg = ('error' in result && typeof result.error === 'string') ? result.error : 'Action failed'
@@ -84,7 +84,7 @@ export default function TodoList({ initialTodos, onUpdate }: TodoListProps) {
         setError(null)
         setTodos(result.todos)
         if (onUpdate)
-          onUpdate()
+          onUpdate(result.todos)
       }
       else {
         const errorMsg = ('error' in result && typeof result.error === 'string') ? result.error : 'Action failed'

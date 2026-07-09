@@ -63,6 +63,19 @@ describe('validateActionArgs', () => {
     const sanitized = validateActionArgs([formData], config)
     expect(sanitized[0]).toBe(formData)
   })
+
+  it('preserves bigint and Date arguments without coercing them to objects', () => {
+    const when = new Date('2026-01-01T00:00:00.000Z')
+    const sanitized = validateActionArgs([1n, when], config)
+
+    expect(sanitized[0]).toBe(1n)
+    expect(sanitized[1]).toBe(when)
+  })
+
+  it('rejects Map and Set arguments', () => {
+    expect(() => validateActionArgs([new Map([['a', 1]])], config)).toThrow(/Map is not supported/)
+    expect(() => validateActionArgs([new Set([1])], config)).toThrow(/Set is not supported/)
+  })
 })
 
 describe('validateFormData', () => {

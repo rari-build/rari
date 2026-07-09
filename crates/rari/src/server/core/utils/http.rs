@@ -2,6 +2,16 @@ use axum::http::{HeaderMap, HeaderValue};
 use cow_utils::CowUtils;
 use rustc_hash::{FxHashMap, FxHashSet};
 
+pub const RARI_NAVIGATION_ID_HEADER: &str = "rari-navigation-id";
+
+#[expect(
+    clippy::implicit_hasher,
+    reason = "FxHashMap is the specific hasher needed for this codebase"
+)]
+pub fn parse_navigation_id(headers: &FxHashMap<String, String>) -> Option<u32> {
+    headers.get(RARI_NAVIGATION_ID_HEADER).and_then(|value| value.parse().ok())
+}
+
 #[expect(
     clippy::implicit_hasher,
     reason = "FxHashMap is the specific hasher needed for this codebase"
@@ -442,6 +452,18 @@ mod tests {
         assert!(is_origin_allowed("http://app.example.com:8080", &allowed));
         assert!(!is_origin_allowed("https://app.example.com:443", &allowed));
         assert!(!is_origin_allowed("http://app.example.com:80", &allowed));
+    }
+
+    #[test]
+    fn test_parse_navigation_id() {
+        let mut headers = FxHashMap::default();
+        assert_eq!(super::parse_navigation_id(&headers), None);
+
+        headers.insert(super::RARI_NAVIGATION_ID_HEADER.to_string(), "42".to_string());
+        assert_eq!(super::parse_navigation_id(&headers), Some(42));
+
+        headers.insert(super::RARI_NAVIGATION_ID_HEADER.to_string(), "not-a-number".to_string());
+        assert_eq!(super::parse_navigation_id(&headers), None);
     }
 
     #[test]

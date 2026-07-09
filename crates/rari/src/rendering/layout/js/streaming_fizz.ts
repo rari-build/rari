@@ -2,6 +2,13 @@
 
 const flightStreamPromises = new WeakMap<ReadableStream, Promise<unknown>>()
 
+function rariFlightRenderOptions(onError: (error: unknown) => void) {
+  return {
+    formState: g['~rari']?.actionFormState ?? undefined,
+    onError,
+  }
+}
+
 function rariStreamLog(phase: string, detail?: string) {
   const message = detail ? `[streaming] ${phase}: ${detail}` : `[streaming] ${phase}`
   try {
@@ -615,12 +622,10 @@ async function renderStreamingDocument(options: RenderStreamingDocumentOptions) 
   const rscStream = await ReactServerRenderer.renderToReadableStream(
     capturedElement,
     bundlerConfig,
-    {
-      onError(error: unknown) {
-        console.error('[rari] RSC error:', error)
-        caughtErrors.push(error)
-      },
-    },
+    rariFlightRenderOptions((error: unknown) => {
+      console.error('[rari] RSC error:', error)
+      caughtErrors.push(error)
+    }),
   )
   rariStreamLog('rsc.stream.ready')
 
@@ -694,12 +699,10 @@ async function renderStaticDocument(options: RenderStreamingDocumentOptions): Pr
   const rscStream = await ReactServerRenderer.renderToReadableStream(
     capturedElement,
     bundlerConfig,
-    {
-      onError(error: unknown) {
-        console.error('[rari] RSC error:', error)
-        caughtErrors.push(error)
-      },
-    },
+    rariFlightRenderOptions((error: unknown) => {
+      console.error('[rari] RSC error:', error)
+      caughtErrors.push(error)
+    }),
   )
 
   const { flightReadable, liveFlight, ensureSourceComplete } = rariCreatePullFlightFanout(rscStream)
@@ -750,11 +753,9 @@ async function pumpRscElementStream(
   const stream = await ReactServerRenderer.renderToReadableStream(
     element,
     bundlerConfig,
-    {
-      onError(error: unknown) {
-        console.error('[rari] RSC stream error:', error)
-      },
-    },
+    rariFlightRenderOptions((error: unknown) => {
+      console.error('[rari] RSC stream error:', error)
+    }),
   )
 
   const reader = stream.getReader()

@@ -1788,6 +1788,12 @@ ${clientTransformedCode}`
       if (id === 'react-server-dom-rari/server')
         return id
 
+      if (importer && importer.startsWith('virtual:') && id.startsWith('./')) {
+        const runtimeFile = resolveRuntimeDistFile(path.basename(id))
+        if (runtimeFile)
+          return runtimeFile
+      }
+
       if (importer && importer.startsWith('virtual:') && id.startsWith('../')) {
         const currentFileUrl = import.meta.url
         const currentFilePath = fileURLToPath(currentFileUrl)

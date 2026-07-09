@@ -42,7 +42,7 @@ test.describe('Server Actions Progressive Enhancement (no JS)', () => {
     const html = await page.content()
     const { action, fields } = getTodoFormFieldsFromHtml(html)
 
-    expect(action).toBe('/_rari/action')
+    expect(action).toBe('/actions')
     expect(html).not.toContain('javascript:throw')
     expect(html).toMatch(/\$ACTION_/)
     expect(fields.some(field => field.name === '$ACTION_REF_1')).toBe(true)
@@ -83,10 +83,12 @@ test.describe('Server Actions Progressive Enhancement', () => {
 
     const html = await page.request.get(`${baseURL}/actions`).then(response => response.text())
     const { action, fields } = getTodoFormFieldsFromHtml(html)
-    expect(action).toBe('/_rari/action')
+    expect(action).toBe('/actions')
     expect(fields.some(field => field.name === '$ACTION_REF_1')).toBe(true)
+    if (!action)
+      throw new Error('Missing form action URL in SSR HTML')
 
-    await page.evaluate(({ fields, todoText }) => {
+    await page.evaluate(({ fields, action, todoText }) => {
       const form = document.querySelector('[data-testid="todo-form"] form') as HTMLFormElement | null
       if (!form)
         throw new Error('Todo form not found')
@@ -95,7 +97,7 @@ test.describe('Server Actions Progressive Enhancement', () => {
       if (!textInput)
         throw new Error('Todo text input not found')
 
-      form.action = '/_rari/action'
+      form.action = action
       form.method = 'POST'
       form.enctype = 'multipart/form-data'
 
@@ -114,7 +116,7 @@ test.describe('Server Actions Progressive Enhancement', () => {
       // submit() bypasses React's onSubmit handler so the browser performs a native POST
       // (decodeAction path) instead of the client RPC path (rsc-action-id header).
       form.submit()
-    }, { fields, todoText: 'Integration test todo' })
+    }, { fields, action, todoText: 'Integration test todo' })
 
     await page.waitForURL('**/actions', { waitUntil: 'networkidle' })
     await expect(page.getByTestId('todo-count')).toHaveText('Total: 3', { timeout: 15_000 })
