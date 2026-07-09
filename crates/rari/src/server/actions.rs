@@ -386,6 +386,12 @@ pub fn has_action_form_state_cookie(cookie_header: Option<&str>) -> bool {
     read_cookie_value(cookie_header, ACTION_FORM_STATE_COOKIE).is_some()
 }
 
+pub fn response_cache_cookie_partition(cookie_header: Option<&str>) -> Option<String> {
+    let cookie_header = cookie_header.filter(|value| !value.is_empty())?;
+    let form_state = read_cookie_value(cookie_header, ACTION_FORM_STATE_COOKIE)?;
+    Some(format!("{ACTION_FORM_STATE_COOKIE}={form_state}"))
+}
+
 pub async fn inject_action_form_state_from_cookie(
     runtime: &JsExecutionRuntime,
     cookie_header: Option<&str>,
@@ -1288,6 +1294,18 @@ mod tests {
 
         let result = super::build_set_cookie_header(&cookie);
         assert!(result.is_err(), "Cookie value with backslash should be rejected");
+    }
+
+    #[test]
+    fn test_response_cache_cookie_partition_ignores_unrelated_cookies() {
+        let unrelated = super::response_cache_cookie_partition(Some("session=abc; _ga=1"));
+        assert_eq!(unrelated, None);
+
+        let encoded = BASE64_STANDARD.encode(r#"{"ok":true}"#);
+        let with_form_state = super::response_cache_cookie_partition(Some(&format!(
+            "session=abc; rari-action-form-state={encoded}"
+        )));
+        assert_eq!(with_form_state, Some(format!("rari-action-form-state={encoded}")));
     }
 
     #[test]
