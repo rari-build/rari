@@ -7,8 +7,19 @@ import { scheduleActionFlightRefresh } from './action-flight-refresh'
 import { serializeRouterState } from './router-state'
 
 interface ActionFlightResponse {
-  a: Promise<unknown> | unknown
-  f?: Promise<unknown> | unknown | string
+  a: unknown
+  f?: unknown
+}
+
+const ACTION_REQUEST_TIMEOUT_MS = 30_000
+
+function stripInternalActionMetadata<T>(result: T): T {
+  if (!result || typeof result !== 'object' || Array.isArray(result))
+    return result
+
+  const record = { ...(result as Record<string, unknown>) }
+  delete record['~rariSkipRefresh']
+  return record as T
 }
 
 function actionPostUrl(): string {
@@ -55,11 +66,28 @@ export async function callServer(id: string, args: unknown[]): Promise<unknown> 
     body = encoded
   }
 
-  const response = await fetch(actionPostUrl(), {
-    method: 'POST',
-    headers,
-    body,
-  })
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), ACTION_REQUEST_TIMEOUT_MS)
+
+  let response: Response
+  try {
+    response = await fetch(actionPostUrl(), {
+      method: 'POST',
+      headers,
+      body,
+      signal: controller.signal,
+    })
+  }
+  catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`Server action "${id}" timed out after ${ACTION_REQUEST_TIMEOUT_MS}ms`)
+    }
+
+    throw error
+  }
+  finally {
+    clearTimeout(timeoutId)
+  }
 
   const redirectHeader = response.headers.get('x-action-redirect')
   if (redirectHeader) {
@@ -91,5 +119,5 @@ export async function callServer(id: string, args: unknown[]): Promise<unknown> 
 
   scheduleActionFlightRefresh(response, flightResponse, resolvedActionResult)
 
-  return resolvedActionResult
+  return stripInternalActionMetadata(resolvedActionResult)
 }

@@ -1,6 +1,7 @@
 #![expect(clippy::missing_errors_doc, clippy::too_many_lines)]
 
 use std::{
+    env,
     fmt::Write,
     str,
     sync::{
@@ -287,6 +288,25 @@ fn document_form_redirect_response(
 const ACTION_FORM_STATE_COOKIE: &str = "rari-action-form-state";
 const ACTION_REVALIDATION_DYNAMIC_ONLY: &str = "2";
 
+fn action_form_state_cookie_secure() -> bool {
+    env::var("NODE_ENV").map(|value| value == "production").unwrap_or(false)
+}
+
+fn encode_action_form_state_cookie_value(form_state: &Value) -> Option<String> {
+    let json = serde_json::to_string(form_state).ok()?;
+    Some(BASE64_STANDARD.encode(json))
+}
+
+fn decode_action_form_state_cookie_value(encoded: &str) -> Option<Value> {
+    if let Ok(bytes) = BASE64_STANDARD.decode(encoded) {
+        if let Ok(value) = serde_json::from_slice(&bytes) {
+            return Some(value);
+        }
+    }
+
+    serde_json::from_str(encoded).ok()
+}
+
 fn extract_and_strip_form_state(value: &mut Value) -> Option<Value> {
     let form_state = value.get("~rariFormState").cloned();
     if let Some(obj) = value.as_object_mut() {
@@ -299,9 +319,11 @@ pub fn stage_action_form_state_cookie(
     pending_cookies: &dashmap::DashMap<PendingCookieKey, PendingCookie>,
     form_state: &Value,
 ) {
-    let Ok(encoded) = serde_json::to_string(form_state) else {
+    let Some(encoded) = encode_action_form_state_cookie_value(form_state) else {
         return;
     };
+
+    let secure = action_form_state_cookie_secure();
 
     pending_cookies.insert(
         PendingCookieKey::new(ACTION_FORM_STATE_COOKIE, Some("/"), None),
@@ -313,7 +335,7 @@ pub fn stage_action_form_state_cookie(
             expires: None,
             max_age: Some(60),
             http_only: true,
-            secure: false,
+            secure,
             same_site: Some("Lax".to_string()),
             priority: None,
             partitioned: false,
@@ -324,6 +346,8 @@ pub fn stage_action_form_state_cookie(
 pub fn clear_action_form_state_cookie(
     pending_cookies: &dashmap::DashMap<PendingCookieKey, PendingCookie>,
 ) {
+    let secure = action_form_state_cookie_secure();
+
     pending_cookies.insert(
         PendingCookieKey::new(ACTION_FORM_STATE_COOKIE, Some("/"), None),
         PendingCookie {
@@ -334,7 +358,7 @@ pub fn clear_action_form_state_cookie(
             expires: None,
             max_age: Some(0),
             http_only: true,
-            secure: false,
+            secure,
             same_site: Some("Lax".to_string()),
             priority: None,
             partitioned: false,
@@ -354,6 +378,14 @@ fn read_cookie_value(cookie_header: &str, name: &str) -> Option<String> {
     None
 }
 
+pub fn has_action_form_state_cookie(cookie_header: Option<&str>) -> bool {
+    let Some(cookie_header) = cookie_header else {
+        return false;
+    };
+
+    read_cookie_value(cookie_header, ACTION_FORM_STATE_COOKIE).is_some()
+}
+
 pub async fn inject_action_form_state_from_cookie(
     runtime: &JsExecutionRuntime,
     cookie_header: Option<&str>,
@@ -366,7 +398,7 @@ pub async fn inject_action_form_state_from_cookie(
         return;
     };
 
-    let Ok(form_state) = serde_json::from_str::<Value>(&encoded) else {
+    let Some(form_state) = decode_action_form_state_cookie_value(&encoded) else {
         return;
     };
 
@@ -1256,6 +1288,16 @@ mod tests {
 
         let result = super::build_set_cookie_header(&cookie);
         assert!(result.is_err(), "Cookie value with backslash should be rejected");
+    }
+
+    #[test]
+    fn test_action_form_state_cookie_base64_roundtrip() {
+        let form_state = serde_json::json!({ "message": "Todo added \"successfully\"" });
+        let encoded = super::encode_action_form_state_cookie_value(&form_state).expect("encoded");
+        assert!(!encoded.contains('"'));
+
+        let decoded = super::decode_action_form_state_cookie_value(&encoded).expect("decoded");
+        assert_eq!(decoded, form_state);
     }
 
     #[test]

@@ -7,10 +7,18 @@ export type SegmentPath = string[]
 
 const CHILDREN_SLOT = 'children'
 
+function trimTrailingSlashes(pathname: string): string {
+  let end = pathname.length
+  while (end > 1 && pathname[end - 1] === '/')
+    end -= 1
+
+  return pathname.slice(0, end)
+}
+
 export function buildFlightRouterState(pathname: string): FlightRouterState {
   const normalized = pathname === '/' || pathname === ''
     ? '/'
-    : pathname.replace(/\/+$/, '') || '/'
+    : trimTrailingSlashes(pathname) || '/'
 
   const segments = normalized === '/'
     ? []

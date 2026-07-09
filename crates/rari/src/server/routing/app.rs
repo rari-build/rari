@@ -34,7 +34,7 @@ use crate::{
     },
     server::{
         ServerState,
-        actions::inject_action_form_state_from_cookie,
+        actions::{has_action_form_state_cookie, inject_action_form_state_from_cookie},
         cache::response,
         compression::{CompressionEncoding, compress_body, compress_stream},
         config::Config,
@@ -75,6 +75,13 @@ fn static_html_vary_header(cookie_header: Option<&str>) -> String {
         parts.push("Cookie");
     }
     parts.join(", ")
+}
+
+/// Static fast-cache entries are keyed without cookies because only cookie-independent
+/// HTML is stored. Skip the fast path when action form state is present since that
+/// cookie is injected into SSR before render.
+fn can_use_static_fast_cache(cookie_header: Option<&str>) -> bool {
+    !has_action_form_state_cookie(cookie_header)
 }
 
 fn rsc_vary_header(cookie_header: Option<&str>) -> String {
@@ -1013,7 +1020,7 @@ pub async fn handle_app_route(
     let cookie_header = request_cookie_header(&headers);
     let query_params_ref = route_query_params_for_cache(&query_params_for_cache);
 
-    if matches!(render_mode, RenderMode::Ssr) {
+    if matches!(render_mode, RenderMode::Ssr) && can_use_static_fast_cache(cookie_header) {
         let fast_key =
             response::ResponseCache::generate_static_fast_cache_key(path, query_params_ref, None);
 
@@ -1030,7 +1037,7 @@ pub async fn handle_app_route(
                 return Ok(Response::builder()
                     .status(StatusCode::NOT_MODIFIED)
                     .header("etag", &prebuilt.etag)
-                    .header("vary", static_html_vary_header(cookie_header))
+                    .header("vary", static_html_vary_header(None))
                     .body(Body::empty())
                     .expect("Valid 304 response"));
             }
@@ -1044,7 +1051,7 @@ pub async fn handle_app_route(
                 .header("content-type", prebuilt.content_type.as_str())
                 .header("cache-control", prebuilt.cache_control.as_str())
                 .header("etag", &prebuilt.etag)
-                .header("vary", static_html_vary_header(cookie_header))
+                .header("vary", static_html_vary_header(None))
                 .header("x-cache", "HIT");
 
             if let Some(enc) = encoding_header {
@@ -1573,24 +1580,26 @@ pub async fn handle_app_route(
                     )
                 };
 
-                let fast_key = response::ResponseCache::generate_static_fast_cache_key(
-                    path,
-                    query_params_ref,
-                    None,
-                );
-                state.static_fast_cache.insert(
-                    fast_key,
-                    Arc::new(response::PrebuiltResponse {
-                        identity: body_bytes.clone(),
-                        gzip: compressed_gzip.clone(),
-                        br: compressed_br.clone(),
-                        zstd: compressed_zstd.clone(),
-                        etag: etag.clone(),
-                        content_type: "text/html; charset=utf-8".to_string(),
-                        cache_control: cache_control_value.to_string(),
-                        is_not_found: route_match.not_found.is_some(),
-                    }),
-                );
+                if can_use_static_fast_cache(cookie_header) {
+                    let fast_key = response::ResponseCache::generate_static_fast_cache_key(
+                        path,
+                        query_params_ref,
+                        None,
+                    );
+                    state.static_fast_cache.insert(
+                        fast_key,
+                        Arc::new(response::PrebuiltResponse {
+                            identity: body_bytes.clone(),
+                            gzip: compressed_gzip.clone(),
+                            br: compressed_br.clone(),
+                            zstd: compressed_zstd.clone(),
+                            etag: etag.clone(),
+                            content_type: "text/html; charset=utf-8".to_string(),
+                            cache_control: cache_control_value.to_string(),
+                            is_not_found: route_match.not_found.is_some(),
+                        }),
+                    );
+                }
 
                 let cached_response = response::CachedResponse {
                     body: body_bytes,
