@@ -69,6 +69,7 @@ export default defineConfig({
         new URL('./packages/logger/src', import.meta.url),
       ),
       '@rari': fileURLToPath(new URL('./packages/rari/src', import.meta.url)),
+      '@rari/runtime': fileURLToPath(new URL('./packages/rari/src/runtime', import.meta.url)),
     },
   },
   test: {

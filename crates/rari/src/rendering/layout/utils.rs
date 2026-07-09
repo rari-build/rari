@@ -145,6 +145,31 @@ pub fn create_page_props(
     Ok(result)
 }
 
+pub fn format_action_post_url(
+    pathname: &str,
+    search_params: &FxHashMap<String, Vec<String>>,
+) -> String {
+    if search_params.is_empty() {
+        return pathname.to_string();
+    }
+
+    let mut keys: Vec<_> = search_params.keys().collect();
+    keys.sort_unstable();
+    let mut query_pairs = Vec::new();
+    for key in keys {
+        let values = &search_params[key];
+        for value in values {
+            query_pairs.push(format!(
+                "{}={}",
+                urlencoding::encode(key),
+                urlencoding::encode(value)
+            ));
+        }
+    }
+
+    format!("{pathname}?{}", query_pairs.join("&"))
+}
+
 #[expect(
     clippy::implicit_hasher,
     reason = "FxHashMap is the specific hasher needed for LayoutRenderContext"
@@ -155,7 +180,24 @@ pub fn create_layout_context(
     headers: FxHashMap<String, String>,
     pathname: String,
 ) -> LayoutRenderContext {
-    LayoutRenderContext { params, search_params, headers, pathname, metadata: None }
+    LayoutRenderContext {
+        params,
+        search_params,
+        headers,
+        pathname,
+        template_navigation_id: None,
+        metadata: None,
+    }
+}
+
+pub fn template_key_json(context: &LayoutRenderContext) -> String {
+    let template_key = if let Some(navigation_id) = context.template_navigation_id {
+        format!("{}:{}", context.pathname, navigation_id)
+    } else {
+        context.pathname.clone()
+    };
+
+    serde_json::to_string(&template_key).unwrap_or_else(|_| "null".to_string())
 }
 
 pub async fn drain_chunked_stream(

@@ -1,12 +1,5 @@
+/// <reference path="../../crates/rari/src/rendering/types.d.ts" />
 import '../../crates/rari/src/rendering/base/js/action_args_validation.core'
-
-export interface ActionValidationConfig {
-  maxDepth: number
-  maxStringLength: number
-  maxArrayLength: number
-  maxObjectKeys: number
-  maxTotalElements: number
-}
 
 interface ActionArgsValidationApi {
   productionValidationConfig: () => ActionValidationConfig

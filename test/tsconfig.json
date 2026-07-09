@@ -8,7 +8,7 @@
       "@rari/use-cache": ["../packages/use-cache/src/index"],
       "@rari/*": ["../packages/rari/src/*"]
     },
-    "types": ["node"]
+    "types": ["node", "react"]
   },
   "include": ["**/*.ts"]
 }

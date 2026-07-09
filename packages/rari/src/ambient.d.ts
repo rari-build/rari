@@ -12,20 +12,30 @@ declare module 'virtual:react-flight-client' {
     reason?: unknown
   }
 
-  export function createServerReference<T>(
+  export function createServerReference<T, A extends unknown[] = unknown[], R = unknown>(
     id: string,
-    callServer: <A, R>(id: string, args: A) => Promise<R>,
+    callServer: (id: string, args: A) => Promise<R>,
     encodeFormAction?: (args: A) => Promise<FormData | string>,
   ): T
 
   export function createFromReadableStream<T>(
     stream: ReadableStream<Uint8Array>,
     options?: {
-      callServer?: <A, R>(id: string, args: A) => Promise<R>
+      callServer?: (id: string, args: unknown[]) => Promise<unknown>
       moduleMap?: unknown
       moduleLoading?: unknown
     },
   ): Thenable<T>
+
+  export function createFromFetch<T>(
+    promiseForResponse: Promise<Response>,
+    options?: {
+      callServer?: (id: string, args: unknown[]) => Promise<unknown>
+      temporaryReferences?: Map<string, unknown>
+    },
+  ): Promise<T>
+
+  export function createTemporaryReferenceSet(): Map<string, unknown>
 
   export function encodeReply(
     value: unknown,

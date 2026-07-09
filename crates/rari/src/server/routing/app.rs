@@ -34,12 +34,14 @@ use crate::{
     },
     server::{
         ServerState,
+        actions::inject_action_form_state_from_cookie,
         cache::response,
         compression::{CompressionEncoding, compress_body, compress_stream},
         config::Config,
         core::{
             types::request::{RenderMode, RequestTypeDetector},
             utils::{
+                self,
                 http::{
                     extract_headers, extract_search_params, get_content_type,
                     merge_vary_with_accept,
@@ -65,6 +67,22 @@ fn route_query_params_for_cache(
     query_params: &FxHashMap<String, String>,
 ) -> Option<&FxHashMap<String, String>> {
     if query_params.is_empty() { None } else { Some(query_params) }
+}
+
+fn static_html_vary_header(cookie_header: Option<&str>) -> String {
+    let mut parts = vec!["Accept", "Accept-Encoding"];
+    if cookie_header.is_some() {
+        parts.push("Cookie");
+    }
+    parts.join(", ")
+}
+
+fn rsc_vary_header(cookie_header: Option<&str>) -> String {
+    let mut headers = HeaderMap::new();
+    if cookie_header.is_some() {
+        headers.insert("vary", HeaderValue::from_static("Cookie"));
+    }
+    merge_vary_with_accept(headers.get("vary"))
 }
 
 async fn should_store_response_cache(
@@ -982,6 +1000,12 @@ pub async fn handle_app_route(
         RequestContext::new(path.to_string()).with_http_headers(extract_headers(&headers)),
     );
 
+    let runtime = {
+        let renderer = state.renderer.lock().await;
+        Arc::clone(&renderer.runtime)
+    };
+    inject_action_form_state_from_cookie(&runtime, request_cookie_header(&headers)).await;
+
     let render_mode = RequestTypeDetector::detect_render_mode(&headers);
     let accept_encoding = headers.get("accept-encoding").and_then(|v| v.to_str().ok());
 
@@ -990,11 +1014,8 @@ pub async fn handle_app_route(
     let query_params_ref = route_query_params_for_cache(&query_params_for_cache);
 
     if matches!(render_mode, RenderMode::Ssr) {
-        let fast_key = response::ResponseCache::generate_static_fast_cache_key(
-            path,
-            query_params_ref,
-            cookie_header,
-        );
+        let fast_key =
+            response::ResponseCache::generate_static_fast_cache_key(path, query_params_ref, None);
 
         if let Some(prebuilt) = state.static_fast_cache.get(&fast_key) {
             let prebuilt = Arc::clone(prebuilt.value());
@@ -1009,7 +1030,7 @@ pub async fn handle_app_route(
                 return Ok(Response::builder()
                     .status(StatusCode::NOT_MODIFIED)
                     .header("etag", &prebuilt.etag)
-                    .header("vary", "Accept, Accept-Encoding")
+                    .header("vary", static_html_vary_header(cookie_header))
                     .body(Body::empty())
                     .expect("Valid 304 response"));
             }
@@ -1023,7 +1044,7 @@ pub async fn handle_app_route(
                 .header("content-type", prebuilt.content_type.as_str())
                 .header("cache-control", prebuilt.cache_control.as_str())
                 .header("etag", &prebuilt.etag)
-                .header("vary", "Accept, Accept-Encoding")
+                .header("vary", static_html_vary_header(cookie_header))
                 .header("x-cache", "HIT");
 
             if let Some(enc) = encoding_header {
@@ -1047,6 +1068,7 @@ pub async fn handle_app_route(
         request_headers,
         route_match.pathname.clone(),
     );
+    context.template_navigation_id = utils::http::parse_navigation_id(&context.headers);
 
     let layout_renderer = LayoutRenderer::with_shared_cache(
         Arc::clone(&state.renderer),
@@ -1089,7 +1111,9 @@ pub async fn handle_app_route(
                 cookie_header,
             );
 
-            if let Some(cached) = state.response_cache.get(&cache_key).await {
+            if context.template_navigation_id.is_none()
+                && let Some(cached) = state.response_cache.get(&cache_key).await
+            {
                 let status_code = if route_match.not_found.is_some() {
                     StatusCode::NOT_FOUND
                 } else {
@@ -1135,7 +1159,7 @@ pub async fn handle_app_route(
                     let mut response_builder = Response::builder()
                         .status(status_code)
                         .header("content-type", "text/x-component")
-                        .header("vary", "Accept")
+                        .header("vary", rsc_vary_header(cookie_header))
                         .header("x-cache", "MISS");
 
                     let mut cache_headers = HeaderMap::new();
@@ -1513,7 +1537,7 @@ pub async fn handle_app_route(
                 .status(status_code)
                 .header("content-type", "text/html; charset=utf-8")
                 .header("etag", &etag)
-                .header("vary", "Accept")
+                .header("vary", rsc_vary_header(cookie_header))
                 .header("x-cache", "MISS");
 
             let cache_control_value = state.config.get_cache_control_for_route(path);
@@ -1552,7 +1576,7 @@ pub async fn handle_app_route(
                 let fast_key = response::ResponseCache::generate_static_fast_cache_key(
                     path,
                     query_params_ref,
-                    cookie_header,
+                    None,
                 );
                 state.static_fast_cache.insert(
                     fast_key,

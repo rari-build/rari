@@ -174,7 +174,7 @@ globalThis.__rari_rsc_require__.u = function(chunkId) {
 };
 `,
     externals: {
-      react: 'ext:rari/react/vendor/react.js',
+      'react': 'ext:rari/react/vendor/react.js',
       'react-dom': 'ext:rari/react/vendor/react-dom.js',
     },
   },
@@ -208,7 +208,7 @@ globalThis.__rari_rsc_require__ = function(id) {
   },
 ]
 
-function createEntrySource(entry: BundleEntry): string {
+function createEntrySource(entry: BundleEntry): { source: string, tempPath?: string } {
   if (!entry.cjsFile)
     throw new Error(`Entry ${entry.name} is missing cjsFile`)
 
@@ -220,11 +220,13 @@ function createEntrySource(entry: BundleEntry): string {
   lines.push('')
 
   let importPath = entry.cjsFile.replace(/\\/g, '/')
+  let tempPath: string | undefined
   if (entry.patchCjsSource) {
     const patchedPath = path.join(OUT_DIR, `.tmp-${entry.name}.cjs`)
     const patchedSource = entry.patchCjsSource(fs.readFileSync(entry.cjsFile, 'utf-8'))
     fs.writeFileSync(patchedPath, patchedSource, 'utf-8')
     importPath = patchedPath.replace(/\\/g, '/')
+    tempPath = patchedPath
   }
 
   lines.push(`import * as __mod from '${importPath}';`)
@@ -241,7 +243,7 @@ function createEntrySource(entry: BundleEntry): string {
 
   lines.push(`export default __mod;`)
 
-  return lines.join('\n')
+  return { source: lines.join('\n'), tempPath }
 }
 
 function createVendorHeader(entry: BundleEntry): string {
@@ -284,7 +286,7 @@ async function bundleShimEntry(entry: BundleEntry): Promise<void> {
 
 async function bundleCjsEntry(entry: BundleEntry): Promise<void> {
   const virtualId = `\0virtual:${entry.name}`
-  const entrySource = createEntrySource(entry)
+  const { source: entrySource, tempPath } = createEntrySource(entry)
 
   const externalPatterns: (string | RegExp)[] = [/^node:/]
 
@@ -296,82 +298,88 @@ async function bundleCjsEntry(entry: BundleEntry): Promise<void> {
     }
   }
 
-  const result = await build({
-    input: virtualId,
-    platform: 'neutral',
-    write: false,
-    external: externalPatterns,
-    output: {
-      format: 'esm',
-      minify: false,
-      exports: 'named',
-    },
-    resolve: {
-      conditionNames: ['production', 'default'],
-    },
-    plugins: [
-      {
-        name: 'virtual-entry',
-        resolveId(source) {
-          if (source === virtualId)
-            return source
-          for (const [pkg, target] of Object.entries(resolveOverrides)) {
-            if (source === pkg || source.startsWith(`${pkg}/`))
-              return { id: target, external: true }
-          }
-
-          return null
-        },
-        load(id) {
-          if (id === virtualId)
-            return entrySource
-
-          return null
-        },
+  try {
+    const result = await build({
+      input: virtualId,
+      platform: 'neutral',
+      write: false,
+      external: externalPatterns,
+      output: {
+        format: 'esm',
+        minify: false,
+        exports: 'named',
       },
-    ],
-  })
+      resolve: {
+        conditionNames: ['production', 'default'],
+      },
+      plugins: [
+        {
+          name: 'virtual-entry',
+          resolveId(source) {
+            if (source === virtualId)
+              return source
+            for (const [pkg, target] of Object.entries(resolveOverrides)) {
+              if (source === pkg || source.startsWith(`${pkg}/`))
+                return { id: target, external: true }
+            }
 
-  const output = result.output[0]
-  if (!output)
-    throw new Error(`No output generated for ${entry.name}`)
+            return null
+          },
+          load(id) {
+            if (id === virtualId)
+              return entrySource
 
-  // Rolldown emits external CJS deps as `__require("pkg")` calls, which throw
-  // in deno_core's V8 (no `require`). Rewrite them into a static ESM import of
-  // the shared vendor module so the whole runtime resolves to ONE React
-  // instance (file:///react_vendor/react.js).
-  let code = output.code
-  if (entry.externals) {
-    const importLines: string[] = []
-    for (const [pkg, target] of Object.entries(entry.externals)) {
-      const ident = `__ext_${pkg.replace(/\W/g, '_')}`
-      const escaped = pkg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      const requirePattern = `__require\\((["'])${escaped}\\1\\)`
-      if (new RegExp(requirePattern).test(code)) {
-        importLines.push(`import * as ${ident} from '${target}';`)
-        code = code.replace(new RegExp(requirePattern, 'g'), ident)
+            return null
+          },
+        },
+      ],
+    })
+
+    const output = result.output[0]
+    if (!output)
+      throw new Error(`No output generated for ${entry.name}`)
+
+    // Rolldown emits external CJS deps as `__require("pkg")` calls, which throw
+    // in deno_core's V8 (no `require`). Rewrite them into a static ESM import of
+    // the shared vendor module so the whole runtime resolves to ONE React
+    // instance (file:///react_vendor/react.js).
+    let code = output.code
+    if (entry.externals) {
+      const importLines: string[] = []
+      for (const [pkg, target] of Object.entries(entry.externals)) {
+        const ident = `__ext_${pkg.replace(/\W/g, '_')}`
+        const escaped = pkg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        const requirePattern = `__require\\((["'])${escaped}\\1\\)`
+        if (new RegExp(requirePattern).test(code)) {
+          importLines.push(`import * as ${ident} from '${target}';`)
+          code = code.replace(new RegExp(requirePattern, 'g'), ident)
+        }
       }
+      if (importLines.length > 0)
+        code = `${importLines.join('\n')}\n${code}`
     }
-    if (importLines.length > 0)
-      code = `${importLines.join('\n')}\n${code}`
+
+    if (code.includes('__webpack_chunk_load__'))
+      code = code.replaceAll('__webpack_chunk_load__', '__rari_chunk_load__')
+
+    if (code.includes('__webpack_require__')) {
+      if (code.includes('__webpack_require__.u'))
+        code = code.replaceAll('__webpack_require__.u', '({}).u')
+      code = code.replaceAll('__webpack_require__', '__rari_rsc_require__')
+    }
+
+    // Rolldown collapses React's $$FORM_ACTION / $$IS_SIGNATURE_EQUAL property
+    // names to a single $ prefix. react-dom-server checks the double-$ names.
+    if (entry.name === 'react-server-dom-webpack-client') {
+      code = fixRolldownDoubleDollarProperties(code)
+    }
+
+    writeVendorBundle(entry, code)
   }
-
-  if (code.includes('__webpack_chunk_load__'))
-    code = code.replaceAll('__webpack_chunk_load__', '__rari_chunk_load__')
-
-  if (code.includes('__webpack_require__')) {
-    if (code.includes('__webpack_require__.u'))
-      code = code.replaceAll('__webpack_require__.u', '({}).u')
-    code = code.replaceAll('__webpack_require__', '__rari_rsc_require__')
+  finally {
+    if (tempPath)
+      fs.rmSync(tempPath, { force: true })
   }
-
-  // Rolldown collapses React's $$FORM_ACTION / $$IS_SIGNATURE_EQUAL property
-  // names to a single $ prefix. react-dom-server checks the double-$ names.
-  if (entry.name === 'react-server-dom-webpack-client') {
-    code = fixRolldownDoubleDollarProperties(code)
-  }
-
-  writeVendorBundle(entry, code)
 }
 
 async function bundleEntry(entry: BundleEntry): Promise<void> {

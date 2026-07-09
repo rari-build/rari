@@ -7,11 +7,13 @@ async function renderToRsc(element: unknown): Promise<string> {
     throw new Error('[rari] React Server renderer not loaded')
 
   const bundlerConfig = g['~rari']?.clientReferenceManifest || {}
+  const formState = g['~rari']?.actionFormState ?? undefined
 
   const stream = await ReactServerRenderer.renderToReadableStream(
     element,
     bundlerConfig,
     {
+      formState,
       onError(error: unknown) {
         console.error('[rari] RSC render error:', error)
       },

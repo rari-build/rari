@@ -11,6 +11,7 @@ pub struct LayoutRenderContext {
     pub search_params: FxHashMap<String, Vec<String>>,
     pub headers: FxHashMap<String, String>,
     pub pathname: String,
+    pub template_navigation_id: Option<u32>,
     pub metadata: Option<PageMetadata>,
 }
 

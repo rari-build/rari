@@ -19,11 +19,20 @@ export function patchBrowserClientForFormActions(
     encType: "multipart/form-data",
     data: data
   };`,
-    `return {
+    `function resolveRariFormActionUrl() {
+    var g = typeof globalThis !== "undefined" ? globalThis : {};
+    var rari = g["~rari"];
+    if (rari && rari.actionPostUrl)
+      return rari.actionPostUrl;
+    if (typeof window !== "undefined")
+      return window.location.pathname + window.location.search;
+    return "/";
+  }
+  return {
     name: referenceClosure,
     method: "POST",
     encType: "multipart/form-data",
-    action: "/_rari/action",
+    action: resolveRariFormActionUrl(),
     data: data
   };`,
   )

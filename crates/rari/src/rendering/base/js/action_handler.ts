@@ -3,11 +3,16 @@
 interface FlightServerActions {
   decodeAction: (
     body: FormData,
-    serverManifest: Record<string, { id: string, chunks: string[] }>,
+    serverManifest: Record<string, { id: string, name?: string, chunks: string[] }>,
   ) => Promise<(() => Promise<unknown>) | null>
+  decodeFormState: (
+    actionResult: unknown,
+    body: FormData,
+    serverManifest: Record<string, { id: string, name?: string, chunks: string[] }>,
+  ) => Promise<unknown>
   decodeReply: (
     body: string | FormData,
-    serverManifest: Record<string, { id: string, chunks: string[] }>,
+    serverManifest: Record<string, { id: string, name?: string, chunks: string[] }>,
   ) => Promise<unknown>
 }
 
@@ -17,7 +22,7 @@ interface FlightServerActions {
       g['~rari'].loadRscReactVendors()
 
     const flightServer = g['~reactServerRenderer'] as FlightServerActions | undefined
-    if (!flightServer?.decodeAction || !flightServer?.decodeReply)
+    if (!flightServer?.decodeAction || !flightServer?.decodeReply || !flightServer?.decodeFormState)
       throw new TypeError('Flight server action helpers not loaded')
 
     const serverManifest = g['~rari']?.serverManifest || {}
@@ -51,7 +56,28 @@ interface FlightServerActions {
       if (!runFormAction)
         throw new TypeError('Failed to decode server action from form data')
 
-      return await runFormAction()
+      const actionResult = await runFormAction()
+      const formState = await flightServer.decodeFormState(actionResult, formData, serverManifest)
+
+      if (formState != null) {
+        if (!g['~rari'])
+          g['~rari'] = {}
+        g['~rari'].actionFormState = formState
+
+        if (actionResult && typeof actionResult === 'object') {
+          return {
+            ...(actionResult as Record<string, unknown>),
+            '~rariFormState': formState,
+          }
+        }
+
+        return {
+          'value': actionResult,
+          '~rariFormState': formState,
+        }
+      }
+
+      return actionResult
     }
 
     let decoded: unknown
@@ -72,7 +98,8 @@ interface FlightServerActions {
     const args = Array.isArray(decoded) ? decoded : [decoded]
     const sanitizedArgs = validateActionArgs(args)
     const actionFn = resolveActionFn(actionId, serverManifest)
-    return await actionFn(...sanitizedArgs)
+    const result = await actionFn(...sanitizedArgs)
+    return stashRpcActionResult(result)
   }
   catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error)

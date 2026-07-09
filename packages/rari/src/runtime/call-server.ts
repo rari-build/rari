@@ -1,25 +1,49 @@
-import { encodeReply } from 'virtual:react-flight-client'
+import {
+  createFromFetch,
+  createTemporaryReferenceSet,
+  encodeReply,
+} from 'virtual:react-flight-client'
+import { scheduleActionFlightRefresh } from './action-flight-refresh'
+import { serializeRouterState } from './router-state'
 
-export interface ServerActionResult {
-  success: boolean
-  result?: unknown
-  error?: string
-  redirect?: string
+interface ActionFlightResponse {
+  a: Promise<unknown> | unknown
+  f?: Promise<unknown> | unknown | string
 }
 
+function actionPostUrl(): string {
+  if (typeof window !== 'undefined')
+    return window.location.pathname + window.location.search
+
+  return '/'
+}
+
+const ALLOWED_REDIRECT_PROTOCOLS = new Set(['http:', 'https:'])
+
 function applyRedirect(redirect: string) {
-  if (typeof window !== 'undefined') {
-    const absoluteRedirect = new URL(redirect, window.location.href).href
-    if (absoluteRedirect !== window.location.href)
-      window.location.href = absoluteRedirect
+  if (typeof window === 'undefined')
+    return
+
+  try {
+    const absoluteRedirect = new URL(redirect, window.location.href)
+    if (!ALLOWED_REDIRECT_PROTOCOLS.has(absoluteRedirect.protocol))
+      return
+
+    if (absoluteRedirect.href !== window.location.href)
+      window.location.href = absoluteRedirect.href
+  }
+  catch {
+    // Ignore malformed redirect targets.
   }
 }
 
 export async function callServer(id: string, args: unknown[]): Promise<unknown> {
-  const encoded = await encodeReply(args)
+  const temporaryReferences = createTemporaryReferenceSet()
+  const encoded = await encodeReply(args, { temporaryReferences })
   const headers: Record<string, string> = {
-    'Accept': 'application/json',
+    'Accept': 'text/x-component',
     'rsc-action-id': id,
+    'rari-router-state': serializeRouterState(),
   }
 
   let body: BodyInit
@@ -31,26 +55,41 @@ export async function callServer(id: string, args: unknown[]): Promise<unknown> 
     body = encoded
   }
 
-  const response = await fetch('/_rari/action', {
+  const response = await fetch(actionPostUrl(), {
     method: 'POST',
     headers,
     body,
   })
 
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => response.statusText)
-    throw new Error(`Server action "${id}" failed with status ${response.status}: ${errorText}`)
+  const redirectHeader = response.headers.get('x-action-redirect')
+  if (redirectHeader) {
+    const [location] = redirectHeader.split(';')
+    if (location)
+      applyRedirect(location)
+
+    return { redirect: location }
   }
 
-  const payload = await response.json() as ServerActionResult
+  const contentType = response.headers.get('content-type') || ''
+  const isFlightResponse = contentType.startsWith('text/x-component')
 
-  if (payload.redirect) {
-    applyRedirect(payload.redirect)
-    return { redirect: payload.redirect }
+  if (!isFlightResponse) {
+    const message = response.status >= 400 && contentType.startsWith('text/plain')
+      ? await response.text().catch(() => response.statusText)
+      : `Server action "${id}" failed with status ${response.status}: ${response.statusText}`
+
+    throw new Error(message)
   }
 
-  if (!payload.success)
-    throw new Error(payload.error || 'Server action failed')
+  const flightResponse = await createFromFetch(Promise.resolve(response), {
+    callServer: callServer as <A, R>(id: string, args: A) => Promise<R>,
+    temporaryReferences,
+  }) as ActionFlightResponse
 
-  return payload.result
+  const actionResult = flightResponse.a
+  const resolvedActionResult = actionResult instanceof Promise ? await actionResult : actionResult
+
+  scheduleActionFlightRefresh(response, flightResponse, resolvedActionResult)
+
+  return resolvedActionResult
 }

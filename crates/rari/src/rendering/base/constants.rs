@@ -16,12 +16,29 @@ pub const DEFAULT_MAX_MEMORY_PER_COMPONENT_MB: usize = 50;
 pub const DEFAULT_MAX_CACHE_SIZE: usize = 1000;
 
 pub const V8_CACHE_CLEAR_SCRIPT: &str = include_str!("js/v8_cache_clear.ts");
+// Embedded action handler scripts (validation core v2: isolate-safe init)
+pub const ACTION_FLIGHT_ENCODE_SCRIPT: &str = concat!(
+    include_str!("js/action_flight_shared.ts"),
+    include_str!("js/action_flight_encode.ts"),
+);
 pub const ACTION_HANDLER_SCRIPT: &str = concat!(
+    "// rari-action-handler-v3\n",
     include_str!("js/action_fn_resolver.ts"),
     include_str!("js/action_args_validation.core.ts"),
     include_str!("js/action_args_validation_v8.ts"),
+    include_str!("js/action_flight_shared.ts"),
     include_str!("js/action_handler.ts"),
 );
+
+pub const GET_RSC_BINARY_B64: &str = r"(function() {
+    const bin = globalThis['~rari']?.lastRscBinary;
+    if (!bin || bin.length === 0) return null;
+    let str = '';
+    for (let i = 0; i < bin.length; i++) {
+        str += String.fromCharCode(bin[i]);
+    }
+    return btoa(str);
+})()";
 
 pub const FIZZ_RENDER_SCRIPT: &str = include_str!("../layout/js/fizz_render.ts");
 pub const STREAMING_FIZZ_SCRIPT: &str = include_str!("../layout/js/streaming_fizz.ts");

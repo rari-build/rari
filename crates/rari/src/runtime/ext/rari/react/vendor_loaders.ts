@@ -102,8 +102,6 @@ export function loadRscReactVendors(): boolean {
     return !!(
       typeof g.React?.createElement === 'function'
       && typeof g['~reactServerRenderer']?.renderToReadableStream === 'function'
-      && typeof g['~reactServerRenderer']?.decodeAction === 'function'
-      && typeof g['~reactServerRenderer']?.decodeReply === 'function'
     )
   }
   catch (e) {

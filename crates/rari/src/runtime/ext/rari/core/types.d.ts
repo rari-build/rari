@@ -33,8 +33,9 @@ declare global {
       createFromReadableStream: (stream: ReadableStream, options?: { ssrManifest?: unknown }) => Promise<unknown>
     }
     '~reactServerRenderer'?: {
-      renderToReadableStream: (element: unknown, bundlerConfig: unknown, options?: { onError?: (error: unknown) => void }) => Promise<ReadableStream>
+      renderToReadableStream: (element: unknown, bundlerConfig: unknown, options?: { formState?: unknown, onError?: (error: unknown) => void }) => Promise<ReadableStream>
       decodeAction?: (body: FormData, serverManifest: Record<string, { id: string, name?: string, chunks: string[] }>) => Promise<(() => Promise<unknown>) | null>
+      decodeFormState?: (actionResult: unknown, body: FormData, serverManifest: Record<string, { id: string, name?: string, chunks: string[] }>) => Promise<unknown>
       decodeReply?: (body: string | FormData, serverManifest: Record<string, { id: string, name?: string, chunks: string[] }>) => Promise<unknown>
     }
     '~promises'?: {
@@ -106,7 +107,11 @@ declare global {
       registeredServerFunctions?: Set<string>
       clientReferenceManifest?: Record<string, { id: string, chunks: string, name: string }>
       lastRscBinary?: Uint8Array
+      actionPostUrl?: string
+      actionRefreshSearch?: string
+      actionFormState?: unknown
       capturedElement?: unknown
+      pendingActionResult?: unknown
       exportOwners?: Record<string, string>
       metadataCollector?: {
         collect: (layoutPaths: string[], pagePath: string, params: Record<string, string>, searchParams: Record<string, string>) => Promise<unknown[]>
