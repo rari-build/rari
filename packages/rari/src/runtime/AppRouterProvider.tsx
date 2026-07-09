@@ -507,34 +507,45 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
       saveFormState()
 
-      const { pathname, search } = currentRouteLocation()
-      if (customEvent.detail.revalidationKind === ActionDidRevalidateStaticAndDynamic)
-        flightRouteCache.clear()
-      else if (customEvent.detail.revalidatedPath)
-        flightRouteCache.invalidate(customEvent.detail.revalidatedPath, search)
-      else
-        flightRouteCache.invalidate(pathname, search)
+      try {
+        const { pathname, search } = currentRouteLocation()
+        if (customEvent.detail.revalidationKind === ActionDidRevalidateStaticAndDynamic)
+          flightRouteCache.clear()
+        else if (customEvent.detail.revalidatedPath)
+          flightRouteCache.invalidate(customEvent.detail.revalidatedPath, search)
+        else
+          flightRouteCache.invalidate(pathname, search)
 
-      const cachedElement = flightRouteCache.getElement(pathname, search) ?? rscPayloadRef.current?.element
-      const merged = mergeFlightRefresh(
-        cachedElement as React.ReactNode,
-        customEvent.detail.element as React.ReactNode,
-      )
+        const cachedElement = flightRouteCache.getElement(pathname, search) ?? rscPayloadRef.current?.element
+        const merged = mergeFlightRefresh(
+          cachedElement as React.ReactNode,
+          customEvent.detail.element as React.ReactNode,
+        )
 
-      React.startTransition(() => {
-        setRscPayload({
-          element: merged,
-          rawElement: merged,
+        React.startTransition(() => {
+          setRscPayload({
+            element: merged,
+            rawElement: merged,
+          })
+          setHmrError(null)
         })
-        setHmrError(null)
-      })
 
-      rememberRouteCache(merged)
-
-      requestAnimationFrame(() => {
-        window.scrollTo(scrollPositionRef.current.x, scrollPositionRef.current.y)
-        restoreFormState()
-      })
+        rememberRouteCache(merged)
+      }
+      catch (error) {
+        console.error(
+          'Action flight refresh error:',
+          error instanceof Error ? error.message : String(error),
+        )
+        if (consecutiveFailuresRef.current >= MAX_RETRIES)
+          handleFallbackReload()
+      }
+      finally {
+        requestAnimationFrame(() => {
+          window.scrollTo(scrollPositionRef.current.x, scrollPositionRef.current.y)
+          restoreFormState()
+        })
+      }
     }
 
     const handleRscInvalidate = async () => {

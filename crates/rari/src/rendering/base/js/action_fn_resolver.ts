@@ -3,6 +3,24 @@
 type ActionModule = Record<string, unknown> & { default?: unknown }
 type ActionFn = (...args: unknown[]) => unknown
 
+interface ParsedActionId {
+  moduleId: string
+  exportName: string
+}
+
+function parseActionId(id: string): ParsedActionId | null {
+  const hashIdx = id.lastIndexOf('#')
+  const colonIdx = id.lastIndexOf(':')
+  if (hashIdx === -1 && colonIdx === -1)
+    return null
+
+  const separatorIdx = hashIdx !== -1 ? hashIdx : colonIdx
+  return {
+    moduleId: id.slice(0, separatorIdx),
+    exportName: id.slice(separatorIdx + 1),
+  }
+}
+
 function resolveActionModuleNamespace(
   id: string,
   manifest: Record<string, { id: string, chunks: string[], name?: string }>,
@@ -11,37 +29,26 @@ function resolveActionModuleNamespace(
   if (!ssrModules)
     return undefined
 
-  const hashIdx = id.lastIndexOf('#')
-  const colonIdx = id.lastIndexOf(':')
-  if (hashIdx === -1 && colonIdx === -1)
+  const parsed = parseActionId(id)
+  if (!parsed)
     return undefined
 
-  const moduleId = hashIdx !== -1 ? id.slice(0, hashIdx) : id.slice(0, colonIdx)
-  const entry = manifest[id] ?? manifest[moduleId]
-  return ssrModules[id] ?? ssrModules[entry?.id ?? moduleId]
+  const entry = manifest[id] ?? manifest[parsed.moduleId]
+  return ssrModules[id] ?? ssrModules[entry?.id ?? parsed.moduleId]
 }
 
 function resolveActionFnFromSsrModules(
   id: string,
   manifest: Record<string, { id: string, chunks: string[], name?: string }>,
 ): ActionFn | null {
-  const hashIdx = id.lastIndexOf('#')
-  const colonIdx = id.lastIndexOf(':')
-  const exportName = hashIdx !== -1
-    ? id.slice(hashIdx + 1)
-    : colonIdx !== -1
-      ? id.slice(colonIdx + 1)
-      : 'default'
+  const parsed = parseActionId(id)
+  const exportName = parsed?.exportName ?? 'default'
 
   const mod = resolveActionModuleNamespace(id, manifest)
   if (!mod)
     return null
 
-  const moduleId = hashIdx !== -1
-    ? id.slice(0, hashIdx)
-    : colonIdx !== -1
-      ? id.slice(0, colonIdx)
-      : id
+  const moduleId = parsed?.moduleId ?? id
   const entry = manifest[id] ?? manifest[moduleId]
   const fnName = entry?.name ?? exportName
   const fn = fnName === 'default'
@@ -63,8 +70,8 @@ function resolveActionFn(
   if (typeof fn === 'function')
     return fn
 
-  const hashIdx = id.lastIndexOf('#')
-  const moduleId = hashIdx === -1 ? id : id.slice(0, hashIdx)
+  const parsed = parseActionId(id)
+  const moduleId = parsed?.moduleId ?? id
   if (!resolveActionModuleNamespace(id, manifest))
     throw new TypeError(`Server action module "${moduleId}" not found`)
 

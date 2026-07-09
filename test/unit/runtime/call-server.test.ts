@@ -157,6 +157,26 @@ describe('callServer', () => {
     expect(location.href).toBe('http://localhost/actions')
   })
 
+  it('strips internal metadata from the return value but preserves it for refresh scheduling', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(new Response('0:{}', {
+      status: 200,
+      headers: { 'content-type': 'text/x-component' },
+    }))
+    flightClientMocks.createFromFetch.mockResolvedValueOnce({
+      a: Promise.resolve({ 'success': true, '~rariSkipRefresh': true }),
+      f: Promise.resolve({ type: 'refresh' }),
+    })
+
+    const result = await callServer('actions/todo-actions_abcd1234#addTodo', [])
+
+    expect(result).toEqual({ success: true })
+    expect(scheduleActionFlightRefresh).toHaveBeenCalledWith(
+      expect.any(Response),
+      expect.any(Object),
+      { 'success': true, '~rariSkipRefresh': true },
+    )
+  })
+
   it('throws when the server returns a non-flight 500 error', async () => {
     vi.mocked(globalThis.fetch).mockResolvedValueOnce(new Response('', {
       status: 500,

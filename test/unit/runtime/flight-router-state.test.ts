@@ -17,4 +17,9 @@ describe('flight-router-state', () => {
     expect(segmentPathFromPathname('/')).toEqual([])
     expect(segmentPathFromRouterState(buildFlightRouterState('/'))).toEqual([])
   })
+
+  it('normalizes trailing slashes without regex backtracking', () => {
+    expect(segmentPathFromPathname('/actions///')).toEqual(['actions'])
+    expect(segmentPathFromPathname('/a/b//')).toEqual(['a', 'b'])
+  })
 })

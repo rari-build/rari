@@ -37,7 +37,7 @@ describe('action-flight-refresh', () => {
     expect(globalThis.dispatchEvent).not.toHaveBeenCalled()
   })
 
-  it('skips refresh when the action result is client-driven state', () => {
+  it('skips refresh when the action result opts out via ~rariSkipRefresh', () => {
     const response = new Response('', {
       headers: {
         'x-action-revalidated': '2',
@@ -48,7 +48,7 @@ describe('action-flight-refresh', () => {
     scheduleActionFlightRefresh(
       response,
       { f: refreshElement },
-      { success: true, todos: [] },
+      { 'success': true, '~rariSkipRefresh': true },
     )
 
     expect(globalThis.dispatchEvent).not.toHaveBeenCalled()

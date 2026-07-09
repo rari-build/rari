@@ -10,25 +10,23 @@ export interface ActionFlightRefreshDetail {
   revalidatedPath?: string
 }
 
+/** Flight action response: `a` is the action result, `f` is the optional refresh tree. */
 export interface ActionFlightResponseShape {
-  a?: Promise<unknown> | unknown
-  f?: Promise<unknown> | unknown | string
+  a?: unknown
+  f?: unknown
 }
 
+const SKIP_REFRESH_MARKER = '~rariSkipRefresh'
+
 function shouldSkipRefreshForActionResult(result: unknown): boolean {
-  if (result == null || typeof result !== 'object')
+  if (result == null || typeof result !== 'object' || Array.isArray(result))
     return false
 
   const record = result as Record<string, unknown>
   if ('redirect' in record)
     return true
 
-  // useActionState and other client-driven mutations return structured state in `a`;
-  // applying `f` would remount client islands and drop transient UI like success messages.
-  if ('success' in record && 'todos' in record)
-    return true
-
-  return false
+  return SKIP_REFRESH_MARKER in record || '~rariFormState' in record
 }
 
 function isLikelyReactElement(value: unknown): value is Record<string, unknown> {
@@ -96,7 +94,12 @@ export function scheduleActionFlightRefresh(
     }
 
     queueMicrotask(applyRefresh)
-  })()
+  })().catch((error: unknown) => {
+    console.error(
+      '[rari] Action flight refresh failed:',
+      error instanceof Error ? error.message : String(error),
+    )
+  })
 }
 
 export function refreshRouter(): void {

@@ -64,16 +64,18 @@ interface FlightServerActions {
           g['~rari'] = {}
         g['~rari'].actionFormState = formState
 
-        if (actionResult && typeof actionResult === 'object') {
+        if (actionResult && typeof actionResult === 'object' && !Array.isArray(actionResult)) {
           return {
             ...(actionResult as Record<string, unknown>),
             '~rariFormState': formState,
+            '~rariSkipRefresh': true,
           }
         }
 
         return {
           'value': actionResult,
           '~rariFormState': formState,
+          '~rariSkipRefresh': true,
         }
       }
 

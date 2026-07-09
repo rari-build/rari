@@ -62,12 +62,22 @@ async function encodeActionFlightResponse(
   await readStreamToLastRscBinary(stream)
 }
 
+function withSkipRefreshMarker(result: unknown): unknown {
+  if (!result || typeof result !== 'object' || Array.isArray(result))
+    return result
+
+  return {
+    ...(result as Record<string, unknown>),
+    '~rariSkipRefresh': true,
+  }
+}
+
 // eslint-disable-next-line unused-imports/no-unused-vars
 function stashRpcActionResult(result: unknown): Record<string, unknown> {
   if (!g['~rari'])
     g['~rari'] = {}
 
-  g['~rari'].pendingActionResult = result
+  g['~rari'].pendingActionResult = withSkipRefreshMarker(result)
 
   const metadata: Record<string, unknown> = { '~actionFlightPending': true }
   if (result && typeof result === 'object') {
