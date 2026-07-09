@@ -155,7 +155,7 @@ fn check_origin(headers: &HeaderMap, allowed_origins: &[String]) -> Result<(), S
     Err(StatusCode::FORBIDDEN)
 }
 
-fn build_official_action_script(action_id: &str, body_text: &str) -> Result<String, RariError> {
+fn build_reply_action_script(action_id: &str, body_text: &str) -> Result<String, RariError> {
     let action_id_json = serde_json::to_string(action_id)
         .map_err(|e| RariError::serialization(format!("Failed to serialize action id: {e}")))?;
     let body_text_json = serde_json::to_string(body_text)
@@ -214,22 +214,17 @@ fn is_form_content_type(content_type: &str) -> bool {
         || content_type.starts_with("application/x-www-form-urlencoded")
 }
 
-fn request_unique_script_name(base: &str) -> String {
+fn action_script_name(action_id: Option<&str>) -> String {
     static SCRIPT_COUNTER: AtomicU64 = AtomicU64::new(0);
     let nonce = SCRIPT_COUNTER.fetch_add(1, Ordering::Relaxed);
-    // Request-scoped suffix avoids module-cache / already-evaluated shortcuts.
-    // `#` in names also breaks TypeScript transpilation.
-    format!("{base}_req{nonce}.ts")
-}
-
-fn action_script_name(action_id: Option<&str>) -> String {
     let base = match action_id {
         Some(action_id) => {
-            format!("official_action_{}", action_id.cow_replace('/', "_").cow_replace('#', "_"))
+            format!("action_{}", action_id.cow_replace('/', "_").cow_replace('#', "_"))
         }
-        None => "official_action_form".to_string(),
+        None => "action_form".to_string(),
     };
-    request_unique_script_name(&base)
+    // Use a request-scoped suffix for cache keys. `#` breaks TypeScript transpilation.
+    format!("{base}_req{nonce}.ts")
 }
 
 fn build_action_script(
@@ -245,7 +240,7 @@ fn build_action_script(
             let body_text = str::from_utf8(body).map_err(|_| {
                 RariError::bad_request("Server action body is not valid UTF-8".to_string())
             })?;
-            build_official_action_script(action_id, body_text)
+            build_reply_action_script(action_id, body_text)
         }
         None if is_form_content_type(content_type) => build_form_action_script(body, content_type),
         None => Err(RariError::bad_request(
@@ -692,7 +687,7 @@ async fn handle_server_action_at_path(
     {
         Ok(value) => value,
         Err(e) => {
-            tracing::error!("Official server action execution failed: {}", e);
+            tracing::error!("Server action execution failed: {}", e);
             if is_document_form_post {
                 #[expect(
                     clippy::expect_used,
@@ -792,10 +787,18 @@ async fn handle_server_action_at_path(
         };
     }
 
+    // Request-unique name so the encode script is never served from module cache /
+    // already-evaluated shortcuts (fixed names can leave lastRscBinary stale).
+    let encode_script_name = {
+        static ENCODE_COUNTER: AtomicU64 = AtomicU64::new(0);
+        let nonce = ENCODE_COUNTER.fetch_add(1, Ordering::Relaxed);
+        format!("action_flight_encode_req{nonce}.ts")
+    };
+
     runtime
         .execute_script_with_request_context(
             Arc::clone(&request_context),
-            request_unique_script_name("official_action_flight_encode"),
+            encode_script_name,
             ACTION_FLIGHT_ENCODE_SCRIPT.to_string(),
         )
         .await
