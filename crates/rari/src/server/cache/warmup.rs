@@ -219,7 +219,7 @@ async fn warm_route(
 
     if let Ok(rsc_flight_protocol) = rsc_result {
         let rsc_cache_key =
-            response::ResponseCache::generate_cache_key_with_mode(path, None, Some("rsc"));
+            response::ResponseCache::generate_cache_key_with_mode(path, None, Some("rsc"), None);
 
         if cache_policy.enabled && state.response_cache.config.enabled {
             let merged_tags = merge_warmup_cache_tags(state, cache_policy.tags.clone()).await;

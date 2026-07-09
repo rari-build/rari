@@ -12,17 +12,11 @@ interface ServerFunctionOptions {
 }
 
 (function initializeServerFunctions() {
-  if (!g['~serverFunctions'])
-    g['~serverFunctions'] = {}
+  if (!g['~rari'])
+    g['~rari'] = {}
 
-  if (!g['~serverFunctions'].registered)
-    g['~serverFunctions'].registered = new Set()
-
-  if (!g['~serverFunctions'].exported)
-    g['~serverFunctions'].exported = {}
-
-  if (!g['~serverFunctions'].all)
-    g['~serverFunctions'].all = {}
+  if (!g['~rari'].registeredServerFunctions)
+    g['~rari'].registeredServerFunctions = new Set()
 
   g.resolveServerFunctionsForComponent = async function resolveServerFunctionsForComponent(
     componentId?: string,
@@ -30,27 +24,29 @@ interface ServerFunctionOptions {
     const currentComponent
       = componentId || g['~render']?.currentComponent
 
-    const serverFunctions = g['~serverFunctions']!.exported || {}
-    const functionNames = Object.keys(serverFunctions)
+    const manifest = g['~rari']!.serverManifest || {}
+    const functionNames = Object.keys(manifest).filter(key => key.includes('#') || key.includes(':'))
 
     let registeredCount = 0
 
     for (const functionName of functionNames) {
-      const serverFunction = serverFunctions[functionName]
-      if (typeof serverFunction === 'function') {
-        if (functionName.startsWith('~rari_') || functionName === 'default')
-          continue
+      if (functionName.startsWith('~rari_'))
+        continue
 
-        g['~serverFunctions']!.registered!.add(functionName)
-        registeredCount++
-      }
+      const entry = manifest[functionName]
+      const exportName = entry?.name ?? functionName.split(/[#:]/).pop()
+      if (!exportName || exportName === 'default')
+        continue
+
+      g['~rari']!.registeredServerFunctions!.add(functionName)
+      registeredCount++
     }
 
     return {
       success: true,
       registered: registeredCount,
       component: currentComponent,
-      functions: [...g['~serverFunctions']!.registered!],
+      functions: [...g['~rari']!.registeredServerFunctions!],
     }
   }
 
@@ -98,11 +94,11 @@ interface ServerFunctionOptions {
   g.isServerFunctionRegistered = function isServerFunctionRegistered(
     functionName: string,
   ): boolean {
-    return g['~serverFunctions']!.registered?.has(functionName) || false
+    return g['~rari']!.registeredServerFunctions?.has(functionName) || false
   }
 
   g.clearServerFunctionCache = function clearServerFunctionCache(): void {
-    g['~serverFunctions']!.registered!.clear()
+    g['~rari']!.registeredServerFunctions!.clear()
   }
 
   g.ServerFunctions = {
@@ -117,6 +113,6 @@ interface ServerFunctionOptions {
     initialized: true,
     timestamp: Date.now(),
     extension: 'server_functions',
-    registeredCount: g['~serverFunctions'].registered?.size || 0,
+    registeredCount: g['~rari'].registeredServerFunctions?.size || 0,
   }
 })()

@@ -302,9 +302,37 @@ async fn handle_invalidate(
                     clearedCount++;
                 }}
 
-                if (globalThis['~rsc'].serverFunctions && globalThis['~rsc'].serverFunctions.has(componentId)) {{
-                    globalThis['~rsc'].serverFunctions.delete(componentId);
-                    clearedCount++;
+                if (globalThis['~rari']?.ssrModules) {{
+                    const colonPrefix = componentId + ':';
+                    const hashPrefix = componentId + '#';
+                    for (const key in globalThis['~rari'].ssrModules) {{
+                        if (key === componentId || key.startsWith(colonPrefix) || key.startsWith(hashPrefix)) {{
+                            delete globalThis['~rari'].ssrModules[key];
+                            clearedCount++;
+                        }}
+                    }}
+                }}
+
+                if (globalThis['~rari']?.serverManifest) {{
+                    const colonPrefix = componentId + ':';
+                    const hashPrefix = componentId + '#';
+                    for (const key in globalThis['~rari'].serverManifest) {{
+                        if (key === componentId || key.startsWith(colonPrefix) || key.startsWith(hashPrefix)) {{
+                            delete globalThis['~rari'].serverManifest[key];
+                            clearedCount++;
+                        }}
+                    }}
+                }}
+
+                if (globalThis['~rari']?.registeredServerFunctions) {{
+                    const colonPrefix = componentId + ':';
+                    const hashPrefix = componentId + '#';
+                    for (const key of globalThis['~rari'].registeredServerFunctions) {{
+                        if (key === componentId || key.startsWith(colonPrefix) || key.startsWith(hashPrefix)) {{
+                            globalThis['~rari'].registeredServerFunctions.delete(key);
+                            clearedCount++;
+                        }}
+                    }}
                 }}
 
                 if (globalThis['~rsc'].componentData && globalThis['~rsc'].componentData.has(componentId)) {{

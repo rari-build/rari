@@ -34,6 +34,8 @@ declare global {
     }
     '~reactServerRenderer'?: {
       renderToReadableStream: (element: unknown, bundlerConfig: unknown, options?: { onError?: (error: unknown) => void }) => Promise<ReadableStream>
+      decodeAction?: (body: FormData, serverManifest: Record<string, { id: string, name?: string, chunks: string[] }>) => Promise<(() => Promise<unknown>) | null>
+      decodeReply?: (body: string | FormData, serverManifest: Record<string, { id: string, name?: string, chunks: string[] }>) => Promise<unknown>
     }
     '~promises'?: {
       currentObject?: unknown
@@ -53,11 +55,6 @@ declare global {
     'registerClientComponentFromModule'?: (componentPath: string, moduleExports: any) => void
     'markAsClientComponent'?: (component: any, componentId?: string) => void
     'createClientReference'?: (componentId: string, componentPath: string) => any
-    '~serverFunctions'?: {
-      registered?: Set<string>
-      exported?: Record<string, unknown>
-      all?: Record<string, unknown>
-    }
     'getServerFunction'?: (name: string) => ((...args: unknown[]) => Promise<unknown>) | null
     'renderToRsc'?: (element: unknown) => Promise<string>
     'renderToHtmlFizz'?: (element: unknown) => Promise<string>
@@ -105,6 +102,8 @@ declare global {
       }
       readStream?: (stream: ReadableStream) => Promise<string>
       ssrModules?: Record<string, { default?: unknown, [key: string]: unknown }>
+      serverManifest?: Record<string, { id: string, name?: string, chunks: string[] }>
+      registeredServerFunctions?: Set<string>
       clientReferenceManifest?: Record<string, { id: string, chunks: string, name: string }>
       lastRscBinary?: Uint8Array
       capturedElement?: unknown

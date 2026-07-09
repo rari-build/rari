@@ -3,103 +3,27 @@
 use std::{fmt::Write, str, sync::Arc};
 
 use axum::{
-    body::Bytes,
+    body::{Body, Bytes},
     extract::State,
     http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Json, Response},
 };
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
 use cow_utils::CowUtils;
 use rari_error::RariError;
-use rustc_hash::FxHashMap;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::Value;
 
 use crate::{
-    rendering::base::RscRenderer,
+    rendering::base::constants::ACTION_HANDLER_SCRIPT,
     server::{
         ServerState,
+        cache::revalidate::invalidate_route_caches,
         config::RedirectConfig,
         core::utils::http::{extract_headers, is_origin_allowed},
         middleware::request_context::{PendingCookie, PendingCookieKey, RequestContext},
     },
-    utils::cast,
 };
-
-const MAX_BOUND_ARGS: usize = 1000;
-const MAX_BIGINT_DIGITS: usize = 300;
-
-#[derive(Debug, Clone)]
-#[non_exhaustive]
-pub struct ValidationConfig {
-    pub max_depth: usize,
-    pub max_string_length: usize,
-    pub max_array_length: usize,
-    pub max_object_keys: usize,
-    pub allow_special_numbers: bool,
-    pub max_total_elements: usize,
-}
-
-impl Default for ValidationConfig {
-    fn default() -> Self {
-        Self {
-            max_depth: 10,
-            max_string_length: 10_000,
-            max_array_length: 1_000,
-            max_object_keys: 100,
-            allow_special_numbers: false,
-            max_total_elements: 1_000_000,
-        }
-    }
-}
-
-impl ValidationConfig {
-    pub fn development() -> Self {
-        Self {
-            max_depth: 20,
-            max_string_length: 50_000,
-            max_array_length: 5_000,
-            max_object_keys: 500,
-            allow_special_numbers: false,
-            max_total_elements: 5_000_000,
-        }
-    }
-
-    pub fn production() -> Self {
-        Self::default()
-    }
-}
-
-#[derive(Debug)]
-struct ValidationContext {
-    total_elements: usize,
-    has_fork: bool,
-}
-
-impl ValidationContext {
-    fn new() -> Self {
-        Self { total_elements: 0, has_fork: false }
-    }
-
-    fn bump_count(&mut self, count: usize, config: &ValidationConfig) -> Result<(), RariError> {
-        self.total_elements = self.total_elements.saturating_add(count);
-
-        if self.total_elements > config.max_total_elements && self.has_fork {
-            return Err(RariError::bad_request(format!(
-                "Maximum array nesting exceeded: {} > {}. Large nested arrays can be dangerous. Try adding intermediate objects.",
-                self.total_elements, config.max_total_elements
-            )));
-        }
-        Ok(())
-    }
-}
-
-#[derive(Debug, Deserialize)]
-#[non_exhaustive]
-pub struct ServerActionRequest {
-    pub id: String,
-    pub export_name: String,
-    pub args: Vec<Value>,
-}
 
 #[derive(Debug, Serialize)]
 #[non_exhaustive]
@@ -218,13 +142,134 @@ fn check_origin(headers: &HeaderMap, allowed_origins: &[String]) -> Result<(), S
     Err(StatusCode::FORBIDDEN)
 }
 
-async fn clear_layout_html_cache(state: &ServerState) {
-    if let Err(e) = state.layout_html_cache.clear().await {
+fn build_official_action_script(action_id: &str, body_text: &str) -> Result<String, RariError> {
+    let action_id_json = serde_json::to_string(action_id)
+        .map_err(|e| RariError::serialization(format!("Failed to serialize action id: {e}")))?;
+    let body_text_json = serde_json::to_string(body_text)
+        .map_err(|e| RariError::serialization(format!("Failed to serialize action body: {e}")))?;
+
+    Ok(ACTION_HANDLER_SCRIPT
+        .cow_replace("__RARI_ACTION_MODE__", "\"reply\"")
+        .cow_replace("__RARI_ACTION_ID__", &action_id_json)
+        .cow_replace("__RARI_ACTION_BODY__", &body_text_json)
+        .cow_replace("__RARI_ACTION_BODY_B64__", "\"\"")
+        .cow_replace("__RARI_ACTION_CONTENT_TYPE__", "\"\"")
+        .cow_replace("__RARI_ACTION_FORM_ENTRIES__", "[]")
+        .into_owned())
+}
+
+fn build_multipart_action_script(
+    action_id: &str,
+    body: &[u8],
+    content_type: &str,
+) -> Result<String, RariError> {
+    let action_id_json = serde_json::to_string(action_id)
+        .map_err(|e| RariError::serialization(format!("Failed to serialize action id: {e}")))?;
+    let body_b64_json = serde_json::to_string(&BASE64_STANDARD.encode(body))
+        .map_err(|e| RariError::serialization(format!("Failed to serialize action body: {e}")))?;
+    let content_type_json = serde_json::to_string(content_type)
+        .map_err(|e| RariError::serialization(format!("Failed to serialize content type: {e}")))?;
+
+    Ok(ACTION_HANDLER_SCRIPT
+        .cow_replace("__RARI_ACTION_MODE__", "\"reply-multipart\"")
+        .cow_replace("__RARI_ACTION_ID__", &action_id_json)
+        .cow_replace("__RARI_ACTION_BODY__", "\"\"")
+        .cow_replace("__RARI_ACTION_BODY_B64__", &body_b64_json)
+        .cow_replace("__RARI_ACTION_CONTENT_TYPE__", &content_type_json)
+        .cow_replace("__RARI_ACTION_FORM_ENTRIES__", "[]")
+        .into_owned())
+}
+
+fn build_form_action_script(body: &[u8], content_type: &str) -> Result<String, RariError> {
+    let body_b64_json = serde_json::to_string(&BASE64_STANDARD.encode(body))
+        .map_err(|e| RariError::serialization(format!("Failed to serialize action body: {e}")))?;
+    let content_type_json = serde_json::to_string(content_type)
+        .map_err(|e| RariError::serialization(format!("Failed to serialize content type: {e}")))?;
+
+    Ok(ACTION_HANDLER_SCRIPT
+        .cow_replace("__RARI_ACTION_MODE__", "\"form\"")
+        .cow_replace("__RARI_ACTION_ID__", "\"\"")
+        .cow_replace("__RARI_ACTION_BODY__", "\"\"")
+        .cow_replace("__RARI_ACTION_BODY_B64__", &body_b64_json)
+        .cow_replace("__RARI_ACTION_CONTENT_TYPE__", &content_type_json)
+        .cow_replace("__RARI_ACTION_FORM_ENTRIES__", "[]")
+        .into_owned())
+}
+
+fn is_form_content_type(content_type: &str) -> bool {
+    content_type.starts_with("multipart/form-data")
+        || content_type.starts_with("application/x-www-form-urlencoded")
+}
+
+fn action_script_name(action_id: Option<&str>) -> String {
+    match action_id {
+        Some(action_id) => {
+            format!("official_action_{}.ts", action_id.cow_replace('/', "_").cow_replace('#', "_"))
+        }
+        None => "official_action_form.ts".to_string(),
+    }
+}
+
+fn build_action_script(
+    action_id: Option<&str>,
+    content_type: &str,
+    body: &[u8],
+) -> Result<String, RariError> {
+    match action_id {
+        Some(action_id) if content_type.starts_with("multipart/form-data") => {
+            build_multipart_action_script(action_id, body, content_type)
+        }
+        Some(action_id) => {
+            let body_text = str::from_utf8(body).map_err(|_| {
+                RariError::bad_request("Server action body is not valid UTF-8".to_string())
+            })?;
+            build_official_action_script(action_id, body_text)
+        }
+        None if is_form_content_type(content_type) => build_form_action_script(body, content_type),
+        None => Err(RariError::bad_request(
+            "Missing rsc-action-id header for non-form server action request".to_string(),
+        )),
+    }
+}
+
+fn redirect_target_path(redirect_url: &str) -> String {
+    if let Ok(parsed) = url::Url::parse(redirect_url) {
+        parsed.path().to_string()
+    } else if redirect_url.starts_with('/') {
+        redirect_url.split('?').next().unwrap_or(redirect_url).to_string()
+    } else {
+        redirect_url.to_string()
+    }
+}
+
+async fn invalidate_redirect_target_caches(state: &ServerState, redirect_url: &str) {
+    let redirect_path = redirect_target_path(redirect_url);
+    if let Err(e) = invalidate_route_caches(state, &redirect_path).await {
         tracing::warn!(
             error = %e,
-            "layout_html_cache.clear failed during action; stale layout entries may persist until next revalidate"
+            path = %redirect_path,
+            "route cache invalidation failed after server action redirect"
         );
     }
+}
+
+fn document_form_redirect_response(
+    redirect_url: &str,
+    pending_cookies: &dashmap::DashMap<PendingCookieKey, PendingCookie>,
+) -> Response {
+    #[expect(clippy::expect_used, reason = "Response::builder() with valid components never fails")]
+    let mut response = Response::builder()
+        .status(StatusCode::SEE_OTHER)
+        .header(header::LOCATION, redirect_url)
+        .header(header::CACHE_CONTROL, "no-store, no-cache, must-revalidate, private")
+        .body(Body::empty())
+        .expect("Valid redirect response");
+    append_pending_cookies(response.headers_mut(), pending_cookies);
+    response
+}
+
+fn action_export_name(action_id: &str) -> &str {
+    action_id.rsplit_once('#').map_or("default", |(_, export_name)| export_name)
 }
 
 pub async fn handle_server_action(
@@ -235,93 +280,23 @@ pub async fn handle_server_action(
     let allowed_origins = state.config.action_origins();
     check_origin(&headers, &allowed_origins)?;
 
-    let request: ServerActionRequest = match serde_json::from_slice(&body) {
-        Ok(req) => req,
-        Err(e) => {
-            tracing::error!("Failed to parse server action request: {}", e);
+    let action_id = headers
+        .get("rsc-action-id")
+        .and_then(|value| value.to_str().ok())
+        .filter(|value| !value.is_empty());
+
+    let is_document_form_post = action_id.is_none();
+
+    if let Some(action_id) = action_id {
+        let export_name = action_export_name(action_id);
+        if is_reserved_export_name(export_name) {
+            tracing::error!("Attempted to call reserved export name: {}", export_name);
             let mut response = Json(ServerActionResponse {
                 success: false,
                 result: None,
-                error: Some("Invalid request format".to_string()),
-                redirect: None,
-            })
-            .into_response();
-            response.headers_mut().insert(
-                header::CACHE_CONTROL,
-                #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
-                "no-store, no-cache, must-revalidate, private"
-                    .parse()
-                    .expect("Valid cache-control header"),
-            );
-            return Ok(response);
-        }
-    };
-
-    if request.args.len() > MAX_BOUND_ARGS {
-        tracing::error!(
-            "Too many server function arguments: {} > {}",
-            request.args.len(),
-            MAX_BOUND_ARGS
-        );
-        let mut response = Json(ServerActionResponse {
-            success: false,
-            result: None,
-            error: Some(format!(
-                "Server Function has too many bound arguments. Received {} but the limit is {}.",
-                request.args.len(),
-                MAX_BOUND_ARGS
-            )),
-            redirect: None,
-        })
-        .into_response();
-        response.headers_mut().insert(
-            header::CACHE_CONTROL,
-            #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
-            "no-store, no-cache, must-revalidate, private"
-                .parse()
-                .expect("Valid cache-control header"),
-        );
-        *response.status_mut() = StatusCode::BAD_REQUEST;
-        return Ok(response);
-    }
-
-    if is_reserved_export_name(&request.export_name) {
-        tracing::error!("Attempted to call reserved export name: {}", request.export_name);
-        let mut response = Json(ServerActionResponse {
-            success: false,
-            result: None,
-            error: Some(format!(
-                "Invalid export name '{}': reserved for internal use",
-                request.export_name
-            )),
-            redirect: None,
-        })
-        .into_response();
-        response.headers_mut().insert(
-            header::CACHE_CONTROL,
-            #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
-            "no-store, no-cache, must-revalidate, private"
-                .parse()
-                .expect("Valid cache-control header"),
-        );
-        *response.status_mut() = StatusCode::BAD_REQUEST;
-        return Ok(response);
-    }
-
-    let validation_config = if state.config.is_development() {
-        ValidationConfig::development()
-    } else {
-        ValidationConfig::production()
-    };
-
-    let sanitized_args = match validate_and_sanitize_args(&request.args, &validation_config) {
-        Ok(args) => args,
-        Err(e) => {
-            tracing::error!("Input validation failed: {}", e);
-            let mut response = Json(ServerActionResponse {
-                success: false,
-                result: None,
-                error: Some(format!("Input validation failed: {e}")),
+                error: Some(format!(
+                    "Invalid export name '{export_name}': reserved for internal use"
+                )),
                 redirect: None,
             })
             .into_response();
@@ -335,7 +310,12 @@ pub async fn handle_server_action(
             *response.status_mut() = StatusCode::BAD_REQUEST;
             return Ok(response);
         }
-    };
+    }
+
+    let content_type = headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("text/plain;charset=UTF-8");
 
     let request_context = Arc::new(
         RequestContext::new("/_rari/action".to_string())
@@ -347,52 +327,34 @@ pub async fn handle_server_action(
         Arc::clone(&renderer.runtime)
     };
 
-    let result = RscRenderer::execute_server_function_with_context(
-        &runtime,
-        Arc::clone(&request_context),
-        &request.id,
-        &request.export_name,
-        &sanitized_args,
-    )
-    .await;
+    let script = build_action_script(action_id, content_type, &body).map_err(|e| {
+        tracing::error!("Failed to build action script: {}", e);
+        StatusCode::BAD_REQUEST
+    })?;
 
-    match result {
-        Ok(value) => {
-            let redirect_config = state.config.redirect_config();
-            let redirect = extract_redirect_from_result(&value, &redirect_config);
+    let script_name = action_script_name(action_id);
 
-            if let Some(ref redirect_url) = redirect {
-                let redirect_path = if let Ok(parsed) = url::Url::parse(redirect_url) {
-                    parsed.path().to_string()
-                } else if redirect_url.starts_with('/') {
-                    redirect_url.split('?').next().unwrap_or(redirect_url).to_string()
-                } else {
-                    redirect_url.clone()
-                };
-
-                state.response_cache.invalidate_by_tag(&redirect_path).await;
-                state.html_cache.remove(&redirect_path);
-                clear_layout_html_cache(&state).await;
+    let value = match runtime
+        .execute_script_with_request_context(Arc::clone(&request_context), script_name, script)
+        .await
+    {
+        Ok(value) => value,
+        Err(e) => {
+            tracing::error!("Official server action execution failed: {}", e);
+            if is_document_form_post {
+                #[expect(
+                    clippy::expect_used,
+                    reason = "Response::builder() with valid components never fails"
+                )]
+                let mut response = Response::builder()
+                    .status(StatusCode::BAD_REQUEST)
+                    .header(header::CACHE_CONTROL, "no-store, no-cache, must-revalidate, private")
+                    .body(Body::from(e.to_string()))
+                    .expect("Valid error response");
+                append_pending_cookies(response.headers_mut(), &request_context.pending_cookies);
+                return Ok(response);
             }
 
-            let response =
-                ServerActionResponse { success: true, result: Some(value), error: None, redirect };
-
-            let mut response = Json(response).into_response();
-            response.headers_mut().insert(
-                header::CACHE_CONTROL,
-                #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
-                "no-store, no-cache, must-revalidate, private"
-                    .parse()
-                    .expect("Valid cache-control header"),
-            );
-
-            append_pending_cookies(response.headers_mut(), &request_context.pending_cookies);
-
-            Ok(response)
-        }
-        Err(e) => {
-            tracing::error!("Server action execution failed: {}", e);
             let mut response = Json(ServerActionResponse {
                 success: false,
                 result: None,
@@ -408,186 +370,75 @@ pub async fn handle_server_action(
                     .expect("Valid cache-control header"),
             );
             append_pending_cookies(response.headers_mut(), &request_context.pending_cookies);
-            Ok(response)
-        }
-    }
-}
-
-pub async fn handle_form_action(
-    State(state): State<ServerState>,
-    headers: HeaderMap,
-    body: Bytes,
-) -> Result<Response, StatusCode> {
-    let allowed_origins = state.config.action_origins();
-    check_origin(&headers, &allowed_origins)?;
-
-    let form_data = match parse_form_data(&body) {
-        Ok(data) => data,
-        Err(e) => {
-            tracing::error!("Failed to parse form data: {}", e);
-            return Err(StatusCode::BAD_REQUEST);
+            return Ok(response);
         }
     };
 
-    let action_id = form_data.get("__action_id").ok_or(StatusCode::BAD_REQUEST)?;
-    let export_name = form_data.get("__export_name").ok_or(StatusCode::BAD_REQUEST)?;
+    let redirect_config = state.config.redirect_config();
+    let redirect = extract_redirect_from_result(&value, &redirect_config);
 
-    if is_reserved_export_name(export_name) {
-        tracing::error!("Attempted to call reserved export name in form action: {}", export_name);
-        return Err(StatusCode::BAD_REQUEST);
+    if let Some(ref redirect_url) = redirect {
+        invalidate_redirect_target_caches(&state, redirect_url).await;
     }
 
-    let args = convert_form_data_to_args(&form_data);
-
-    let validation_config = if state.config.is_development() {
-        ValidationConfig::development()
-    } else {
-        ValidationConfig::production()
-    };
-
-    let sanitized_args = match validate_and_sanitize_args(&args, &validation_config) {
-        Ok(args) => args,
-        Err(e) => {
-            tracing::error!("Form action input validation failed: {}", e);
-            return Err(StatusCode::BAD_REQUEST);
+    if is_document_form_post {
+        if is_failed_action_result(&value) {
+            let error_message = value
+                .get("error")
+                .and_then(Value::as_str)
+                .unwrap_or("Server action failed")
+                .to_owned();
+            #[expect(
+                clippy::expect_used,
+                reason = "Response::builder() with valid components never fails"
+            )]
+            let mut response = Response::builder()
+                .status(StatusCode::BAD_REQUEST)
+                .header(header::CACHE_CONTROL, "no-store, no-cache, must-revalidate, private")
+                .body(Body::from(error_message))
+                .expect("Valid error response");
+            append_pending_cookies(response.headers_mut(), &request_context.pending_cookies);
+            return Ok(response);
         }
-    };
 
-    let request_context = Arc::new(
-        RequestContext::new("/_rari/action".to_string())
-            .with_http_headers(extract_headers(&headers)),
+        if let Some(redirect_url) = redirect {
+            return Ok(document_form_redirect_response(
+                &redirect_url,
+                &request_context.pending_cookies,
+            ));
+        }
+
+        if let Some(referer) = headers.get(header::REFERER).and_then(|value| value.to_str().ok()) {
+            invalidate_redirect_target_caches(&state, referer).await;
+            return Ok(document_form_redirect_response(referer, &request_context.pending_cookies));
+        }
+
+        #[expect(
+            clippy::expect_used,
+            reason = "Response::builder() with valid components never fails"
+        )]
+        let mut response = Response::builder()
+            .status(StatusCode::BAD_REQUEST)
+            .header(header::CACHE_CONTROL, "no-store, no-cache, must-revalidate, private")
+            .body(Body::from("Missing Referer header for document form action"))
+            .expect("Valid error response");
+        append_pending_cookies(response.headers_mut(), &request_context.pending_cookies);
+        return Ok(response);
+    }
+
+    let response =
+        ServerActionResponse { success: true, result: Some(value), error: None, redirect };
+
+    let mut response = Json(response).into_response();
+    response.headers_mut().insert(
+        header::CACHE_CONTROL,
+        #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
+        "no-store, no-cache, must-revalidate, private".parse().expect("Valid cache-control header"),
     );
 
-    let runtime = {
-        let renderer = state.renderer.lock().await;
-        Arc::clone(&renderer.runtime)
-    };
+    append_pending_cookies(response.headers_mut(), &request_context.pending_cookies);
 
-    let result = RscRenderer::execute_server_function_with_context(
-        &runtime,
-        Arc::clone(&request_context),
-        action_id,
-        export_name,
-        &sanitized_args,
-    )
-    .await;
-
-    match result {
-        Ok(value) => {
-            let redirect_config = state.config.redirect_config();
-            if let Some(redirect_url) = extract_redirect_from_result(&value, &redirect_config) {
-                let redirect_path = if let Ok(parsed) = url::Url::parse(&redirect_url) {
-                    parsed.path().to_string()
-                } else if redirect_url.starts_with('/') {
-                    redirect_url.split('?').next().unwrap_or(&redirect_url).to_string()
-                } else {
-                    redirect_url.clone()
-                };
-
-                state.response_cache.invalidate_by_tag(&redirect_path).await;
-                state.html_cache.remove(&redirect_path);
-                clear_layout_html_cache(&state).await;
-
-                let mut redirect_response = Response::builder()
-                    .status(StatusCode::SEE_OTHER)
-                    .header("Location", redirect_url)
-                    .header("Cache-Control", "no-store, no-cache, must-revalidate")
-                    .body("".into())
-                    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-                append_pending_cookies(
-                    redirect_response.headers_mut(),
-                    &request_context.pending_cookies,
-                );
-
-                return Ok(redirect_response);
-            }
-
-            let (redirect_url, redirect_path_opt) = if let Some(referer) =
-                headers.get("referer").and_then(|h| h.to_str().ok())
-            {
-                if let Ok(parsed) = url::Url::parse(referer) {
-                    let referer_tuple = normalize_origin(&parsed);
-
-                    let server_origin_tuple_opt = {
-                        let host = headers.get("host").and_then(|v| v.to_str().ok()).unwrap_or("");
-                        let scheme = headers
-                            .get("x-forwarded-proto")
-                            .or_else(|| headers.get("x-forwarded-protocol"))
-                            .and_then(|v| v.to_str().ok())
-                            .unwrap_or("http");
-                        let server_origin_str = format!("{scheme}://{host}");
-
-                        url::Url::parse(&server_origin_str).ok().map(|u| normalize_origin(&u))
-                    };
-
-                    let (is_same_origin, is_allowed) = if allowed_origins.is_empty() {
-                        if let Some(server_origin_tuple) = &server_origin_tuple_opt {
-                            let is_same = referer_tuple == *server_origin_tuple;
-                            (is_same, is_same)
-                        } else {
-                            (false, false)
-                        }
-                    } else {
-                        let is_same =
-                            server_origin_tuple_opt.as_ref().is_some_and(|t| referer_tuple == *t);
-
-                        let referer_origin = format!(
-                            "{}://{}:{}",
-                            referer_tuple.0, referer_tuple.1, referer_tuple.2
-                        );
-                        let allowed = is_origin_allowed(&referer_origin, &allowed_origins);
-                        (is_same, allowed)
-                    };
-
-                    if is_allowed {
-                        if is_same_origin {
-                            let path_and_query = if let Some(query) = parsed.query() {
-                                format!("{}?{}", parsed.path(), query)
-                            } else {
-                                parsed.path().to_string()
-                            };
-                            (path_and_query, Some(parsed.path().to_string()))
-                        } else {
-                            (referer.to_string(), None)
-                        }
-                    } else {
-                        ("/".to_string(), None)
-                    }
-                } else {
-                    ("/".to_string(), None)
-                }
-            } else {
-                ("/".to_string(), None)
-            };
-
-            if let Some(redirect_path) = redirect_path_opt {
-                state.response_cache.invalidate_by_tag(&redirect_path).await;
-                state.html_cache.remove(&redirect_path);
-                clear_layout_html_cache(&state).await;
-            }
-
-            let mut redirect_response = Response::builder()
-                .status(StatusCode::SEE_OTHER)
-                .header("Location", redirect_url)
-                .header("Cache-Control", "no-store, no-cache, must-revalidate")
-                .body("".into())
-                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-            append_pending_cookies(
-                redirect_response.headers_mut(),
-                &request_context.pending_cookies,
-            );
-
-            Ok(redirect_response)
-        }
-        Err(e) => {
-            tracing::error!("Form action execution failed: {}", e);
-            let mut response = StatusCode::INTERNAL_SERVER_ERROR.into_response();
-            append_pending_cookies(response.headers_mut(), &request_context.pending_cookies);
-            Ok(response)
-        }
-    }
+    Ok(response)
 }
 
 pub fn validate_redirect_url(url: &str, config: &RedirectConfig) -> Result<String, RariError> {
@@ -621,6 +472,12 @@ pub fn validate_redirect_url(url: &str, config: &RedirectConfig) -> Result<Strin
     Ok(url.to_string())
 }
 
+fn is_failed_action_result(result: &Value) -> bool {
+    result.get("~promiseError").and_then(Value::as_bool) == Some(true)
+        || result.get("~timeoutError").is_some()
+        || result.get("success").and_then(Value::as_bool) == Some(false)
+}
+
 fn extract_redirect_from_result(result: &Value, config: &RedirectConfig) -> Option<String> {
     if let Some(redirect) = result.get("redirect") {
         if let Some(url) = redirect.as_str() {
@@ -633,191 +490,6 @@ fn extract_redirect_from_result(result: &Value, config: &RedirectConfig) -> Opti
         }
     }
     None
-}
-
-fn parse_form_data(body: &Bytes) -> Result<FxHashMap<String, String>, RariError> {
-    let body_str =
-        str::from_utf8(body).map_err(|_| RariError::bad_request("Invalid UTF-8 in form data"))?;
-
-    let mut form_data = FxHashMap::default();
-
-    for pair in body_str.split('&') {
-        if let Some((key, value)) = pair.split_once('=') {
-            let key = percent_decode(key)
-                .map_err(|_| RariError::bad_request("Invalid URL encoding in form key"))?;
-            let value = percent_decode(value)
-                .map_err(|_| RariError::bad_request("Invalid URL encoding in form value"))?;
-            form_data.insert(key, value);
-        }
-    }
-
-    Ok(form_data)
-}
-
-fn convert_form_data_to_args(form_data: &FxHashMap<String, String>) -> Vec<Value> {
-    let mut form_entries = serde_json::Map::new();
-
-    for (key, value) in form_data {
-        if key.starts_with("__") {
-            continue;
-        }
-        form_entries.insert(key.clone(), Value::String(value.clone()));
-    }
-
-    let form_data_object = Value::Object(form_entries);
-
-    vec![Value::Null, form_data_object]
-}
-
-fn percent_decode(input: &str) -> Result<String, RariError> {
-    let mut bytes = Vec::new();
-    let mut chars = input.chars();
-
-    while let Some(ch) = chars.next() {
-        if ch == '%' {
-            let hex1 =
-                chars.next().ok_or_else(|| RariError::bad_request("Invalid percent encoding"))?;
-            let hex2 =
-                chars.next().ok_or_else(|| RariError::bad_request("Invalid percent encoding"))?;
-
-            let hex_str = format!("{hex1}{hex2}");
-            let byte = u8::from_str_radix(&hex_str, 16)
-                .map_err(|_| RariError::bad_request("Invalid hex in percent encoding"))?;
-
-            bytes.push(byte);
-        } else if ch == '+' {
-            bytes.push(b' ');
-        } else {
-            let mut buf = [0u8; 4];
-            for b in ch.encode_utf8(&mut buf).bytes() {
-                bytes.push(b);
-            }
-        }
-    }
-
-    String::from_utf8(bytes)
-        .map_err(|_| RariError::bad_request("Invalid UTF-8 in percent-decoded data"))
-}
-
-pub fn validate_and_sanitize_args(
-    args: &[Value],
-    config: &ValidationConfig,
-) -> Result<Vec<Value>, RariError> {
-    let mut context = ValidationContext::new();
-    args.iter().map(|arg| validate_and_sanitize_value(arg, config, 0, &mut context)).collect()
-}
-
-fn validate_and_sanitize_value(
-    value: &Value,
-    config: &ValidationConfig,
-    depth: usize,
-    context: &mut ValidationContext,
-) -> Result<Value, RariError> {
-    if depth > config.max_depth {
-        return Err(RariError::bad_request(format!(
-            "Maximum nesting depth exceeded: {} > {}",
-            depth, config.max_depth
-        )));
-    }
-
-    match value {
-        Value::String(s) => {
-            if s.len() > config.max_string_length {
-                return Err(RariError::bad_request(format!(
-                    "String too long: {} > {}",
-                    s.len(),
-                    config.max_string_length
-                )));
-            }
-
-            context.bump_count(s.len(), config)?;
-
-            Ok(value.clone())
-        }
-        Value::Number(n) => {
-            if let Some(f) = n.as_f64()
-                && !config.allow_special_numbers
-                && !f.is_finite()
-            {
-                return Err(RariError::bad_request(
-                    "Invalid number: Infinity or NaN not allowed".to_string(),
-                ));
-            }
-
-            if let Some(f) = n.as_f64() {
-                let abs_f = f.abs();
-                if abs_f > 1e100 {
-                    let estimated_digits =
-                        if abs_f == 0.0 { 1 } else { cast::f64_floor_usize(abs_f.log10()) + 1 };
-
-                    if estimated_digits > MAX_BIGINT_DIGITS {
-                        return Err(RariError::bad_request(format!(
-                            "Number too large. Estimated {estimated_digits} digits but the limit is {MAX_BIGINT_DIGITS}."
-                        )));
-                    }
-                }
-            }
-
-            Ok(value.clone())
-        }
-        Value::Array(arr) => {
-            if arr.len() > config.max_array_length {
-                return Err(RariError::bad_request(format!(
-                    "Array too large: {} > {}",
-                    arr.len(),
-                    config.max_array_length
-                )));
-            }
-
-            if arr.len() > 1 {
-                context.has_fork = true;
-            }
-
-            context.bump_count(arr.len() + 1, config)?;
-
-            let validated: Result<Vec<_>, _> = arr
-                .iter()
-                .map(|v| validate_and_sanitize_value(v, config, depth + 1, context))
-                .collect();
-
-            Ok(Value::Array(validated?))
-        }
-        Value::Object(obj) => {
-            if obj.len() > config.max_object_keys {
-                return Err(RariError::bad_request(format!(
-                    "Too many object keys: {} > {}",
-                    obj.len(),
-                    config.max_object_keys
-                )));
-            }
-
-            let mut sanitized = serde_json::Map::new();
-            for (key, val) in obj {
-                if is_dangerous_property(key) {
-                    continue;
-                }
-
-                let validated_val = validate_and_sanitize_value(val, config, depth + 1, context)?;
-                sanitized.insert(key.clone(), validated_val);
-            }
-
-            Ok(Value::Object(sanitized))
-        }
-        Value::Bool(_) | Value::Null => Ok(value.clone()),
-    }
-}
-
-pub fn is_dangerous_property(key: &str) -> bool {
-    matches!(
-        key,
-        "__proto__"
-            | "constructor"
-            | "prototype"
-            | "__defineGetter__"
-            | "__defineSetter__"
-            | "__lookupGetter__"
-            | "__lookupSetter__"
-    )
 }
 
 pub fn is_reserved_export_name(name: &str) -> bool {
@@ -947,468 +619,10 @@ pub fn build_set_cookie_header(cookie: &PendingCookie) -> Result<String, String>
 }
 
 #[cfg(test)]
-#[expect(clippy::unwrap_used, clippy::float_cmp, clippy::approx_constant)]
+#[expect(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
-    use serde_json::json;
-
     use super::*;
     use crate::server::{config::RedirectConfig, middleware::request_context::PendingCookie};
-
-    #[test]
-    fn test_sanitize_args_removes_proto() {
-        let config = ValidationConfig::default();
-        let args = vec![json!({
-            "__proto__": {
-                "isAdmin": true
-            },
-            "username": "test"
-        })];
-
-        let sanitized = validate_and_sanitize_args(&args, &config).unwrap();
-
-        assert_eq!(sanitized.len(), 1);
-        let obj = sanitized[0].as_object().unwrap();
-        assert!(!obj.contains_key("__proto__"));
-        assert_eq!(obj.get("username").unwrap().as_str().unwrap(), "test");
-    }
-
-    #[test]
-    fn test_sanitize_args_removes_constructor() {
-        let config = ValidationConfig::default();
-        let args = vec![json!({
-            "constructor": {
-                "prototype": {
-                    "isAdmin": true
-                }
-            },
-            "data": "safe"
-        })];
-
-        let sanitized = validate_and_sanitize_args(&args, &config).unwrap();
-
-        let obj = sanitized[0].as_object().unwrap();
-        assert!(!obj.contains_key("constructor"));
-        assert_eq!(obj.get("data").unwrap().as_str().unwrap(), "safe");
-    }
-
-    #[test]
-    fn test_sanitize_args_removes_prototype() {
-        let config = ValidationConfig::default();
-        let args = vec![json!({
-            "prototype": {
-                "polluted": true
-            },
-            "normal": "value"
-        })];
-
-        let sanitized = validate_and_sanitize_args(&args, &config).unwrap();
-
-        let obj = sanitized[0].as_object().unwrap();
-        assert!(!obj.contains_key("prototype"));
-        assert_eq!(obj.get("normal").unwrap().as_str().unwrap(), "value");
-    }
-
-    #[test]
-    fn test_sanitize_args_nested_objects() {
-        let config = ValidationConfig::default();
-        let args = vec![json!({
-            "user": {
-                "__proto__": {
-                    "isAdmin": true
-                },
-                "name": "John",
-                "settings": {
-                    "constructor": "bad",
-                    "theme": "dark"
-                }
-            }
-        })];
-
-        let sanitized = validate_and_sanitize_args(&args, &config).unwrap();
-
-        let obj = sanitized[0].as_object().unwrap();
-        let user = obj.get("user").unwrap().as_object().unwrap();
-        assert!(!user.contains_key("__proto__"));
-        assert_eq!(user.get("name").unwrap().as_str().unwrap(), "John");
-
-        let settings = user.get("settings").unwrap().as_object().unwrap();
-        assert!(!settings.contains_key("constructor"));
-        assert_eq!(settings.get("theme").unwrap().as_str().unwrap(), "dark");
-    }
-
-    #[test]
-    fn test_sanitize_args_arrays() {
-        let config = ValidationConfig::default();
-        let args = vec![json!([
-            {
-                "__proto__": "bad",
-                "id": 1
-            },
-            {
-                "constructor": "bad",
-                "id": 2
-            }
-        ])];
-
-        let sanitized = validate_and_sanitize_args(&args, &config).unwrap();
-
-        let arr = sanitized[0].as_array().unwrap();
-        assert_eq!(arr.len(), 2);
-
-        let obj1 = arr[0].as_object().unwrap();
-        assert!(!obj1.contains_key("__proto__"));
-        assert_eq!(obj1.get("id").unwrap().as_i64().unwrap(), 1);
-
-        let obj2 = arr[1].as_object().unwrap();
-        assert!(!obj2.contains_key("constructor"));
-        assert_eq!(obj2.get("id").unwrap().as_i64().unwrap(), 2);
-    }
-
-    #[test]
-    fn test_sanitize_args_preserves_safe_data() {
-        let config = ValidationConfig::default();
-        let args = vec![
-            json!("string value"),
-            json!(42),
-            json!(true),
-            json!(null),
-            json!({
-                "name": "test",
-                "count": 10,
-                "active": true,
-                "tags": ["a", "b", "c"]
-            }),
-        ];
-
-        let sanitized = validate_and_sanitize_args(&args, &config).unwrap();
-
-        assert_eq!(sanitized.len(), 5);
-        assert_eq!(sanitized[0].as_str().unwrap(), "string value");
-        assert_eq!(sanitized[1].as_i64().unwrap(), 42);
-        assert!(sanitized[2].as_bool().unwrap());
-        assert!(sanitized[3].is_null());
-
-        let obj = sanitized[4].as_object().unwrap();
-        assert_eq!(obj.get("name").unwrap().as_str().unwrap(), "test");
-        assert_eq!(obj.get("count").unwrap().as_i64().unwrap(), 10);
-        assert!(obj.get("active").unwrap().as_bool().unwrap());
-        assert_eq!(obj.get("tags").unwrap().as_array().unwrap().len(), 3);
-    }
-
-    #[test]
-    fn test_is_dangerous_property() {
-        assert!(is_dangerous_property("__proto__"));
-        assert!(is_dangerous_property("constructor"));
-        assert!(is_dangerous_property("prototype"));
-        assert!(is_dangerous_property("__defineGetter__"));
-        assert!(is_dangerous_property("__defineSetter__"));
-        assert!(is_dangerous_property("__lookupGetter__"));
-        assert!(is_dangerous_property("__lookupSetter__"));
-
-        assert!(!is_dangerous_property("name"));
-        assert!(!is_dangerous_property("value"));
-        assert!(!is_dangerous_property("data"));
-        assert!(!is_dangerous_property("__typename"));
-    }
-
-    #[test]
-    fn test_sanitize_deeply_nested() {
-        let config = ValidationConfig::default();
-        let args = vec![json!({
-            "level1": {
-                "level2": {
-                    "level3": {
-                        "__proto__": "bad",
-                        "level4": {
-                            "constructor": "bad",
-                            "safe": "value"
-                        }
-                    }
-                }
-            }
-        })];
-
-        let sanitized = validate_and_sanitize_args(&args, &config).unwrap();
-
-        let obj = sanitized[0].as_object().unwrap();
-        let level1 = obj.get("level1").unwrap().as_object().unwrap();
-        let level2 = level1.get("level2").unwrap().as_object().unwrap();
-        let level3 = level2.get("level3").unwrap().as_object().unwrap();
-        assert!(!level3.contains_key("__proto__"));
-
-        let level4 = level3.get("level4").unwrap().as_object().unwrap();
-        assert!(!level4.contains_key("constructor"));
-        assert_eq!(level4.get("safe").unwrap().as_str().unwrap(), "value");
-    }
-
-    #[test]
-    fn test_validation_depth_limit() {
-        let config = ValidationConfig { max_depth: 3, ..Default::default() };
-
-        let valid = vec![json!({
-            "level1": {
-                "level2": {
-                    "level3": "ok"
-                }
-            }
-        })];
-        assert!(validate_and_sanitize_args(&valid, &config).is_ok());
-
-        let invalid = vec![json!({
-            "level1": {
-                "level2": {
-                    "level3": {
-                        "level4": "too deep"
-                    }
-                }
-            }
-        })];
-        let result = validate_and_sanitize_args(&invalid, &config);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("nesting depth"));
-    }
-
-    #[test]
-    fn test_validation_string_length() {
-        let config = ValidationConfig { max_string_length: 100, ..Default::default() };
-
-        let valid = vec![json!({"text": "A".repeat(100)})];
-        assert!(validate_and_sanitize_args(&valid, &config).is_ok());
-
-        let invalid = vec![json!({"text": "A".repeat(101)})];
-        let result = validate_and_sanitize_args(&invalid, &config);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("String too long"));
-    }
-
-    #[test]
-    fn test_validation_array_length() {
-        let config = ValidationConfig { max_array_length: 10, ..Default::default() };
-
-        let valid = vec![json!({"items": vec![1; 10]})];
-        assert!(validate_and_sanitize_args(&valid, &config).is_ok());
-
-        let invalid = vec![json!({"items": vec![1; 11]})];
-        let result = validate_and_sanitize_args(&invalid, &config);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Array too large"));
-    }
-
-    #[test]
-    fn test_validation_object_keys() {
-        let config = ValidationConfig { max_object_keys: 5, ..Default::default() };
-
-        let mut valid_obj = serde_json::Map::new();
-        for i in 0..5 {
-            valid_obj.insert(format!("key{i}"), json!(i));
-        }
-        let valid = vec![json!(valid_obj)];
-        assert!(validate_and_sanitize_args(&valid, &config).is_ok());
-
-        let mut invalid_obj = serde_json::Map::new();
-        for i in 0..6 {
-            invalid_obj.insert(format!("key{i}"), json!(i));
-        }
-        let invalid = vec![json!(invalid_obj)];
-        let result = validate_and_sanitize_args(&invalid, &config);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Too many object keys"));
-    }
-
-    #[test]
-    fn test_validation_special_numbers() {
-        let config = ValidationConfig { allow_special_numbers: false, ..Default::default() };
-
-        let valid = vec![json!({"value": 42.5})];
-        assert!(validate_and_sanitize_args(&valid, &config).is_ok());
-
-        let valid_negative = vec![json!({"value": -123.456})];
-        assert!(validate_and_sanitize_args(&valid_negative, &config).is_ok());
-    }
-
-    #[test]
-    fn test_validation_combined_limits() {
-        let config = ValidationConfig {
-            max_depth: 3,
-            max_string_length: 50,
-            max_array_length: 3,
-            max_object_keys: 3,
-            allow_special_numbers: false,
-            max_total_elements: 100_000,
-        };
-
-        let valid = vec![json!({
-            "user": {
-                "name": "John",
-                "tags": ["a", "b", "c"]
-            }
-        })];
-        assert!(validate_and_sanitize_args(&valid, &config).is_ok());
-
-        let too_deep = vec![json!({
-            "level1": {
-                "level2": {
-                    "level3": {
-                        "level4": "fail"
-                    }
-                }
-            }
-        })];
-        assert!(validate_and_sanitize_args(&too_deep, &config).is_err());
-
-        let long_string = vec![json!({
-            "text": "A".repeat(51)
-        })];
-        assert!(validate_and_sanitize_args(&long_string, &config).is_err());
-
-        let large_array = vec![json!({
-            "items": vec![1, 2, 3, 4]
-        })];
-        assert!(validate_and_sanitize_args(&large_array, &config).is_err());
-
-        let many_keys = vec![json!({
-            "key1": 1,
-            "key2": 2,
-            "key3": 3,
-            "key4": 4
-        })];
-        assert!(validate_and_sanitize_args(&many_keys, &config).is_err());
-    }
-
-    #[test]
-    fn test_validation_with_dangerous_properties() {
-        let config = ValidationConfig::default();
-
-        let args = vec![json!({
-            "__proto__": {"isAdmin": true},
-            "username": "test",
-            "data": "A".repeat(100)
-        })];
-
-        let result = validate_and_sanitize_args(&args, &config).unwrap();
-        let obj = result[0].as_object().unwrap();
-
-        assert!(!obj.contains_key("__proto__"));
-        assert_eq!(obj.get("username").unwrap().as_str().unwrap(), "test");
-        assert_eq!(obj.get("data").unwrap().as_str().unwrap().len(), 100);
-    }
-
-    #[test]
-    fn test_validation_nested_arrays() {
-        let config = ValidationConfig { max_depth: 3, max_array_length: 2, ..Default::default() };
-
-        let valid = vec![json!({
-            "matrix": [
-                [1, 2],
-                [3, 4]
-            ]
-        })];
-        assert!(validate_and_sanitize_args(&valid, &config).is_ok());
-
-        let invalid = vec![json!({
-            "matrix": [
-                [1, 2, 3]
-            ]
-        })];
-        assert!(validate_and_sanitize_args(&invalid, &config).is_err());
-    }
-
-    #[test]
-    fn test_validation_preserves_types() {
-        let config = ValidationConfig::default();
-
-        let args = vec![
-            json!(null),
-            json!(true),
-            json!(false),
-            json!(42),
-            json!(-123),
-            json!(3.14),
-            json!("string"),
-            json!([1, 2, 3]),
-            json!({"key": "value"}),
-        ];
-
-        let result = validate_and_sanitize_args(&args, &config).unwrap();
-
-        assert!(result[0].is_null());
-        assert!(result[1].as_bool().unwrap());
-        assert!(!result[2].as_bool().unwrap());
-        assert_eq!(result[3].as_i64().unwrap(), 42);
-        assert_eq!(result[4].as_i64().unwrap(), -123);
-        assert_eq!(result[5].as_f64().unwrap(), 3.14);
-        assert_eq!(result[6].as_str().unwrap(), "string");
-        assert_eq!(result[7].as_array().unwrap().len(), 3);
-        assert_eq!(result[8].as_object().unwrap().len(), 1);
-    }
-
-    #[test]
-    fn test_validation_config_development() {
-        let dev_config = ValidationConfig::development();
-
-        assert_eq!(dev_config.max_depth, 20);
-        assert_eq!(dev_config.max_string_length, 50_000);
-        assert_eq!(dev_config.max_array_length, 5_000);
-        assert_eq!(dev_config.max_object_keys, 500);
-    }
-
-    #[test]
-    fn test_validation_config_production() {
-        let prod_config = ValidationConfig::production();
-
-        assert_eq!(prod_config.max_depth, 10);
-        assert_eq!(prod_config.max_string_length, 10_000);
-        assert_eq!(prod_config.max_array_length, 1_000);
-        assert_eq!(prod_config.max_object_keys, 100);
-    }
-
-    #[test]
-    fn test_validation_empty_structures() {
-        let config = ValidationConfig::default();
-
-        let empty_obj = vec![json!({})];
-        assert!(validate_and_sanitize_args(&empty_obj, &config).is_ok());
-
-        let empty_arr = vec![json!([])];
-        assert!(validate_and_sanitize_args(&empty_arr, &config).is_ok());
-
-        let empty_str = vec![json!({"text": ""})];
-        assert!(validate_and_sanitize_args(&empty_str, &config).is_ok());
-    }
-
-    #[test]
-    fn test_validation_realistic_payload() {
-        let config = ValidationConfig::default();
-
-        let args = vec![json!({
-            "user": {
-                "id": 123,
-                "name": "John Doe",
-                "email": "john@example.com",
-                "roles": ["user", "admin"],
-                "metadata": {
-                    "lastLogin": "2025-12-09T14:00:00Z",
-                    "preferences": {
-                        "theme": "dark",
-                        "notifications": true
-                    }
-                }
-            },
-            "action": "update",
-            "timestamp": 1_733_756_400
-        })];
-
-        let result = validate_and_sanitize_args(&args, &config);
-        assert!(result.is_ok());
-
-        let sanitized = result.unwrap();
-        assert_eq!(sanitized.len(), 1);
-
-        let obj = sanitized[0].as_object().unwrap();
-        assert!(obj.contains_key("user"));
-        assert!(obj.contains_key("action"));
-        assert!(obj.contains_key("timestamp"));
-    }
 
     #[test]
     fn test_redirect_relative_url_allowed() {
@@ -1664,89 +878,6 @@ mod tests {
     }
 
     #[test]
-    fn test_cve_2025_55182_wide_array_dos_attack() {
-        let config = ValidationConfig {
-            max_depth: 10,
-            max_total_elements: 10_000,
-            max_array_length: 1_000,
-            ..Default::default()
-        };
-
-        let mut outer_array = Vec::new();
-        for _ in 0..20 {
-            outer_array.push(json!(vec![1; 600]));
-        }
-        let wide_nested = json!({ "data": outer_array });
-
-        let result = validate_and_sanitize_args(&[wide_nested], &config);
-        assert!(result.is_err());
-        let err_msg = result.unwrap_err().to_string();
-        assert!(
-            err_msg.contains("Maximum array nesting exceeded") || err_msg.contains("12000 > 10000"),
-            "Expected array nesting error, got: {err_msg}"
-        );
-    }
-
-    #[test]
-    fn test_cve_2025_55182_string_accumulation_dos() {
-        let config = ValidationConfig {
-            max_depth: 10,
-            max_total_elements: 50_000,
-            max_string_length: 10_000,
-            ..Default::default()
-        };
-
-        let strings: Vec<_> = (0..10).map(|_| json!("A".repeat(6_000))).collect();
-        let many_strings = json!({ "strings": strings });
-
-        let result = validate_and_sanitize_args(&[many_strings], &config);
-        assert!(result.is_err());
-        let err_msg = result.unwrap_err().to_string();
-        assert!(
-            err_msg.contains("Maximum array nesting exceeded"),
-            "Expected cumulative limit error, got: {err_msg}"
-        );
-    }
-
-    #[test]
-    fn test_cve_2025_55182_fork_detection() {
-        let config = ValidationConfig {
-            max_depth: 5,
-            max_total_elements: 1_000,
-            max_array_length: 500,
-            ..Default::default()
-        };
-
-        let single_child = json!({ "data": [vec![1; 500]] });
-        assert!(validate_and_sanitize_args(&[single_child], &config).is_ok());
-
-        let forked = json!({ "data": [vec![1; 500], vec![2; 500]] });
-        let result = validate_and_sanitize_args(&[forked], &config);
-
-        assert!(result.is_err(), "Expected fork with >1000 elements to fail");
-    }
-
-    #[test]
-    fn test_cve_2025_55182_production_limits() {
-        let prod_config = ValidationConfig::production();
-
-        assert_eq!(prod_config.max_total_elements, 1_000_000);
-        assert_eq!(prod_config.max_depth, 10);
-        assert_eq!(prod_config.max_array_length, 1_000);
-        assert_eq!(prod_config.max_string_length, 10_000);
-    }
-
-    #[test]
-    fn test_cve_2025_55182_development_limits() {
-        let dev_config = ValidationConfig::development();
-
-        assert_eq!(dev_config.max_total_elements, 5_000_000);
-        assert_eq!(dev_config.max_depth, 20);
-        assert_eq!(dev_config.max_array_length, 5_000);
-        assert_eq!(dev_config.max_string_length, 50_000);
-    }
-
-    #[test]
     fn test_cookie_value_rejects_double_quote() {
         let cookie = PendingCookie {
             name: "session".to_string(),
@@ -1971,5 +1102,48 @@ mod tests {
             result.is_ok(),
             "Referer with explicit default HTTPS port (443) should match server origin without port"
         );
+    }
+
+    #[test]
+    fn test_is_failed_action_result() {
+        assert!(is_failed_action_result(&serde_json::json!({ "success": false })));
+        assert!(is_failed_action_result(&serde_json::json!({ "~promiseError": true })));
+        assert!(is_failed_action_result(&serde_json::json!({ "~timeoutError": "timed out" })));
+        assert!(!is_failed_action_result(&serde_json::json!({ "success": true })));
+        assert!(!is_failed_action_result(&serde_json::json!({ "result": "ok" })));
+    }
+
+    #[test]
+    fn test_build_action_script_reply_mode() {
+        use super::build_action_script;
+
+        let script = build_action_script(
+            Some("actions/foo#bar"),
+            "text/plain;charset=UTF-8",
+            b"[\"hello\"]",
+        )
+        .expect("script");
+
+        assert!(script.contains("\"reply\""));
+        assert!(script.contains("decodeReply"));
+    }
+
+    #[test]
+    fn test_build_form_action_script_mode() {
+        use super::build_form_action_script;
+
+        let script = build_form_action_script(b"--test\r\n", "multipart/form-data; boundary=test")
+            .expect("script");
+
+        assert!(script.contains("\"form\""));
+        assert!(script.contains("decodeAction"));
+    }
+
+    #[test]
+    fn test_build_action_script_requires_form_without_action_id() {
+        use super::build_action_script;
+
+        let err = build_action_script(None, "text/plain", b"{}").expect_err("error");
+        assert!(err.to_string().contains("rsc-action-id"));
     }
 }

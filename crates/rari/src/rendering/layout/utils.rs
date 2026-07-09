@@ -17,7 +17,11 @@ use crate::server::{
     routing::{app_router::AppRouteMatch, types::ParamValue},
 };
 
-pub fn generate_cache_key(route_match: &AppRouteMatch, context: &LayoutRenderContext) -> u64 {
+pub fn generate_cache_key(
+    route_match: &AppRouteMatch,
+    context: &LayoutRenderContext,
+    cookie_header: Option<&str>,
+) -> u64 {
     let mut hasher = DefaultHasher::new();
 
     route_match.route.path.hash(&mut hasher);
@@ -34,6 +38,10 @@ pub fn generate_cache_key(route_match: &AppRouteMatch, context: &LayoutRenderCon
     for (k, v) in search_params {
         k.hash(&mut hasher);
         v.hash(&mut hasher);
+    }
+
+    if let Some(cookie_header) = cookie_header.filter(|value| !value.is_empty()) {
+        cookie_header.hash(&mut hasher);
     }
 
     hasher.finish()

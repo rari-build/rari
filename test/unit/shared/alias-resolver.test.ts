@@ -52,6 +52,18 @@ describe('alias-resolver', () => {
       expect(result).toBe(path.resolve('/project', 'src/lib'))
     })
 
+    it('should resolve single-character @ alias with slash-prefixed imports', () => {
+      const source = '@/actions/todo-actions'
+      const aliases = {
+        '@': '/project/src',
+      }
+      const projectRoot = '/project'
+
+      const result = resolveAlias(source, aliases, projectRoot)
+
+      expect(path.normalize(result!)).toBe(path.normalize('/project/src/actions/todo-actions'))
+    })
+
     it('should handle alias with trailing slash', () => {
       const source = '@components/Button/index'
       const aliases = {

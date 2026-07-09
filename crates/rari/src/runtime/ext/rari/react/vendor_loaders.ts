@@ -38,6 +38,14 @@ interface FlightServerNamespace {
     bundlerConfig: unknown,
     options?: { onError?: (error: unknown) => void },
   ) => Promise<ReadableStream>
+  decodeAction?: (
+    body: FormData,
+    serverManifest: Record<string, { id: string, chunks: string[] }>,
+  ) => Promise<(() => Promise<unknown>) | null>
+  decodeReply?: (
+    body: string | FormData,
+    serverManifest: Record<string, { id: string, chunks: string[] }>,
+  ) => Promise<unknown>
 }
 
 const lazyReact = lazyExtModule<ReactVendorNamespace>('ext:rari/react/vendor/react.js')
@@ -94,6 +102,8 @@ export function loadRscReactVendors(): boolean {
     return !!(
       typeof g.React?.createElement === 'function'
       && typeof g['~reactServerRenderer']?.renderToReadableStream === 'function'
+      && typeof g['~reactServerRenderer']?.decodeAction === 'function'
+      && typeof g['~reactServerRenderer']?.decodeReply === 'function'
     )
   }
   catch (e) {

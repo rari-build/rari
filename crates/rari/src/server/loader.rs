@@ -13,7 +13,8 @@ use crate::{
     server::{
         config::Config,
         core::utils::component::{
-            has_use_client_directive, has_use_server_directive, wrap_server_action_module,
+            extract_component_id, has_use_client_directive, has_use_server_directive,
+            wrap_server_action_module,
         },
     },
     utils::path::path_to_file_url,
@@ -120,20 +121,29 @@ impl ComponentLoader {
                                         r#"(async function() {{
                                             try {{
                                                 const moduleNamespace = await import({specifier_json});
-                                                if (!globalThis['~serverFunctions']) {{
-                                                    globalThis['~serverFunctions'] = {{}};
+                                                if (!globalThis['~rari']) {{
+                                                    globalThis['~rari'] = {{}};
                                                 }}
-                                                if (!globalThis['~serverFunctions'].all) {{
-                                                    globalThis['~serverFunctions'].all = {{}};
+                                                if (!globalThis['~rari'].serverManifest) {{
+                                                    globalThis['~rari'].serverManifest = {{}};
                                                 }}
-                                                if (!globalThis['~serverFunctions'].exported) {{
-                                                    globalThis['~serverFunctions'].exported = {{}};
+                                                if (!globalThis['~rari'].ssrModules) {{
+                                                    globalThis['~rari'].ssrModules = {{}};
                                                 }}
+                                                globalThis['~rari'].serverManifest[{component_id_json}] = {{
+                                                    id: {component_id_json},
+                                                    chunks: [],
+                                                }};
+                                                globalThis['~rari'].ssrModules[{component_id_json}] = moduleNamespace;
                                                 for (const [key, value] of Object.entries(moduleNamespace)) {{
                                                     if (typeof value === 'function') {{
-                                                        const moduleKey = {component_id_json} + ':' + key;
-                                                        globalThis['~serverFunctions'].all[moduleKey] = value;
-                                                        globalThis['~serverFunctions'].exported[moduleKey] = value;
+                                                        const fullId = {component_id_json} + '#' + key;
+                                                        globalThis['~rari'].serverManifest[fullId] = {{
+                                                            id: {component_id_json},
+                                                            name: key,
+                                                            chunks: [],
+                                                        }};
+                                                        globalThis['~rari'].ssrModules[fullId] = moduleNamespace;
                                                     }}
                                                 }}
                                                 return {{ success: true }};
@@ -289,17 +299,18 @@ impl ComponentLoader {
                     };
 
                     if has_use_server_directive(&code) {
-                        let src_dir = Path::new("src");
-                        let relative_path = path.strip_prefix(src_dir).unwrap_or(&path);
-                        let action_id = relative_path
-                            .to_str()
-                            .unwrap_or("unknown")
-                            .cow_replace(".ts", "")
-                            .cow_replace(".tsx", "")
-                            .cow_replace(".js", "")
-                            .cow_replace(".jsx", "")
-                            .cow_replace('\\', "/")
-                            .into_owned();
+                        let path_str = path.to_string_lossy();
+                        let action_id = match extract_component_id(&path_str) {
+                            Ok(id) => id,
+                            Err(e) => {
+                                tracing::error!(
+                                    "Failed to derive server action id for {}: {}",
+                                    path.display(),
+                                    e
+                                );
+                                continue;
+                            }
+                        };
 
                         let dist_path =
                             Path::new(DIST_DIR).join("server").join(format!("{action_id}.js"));
@@ -353,20 +364,29 @@ impl ComponentLoader {
                                                         r#"(async function() {{
                                                             try {{
                                                                 const moduleNamespace = await import({module_specifier_json});
-                                                                if (!globalThis['~serverFunctions']) {{
-                                                                    globalThis['~serverFunctions'] = {{}};
+                                                                if (!globalThis['~rari']) {{
+                                                                    globalThis['~rari'] = {{}};
                                                                 }}
-                                                                if (!globalThis['~serverFunctions'].all) {{
-                                                                    globalThis['~serverFunctions'].all = {{}};
+                                                                if (!globalThis['~rari'].serverManifest) {{
+                                                                    globalThis['~rari'].serverManifest = {{}};
                                                                 }}
-                                                                if (!globalThis['~serverFunctions'].exported) {{
-                                                                    globalThis['~serverFunctions'].exported = {{}};
+                                                                if (!globalThis['~rari'].ssrModules) {{
+                                                                    globalThis['~rari'].ssrModules = {{}};
                                                                 }}
+                                                                globalThis['~rari'].serverManifest[{action_id_json}] = {{
+                                                                    id: {action_id_json},
+                                                                    chunks: [],
+                                                                }};
+                                                                globalThis['~rari'].ssrModules[{action_id_json}] = moduleNamespace;
                                                                 for (const [key, value] of Object.entries(moduleNamespace)) {{
                                                                     if (typeof value === 'function') {{
-                                                                        const moduleKey = {action_id_json} + ':' + key;
-                                                                        globalThis['~serverFunctions'].all[moduleKey] = value;
-                                                                        globalThis['~serverFunctions'].exported[moduleKey] = value;
+                                                                        const fullId = {action_id_json} + '#' + key;
+                                                                        globalThis['~rari'].serverManifest[fullId] = {{
+                                                                            id: {action_id_json},
+                                                                            name: key,
+                                                                            chunks: [],
+                                                                        }};
+                                                                        globalThis['~rari'].ssrModules[fullId] = moduleNamespace;
                                                                     }}
                                                                 }}
                                                                 return {{ success: true }};
@@ -575,20 +595,29 @@ impl ComponentLoader {
                                             r#"(async function() {{
                                                 try {{
                                                     const moduleNamespace = await import({module_specifier_json});
-                                                    if (!globalThis['~serverFunctions']) {{
-                                                        globalThis['~serverFunctions'] = {{}};
+                                                    if (!globalThis['~rari']) {{
+                                                        globalThis['~rari'] = {{}};
                                                     }}
-                                                    if (!globalThis['~serverFunctions'].all) {{
-                                                        globalThis['~serverFunctions'].all = {{}};
+                                                    if (!globalThis['~rari'].serverManifest) {{
+                                                        globalThis['~rari'].serverManifest = {{}};
                                                     }}
-                                                    if (!globalThis['~serverFunctions'].exported) {{
-                                                        globalThis['~serverFunctions'].exported = {{}};
+                                                    if (!globalThis['~rari'].ssrModules) {{
+                                                        globalThis['~rari'].ssrModules = {{}};
                                                     }}
+                                                    globalThis['~rari'].serverManifest[{relative_str_json}] = {{
+                                                        id: {relative_str_json},
+                                                        chunks: [],
+                                                    }};
+                                                    globalThis['~rari'].ssrModules[{relative_str_json}] = moduleNamespace;
                                                     for (const [key, value] of Object.entries(moduleNamespace)) {{
                                                         if (typeof value === 'function') {{
-                                                            const moduleKey = {relative_str_json} + ':' + key;
-                                                            globalThis['~serverFunctions'].all[moduleKey] = value;
-                                                            globalThis['~serverFunctions'].exported[moduleKey] = value;
+                                                            const fullId = {relative_str_json} + '#' + key;
+                                                            globalThis['~rari'].serverManifest[fullId] = {{
+                                                                id: {relative_str_json},
+                                                                name: key,
+                                                                chunks: [],
+                                                            }};
+                                                            globalThis['~rari'].ssrModules[fullId] = moduleNamespace;
                                                         }}
                                                     }}
                                                     return {{ success: true }};

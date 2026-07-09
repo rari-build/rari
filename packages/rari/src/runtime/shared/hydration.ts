@@ -15,6 +15,24 @@ export function hasFizzMarkers(root: Element): boolean {
   return false
 }
 
+export function hasServerRenderedDom(root: Element): boolean {
+  if (hasFizzMarkers(root))
+    return true
+
+  const first = root.firstElementChild
+  if (first === null)
+    return false
+
+  if (first.tagName === 'SCRIPT')
+    return false
+
+  return !first.classList.contains('rari-error')
+}
+
+export function shouldHydrateServerDom(root: Element): boolean {
+  return hasFizzMarkers(root)
+}
+
 export function clearServerInjectedErrors(root: Element): void {
   root.querySelectorAll('.rari-error:not([data-rari-hydration-failure])').forEach((element) => {
     element.remove()

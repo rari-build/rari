@@ -6,6 +6,10 @@ import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { build } from 'rolldown'
+import {
+  fixRolldownDoubleDollarProperties,
+  patchBrowserClientForFormActions,
+} from '../../packages/rari/src/shared/patch-flight-browser-client.ts'
 
 const require = createRequire(import.meta.url)
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url))
@@ -18,6 +22,12 @@ function resolveReactCjs(pkg: string, cjsFile: string): string {
   return path.join(pkgDir, 'cjs', `${cjsFile}.production.js`)
 }
 
+function patchBrowserClientForFormActionsFromDisk(browserSource: string): string {
+  const edgePath = resolveReactCjs('react-server-dom-webpack', 'react-server-dom-webpack-client.edge')
+  const edgeSource = fs.readFileSync(edgePath, 'utf-8')
+  return patchBrowserClientForFormActions(browserSource, edgeSource)
+}
+
 interface BundleEntry {
   name: string
   cjsFile?: string
@@ -26,6 +36,7 @@ interface BundleEntry {
   banner?: string
   externals?: Record<string, string>
   shimDescription?: string
+  patchCjsSource?: (source: string) => string
 }
 
 /** Client-only react-dom exports stubbed for SSR module evaluation. */
@@ -147,7 +158,8 @@ const entries: BundleEntry[] = [
   {
     name: 'react-server-dom-webpack-client',
     cjsFile: resolveReactCjs('react-server-dom-webpack', 'react-server-dom-webpack-client.browser'),
-    namedExports: ['createFromFetch', 'createFromReadableStream', 'createTemporaryReferenceSet', 'encodeReply'],
+    patchCjsSource: patchBrowserClientForFormActionsFromDisk,
+    namedExports: ['createFromFetch', 'createFromReadableStream', 'createServerReference', 'createTemporaryReferenceSet', 'encodeReply'],
     // Stub out webpack-specific module loading since we're bundling to a single ESM file
     banner: `
 // Stub webpack's module loading system (not needed in our bundled ESM context)
@@ -161,11 +173,9 @@ globalThis.__rari_rsc_require__.u = function(chunkId) {
   return '';
 };
 `,
-    // Only externalize react - let react-dom be inlined
-    // The Flight client needs React's internals. react-dom is optional in browser mode
-    // and will be inlined with its required internals
     externals: {
       react: 'ext:rari/react/vendor/react.js',
+      'react-dom': 'ext:rari/react/vendor/react-dom.js',
     },
   },
   {
@@ -209,7 +219,14 @@ function createEntrySource(entry: BundleEntry): string {
   lines.push(`globalThis.process.env.NODE_ENV = 'production';`)
   lines.push('')
 
-  const importPath = entry.cjsFile.replace(/\\/g, '/')
+  let importPath = entry.cjsFile.replace(/\\/g, '/')
+  if (entry.patchCjsSource) {
+    const patchedPath = path.join(OUT_DIR, `.tmp-${entry.name}.cjs`)
+    const patchedSource = entry.patchCjsSource(fs.readFileSync(entry.cjsFile, 'utf-8'))
+    fs.writeFileSync(patchedPath, patchedSource, 'utf-8')
+    importPath = patchedPath.replace(/\\/g, '/')
+  }
+
   lines.push(`import * as __mod from '${importPath}';`)
   lines.push('')
 
@@ -329,10 +346,10 @@ async function bundleCjsEntry(entry: BundleEntry): Promise<void> {
     for (const [pkg, target] of Object.entries(entry.externals)) {
       const ident = `__ext_${pkg.replace(/\W/g, '_')}`
       const escaped = pkg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      const requireRe = new RegExp(`__require\\((["'])${escaped}\\1\\)`, 'g')
-      if (requireRe.test(code)) {
+      const requirePattern = `__require\\((["'])${escaped}\\1\\)`
+      if (new RegExp(requirePattern).test(code)) {
         importLines.push(`import * as ${ident} from '${target}';`)
-        code = code.replace(requireRe, ident)
+        code = code.replace(new RegExp(requirePattern, 'g'), ident)
       }
     }
     if (importLines.length > 0)
@@ -346,6 +363,12 @@ async function bundleCjsEntry(entry: BundleEntry): Promise<void> {
     if (code.includes('__webpack_require__.u'))
       code = code.replaceAll('__webpack_require__.u', '({}).u')
     code = code.replaceAll('__webpack_require__', '__rari_rsc_require__')
+  }
+
+  // Rolldown collapses React's $$FORM_ACTION / $$IS_SIGNATURE_EQUAL property
+  // names to a single $ prefix. react-dom-server checks the double-$ names.
+  if (entry.name === 'react-server-dom-webpack-client') {
+    code = fixRolldownDoubleDollarProperties(code)
   }
 
   writeVendorBundle(entry, code)
