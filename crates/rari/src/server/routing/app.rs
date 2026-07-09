@@ -34,7 +34,10 @@ use crate::{
     },
     server::{
         ServerState,
-        actions::{has_action_form_state_cookie, inject_action_form_state_from_cookie},
+        actions::{
+            has_action_form_state_cookie, inject_action_form_state_from_cookie,
+            response_cache_cookie_partition,
+        },
         cache::response,
         compression::{CompressionEncoding, compress_body, compress_stream},
         config::Config,
@@ -82,6 +85,21 @@ fn static_html_vary_header(cookie_header: Option<&str>) -> String {
 /// cookie is injected into SSR before render.
 fn can_use_static_fast_cache(cookie_header: Option<&str>) -> bool {
     !has_action_form_state_cookie(cookie_header)
+}
+
+fn response_cache_key(
+    path: &str,
+    query_params_ref: Option<&FxHashMap<String, String>>,
+    render_mode: Option<&str>,
+    cookie_header: Option<&str>,
+) -> String {
+    let cache_cookie = response_cache_cookie_partition(cookie_header);
+    response::ResponseCache::generate_cache_key_with_mode(
+        path,
+        query_params_ref,
+        render_mode,
+        cache_cookie.as_deref(),
+    )
 }
 
 fn rsc_vary_header(cookie_header: Option<&str>) -> String {
@@ -1111,12 +1129,7 @@ pub async fn handle_app_route(
                 )
                 .await;
             }
-            let cache_key = response::ResponseCache::generate_cache_key_with_mode(
-                path,
-                query_params_ref,
-                Some("rsc"),
-                cookie_header,
-            );
+            let cache_key = response_cache_key(path, query_params_ref, Some("rsc"), cookie_header);
 
             if context.template_navigation_id.is_none()
                 && let Some(cached) = state.response_cache.get(&cache_key).await
@@ -1224,12 +1237,7 @@ pub async fn handle_app_route(
             }
         }
         RenderMode::Ssr => {
-            let cache_key = response::ResponseCache::generate_cache_key_with_mode(
-                path,
-                query_params_ref,
-                None,
-                cookie_header,
-            );
+            let cache_key = response_cache_key(path, query_params_ref, None, cookie_header);
 
             let client_etag = headers.get("if-none-match").and_then(|v| v.to_str().ok());
 

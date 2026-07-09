@@ -531,11 +531,15 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         })
 
         rememberRouteCache(merged)
+        resetFailureTracking()
       }
       catch (error) {
-        console.error(
-          'Action flight refresh error:',
-          error instanceof Error ? error.message : String(error),
+        const refreshError = error instanceof Error ? error : new Error(String(error))
+        trackHMRFailure(
+          refreshError,
+          'parse',
+          `Action flight refresh failed: ${refreshError.message}`,
+          window.location.pathname,
         )
         if (consecutiveFailuresRef.current >= MAX_RETRIES)
           handleFallbackReload()
