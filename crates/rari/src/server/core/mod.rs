@@ -37,7 +37,7 @@ use crate::{
     rendering::{base::ResourceLimits, layout::LayoutRenderer},
     runtime::JsExecutionRuntime,
     server::{
-        actions::{handle_form_action, handle_server_action},
+        actions::handle_server_action,
         cache::{
             handler::CacheHandlerRegistry, loader::CacheLoader, response,
             revalidate::revalidate_by_path, warmup,
@@ -295,7 +295,6 @@ impl Server {
             .route("/_rari/route-info", routing::post(get_route_info))
             .layer(small_body_limit)
             .route("/_rari/action", routing::post(handle_server_action))
-            .route("/_rari/form-action", routing::post(handle_form_action))
             .layer(medium_body_limit)
             .merge(revalidation_router);
 

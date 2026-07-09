@@ -29,17 +29,110 @@ interface RegisterResult {
   if (!g['~rsc'].modules)
     g['~rsc'].modules = {}
 
-  if (!g['~serverFunctions'])
-    g['~serverFunctions'] = {}
+  if (!g['~rari'])
+    g['~rari'] = {}
 
-  if (!g['~serverFunctions'].exported)
-    g['~serverFunctions'].exported = {}
+  if (!g['~rari'].serverManifest)
+    g['~rari'].serverManifest = {}
 
-  if (!g['~serverFunctions'].all)
-    g['~serverFunctions'].all = {}
+  if (!g['~rari'].ssrModules)
+    g['~rari'].ssrModules = {}
 
-  if (!g['~serverFunctions'].registered)
-    g['~serverFunctions'].registered = new Set()
+  function ensureRariManifestStores() {
+    if (!g['~rari'])
+      g['~rari'] = {}
+    if (!g['~rari'].serverManifest)
+      g['~rari'].serverManifest = {}
+    if (!g['~rari'].ssrModules)
+      g['~rari'].ssrModules = {}
+  }
+
+  function clearManifestEntriesForModule(moduleKey: string) {
+    ensureRariManifestStores()
+    const colonPrefix = `${moduleKey}:`
+    const hashPrefix = `${moduleKey}#`
+
+    for (const key of Object.keys(g['~rari']!.serverManifest!)) {
+      if (key === moduleKey || key.startsWith(colonPrefix) || key.startsWith(hashPrefix))
+        delete g['~rari']!.serverManifest![key]
+    }
+
+    for (const key of Object.keys(g['~rari']!.ssrModules!)) {
+      if (key === moduleKey || key.startsWith(colonPrefix) || key.startsWith(hashPrefix))
+        delete g['~rari']!.ssrModules![key]
+    }
+  }
+
+  function registerManifestExport(moduleKey: string, module: RscModule, exportName: string) {
+    ensureRariManifestStores()
+    const hashId = `${moduleKey}#${exportName}`
+
+    g['~rari']!.serverManifest![hashId] = {
+      id: moduleKey,
+      name: exportName,
+      chunks: [],
+    }
+    g['~rari']!.ssrModules![hashId] = module
+  }
+
+  function resolveServerFunctionExport(name: string): ((...args: any[]) => any) | null {
+    ensureRariManifestStores()
+    const manifest = g['~rari']!.serverManifest!
+    const ssrModules = g['~rari']!.ssrModules!
+
+    const hashIdx = name.lastIndexOf('#')
+    const colonIdx = name.lastIndexOf(':')
+
+    if (hashIdx !== -1 || colonIdx !== -1) {
+      const moduleId = hashIdx !== -1
+        ? name.slice(0, hashIdx)
+        : name.slice(0, colonIdx)
+      const exportName = hashIdx !== -1
+        ? name.slice(hashIdx + 1)
+        : name.slice(colonIdx + 1)
+      const entry = manifest[name] ?? manifest[moduleId]
+      const moduleNs = ssrModules[name] ?? ssrModules[entry?.id ?? moduleId]
+      if (!moduleNs)
+        return null
+
+      const fnName = entry?.name ?? exportName
+      const fn = fnName === 'default'
+        ? (moduleNs.default ?? moduleNs[fnName])
+        : moduleNs[fnName]
+      return typeof fn === 'function' ? fn as (...args: any[]) => any : null
+    }
+
+    let foundKey: string | null = null
+    let foundFunction: ((...args: any[]) => any) | null = null
+
+    for (const key of Object.keys(manifest)) {
+      if (!key.endsWith(`#${name}`) && !key.endsWith(`:${name}`))
+        continue
+
+      const entry = manifest[key]
+      const moduleNs = ssrModules[key] ?? ssrModules[entry?.id ?? '']
+      if (!moduleNs)
+        continue
+
+      const fnName = entry?.name ?? name
+      const fn = fnName === 'default'
+        ? (moduleNs.default ?? moduleNs[fnName])
+        : moduleNs[fnName]
+      if (typeof fn !== 'function')
+        continue
+
+      if (foundKey !== null) {
+        throw new Error(
+          `Ambiguous server function name '${name}'. Multiple modules export this function: '${foundKey}' and '${key}'. Use the full namespaced key (moduleId#functionName) instead.`,
+        )
+      }
+
+      foundKey = key
+      foundFunction = fn as (...args: any[]) => any
+    }
+
+    return foundFunction
+  }
 
   g.registerModule = function registerModule(
     moduleKeyOrModule: string | RscModule,
@@ -70,28 +163,18 @@ interface RegisterResult {
 
     g['~rsc']!.modules![moduleKey] = module
 
-    const prefix = `${moduleKey}:`
-    if (g['~serverFunctions']!.all) {
-      const allKeys = Object.keys(g['~serverFunctions']!.all)
-      for (const key of allKeys) {
-        if (key.startsWith(prefix))
-          delete g['~serverFunctions']!.all![key]
-      }
+    clearManifestEntriesForModule(moduleKey)
+    ensureRariManifestStores()
+    g['~rari']!.serverManifest![moduleKey] = {
+      id: moduleKey,
+      chunks: [],
     }
-    if (g['~serverFunctions']!.exported) {
-      const exportedKeys = Object.keys(g['~serverFunctions']!.exported)
-      for (const key of exportedKeys) {
-        if (key.startsWith(prefix))
-          delete g['~serverFunctions']!.exported![key]
-      }
-    }
+    g['~rari']!.ssrModules![moduleKey] = module
 
     let exportCount = 0
     for (const key in module) {
       if (typeof module[key] === 'function') {
-        const namespacedKey = `${moduleKey}:${key}`
-        g['~serverFunctions']!.all![namespacedKey] = module[key] as (...args: any[]) => any
-        g['~serverFunctions']!.exported![namespacedKey] = module[key] as (...args: any[]) => any
+        registerManifestExport(moduleKey, module, key)
         exportCount++
       }
     }
@@ -114,59 +197,7 @@ interface RegisterResult {
   }
 
   g.getServerFunction = function getServerFunction(name: string): ((...args: any[]) => any) | null {
-    if (name.includes(':')) {
-      if (g['~serverFunctions']!.exported && typeof g['~serverFunctions']!.exported[name] === 'function')
-        return g['~serverFunctions']!.exported[name] as (...args: any[]) => any
-
-      if (g['~serverFunctions']!.all && typeof g['~serverFunctions']!.all[name] === 'function')
-        return g['~serverFunctions']!.all[name] as (...args: any[]) => any
-
-      return null
-    }
-
-    if (g['~serverFunctions']!.exported && typeof g['~serverFunctions']!.exported[name] === 'function')
-      return g['~serverFunctions']!.exported[name] as (...args: any[]) => any
-
-    if (g['~serverFunctions']!.all && typeof g['~serverFunctions']!.all[name] === 'function')
-      return g['~serverFunctions']!.all[name] as (...args: any[]) => any
-
-    let foundKey: string | null = null
-    let foundFunction: ((...args: any[]) => any) | null = null
-
-    if (g['~serverFunctions']!.exported) {
-      const exportedKeys = Object.keys(g['~serverFunctions']!.exported)
-      for (const key of exportedKeys) {
-        if (key.endsWith(`:${name}`) && typeof g['~serverFunctions']!.exported[key] === 'function') {
-          if (foundKey !== null) {
-            throw new Error(
-              `Ambiguous server function name '${name}'. Multiple modules export this function: '${foundKey}' and '${key}'. Use the full namespaced key (moduleId:functionName) instead.`,
-            )
-          }
-          foundKey = key
-          foundFunction = g['~serverFunctions']!.exported[key] as (...args: any[]) => any
-        }
-      }
-    }
-
-    if (foundFunction)
-      return foundFunction
-
-    if (g['~serverFunctions']!.all) {
-      const allKeys = Object.keys(g['~serverFunctions']!.all)
-      for (const key of allKeys) {
-        if (key.endsWith(`:${name}`) && typeof g['~serverFunctions']!.all[key] === 'function') {
-          if (foundKey !== null) {
-            throw new Error(
-              `Ambiguous server function name '${name}'. Multiple modules export this function: '${foundKey}' and '${key}'. Use the full namespaced key (moduleId:functionName) instead.`,
-            )
-          }
-          foundKey = key
-          foundFunction = g['~serverFunctions']!.all[key] as (...args: any[]) => any
-        }
-      }
-    }
-
-    return foundFunction
+    return resolveServerFunctionExport(name)
   }
 
   g.createServerFunctionPromise = function createServerFunctionPromise(
@@ -233,13 +264,6 @@ if (typeof globalThis.registerModule === 'function') {
     globalThis.registerModule({}, '${componentId}');
 }
 
-if (!globalThis['~serverFunctions']) {
-  globalThis['~serverFunctions'] = {}
-}
-if (typeof globalThis['~serverFunctions'].all === 'undefined') {
-  globalThis['~serverFunctions'].all = {}
-}
-
 if (typeof globalThis['~rsc'] === 'undefined') {
     globalThis['~rsc'] = {};
 }
@@ -273,13 +297,6 @@ const moduleExports = {
 
 if (typeof globalThis.registerModule === 'function') {
     globalThis.registerModule(moduleExports, '${componentName}');
-}
-
-if (!globalThis['~serverFunctions']) {
-  globalThis['~serverFunctions'] = {}
-}
-if (typeof globalThis['~serverFunctions'].all === 'undefined') {
-  globalThis['~serverFunctions'].all = {}
 }
 
 if (typeof globalThis['~rsc'] === 'undefined') {

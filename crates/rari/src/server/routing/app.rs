@@ -57,6 +57,32 @@ use crate::{
     utils::path::path_to_file_url,
 };
 
+fn request_cookie_header(headers: &HeaderMap) -> Option<&str> {
+    headers.get("cookie").and_then(|value| value.to_str().ok()).filter(|value| !value.is_empty())
+}
+
+fn route_query_params_for_cache(
+    query_params: &FxHashMap<String, String>,
+) -> Option<&FxHashMap<String, String>> {
+    if query_params.is_empty() { None } else { Some(query_params) }
+}
+
+async fn should_store_response_cache(
+    state: &ServerState,
+    cache_policy: &response::RouteCachePolicy,
+) -> bool {
+    if !cache_policy.enabled || !state.response_cache.config.enabled {
+        return false;
+    }
+
+    let runtime = {
+        let renderer = state.renderer.lock().await;
+        Arc::clone(&renderer.runtime)
+    };
+
+    !runtime.is_dynamic_render().await.unwrap_or(true)
+}
+
 async fn decompress_bytes(data: &Bytes, encoding: CompressionEncoding) -> Result<Bytes, Error> {
     use tokio::io::AsyncReadExt;
 
@@ -960,16 +986,15 @@ pub async fn handle_app_route(
     let accept_encoding = headers.get("accept-encoding").and_then(|v| v.to_str().ok());
 
     let query_params_for_cache = query_params.clone();
+    let cookie_header = request_cookie_header(&headers);
+    let query_params_ref = route_query_params_for_cache(&query_params_for_cache);
 
     if matches!(render_mode, RenderMode::Ssr) {
-        let fast_key = if query_params_for_cache.is_empty() {
-            path.to_string()
-        } else {
-            let mut sorted: Vec<_> = query_params_for_cache.iter().collect();
-            sorted.sort_by_key(|(k, _)| *k);
-            let qs = sorted.iter().map(|(k, v)| format!("{k}={v}")).collect::<Vec<_>>().join("&");
-            format!("{path}?{qs}")
-        };
+        let fast_key = response::ResponseCache::generate_static_fast_cache_key(
+            path,
+            query_params_ref,
+            cookie_header,
+        );
 
         if let Some(prebuilt) = state.static_fast_cache.get(&fast_key) {
             let prebuilt = Arc::clone(prebuilt.value());
@@ -1059,12 +1084,9 @@ pub async fn handle_app_route(
             }
             let cache_key = response::ResponseCache::generate_cache_key_with_mode(
                 path,
-                if query_params_for_cache.is_empty() {
-                    None
-                } else {
-                    Some(&query_params_for_cache)
-                },
+                query_params_ref,
                 Some("rsc"),
+                cookie_header,
             );
 
             if let Some(cached) = state.response_cache.get(&cache_key).await {
@@ -1133,9 +1155,12 @@ pub async fn handle_app_route(
                     let cache_policy =
                         response::RouteCachePolicy::from_cache_control(cache_control, path);
 
-                    if cache_policy.enabled && state.response_cache.config.enabled {
+                    if should_store_response_cache(&state, &cache_policy).await {
                         let response_cache_tags =
                             merge_response_cache_tags(&state, cache_policy.tags.clone()).await;
+                        if cookie_header.is_some() {
+                            cache_headers.insert("vary", HeaderValue::from_static("Cookie"));
+                        }
                         let cached_response = response::CachedResponse {
                             body: Bytes::from(rsc_flight_protocol.clone()),
                             headers: cache_headers,
@@ -1168,13 +1193,11 @@ pub async fn handle_app_route(
             }
         }
         RenderMode::Ssr => {
-            let cache_key = response::ResponseCache::generate_cache_key(
+            let cache_key = response::ResponseCache::generate_cache_key_with_mode(
                 path,
-                if query_params_for_cache.is_empty() {
-                    None
-                } else {
-                    Some(&query_params_for_cache)
-                },
+                query_params_ref,
+                None,
+                cookie_header,
             );
 
             let client_etag = headers.get("if-none-match").and_then(|v| v.to_str().ok());
@@ -1305,7 +1328,7 @@ pub async fn handle_app_route(
                         policy
                     };
 
-                    if cache_policy.enabled && state.response_cache.config.enabled {
+                    if should_store_response_cache(&state, &cache_policy).await {
                         let response_encoding = parts
                             .headers
                             .get("content-encoding")
@@ -1353,6 +1376,9 @@ pub async fn handle_app_route(
                             {
                                 response_headers.insert(key.clone(), value.clone());
                             }
+                        }
+                        if cookie_header.is_some() {
+                            response_headers.insert("vary", HeaderValue::from_static("Cookie"));
                         }
 
                         let merged_tags =
@@ -1497,11 +1523,14 @@ pub async fn handle_app_route(
             if let Ok(header_value) = HeaderValue::from_str(cache_control_value) {
                 response_headers.insert(CACHE_CONTROL, header_value);
             }
+            if cookie_header.is_some() {
+                response_headers.insert("vary", HeaderValue::from_static("Cookie"));
+            }
 
             let cache_policy =
                 response::RouteCachePolicy::from_cache_control(cache_control_value, path);
 
-            if cache_policy.enabled && state.response_cache.config.enabled {
+            if should_store_response_cache(&state, &cache_policy).await {
                 let response_cache_tags =
                     merge_response_cache_tags(&state, cache_policy.tags.clone()).await;
                 let body_bytes = Bytes::from(final_html.clone());
@@ -1520,18 +1549,11 @@ pub async fn handle_app_route(
                     )
                 };
 
-                let fast_key = if query_params_for_cache.is_empty() {
-                    path.to_string()
-                } else {
-                    let mut sorted: Vec<_> = query_params_for_cache.iter().collect();
-                    sorted.sort_by_key(|(k, _)| *k);
-                    let qs = sorted
-                        .iter()
-                        .map(|(k, v)| format!("{k}={v}"))
-                        .collect::<Vec<_>>()
-                        .join("&");
-                    format!("{path}?{qs}")
-                };
+                let fast_key = response::ResponseCache::generate_static_fast_cache_key(
+                    path,
+                    query_params_ref,
+                    cookie_header,
+                );
                 state.static_fast_cache.insert(
                     fast_key,
                     Arc::new(response::PrebuiltResponse {

@@ -388,9 +388,10 @@ function rariGetFlightStream(stream: ReadableStream): Promise<unknown> {
   rariStreamLog('flight.createFromReadableStream.start')
   // createFromReadableStream returns a ReactPromise (custom thenable), not a
   // native Promise — do not chain .then/.catch directly or .catch throws.
+  const ssrModules = g['~rari']?.ssrModules || {}
   const flightPromise = FlightClient.createFromReadableStream(stream, {
     ssrManifest: {
-      moduleMap: g['~rari']?.ssrModules || {},
+      moduleMap: ssrModules,
       moduleLoading: null,
     },
   })

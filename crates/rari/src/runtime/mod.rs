@@ -337,21 +337,34 @@ impl JsExecutionRuntime {
                     deleted = true;
                 }}
 
-                if (globalThis['~serverFunctions']?.all) {{
-                    const prefix = componentId + ':';
-                    for (const key in globalThis['~serverFunctions'].all) {{
-                        if (key === componentId || key.startsWith(prefix)) {{
-                            delete globalThis['~serverFunctions'].all[key];
+                if (globalThis['~rari']?.ssrModules) {{
+                    const colonPrefix = componentId + ':';
+                    const hashPrefix = componentId + '#';
+                    for (const key in globalThis['~rari'].ssrModules) {{
+                        if (key === componentId || key.startsWith(colonPrefix) || key.startsWith(hashPrefix)) {{
+                            delete globalThis['~rari'].ssrModules[key];
                             deleted = true;
                         }}
                     }}
                 }}
 
-                if (globalThis['~serverFunctions']?.exported) {{
-                    const prefix = componentId + ':';
-                    for (const key in globalThis['~serverFunctions'].exported) {{
-                        if (key === componentId || key.startsWith(prefix)) {{
-                            delete globalThis['~serverFunctions'].exported[key];
+                if (globalThis['~rari']?.serverManifest) {{
+                    const colonPrefix = componentId + ':';
+                    const hashPrefix = componentId + '#';
+                    for (const key in globalThis['~rari'].serverManifest) {{
+                        if (key === componentId || key.startsWith(colonPrefix) || key.startsWith(hashPrefix)) {{
+                            delete globalThis['~rari'].serverManifest[key];
+                            deleted = true;
+                        }}
+                    }}
+                }}
+
+                if (globalThis['~rari']?.registeredServerFunctions) {{
+                    const colonPrefix = componentId + ':';
+                    const hashPrefix = componentId + '#';
+                    for (const key of globalThis['~rari'].registeredServerFunctions) {{
+                        if (key === componentId || key.startsWith(colonPrefix) || key.startsWith(hashPrefix)) {{
+                            globalThis['~rari'].registeredServerFunctions.delete(key);
                             deleted = true;
                         }}
                     }}

@@ -20,7 +20,7 @@ export default defineConfig({
       'mdx/define': 'src/mdx/define.ts',
       'mdx/registry': 'src/mdx/registry.ts',
       'headers': 'src/headers.ts',
-      'runtime/actions': 'src/runtime/actions.ts',
+      'runtime/call-server': 'src/runtime/call-server.ts',
       'runtime/entry-client': 'src/runtime/entry-client.ts',
       'runtime/rsc-references': 'src/runtime/rsc-references.ts',
       'runtime/rsc-client-runtime': 'src/runtime/rsc-client-runtime.ts',

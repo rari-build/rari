@@ -95,7 +95,16 @@ export async function getTodos() {
   return [...todos]
 }
 
-export async function addTodo(formData: FormData) {
+export interface TodoActionState {
+  success: boolean
+  error?: string
+  todos?: Todo[]
+}
+
+export async function addTodo(
+  _prevState: TodoActionState,
+  formData: FormData,
+): Promise<TodoActionState> {
   const text = formData.get('text') as string
 
   if (!text?.trim()) {

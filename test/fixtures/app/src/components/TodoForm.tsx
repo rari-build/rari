@@ -1,40 +1,35 @@
 'use client'
 
-import type { Todo } from '@/actions/todo-actions'
-import { useActionState, useState } from 'react'
+import type { Todo, TodoActionState } from '@/actions/todo-actions'
+import { useActionState, useEffect, useRef } from 'react'
 import { addTodo } from '@/actions/todo-actions'
-
-interface FormState {
-  success: boolean
-  error?: string
-  todos?: Todo[]
-}
 
 interface TodoFormProps {
   onSuccess?: (todos?: Todo[]) => void
 }
 
 export default function TodoForm({ onSuccess }: TodoFormProps) {
-  const [resetKey, setResetKey] = useState(0)
-
-  const [state, formAction, isPending] = useActionState<FormState, FormData>(
-    async (_prevState, formData) => {
-      const result = await addTodo(formData)
-      if (result.success) {
-        setResetKey(prev => prev + 1)
-        if (onSuccess)
-          onSuccess(result.todos)
-      }
-
-      return result
-    },
+  const [state, formAction, isPending] = useActionState<TodoActionState, FormData>(
+    addTodo,
     { success: false, todos: [] },
   )
+  const lastSuccessCountRef = useRef(0)
+
+  useEffect(() => {
+    if (!state.success || !state.todos)
+      return
+
+    if (state.todos.length === lastSuccessCountRef.current)
+      return
+
+    lastSuccessCountRef.current = state.todos.length
+    onSuccess?.(state.todos)
+  }, [state.success, state.todos, onSuccess])
 
   return (
     <div data-testid="todo-form">
       <h2>Add Todo</h2>
-      <form action={formAction} key={resetKey}>
+      <form action={formAction}>
         <input
           type="text"
           name="text"

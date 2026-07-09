@@ -28,13 +28,6 @@ pub fn usize_fraction_ceil(value: usize, factor: f64) -> usize {
     (value as f64 * factor).ceil() as usize
 }
 
-#[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-#[inline]
-#[must_use]
-pub fn f64_floor_usize(value: f64) -> usize {
-    value.floor() as usize
-}
-
 #[expect(clippy::cast_possible_truncation)]
 #[inline]
 #[must_use]

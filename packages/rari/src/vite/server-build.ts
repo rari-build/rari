@@ -624,7 +624,7 @@ const ${importName} = (props) => {
       const aliases = this.options.alias || {}
       for (const [alias, replacement] of Object.entries(aliases)) {
         if (importPath.startsWith(`${alias}/`) || importPath === alias) {
-          const relativePath = importPath.slice(alias.length)
+          const relativePath = importPath.slice(alias.length).replace(/^\/+/, '')
           resolvedPath = path.join(replacement, relativePath)
           break
         }
@@ -787,6 +787,7 @@ const ${importName} = (props) => {
       },
       {
         name: 'resolve-client-server-boundaries',
+        enforce: 'pre' as const,
         resolveId: (source: string, importer: string | undefined) => {
           if (!importer || importer.includes('node_modules') || isRariInternalPath(importer))
             return null
@@ -811,6 +812,9 @@ const ${importName} = (props) => {
             const importerDir = importer === virtualModuleId ? resolveDir : path.dirname(importer)
             resolvedPath = path.resolve(importerDir, source)
           }
+
+          if (!resolvedPath && path.isAbsolute(source))
+            resolvedPath = source
 
           if (resolvedPath) {
             const extensions = ['', '.ts', '.tsx', '.js', '.jsx']
@@ -865,22 +869,10 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
 
           if (id.startsWith('\0server-action:')) {
             const filePath = id.slice('\0server-action:'.length)
-
             const actionId = serverActionRefs.get(filePath)?.actionId ?? this.getComponentId(filePath)
-            const builtPath = path.join(this.options.outDir, this.options.rscDir, `${actionId}.js`)
-            const absoluteBuiltPath = path.resolve(this.projectRoot, builtPath)
-
-            const builtFileUrl = pathToFileURL(absoluteBuiltPath).href
-
-            const actionInfo = serverActionRefs.get(filePath)
-            const hasDefault = actionInfo?.hasDefaultExport ?? false
-
-            const exportStatement = hasDefault
-              ? `export * from ${JSON.stringify(builtFileUrl)};\nexport { default } from ${JSON.stringify(builtFileUrl)};`
-              : `export * from ${JSON.stringify(builtFileUrl)};`
 
             return {
-              code: exportStatement,
+              code: this.generateServerActionRuntimeModule(filePath, actionId),
               moduleType: 'js',
             }
           }
@@ -924,6 +916,9 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
               if (this.isClientComponent(pathWithExt))
                 return null
 
+              if (this.isServerActionFile(pathWithExt))
+                return null
+
               const srcDir = path.join(this.projectRoot, 'src')
               if (!pathWithExt.startsWith(srcDir))
                 return null
@@ -959,33 +954,44 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
           if (source.startsWith('\0'))
             return null
 
-          const aliases = this.options.alias || {}
-          for (const [alias, replacement] of Object.entries(aliases)) {
-            if (source.startsWith(`${alias}/`) || source === alias) {
-              const relativePath = source.slice(alias.length)
-              const resolvedPath = path.join(replacement, relativePath)
-              const absolutePath = path.isAbsolute(resolvedPath)
-                ? resolvedPath
-                : path.resolve(this.projectRoot, resolvedPath)
+          const resolved = resolveAlias(source, this.options.alias || {}, this.projectRoot)
+          if (!resolved)
+            return null
 
-              const extensions = ['', '.ts', '.tsx', '.js', '.jsx']
-              for (const ext of extensions) {
-                const pathWithExt = absolutePath + ext
-                if (fs.existsSync(pathWithExt) && fs.statSync(pathWithExt).isFile())
-                  return pathWithExt
+          const extensions = ['', '.ts', '.tsx', '.js', '.jsx']
+          for (const ext of extensions) {
+            const pathWithExt = resolved + ext
+            if (fs.existsSync(pathWithExt) && fs.statSync(pathWithExt).isFile()) {
+              if (this.isServerActionFile(pathWithExt)) {
+                const actionId = this.getComponentId(pathWithExt)
+                serverActionRefs.set(pathWithExt, {
+                  actionId,
+                  hasDefaultExport: this.moduleAnalysisCache.get(pathWithExt).hasDefaultExport,
+                })
+                return { id: `\0server-action:${pathWithExt}` }
               }
 
-              for (const ext of ['.ts', '.tsx', '.js', '.jsx']) {
-                const indexPath = path.join(absolutePath, `index${ext}`)
-                if (fs.existsSync(indexPath))
-                  return indexPath
-              }
-
-              return absolutePath
+              return pathWithExt
             }
           }
 
-          return null
+          for (const ext of ['.ts', '.tsx', '.js', '.jsx']) {
+            const indexPath = path.join(resolved, `index${ext}`)
+            if (fs.existsSync(indexPath)) {
+              if (this.isServerActionFile(indexPath)) {
+                const actionId = this.getComponentId(indexPath)
+                serverActionRefs.set(indexPath, {
+                  actionId,
+                  hasDefaultExport: this.moduleAnalysisCache.get(indexPath).hasDefaultExport,
+                })
+                return { id: `\0server-action:${indexPath}` }
+              }
+
+              return indexPath
+            }
+          }
+
+          return resolved
         },
       },
       {
@@ -1082,6 +1088,9 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
           }
 
           if (source === 'rari')
+            return null
+
+          if (resolveAlias(source, this.options.alias || {}, this.projectRoot))
             return null
 
           if (!source.startsWith('.') && !source.startsWith('/'))
@@ -1553,12 +1562,58 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     const exports: string[] = []
     if (/export\s+default\b/.test(code))
       exports.push('default')
-    const namedExportRegex = /export\s+(?:function|const|let|var|class)\s+(\w+)/g
+    const namedExportRegex = /export\s+(?:async\s+)?(?:function|const|let|var|class)\s+(\w+)/g
     for (const m of code.matchAll(namedExportRegex)) {
       exports.push(m[1])
     }
 
     return exports.length > 0 ? exports : ['default']
+  }
+
+  private isServerActionFile(filePath: string): boolean {
+    try {
+      const code = fs.readFileSync(filePath, 'utf-8')
+      return this.isServerAction(code, filePath)
+    }
+    catch {
+      return false
+    }
+  }
+
+  private generateServerActionRuntimeModule(filePath: string, actionId: string): string {
+    const code = fs.readFileSync(filePath, 'utf-8')
+    const exports = this.extractExportNames(code)
+    const lines = [
+      `const __rariActionMod = globalThis.__rari_rsc_require__(${JSON.stringify(actionId)});`,
+      `if (!__rariActionMod) throw new Error("Server action module ${actionId} is not registered");`,
+    ]
+
+    for (const name of exports) {
+      if (name === 'default')
+        lines.push('export default __rariActionMod.default;')
+      else
+        lines.push(`export const ${name} = __rariActionMod.${name};`)
+    }
+
+    return `${lines.join('\n')}\n`
+  }
+
+  private generateServerActionReferenceModule(filePath: string): string {
+    const code = fs.readFileSync(filePath, 'utf-8')
+    const exports = this.extractExportNames(code)
+    const actionId = this.getComponentId(filePath)
+
+    let stub = `import { createServerReference } from 'react-server-dom-webpack/client';\n`
+    stub += `import { callServer } from 'rari/runtime/call-server';\n`
+    for (const name of exports) {
+      const refId = `${actionId}#${name}`
+      if (name === 'default')
+        stub += `export default createServerReference(${JSON.stringify(refId)}, callServer);\n`
+      else
+        stub += `export const ${name} = createServerReference(${JSON.stringify(refId)}, callServer);\n`
+    }
+
+    return stub
   }
 
   private async buildSSRSingleClient(
@@ -1583,6 +1638,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     const virtualModuleId = `\0ssr-virtual:${inputPath}`
     const projectRoot = this.projectRoot
     const aliasRoot = aliasRootForPath(inputPath, projectRoot)
+    const buildContext = this
 
     const result = await build({
       input: virtualModuleId,
@@ -1594,6 +1650,8 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
         'react-dom',
         /^react\//,
         /^rari/,
+        'react-server-dom-webpack/client',
+        /^react-server-dom-webpack\//,
       ],
       output: {
         format: 'esm',
@@ -1627,23 +1685,47 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
             if (id === virtualModuleId)
               return { code: strippedCode, moduleType: loader }
 
+            if (id.startsWith('\0server-action-ref:')) {
+              const filePath = id.slice('\0server-action-ref:'.length)
+              return {
+                code: buildContext.generateServerActionReferenceModule(filePath),
+                moduleType: 'js',
+              }
+            }
+
             return null
           },
         },
         {
           name: 'ssr-client-resolve',
           resolveId(id, importer) {
+            if (id.startsWith('\0server-action-ref:'))
+              return id
+
             if (id.startsWith('.') || id.startsWith('/') || id.startsWith('@/')) {
               let resolved = id
-              if (id.startsWith('@/'))
+              if (id.startsWith('@/')) {
                 resolved = path.join(aliasRoot, id.slice(2))
-              else if (importer === virtualModuleId)
+              }
+              else if (importer === virtualModuleId) {
                 resolved = path.resolve(path.dirname(inputPath), id)
-              else if (importer)
-                resolved = path.resolve(path.dirname(importer.replace('\0ssr-virtual:', '')), id)
+              }
+              else if (importer) {
+                resolved = path.resolve(
+                  path.dirname(
+                    importer
+                      .replace('\0ssr-virtual:', '')
+                      .replace('\0server-action-ref:', ''),
+                  ),
+                  id,
+                )
+              }
 
               const found = resolveWithExtensions(resolved, ['.ts', '.tsx', '.js', '.jsx'])
                 || resolveIndexFile(resolved, ['.ts', '.tsx', '.js', '.jsx'])
+
+              if (found && buildContext.isServerActionFile(found))
+                return `\0server-action-ref:${path.resolve(found)}`
 
               if (found && clientModuleSpecifiers) {
                 const resolvedAbs = path.resolve(found)
@@ -1839,7 +1921,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
 
     for (const [alias, replacement] of Object.entries(aliases)) {
       if (importPath.startsWith(`${alias}/`) || importPath === alias) {
-        const relativePath = importPath.slice(alias.length)
+        const relativePath = importPath.slice(alias.length).replace(/^\/+/, '')
         resolvedPath = path.join(replacement, relativePath)
         break
       }

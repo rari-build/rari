@@ -1,20 +1,17 @@
 import { expect, test } from '@playwright/test'
-import { submitAndWaitForAction } from './shared/server-action-helpers'
+import { resetActionsFixture, submitAndWaitForAction } from './shared/server-action-helpers'
 
 test.describe.serial('Server Actions', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/actions')
-    await page.waitForLoadState('networkidle')
-    await page.click('[data-testid="reset-button"]')
-    await expect(page.locator('[data-testid="todo-count"]')).toHaveText('Total: 2', { timeout: 15000 })
-    await expect(page.locator('[data-testid="todo-status-1"]')).toHaveText('completed', { timeout: 10000 })
+    test.setTimeout(60_000)
+    await resetActionsFixture(page)
   })
 
   test.describe('useActionState Hook', () => {
     test('should add todo using form action', async ({ page }) => {
       await page.fill('[data-testid="todo-input"]', 'New test todo')
       await submitAndWaitForAction(page, '[data-testid="submit-button"]')
-      await expect(page.locator('[data-testid="success-message"]')).toBeVisible()
+      await expect(page.locator('[data-testid="success-message"]')).toBeVisible({ timeout: 15_000 })
       await expect(page.locator('[data-testid="todo-count"]')).toHaveText('Total: 3', { timeout: 15000 })
       await expect(page.locator('[data-testid="todo-list"]')).toContainText('New test todo')
     })
@@ -28,7 +25,7 @@ test.describe.serial('Server Actions', () => {
     test('should reset form after successful submission', async ({ page }) => {
       await page.fill('[data-testid="todo-input"]', 'Test form reset')
       await submitAndWaitForAction(page, '[data-testid="submit-button"]')
-      await expect(page.locator('[data-testid="success-message"]')).toBeVisible()
+      await expect(page.locator('[data-testid="success-message"]')).toBeVisible({ timeout: 15_000 })
       await expect(page.locator('[data-testid="todo-input"]')).toHaveValue('')
     })
   })

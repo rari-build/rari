@@ -398,7 +398,8 @@ impl LayoutRenderer {
         request_context: Option<Arc<RequestContext>>,
         return_rsc_on_fallback: bool,
     ) -> Result<RenderResult, RariError> {
-        let cache_key = utils::generate_cache_key(route_match, context);
+        let cookie_header = request_context.as_deref().and_then(|ctx| ctx.cookie_header.as_deref());
+        let cache_key = utils::generate_cache_key(route_match, context, cookie_header);
         let layout_cache_enabled =
             should_use_layout_html_cache(context, request_context.as_deref());
 

@@ -36,7 +36,7 @@ pub struct RevalidateResponse {
     pub message: Option<String>,
 }
 
-async fn invalidate_use_cache_entries(
+pub(crate) async fn invalidate_use_cache_entries(
     renderer: &Arc<Mutex<RscRenderer>>,
     tag: Option<&str>,
     path: Option<&str>,
@@ -73,6 +73,40 @@ async fn invalidate_use_cache_entries(
     runtime.execute_script("use_cache_invalidate".to_string(), script).await.map(|_| ())
 }
 
+pub(crate) async fn invalidate_route_caches(
+    state: &ServerState,
+    path: &str,
+) -> Result<(), RariError> {
+    state.response_cache.invalidate(path).await;
+    state.response_cache.invalidate_by_tag(path).await;
+    response::invalidate_static_fast_cache_for_path(&state.static_fast_cache, path);
+    state.html_cache.remove(path);
+
+    if let Err(e) = invalidate_use_cache_entries(&state.renderer, None, Some(path)).await {
+        tracing::warn!(error = %e, path = %path, "use cache invalidate failed during route cache invalidation");
+        return Err(e);
+    }
+
+    let rsc_cache_key =
+        response::ResponseCache::generate_cache_key_with_mode(path, None, Some("rsc"), None);
+    state.response_cache.invalidate(&rsc_cache_key).await;
+
+    for key in state.response_cache.get_all_keys() {
+        if response::ResponseCache::cache_key_matches_route(&key, path) {
+            state.response_cache.invalidate(&key).await;
+        }
+    }
+
+    state.layout_html_cache.clear().await.map_err(|e| {
+        tracing::warn!(
+            error = %e,
+            path = %path,
+            "layout_html_cache.clear failed during route cache invalidation"
+        );
+        RariError::from(format!("layout cache clear error: {e}"))
+    })
+}
+
 #[axum::debug_handler]
 pub async fn revalidate_by_path(
     State(state): State<ServerState>,
@@ -95,42 +129,17 @@ pub async fn revalidate_by_path(
                 }
             }
 
-            state.response_cache.invalidate(path).await;
-            response::invalidate_static_fast_cache_for_path(&state.static_fast_cache, path);
-            let use_cache_result =
-                invalidate_use_cache_entries(&state.renderer, None, Some(path)).await;
-
-            let path_pattern = format!("{path}?");
-            let all_keys = state.response_cache.get_all_keys();
-
-            for key in all_keys {
-                if key.starts_with(&path_pattern) {
-                    state.response_cache.invalidate(&key).await;
-                }
-            }
-
-            let layout_result = state.layout_html_cache.clear().await;
-
-            let res = match (layout_result, use_cache_result) {
-                (Ok(()), Ok(())) => RevalidateResponse {
+            let res = match invalidate_route_caches(&state, path).await {
+                Ok(()) => RevalidateResponse {
                     revalidated: true,
                     message: Some(format!("Revalidated path: {path}")),
                 },
-                (Err(e), _) => {
-                    tracing::error!(error = %e, path = %path, "layout_html_cache.clear failed");
+                Err(e) => {
+                    tracing::error!(error = %e, path = %path, "route cache invalidation failed");
                     RevalidateResponse {
                         revalidated: false,
                         message: Some(format!(
                             "Revalidation failed: layout cache clear error: {e}"
-                        )),
-                    }
-                }
-                (Ok(()), Err(e)) => {
-                    tracing::error!(error = %e, path = %path, "use cache invalidate script failed");
-                    RevalidateResponse {
-                        revalidated: false,
-                        message: Some(format!(
-                            "Revalidation failed: use cache invalidate error: {e}"
                         )),
                     }
                 }

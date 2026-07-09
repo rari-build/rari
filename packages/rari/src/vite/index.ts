@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url'
 import { DEFAULT_DEVICE_SIZES, DEFAULT_FORMATS, DEFAULT_IMAGE_SIZES, DEFAULT_MAX_CACHE_SIZE, DEFAULT_MINIMUM_CACHE_TTL, DEFAULT_QUALITY_LEVELS } from '@/image/constants'
 import { rariProxy } from '@/proxy/vite-plugin'
 import { rariRouter } from '@/router/vite-plugin'
+import { fixRolldownDoubleDollarProperties, patchBrowserClientForFormActions } from '@/shared/patch-flight-browser-client'
 import {
   BACKSLASH_REGEX,
   EXPORT_NAMED_DECLARATION_REGEX,
@@ -528,7 +529,9 @@ export function rari(options: RariOptions = {}): RariPlugin[] {
     if (exportedNames.length === 0)
       return code
 
-    const idJson = JSON.stringify(id)
+    const projectRoot = options.projectRoot || process.cwd()
+    const moduleId = getComponentId(id, projectRoot)
+    const idJson = JSON.stringify(moduleId)
     let newCode = code
     newCode
       += '\n\nimport {registerServerReference} from "react-server-dom-rari/server";\n'
@@ -586,15 +589,17 @@ if (import.meta.hot) {
         return ''
 
       const moduleId = getComponentId(id, projectRoot)
-      const moduleIdJson = JSON.stringify(moduleId)
 
-      let newCode = 'import { createServerReference } from "rari/runtime/actions";\n'
+      let newCode = 'import { createServerReference } from "virtual:react-flight-client";\n'
+      newCode += 'import { callServer } from "rari/runtime/call-server";\n'
 
       for (const name of exportedNames) {
+        const refId = `${moduleId}#${name}`
+        const refIdJson = JSON.stringify(refId)
         if (name === 'default')
-          newCode += `export default createServerReference("default", ${moduleIdJson}, "default");\n`
+          newCode += `export default createServerReference(${refIdJson}, callServer);\n`
         else
-          newCode += `export const ${name} = createServerReference("${name}", ${moduleIdJson}, "${name}");\n`
+          newCode += `export const ${name} = createServerReference(${refIdJson}, callServer);\n`
       }
 
       return newCode
@@ -995,8 +1000,9 @@ if (import.meta.hot) {
 
         const external = config.environments.client.build.rolldownOptions.external
         if (Array.isArray(external)) {
-          if (!external.includes('react-server-dom-webpack/client'))
-            external.push('react-server-dom-webpack/client')
+          const rsdwClientIndex = external.indexOf('react-server-dom-webpack/client')
+          if (rsdwClientIndex !== -1)
+            external.splice(rsdwClientIndex, 1)
         }
       }
 
@@ -1774,13 +1780,9 @@ ${clientTransformedCode}`
       if (id === 'virtual:rari-mdx-components' || id === 'virtual:rari-mdx-components.ts')
         return 'virtual:rari-mdx-components.ts'
 
-      if ((id === 'react-server-dom-webpack/client' || id === 'react-server-dom-webpack/client.browser') && importer?.startsWith('virtual:')) {
-        try {
-          const packageDir = path.dirname(fileURLToPath(import.meta.resolve('react-server-dom-webpack/package.json')))
-          return path.join(packageDir, 'client.browser.js')
-        }
-        catch {}
-      }
+      if (id === 'react-server-dom-webpack/client' || id === 'react-server-dom-webpack/client.browser')
+        return 'virtual:react-flight-client.ts'
+
       if (id === './LoadingErrorBoundary' || id === './LoadingErrorBoundary.tsx')
         return 'virtual:loading-error-boundary.tsx'
       if (id === 'react-server-dom-rari/server')
@@ -2038,22 +2040,30 @@ import * as React from 'react';\n${content}`
 
       if (id === 'virtual:react-flight-client.ts') {
         let browserClientPath: string
+        let edgeClientPath: string
         try {
           const packageDir = path.dirname(fileURLToPath(import.meta.resolve('react-server-dom-webpack/package.json')))
           browserClientPath = path.join(packageDir, 'cjs/react-server-dom-webpack-client.browser.production.js')
+          edgeClientPath = path.join(packageDir, 'cjs/react-server-dom-webpack-client.edge.production.js')
         }
         catch {
           const rariDir = path.dirname(fileURLToPath(import.meta.url))
           const nmDir = path.resolve(rariDir, '../../node_modules')
           browserClientPath = path.join(nmDir, 'react-server-dom-webpack/cjs/react-server-dom-webpack-client.browser.production.js')
+          edgeClientPath = path.join(nmDir, 'react-server-dom-webpack/cjs/react-server-dom-webpack-client.edge.production.js')
         }
 
-        const cjsSource = fs.readFileSync(browserClientPath, 'utf-8')
+        const browserSource = fs.readFileSync(browserClientPath, 'utf-8')
+        const edgeSource = fs.readFileSync(edgeClientPath, 'utf-8')
+        const cjsSource = fixRolldownDoubleDollarProperties(
+          patchBrowserClientForFormActions(browserSource, edgeSource),
+        )
 
         return {
           code: `
 import * as React from 'react';
 import * as ReactDOM from 'react-dom';
+import { callServer as rariCallServer } from 'rari/runtime/call-server';
 
 const module = { exports: {} };
 const exports = module.exports;
@@ -2065,7 +2075,15 @@ ${cjsSource}
   throw new Error('Cannot require "' + id + '" from react-server-dom-webpack client bundle');
 });
 export const createFromFetch = module.exports.createFromFetch;
-export const createFromReadableStream = module.exports.createFromReadableStream;
+export function createFromReadableStream(stream, options) {
+  return module.exports.createFromReadableStream(stream, {
+    ...options,
+    callServer: options?.callServer ?? rariCallServer,
+  });
+}
+export const createServerReference = module.exports.createServerReference;
+export const encodeReply = module.exports.encodeReply;
+export const createTemporaryReferenceSet = module.exports.createTemporaryReferenceSet;
 `,
         }
       }

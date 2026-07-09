@@ -23,9 +23,9 @@ use super::{
         BATCH_ERROR_COLLECTION, CACHE_CLEANUP_INTERVAL, EXTENSION_CHECKS, FIZZ_RENDER_SCRIPT,
         LOAD_FULL_REACT_VENDORS_SCRIPT, LOAD_RSC_VENDORS_SCRIPT,
         MEMORY_PRESSURE_RENDER_THRESHOLD_DEN, MEMORY_PRESSURE_RENDER_THRESHOLD_NUM,
-        RSC_RENDERER_SCRIPT, SERVER_ACTION_INVOCATION_SCRIPT, SERVER_FUNCTION_RESOLVER,
-        STREAMING_FIZZ_SCRIPT, STREAMING_PIPELINE_READY_CHECK, V8_CACHE_CLEAR_SCRIPT,
-        module_registration_script, resolve_server_functions_for_component,
+        RSC_RENDERER_SCRIPT, SERVER_FUNCTION_RESOLVER, STREAMING_FIZZ_SCRIPT,
+        STREAMING_PIPELINE_READY_CHECK, V8_CACHE_CLEAR_SCRIPT, module_registration_script,
+        resolve_server_functions_for_component,
     },
     types::{ResourceLimits, ResourceMetrics, ResourceTracker},
     utils::transform_imports_for_hmr,
@@ -957,64 +957,6 @@ globalThis['~errors'].batch.push({{
     ) -> impl Future<Output = Result<String, RariError>> {
         let encoded_id = urlencoding::encode(component_id);
         future::ready(Ok(format!(r"<!-- rari:client-component-ref:{encoded_id} -->")))
-    }
-
-    pub async fn execute_server_function(
-        &self,
-        function_id: &str,
-        export_name: &str,
-        args: &[Value],
-    ) -> Result<Value, RariError> {
-        Self::execute_server_function_on_runtime(&self.runtime, function_id, export_name, args)
-            .await
-    }
-
-    pub async fn execute_server_function_on_runtime(
-        runtime: &Arc<JsExecutionRuntime>,
-        function_id: &str,
-        export_name: &str,
-        args: &[Value],
-    ) -> Result<Value, RariError> {
-        let args_json = serde_json::to_string(args)
-            .map_err(|e| RariError::serialization(format!("Failed to serialize args: {e}")))?;
-
-        let script = SERVER_ACTION_INVOCATION_SCRIPT
-            .cow_replace("{function_name}", export_name)
-            .cow_replace("{args_json}", &args_json)
-            .into_owned();
-
-        runtime
-            .execute_script(
-                format!("execute_action_{}_{}.ts", function_id.cow_replace('/', "_"), export_name),
-                script,
-            )
-            .await
-            .map_err(|e| RariError::js_execution(format!("Server function execution failed: {e}")))
-    }
-
-    pub async fn execute_server_function_with_context(
-        runtime: &Arc<JsExecutionRuntime>,
-        request_context: Arc<RequestContext>,
-        function_id: &str,
-        export_name: &str,
-        args: &[Value],
-    ) -> Result<Value, RariError> {
-        let args_json = serde_json::to_string(args)
-            .map_err(|e| RariError::serialization(format!("Failed to serialize args: {e}")))?;
-
-        let script = SERVER_ACTION_INVOCATION_SCRIPT
-            .cow_replace("{function_name}", export_name)
-            .cow_replace("{args_json}", &args_json)
-            .into_owned();
-
-        runtime
-            .execute_script_with_request_context(
-                request_context,
-                format!("execute_action_{}_{}.ts", function_id.cow_replace('/', "_"), export_name),
-                script,
-            )
-            .await
-            .map_err(|e| RariError::js_execution(format!("Server function execution failed: {e}")))
     }
 
     pub async fn ensure_component_loaded(&self, component_id: &str) -> Result<(), RariError> {

@@ -22,9 +22,11 @@ export default defineConfig({
   },
 
   webServer: {
-    command: `pnpm --filter @test/app build && pnpm --filter @test/app start > "${getRariLogPath()}" 2>&1`,
+    command: `pnpm --filter rari build && pnpm --filter @test/app build && pnpm --filter @test/app start > "${getRariLogPath()}" 2>&1`,
     url: `http://localhost:${process.env.PORT || 3000}`,
-    reuseExistingServer: !process.env.CI,
+    // Reusing a running server after `pnpm build` serves stale SSR HTML with outdated
+    // asset hashes (client JS 404s). Set E2E_REUSE_SERVER=1 to opt in locally.
+    reuseExistingServer: process.env.E2E_REUSE_SERVER === '1',
     timeout: 120000,
     env: {
       NODE_ENV: 'production',

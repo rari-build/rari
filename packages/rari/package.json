@@ -71,9 +71,9 @@
       "types": "./dist/headers.d.mts",
       "default": "./dist/headers.mjs"
     },
-    "./runtime/actions": {
-      "types": "./dist/runtime/actions.d.mts",
-      "default": "./dist/runtime/actions.mjs"
+    "./runtime/call-server": {
+      "types": "./dist/runtime/call-server.d.mts",
+      "default": "./dist/runtime/call-server.mjs"
     },
     "./runtime/entry-client": {
       "types": "./dist/runtime/entry-client.d.mts",

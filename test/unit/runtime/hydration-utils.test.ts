@@ -1,4 +1,4 @@
-import { clearServerInjectedErrors, hasFizzMarkers } from '@rari/runtime/shared/hydration'
+import { clearServerInjectedErrors, hasFizzMarkers, hasServerRenderedDom } from '@rari/runtime/shared/hydration'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 
 function mockRoot(options: {
@@ -65,6 +65,45 @@ describe('hasFizzMarkers', () => {
   it('returns true for template[data-rri] markers', () => {
     const root = mockRoot({ templateCount: 1 })
     expect(hasFizzMarkers(root)).toBe(true)
+  })
+})
+
+describe('hasServerRenderedDom', () => {
+  beforeEach(() => {
+    vi.stubGlobal('NodeFilter', { SHOW_COMMENT: 128 })
+    vi.stubGlobal('document', {
+      createTreeWalker: vi.fn(),
+    })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it('returns false for empty root', () => {
+    const root = mockRoot({})
+    Object.defineProperty(root, 'firstElementChild', { value: null })
+
+    expect(hasServerRenderedDom(root)).toBe(false)
+  })
+
+  it('returns false when only a server error node is present', () => {
+    const root = mockRoot({})
+    Object.defineProperty(root, 'firstElementChild', {
+      value: { tagName: 'DIV', classList: { contains: (name: string) => name === 'rari-error' } },
+    })
+
+    expect(hasServerRenderedDom(root)).toBe(false)
+  })
+
+  it('returns true for SSR content without Fizz markers', () => {
+    const root = mockRoot({})
+    Object.defineProperty(root, 'firstElementChild', {
+      value: { tagName: 'MAIN', classList: { contains: () => false } },
+    })
+
+    expect(hasServerRenderedDom(root)).toBe(true)
   })
 })
 

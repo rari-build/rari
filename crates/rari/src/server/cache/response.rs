@@ -98,9 +98,13 @@ pub fn invalidate_static_fast_cache_for_path(
 ) {
     cache.remove(path);
     let query_prefix = format!("{path}?");
+    let hash_prefix = format!("{path}#");
     let keys: Vec<String> = cache
         .iter()
-        .filter(|entry| entry.key().starts_with(&query_prefix))
+        .filter(|entry| {
+            let key = entry.key();
+            key.starts_with(&query_prefix) || key.starts_with(&hash_prefix)
+        })
         .map(|entry| entry.key().clone())
         .collect();
     for key in keys {
@@ -260,15 +264,30 @@ impl ResponseCache {
         route: &str,
         params: Option<&rustc_hash::FxHashMap<String, String>>,
     ) -> String {
-        Self::generate_cache_key_with_mode(route, params, None)
+        Self::generate_cache_key_with_mode(route, params, None, None)
     }
 
     pub fn generate_cache_key_with_mode(
         route: &str,
         params: Option<&rustc_hash::FxHashMap<String, String>>,
         render_mode: Option<&str>,
+        cookie_header: Option<&str>,
     ) -> String {
-        let base = if let Some(params) = params {
+        let base = Self::route_cache_base_key(route, params);
+
+        let with_mode = match render_mode {
+            Some(mode) => format!("{base}#:{mode}"),
+            None => base,
+        };
+
+        Self::append_cookie_partition(with_mode, cookie_header)
+    }
+
+    fn route_cache_base_key(
+        route: &str,
+        params: Option<&rustc_hash::FxHashMap<String, String>>,
+    ) -> String {
+        if let Some(params) = params {
             if params.is_empty() {
                 route.to_string()
             } else {
@@ -285,12 +304,36 @@ impl ResponseCache {
             }
         } else {
             route.to_string()
+        }
+    }
+
+    fn append_cookie_partition(base_key: String, cookie_header: Option<&str>) -> String {
+        use std::{
+            collections::hash_map::DefaultHasher,
+            hash::{Hash, Hasher},
         };
 
-        match render_mode {
-            Some(mode) => format!("{base}#:{mode}"),
-            None => base,
-        }
+        let Some(cookie_header) = cookie_header.filter(|value| !value.is_empty()) else {
+            return base_key;
+        };
+
+        let mut hasher = DefaultHasher::new();
+        cookie_header.hash(&mut hasher);
+        format!("{base_key}#cookie:{:x}", hasher.finish())
+    }
+
+    pub fn generate_static_fast_cache_key(
+        route: &str,
+        params: Option<&rustc_hash::FxHashMap<String, String>>,
+        cookie_header: Option<&str>,
+    ) -> String {
+        Self::generate_cache_key_with_mode(route, params, None, cookie_header)
+    }
+
+    pub fn cache_key_matches_route(cache_key: &str, route: &str) -> bool {
+        cache_key == route
+            || cache_key.starts_with(&format!("{route}?"))
+            || cache_key.starts_with(&format!("{route}#"))
     }
 
     pub fn generate_etag(content: &[u8]) -> String {
@@ -823,7 +866,8 @@ mod tests {
 
     #[test]
     fn test_generate_cache_key_with_mode() {
-        let key = ResponseCache::generate_cache_key_with_mode("/blog/post", None, Some("rsc"));
+        let key =
+            ResponseCache::generate_cache_key_with_mode("/blog/post", None, Some("rsc"), None);
         assert_eq!(key, "/blog/post#:rsc");
     }
 
@@ -832,14 +876,36 @@ mod tests {
         let mut params = rustc_hash::FxHashMap::default();
         params.insert("page".to_string(), "1".to_string());
 
-        let key = ResponseCache::generate_cache_key_with_mode("/blog", Some(&params), Some("rsc"));
+        let key =
+            ResponseCache::generate_cache_key_with_mode("/blog", Some(&params), Some("rsc"), None);
         assert_eq!(key, "/blog?page=1#:rsc");
     }
 
     #[test]
     fn test_generate_cache_key_with_mode_none() {
-        let key = ResponseCache::generate_cache_key_with_mode("/blog/post", None, None);
+        let key = ResponseCache::generate_cache_key_with_mode("/blog/post", None, None, None);
         assert_eq!(key, "/blog/post");
+    }
+
+    #[test]
+    fn test_generate_cache_key_with_cookie_partition() {
+        let key = ResponseCache::generate_cache_key_with_mode(
+            "/actions",
+            None,
+            None,
+            Some("session=abc"),
+        );
+        assert!(key.starts_with("/actions#cookie:"));
+        assert_ne!(key, ResponseCache::generate_cache_key_with_mode("/actions", None, None, None));
+        assert_eq!(
+            key,
+            ResponseCache::generate_cache_key_with_mode(
+                "/actions",
+                None,
+                None,
+                Some("session=abc")
+            )
+        );
     }
 
     #[derive(Debug, Default)]
@@ -1055,12 +1121,14 @@ mod tests {
 
         cache.insert("/about".to_string(), make_entry());
         cache.insert("/about?tab=1".to_string(), make_entry());
+        cache.insert("/about#cookie:abc123".to_string(), make_entry());
         cache.insert("/other".to_string(), make_entry());
 
         invalidate_static_fast_cache_for_path(&cache, "/about");
 
         assert!(!cache.contains_key("/about"));
         assert!(!cache.contains_key("/about?tab=1"));
+        assert!(!cache.contains_key("/about#cookie:abc123"));
         assert!(cache.contains_key("/other"));
     }
 }

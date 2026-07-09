@@ -7,7 +7,7 @@ import { createFromReadableStream } from 'virtual:react-flight-client'
 import { RouterProvider } from '@/router'
 import { ClientRouter } from '@/router/ClientRouter'
 import { getClientComponent } from './shared/get-client-component'
-import { clearServerInjectedErrors, hasFizzMarkers } from './shared/hydration'
+import { clearServerInjectedErrors, hasFizzMarkers, hasServerRenderedDom, shouldHydrateServerDom } from './shared/hydration'
 import { preloadModulesFromFlightProtocol } from './shared/preload-modules'
 // eslint-disable-next-line ts/ban-ts-comment
 // @ts-ignore - virtual module resolved by Vite
@@ -40,8 +40,13 @@ function showHydrationFailureMessage(container: Element, message: string): void 
   container.prepend(banner)
 }
 
+function notifyClientReady() {
+  ;(globalThis as { __rari_client_ready?: boolean }).__rari_client_ready = true
+  window.dispatchEvent(new CustomEvent('rari:client-ready'))
+}
+
 function mountApp(rootElement: HTMLElement, content: React.ReactNode) {
-  if (hasFizzMarkers(rootElement)) {
+  if (shouldHydrateServerDom(rootElement)) {
     clearServerInjectedErrors(rootElement)
     hydrateRoot(rootElement, content, {
       onRecoverableError(error) {
@@ -51,10 +56,10 @@ function mountApp(rootElement: HTMLElement, content: React.ReactNode) {
     })
   }
   else {
-    if (rootElement.children.length > 0)
-      rootElement.replaceChildren()
     createRoot(rootElement).render(content)
   }
+
+  notifyClientReady()
 }
 
 if (typeof getRariGlobal() === 'undefined')
@@ -206,7 +211,7 @@ export async function renderApp(): Promise<void> {
 
   const hasEmbeddedPayload = hasEmbeddedFlightPayload()
   const embeddedPayloadBytes = decodeEmbeddedFlightPayload()
-  const hasServerRenderedContent = hasFizzMarkers(rootElement)
+  const hasServerRenderedContent = hasServerRenderedDom(rootElement) || hasFizzMarkers(rootElement)
   const hasBufferedRows = getWindow()['~rari']?.streaming?.bufferedRows && getWindow()['~rari'].streaming!.bufferedRows!.length > 0
 
   try {
