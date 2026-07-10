@@ -440,6 +440,20 @@ The release process:
 4. Publishes to npm
 5. Uploads binaries to GitHub releases
 
+### Manual release notes (hybrid)
+
+For minors/majors, add curated notes under `.github/release-notes/` before releasing:
+
+```bash
+cp .github/release-notes/_template.md .github/release-notes/0.15.0.md
+# edit Highlights / Breaking Changes, then:
+just release
+```
+
+Lookup order: `--notes-file` / `RELEASE_NOTES_FILE` → `<tag>.md` → `<version>.md`.
+
+Manual notes are prepended to the GitHub release body (above the auto-generated commit list) and injected into `CHANGELOG.md` under the new version heading. Patch releases can skip this and stay cliff-only.
+
 ## Pull Request Guidelines
 
 ### Before Submitting
