@@ -631,6 +631,14 @@ export default defineConfig({
       },
       {
         files: [
+          'tools/bundle-react-esm/*.ts',
+        ],
+        rules: {
+          'no-console': 'off',
+        },
+      },
+      {
+        files: [
           '**/*.js',
           '**/*.cjs',
         ],

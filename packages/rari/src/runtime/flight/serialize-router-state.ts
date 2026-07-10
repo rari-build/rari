@@ -1,7 +1,6 @@
 import type { FlightRouterState } from './router-state'
 import {
   buildFlightRouterState,
-
 } from './router-state'
 
 export interface RariRouterState {

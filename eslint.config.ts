@@ -40,6 +40,12 @@ export default antfu(
       'unused-imports/no-unused-vars': 'off',
     },
   },
+  {
+    files: ['tools/bundle-react-esm/*.ts'],
+    rules: {
+      'no-console': 'off',
+    },
+  },
   deMorgan.configs.recommended,
   ...oxlint.buildFromOxlintConfigFile(join(import.meta.dirname, 'vite.config.ts')),
 )
