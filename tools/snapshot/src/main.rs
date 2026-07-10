@@ -113,6 +113,9 @@ fn main() {
         }
     }
 
+    residual_esm.sort_by_key(|(a, _)| *a);
+    residual_js.sort_by_key(|(a, _)| *a);
+
     #[expect(clippy::print_stdout, reason = "CLI tool - stdout output is expected")]
     {
         println!("Residual lazy sources: {} ESM, {} JS", residual_esm.len(), residual_js.len());
