@@ -682,8 +682,10 @@ jobs:
       - name: Build package
         run: pnpm --filter "@rari/use-cache" build
 
-      - name: Copy LICENSE
-        run: cp LICENSE packages/use-cache/LICENSE
+      - name: Copy LICENSE and README
+        run: |
+          cp LICENSE packages/use-cache/LICENSE
+          cp .github/templates/readme/use-cache.md packages/use-cache/README.md
 
       - name: Publish to npm
         run: |

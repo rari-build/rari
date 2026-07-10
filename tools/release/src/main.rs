@@ -39,6 +39,9 @@ struct Args {
 
     #[arg(long)]
     no_push: bool,
+
+    #[arg(long)]
+    notes_file: Option<PathBuf>,
 }
 
 #[expect(clippy::print_stdout)]
@@ -62,9 +65,20 @@ async fn main() -> Result<()> {
 
     let env_version = env::var("RELEASE_VERSION").ok();
     let env_type = env::var("RELEASE_TYPE").ok();
+    let notes_file = args.notes_file.or_else(|| {
+        env::var("RELEASE_NOTES_FILE").ok().filter(|s| !s.is_empty()).map(PathBuf::from)
+    });
 
     if args.non_interactive || env_version.is_some() || env_type.is_some() {
-        return run_non_interactive(only, args.dry_run, args.no_push, env_version, env_type).await;
+        return run_non_interactive(
+            only,
+            args.dry_run,
+            args.no_push,
+            env_version,
+            env_type,
+            notes_file,
+        )
+        .await;
     }
 
     if !args.dry_run {
@@ -79,7 +93,7 @@ async fn main() -> Result<()> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let mut app = App::new(only, args.dry_run).await?;
+    let mut app = App::new(only, args.dry_run, notes_file).await?;
 
     let result = run_app(&mut terminal, &mut app).await;
 
@@ -118,6 +132,7 @@ async fn run_non_interactive(
     no_push: bool,
     env_version: Option<String>,
     env_type: Option<String>,
+    notes_file: Option<PathBuf>,
 ) -> Result<()> {
     println!("{}", "rari Release Script".cyan().bold());
     if dry_run {
@@ -218,9 +233,31 @@ async fn run_non_interactive(
 
         let generates_changelog =
             matches!(unit_name, "rari" | "create-rari-app" | "@rari/use-cache");
+        let tag = if unit_name == "rari-binaries" {
+            format!("v{new_version}")
+        } else if unit_name == "@rari/use-cache-binaries" {
+            format!("use-cache-binaries@{new_version}")
+        } else {
+            format!("{unit_name}@{new_version}")
+        };
+        let notes_override = notes_file.as_deref();
+        let manual_notes = changelog::load_manual_notes(&tag, &new_version, notes_override).await?;
+
+        if let Some((path, _)) = &manual_notes {
+            println!("  {} Manual notes: {}", "✓".green(), path.display());
+        } else {
+            println!("  {} No manual release notes (cliff-only)", "ℹ".blue());
+        }
+
         if dry_run {
             if generates_changelog {
                 println!("  {} Would generate changelog...", "[DRY RUN]".yellow());
+                if manual_notes.is_some() {
+                    println!(
+                        "  {} Would inject manual notes into CHANGELOG.md",
+                        "[DRY RUN]".yellow()
+                    );
+                }
             } else {
                 println!(
                     "  {} Would skip changelog generation (binary packages)",
@@ -229,22 +266,18 @@ async fn run_non_interactive(
             }
         } else if generates_changelog {
             println!("  {} Generating changelog...", "→".cyan());
-            let tag = format!("{unit_name}@{new_version}");
             let package_path = unit.paths()[0];
             changelog::generate(&tag, unit_name, package_path).await?;
+            if let Some((_, body)) = &manual_notes {
+                changelog::inject_manual_notes(package_path, &new_version, body).await?;
+                println!("  {} Injected manual notes into CHANGELOG.md", "✓".green());
+            }
             println!("  {} Generated changelog", "✓".green());
         } else {
             println!("  {} Skipping changelog generation", "ℹ".blue());
         }
 
         let message = format!("release: {unit_name}@{new_version}");
-        let tag = if unit_name == "rari-binaries" {
-            format!("v{new_version}")
-        } else if unit_name == "@rari/use-cache-binaries" {
-            format!("use-cache-binaries@{new_version}")
-        } else {
-            format!("{unit_name}@{new_version}")
-        };
         if dry_run {
             println!("  {} Would commit: {}", "[DRY RUN]".yellow(), message);
             println!("  {} Would create tag: {}", "[DRY RUN]".yellow(), tag);
@@ -320,6 +353,8 @@ async fn run_non_interactive(
                 &tag,
                 unit_name,
                 previous_tag.as_deref(),
+                &new_version,
+                notes_file.as_deref(),
             )
             .await
             .unwrap_or_else(|_| "See CHANGELOG.md for details.".to_string()),
