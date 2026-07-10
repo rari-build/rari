@@ -3,7 +3,6 @@ import type { SegmentPath } from './router-state'
 import {
   buildFlightRouterState,
   pathnameFromSegmentPath,
-
   segmentPathFromPathname,
 } from './router-state'
 
