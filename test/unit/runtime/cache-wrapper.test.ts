@@ -14,7 +14,7 @@ function uninstallOpsMock(): void {
 }
 
 const CACHE_LIMIT = 1000
-const FILL_COUNT = 2 * CACHE_LIMIT + 500
+const FILL_COUNT = CACHE_LIMIT + 1
 
 async function callCache<Args extends unknown[]>(
   kind: string,
@@ -154,7 +154,7 @@ describe('$$cache__', () => {
     expect(r2).toBe(10)
   })
 
-  it('evicts least recently used resolved entries after exceeding the relaxed LRU ceiling', async () => {
+  it('evicts least recently used resolved entries after exceeding the LRU max size', async () => {
     let callCount = 0
     const fn = (a: number) => {
       callCount++
