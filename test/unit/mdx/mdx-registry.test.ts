@@ -1,8 +1,8 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { discoverMdxRegistryEntries, generateMdxRegistryModule, isMdxRegistryModuleId } from '@rari/vite/mdx-registry'
-import { ModuleAnalysisCache } from '@rari/vite/module-analysis-cache'
+import { ModuleAnalysisCache } from '@rari/vite/analysis/module-cache'
+import { discoverMdxRegistryEntries, generateMdxRegistryModule, isMdxRegistryModuleId } from '@rari/vite/mdx/registry'
 import { describe, expect, it } from 'vite-plus/test'
 
 describe('mdx registry', () => {

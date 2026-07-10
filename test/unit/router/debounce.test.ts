@@ -1,4 +1,4 @@
-import { debounce } from '@rari/router/debounce'
+import { debounce } from '@rari/router/navigation/debounce'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 
 describe('debounce', () => {

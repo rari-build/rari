@@ -1,2 +1,2 @@
-export { defineMdxComponents } from './define-mdx-components'
-export type { MdxComponentEntry } from './define-mdx-components'
+export { defineMdxComponents } from './components/define'
+export type { MdxComponentEntry } from './components/define'

@@ -1,6 +1,6 @@
-import { scheduleActionFlightRefresh } from '@rari/runtime/action-flight-refresh'
-import { callServer } from '@rari/runtime/call-server'
-import { serializeRouterState } from '@rari/runtime/router-state'
+import { callServer } from '@rari/runtime/actions/call-server'
+import { scheduleActionFlightRefresh } from '@rari/runtime/actions/flight-refresh'
+import { serializeRouterState } from '@rari/runtime/flight/serialize-router-state'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 
 const flightClientMocks = vi.hoisted(() => ({
@@ -16,7 +16,7 @@ const flightClientMocks = vi.hoisted(() => ({
 
 vi.mock('virtual:react-flight-client', () => flightClientMocks)
 
-vi.mock('@rari/runtime/action-flight-refresh', () => ({
+vi.mock('@rari/runtime/actions/flight-refresh', () => ({
   scheduleActionFlightRefresh: vi.fn(),
 }))
 
@@ -163,17 +163,17 @@ describe('callServer', () => {
       headers: { 'content-type': 'text/x-component' },
     }))
     flightClientMocks.createFromFetch.mockResolvedValueOnce({
-      a: Promise.resolve({ 'success': true, '~rariSkipRefresh': true }),
+      a: Promise.resolve({ 'ok': true, '~rariSkipRefresh': true }),
       f: Promise.resolve({ type: 'refresh' }),
     })
 
     const result = await callServer('actions/todo-actions_abcd1234#addTodo', [])
 
-    expect(result).toEqual({ success: true })
+    expect(result).toEqual({ ok: true })
     expect(scheduleActionFlightRefresh).toHaveBeenCalledWith(
       expect.any(Response),
       expect.any(Object),
-      { 'success': true, '~rariSkipRefresh': true },
+      { 'ok': true, '~rariSkipRefresh': true },
     )
   })
 

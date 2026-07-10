@@ -1,4 +1,4 @@
-import { RariRequest } from '@rari/proxy/RariRequest'
+import { RariRequest } from '@rari/proxy/http/request'
 import { describe, expect, it } from 'vite-plus/test'
 
 describe('RariRequest', () => {

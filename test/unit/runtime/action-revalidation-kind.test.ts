@@ -3,7 +3,7 @@ import {
   ActionDidRevalidateDynamicOnly,
   ActionDidRevalidateStaticAndDynamic,
   parseActionRevalidationKind,
-} from '@rari/runtime/action-revalidation-kind'
+} from '@rari/runtime/actions/revalidation-kind'
 import { describe, expect, it } from 'vite-plus/test'
 
 describe('parseActionRevalidationKind', () => {

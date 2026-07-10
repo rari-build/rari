@@ -1,1 +1,1 @@
-export { ImageResponse, type ImageResponseOptions, type ImageResponseSize } from './ImageResponse'
+export { ImageResponse, type ImageResponseOptions, type ImageResponseSize } from './image-response'

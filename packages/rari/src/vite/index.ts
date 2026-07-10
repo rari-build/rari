@@ -1,10 +1,10 @@
 import type { CSSModulesOptions, Plugin, UserConfig } from 'vite-plus'
-import type { ModuleAnalysis } from './directives'
-import type { MdxPluginOptions } from './mdx-registry'
-import type { RariPlugin } from './plugin-types'
-import type { ServerBuildOptions } from './server-build'
-import type { ServerCacheConfig, ServerCacheLayerConfig } from './server-config'
-import type { ProxyPluginOptions } from '@/proxy/vite-plugin'
+import type { ModuleAnalysis } from './analysis/directives'
+import type { MdxPluginOptions } from './mdx/registry'
+import type { RariPlugin } from './plugin/types'
+import type { ServerBuildOptions } from './server/build'
+import type { ServerCacheConfig, ServerCacheLayerConfig } from './server/config'
+import type { ProxyPluginOptions } from '@/proxy/build/vite-plugin'
 import { Buffer } from 'node:buffer'
 import { spawn, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
@@ -12,8 +12,8 @@ import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { DEFAULT_DEVICE_SIZES, DEFAULT_FORMATS, DEFAULT_IMAGE_SIZES, DEFAULT_MAX_CACHE_SIZE, DEFAULT_MINIMUM_CACHE_TTL, DEFAULT_QUALITY_LEVELS } from '@/image/constants'
-import { rariProxy } from '@/proxy/vite-plugin'
-import { rariRouter } from '@/router/vite-plugin'
+import { rariProxy } from '@/proxy/build/vite-plugin'
+import { rariRouter } from '@/router/build/vite-plugin'
 import { fixRolldownDoubleDollarProperties, patchBrowserClientForFormActions } from '@/shared/patch-flight-browser-client'
 import {
   BACKSLASH_REGEX,
@@ -24,25 +24,25 @@ import {
   WINDOWS_PATH_REGEX,
 } from '@/shared/regex-constants'
 import { clearFileResolverCache, resolveImportToFilePath } from '@/shared/utils/file-resolver'
-import {
-  buildNamespaceClientReferenceReplacement,
-  NAMESPACE_IMPORT_LINE_REGEX,
-} from './client-import-transform'
-import { getComponentId } from './component-ids'
-import { hasDefaultExport } from './directives'
-import { HMRCoordinator } from './hmr-coordinator'
-import { parseHtmlEntryImports } from './html-entry-imports'
-import { transformDefineMdxComponents } from './mdx-components-transform'
+import { getComponentId } from './analysis/component-ids'
+import { hasDefaultExport } from './analysis/directives'
+import { collectClientComponentPaths, invalidateModuleCachePath, ModuleAnalysisCache, resolveModuleCachePath } from './analysis/module-cache'
+import { normalizeScanDirs } from './analysis/source-walker'
+import { HMRCoordinator } from './hmr/coordinator'
 import {
   generateMdxRegistryModule,
   isMdxRegistryModuleId,
   resolveMdxRegistryEntries,
-} from './mdx-registry'
-import { collectClientComponentPaths, invalidateModuleCachePath, ModuleAnalysisCache, resolveModuleCachePath } from './module-analysis-cache'
-import { toRariPlugins } from './plugin-types'
-import { createServerBuildPlugin, isServerComponentFromAnalysis, RARI_CSS_MODULES_PATTERN, scanDirectory, ServerComponentBuilder } from './server-build'
-import { normalizeScanDirs } from './source-file-walker'
-import { getUseCacheTransform } from './use-cache-loader'
+} from './mdx/registry'
+import { toRariPlugins } from './plugin/types'
+import { createServerBuildPlugin, isServerComponentFromAnalysis, RARI_CSS_MODULES_PATTERN, scanDirectory, ServerComponentBuilder } from './server/build'
+import {
+  buildNamespaceClientReferenceReplacement,
+  NAMESPACE_IMPORT_LINE_REGEX,
+} from './transform/client-import'
+import { parseHtmlEntryImports } from './transform/html-entry'
+import { transformDefineMdxComponents } from './transform/mdx-components'
+import { getUseCacheTransform } from './transform/use-cache'
 
 const DIST_NOT_BUILT_ERROR = '[rari] Runtime dist not built. Run `pnpm build` in the rari package first.'
 
@@ -289,7 +289,7 @@ async function loadRscReferences(): Promise<string> {
 
 async function writeImageConfig(projectRoot: string, options: RariOptions): Promise<void> {
   const srcDir = path.join(projectRoot, 'src')
-  const { getBinaryPath } = await import('../cli/platform')
+  const { getBinaryPath } = await import('@/cli/platform')
   const binaryPath = getBinaryPath()
 
   const scanImagesTimeoutMs = 60_000
@@ -1417,7 +1417,7 @@ ${clientTransformedCode}`
           return
 
         const { getBinaryPath, getInstallationInstructions } = await import(
-          '../cli/platform',
+          '@/cli/platform',
         )
 
         let binaryPath: string
@@ -2286,7 +2286,7 @@ export function defineRariConfig(
   }
 }
 
-export type { RariPlugin } from './plugin-types'
+export type { RariPlugin } from './plugin/types'
 
 export type Request = globalThis.Request
 export type Response = globalThis.Response
@@ -2298,8 +2298,12 @@ export type {
   ServerConfig,
   ServerCSPConfig,
   ServerUseCacheConfig,
-} from './server-config'
+} from './server/config'
 export type {} from '@/ambient'
+
+export { rariProxy } from '@/proxy/build/vite-plugin'
+
+export type { ProxyPluginOptions } from '@/proxy/build/vite-plugin'
 
 export type {
   CookieOptions,
@@ -2312,21 +2316,15 @@ export type {
   RariURL,
   RequestCookies,
   ResponseCookies,
-} from '@/proxy/types'
-
-export { rariProxy } from '@/proxy/vite-plugin'
-
-export type { ProxyPluginOptions } from '@/proxy/vite-plugin'
+} from '@/proxy/http/types'
 
 export type {
   ApiRouteHandlers,
   RouteContext,
   RouteHandler,
-} from '@/router/api-routes'
+} from '@/router/build/api-routes'
 
-export { ApiResponse } from '@/router/api-routes'
-
-export type { Robots, RobotsRule, Sitemap, SitemapEntry, SitemapImage, SitemapVideo } from '@/router/metadata-route'
+export { ApiResponse } from '@/router/build/api-routes'
 
 export {
   clearPropsCache,
@@ -2336,17 +2334,17 @@ export {
   extractServerPropsWithCache,
   extractStaticParams,
   hasServerSideDataFetching,
-} from '@/router/props-extractor'
+} from '@/router/build/props-extractor'
 
 export type {
   MetadataResult,
   ServerSidePropsResult,
   StaticParamsResult,
-} from '@/router/props-extractor'
+} from '@/router/build/props-extractor'
 
 export {
   generateAppRouteManifest,
-} from '@/router/routes'
+} from '@/router/build/routes'
 
 export type {
   AppRouteEntry,
@@ -2364,8 +2362,10 @@ export type {
   RouteSegment,
   RouteSegmentType,
   TemplateEntry,
-} from '@/router/types'
+} from '@/router/build/types'
 
-export type { Metadata } from '@/router/types'
+export type { Metadata } from '@/router/build/types'
 
-export { rariRouter } from '@/router/vite-plugin'
+export { rariRouter } from '@/router/build/vite-plugin'
+
+export type { Robots, RobotsRule, Sitemap, SitemapEntry, SitemapImage, SitemapVideo } from '@/router/metadata/types'

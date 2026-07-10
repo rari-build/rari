@@ -1,5 +1,5 @@
-export { defineMdxComponents } from './define-mdx-components'
-export type { MdxComponentEntry } from './define-mdx-components'
+export { defineMdxComponents } from './components/define'
+export type { MdxComponentEntry } from './components/define'
 export { evaluate } from './evaluate'
 export type { EvaluateOptions, EvaluateResult } from './evaluate'
-export { scanMdxComponentNames } from './scan'
+export { scanMdxComponentNames } from './scan/names'

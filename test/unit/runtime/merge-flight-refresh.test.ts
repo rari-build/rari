@@ -1,4 +1,4 @@
-import { mergeFlightRefresh } from '@rari/runtime/merge-flight-refresh'
+import { mergeFlightRefresh } from '@rari/runtime/flight/merge-refresh'
 import * as React from 'react'
 import { describe, expect, it } from 'vite-plus/test'
 

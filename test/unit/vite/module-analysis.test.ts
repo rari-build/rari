@@ -1,8 +1,8 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { analyzeModuleSource, getDirectives, hasDefaultExport, hasTopLevelUseClientDirective, hasTopLevelUseServerDirective } from '@rari/vite/directives'
-import { collectClientComponentPaths, filterExternalDependencies, hasNodeImportsFromAnalysis, invalidateModuleCachePath, isNodeBuiltinModule, ModuleAnalysisCache, resolveModuleCachePath } from '@rari/vite/module-analysis-cache'
+import { analyzeModuleSource, getDirectives, hasDefaultExport, hasTopLevelUseClientDirective, hasTopLevelUseServerDirective } from '@rari/vite/analysis/directives'
+import { collectClientComponentPaths, filterExternalDependencies, hasNodeImportsFromAnalysis, invalidateModuleCachePath, isNodeBuiltinModule, ModuleAnalysisCache, resolveModuleCachePath } from '@rari/vite/analysis/module-cache'
 import { describe, expect, it, vi } from 'vite-plus/test'
 
 describe('analyzeModuleSource', () => {

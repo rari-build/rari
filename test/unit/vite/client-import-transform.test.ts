@@ -1,7 +1,7 @@
 import {
   buildNamespaceClientReferenceReplacement,
   NAMESPACE_IMPORT_LINE_REGEX,
-} from '@rari/vite/client-import-transform'
+} from '@rari/vite/transform/client-import'
 import { describe, expect, it } from 'vite-plus/test'
 
 describe('namespace client import transform', () => {

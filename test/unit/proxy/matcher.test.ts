@@ -1,4 +1,4 @@
-import { extractParams, matchesPattern } from '@rari/proxy/matcher'
+import { extractParams, matchesPattern } from '@rari/proxy/runtime/matcher'
 import { describe, expect, it } from 'vite-plus/test'
 
 describe('matchesPattern', () => {
