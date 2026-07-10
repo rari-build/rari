@@ -239,18 +239,6 @@ jobs:
 
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
 
-      - name: Check for existing binary
-        if: needs.changes.outputs.rust != 'true'
-        id: cache-binary
-        shell: bash
-        run: |
-          bin="target/debug/rari${{ runner.os == 'Windows' && '.exe' || '' }}"
-          if [ -f "$bin" ]; then
-            echo "cache-hit=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "cache-hit=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Download snapshot
         if: needs.build-snapshot.result == 'success'
         uses: namespace-actions/download-artifact@7cbad919e4b0e09f17e9d6311a444ff002992b5b # v2.0.1
@@ -263,7 +251,7 @@ jobs:
         run: just ci-create-snapshot-placeholder
 
       - name: Build rari binary (Windows)
-        if: runner.os == 'Windows' && (needs.changes.outputs.rust == 'true' || steps.cache-binary.outputs.cache-hit != 'true')
+        if: runner.os == 'Windows'
         run: cargo build --bin rari
         env:
           AWS_LC_SYS_PREBUILT_NASM: 1
@@ -271,7 +259,7 @@ jobs:
           VCPKG_ROOT: C:\vcpkg
 
       - name: Build rari binary (Linux)
-        if: runner.os != 'Windows' && (needs.changes.outputs.rust == 'true' || steps.cache-binary.outputs.cache-hit != 'true')
+        if: runner.os != 'Windows'
         run: cargo build --bin rari
 
       - name: Upload binary (Linux)
@@ -547,6 +535,21 @@ jobs:
           name: dist
           path: packages
 
+      - uses: ./.github/actions/restore-use-cache-addon
+        if: runner.os == 'Linux' && needs.build-use-cache-addon-linux.result == 'success'
+        with:
+          platform: linux-x64
+
+      - uses: ./.github/actions/restore-use-cache-addon
+        if: runner.os == 'Windows' && needs.build-use-cache-addon-windows.result == 'success'
+        with:
+          platform: win32-x64
+
+      - uses: ./.github/actions/setup-redis
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Download rari binary (Linux)
         if: runner.os == 'Linux'
         uses: namespace-actions/download-artifact@7cbad919e4b0e09f17e9d6311a444ff002992b5b # v2.0.1
@@ -561,24 +564,19 @@ jobs:
           name: rari-binary-windows
           path: packages/rari-win32-x64/bin
 
-      - uses: ./.github/actions/restore-use-cache-addon
-        if: runner.os == 'Linux' && needs.build-use-cache-addon-linux.result == 'success'
-        with:
-          platform: linux-x64
-
-      - uses: ./.github/actions/restore-use-cache-addon
-        if: runner.os == 'Windows' && needs.build-use-cache-addon-windows.result == 'success'
-        with:
-          platform: win32-x64
-
       - name: Make binary executable (Linux)
         if: runner.os == 'Linux'
         run: chmod +x packages/rari-linux-x64/bin/rari
 
-      - uses: ./.github/actions/setup-redis
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Verify rari binary
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            bin="packages/rari-win32-x64/bin/rari.exe"
+          else
+            bin="packages/rari-linux-x64/bin/rari"
+          fi
+          "$bin" scan-images --help >/dev/null
 
       - name: Install Playwright
         run: pnpm playwright install chromium --with-deps
