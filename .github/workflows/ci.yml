@@ -246,9 +246,9 @@ jobs:
           name: v8-snapshot
           path: crates/rari/snapshots
 
-      - name: Create snapshot placeholder
+      - name: Generate snapshot if needed
         if: needs.build-snapshot.result != 'success'
-        run: just ci-create-snapshot-placeholder
+        run: just ci-generate-snapshot
 
       - name: Build rari binary (Windows)
         if: runner.os == 'Windows'
