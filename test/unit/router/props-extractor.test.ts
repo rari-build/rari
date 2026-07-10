@@ -1,5 +1,5 @@
-import type { MetadataResult } from '@rari/router/props-extractor'
-import { clearPropsCache, clearPropsCacheForComponent, mergeMetadata } from '@rari/router/props-extractor'
+import type { MetadataResult } from '@rari/router/build/props-extractor'
+import { clearPropsCache, clearPropsCacheForComponent, mergeMetadata } from '@rari/router/build/props-extractor'
 import { describe, expect, it } from 'vite-plus/test'
 
 describe('mergeMetadata', () => {

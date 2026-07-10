@@ -1,7 +1,7 @@
-import { defineMdxComponents } from '@rari/mdx/define-mdx-components'
+import { defineMdxComponents } from '@rari/mdx/components/define'
 import { describe, expect, it, vi } from 'vite-plus/test'
 
-vi.mock('@rari/runtime/rsc-references', () => ({
+vi.mock('@rari/runtime/rsc/references', () => ({
   registerClientReference: (proxy: unknown) => proxy,
 }))
 

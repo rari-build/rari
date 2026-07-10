@@ -12,7 +12,7 @@
     "packages/rari": {
       "entry": [
         "src/**/*.ts",
-        "src/runtime/*.tsx"
+        "src/runtime/**/*.tsx"
       ],
       "project": [
         "src/**/*.{ts,tsx,js,jsx}"

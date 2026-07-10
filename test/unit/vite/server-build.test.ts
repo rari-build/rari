@@ -1,7 +1,7 @@
 import fsSync from 'node:fs'
 import path from 'node:path'
-import { resolveModuleCachePath } from '@rari/vite/module-analysis-cache'
-import { hasComponentExport, ServerComponentBuilder } from '@rari/vite/server-build'
+import { resolveModuleCachePath } from '@rari/vite/analysis/module-cache'
+import { hasComponentExport, ServerComponentBuilder } from '@rari/vite/server/build'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 
 vi.mock('node:fs')

@@ -1,4 +1,4 @@
-import { Image as ImageComponent } from './Image'
+import { Image as ImageComponent } from './image'
 
 export type { ImageFormat } from './constants'
 export {
@@ -9,7 +9,7 @@ export {
   DEFAULT_MINIMUM_CACHE_TTL,
   DEFAULT_QUALITY_LEVELS,
 } from './constants'
-export type { ImageProps, StaticImageData } from './Image'
+export type { ImageProps, StaticImageData } from './image'
 
 const isServer = typeof window === 'undefined'
 const Image: any = ImageComponent

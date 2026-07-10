@@ -1,8 +1,8 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { parseHtmlEntryImports } from '@rari/vite/html-entry-imports'
-import { collectSourceFilePaths, normalizeScanDirs } from '@rari/vite/source-file-walker'
+import { collectSourceFilePaths, normalizeScanDirs } from '@rari/vite/analysis/source-walker'
+import { parseHtmlEntryImports } from '@rari/vite/transform/html-entry'
 import { describe, expect, it } from 'vite-plus/test'
 
 describe('source-file-walker', () => {

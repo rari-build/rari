@@ -1,7 +1,7 @@
 import {
   refreshRouter,
   scheduleActionFlightRefresh,
-} from '@rari/runtime/action-flight-refresh'
+} from '@rari/runtime/actions/flight-refresh'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 
 const refreshElement = { $$typeof: Symbol.for('react.element'), type: 'div', props: { children: 'refresh' } }

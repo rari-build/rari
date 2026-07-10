@@ -1,5 +1,5 @@
-import type { Feed } from '@rari/router/metadata-route'
-import { generateFeedXml } from '@rari/router/feed-generator'
+import type { Feed } from '@rari/router/metadata/types'
+import { generateFeedXml } from '@rari/router/metadata/feed'
 import { describe, expect, it } from 'vite-plus/test'
 
 describe('generateFeedXml', () => {

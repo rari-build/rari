@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { transformDefineMdxComponents } from '@rari/vite/mdx-components-transform'
+import { transformDefineMdxComponents } from '@rari/vite/transform/mdx-components'
 import { describe, expect, it } from 'vite-plus/test'
 
 describe('transformDefineMdxComponents', () => {

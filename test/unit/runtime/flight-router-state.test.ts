@@ -2,7 +2,7 @@ import {
   buildFlightRouterState,
   segmentPathFromPathname,
   segmentPathFromRouterState,
-} from '@rari/runtime/flight-router-state'
+} from '@rari/runtime/flight/router-state'
 import { describe, expect, it } from 'vite-plus/test'
 
 describe('flight-router-state', () => {

@@ -1,7 +1,7 @@
 import type { ViteDevServer } from 'vite-plus'
 import fs from 'node:fs'
-import { analyzeModuleSource } from '@rari/vite/directives'
-import { HMRCoordinator } from '@rari/vite/hmr-coordinator'
+import { analyzeModuleSource } from '@rari/vite/analysis/directives'
+import { HMRCoordinator } from '@rari/vite/hmr/coordinator'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 
 vi.mock('node:fs')
