@@ -77,8 +77,6 @@ catalogs:
     react: ^19.2.7
     react-dom: ^19.2.7
     react-server-dom-webpack: ^19.2.7
-  runtime:
-    quick-lru: ^7.3.0
   tailwind:
     '@tailwindcss/vite': ^4.3.2
     tailwindcss: ^4.3.2

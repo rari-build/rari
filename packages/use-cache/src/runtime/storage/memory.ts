@@ -1,13 +1,12 @@
 import type { CacheStorage, CacheStorageEntry, CacheWriteOptions } from './types'
-import QuickLRU from 'quick-lru'
-
 import { registerUseCacheEntryTags } from '@/runtime/invalidation/cache-tag-registry'
+import { LruCache } from './lru'
 
 export class MemoryCacheStorage implements CacheStorage {
-  private readonly cache: QuickLRU<string, CacheStorageEntry>
+  private readonly cache: LruCache<string, CacheStorageEntry>
 
   constructor(maxEntries: number = 1000) {
-    this.cache = new QuickLRU<string, CacheStorageEntry>({ maxSize: maxEntries })
+    this.cache = new LruCache<string, CacheStorageEntry>(maxEntries)
   }
 
   async read(key: string) {
@@ -15,7 +14,7 @@ export class MemoryCacheStorage implements CacheStorage {
   }
 
   async write(key: string, value: unknown, options: CacheWriteOptions) {
-    this.cache.set(key, { value }, { maxAge: options.ttlMs })
+    this.cache.set(key, { value }, options.ttlMs)
     if (options.tags?.length)
       registerUseCacheEntryTags(key, options.tags)
   }

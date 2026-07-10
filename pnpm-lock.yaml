@@ -96,10 +96,6 @@ catalogs:
     react-server-dom-webpack:
       specifier: ^19.2.7
       version: 19.2.7
-  runtime:
-    quick-lru:
-      specifier: ^7.3.0
-      version: 7.3.0
   tailwind:
     '@tailwindcss/vite':
       specifier: ^4.3.2
@@ -328,9 +324,6 @@ importers:
 
   packages/use-cache:
     dependencies:
-      quick-lru:
-        specifier: catalog:runtime
-        version: 7.3.0
       react-server-dom-webpack:
         specifier: catalog:react
         version: 19.2.7(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(webpack@5.107.2)
@@ -4382,10 +4375,6 @@ packages:
 
   query-selector-shadow-dom@1.0.1:
     resolution: {integrity: sha512-lT5yCqEBgfoMYpf3F2xQRK7zEr1rhIIZuceDK6+xRkJQ4NMbHTwXqk4NkwDwQMNqXgG9r9fyHnzwNVs6zV5KRw==}
-
-  quick-lru@7.3.0:
-    resolution: {integrity: sha512-k9lSsjl36EJdK7I06v7APZCbyGT2vMTsYSRX1Q2nbYmnkBqgUhRkAuzH08Ciotteu/PLJmIF2+tti7o3C/ts2g==}
-    engines: {node: '>=18'}
 
   rari-darwin-arm64@0.14.12:
     resolution: {integrity: sha512-wmmhoqtLJ6EvEOiW/V5V7uFgILmTqCnkXXfUcJxDYxU8IuvA7hSoVBEqSt8ZVurKYGwi6SOugUHtmPZDNgw3fQ==}
@@ -9095,8 +9084,6 @@ snapshots:
   quansync@0.2.11: {}
 
   query-selector-shadow-dom@1.0.1: {}
-
-  quick-lru@7.3.0: {}
 
   rari-darwin-arm64@0.14.12:
     optional: true

@@ -62,9 +62,6 @@
   "peerDependencies": {
     "react-server-dom-webpack": "catalog:react"
   },
-  "dependencies": {
-    "quick-lru": "catalog:runtime"
-  },
   "optionalDependencies": {
     "@rari/use-cache-darwin-arm64": "workspace:*",
     "@rari/use-cache-darwin-x64": "workspace:*",
