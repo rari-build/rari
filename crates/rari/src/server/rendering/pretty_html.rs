@@ -126,6 +126,17 @@ fn write_indent(out: &mut String, indent: usize) {
 }
 
 fn find_tag_end(bytes: &[u8], start: usize) -> Option<usize> {
+    if bytes[start..].starts_with(b"<!--") {
+        let mut i = start + 4;
+        while i + 2 < bytes.len() {
+            if bytes[i] == b'-' && bytes[i + 1] == b'-' && bytes[i + 2] == b'>' {
+                return Some(i + 2);
+            }
+            i += 1;
+        }
+        return None;
+    }
+
     let mut in_quote: Option<u8> = None;
     let mut i = start + 1;
     while i < bytes.len() {
@@ -236,5 +247,16 @@ mod tests {
         let out = pretty_print_html(input);
         assert!(out.contains("const s = \"</€a日\";"));
         assert!(out.contains("</script>"));
+    }
+
+    #[test]
+    fn preserves_comments_containing_gt() {
+        let input = "<div><!-- x > y --><span>hi</span></div>";
+        let out = pretty_print_html(input);
+        assert!(out.contains("<!-- x > y -->\n"));
+        assert!(out.contains("  <span>\n"));
+        assert!(out.contains("    hi\n"));
+        // Must not treat the `>` inside the comment as a tag terminator.
+        assert!(!out.contains("<!-- x >\n"));
     }
 }
