@@ -41,13 +41,10 @@ export function PostHogProvider({ children, pathname }: { children: ReactNode, p
     }
   }, [])
 
-  if (!client)
-    return <>{children}</>
-
   return (
     <>
-      <PostHogPageView pathname={pathname} posthog={client} />
       {children}
+      {client ? <PostHogPageView pathname={pathname} posthog={client} /> : null}
     </>
   )
 }
