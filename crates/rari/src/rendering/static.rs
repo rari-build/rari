@@ -141,8 +141,8 @@ impl RscHtmlRenderer {
             let mut result = String::new();
             result.push_str(&html[..head_end]);
             result.push_str(
-                r#"    <script type="module" src="/@vite/client"></script>
-    <script type="module" src="/src/main.tsx"></script>
+                r#"<script type="module" src="/@vite/client"></script>
+<script type="module" src="/src/main.tsx"></script>
 "#,
             );
             result.push_str(&html[head_end..]);
@@ -153,8 +153,8 @@ impl RscHtmlRenderer {
             let mut result = String::new();
             result.push_str(&html[..body_end]);
             result.push_str(
-                r#"    <script type="module" src="/@vite/client"></script>
-    <script type="module" src="/src/main.tsx"></script>
+                r#"<script type="module" src="/@vite/client"></script>
+<script type="module" src="/src/main.tsx"></script>
 "#,
             );
             result.push_str(&html[body_end..]);

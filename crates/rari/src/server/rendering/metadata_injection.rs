@@ -43,7 +43,7 @@ pub fn inject_metadata(
             result.insert_str(
                 head_end,
                 &format!(
-                    r#"    <meta name="description" content="{}" />
+                    r#"<meta name="description" content="{}" />
 "#,
                     escape_html(description)
                 ),
@@ -69,7 +69,7 @@ pub fn inject_metadata(
         if !result.contains(r"<meta charset") {
             critical_tags.push_str(
                 r#"
-    <meta charset="UTF-8" />"#,
+<meta charset="UTF-8" />"#,
             );
         }
 
@@ -80,7 +80,7 @@ pub fn inject_metadata(
             write!(
                 critical_tags,
                 r#"
-    <meta name="viewport" content="{}" />"#,
+<meta name="viewport" content="{}" />"#,
                 escape_html(viewport_content)
             )
             .unwrap();
@@ -93,7 +93,7 @@ pub fn inject_metadata(
             write!(
                 critical_tags,
                 r"
-    <title>{}</title>",
+<title>{}</title>",
                 escape_html(title)
             )
             .unwrap();
@@ -113,20 +113,15 @@ pub fn inject_metadata(
             let keywords_str =
                 keywords.iter().map(|k| escape_html(k)).collect::<Vec<_>>().join(", ");
             #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
-            writeln!(meta_tags, r#"    <meta name="keywords" content="{keywords_str}" />"#)
-                .unwrap();
+            writeln!(meta_tags, r#"<meta name="keywords" content="{keywords_str}" />"#).unwrap();
         }
 
         let alternates_canonical = metadata.alternates.as_ref().and_then(|a| a.canonical.as_ref());
         let effective_canonical = alternates_canonical.or(metadata.canonical.as_ref());
         if let Some(canonical) = effective_canonical {
             #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
-            writeln!(
-                meta_tags,
-                r#"    <link rel="canonical" href="{}" />"#,
-                escape_html(canonical)
-            )
-            .unwrap();
+            writeln!(meta_tags, r#"<link rel="canonical" href="{}" />"#, escape_html(canonical))
+                .unwrap();
         }
 
         if let Some(robots) = &metadata.robots {
@@ -146,7 +141,7 @@ pub fn inject_metadata(
                 #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
                 writeln!(
                     meta_tags,
-                    r#"    <meta name="robots" content="{}" />"#,
+                    r#"<meta name="robots" content="{}" />"#,
                     robots_content.join(", ")
                 )
                 .unwrap();
@@ -158,7 +153,7 @@ pub fn inject_metadata(
                 #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
                 writeln!(
                     meta_tags,
-                    r#"    <meta property="og:title" content="{}" />"#,
+                    r#"<meta property="og:title" content="{}" />"#,
                     escape_html(og_title)
                 )
                 .unwrap();
@@ -167,7 +162,7 @@ pub fn inject_metadata(
                 #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
                 writeln!(
                     meta_tags,
-                    r#"    <meta property="og:description" content="{}" />"#,
+                    r#"<meta property="og:description" content="{}" />"#,
                     escape_html(og_description)
                 )
                 .unwrap();
@@ -176,7 +171,7 @@ pub fn inject_metadata(
                 #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
                 writeln!(
                     meta_tags,
-                    r#"    <meta property="og:url" content="{}" />"#,
+                    r#"<meta property="og:url" content="{}" />"#,
                     escape_html(og_url)
                 )
                 .unwrap();
@@ -185,7 +180,7 @@ pub fn inject_metadata(
                 #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
                 writeln!(
                     meta_tags,
-                    r#"    <meta property="og:site_name" content="{}" />"#,
+                    r#"<meta property="og:site_name" content="{}" />"#,
                     escape_html(og_site_name)
                 )
                 .unwrap();
@@ -194,7 +189,7 @@ pub fn inject_metadata(
                 #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
                 writeln!(
                     meta_tags,
-                    r#"    <meta property="og:type" content="{}" />"#,
+                    r#"<meta property="og:type" content="{}" />"#,
                     escape_html(og_type)
                 )
                 .unwrap();
@@ -208,7 +203,7 @@ pub fn inject_metadata(
                     #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
                     writeln!(
                         meta_tags,
-                        r#"    <meta property="og:image" content="{}" />"#,
+                        r#"<meta property="og:image" content="{}" />"#,
                         escape_html(image_url)
                     )
                     .unwrap();
@@ -218,7 +213,7 @@ pub fn inject_metadata(
                             #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
                             writeln!(
                                 meta_tags,
-                                r#"    <meta property="og:image:width" content="{width}" />"#
+                                r#"<meta property="og:image:width" content="{width}" />"#
                             )
                             .unwrap();
                         }
@@ -226,7 +221,7 @@ pub fn inject_metadata(
                             #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
                             writeln!(
                                 meta_tags,
-                                r#"    <meta property="og:image:height" content="{height}" />"#
+                                r#"<meta property="og:image:height" content="{height}" />"#
                             )
                             .unwrap();
                         }
@@ -234,7 +229,7 @@ pub fn inject_metadata(
                             #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
                             writeln!(
                                 meta_tags,
-                                r#"    <meta property="og:image:alt" content="{}" />"#,
+                                r#"<meta property="og:image:alt" content="{}" />"#,
                                 escape_html(alt)
                             )
                             .unwrap();
@@ -249,7 +244,7 @@ pub fn inject_metadata(
                 #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
                 writeln!(
                     meta_tags,
-                    r#"    <meta name="twitter:card" content="{}" />"#,
+                    r#"<meta name="twitter:card" content="{}" />"#,
                     escape_html(card)
                 )
                 .unwrap();
@@ -258,7 +253,7 @@ pub fn inject_metadata(
                 #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
                 writeln!(
                     meta_tags,
-                    r#"    <meta name="twitter:site" content="{}" />"#,
+                    r#"<meta name="twitter:site" content="{}" />"#,
                     escape_html(site)
                 )
                 .unwrap();
@@ -267,7 +262,7 @@ pub fn inject_metadata(
                 #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
                 writeln!(
                     meta_tags,
-                    r#"    <meta name="twitter:creator" content="{}" />"#,
+                    r#"<meta name="twitter:creator" content="{}" />"#,
                     escape_html(creator)
                 )
                 .unwrap();
@@ -276,7 +271,7 @@ pub fn inject_metadata(
                 #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
                 writeln!(
                     meta_tags,
-                    r#"    <meta name="twitter:title" content="{}" />"#,
+                    r#"<meta name="twitter:title" content="{}" />"#,
                     escape_html(twitter_title)
                 )
                 .unwrap();
@@ -285,7 +280,7 @@ pub fn inject_metadata(
                 #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
                 writeln!(
                     meta_tags,
-                    r#"    <meta name="twitter:description" content="{}" />"#,
+                    r#"<meta name="twitter:description" content="{}" />"#,
                     escape_html(twitter_description)
                 )
                 .unwrap();
@@ -295,7 +290,7 @@ pub fn inject_metadata(
                     #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
                     writeln!(
                         meta_tags,
-                        r#"    <meta name="twitter:image" content="{}" />"#,
+                        r#"<meta name="twitter:image" content="{}" />"#,
                         escape_html(image)
                     )
                     .unwrap();
@@ -308,19 +303,15 @@ pub fn inject_metadata(
                 match icon_value {
                     IconValue::Single(url) => {
                         #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
-                        writeln!(
-                            meta_tags,
-                            r#"    <link rel="icon" href="{}" />"#,
-                            escape_html(url)
-                        )
-                        .unwrap();
+                        writeln!(meta_tags, r#"<link rel="icon" href="{}" />"#, escape_html(url))
+                            .unwrap();
                     }
                     IconValue::Multiple(urls) => {
                         for url in urls {
                             #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
                             writeln!(
                                 meta_tags,
-                                r#"    <link rel="icon" href="{}" />"#,
+                                r#"<link rel="icon" href="{}" />"#,
                                 escape_html(url)
                             )
                             .unwrap();
@@ -350,7 +341,7 @@ pub fn inject_metadata(
                                 write!(&mut attrs, r#" sizes="{}""#, escape_html(sizes)).unwrap();
                             }
                             #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
-                            writeln!(&mut meta_tags, "    <link {attrs} />").unwrap();
+                            writeln!(&mut meta_tags, "<link {attrs} />").unwrap();
                         }
                     }
                 }
@@ -361,7 +352,7 @@ pub fn inject_metadata(
                         #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
                         writeln!(
                             meta_tags,
-                            r#"    <link rel="apple-touch-icon" href="{}" />"#,
+                            r#"<link rel="apple-touch-icon" href="{}" />"#,
                             escape_html(url)
                         )
                         .unwrap();
@@ -371,7 +362,7 @@ pub fn inject_metadata(
                             #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
                             writeln!(
                                 meta_tags,
-                                r#"    <link rel="apple-touch-icon" href="{}" />"#,
+                                r#"<link rel="apple-touch-icon" href="{}" />"#,
                                 escape_html(url)
                             )
                             .unwrap();
@@ -393,7 +384,7 @@ pub fn inject_metadata(
                                 write!(&mut attrs, r#" sizes="{}""#, escape_html(sizes)).unwrap();
                             }
                             #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
-                            writeln!(&mut meta_tags, "    <link {attrs} />").unwrap();
+                            writeln!(&mut meta_tags, "<link {attrs} />").unwrap();
                         }
                     }
                 }
@@ -416,14 +407,14 @@ pub fn inject_metadata(
                         write!(&mut attrs, r#" color="{}""#, escape_html(color)).unwrap();
                     }
                     #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
-                    writeln!(&mut meta_tags, "    <link {attrs} />").unwrap();
+                    writeln!(&mut meta_tags, "<link {attrs} />").unwrap();
                 }
             }
         }
 
         if let Some(manifest) = &metadata.manifest {
             #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
-            writeln!(meta_tags, r#"    <link rel="manifest" href="{}" />"#, escape_html(manifest))
+            writeln!(meta_tags, r#"<link rel="manifest" href="{}" />"#, escape_html(manifest))
                 .unwrap();
         }
 
@@ -433,7 +424,7 @@ pub fn inject_metadata(
                     #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
                     writeln!(
                         meta_tags,
-                        r#"    <meta name="theme-color" content="{}" />"#,
+                        r#"<meta name="theme-color" content="{}" />"#,
                         escape_html(color)
                     )
                     .unwrap();
@@ -449,7 +440,7 @@ pub fn inject_metadata(
                             write!(&mut attrs, r#" media="{}""#, escape_html(media)).unwrap();
                         }
                         #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
-                        writeln!(&mut meta_tags, "    <meta {attrs} />").unwrap();
+                        writeln!(&mut meta_tags, "<meta {attrs} />").unwrap();
                     }
                 }
             }
@@ -460,7 +451,7 @@ pub fn inject_metadata(
                 #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
                 writeln!(
                     meta_tags,
-                    r#"    <meta name="apple-mobile-web-app-title" content="{}" />"#,
+                    r#"<meta name="apple-mobile-web-app-title" content="{}" />"#,
                     escape_html(title)
                 )
                 .unwrap();
@@ -469,7 +460,7 @@ pub fn inject_metadata(
                 #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
                 writeln!(
                     meta_tags,
-                    r#"    <meta name="apple-mobile-web-app-status-bar-style" content="{}" />"#,
+                    r#"<meta name="apple-mobile-web-app-status-bar-style" content="{}" />"#,
                     escape_html(status_bar_style)
                 )
                 .unwrap();
@@ -478,7 +469,7 @@ pub fn inject_metadata(
                 #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
                 writeln!(
                     meta_tags,
-                    r#"    <meta name="mobile-web-app-capable" content="{}" />"#,
+                    r#"<meta name="mobile-web-app-capable" content="{}" />"#,
                     if capable { "yes" } else { "no" }
                 )
                 .unwrap();
@@ -491,7 +482,7 @@ pub fn inject_metadata(
                     #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
                     writeln!(
                         meta_tags,
-                        r#"    <link rel="alternate" hreflang="{}" href="{}" />"#,
+                        r#"<link rel="alternate" hreflang="{}" href="{}" />"#,
                         escape_html(lang),
                         escape_html(url)
                     )
@@ -508,7 +499,7 @@ pub fn inject_metadata(
                     #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
                     writeln!(
                         meta_tags,
-                        r#"    <link rel="alternate" type="{}" href="{}" title="{}" />"#,
+                        r#"<link rel="alternate" type="{}" href="{}" title="{}" />"#,
                         escape_html(media_type),
                         escape_html(url),
                         escape_html(title)
@@ -530,7 +521,6 @@ pub fn inject_metadata(
         if !preload_links.is_empty() {
             let mut preload_html = String::new();
             for link in preload_links {
-                preload_html.push_str("    ");
                 preload_html.push_str(&link);
                 preload_html.push('\n');
             }

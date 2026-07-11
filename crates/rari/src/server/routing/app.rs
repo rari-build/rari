@@ -55,6 +55,7 @@ use crate::{
         middleware::request_context::RequestContext,
         rendering::{
             metadata_injection::inject_metadata,
+            pretty_html::pretty_print_html,
             utils::{inject_assets_into_html, inject_vite_client},
         },
         routing::app_router::AppRouteMatch,
@@ -187,7 +188,7 @@ pub(crate) fn wrap_html_with_metadata(
     let trimmed_lower = trimmed.cow_to_lowercase();
     let is_complete = trimmed_lower.starts_with("<!doctype") || trimmed_lower.starts_with("<html");
 
-    if is_complete {
+    let html = if is_complete {
         if let Some(metadata) = metadata {
             inject_metadata(&html_content, metadata, state.image_optimizer.as_deref())
         } else {
@@ -195,7 +196,9 @@ pub(crate) fn wrap_html_with_metadata(
         }
     } else {
         html_content
-    }
+    };
+
+    if state.config.is_development() { pretty_print_html(&html) } else { html }
 }
 
 fn should_use_streaming(route_match: &AppRouteMatch, config: &Config) -> bool {
@@ -873,11 +876,15 @@ pub async fn render_fallback_html(
         }
 
         if let Ok(html_content) = fs::read_to_string(&index_path).await {
-            let final_html = if state.config.is_development() {
+            let mut final_html = if state.config.is_development() {
                 inject_vite_client(&html_content, state.config.vite.port)
             } else {
                 html_content
             };
+
+            if state.config.is_development() {
+                final_html = pretty_print_html(&final_html);
+            }
 
             if state.config.is_production() {
                 state.html_cache.insert(path.to_string(), final_html.clone());
@@ -900,7 +907,7 @@ pub async fn render_fallback_html(
 
     if state.config.is_development() {
         let vite_port = state.config.vite.port;
-        let html_shell = format!(
+        let mut html_shell = format!(
             r#"<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -917,6 +924,10 @@ pub async fn render_fallback_html(
 </body>
 </html>"#
         );
+
+        if state.config.is_development() {
+            html_shell = pretty_print_html(&html_shell);
+        }
 
         let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
 
@@ -1503,6 +1514,11 @@ pub async fn handle_app_route(
                 }
             };
 
+            let cache_control_value = state.config.get_cache_control_for_route(path);
+            let cache_policy =
+                response::RouteCachePolicy::from_cache_control(cache_control_value, path);
+            let for_response_cache = should_store_response_cache(&state, &cache_policy).await;
+
             let (final_html, etag) = match render_result {
                 RenderResult::Static(html_content) => {
                     let html_with_assets =
@@ -1574,7 +1590,6 @@ pub async fn handle_app_route(
                 .header("vary", static_html_vary_header(cookie_header))
                 .header("x-cache", "MISS");
 
-            let cache_control_value = state.config.get_cache_control_for_route(path);
             let mut response_headers = HeaderMap::new();
 
             response_builder = response_builder.header("cache-control", cache_control_value);
@@ -1583,10 +1598,7 @@ pub async fn handle_app_route(
             }
             insert_response_cache_vary_header(&mut response_headers, cookie_header, true);
 
-            let cache_policy =
-                response::RouteCachePolicy::from_cache_control(cache_control_value, path);
-
-            if should_store_response_cache(&state, &cache_policy).await {
+            if for_response_cache {
                 let response_cache_tags =
                     merge_response_cache_tags(&state, cache_policy.tags.clone()).await;
                 let body_bytes = Bytes::from(final_html.clone());
