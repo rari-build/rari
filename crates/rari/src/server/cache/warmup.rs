@@ -34,10 +34,10 @@ const WARMUP_CONCURRENCY: usize = 10;
 /// The RSC+Fizz pipeline shares V8 globals between the mutex-protected
 /// RSC render and the non-mutex Fizz render. Without serialization,
 /// concurrent warmup tasks interleave and produce wrong HTML.
-static WARMUP_RENDER_LOCK: OnceCell<Mutex<()>> = OnceCell::const_new();
+static WARMUP_RENDER_LOCK: OnceCell<Arc<Mutex<()>>> = OnceCell::const_new();
 
-async fn warmup_render_lock() -> &'static Mutex<()> {
-    WARMUP_RENDER_LOCK.get_or_init(|| async { Mutex::new(()) }).await
+async fn warmup_render_lock() -> Arc<Mutex<()>> {
+    Arc::clone(WARMUP_RENDER_LOCK.get_or_init(|| async { Arc::new(Mutex::new(())) }).await)
 }
 
 async fn merge_warmup_cache_tags(state: &ServerState, base_tags: Vec<String>) -> Vec<String> {
@@ -116,21 +116,33 @@ async fn warm_route(
         Arc::clone(&state.renderer),
         Arc::clone(&state.layout_html_cache),
     );
+    let layout_renderer_for_rsc = LayoutRenderer::with_shared_cache(
+        Arc::clone(&state.renderer),
+        Arc::clone(&state.layout_html_cache),
+    );
 
     let request_context =
         Arc::new(RequestContext::new(route_match.route.path.clone()).without_layout_html_cache());
 
-    let _render_guard = warmup_render_lock().await.lock().await;
+    let render_lock = warmup_render_lock().await;
+    let route_match_for_render = route_match.clone();
+    let context_for_render = context.clone();
+    let request_context_for_render = Arc::clone(&request_context);
 
-    let render_result = layout_renderer
-        .render_route_with_streaming(
-            &route_match,
-            &context,
-            Some(Arc::clone(&request_context)),
-            false,
-        )
-        .await
-        .map_err(|e| format!("Render failed: {e}"))?;
+    let render_result = tokio::spawn(async move {
+        let _guard = render_lock.lock_owned().await;
+        layout_renderer
+            .render_route_with_streaming(
+                &route_match_for_render,
+                &context_for_render,
+                Some(request_context_for_render),
+                false,
+            )
+            .await
+    })
+    .await
+    .map_err(|e| format!("Warmup render task join failed: {e}"))?
+    .map_err(|e| format!("Render failed: {e}"))?;
 
     context.metadata = collect_page_metadata(state, &route_match, &context).await;
 
@@ -215,8 +227,9 @@ async fn warm_route(
         state.response_cache.set(html_cache_key, cached_response).await;
     }
 
-    let rsc_result =
-        layout_renderer.render_route_by_mode(&route_match, &context, Some(request_context)).await;
+    let rsc_result = layout_renderer_for_rsc
+        .render_route_by_mode(&route_match, &context, Some(request_context))
+        .await;
 
     if let Ok(rsc_flight_protocol) = rsc_result {
         let rsc_cache_key =

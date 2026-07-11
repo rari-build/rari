@@ -82,17 +82,6 @@ static GLOBAL_FETCH_CACHE: LazyLock<Arc<Mutex<LruCache<String, CachedFetchResult
 static GLOBAL_IN_FLIGHT_FETCHES: LazyLock<InFlightFetches> =
     LazyLock::new(|| Arc::new(DashMap::new()));
 
-struct FetchCleanupGuard<'a> {
-    in_flight_fetches: &'a InFlightFetches,
-    cache_key: String,
-}
-
-impl Drop for FetchCleanupGuard<'_> {
-    fn drop(&mut self) {
-        self.in_flight_fetches.remove(&self.cache_key);
-    }
-}
-
 pub struct RequestContext {
     fetch_cache: Arc<Mutex<LruCache<String, CachedFetchResult>>>,
     in_flight_fetches: InFlightFetches,
@@ -249,47 +238,41 @@ impl RequestContext {
             entry.or_insert_with(|| Arc::new(TokioMutex::new(None))).clone()
         };
 
-        let mut guard = fetch_lock.lock().await;
+        let url = url.to_string();
+        let fetch_cache = Arc::clone(&self.fetch_cache);
+        let in_flight_fetches = Arc::clone(&self.in_flight_fetches);
+        let cache_key_for_task = cache_key.clone();
 
-        if let Some(result) = guard.as_ref() {
-            let mut cloned_result = result.clone()?;
-            cloned_result.tags = Self::merge_and_sort_tags(cloned_result.tags, tags);
+        tokio::spawn(async move {
+            let mut guard = fetch_lock.lock().await;
 
-            {
-                let mut cache = self.fetch_cache.lock();
-                cache.put(cache_key.clone(), cloned_result.clone());
+            if let Some(result) = guard.as_ref() {
+                return result.clone();
             }
 
-            *guard = Some(Ok(cloned_result.clone()));
+            let mut fetch_result = Self::perform_fetch_standalone(&url, &options).await;
 
-            return Ok(cloned_result);
-        }
+            if let Ok(ref mut result) = fetch_result {
+                result.tags = Self::merge_and_sort_tags(mem::take(&mut result.tags), tags);
+            }
 
-        let _cleanup = FetchCleanupGuard {
-            in_flight_fetches: &self.in_flight_fetches,
-            cache_key: cache_key.clone(),
-        };
+            *guard = Some(fetch_result.clone());
 
-        let mut fetch_result = self.perform_fetch(url, &options).await;
+            if let Ok(ref cached_result) = fetch_result {
+                let mut cache = fetch_cache.lock();
+                cache.put(cache_key_for_task.clone(), cached_result.clone());
+            }
 
-        if let Ok(ref mut result) = fetch_result {
-            result.tags = Self::merge_and_sort_tags(mem::take(&mut result.tags), tags);
-        }
+            drop(guard);
+            in_flight_fetches.remove(&cache_key_for_task);
 
-        *guard = Some(fetch_result.clone());
-
-        if let Ok(ref cached_result) = fetch_result {
-            let mut cache = self.fetch_cache.lock();
-            cache.put(cache_key.clone(), cached_result.clone());
-        }
-
-        drop(guard);
-
-        fetch_result
+            fetch_result
+        })
+        .await
+        .map_err(|e| RariError::network(format!("fetch singleflight join failed: {e}")))?
     }
 
-    async fn perform_fetch(
-        &self,
+    async fn perform_fetch_standalone(
         url: &str,
         options: &FxHashMap<String, String>,
     ) -> Result<CachedFetchResult, RariError> {
