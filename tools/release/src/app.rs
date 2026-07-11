@@ -6,7 +6,7 @@ use ratatui::Frame;
 
 use crate::{
     changelog, git,
-    package::{Package, ReleaseType, ReleaseUnit, ReleasedPackage},
+    package::{Package, ReleaseType, ReleaseUnit, ReleasedPackage, release_tag},
     ui,
 };
 
@@ -517,15 +517,5 @@ impl App {
                 ui::render_complete(frame, &self.released_packages, self.dry_run);
             }
         }
-    }
-}
-
-fn release_tag(unit_name: &str, version: &str) -> String {
-    if unit_name == "rari-binaries" {
-        format!("v{version}")
-    } else if unit_name == "@rari/use-cache-binaries" {
-        format!("use-cache-binaries@{version}")
-    } else {
-        format!("{unit_name}@{version}")
     }
 }

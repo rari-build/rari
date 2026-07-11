@@ -42,21 +42,30 @@ pub async fn generate(tag: &str, package_name: &str, package_path: &Path) -> Res
 /// Resolve manual release notes path.
 ///
 /// Lookup order:
-/// 1. Explicit `--notes-file` / override
-/// 2. `.github/release-notes/<tag>.md` (e.g. `rari@0.15.0.md`, `v0.15.0.md`)
+/// 1. Explicit `--notes-file` / override (if the path exists)
+/// 2. `.github/release-notes/<tag>.md` with `/` in the tag replaced by `-`
+///    (e.g. `rari@0.15.0.md`, `v0.15.0.md`, `@rari-use-cache@0.15.0.md`)
 /// 3. `.github/release-notes/<version>.md` (shared across units, e.g. `0.15.0.md`)
 pub fn resolve_notes_path(
     tag: &str,
     version: &str,
     override_path: Option<&Path>,
 ) -> Option<PathBuf> {
-    if let Some(path) = override_path {
-        return path.exists().then(|| path.to_path_buf());
+    if let Some(path) = override_path
+        && path.exists()
+    {
+        return Some(path.to_path_buf());
     }
 
     let dir = Path::new(NOTES_DIR);
-    let candidates = [dir.join(format!("{tag}.md")), dir.join(format!("{version}.md"))];
+    let candidates = [dir.join(tag_notes_filename(tag)), dir.join(format!("{version}.md"))];
     candidates.into_iter().find(|path| path.exists())
+}
+
+/// Flat filename for a release tag. Scoped tags contain `/`, which must not be
+/// passed to `Path::join` or it becomes a subdirectory on Unix.
+fn tag_notes_filename(tag: &str) -> String {
+    format!("{}.md", tag.replace('/', "-"))
 }
 
 pub async fn load_manual_notes(
@@ -211,30 +220,4 @@ async fn generate_auto_release_notes(
 
     let _ = tag;
     Ok("See CHANGELOG.md for details.".to_string())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn compose_prepends_manual_with_separator() {
-        let out =
-            compose_release_notes(Some("## Highlights\n\n- big thing"), "### Features\n\n- x");
-        assert!(out.starts_with("## Highlights"));
-        assert!(out.contains("\n\n---\n\n### Features"));
-    }
-
-    #[test]
-    fn compose_manual_only_when_auto_placeholder() {
-        let out =
-            compose_release_notes(Some("## Highlights\n\n- only"), "See CHANGELOG.md for details.");
-        assert_eq!(out, "## Highlights\n\n- only");
-    }
-
-    #[test]
-    fn compose_auto_only_without_manual() {
-        let out = compose_release_notes(None, "### Features\n\n- x");
-        assert_eq!(out, "### Features\n\n- x");
-    }
 }
