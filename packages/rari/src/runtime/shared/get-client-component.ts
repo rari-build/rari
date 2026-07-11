@@ -1,5 +1,6 @@
-import type { ComponentInfo, GlobalWithRari } from './types'
+import type { ComponentInfo } from './types'
 import * as React from 'react'
+import { getClientComponents, getRariGlobalRoot } from './rari-global'
 
 interface GlobalAccessor {
   '~clientComponents': Record<string, ComponentInfo>
@@ -297,7 +298,7 @@ function createSuspenseModule(
 }
 
 export function requireClientComponent(id: string): any {
-  const lookup = findComponentInfo(id, globalThis as unknown as GlobalWithRari)
+  const lookup = findComponentInfo(id, getRariGlobalRoot())
   if (!lookup) {
     if (import.meta.env?.DEV)
       console.warn(`[rari] __rari_rsc_require__: component "${id}" not found in registry`)
@@ -323,7 +324,7 @@ export function requireClientComponent(id: string): any {
 }
 
 export async function getClientComponent(id: string): Promise<any> {
-  const lookup = findComponentInfo(id, globalThis as unknown as GlobalWithRari)
+  const lookup = findComponentInfo(id, getRariGlobalRoot())
   if (!lookup)
     return null
 
@@ -334,8 +335,7 @@ export function installRscChunkLoader(): void {
   if (typeof window === 'undefined')
     return
   (globalThis as any).__rari_chunk_load__ = (chunkId: string) => {
-    const clientComponents = (globalThis as unknown as GlobalWithRari)['~clientComponents'] || {}
-
+    const clientComponents = getClientComponents()
     let componentInfo = clientComponents[chunkId]
 
     if (!componentInfo) {

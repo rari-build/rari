@@ -72,25 +72,15 @@ fn extract_promise_metadata<'s>(
     }
 
     let mut metadata = serde_json::Map::new();
-    metadata.insert("~promisePlaceholder".to_string(), serde_json::Value::Bool(true));
     metadata.insert("type".to_string(), serde_json::Value::String("Promise".to_string()));
 
-    if let Ok(obj) = v8::Local::<v8::Object>::try_from(value) {
-        if let Some(boundary_key) = v8::String::new(scope, "~boundaryId")
-            && let Some(boundary_val) = obj.get(scope, boundary_key.into())
-            && let Some(boundary_str) = boundary_val.to_string(scope)
-        {
-            let boundary_id = boundary_str.to_rust_string_lossy(scope.as_ref());
-            metadata.insert("~boundaryId".to_string(), serde_json::Value::String(boundary_id));
-        }
-
-        if let Some(promise_key) = v8::String::new(scope, "promiseId")
-            && let Some(promise_val) = obj.get(scope, promise_key.into())
-            && let Some(promise_str) = promise_val.to_string(scope)
-        {
-            let promise_id = promise_str.to_rust_string_lossy(scope.as_ref());
-            metadata.insert("promiseId".to_string(), serde_json::Value::String(promise_id));
-        }
+    if let Ok(obj) = v8::Local::<v8::Object>::try_from(value)
+        && let Some(promise_key) = v8::String::new(scope, "promiseId")
+        && let Some(promise_val) = obj.get(scope, promise_key.into())
+        && let Some(promise_str) = promise_val.to_string(scope)
+    {
+        let promise_id = promise_str.to_rust_string_lossy(scope.as_ref());
+        metadata.insert("promiseId".to_string(), serde_json::Value::String(promise_id));
     }
 
     metadata.insert(
@@ -235,7 +225,6 @@ fn extract_composition_result_manually_from_panic<'s>(
     );
 
     let mut error_obj = serde_json::Map::new();
-    error_obj.insert("~serializationError".to_string(), serde_json::Value::Bool(true));
     error_obj.insert(
         "error".to_string(),
         serde_json::Value::String("V8 value could not be serialized".to_string()),

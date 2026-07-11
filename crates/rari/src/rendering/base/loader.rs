@@ -39,23 +39,6 @@ impl RscJsLoader {
             if (!globalThis['~render']) globalThis['~render'] = {{}};
             globalThis['~render'].currentComponent = "{component_id}";
 
-            if (globalThis['~rsc'].componentData && !globalThis['~rsc'].componentData.has("{component_id}")) {{
-                globalThis['~rsc'].componentData.set("{component_id}", {{
-                    promises: new Map(),
-                    values: new Map(),
-                    renderTime: Date.now(),
-                    isolated: true
-                }});
-            }}
-
-            if (globalThis['~components']?.permissions) {{
-                const componentType = "{component_id}".includes("TestComponent") ? "test" : "generic";
-                globalThis['~components'].permissions.set("{component_id}", {{
-                    canAccessCalculations: true,
-                    componentType: componentType
-                }});
-            }}
-
             return {{
                 componentId: "{component_id}",
                 environmentSetup: true,
@@ -395,25 +378,6 @@ impl RscJsLoader {
         create_js_wrapper(&verification_code)
     }
 
-    pub fn create_isolation_namespacing_script(component_id: &str) -> String {
-        format!(
-            r#"
-            (function() {{
-                if (!globalThis['~rsc']) globalThis['~rsc'] = {{}};
-                if (!globalThis['~rsc'].componentNamespaces) globalThis['~rsc'].componentNamespaces = new Map();
-                if (!globalThis['~rsc'].componentNamespaces.has("{component_id}")) {{
-                    globalThis['~rsc'].componentNamespaces.set("{component_id}", new Map());
-                }}
-
-                return {{
-                    componentId: "{component_id}",
-                    hasNamespace: globalThis['~rsc'].componentNamespaces.has("{component_id}")
-                }};
-            }})();
-            "#
-        )
-    }
-
     pub fn create_module_loader_check_script() -> String {
         r"
         (function() {
@@ -429,10 +393,6 @@ impl RscJsLoader {
             (function() {{
                 if (!globalThis['~render']) globalThis['~render'] = {{}};
                 globalThis['~render'].currentComponent = "{component_id}";
-
-                if (globalThis['~components']?.promiseMap && globalThis['~components'].promiseMap.has("{component_id}")) {{
-                    globalThis['~components'].promiseMap.set("{component_id}", new Map());
-                }}
 
                 return true;
             }})();

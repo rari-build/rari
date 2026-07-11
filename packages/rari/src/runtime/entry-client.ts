@@ -1,4 +1,3 @@
-import type { GlobalWithRari, WindowWithRari } from './shared/types'
 import * as React from 'react'
 import { createRoot, hydrateRoot } from 'react-dom/client'
 // @ts-expect-error - virtual module resolved by Vite
@@ -9,21 +8,10 @@ import { ClientRouter } from '@/router/navigation/client-router'
 import { getClientComponent } from './shared/get-client-component'
 import { clearServerInjectedErrors, hasFizzMarkers, hasServerRenderedDom, shouldHydrateServerDom } from './shared/hydration'
 import { preloadModulesFromFlightProtocol } from './shared/preload-modules'
+import { getClientComponentPaths, getClientComponents, getRariGlobal, getRariWindowBag } from './shared/rari-global'
 // eslint-disable-next-line ts/ban-ts-comment
 // @ts-ignore - virtual module resolved by Vite
 import 'virtual:rsc-integration.ts'
-
-function getRariGlobal(): GlobalWithRari['~rari'] {
-  return (globalThis as unknown as GlobalWithRari)['~rari']
-}
-
-function getGlobalThis(): GlobalWithRari {
-  return globalThis as unknown as GlobalWithRari
-}
-
-function getWindow(): WindowWithRari {
-  return window as unknown as WindowWithRari
-}
 
 function showHydrationFailureMessage(container: Element, message: string): void {
   if (container.querySelector('.rari-error[data-rari-hydration-failure]'))
@@ -62,12 +50,10 @@ function mountApp(rootElement: HTMLElement, content: React.ReactNode) {
   notifyClientReady()
 }
 
-if (typeof getRariGlobal() === 'undefined')
-  (globalThis as unknown as GlobalWithRari)['~rari'] = {}
-
-getRariGlobal().AppRouterProvider = AppRouterProvider
-getRariGlobal().ClientRouter = ClientRouter
-getRariGlobal().getClientComponent = getClientComponent
+const rari = getRariGlobal()
+rari.AppRouterProvider = AppRouterProvider
+rari.ClientRouter = ClientRouter
+rari.getClientComponent = getClientComponent
 
 export async function preloadClientComponent(id: string): Promise<void> {
   try {
@@ -78,15 +64,13 @@ export async function preloadClientComponent(id: string): Promise<void> {
   }
 }
 
-getRariGlobal().preloadClientComponent = preloadClientComponent
+rari.preloadClientComponent = preloadClientComponent
 
-if (typeof getGlobalThis()['~clientComponents'] === 'undefined')
-  (globalThis as unknown as GlobalWithRari)['~clientComponents'] = {}
+getClientComponents()
 
 /*! @preserve CLIENT_COMPONENT_IMPORTS_PLACEHOLDER */
 
-if (typeof getGlobalThis()['~clientComponentPaths'] === 'undefined')
-  (globalThis as unknown as GlobalWithRari)['~clientComponentPaths'] = {}
+getClientComponentPaths()
 
 /*! @preserve CLIENT_COMPONENT_REGISTRATIONS_PLACEHOLDER */
 
@@ -141,9 +125,11 @@ async function createElementFromFlightBytes(
   const payloadText = new TextDecoder().decode(payloadBytes)
   await preloadModulesFromFlightProtocol(payloadText)
 
-  const hasBufferedRows = getWindow()['~rari']?.streaming?.bufferedRows && getWindow()['~rari'].streaming!.bufferedRows!.length > 0
+  const windowRari = getRariWindowBag()!
+  const streaming = windowRari.streaming
+  const hasBufferedRows = !!(streaming?.bufferedRows && streaming.bufferedRows.length > 0)
   const isStreaming = options.streaming && (
-    getWindow()['~rari']?.streaming?.complete === undefined || hasBufferedRows
+    streaming?.complete === undefined || hasBufferedRows
   )
 
   if (isStreaming) {
@@ -173,18 +159,18 @@ async function createElementFromFlightBytes(
         window.addEventListener('rari:html-stream-row', handleStreamUpdate)
         window.addEventListener('rari:stream-complete', handleStreamComplete)
 
-        if (getWindow()['~rari']?.streaming?.bufferedRows) {
-          const initialRows = [...getWindow()['~rari'].streaming!.bufferedRows!]
+        if (windowRari.streaming?.bufferedRows) {
+          const initialRows = [...windowRari.streaming.bufferedRows]
           for (const row of initialRows) {
             if (streamClosed)
               break
             controller.enqueue(new TextEncoder().encode(`\n${row}`))
           }
 
-          getWindow()['~rari'].streaming!.bufferedRows = []
+          windowRari.streaming.bufferedRows = []
         }
 
-        if (getWindow()['~rari']?.streaming?.complete)
+        if (windowRari.streaming?.complete)
           handleStreamComplete()
       },
     })
@@ -212,7 +198,8 @@ export async function renderApp(): Promise<void> {
   const hasEmbeddedPayload = hasEmbeddedFlightPayload()
   const embeddedPayloadBytes = decodeEmbeddedFlightPayload()
   const hasServerRenderedContent = hasServerRenderedDom(rootElement) || hasFizzMarkers(rootElement)
-  const hasBufferedRows = getWindow()['~rari']?.streaming?.bufferedRows && getWindow()['~rari'].streaming!.bufferedRows!.length > 0
+  const streaming = getRariWindowBag()!.streaming
+  const hasBufferedRows = !!(streaming?.bufferedRows && streaming.bufferedRows.length > 0)
 
   try {
     let element
@@ -352,15 +339,16 @@ export async function renderApp(): Promise<void> {
             window.addEventListener('rari:html-stream-row', handleStreamUpdate)
             window.addEventListener('rari:stream-complete', handleStreamComplete)
 
-            if (getWindow()['~rari']?.streaming?.bufferedRows) {
-              const snapshot = [...getWindow()['~rari'].streaming!.bufferedRows!]
-              getWindow()['~rari'].streaming!.bufferedRows = []
+            const windowRari = getRariWindowBag()!
+            if (windowRari.streaming?.bufferedRows) {
+              const snapshot = [...windowRari.streaming.bufferedRows]
+              windowRari.streaming.bufferedRows = []
 
               for (const row of snapshot)
                 controller.enqueue(new TextEncoder().encode(`${row}\n`))
             }
 
-            if (getWindow()['~rari']?.streaming?.complete)
+            if (windowRari.streaming?.complete)
               handleStreamComplete()
           },
         })

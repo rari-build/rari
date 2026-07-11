@@ -297,11 +297,6 @@ async fn handle_invalidate(
                     clearedCount++;
                 }}
 
-                if (globalThis['~rsc'].componentFunctions && globalThis['~rsc'].componentFunctions.has(componentId)) {{
-                    globalThis['~rsc'].componentFunctions.delete(componentId);
-                    clearedCount++;
-                }}
-
                 if (globalThis['~rari']?.ssrModules) {{
                     const colonPrefix = componentId + ':';
                     const hashPrefix = componentId + '#';
@@ -333,16 +328,6 @@ async fn handle_invalidate(
                             clearedCount++;
                         }}
                     }}
-                }}
-
-                if (globalThis['~rsc'].componentData && globalThis['~rsc'].componentData.has(componentId)) {{
-                    globalThis['~rsc'].componentData.delete(componentId);
-                    clearedCount++;
-                }}
-
-                if (globalThis['~rsc'].componentNamespaces && globalThis['~rsc'].componentNamespaces.has(componentId)) {{
-                    globalThis['~rsc'].componentNamespaces.delete(componentId);
-                    clearedCount++;
                 }}
 
                 return {{

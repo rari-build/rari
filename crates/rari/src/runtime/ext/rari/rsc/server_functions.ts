@@ -7,10 +7,6 @@ interface ResolveResult {
   functions: string[]
 }
 
-interface ServerFunctionOptions {
-  componentId?: string
-}
-
 (function initializeServerFunctions() {
   if (!g['~rari'])
     g['~rari'] = {}
@@ -76,21 +72,9 @@ interface ServerFunctionOptions {
   g.createEnhancedServerFunctionPromise = function createEnhancedServerFunctionPromise(
     functionName: string,
     args: unknown[] = [],
-    options: ServerFunctionOptions = {},
   ): Promise<unknown> {
-    const { componentId } = options
-
-    if (g.RscModuleManager?.createPromise) {
-      const promise = g.RscModuleManager.createPromise(
-        functionName,
-        args,
-      )
-
-      if (componentId)
-        (promise as any)['~rsc_component_id'] = componentId
-
-      return promise
-    }
+    if (g.RscModuleManager?.createPromise)
+      return g.RscModuleManager.createPromise(functionName, args)
 
     return g.executeServerFunction!(functionName, args)
   }

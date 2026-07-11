@@ -328,10 +328,10 @@ globalThis['~errors'].batch.push({{
                 "init_rsc_namespace".to_string(),
                 r"(function() {
                     if (!globalThis['~rsc']) globalThis['~rsc'] = {};
-                    if (!globalThis['~rsc'].componentNamespaces) globalThis['~rsc'].componentNamespaces = new Map();
                     if (!globalThis['~rsc'].modules) globalThis['~rsc'].modules = {};
                     if (!globalThis['~rsc'].functions) globalThis['~rsc'].functions = {};
-                })()".to_string(),
+                })()"
+                    .to_string(),
             )
             .await?;
 
@@ -407,16 +407,6 @@ globalThis['~errors'].batch.push({{
         component_id: &str,
         component_code: &str,
     ) -> Result<(), RariError> {
-        let isolation_namespacing_script =
-            RscJsLoader::create_isolation_namespacing_script(component_id);
-
-        self.runtime
-            .execute_script(
-                format!("create_namespace_{component_id}.js"),
-                isolation_namespacing_script,
-            )
-            .await?;
-
         let dependencies = rsc::extract_dependencies(component_code);
 
         for dep in &dependencies {
@@ -1115,7 +1105,6 @@ globalThis['~errors'].batch.push({{
             }
 
             transformed_source_safe = transformed_source_safe
-                .cow_replace(&format!("export const ~rari_main_export = {component_id};"), "")
                 .cow_replace("export const metadata =", "const metadata =")
                 .cow_replace("export const ", "const ")
                 .cow_replace("export function ", "function ")

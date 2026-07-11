@@ -1,12 +1,12 @@
 'use client'
 
-import type { GlobalWithRari } from '../shared/types'
 import * as React from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { createFromReadableStream } from 'virtual:react-flight-client'
 import { PATH_TRAILING_SLASH_REGEX } from '@/shared/regex-constants'
 import { ActionDidRevalidateStaticAndDynamic } from '../actions/revalidation-kind'
 import { preloadModulesFromFlightProtocol } from '../shared/preload-modules'
+import { getRariWindowBag } from '../shared/rari-global'
 import { mergeFlightRefresh } from './merge-refresh'
 import { currentRouteLocation, flightRouteCache } from './route-cache'
 
@@ -572,10 +572,9 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       currentNavigationIdRef.current = customEvent.detail.navigationId
 
       if (typeof window !== 'undefined') {
-        const globalWindow = window as unknown as GlobalWithRari
-        if (!globalWindow['~rari'])
-          globalWindow['~rari'] = {} as GlobalWithRari['~rari']
-        globalWindow['~rari'].navigationId = customEvent.detail.navigationId
+        const windowRari = getRariWindowBag()
+        if (windowRari)
+          windowRari.navigationId = customEvent.detail.navigationId
       }
     }
 
