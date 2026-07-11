@@ -167,8 +167,10 @@ fn find_closing_tag(html: &str, from: usize, tag_name: &str) -> Option<usize> {
         if bytes[i] == b'<' && bytes[i + 1] == b'/' {
             let name_start = i + 2;
             let name_end = name_start + name_bytes.len();
+            // Compare on bytes — str slicing here can panic if name_end falls
+            // inside a multi-byte UTF-8 character (e.g. `</` + `€a日…`).
             if name_end <= bytes.len()
-                && html[name_start..name_end].eq_ignore_ascii_case(tag_name)
+                && bytes[name_start..name_end].eq_ignore_ascii_case(name_bytes)
                 && (name_end == bytes.len()
                     || bytes[name_end].is_ascii_whitespace()
                     || bytes[name_end] == b'>')
@@ -224,5 +226,15 @@ mod tests {
     fn empty_input() {
         assert_eq!(pretty_print_html(""), "");
         assert_eq!(pretty_print_html("   "), "");
+    }
+
+    #[test]
+    fn raw_text_multibyte_after_false_closing_slash_does_not_panic() {
+        // `</` + `€a日` makes a 6-byte window for "script" that ends mid-character.
+        // Byte comparison must not slice the &str at that range.
+        let input = "<script>const s = \"</€a日\";</script>";
+        let out = pretty_print_html(input);
+        assert!(out.contains("const s = \"</€a日\";"));
+        assert!(out.contains("</script>"));
     }
 }
