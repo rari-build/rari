@@ -17,7 +17,6 @@ pub async fn extract_asset_links_from_index_html() -> Option<String> {
             let mut in_inline_script = false;
             let mut in_body = false;
             let mut script_base_indent = 0;
-            let mut is_first_line = true;
 
             for line in content.lines() {
                 let trimmed = line.trim();
@@ -37,12 +36,8 @@ pub async fn extract_asset_links_from_index_html() -> Option<String> {
                 if (trimmed.starts_with("<script") && trimmed.contains("/assets/"))
                     || (trimmed.starts_with("<link") && trimmed.contains("/assets/"))
                 {
-                    if !is_first_line {
-                        asset_links.push_str("    ");
-                    }
                     asset_links.push_str(trimmed);
                     asset_links.push('\n');
-                    is_first_line = false;
                     continue;
                 }
 
@@ -50,12 +45,8 @@ pub async fn extract_asset_links_from_index_html() -> Option<String> {
                     in_inline_script = true;
 
                     script_base_indent = line.len() - line.trim_start().len();
-                    if !is_first_line {
-                        asset_links.push_str("    ");
-                    }
                     asset_links.push_str(trimmed);
                     asset_links.push('\n');
-                    is_first_line = false;
 
                     if trimmed.contains("</script>") {
                         in_inline_script = false;
@@ -66,16 +57,10 @@ pub async fn extract_asset_links_from_index_html() -> Option<String> {
                 if in_inline_script {
                     let current_indent = line.len() - line.trim_start().len();
                     if current_indent >= script_base_indent {
-                        let relative_indent = current_indent - script_base_indent;
-                        asset_links.push_str("    ");
-                        asset_links.push_str(&" ".repeat(relative_indent));
-                        asset_links.push_str(trimmed);
-                    } else {
-                        asset_links.push_str("    ");
-                        asset_links.push_str(trimmed);
+                        asset_links.push_str(&" ".repeat(current_indent - script_base_indent));
                     }
+                    asset_links.push_str(trimmed);
                     asset_links.push('\n');
-                    is_first_line = false;
 
                     if trimmed.contains("</script>") {
                         in_inline_script = false;
@@ -86,12 +71,8 @@ pub async fn extract_asset_links_from_index_html() -> Option<String> {
                 if trimmed.starts_with("<link")
                     && (trimmed.contains("preconnect") || trimmed.contains("dns-prefetch"))
                 {
-                    if !is_first_line {
-                        asset_links.push_str("    ");
-                    }
                     asset_links.push_str(trimmed);
                     asset_links.push('\n');
-                    is_first_line = false;
                 }
             }
 
@@ -115,7 +96,6 @@ pub async fn extract_body_scripts_from_index_html() -> Option<String> {
             let mut in_inline_script = false;
             let mut in_body = false;
             let mut script_base_indent = 0;
-            let mut is_first_line = true;
 
             for line in content.lines() {
                 let trimmed = line.trim();
@@ -136,12 +116,8 @@ pub async fn extract_body_scripts_from_index_html() -> Option<String> {
                     in_inline_script = true;
 
                     script_base_indent = line.len() - line.trim_start().len();
-                    if !is_first_line {
-                        body_scripts.push_str("    ");
-                    }
                     body_scripts.push_str(trimmed);
                     body_scripts.push('\n');
-                    is_first_line = false;
 
                     if trimmed.contains("</script>") {
                         in_inline_script = false;
@@ -152,16 +128,10 @@ pub async fn extract_body_scripts_from_index_html() -> Option<String> {
                 if in_inline_script {
                     let current_indent = line.len() - line.trim_start().len();
                     if current_indent >= script_base_indent {
-                        let relative_indent = current_indent - script_base_indent;
-                        body_scripts.push_str("    ");
-                        body_scripts.push_str(&" ".repeat(relative_indent));
-                        body_scripts.push_str(trimmed);
-                    } else {
-                        body_scripts.push_str("    ");
-                        body_scripts.push_str(trimmed);
+                        body_scripts.push_str(&" ".repeat(current_indent - script_base_indent));
                     }
+                    body_scripts.push_str(trimmed);
                     body_scripts.push('\n');
-                    is_first_line = false;
 
                     if trimmed.contains("</script>") {
                         in_inline_script = false;
@@ -538,10 +508,10 @@ pub fn inject_vite_client(html: &str, vite_port: u16) -> String {
         #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
         write!(
             result,
-            r#"  <script type="module" src="http://localhost:{vite_port}/@vite/client"></script>
-  <script type="module">
-    import 'http://localhost:{vite_port}/@id/virtual:rari-entry-client';
-  </script>
+            r#"<script type="module" src="http://localhost:{vite_port}/@vite/client"></script>
+<script type="module">
+import 'http://localhost:{vite_port}/@id/virtual:rari-entry-client';
+</script>
 "#
         )
         .unwrap();
@@ -555,10 +525,10 @@ pub fn inject_vite_client(html: &str, vite_port: u16) -> String {
         #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
         write!(
             result,
-            r#"  <script type="module" src="http://localhost:{vite_port}/@vite/client"></script>
-  <script type="module">
-    import 'http://localhost:{vite_port}/@id/virtual:rari-entry-client';
-  </script>
+            r#"<script type="module" src="http://localhost:{vite_port}/@vite/client"></script>
+<script type="module">
+import 'http://localhost:{vite_port}/@id/virtual:rari-entry-client';
+</script>
 "#
         )
         .unwrap();
@@ -569,7 +539,7 @@ pub fn inject_vite_client(html: &str, vite_port: u16) -> String {
     format!(
         r#"<script type="module" src="http://localhost:{vite_port}/@vite/client"></script>
 <script type="module">
-  import 'http://localhost:{vite_port}/@id/virtual:rari-entry-client';
+import 'http://localhost:{vite_port}/@id/virtual:rari-entry-client';
 </script>
 {html}"#
     )

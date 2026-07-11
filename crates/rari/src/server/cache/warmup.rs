@@ -151,14 +151,15 @@ async fn warm_route(
         _ => return Ok(()),
     };
 
-    let html = wrap_html_with_metadata(html, context.metadata.as_ref(), state);
-
     let html_cache_key = response::ResponseCache::generate_cache_key(path, None);
-    let etag = response::ResponseCache::generate_etag(html.as_bytes());
     let cache_control = state.config.get_cache_control_for_route(path);
     let cache_policy = response::RouteCachePolicy::from_cache_control(cache_control, path);
+    let for_response_cache = cache_policy.enabled && state.response_cache.config.enabled;
 
-    if cache_policy.enabled && state.response_cache.config.enabled {
+    let html = wrap_html_with_metadata(html, context.metadata.as_ref(), state);
+    let etag = response::ResponseCache::generate_etag(html.as_bytes());
+
+    if for_response_cache {
         let merged_tags = merge_warmup_cache_tags(state, cache_policy.tags.clone()).await;
         let body_bytes = bytes::Bytes::from(html);
 
@@ -221,7 +222,7 @@ async fn warm_route(
         let rsc_cache_key =
             response::ResponseCache::generate_cache_key_with_mode(path, None, Some("rsc"), None);
 
-        if cache_policy.enabled && state.response_cache.config.enabled {
+        if for_response_cache {
             let merged_tags = merge_warmup_cache_tags(state, cache_policy.tags.clone()).await;
             let mut cache_headers = HeaderMap::new();
 

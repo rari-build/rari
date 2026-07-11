@@ -313,12 +313,11 @@ pub struct RscHtmlConfig {
     pub enabled: bool,
     pub timeout_ms: u64,
     pub cache_template: bool,
-    pub pretty_print: bool,
 }
 
 impl Default for RscHtmlConfig {
     fn default() -> Self {
-        Self { enabled: true, timeout_ms: 5000, cache_template: true, pretty_print: false }
+        Self { enabled: true, timeout_ms: 5000, cache_template: true }
     }
 }
 
@@ -433,10 +432,7 @@ impl Config {
                 ..default_config.vite
             },
             rsc: default_config.rsc,
-            rsc_html: RscHtmlConfig {
-                pretty_print: mode == Mode::Development,
-                ..default_config.rsc_html
-            },
+            rsc_html: default_config.rsc_html,
             caching: CacheControlConfig {
                 server_components: Self::server_components_cache_control_for_mode(mode),
                 ..default_config.caching
@@ -511,12 +507,6 @@ impl Config {
                 == "true"
                 || rsc_html_cache_template_str == "1"
                 || rsc_html_cache_template_str.cow_to_lowercase() == "yes";
-        }
-
-        if let Ok(rsc_html_pretty_print_str) = env::var("RARI_RSC_HTML_PRETTY_PRINT") {
-            config.rsc_html.pretty_print = rsc_html_pretty_print_str.cow_to_lowercase() == "true"
-                || rsc_html_pretty_print_str == "1"
-                || rsc_html_pretty_print_str.cow_to_lowercase() == "yes";
         }
 
         if let Ok(loading_enabled_str) = env::var("RARI_LOADING_ENABLED") {
