@@ -3,6 +3,7 @@
 use std::{
     error::Error,
     path::Path,
+    sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -12,6 +13,7 @@ use serde_json::Value;
 use tokio::{fs, time};
 
 use crate::{
+    rendering::base::{run_with_renderer, run_with_renderer_result},
     rsc::extract_dependencies,
     server::{
         RegisterClientRequest, RegisterRequest, ServerState,
@@ -33,44 +35,64 @@ pub async fn register_component(
     }
 
     let result = {
-        let renderer = state.renderer.lock().await;
-        renderer.register_component(&request.component_id, &request.component_code).await
+        let renderer = Arc::clone(&state.renderer);
+        let component_id = request.component_id.clone();
+        let component_code = request.component_code.clone();
+        run_with_renderer_result(renderer, move |renderer| async move {
+            renderer.register_component(&component_id, &component_code).await
+        })
+        .await
     };
 
     match result {
         Ok(()) => {
-            let renderer = state.renderer.lock().await;
-            let is_client = {
-                let registry = renderer.component_registry.lock();
-                registry.is_client_reference(&request.component_id)
-            };
+            let mark_result = {
+                let renderer = Arc::clone(&state.renderer);
+                let component_id = request.component_id.clone();
+                run_with_renderer_result(renderer, move |renderer| async move {
+                    let is_client = {
+                        let registry = renderer.component_registry.lock();
+                        registry.is_client_reference(&component_id)
+                    };
 
-            if is_client {
-                let mark_script = format!(
-                    r#"(function() {{
-                        const comp = globalThis["{}"];
+                    if is_client {
+                        let mark_script = format!(
+                            r#"(function() {{
+                        const comp = globalThis["{component_id}"];
                         if (comp && typeof comp === 'function') {{
                             comp['~isClientComponent'] = true;
-                            comp['~clientComponentId'] = "{}";
+                            comp['~clientComponentId'] = "{component_id}";
                         }}
-                    }})()"#,
-                    request.component_id, request.component_id
-                );
+                    }})()"#
+                        );
 
-                if let Err(e) = renderer
-                    .runtime
-                    .execute_script(
-                        format!("mark_client_{}.js", request.component_id.cow_replace('/', "_")),
-                        mark_script,
-                    )
-                    .await
-                {
-                    tracing::error!(
-                        "Failed to mark {} as client component: {}",
-                        request.component_id,
-                        e
-                    );
-                }
+                        if let Err(e) = renderer
+                            .runtime
+                            .execute_script(
+                                format!("mark_client_{}.js", component_id.cow_replace('/', "_")),
+                                mark_script,
+                            )
+                            .await
+                        {
+                            tracing::error!(
+                                "Failed to mark {} as client component: {}",
+                                component_id,
+                                e
+                            );
+                        }
+                    }
+
+                    Ok(())
+                })
+                .await
+            };
+
+            if let Err(e) = mark_result {
+                tracing::error!(
+                    "Failed post-register client mark for {}: {}",
+                    request.component_id,
+                    e
+                );
             }
 
             Ok(Json(serde_json::json!({
@@ -220,52 +242,57 @@ pub async fn reload_component_from_dist(
         || dist_code.contains("export\n")
         || dist_code.contains("export\r");
 
-    let renderer = state.renderer.lock().await;
+    let dist_path_display = dist_path.display().to_string();
+    let component_id = component_id.to_string();
+    let renderer = Arc::clone(&state.renderer);
 
-    if is_esm {
-        renderer.clear_component_cache(component_id);
+    run_with_renderer(renderer, move |renderer| async move {
+        if is_esm {
+            renderer.clear_component_cache(&component_id);
 
-        if let Err(e) = renderer.runtime.clear_module_loader_caches(component_id).await {
-            tracing::error!("Failed to clear module loader caches for {}: {}", component_id, e);
-        }
+            if let Err(e) = renderer.runtime.clear_module_loader_caches(&component_id).await {
+                tracing::error!("Failed to clear module loader caches for {}: {}", component_id, e);
+            }
 
-        let timestamp =
-            SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis();
+            let timestamp =
+                SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis();
 
-        let hmr_specifier = format!("file:///rari_hmr/server/{component_id}.js?v={timestamp}");
+            let hmr_specifier = format!("file:///rari_hmr/server/{component_id}.js?v={timestamp}");
 
-        renderer.runtime.add_module_to_loader(&hmr_specifier, dist_code.clone()).await.map_err(
-            |e| {
+            renderer
+                .runtime
+                .add_module_to_loader(&hmr_specifier, dist_code.clone())
+                .await
+                .map_err(|e| {
+                    tracing::error!(
+                        component_id = component_id.as_str(),
+                        error = %e,
+                        "Failed to add HMR module to loader"
+                    );
+                    format!("Failed to add HMR module to loader: {e}")
+                })?;
+
+            let module_id = renderer.runtime.load_es_module(&component_id).await.map_err(|e| {
                 tracing::error!(
-                    component_id = component_id,
+                    component_id = component_id.as_str(),
                     error = %e,
-                    "Failed to add HMR module to loader"
+                    "Failed to load ES module during HMR"
                 );
-                format!("Failed to add HMR module to loader: {e}")
-            },
-        )?;
+                format!("Failed to load ES module: {e}")
+            })?;
 
-        let module_id = renderer.runtime.load_es_module(component_id).await.map_err(|e| {
-            tracing::error!(
-                component_id = component_id,
-                error = %e,
-                "Failed to load ES module during HMR"
-            );
-            format!("Failed to load ES module: {e}")
-        })?;
+            renderer.runtime.evaluate_module(module_id).await.map_err(|e| {
+                tracing::error!(
+                    component_id = component_id.as_str(),
+                    module_id = module_id,
+                    error = %e,
+                    "Failed to evaluate module during HMR"
+                );
+                format!("Failed to evaluate module: {e}")
+            })?;
 
-        renderer.runtime.evaluate_module(module_id).await.map_err(|e| {
-            tracing::error!(
-                component_id = component_id,
-                module_id = module_id,
-                error = %e,
-                "Failed to evaluate module during HMR"
-            );
-            format!("Failed to evaluate module: {e}")
-        })?;
-
-        let clear_script = format!(
-            r#"(function() {{
+            let clear_script = format!(
+                r#"(function() {{
                 const componentId = "{component_id}";
 
                 delete globalThis[componentId];
@@ -276,26 +303,26 @@ pub async fn reload_component_from_dist(
 
                 return {{ success: true }};
             }})()"#
-        );
+            );
 
-        renderer
-            .runtime
-            .execute_script(
-                format!("clear_old_{}.js", component_id.cow_replace('/', "_")),
-                clear_script,
-            )
-            .await
-            .map_err(|e| {
-                tracing::error!(
-                    component_id = component_id,
-                    error = %e,
-                    "Failed to clear old component"
-                );
-                format!("Failed to clear old component: {e}")
-            })?;
+            renderer
+                .runtime
+                .execute_script(
+                    format!("clear_old_{}.js", component_id.cow_replace('/', "_")),
+                    clear_script,
+                )
+                .await
+                .map_err(|e| {
+                    tracing::error!(
+                        component_id = component_id.as_str(),
+                        error = %e,
+                        "Failed to clear old component"
+                    );
+                    format!("Failed to clear old component: {e}")
+                })?;
 
-        let registration_script = format!(
-            r#"(async function() {{
+            let registration_script = format!(
+                r#"(async function() {{
                 try {{
                     const moduleNamespace = await import("{hmr_specifier}");
                     const componentId = "{component_id}";
@@ -334,71 +361,70 @@ pub async fn reload_component_from_dist(
                     return {{ success: false, error: error.message }};
                 }}
             }})()"#
-        );
+            );
 
-        renderer
-            .runtime
-            .execute_script(
-                format!("register_esm_{}.js", component_id.cow_replace('/', "_")),
-                registration_script,
-            )
-            .await
-            .map_err(|e| {
-                tracing::error!(
-                    component_id = component_id,
-                    error = %e,
-                    "Failed to register ESM module exports to globalThis"
+            renderer
+                .runtime
+                .execute_script(
+                    format!("register_esm_{}.js", component_id.cow_replace('/', "_")),
+                    registration_script,
+                )
+                .await
+                .map_err(|e| {
+                    tracing::error!(
+                        component_id = component_id.as_str(),
+                        error = %e,
+                        "Failed to register ESM module exports to globalThis"
+                    );
+                    format!("Failed to register ESM module: {e}")
+                })?;
+
+            renderer.clear_script_cache();
+
+            let dependencies = extract_dependencies(&dist_code);
+
+            {
+                let mut registry = renderer.component_registry.lock();
+
+                registry.remove_component(&component_id);
+
+                let _ = registry.register_component(
+                    &component_id,
+                    &dist_code,
+                    dist_code.clone(),
+                    dependencies.into_iter().collect(),
                 );
-                format!("Failed to register ESM module: {e}")
-            })?;
 
-        renderer.clear_script_cache();
+                registry.mark_component_loaded(&component_id);
+                registry.mark_component_initially_loaded(&component_id);
+            }
+        } else {
+            let wrapped_code = wrap_server_action_module(&dist_code, &component_id);
 
-        let dependencies = extract_dependencies(&dist_code);
+            let execution_result = renderer
+                .runtime
+                .execute_script(
+                    format!("hmr_reload_{}.js", component_id.cow_replace('/', "_")),
+                    wrapped_code.clone(),
+                )
+                .await;
 
-        {
-            let mut registry = renderer.component_registry.lock();
-
-            registry.remove_component(component_id);
-
-            let _ = registry.register_component(
-                component_id,
-                &dist_code,
-                dist_code.clone(),
-                dependencies.into_iter().collect(),
-            );
-
-            registry.mark_component_loaded(component_id);
-            registry.mark_component_initially_loaded(component_id);
+            if let Err(e) = execution_result {
+                tracing::error!(
+                    component_id = component_id.as_str(),
+                    dist_path = %dist_path_display,
+                    error = %e,
+                    code_length = dist_code.len(),
+                    "Failed to execute component code during reload. Last known good version will be preserved."
+                );
+                return Err(format!(
+                    "Failed to execute component code: {e}. Last known good version will be preserved."
+                ));
+            }
         }
-    } else {
-        let wrapped_code = wrap_server_action_module(&dist_code, component_id);
 
-        let execution_result = renderer
-            .runtime
-            .execute_script(
-                format!("hmr_reload_{}.js", component_id.cow_replace('/', "_")),
-                wrapped_code.clone(),
-            )
-            .await;
-
-        if let Err(e) = execution_result {
-            tracing::error!(
-                component_id = component_id,
-                dist_path = %dist_path.display(),
-                error = %e,
-                code_length = dist_code.len(),
-                "Failed to execute component code during reload. Last known good version will be preserved."
-            );
-            return Err(format!(
-                "Failed to execute component code: {e}. Last known good version will be preserved."
-            )
-            .into());
-        }
-    }
-
-    let verification_script = format!(
-        r"(function() {{
+        let verification_script = format!(
+            r"(function() {{
             const expectedKey = '{component_id}';
             const exists = typeof globalThis[expectedKey] !== 'undefined';
             const type = typeof globalThis[expectedKey];
@@ -417,65 +443,74 @@ pub async fn reload_component_from_dist(
                 actualKeys: allKeys
             }};
         }})()"
-    );
-
-    let result_json = match renderer
-        .runtime
-        .execute_script(
-            format!("verify_{}.js", component_id.cow_replace('/', "_")),
-            verification_script,
-        )
-        .await
-    {
-        Ok(json) => json,
-        Err(e) => {
-            tracing::error!(
-                component_id = component_id,
-                error = %e,
-                "Failed to execute verification script. Last known good version will be preserved."
-            );
-            return Err(format!(
-                "Failed to verify component reload: {e}. Last known good version will be preserved."
-            )
-            .into());
-        }
-    };
-
-    if let Some(success) = result_json.get("success").and_then(serde_json::Value::as_bool) {
-        if success {
-            Ok(())
-        } else {
-            let actual_keys = result_json
-                .get("actualKeys")
-                .and_then(|v| v.as_array())
-                .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>().join(", "))
-                .unwrap_or_else(|| "unknown".to_string());
-
-            let expected_key =
-                result_json.get("expectedKey").and_then(|v| v.as_str()).unwrap_or(component_id);
-
-            tracing::error!(
-                component_id = component_id,
-                expected_key = expected_key,
-                actual_keys = actual_keys,
-                verification_result = ?result_json,
-                "Component not found in globalThis after reload. Expected key '{}' not found. Available keys: [{}]. Last known good version will be preserved.",
-                expected_key,
-                actual_keys
-            );
-            Err(format!(
-                "Component '{component_id}' not found in globalThis after reload. Expected key '{expected_key}' but found keys: [{actual_keys}]. Last known good version will be preserved."
-            )
-            .into())
-        }
-    } else {
-        tracing::error!(
-            component_id = component_id,
-            verification_result = ?result_json,
-            "Invalid verification result format. Last known good version will be preserved."
         );
-        Err("Invalid verification result format. Last known good version will be preserved.".into())
-    }
+
+        let result_json = match renderer
+            .runtime
+            .execute_script(
+                format!("verify_{}.js", component_id.cow_replace('/', "_")),
+                verification_script,
+            )
+            .await
+        {
+            Ok(json) => json,
+            Err(e) => {
+                tracing::error!(
+                    component_id = component_id.as_str(),
+                    error = %e,
+                    "Failed to execute verification script. Last known good version will be preserved."
+                );
+                return Err(format!(
+                    "Failed to verify component reload: {e}. Last known good version will be preserved."
+                ));
+            }
+        };
+
+        if let Some(success) = result_json.get("success").and_then(serde_json::Value::as_bool) {
+            if success {
+                Ok(())
+            } else {
+                let actual_keys = result_json
+                    .get("actualKeys")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| {
+                        arr.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>().join(", ")
+                    })
+                    .unwrap_or_else(|| "unknown".to_string());
+
+                let expected_key = result_json
+                    .get("expectedKey")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or(&component_id);
+
+                tracing::error!(
+                    component_id = component_id.as_str(),
+                    expected_key = expected_key,
+                    actual_keys = actual_keys,
+                    verification_result = ?result_json,
+                    "Component not found in globalThis after reload. Expected key '{}' not found. Available keys: [{}]. Last known good version will be preserved.",
+                    expected_key,
+                    actual_keys
+                );
+                Err(format!(
+                    "Component '{component_id}' not found in globalThis after reload. Expected key '{expected_key}' but found keys: [{actual_keys}]. Last known good version will be preserved."
+                ))
+            }
+        } else {
+            tracing::error!(
+                component_id = component_id.as_str(),
+                verification_result = ?result_json,
+                "Invalid verification result format. Last known good version will be preserved."
+            );
+            Err(
+                "Invalid verification result format. Last known good version will be preserved."
+                    .to_string(),
+            )
+        }
+    })
+    .await
+    .map_err(|e| -> Box<dyn Error + Send + Sync> { e.to_string().into() })?
+    .map_err(|e| -> Box<dyn Error + Send + Sync> { e.into() })
 }
 
 pub async fn immediate_component_reregistration(
@@ -501,12 +536,22 @@ pub async fn immediate_component_reregistration(
         path.file_stem().and_then(|stem| stem.to_str()).unwrap_or("UnknownComponent");
 
     {
-        let mut renderer = state.renderer.lock().await;
-        renderer.clear_script_cache();
+        let renderer = Arc::clone(&state.renderer);
+        let component_name = component_name.to_string();
+        run_with_renderer_result(renderer, move |mut renderer| async move {
+            renderer.clear_script_cache();
 
-        if let Err(e) = renderer.clear_component_module_cache(component_name).await {
-            tracing::error!("Failed to clear component module cache for {}: {}", component_name, e);
-        }
+            if let Err(e) = renderer.clear_component_module_cache(&component_name).await {
+                tracing::error!(
+                    "Failed to clear component module cache for {}: {}",
+                    component_name,
+                    e
+                );
+            }
+            Ok(())
+        })
+        .await
+        .map_err(|e| -> Box<dyn Error + Send + Sync> { e.to_string().into() })?;
     }
 
     let content = match fs::read_to_string(file_path).await {
@@ -523,49 +568,59 @@ pub async fn immediate_component_reregistration(
         }
     };
 
+    let component_name = component_name.to_string();
+    let renderer = Arc::clone(&state.renderer);
+    let content_for_register = content.clone();
+    let name_for_register = component_name.clone();
+
+    if let Err(e) = run_with_renderer_result(renderer, move |renderer| async move {
+        renderer.register_component(&name_for_register, &content_for_register).await
+    })
+    .await
     {
-        if let Err(e) =
-            state.renderer.lock().await.register_component(component_name, &content).await
-        {
-            tracing::error!(
-                component_name = component_name,
-                error = %e,
-                "Failed to register component directly, preserving last known good version"
-            );
-            Err(format!("Failed to register component: {e}").into())
-        } else {
-            time::sleep(time::Duration::from_millis(100)).await;
-
-            let mut renderer = state.renderer.lock().await;
-            if let Err(e) = renderer.clear_component_module_cache(component_name).await {
-                tracing::error!(
-                    "Failed to clear component module cache for {}: {}",
-                    component_name,
-                    e
-                );
-            }
-            drop(renderer);
-
-            time::sleep(time::Duration::from_millis(200)).await;
-
-            if let Err(e) =
-                state.renderer.lock().await.register_component(component_name, &content).await
-            {
-                tracing::error!(
-                    component_name = component_name,
-                    error = %e,
-                    "Failed to re-register component after cache clear, preserving last known good version"
-                );
-                return Err(
-                    format!("Failed to re-register component after cache clear: {e}").into()
-                );
-            }
-
-            time::sleep(time::Duration::from_millis(200)).await;
-
-            Ok(())
-        }
+        tracing::error!(
+            component_name = component_name.as_str(),
+            error = %e,
+            "Failed to register component directly, preserving last known good version"
+        );
+        return Err(format!("Failed to register component: {e}").into());
     }
+
+    time::sleep(time::Duration::from_millis(100)).await;
+
+    {
+        let renderer = Arc::clone(&state.renderer);
+        let name = component_name.clone();
+        run_with_renderer_result(renderer, move |mut renderer| async move {
+            if let Err(e) = renderer.clear_component_module_cache(&name).await {
+                tracing::error!("Failed to clear component module cache for {}: {}", name, e);
+            }
+            Ok(())
+        })
+        .await
+        .map_err(|e| -> Box<dyn Error + Send + Sync> { e.to_string().into() })?;
+    }
+
+    time::sleep(time::Duration::from_millis(200)).await;
+
+    let renderer = Arc::clone(&state.renderer);
+    let name_for_reregister = component_name.clone();
+    if let Err(e) = run_with_renderer_result(renderer, move |renderer| async move {
+        renderer.register_component(&name_for_reregister, &content).await
+    })
+    .await
+    {
+        tracing::error!(
+            component_name = component_name.as_str(),
+            error = %e,
+            "Failed to re-register component after cache clear, preserving last known good version"
+        );
+        return Err(format!("Failed to re-register component after cache clear: {e}").into());
+    }
+
+    time::sleep(time::Duration::from_millis(200)).await;
+
+    Ok(())
 }
 
 #[axum::debug_handler]

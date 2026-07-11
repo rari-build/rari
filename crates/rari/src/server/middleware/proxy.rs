@@ -3,6 +3,7 @@ use std::{
     error::Error,
     fs as std_fs, mem,
     path::{Path, PathBuf},
+    sync::Arc,
     task::{Context, Poll},
 };
 
@@ -61,13 +62,8 @@ async fn execute_proxy(
     uri: String,
     headers: FxHashMap<String, String>,
 ) -> Result<ProxyResult, Box<dyn Error + Send + Sync>> {
-    let renderer = state.renderer.lock().await;
-    let runtime = &renderer.runtime;
-
     let scheme = headers.get("x-forwarded-proto").cloned().unwrap_or_else(|| "http".to_string());
-
     let host = headers.get("host").cloned().unwrap_or_else(|| "localhost".to_string());
-
     let url = format!("{scheme}://{host}{uri}");
 
     let request_data = serde_json::json!({
@@ -75,6 +71,11 @@ async fn execute_proxy(
         "method": method,
         "headers": headers,
     });
+
+    let runtime = {
+        let renderer = state.renderer.lock().await;
+        Arc::clone(&renderer.runtime)
+    };
 
     let result_json = runtime.execute_function("~rariExecuteProxy", vec![request_data]).await?;
 
@@ -247,9 +248,6 @@ pub async fn initialize_proxy(state: &ServerState) -> Result<(), Box<dyn Error>>
         return Ok(());
     }
 
-    let renderer = state.renderer.lock().await;
-    let runtime = &renderer.runtime;
-
     let Some(rari_pkg_dir) = resolve_rari_package_dir().await else {
         tracing::debug!("Proxy: rari package directory not found in node_modules");
         return Ok(());
@@ -279,6 +277,11 @@ pub async fn initialize_proxy(state: &ServerState) -> Result<(), Box<dyn Error>>
         Err(_) => env::current_dir()?.join(proxy_file_path),
     };
     let proxy_specifier = path_to_file_url(&proxy_absolute);
+
+    let runtime = {
+        let renderer = state.renderer.lock().await;
+        Arc::clone(&renderer.runtime)
+    };
 
     let init_script = format!(
         r#"(async function() {{

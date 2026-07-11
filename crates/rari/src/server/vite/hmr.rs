@@ -3,6 +3,7 @@
 use std::{
     env,
     path::PathBuf,
+    sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -14,6 +15,7 @@ use serde_json::Value;
 use tokio::{fs, time};
 
 use crate::{
+    rendering::base::run_with_renderer_result,
     rsc::extract_dependencies,
     server::{
         ServerState,
@@ -263,20 +265,21 @@ async fn handle_invalidate(
     _file_path: Option<String>,
 ) -> Result<Json<Value>, StatusCode> {
     let result = {
-        let renderer = state.renderer.lock().await;
+        let renderer = Arc::clone(&state.renderer);
+        let component_id = component_id.clone();
+        run_with_renderer_result(renderer, move |renderer| async move {
+            {
+                let mut registry = renderer.component_registry.lock();
+                registry.mark_module_stale(&component_id);
+            }
 
-        {
-            let mut registry = renderer.component_registry.lock();
-            registry.mark_module_stale(&component_id);
-        }
+            renderer.clear_component_cache(&component_id);
 
-        renderer.clear_component_cache(&component_id);
+            if let Err(e) = renderer.runtime.clear_module_loader_caches(&component_id).await {
+                tracing::error!("Failed to clear module loader caches for {}: {}", component_id, e);
+            }
 
-        if let Err(e) = renderer.runtime.clear_module_loader_caches(&component_id).await {
-            tracing::error!("Failed to clear module loader caches for {}: {}", component_id, e);
-        }
-
-        let clear_script = format!(
+            let clear_script = format!(
             r#"
             (function() {{
                 let clearedCount = 0;
@@ -339,13 +342,15 @@ async fn handle_invalidate(
             "#
         );
 
-        renderer
-            .runtime
-            .execute_script(
-                format!("hmr_clear_cache_{}.js", component_id.cow_replace('/', "_")),
-                clear_script,
-            )
-            .await
+            renderer
+                .runtime
+                .execute_script(
+                    format!("hmr_clear_cache_{}.js", component_id.cow_replace('/', "_")),
+                    clear_script,
+                )
+                .await
+        })
+        .await
     };
 
     match result {
@@ -431,8 +436,15 @@ async fn handle_reload(
         }
     };
 
-    let result =
-        { state.renderer.lock().await.register_component(&component_id, &transpiled_code).await };
+    let result = {
+        let renderer = Arc::clone(&state.renderer);
+        let component_id = component_id.clone();
+        let code = transpiled_code.clone();
+        run_with_renderer_result(renderer, move |renderer| async move {
+            renderer.register_component(&component_id, &code).await
+        })
+        .await
+    };
 
     match result {
         Ok(()) => Ok(Json(serde_json::json!({
@@ -517,49 +529,46 @@ async fn handle_reload_component(
         })));
     }
 
-    if let Err(e) = {
-        let renderer = state.renderer.lock().await;
-        renderer.runtime.invalidate_component(&component_id).await
-    } {
-        tracing::error!("Failed to invalidate component {}: {}", component_id, e);
-    }
-
     let load_result = {
-        let renderer = state.renderer.lock().await;
-        renderer.runtime.load_component_code(&component_id, &bundle_code).await
+        let renderer = Arc::clone(&state.renderer);
+        let component_id = component_id.clone();
+        run_with_renderer_result(renderer, move |renderer| async move {
+            if let Err(e) = renderer.runtime.invalidate_component(&component_id).await {
+                tracing::error!("Failed to invalidate component {}: {}", component_id, e);
+            }
+
+            renderer.runtime.load_component_code(&component_id, &bundle_code).await?;
+
+            let mut registry = renderer.component_registry.lock();
+            registry.remove_component(&component_id);
+
+            let dependencies = extract_dependencies(&bundle_code);
+
+            match registry.register_component(
+                &component_id,
+                &bundle_code,
+                bundle_code.clone(),
+                dependencies.into_iter().collect(),
+            ) {
+                Ok(()) => {
+                    registry.mark_component_loaded(&component_id);
+                    registry.mark_component_initially_loaded(&component_id);
+                    Ok(())
+                }
+                Err(e) => {
+                    tracing::error!("Failed to register component {}: {}", component_id, e);
+                    registry.remove_component(&component_id);
+                    Err(rari_error::RariError::internal(format!(
+                        "Failed to register component: {e}"
+                    )))
+                }
+            }
+        })
+        .await
     };
 
     match load_result {
         Ok(()) => {
-            {
-                let renderer = state.renderer.lock().await;
-                let mut registry = renderer.component_registry.lock();
-
-                registry.remove_component(&component_id);
-
-                let dependencies = extract_dependencies(&bundle_code);
-
-                match registry.register_component(
-                    &component_id,
-                    &bundle_code,
-                    bundle_code.clone(),
-                    dependencies.into_iter().collect(),
-                ) {
-                    Ok(()) => {
-                        registry.mark_component_loaded(&component_id);
-                        registry.mark_component_initially_loaded(&component_id);
-                    }
-                    Err(e) => {
-                        tracing::error!("Failed to register component {}: {}", component_id, e);
-                        registry.remove_component(&component_id);
-                        return Ok(Json(serde_json::json!({
-                            "success": false,
-                            "message": format!("Failed to register component: {}", e)
-                        })));
-                    }
-                }
-            }
-
             invalidate_component_cache(&state.response_cache, &component_id).await;
 
             Ok(Json(serde_json::json!({
