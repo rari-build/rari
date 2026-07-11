@@ -1,41 +1,41 @@
 pub const LOADER_STUB_TEMPLATE: &str = r"
 // Auto-generated loader stub for {component_id}
 
-if (typeof globalThis.registerModule === 'function') {{
-    globalThis.registerModule({{}}, '{component_id}');
-}}
+if (typeof globalThis.registerModule === 'function') {
+    globalThis.registerModule({}, '{component_id}');
+}
 
-if (typeof globalThis['~rsc'] === 'undefined') {{
-    globalThis['~rsc'] = {{}};
-}}
+if (typeof globalThis['~rsc'] === 'undefined') {
+    globalThis['~rsc'] = {};
+}
 
-if (typeof globalThis['~rsc'].functions === 'undefined') {{
-    globalThis['~rsc'].functions = {{}};
-}}
+if (typeof globalThis['~rsc'].functions === 'undefined') {
+    globalThis['~rsc'].functions = {};
+}
 
-if (typeof globalThis['~rsc'].modules === 'undefined') {{
-    globalThis['~rsc'].modules = {{}};
-}}
+if (typeof globalThis['~rsc'].modules === 'undefined') {
+    globalThis['~rsc'].modules = {};
+}
 
-globalThis['~rsc'].modules['{component_id}'] = {{}};
+globalThis['~rsc'].modules['{component_id}'] = {};
 
-export default {{}};
+export default {};
 ";
 
 pub const FALLBACK_MODULE_TEMPLATE: &str = r"
 // Dynamic fallback module for: {module_name}
 
-if (typeof globalThis['~rsc'] === 'undefined') {{
-    globalThis['~rsc'] = {{}};
-}}
+if (typeof globalThis['~rsc'] === 'undefined') {
+    globalThis['~rsc'] = {};
+}
 
-if (typeof globalThis['~rsc'].modules === 'undefined') {{
-    globalThis['~rsc'].modules = {{}};
-}}
+if (typeof globalThis['~rsc'].modules === 'undefined') {
+    globalThis['~rsc'].modules = {};
+}
 
-globalThis['~rsc'].modules['{module_name}'] = {{}};
+globalThis['~rsc'].modules['{module_name}'] = {};
 
-export default {{}};
+export default {};
 ";
 
 pub fn create_generic_module_stub(module_path: &str) -> String {
