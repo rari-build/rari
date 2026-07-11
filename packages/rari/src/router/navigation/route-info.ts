@@ -1,4 +1,5 @@
 import type { RouteInfoError, RouteInfoRequest, RouteInfoResponse } from './route-info-types'
+import { getRariWindowBag } from '@/runtime/shared/rari-global'
 
 class RouteInfoCache {
   private cache = new Map<string, RouteInfoResponse>()
@@ -80,8 +81,6 @@ class RouteInfoCache {
 export const routeInfoCache = new RouteInfoCache()
 
 if (typeof window !== 'undefined') {
-  const globalRari = (window as any)['~rari'] || {}
-  if (!(window as any)['~rari'])
-    (window as any)['~rari'] = globalRari
-  globalRari.routeInfoCache = routeInfoCache
+  const windowRari = getRariWindowBag()!
+  windowRari.routeInfoCache = routeInfoCache
 }

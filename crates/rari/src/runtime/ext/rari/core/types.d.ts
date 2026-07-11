@@ -5,8 +5,6 @@ declare global {
     '~rsc'?: {
       modules?: Record<string, { default?: unknown, [key: string]: unknown }>
       functions?: Record<string, unknown>
-      keyCounter?: number
-      renderGeneration?: number
       renderResult?: unknown
     }
     '~render'?: {
@@ -14,17 +12,10 @@ declare global {
       currentComponent?: string
     }
     '~suspense'?: {
-      streaming?: boolean
-      promises?: Record<string, unknown>
-      boundaryProps?: Record<string, unknown>
       discoveredBoundaries?: unknown[]
       pendingPromises?: unknown[]
-      pendingPromisesById?: Record<string, unknown>
+      promises?: Record<string, unknown>
       currentBoundaryId?: string | null
-      renderGeneration?: number
-      SAFE_PROPS?: Set<string>
-      isSafeProp?: (key: string) => boolean
-      safeSerializeElement?: (element: unknown) => unknown
     }
     '~reactServer'?: {
       renderToReadableStream: (element: unknown, options?: { onError?: (error: unknown) => void }) => Promise<ReadableStream>
@@ -71,7 +62,7 @@ declare global {
     'isServerFunctionRegistered'?: (functionName: string) => boolean
     'registerModule'?: (moduleKeyOrModule: string | any, moduleNameOrMainExport: string | any, exportedFunctions?: Record<string, (...args: any[]) => any>) => { success: boolean, exportCount: number }
     'executeServerFunction'?: (functionName: string, args?: any[]) => Promise<any>
-    'createEnhancedServerFunctionPromise'?: (functionName: string, args?: any[], options?: { componentId?: string }) => Promise<any>
+    'createEnhancedServerFunctionPromise'?: (functionName: string, args?: any[]) => Promise<any>
     'discoverModuleExports'?: (code: string) => string[]
     'createServerFunctionPromise'?: (functionName: string, args?: any[]) => Promise<any>
     'createLoaderStub'?: (componentId: string) => string
@@ -89,7 +80,7 @@ declare global {
     'ServerFunctions'?: {
       resolve: (componentId?: string) => Promise<unknown>
       execute: (functionName: string, args?: any[]) => Promise<any>
-      createPromise: (functionName: string, args?: any[], options?: { componentId?: string }) => Promise<any>
+      createPromise: (functionName: string, args?: any[]) => Promise<any>
       isRegistered: (functionName: string) => boolean
       clear: () => void
     }

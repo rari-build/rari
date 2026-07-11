@@ -1,18 +1,12 @@
 /* eslint-disable node/prefer-global/process */
-import type { GlobalWithRari, WindowWithRari } from '../shared/types'
 import { installRscChunkLoader, requireClientComponent } from '../shared/get-client-component'
+import { getClientComponentNames, getClientComponentPaths, getClientComponents, getRariGlobal, getRariWindowBag } from '../shared/rari-global'
 
-if (typeof (globalThis as unknown as GlobalWithRari)['~rari'] === 'undefined')
-  (globalThis as unknown as GlobalWithRari)['~rari'] = {}
+getRariGlobal().isDevelopment = process.env.NODE_ENV !== 'production'
 
-;(globalThis as unknown as GlobalWithRari)['~rari'].isDevelopment = process.env.NODE_ENV !== 'production'
-
-if (typeof (globalThis as unknown as GlobalWithRari)['~clientComponents'] === 'undefined')
-  (globalThis as unknown as GlobalWithRari)['~clientComponents'] = {}
-if (typeof (globalThis as unknown as GlobalWithRari)['~clientComponentNames'] === 'undefined')
-  (globalThis as unknown as GlobalWithRari)['~clientComponentNames'] = {}
-if (typeof (globalThis as unknown as GlobalWithRari)['~clientComponentPaths'] === 'undefined')
-  (globalThis as unknown as GlobalWithRari)['~clientComponentPaths'] = {}
+getClientComponents()
+getClientComponentNames()
+getClientComponentPaths()
 
 if (typeof window !== 'undefined') {
   installRscChunkLoader()
@@ -20,13 +14,11 @@ if (typeof window !== 'undefined') {
 }
 
 if (typeof window !== 'undefined') {
-  if (!(window as unknown as WindowWithRari)['~rari'])
-    (window as unknown as WindowWithRari)['~rari'] = (globalThis as unknown as GlobalWithRari)['~rari']
-
-  if (!(window as unknown as WindowWithRari)['~rari'].streaming)
-    (window as unknown as WindowWithRari)['~rari'].streaming = { bufferedRows: [] }
-  else if (!(window as unknown as WindowWithRari)['~rari'].streaming!.bufferedRows)
-    (window as unknown as WindowWithRari)['~rari'].streaming!.bufferedRows = []
+  const windowRari = getRariWindowBag()!
+  if (!windowRari.streaming)
+    windowRari.streaming = { bufferedRows: [] }
+  else if (!windowRari.streaming.bufferedRows)
+    windowRari.streaming.bufferedRows = []
 }
 
 if (import.meta.hot) {
@@ -43,7 +35,7 @@ if (import.meta.hot) {
     if (!filePath)
       return false
     try {
-      return !!(globalThis as unknown as GlobalWithRari)['~rari'].serverComponents?.has(filePath)
+      return !!getRariGlobal().serverComponents?.has(filePath)
     }
     catch {
       return false
@@ -72,16 +64,18 @@ if (import.meta.hot) {
 
   registerHandler('rari:register-server-component', (data) => {
     if (data?.filePath) {
-      ;(globalThis as unknown as GlobalWithRari)['~rari'].serverComponents = (globalThis as unknown as GlobalWithRari)['~rari'].serverComponents || new Set()
-      ;(globalThis as unknown as GlobalWithRari)['~rari'].serverComponents!.add(data.filePath)
+      const rari = getRariGlobal()
+      rari.serverComponents = rari.serverComponents || new Set()
+      rari.serverComponents.add(data.filePath)
     }
   })
 
   registerHandler('rari:server-components-registry', (data) => {
     if (data?.serverComponents && Array.isArray(data.serverComponents)) {
-      ;(globalThis as unknown as GlobalWithRari)['~rari'].serverComponents = (globalThis as unknown as GlobalWithRari)['~rari'].serverComponents || new Set()
+      const rari = getRariGlobal()
+      rari.serverComponents = rari.serverComponents || new Set()
       data.serverComponents.forEach((path: string) => {
-        ;(globalThis as unknown as GlobalWithRari)['~rari'].serverComponents?.add(path)
+        rari.serverComponents?.add(path)
       })
     }
   })
@@ -150,8 +144,9 @@ if (import.meta.hot) {
         }
       }
 
-      if (data.manifestUpdated && (window as unknown as WindowWithRari)['~rari']?.routeInfoCache)
-        (window as unknown as WindowWithRari)['~rari'].routeInfoCache!.clear()
+      const windowRari = getRariWindowBag()
+      if (data.manifestUpdated && windowRari?.routeInfoCache)
+        windowRari.routeInfoCache.clear()
 
       window.dispatchEvent(new CustomEvent('rari:app-router-rerender', {
         detail: {

@@ -60,7 +60,7 @@ export interface GlobalWithRari {
       streamingBridgeInstalled?: boolean
     }
     serverComponents?: Set<string>
-    routeInfoCache?: Map<string, any>
+    routeInfoCache?: { clear: () => void, invalidate?: (path: string) => void }
     cookies?: () => CookieStore
     headers?: () => ReadonlyHeaders
     useCacheDynamicDepth?: number

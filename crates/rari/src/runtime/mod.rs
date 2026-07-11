@@ -375,11 +375,6 @@ impl JsExecutionRuntime {
                     deleted = true;
                 }}
 
-                if (globalThis['~rsc']?.components?.[componentId]) {{
-                    delete globalThis['~rsc'].components[componentId];
-                    deleted = true;
-                }}
-
                 if (globalThis.RscModuleManager && globalThis.RscModuleManager.unregister) {{
                     try {{
                         globalThis.RscModuleManager.unregister(componentId);

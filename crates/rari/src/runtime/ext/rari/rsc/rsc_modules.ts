@@ -1,17 +1,7 @@
 /// <reference path="../core/types.d.ts" />
 
-interface ServerFunctionPromise extends Promise<unknown> {
-  '~rsc_function_name'?: string
-  '~rsc_function_args'?: unknown[]
-  '~rsc_cache_key'?: string
-  '~rsc_promise_id'?: string
-  '~rsc_component_id'?: string
-}
-
 interface RscModule {
   [key: string]: unknown
-  '~isLoaderStub'?: boolean
-  '~awaitingRegistration'?: boolean
 }
 
 interface RegisterResult {
@@ -21,7 +11,6 @@ interface RegisterResult {
 
 (function initializeRscModules() {
   const EXPORT_FUNCTION_REGEX = /^export\s+(?:async\s+)?function\s+(\w+)/gm
-  const NON_ALPHANUMERIC_REGEX = /[^a-z0-9]/gi
 
   if (!g['~rsc'])
     g['~rsc'] = {}
@@ -203,33 +192,16 @@ interface RegisterResult {
   g.createServerFunctionPromise = function createServerFunctionPromise(
     functionName: string,
     args: unknown[] = [],
-  ): ServerFunctionPromise {
-    let cacheKey = `${functionName}_unknown`
-    let promiseId = `server_fn_${functionName}_unknown`
+  ): Promise<unknown> {
     let argsJson = 'unknown'
-    let promise: ServerFunctionPromise
+    let promise: Promise<unknown> & { toString?: () => string }
     try {
       argsJson = JSON.stringify(args)
-      cacheKey = `${functionName}_${argsJson}`
-
-      const encoder = new TextEncoder()
-      const data = encoder.encode(argsJson)
-      let binary = ''
-      for (let i = 0; i < data.length; i++) {
-        binary += String.fromCharCode(data[i])
-      }
-      promiseId = `server_fn_${functionName}_${btoa(binary)
-        .replace(NON_ALPHANUMERIC_REGEX, '')
-        .slice(0, 10)}`
 
       const serverFunction = g.getServerFunction?.(functionName)
       if (!serverFunction) {
         const error = new Error(`Server function '${functionName}' not found`)
-        promise = Promise.reject(error) as ServerFunctionPromise
-        promise['~rsc_function_name'] = functionName
-        promise['~rsc_function_args'] = args
-        promise['~rsc_cache_key'] = cacheKey
-        promise['~rsc_promise_id'] = promiseId
+        promise = Promise.reject(error)
         promise.toString = () =>
           `ServerFunctionPromise(${functionName}(${argsJson}))`
         return promise
@@ -238,18 +210,14 @@ interface RegisterResult {
       const result = serverFunction(...args)
 
       if (result && typeof result.then === 'function')
-        promise = result as ServerFunctionPromise
+        promise = result as Promise<unknown>
       else
-        promise = Promise.resolve(result) as ServerFunctionPromise
+        promise = Promise.resolve(result)
     }
     catch (error) {
-      promise = Promise.reject(error) as ServerFunctionPromise
+      promise = Promise.reject(error)
     }
 
-    promise['~rsc_function_name'] = functionName
-    promise['~rsc_function_args'] = args
-    promise['~rsc_cache_key'] = cacheKey
-    promise['~rsc_promise_id'] = promiseId
     promise.toString = () =>
       `ServerFunctionPromise(${functionName}(${argsJson}))`
 
@@ -272,16 +240,9 @@ if (typeof globalThis['~rsc'].modules === 'undefined') {
     globalThis['~rsc'].modules = {};
 }
 
-globalThis['~rsc'].modules['${componentId}'] = {
-    '~isLoaderStub': true,
-    '~awaitingRegistration': true
-};
+globalThis['~rsc'].modules['${componentId}'] = {};
 
-export default {
-    '~isLoaderStub': true,
-    '~componentId': "${componentId}",
-    '~awaitingRegistration': true
-};
+export default {};
 `
   }
 
@@ -289,11 +250,7 @@ export default {
     return `
 // Auto-generated stub for component: ${componentName}
 
-const moduleExports = {
-    '~isStub': true,
-    '~componentName': "${componentName}",
-    '~awaitingRegistration': true
-};
+const moduleExports = {};
 
 if (typeof globalThis.registerModule === 'function') {
     globalThis.registerModule(moduleExports, '${componentName}');

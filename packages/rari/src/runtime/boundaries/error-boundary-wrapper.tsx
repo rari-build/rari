@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react'
 import * as React from 'react'
 import { Component } from 'react'
+import { getClientComponents } from '@/runtime/shared/rari-global'
 import { clearTimer } from '@/shared/utils/timer'
 
 interface ErrorBoundaryWrapperProps {
@@ -47,8 +48,7 @@ export class ErrorBoundaryWrapper extends Component<
     const errorComponentId = this.props.errorComponentId
 
     if (errorComponentId && typeof window !== 'undefined') {
-      const win = window as any
-      const componentInfo = win['~clientComponents']?.[errorComponentId]
+      const componentInfo = getClientComponents()[errorComponentId]
 
       if (componentInfo) {
         const hasComponent = componentInfo.component && typeof componentInfo.component === 'function'

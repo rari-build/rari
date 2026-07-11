@@ -86,7 +86,6 @@ impl RouteComposer {
                 if (!globalThis['~suspense']) globalThis['~suspense'] = {{}};
                 globalThis['~suspense'].discoveredBoundaries = [];
                 globalThis['~suspense'].pendingPromises = [];
-                globalThis['~suspense'].pendingPromisesByBoundary = {{}};
                 globalThis['~suspense'].promises = {{}};
                 globalThis['~suspense'].currentBoundaryId = null;
 

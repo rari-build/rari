@@ -46,7 +46,8 @@ pub const PROMISE_SETUP_SCRIPT: &str = r#"
         const promise = globalThis['~promises'].currentObject;
         if (!promise || typeof promise.then !== 'function') {
             globalThis['~promises'].resolvedValue = {
-                '~error': "Not a valid promise",
+                '~error': true,
+                message: "Not a valid promise",
                 received: typeof promise,
                 promiseToString: String(promise)
             };
@@ -86,11 +87,7 @@ pub const PROMISE_EXTRACT_SCRIPT: &str = r#"
         return globalThis['~promises'].resolvedValue;
     } else {
         return {
-            '~timeoutError': "Promise did not resolve in time",
-            '~debugInfo': {
-                completion_flag: globalThis['~promises'].resolutionComplete,
-                resolved_value: globalThis['~promises'].resolvedValue
-            }
+            '~timeoutError': "Promise did not resolve in time"
         };
     }
 })()

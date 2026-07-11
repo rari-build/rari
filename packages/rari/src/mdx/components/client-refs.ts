@@ -1,4 +1,5 @@
 import { registerClientReference } from '@/runtime/rsc/references'
+import { getClientComponents } from '@/runtime/shared/rari-global'
 import { EXTENSION_REGEX } from '@/shared/regex-constants'
 
 interface MDXClientComponentConfig {
@@ -15,10 +16,7 @@ export function createMDXClientReference(
   const key = `${id}#${exportName}`
 
   if (typeof globalThis !== 'undefined') {
-    const globalAny = globalThis as any
-    if (!globalAny['~clientComponents'])
-      globalAny['~clientComponents'] = {}
-
+    const clientComponents = getClientComponents()
     const componentId = id.replace(EXTENSION_REGEX, '').split('/').pop() || exportName
 
     const componentEntry = {
@@ -29,9 +27,9 @@ export function createMDXClientReference(
       registered: true,
     }
 
-    globalAny['~clientComponents'][key] = componentEntry
-    globalAny['~clientComponents'][componentId] = componentEntry
-    globalAny['~clientComponents'][id] = componentEntry
+    clientComponents[key] = componentEntry
+    clientComponents[componentId] = componentEntry
+    clientComponents[id] = componentEntry
   }
 
   function clientProxy(): never {
