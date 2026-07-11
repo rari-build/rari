@@ -1108,12 +1108,11 @@ if (import.meta.hot) {
           clientTransformedCode = `// HMR acceptance for server component
 if (import.meta.hot) {
   import.meta.hot.accept();
-}
-
-if (typeof globalThis !== 'undefined') {
-  if (!globalThis['~rari']) globalThis['~rari'] = {};
-  globalThis['~rari'].serverComponents = globalThis['~rari'].serverComponents || new Set();
-  globalThis['~rari'].serverComponents.add(${JSON.stringify(id)});
+  if (typeof globalThis !== 'undefined') {
+    if (!globalThis['~rari']) globalThis['~rari'] = {};
+    globalThis['~rari'].serverComponents = globalThis['~rari'].serverComponents || new Set();
+    globalThis['~rari'].serverComponents.add(${JSON.stringify(id)});
+  }
 }
 
 ${clientTransformedCode}`
