@@ -265,8 +265,16 @@ async fn run_non_interactive(
             let package_path = unit.paths()[0];
             changelog::generate(&tag, unit_name, package_path).await?;
             if let Some((_, body)) = &manual_notes {
-                changelog::inject_manual_notes(package_path, &new_version, body).await?;
-                println!("  {} Injected manual notes into CHANGELOG.md", "✓".green());
+                if changelog::inject_manual_notes(package_path, &tag, &new_version, body).await? {
+                    println!("  {} Injected manual notes into CHANGELOG.md", "✓".green());
+                } else {
+                    let expected =
+                        changelog::expected_changelog_headings(&tag, &new_version).join("` or `");
+                    println!(
+                        "  {} Could not inject manual notes: missing heading `{expected}` in CHANGELOG.md",
+                        "⚠".yellow()
+                    );
+                }
             }
             println!("  {} Generated changelog", "✓".green());
         } else {
@@ -353,7 +361,7 @@ async fn run_non_interactive(
                 notes_file.as_deref(),
             )
             .await
-            .unwrap_or_else(|_| "See CHANGELOG.md for details.".to_string()),
+            .unwrap_or_else(|_| changelog::CHANGELOG_FALLBACK_NOTES.to_string()),
             previous_tag,
         });
     }

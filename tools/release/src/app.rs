@@ -319,9 +319,20 @@ impl App {
                             let package_path = unit.paths()[0];
                             changelog::generate(&tag, unit_name, package_path).await?;
                             if let Some((_, body)) = &manual_notes {
-                                changelog::inject_manual_notes(package_path, version, body).await?;
-                                self.status_messages
-                                    .push("* Injected manual notes into CHANGELOG.md".to_string());
+                                if changelog::inject_manual_notes(package_path, &tag, version, body)
+                                    .await?
+                                {
+                                    self.status_messages.push(
+                                        "* Injected manual notes into CHANGELOG.md".to_string(),
+                                    );
+                                } else {
+                                    let expected =
+                                        changelog::expected_changelog_headings(&tag, version)
+                                            .join("` or `");
+                                    self.status_messages.push(format!(
+                                        "⚠ Could not inject manual notes: missing heading `{expected}` in CHANGELOG.md"
+                                    ));
+                                }
                             }
                         }
                         self.status_messages.push("* Generated changelog".to_string());
@@ -414,7 +425,7 @@ impl App {
                         self.notes_file.as_deref(),
                     )
                     .await
-                    .unwrap_or_else(|_| "See CHANGELOG.md for details.".to_string());
+                    .unwrap_or_else(|_| changelog::CHANGELOG_FALLBACK_NOTES.to_string());
                     self.released_packages.push(ReleasedPackage {
                         name: unit.name().to_string(),
                         version: version.clone(),
