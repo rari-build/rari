@@ -5,6 +5,8 @@ use tokio::{fs, process::Command};
 
 const NOTES_DIR: &str = ".github/release-notes";
 
+pub const CHANGELOG_FALLBACK_NOTES: &str = "See CHANGELOG.md for details.";
+
 pub async fn generate(tag: &str, package_name: &str, package_path: &Path) -> Result<()> {
     let changelog_path = package_path.join("CHANGELOG.md");
 
@@ -91,27 +93,32 @@ pub fn compose_release_notes(manual: Option<&str>, auto: &str) -> String {
     let auto = auto.trim();
 
     match manual {
-        Some(manual) if auto.is_empty() || auto == "See CHANGELOG.md for details." => {
-            manual.to_string()
-        }
+        Some(manual) if auto.is_empty() || auto == CHANGELOG_FALLBACK_NOTES => manual.to_string(),
         Some(manual) => format!("{manual}\n\n---\n\n{auto}"),
         None => auto.to_string(),
     }
 }
 
 /// Insert manual notes under the newly generated version heading in CHANGELOG.md.
-pub async fn inject_manual_notes(package_path: &Path, version: &str, manual: &str) -> Result<()> {
+///
+/// Returns `Ok(true)` when notes were injected, or `Ok(false)` when no matching
+/// heading was found (caller should warn; this is not treated as a hard error).
+pub async fn inject_manual_notes(
+    package_path: &Path,
+    tag: &str,
+    version: &str,
+    manual: &str,
+) -> Result<bool> {
     let manual = manual.trim();
     if manual.is_empty() {
-        return Ok(());
+        return Ok(true);
     }
 
     let path = package_path.join("CHANGELOG.md");
     let content = fs::read_to_string(&path).await?;
-    let marker = format!("## [{version}]");
 
-    let Some(idx) = content.find(&marker) else {
-        return Ok(());
+    let Some(idx) = find_changelog_heading(&content, tag, version) else {
+        return Ok(false);
     };
 
     let line_end = content[idx..].find('\n').map_or(content.len(), |i| idx + i + 1);
@@ -127,7 +134,27 @@ pub async fn inject_manual_notes(package_path: &Path, version: &str, manual: &st
     new_content.push_str(&content[insert_at..]);
     fs::write(&path, new_content).await?;
 
-    Ok(())
+    Ok(true)
+}
+
+/// Headings `inject_manual_notes` looks for, for warning messages.
+pub fn expected_changelog_headings(tag: &str, version: &str) -> Vec<String> {
+    let cliff_heading = format!("## [{}]", tag.trim_start_matches('v'));
+    let version_heading = format!("## [{version}]");
+    if cliff_heading == version_heading {
+        vec![cliff_heading]
+    } else {
+        vec![cliff_heading, version_heading]
+    }
+}
+
+fn find_changelog_heading(content: &str, tag: &str, version: &str) -> Option<usize> {
+    let cliff_heading = format!("## [{}]", tag.trim_start_matches('v'));
+    let version_heading = format!("## [{version}]");
+
+    content.find(&cliff_heading).or_else(|| {
+        if cliff_heading == version_heading { None } else { content.find(&version_heading) }
+    })
 }
 
 pub async fn generate_release_notes(
@@ -219,5 +246,5 @@ async fn generate_auto_release_notes(
     }
 
     let _ = tag;
-    Ok("See CHANGELOG.md for details.".to_string())
+    Ok(CHANGELOG_FALLBACK_NOTES.to_string())
 }
