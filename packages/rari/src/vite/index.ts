@@ -1756,8 +1756,22 @@ ${clientTransformedCode}`
         }
 
         if (rustServerProcess) {
-          rustServerProcess.kill('SIGTERM')
+          const proc = rustServerProcess
           rustServerProcess = null
+          rustServerReady = false
+
+          let exited = false
+          const forceKillTimer = setTimeout(() => {
+            if (!exited)
+              proc.kill('SIGKILL')
+          }, 5000)
+          forceKillTimer.unref?.()
+          proc.once('exit', () => {
+            exited = true
+            clearTimeout(forceKillTimer)
+          })
+          proc.kill('SIGTERM')
+          return
         }
 
         rustServerReady = false

@@ -440,13 +440,15 @@ async function startRustServer(): Promise<void> {
 
   const args = ['--mode', mode, '--port', port, '--host', host]
 
+  // Detach only for interactive terminals so Ctrl+C hits Node first (then we
+  // SIGTERM the Rust server). Under Playwright/CI (no TTY), staying in the
+  // process group prevents orphaned rari processes after webServer teardown.
+  const detachRustServer = process.platform !== 'win32' && Boolean(process.stdin.isTTY)
+
   const rustServer = spawn(binaryPath, args, {
     stdio: 'inherit',
     cwd: process.cwd(),
-    // Keep the Rust server out of the terminal's process group so Ctrl+C
-    // only reaches this Node process. Deno intercepts SIGINT and won't shut
-    // down cleanly, but it does handle SIGTERM.
-    detached: process.platform !== 'win32',
+    detached: detachRustServer,
     env: {
       ...process.env,
       RUST_LOG: process.env.RUST_LOG || 'error',
@@ -471,6 +473,14 @@ async function startRustServer(): Promise<void> {
 
   process.on('SIGINT', shutdown)
   process.on('SIGTERM', shutdown)
+  process.on('exit', () => {
+    try {
+      rustServer.kill('SIGKILL')
+    }
+    catch {
+      // already dead
+    }
+  })
 
   rustServer.on('error', (error: Error) => {
     logError(`Failed to start rari server: ${error.message}`)
