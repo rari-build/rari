@@ -12,7 +12,8 @@
 File naming (checked in order):
   1. --notes-file / RELEASE_NOTES_FILE
   2. .github/release-notes/<tag>.md
-     e.g. rari@0.15.0.md, v0.15.0.md, use-cache-binaries@0.15.0.md
+     `/` in scoped tags is replaced with `-` for the filename
+     e.g. rari@0.15.0.md, v0.15.0.md, @rari-use-cache@0.15.0.md
   3. .github/release-notes/<version>.md
      e.g. 0.15.0.md (shared across release units)
 

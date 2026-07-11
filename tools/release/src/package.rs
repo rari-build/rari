@@ -83,6 +83,16 @@ pub struct ReleasedPackage {
     pub previous_tag: Option<String>,
 }
 
+pub fn release_tag(unit_name: &str, version: &str) -> String {
+    if unit_name == "rari-binaries" {
+        format!("v{version}")
+    } else if unit_name == "@rari/use-cache-binaries" {
+        format!("use-cache-binaries@{version}")
+    } else {
+        format!("{unit_name}@{version}")
+    }
+}
+
 impl Package {
     pub async fn load(name: &str, path: &str) -> Result<Self> {
         let pkg_path = PathBuf::from(path);

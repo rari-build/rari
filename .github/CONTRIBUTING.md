@@ -450,7 +450,7 @@ cp .github/release-notes/_template.md .github/release-notes/0.15.0.md
 just release
 ```
 
-Lookup order: `--notes-file` / `RELEASE_NOTES_FILE` → `<tag>.md` → `<version>.md`.
+Lookup order: `--notes-file` / `RELEASE_NOTES_FILE` → `<tag>.md` (scoped `/` → `-`) → `<version>.md`.
 
 Manual notes are prepended to the GitHub release body (above the auto-generated commit list) and injected into `CHANGELOG.md` under the new version heading. Patch releases can skip this and stay cliff-only.
 

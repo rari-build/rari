@@ -22,7 +22,9 @@ use crossterm::{
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
 
-use crate::package::{Package, PackageGroup, ReleaseType, ReleaseUnit, ReleasedPackage};
+use crate::package::{
+    Package, PackageGroup, ReleaseType, ReleaseUnit, ReleasedPackage, release_tag,
+};
 
 #[derive(Parser, Debug)]
 #[command(name = "release")]
@@ -233,13 +235,7 @@ async fn run_non_interactive(
 
         let generates_changelog =
             matches!(unit_name, "rari" | "create-rari-app" | "@rari/use-cache");
-        let tag = if unit_name == "rari-binaries" {
-            format!("v{new_version}")
-        } else if unit_name == "@rari/use-cache-binaries" {
-            format!("use-cache-binaries@{new_version}")
-        } else {
-            format!("{unit_name}@{new_version}")
-        };
+        let tag = release_tag(unit_name, &new_version);
         let notes_override = notes_file.as_deref();
         let manual_notes = changelog::load_manual_notes(&tag, &new_version, notes_override).await?;
 
