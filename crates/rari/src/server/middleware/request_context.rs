@@ -273,6 +273,7 @@ impl RequestContext {
             let mut guard = fetch_lock.lock().await;
 
             if let Some(result) = guard.as_ref() {
+                cleanup.disarm();
                 let mut result = result.clone();
                 if let Ok(ref mut cached) = result {
                     cached.tags = Self::merge_and_sort_tags(mem::take(&mut cached.tags), tags);
@@ -280,7 +281,6 @@ impl RequestContext {
                     let mut cache = fetch_cache.lock();
                     cache.put(cache_key_for_task, cached.clone());
                 }
-                cleanup.disarm();
                 return result;
             }
 
