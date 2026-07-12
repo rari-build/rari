@@ -301,7 +301,7 @@ impl RequestContext {
             fetch_result
         })
         .await
-        .map_err(|e| RariError::network(format!("fetch singleflight join failed: {e}")))?
+        .map_err(|e| RariError::internal(format!("fetch singleflight join failed: {e}")))?
     }
 
     async fn perform_fetch_standalone(
