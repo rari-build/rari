@@ -20,7 +20,14 @@ use serde::{Deserialize, Serialize};
 use tokio::fs;
 use tower::{Layer, Service};
 
-use crate::{server::core::types::ServerState, utils::path::path_to_file_url};
+use crate::{
+    runtime::JsExecutionRuntime, server::core::types::ServerState, utils::path::path_to_file_url,
+};
+
+async fn clone_renderer_runtime(state: &ServerState) -> Arc<JsExecutionRuntime> {
+    let renderer = state.renderer.lock().await;
+    Arc::clone(&renderer.runtime)
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ProxyResult {
@@ -72,10 +79,7 @@ async fn execute_proxy(
         "headers": headers,
     });
 
-    let runtime = {
-        let renderer = state.renderer.lock().await;
-        Arc::clone(&renderer.runtime)
-    };
+    let runtime = clone_renderer_runtime(state).await;
 
     let result_json = runtime.execute_function("~rariExecuteProxy", vec![request_data]).await?;
 
@@ -278,10 +282,7 @@ pub async fn initialize_proxy(state: &ServerState) -> Result<(), Box<dyn Error>>
     };
     let proxy_specifier = path_to_file_url(&proxy_absolute);
 
-    let runtime = {
-        let renderer = state.renderer.lock().await;
-        Arc::clone(&renderer.runtime)
-    };
+    let runtime = clone_renderer_runtime(state).await;
 
     let init_script = format!(
         r#"(async function() {{

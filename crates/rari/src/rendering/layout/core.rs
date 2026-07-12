@@ -303,36 +303,7 @@ impl LayoutRenderer {
         context: &LayoutRenderContext,
         request_context: Option<Arc<RequestContext>>,
     ) -> Result<String, RariError> {
-        let loading_enabled = Config::get().map(|c| c.loading.enabled).unwrap_or(true);
-        let loading_component_id = if loading_enabled {
-            route_match.loading.as_ref().map(|e| {
-                e.component_id.clone().unwrap_or_else(|| utils::create_component_id(&e.file_path))
-            })
-        } else {
-            None
-        };
-
-        let composition_script = self.build_composition_script(
-            route_match,
-            context,
-            loading_component_id.as_deref(),
-            loading_component_id.is_some(),
-            false,
-        )?;
-
-        let renderer = Arc::clone(&self.renderer);
-        run_with_renderer_result(renderer, move |renderer| async move {
-            let render_operation = async {
-                Self::execute_composition_and_serialize(&renderer, composition_script).await
-            };
-
-            if let Some(ctx) = request_context {
-                renderer.runtime.execute_with_request_context(ctx, render_operation).await
-            } else {
-                render_operation.await
-            }
-        })
-        .await
+        self.render_route_with_mode_internal(route_match, context, request_context).await
     }
 
     async fn render_route_with_mode_internal(

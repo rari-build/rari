@@ -82,6 +82,30 @@ static GLOBAL_FETCH_CACHE: LazyLock<Arc<Mutex<LruCache<String, CachedFetchResult
 static GLOBAL_IN_FLIGHT_FETCHES: LazyLock<InFlightFetches> =
     LazyLock::new(|| Arc::new(DashMap::new()));
 
+struct FetchCleanupGuard {
+    in_flight_fetches: InFlightFetches,
+    cache_key: String,
+    armed: bool,
+}
+
+impl FetchCleanupGuard {
+    fn new(in_flight_fetches: InFlightFetches, cache_key: String) -> Self {
+        Self { in_flight_fetches, cache_key, armed: true }
+    }
+
+    fn disarm(&mut self) {
+        self.armed = false;
+    }
+}
+
+impl Drop for FetchCleanupGuard {
+    fn drop(&mut self) {
+        if self.armed {
+            self.in_flight_fetches.remove(&self.cache_key);
+        }
+    }
+}
+
 pub struct RequestContext {
     fetch_cache: Arc<Mutex<LruCache<String, CachedFetchResult>>>,
     in_flight_fetches: InFlightFetches,
@@ -244,10 +268,20 @@ impl RequestContext {
         let cache_key_for_task = cache_key.clone();
 
         tokio::spawn(async move {
+            let mut cleanup =
+                FetchCleanupGuard::new(Arc::clone(&in_flight_fetches), cache_key_for_task.clone());
             let mut guard = fetch_lock.lock().await;
 
             if let Some(result) = guard.as_ref() {
-                return result.clone();
+                let mut result = result.clone();
+                if let Ok(ref mut cached) = result {
+                    cached.tags = Self::merge_and_sort_tags(mem::take(&mut cached.tags), tags);
+                    *guard = Some(Ok(cached.clone()));
+                    let mut cache = fetch_cache.lock();
+                    cache.put(cache_key_for_task, cached.clone());
+                }
+                cleanup.disarm();
+                return result;
             }
 
             let mut fetch_result = Self::perform_fetch_standalone(&url, &options).await;
@@ -260,12 +294,10 @@ impl RequestContext {
 
             if let Ok(ref cached_result) = fetch_result {
                 let mut cache = fetch_cache.lock();
-                cache.put(cache_key_for_task.clone(), cached_result.clone());
+                cache.put(cache_key_for_task, cached_result.clone());
             }
 
             drop(guard);
-            in_flight_fetches.remove(&cache_key_for_task);
-
             fetch_result
         })
         .await
