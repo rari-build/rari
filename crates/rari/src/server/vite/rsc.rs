@@ -39,67 +39,46 @@ pub async fn register_component(
         let component_id = request.component_id.clone();
         let component_code = request.component_code.clone();
         run_with_renderer_result(renderer, move |renderer| async move {
-            renderer.register_component(&component_id, &component_code).await
-        })
-        .await
-    };
+            renderer.register_component(&component_id, &component_code).await?;
 
-    match result {
-        Ok(()) => {
-            let mark_result = {
-                let renderer = Arc::clone(&state.renderer);
-                let component_id = request.component_id.clone();
-                run_with_renderer_result(renderer, move |renderer| async move {
-                    let is_client = {
-                        let registry = renderer.component_registry.lock();
-                        registry.is_client_reference(&component_id)
-                    };
+            let is_client = {
+                let registry = renderer.component_registry.lock();
+                registry.is_client_reference(&component_id)
+            };
 
-                    if is_client {
-                        let mark_script = format!(
-                            r#"(function() {{
+            if is_client {
+                let mark_script = format!(
+                    r#"(function() {{
                         const comp = globalThis["{component_id}"];
                         if (comp && typeof comp === 'function') {{
                             comp['~isClientComponent'] = true;
                             comp['~clientComponentId'] = "{component_id}";
                         }}
                     }})()"#
-                        );
-
-                        if let Err(e) = renderer
-                            .runtime
-                            .execute_script(
-                                format!("mark_client_{}.js", component_id.cow_replace('/', "_")),
-                                mark_script,
-                            )
-                            .await
-                        {
-                            tracing::error!(
-                                "Failed to mark {} as client component: {}",
-                                component_id,
-                                e
-                            );
-                        }
-                    }
-
-                    Ok(())
-                })
-                .await
-            };
-
-            if let Err(e) = mark_result {
-                tracing::error!(
-                    "Failed post-register client mark for {}: {}",
-                    request.component_id,
-                    e
                 );
+
+                if let Err(e) = renderer
+                    .runtime
+                    .execute_script(
+                        format!("mark_client_{}.js", component_id.cow_replace('/', "_")),
+                        mark_script,
+                    )
+                    .await
+                {
+                    tracing::error!("Failed to mark {} as client component: {}", component_id, e);
+                }
             }
 
-            Ok(Json(serde_json::json!({
-                "success": true,
-                "component_id": request.component_id
-            })))
-        }
+            Ok(())
+        })
+        .await
+    };
+
+    match result {
+        Ok(()) => Ok(Json(serde_json::json!({
+            "success": true,
+            "component_id": request.component_id
+        }))),
         Err(e) => {
             tracing::error!("Failed to register component {}: {}", request.component_id, e);
             Err(StatusCode::INTERNAL_SERVER_ERROR)
@@ -388,15 +367,26 @@ pub async fn reload_component_from_dist(
 
                 registry.remove_component(&component_id);
 
-                let _ = registry.register_component(
+                match registry.register_component(
                     &component_id,
                     &dist_code,
                     dist_code.clone(),
                     dependencies.into_iter().collect(),
-                );
-
-                registry.mark_component_loaded(&component_id);
-                registry.mark_component_initially_loaded(&component_id);
+                ) {
+                    Ok(()) => {
+                        registry.mark_component_loaded(&component_id);
+                        registry.mark_component_initially_loaded(&component_id);
+                    }
+                    Err(e) => {
+                        tracing::error!(
+                            component_id = component_id.as_str(),
+                            error = %e,
+                            "Failed to register component during HMR reload"
+                        );
+                        registry.remove_component(&component_id);
+                        return Err(format!("Failed to register component: {e}"));
+                    }
+                }
             }
         } else {
             let wrapped_code = wrap_server_action_module(&dist_code, &component_id);
