@@ -710,7 +710,7 @@ async fn handle_server_action_at_path(
                     reason = "Response::builder() with valid components never fails"
                 )]
                 let mut response = Response::builder()
-                    .status(StatusCode::BAD_REQUEST)
+                    .status(error_response::status(&e))
                     .header(header::CACHE_CONTROL, "no-store, no-cache, must-revalidate, private")
                     .body(Body::from(e.safe_message(state.config.is_development())))
                     .expect("Valid error response");
