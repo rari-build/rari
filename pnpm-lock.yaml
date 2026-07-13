@@ -304,23 +304,23 @@ importers:
         specifier: 0.15.0
         version: 0.15.0(react-server-dom-webpack@19.2.7(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(webpack@5.107.2(lightningcss@1.32.0)))
       rari-darwin-arm64:
-        specifier: 0.14.12
-        version: 0.14.12
+        specifier: 0.15.0
+        version: 0.15.0
       rari-darwin-x64:
-        specifier: 0.14.12
-        version: 0.14.12
+        specifier: 0.15.0
+        version: 0.15.0
       rari-linux-arm64:
-        specifier: 0.14.12
-        version: 0.14.12
+        specifier: 0.15.0
+        version: 0.15.0
       rari-linux-x64:
-        specifier: 0.14.12
-        version: 0.14.12
+        specifier: 0.15.0
+        version: 0.15.0
       rari-win32-arm64:
-        specifier: 0.14.12
-        version: 0.14.12
+        specifier: 0.15.0
+        version: 0.15.0
       rari-win32-x64:
-        specifier: 0.14.12
-        version: 0.14.12
+        specifier: 0.15.0
+        version: 0.15.0
 
   packages/use-cache:
     dependencies:
@@ -4559,44 +4559,44 @@ packages:
   query-selector-shadow-dom@1.0.1:
     resolution: {integrity: sha512-lT5yCqEBgfoMYpf3F2xQRK7zEr1rhIIZuceDK6+xRkJQ4NMbHTwXqk4NkwDwQMNqXgG9r9fyHnzwNVs6zV5KRw==}
 
-  rari-darwin-arm64@0.14.12:
-    resolution: {integrity: sha512-wmmhoqtLJ6EvEOiW/V5V7uFgILmTqCnkXXfUcJxDYxU8IuvA7hSoVBEqSt8ZVurKYGwi6SOugUHtmPZDNgw3fQ==}
-    engines: {node: '>=22.12.0'}
+  rari-darwin-arm64@0.15.0:
+    resolution: {integrity: sha512-uxtsbDlWY02lmjJ2xysxf0gKKwjcQz/9jVTUg3MgUBpgT5ECSR7OdxXFChn7cA0K3t+2YuJW9xW5E9BMsJW4dA==}
+    engines: {node: '>=22.18.0'}
     cpu: [arm64]
     os: [darwin]
     hasBin: true
 
-  rari-darwin-x64@0.14.12:
-    resolution: {integrity: sha512-T7ajXZCSmCoYwp7T2ZaPtaer/hiJakEjCGEp7XsxmvMDT0+bP8Hbs+LPT2umCgC5Hi0Wazjn5czFX27S77IbsQ==}
-    engines: {node: '>=22.12.0'}
+  rari-darwin-x64@0.15.0:
+    resolution: {integrity: sha512-+SKOOdSluSc2CX824HYKWPC3BvQIbtZUZamw3cjP/7z3nRJwJMxYVog9CQ6QSTYNgGAyJ1wnqCIAoRGvhxy4bw==}
+    engines: {node: '>=22.18.0'}
     cpu: [x64]
     os: [darwin]
     hasBin: true
 
-  rari-linux-arm64@0.14.12:
-    resolution: {integrity: sha512-i9DR6ZnB2jYHP/XNzkZ6vKM2k/2+YsSJGYGpbL0qZG4BB79PiJ4A8BoA5/xDbmU1LsuHLbZQo6hgVrmW8ZUyjQ==}
-    engines: {node: '>=22.12.0'}
+  rari-linux-arm64@0.15.0:
+    resolution: {integrity: sha512-iPNKcbmy/4mSd4qDK5qddWmthElAL7BpmwkQ/FeZDtJ6mPL4C9rb+MM6hQZkJ+YLhRi9m2UpjDiN15cTs9Bhkg==}
+    engines: {node: '>=22.18.0'}
     cpu: [arm64]
     os: [linux]
     hasBin: true
 
-  rari-linux-x64@0.14.12:
-    resolution: {integrity: sha512-DdtyncMvE+ko6hzBwn+IssxbnLGFqGyTzSzOXhZRNyzuXPEWF3RJbiSmo92MM3N/yj75++akWeubeaJqYg3BRg==}
-    engines: {node: '>=22.12.0'}
+  rari-linux-x64@0.15.0:
+    resolution: {integrity: sha512-abKK2yOK68RcE3QopDYdssG3dACqYGlSKg0Z0wI/rYTM6PcP0tmW5QGcz7e/rHH2KN6Rx3vTX3pHBt7W+o6OWw==}
+    engines: {node: '>=22.18.0'}
     cpu: [x64]
     os: [linux]
     hasBin: true
 
-  rari-win32-arm64@0.14.12:
-    resolution: {integrity: sha512-+KCE2oyetwnZNbOiHpuKZ1S7VwH/Bx+giOvCcYT/o+pUP0OsJugvqWMeYoYU88QdmqwM5S9geImPPx/eX2Gqrw==}
-    engines: {node: '>=22.12.0'}
+  rari-win32-arm64@0.15.0:
+    resolution: {integrity: sha512-m6M9MyfD4ksVX1ciPdQGErO9EdD48r1Fkdhv6buVPKWihdPop16qgfyldSeU+P+K2kjPbbUimKD2vNTPcku84g==}
+    engines: {node: '>=22.18.0'}
     cpu: [arm64]
     os: [win32]
     hasBin: true
 
-  rari-win32-x64@0.14.12:
-    resolution: {integrity: sha512-v5DWx5Dwj/H9pn8O3FtStWKDXI/0Iff4s0KFDKKgfMM5ALZIwJrkteHN26iBiTEnNRqUP2EQV4c001D1L21EeA==}
-    engines: {node: '>=22.12.0'}
+  rari-win32-x64@0.15.0:
+    resolution: {integrity: sha512-dsefYkfeWQnZa5KEP1IcC5JvbHYQGZIP2xq8Kr4/ZODBlIN7gAk2VlPzzH86dxh0KSe9ZcgKrhpJbwpf4P4Fpg==}
+    engines: {node: '>=22.18.0'}
     cpu: [x64]
     os: [win32]
     hasBin: true
@@ -9388,22 +9388,22 @@ snapshots:
 
   query-selector-shadow-dom@1.0.1: {}
 
-  rari-darwin-arm64@0.14.12:
+  rari-darwin-arm64@0.15.0:
     optional: true
 
-  rari-darwin-x64@0.14.12:
+  rari-darwin-x64@0.15.0:
     optional: true
 
-  rari-linux-arm64@0.14.12:
+  rari-linux-arm64@0.15.0:
     optional: true
 
-  rari-linux-x64@0.14.12:
+  rari-linux-x64@0.15.0:
     optional: true
 
-  rari-win32-arm64@0.14.12:
+  rari-win32-arm64@0.15.0:
     optional: true
 
-  rari-win32-x64@0.14.12:
+  rari-win32-x64@0.15.0:
     optional: true
 
   react-dom@19.2.7(react@19.2.7):
