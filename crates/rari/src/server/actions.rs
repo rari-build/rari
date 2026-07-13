@@ -810,23 +810,29 @@ async fn handle_server_action_at_path(
         .await
     {
         tracing::error!("Failed to encode action flight response: {}", error);
-        return Ok(error_response::json_response(&error, state.config.is_development()));
+        let mut response = error_response::json_response(&error, state.config.is_development());
+        append_pending_cookies(response.headers_mut(), &request_context.pending_cookies);
+        return Ok(response);
     }
 
     let flight_body = match capture_last_action_flight_binary(&runtime).await {
         Ok(body) => body,
         Err(e) => {
             tracing::error!("Failed to read action flight response: {}", e);
-            return Ok(error_response::json_response(&e, state.config.is_development()));
+            let mut response = error_response::json_response(&e, state.config.is_development());
+            append_pending_cookies(response.headers_mut(), &request_context.pending_cookies);
+            return Ok(response);
         }
     };
 
     let Some(flight_body) = flight_body else {
         tracing::error!("RPC server action did not produce a Flight response payload");
-        return Ok(error_response::json_response(
+        let mut response = error_response::json_response(
             &RariError::internal("RPC server action did not produce a Flight response payload"),
             state.config.is_development(),
-        ));
+        );
+        append_pending_cookies(response.headers_mut(), &request_context.pending_cookies);
+        return Ok(response);
     };
 
     Ok(rpc_action_flight_response(

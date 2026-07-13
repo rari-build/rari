@@ -36,8 +36,8 @@ fn create_client() -> Client {
 }
 
 fn vite_error(err: &RariError) -> Response {
-    // Vite proxies are only mounted in development.
-    error_response::json_response(err, true)
+    let is_dev = Config::get().is_some_and(Config::is_development);
+    error_response::json_response(err, is_dev)
 }
 
 pub async fn vite_src_proxy(req: Request) -> impl IntoResponse {
