@@ -1,3 +1,277 @@
+## [rari@0.15.0] - 2026-07-13
+
+## Highlights
+
+- **React Flight + Fizz RSC stack:** the runtime renders with official React Server Components: Flight for the RSC payload / client hydration path, and Fizz for HTML SSR and streaming. Wire-format naming and the client Flight bundle are aligned with that model.
+- **Server actions on Flight:** actions use React Flight decode/encode end-to-end (`decodeAction` / `decodeReply`, form state, action refresh), with cookie-partitioned response cache keys after mutations.
+- Experimental `'use cache'` with a native transform addon, memory/private storage, and remote backends (Redis and redb). Enable with `experimental.useCache` / `experimental.useCacheRemote`. APIs: `cacheLife`, `cacheTag`, `revalidateTag`, `revalidatePath`, `updateTag`.
+- Production routing loads a unified `RoutesManifest` (`routes.json`) plus server component manifest; external framework client components such as `rari/image` resolve during SSR.
+- MDX component registry via `defineMdxComponents` / `rari/mdx/registry` for shared MDX UI across the app.
+- Image usage scanning runs in Rust (faster builds, same CLI surface).
+- Dev HTML pretty-printing for local responses.
+- Tooling: TypeScript 7 available side-by-side in the workspace catalog; create-rari-app templates target it. Node engine floor is `>=22.18.0`.
+
+## Breaking Changes
+
+- **Server action client entry:** `rari/runtime/actions` is removed. Import `callServer` from `rari/runtime/call-server` (the Vite plugin already injects this for transformed modules).
+- **Form action endpoint:** `POST /_rari/form-action` is removed. Progressive enhancement and client actions use `POST /_rari/action` (and page POSTs) on the React Flight action path.
+- **Node.js:** `engines.node` is now `>=22.18.0` (was `>=22.12.0`).
+- **`'use cache'`:** remains behind `experimental.useCache` / `experimental.useCacheRemote`. Remote storage needs a matching `@rari/use-cache-*` native addon for your platform.
+
+<!--
+File naming (checked in order):
+  1. --notes-file / RELEASE_NOTES_FILE
+  2. .github/release-notes/<tag>.md
+     `/` in scoped tags is replaced with `-` for the filename
+     e.g. rari@0.15.0.md, v0.15.0.md, @rari-use-cache@0.15.0.md
+  3. .github/release-notes/<version>.md
+     e.g. 0.15.0.md (shared across release units)
+
+Copy this template to one of those names before running `just release`.
+Manual notes are prepended to git-cliff output for GitHub releases and
+injected under the version heading in CHANGELOG.md.
+-->
+
+### ⚙️ Miscellaneous Tasks
+
+- *(dependencies)* upgrade rari packages to version 0.15.0 in pnpm-lock.yaml, pnpm-workspace.yaml, and package.json by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/v0.15.0...rari@0.15.0
+## [0.15.0] - 2026-07-13
+
+### 🚀 Features
+
+- *(cache)* implement pluggable cache-handler system with memory and disk caching by @jarick
+- *(use-cache-transform)* napi-rs addon for 'use cache' directive transformation by @jarick
+- *(use-cache-transform)* napi-rs addon for 'use cache' directive transformation by @jarick
+- add platform-specific native addon for use-cache-transform by @jarick
+- *(module_loader)* implement component-aware version key generation by @skiniks
+- use cache remote (Redis) + native addon by @jarick
+- *(og-layout)* add space-evenly justify-content alignment option back by @skiniks
+- add GitHub action for bundling React ESM vendor files by @skiniks
+- *(cache)* implement static cache invalidation and enhance revalidation process by @skiniks
+- *(rendering)* enhance RSC flight protocol validation and add tests by @skiniks
+- *(config)* enhance environment configuration loading and cache control by @skiniks
+- *(rendering)* improve error handling and add fizz chunk helper by @skiniks
+- introduce MDX component registry and enhance MDX handling by @skiniks
+- add redb backend for use cache remote storage by @skiniks
+- add cache storage modules for use-cache by @skiniks
+- introduce lazy loading for Deno extensions and enhance module structure by @skiniks
+- enhance Deno extensions with new networking and TLS modules by @skiniks
+- *(use-cache)* extend runtime parity, revalidation, and headers support by @skiniks
+- *(image-scanner)* migrate image-scanner to rari crate from TS by @skiniks
+- *(image-scanner)* implement alias regex caching and improve JSX alias processing by @skiniks
+- *(server-build)* add support for external client components and improve manifest handling by @skiniks
+- *(image-scanner)* add test for default import JSX in JS files and enhance image usage extraction by @skiniks
+- *(rari)* enhance SSR client component resolution and streamline error boundary handling by @skiniks
+- *(rari)* add type definitions for ErrorBoundaryWrapper in package.json by @skiniks
+- *(rari)* implement server manifest loading and enhance routing with new RoutesManifest structure by @skiniks
+- migrate from @typescript/native-preview to TypeScript 7 🎉 by @skiniks
+- *(rari)* migrate server actions to React Flight protocol by @skiniks
+- *(rari)* enhance action handling and form state management by @skiniks
+- *(rari)* improve action flight response handling and form state management by @skiniks
+- *(rari)* add response cache cookie partitioning and improve cache key generation by @skiniks
+- *(rari)* enhance action form state management and request context handling by @skiniks
+- *(rendering)* add support for preserving HTML comments containing '>' in pretty-printing by @skiniks
+
+### 🐛 Bug Fixes
+
+- *(core)* emit Cache-Control on static and synchronous render paths by @adambenhassen
+- *(use-cache)* correct off-by-one in repoRoot path computation by @jarick
+- *(use-cache-loader)* handle missing transformUseCacheModule gracefully by @skiniks
+- *(api_routes)* validate HTTP status codes and improve response envelope handling by @skiniks
+- *(server)* add vite-server WebSocket route without trailing slash by @skiniks
+- *(og-rendering)* add missing text alignment options back by @skiniks
+- improve module path resolution and rendering safety checks by @skiniks
+- *(config)* trim remote cache URL and validate redis handler by @skiniks
+- *(rendering)* enhance error handling in RSC streaming and hydration processes by @skiniks
+- correct plugin configuration order in Rari config by @skiniks
+- handle inline type imports in MDX component transformations by @skiniks
+- clear file resolver cache on hot update to improve MDX handling by @skiniks
+- *(use-cache)* address review findings and consolidate RariGlobal access by @skiniks
+- *(image-scanner)* enhance JSON parsing with error handling for scanner output by @skiniks
+- *(rari)* implement graceful shutdown handling and update dependencies by @skiniks
+- *(rendering)* prevent panic in HTML tag parsing for multibyte characters by @skiniks
+- *(rust-server)* improve process management for Rust server termination and ensure cleanup on exit by @skiniks
+- *(request_context)* update error handling to use internal error for fetch singleflight join failures by @skiniks
+- *(request_context)* ensure cleanup disarm is called correctly in request context caching logic by @skiniks
+
+### 💼 Other
+
+- *(use-cache)* add console.error logging to use-cache-transform plugin to diagnose CI cache miss by @jarick
+
+### 🚜 Refactor
+
+- *(runtime)* reorganize factory JS helpers into dedicated directory by @skiniks
+- *(rsc)* consolidate RSC action tests into main module by @skiniks
+- *(rsc)* reorganize action tests into dedicated module by @skiniks
+- *(rsc)* allow disallowed clippy methods in action tests by @skiniks
+- *(rsc)* allow additional clippy methods in action tests by @skiniks
+- *(rsc)* consolidate RscElement and SuspenseBoundary into main module by @skiniks
+- *(rsc)* allow disallowed clippy methods in core rendering tests by @skiniks
+- *(rsc)* move parser and core rendering tests into inline modules by @skiniks
+- migrate use-cache-transform to optional dependency with lazy loading by @skiniks
+- *(cache)* consolidate cache exports and update import paths by @skiniks
+- *(cache-wrapper)* move cache-wrapper export to use-cache package by @skiniks
+- *(use-cache)* migrate from SHA1 to SHA256 hashing by @skiniks
+- extract error and utility modules into separate crates by @skiniks
+- *(rendering)* replace to_lowercase() with to_ascii_lowercase() for efficiency by @skiniks
+- *(runtime)* remove module reload system and simplify runtime architecture by @skiniks
+- *(runtime)* consolidate runtime module structure and simplify http adapter by @skiniks
+- *(runtime)* remove http_adapter module and inline request/response handling by @skiniks
+- *(server)* reorganize module structure and consolidate utilities by @skiniks
+- *(vite)* consolidate proxy handlers and improve request forwarding by @skiniks
+- *(transpile)* simplify version placeholder substitution check by @skiniks
+- *(transpile)* improve version placeholder check with exact module matching by @skiniks
+- *(runtime)* rename DenoRuntime to RariRuntime and reorganize factory module by @skiniks
+- *(runtime)* reorganize factory and loader modules with utils submodules by @skiniks
+- *(runtime)* rename deno_runtime parameter to js_runtime for clarity by @skiniks
+- improve code formatting and consistency across codebase by @skiniks
+- enforce workspace lints monorepo-wide, stricter linting rules and improve code quality by @skiniks
+- improve code clarity and fix raw string handling by @skiniks
+- improve code quality and clarify clippy lint reasoning by @skiniks
+- improve path handling and error handling in core modules by @skiniks
+- *(runtime)* extract and reuse source extension logic by @skiniks
+- simplify redis integration and update dependencies by @skiniks
+- *(runtime)* reorganize redis cache as extension module by @skiniks
+- *(runtime)* extract redis cache extensions into separate function by @skiniks
+- *(redis-cache)* remove async from get_redis_state and update error handling by @skiniks
+- *(cache-config)* simplify URL trimming logic and improve readability by @skiniks
+- *(config)* simplify URL validation check using method reference by @skiniks
+- *(runtime)* migrate js helpers to typescript extension modules by @skiniks
+- *(runtime)* revert to handle JsRuntime creation failures with graceful restart by @skiniks
+- *(rari)* migrate rari module from JavaScript to TypeScript by @skiniks
+- *(rari)* consolidate clippy allow attributes to module level by @skiniks
+- *(runtime)* remove JavaScript entry point and consolidate imports by @skiniks
+- reapply rustfmt formatting across codebase by @skiniks
+- *(streaming)* simplify closure and add import row handling by @skiniks
+- *(streaming)* extract boundary update and error handling into helper methods by @skiniks
+- *(streaming)* remove unused boundary_rows_map and add error handling by @skiniks
+- *(runtime)* migrate remaining extensions from JavaScript to TypeScript by @skiniks
+- *(runtime)* improve type safety and correctness across extensions by @skiniks
+- *(runtime)* improve type safety for cookie options and server function caching by @skiniks
+- *(runtime)* avoid redundant JSON serialization in server function caching by @skiniks
+- *(rsc)* flatten module structure and remove promise manager extension by @skiniks
+- *(module_loader)* extract dependency extraction logic into utility function by @skiniks
+- *(rsc)* extract React Server Components into dedicated workspace crate by @skiniks
+- *(rsc)* flatten rendering module structure into main crate by @skiniks
+- *(imports)* consolidate and optimize import statements across crates by @skiniks
+- *(main)* move unix signal imports into platform-specific block by @skiniks
+- migrate to official React Server Components with Fizz SSR by @skiniks
+- consolidate absolute imports to relative paths by @skiniks
+- *(router)* reorganize metadata route types and imports by @skiniks
+- *(rendering)* remove Fizz streaming functionality and related code by @skiniks
+- *(runtime)* streamline script execution and enhance timeout handling by @skiniks
+- *(runtime)* replace hardcoded NODE_VERSION with deno_node constant by @skiniks
+- streamline clippy allow attributes and update string formatting by @skiniks
+- convert instance methods to static methods across runtime and rendering by @skiniks
+- consolidate clippy attributes and enhance memory pressure constants by @skiniks
+- convert mutable renderer references to immutable and optimize workspace configuration by @skiniks
+- migrate clippy attributes from allow to expect by @skiniks
+- migrate clippy attributes from allow to expect across codebase by @skiniks
+- apply use_self clippy lint across codebase by @skiniks
+- migrate clippy attributes from allow to expect in server module by @skiniks
+- simplify extension trait implementations across runtime modules by @skiniks
+- update type aliases for permissions container and improve file loading method by @skiniks
+- rename wire format to flight protocol across rendering modules by @skiniks
+- streamline rendering and runtime modules by introducing helper functions by @skiniks
+- simplify FFI permission handling in AllowlistWebPermissions by @skiniks
+- standardize error logging and improve code clarity by @skiniks
+- unify logging practices and enhance utility function usage by @skiniks
+- transition to asynchronous file operations across server modules by @skiniks
+- enhance file existence checks with asynchronous operations by @skiniks
+- convert path validation and file operations to asynchronous methods by @skiniks
+- streamline rendering and module loading by introducing rsc-references by @skiniks
+- remove streaming module and consolidate rendering logic by @skiniks
+- enhance rendering and execution context handling by @skiniks
+- improve HTML streaming and rendering logic by @skiniks
+- enhance rendering logic and error handling by @skiniks
+- improve client component error handling and type safety by @skiniks
+- enhance HTML rendering and tag management by @skiniks
+- streamline hydration utilities and component resolution by @skiniks
+- enhance HTML stream management and error handling by @skiniks
+- introduce namespace import transformation and client module proxy by @skiniks
+- implement module analysis caching and enhance directive handling by @skiniks
+- enhance module analysis and HTML import handling by @skiniks
+- enhance module analysis and HTML import handling by @skiniks
+- improve project context detection and caching mechanisms by @skiniks
+- enhance binary spawning and module analysis by @skiniks
+- improve module analysis by using original code for caching by @skiniks
+- reorganize server structure and introduce new action handling by @skiniks
+- reorganize CLI structure and enhance platform detection by @skiniks
+- restructure router and vite module organization by @skiniks
+- enhance MDX component handling and streamline imports by @skiniks
+- introduce isMdxRegistryModuleId function for improved MDX module identification by @skiniks
+- rename rari dependencies and update CI workflows by @skiniks
+- move component and cache loaders by @skiniks
+- *(cache)* move response cache tag merging inside conditional block by @skiniks
+- *(cache)* improve async safety in response cache tag merging by @skiniks
+- *(cache)* remove redundant pageCacheTags clearing in tag merging by @skiniks
+- update import paths to use aliasing by @skiniks
+- *(rari)* enhance shutdown signal handling for Unix and Windows platforms by @skiniks
+- *(rari)* improve external client component resolution and enhance shutdown signal handling by @skiniks
+- *(rari)* improve action script name generation for request context by @skiniks
+- *(rari)* rename action script functions for clarity and improve naming conventions by @skiniks
+- *(rari)* update file structure and improve import paths for better organization by @skiniks
+- *(rendering)* enhance HTML output formatting and introduce pretty-printing for development by @skiniks
+- *(rendering)* streamline global state management and improve component registration handling by @skiniks
+- *(loader)* simplify global state initialization in loader and fallback module templates by @skiniks
+- *(vite)* optimize global state initialization for server components in HMR by @skiniks
+- *(rendering)* introduce renderer lock management for safe concurrent access and streamline rendering operations by @skiniks
+- *(rendering)* simplify rendering logic by consolidating route rendering methods and improving concurrency handling by @skiniks
+
+### ⚡ Performance
+
+- optimize string allocations and comparisons across rendering pipeline by @skiniks
+
+### 🎨 Styling
+
+- *(api_routes)* suppress clippy disallowed_methods lint in test module by @skiniks
+- fix indentation and remove unused imports across codebase by @skiniks
+
+### 🧪 Testing
+
+- *(rsc)* improve renderer test assertions and error handling by @skiniks
+- *(path_url)* add comprehensive dot segment and relative path tests by @skiniks
+
+### ⚙️ Miscellaneous Tasks
+
+- consolidate deno_ast features and remove unused DefaultLoadingIndicator by @skiniks
+- *(use-cache)* rename crate and package from use-cache-transform by @skiniks
+- update dependencies and configuration for use-cache distribution by @skiniks
+- *(templates,path-validation)* remove template placeholders and improve test reliability by @skiniks
+- *(cargo)* consolidate package metadata to workspace level by @skiniks
+- *(dependencies)* update various dependencies and improve project structure by @skiniks
+- update dependencies in Cargo.toml files across the project by @skiniks
+- refine tokio dependency configurations and update Node.js types in package.json by @skiniks
+- refactor RSC-related modules by removing unused code and dependencies, including error handling and flight protocol validation by @skiniks
+- simplify test expectations in core layout rendering by removing unused unwrap check by @skiniks
+- add path mapping for use-cache module in TypeScript configuration by @skiniks
+- streamline build and verification processes by removing conditional checks for use-cache addon by @skiniks
+- refactor rendering modules by removing unused functions, updating sanitization logic, and enhancing flight protocol handling by @skiniks
+- enhance rendering capabilities by adding Fizz and RSC scripts, improving streaming pipeline checks, and refactoring script loading logic by @skiniks
+- enhance runtime operations by adding new node module checks, improving process shim functionality, and refining version placeholder handling by @skiniks
+- streamline rendering and runtime processes by removing unused functions, enhancing stream completion handling, and refining error management in script execution by @skiniks
+- enhance module loader functionality by adding component ID aliasing and refining component specifier registration by @skiniks
+- refine component ID alias handling in module loader by removing redundant alias check and ensuring all aliases are removed from component specifiers by @skiniks
+- simplify build scripts by removing redundant clean command by @skiniks
+- remove rari_utils crate and move util back to main crate by @skiniks
+- refactor rari crate by removing rari_rsc module and integrating its functionality directly into the main crate by @skiniks
+- update dependencies in Cargo.toml files to use workspace references and ensure consistent versioning across Deno ecosystem by @skiniks
+- update dependencies in Cargo.toml files to use workspace references for improved consistency and alignment with Deno ecosystem by @skiniks
+- update justfile and Cargo.toml for consistency, add prepare_binaries tool for building platform-specific binaries and addons by @skiniks
+- *(eslint, vite)* disable no-console rule for TypeScript files in bundle-react-esm directory by @skiniks
+- *(dependencies)* update various package versions by @skiniks
+- *(dependencies)* update various package versions by @skiniks
+- *(dependencies)* update @rari/use-cache to version 0.15.0 in package.json and pnpm-lock.yaml by @skiniks
+
+
+### 🆕 New Contributors
+
+- @adambenhassen made their first contribution
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.14.12...v0.15.0
 ## [0.14.12] - 2026-06-16
 
 ### 🚀 Features
