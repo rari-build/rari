@@ -1,5 +1,9 @@
 ## [rari@0.15.1] - 2026-07-13
 
+### 🐛 Bug Fixes
+
+- downgrade rari version from 0.15.1 to 0.15.0 by @skiniks
+
 ### ⚙️ Miscellaneous Tasks
 
 - *(workflows)* update release workflow to use Ubuntu 22.04 for Linux targets and adjust file resolution extensions in build script by @skiniks
