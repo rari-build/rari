@@ -342,23 +342,23 @@ importers:
         version: 0.2.4(@opentelemetry/api@1.9.0)(@types/node@26.1.1)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@4.1.10)(jiti@2.7.0)(terser@5.48.0)(vite@8.1.4(@types/node@26.1.1)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))(yaml@2.9.0)
     optionalDependencies:
       '@rari/use-cache-darwin-arm64':
-        specifier: workspace:*
-        version: link:../use-cache-darwin-arm64
+        specifier: 0.15.0
+        version: 0.15.0
       '@rari/use-cache-darwin-x64':
-        specifier: workspace:*
-        version: link:../use-cache-darwin-x64
+        specifier: 0.15.0
+        version: 0.15.0
       '@rari/use-cache-linux-arm64':
-        specifier: workspace:*
-        version: link:../use-cache-linux-arm64
+        specifier: 0.15.0
+        version: 0.15.0
       '@rari/use-cache-linux-x64':
-        specifier: workspace:*
-        version: link:../use-cache-linux-x64
+        specifier: 0.15.0
+        version: 0.15.0
       '@rari/use-cache-win32-arm64':
-        specifier: workspace:*
-        version: link:../use-cache-win32-arm64
+        specifier: 0.15.0
+        version: 0.15.0
       '@rari/use-cache-win32-x64':
-        specifier: workspace:*
-        version: link:../use-cache-win32-x64
+        specifier: 0.15.0
+        version: 0.15.0
 
   packages/use-cache-darwin-arm64: {}
 
@@ -1999,6 +1999,42 @@ packages:
 
   '@posthog/types@1.393.0':
     resolution: {integrity: sha512-vzWeEJZ7ERQhFRoQYaP5jzN1JvIu46UJyHXsuv+dTGW2r3sMgREOhNxXLZjmFHwZ8/FOHQoyqqQmXTCXZSfMSg==}
+
+  '@rari/use-cache-darwin-arm64@0.15.0':
+    resolution: {integrity: sha512-dheB/4TvGfKLj46g9+LwiPuKrSKMOcX6NH/sSzo/QqccA0fVvfccGlRW/iWq6aMaypTrDF1Cqqpsg2GvHvCqCQ==}
+    engines: {node: '>=22.18.0'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@rari/use-cache-darwin-x64@0.15.0':
+    resolution: {integrity: sha512-GssxKGhNYjkTUHdC+C9yRlj+gXqcs2o5f91znrW/PQCgnXonaYFDuA2J9oFdPY449p0E44Kv2nBpDNq9A+Dqcw==}
+    engines: {node: '>=22.18.0'}
+    cpu: [x64]
+    os: [darwin]
+
+  '@rari/use-cache-linux-arm64@0.15.0':
+    resolution: {integrity: sha512-zvZNSyR7app1pEGQ9qb3ulHZnAgQru7iLweTsa3z0AJZ5qhxMUNzWnIroweo9GdzCvacpjQe+//pbo+VseiFfQ==}
+    engines: {node: '>=22.18.0'}
+    cpu: [arm64]
+    os: [linux]
+
+  '@rari/use-cache-linux-x64@0.15.0':
+    resolution: {integrity: sha512-LnBT0fXRb5C8cP1jijPdw9y51uVQkVw7tNevTjSpMQB1QB9Ks1aKx0YSiP03v1RC6NCqyw3nFddRw8dL4Ac8Kg==}
+    engines: {node: '>=22.18.0'}
+    cpu: [x64]
+    os: [linux]
+
+  '@rari/use-cache-win32-arm64@0.15.0':
+    resolution: {integrity: sha512-8ujGICJGMgS+YAxWurSd1k+IE4a9eY8naTpUuRQBOK83QSpS4XZb1zCac9uJ5iZmrs/KTHOcO147MTIY3LpHCQ==}
+    engines: {node: '>=22.18.0'}
+    cpu: [arm64]
+    os: [win32]
+
+  '@rari/use-cache-win32-x64@0.15.0':
+    resolution: {integrity: sha512-Dyr78kFznFGvcTw2AEcbqAj+IJ3X7LMilpcC8OYCfUvFOlzhf01Q23DkLs3v/GssyWnHNI7+XxFe2ijEUlit8A==}
+    engines: {node: '>=22.18.0'}
+    cpu: [x64]
+    os: [win32]
 
   '@rolldown/binding-android-arm64@1.1.5':
     resolution: {integrity: sha512-lZg8fqIv2v7FF237bwMgzGZEJvGL79/s5knJ/i6FmsGF4XXlzccZ4jb+TrFIxtSSxFtIpdsgrPZeMk1I9AFcyQ==}
@@ -6306,6 +6342,24 @@ snapshots:
       '@posthog/types': 1.393.0
 
   '@posthog/types@1.393.0': {}
+
+  '@rari/use-cache-darwin-arm64@0.15.0':
+    optional: true
+
+  '@rari/use-cache-darwin-x64@0.15.0':
+    optional: true
+
+  '@rari/use-cache-linux-arm64@0.15.0':
+    optional: true
+
+  '@rari/use-cache-linux-x64@0.15.0':
+    optional: true
+
+  '@rari/use-cache-win32-arm64@0.15.0':
+    optional: true
+
+  '@rari/use-cache-win32-x64@0.15.0':
+    optional: true
 
   '@rolldown/binding-android-arm64@1.1.5':
     optional: true
