@@ -801,29 +801,33 @@ async fn handle_server_action_at_path(
         format!("action_flight_encode_req{nonce}.ts")
     };
 
-    runtime
+    if let Err(error) = runtime
         .execute_script_with_request_context(
             Arc::clone(&request_context),
             encode_script_name,
             ACTION_FLIGHT_ENCODE_SCRIPT.to_string(),
         )
         .await
-        .map_err(|error| {
-            tracing::error!("Failed to encode action flight response: {}", error);
-            error_response::status(&error)
-        })?;
+    {
+        tracing::error!("Failed to encode action flight response: {}", error);
+        return Ok(error_response::json_response(&error, state.config.is_development()));
+    }
 
-    let flight_body = capture_last_action_flight_binary(&runtime).await.map_err(|e| {
-        tracing::error!("Failed to read action flight response: {}", e);
-        error_response::status(&e)
-    })?;
+    let flight_body = match capture_last_action_flight_binary(&runtime).await {
+        Ok(body) => body,
+        Err(e) => {
+            tracing::error!("Failed to read action flight response: {}", e);
+            return Ok(error_response::json_response(&e, state.config.is_development()));
+        }
+    };
 
-    let flight_body = flight_body.ok_or_else(|| {
+    let Some(flight_body) = flight_body else {
         tracing::error!("RPC server action did not produce a Flight response payload");
-        error_response::status(&RariError::internal(
-            "RPC server action did not produce a Flight response payload",
-        ))
-    })?;
+        return Ok(error_response::json_response(
+            &RariError::internal("RPC server action did not produce a Flight response payload"),
+            state.config.is_development(),
+        ));
+    };
 
     Ok(rpc_action_flight_response(
         flight_body,

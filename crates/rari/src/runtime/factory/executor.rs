@@ -446,17 +446,14 @@ pub async fn execute_script_for_streaming(
     };
 
     if let Some(sender) = leftover_sender {
-        let error_message = if let Err(err) = &result {
-            err.to_string()
-        } else {
-            format!("Streaming script '{script_name}' ended without completing the stream")
+        let stream_err = match &result {
+            Err(err) => err.clone(),
+            Ok(_) => RariError::js_execution(format!(
+                "Streaming script '{script_name}' ended without completing the stream"
+            )),
         };
 
-        let _ = sender
-            .send(Err(RariError::js_execution(format!(
-                "Streaming script '{script_name}' failed: {error_message}"
-            ))))
-            .await;
+        let _ = sender.send(Err(stream_err)).await;
     }
 
     result?;

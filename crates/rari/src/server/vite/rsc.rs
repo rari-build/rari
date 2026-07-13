@@ -536,8 +536,7 @@ pub async fn immediate_component_reregistration(
             }
             Ok(())
         })
-        .await
-        .map_err(|e| RariError::internal(e.to_string()))?;
+        .await?;
     }
 
     let content = match fs::read_to_string(file_path).await {
@@ -583,8 +582,7 @@ pub async fn immediate_component_reregistration(
             }
             Ok(())
         })
-        .await
-        .map_err(|e| RariError::internal(e.to_string()))?;
+        .await?;
     }
 
     time::sleep(time::Duration::from_millis(200)).await;

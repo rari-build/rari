@@ -81,10 +81,7 @@ async fn execute_proxy(
 
     let runtime = clone_renderer_runtime(state).await;
 
-    let result_json = runtime
-        .execute_function("~rariExecuteProxy", vec![request_data])
-        .await
-        .map_err(|e| RariError::js_execution(format!("Proxy execution failed: {e}")))?;
+    let result_json = runtime.execute_function("~rariExecuteProxy", vec![request_data]).await?;
 
     let proxy_result: ProxyResult = serde_json::from_value(result_json)
         .map_err(|e| RariError::deserialization(format!("Invalid proxy result: {e}")))?;

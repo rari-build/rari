@@ -478,7 +478,7 @@ pub async fn op_fetch_with_cache(
                     "ok": false,
                     "status": 500,
                     "statusText": "Internal Server Error",
-                    "error": e,
+                    "error": e.to_string(),
                     "cached": false,
                     "tags": Vec::<String>::new()
                 }))
@@ -490,8 +490,8 @@ pub async fn op_fetch_with_cache(
 async fn perform_simple_fetch(
     url: &str,
     options: &rustc_hash::FxHashMap<String, String>,
-) -> Result<(u16, String, serde_json::Map<String, serde_json::Value>), String> {
-    let client = client::get_http_client().map_err(|e| e.to_string())?;
+) -> Result<(u16, String, serde_json::Map<String, serde_json::Value>), RariError> {
+    let client = client::get_http_client()?;
     let mut request = client.get(url);
 
     if let Some(headers_str) = options.get("headers")
@@ -506,13 +506,17 @@ async fn perform_simple_fetch(
 
     request = request.timeout(Duration::from_millis(timeout));
 
-    let response = request.send().await.map_err(|e| format!("Request failed: {e}"))?;
+    let response =
+        request.send().await.map_err(|e| RariError::network(format!("Request failed: {e}")))?;
 
     let status = response.status().as_u16();
     let headers = response.headers().clone();
     let headers_obj = headers_to_json(&headers);
 
-    let body = response.text().await.map_err(|e| format!("Failed to read response: {e}"))?;
+    let body = response
+        .text()
+        .await
+        .map_err(|e| RariError::network(format!("Failed to read response: {e}")))?;
 
     Ok((status, body, headers_obj))
 }
