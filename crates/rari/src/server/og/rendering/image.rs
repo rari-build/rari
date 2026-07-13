@@ -1,6 +1,7 @@
 use std::{string::String, time::Duration};
 
 use image::{RgbaImage, imageops};
+use rari_error::RariError;
 use reqwest::blocking::Client;
 
 use super::{super::layout::ComputedLayout, border::BorderRadius, renderer::ImageRenderer};
@@ -11,13 +12,13 @@ impl ImageRenderer {
         &self,
         layout: &ComputedLayout,
         canvas: &mut RgbaImage,
-    ) -> Result<(), String> {
+    ) -> Result<(), RariError> {
         let src = layout
             .element
             .props
             .get("src")
             .and_then(|v| v.as_str())
-            .ok_or("Image element missing src attribute")?;
+            .ok_or_else(|| RariError::validation("Image element missing src attribute"))?;
 
         let source_image = Self::load_image(src)?;
 
@@ -68,7 +69,7 @@ impl ImageRenderer {
         target_width: u32,
         target_height: u32,
         object_fit: &str,
-    ) -> Result<(RgbaImage, u32, u32), String> {
+    ) -> Result<(RgbaImage, u32, u32), RariError> {
         let src_width = float::u32_to_f32(source_image.width());
         let src_height = float::u32_to_f32(source_image.height());
         let target_w = float::u32_to_f32(target_width);
@@ -241,50 +242,57 @@ impl ImageRenderer {
         }
     }
 
-    fn load_image(src: &str) -> Result<RgbaImage, String> {
+    fn load_image(src: &str) -> Result<RgbaImage, RariError> {
         if src.starts_with("http://") || src.starts_with("https://") {
             Self::load_remote_image(src)
         } else if src.starts_with("data:") {
             Self::load_data_url(src)
         } else {
-            Ok(image::open(src).map_err(|e| format!("Failed to load image {src}: {e}"))?.to_rgba8())
+            Ok(image::open(src)
+                .map_err(|e| RariError::io(format!("Failed to load image {src}: {e}")))?
+                .to_rgba8())
         }
     }
 
-    fn load_remote_image(url: &str) -> Result<RgbaImage, String> {
+    fn load_remote_image(url: &str) -> Result<RgbaImage, RariError> {
         use std::io::Read;
 
         let client = Client::builder()
             .timeout(Duration::from_secs(10))
             .build()
-            .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
+            .map_err(|e| RariError::network(format!("Failed to create HTTP client: {e}")))?;
 
-        let response =
-            client.get(url).send().map_err(|e| format!("Failed to fetch image from {url}: {e}"))?;
+        let response = client
+            .get(url)
+            .send()
+            .map_err(|e| RariError::network(format!("Failed to fetch image from {url}: {e}")))?;
 
         if !response.status().is_success() {
-            return Err(format!("Failed to fetch image: HTTP {}", response.status()));
+            return Err(RariError::network(format!(
+                "Failed to fetch image: HTTP {}",
+                response.status()
+            )));
         }
 
         let mut buffer = Vec::new();
         response
             .take((super::super::MAX_OG_IMAGE_BYTES + 1) as u64)
             .read_to_end(&mut buffer)
-            .map_err(|e| format!("Failed to read image data: {e}"))?;
+            .map_err(|e| RariError::network(format!("Failed to read image data: {e}")))?;
 
         if buffer.len() > super::super::MAX_OG_IMAGE_BYTES {
-            return Err("Image too large (max 10MB)".to_string());
+            return Err(RariError::validation("Image too large (max 10MB)"));
         }
 
         Ok(image::load_from_memory(&buffer)
-            .map_err(|e| format!("Failed to decode image: {e}"))?
+            .map_err(|e| RariError::internal(format!("Failed to decode image: {e}")))?
             .to_rgba8())
     }
 
-    fn load_data_url(data_url: &str) -> Result<RgbaImage, String> {
+    fn load_data_url(data_url: &str) -> Result<RgbaImage, RariError> {
         let parts: Vec<&str> = data_url.splitn(2, ',').collect();
         if parts.len() != 2 {
-            return Err("Invalid data URL format".to_string());
+            return Err(RariError::validation("Invalid data URL format"));
         }
 
         let header = parts[0];
@@ -294,13 +302,13 @@ impl ImageRenderer {
             use base64::{Engine as _, engine::general_purpose};
             let decoded = general_purpose::STANDARD
                 .decode(data)
-                .map_err(|e| format!("Failed to decode base64: {e}"))?;
+                .map_err(|e| RariError::validation(format!("Failed to decode base64: {e}")))?;
 
             Ok(image::load_from_memory(&decoded)
-                .map_err(|e| format!("Failed to decode image: {e}"))?
+                .map_err(|e| RariError::internal(format!("Failed to decode image: {e}")))?
                 .to_rgba8())
         } else {
-            Err("Only base64 data URLs are supported".to_string())
+            Err(RariError::validation("Only base64 data URLs are supported"))
         }
     }
 }

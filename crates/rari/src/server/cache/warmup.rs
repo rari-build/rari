@@ -8,6 +8,7 @@ use std::{
 
 use axum::http::HeaderMap;
 use futures::stream::{self, StreamExt};
+use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use tokio::sync::{Mutex, OnceCell};
 
@@ -105,9 +106,8 @@ async fn warm_route(
     state: &ServerState,
     app_router: &Arc<AppRouter>,
     path: &str,
-) -> Result<(), String> {
-    let route_match =
-        app_router.match_route(path).map_err(|e| format!("Route match failed: {e}"))?;
+) -> Result<(), RariError> {
+    let route_match = app_router.match_route(path)?;
 
     if route_match.loading.is_some() {
         return Ok(());
@@ -133,7 +133,7 @@ async fn warm_route(
             false,
         )
         .await
-        .map_err(|e| format!("Render failed: {e}"))?;
+        .map_err(|e| RariError::internal(format!("Render failed: {e}")))?;
 
     context.metadata = collect_page_metadata(state, &route_match, &context).await;
 

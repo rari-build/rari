@@ -186,7 +186,7 @@ async fn run_streaming_script(
     request_context: Option<Arc<RequestContext>>,
     script_name: String,
     script: String,
-    chunk_sender: mpsc::Sender<Result<Vec<u8>, String>>,
+    chunk_sender: mpsc::Sender<Result<Vec<u8>, RariError>>,
 ) -> Result<(), RariError> {
     let execute_stream =
         async { runtime.execute_script_for_streaming(script_name, script, chunk_sender).await };
@@ -450,7 +450,8 @@ impl LayoutRenderer {
                     true,
                 )?;
 
-                let (chunk_sender, chunk_receiver) = mpsc::channel::<Result<Vec<u8>, String>>(32);
+                let (chunk_sender, chunk_receiver) =
+                    mpsc::channel::<Result<Vec<u8>, RariError>>(32);
 
                 let runtime =
                     run_with_renderer_result(Arc::clone(&self.renderer), |renderer| async move {
@@ -577,7 +578,8 @@ impl LayoutRenderer {
                     .unwrap_or("")
                     .to_string();
 
-                let (chunk_sender, chunk_receiver) = mpsc::channel::<Result<Vec<u8>, String>>(32);
+                let (chunk_sender, chunk_receiver) =
+                    mpsc::channel::<Result<Vec<u8>, RariError>>(32);
 
                 let head_content_json =
                     serde_json::to_string(&head_content).unwrap_or_else(|_| "\"\"".to_string());

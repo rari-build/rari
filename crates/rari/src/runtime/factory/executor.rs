@@ -414,7 +414,7 @@ pub async fn execute_script_for_streaming(
     module_loader: &Rc<RariModuleLoader>,
     script_name: &str,
     script_code: &str,
-    chunk_sender: mpsc::Sender<Result<Vec<u8>, String>>,
+    chunk_sender: mpsc::Sender<Result<Vec<u8>, RariError>>,
 ) -> Result<(), RariError> {
     {
         let op_state_rc = runtime.op_state();
@@ -453,7 +453,9 @@ pub async fn execute_script_for_streaming(
         };
 
         let _ = sender
-            .send(Err(format!("Streaming script '{script_name}' failed: {error_message}")))
+            .send(Err(RariError::js_execution(format!(
+                "Streaming script '{script_name}' failed: {error_message}"
+            ))))
             .await;
     }
 

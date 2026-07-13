@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use parley::style::FontWeight;
+use rari_error::RariError;
 use reqwest::blocking::Client;
 
 pub mod style;
@@ -59,7 +60,7 @@ impl LayoutEngine {
         element: &JsxElement,
         width: f32,
         height: f32,
-    ) -> Result<ComputedLayout, String> {
+    ) -> Result<ComputedLayout, RariError> {
         self.taffy.clear();
 
         let mut inherited_color = None;
@@ -81,7 +82,7 @@ impl LayoutEngine {
                     )
                 },
             )
-            .map_err(|e| format!("Layout computation failed: {e:?}"))?;
+            .map_err(|e| RariError::internal(format!("Layout computation failed: {e:?}")))?;
 
         self.extract_layout(root_node, 0.0, 0.0)
     }
@@ -90,7 +91,7 @@ impl LayoutEngine {
         &mut self,
         element: &JsxElement,
         inherited_color: &mut Option<String>,
-    ) -> Result<NodeId, String> {
+    ) -> Result<NodeId, RariError> {
         let mut style = Self::parse_style(&element.props);
 
         if !style.contains_key("color") {
@@ -107,10 +108,9 @@ impl LayoutEngine {
         let node_data = NodeData { element: element.clone(), style: style.clone(), has_text };
 
         if is_svg_element(&element.element_type) {
-            let node = self
-                .taffy
-                .new_leaf_with_context(taffy_style, node_data)
-                .map_err(|e| format!("Failed to create SVG leaf node: {e:?}"))?;
+            let node = self.taffy.new_leaf_with_context(taffy_style, node_data).map_err(|e| {
+                RariError::internal(format!("Failed to create SVG leaf node: {e:?}"))
+            })?;
             return Ok(node);
         }
 
@@ -125,16 +125,16 @@ impl LayoutEngine {
         let node = if child_nodes.is_empty() {
             self.taffy
                 .new_leaf_with_context(taffy_style, node_data)
-                .map_err(|e| format!("Failed to create leaf node: {e:?}"))?
+                .map_err(|e| RariError::internal(format!("Failed to create leaf node: {e:?}")))?
         } else {
             let node = self
                 .taffy
                 .new_with_children(taffy_style, &child_nodes)
-                .map_err(|e| format!("Failed to create parent node: {e:?}"))?;
+                .map_err(|e| RariError::internal(format!("Failed to create parent node: {e:?}")))?;
 
             self.taffy
                 .set_node_context(node, Some(node_data))
-                .map_err(|e| format!("Failed to set node context: {e:?}"))?;
+                .map_err(|e| RariError::internal(format!("Failed to set node context: {e:?}")))?;
 
             node
         };
@@ -377,16 +377,22 @@ impl LayoutEngine {
         node: NodeId,
         parent_x: f32,
         parent_y: f32,
-    ) -> Result<ComputedLayout, String> {
-        let layout = self.taffy.layout(node).map_err(|e| format!("Failed to get layout: {e:?}"))?;
-        let node_data = self.taffy.get_node_context(node).ok_or("No node data")?;
+    ) -> Result<ComputedLayout, RariError> {
+        let layout = self
+            .taffy
+            .layout(node)
+            .map_err(|e| RariError::internal(format!("Failed to get layout: {e:?}")))?;
+        let node_data =
+            self.taffy.get_node_context(node).ok_or_else(|| RariError::internal("No node data"))?;
 
         let x = parent_x + layout.location.x;
         let y = parent_y + layout.location.y;
 
         let mut children = Vec::new();
-        for child_id in
-            self.taffy.children(node).map_err(|e| format!("Failed to get children: {e:?}"))?
+        for child_id in self
+            .taffy
+            .children(node)
+            .map_err(|e| RariError::internal(format!("Failed to get children: {e:?}")))?
         {
             children.push(self.extract_layout(child_id, x, y)?);
         }

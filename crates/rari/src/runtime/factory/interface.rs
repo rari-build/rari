@@ -73,6 +73,6 @@ pub trait JsRuntimeInterface: Send + Sync {
         &self,
         script_name: String,
         script_code: String,
-        chunk_sender: Sender<Result<Vec<u8>, String>>,
+        chunk_sender: Sender<Result<Vec<u8>, RariError>>,
     ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>>;
 }

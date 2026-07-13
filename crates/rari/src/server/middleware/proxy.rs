@@ -68,7 +68,7 @@ async fn execute_proxy(
     method: String,
     uri: String,
     headers: FxHashMap<String, String>,
-) -> Result<ProxyResult, Box<dyn Error + Send + Sync>> {
+) -> Result<ProxyResult, RariError> {
     let scheme = headers.get("x-forwarded-proto").cloned().unwrap_or_else(|| "http".to_string());
     let host = headers.get("host").cloned().unwrap_or_else(|| "localhost".to_string());
     let url = format!("{scheme}://{host}{uri}");
@@ -81,9 +81,13 @@ async fn execute_proxy(
 
     let runtime = clone_renderer_runtime(state).await;
 
-    let result_json = runtime.execute_function("~rariExecuteProxy", vec![request_data]).await?;
+    let result_json = runtime
+        .execute_function("~rariExecuteProxy", vec![request_data])
+        .await
+        .map_err(|e| RariError::js_execution(format!("Proxy execution failed: {e}")))?;
 
-    let proxy_result: ProxyResult = serde_json::from_value(result_json)?;
+    let proxy_result: ProxyResult = serde_json::from_value(result_json)
+        .map_err(|e| RariError::deserialization(format!("Invalid proxy result: {e}")))?;
 
     Ok(proxy_result)
 }
@@ -247,7 +251,7 @@ async fn resolve_rari_package_dir() -> Option<PathBuf> {
 }
 
 #[expect(clippy::missing_errors_doc)]
-pub async fn initialize_proxy(state: &ServerState) -> Result<(), Box<dyn Error>> {
+pub async fn initialize_proxy(state: &ServerState) -> Result<(), RariError> {
     if !is_proxy_enabled() {
         return Ok(());
     }
@@ -278,7 +282,9 @@ pub async fn initialize_proxy(state: &ServerState) -> Result<(), Box<dyn Error>>
     let proxy_file_path = Path::new("dist/server/proxy.js");
     let proxy_absolute = match fs::canonicalize(proxy_file_path).await {
         Ok(canonical) => canonical,
-        Err(_) => env::current_dir()?.join(proxy_file_path),
+        Err(_) => env::current_dir()
+            .map_err(|e| RariError::io(format!("Failed to get current directory: {e}")))?
+            .join(proxy_file_path),
     };
     let proxy_specifier = path_to_file_url(&proxy_absolute);
 
@@ -308,18 +314,16 @@ pub async fn initialize_proxy(state: &ServerState) -> Result<(), Box<dyn Error>>
                         .and_then(|v| v.as_str())
                         .unwrap_or("Unknown error during proxy initialization");
                     tracing::error!("Proxy initialization failed: {error_msg}");
-                    Err(RariError::js_runtime(format!("Proxy initialization failed: {error_msg}"))
-                        .into())
+                    Err(RariError::js_runtime(format!("Proxy initialization failed: {error_msg}")))
                 }
             } else {
                 tracing::error!("Proxy initialization returned invalid result format");
-                Err(RariError::js_runtime("Proxy initialization returned invalid result format")
-                    .into())
+                Err(RariError::js_runtime("Proxy initialization returned invalid result format"))
             }
         }
         Err(e) => {
             tracing::error!("Failed to register proxy function: {}", e);
-            Err(e.into())
+            Err(e)
         }
     }
 }

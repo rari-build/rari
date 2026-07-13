@@ -1,4 +1,5 @@
 use image::RgbaImage;
+use rari_error::RariError;
 
 use super::{
     super::layout::{ComputedLayout, style::LinearGradient},
@@ -14,7 +15,7 @@ impl ImageRenderer {
         bg: &str,
         image: &mut RgbaImage,
         mask_memory: &mut MaskMemory,
-    ) -> Result<(), String> {
+    ) -> Result<(), RariError> {
         let border_radius = Self::parse_border_radius(&layout.style);
 
         let x_start = cast::f32_to_u32(layout.x);

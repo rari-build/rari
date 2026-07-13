@@ -10,7 +10,7 @@ use axum::{
         Request,
         ws::{Message as WsMessage, WebSocket, WebSocketUpgrade},
     },
-    http::{HeaderName, HeaderValue, StatusCode, Uri},
+    http::{HeaderName, HeaderValue, Uri},
     response::{IntoResponse, Response},
 };
 use futures::StreamExt as FuturesStreamExt;
@@ -22,7 +22,7 @@ use tokio::time;
 use tokio_tungstenite::tungstenite::Message;
 use tungstenite::{client::IntoClientRequest, http::Request as HttpRequest};
 
-use crate::server::config::Config;
+use crate::server::{config::Config, error_response};
 
 const VITE_WS_PROTOCOL: &str = "vite-hmr";
 
@@ -35,13 +35,15 @@ fn create_client() -> Client {
         .expect("Failed to create HTTP client")
 }
 
+fn vite_error(err: &RariError) -> Response {
+    // Vite proxies are only mounted in development.
+    error_response::json_response(err, true)
+}
+
 pub async fn vite_src_proxy(req: Request) -> impl IntoResponse {
     let Some(config) = Config::get() else {
         tracing::error!("Failed to get global configuration for Vite proxy");
-        return create_error_response(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Configuration not available",
-        );
+        return vite_error(&RariError::configuration("Configuration not available"));
     };
 
     let client = create_client();
@@ -60,10 +62,7 @@ pub async fn vite_src_proxy(req: Request) -> impl IntoResponse {
         Ok(bytes) => bytes,
         Err(e) => {
             tracing::error!("Failed to read request body: {}", e);
-            return create_error_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Failed to read request body",
-            );
+            return vite_error(&RariError::bad_request("Failed to read request body"));
         }
     };
 
@@ -87,26 +86,17 @@ pub async fn vite_src_proxy(req: Request) -> impl IntoResponse {
                 Ok(response) => response,
                 Err(e) => {
                     tracing::error!("Failed to build proxy response: {}", e);
-                    create_error_response(
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        "Failed to build response",
-                    )
+                    vite_error(&RariError::internal("Failed to build response"))
                 }
             }
         }
         Err(e) => {
             if e.is_connect() {
-                create_error_response(
-                    StatusCode::BAD_GATEWAY,
-                    &format!(
-                        "Vite development server is not running on {vite_base_url}. Please start your Vite dev server."
-                    ),
-                )
+                vite_error(&RariError::network(format!(
+                    "Vite development server is not running on {vite_base_url}. Please start your Vite dev server."
+                )))
             } else {
-                create_error_response(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    &format!("Proxy error: {e}"),
-                )
+                vite_error(&RariError::network(format!("Proxy error: {e}")))
             }
         }
     }
@@ -115,10 +105,7 @@ pub async fn vite_src_proxy(req: Request) -> impl IntoResponse {
 pub async fn vite_reverse_proxy(req: Request) -> impl IntoResponse {
     let Some(config) = Config::get() else {
         tracing::error!("Failed to get global configuration for Vite proxy");
-        return create_error_response(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Configuration not available",
-        );
+        return vite_error(&RariError::configuration("Configuration not available"));
     };
 
     let client = create_client();
@@ -137,10 +124,7 @@ pub async fn vite_reverse_proxy(req: Request) -> impl IntoResponse {
         Ok(bytes) => bytes,
         Err(e) => {
             tracing::error!("Failed to read request body: {}", e);
-            return create_error_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Failed to read request body",
-            );
+            return vite_error(&RariError::bad_request("Failed to read request body"));
         }
     };
 
@@ -164,26 +148,17 @@ pub async fn vite_reverse_proxy(req: Request) -> impl IntoResponse {
                 Ok(response) => response,
                 Err(e) => {
                     tracing::error!("Failed to build proxy response: {}", e);
-                    create_error_response(
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        "Failed to build response",
-                    )
+                    vite_error(&RariError::internal("Failed to build response"))
                 }
             }
         }
         Err(e) => {
             if e.is_connect() {
-                create_error_response(
-                    StatusCode::BAD_GATEWAY,
-                    &format!(
-                        "Vite development server is not running on {vite_base_url}. Please start your Vite dev server."
-                    ),
-                )
+                vite_error(&RariError::network(format!(
+                    "Vite development server is not running on {vite_base_url}. Please start your Vite dev server."
+                )))
             } else {
-                create_error_response(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    &format!("Proxy error: {e}"),
-                )
+                vite_error(&RariError::network(format!("Proxy error: {e}")))
             }
         }
     }
@@ -311,28 +286,6 @@ fn convert_tungstenite_to_axum_message(msg: Message) -> Option<WsMessage> {
     }
 }
 
-fn create_error_response(status: StatusCode, message: &str) -> Response<Body> {
-    let error_body = serde_json::json!({
-        "error": message,
-        "status": status.as_u16()
-    });
-
-    Response::builder()
-        .status(status)
-        .header("content-type", "application/json")
-        .body(Body::from(error_body.to_string()))
-        .unwrap_or_else(|_| {
-            #[expect(
-                clippy::expect_used,
-                reason = "Response::builder() with valid components never fails"
-            )]
-            Response::builder()
-                .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body(Body::from("Internal server error"))
-                .expect("Valid fallback error response")
-        })
-}
-
 #[expect(clippy::missing_errors_doc)]
 pub async fn check_vite_server_health() -> Result<(), RariError> {
     let config = Config::get().ok_or_else(|| {
@@ -382,6 +335,8 @@ pub async fn check_vite_server_health() -> Result<(), RariError> {
 
 #[cfg(test)]
 mod tests {
+    use axum::http::StatusCode;
+
     use super::*;
 
     #[test]
@@ -397,7 +352,7 @@ mod tests {
 
     #[test]
     fn test_error_response_creation() {
-        let response = create_error_response(StatusCode::NOT_FOUND, "Test error");
+        let response = vite_error(&RariError::not_found("Test error"));
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 }

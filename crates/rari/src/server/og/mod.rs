@@ -21,7 +21,7 @@ pub use generator::OgImageGenerator;
 use rari_error::RariError;
 pub use types::{OgImageEntry, OgImageParams, OgImageResult};
 
-use crate::server::ServerState;
+use crate::server::{ServerState, config::Config, error_response};
 
 pub async fn og_image_handler(
     State(state): State<ServerState>,
@@ -67,12 +67,7 @@ pub async fn og_image_handler(
             }
             Err(err) => {
                 tracing::error!("OG image generation error: {}", err);
-                let status = if err.to_string().contains("not found") {
-                    StatusCode::NOT_FOUND
-                } else {
-                    StatusCode::INTERNAL_SERVER_ERROR
-                };
-                Ok((status, err.to_string()).into_response())
+                Ok(err.into_response())
             }
         }
     } else {
@@ -107,19 +102,24 @@ impl From<RariError> for OgImageError {
     }
 }
 
+impl From<&OgImageError> for RariError {
+    fn from(err: &OgImageError) -> Self {
+        match err {
+            OgImageError::ComponentNotFound(route) => {
+                Self::not_found(format!("OG image component not found for route: {route}"))
+            }
+            OgImageError::InvalidParams(msg) => Self::validation(msg.clone()),
+            OgImageError::ExecutionError(msg) => Self::js_execution(msg.clone()),
+            OgImageError::GenerationError(msg) | OgImageError::InternalError(msg) => {
+                Self::internal(msg.clone())
+            }
+        }
+    }
+}
+
 impl IntoResponse for OgImageError {
     fn into_response(self) -> Response {
-        let (status, message) = match self {
-            Self::ComponentNotFound(_) => (StatusCode::NOT_FOUND, self.to_string()),
-            Self::InvalidParams(_) => (StatusCode::BAD_REQUEST, self.to_string()),
-            Self::ExecutionError(_) | Self::GenerationError(_) => {
-                (StatusCode::INTERNAL_SERVER_ERROR, self.to_string())
-            }
-            Self::InternalError(_) => {
-                (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error".to_string())
-            }
-        };
-
-        (status, message).into_response()
+        let is_dev = Config::get().is_some_and(Config::is_development);
+        error_response::json_response(&RariError::from(&self), is_dev)
     }
 }

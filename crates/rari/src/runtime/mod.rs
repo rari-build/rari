@@ -117,7 +117,7 @@ impl JsExecutionRuntime {
         &self,
         script_name: String,
         script_code: String,
-        chunk_sender: Sender<Result<Vec<u8>, String>>,
+        chunk_sender: Sender<Result<Vec<u8>, RariError>>,
     ) -> Result<(), RariError> {
         let runtime = Arc::clone(&self.runtime);
         runtime.execute_script_for_streaming(script_name, script_code, chunk_sender).await

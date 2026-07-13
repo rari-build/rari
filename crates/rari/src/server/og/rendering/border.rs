@@ -1,4 +1,5 @@
 use image::RgbaImage;
+use rari_error::RariError;
 use zeno::Fill;
 
 use super::{
@@ -41,7 +42,7 @@ impl ImageRenderer {
         layout: &ComputedLayout,
         image: &mut RgbaImage,
         mask_memory: &mut MaskMemory,
-    ) -> Result<(), String> {
+    ) -> Result<(), RariError> {
         let border_width = Self::parse_border_width(&layout.style);
         let border_color = Self::parse_border_color(&layout.style);
 

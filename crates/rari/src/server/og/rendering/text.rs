@@ -6,6 +6,7 @@ use parley::{
     PositionedLayoutItem::{GlyphRun, InlineBox},
     style::FontWeight,
 };
+use rari_error::RariError;
 use swash::{
     FontRef,
     scale::{ScaleContext, StrikeWith, image::Image, outline::Outline},
@@ -42,7 +43,7 @@ impl ImageRenderer {
         &mut self,
         layout: &ComputedLayout,
         image: &mut RgbaImage,
-    ) -> Result<(), String> {
+    ) -> Result<(), RariError> {
         let text = Self::extract_text(&layout.element);
         if text.is_empty() {
             return Ok(());
@@ -188,7 +189,7 @@ impl ImageRenderer {
         text: &str,
         params: &GlyphRenderParams,
         image: &mut RgbaImage,
-    ) -> Result<(), String> {
+    ) -> Result<(), RariError> {
         use parley::TextStyle;
 
         let line_height_parley = Absolute(params.line_height);
@@ -226,7 +227,7 @@ impl ImageRenderer {
                 let run = glyph_run.run();
                 let font_ref =
                     FontRef::from_index(run.font().data.as_ref(), run.font().index as usize)
-                        .ok_or("Invalid font index")?;
+                        .ok_or_else(|| RariError::internal("Invalid font index"))?;
 
                 let mut scaler = scale_context
                     .builder(font_ref)
@@ -263,7 +264,7 @@ impl ImageRenderer {
         line: &parley::Line<[u8; 4]>,
         params: &GlyphRenderParams,
         image: &mut RgbaImage,
-    ) -> Result<(), String> {
+    ) -> Result<(), RariError> {
         let metrics = line.metrics();
         let line_y = params.y + metrics.baseline;
 
@@ -375,7 +376,7 @@ impl ImageRenderer {
         y: f32,
         palette: Option<swash::ColorPalette>,
         image: &mut RgbaImage,
-    ) -> Result<(), String> {
+    ) -> Result<(), RariError> {
         use zeno::Command;
 
         if let Some(palette) = palette {
@@ -423,7 +424,7 @@ impl ImageRenderer {
         y: f32,
         color: Rgba<u8>,
         image: &mut RgbaImage,
-    ) -> Result<(), String> {
+    ) -> Result<(), RariError> {
         use zeno::Command;
 
         let path_commands: Vec<Command> = outline
@@ -454,7 +455,7 @@ impl ImageRenderer {
         y: f32,
         color: Rgba<u8>,
         image: &mut RgbaImage,
-    ) -> Result<(), String> {
+    ) -> Result<(), RariError> {
         use zeno::Transform;
 
         let transform = Transform::translation(x, y);

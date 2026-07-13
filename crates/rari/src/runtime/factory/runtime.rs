@@ -145,7 +145,7 @@ enum JsRequest {
     ExecuteScriptForStreaming {
         script_name: String,
         script_code: String,
-        chunk_sender: mpsc::Sender<Result<Vec<u8>, String>>,
+        chunk_sender: mpsc::Sender<Result<Vec<u8>, RariError>>,
         result_tx: oneshot::Sender<Result<(), RariError>>,
     },
 }
@@ -1245,7 +1245,7 @@ impl JsRuntimeInterface for RariRuntime {
         &self,
         script_name: String,
         script_code: String,
-        chunk_sender: mpsc::Sender<Result<Vec<u8>, String>>,
+        chunk_sender: mpsc::Sender<Result<Vec<u8>, RariError>>,
     ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>> {
         let request_sender = self.request_sender.clone();
 

@@ -19,6 +19,7 @@ use axum::{
 };
 use bytes::Bytes;
 use cow_utils::CowUtils;
+use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use tokio::{
     fs,
@@ -52,6 +53,7 @@ use crate::{
                 path_validation::validate_safe_path,
             },
         },
+        error_response,
         middleware::request_context::RequestContext,
         rendering::{
             metadata_injection::inject_metadata,
@@ -426,7 +428,7 @@ pub async fn render_rsc_navigation_streaming(
                 route_match.route.path,
                 e
             );
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            return Err(error_response::status(&e));
         }
     };
 
@@ -448,7 +450,9 @@ pub async fn render_rsc_navigation_streaming(
         )),
         RenderResult::Chunked { content_type: ChunkedContentType::Html, .. } => {
             tracing::error!("HTML chunked render not supported in RSC-only mode");
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
+            Err(error_response::status(&RariError::internal(
+                "HTML chunked render not supported in RSC-only mode",
+            )))
         }
         RenderResult::Static(rsc_flight_protocol) => {
             let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
@@ -512,7 +516,7 @@ fn render_chunked_response(
     content_type: ChunkedContentType,
     shell: Bytes,
     closing: Bytes,
-    mut chunks: Receiver<Result<Vec<u8>, String>>,
+    mut chunks: Receiver<Result<Vec<u8>, RariError>>,
     is_not_found: bool,
     accept_encoding: Option<&str>,
 ) -> http::Response<Body> {
@@ -532,7 +536,7 @@ fn render_chunked_response(
                         }
                         Ok(Some(Err(e))) => {
                             tracing::error!("Error in chunked HTML stream: {}", e);
-                            yield Err(Error::other(e));
+                            yield Err(Error::other(e.to_string()));
                             break;
                         }
                         Ok(None) => break,
@@ -564,7 +568,7 @@ fn render_chunked_response(
                         }
                         Ok(Some(Err(e))) => {
                             tracing::error!("Error in chunked RSC stream: {}", e);
-                            yield Err(Error::other(e));
+                            yield Err(Error::other(e.to_string()));
                             break;
                         }
                         Ok(None) => break,
@@ -724,7 +728,9 @@ pub async fn render_synchronous(
             }
             RenderResult::Chunked { content_type: ChunkedContentType::RscFlight, .. } => {
                 tracing::error!("RSC chunked render not supported in HTML synchronous mode");
-                Err(StatusCode::INTERNAL_SERVER_ERROR)
+                Err(error_response::status(&RariError::internal(
+                    "RSC chunked render not supported in HTML synchronous mode",
+                )))
             }
         },
         Err(e) => {
@@ -834,10 +840,14 @@ pub async fn render_streaming_with_layout(
             )]
             Ok(response_builder.body(Body::from(body_bytes)).expect("Valid HTML response"))
         }
-        RenderResult::StaticBinary(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+        RenderResult::StaticBinary(_) => Err(error_response::status(&RariError::internal(
+            "Binary render result not supported in HTML streaming mode",
+        ))),
         RenderResult::Chunked { content_type: ChunkedContentType::RscFlight, .. } => {
             tracing::error!("RSC chunked render not supported in HTML streaming mode");
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
+            Err(error_response::status(&RariError::internal(
+                "RSC chunked render not supported in HTML streaming mode",
+            )))
         }
     }
 }
@@ -1260,7 +1270,7 @@ pub async fn handle_app_route(
                 }
                 Err(e) => {
                     tracing::error!("Failed to render RSC: {}", e);
-                    Err(StatusCode::INTERNAL_SERVER_ERROR)
+                    Err(error_response::status(&e))
                 }
             }
         }
@@ -1377,9 +1387,12 @@ pub async fn handle_app_route(
                     && render_mode == "static"
                 {
                     let (parts, body) = response.into_parts();
-                    let body_bytes = body::to_bytes(body, usize::MAX)
-                        .await
-                        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+                    let body_bytes = body::to_bytes(body, usize::MAX).await.map_err(|e| {
+                        tracing::error!("Failed to read response body for cache: {}", e);
+                        error_response::status(&RariError::internal(format!(
+                            "Failed to read response body for cache: {e}"
+                        )))
+                    })?;
 
                     let cache_control_value =
                         parts.headers.get("cache-control").and_then(|v| v.to_str().ok());

@@ -203,8 +203,8 @@ pub fn template_key_json(context: &LayoutRenderContext) -> String {
 pub async fn drain_chunked_stream(
     shell: Bytes,
     closing: Bytes,
-    chunks: &mut Receiver<Result<Vec<u8>, String>>,
-) -> Result<String, String> {
+    chunks: &mut Receiver<Result<Vec<u8>, RariError>>,
+) -> Result<String, RariError> {
     let mut output = String::from_utf8_lossy(&shell).into_owned();
 
     while let Some(chunk_result) = chunks.recv().await {

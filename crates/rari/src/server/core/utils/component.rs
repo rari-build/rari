@@ -1,9 +1,7 @@
-use std::{
-    error::Error,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
 use cow_utils::CowUtils;
+use rari_error::RariError;
 use sha2::{Digest, Sha256};
 
 const DIST_DIR: &str = "dist";
@@ -114,7 +112,7 @@ if (!globalThis.{module_key}) {{
 }
 
 #[expect(clippy::missing_errors_doc)]
-pub fn extract_component_id(file_path: &str) -> Result<String, Box<dyn Error + Send + Sync>> {
+pub fn extract_component_id(file_path: &str) -> Result<String, RariError> {
     let path = Path::new(file_path);
 
     let project_relative_path = if path.is_absolute() {
@@ -122,7 +120,9 @@ pub fn extract_component_id(file_path: &str) -> Result<String, Box<dyn Error + S
         if let Some(src_idx) = components.iter().rposition(|c| c.as_os_str() == "src") {
             components[src_idx..].iter().collect()
         } else {
-            return Err(format!("Path does not contain 'src' directory: {file_path}").into());
+            return Err(RariError::validation(format!(
+                "Path does not contain 'src' directory: {file_path}"
+            )));
         }
     } else {
         let normalized = file_path.cow_replace('\\', "/");
@@ -133,8 +133,10 @@ pub fn extract_component_id(file_path: &str) -> Result<String, Box<dyn Error + S
         }
     };
 
-    let project_relative_path =
-        project_relative_path.to_str().ok_or("Invalid path encoding")?.cow_replace('\\', "/");
+    let project_relative_path = project_relative_path
+        .to_str()
+        .ok_or_else(|| RariError::validation("Invalid path encoding"))?
+        .cow_replace('\\', "/");
 
     Ok(format!(
         "{}_{}",
@@ -144,9 +146,7 @@ pub fn extract_component_id(file_path: &str) -> Result<String, Box<dyn Error + S
 }
 
 #[expect(clippy::missing_errors_doc)]
-pub fn get_dist_path_for_component(
-    file_path: &str,
-) -> Result<PathBuf, Box<dyn Error + Send + Sync>> {
+pub fn get_dist_path_for_component(file_path: &str) -> Result<PathBuf, RariError> {
     let component_id = extract_component_id(file_path)?;
 
     let dist_path = Path::new(DIST_DIR).join("server").join(format!("{component_id}.js"));

@@ -6,6 +6,7 @@
 use std::{path::PathBuf, string::ToString, sync::Arc, vec::Vec};
 
 use cow_utils::CowUtils;
+use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use serde_json::{Map, Value};
 use tokio::{fs, sync::RwLock, task};
@@ -423,7 +424,7 @@ impl OgImageGenerator {
         Ok(JsxElement { element_type, props, children })
     }
 
-    fn encode_webp(image: &image::RgbaImage) -> Result<Vec<u8>, String> {
+    fn encode_webp(image: &image::RgbaImage) -> Result<Vec<u8>, RariError> {
         use webp::Encoder;
 
         let encoder = Encoder::from_rgba(image.as_raw(), image.width(), image.height());

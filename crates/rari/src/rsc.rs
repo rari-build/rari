@@ -8,6 +8,7 @@ use std::{
 
 use cow_utils::CowUtils;
 use parking_lot::Mutex;
+use rari_error::RariError;
 use regex::Regex;
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
@@ -128,7 +129,7 @@ impl ComponentRegistry {
         source: &str,
         transformed_source: String,
         dependencies: ComponentDependencies,
-    ) -> Result<(), String> {
+    ) -> Result<(), RariError> {
         let component_id = Self::normalize_id(id).into_owned();
         let dependencies: ComponentDependencies =
             dependencies.into_iter().map(|dep| Self::normalize_id(&dep).into_owned()).collect();
