@@ -77,12 +77,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Ubuntu 22.04 (glibc 2.35) keeps linux binaries runnable on older distros.
+          # Namespace 24.04+ profiles produce GLIBC_2.38/2.39 requirements.
           - target: x86_64-unknown-linux-gnu
-            os: namespace-profile-rari-linux-amd64
+            os: nscloud-ubuntu-22.04-amd64
             name: rari-linux-x64
             platform: linux-x64
           - target: aarch64-unknown-linux-gnu
-            os: namespace-profile-rari-linux-arm64
+            os: nscloud-ubuntu-22.04-arm64
             name: rari-linux-arm64
             platform: linux-arm64
           - target: x86_64-apple-darwin
@@ -417,11 +419,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Ubuntu 22.04 (glibc 2.35) for portable linux NAPI addons.
           - target: x86_64-unknown-linux-gnu
-            os: namespace-profile-rari-linux-amd64
+            os: nscloud-ubuntu-22.04-amd64
             platform: linux-x64
           - target: aarch64-unknown-linux-gnu
-            os: namespace-profile-rari-linux-arm64
+            os: nscloud-ubuntu-22.04-arm64
             platform: linux-arm64
           - target: x86_64-apple-darwin
             os: namespace-profile-rari-macos-arm64

@@ -1728,8 +1728,8 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
                 )
               }
 
-              const found = resolveWithExtensions(resolved, ['.ts', '.tsx', '.js', '.jsx'])
-                || resolveIndexFile(resolved, ['.ts', '.tsx', '.js', '.jsx'])
+              const found = resolveWithExtensions(resolved, ['.mjs', '.mts', '.ts', '.tsx', '.js', '.jsx'])
+                || resolveIndexFile(resolved, ['.mjs', '.mts', '.ts', '.tsx', '.js', '.jsx'])
 
               if (found && buildContext.isServerActionFile(found))
                 return `\0server-action-ref:${path.resolve(found)}`
