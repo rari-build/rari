@@ -13,7 +13,7 @@ minimumReleaseAgeExclude:
   - rari-linux-x64@0.15.0 || 0.15.1
   - rari-win32-arm64@0.15.0 || 0.15.1
   - rari-win32-x64@0.15.0 || 0.15.1
-  - rari@0.15.0
+  - rari@0.15.0 || 0.15.1
 shellEmulator: true
 trustPolicy: no-downgrade
 packages:
@@ -34,7 +34,7 @@ catalogs:
   cli:
     '@clack/prompts': ^1.7.0
   default:
-    rari: ^0.15.0
+    rari: ^0.15.1
   eslint:
     '@antfu/eslint-config': ^9.1.0
     '@eslint-react/eslint-plugin': ^5.14.5
