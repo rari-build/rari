@@ -29,6 +29,10 @@ catalogs:
     '@clack/prompts':
       specifier: ^1.7.0
       version: 1.7.0
+  default:
+    rari:
+      specifier: ^0.15.0
+      version: 0.15.0
   eslint:
     '@antfu/eslint-config':
       specifier: ^9.1.0
@@ -455,8 +459,8 @@ importers:
         specifier: catalog:analytics
         version: 1.399.2
       rari:
-        specifier: workspace:*
-        version: link:../packages/rari
+        specifier: 'catalog:'
+        version: 0.15.0(@mdx-js/mdx@3.1.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(webpack@5.107.2)
       react:
         specifier: catalog:react
         version: 19.2.7
@@ -4601,6 +4605,18 @@ packages:
     os: [win32]
     hasBin: true
 
+  rari@0.15.0:
+    resolution: {integrity: sha512-PmeOphYVsLiH58CQAfQ8lZzHjmkh9Qu9k7h7F0fQg7M9uhkUfUediwFqViPAw/i7juxrYtUKhFetxTD1cv3f4A==}
+    engines: {node: '>=22.18.0'}
+    hasBin: true
+    peerDependencies:
+      '@mdx-js/mdx': ^3.1.1
+      react: ^19.2.7
+      react-dom: ^19.2.7
+    peerDependenciesMeta:
+      '@mdx-js/mdx':
+        optional: true
+
   react-dom@19.2.7:
     resolution: {integrity: sha512-t0BRVXvbiE/o20Hfw669rLbMCDWtYZLvmJigy2f0MxsXF+71pxhR3xOkspmsO8h3ZlNzyibAmtCa3l4lYKk6gQ==}
     peerDependencies:
@@ -6370,6 +6386,18 @@ snapshots:
   '@rari/use-cache@0.15.0(react-server-dom-webpack@19.2.7(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(webpack@5.107.2(lightningcss@1.32.0)))':
     dependencies:
       react-server-dom-webpack: 19.2.7(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(webpack@5.107.2(lightningcss@1.32.0))
+    optionalDependencies:
+      '@rari/use-cache-darwin-arm64': 0.15.0
+      '@rari/use-cache-darwin-x64': 0.15.0
+      '@rari/use-cache-linux-arm64': 0.15.0
+      '@rari/use-cache-linux-x64': 0.15.0
+      '@rari/use-cache-win32-arm64': 0.15.0
+      '@rari/use-cache-win32-x64': 0.15.0
+    optional: true
+
+  '@rari/use-cache@0.15.0(react-server-dom-webpack@19.2.7(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(webpack@5.107.2))':
+    dependencies:
+      react-server-dom-webpack: 19.2.7(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(webpack@5.107.2)
     optionalDependencies:
       '@rari/use-cache-darwin-arm64': 0.15.0
       '@rari/use-cache-darwin-x64': 0.15.0
@@ -9405,6 +9433,25 @@ snapshots:
 
   rari-win32-x64@0.15.0:
     optional: true
+
+  rari@0.15.0(@mdx-js/mdx@3.1.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(webpack@5.107.2):
+    dependencies:
+      lightningcss: 1.32.0
+      react: 19.2.7
+      react-dom: 19.2.7(react@19.2.7)
+      react-server-dom-webpack: 19.2.7(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(webpack@5.107.2)
+      rolldown: 1.1.5
+    optionalDependencies:
+      '@mdx-js/mdx': 3.1.1
+      '@rari/use-cache': 0.15.0(react-server-dom-webpack@19.2.7(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(webpack@5.107.2))
+      rari-darwin-arm64: 0.15.0
+      rari-darwin-x64: 0.15.0
+      rari-linux-arm64: 0.15.0
+      rari-linux-x64: 0.15.0
+      rari-win32-arm64: 0.15.0
+      rari-win32-x64: 0.15.0
+    transitivePeerDependencies:
+      - webpack
 
   react-dom@19.2.7(react@19.2.7):
     dependencies:

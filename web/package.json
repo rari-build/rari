@@ -28,7 +28,7 @@
     "@shikijs/types": "catalog:mdx",
     "mermaid": "catalog:mdx",
     "posthog-js": "catalog:analytics",
-    "rari": "workspace:*",
+    "rari": "catalog:",
     "react": "catalog:react",
     "react-dom": "catalog:react",
     "remark-gfm": "catalog:mdx"
