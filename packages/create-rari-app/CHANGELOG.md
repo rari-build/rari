@@ -1,3 +1,22 @@
+## [create-rari-app@0.5.18] - 2026-07-13
+
+### 🚀 Features
+
+- migrate from @typescript/native-preview to TypeScript 7 🎉 by @skiniks
+
+### ⚙️ Miscellaneous Tasks
+
+- *(dependencies)* update various dependencies and improve project structure by @skiniks
+- update package dependencies by @skiniks
+- refine tokio dependency configurations and update Node.js types in package.json by @skiniks
+- update packageManager version to pnpm@11.10.0 by @skiniks
+- simplify build scripts by removing redundant clean command by @skiniks
+- *(dependencies)* update various package versions by @skiniks
+- *(dependencies)* update various package versions by @skiniks
+- *(dependencies)* downgrade pnpm version to 11.11.0 across multiple package.json files and update CodSpeed action version to 4.18.5 by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/create-rari-app@0.5.17...create-rari-app@0.5.18
 ## [0.14.12] - 2026-06-16
 
 ### 🚀 Features
