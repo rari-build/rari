@@ -32,6 +32,10 @@ Manual notes are prepended to git-cliff output for GitHub releases and
 injected under the version heading in CHANGELOG.md.
 -->
 
+### 🐛 Bug Fixes
+
+- *(package)* downgrade rari version from 0.15.0 to 0.14.12 in package.json by @skiniks
+
 ### ⚙️ Miscellaneous Tasks
 
 - *(dependencies)* upgrade rari packages to version 0.15.0 in pnpm-lock.yaml, pnpm-workspace.yaml, and package.json by @skiniks
