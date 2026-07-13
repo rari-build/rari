@@ -105,13 +105,11 @@ impl From<RariError> for OgImageError {
 impl From<&OgImageError> for RariError {
     fn from(err: &OgImageError) -> Self {
         match err {
-            OgImageError::ComponentNotFound(route) => {
-                Self::not_found(format!("OG image component not found for route: {route}"))
-            }
-            OgImageError::InvalidParams(msg) => Self::validation(msg.clone()),
-            OgImageError::ExecutionError(msg) => Self::js_execution(msg.clone()),
-            OgImageError::GenerationError(msg) | OgImageError::InternalError(msg) => {
-                Self::internal(msg.clone())
+            OgImageError::ComponentNotFound(_) => Self::not_found(err.to_string()),
+            OgImageError::InvalidParams(_) => Self::validation(err.to_string()),
+            OgImageError::ExecutionError(_) => Self::js_execution(err.to_string()),
+            OgImageError::GenerationError(_) | OgImageError::InternalError(_) => {
+                Self::internal(err.to_string())
             }
         }
     }
