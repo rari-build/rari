@@ -413,17 +413,20 @@ fn action_export_name(action_id: &str) -> &str {
 }
 
 fn rpc_action_error_response(
-    error_message: String,
-    pending_cookies: &dashmap::DashMap<PendingCookieKey, PendingCookie>,
+    error: &RariError,
+    is_development: bool,
+    pending_cookies: Option<&dashmap::DashMap<PendingCookieKey, PendingCookie>>,
 ) -> Response {
     #[expect(clippy::expect_used, reason = "Response::builder() with valid components never fails")]
     let mut response = Response::builder()
-        .status(StatusCode::BAD_REQUEST)
+        .status(error_response::status(error))
         .header(header::CONTENT_TYPE, "text/plain;charset=UTF-8")
         .header(header::CACHE_CONTROL, "no-store, no-cache, must-revalidate, private")
-        .body(Body::from(error_message))
+        .body(Body::from(error.safe_message(is_development)))
         .expect("Valid error response");
-    append_pending_cookies(response.headers_mut(), pending_cookies);
+    if let Some(pending_cookies) = pending_cookies {
+        append_pending_cookies(response.headers_mut(), pending_cookies);
+    }
     response
 }
 
@@ -635,7 +638,7 @@ async fn handle_server_action_at_path(
 ) -> Result<Response, StatusCode> {
     let allowed_origins = state.config.action_origins();
     if let Err(e) = check_origin(&headers, &allowed_origins) {
-        return Ok(error_response::json_response(&e, state.config.is_development()));
+        return Ok(rpc_action_error_response(&e, state.config.is_development(), None));
     }
 
     let action_id = headers
@@ -661,8 +664,11 @@ async fn handle_server_action_at_path(
         if is_reserved_export_name(export_name) {
             tracing::error!("Attempted to call reserved export name: {}", export_name);
             return Ok(rpc_action_error_response(
-                format!("Invalid export name '{export_name}': reserved for internal use"),
-                &request_context.pending_cookies,
+                &RariError::bad_request(format!(
+                    "Invalid export name '{export_name}': reserved for internal use"
+                )),
+                state.config.is_development(),
+                Some(&request_context.pending_cookies),
             ));
         }
     }
@@ -681,7 +687,11 @@ async fn handle_server_action_at_path(
         Ok(script) => script,
         Err(e) => {
             tracing::error!("Failed to build action script: {}", e);
-            return Ok(error_response::json_response(&e, state.config.is_development()));
+            return Ok(rpc_action_error_response(
+                &e,
+                state.config.is_development(),
+                Some(&request_context.pending_cookies),
+            ));
         }
     };
 
@@ -702,13 +712,17 @@ async fn handle_server_action_at_path(
                 let mut response = Response::builder()
                     .status(StatusCode::BAD_REQUEST)
                     .header(header::CACHE_CONTROL, "no-store, no-cache, must-revalidate, private")
-                    .body(Body::from(e.to_string()))
+                    .body(Body::from(e.safe_message(state.config.is_development())))
                     .expect("Valid error response");
                 append_pending_cookies(response.headers_mut(), &request_context.pending_cookies);
                 return Ok(response);
             }
 
-            return Ok(rpc_action_error_response(e.to_string(), &request_context.pending_cookies));
+            return Ok(rpc_action_error_response(
+                &e,
+                state.config.is_development(),
+                Some(&request_context.pending_cookies),
+            ));
         }
     };
 
@@ -810,29 +824,32 @@ async fn handle_server_action_at_path(
         .await
     {
         tracing::error!("Failed to encode action flight response: {}", error);
-        let mut response = error_response::json_response(&error, state.config.is_development());
-        append_pending_cookies(response.headers_mut(), &request_context.pending_cookies);
-        return Ok(response);
+        return Ok(rpc_action_error_response(
+            &error,
+            state.config.is_development(),
+            Some(&request_context.pending_cookies),
+        ));
     }
 
     let flight_body = match capture_last_action_flight_binary(&runtime).await {
         Ok(body) => body,
         Err(e) => {
             tracing::error!("Failed to read action flight response: {}", e);
-            let mut response = error_response::json_response(&e, state.config.is_development());
-            append_pending_cookies(response.headers_mut(), &request_context.pending_cookies);
-            return Ok(response);
+            return Ok(rpc_action_error_response(
+                &e,
+                state.config.is_development(),
+                Some(&request_context.pending_cookies),
+            ));
         }
     };
 
     let Some(flight_body) = flight_body else {
         tracing::error!("RPC server action did not produce a Flight response payload");
-        let mut response = error_response::json_response(
+        return Ok(rpc_action_error_response(
             &RariError::internal("RPC server action did not produce a Flight response payload"),
             state.config.is_development(),
-        );
-        append_pending_cookies(response.headers_mut(), &request_context.pending_cookies);
-        return Ok(response);
+            Some(&request_context.pending_cookies),
+        ));
     };
 
     Ok(rpc_action_flight_response(
