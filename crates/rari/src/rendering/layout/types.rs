@@ -1,4 +1,5 @@
 use bytes::Bytes;
+use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use tokio::sync::mpsc::Receiver;
 
@@ -198,6 +199,6 @@ pub enum RenderResult {
         content_type: ChunkedContentType,
         shell: Bytes,
         closing: Bytes,
-        chunks: Receiver<Result<Vec<u8>, String>>,
+        chunks: Receiver<Result<Vec<u8>, RariError>>,
     },
 }

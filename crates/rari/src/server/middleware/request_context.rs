@@ -308,8 +308,7 @@ impl RequestContext {
         url: &str,
         options: &FxHashMap<String, String>,
     ) -> Result<CachedFetchResult, RariError> {
-        let client = get_http_client()
-            .map_err(|e| RariError::network(format!("HTTP client initialization failed: {e}")))?;
+        let client = get_http_client()?;
         let mut request = client.get(url);
 
         if let Some(headers_str) = options.get("headers")

@@ -1,7 +1,6 @@
 #![expect(clippy::missing_errors_doc, clippy::too_many_lines)]
 
 use std::{
-    error::Error,
     path::Path,
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
@@ -9,11 +8,12 @@ use std::{
 
 use axum::{extract::State, http::StatusCode, response::Json};
 use cow_utils::CowUtils;
+use rari_error::RariError;
 use serde_json::Value;
 use tokio::{fs, time};
 
 use crate::{
-    rendering::base::{run_with_renderer, run_with_renderer_result},
+    rendering::base::run_with_renderer_result,
     rsc::extract_dependencies,
     server::{
         RegisterClientRequest, RegisterRequest, ServerState,
@@ -21,6 +21,7 @@ use crate::{
             component::{get_dist_path_for_component, wrap_server_action_module},
             path_validation::{normalize_component_path, validate_component_path},
         },
+        error_response,
     },
 };
 
@@ -81,7 +82,7 @@ pub async fn register_component(
         }))),
         Err(e) => {
             tracing::error!("Failed to register component {}: {}", request.component_id, e);
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
+            Err(error_response::status(&e))
         }
     }
 }
@@ -110,7 +111,7 @@ pub async fn reload_component_from_dist(
     state: &ServerState,
     file_path: &str,
     component_id: &str,
-) -> Result<(), Box<dyn Error + Send + Sync>> {
+) -> Result<(), RariError> {
     let normalized_path = normalize_component_path(file_path);
 
     if let Err(e) = validate_component_path(&normalized_path) {
@@ -121,7 +122,7 @@ pub async fn reload_component_from_dist(
             error = %e,
             "Component path validation failed"
         );
-        return Err(format!("Path validation error: {e}").into());
+        return Err(RariError::validation(format!("Path validation error: {e}")));
     }
 
     let file_path = &normalized_path;
@@ -135,16 +136,15 @@ pub async fn reload_component_from_dist(
                 error = %e,
                 "Failed to resolve dist path for component"
             );
-            return Err(format!("Path resolution error: {e}").into());
+            return Err(RariError::internal(format!("Path resolution error: {e}")));
         }
     };
 
     if !fs::try_exists(&dist_path).await.unwrap_or(false) {
-        return Err(format!(
+        return Err(RariError::not_found(format!(
             "Dist file not found: {}. Vite may not have finished building yet. Last known good version will be preserved.",
             dist_path.display()
-        )
-        .into());
+        )));
     }
 
     let mut dist_code = match fs::read_to_string(&dist_path).await {
@@ -157,12 +157,11 @@ pub async fn reload_component_from_dist(
                 error_kind = ?e.kind(),
                 "Failed to read dist file. Last known good version will be preserved."
             );
-            return Err(format!(
+            return Err(RariError::io(format!(
                 "Failed to read dist file {}: {}. Last known good version will be preserved.",
                 dist_path.display(),
                 e
-            )
-            .into());
+            )));
         }
     };
 
@@ -192,7 +191,7 @@ pub async fn reload_component_from_dist(
                     error = %e,
                     "Failed to re-read dist file after retry"
                 );
-                return Err(format!("Failed to re-read dist file: {e}").into());
+                return Err(RariError::io(format!("Failed to re-read dist file: {e}")));
             }
         };
 
@@ -204,9 +203,9 @@ pub async fn reload_component_from_dist(
             let new_snippet = new_dist_code.chars().take(500).collect::<String>();
 
             if existing_snippet == new_snippet {
-                return Err(
-                    "Dist file not yet updated by Vite. Last known good version preserved.".into(),
-                );
+                return Err(RariError::state(
+                    "Dist file not yet updated by Vite. Last known good version preserved.",
+                ));
             }
         }
         drop(registry);
@@ -225,7 +224,7 @@ pub async fn reload_component_from_dist(
     let component_id = component_id.to_string();
     let renderer = Arc::clone(&state.renderer);
 
-    run_with_renderer(renderer, move |renderer| async move {
+    run_with_renderer_result(renderer, move |renderer| async move {
         if is_esm {
             renderer.clear_component_cache(&component_id);
 
@@ -248,7 +247,7 @@ pub async fn reload_component_from_dist(
                         error = %e,
                         "Failed to add HMR module to loader"
                     );
-                    format!("Failed to add HMR module to loader: {e}")
+                    RariError::js_execution(format!("Failed to add HMR module to loader: {e}"))
                 })?;
 
             let module_id = renderer.runtime.load_es_module(&component_id).await.map_err(|e| {
@@ -257,7 +256,7 @@ pub async fn reload_component_from_dist(
                     error = %e,
                     "Failed to load ES module during HMR"
                 );
-                format!("Failed to load ES module: {e}")
+                RariError::js_execution(format!("Failed to load ES module: {e}"))
             })?;
 
             renderer.runtime.evaluate_module(module_id).await.map_err(|e| {
@@ -267,7 +266,7 @@ pub async fn reload_component_from_dist(
                     error = %e,
                     "Failed to evaluate module during HMR"
                 );
-                format!("Failed to evaluate module: {e}")
+                RariError::js_execution(format!("Failed to evaluate module: {e}"))
             })?;
 
             let clear_script = format!(
@@ -297,7 +296,7 @@ pub async fn reload_component_from_dist(
                         error = %e,
                         "Failed to clear old component"
                     );
-                    format!("Failed to clear old component: {e}")
+                    RariError::js_execution(format!("Failed to clear old component: {e}"))
                 })?;
 
             let registration_script = format!(
@@ -355,7 +354,7 @@ pub async fn reload_component_from_dist(
                         error = %e,
                         "Failed to register ESM module exports to globalThis"
                     );
-                    format!("Failed to register ESM module: {e}")
+                    RariError::js_execution(format!("Failed to register ESM module: {e}"))
                 })?;
 
             renderer.clear_script_cache();
@@ -384,7 +383,7 @@ pub async fn reload_component_from_dist(
                             "Failed to register component during HMR reload"
                         );
                         registry.remove_component(&component_id);
-                        return Err(format!("Failed to register component: {e}"));
+                        return Err(RariError::internal(format!("Failed to register component: {e}")));
                     }
                 }
             }
@@ -407,9 +406,9 @@ pub async fn reload_component_from_dist(
                     code_length = dist_code.len(),
                     "Failed to execute component code during reload. Last known good version will be preserved."
                 );
-                return Err(format!(
+                return Err(RariError::js_execution(format!(
                     "Failed to execute component code: {e}. Last known good version will be preserved."
-                ));
+                )));
             }
         }
 
@@ -450,9 +449,9 @@ pub async fn reload_component_from_dist(
                     error = %e,
                     "Failed to execute verification script. Last known good version will be preserved."
                 );
-                return Err(format!(
+                return Err(RariError::js_execution(format!(
                     "Failed to verify component reload: {e}. Last known good version will be preserved."
-                ));
+                )));
             }
         };
 
@@ -482,9 +481,9 @@ pub async fn reload_component_from_dist(
                     expected_key,
                     actual_keys
                 );
-                Err(format!(
+                Err(RariError::js_runtime(format!(
                     "Component '{component_id}' not found in globalThis after reload. Expected key '{expected_key}' but found keys: [{actual_keys}]. Last known good version will be preserved."
-                ))
+                )))
             }
         } else {
             tracing::error!(
@@ -492,21 +491,18 @@ pub async fn reload_component_from_dist(
                 verification_result = ?result_json,
                 "Invalid verification result format. Last known good version will be preserved."
             );
-            Err(
+            Err(RariError::internal(
                 "Invalid verification result format. Last known good version will be preserved."
-                    .to_string(),
-            )
+            ))
         }
     })
     .await
-    .map_err(|e| -> Box<dyn Error + Send + Sync> { e.to_string().into() })?
-    .map_err(|e| -> Box<dyn Error + Send + Sync> { e.into() })
 }
 
 pub async fn immediate_component_reregistration(
     state: &ServerState,
     file_path: &str,
-) -> Result<(), Box<dyn Error + Send + Sync>> {
+) -> Result<(), RariError> {
     let normalized_path = normalize_component_path(file_path);
 
     if let Err(e) = validate_component_path(&normalized_path) {
@@ -516,7 +512,7 @@ pub async fn immediate_component_reregistration(
             error = %e,
             "Component path validation failed"
         );
-        return Err(format!("Path validation error: {e}").into());
+        return Err(RariError::validation(format!("Path validation error: {e}")));
     }
 
     let file_path = &normalized_path;
@@ -541,7 +537,7 @@ pub async fn immediate_component_reregistration(
             Ok(())
         })
         .await
-        .map_err(|e| -> Box<dyn Error + Send + Sync> { e.to_string().into() })?;
+        .map_err(|e| RariError::internal(e.to_string()))?;
     }
 
     let content = match fs::read_to_string(file_path).await {
@@ -554,7 +550,7 @@ pub async fn immediate_component_reregistration(
                 error_kind = ?e.kind(),
                 "Failed to read source file for immediate re-registration"
             );
-            return Err(format!("Failed to read source file: {e}").into());
+            return Err(RariError::io(format!("Failed to read source file: {e}")));
         }
     };
 
@@ -573,7 +569,7 @@ pub async fn immediate_component_reregistration(
             error = %e,
             "Failed to register component directly, preserving last known good version"
         );
-        return Err(format!("Failed to register component: {e}").into());
+        return Err(RariError::internal(format!("Failed to register component: {e}")));
     }
 
     time::sleep(time::Duration::from_millis(100)).await;
@@ -588,7 +584,7 @@ pub async fn immediate_component_reregistration(
             Ok(())
         })
         .await
-        .map_err(|e| -> Box<dyn Error + Send + Sync> { e.to_string().into() })?;
+        .map_err(|e| RariError::internal(e.to_string()))?;
     }
 
     time::sleep(time::Duration::from_millis(200)).await;
@@ -605,7 +601,9 @@ pub async fn immediate_component_reregistration(
             error = %e,
             "Failed to re-register component after cache clear, preserving last known good version"
         );
-        return Err(format!("Failed to re-register component after cache clear: {e}").into());
+        return Err(RariError::internal(format!(
+            "Failed to re-register component after cache clear: {e}"
+        )));
     }
 
     time::sleep(time::Duration::from_millis(200)).await;

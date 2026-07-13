@@ -34,6 +34,7 @@ use crate::{
         cache::revalidate::invalidate_route_caches,
         config::RedirectConfig,
         core::utils::http::{extract_headers, extract_search_params, is_origin_allowed},
+        error_response,
         middleware::request_context::{PendingCookie, PendingCookieKey, RequestContext},
     },
 };
@@ -59,11 +60,11 @@ fn normalize_origin(url: &url::Url) -> (String, String, u16) {
     (url.scheme().to_string(), url.host_str().unwrap_or("").to_string(), effective_port(url))
 }
 
-fn check_origin(headers: &HeaderMap, allowed_origins: &[String]) -> Result<(), StatusCode> {
+fn check_origin(headers: &HeaderMap, allowed_origins: &[String]) -> Result<(), RariError> {
     if allowed_origins.is_empty() {
         let host = headers.get("host").and_then(|v| v.to_str().ok()).ok_or_else(|| {
             tracing::error!("Missing host header in server action request");
-            StatusCode::BAD_REQUEST
+            RariError::bad_request("Missing host header")
         })?;
 
         let scheme = headers
@@ -80,7 +81,7 @@ fn check_origin(headers: &HeaderMap, allowed_origins: &[String]) -> Result<(), S
         let server_origin_str = format!("{scheme}://{host}");
         let server_origin_url = url::Url::parse(&server_origin_str).map_err(|e| {
             tracing::error!("Failed to parse server origin: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
+            RariError::internal(format!("Failed to parse server origin: {e}"))
         })?;
         let server_origin_tuple = normalize_origin(&server_origin_url);
 
@@ -97,7 +98,7 @@ fn check_origin(headers: &HeaderMap, allowed_origins: &[String]) -> Result<(), S
                 origin,
                 server_origin_str
             );
-            return Err(StatusCode::FORBIDDEN);
+            return Err(RariError::forbidden("Origin not allowed"));
         }
 
         if let Some(referer) = headers.get("referer").and_then(|v| v.to_str().ok()) {
@@ -117,17 +118,17 @@ fn check_origin(headers: &HeaderMap, allowed_origins: &[String]) -> Result<(), S
             } else {
                 tracing::error!("Invalid referer header: failed to parse");
             }
-            return Err(StatusCode::FORBIDDEN);
+            return Err(RariError::forbidden("Referer not allowed"));
         }
 
         tracing::error!("Missing origin and referer headers in server action request");
-        return Err(StatusCode::FORBIDDEN);
+        return Err(RariError::forbidden("Origin or referer required"));
     }
 
     if let Some(origin) = headers.get("origin").and_then(|v| v.to_str().ok()) {
         if !is_origin_allowed(origin, allowed_origins) {
             tracing::error!("Invalid origin: {}", origin);
-            return Err(StatusCode::FORBIDDEN);
+            return Err(RariError::forbidden("Origin not allowed"));
         }
         return Ok(());
     }
@@ -148,11 +149,11 @@ fn check_origin(headers: &HeaderMap, allowed_origins: &[String]) -> Result<(), S
         } else {
             tracing::error!("Invalid referer header: failed to parse origin");
         }
-        return Err(StatusCode::FORBIDDEN);
+        return Err(RariError::forbidden("Referer not allowed"));
     }
 
     tracing::error!("Missing Origin and Referer headers with non-empty allowed_origins");
-    Err(StatusCode::FORBIDDEN)
+    Err(RariError::forbidden("Origin or referer required"))
 }
 
 fn build_reply_action_script(action_id: &str, body_text: &str) -> Result<String, RariError> {
@@ -633,7 +634,9 @@ async fn handle_server_action_at_path(
     body: Bytes,
 ) -> Result<Response, StatusCode> {
     let allowed_origins = state.config.action_origins();
-    check_origin(&headers, &allowed_origins)?;
+    if let Err(e) = check_origin(&headers, &allowed_origins) {
+        return Ok(error_response::json_response(&e, state.config.is_development()));
+    }
 
     let action_id = headers
         .get("rsc-action-id")
@@ -674,10 +677,13 @@ async fn handle_server_action_at_path(
         Arc::clone(&renderer.runtime)
     };
 
-    let script = build_action_script(action_id, content_type, &body).map_err(|e| {
-        tracing::error!("Failed to build action script: {}", e);
-        StatusCode::BAD_REQUEST
-    })?;
+    let script = match build_action_script(action_id, content_type, &body) {
+        Ok(script) => script,
+        Err(e) => {
+            tracing::error!("Failed to build action script: {}", e);
+            return Ok(error_response::json_response(&e, state.config.is_development()));
+        }
+    };
 
     let script_name = action_script_name(action_id);
 
@@ -804,17 +810,19 @@ async fn handle_server_action_at_path(
         .await
         .map_err(|error| {
             tracing::error!("Failed to encode action flight response: {}", error);
-            StatusCode::INTERNAL_SERVER_ERROR
+            error_response::status(&error)
         })?;
 
     let flight_body = capture_last_action_flight_binary(&runtime).await.map_err(|e| {
         tracing::error!("Failed to read action flight response: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
+        error_response::status(&e)
     })?;
 
     let flight_body = flight_body.ok_or_else(|| {
         tracing::error!("RPC server action did not produce a Flight response payload");
-        StatusCode::INTERNAL_SERVER_ERROR
+        error_response::status(&RariError::internal(
+            "RPC server action did not produce a Flight response payload",
+        ))
     })?;
 
     Ok(rpc_action_flight_response(
@@ -929,17 +937,17 @@ pub fn is_valid_attr_value(s: &str) -> bool {
     !s.is_empty() && s.is_ascii() && s.bytes().all(|b| b >= 32 && b != b';' && b != 127)
 }
 
-pub fn build_set_cookie_header(cookie: &PendingCookie) -> Result<String, String> {
+pub fn build_set_cookie_header(cookie: &PendingCookie) -> Result<String, RariError> {
     if !is_valid_cookie_name(&cookie.name) {
-        return Err(format!("invalid cookie name: {}", cookie.name));
+        return Err(RariError::validation(format!("invalid cookie name: {}", cookie.name)));
     }
     if !is_valid_cookie_value(&cookie.value) {
-        return Err(format!("invalid cookie value for: {}", cookie.name));
+        return Err(RariError::validation(format!("invalid cookie value for: {}", cookie.name)));
     }
 
     let path = cookie.path.as_deref().unwrap_or("/");
     if !is_valid_attr_value(path) {
-        return Err(format!("invalid cookie path: {path}"));
+        return Err(RariError::validation(format!("invalid cookie path: {path}")));
     }
 
     let mut header = format!("{}={}", cookie.name, cookie.value);
@@ -948,14 +956,14 @@ pub fn build_set_cookie_header(cookie: &PendingCookie) -> Result<String, String>
 
     if let Some(domain) = &cookie.domain {
         if !is_valid_attr_value(domain) {
-            return Err(format!("invalid cookie domain: {domain}"));
+            return Err(RariError::validation(format!("invalid cookie domain: {domain}")));
         }
         #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
         write!(&mut header, "; Domain={domain}").unwrap();
     }
     if let Some(expires) = &cookie.expires {
         if !is_valid_attr_value(expires) {
-            return Err(format!("invalid cookie expires: {expires}"));
+            return Err(RariError::validation(format!("invalid cookie expires: {expires}")));
         }
         #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
         write!(&mut header, "; Expires={expires}").unwrap();
@@ -967,10 +975,10 @@ pub fn build_set_cookie_header(cookie: &PendingCookie) -> Result<String, String>
     let normalized_same_site =
         cookie.same_site.as_deref().map(cow_utils::CowUtils::cow_to_ascii_lowercase);
     if normalized_same_site.as_deref() == Some("none") && !cookie.secure {
-        return Err("SameSite=None requires Secure".to_string());
+        return Err(RariError::validation("SameSite=None requires Secure"));
     }
     if cookie.partitioned && !cookie.secure {
-        return Err("Partitioned requires Secure".to_string());
+        return Err(RariError::validation("Partitioned requires Secure"));
     }
     if cookie.http_only {
         header.push_str("; HttpOnly");
@@ -983,7 +991,9 @@ pub fn build_set_cookie_header(cookie: &PendingCookie) -> Result<String, String>
             "strict" => "Strict",
             "lax" => "Lax",
             "none" => "None",
-            _ => return Err(format!("invalid SameSite value: {same_site}")),
+            _ => {
+                return Err(RariError::validation(format!("invalid SameSite value: {same_site}")));
+            }
         };
         #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
         write!(&mut header, "; SameSite={serialized_same_site}").unwrap();
@@ -993,7 +1003,9 @@ pub fn build_set_cookie_header(cookie: &PendingCookie) -> Result<String, String>
             "low" => header.push_str("; Priority=Low"),
             "medium" => header.push_str("; Priority=Medium"),
             "high" => header.push_str("; Priority=High"),
-            _ => return Err(format!("invalid Priority value: {priority}")),
+            _ => {
+                return Err(RariError::validation(format!("invalid Priority value: {priority}")));
+            }
         }
     }
     if cookie.partitioned {

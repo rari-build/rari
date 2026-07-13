@@ -3,6 +3,7 @@ pub mod cache;
 pub mod compression;
 pub mod config;
 pub mod core;
+pub mod error_response;
 pub mod image;
 pub mod loader;
 pub mod middleware;

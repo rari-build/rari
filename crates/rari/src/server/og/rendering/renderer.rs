@@ -1,5 +1,6 @@
 use image::{Rgba, RgbaImage};
 use parley::FontContext as ParleyFontContext;
+use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use zeno::Scratch;
 
@@ -28,7 +29,7 @@ impl ImageRenderer {
         }
     }
 
-    pub fn render(&mut self, layout: &ComputedLayout) -> Result<RgbaImage, String> {
+    pub fn render(&mut self, layout: &ComputedLayout) -> Result<RgbaImage, RariError> {
         let mut image = RgbaImage::new(self.width, self.height);
 
         for pixel in image.pixels_mut() {
@@ -44,7 +45,7 @@ impl ImageRenderer {
         &mut self,
         layout: &ComputedLayout,
         image: &mut RgbaImage,
-    ) -> Result<(), String> {
+    ) -> Result<(), RariError> {
         if let Some(bg) = layout.style.get("background").or(layout.style.get("backgroundColor")) {
             self.render_background(layout, bg, image, &mut self.mask_memory.clone())?;
         }

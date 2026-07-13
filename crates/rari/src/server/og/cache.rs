@@ -1,6 +1,5 @@
 use std::{
     collections::hash_map::DefaultHasher,
-    error::Error,
     fs as std_fs,
     hash::{Hash, Hasher},
     io::ErrorKind::NotFound,
@@ -8,6 +7,7 @@ use std::{
     sync::Arc,
 };
 
+use rari_error::RariError;
 use tokio::{fs, task};
 
 use crate::server::{
@@ -87,13 +87,18 @@ impl OgImageCache {
     }
 
     #[expect(clippy::missing_errors_doc)]
-    pub async fn insert(&self, key: String, value: Vec<u8>) -> Result<(), Box<dyn Error>> {
+    pub async fn insert(&self, key: String, value: Vec<u8>) -> Result<(), RariError> {
         self.ensure_cache_dir().await;
 
         let path = self.cache_filename(&key);
-        fs::write(&path, &value).await?;
+        fs::write(&path, &value)
+            .await
+            .map_err(|e| RariError::io(format!("Failed to write OG cache file: {e}")))?;
 
-        self.handler.set(&Self::ns(&key), value, OG_TTL_SECS).await?;
+        self.handler
+            .set(&Self::ns(&key), value, OG_TTL_SECS)
+            .await
+            .map_err(|e| RariError::cache(format!("Failed to store OG image in cache: {e}")))?;
         Ok(())
     }
 

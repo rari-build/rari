@@ -11,6 +11,7 @@ use axum::http::HeaderMap;
 use deno_core::{ModuleSpecifier, OpDecl, OpState, op2};
 use deno_error::JsErrorBox;
 use deno_runtime::BootstrapOptions;
+use rari_error::RariError;
 use serde::Deserialize;
 use tokio::sync::mpsc;
 
@@ -61,7 +62,7 @@ enum RscStreamOperation {
 #[derive(Default)]
 #[non_exhaustive]
 pub struct StreamOpState {
-    pub chunk_sender: Option<mpsc::Sender<Result<Vec<u8>, String>>>,
+    pub chunk_sender: Option<mpsc::Sender<Result<Vec<u8>, RariError>>>,
     pub current_stream_id: Option<String>,
     pub row_counter: u32,
 }
@@ -490,7 +491,7 @@ async fn perform_simple_fetch(
     url: &str,
     options: &rustc_hash::FxHashMap<String, String>,
 ) -> Result<(u16, String, serde_json::Map<String, serde_json::Value>), String> {
-    let client = client::get_http_client()?;
+    let client = client::get_http_client().map_err(|e| e.to_string())?;
     let mut request = client.get(url);
 
     if let Some(headers_str) = options.get("headers")
@@ -760,7 +761,7 @@ mod tests {
         assert_eq!(row_id_2, "1");
         assert_eq!(stream_state.row_counter, 2);
 
-        let (sender, _receiver) = mpsc::channel::<Result<Vec<u8>, String>>(32);
+        let (sender, _receiver) = mpsc::channel::<Result<Vec<u8>, RariError>>(32);
         stream_state.chunk_sender = Some(sender);
 
         assert!(stream_state.chunk_sender.is_some());

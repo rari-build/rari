@@ -1,5 +1,6 @@
 use cow_utils::CowUtils;
 use image::{Rgba, RgbaImage};
+use rari_error::RariError;
 use resvg::{
     tiny_skia::{Pixmap, Transform},
     usvg::{Options, Size, Tree},
@@ -50,7 +51,7 @@ impl ImageRenderer {
         &self,
         layout: &ComputedLayout,
         image: &mut RgbaImage,
-    ) -> Result<(), String> {
+    ) -> Result<(), RariError> {
         let width = cast::f32_to_u32(layout.width.round());
         let height = cast::f32_to_u32(layout.height.round());
 
@@ -72,10 +73,11 @@ impl ImageRenderer {
             ..Default::default()
         };
 
-        let tree =
-            Tree::from_str(&svg_string, &options).map_err(|e| format!("SVG parse error: {e}"))?;
+        let tree = Tree::from_str(&svg_string, &options)
+            .map_err(|e| RariError::validation(format!("SVG parse error: {e}")))?;
 
-        let mut pixmap = Pixmap::new(width, height).ok_or("Failed to create pixmap")?;
+        let mut pixmap = Pixmap::new(width, height)
+            .ok_or_else(|| RariError::internal("Failed to create pixmap"))?;
 
         let svg_size = tree.size();
         let scale_x = float::u32_to_f32(width) / svg_size.width();
