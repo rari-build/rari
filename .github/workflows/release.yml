@@ -371,6 +371,12 @@ jobs:
       - name: Upgrade npm
         run: npm install -g npm@11
 
+      - name: Build workspace dependencies
+        if: steps.pkg.outputs.name == 'rari'
+        run: |
+          pnpm --filter @rari/logger build
+          pnpm --filter @rari/deploy build
+
       - name: Build package
         run: pnpm --filter "${{ steps.pkg.outputs.name }}" build
 
