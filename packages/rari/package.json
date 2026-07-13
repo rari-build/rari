@@ -152,7 +152,7 @@
     "rolldown": "catalog:build"
   },
   "optionalDependencies": {
-    "@rari/use-cache": "workspace:*",
+    "@rari/use-cache": "0.15.0",
     "rari-darwin-arm64": "0.14.12",
     "rari-darwin-x64": "0.14.12",
     "rari-linux-arm64": "0.14.12",
