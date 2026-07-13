@@ -8,6 +8,7 @@ pub mod id;
 pub mod transform;
 
 use napi::bindgen_prelude::*;
+pub use transform::{TransformError, TransformOutput};
 
 #[non_exhaustive]
 #[napi(object)]
@@ -50,7 +51,7 @@ pub fn transform_use_cache(source: String, options: TransformOptions) -> Result<
     let hash_salt = options.hash_salt.unwrap_or_else(|| "rari-use-cache-v1".to_string());
 
     let result = transform::transform_source(&source, &options.filename, &hash_salt)
-        .map_err(Error::from_reason)?;
+        .map_err(|e| Error::from_reason(e.to_string()))?;
 
     Ok(TransformResult {
         code: result.code,

@@ -1,4 +1,4 @@
-use std::{mem, panic, path::PathBuf, rc::Rc};
+use std::{error, fmt, mem, panic, path::PathBuf, rc::Rc};
 
 use deno_ast::swc::{
     ast::{
@@ -15,6 +15,28 @@ use deno_ast::swc::{
 use rustc_hash::FxHashSet;
 
 use crate::{closure, directive, hoist, id};
+
+#[derive(Debug)]
+#[non_exhaustive]
+pub enum TransformError {
+    Parse(String),
+    Codegen(String),
+    Utf8(String),
+    Panic(String),
+}
+
+impl fmt::Display for TransformError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Parse(msg) => write!(f, "Parse error: {msg}"),
+            Self::Codegen(msg) => write!(f, "Codegen error: {msg}"),
+            Self::Utf8(msg) => write!(f, "UTF-8 error: {msg}"),
+            Self::Panic(msg) => write!(f, "Panic: {msg}"),
+        }
+    }
+}
+
+impl error::Error for TransformError {}
 
 #[non_exhaustive]
 pub struct TransformOutput {
@@ -234,12 +256,13 @@ impl TransformVisitor {
 ///
 /// # Errors
 ///
-/// Returns an error if parsing fails or code generation fails.
+/// Returns [`TransformError`] if parsing fails, code generation fails, or the
+/// transform panics.
 pub fn transform_source(
     source: &str,
     filename: &str,
     hash_salt: &str,
-) -> Result<TransformOutput, String> {
+) -> Result<TransformOutput, TransformError> {
     let result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
         GLOBALS.set(&Globals::default(), || {
             let cm: Lrc<SourceMap> = SourceMap::new(FilePathMapping::empty()).into();
@@ -255,7 +278,7 @@ pub fn transform_source(
             );
 
             let mut module: Module =
-                parser.parse_module().map_err(|e| format!("Parse error: {e:?}"))?;
+                parser.parse_module().map_err(|e| TransformError::Parse(format!("{e:?}")))?;
 
             let mut visitor = TransformVisitor::new(filename, hash_salt);
             visitor.visit_mut_module(&mut module);
@@ -277,9 +300,12 @@ pub fn transform_source(
                     comments: None,
                     wr: JsWriter::new(Rc::clone(&cm), "\n", &mut code_buf, None),
                 };
-                emitter.emit_module(&module).map_err(|e| format!("Codegen error: {e:?}"))?;
+                emitter
+                    .emit_module(&module)
+                    .map_err(|e| TransformError::Codegen(format!("{e:?}")))?;
             }
-            let code = String::from_utf8(code_buf).map_err(|e| format!("UTF-8 error: {e:?}"))?;
+            let code =
+                String::from_utf8(code_buf).map_err(|e| TransformError::Utf8(format!("{e:?}")))?;
 
             Ok(TransformOutput {
                 code,
@@ -296,11 +322,11 @@ pub fn transform_source(
             let msg = if let Some(s) = panic.downcast_ref::<String>() {
                 s.clone()
             } else if let Some(s) = panic.downcast_ref::<&str>() {
-                s.to_string()
+                (*s).to_string()
             } else {
                 "Unknown panic during transformation".to_string()
             };
-            Err(format!("Panic: {msg}"))
+            Err(TransformError::Panic(msg))
         }
     }
 }
