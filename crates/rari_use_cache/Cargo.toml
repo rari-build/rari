@@ -19,11 +19,11 @@ deno_ast = { workspace = true, features = [
   "visit"
 ] }
 hex = { workspace = true }
-napi = { version = "3.10.3", features = [
+napi = { version = "3.10.5", features = [
   "napi6",
   "serde-json",
 ] }
-napi-derive = "3.5.9"
+napi-derive = "3.5.10"
 rustc-hash = { workspace = true }
 sha2 = { workspace = true }
 
