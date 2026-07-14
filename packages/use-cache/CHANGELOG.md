@@ -1,11 +1,23 @@
-## [@rari/use-cache@0.15.1] - 2026-07-13
+## [@rari/use-cache@0.15.2] - 2026-07-14
+
+### 🚜 Refactor
+
+- introduce TransformError enum for improved error handling in transform module by @skiniks
+
+### ⚙️ Miscellaneous Tasks
+
+- update optional dependencies to version 0.15.2 for all platforms in package.json and pnpm-lock.yaml by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/v0.15.1...@rari/use-cache@0.15.2
+## [0.15.1] - 2026-07-13
 
 ### ⚙️ Miscellaneous Tasks
 
 - *(dependencies)* upgrade @rari/use-cache packages to version 0.15.1 by @skiniks
 
 
-**Full Changelog**: https://github.com/rari-build/rari/compare/@rari/use-cache@0.15.0...@rari/use-cache@0.15.1
+**Full Changelog**: https://github.com/rari-build/rari/compare/@rari/use-cache@0.15.0...v0.15.1
 ## [@rari/use-cache@0.15.0] - 2026-07-13
 
 ### 🚀 Features
