@@ -1071,8 +1071,10 @@ impl ModuleLoader for RariModuleLoader {
         if (specifier.starts_with("./") || specifier.starts_with("../"))
             && referrer.starts_with(FILE_PROTOCOL)
             && !is_virtual_referrer(referrer)
-            && !referrer.contains("node_modules")
         {
+            if referrer.contains("node_modules") {
+                return self.resolve_via_node_resolver(specifier, referrer);
+            }
             match resolve_import(specifier, referrer) {
                 Ok(url) => return Ok(url),
                 Err(_) => {}
