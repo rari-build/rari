@@ -1,0 +1,82 @@
+{
+  "cases": [
+    {
+      "id": "client-single-quotes",
+      "source": "'use client'\nexport default function C() { return null }\n",
+      "hasUseClient": true,
+      "hasUseServer": false
+    },
+    {
+      "id": "client-double-quotes",
+      "source": "\"use client\"\nexport default function C() { return null }\n",
+      "hasUseClient": true,
+      "hasUseServer": false
+    },
+    {
+      "id": "client-with-semicolon",
+      "source": "'use client';\nexport default function C() { return null }\n",
+      "hasUseClient": true,
+      "hasUseServer": false
+    },
+    {
+      "id": "server-double-quotes",
+      "source": "\"use server\"\nexport async function action() {}\n",
+      "hasUseClient": false,
+      "hasUseServer": true
+    },
+    {
+      "id": "server-with-semicolon",
+      "source": "'use server';\nexport async function action() {}\n",
+      "hasUseClient": false,
+      "hasUseServer": true
+    },
+    {
+      "id": "comment-only-client",
+      "source": "// 'use client'\nexport default function C() { return null }\n",
+      "hasUseClient": false,
+      "hasUseServer": false
+    },
+    {
+      "id": "leading-line-comment-then-client",
+      "source": "// license\n'use client'\nexport default function C() { return null }\n",
+      "hasUseClient": true,
+      "hasUseServer": false
+    },
+    {
+      "id": "empty-lines-then-client",
+      "source": "\n\n'use client'\nexport default function C() { return null }\n",
+      "hasUseClient": true,
+      "hasUseServer": false
+    },
+    {
+      "id": "same-line-block-comment-then-client",
+      "source": "/* comment */ 'use client'\nexport default function C() { return null }\n",
+      "hasUseClient": true,
+      "hasUseServer": false
+    },
+    {
+      "id": "multiline-block-comment-then-client",
+      "source": "/* comment\nstill comment */\n'use client'\nexport default function C() { return null }\n",
+      "hasUseClient": true,
+      "hasUseServer": false
+    },
+    {
+      "id": "incomplete-block-comment-then-client",
+      "source": "/* comment */ 'use client' /*\nexport default function C() { return null }\n",
+      "hasUseClient": true,
+      "hasUseServer": false
+    },
+    {
+      "id": "directive-after-import",
+      "source": "import React from 'react'\n'use client'\nexport default function C() { return null }\n",
+      "hasUseClient": false,
+      "hasUseServer": false
+    },
+    {
+      "id": "no-directive",
+      "source": "export default function C() { return null }\n",
+      "hasUseClient": false,
+      "hasUseServer": false
+    }
+  ]
+}
