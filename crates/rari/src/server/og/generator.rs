@@ -21,7 +21,8 @@ use super::{
 use crate::{
     runtime::JsExecutionRuntime,
     server::{
-        cache::handler::CacheError, loader::SERVER_MANIFEST_PATH, routing::types::ParamValue,
+        cache::handler::CacheError, core::utils::component::extract_component_id,
+        loader::SERVER_MANIFEST_PATH, routing::types::ParamValue,
     },
     utils::{float, path::path_to_file_url},
 };
@@ -300,24 +301,8 @@ impl OgImageGenerator {
         route_path: &str,
         params: &FxHashMap<String, ParamValue>,
     ) -> Result<JsxElement, OgImageError> {
-        let component_id = {
-            let path = entry.file_path.as_str();
-            let path = path.cow_replace(".tsx", "");
-            let path = path.cow_replace(".ts", "");
-            let path = path.cow_replace(".jsx", "");
-            let path = path.cow_replace(".js", "");
-            let path =
-                path.chars()
-                    .map(|c| {
-                        if c.is_alphanumeric() || c == '/' || c == '-' || c == '_' {
-                            c
-                        } else {
-                            '_'
-                        }
-                    })
-                    .collect::<String>();
-            format!("app/{path}")
-        };
+        let component_id = extract_component_id(&format!("app/{}", entry.file_path))
+            .map_err(|e| OgImageError::ExecutionError(format!("Invalid OG component path: {e}")))?;
 
         let server_manifest = self.server_manifest.read().await;
         let bundle_path = server_manifest
@@ -452,6 +437,23 @@ mod tests {
     use std::env;
 
     use super::*;
+    use crate::server::core::utils::component::extract_component_id;
+
+    #[test]
+    fn test_og_component_id_matches_hashed_manifest_keys() {
+        assert_eq!(
+            extract_component_id("app/opengraph-image.tsx").unwrap(),
+            "app/opengraph-image_7c956ddc"
+        );
+        assert_eq!(
+            extract_component_id("app/docs/[...slug]/opengraph-image.tsx").unwrap(),
+            "app/docs/____slug_/opengraph-image_ef4094d1"
+        );
+        assert_eq!(
+            extract_component_id("app/blog/[slug]/opengraph-image.tsx").unwrap(),
+            "app/blog/_slug_/opengraph-image_2ade8d39"
+        );
+    }
 
     #[tokio::test]
     async fn test_find_og_image_for_static_route() {

@@ -121,7 +121,7 @@ fn check_origin(headers: &HeaderMap, allowed_origins: &[String]) -> Result<(), R
             return Err(RariError::forbidden("Referer not allowed"));
         }
 
-        tracing::error!("Missing origin and referer headers in server action request");
+        tracing::debug!("Missing origin and referer headers in server action request");
         return Err(RariError::forbidden("Origin or referer required"));
     }
 
@@ -152,7 +152,7 @@ fn check_origin(headers: &HeaderMap, allowed_origins: &[String]) -> Result<(), R
         return Err(RariError::forbidden("Referer not allowed"));
     }
 
-    tracing::error!("Missing Origin and Referer headers with non-empty allowed_origins");
+    tracing::debug!("Missing Origin and Referer headers with non-empty allowed_origins");
     Err(RariError::forbidden("Origin or referer required"))
 }
 

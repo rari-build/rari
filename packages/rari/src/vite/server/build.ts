@@ -3,6 +3,7 @@ import type { ModuleAnalysis } from '../analysis/directives'
 import type { MdxPluginOptions } from '../mdx/registry'
 import type { ServerCacheConfig, ServerCacheControlConfig, ServerCacheLayerConfig, ServerConfig, ServerCSPConfig } from './config'
 import fs from 'node:fs'
+import { createRequire } from 'node:module'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -36,6 +37,37 @@ const SPECIAL_FILE_REGEX = /^(?:robots|sitemap|feed)\.(?:tsx?|jsx?)$/
 const RSC_REFERENCES_IMPORT = 'react-server-dom-rari/server'
 const NODE_PROTOCOL_REGEX = /^node:/
 export const RARI_CSS_MODULES_PATTERN = '[hash]_[local]'
+
+/** Bare package name including scope (e.g. `markdown-it`, `@scope/pkg`). */
+function barePackageName(source: string): string {
+  if (source.startsWith('@')) {
+    const parts = source.split('/')
+    return parts.length >= 2 ? `${parts[0]}/${parts[1]}` : source
+  }
+
+  return source.split('/')[0] ?? source
+}
+
+/**
+ * True when BYONM/Node would find the package by walking `node_modules` from
+ * the app root. Avoid createRequire here — pnpm bin shims set NODE_PATH, which
+ * is baked into Module.globalPaths and makes transitive workspace deps look
+ * like app installs (then incorrectly get externalized).
+ */
+function isInstalledFromAppRoot(projectRoot: string, source: string): boolean {
+  const packageName = barePackageName(source)
+  let dir = projectRoot
+  while (true) {
+    const candidate = path.join(dir, 'node_modules', ...packageName.split('/'))
+    if (fs.existsSync(path.join(candidate, 'package.json')))
+      return true
+
+    const parent = path.dirname(dir)
+    if (parent === dir)
+      return false
+    dir = parent
+  }
+}
 
 const EXTERNAL_CLIENT_COMPONENT_MANIFESTS: Array<{
   componentId: string
@@ -1067,7 +1099,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
       } satisfies Plugin,
       {
         name: 'externalize-deps',
-        resolveId: (source: string) => {
+        resolveId: (source: string, importer: string | undefined) => {
           if (source.startsWith('\0'))
             return null
 
@@ -1100,8 +1132,30 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
           if (resolveAlias(source, this.options.alias || {}, this.projectRoot))
             return null
 
-          if (!source.startsWith('.') && !source.startsWith('/'))
-            return { id: source, external: true }
+          if (!source.startsWith('.') && !source.startsWith('/')) {
+            // App-visible installs stay external for runtime BYONM. Deps that only
+            // exist under a workspace package (e.g. markdown-it in shared/) must be
+            // force-resolved and bundled — Rolldown's platform:'node' otherwise
+            // leaves them as unresolved externals.
+            if (isInstalledFromAppRoot(this.projectRoot, source))
+              return { id: source, external: true }
+
+            const resolveFrom = [
+              importer && !importer.startsWith('\0') ? importer : null,
+              inputPath,
+            ].filter((value): value is string => Boolean(value))
+
+            for (const from of resolveFrom) {
+              try {
+                return { id: createRequire(from).resolve(source) }
+              }
+              catch {
+                // try next candidate
+              }
+            }
+
+            return null
+          }
 
           return null
         },

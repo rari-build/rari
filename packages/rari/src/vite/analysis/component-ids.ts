@@ -8,8 +8,6 @@ import {
   TSX_EXT_REGEX,
 } from '@/shared/regex-constants'
 
-const PATH_OUTSIDE_ROOT_REGEX = /^\.\.(?:[/\\]|$)/
-
 export function hashString(value: string, length = 8): string {
   return crypto.createHash('sha256').update(value).digest('hex').slice(0, length)
 }
@@ -20,10 +18,13 @@ export function getProjectRelativePath(filePath: string, projectRoot = process.c
     : path.resolve(projectRoot, filePath)
   const relativePath = path.relative(projectRoot, absolutePath)
 
-  return (PATH_OUTSIDE_ROOT_REGEX.test(relativePath) || path.isAbsolute(relativePath)
-    ? filePath
-    : relativePath)
-    .replace(BACKSLASH_REGEX, '/')
+  // Always prefer a path relative to the project root — including `../…` for
+  // workspace packages outside the app. Absolute paths become
+  // `dist/server/Users/...` and break runtime module resolution.
+  if (path.isAbsolute(relativePath))
+    return absolutePath.replace(BACKSLASH_REGEX, '/')
+
+  return relativePath.replace(BACKSLASH_REGEX, '/')
 }
 
 export function getReadableComponentId(projectRelativePath: string): string {

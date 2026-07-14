@@ -46,10 +46,40 @@ function createReactDomShimSource(): string {
   return null
 }`).join('\n\n')
 
-  const defaultFields = REACT_DOM_CLIENT_STUBS.join(',\n  ')
+  const defaultFields = [
+    ...REACT_DOM_CLIENT_STUBS,
+    '__DOM_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE: Internals',
+  ].join(',\n  ')
 
-  return `/** Client-only APIs - safe no-ops during SSR module evaluation. */
+  // Must match react-dom.production.js Internals so Flight Hint (`H`) rows and
+  // react-dom-server can share one `.d` dispatcher. Fizz replaces `.d` with
+  // real prefetch/preconnect implementations at module init.
+  return `function noop() {}
+
+const Internals = {
+  d: {
+    f: noop,
+    r() {
+      throw new Error(
+        'The current dispatcher does not support this form action operation.',
+      )
+    },
+    D: noop,
+    C: noop,
+    L: noop,
+    m: noop,
+    X: noop,
+    S: noop,
+    M: noop,
+  },
+  p: 0,
+  findDOMNode: null,
+}
+
+/** Client-only APIs - safe no-ops during SSR module evaluation. */
 ${stubExports}
+
+export const __DOM_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE = Internals
 
 export default {
   ${defaultFields},
@@ -141,13 +171,13 @@ const entries: BundleEntry[] = [
     name: 'react-dom-server',
     cjsFile: resolveReactCjs('react-dom', 'react-dom-server.browser'),
     namedExports: ['renderToReadableStream', 'renderToString', 'renderToStaticMarkup', 'resume', 'version'],
-    // `react` is externalized to 'ext:rari/react/vendor/react.js' so the server renderer
-    // and the client-component SSR bundles share ONE React instance. React's
-    // hook dispatcher and context state are per-instance, so this is required
-    // for real useState/useContext/createContext to work during SSR.
-    // `react-dom` stays inlined (its own require('react') is also redirected
-    // to the shared ext:rari/react/vendor/react.js by the external pattern below).
-    externals: { react: 'ext:rari/react/vendor/react.js' },
+    // Share one React + react-dom Internals instance with Flight client / SSR
+    // client components so Fizz can install Hint dispatchers on Internals.d
+    // that processFullBinaryRow (H rows) will call.
+    externals: {
+      'react': 'ext:rari/react/vendor/react.js',
+      'react-dom': 'ext:rari/react/vendor/react-dom.js',
+    },
   },
   {
     name: 'react-dom',
