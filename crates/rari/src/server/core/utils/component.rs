@@ -39,9 +39,12 @@ fn is_use_server_directive(trimmed: &str) -> bool {
 }
 
 /// Strip leading complete `/* ... */` comments. Tracks open block comments across lines.
-/// Returns the next prologue-significant token on the line, if any.
-fn next_directive_candidate<'a>(line: &'a str, in_block_comment: &mut bool) -> Option<&'a str> {
-    let mut rest = line.trim();
+/// Returns the next prologue-significant token and advances `remaining` past it.
+fn next_directive_candidate<'a>(
+    remaining: &mut &'a str,
+    in_block_comment: &mut bool,
+) -> Option<&'a str> {
+    let mut rest = remaining.trim_start();
 
     if *in_block_comment {
         let end = rest.find("*/")?;
@@ -50,11 +53,15 @@ fn next_directive_candidate<'a>(line: &'a str, in_block_comment: &mut bool) -> O
     }
 
     loop {
+        rest = rest.trim_start_matches(|c: char| c.is_whitespace() || c == ';');
+
         if rest.is_empty() {
+            *remaining = rest;
             return None;
         }
 
         if rest.starts_with("//") {
+            *remaining = "";
             return None;
         }
 
@@ -64,6 +71,7 @@ fn next_directive_candidate<'a>(line: &'a str, in_block_comment: &mut bool) -> O
                 continue;
             }
             *in_block_comment = true;
+            *remaining = "";
             return None;
         }
 
@@ -74,33 +82,38 @@ fn next_directive_candidate<'a>(line: &'a str, in_block_comment: &mut bool) -> O
     if bytes.first().is_some_and(|b| *b == b'\'' || *b == b'"') {
         let quote = bytes[0];
         let Some(close_rel) = rest[1..].find(quote as char) else {
+            *remaining = "";
             return Some(rest);
         };
         let mut end = 1 + close_rel + 1;
         if rest.as_bytes().get(end) == Some(&b';') {
             end += 1;
         }
-        return Some(&rest[..end]);
+        let token = &rest[..end];
+        *remaining = rest[end..].trim_start();
+        return Some(token);
     }
 
     let end = rest.find(char::is_whitespace).unwrap_or(rest.len());
-    Some(&rest[..end])
+    let token = &rest[..end];
+    *remaining = rest[end..].trim_start();
+    Some(token)
 }
 
 fn has_directive(code: &str, is_match: fn(&str) -> bool) -> bool {
     let mut in_block_comment = false;
 
     for line in code.lines() {
-        let Some(token) = next_directive_candidate(line, &mut in_block_comment) else {
-            continue;
-        };
+        let mut remaining = line;
 
-        if is_match(token) {
-            return true;
-        }
+        while let Some(token) = next_directive_candidate(&mut remaining, &mut in_block_comment) {
+            if is_match(token) {
+                return true;
+            }
 
-        if !token.starts_with("'use") && !token.starts_with("\"use") {
-            break;
+            if !token.starts_with("'use") && !token.starts_with("\"use") {
+                return false;
+            }
         }
     }
 

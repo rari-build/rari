@@ -77,6 +77,12 @@
       "source": "export default function C() { return null }\n",
       "hasUseClient": false,
       "hasUseServer": false
+    },
+    {
+      "id": "same-line-client-and-server",
+      "source": "'use client'; 'use server'\nexport default function C() { return null }\n",
+      "hasUseClient": true,
+      "hasUseServer": true
     }
   ]
 }
