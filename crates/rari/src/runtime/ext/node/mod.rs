@@ -8,7 +8,7 @@ use sys_traits::impls::RealSys;
 
 use super::{ExtensionTrait, lazy};
 
-mod cjs_translator;
+pub mod cjs_translator;
 pub mod resolvers;
 
 extension!(

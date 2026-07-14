@@ -33,11 +33,10 @@ include!("../../../snapshots/residual_lazy_sources.rs");
 pub fn build_js_runtime(
     env_vars: Option<FxHashMap<String, String>>,
 ) -> Result<(JsRuntime, Rc<RariModuleLoader>), RariError> {
-    let module_loader = Rc::new(RariModuleLoader::new());
-
     let streaming_ops = get_streaming_ops();
 
     let ext_options = ext::ExtensionOptions::default();
+    let module_loader = Rc::new(RariModuleLoader::new(Arc::clone(&ext_options.node_resolver)));
     let has_node_modules_dir = ext_options.node_resolver.has_node_modules_dir();
     let (mut extensions, lazy_args) = ext::extensions_with_lazy_args(&ext_options, true);
 
