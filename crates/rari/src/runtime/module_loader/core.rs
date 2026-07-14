@@ -58,6 +58,8 @@ const FILE_PROTOCOL: &str = "file://";
 const NODE_PREFIX: &str = "node:";
 const FUNCTIONS_MODULE: &str = "functions";
 const VERSION_QUERY_PARAM: &str = "?v=";
+const DENO_GLOBAL_SCOPE_SHARED: &str = "ext:runtime/98_global_scope_shared.js";
+const NODE_CONSOLE_SCOPE_SOURCE: &str = include_str!("../ext/runtime/node_console_scope.ts");
 const RELATIVE_CURRENT_PATH: &str = "./";
 const RELATIVE_UP_PATH: &str = "../";
 const RARI_INTERNAL_PATH: &str = "/rari_internal/";
@@ -1116,6 +1118,15 @@ impl ModuleLoader for RariModuleLoader {
 
         if let Some(response) = self.handle_version_query(&specifier_str, module_specifier) {
             return response;
+        }
+
+        if specifier_str == DENO_GLOBAL_SCOPE_SHARED {
+            return ModuleLoadResponse::Sync(Ok(ModuleSource::new(
+                ModuleType::JavaScript,
+                ModuleSourceCode::String(NODE_CONSOLE_SCOPE_SOURCE.to_owned().into()),
+                module_specifier,
+                None,
+            )));
         }
 
         if let Some(response) = self.handle_rari_internal_modules(&specifier_str, module_specifier)

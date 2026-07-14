@@ -406,42 +406,39 @@ impl NodeResolutionCache for NodeResolutionCacheImpl {
         }
     }
 }
+
 #[derive(Debug, Default, Clone)]
 pub struct NodeResolutionCacheInner {
-    cache: FxHashMap<PathBuf, (Option<PathBuf>, Option<FileType>)>,
+    canonicalized: FxHashMap<PathBuf, Option<PathBuf>>,
+    file_types: FxHashMap<PathBuf, Option<FileType>>,
 }
 impl NodeResolutionCacheInner {
     fn get_canonicalized(&self, path: &Path) -> Option<Result<PathBuf, io::Error>> {
-        self.cache.get(path).map(|(t, _)| {
-            t.clone().ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Not found."))
+        self.canonicalized.get(path).map(|item| match item {
+            Some(value) => Ok(value.clone()),
+            None => Err(io::Error::new(io::ErrorKind::NotFound, "Not found.")),
         })
     }
 
     fn set_canonicalized(&mut self, from: PathBuf, to: &io::Result<PathBuf>) {
-        let canon = match to {
-            Err(e) if e.kind() == io::ErrorKind::NotFound => None,
-            Ok(p) => Some(p.clone()),
-            _ => return,
-        };
-
-        if let Some((t, _)) = self.cache.get_mut(&from) {
-            *t = canon;
-        } else {
-            self.cache.insert(from, (canon, None));
+        match to {
+            Ok(to) => {
+                self.canonicalized.insert(from, Some(to.clone()));
+            }
+            Err(err) if err.kind() == io::ErrorKind::NotFound => {
+                self.canonicalized.insert(from, None);
+            }
+            Err(_) => {}
         }
     }
 
     #[expect(clippy::option_option)]
     fn get_file_type(&self, path: &Path) -> Option<Option<FileType>> {
-        self.cache.get(path).map(|(_, t)| *t)
+        self.file_types.get(path).copied()
     }
 
     fn set_file_type(&mut self, path: PathBuf, value: Option<FileType>) {
-        if let Some((_, t)) = self.cache.get_mut(&path) {
-            *t = value;
-        } else {
-            self.cache.insert(path, (None, value));
-        }
+        self.file_types.insert(path, value);
     }
 }
 
