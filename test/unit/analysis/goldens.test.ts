@@ -30,6 +30,8 @@ interface DirectiveCase {
   source: string
   hasUseClient: boolean
   hasUseServer: boolean
+  topLevelUseClient: boolean
+  topLevelUseServer: boolean
 }
 
 describe('analysis goldens (shared with Rust)', () => {
@@ -57,14 +59,12 @@ describe('analysis goldens (shared with Rust)', () => {
       const directives = getDirectives(testCase.source)
       expect(directives.hasUseClient, testCase.id).toBe(testCase.hasUseClient)
       expect(directives.hasUseServer, testCase.id).toBe(testCase.hasUseServer)
-      if (!testCase.hasUseClient || !testCase.hasUseServer) {
-        expect(hasTopLevelUseClientDirective(testCase.source), testCase.id).toBe(
-          testCase.hasUseClient,
-        )
-        expect(hasTopLevelUseServerDirective(testCase.source), testCase.id).toBe(
-          testCase.hasUseServer,
-        )
-      }
+      expect(hasTopLevelUseClientDirective(testCase.source), testCase.id).toBe(
+        testCase.topLevelUseClient,
+      )
+      expect(hasTopLevelUseServerDirective(testCase.source), testCase.id).toBe(
+        testCase.topLevelUseServer,
+      )
     }
   })
 })
