@@ -1,3 +1,32 @@
+## [rari@0.15.2] - 2026-07-14
+
+### ⚙️ Miscellaneous Tasks
+
+- update optional dependencies to version 0.15.2 in pnpm-lock.yaml and pnpm-workspace.yaml by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/use-cache-binaries@0.15.2...rari@0.15.2
+## [use-cache-binaries@0.15.2] - 2026-07-14
+
+### 🚜 Refactor
+
+- replace String error types with RariError in various modules for improved error handling by @skiniks
+- enhance error handling by replacing string error messages with RariError in multiple modules by @skiniks
+- improve error response handling by appending pending cookies in server actions and adjusting development flag usage in vite module by @skiniks
+- streamline error response handling in server actions by utilizing RariError and conditional pending cookies by @skiniks
+- update error response status handling in server actions to utilize dynamic status codes from error_response module by @skiniks
+- simplify directive detection logic and enhance component ID handling with new utility functions and test fixtures by @skiniks
+- enhance directive parsing logic and add new test cases for mixed use directives by @skiniks
+- enhance directive scanning logic to support top-level directive detection and update related test cases by @skiniks
+- update module loader to utilize new resolver structure and enhance test configurations by @skiniks
+- update module resolution logic to handle node_modules references and improve import resolution by @skiniks
+
+### ⚙️ Miscellaneous Tasks
+
+- bump rari package version to 0.15.2 in Cargo.toml by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.15.1...use-cache-binaries@0.15.2
 ## [rari@0.15.1] - 2026-07-13
 
 ### 🐛 Bug Fixes
