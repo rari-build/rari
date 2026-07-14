@@ -30,31 +30,76 @@ pub fn readable_component_id(project_relative_path: &str) -> String {
         .collect()
 }
 
-pub fn has_use_client_directive(code: &str) -> bool {
+fn is_use_client_directive(trimmed: &str) -> bool {
+    matches!(trimmed, "'use client';" | "\"use client\";" | "'use client'" | "\"use client\"")
+}
+
+fn is_use_server_directive(trimmed: &str) -> bool {
+    matches!(trimmed, "'use server';" | "\"use server\";" | "'use server'" | "\"use server\"")
+}
+
+/// Strip leading complete `/* ... */` comments. Tracks open block comments across lines.
+/// Returns the next prologue-significant token on the line, if any.
+fn next_directive_candidate<'a>(line: &'a str, in_block_comment: &mut bool) -> Option<&'a str> {
+    let mut rest = line.trim();
+
+    if *in_block_comment {
+        let end = rest.find("*/")?;
+        rest = rest[end + 2..].trim_start();
+        *in_block_comment = false;
+    }
+
+    loop {
+        if rest.is_empty() {
+            return None;
+        }
+
+        if rest.starts_with("//") {
+            return None;
+        }
+
+        if let Some(after_open) = rest.strip_prefix("/*") {
+            if let Some(end) = after_open.find("*/") {
+                rest = after_open[end + 2..].trim_start();
+                continue;
+            }
+            *in_block_comment = true;
+            return None;
+        }
+
+        break;
+    }
+
+    let bytes = rest.as_bytes();
+    if bytes.first().is_some_and(|b| *b == b'\'' || *b == b'"') {
+        let quote = bytes[0];
+        let Some(close_rel) = rest[1..].find(quote as char) else {
+            return Some(rest);
+        };
+        let mut end = 1 + close_rel + 1;
+        if rest.as_bytes().get(end) == Some(&b';') {
+            end += 1;
+        }
+        return Some(&rest[..end]);
+    }
+
+    let end = rest.find(char::is_whitespace).unwrap_or(rest.len());
+    Some(&rest[..end])
+}
+
+fn has_directive(code: &str, is_match: fn(&str) -> bool) -> bool {
+    let mut in_block_comment = false;
+
     for line in code.lines() {
-        let trimmed = line.trim();
-
-        if trimmed.is_empty() {
+        let Some(token) = next_directive_candidate(line, &mut in_block_comment) else {
             continue;
-        }
+        };
 
-        if trimmed.starts_with("//") {
-            continue;
-        }
-
-        if trimmed.starts_with("/*") {
-            continue;
-        }
-
-        if trimmed == "'use client';"
-            || trimmed == "\"use client\";"
-            || trimmed == "'use client'"
-            || trimmed == "\"use client\""
-        {
+        if is_match(token) {
             return true;
         }
 
-        if !trimmed.starts_with("'use") && !trimmed.starts_with("\"use") {
+        if !token.starts_with("'use") && !token.starts_with("\"use") {
             break;
         }
     }
@@ -62,36 +107,12 @@ pub fn has_use_client_directive(code: &str) -> bool {
     false
 }
 
+pub fn has_use_client_directive(code: &str) -> bool {
+    has_directive(code, is_use_client_directive)
+}
+
 pub fn has_use_server_directive(code: &str) -> bool {
-    for line in code.lines() {
-        let trimmed = line.trim();
-
-        if trimmed.is_empty() {
-            continue;
-        }
-
-        if trimmed.starts_with("//") {
-            continue;
-        }
-
-        if trimmed.starts_with("/*") {
-            continue;
-        }
-
-        if trimmed.starts_with("'use server';")
-            || trimmed.starts_with("\"use server\";")
-            || trimmed == "'use server'"
-            || trimmed == "\"use server\""
-        {
-            return true;
-        }
-
-        if !trimmed.starts_with("'use") && !trimmed.starts_with("\"use") {
-            break;
-        }
-    }
-
-    false
+    has_directive(code, is_use_server_directive)
 }
 
 pub fn wrap_server_action_module(code: &str, module_id: &str) -> String {
@@ -152,4 +173,96 @@ pub fn get_dist_path_for_component(file_path: &str) -> Result<PathBuf, RariError
     let dist_path = Path::new(DIST_DIR).join("server").join(format!("{component_id}.js"));
 
     Ok(dist_path)
+}
+
+#[cfg(test)]
+#[expect(clippy::unwrap_used, clippy::expect_used)]
+mod analysis_golden_tests {
+    use std::{fs, path::PathBuf};
+
+    use serde::Deserialize;
+
+    use super::*;
+
+    fn fixture_path(name: &str) -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../test/fixtures/analysis").join(name)
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct ComponentIdFixture {
+        cases: Vec<ComponentIdCase>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct ComponentIdCase {
+        input: String,
+        readable: String,
+        id: String,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct DirectiveFixture {
+        cases: Vec<DirectiveCase>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct DirectiveCase {
+        id: String,
+        source: String,
+        has_use_client: bool,
+        has_use_server: bool,
+    }
+
+    #[test]
+    fn component_ids_match_shared_goldens() {
+        let fixture: ComponentIdFixture = serde_json::from_str(
+            &fs::read_to_string(fixture_path("component-ids.json")).expect("read fixture"),
+        )
+        .expect("parse fixture");
+
+        for case in fixture.cases {
+            assert_eq!(
+                readable_component_id(&case.input),
+                case.readable,
+                "readable mismatch for {}",
+                case.input
+            );
+            assert_eq!(
+                extract_component_id(&case.input).unwrap(),
+                case.id,
+                "id mismatch for {}",
+                case.input
+            );
+            assert_eq!(
+                short_hash(&case.input),
+                case.id.rsplit_once('_').expect("id has hash").1,
+                "hash mismatch for {}",
+                case.input
+            );
+        }
+    }
+
+    #[test]
+    fn directives_match_shared_goldens() {
+        let fixture: DirectiveFixture = serde_json::from_str(
+            &fs::read_to_string(fixture_path("directives.json")).expect("read fixture"),
+        )
+        .expect("parse fixture");
+
+        for case in fixture.cases {
+            assert_eq!(
+                has_use_client_directive(&case.source),
+                case.has_use_client,
+                "hasUseClient mismatch for {}",
+                case.id
+            );
+            assert_eq!(
+                has_use_server_directive(&case.source),
+                case.has_use_server,
+                "hasUseServer mismatch for {}",
+                case.id
+            );
+        }
+    }
 }

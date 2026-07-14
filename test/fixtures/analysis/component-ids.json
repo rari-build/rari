@@ -1,0 +1,34 @@
+{
+  "cases": [
+    {
+      "input": "src/app/page.tsx",
+      "readable": "app/page",
+      "id": "app/page_73d7a23e"
+    },
+    {
+      "input": "src/app/css/page.tsx",
+      "readable": "app/css/page",
+      "id": "app/css/page_1a52d086"
+    },
+    {
+      "input": "src/app/foo@bar/page.tsx",
+      "readable": "app/foo_bar/page",
+      "id": "app/foo_bar/page_e35d0d78"
+    },
+    {
+      "input": "src/app/foo#bar/page.tsx",
+      "readable": "app/foo_bar/page",
+      "id": "app/foo_bar/page_9744e5ac"
+    },
+    {
+      "input": "src/components/Button.tsx",
+      "readable": "components/Button",
+      "id": "components/Button_1e4ab167"
+    },
+    {
+      "input": "src/lib/utils.ts",
+      "readable": "lib/utils",
+      "id": "lib/utils_da10bcc7"
+    }
+  ]
+}
