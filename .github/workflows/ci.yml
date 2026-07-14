@@ -240,15 +240,23 @@ jobs:
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
 
       - name: Download snapshot
-        if: needs.build-snapshot.result == 'success'
+        if: needs.build-snapshot.result == 'success' && runner.os == 'Linux'
         uses: namespace-actions/download-artifact@7cbad919e4b0e09f17e9d6311a444ff002992b5b # v2.0.1
         with:
           name: v8-snapshot
           path: crates/rari/snapshots
 
-      - name: Generate snapshot if needed
-        if: needs.build-snapshot.result != 'success'
+      - name: Generate snapshot if needed (Linux)
+        if: needs.build-snapshot.result != 'success' && runner.os == 'Linux'
         run: just ci-generate-snapshot
+
+      - name: Generate V8 snapshot (Windows)
+        if: runner.os == 'Windows'
+        run: just ci-generate-snapshot
+        env:
+          AWS_LC_SYS_PREBUILT_NASM: 1
+          PKG_CONFIG_PATH: C:\vcpkg\installed\x64-windows\lib\pkgconfig
+          VCPKG_ROOT: C:\vcpkg
 
       - name: Build rari binary (Windows)
         if: runner.os == 'Windows'

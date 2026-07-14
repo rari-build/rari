@@ -267,7 +267,7 @@ ci-create-snapshot-placeholder:
     echo 'pub static RESIDUAL_LAZY_ESM_SOURCES: &[(&str, &str)] = &[];' > crates/rari/snapshots/residual_lazy_sources.rs
     echo 'pub static RESIDUAL_LAZY_JS_SOURCES: &[(&str, &str)] = &[];' >> crates/rari/snapshots/residual_lazy_sources.rs
 
-# Generate V8 snapshot (CI caches snapshot artifacts separately)
+# Generate V8 snapshot for the current host (OS/arch-specific; do not reuse across platforms)
 ci-generate-snapshot: ci-create-snapshot-placeholder
     cargo run --manifest-path tools/snapshot/Cargo.toml -- crates/rari/snapshots
 

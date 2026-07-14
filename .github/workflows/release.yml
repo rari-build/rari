@@ -17,60 +17,8 @@ env:
   NODE_VERSION: 22.18.0
 
 jobs:
-  build-snapshot:
-    name: Build V8 snapshot
-    runs-on: namespace-profile-rari-linux-amd64
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        if: runner.os == 'Windows'
-
-      - uses: namespacelabs/nscloud-checkout-action@445c25d7009680597d73eb03c4e1cd5be522ed73 # v9.0.0
-        if: runner.os != 'Windows'
-
-      - uses: ./.github/actions/setup-namespace-cache
-        with:
-          cache: |
-            rust
-            pnpm
-            apt
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
-        with:
-          toolchain: nightly
-
-      - uses: ./.github/actions/setup-rust-build-deps
-
-      - name: Bundle React ESM vendor files
-        uses: ./.github/actions/bundle-react-esm
-
-      - name: Create snapshot placeholder
-        run: |
-          mkdir -p crates/rari/snapshots
-          touch crates/rari/snapshots/RARI_SNAPSHOT.bin
-          echo 'pub static RESIDUAL_LAZY_ESM_SOURCES: &[(&str, &str)] = &[];' > crates/rari/snapshots/residual_lazy_sources.rs
-          echo 'pub static RESIDUAL_LAZY_JS_SOURCES: &[(&str, &str)] = &[];' >> crates/rari/snapshots/residual_lazy_sources.rs
-
-      - name: Generate V8 snapshot
-        run: cargo run --release --manifest-path tools/snapshot/Cargo.toml -- crates/rari/snapshots
-        env:
-          RUSTFLAGS: -C link-arg=-fuse-ld=mold
-
-      - name: Upload snapshot
-        uses: namespace-actions/upload-artifact@f6ccaacc655aec41b93af180d1d7eef21af862d2 # v1.0.3
-        with:
-          name: v8-snapshot
-          path: |
-            crates/rari/snapshots/RARI_SNAPSHOT.bin
-            crates/rari/snapshots/residual_lazy_sources.rs
-          if-no-files-found: error
-          retention-days: 7
-
   build-binaries:
     name: Build ${{ matrix.target }}
-    needs: build-snapshot
     runs-on: ${{ matrix.runner }}
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     strategy:
@@ -97,9 +45,10 @@ jobs:
             name: rari-linux-arm64
             platform: linux-arm64
           - target: x86_64-apple-darwin
-            runner: namespace-profile-rari-macos-arm64
+            runner: macos-15-intel
             name: rari-darwin-x64
             platform: darwin-x64
+            github_hosted: true
           - target: aarch64-apple-darwin
             runner: namespace-profile-rari-macos-arm64
             name: rari-darwin-arm64
@@ -110,19 +59,21 @@ jobs:
             vcpkg_triplet: x64-windows
             platform: win32-x64
           - target: aarch64-pc-windows-msvc
-            runner: namespace-profile-rari-windows-amd64
+            runner: windows-11-arm
             name: rari-win32-arm64.exe
             vcpkg_triplet: arm64-windows
             platform: win32-arm64
+            github_hosted: true
 
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' || matrix.github_hosted
 
       - uses: namespacelabs/nscloud-checkout-action@445c25d7009680597d73eb03c4e1cd5be522ed73 # v9.0.0
-        if: runner.os != 'Windows'
+        if: runner.os != 'Windows' && !matrix.github_hosted
 
       - uses: ./.github/actions/setup-platform-cache
+        if: ${{ !matrix.github_hosted }}
         with:
           linux-cache: |
             rust
@@ -145,14 +96,44 @@ jobs:
         with:
           vcpkg-triplet: ${{ matrix.vcpkg_triplet }}
 
+      - uses: ./.github/actions/setup-pnpm
+        if: ${{ matrix.github_hosted }}
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'true'
+          install: 'false'
+
       - name: Bundle React ESM vendor files
         uses: ./.github/actions/bundle-react-esm
 
-      - name: Download V8 snapshot
-        uses: namespace-actions/download-artifact@7cbad919e4b0e09f17e9d6311a444ff002992b5b # v2.0.1
-        with:
-          name: v8-snapshot
-          path: crates/rari/snapshots
+      - name: Create snapshot placeholder
+        shell: bash
+        run: |
+          mkdir -p crates/rari/snapshots
+          touch crates/rari/snapshots/RARI_SNAPSHOT.bin
+          echo 'pub static RESIDUAL_LAZY_ESM_SOURCES: &[(&str, &str)] = &[];' > crates/rari/snapshots/residual_lazy_sources.rs
+          echo 'pub static RESIDUAL_LAZY_JS_SOURCES: &[(&str, &str)] = &[];' >> crates/rari/snapshots/residual_lazy_sources.rs
+
+      - name: Generate V8 snapshot (Linux)
+        if: runner.os == 'Linux'
+        run: cargo run --release --manifest-path tools/snapshot/Cargo.toml -- crates/rari/snapshots
+        env:
+          RUSTFLAGS: -C link-arg=-fuse-ld=mold
+
+      - name: Generate V8 snapshot (macOS)
+        if: runner.os == 'macOS'
+        run: cargo run --release --manifest-path tools/snapshot/Cargo.toml -- crates/rari/snapshots
+        env:
+          RUSTFLAGS: '' # Override .cargo/config.toml to use default linker
+
+      - name: Generate V8 snapshot (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: cargo run --release --manifest-path tools/snapshot/Cargo.toml -- crates/rari/snapshots
+        env:
+          AWS_LC_SYS_PREBUILT_NASM: 1
+          PKG_CONFIG_PATH: C:\vcpkg\installed\${{ matrix.vcpkg_triplet }}\lib\pkgconfig
+          VCPKG_ROOT: C:\vcpkg
 
       - name: Build binary (Linux)
         if: runner.os == 'Linux'
