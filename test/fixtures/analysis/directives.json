@@ -4,85 +4,137 @@
       "id": "client-single-quotes",
       "source": "'use client'\nexport default function C() { return null }\n",
       "hasUseClient": true,
-      "hasUseServer": false
+      "hasUseServer": false,
+      "topLevelUseClient": true,
+      "topLevelUseServer": false
     },
     {
       "id": "client-double-quotes",
       "source": "\"use client\"\nexport default function C() { return null }\n",
       "hasUseClient": true,
-      "hasUseServer": false
+      "hasUseServer": false,
+      "topLevelUseClient": true,
+      "topLevelUseServer": false
     },
     {
       "id": "client-with-semicolon",
       "source": "'use client';\nexport default function C() { return null }\n",
       "hasUseClient": true,
-      "hasUseServer": false
+      "hasUseServer": false,
+      "topLevelUseClient": true,
+      "topLevelUseServer": false
     },
     {
       "id": "server-double-quotes",
       "source": "\"use server\"\nexport async function action() {}\n",
       "hasUseClient": false,
-      "hasUseServer": true
+      "hasUseServer": true,
+      "topLevelUseClient": false,
+      "topLevelUseServer": true
     },
     {
       "id": "server-with-semicolon",
       "source": "'use server';\nexport async function action() {}\n",
       "hasUseClient": false,
-      "hasUseServer": true
+      "hasUseServer": true,
+      "topLevelUseClient": false,
+      "topLevelUseServer": true
     },
     {
       "id": "comment-only-client",
       "source": "// 'use client'\nexport default function C() { return null }\n",
       "hasUseClient": false,
-      "hasUseServer": false
+      "hasUseServer": false,
+      "topLevelUseClient": false,
+      "topLevelUseServer": false
     },
     {
       "id": "leading-line-comment-then-client",
       "source": "// license\n'use client'\nexport default function C() { return null }\n",
       "hasUseClient": true,
-      "hasUseServer": false
+      "hasUseServer": false,
+      "topLevelUseClient": true,
+      "topLevelUseServer": false
     },
     {
       "id": "empty-lines-then-client",
       "source": "\n\n'use client'\nexport default function C() { return null }\n",
       "hasUseClient": true,
-      "hasUseServer": false
+      "hasUseServer": false,
+      "topLevelUseClient": true,
+      "topLevelUseServer": false
     },
     {
       "id": "same-line-block-comment-then-client",
       "source": "/* comment */ 'use client'\nexport default function C() { return null }\n",
       "hasUseClient": true,
-      "hasUseServer": false
+      "hasUseServer": false,
+      "topLevelUseClient": true,
+      "topLevelUseServer": false
     },
     {
       "id": "multiline-block-comment-then-client",
       "source": "/* comment\nstill comment */\n'use client'\nexport default function C() { return null }\n",
       "hasUseClient": true,
-      "hasUseServer": false
+      "hasUseServer": false,
+      "topLevelUseClient": true,
+      "topLevelUseServer": false
     },
     {
       "id": "incomplete-block-comment-then-client",
       "source": "/* comment */ 'use client' /*\nexport default function C() { return null }\n",
       "hasUseClient": true,
-      "hasUseServer": false
+      "hasUseServer": false,
+      "topLevelUseClient": true,
+      "topLevelUseServer": false
     },
     {
       "id": "directive-after-import",
       "source": "import React from 'react'\n'use client'\nexport default function C() { return null }\n",
       "hasUseClient": false,
-      "hasUseServer": false
+      "hasUseServer": false,
+      "topLevelUseClient": false,
+      "topLevelUseServer": false
     },
     {
       "id": "no-directive",
       "source": "export default function C() { return null }\n",
       "hasUseClient": false,
-      "hasUseServer": false
+      "hasUseServer": false,
+      "topLevelUseClient": false,
+      "topLevelUseServer": false
     },
     {
       "id": "same-line-client-and-server",
       "source": "'use client'; 'use server'\nexport default function C() { return null }\n",
       "hasUseClient": true,
-      "hasUseServer": true
+      "hasUseServer": true,
+      "topLevelUseClient": true,
+      "topLevelUseServer": false
+    },
+    {
+      "id": "same-line-server-and-client",
+      "source": "'use server'; 'use client'\nexport async function action() {}\n",
+      "hasUseClient": true,
+      "hasUseServer": true,
+      "topLevelUseClient": false,
+      "topLevelUseServer": true
+    },
+    {
+      "id": "string-then-client",
+      "source": "'hello'\n'use client'\nexport default function C() { return null }\n",
+      "hasUseClient": true,
+      "hasUseServer": false,
+      "topLevelUseClient": false,
+      "topLevelUseServer": false
+    },
+    {
+      "id": "unclosed-string-then-server",
+      "source": "'oops\n'use server'\nexport async function action() {}\n",
+      "hasUseClient": false,
+      "hasUseServer": false,
+      "topLevelUseClient": false,
+      "topLevelUseServer": false
     }
   ]
 }

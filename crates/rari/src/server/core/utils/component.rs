@@ -38,6 +38,30 @@ fn is_use_server_directive(trimmed: &str) -> bool {
     matches!(trimmed, "'use server';" | "\"use server\";" | "'use server'" | "\"use server\"")
 }
 
+fn is_closed_string_token(token: &str) -> bool {
+    let bytes = token.as_bytes();
+    let Some((&quote, rest)) = bytes.split_first() else {
+        return false;
+    };
+    if quote != b'\'' && quote != b'"' {
+        return false;
+    }
+    let body = if rest.last() == Some(&b';') { &rest[..rest.len() - 1] } else { rest };
+    body.last() == Some(&quote)
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct DirectiveFlags {
+    use_client: bool,
+    use_server: bool,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct DirectiveScan {
+    present: DirectiveFlags,
+    top_level: DirectiveFlags,
+}
+
 /// Strip leading complete `/* ... */` comments. Tracks open block comments across lines.
 /// Returns the next prologue-significant token and advances `remaining` past it.
 fn next_directive_candidate<'a>(
@@ -100,32 +124,59 @@ fn next_directive_candidate<'a>(
     Some(token)
 }
 
-fn has_directive(code: &str, is_match: fn(&str) -> bool) -> bool {
+fn scan_directives(code: &str) -> DirectiveScan {
     let mut in_block_comment = false;
+    let mut scan = DirectiveScan::default();
+    let mut saw_first_string = false;
 
     for line in code.lines() {
         let mut remaining = line;
 
         while let Some(token) = next_directive_candidate(&mut remaining, &mut in_block_comment) {
-            if is_match(token) {
-                return true;
+            let is_string = token.starts_with('\'') || token.starts_with('"');
+            if !is_string {
+                return scan;
             }
 
-            if !token.starts_with("'use") && !token.starts_with("\"use") {
-                return false;
+            let is_client = is_use_client_directive(token);
+            let is_server = is_use_server_directive(token);
+
+            if !saw_first_string {
+                saw_first_string = true;
+                scan.top_level.use_client = is_client;
+                scan.top_level.use_server = is_server;
+            }
+
+            if !is_closed_string_token(token) {
+                return scan;
+            }
+
+            if is_client {
+                scan.present.use_client = true;
+            }
+            if is_server {
+                scan.present.use_server = true;
             }
         }
     }
 
-    false
+    scan
 }
 
 pub fn has_use_client_directive(code: &str) -> bool {
-    has_directive(code, is_use_client_directive)
+    scan_directives(code).present.use_client
 }
 
 pub fn has_use_server_directive(code: &str) -> bool {
-    has_directive(code, is_use_server_directive)
+    scan_directives(code).present.use_server
+}
+
+pub fn has_top_level_use_client_directive(code: &str) -> bool {
+    scan_directives(code).top_level.use_client
+}
+
+pub fn has_top_level_use_server_directive(code: &str) -> bool {
+    scan_directives(code).top_level.use_server
 }
 
 pub fn wrap_server_action_module(code: &str, module_id: &str) -> String {
@@ -220,11 +271,14 @@ mod analysis_golden_tests {
 
     #[derive(Debug, Deserialize)]
     #[serde(rename_all = "camelCase")]
+    #[expect(clippy::struct_excessive_bools)]
     struct DirectiveCase {
         id: String,
         source: String,
         has_use_client: bool,
         has_use_server: bool,
+        top_level_use_client: bool,
+        top_level_use_server: bool,
     }
 
     #[test]
@@ -274,6 +328,18 @@ mod analysis_golden_tests {
                 has_use_server_directive(&case.source),
                 case.has_use_server,
                 "hasUseServer mismatch for {}",
+                case.id
+            );
+            assert_eq!(
+                has_top_level_use_client_directive(&case.source),
+                case.top_level_use_client,
+                "topLevelUseClient mismatch for {}",
+                case.id
+            );
+            assert_eq!(
+                has_top_level_use_server_directive(&case.source),
+                case.top_level_use_server,
+                "topLevelUseServer mismatch for {}",
                 case.id
             );
         }
