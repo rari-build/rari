@@ -5,8 +5,12 @@ use deno_core::{Extension, ExtensionArguments};
 use deno_fs::{FileSystemRc, RealFs, sync::MaybeArc};
 use deno_io::Stdio;
 use deno_web::InMemoryBroadcastChannel;
+pub use node::{
+    cjs_translator::NodeCodeTranslator,
+    resolvers::{NpmPackageFolderResolverImpl, Resolver},
+};
 
-use crate::runtime::ext::{node::resolvers::Resolver, web::WebOptions};
+use crate::runtime::ext::web::WebOptions;
 
 pub trait ExtensionTrait<A> {
     const LAZY_INIT: bool = false;

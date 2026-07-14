@@ -264,7 +264,7 @@ impl WebWorkerCallbackOptions {
 fn create_web_worker_callback(options: WebWorkerCallbackOptions) -> Arc<CreateWebWorkerCb> {
     Arc::new(move |args| {
         let node_resolver = Arc::clone(&options.node_resolver);
-        let module_loader = Rc::new(RariModuleLoader::new());
+        let module_loader = Rc::new(RariModuleLoader::new(Arc::clone(&node_resolver)));
 
         let create_web_worker_cb = create_web_worker_callback(options.clone());
 

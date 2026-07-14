@@ -38,20 +38,6 @@ globalThis['~rsc'].modules['{module_name}'] = {};
 export default {};
 ";
 
-pub fn create_generic_module_stub(module_path: &str) -> String {
-    let escaped_path = module_path.replace('\\', "\\\\").replace('\'', "\\'");
-    format!(
-        r"
-// Generic fallback stub for node module: {module_path}
-
-export default {{
-  name: '{escaped_path}',
-  isStub: true
-}};
-"
-    )
-}
-
 pub fn create_component_stub(component_name: &str) -> String {
     format!(
         r"

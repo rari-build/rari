@@ -1,48 +1,55 @@
 use std::{
     borrow::Cow,
     env,
-    fmt::Write,
+    fmt::{self, Write},
     fs,
     io::{Error, ErrorKind},
     path::{Path, PathBuf},
     rc::Rc,
     string::ToString,
-    sync::{Arc, OnceLock},
-    time::Instant,
+    sync::Arc,
 };
 
 use cow_utils::CowUtils;
 use dashmap::DashMap;
+use deno_ast::MediaType;
 use deno_core::{
     FastString, ModuleLoadOptions, ModuleLoadReferrer, ModuleLoadResponse, ModuleLoader,
-    ModuleSource, ModuleSourceCode, ModuleSpecifier, ModuleType, ResolutionKind,
+    ModuleSource, ModuleSourceCode, ModuleSpecifier, ModuleType, ResolutionKind, resolve_import,
 };
 use deno_error::JsErrorBox;
-use parking_lot::RwLock;
-use regex::Regex;
-use rustc_hash::FxHashMap;
+use deno_node::NodeResolver;
+use deno_resolver::npm::DenoInNpmPackageChecker;
+use node_resolver::{
+    NodeResolution, NodeResolutionKind, ResolutionMode, errors::NodeResolveErrorKind,
+};
+use sys_traits::impls::RealSys;
 
 use super::{
     cache::{DEFAULT_TTL_SECS, ModuleCaching},
     config::RuntimeConfig,
-    resolver::ModuleResolver,
     storage::ModuleStorage,
     stubs::{
         FALLBACK_MODULE_TEMPLATE, LOADER_STUB_TEMPLATE, RARI_CACHE_STUB, RARI_CALL_SERVER_STUB,
         RARI_CLIENT_STUB, RARI_DEFAULT_STUB, RARI_HEADERS_STUB, RARI_IMAGE_STUB, RARI_ROUTER_STUB,
-        create_component_stub, create_generic_module_stub,
+        create_component_stub,
     },
     transpiler::{needs_jsx_transpilation, needs_typescript_transpilation},
 };
 use crate::{
     rsc::{DependencyList, extract_dependencies},
-    runtime::transpile,
+    runtime::{
+        ext::{NodeCodeTranslator, NpmPackageFolderResolverImpl, Resolver},
+        transpile,
+    },
     server::{cache::handler::CacheHandlerRegistry, config::CacheLayerConfig},
     utils::path::path_to_file_url,
 };
 
 type ExtensionTranspilerResult = Result<(FastString, Option<Cow<'static, [u8]>>), JsErrorBox>;
 type ExtensionTranspilerFn = dyn Fn(FastString, FastString) -> ExtensionTranspilerResult;
+type RariNodeResolver =
+    NodeResolver<DenoInNpmPackageChecker, NpmPackageFolderResolverImpl, RealSys>;
 
 const NODE_MODULES_PATH: &str = "/node_modules/";
 const RARI_COMPONENT_PATH: &str = "/rari_component/";
@@ -56,28 +63,11 @@ const RELATIVE_UP_PATH: &str = "../";
 const RARI_INTERNAL_PATH: &str = "/rari_internal/";
 const LOADER_STUB_PREFIX: &str = "load_";
 const RSC_REFERENCES_SPECIFIER: &str = "react-server-dom-rari/server";
+const RARI_RSC_REFERENCES_EXPORT: &str = "rari/runtime/rsc-references";
 const RARI_MDX_REGISTRY_SPECIFIER: &str = "rari/mdx/registry";
 const RARI_MDX_REGISTRY_INTERNAL: &str = "file:///rari_internal/mdx-registry.js";
 const RARI_MDX_REGISTRY_MANIFEST: &str = "dist/server/manifest.json";
 const RARI_MDX_REGISTRY_EXPORT_PATH: &str = "dist/mdx/registry.mjs";
-const RARI_RSC_REFERENCES_PATH: &str = "dist/runtime/rsc-references.mjs";
-
-#[derive(Debug)]
-struct AsyncFileManager {
-    file_cache: Arc<RwLock<FxHashMap<String, (String, Instant)>>>,
-}
-
-impl AsyncFileManager {
-    fn new() -> Self {
-        Self { file_cache: Arc::new(RwLock::new(FxHashMap::default())) }
-    }
-}
-
-static ASYNC_FILE_MANAGER: OnceLock<AsyncFileManager> = OnceLock::new();
-
-fn get_async_file_manager() -> &'static AsyncFileManager {
-    ASYNC_FILE_MANAGER.get_or_init(AsyncFileManager::new)
-}
 
 fn file_url_to_path(url: &str) -> Option<PathBuf> {
     if !url.starts_with(FILE_PROTOCOL) {
@@ -128,24 +118,50 @@ fn component_id_aliases(component_id: &str) -> Vec<String> {
     aliases
 }
 
-#[derive(Debug)]
+fn is_virtual_referrer(referrer: &str) -> bool {
+    referrer.is_empty()
+        || referrer.contains(RARI_COMPONENT_PATH)
+        || referrer.contains(RARI_INTERNAL_PATH)
+        || referrer.contains(RARI_STUB_PATH)
+        || referrer.contains("/react_vendor/")
+        || referrer.contains("/rari_hmr/")
+        || referrer.starts_with("ext:")
+}
+
 pub struct RariModuleLoader {
     storage: ModuleStorage,
-    module_resolver: ModuleResolver,
+    resolver: Arc<Resolver>,
+    node_resolver: Arc<RariNodeResolver>,
+    code_translator: Rc<NodeCodeTranslator>,
     pub module_caching: ModuleCaching,
     pub component_specifiers: DashMap<String, String>,
 }
 
+impl fmt::Debug for RariModuleLoader {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RariModuleLoader")
+            .field("storage", &self.storage)
+            .field("module_caching", &self.module_caching)
+            .field("component_specifiers", &self.component_specifiers)
+            .finish_non_exhaustive()
+    }
+}
+
 impl RariModuleLoader {
-    pub fn new() -> Self {
-        Self::with_config(&RuntimeConfig::default())
+    pub fn new(resolver: Arc<Resolver>) -> Self {
+        Self::with_config(resolver, &RuntimeConfig::default())
     }
 
-    pub fn with_config(config: &RuntimeConfig) -> Self {
-        Self::with_config_and_registry(config, &CacheHandlerRegistry::default_with_memory())
+    pub fn with_config(resolver: Arc<Resolver>, config: &RuntimeConfig) -> Self {
+        Self::with_config_and_registry(
+            resolver,
+            config,
+            &CacheHandlerRegistry::default_with_memory(),
+        )
     }
 
     pub fn with_config_and_registry(
+        resolver: Arc<Resolver>,
         config: &RuntimeConfig,
         registry: &CacheHandlerRegistry,
     ) -> Self {
@@ -156,9 +172,13 @@ impl RariModuleLoader {
             default_ttl_secs: DEFAULT_TTL_SECS,
         };
         let module_caching = ModuleCaching::from_config(&layer, registry);
+        let node_resolver = resolver.node_resolver();
+        let code_translator = Rc::new(resolver.code_translator(Arc::clone(&node_resolver)));
         Self {
             storage: ModuleStorage::new(),
-            module_resolver: ModuleResolver::new(),
+            resolver,
+            node_resolver,
+            code_translator,
             module_caching,
             component_specifiers: DashMap::new(),
         }
@@ -316,14 +336,6 @@ export default {{}};
         self.storage.set_module_meta(format!("hmr_{component_specifier}"), false);
         self.storage.set_module_meta(format!("registered_{component_id}"), false);
         self.storage.set_version(format!("version_{component_id}"), 0);
-
-        let file_cache = Arc::clone(&get_async_file_manager().file_cache);
-        let mut cache = file_cache.write();
-        let keys_to_remove: Vec<String> =
-            cache.keys().filter(|key| key.contains(component_id)).cloned().collect();
-        for key in keys_to_remove {
-            cache.remove(&key);
-        }
     }
 
     pub fn create_specifier(&self, name: &str, prefix: &str) -> String {
@@ -349,204 +361,75 @@ export default {{}};
         })
     }
 
-    fn find_package_directory(current_dir: &Path, package_name: &str) -> Option<PathBuf> {
-        let node_modules_path = current_dir.join("node_modules").join(package_name);
-        if node_modules_path.exists() {
-            return Some(node_modules_path);
-        }
-
-        let mut search_dir = current_dir.to_path_buf();
-
-        loop {
-            let node_modules_path = search_dir.join("node_modules").join(package_name);
-            if node_modules_path.exists() {
-                return Some(node_modules_path);
-            }
-
-            if Self::is_likely_workspace_root(&search_dir)
-                && let Some(found) =
-                    Self::find_package_in_workspace_siblings(&search_dir, package_name)
-            {
-                return Some(found);
-            }
-
-            if !search_dir.pop() {
-                break;
-            }
-        }
-
-        None
+    fn cwd_directory_url() -> Result<ModuleSpecifier, JsErrorBox> {
+        let cwd = env::current_dir().map_err(|err| {
+            JsErrorBox::generic(format!("Failed to get current directory: {err}"))
+        })?;
+        ModuleSpecifier::from_directory_path(&cwd)
+            .map_err(|()| JsErrorBox::generic("Failed to convert cwd to file URL"))
     }
 
-    fn is_likely_workspace_root(dir: &Path) -> bool {
-        if dir.join("pnpm-workspace.yaml").exists() || dir.join("pnpm-lock.yaml").exists() {
-            return true;
+    fn referrer_url_for_node(referrer: &str) -> Result<ModuleSpecifier, JsErrorBox> {
+        if is_virtual_referrer(referrer) {
+            return Self::cwd_directory_url();
         }
-        if let Ok(content) = fs::read_to_string(dir.join("package.json"))
-            && content.contains("\"workspaces\"")
-        {
-            return true;
+
+        if let Ok(url) = ModuleSpecifier::parse(referrer) {
+            if url.scheme() == "file" {
+                return Ok(url);
+            }
+            return Self::cwd_directory_url();
         }
-        if dir.join("Cargo.toml").exists()
-            && let Ok(content) = fs::read_to_string(dir.join("Cargo.toml"))
-            && content.contains("[workspace]")
-        {
-            return true;
+
+        let path = PathBuf::from(referrer);
+        if path.is_absolute() {
+            ModuleSpecifier::from_file_path(&path)
+                .or_else(|()| ModuleSpecifier::from_directory_path(&path))
+                .or_else(|()| Self::cwd_directory_url())
+        } else {
+            Self::cwd_directory_url()
         }
-        false
     }
 
-    fn find_package_in_workspace_siblings(
-        workspace_root: &Path,
-        package_name: &str,
-    ) -> Option<PathBuf> {
-        let entries = fs::read_dir(workspace_root).ok()?;
+    fn resolve_via_node_resolver(
+        &self,
+        specifier: &str,
+        referrer: &str,
+    ) -> Result<ModuleSpecifier, JsErrorBox> {
+        let referrer_url = Self::referrer_url_for_node(referrer)?;
 
-        for entry in entries.flatten() {
-            let path = entry.path();
-
-            if let Ok(metadata) = fs::symlink_metadata(&path)
-                && metadata.file_type().is_symlink()
-            {
-                continue;
-            }
-
-            if !path.is_dir() {
-                continue;
-            }
-
-            let Some(dir_name) = path.file_name().and_then(|n| n.to_str()) else {
-                continue;
-            };
-
-            if dir_name.starts_with('.')
-                || dir_name == "node_modules"
-                || dir_name == "dist"
-                || dir_name == "target"
-                || dir_name == "build"
-                || dir_name == "out"
-            {
-                continue;
-            }
-
-            let sibling_node_modules = path.join("node_modules").join(package_name);
-            if sibling_node_modules.exists() {
-                return Some(sibling_node_modules);
-            }
-
-            for container in &["packages", "apps"] {
-                let container_path = path.join(container);
-                if container_path.is_dir()
-                    && let Ok(nested_entries) = fs::read_dir(&container_path)
-                {
-                    for nested_entry in nested_entries.flatten() {
-                        let nested_path = nested_entry.path();
-
-                        if let Ok(metadata) = fs::symlink_metadata(&nested_path)
-                            && metadata.file_type().is_symlink()
-                        {
-                            continue;
-                        }
-
-                        if nested_path.is_dir() {
-                            let nested_node_modules =
-                                nested_path.join("node_modules").join(package_name);
-                            if nested_node_modules.exists() {
-                                return Some(nested_node_modules);
-                            }
+        match self.node_resolver.resolve(
+            specifier,
+            &referrer_url,
+            ResolutionMode::Import,
+            NodeResolutionKind::Execution,
+        ) {
+            Ok(NodeResolution::BuiltIn(builtin_name)) => {
+                match self.node_resolver.resolve_package(
+                    specifier,
+                    &referrer_url,
+                    ResolutionMode::Import,
+                    NodeResolutionKind::Execution,
+                ) {
+                    Ok(resolution) => {
+                        resolution.into_url().map_err(|err| JsErrorBox::generic(err.to_string()))
+                    }
+                    Err(err) => {
+                        if matches!(err.as_kind(), NodeResolveErrorKind::PackageResolve(_)) {
+                            NodeResolution::BuiltIn(builtin_name)
+                                .into_url()
+                                .map_err(|err| JsErrorBox::generic(err.to_string()))
+                        } else {
+                            Err(JsErrorBox::generic(err.to_string()))
                         }
                     }
                 }
             }
-        }
-
-        None
-    }
-
-    fn resolve_from_node_modules(
-        &self,
-        package_specifier: &str,
-        referrer_path: &str,
-    ) -> Option<String> {
-        let start_dir = if referrer_path.is_empty() {
-            env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
-        } else {
-            let clean_referrer_path = if referrer_path.starts_with(FILE_PROTOCOL) {
-                file_url_to_path(referrer_path).unwrap_or_else(|| PathBuf::from(referrer_path))
-            } else {
-                PathBuf::from(referrer_path)
-            };
-
-            let clean_referrer_str = clean_referrer_path.to_string_lossy();
-
-            if clean_referrer_str.contains("/rari_component/")
-                || clean_referrer_str.contains("/rari_internal/")
-            {
-                env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
-            } else {
-                let dir_path = clean_referrer_path
-                    .parent()
-                    .map(Path::to_path_buf)
-                    .unwrap_or_else(|| env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
-                dir_path.canonicalize().unwrap_or(dir_path)
+            Ok(resolution) => {
+                resolution.into_url().map_err(|err| JsErrorBox::generic(err.to_string()))
             }
-        };
-
-        let result = self.resolve_from_node_modules_with_dir(package_specifier, &start_dir);
-
-        if result.is_none() {
-            let cwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-            let cwd_canonical = fs::canonicalize(&cwd).unwrap_or(cwd);
-            if cwd_canonical != start_dir {
-                return self.resolve_from_node_modules_with_dir(package_specifier, &cwd_canonical);
-            }
+            Err(err) => Err(JsErrorBox::generic(err.to_string())),
         }
-
-        result
-    }
-
-    fn resolve_rsc_references(referrer_path: &str) -> Option<String> {
-        let start_dir = if referrer_path.is_empty() {
-            env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
-        } else {
-            let clean_referrer_path = if referrer_path.starts_with(FILE_PROTOCOL) {
-                file_url_to_path(referrer_path).unwrap_or_else(|| PathBuf::from(referrer_path))
-            } else {
-                PathBuf::from(referrer_path)
-            };
-
-            let clean_referrer_str = clean_referrer_path.to_string_lossy();
-
-            if clean_referrer_str.contains("/rari_component/")
-                || clean_referrer_str.contains("/rari_internal/")
-            {
-                env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
-            } else {
-                let dir_path = clean_referrer_path
-                    .parent()
-                    .map(Path::to_path_buf)
-                    .unwrap_or_else(|| env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
-                dir_path.canonicalize().unwrap_or(dir_path)
-            }
-        };
-
-        let mut search_dirs = vec![start_dir.clone()];
-        let cwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        let cwd_canonical = fs::canonicalize(&cwd).unwrap_or(cwd);
-        if cwd_canonical != start_dir {
-            search_dirs.push(cwd_canonical);
-        }
-
-        for dir in search_dirs {
-            if let Some(package_dir) = Self::find_package_directory(&dir, "rari") {
-                let references_path = package_dir.join(RARI_RSC_REFERENCES_PATH);
-                if references_path.exists() {
-                    return Some(path_to_file_url(&references_path));
-                }
-            }
-        }
-
-        None
     }
 
     fn is_rari_mdx_registry_stub(path: &Path) -> bool {
@@ -632,71 +515,6 @@ export default {{}};
         );
         self.storage.set_module_code(RARI_MDX_REGISTRY_INTERNAL.to_string(), code.clone());
         code
-    }
-
-    fn resolve_from_node_modules_with_dir(
-        &self,
-        package_specifier: &str,
-        start_dir: &Path,
-    ) -> Option<String> {
-        if let Some(slash_pos) = package_specifier.find('/') {
-            if package_specifier.starts_with('@') {
-                if let Some(second_slash_pos) = package_specifier[slash_pos + 1..].find('/') {
-                    let actual_slash_pos = slash_pos + 1 + second_slash_pos;
-                    let package_name = &package_specifier[..actual_slash_pos];
-                    let subpath = &package_specifier[actual_slash_pos..];
-
-                    return Self::resolve_subpath_export_from_dir(package_name, subpath, start_dir);
-                }
-            } else {
-                let package_name = &package_specifier[..slash_pos];
-                let subpath = &package_specifier[slash_pos..];
-
-                return Self::resolve_subpath_export_from_dir(package_name, subpath, start_dir);
-            }
-        }
-
-        self.resolve_regular_package_from_dir(package_specifier, start_dir)
-    }
-
-    fn is_npm_package_context(&self, referrer: &str) -> bool {
-        referrer.contains("node_modules") || self.module_resolver.contains_path(referrer)
-    }
-
-    fn extract_package_base_from_referrer(&self, referrer: &str) -> Option<String> {
-        let clean_referrer = if referrer.starts_with(FILE_PROTOCOL) {
-            file_url_to_path(referrer)
-                .map(|p| p.to_string_lossy().cow_replace('\\', "/").into_owned())
-                .unwrap_or_else(|| referrer.to_string())
-        } else {
-            referrer.cow_replace('\\', "/").into_owned()
-        };
-
-        if clean_referrer.contains("node_modules")
-            && let Some(last_slash) = clean_referrer.rfind('/')
-        {
-            let dir_path = &clean_referrer[..last_slash];
-            return Some(dir_path.to_string());
-        }
-
-        self.module_resolver.get_package_base(&clean_referrer)
-    }
-
-    fn resolve_relative_up(specifier: &str, package_base: &str) -> String {
-        let remaining = specifier.strip_prefix("../").unwrap_or(specifier);
-        let parent_dir = if package_base.contains('/') {
-            package_base.rsplit_once('/').map(|(dir, _)| dir).unwrap_or("")
-        } else {
-            ""
-        };
-        let full_path = PathBuf::from(parent_dir).join(remaining);
-        path_to_file_url(&full_path)
-    }
-
-    fn resolve_relative_current(specifier: &str, package_base: &str) -> String {
-        let remaining = specifier.strip_prefix("./").unwrap_or(specifier);
-        let full_path = PathBuf::from(package_base).join(remaining);
-        path_to_file_url(&full_path)
     }
 
     fn handle_cached_module(
@@ -870,337 +688,90 @@ export default {{}};
         None
     }
 
-    fn is_cjs_module(&self, content: &str, file_path: &str) -> bool {
-        static REQUIRE_REGEX: OnceLock<Regex> = OnceLock::new();
-        let require_regex = REQUIRE_REGEX.get_or_init(|| {
-            #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
-            Regex::new(r#"require\s*\(\s*['"]"#).expect("Failed to compile require regex pattern")
-        });
-
-        let has_require = require_regex.is_match(content);
-        let has_module_exports = content.contains("module.exports");
-        let has_exports_dot = content.contains("exports.");
-        let is_cjs_extension = file_path.ends_with(".cjs");
-
-        let has_import = content.contains("import ") || content.contains("import{");
-        let has_export = content.contains("export ")
-            || content.contains("export{")
-            || content.contains("export default");
-
-        if has_export || (has_import && !has_require) {
-            return false;
-        }
-
-        if file_path.contains("node_modules")
-            && let Some(pkg_json_type) = self.get_package_type_for_file(file_path)
-        {
-            if pkg_json_type == "module" {
-                return false;
-            }
-            if pkg_json_type == "commonjs" {
-                return true;
-            }
-        }
-
-        has_require || has_module_exports || has_exports_dot || is_cjs_extension
-    }
-
-    fn get_package_type_for_file(&self, file_path: &str) -> Option<String> {
-        let path = PathBuf::from(file_path);
-        let mut current_dir = path.parent()?.to_path_buf();
-
-        while !current_dir.as_os_str().is_empty() {
-            if let Some(cached_type) = self.module_resolver.get_cached_package_type(&current_dir) {
-                return Some(cached_type);
-            }
-
-            let package_json_path = current_dir.join("package.json");
-            if package_json_path.exists() {
-                let package_type = if let Ok(content) = fs::read_to_string(&package_json_path)
-                    && let Ok(json) = serde_json::from_str::<serde_json::Value>(&content)
-                    && let Some(type_field) = json.get("type").and_then(|v| v.as_str())
-                {
-                    type_field.to_string()
-                } else {
-                    "commonjs".to_string()
-                };
-
-                self.module_resolver.cache_package_type(current_dir, package_type.clone());
-                return Some(package_type);
-            }
-            if !current_dir.pop() {
-                break;
-            }
-        }
-        None
-    }
-
-    #[expect(clippy::too_many_lines)]
-    fn wrap_cjs_module(content: &str, file_path: &str) -> String {
-        let file_dir = if let Some(last_slash) = file_path.rfind('/') {
-            &file_path[..last_slash]
-        } else {
-            "."
-        };
-        let file_dir_js = serde_json::to_string(file_dir).unwrap_or_else(|_| "\"\"".to_string());
-        let file_path_js = serde_json::to_string(file_path).unwrap_or_else(|_| "\"\"".to_string());
-
-        format!(
-            r"
-// CJS-to-ESM wrapper for: {file_path}
-const __cjs_module__ = {{ exports: {{}} }};
-const __cjs_exports__ = __cjs_module__.exports;
-const __cjs_dirname__ = {file_dir_js};
-const __cjs_filename__ = {file_path_js};
-
-const __require__ = (id) => {{
-    if (id.startsWith('./') || id.startsWith('../')) {{
-        let resolvedPath = __cjs_dirname__;
-        const parts = id.split('/');
-        for (const part of parts) {{
-            if (part === '..') {{
-                const lastSlash = resolvedPath.lastIndexOf('/');
-                if (lastSlash >= 0) {{
-                    resolvedPath = resolvedPath.substring(0, lastSlash);
-                }} else {{
-                    resolvedPath = '.';
-                }}
-            }} else if (part !== '.' && part !== '') {{
-                resolvedPath = resolvedPath + '/' + part;
-            }}
-        }}
-
-        const tryPaths = [];
-        if (resolvedPath.endsWith('.js') || resolvedPath.endsWith('.json')) {{
-            tryPaths.push(resolvedPath);
-        }} else {{
-            tryPaths.push(resolvedPath + '.js');
-            tryPaths.push(resolvedPath + '/index.js');
-            tryPaths.push(resolvedPath);
-        }}
-
-        for (const tryPath of tryPaths) {{
-            try {{
-                const fileContent = Deno.readTextFileSync(tryPath);
-
-                if (tryPath.endsWith('.json')) {{
-                    return JSON.parse(fileContent);
-                }}
-
-                const nestedModule = {{ exports: {{}} }};
-                const nestedExports = nestedModule.exports;
-                const nestedDirname = tryPath.substring(0, tryPath.lastIndexOf('/'));
-                const nestedFilename = tryPath;
-
-                const nestedRequire = (nestedId) => {{
-                    if (nestedId.startsWith('./') || nestedId.startsWith('../')) {{
-                        let nestedResolved = nestedDirname;
-                        const nestedParts = nestedId.split('/');
-                        for (const p of nestedParts) {{
-                            if (p === '..') {{
-                                const ls = nestedResolved.lastIndexOf('/');
-                                if (ls >= 0) {{
-                                    nestedResolved = nestedResolved.substring(0, ls);
-                                }} else {{
-                                    nestedResolved = '.';
-                                }}
-                            }} else if (p !== '.' && p !== '') {{
-                                nestedResolved = nestedResolved + '/' + p;
-                            }}
-                        }}
-                        const nestedTryPaths = nestedResolved.endsWith('.js') || nestedResolved.endsWith('.json')
-                            ? [nestedResolved]
-                            : [nestedResolved + '.js', nestedResolved + '/index.js', nestedResolved];
-                        for (const ntp of nestedTryPaths) {{
-                            try {{
-                                const nc = Deno.readTextFileSync(ntp);
-                                if (ntp.endsWith('.json')) return JSON.parse(nc);
-                                const nm = {{ exports: {{}} }};
-                                const nfn = new Function('module', 'exports', 'require', '__filename', '__dirname', nc);
-                                nfn(nm, nm.exports, nestedRequire, ntp, ntp.substring(0, ntp.lastIndexOf('/')));
-                                return nm.exports;
-                            }} catch {{}}
-                        }}
-                    }}
-                    throw new Error(`Cannot find module '${{nestedId}}'`);
-                }};
-
-                const moduleFn = new Function('module', 'exports', 'require', '__filename', '__dirname', fileContent);
-                moduleFn(nestedModule, nestedExports, nestedRequire, nestedFilename, nestedDirname);
-
-                return nestedModule.exports;
-            }} catch (e) {{
-                if (e instanceof Deno.errors.NotFound) {{
-                    continue;
-                }}
-                throw e;
-            }}
-        }}
-
-        throw new Error(`Cannot find module '${{id}}' from '${{__cjs_filename__}}'`);
-    }}
-
-    if (id.startsWith('node:')) {{
-        return {{ __esModule: true, default: {{}} }};
-    }}
-
-    throw new Error(`Cannot find module '${{id}}' from '${{__cjs_filename__}}': bare specifier requires are not supported in CJS wrapper`);
-}};
-
-(function(module, exports, require, __filename, __dirname) {{
-{content}
-}})(__cjs_module__, __cjs_exports__, __require__, __cjs_filename__, __cjs_dirname__);
-
-const __result__ = __cjs_module__.exports;
-
-export default __result__;
-
-const __exportProxy__ = new Proxy(__result__, {{
-    get(target, prop) {{
-        if (prop === Symbol.toStringTag) return 'Module';
-        if (prop === '__esModule') return true;
-        return target[prop];
-    }},
-    has(target, prop) {{
-        return prop in target;
-    }},
-    ownKeys(target) {{
-        return Reflect.ownKeys(target);
-    }},
-    getOwnPropertyDescriptor(target, prop) {{
-        const desc = Reflect.getOwnPropertyDescriptor(target, prop);
-        if (desc) {{
-            return {{ ...desc, enumerable: true, configurable: true }};
-        }}
-        return desc;
-    }}
-}});
-
-const __keys__ = Object.keys(__result__);
-
-export {{ __exportProxy__ as __cjsExports__, __keys__ }};
-"
-        )
-    }
-
     fn handle_file_protocol_modules(
         &self,
         specifier_str: &str,
         module_specifier: &ModuleSpecifier,
     ) -> Option<ModuleLoadResponse> {
-        if specifier_str.starts_with(FILE_PROTOCOL) {
-            let Ok(file_path) = module_specifier.to_file_path() else {
-                return None;
-            };
-
-            if Self::is_rari_mdx_registry_stub(&file_path) {
-                let code = self.synthesize_mdx_registry_module();
-                return Some(ModuleLoadResponse::Sync(Ok(ModuleSource::new(
-                    ModuleType::JavaScript,
-                    ModuleSourceCode::String(code.into()),
-                    module_specifier,
-                    None,
-                ))));
-            }
-
-            let file_path_str = file_path.to_string_lossy();
-            let file_path_for_wrapper = file_path_str.cow_replace('\\', "/").into_owned();
-
-            let cache = get_async_file_manager().file_cache.read();
-            if let Some((content, _)) = cache.get(file_path_str.as_ref()) {
-                let final_code = content.clone();
-                return Some(ModuleLoadResponse::Sync(Ok(ModuleSource::new(
-                    ModuleType::JavaScript,
-                    ModuleSourceCode::String(final_code.into()),
-                    module_specifier,
-                    None,
-                ))));
-            }
-            drop(cache);
-
-            if let Ok(content) = fs::read_to_string(&file_path) {
-                let final_code = if file_path_str.contains("node_modules")
-                    && self.is_cjs_module(&content, &file_path_str)
-                {
-                    Self::wrap_cjs_module(&content, &file_path_for_wrapper)
-                } else {
-                    content
-                };
-
-                return Some(ModuleLoadResponse::Sync(Ok(ModuleSource::new(
-                    ModuleType::JavaScript,
-                    ModuleSourceCode::String(final_code.into()),
-                    module_specifier,
-                    None,
-                ))));
-            }
+        if !specifier_str.starts_with(FILE_PROTOCOL) {
+            return None;
         }
-        None
+
+        let Ok(file_path) = module_specifier.to_file_path() else {
+            return None;
+        };
+
+        if Self::is_rari_mdx_registry_stub(&file_path) {
+            let code = self.synthesize_mdx_registry_module();
+            return Some(ModuleLoadResponse::Sync(Ok(ModuleSource::new(
+                ModuleType::JavaScript,
+                ModuleSourceCode::String(code.into()),
+                module_specifier,
+                None,
+            ))));
+        }
+
+        let file_path_str = file_path.to_string_lossy();
+        let Ok(content) = fs::read_to_string(&file_path) else {
+            return None;
+        };
+
+        let media_type = MediaType::from_specifier(module_specifier);
+        let is_node_modules = file_path_str.contains("node_modules");
+        let is_cjs = is_node_modules && self.resolver.is_cjs(module_specifier, media_type, true);
+
+        if is_cjs {
+            let code_translator = Rc::clone(&self.code_translator);
+            let module_specifier = module_specifier.clone();
+            return Some(ModuleLoadResponse::Async(Box::pin(async move {
+                let translated = code_translator
+                    .translate_cjs_to_esm(&module_specifier, Some(Cow::Owned(content)))
+                    .await
+                    .map_err(|err| JsErrorBox::generic(err.to_string()))?;
+
+                Ok(ModuleSource::new(
+                    ModuleType::JavaScript,
+                    ModuleSourceCode::String(translated.into_owned().into()),
+                    &module_specifier,
+                    None,
+                ))
+            })));
+        }
+
+        Some(ModuleLoadResponse::Sync(Ok(ModuleSource::new(
+            ModuleType::JavaScript,
+            ModuleSourceCode::String(content.into()),
+            module_specifier,
+            None,
+        ))))
     }
 
-    fn handle_node_modules(
-        &self,
+    fn handle_rari_stub_modules(
         specifier_str: &str,
         module_specifier: &ModuleSpecifier,
     ) -> Option<ModuleLoadResponse> {
-        if specifier_str.contains(RARI_STUB_PATH) {
-            let module_name =
-                specifier_str.rsplit(RARI_STUB_PATH).next().unwrap_or("").trim_end_matches(".js");
-            let stub_content = match module_name {
-                "router" => RARI_ROUTER_STUB.to_string(),
-                "headers" => RARI_HEADERS_STUB.to_string(),
-                "cache" => RARI_CACHE_STUB.to_string(),
-                "image" => RARI_IMAGE_STUB.to_string(),
-                "client" => RARI_CLIENT_STUB.to_string(),
-                "runtime/call-server" => RARI_CALL_SERVER_STUB.to_string(),
-                _ => RARI_DEFAULT_STUB.to_string(),
-            };
-
-            return Some(ModuleLoadResponse::Sync(Ok(ModuleSource::new(
-                ModuleType::JavaScript,
-                ModuleSourceCode::String(stub_content.into()),
-                module_specifier,
-                None,
-            ))));
+        if !specifier_str.contains(RARI_STUB_PATH) {
+            return None;
         }
 
-        if specifier_str.contains(NODE_MODULES_PATH) {
-            let parts: Vec<&str> = specifier_str.split(NODE_MODULES_PATH).collect();
-            let module_path = parts.get(1).unwrap_or(&"unknown");
+        let module_name =
+            specifier_str.rsplit(RARI_STUB_PATH).next().unwrap_or("").trim_end_matches(".js");
+        let stub_content = match module_name {
+            "router" => RARI_ROUTER_STUB.to_string(),
+            "headers" => RARI_HEADERS_STUB.to_string(),
+            "cache" => RARI_CACHE_STUB.to_string(),
+            "image" => RARI_IMAGE_STUB.to_string(),
+            "client" => RARI_CLIENT_STUB.to_string(),
+            "runtime/call-server" => RARI_CALL_SERVER_STUB.to_string(),
+            _ => RARI_DEFAULT_STUB.to_string(),
+        };
 
-            let package_name = module_path.split('/').next().unwrap_or(module_path);
-
-            if let Some(resolved_path) = self.resolve_from_node_modules(package_name, "") {
-                let file_path = if resolved_path.starts_with(FILE_PROTOCOL) {
-                    file_url_to_path(&resolved_path).unwrap_or_else(|| {
-                        PathBuf::from(
-                            resolved_path.strip_prefix(FILE_PROTOCOL).unwrap_or(&resolved_path),
-                        )
-                    })
-                } else {
-                    PathBuf::from(&resolved_path)
-                };
-
-                if let Ok(content) = fs::read_to_string(&file_path) {
-                    return Some(ModuleLoadResponse::Sync(Ok(ModuleSource::new(
-                        ModuleType::JavaScript,
-                        ModuleSourceCode::String(content.into()),
-                        module_specifier,
-                        None,
-                    ))));
-                }
-            }
-
-            let generic_stub = create_generic_module_stub(module_path);
-
-            return Some(ModuleLoadResponse::Sync(Ok(ModuleSource::new(
-                ModuleType::JavaScript,
-                ModuleSourceCode::String(generic_stub.into()),
-                module_specifier,
-                None,
-            ))));
-        }
-        None
+        Some(ModuleLoadResponse::Sync(Ok(ModuleSource::new(
+            ModuleType::JavaScript,
+            ModuleSourceCode::String(stub_content.into()),
+            module_specifier,
+            None,
+        ))))
     }
 
     fn handle_rari_component_modules(
@@ -1273,297 +844,69 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
         None
     }
 
-    fn resolve_regular_package_from_dir(
+    fn resolve_rari_component_relative(
         &self,
-        package_name: &str,
-        start_dir: &Path,
-    ) -> Option<String> {
-        if let Some(cached_path) = self.module_resolver.get_cached_package(package_name) {
-            return Some(cached_path);
-        }
-
-        if let Some(package_dir) = Self::find_package_directory(start_dir, package_name) {
-            if let Some(entry_point) = Self::resolve_package_entry_point(&package_dir) {
-                self.cache_resolved_package(package_name, &entry_point);
-                return Some(entry_point);
-            }
-
-            let fallback_url = path_to_file_url(&package_dir);
-            self.cache_resolved_package(package_name, &fallback_url);
-            return Some(fallback_url);
-        }
-
-        None
-    }
-
-    fn resolve_subpath_export_from_dir(
-        package_name: &str,
-        subpath: &str,
-        start_dir: &Path,
-    ) -> Option<String> {
-        let package_dir = Self::find_package_directory(start_dir, package_name)?;
-
-        let package_json_path = package_dir.join("package.json");
-        if !package_json_path.exists() {
+        specifier: &str,
+        referrer: &str,
+    ) -> Option<Result<ModuleSpecifier, JsErrorBox>> {
+        if !referrer.contains(RARI_COMPONENT_PATH) {
             return None;
         }
 
-        let package_json_content = fs::read_to_string(&package_json_path).ok()?;
-        let package_info = Self::parse_package_json(&package_json_content).ok()?;
-
-        if let Some(exports) = &package_info.exports {
-            return Self::resolve_subpath_from_exports(exports, subpath, &package_dir);
-        }
-
-        None
-    }
-
-    fn resolve_subpath_from_exports(
-        exports: &serde_json::Value,
-        subpath: &str,
-        package_dir: &Path,
-    ) -> Option<String> {
-        if let Some(exports_obj) = exports.as_object() {
-            let subpath_variants = vec![
-                subpath.to_string(),
-                format!(".{}", subpath),
-                subpath[1..].to_string(),
-                format!("./{}", &subpath[1..]),
-            ];
-
-            for variant in &subpath_variants {
-                if let Some(export_value) = exports_obj.get(variant)
-                    && let Some(result) = Self::resolve_export_value(export_value, package_dir)
-                {
-                    return Some(result);
-                }
-            }
-        }
-
-        None
-    }
-
-    fn resolve_subpath_import(specifier: &str, referrer: &str) -> Option<String> {
-        let clean_referrer = if referrer.starts_with(FILE_PROTOCOL) {
-            file_url_to_path(referrer)
-                .map(|p| p.to_string_lossy().to_string())
-                .unwrap_or_else(|| referrer.to_string())
+        let source_path = self.module_caching.get_component_source_path(referrer)?;
+        let source_dir = if source_path.contains('/') {
+            source_path.rsplit_once('/').map(|(dir, _)| dir).unwrap_or("")
         } else {
-            referrer.to_string()
+            ""
         };
 
-        let mut current_dir = PathBuf::from(&clean_referrer);
+        let resolved_path = if specifier.starts_with("../") {
+            let remaining = specifier.strip_prefix("../").unwrap_or(specifier);
+            let source_path = Path::new(source_dir);
+            let parent_dir = source_path.parent().unwrap_or_else(|| Path::new(""));
 
-        if !current_dir.pop() {
-            current_dir = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        }
+            let (base_with_ext, suffix) = append_extension_only(remaining);
+            let mut file_url = path_to_file_url(&parent_dir.join(base_with_ext));
+            file_url.push_str(suffix);
+            file_url
+        } else {
+            let remaining = specifier.strip_prefix("./").unwrap_or(specifier);
 
-        while !current_dir.as_os_str().is_empty() {
-            let package_json_path = current_dir.join("package.json");
-            if package_json_path.exists() {
-                if let Ok(content) = fs::read_to_string(&package_json_path)
-                    && let Ok(json) = serde_json::from_str::<serde_json::Value>(&content)
-                    && let Some(imports) = json.get("imports").and_then(|v| v.as_object())
-                    && let Some(import_value) = imports.get(specifier)
-                    && let Some(resolved) = Self::resolve_import_value(import_value, &current_dir)
-                {
-                    return Some(resolved);
-                }
-                break;
-            }
+            let (base_with_ext, suffix) = append_extension_only(remaining);
+            let mut file_url = path_to_file_url(&Path::new(source_dir).join(base_with_ext));
+            file_url.push_str(suffix);
+            file_url
+        };
 
-            if !current_dir.pop() {
-                break;
-            }
-        }
-
-        None
+        Some(
+            ModuleSpecifier::parse(&resolved_path)
+                .map_err(|err| JsErrorBox::generic(format!("Invalid URL: {err}"))),
+        )
     }
 
-    fn resolve_import_value(value: &serde_json::Value, package_dir: &Path) -> Option<String> {
-        match value {
-            serde_json::Value::String(path_str) => {
-                let clean_path = path_str.trim_start_matches("./");
-                let full_path = package_dir.join(clean_path);
-                if full_path.exists() {
-                    return Some(path_to_file_url(&full_path));
-                }
-            }
-            serde_json::Value::Object(obj) => {
-                let conditions = ["node", "import", "module", "default"];
-                for condition in &conditions {
-                    if let Some(nested_value) = obj.get(*condition)
-                        && let Some(result) = Self::resolve_import_value(nested_value, package_dir)
-                    {
-                        return Some(result);
-                    }
-                }
-            }
-            _ => {}
-        }
-        None
-    }
+    fn resolve_functions_special(&self) -> Result<ModuleSpecifier, JsErrorBox> {
+        let possible_keys = [
+            "functions",
+            "index",
+            "serverFunctions",
+            "server_functions",
+            "rari_internal:///functions.js",
+            "functions.js",
+        ];
 
-    fn resolve_export_value(
-        export_value: &serde_json::Value,
-        package_dir: &Path,
-    ) -> Option<String> {
-        match export_value {
-            serde_json::Value::String(path_str) => {
-                let full_path = package_dir.join(path_str.trim_start_matches("./"));
-
-                if full_path.exists() {
-                    return Some(path_to_file_url(&full_path));
-                }
-            }
-            serde_json::Value::Object(obj) => {
-                let conditions = ["import", "module", "default"];
-                for condition in &conditions {
-                    if let Some(nested_value) = obj.get(*condition)
-                        && let Some(result) = Self::resolve_export_value(nested_value, package_dir)
-                    {
-                        return Some(result);
-                    }
-                }
-            }
-            _ => {}
-        }
-        None
-    }
-
-    fn cache_resolved_package(&self, package_name: &str, resolved_path: &str) {
-        self.module_resolver
-            .cache_package_resolution(package_name.to_string(), resolved_path.to_string());
-    }
-
-    fn parse_package_json(content: &str) -> Result<PackageInfo, serde_json::Error> {
-        let json: serde_json::Value = serde_json::from_str(content)?;
-
-        Ok(PackageInfo {
-            module: json.get("module").and_then(|v| v.as_str()).map(ToString::to_string),
-            exports: json.get("exports").cloned(),
-        })
-    }
-
-    fn resolve_entry_from_package_info(
-        package_info: &PackageInfo,
-        package_dir: &Path,
-    ) -> Option<String> {
-        if let Some(exports) = &package_info.exports
-            && let Some(resolved) = Self::resolve_from_exports(exports, package_dir)
-        {
-            return Some(resolved);
-        }
-
-        if let Some(module_path) = &package_info.module {
-            let full_path = package_dir.join(module_path);
-            if full_path.exists() {
-                return Some(path_to_file_url(&full_path));
+        for key in &possible_keys {
+            if let Some(functions_specifier) = self.component_specifiers.get(*key) {
+                return ModuleSpecifier::parse(functions_specifier.value())
+                    .map_err(|err| JsErrorBox::generic(format!("Invalid URL: {err}")));
             }
         }
-
-        let fallbacks = ["index.mjs", "index.ts", "index.js"];
-        for fallback in &fallbacks {
-            let fallback_path = package_dir.join(fallback);
-            if fallback_path.exists() {
-                return Some(path_to_file_url(&fallback_path));
-            }
-        }
-
-        None
-    }
-
-    fn resolve_from_exports(exports: &serde_json::Value, package_dir: &Path) -> Option<String> {
-        if let Some(export_path) = exports.as_str() {
-            let clean_path = export_path.trim_start_matches("./");
-            let full_path = package_dir.join(clean_path);
-            if full_path.exists() {
-                return Some(path_to_file_url(&full_path));
-            }
-        }
-
-        if let Some(exports_obj) = exports.as_object() {
-            if let Some(main_export) = exports_obj.get(".") {
-                if let Some(path) = main_export.as_str() {
-                    let clean_path = path.trim_start_matches("./");
-                    let full_path = package_dir.join(clean_path);
-                    if full_path.exists() {
-                        return Some(path_to_file_url(&full_path));
-                    }
-                }
-
-                if let Some(conditional) = main_export.as_object() {
-                    let conditions = ["import", "module", "default"];
-
-                    for condition in &conditions {
-                        if let Some(condition_value) = conditional.get(*condition) {
-                            if let Some(path) = condition_value.as_str() {
-                                let clean_path = path.trim_start_matches("./");
-                                let full_path = package_dir.join(clean_path);
-                                if full_path.exists() {
-                                    return Some(path_to_file_url(&full_path));
-                                }
-                            } else if let Some(nested_conditional) = condition_value.as_object() {
-                                let nested_conditions = ["import", "module", "default"];
-                                for nested_condition in &nested_conditions {
-                                    if let Some(path) = nested_conditional
-                                        .get(*nested_condition)
-                                        .and_then(|v| v.as_str())
-                                    {
-                                        let clean_path = path.trim_start_matches("./");
-                                        let full_path = package_dir.join(clean_path);
-
-                                        if full_path.exists() {
-                                            return Some(path_to_file_url(&full_path));
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            } else {
-                let conditions = ["import", "module", "default", "node"];
-                for condition in &conditions {
-                    if let Some(condition_value) = exports_obj.get(*condition)
-                        && let Some(path) = condition_value.as_str()
-                    {
-                        let clean_path = path.trim_start_matches("./");
-                        let full_path = package_dir.join(clean_path);
-                        if full_path.exists() {
-                            return Some(path_to_file_url(&full_path));
-                        }
-                    }
-                }
-            }
-        }
-
-        None
-    }
-
-    fn resolve_package_entry_point(package_dir: &Path) -> Option<String> {
-        let package_json_path = package_dir.join("package.json");
-        if let Ok(content) = fs::read_to_string(&package_json_path)
-            && let Ok(package_info) = Self::parse_package_json(&content)
-        {
-            return Self::resolve_entry_from_package_info(&package_info, package_dir);
-        }
-
-        let default_files = ["index.mjs", "index.ts", "index.js"];
-        for file in &default_files {
-            let entry_path = package_dir.join(file);
-            if entry_path.exists() {
-                return Some(path_to_file_url(&entry_path));
-            }
-        }
-
-        None
+        Err(JsErrorBox::generic("Module not found"))
     }
 }
 
 impl Default for RariModuleLoader {
     fn default() -> Self {
-        Self::new()
+        Self::new(Arc::new(Resolver::default()))
     }
 }
 
@@ -1578,10 +921,10 @@ impl ModuleLoader for RariModuleLoader {
         if referrer.starts_with("ext:")
             && (specifier.starts_with("./") || specifier.starts_with("../"))
         {
-            if let Ok(referrer_url) = ModuleSpecifier::parse(referrer) {
-                if let Ok(resolved_url) = referrer_url.join(specifier) {
-                    return Ok(resolved_url);
-                }
+            if let Ok(referrer_url) = ModuleSpecifier::parse(referrer)
+                && let Ok(resolved_url) = referrer_url.join(specifier)
+            {
+                return Ok(resolved_url);
             }
         }
 
@@ -1627,114 +970,19 @@ impl ModuleLoader for RariModuleLoader {
             return Ok(url);
         }
 
-        if specifier.starts_with('#')
-            && let Some(resolved) = Self::resolve_subpath_import(specifier, referrer)
-        {
-            return self.resolve(&resolved, referrer, kind);
+        if specifier == "../functions" {
+            return self.resolve_functions_special();
         }
 
-        if specifier.starts_with("./") || specifier.starts_with("../") {
-            if (referrer.contains("node_modules") || self.is_npm_package_context(referrer))
-                && let Some(package_base) = self.extract_package_base_from_referrer(referrer)
-            {
-                let resolved_path = if specifier.starts_with("../") {
-                    Self::resolve_relative_up(specifier, &package_base)
-                } else {
-                    Self::resolve_relative_current(specifier, &package_base)
-                };
-
-                let url = ModuleSpecifier::parse(&resolved_path)
-                    .map_err(|err| JsErrorBox::generic(format!("Invalid URL: {err}")))?;
-                return Ok(url);
-            }
-
-            if specifier == "../functions" {
-                let possible_keys = [
-                    "functions",
-                    "index",
-                    "serverFunctions",
-                    "server_functions",
-                    "rari_internal:///functions.js",
-                    "functions.js",
-                ];
-
-                for key in &possible_keys {
-                    if let Some(functions_specifier) = self.component_specifiers.get(*key) {
-                        let url = ModuleSpecifier::parse(functions_specifier.value())
-                            .map_err(|err| JsErrorBox::generic(format!("Invalid URL: {err}")))?;
-                        return Ok(url);
-                    }
-                }
-                return Err(JsErrorBox::generic("Module not found"));
-            }
-
-            if referrer.contains(RARI_COMPONENT_PATH) {
-                let source_path = self.module_caching.get_component_source_path(referrer);
-
-                if let Some(source_path) = source_path {
-                    let source_dir = if source_path.contains('/') {
-                        source_path.rsplit_once('/').map(|(dir, _)| dir).unwrap_or("")
-                    } else {
-                        ""
-                    };
-
-                    let resolved_path = if specifier.starts_with("../") {
-                        let remaining = specifier.strip_prefix("../").unwrap_or(specifier);
-                        let source_path = Path::new(source_dir);
-                        let parent_dir = source_path.parent().unwrap_or_else(|| Path::new(""));
-
-                        let (base_with_ext, suffix) = append_extension_only(remaining);
-                        let mut file_url = path_to_file_url(&parent_dir.join(base_with_ext));
-                        file_url.push_str(suffix);
-                        file_url
-                    } else {
-                        let remaining = specifier.strip_prefix("./").unwrap_or(specifier);
-
-                        let (base_with_ext, suffix) = append_extension_only(remaining);
-                        let mut file_url =
-                            path_to_file_url(&Path::new(source_dir).join(base_with_ext));
-                        file_url.push_str(suffix);
-                        file_url
-                    };
-
-                    let url = ModuleSpecifier::parse(&resolved_path)
-                        .map_err(|err| JsErrorBox::generic(format!("Invalid URL: {err}")))?;
-                    return Ok(url);
-                }
-            }
-
-            let referrer_path = if referrer.starts_with(FILE_PROTOCOL) {
-                file_url_to_path(referrer)
-                    .map(|p| p.to_string_lossy().cow_replace('\\', "/").into_owned())
-                    .unwrap_or_else(|| referrer.to_string())
-            } else {
-                referrer.to_string()
-            };
-
-            let referrer_path = referrer_path.as_str();
-
-            let base_path = Path::new(referrer_path);
-            let base_dir = base_path.parent().unwrap_or_else(|| Path::new(""));
-
-            let resolved_path = if specifier.starts_with("../") {
-                let remaining = specifier.strip_prefix("../").unwrap_or(specifier);
-                let parent_dir = base_dir.parent().unwrap_or_else(|| Path::new(""));
-                path_to_file_url(&parent_dir.join(remaining))
-            } else {
-                let remaining = specifier.strip_prefix("./").unwrap_or(specifier);
-                path_to_file_url(&base_dir.join(remaining))
-            };
-
-            let url = ModuleSpecifier::parse(&resolved_path)
-                .map_err(|err| JsErrorBox::generic(format!("Invalid URL: {err}")))?;
-            return Ok(url);
+        if (specifier.starts_with("./") || specifier.starts_with("../"))
+            && let Some(result) = self.resolve_rari_component_relative(specifier, referrer)
+        {
+            return result;
         }
 
         if specifier.starts_with(NODE_PREFIX) {
-            let result = ModuleSpecifier::parse(specifier)
-                .map_err(|err| JsErrorBox::generic(format!("Invalid URL: {err}")))?;
-
-            return Ok(result);
+            return ModuleSpecifier::parse(specifier)
+                .map_err(|err| JsErrorBox::generic(format!("Invalid URL: {err}")));
         }
 
         if let Some(component_specifier) = self.get_component_specifier(specifier) {
@@ -1798,13 +1046,6 @@ impl ModuleLoader for RariModuleLoader {
                 );
             }
 
-            if matches!(specifier, "react-dom/client" | "react-dom/client.js")
-                && let Some(resolved_path) =
-                    self.resolve_from_node_modules("react-dom/client", referrer)
-            {
-                return self.resolve(&resolved_path, referrer, kind);
-            }
-
             if specifier == "rari" || specifier.starts_with("rari/") {
                 let is_ssr_context = referrer.contains("/ssr/");
                 if is_ssr_context {
@@ -1818,25 +1059,35 @@ impl ModuleLoader for RariModuleLoader {
             }
 
             if specifier == RSC_REFERENCES_SPECIFIER {
-                if let Some(resolved_path) = Self::resolve_rsc_references(referrer) {
-                    return self.resolve(&resolved_path, referrer, kind);
-                }
+                return self.resolve_via_node_resolver(RARI_RSC_REFERENCES_EXPORT, referrer);
             }
 
             if specifier == RARI_MDX_REGISTRY_SPECIFIER {
                 return ModuleSpecifier::parse(RARI_MDX_REGISTRY_INTERNAL)
                     .map_err(|err| JsErrorBox::generic(format!("Invalid URL: {err}")));
             }
+        }
 
-            if let Some(resolved_path) = self.resolve_from_node_modules(specifier, referrer) {
-                return self.resolve(&resolved_path, referrer, kind);
+        if (specifier.starts_with("./") || specifier.starts_with("../"))
+            && referrer.starts_with(FILE_PROTOCOL)
+            && !is_virtual_referrer(referrer)
+            && !referrer.contains("node_modules")
+        {
+            match resolve_import(specifier, referrer) {
+                Ok(url) => return Ok(url),
+                Err(_) => {}
             }
         }
 
-        let url = ModuleSpecifier::parse(specifier)
-            .map_err(|err| JsErrorBox::generic(format!("Invalid URL: {err}")))?;
+        // Bare package names / subpaths — Deno NodeResolver / BYONM.
+        // Scheme URLs (`ext:`, `file:`, `data:`, …) must NOT go through Node:
+        // that produces ERR_UNSUPPORTED_ESM_URL_SCHEME and breaks snapshot bootstrap.
+        if !specifier.contains(':') && !specifier.starts_with('.') && !specifier.starts_with('/') {
+            return self.resolve_via_node_resolver(specifier, referrer);
+        }
 
-        Ok(url)
+        ModuleSpecifier::parse(specifier)
+            .map_err(|err| JsErrorBox::generic(format!("Invalid URL: {err}")))
     }
 
     fn load(
@@ -1870,12 +1121,12 @@ impl ModuleLoader for RariModuleLoader {
             return response;
         }
 
-        if let Some(response) = self.handle_file_protocol_modules(&specifier_str, module_specifier)
-        {
+        if let Some(response) = Self::handle_rari_stub_modules(&specifier_str, module_specifier) {
             return response;
         }
 
-        if let Some(response) = self.handle_node_modules(&specifier_str, module_specifier) {
+        if let Some(response) = self.handle_file_protocol_modules(&specifier_str, module_specifier)
+        {
             return response;
         }
 
@@ -1884,12 +1135,8 @@ impl ModuleLoader for RariModuleLoader {
             return response;
         }
 
-        ModuleLoadResponse::Sync(Err(JsErrorBox::generic("Module not found")))
+        ModuleLoadResponse::Sync(Err(JsErrorBox::generic(format!(
+            "Module not found: {specifier_str}"
+        ))))
     }
-}
-
-#[derive(Debug, Clone)]
-struct PackageInfo {
-    module: Option<String>,
-    exports: Option<serde_json::Value>,
 }
