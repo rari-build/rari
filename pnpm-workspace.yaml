@@ -6,14 +6,14 @@ minimumReleaseAgeExclude:
   - '@rari/use-cache-linux-x64@0.15.1 || 0.15.2'
   - '@rari/use-cache-win32-arm64@0.15.1 || 0.15.2'
   - '@rari/use-cache-win32-x64@0.15.1 || 0.15.2'
-  - '@rari/use-cache@0.15.1'
-  - rari-darwin-arm64@0.15.1
-  - rari-darwin-x64@0.15.1
-  - rari-linux-arm64@0.15.1
-  - rari-linux-x64@0.15.1
-  - rari-win32-arm64@0.15.1
-  - rari-win32-x64@0.15.1
-  - rari@0.15.1
+  - '@rari/use-cache@0.15.1 || 0.15.2'
+  - rari-darwin-arm64@0.15.1 || 0.15.2
+  - rari-darwin-x64@0.15.1 || 0.15.2
+  - rari-linux-arm64@0.15.1 || 0.15.2
+  - rari-linux-x64@0.15.1 || 0.15.2
+  - rari-win32-arm64@0.15.1 || 0.15.2
+  - rari-win32-x64@0.15.1 || 0.15.2
+  - rari@0.15.1 || 0.15.2
 shellEmulator: true
 trustPolicy: no-downgrade
 packages:
