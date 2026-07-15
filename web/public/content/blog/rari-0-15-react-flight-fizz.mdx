@@ -1,0 +1,139 @@
+export const title = 'rari 0.15: React Flight and Fizz on Rust + V8'
+export const description = 'rari 0.15 is the alignment release: official React Flight for RSC and server actions, Fizz for HTML SSR and streaming, hosted on Rust with embedded V8. Experimental use cache ships as a follow-on.'
+export const date = '2026-07-13T12:00:00-04:00'
+export const author = 'Ryan Skinner'
+export const authorUrl = 'https://ryanskinner.com'
+
+<PageHeader title="rari 0.15: React Flight and Fizz on Rust + V8" />
+
+rari 0.15 is the release where the runtime stops being "RSC-shaped" and runs React's own stack: **Flight** for the RSC wire format, client path, and server actions; **Fizz** for HTML SSR and streaming. The host is still a Rust HTTP server with embedded V8. The component protocol is React's.
+
+That alignment is the point of this release. For anyone comparing RSC runtimes, Flight and Fizz are the words that matter. Experimental `'use cache'` also ships in 0.15, behind a flag, as a separate add-on.
+
+## What React Flight and Fizz are
+
+Flight and Fizz are React's own <a href="https://github.com/facebook/react/blob/main/packages/react-server/README.md" target="_blank" rel="noopener noreferrer">codenames</a> for its two server rendering implementations: **Flight** for React Server Components, **Fizz** for SSR HTML. rari uses those names on purpose so the framework story matches React's.
+
+**Flight** is the RSC protocol: a structured stream of rows that describe server components, client references, props, and suspense. The browser reconstructs a React tree from that payload. Navigation, hydration, and now server actions in rari all speak Flight.
+
+**Fizz** is React's HTML renderer for SSR. It turns the same server tree into HTML you can send on first paint, including streaming shells and suspense boundaries. The Flight tree can also be SSR'd with Fizz, which is how document responses and the client path stay aligned.
+
+Most app code never names either one. You write server components and forms. The framework has to wire both paths correctly or you get "almost RSC": custom wire formats, half-broken progressive enhancement, or HTML that does not match what the client expects.
+
+0.15 finishes that wiring. You get actions that travel the way React expects, document HTML that matches the client tree, and a Flight graph later features (cache, deferred holes, denser streaming) can sit on without inventing another protocol.
+
+## How rari runs Flight and Fizz
+
+The interesting part is not reinventing React's serializers. It's hosting them.
+
+The Rust process owns routing, caching, and the Deno/V8 isolate. Inside that isolate rari loads the official React Server Components and Fizz pieces, then drives:
+
+1. Composition of the app router tree on the server
+2. Flight serialization for the RSC / client path
+3. Fizz HTML for document responses and streaming
+4. Flight decode/encode for server actions (`decodeAction`, `decodeReply`, form state, action refresh)
+
+That is why you will see Flight client bundles, Fizz chunk helpers, and action scripts living next to each other in the runtime. They are one stack with two outputs: a Flight payload for React on the client, and HTML for the first bytes on the wire.
+
+## Server actions moved onto Flight
+
+Before 0.15, actions had a rari-specific client entry and a separate form endpoint. That worked for demos. It did not match how React expects actions to travel with the Flight protocol.
+
+In 0.15:
+
+- Client code uses `rari/runtime/call-server` (the Vite plugin injects this for transformed modules)
+- Mutations go through `POST /_rari/action` (and page POSTs) on the Flight action path
+- Form state and action refresh follow the Flight response model
+- Response cache keys can partition on cookies after mutations so personalized pages do not poison the shared cache
+
+### Migration from 0.14
+
+If you imported `rari/runtime/actions`, switch to `rari/runtime/call-server`.
+
+If anything still posted to `/_rari/form-action`, point it at `/_rari/action` or use the generated form / `useActionState` path. The old form endpoint is gone.
+
+For most apps that only used `'use server'` and `useActionState`, the plugin already generates the right client wiring. Upgrade, run your action e2e paths, and treat any direct imports of the old runtime entry as the breakage to fix.
+
+## Also in 0.15: experimental `use cache`
+
+On top of the Flight/Fizz work, we also shipped the first public cut of `'use cache'`: a NAPI transform addon, runtime wrappers, and storage backends (memory / private, plus remote Redis and redb). It is useful, tested, and still secondary to the protocol change.
+
+Enable it explicitly:
+
+<CodeBlock filename="vite.config.ts" language="typescript">{`import { rari } from 'rari/vite'
+import { defineConfig } from 'vite'
+
+export default defineConfig({
+  plugins: [
+    rari({
+      experimental: {
+        useCache: true,
+        // optional remote, e.g. Redis or redb via useCacheRemote
+      },
+    }),
+  ],
+})
+`}</CodeBlock>
+
+Then cache a function the usual way:
+
+<CodeBlock filename="src/app/example/page.tsx" language="tsx">{`async function getCachedData(label: string) {
+  'use cache'
+  // expensive work runs once per cache key
+  return label
+}
+
+export default async function Page() {
+  const a = await getCachedData('first')
+  const b = await getCachedData('first') // hits cache
+  return <p>{a} / {b}</p>
+}
+`}</CodeBlock>
+
+APIs in this release: `cacheLife`, `cacheTag`, `revalidateTag`, `revalidatePath`, `updateTag`.
+
+This is still **experimental**. We are not claiming full Next.js cache parity. Known gaps include `updateTag` currently aliasing `revalidateTag`, and `cacheLife` stale values not yet driving a full stale-while-revalidate client layer. Remote storage also needs the matching `@rari/use-cache-*` native addon for your platform.
+
+We kept the flag experimental on purpose: the transform and remotes are real and covered by e2e tests, but the product surface will stay honest until docs and parity catch up.
+
+## What else landed in 0.15
+
+- Unified production `RoutesManifest` (`routes.json`) plus server component manifest loading
+- External framework client components (for example `rari/image`) resolving during SSR
+- MDX component registry (`defineMdxComponents` / `rari/mdx/registry`)
+- Image usage scanning moved into Rust; Node engine floor `>=22.18.0`; TypeScript 7 in the create-rari-app templates
+
+## Who this release is for
+
+If you care about React Server Components on a non-Node server runtime, 0.15 is the version where rari matches React's vocabulary: Flight for the RSC graph and actions, Fizz for HTML. That is the alignment release.
+
+If you need production-stable `use cache` with every Next semantic, wait. Turn the experimental flag on in a branch, run the fixture-style tests against your app, and tell us where it diverges.
+
+## Try 0.15
+
+<CodeBlock language="bash">{`pnpm create rari-app@latest my-app
+# or bump an existing app to rari@0.15.3 and Node 22.18+
+`}</CodeBlock>
+
+Upgrade checklist:
+
+1. Node `>=22.18.0`
+2. Replace any `rari/runtime/actions` imports with `rari/runtime/call-server`
+3. Remove callers of `/_rari/form-action`
+4. Opt into `experimental.useCache` only if you want the new directive
+
+Source and issues: <a href="https://github.com/rari-build/rari" target="_blank" rel="noopener noreferrer">github.com/rari-build/rari</a>. Docs start at <a href="/docs/getting-started">Getting Started</a>.
+
+## FAQ
+
+### Does rari still use a custom RSC protocol?
+
+No. 0.15 aligns the renderer with React's Flight protocol for RSC payloads and actions, and Fizz for HTML SSR / streaming. The host is still Rust + V8; the component protocol is React's.
+
+### Is `use cache` stable?
+
+No. It is gated by `experimental.useCache` / `experimental.useCacheRemote` in 0.15.
+
+### Do I have to rewrite my server actions?
+
+Only if you depended on the removed `rari/runtime/actions` export or `/_rari/form-action`. Standard `'use server'` + `useActionState` apps should pick up the Flight path from the plugin.
