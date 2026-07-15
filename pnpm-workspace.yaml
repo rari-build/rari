@@ -1,12 +1,12 @@
 catalogMode: prefer
 minimumReleaseAgeExclude:
-  - '@rari/use-cache-darwin-arm64@0.15.3'
-  - '@rari/use-cache-darwin-x64@0.15.3'
-  - '@rari/use-cache-linux-arm64@0.15.3'
-  - '@rari/use-cache-linux-x64@0.15.3'
-  - '@rari/use-cache-win32-arm64@0.15.3'
-  - '@rari/use-cache-win32-x64@0.15.3'
-  - '@rari/use-cache@0.15.3'
+  - '@rari/use-cache-darwin-arm64@0.15.3 || 0.15.4'
+  - '@rari/use-cache-darwin-x64@0.15.3 || 0.15.4'
+  - '@rari/use-cache-linux-arm64@0.15.3 || 0.15.4'
+  - '@rari/use-cache-linux-x64@0.15.3 || 0.15.4'
+  - '@rari/use-cache-win32-arm64@0.15.3 || 0.15.4'
+  - '@rari/use-cache-win32-x64@0.15.3 || 0.15.4'
+  - '@rari/use-cache@0.15.3 || 0.15.4'
   - rari-darwin-arm64@0.15.3
   - rari-darwin-x64@0.15.3
   - rari-linux-arm64@0.15.3
