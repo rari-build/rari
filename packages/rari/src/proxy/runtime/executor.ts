@@ -1,6 +1,5 @@
 import type { RariResponse } from '../http/response'
 import type { ProxyConfig, ProxyFunction, ProxyModule, ProxyResult } from '../http/types'
-import { TSX_EXT_REGEX } from '@/shared/regex-constants'
 import { RariRequest } from '../http/request'
 import { shouldRunProxy } from './matcher'
 
@@ -168,27 +167,4 @@ export function getProxyExecutor(): ProxyExecutor {
     globalExecutor = new ProxyExecutor()
 
   return globalExecutor
-}
-
-export async function initializeProxyFromManifest(
-  manifestPath: string,
-): Promise<ProxyExecutor | null> {
-  try {
-    const { promises: fs } = await import('node:fs')
-    const manifestContent = await fs.readFile(manifestPath, 'utf-8')
-    const manifest = JSON.parse(manifestContent)
-
-    if (!manifest.enabled || !manifest.proxyFile)
-      return null
-
-    const executor = getProxyExecutor()
-    const proxyPath = manifest.proxyFile.replace(TSX_EXT_REGEX, '.js')
-    await executor.loadProxy(proxyPath)
-
-    return executor
-  }
-  catch (error) {
-    console.error('[rari] Proxy: Failed to initialize from manifest:', error)
-    return null
-  }
 }

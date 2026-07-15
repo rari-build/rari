@@ -464,10 +464,7 @@ export function rariRouter(options: RariRouterPluginOptions = {}): RariPlugin {
           if (!componentId)
             continue
 
-          const relativePath = componentId.startsWith('app/')
-            ? componentId.slice(4)
-            : componentId
-          const compiledPath = path.resolve(serverDir, 'app', `${relativePath}.js`)
+          const compiledPath = path.join(serverDir, `${componentId}.js`)
 
           try {
             const module = await import(/* @vite-ignore */ compiledPath)

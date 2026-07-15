@@ -2,8 +2,8 @@ use std::{
     env,
     error::Error,
     fs as std_fs, mem,
-    path::{Path, PathBuf},
-    sync::Arc,
+    path::PathBuf,
+    sync::{Arc, OnceLock},
     task::{Context, Poll},
 };
 
@@ -21,7 +21,9 @@ use tokio::fs;
 use tower::{Layer, Service};
 
 use crate::{
-    runtime::JsExecutionRuntime, server::core::types::ServerState, utils::path::path_to_file_url,
+    runtime::JsExecutionRuntime,
+    server::core::{types::ServerState, utils::component::get_dist_path_for_component},
+    utils::path::path_to_file_url,
 };
 
 async fn clone_renderer_runtime(state: &ServerState) -> Arc<JsExecutionRuntime> {
@@ -55,12 +57,20 @@ struct RedirectInfo {
     permanent: bool,
 }
 
-use std::sync::OnceLock;
+static PROXY_DIST_PATH: OnceLock<Option<PathBuf>> = OnceLock::new();
 
-static PROXY_ENABLED: OnceLock<bool> = OnceLock::new();
+fn resolve_proxy_dist_path() -> Option<PathBuf> {
+    PROXY_DIST_PATH
+        .get_or_init(|| {
+            let hashed = get_dist_path_for_component("src/proxy.ts").ok()?;
+            std_fs::metadata(&hashed).ok()?;
+            Some(hashed)
+        })
+        .clone()
+}
 
 fn is_proxy_enabled() -> bool {
-    *PROXY_ENABLED.get_or_init(|| std_fs::metadata("dist/server/proxy.js").is_ok())
+    resolve_proxy_dist_path().is_some()
 }
 
 async fn execute_proxy(
@@ -276,12 +286,14 @@ pub async fn initialize_proxy(state: &ServerState) -> Result<(), RariError> {
         fs::canonicalize(&rari_request_path).await.unwrap_or(rari_request_path);
     let rari_request_specifier = path_to_file_url(&rari_request_absolute);
 
-    let proxy_file_path = Path::new("dist/server/proxy.js");
-    let proxy_absolute = match fs::canonicalize(proxy_file_path).await {
+    let Some(proxy_file_path) = resolve_proxy_dist_path() else {
+        return Ok(());
+    };
+    let proxy_absolute = match fs::canonicalize(&proxy_file_path).await {
         Ok(canonical) => canonical,
         Err(_) => env::current_dir()
             .map_err(|e| RariError::io(format!("Failed to get current directory: {e}")))?
-            .join(proxy_file_path),
+            .join(&proxy_file_path),
     };
     let proxy_specifier = path_to_file_url(&proxy_absolute);
 

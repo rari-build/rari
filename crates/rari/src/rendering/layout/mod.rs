@@ -7,13 +7,13 @@ pub use core::{LayoutHtmlCache, LayoutRenderer};
 
 pub use route_composer::{LayoutInfo, RouteComposer};
 pub use types::*;
-pub(crate) use utils::{component_dist_path, drain_chunked_stream};
+pub(crate) use utils::{component_dist_path, create_component_id, drain_chunked_stream};
 pub use utils::{create_layout_context, sort_flight_protocol};
 
 #[cfg(test)]
 #[expect(clippy::unwrap_used)]
 mod tests {
-    use std::sync::Arc;
+    use std::{path::Path, sync::Arc};
 
     use rustc_hash::FxHashMap;
     use tokio::sync::Mutex;
@@ -34,6 +34,16 @@ mod tests {
         assert_eq!(utils::get_component_id("app/layout.tsx"), "Layout");
         assert_eq!(utils::get_component_id("app/loading.tsx"), "Loading");
         assert_eq!(utils::get_component_id("app/error.tsx"), "Error");
+    }
+
+    #[test]
+    fn test_component_dist_path_uses_hashed_id_from_file_path() {
+        let base = Path::new("/dist/server");
+        let path = utils::component_dist_path(base, "blog/_slug_/page.tsx");
+        assert_eq!(
+            path,
+            base.join(format!("{}.js", utils::create_component_id("blog/_slug_/page.tsx")))
+        );
     }
 
     #[test]

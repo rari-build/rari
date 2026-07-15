@@ -319,11 +319,9 @@ class AppRouteGenerator {
 
     const loadingFile = this.findFile(files, SPECIAL_FILES.LOADING)
     if (loadingFile) {
-      const componentId = this.generateComponentId(routePath, 'loading')
       loading.push({
         path: routePath,
         filePath: path.join(relativePath, loadingFile).replace(BACKSLASH_REGEX, '/'),
-        componentId,
       })
     }
 
@@ -444,10 +442,6 @@ class AppRouteGenerator {
     /* v8 ignore stop */
 
     return parts.slice(0, -1).join('/')
-  }
-
-  private generateComponentId(routePath: string, type: string): string {
-    return `${type}:${routePath}`
   }
 
   private shouldScanDirectory(name: string): boolean {

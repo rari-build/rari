@@ -48,7 +48,7 @@ impl ComponentLoader {
         sorted_components.sort_by_key(|(id, _)| i32::from(!id.starts_with("components/")));
 
         for (component_id, component_info) in sorted_components {
-            if component_id == "proxy" || component_id.ends_with("/proxy") {
+            if component_id.starts_with("proxy_") {
                 continue;
             }
 
@@ -528,7 +528,7 @@ impl ComponentLoader {
                     Self::load_server_components_recursive(&path, base_dir, renderer).await?;
                 } else if path.extension().and_then(|s| s.to_str()) == Some("js") {
                     let file_name = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-                    if file_name == "proxy" {
+                    if file_name.starts_with("proxy_") {
                         continue;
                     }
 

@@ -42,14 +42,14 @@ mod tests {
     #[test]
     fn deserializes_shared_routes_manifest() {
         let json = r#"{
-            "routes": [{"path": "/", "filePath": "page.tsx", "segments": [], "params": [], "isDynamic": false, "componentId": "app/page"}],
+            "routes": [{"path": "/", "filePath": "page.tsx", "segments": [], "params": [], "isDynamic": false, "componentId": "app/page_73d7a23e"}],
             "layouts": [],
             "loading": [],
             "errors": [],
             "notFound": [],
             "templates": [],
             "generated": "2026-01-01",
-            "apiRoutes": [{"path": "/api/hello", "filePath": "api/hello/route.ts", "methods": ["GET"], "segments": [], "params": [], "isDynamic": false, "componentId": "app/api/hello/route"}],
+            "apiRoutes": [{"path": "/api/hello", "filePath": "api/hello/route.ts", "methods": ["GET"], "segments": [], "params": [], "isDynamic": false, "componentId": "app/api/hello/route_6634b3ed"}],
             "ogImages": [{"path": "/", "filePath": "opengraph-image.tsx", "width": 1200, "height": 630}]
         }"#;
 
