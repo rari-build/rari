@@ -1,4 +1,12 @@
-## [@rari/use-cache@0.15.2] - 2026-07-14
+## [@rari/use-cache@0.15.3] - 2026-07-15
+
+### ⚙️ Miscellaneous Tasks
+
+- update optional dependencies to version 0.15.3 by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/v0.15.2...@rari/use-cache@0.15.3
+## [0.15.2] - 2026-07-14
 
 ### 🚜 Refactor
 
@@ -9,7 +17,7 @@
 - update optional dependencies to version 0.15.2 for all platforms in package.json and pnpm-lock.yaml by @skiniks
 
 
-**Full Changelog**: https://github.com/rari-build/rari/compare/v0.15.1...@rari/use-cache@0.15.2
+**Full Changelog**: https://github.com/rari-build/rari/compare/v0.15.1...v0.15.2
 ## [0.15.1] - 2026-07-13
 
 ### ⚙️ Miscellaneous Tasks
