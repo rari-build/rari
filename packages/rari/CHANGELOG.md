@@ -1,3 +1,16 @@
+## [0.15.4] - 2026-07-15
+
+### 🐛 Bug Fixes
+
+- resolve hashed server modules and workspace package imports by @skiniks
+
+### 🚜 Refactor
+
+- simplify path resolution and handler cache management in API routes by @skiniks
+- remove unnecessary clone by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.15.3...v0.15.4
 ## [rari@0.15.3] - 2026-07-15
 
 ### ⚙️ Miscellaneous Tasks
