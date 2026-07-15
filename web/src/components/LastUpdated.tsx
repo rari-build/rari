@@ -14,7 +14,7 @@ export default async function LastUpdated({ filePath }: LastUpdatedProps) {
   const displayDate = formatDate(lastCommitDate)
 
   return (
-    <div className="text-sm text-gray-300 mt-2 pb-4 border-b border-[#30363d]">
+    <div className="text-sm text-fg-muted mt-2 pb-4 border-b border-edge">
       Last updated:
       {' '}
       {displayDate}

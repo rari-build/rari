@@ -22,11 +22,11 @@ const RARI_VERSION = getRariVersion()
 export default function RootLayout({ children, pathname }: LayoutProps) {
   return (
     <Providers pathname={pathname}>
-      <div className="min-h-screen bg-[#30363d] text-gray-200 font-sans overflow-x-hidden" style={{ '--sidebar-width': 'calc(8rem)' } as React.CSSProperties}>
+      <div className="min-h-screen bg-chrome text-fg-body font-sans overflow-x-hidden" style={{ '--sidebar-width': 'calc(8rem)' } as React.CSSProperties}>
         <div className="flex min-h-screen">
           <Sidebar version={RARI_VERSION} />
           <div className="flex-1 flex flex-col min-h-screen min-w-0 gap-0.5 md:pl-0.5 md:pr-0.5">
-            <main className="flex-1 min-w-0 bg-[#0d1117] rounded-b-md overflow-hidden">
+            <main className="flex-1 min-w-0 bg-canvas rounded-b-md overflow-hidden">
               {children}
             </main>
             <Footer />
@@ -51,12 +51,12 @@ export const metadata: Metadata = {
     ],
   },
   themeColor: [
-    { color: '#0d1117' },
+    { media: '(prefers-color-scheme: light)', color: '#e8ecf1' },
     { media: '(prefers-color-scheme: dark)', color: '#0d1117' },
   ],
   appleWebApp: {
     title: 'rari | Runtime Accelerated Rendering Infrastructure',
-    statusBarStyle: 'black-translucent',
+    statusBarStyle: 'default',
     capable: true,
   },
   openGraph: {

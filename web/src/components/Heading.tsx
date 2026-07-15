@@ -58,7 +58,7 @@ export default function Heading({ level, children, id }: HeadingProps) {
         className={`inline-flex items-center opacity-0 group-hover:opacity-100 transition-opacity no-underline ${iconSize}`}
         aria-label={`Link to ${textContent}`}
       >
-        <LinkIcon className="text-gray-400 hover:text-[#fd7e14]" />
+        <LinkIcon className="text-fg-muted hover:text-link" />
       </a>
     </Tag>
   )

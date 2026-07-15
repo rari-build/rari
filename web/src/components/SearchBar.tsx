@@ -118,12 +118,12 @@ export default function SearchBar() {
       <button
         type="button"
         onClick={() => setIsOpen(true)}
-        className="w-full flex items-center gap-2 pl-3 pr-3 py-1.5 bg-[#161b22] border border-[#30363d] rounded-md text-sm text-gray-400 hover:border-[#fd7e14]/50 hover:text-gray-300 transition-all group"
+        className="w-full flex items-center gap-2 pl-3 pr-3 py-1.5 bg-surface border border-edge rounded-md text-sm text-fg-muted hover:border-accent/50 hover:text-fg-muted transition-all group"
         aria-label="Open search"
       >
         <Search className="w-4 h-4" />
         <span className="flex-1 text-left">Search</span>
-        <kbd className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 bg-[#0d1117] border border-[#30363d] rounded text-xs text-gray-300 font-mono">
+        <kbd className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 bg-canvas border border-edge rounded text-xs text-fg-muted font-mono">
           ⌘ K
         </kbd>
       </button>
@@ -132,7 +132,7 @@ export default function SearchBar() {
         <div className="fixed inset-0 z-100 flex items-start justify-center" onClick={handleClose}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
           <div
-            className="relative flex flex-col gap-4 my-16 mx-auto p-3 bg-[#161b22] border border-[#30363d] rounded-lg shadow-2xl"
+            className="relative flex flex-col gap-4 my-16 mx-auto p-3 bg-surface border border-edge rounded-lg shadow-2xl"
             style={{
               width: 'min(calc(100vw - 60px), 900px)',
               height: 'min-content',
@@ -140,23 +140,23 @@ export default function SearchBar() {
             }}
             onClick={e => e.stopPropagation()}
           >
-            <div className="flex items-center gap-3 px-3 py-3 border-b border-[#30363d] bg-[#161b22] rounded-t-lg">
-              <Search className="w-5 h-5 text-gray-400" />
+            <div className="flex items-center gap-3 px-3 py-3 border-b border-edge bg-surface rounded-t-lg">
+              <Search className="w-5 h-5 text-fg-muted" />
               <input
                 ref={inputRef}
                 type="text"
                 value={query}
                 onChange={e => setQuery(e.target.value)}
                 placeholder="Search documentation..."
-                className="flex-1 bg-transparent text-gray-200 placeholder-gray-500 outline-none text-base"
+                className="flex-1 bg-transparent text-fg-secondary placeholder-gray-500 outline-none text-base"
               />
               {isPending && (
-                <div className="w-4 h-4 border-2 border-[#fd7e14] border-t-transparent rounded-full animate-spin" />
+                <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
               )}
               <button
                 type="button"
                 onClick={handleClose}
-                className="p-1 text-gray-400 hover:text-gray-200 transition-colors"
+                className="p-1 text-fg-muted hover:text-fg-secondary transition-colors"
                 aria-label="Close search"
               >
                 <Close className="w-5 h-5" />
@@ -185,12 +185,12 @@ export default function SearchBar() {
                         )
                       : isPending
                         ? (
-                            <div className="p-8 text-center text-gray-500 text-sm">
+                            <div className="p-8 text-center text-fg-muted text-sm">
                               Searching...
                             </div>
                           )
                         : (
-                            <div className="p-8 text-center text-gray-500 text-sm">
+                            <div className="p-8 text-center text-fg-muted text-sm">
                               No results found for "
                               {query}
                               "
@@ -198,24 +198,24 @@ export default function SearchBar() {
                           )
                   )
                 : (
-                    <div className="p-8 text-center text-gray-500 text-sm">
+                    <div className="p-8 text-center text-fg-muted text-sm">
                       Start typing to search documentation...
                     </div>
                   )}
             </div>
 
-            <div className="flex items-center gap-4 px-3 py-2 border-t border-[#30363d] bg-[#0d1117] text-xs text-gray-500 rounded-b-lg">
+            <div className="flex items-center gap-4 px-3 py-2 border-t border-edge bg-canvas text-xs text-fg-muted rounded-b-lg">
               <span className="flex items-center gap-1">
-                <kbd className="px-1.5 py-0.5 bg-[#161b22] border border-[#30363d] rounded font-mono">↑</kbd>
-                <kbd className="px-1.5 py-0.5 bg-[#161b22] border border-[#30363d] rounded font-mono">↓</kbd>
+                <kbd className="px-1.5 py-0.5 bg-surface border border-edge rounded font-mono">↑</kbd>
+                <kbd className="px-1.5 py-0.5 bg-surface border border-edge rounded font-mono">↓</kbd>
                 to navigate
               </span>
               <span className="flex items-center gap-1">
-                <kbd className="px-1.5 py-0.5 bg-[#161b22] border border-[#30363d] rounded font-mono">↵</kbd>
+                <kbd className="px-1.5 py-0.5 bg-surface border border-edge rounded font-mono">↵</kbd>
                 to select
               </span>
               <span className="flex items-center gap-1">
-                <kbd className="px-1.5 py-0.5 bg-[#161b22] border border-[#30363d] rounded font-mono">esc</kbd>
+                <kbd className="px-1.5 py-0.5 bg-surface border border-edge rounded font-mono">esc</kbd>
                 to close
               </span>
             </div>
@@ -260,7 +260,7 @@ function SearchResultItem({
 
           return part.toLowerCase() === highlight.toLowerCase()
             ? (
-                <mark key={key} className="bg-[#fd7e14]/30 text-white">
+                <mark key={key} className="bg-accent/30 text-fg">
                   {part}
                 </mark>
               )
@@ -279,23 +279,23 @@ function SearchResultItem({
       onClick={onClick}
       className={`w-full flex flex-col gap-1 px-3 py-2 rounded-md transition-colors group text-left ${
         isSelected
-          ? 'bg-[#21262d] ring-1 ring-[#fd7e14]/50'
-          : 'hover:bg-[#21262d]'
+          ? 'bg-hover ring-1 ring-accent/50'
+          : 'hover:bg-hover'
       }`}
     >
       <div className="flex items-center gap-2 text-sm">
-        <span className="text-gray-400">
-          <span className="text-[#fd7e14]">#</span>
+        <span className="text-fg-muted">
+          <span className="text-link">#</span>
           {' '}
           {category}
         </span>
-        <span className="text-gray-400">›</span>
-        <span className={`${isSelected ? 'text-white' : 'text-gray-200 group-hover:text-white'}`}>
+        <span className="text-fg-muted">›</span>
+        <span className={`${isSelected ? 'text-fg' : 'text-fg-secondary group-hover:text-fg'}`}>
           {highlightText(title, query)}
         </span>
       </div>
       {excerpt && (
-        <p className="text-xs text-gray-400 line-clamp-2">
+        <p className="text-xs text-fg-muted line-clamp-2">
           {highlightText(excerpt, query)}
         </p>
       )}

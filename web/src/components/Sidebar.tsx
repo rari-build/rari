@@ -14,6 +14,7 @@ import Heart from './icons/Heart'
 import Menu from './icons/Menu'
 import Rari from './icons/Rari'
 import SearchBar from './SearchBar'
+import ThemeSwitcher from './ThemeSwitcher'
 
 interface SidebarProps {
   version: string
@@ -67,13 +68,13 @@ function NavigationLink({
       href={item.href}
       {...(isSponsor ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
       className={`flex-1 ${isSponsor ? 'flex items-center' : 'block'} px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-200 relative overflow-hidden group ${isActive
-        ? 'bg-linear-to-r from-[#fd7e14]/20 to-[#e8590c]/20 text-white border-l-2 border-[#fd7e14]'
-        : 'text-gray-300 hover:bg-[#21262d] hover:text-gray-100'
+        ? 'bg-linear-to-r from-accent/20 to-accent-hover/20 text-fg border-l-2 border-accent'
+        : 'text-fg-muted hover:bg-hover hover:text-fg'
       }`}
       aria-current={isActive ? 'page' : undefined}
     >
       {!isActive && (
-        <span className={`absolute inset-0 ${isSponsor ? 'bg-linear-to-r from-pink-500/10 to-pink-600/10' : 'bg-linear-to-r from-[#fd7e14]/10 to-[#e8590c]/10'} opacity-0 group-hover:opacity-100 transition-opacity duration-300`}></span>
+        <span className={`absolute inset-0 ${isSponsor ? 'bg-linear-to-r from-pink-500/10 to-pink-600/10' : 'bg-linear-to-r from-accent/10 to-accent-hover/10'} opacity-0 group-hover:opacity-100 transition-opacity duration-300`}></span>
       )}
       {isSponsor && <Heart className="w-4 h-4 mr-2 text-pink-400 relative z-10" />}
       <span className="relative z-10">{item.label}</span>
@@ -93,21 +94,21 @@ function EnterpriseItems({
 
   return (
     <div className="mt-1">
-      <div className="space-y-1 ml-2 pl-3 border-l border-[#30363d]">
+      <div className="space-y-1 ml-2 pl-3 border-l border-edge">
         {item.items.map(subItem => (
           <a
             key={subItem.href}
             href={subItem.href}
             className={`flex items-center px-3 py-1.5 rounded-md text-sm transition-all duration-200 relative overflow-hidden group ${pathname === subItem.href
-              ? 'bg-linear-to-r from-[#fd7e14]/20 to-[#e8590c]/20 text-white'
-              : 'text-gray-300 hover:bg-[#21262d] hover:text-gray-100'
+              ? 'bg-linear-to-r from-accent/20 to-accent-hover/20 text-fg'
+              : 'text-fg-muted hover:bg-hover hover:text-fg'
             }`}
           >
             {pathname !== subItem.href && (
-              <span className="absolute inset-0 bg-linear-to-r from-[#fd7e14]/10 to-[#e8590c]/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
+              <span className="absolute inset-0 bg-linear-to-r from-accent/10 to-accent-hover/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
             )}
             <span className="relative z-10 flex items-center">
-              <span className="mr-2 text-gray-400">•</span>
+              <span className="mr-2 text-fg-muted">•</span>
               {subItem.label}
             </span>
           </a>
@@ -129,15 +130,15 @@ function NestedDocItem({
       <a
         href={nestedItem.href}
         className={`flex items-center px-3 py-1.5 rounded-md text-sm transition-all duration-200 relative overflow-hidden group ${pathname === nestedItem.href
-          ? 'bg-linear-to-r from-[#fd7e14]/20 to-[#e8590c]/20 text-white'
-          : 'text-gray-300 hover:bg-[#21262d] hover:text-gray-100'
+          ? 'bg-linear-to-r from-accent/20 to-accent-hover/20 text-fg'
+          : 'text-fg-muted hover:bg-hover hover:text-fg'
         }`}
       >
         {pathname !== nestedItem.href && (
-          <span className="absolute inset-0 bg-linear-to-r from-[#fd7e14]/10 to-[#e8590c]/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
+          <span className="absolute inset-0 bg-linear-to-r from-accent/10 to-accent-hover/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
         )}
         <span className="relative z-10 flex items-center">
-          <span className="mr-2 text-gray-400">•</span>
+          <span className="mr-2 text-fg-muted">•</span>
           {nestedItem.label}
         </span>
       </a>
@@ -170,18 +171,18 @@ function DocsSection({
                 <a
                   href={section.href}
                   className={`flex-1 block px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 relative overflow-hidden group ${pathname === section.href
-                    ? 'bg-linear-to-r from-[#fd7e14]/20 to-[#e8590c]/20 text-white'
-                    : 'text-gray-300 hover:bg-[#21262d] hover:text-white'
+                    ? 'bg-linear-to-r from-accent/20 to-accent-hover/20 text-fg'
+                    : 'text-fg-muted hover:bg-hover hover:text-fg'
                   }`}
                 >
                   {pathname !== section.href && (
-                    <span className="absolute inset-0 bg-linear-to-r from-[#fd7e14]/10 to-[#e8590c]/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
+                    <span className="absolute inset-0 bg-linear-to-r from-accent/10 to-accent-hover/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
                   )}
                   <span className="relative z-10">{section.label}</span>
                 </a>
               )
             : (
-                <div className="flex-1 px-3 py-2 text-xs text-gray-400 uppercase tracking-wider font-semibold">
+                <div className="flex-1 px-3 py-2 text-xs text-fg-muted uppercase tracking-wider font-semibold">
                   {section.label}
                 </div>
               )}
@@ -189,7 +190,7 @@ function DocsSection({
             <button
               type="button"
               onClick={() => toggleSection(sectionKey)}
-              className="px-2 py-2 text-gray-300 hover:text-gray-100 cursor-pointer"
+              className="px-2 py-2 text-fg-muted hover:text-fg cursor-pointer"
               aria-label={isSectionExpanded ? `Collapse ${section.label} section` : `Expand ${section.label} section`}
               aria-expanded={isSectionExpanded}
             >
@@ -249,21 +250,21 @@ function DocsSectionItem({
               <a
                 href={subItem.href}
                 className={`flex-1 flex items-center px-3 py-1.5 rounded-md text-sm transition-all duration-200 relative overflow-hidden group ${pathname === subItem.href
-                  ? 'bg-linear-to-r from-[#fd7e14]/20 to-[#e8590c]/20 text-white'
-                  : 'text-gray-300 hover:bg-[#21262d] hover:text-gray-100'
+                  ? 'bg-linear-to-r from-accent/20 to-accent-hover/20 text-fg'
+                  : 'text-fg-muted hover:bg-hover hover:text-fg'
                 }`}
               >
                 {pathname !== subItem.href && (
-                  <span className="absolute inset-0 bg-linear-to-r from-[#fd7e14]/10 to-[#e8590c]/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
+                  <span className="absolute inset-0 bg-linear-to-r from-accent/10 to-accent-hover/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
                 )}
                 <span className="relative z-10 flex items-center">
-                  {!hasSubItems && <span className="mr-2 text-gray-400">•</span>}
+                  {!hasSubItems && <span className="mr-2 text-fg-muted">•</span>}
                   {subItem.label}
                 </span>
               </a>
             )
           : (
-              <div className="flex-1 flex items-center px-3 py-1.5 text-xs text-gray-400 font-medium">
+              <div className="flex-1 flex items-center px-3 py-1.5 text-xs text-fg-muted font-medium">
                 {subItem.label}
               </div>
             )}
@@ -271,7 +272,7 @@ function DocsSectionItem({
           <button
             type="button"
             onClick={() => toggleSection(itemKey)}
-            className="px-2 py-1.5 text-gray-300 hover:text-gray-100 cursor-pointer"
+            className="px-2 py-1.5 text-fg-muted hover:text-fg cursor-pointer"
             aria-label={isItemExpanded ? `Collapse ${subItem.label} section` : `Expand ${subItem.label} section`}
             aria-expanded={isItemExpanded}
           >
@@ -312,7 +313,7 @@ function DocsNavigation({
 }) {
   return (
     <div className="mt-1">
-      <div className="space-y-1 ml-2 pl-3 border-l border-[#30363d]">
+      <div className="space-y-1 ml-2 pl-3 border-l border-edge">
         {docsNavigation.map(section => (
           <DocsSection
             key={section.href || section.label}
@@ -363,7 +364,7 @@ function NavigationItem({
       <div className="flex items-center">
         {isDisabled
           ? (
-              <div className="flex-1 block px-3 py-2.5 rounded-md text-sm font-medium text-gray-400 cursor-not-allowed">
+              <div className="flex-1 block px-3 py-2.5 rounded-md text-sm font-medium text-fg-muted cursor-not-allowed">
                 {item.label}
               </div>
             )
@@ -374,7 +375,7 @@ function NavigationItem({
           <button
             type="button"
             onClick={() => setManualDocsToggle(!isDocsExpanded)}
-            className="px-2 py-2.5 text-gray-300 hover:text-gray-100 cursor-pointer"
+            className="px-2 py-2.5 text-fg-muted hover:text-fg cursor-pointer"
             aria-label={isDocsExpanded ? 'Collapse documentation section' : 'Expand documentation section'}
             aria-expanded={isDocsExpanded}
           >
@@ -390,7 +391,7 @@ function NavigationItem({
           <button
             type="button"
             onClick={() => setManualEnterpriseToggle(!isEnterpriseExpanded)}
-            className="px-2 py-2.5 text-gray-300 hover:text-gray-100 cursor-pointer"
+            className="px-2 py-2.5 text-fg-muted hover:text-fg cursor-pointer"
             aria-label={isEnterpriseExpanded ? 'Collapse enterprise section' : 'Expand enterprise section'}
             aria-expanded={isEnterpriseExpanded}
           >
@@ -488,22 +489,22 @@ export default function Sidebar({ version }: SidebarProps) {
 
       <label
         htmlFor="mobile-menu-toggle"
-        className="peer-checked:fixed peer-checked:inset-0 peer-checked:bg-black/30 peer-checked:z-20 hidden peer-checked:block lg:hidden"
+        className="peer-checked:fixed peer-checked:inset-0 peer-checked:bg-overlay peer-checked:z-20 hidden peer-checked:block lg:hidden"
       />
 
       <label
         htmlFor="mobile-menu-toggle"
-        className="fixed top-4 left-4 z-50 lg:hidden bg-[#161b22] border border-[#30363d] rounded-md p-2 text-gray-300 hover:text-white hover:bg-[#21262d] transition-colors duration-200 cursor-pointer peer-checked:hidden"
+        className="fixed top-4 left-4 z-50 lg:hidden bg-surface border border-edge rounded-md p-2 text-fg-muted hover:text-fg hover:bg-hover transition-colors duration-200 cursor-pointer peer-checked:hidden"
         aria-label="Open navigation menu"
       >
         <Menu className="w-6 h-6" />
         <span className="sr-only">Open navigation menu</span>
       </label>
 
-      <nav className="fixed lg:relative -translate-x-full peer-checked:translate-x-0 lg:translate-x-0 transition-transform duration-300 ease-in-out z-40 h-screen lg:h-auto bg-[#0d1117] overflow-y-auto w-64 shrink-0">
+      <nav className="fixed lg:relative -translate-x-full peer-checked:translate-x-0 lg:translate-x-0 transition-transform duration-300 ease-in-out z-40 h-screen lg:h-auto bg-canvas overflow-y-auto w-64 shrink-0">
         <label
           htmlFor="mobile-menu-toggle"
-          className="absolute top-4 right-4 lg:hidden bg-[#161b22] border border-[#30363d] rounded-md p-2 text-gray-300 hover:text-white hover:bg-[#21262d] transition-colors duration-200 cursor-pointer z-10"
+          className="absolute top-4 right-4 lg:hidden bg-surface border border-edge rounded-md p-2 text-fg-muted hover:text-fg hover:bg-hover transition-colors duration-200 cursor-pointer z-10"
           aria-label="Close navigation menu"
         >
           <Close className="w-6 h-6" />
@@ -511,16 +512,16 @@ export default function Sidebar({ version }: SidebarProps) {
         </label>
 
         <div className="p-6">
-          <div className="flex flex-row items-center lg:justify-between mb-8 pb-4 border-b border-[#30363d]/50 relative gap-3">
-            <div className="absolute inset-x-0 bottom-0 h-px bg-linear-to-r from-transparent via-[#fd7e14]/30 to-transparent" />
+          <div className="flex flex-row items-center lg:justify-between mb-8 pb-4 border-b border-edge/50 relative gap-3">
+            <div className="absolute inset-x-0 bottom-0 h-px bg-linear-to-r from-transparent via-accent/30 to-transparent" />
             <a
               href="/"
               className="hover:opacity-80 transition-opacity"
               aria-label="rari home"
             >
-              <Rari className="w-14 h-8" aria-hidden="true" />
+              <Rari className="w-14 h-8 text-fg" aria-hidden="true" />
             </a>
-            <div className="px-2 py-1 bg-[#161b22] border border-[#30363d] rounded-md text-xs text-[#fd7e14] font-mono font-medium w-fit">
+            <div className="px-2 py-1 bg-muted border border-accent/40 rounded-md text-xs text-fg font-mono font-medium w-fit">
               v
               {version}
             </div>
@@ -546,25 +547,28 @@ export default function Sidebar({ version }: SidebarProps) {
             ))}
           </ul>
 
-          <div className="mt-8 pt-6 border-t border-[#30363d]/50 relative">
-            <div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-[#fd7e14]/30 to-transparent" />
+          <div className="mt-8 pt-6 border-t border-edge/50 relative">
+            <div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-accent/30 to-transparent" />
             <ul className="space-y-3">
+              <li className="flex justify-center">
+                <ThemeSwitcher />
+              </li>
               <li className="flex items-center justify-center gap-3">
                 <a
                   href="https://github.com/rari-build/rari"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="p-2 text-gray-300 hover:text-gray-100 hover:bg-[#21262d] rounded-md transition-all duration-200 relative overflow-hidden group"
+                  className="p-2 text-fg-muted hover:text-fg hover:bg-hover rounded-md transition-all duration-200 relative overflow-hidden group"
                   aria-label="GitHub"
                 >
-                  <span className="absolute inset-0 bg-linear-to-r from-[#fd7e14]/10 to-[#e8590c]/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
+                  <span className="absolute inset-0 bg-linear-to-r from-accent/10 to-accent-hover/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
                   <Github className="w-5 h-5 relative z-10" />
                 </a>
                 <a
                   href="https://discord.gg/GSh2Ak3b8Q"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="p-2 text-gray-300 hover:text-gray-100 hover:bg-[#21262d] rounded-md transition-all duration-200 relative overflow-hidden group"
+                  className="p-2 text-fg-muted hover:text-fg hover:bg-hover rounded-md transition-all duration-200 relative overflow-hidden group"
                   aria-label="Discord"
                 >
                   <span className="absolute inset-0 bg-linear-to-r from-indigo-500/10 to-purple-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
@@ -574,7 +578,7 @@ export default function Sidebar({ version }: SidebarProps) {
                   href="https://bsky.app/profile/rari.build"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="p-2 text-gray-300 hover:text-gray-100 hover:bg-[#21262d] rounded-md transition-all duration-200 relative overflow-hidden group"
+                  className="p-2 text-fg-muted hover:text-fg hover:bg-hover rounded-md transition-all duration-200 relative overflow-hidden group"
                   aria-label="Bluesky"
                 >
                   <span className="absolute inset-0 bg-linear-to-r from-blue-500/10 to-cyan-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
