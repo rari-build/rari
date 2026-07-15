@@ -328,15 +328,7 @@ impl NpmPackageFolderResolver for NpmPackageFolderResolverImpl {
             Ok(p) => Ok(p),
             Err(_) => {
                 if let Some(base_dir) = self.base_dir() {
-                    let candidate = if specifier.starts_with('@') {
-                        let mut parts = specifier.splitn(2, '/');
-                        match (parts.next(), parts.next()) {
-                            (Some(scope), Some(name)) => base_dir.join(scope).join(name),
-                            _ => base_dir.join(specifier),
-                        }
-                    } else {
-                        base_dir.join(specifier)
-                    };
+                    let candidate = base_dir.join(specifier);
                     if candidate.is_dir() {
                         return Ok(fs::canonicalize(&candidate).unwrap_or(candidate));
                     }

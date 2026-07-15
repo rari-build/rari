@@ -399,11 +399,11 @@ export default {{}};
 
         let path = PathBuf::from(referrer);
         if path.is_absolute() {
-            if path.is_file() {
-                ModuleSpecifier::from_file_path(&path).or_else(|()| Self::cwd_package_json_url())
-            } else {
+            if path.is_dir() {
                 Self::package_json_url_for_directory(&path)
                     .or_else(|_| Self::cwd_package_json_url())
+            } else {
+                ModuleSpecifier::from_file_path(&path).or_else(|()| Self::cwd_package_json_url())
             }
         } else {
             Self::cwd_package_json_url()
