@@ -1,3 +1,23 @@
+## [rari@0.15.3] - 2026-07-15
+
+### ⚙️ Miscellaneous Tasks
+
+- update optional dependencies to version 0.15.3 by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/v0.15.3...rari@0.15.3
+## [0.15.3] - 2026-07-15
+
+### 🐛 Bug Fixes
+
+- resolve prod runtime, SSR, OG, and CSRF issues after 0.15.2 by @skiniks
+
+### 🚜 Refactor
+
+- clean up node_console_scope and enhance module resolution logic in build.ts by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.15.2...v0.15.3
 ## [rari@0.15.2] - 2026-07-14
 
 ### ⚙️ Miscellaneous Tasks
