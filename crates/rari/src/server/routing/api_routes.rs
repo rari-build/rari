@@ -18,7 +18,7 @@ use serde_json::{Value, json};
 use tokio::fs;
 
 use crate::{
-    rendering::layout::create_component_id,
+    rendering::layout::{component_dist_path, create_component_id},
     runtime::JsExecutionRuntime,
     server::{
         core::utils::http::extract_headers, middleware::request_context::RequestContext,
@@ -65,7 +65,6 @@ pub struct ApiRouteMatch {
 
 #[derive(Debug, Clone)]
 pub(crate) struct CompiledHandler {
-    module_id: String,
     code: String,
     last_modified: SystemTime,
 }
@@ -111,19 +110,7 @@ impl ApiRouteHandler {
     }
 
     pub fn invalidate_handler(&self, file_path: &str) {
-        self.handler_cache.remove(file_path);
-        // Handlers may be stored under component_id instead of file_path
-        // (e.g. "app/api/hello/route_6634b3ed" vs "api/hello/route.ts").
-        // Use a precise prefix match to avoid over-invalidating unrelated routes.
-        let route_prefix = format!(
-            "app/{}_",
-            file_path
-                .trim_end_matches(".tsx")
-                .trim_end_matches(".ts")
-                .trim_end_matches(".jsx")
-                .trim_end_matches(".js")
-        );
-        self.handler_cache.retain(|key, _| key != file_path && !key.starts_with(&route_prefix));
+        self.handler_cache.remove(&create_component_id(file_path));
     }
 
     pub fn get_supported_methods(&self, path: &str) -> Option<Vec<String>> {
@@ -290,19 +277,7 @@ impl ApiRouteHandler {
             .and_then(|m| m.modified())
             .unwrap_or_else(|_| SystemTime::now());
 
-        let module_id = file_path
-            .trim_start_matches("api/")
-            .trim_end_matches(".ts")
-            .trim_end_matches(".tsx")
-            .trim_end_matches(".js")
-            .trim_end_matches(".jsx")
-            .cow_replace('/', "_");
-
-        let compiled = CompiledHandler {
-            module_id: module_id.into_owned(),
-            code: code.clone(),
-            last_modified,
-        };
+        let compiled = CompiledHandler { code: code.clone(), last_modified };
 
         self.handler_cache.insert(cache_key.clone(), compiled.clone());
 
@@ -310,9 +285,7 @@ impl ApiRouteHandler {
     }
 
     fn resolve_route_dist_path(route: &ApiRouteEntry) -> PathBuf {
-        Path::new("dist")
-            .join("server")
-            .join(format!("{}.js", create_component_id(&route.file_path)))
+        component_dist_path(Path::new("dist/server"), &route.file_path)
     }
 
     #[expect(clippy::missing_errors_doc, clippy::too_many_lines)]
@@ -379,13 +352,15 @@ impl ApiRouteHandler {
                     })?
                     .to_string();
 
+                let component_id = create_component_id(&route_match.route.file_path);
+
                 if let Err(e) =
                     self.runtime.add_module_to_loader(&module_specifier, handler.code.clone()).await
                 {
                     tracing::error!(
                         route_path = %route_match.route.path,
                         method = %route_match.method,
-                        module_id = %handler.module_id,
+                        component_id = %component_id,
                         error = %e,
                         "Failed to add API route module to loader"
                     );
@@ -393,8 +368,6 @@ impl ApiRouteHandler {
                         "Failed to add module to loader: {e}"
                     )));
                 }
-
-                let component_id = create_component_id(&route_match.route.file_path);
 
                 let module_id = self.runtime.load_es_module(&component_id).await.map_err(|e| {
                     tracing::error!(
@@ -411,7 +384,7 @@ impl ApiRouteHandler {
                     tracing::error!(
                         route_path = %route_match.route.path,
                         method = %route_match.method,
-                        module_id = module_id,
+                        component_id = %component_id,
                         error = %e,
                         "Failed to evaluate API route module"
                     );
@@ -429,7 +402,7 @@ impl ApiRouteHandler {
                         tracing::error!(
                             route_path = %route_match.route.path,
                             method = %route_match.method,
-                            module_id = %handler.module_id,
+                            component_id = %component_id,
                             error = %e,
                             "Handler execution failed"
                         );
