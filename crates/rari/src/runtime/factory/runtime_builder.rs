@@ -1,4 +1,8 @@
-use std::{borrow::Cow, rc::Rc, sync::Arc};
+use std::{
+    borrow::Cow,
+    rc::Rc,
+    sync::{Arc, LazyLock},
+};
 
 use cow_utils::CowUtils;
 use deno_core::{Extension, JsRuntime, RuntimeOptions};
@@ -15,6 +19,21 @@ use crate::runtime::{
     module_loader::RariModuleLoader,
     ops::{self, StreamOpState},
 };
+
+const NODE_CONSOLE_SCOPE_SPECIFIER: &str = "ext:runtime/98_global_scope_shared.js";
+const NODE_CONSOLE_SCOPE_SOURCE: &str = include_str!("../ext/runtime/node_console_scope.ts");
+
+fn residual_lazy_esm_sources() -> &'static [(&'static str, &'static str)] {
+    static SOURCES: LazyLock<Vec<(&'static str, &'static str)>> = LazyLock::new(|| {
+        let mut sources = RESIDUAL_LAZY_ESM_SOURCES.to_vec();
+        if let Err(index) = sources.binary_search_by_key(&NODE_CONSOLE_SCOPE_SPECIFIER, |(s, _)| *s)
+        {
+            sources.insert(index, (NODE_CONSOLE_SCOPE_SPECIFIER, NODE_CONSOLE_SCOPE_SOURCE));
+        }
+        sources
+    });
+    LazyLock::force(&SOURCES).as_slice()
+}
 
 fn sync_bootstrap_options(runtime: &JsRuntime, has_node_modules_dir: bool) {
     let state = runtime.op_state();
@@ -61,7 +80,7 @@ pub fn build_js_runtime(
         extensions,
         extension_transpiler: Some(module_loader.as_extension_transpiler()),
         startup_snapshot: Some(RUNTIME_SNAPSHOT),
-        residual_lazy_esm_sources: RESIDUAL_LAZY_ESM_SOURCES,
+        residual_lazy_esm_sources: residual_lazy_esm_sources(),
         residual_lazy_js_sources: RESIDUAL_LAZY_JS_SOURCES,
         create_params: Some(runtime_create_params()),
         ..Default::default()
