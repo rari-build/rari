@@ -58,6 +58,10 @@ extension!(
     deps = [init_utilities],
     esm_entry_point = "ext:init_console/init_console.ts",
     esm = [ dir "src/runtime/ext/runtime", "init_console.ts" ],
+    lazy_loaded_esm = [
+        dir "src/runtime/ext/runtime",
+        "ext:runtime/98_global_scope_shared.js" = "node_console_scope.ts",
+    ],
 );
 
 extension!(
