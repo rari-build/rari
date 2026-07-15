@@ -1150,7 +1150,13 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
                 return { id: createRequire(from).resolve(source) }
               }
               catch {
-                // try next candidate
+                try {
+                  const resolved = import.meta.resolve(source, pathToFileURL(from).href)
+                  return { id: fileURLToPath(resolved) }
+                }
+                catch {
+                  // try next candidate
+                }
               }
             }
 

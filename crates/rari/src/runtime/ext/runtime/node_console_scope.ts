@@ -11,7 +11,6 @@ export const windowOrWorkerGlobalScope = {
     get() {
       return globalThis.console
     },
-    value: undefined,
   },
 }
 
