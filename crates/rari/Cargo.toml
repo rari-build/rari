@@ -1,6 +1,6 @@
 [package]
 name = "rari"
-version = "0.15.3"
+version = "0.15.4"
 edition = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
