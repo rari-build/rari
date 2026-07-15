@@ -277,9 +277,9 @@ impl ApiRouteHandler {
             .and_then(|m| m.modified())
             .unwrap_or_else(|_| SystemTime::now());
 
-        let compiled = CompiledHandler { code: code.clone(), last_modified };
+        let compiled = CompiledHandler { code, last_modified };
 
-        self.handler_cache.insert(cache_key.clone(), compiled.clone());
+        self.handler_cache.insert(cache_key, compiled.clone());
 
         Ok(compiled)
     }
