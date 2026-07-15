@@ -24,7 +24,7 @@ export default function ApiReferencePage() {
                 <div className="relative z-10">
                   <h2 className="text-xl font-semibold mb-2">
                     <span className="text-fg">Components</span>
-                    <span className="absolute inset-0 bg-clip-text text-transparent bg-linear-to-r from-fg to-accent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                    <span aria-hidden="true" className="absolute inset-0 bg-clip-text text-transparent bg-linear-to-r from-fg to-accent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                       Components
                     </span>
                   </h2>
@@ -53,7 +53,7 @@ export default function ApiReferencePage() {
                 <div className="relative z-10">
                   <h2 className="text-xl font-semibold mb-2">
                     <span className="text-fg">Functions</span>
-                    <span className="absolute inset-0 bg-clip-text text-transparent bg-linear-to-r from-fg to-accent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                    <span aria-hidden="true" className="absolute inset-0 bg-clip-text text-transparent bg-linear-to-r from-fg to-accent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                       Functions
                     </span>
                   </h2>

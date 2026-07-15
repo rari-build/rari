@@ -2,7 +2,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { createContext, use, useCallback, useEffect, useState } from 'react'
+import { createContext, use, useCallback, useEffect, useMemo, useState } from 'react'
 
 export type ThemePreference = 'light' | 'dark' | 'system'
 export type ResolvedTheme = 'light' | 'dark'
@@ -87,8 +87,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     return () => media.removeEventListener('change', onChange)
   }, [theme])
 
+  const value = useMemo(
+    () => ({ theme, resolvedTheme, setTheme: handleSetTheme }),
+    [theme, resolvedTheme, handleSetTheme],
+  )
+
   return (
-    <ThemeContext value={{ theme, resolvedTheme, setTheme: handleSetTheme }}>
+    <ThemeContext value={value}>
       {children}
     </ThemeContext>
   )

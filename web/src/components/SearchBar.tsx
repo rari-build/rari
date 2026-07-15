@@ -148,7 +148,7 @@ export default function SearchBar() {
                 value={query}
                 onChange={e => setQuery(e.target.value)}
                 placeholder="Search documentation..."
-                className="flex-1 bg-transparent text-fg-secondary placeholder-gray-500 outline-none text-base"
+                className="flex-1 bg-transparent text-fg-secondary placeholder-fg-muted outline-hidden text-base"
               />
               {isPending && (
                 <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
