@@ -27,7 +27,7 @@ export default function FunctionsPage() {
                     <div>
                       <h2 className="relative text-xl font-semibold mb-2 font-mono">
                         <span className="text-fg">fetch</span>
-                        <span className="absolute inset-0 bg-clip-text text-transparent bg-linear-to-r from-fg to-accent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                        <span aria-hidden="true" className="absolute inset-0 bg-clip-text text-transparent bg-linear-to-r from-fg to-accent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                           fetch
                         </span>
                       </h2>

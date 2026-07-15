@@ -36,9 +36,7 @@ export async function getHighlighter(): Promise<HighlighterCore> {
         import('@shikijs/themes/github-light-high-contrast').then(t =>
           replaceThemeColors(t.default ?? t, {
             '#6A737D': '#424A53',
-            '#6a737d': '#424A53',
             '#57606A': '#424A53',
-            '#57606a': '#424A53',
           }),
         ),
       ],

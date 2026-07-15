@@ -33,7 +33,7 @@ export default function FeatureCard({ title, description, icon }: FeatureCardPro
           <div className="text-4xl mb-4 transform group-hover:scale-110 transition-transform duration-300">{renderedIcon}</div>
           <h3 className="relative text-xl font-semibold mb-3">
             <span className="text-fg">{title}</span>
-            <span className="absolute inset-0 bg-clip-text text-transparent bg-linear-to-r from-fg to-accent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+            <span aria-hidden="true" className="absolute inset-0 bg-clip-text text-transparent bg-linear-to-r from-fg to-accent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
               {title}
             </span>
           </h3>

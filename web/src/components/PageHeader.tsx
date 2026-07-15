@@ -75,7 +75,7 @@ export default function PageHeader({ title, filePath, pagePath, date, author, au
       {(date || author) && (
         <div className="flex items-center gap-3 text-sm text-fg-muted mb-4">
           {author && <span className="text-fg-muted font-medium">{author}</span>}
-          {author && date && <span className="text-edge">·</span>}
+          {author && date && <span className="text-fg-muted">·</span>}
           {date && <time dateTime={date}>{formatDate(date)}</time>}
         </div>
       )}
