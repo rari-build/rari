@@ -973,8 +973,7 @@ globalThis['~errors'].batch.push({{
         };
 
         if !is_registered {
-            let component_path = component_id.strip_prefix("app/").unwrap_or(component_id);
-            let dist_path = Path::new("dist/server").join(format!("{component_path}.js"));
+            let dist_path = Path::new("dist/server").join(format!("{component_id}.js"));
 
             if dist_path.exists() {
                 let component_code = fs::read_to_string(&dist_path).await.map_err(|e| {

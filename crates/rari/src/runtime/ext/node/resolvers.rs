@@ -1,6 +1,6 @@
 use std::{
     borrow::Cow,
-    env,
+    env, fs,
     io::{self},
     path::{Path, PathBuf},
     rc::Rc,
@@ -326,7 +326,23 @@ impl NpmPackageFolderResolver for NpmPackageFolderResolverImpl {
         let p = self.byonm.resolve_pkg_folder_from_deno_module_req(&request, referrer_url);
         match p {
             Ok(p) => Ok(p),
-            Err(_) => self.byonm.resolve_package_folder_from_package(specifier, referrer),
+            Err(_) => {
+                if let Some(base_dir) = self.base_dir() {
+                    let candidate = if specifier.starts_with('@') {
+                        let mut parts = specifier.splitn(2, '/');
+                        match (parts.next(), parts.next()) {
+                            (Some(scope), Some(name)) => base_dir.join(scope).join(name),
+                            _ => base_dir.join(specifier),
+                        }
+                    } else {
+                        base_dir.join(specifier)
+                    };
+                    if candidate.is_dir() {
+                        return Ok(fs::canonicalize(&candidate).unwrap_or(candidate));
+                    }
+                }
+                self.byonm.resolve_package_folder_from_package(specifier, referrer)
+            }
         }
     }
 

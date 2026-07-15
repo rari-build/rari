@@ -192,6 +192,7 @@ interface RouteManifest {
   loading?: RouteManifestEntry[]
   errors?: RouteManifestEntry[]
   notFound?: RouteManifestEntry[]
+  templates?: RouteManifestEntry[]
   apiRoutes?: RouteManifestEntry[]
 }
 
@@ -395,6 +396,7 @@ export class ServerComponentBuilder {
     applyCss(routeManifest.loading)
     applyCss(routeManifest.errors)
     applyCss(routeManifest.notFound)
+    applyCss(routeManifest.templates)
 
     if (routeManifest.apiRoutes) {
       for (const entry of routeManifest.apiRoutes) {

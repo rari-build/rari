@@ -18,6 +18,7 @@ use serde_json::{Value, json};
 use tokio::fs;
 
 use crate::{
+    rendering::layout::create_component_id,
     runtime::JsExecutionRuntime,
     server::{
         core::utils::http::extract_headers, middleware::request_context::RequestContext,
@@ -243,11 +244,11 @@ impl ApiRouteHandler {
         is_development: bool,
     ) -> Result<CompiledHandler, RariError> {
         let file_path = &route.file_path;
-        let cache_key = route.component_id.as_deref().unwrap_or(file_path);
+        let cache_key = create_component_id(file_path);
 
-        if let Some(cached) = self.handler_cache.get(cache_key) {
+        if let Some(cached) = self.handler_cache.get(&cache_key) {
             if is_development {
-                let dist_path = Self::resolve_route_dist_path(route)?;
+                let dist_path = Self::resolve_route_dist_path(route);
                 if let Ok(metadata) = fs::metadata(&dist_path).await
                     && let Ok(modified) = metadata.modified()
                     && modified <= cached.last_modified
@@ -259,7 +260,7 @@ impl ApiRouteHandler {
             }
         }
 
-        let dist_path = Self::resolve_route_dist_path(route)?;
+        let dist_path = Self::resolve_route_dist_path(route);
 
         if !fs::try_exists(&dist_path).await.unwrap_or(false) {
             tracing::error!(
@@ -303,83 +304,15 @@ impl ApiRouteHandler {
             last_modified,
         };
 
-        self.handler_cache.insert(cache_key.to_string(), compiled.clone());
+        self.handler_cache.insert(cache_key.clone(), compiled.clone());
 
         Ok(compiled)
     }
 
-    fn resolve_route_dist_path(route: &ApiRouteEntry) -> Result<PathBuf, RariError> {
-        if let Some(component_id) = &route.component_id {
-            return Ok(Path::new("dist").join("server").join(format!("{component_id}.js")));
-        }
-
-        Self::resolve_dist_path(&route.file_path)
-    }
-
-    #[expect(clippy::unnecessary_wraps, reason = "Result return type maintains API consistency")]
-    fn resolve_dist_path(file_path: &str) -> Result<PathBuf, RariError> {
-        let mut normalized_path = String::new();
-        let mut chars = file_path.chars().peekable();
-
-        while let Some(ch) = chars.next() {
-            if ch == '[' {
-                if chars.peek() == Some(&'[') {
-                    chars.next();
-
-                    if chars.peek() == Some(&'.') {
-                        chars.next();
-                        if chars.peek() == Some(&'.') {
-                            chars.next();
-                            if chars.peek() == Some(&'.') {
-                                chars.next();
-                                normalized_path.push_str("_____");
-
-                                while let Some(ch) = chars.next() {
-                                    if ch == ']' && chars.peek() == Some(&']') {
-                                        chars.next();
-                                        normalized_path.push_str("__");
-                                        break;
-                                    }
-                                    normalized_path.push(ch);
-                                }
-                            }
-                        }
-                    }
-                } else if chars.peek() == Some(&'.') {
-                    chars.next();
-                    if chars.peek() == Some(&'.') {
-                        chars.next();
-                        if chars.peek() == Some(&'.') {
-                            chars.next();
-                            normalized_path.push_str("____");
-                            for ch in chars.by_ref() {
-                                if ch == ']' {
-                                    normalized_path.push('_');
-                                    break;
-                                }
-                                normalized_path.push(ch);
-                            }
-                        }
-                    }
-                } else {
-                    normalized_path.push('_');
-                    for ch in chars.by_ref() {
-                        if ch == ']' {
-                            normalized_path.push('_');
-                            break;
-                        }
-                        normalized_path.push(ch);
-                    }
-                }
-            } else {
-                normalized_path.push(ch);
-            }
-        }
-
-        let dist_path =
-            Path::new("dist").join("server").join("app").join(normalized_path).with_extension("js");
-
-        Ok(dist_path)
+    fn resolve_route_dist_path(route: &ApiRouteEntry) -> PathBuf {
+        Path::new("dist")
+            .join("server")
+            .join(format!("{}.js", create_component_id(&route.file_path)))
     }
 
     #[expect(clippy::missing_errors_doc, clippy::too_many_lines)]
@@ -430,7 +363,7 @@ impl ApiRouteHandler {
 
         self.runtime
             .execute_with_request_context(request_context, async {
-                let dist_path = Self::resolve_route_dist_path(&route_match.route)?;
+                let dist_path = Self::resolve_route_dist_path(&route_match.route);
                 let canonical_path = fs::canonicalize(&dist_path).await.map_err(|e| {
                     RariError::io(format!(
                         "Failed to canonicalize API route path {}: {e}",
@@ -461,23 +394,7 @@ impl ApiRouteHandler {
                     )));
                 }
 
-                let component_id = route_match.route.component_id.clone().unwrap_or_else(|| {
-                    dist_path
-                        .strip_prefix(Path::new("dist").join("server"))
-                        .map(|p| {
-                            p.with_extension("")
-                                .to_string_lossy()
-                                .cow_replace('\\', "/")
-                                .into_owned()
-                        })
-                        .unwrap_or_else(|_| {
-                            dist_path
-                                .with_extension("")
-                                .to_string_lossy()
-                                .cow_replace('\\', "/")
-                                .into_owned()
-                        })
-                });
+                let component_id = create_component_id(&route_match.route.file_path);
 
                 let module_id = self.runtime.load_es_module(&component_id).await.map_err(|e| {
                     tracing::error!(

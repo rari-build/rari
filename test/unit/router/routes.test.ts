@@ -200,7 +200,6 @@ describe('generateAppRouteManifest', () => {
       expect(manifest.loading[0]).toMatchObject({
         path: '/',
         filePath: 'loading.tsx',
-        componentId: 'loading:/',
       })
     })
 

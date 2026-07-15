@@ -363,33 +363,50 @@ export default {{}};
         })
     }
 
-    fn cwd_directory_url() -> Result<ModuleSpecifier, JsErrorBox> {
+    fn cwd_package_json_url() -> Result<ModuleSpecifier, JsErrorBox> {
         let cwd = env::current_dir().map_err(|err| {
             JsErrorBox::generic(format!("Failed to get current directory: {err}"))
         })?;
-        ModuleSpecifier::from_directory_path(&cwd)
-            .map_err(|()| JsErrorBox::generic("Failed to convert cwd to file URL"))
+        ModuleSpecifier::from_file_path(cwd.join("package.json"))
+            .map_err(|()| JsErrorBox::generic("Failed to convert cwd package.json to file URL"))
+    }
+
+    fn package_json_url_for_directory(dir: &Path) -> Result<ModuleSpecifier, JsErrorBox> {
+        ModuleSpecifier::from_file_path(dir.join("package.json")).map_err(|()| {
+            JsErrorBox::generic(format!(
+                "Failed to convert package.json under {} to file URL",
+                dir.display()
+            ))
+        })
     }
 
     fn referrer_url_for_node(referrer: &str) -> Result<ModuleSpecifier, JsErrorBox> {
         if is_virtual_referrer(referrer) {
-            return Self::cwd_directory_url();
+            return Self::cwd_package_json_url();
         }
 
         if let Ok(url) = ModuleSpecifier::parse(referrer) {
             if url.scheme() == "file" {
+                if url.path().ends_with('/')
+                    && let Ok(path) = url.to_file_path()
+                {
+                    return Self::package_json_url_for_directory(&path);
+                }
                 return Ok(url);
             }
-            return Self::cwd_directory_url();
+            return Self::cwd_package_json_url();
         }
 
         let path = PathBuf::from(referrer);
         if path.is_absolute() {
-            ModuleSpecifier::from_file_path(&path)
-                .or_else(|()| ModuleSpecifier::from_directory_path(&path))
-                .or_else(|()| Self::cwd_directory_url())
+            if path.is_file() {
+                ModuleSpecifier::from_file_path(&path).or_else(|()| Self::cwd_package_json_url())
+            } else {
+                Self::package_json_url_for_directory(&path)
+                    .or_else(|_| Self::cwd_package_json_url())
+            }
         } else {
-            Self::cwd_directory_url()
+            Self::cwd_package_json_url()
         }
     }
 

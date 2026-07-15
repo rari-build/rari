@@ -71,6 +71,10 @@ pub fn create_component_id(file_path: &str) -> String {
     )
 }
 
+pub fn component_dist_path(base_path: &Path, file_path: &str) -> PathBuf {
+    base_path.join(format!("{}.js", create_component_id(file_path)))
+}
+
 pub fn create_client_component_id(file_path: &str) -> String {
     let project_relative_path = normalize_route_component_path(file_path);
     project_relative_path
@@ -79,32 +83,6 @@ pub fn create_client_component_id(file_path: &str) -> String {
         .trim_end_matches(".jsx")
         .trim_end_matches(".js")
         .to_string()
-}
-
-pub fn convert_route_path_to_dist_path(path: &str) -> String {
-    let (base, ext) =
-        if let Some(pos) = path.rfind('.') { (&path[..pos], &path[pos..]) } else { (path, "") };
-
-    let converted_base = base
-        .chars()
-        .map(|c| if c.is_alphanumeric() || c == '/' || c == '-' || c == '_' { c } else { '_' })
-        .collect::<String>();
-
-    format!("{converted_base}{ext}")
-}
-
-pub fn component_dist_path(
-    base_path: &Path,
-    file_path: &str,
-    component_id: Option<&str>,
-) -> PathBuf {
-    if let Some(component_id) = component_id {
-        return base_path.join(format!("{component_id}.js"));
-    }
-
-    let js_filename = file_path.cow_replace(".tsx", ".js").cow_replace(".ts", ".js").into_owned();
-    let dist_filename = convert_route_path_to_dist_path(&js_filename);
-    base_path.join("app").join(&dist_filename)
 }
 
 pub fn get_component_id(file_path: &str) -> String {

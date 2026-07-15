@@ -243,11 +243,7 @@ impl LayoutRenderer {
             return Ok(false);
         };
 
-        let page_file_path = utils::component_dist_path(
-            &base_path,
-            &route_match.route.file_path,
-            route_match.route.component_id.as_deref(),
-        );
+        let page_file_path = utils::component_dist_path(&base_path, &route_match.route.file_path);
 
         if !page_file_path.exists() {
             return Ok(false);
@@ -316,10 +312,7 @@ impl LayoutRenderer {
 
         let loading_component_id = if loading_enabled {
             if let Some(loading_entry) = &route_match.loading {
-                let loading_id = loading_entry
-                    .component_id
-                    .clone()
-                    .unwrap_or_else(|| utils::create_component_id(&loading_entry.file_path));
+                let loading_id = utils::create_component_id(&loading_entry.file_path);
                 Some(loading_id)
             } else {
                 None
@@ -369,12 +362,10 @@ impl LayoutRenderer {
         let loading_enabled = Config::get().map(|config| config.loading.enabled).unwrap_or(true);
 
         let loading_component_id = if loading_enabled {
-            route_match.loading.as_ref().map(|loading_entry| {
-                loading_entry
-                    .component_id
-                    .clone()
-                    .unwrap_or_else(|| utils::create_component_id(&loading_entry.file_path))
-            })
+            route_match
+                .loading
+                .as_ref()
+                .map(|loading_entry| utils::create_component_id(&loading_entry.file_path))
         } else {
             None
         };
@@ -426,10 +417,7 @@ impl LayoutRenderer {
 
         let loading_component_id = if loading_enabled {
             if let Some(loading_entry) = &route_match.loading {
-                let loading_id = loading_entry
-                    .component_id
-                    .clone()
-                    .unwrap_or_else(|| utils::create_component_id(&loading_entry.file_path));
+                let loading_id = utils::create_component_id(&loading_entry.file_path);
                 Some(loading_id)
             } else {
                 None
@@ -881,16 +869,9 @@ impl LayoutRenderer {
         })?;
 
         let page_component_id = if let Some(ref not_found) = route_match.not_found {
-            not_found
-                .component_id
-                .clone()
-                .unwrap_or_else(|| utils::create_component_id(&not_found.file_path))
+            utils::create_component_id(&not_found.file_path)
         } else {
-            route_match
-                .route
-                .component_id
-                .clone()
-                .unwrap_or_else(|| utils::create_component_id(&route_match.route.file_path))
+            utils::create_component_id(&route_match.route.file_path)
         };
 
         let page_render_script = if route_match.not_found.is_some() {
@@ -969,10 +950,7 @@ impl LayoutRenderer {
             .layouts
             .iter()
             .map(|layout| LayoutInfo {
-                component_id: layout
-                    .component_id
-                    .clone()
-                    .unwrap_or_else(|| utils::create_component_id(&layout.file_path)),
+                component_id: utils::create_component_id(&layout.file_path),
                 is_root: layout.is_root,
                 file_path: layout.file_path.clone(),
             })
@@ -982,10 +960,7 @@ impl LayoutRenderer {
             .templates
             .iter()
             .map(|template| TemplateInfo {
-                component_id: template
-                    .component_id
-                    .clone()
-                    .unwrap_or_else(|| utils::create_component_id(&template.file_path)),
+                component_id: utils::create_component_id(&template.file_path),
                 client_component_id: utils::normalize_route_component_path_public(
                     &template.file_path,
                 ),

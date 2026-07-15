@@ -230,18 +230,13 @@ pub(crate) async fn collect_page_metadata(
 
     let mut layout_paths = Vec::with_capacity(route_match.layouts.len());
     for layout in &route_match.layouts {
-        let file_path =
-            component_dist_path(&base_path, &layout.file_path, layout.component_id.as_deref());
+        let file_path = component_dist_path(&base_path, &layout.file_path);
         if fs::try_exists(&file_path).await.unwrap_or(false) {
             layout_paths.push(path_to_file_url(&file_path));
         }
     }
 
-    let page_file_path = component_dist_path(
-        &base_path,
-        &route_match.route.file_path,
-        route_match.route.component_id.as_deref(),
-    );
+    let page_file_path = component_dist_path(&base_path, &route_match.route.file_path);
 
     if !fs::try_exists(&page_file_path).await.unwrap_or(false) {
         return None;
