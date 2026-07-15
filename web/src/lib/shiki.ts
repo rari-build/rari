@@ -19,7 +19,10 @@ function replaceThemeColors(
   return JSON.parse(themeString)
 }
 
-export const SHIKI_THEME = 'github-dark'
+export const SHIKI_THEMES = {
+  light: 'github-light-high-contrast',
+  dark: 'github-dark',
+} as const
 
 export async function getHighlighter(): Promise<HighlighterCore> {
   if (!highlighter) {
@@ -28,6 +31,14 @@ export async function getHighlighter(): Promise<HighlighterCore> {
         import('@shikijs/themes/github-dark').then(t =>
           replaceThemeColors(t.default ?? t, {
             '#6A737D': '#8B949E', // comments: boost contrast on dark bg
+          }),
+        ),
+        import('@shikijs/themes/github-light-high-contrast').then(t =>
+          replaceThemeColors(t.default ?? t, {
+            '#6A737D': '#424A53',
+            '#6a737d': '#424A53',
+            '#57606A': '#424A53',
+            '#57606a': '#424A53',
           }),
         ),
       ],

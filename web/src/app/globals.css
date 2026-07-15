@@ -1,13 +1,86 @@
 @import "tailwindcss";
 
 :root {
+  color-scheme: dark;
+
   --rust-orange: #fd7e14;
   --rust-orange-dark: #e8590c;
-  --github-dark-bg: #0d1117;
-  --github-dark-card: #161b22;
-  --github-dark-border: #30363d;
-  --github-text: #f0f6fc;
-  --text-secondary: #b1bac4;
+  --accent-fg: #1f2328;
+  --link: var(--rust-orange);
+  --link-hover: var(--rust-orange-dark);
+
+  --canvas: #0d1117;
+  --surface: #161b22;
+  --chrome: #30363d;
+  --hover: #21262d;
+  --muted: #1c2128;
+  --edge: #30363d;
+  --fg: #f0f6fc;
+  --fg-body: #c9d1d9;
+  --fg-muted: #8b949e;
+  --fg-secondary: #b1bac4;
+  --code-bg: #24292e;
+  --table-stripe: rgba(22, 27, 34, 0.5);
+  --scrollbar-hover: #484f58;
+  --overlay: rgba(0, 0, 0, 0.3);
+
+  --cmd-bin: #79c0ff;
+  --cmd-verb: #d2a8ff;
+  --cmd-flag: #ffa657;
+  --cmd-pkg: #a5d6ff;
+
+  --github-dark-bg: var(--canvas);
+  --github-dark-card: var(--surface);
+  --github-dark-border: var(--edge);
+  --github-text: var(--fg);
+  --text-secondary: var(--fg-secondary);
+}
+
+html.light {
+  color-scheme: light;
+
+  --canvas: #e8ecf1;
+  --surface: #ffffff;
+  --chrome: #dde3ea;
+  --hover: #dce2e9;
+  --muted: #e4e9ef;
+  --edge: #c8d0d9;
+  --fg: #1f2328;
+  --fg-body: #424a53;
+  --fg-muted: #4d5560;
+  --fg-secondary: #424a53;
+  --code-bg: #ffffff;
+  --table-stripe: rgba(220, 226, 233, 0.9);
+  --scrollbar-hover: #8c959f;
+  --overlay: rgba(31, 35, 40, 0.25);
+
+  --link: #9a4b00;
+  --link-hover: #7a3a00;
+
+  --cmd-bin: #0550ae;
+  --cmd-verb: #8250df;
+  --cmd-flag: #953800;
+  --cmd-pkg: #0a3069;
+}
+
+@theme {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-chrome: var(--chrome);
+  --color-hover: var(--hover);
+  --color-muted: var(--muted);
+  --color-edge: var(--edge);
+  --color-fg: var(--fg);
+  --color-fg-body: var(--fg-body);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-secondary: var(--fg-secondary);
+  --color-accent: var(--rust-orange);
+  --color-accent-hover: var(--rust-orange-dark);
+  --color-accent-fg: var(--accent-fg);
+  --color-link: var(--link);
+  --color-link-hover: var(--link-hover);
+  --color-code-bg: var(--code-bg);
+  --color-overlay: var(--overlay);
 }
 
 *,
@@ -17,12 +90,14 @@
 }
 
 html {
-  background-color: var(--github-dark-bg);
+  background-color: var(--canvas);
   overflow-x: hidden;
 }
 
 body {
   overflow-x: hidden;
+  background-color: var(--canvas);
+  color: var(--fg-body);
 }
 
 code {
@@ -33,8 +108,8 @@ code {
 
 .prose pre {
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Consolas', 'Courier New', monospace;
-  background: var(--github-dark-bg);
-  border: 1px solid var(--github-dark-border);
+  background: var(--canvas);
+  border: 1px solid var(--edge);
   border-radius: 6px;
   padding: 1rem;
   overflow-x: auto;
@@ -45,7 +120,7 @@ code {
 }
 
 .prose {
-  color: #c9d1d9;
+  color: var(--fg-body);
   max-width: none;
   font-size: 1.0625rem;
   line-height: 1.75;
@@ -85,12 +160,12 @@ code {
 }
 
 .prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {
-  color: var(--github-text);
+  color: var(--fg);
   font-weight: 600;
 }
 
 .prose h2 {
-  border-bottom: 1px solid var(--github-dark-border);
+  border-bottom: 1px solid var(--edge);
   padding-bottom: 0.5rem;
 }
 
@@ -149,13 +224,13 @@ code {
 }
 
 .prose a {
-  color: var(--rust-orange);
+  color: var(--link);
   text-decoration: none;
   font-weight: 500;
 }
 
 .prose a:hover {
-  color: var(--rust-orange-dark);
+  color: var(--link-hover);
   text-decoration: underline;
 }
 
@@ -171,24 +246,24 @@ code {
   font-weight: 500;
   border-radius: 0.375rem;
   display: inline-block;
-  border: 1px solid var(--github-dark-border);
-  color: var(--rust-orange);
-  background-color: var(--github-dark-card);
+  border: 1px solid var(--edge);
+  color: var(--link);
+  background-color: var(--muted);
 }
 
 .prose a code {
-  border-color: var(--rust-orange);
+  border-color: var(--link);
   transition: all 0.2s ease;
 }
 
 .prose a:hover code {
-  border-color: var(--rust-orange-dark);
+  border-color: var(--link-hover);
   background-color: rgba(253, 126, 20, 0.1);
 }
 
 .prose blockquote {
   border-left: 4px solid var(--rust-orange);
-  background: var(--github-dark-card);
+  background: var(--surface);
   margin: 1rem 0;
   padding: 1rem 1.5rem;
   border-radius: 0 6px 6px 0;
@@ -205,32 +280,31 @@ code {
 }
 
 .prose th, .prose td {
-  border: 1px solid var(--github-dark-border);
+  border: 1px solid var(--edge);
   padding: 0.75rem;
   text-align: left;
 }
 
 .prose th {
-  background: var(--github-dark-card);
+  background: var(--surface);
   font-weight: 600;
 }
 
 .prose tr:nth-child(even) {
-  background: rgba(22, 27, 34, 0.5);
+  background: var(--table-stripe);
 }
 
 .prose hr {
   border: none;
-  border-top: 1px solid var(--github-dark-border);
+  border-top: 1px solid var(--edge);
   margin: 2.5rem 0;
 }
 
 .prose strong {
-  color: var(--github-text);
+  color: var(--fg);
   font-weight: 600;
 }
 
-/* Scrollbar styling */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -240,7 +314,7 @@ code {
   border: none;
   margin: 0;
   padding: 1rem;
-  background: rgb(36, 41, 46);
+  background: var(--code-bg);
   border-radius: 0;
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Consolas', 'Courier New', monospace;
   font-size: 0.875rem;
@@ -250,16 +324,16 @@ code {
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--github-dark-bg);
+  background: var(--canvas);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--github-dark-border);
+  background: var(--edge);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #484f58;
+  background: var(--scrollbar-hover);
 }
 
 a:focus-visible,
@@ -289,4 +363,19 @@ iframe {
 
 .animate-border-trail {
   animation: border-trail 3s linear infinite;
+}
+
+html.dark .shiki span,
+html:not(.light) .shiki span {
+  color: var(--shiki-dark) !important;
+  font-style: var(--shiki-dark-font-style) !important;
+  font-weight: var(--shiki-dark-font-weight) !important;
+  text-decoration: var(--shiki-dark-text-decoration) !important;
+}
+
+html.light .shiki span {
+  color: var(--shiki-light) !important;
+  font-style: var(--shiki-light-font-style) !important;
+  font-weight: var(--shiki-light-font-weight) !important;
+  text-decoration: var(--shiki-light-text-decoration) !important;
 }

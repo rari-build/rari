@@ -12,10 +12,10 @@ export default function BlogIndexPage() {
     <div className={`${container.marketing} py-12`}>
       <div className="space-y-12">
         <div className="space-y-4">
-          <h1 className="text-5xl font-bold text-[#f0f6fc] tracking-tight">
+          <h1 className="text-5xl font-bold text-fg tracking-tight">
             rari Blog
           </h1>
-          <p className="text-xl text-gray-300 max-w-2xl">
+          <p className="text-xl text-fg-muted max-w-2xl">
             Latest news, updates, and insights from the rari team.
           </p>
         </div>
@@ -37,11 +37,11 @@ export default function BlogIndexPage() {
           : (
               <div className="flex flex-col items-center justify-center py-16 px-4">
                 <div className="text-center space-y-4 max-w-md">
-                  <div className="w-16 h-16 mx-auto bg-[#161b22] border border-[#30363d] rounded-lg flex items-center justify-center">
-                    <News className="w-8 h-8 text-gray-400" />
+                  <div className="w-16 h-16 mx-auto bg-surface border border-edge rounded-lg flex items-center justify-center">
+                    <News className="w-8 h-8 text-fg-muted" />
                   </div>
-                  <h2 className="text-2xl font-semibold text-[#f0f6fc]">No posts yet</h2>
-                  <p className="text-gray-300">
+                  <h2 className="text-2xl font-semibold text-fg">No posts yet</h2>
+                  <p className="text-fg-muted">
                     Check back soon for updates, tutorials, and insights from the rari team.
                   </p>
                 </div>

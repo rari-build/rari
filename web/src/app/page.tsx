@@ -3,22 +3,22 @@ import FeatureCard from '@/components/FeatureCard'
 import HeroSection from '@/components/HeroSection'
 import ArrowNarrowRight from '@/components/icons/ArrowNarrowRight'
 import PackageManagerTabs from '@/components/PackageManagerTabs'
-import { container } from '@/lib/styles'
+import { container, text } from '@/lib/styles'
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen bg-[#0d1117] text-white">
+    <div className="min-h-screen bg-canvas text-fg">
       <HeroSection />
 
       <div className={container.section}>
         <div className={container.marketing}>
           <div className="relative">
-            <div className="absolute -inset-0.5 bg-linear-to-r from-[#fd7e14] to-[#e8590c] rounded-2xl blur opacity-20" />
+            <div className="absolute -inset-0.5 bg-linear-to-r from-accent to-accent-hover rounded-2xl blur opacity-20" />
 
-            <div className="relative bg-linear-to-br from-[#161b22] to-[#0d1117] border border-[#30363d] rounded-2xl p-8 lg:p-12">
+            <div className="relative bg-linear-to-br from-surface to-canvas border border-edge rounded-2xl p-8 lg:p-12">
               <div className="flex items-center gap-3 mb-8">
-                <div className="w-1 h-8 bg-linear-to-b from-[#fd7e14] to-[#e8590c] rounded-full" />
-                <h2 className="text-3xl lg:text-4xl font-bold text-[#f0f6fc]">
+                <div className="w-1 h-8 bg-linear-to-b from-accent to-accent-hover rounded-full" />
+                <h2 className="text-3xl lg:text-4xl font-bold text-fg">
                   Quick Start
                 </h2>
               </div>
@@ -32,13 +32,13 @@ export default function HomePage() {
                 }}
               />
 
-              <p className="text-lg text-gray-400 mb-6">
+              <p className="text-lg text-fg-muted mb-6">
                 Create a new rari project in seconds with our zero-config generator.
               </p>
 
               <a
                 href="/docs/getting-started"
-                className="inline-flex items-center gap-2 text-[#fd7e14] hover:text-[#e8590c] font-semibold text-lg transition-colors duration-200 group"
+                className={`inline-flex items-center gap-2 ${text.link} font-semibold text-lg transition-colors duration-200 group`}
               >
                 Read the full guide
                 <ArrowNarrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -51,12 +51,12 @@ export default function HomePage() {
       <div className={container.section}>
         <div className={container.marketing}>
           <div className="text-center mb-16">
-            <h2 className="text-3xl lg:text-5xl font-bold text-[#f0f6fc] mb-4">
+            <h2 className="text-3xl lg:text-5xl font-bold text-fg mb-4">
               Three layers,
               {' '}
-              <span className="text-transparent bg-clip-text bg-linear-to-r from-[#fd7e14] to-[#e8590c]">one framework</span>
+              <span className={text.accentGradient}>one framework</span>
             </h2>
-            <p className="text-xl text-gray-400 max-w-2xl mx-auto text-balance">
+            <p className="text-xl text-fg-muted max-w-2xl mx-auto text-balance">
               A Rust runtime, a React Server Components framework, and a Rust-native build toolchain, working together so you just write React
             </p>
           </div>

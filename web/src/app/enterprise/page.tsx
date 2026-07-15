@@ -4,21 +4,21 @@ import { container } from '@/lib/styles'
 
 export default function EnterprisePage() {
   return (
-    <div className="min-h-screen bg-[#0d1117] text-white">
+    <div className="min-h-screen bg-canvas text-fg">
       <div className="relative overflow-hidden w-full min-h-[70vh] flex items-center">
-        <div className="absolute inset-0 bg-linear-to-b from-[#161b22]/30 via-transparent to-transparent" />
-        <div className="absolute bottom-0 left-0 right-0 h-40 bg-linear-to-t from-[#0d1117] to-transparent pointer-events-none" />
+        <div className="absolute inset-0 bg-linear-to-b from-surface/30 via-transparent to-transparent" />
+        <div className="absolute bottom-0 left-0 right-0 h-40 bg-linear-to-t from-canvas to-transparent pointer-events-none" />
 
         <div className={`relative ${container.marketing} py-20 w-full`}>
           <div className="text-center mb-12">
-            <h1 className="text-4xl lg:text-6xl font-bold text-white mb-4 max-w-3xl mx-auto leading-none">
+            <h1 className="text-4xl lg:text-6xl font-bold text-fg mb-4 max-w-3xl mx-auto leading-none">
               <span className="block">Build faster.</span>
-              <span className="block text-transparent bg-clip-text bg-linear-to-r from-[#fd7e14] to-[#e8590c]">
+              <span className="block text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover">
                 Ship with confidence.
               </span>
             </h1>
 
-            <p className="text-lg lg:text-xl text-gray-400 mb-12 max-w-3xl mx-auto leading-relaxed text-balance">
+            <p className="text-lg lg:text-xl text-fg-muted mb-12 max-w-3xl mx-auto leading-relaxed text-balance">
               rari gives your team the performance of Rust with the productivity of React.
               Open-source, production-ready, and backed by dedicated enterprise support.
             </p>
@@ -26,7 +26,7 @@ export default function EnterprisePage() {
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
               <a
                 href="/enterprise/sponsors"
-                className="group relative w-full sm:w-auto px-8 py-4 bg-linear-to-r from-[#fd7e14] to-[#e8590c] text-gray-900 rounded-lg font-semibold text-lg transition-transform duration-200 hover:scale-105 flex items-center justify-center gap-2"
+                className="group relative w-full sm:w-auto px-8 py-4 bg-linear-to-r from-accent to-accent-hover text-accent-fg rounded-lg font-semibold text-lg transition-transform duration-200 hover:scale-105 flex items-center justify-center gap-2"
               >
                 View sponsorship tiers
                 <ArrowNarrowRight className="w-5 h-5" />
@@ -34,7 +34,7 @@ export default function EnterprisePage() {
 
               <a
                 href="/docs/getting-started"
-                className="group w-full sm:w-auto px-8 py-4 border-2 border-[#30363d] text-gray-300 hover:text-white hover:border-[#fd7e14] rounded-lg font-semibold text-lg transition-all duration-200 hover:bg-[#161b22]/50 backdrop-blur-sm inline-flex items-center justify-center gap-2"
+                className="group w-full sm:w-auto px-8 py-4 border-2 border-edge text-fg-muted hover:text-fg hover:border-accent rounded-lg font-semibold text-lg transition-all duration-200 hover:bg-surface/50 backdrop-blur-sm inline-flex items-center justify-center gap-2"
               >
                 Read the docs
                 <ArrowNarrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -63,20 +63,20 @@ export default function EnterprisePage() {
       <div className={container.section}>
         <div className={container.marketing}>
           <div className="relative">
-            <div className="absolute -inset-0.5 bg-linear-to-r from-[#fd7e14] to-[#e8590c] rounded-2xl blur opacity-20" />
-            <div className="relative bg-linear-to-br from-[#161b22] to-[#0d1117] border border-[#30363d] rounded-2xl p-8 lg:p-12">
+            <div className="absolute -inset-0.5 bg-linear-to-r from-accent to-accent-hover rounded-2xl blur opacity-20" />
+            <div className="relative bg-linear-to-br from-surface to-canvas border border-edge rounded-2xl p-8 lg:p-12">
               <div className="grid md:grid-cols-3 gap-8">
                 <div className="text-center">
-                  <div className="text-4xl font-bold text-transparent bg-clip-text bg-linear-to-r from-[#fd7e14] to-[#e8590c] mb-2">&lt;50ms</div>
-                  <div className="text-gray-400">Average response time</div>
+                  <div className="text-4xl font-bold text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover mb-2">&lt;50ms</div>
+                  <div className="text-fg-muted">Average response time</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-4xl font-bold text-transparent bg-clip-text bg-linear-to-r from-[#fd7e14] to-[#e8590c] mb-2">100%</div>
-                  <div className="text-gray-400">Open source, MIT licensed</div>
+                  <div className="text-4xl font-bold text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover mb-2">100%</div>
+                  <div className="text-fg-muted">Open source, MIT licensed</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-4xl font-bold text-transparent bg-clip-text bg-linear-to-r from-[#fd7e14] to-[#e8590c] mb-2">0</div>
-                  <div className="text-gray-400">Config needed to start</div>
+                  <div className="text-4xl font-bold text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover mb-2">0</div>
+                  <div className="text-fg-muted">Config needed to start</div>
                 </div>
               </div>
             </div>
@@ -87,12 +87,12 @@ export default function EnterprisePage() {
       <div className={container.section}>
         <div className={container.marketing}>
           <div className="text-center mb-16">
-            <h2 className="text-3xl lg:text-5xl font-bold text-[#f0f6fc] mb-4">
+            <h2 className="text-3xl lg:text-5xl font-bold text-fg mb-4">
               Enterprise
               {' '}
-              <span className="text-transparent bg-clip-text bg-linear-to-r from-[#fd7e14] to-[#e8590c]">benefits</span>
+              <span className="text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover">benefits</span>
             </h2>
-            <p className="text-xl text-gray-400 max-w-2xl mx-auto">
+            <p className="text-xl text-fg-muted max-w-2xl mx-auto">
               Everything your team needs to build and ship with confidence on rari
             </p>
           </div>
@@ -131,16 +131,16 @@ export default function EnterprisePage() {
               },
             ].map(feature => (
               <div key={feature.id} className="relative group h-full overflow-hidden rounded-xl p-px">
-                <div className="relative z-10 h-full bg-linear-to-br from-[#161b22] to-[#0d1117] border border-[#30363d] rounded-xl p-6 transition-all duration-300 group-hover:border-transparent">
-                  <div className="absolute inset-0 bg-linear-to-br from-[#fd7e14]/10 via-[#e8590c]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-xl" />
+                <div className="relative z-10 h-full bg-linear-to-br from-surface to-canvas border border-edge rounded-xl p-6 transition-all duration-300 group-hover:border-transparent">
+                  <div className="absolute inset-0 bg-linear-to-br from-accent/10 via-accent-hover/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-xl" />
                   <div className="relative z-10">
                     <h3 className="relative text-xl font-semibold mb-3">
-                      <span className="text-[#f0f6fc]">{feature.title}</span>
-                      <span className="absolute inset-0 bg-clip-text text-transparent bg-linear-to-r from-[#f0f6fc] to-[#fd7e14] opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                      <span className="text-fg">{feature.title}</span>
+                      <span className="absolute inset-0 bg-clip-text text-transparent bg-linear-to-r from-fg to-accent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                         {feature.title}
                       </span>
                     </h3>
-                    <p className="text-gray-400 leading-relaxed group-hover:text-gray-300 transition-colors duration-300">
+                    <p className="text-fg-muted leading-relaxed group-hover:text-fg-muted transition-colors duration-300">
                       {feature.description}
                     </p>
                   </div>
@@ -163,10 +163,10 @@ export default function EnterprisePage() {
       <div className={container.section}>
         <div className={container.marketing}>
           <div className="text-center mb-16">
-            <h2 className="text-3xl lg:text-5xl font-bold text-[#f0f6fc] mb-4">
+            <h2 className="text-3xl lg:text-5xl font-bold text-fg mb-4">
               Why
               {' '}
-              <span className="text-transparent bg-clip-text bg-linear-to-r from-[#fd7e14] to-[#e8590c]">rari</span>
+              <span className="text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover">rari</span>
               {' '}
               for enterprise?
             </h2>
@@ -190,9 +190,9 @@ export default function EnterprisePage() {
                 body: 'Your team writes React. That\'s it. No new languages to learn, no complex build configs. Full TypeScript support, instant HMR, and detailed error overlays keep developers productive.',
               },
             ].map(section => (
-              <div key={section.id} className="relative bg-linear-to-br from-[#161b22] to-[#0d1117] border border-[#30363d] rounded-xl p-8">
-                <h3 className="text-2xl font-bold text-[#f0f6fc] mb-4">{section.title}</h3>
-                <p className="text-gray-400 leading-relaxed">{section.body}</p>
+              <div key={section.id} className="relative bg-linear-to-br from-surface to-canvas border border-edge rounded-xl p-8">
+                <h3 className="text-2xl font-bold text-fg mb-4">{section.title}</h3>
+                <p className="text-fg-muted leading-relaxed">{section.body}</p>
               </div>
             ))}
           </div>
@@ -202,25 +202,25 @@ export default function EnterprisePage() {
       <div className={container.section}>
         <div className={container.marketing}>
           <div className="relative">
-            <div className="absolute -inset-0.5 bg-linear-to-r from-[#fd7e14] to-[#e8590c] rounded-2xl blur opacity-20" />
-            <div className="relative bg-linear-to-br from-[#161b22] to-[#0d1117] border border-[#30363d] rounded-2xl p-8 lg:p-12 text-center">
-              <h2 className="text-3xl lg:text-4xl font-bold text-[#f0f6fc] mb-4">
+            <div className="absolute -inset-0.5 bg-linear-to-r from-accent to-accent-hover rounded-2xl blur opacity-20" />
+            <div className="relative bg-linear-to-br from-surface to-canvas border border-edge rounded-2xl p-8 lg:p-12 text-center">
+              <h2 className="text-3xl lg:text-4xl font-bold text-fg mb-4">
                 Ready to accelerate your development?
               </h2>
-              <p className="text-xl text-gray-400 mb-8 max-w-2xl mx-auto text-balance">
+              <p className="text-xl text-fg-muted mb-8 max-w-2xl mx-auto text-balance">
                 Choose a sponsorship tier that fits your needs, or reach out to discuss custom partnerships.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <a
                   href="/enterprise/sponsors"
-                  className="group relative px-8 py-4 bg-linear-to-r from-[#fd7e14] to-[#e8590c] text-gray-900 rounded-lg font-semibold text-lg transition-transform duration-200 hover:scale-105 inline-flex items-center justify-center gap-2"
+                  className="group relative px-8 py-4 bg-linear-to-r from-accent to-accent-hover text-accent-fg rounded-lg font-semibold text-lg transition-transform duration-200 hover:scale-105 inline-flex items-center justify-center gap-2"
                 >
                   View sponsorship tiers
                   <ArrowNarrowRight className="w-5 h-5" />
                 </a>
                 <a
                   href="mailto:enterprise@rari.build"
-                  className="group px-8 py-4 border-2 border-[#30363d] text-gray-300 hover:text-white hover:border-[#fd7e14] rounded-lg font-semibold text-lg transition-all duration-200 hover:bg-[#161b22]/50 backdrop-blur-sm inline-flex items-center justify-center gap-2"
+                  className="group px-8 py-4 border-2 border-edge text-fg-muted hover:text-fg hover:border-accent rounded-lg font-semibold text-lg transition-all duration-200 hover:bg-surface/50 backdrop-blur-sm inline-flex items-center justify-center gap-2"
                 >
                   Contact us
                   <ArrowNarrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />

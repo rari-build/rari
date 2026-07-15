@@ -211,31 +211,31 @@ function TierCard({ tier }: { tier: Tier }) {
       className={`relative group h-full overflow-hidden rounded-xl p-px block ${tier.highlight ? 'md:scale-105' : ''}`}
     >
       {tier.highlight && (
-        <div className="absolute -inset-0.5 bg-linear-to-r from-[#fd7e14] to-[#e8590c] rounded-xl blur opacity-30 group-hover:opacity-40 transition-opacity" />
+        <div className="absolute -inset-0.5 bg-linear-to-r from-accent to-accent-hover rounded-xl blur opacity-30 group-hover:opacity-40 transition-opacity" />
       )}
-      <div className={`relative z-10 h-full bg-linear-to-br from-[#161b22] to-[#0d1117] border ${tier.highlight ? 'border-[#fd7e14]' : 'border-[#30363d]'} rounded-xl p-6 flex flex-col transition-all duration-300 group-hover:border-transparent`}>
-        <div className="absolute inset-0 bg-linear-to-br from-[#fd7e14]/10 via-[#e8590c]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-xl" />
+      <div className={`relative z-10 h-full bg-linear-to-br from-surface to-canvas border ${tier.highlight ? 'border-accent' : 'border-edge'} rounded-xl p-6 flex flex-col transition-all duration-300 group-hover:border-transparent`}>
+        <div className="absolute inset-0 bg-linear-to-br from-accent/10 via-accent-hover/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-xl" />
         <div className="relative z-10 flex flex-col h-full">
           <div className="mb-4">
-            <h3 className="text-2xl font-bold text-[#f0f6fc] mb-2">{tier.name}</h3>
+            <h3 className="text-2xl font-bold text-fg mb-2">{tier.name}</h3>
             <div className="flex items-baseline gap-1 mb-3">
-              <span className="text-4xl font-bold text-transparent bg-clip-text bg-linear-to-r from-[#fd7e14] to-[#e8590c]">
+              <span className="text-4xl font-bold text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover">
                 $
                 {tier.price.toLocaleString()}
               </span>
-              <span className="text-gray-400">/month</span>
+              <span className="text-fg-muted">/month</span>
             </div>
-            <p className="text-gray-400 text-sm leading-relaxed group-hover:text-gray-300 transition-colors duration-300">{tier.description}</p>
+            <p className="text-fg-muted text-sm leading-relaxed group-hover:text-fg-muted transition-colors duration-300">{tier.description}</p>
           </div>
 
           <div className="flex-1">
             <div className="space-y-3">
               {tier.benefits.map(benefit => (
-                <div key={benefit.text} className={`flex items-start gap-2 ${benefit.isStatement ? 'mt-4 pt-4 border-t border-[#30363d]' : ''}`}>
+                <div key={benefit.text} className={`flex items-start gap-2 ${benefit.isStatement ? 'mt-4 pt-4 border-t border-edge' : ''}`}>
                   {!benefit.isStatement && (
-                    <Check className="w-5 h-5 text-[#fd7e14] shrink-0 mt-0.5" />
+                    <Check className="w-5 h-5 text-link shrink-0 mt-0.5" />
                   )}
-                  <span className={`text-gray-300 text-sm ${benefit.isStatement ? 'italic text-center w-full' : ''}`}>{benefit.text}</span>
+                  <span className={`text-fg-muted text-sm ${benefit.isStatement ? 'italic text-center w-full' : ''}`}>{benefit.text}</span>
                 </div>
               ))}
             </div>
@@ -254,23 +254,23 @@ function OneTimeTierCard({ tier }: { tier: Tier }) {
       rel="noopener noreferrer"
       className="relative group h-full overflow-hidden rounded-xl p-px block"
     >
-      <div className="relative z-10 h-full bg-linear-to-br from-[#161b22] to-[#0d1117] border border-[#30363d] rounded-xl p-6 transition-all duration-300 group-hover:border-transparent">
-        <div className="absolute inset-0 bg-linear-to-br from-[#fd7e14]/10 via-[#e8590c]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-xl" />
+      <div className="relative z-10 h-full bg-linear-to-br from-surface to-canvas border border-edge rounded-xl p-6 transition-all duration-300 group-hover:border-transparent">
+        <div className="absolute inset-0 bg-linear-to-br from-accent/10 via-accent-hover/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-xl" />
         <div className="relative z-10 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div className="flex-1">
-            <h3 className="text-xl font-bold text-[#f0f6fc] mb-2">{tier.name}</h3>
-            <p className="text-gray-400 text-sm mb-3 group-hover:text-gray-300 transition-colors duration-300">{tier.description}</p>
+            <h3 className="text-xl font-bold text-fg mb-2">{tier.name}</h3>
+            <p className="text-fg-muted text-sm mb-3 group-hover:text-fg-muted transition-colors duration-300">{tier.description}</p>
             <div className="space-y-2">
               {tier.benefits.map(benefit => (
                 <div key={benefit.text} className="flex items-start gap-2">
-                  <Check className="w-4 h-4 text-[#fd7e14] shrink-0 mt-0.5" />
-                  <span className="text-gray-300 text-sm">{benefit.text}</span>
+                  <Check className="w-4 h-4 text-link shrink-0 mt-0.5" />
+                  <span className="text-fg-muted text-sm">{benefit.text}</span>
                 </div>
               ))}
             </div>
           </div>
           <div className="shrink-0">
-            <span className="text-3xl font-bold text-transparent bg-clip-text bg-linear-to-r from-[#fd7e14] to-[#e8590c]">
+            <span className="text-3xl font-bold text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover">
               $
               {tier.price.toLocaleString()}
             </span>
@@ -283,22 +283,22 @@ function OneTimeTierCard({ tier }: { tier: Tier }) {
 
 export default function SponsorsPage() {
   return (
-    <div className="min-h-screen bg-[#0d1117] text-white">
+    <div className="min-h-screen bg-canvas text-fg">
       <div className="relative overflow-hidden w-full flex items-center">
-        <div className="absolute inset-0 bg-linear-to-b from-[#161b22]/30 via-transparent to-transparent" />
-        <div className="absolute bottom-0 left-0 right-0 h-40 bg-linear-to-t from-[#0d1117] to-transparent pointer-events-none" />
+        <div className="absolute inset-0 bg-linear-to-b from-surface/30 via-transparent to-transparent" />
+        <div className="absolute bottom-0 left-0 right-0 h-40 bg-linear-to-t from-canvas to-transparent pointer-events-none" />
 
         <div className={`relative ${container.marketing} py-20 w-full`}>
           <div className="text-center">
-            <h1 className="text-4xl lg:text-6xl font-bold text-white mb-6 max-w-3xl mx-auto leading-tight">
+            <h1 className="text-4xl lg:text-6xl font-bold text-fg mb-6 max-w-3xl mx-auto leading-tight">
               Partner with
               {' '}
-              <span className="text-transparent bg-clip-text bg-linear-to-r from-[#fd7e14] to-[#e8590c]">
+              <span className="text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover">
                 rari
               </span>
             </h1>
 
-            <p className="text-lg lg:text-xl text-gray-400 mb-12 max-w-3xl mx-auto leading-relaxed text-balance">
+            <p className="text-lg lg:text-xl text-fg-muted mb-12 max-w-3xl mx-auto leading-relaxed text-balance">
               Support rari's development while getting the tools and support your team needs.
               From individual developers to enterprise teams, we have a tier that fits.
             </p>
@@ -308,14 +308,14 @@ export default function SponsorsPage() {
                 href={SPONSOR_URL}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="group relative w-full sm:w-auto px-8 py-4 bg-linear-to-r from-[#fd7e14] to-[#e8590c] text-gray-900 rounded-lg font-semibold text-lg transition-transform duration-200 hover:scale-105 flex items-center justify-center gap-2"
+                className="group relative w-full sm:w-auto px-8 py-4 bg-linear-to-r from-accent to-accent-hover text-accent-fg rounded-lg font-semibold text-lg transition-transform duration-200 hover:scale-105 flex items-center justify-center gap-2"
               >
                 Become a sponsor
               </a>
 
               <a
                 href="mailto:enterprise@rari.build"
-                className="group w-full sm:w-auto px-8 py-4 border-2 border-[#30363d] text-gray-300 hover:text-white hover:border-[#fd7e14] rounded-lg font-semibold text-lg transition-all duration-200 hover:bg-[#161b22]/50 backdrop-blur-sm inline-flex items-center justify-center gap-2"
+                className="group w-full sm:w-auto px-8 py-4 border-2 border-edge text-fg-muted hover:text-fg hover:border-accent rounded-lg font-semibold text-lg transition-all duration-200 hover:bg-surface/50 backdrop-blur-sm inline-flex items-center justify-center gap-2"
               >
                 Custom partnership
                 <ArrowNarrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -328,12 +328,12 @@ export default function SponsorsPage() {
       <div className={container.section}>
         <div className={container.marketing}>
           <div className="text-center mb-16">
-            <h2 className="text-3xl lg:text-5xl font-bold text-[#f0f6fc] mb-4">
+            <h2 className="text-3xl lg:text-5xl font-bold text-fg mb-4">
               Monthly
               {' '}
-              <span className="text-transparent bg-clip-text bg-linear-to-r from-[#fd7e14] to-[#e8590c]">sponsorship</span>
+              <span className="text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover">sponsorship</span>
             </h2>
-            <p className="text-xl text-gray-400 max-w-2xl mx-auto">
+            <p className="text-xl text-fg-muted max-w-2xl mx-auto">
               Ongoing support with increasing benefits at every tier
             </p>
           </div>
@@ -355,12 +355,12 @@ export default function SponsorsPage() {
       <div className={container.section}>
         <div className={container.marketing}>
           <div className="text-center mb-16">
-            <h2 className="text-3xl lg:text-5xl font-bold text-[#f0f6fc] mb-4">
+            <h2 className="text-3xl lg:text-5xl font-bold text-fg mb-4">
               One-time
               {' '}
-              <span className="text-transparent bg-clip-text bg-linear-to-r from-[#fd7e14] to-[#e8590c]">contributions</span>
+              <span className="text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover">contributions</span>
             </h2>
-            <p className="text-xl text-gray-400 max-w-2xl mx-auto">
+            <p className="text-xl text-fg-muted max-w-2xl mx-auto">
               A quick way to show your support
             </p>
           </div>
@@ -376,12 +376,12 @@ export default function SponsorsPage() {
       <div className={container.section}>
         <div className={container.marketing}>
           <div className="text-center mb-16">
-            <h2 className="text-3xl lg:text-5xl font-bold text-[#f0f6fc] mb-4">
+            <h2 className="text-3xl lg:text-5xl font-bold text-fg mb-4">
               Infrastructure
               {' '}
-              <span className="text-transparent bg-clip-text bg-linear-to-r from-[#fd7e14] to-[#e8590c]">partners</span>
+              <span className="text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover">partners</span>
             </h2>
-            <p className="text-xl text-gray-400 max-w-2xl mx-auto text-balance">
+            <p className="text-xl text-fg-muted max-w-2xl mx-auto text-balance">
               These companies provide infrastructure and services that power rari's development
             </p>
           </div>
@@ -398,7 +398,7 @@ export default function SponsorsPage() {
                   aria-label={label}
                   className="relative group h-full overflow-hidden rounded-xl p-px block w-full"
                 >
-                  <div className="relative z-10 h-full bg-linear-to-br from-[#161b22] to-[#0d1117] border border-[#30363d] rounded-xl p-8 transition-all duration-300 group-hover:border-transparent">
+                  <div className="relative z-10 h-full bg-linear-to-br from-surface to-canvas border border-edge rounded-xl p-8 transition-all duration-300 group-hover:border-transparent">
                     <div
                       className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-xl"
                       style={{
@@ -410,9 +410,9 @@ export default function SponsorsPage() {
                     </div>
                     <div className="relative z-10 flex flex-col items-center justify-center text-center gap-4 min-h-[120px]">
                       <div className="transform group-hover:scale-105 transition-transform duration-300 flex items-center justify-center">
-                        <Icon className={`${label.includes('Sanity') ? 'h-8 w-auto' : 'h-10 w-auto'}`} />
+                        <Icon className={`text-fg ${label.includes('Sanity') ? 'h-8 w-auto' : 'h-10 w-auto'}`} />
                       </div>
-                      <p className="text-sm text-gray-400 group-hover:text-gray-300 transition-colors duration-300">{description}</p>
+                      <p className="text-sm text-fg-muted group-hover:text-fg-muted transition-colors duration-300">{description}</p>
                     </div>
                   </div>
                 </a>

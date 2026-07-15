@@ -19,20 +19,20 @@ export default function PageHeader({ title, filePath, pagePath, date, author, au
 
   if (isBlog) {
     return (
-      <header className="page-header mb-8 pb-8 border-b border-[#30363d]">
+      <header className="page-header mb-8 pb-8 border-b border-edge">
         {date && (
           <time
             dateTime={date}
-            className="block text-sm font-medium text-gray-400 mb-4"
+            className="block text-sm font-medium text-fg-muted mb-4"
           >
             {formatBlogDate(date)}
           </time>
         )}
-        <h1 className="font-bold text-[#f0f6fc] leading-[1.1] text-4xl md:text-5xl lg:text-6xl mb-6 tracking-tight">
+        <h1 className="font-bold text-fg leading-[1.1] text-4xl md:text-5xl lg:text-6xl mb-6 tracking-tight">
           {title}
         </h1>
         {author && (
-          <div className="flex items-center gap-1 text-base text-gray-400">
+          <div className="flex items-center gap-1 text-base text-fg-muted">
             <span>Posted by</span>
             {authorUrl
               ? (
@@ -40,13 +40,13 @@ export default function PageHeader({ title, filePath, pagePath, date, author, au
                     href={authorUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-gray-200 font-medium hover:text-[#fd7e14] transition-colors"
+                    className="text-fg-secondary font-medium hover:text-link transition-colors"
                   >
                     {author}
                   </a>
                 )
               : (
-                  <span className="text-gray-200 font-medium">{author}</span>
+                  <span className="text-fg-secondary font-medium">{author}</span>
                 )}
           </div>
         )}
@@ -55,7 +55,7 @@ export default function PageHeader({ title, filePath, pagePath, date, author, au
             {tags.map(tag => (
               <span
                 key={tag}
-                className="px-3 py-1.5 text-sm font-medium rounded-md bg-[#1c2128] border border-[#30363d] text-gray-300 hover:border-[#fd7e14] transition-colors"
+                className="px-3 py-1.5 text-sm font-medium rounded-md bg-muted border border-edge text-fg-muted hover:border-accent transition-colors"
               >
                 {tag}
               </span>
@@ -69,13 +69,13 @@ export default function PageHeader({ title, filePath, pagePath, date, author, au
 
   return (
     <header className="page-header mb-8">
-      <h1 className="font-semibold text-3xl text-[#f0f6fc] leading-tight mb-4">
+      <h1 className="font-semibold text-3xl text-fg leading-tight mb-4">
         {title}
       </h1>
       {(date || author) && (
-        <div className="flex items-center gap-3 text-sm text-gray-400 mb-4">
-          {author && <span className="text-gray-300 font-medium">{author}</span>}
-          {author && date && <span className="text-[#30363d]">·</span>}
+        <div className="flex items-center gap-3 text-sm text-fg-muted mb-4">
+          {author && <span className="text-fg-muted font-medium">{author}</span>}
+          {author && date && <span className="text-edge">·</span>}
           {date && <time dateTime={date}>{formatDate(date)}</time>}
         </div>
       )}
@@ -84,7 +84,7 @@ export default function PageHeader({ title, filePath, pagePath, date, author, au
           {tags.map(tag => (
             <span
               key={tag}
-              className="px-2.5 py-0.5 text-xs font-medium rounded-full bg-[#1c2128] border border-[#30363d] text-gray-300"
+              className="px-2.5 py-0.5 text-xs font-medium rounded-full bg-muted border border-edge text-fg-muted"
             >
               {tag}
             </span>

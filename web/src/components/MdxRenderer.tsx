@@ -12,7 +12,7 @@ import Heading from '@/components/Heading'
 import PageHeader from '@/components/PageHeader'
 import { extractBlogMetadata } from '@/lib/metadata'
 import { remarkCodeBlock } from '@/lib/remark-codeblock'
-import { getHighlighter, SHIKI_THEME } from '@/lib/shiki'
+import { getHighlighter, SHIKI_THEMES } from '@/lib/shiki'
 
 interface MdxRendererProps {
   filePath: string
@@ -67,7 +67,7 @@ export default async function MdxRenderer({
       remarkGfm,
       [
         remarkCodeBlock,
-        { highlighter, theme: SHIKI_THEME },
+        { highlighter, themes: SHIKI_THEMES },
       ],
     ]
 
@@ -84,7 +84,7 @@ export default async function MdxRenderer({
 
     return (
       <div
-        className={`prose prose-invert max-w-none overflow-hidden ${className}`}
+        className={`prose max-w-none overflow-hidden ${className}`}
         style={{
           wordWrap: 'break-word',
           overflowWrap: 'break-word',

@@ -22,15 +22,15 @@ export default function Breadcrumbs({ pathname }: BreadcrumbsProps) {
             <li key={uniqueKey} className="flex items-center">
               {index > 0 && (
                 <ChevronRight
-                  className="w-4 h-4 mx-2 text-gray-600"
+                  className="w-4 h-4 mx-2 text-fg-muted"
                 />
               )}
               {isLast || !crumb.href
-                ? <span className="text-gray-300">{crumb.label}</span>
+                ? <span className="text-fg-muted">{crumb.label}</span>
                 : (
                     <a
                       href={crumb.href}
-                      className="text-gray-300 hover:text-white transition-colors"
+                      className="text-fg-secondary hover:text-fg transition-colors"
                     >
                       {crumb.label}
                     </a>

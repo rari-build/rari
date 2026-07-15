@@ -26,11 +26,21 @@ interface VFile {
 }
 
 interface Highlighter {
-  codeToHtml: (code: string, options: { lang: string, theme: string }) => string
+  codeToHtml: (
+    code: string,
+    options: {
+      lang: string
+      themes: { light: string, dark: string }
+      defaultColor: false
+    },
+  ) => string
 }
 
-export function remarkCodeBlock(options: { highlighter: Highlighter, theme: string }) {
-  const { highlighter, theme } = options
+export function remarkCodeBlock(options: {
+  highlighter: Highlighter
+  themes: { light: string, dark: string }
+}) {
+  const { highlighter, themes } = options
 
   return (tree: ASTNode, file: VFile) => {
     visit(tree, (node: ASTNode) => {
@@ -87,7 +97,8 @@ export function remarkCodeBlock(options: { highlighter: Highlighter, theme: stri
       try {
         let highlightedHtml = highlighter.codeToHtml(code.trim(), {
           lang: language,
-          theme,
+          themes,
+          defaultColor: false,
         })
         highlightedHtml = highlightedHtml.replace(PRE_STYLE_REGEX, '<pre$1')
         if (!node.attributes)

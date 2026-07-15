@@ -2,6 +2,7 @@
 
 import type { PackageManager } from '@/providers/PackageManagerProvider'
 import { highlightCommand } from '@/lib/highlight-command'
+import { code } from '@/lib/styles'
 import { useClipboard } from '@/lib/use-clipboard'
 import { usePackageManager } from '@/providers/PackageManagerProvider'
 import Bun from './icons/Bun'
@@ -32,8 +33,8 @@ export default function PackageManagerTabs({ commands }: PackageManagerTabsProps
   const { copied, copyToClipboard } = useClipboard()
 
   return (
-    <div className="not-prose my-6 relative group overflow-hidden rounded-md border border-[#30363d] bg-[#0d1117] max-w-full">
-      <div className="flex items-center gap-1 bg-[#161b22] px-2 py-1.5 border-b border-[#30363d] overflow-x-auto" role="tablist" aria-label="Package manager selection">
+    <div className={code.panel}>
+      <div className="flex items-center gap-1 bg-muted px-2 py-1.5 border-b border-edge overflow-x-auto" role="tablist" aria-label="Package manager selection">
         {(Object.keys(commands) as PackageManager[]).map((pm) => {
           const Icon = packageManagerIcons[pm]
           return (
@@ -44,8 +45,8 @@ export default function PackageManagerTabs({ commands }: PackageManagerTabsProps
               relative inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded
               transition-colors duration-200 shrink-0
               ${activeTab === pm
-              ? 'bg-[#0d1117] text-white'
-              : 'text-gray-300 hover:text-gray-100 hover:bg-[#21262d]'
+              ? 'bg-surface text-fg shadow-sm'
+              : 'text-fg-muted hover:text-fg hover:bg-hover'
             }
             `}
               type="button"
@@ -62,12 +63,12 @@ export default function PackageManagerTabs({ commands }: PackageManagerTabsProps
       </div>
 
       <div className="relative" role="tabpanel" id={`${activeTab}-panel`} aria-labelledby={`${activeTab}-tab`}>
-        <span className="absolute top-2 right-2 text-xs text-gray-400 font-mono opacity-100 lg:group-hover:opacity-0 transition-opacity duration-200 z-10">
+        <span className="absolute top-2 right-2 text-xs text-fg-muted font-mono opacity-100 lg:group-hover:opacity-0 transition-opacity duration-200 z-10">
           bash
         </span>
         <button
           onClick={() => copyToClipboard(commands[activeTab])}
-          className="absolute top-2 right-2 p-1.5 text-gray-300 hover:text-white bg-[#161b22] hover:bg-[#21262d] border border-[#30363d] rounded transition-all duration-200 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 z-10"
+          className={`${code.copyButton} top-2`}
           type="button"
           aria-label="Copy code to clipboard"
         >
@@ -82,7 +83,7 @@ export default function PackageManagerTabs({ commands }: PackageManagerTabsProps
 
         <pre className="font-mono text-sm px-4 py-3 pr-12 m-0 overflow-x-auto max-w-full">
           <code className="whitespace-pre wrap-break-word">
-            <span className="text-gray-400 select-none">$ </span>
+            <span className="text-fg-muted select-none">$ </span>
             {highlightCommand(commands[activeTab])}
           </code>
         </pre>

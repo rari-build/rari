@@ -7,6 +7,27 @@ interface MermaidChartProps {
   className?: string
 }
 
+const THEME_VARIABLES = {
+  primaryColor: '#3b82f6',
+  primaryTextColor: '#e5e7eb',
+  primaryBorderColor: '#60a5fa',
+  lineColor: '#9ca3af',
+  secondaryColor: '#1f2937',
+  tertiaryColor: '#111827',
+  background: '#0d1117',
+  mainBkg: '#161b22',
+  secondBkg: '#0d1117',
+  border1: '#30363d',
+  border2: '#21262d',
+  note: '#1f2937',
+  noteText: '#e5e7eb',
+  noteBorder: '#30363d',
+  textColor: '#e5e7eb',
+  clusterBkg: '#1f2937',
+  clusterBorder: '#30363d',
+  titleColor: '#e5e7eb',
+}
+
 export default function MermaidChart({ children, className }: MermaidChartProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [svg, setSvg] = useState<string>('')
@@ -27,23 +48,7 @@ export default function MermaidChart({ children, className }: MermaidChartProps)
         mermaid.initialize({
           startOnLoad: false,
           theme: 'dark',
-          themeVariables: {
-            primaryColor: '#3b82f6',
-            primaryTextColor: '#e5e7eb',
-            primaryBorderColor: '#60a5fa',
-            lineColor: '#9ca3af',
-            secondaryColor: '#1f2937',
-            tertiaryColor: '#111827',
-            background: '#0d1117',
-            mainBkg: '#161b22',
-            secondBkg: '#0d1117',
-            border1: '#30363d',
-            border2: '#21262d',
-            note: '#1f2937',
-            noteText: '#e5e7eb',
-            noteBorder: '#30363d',
-            textColor: '#e5e7eb',
-          },
+          themeVariables: THEME_VARIABLES,
           flowchart: {
             useMaxWidth: true,
             htmlLabels: true,
@@ -116,10 +121,10 @@ export default function MermaidChart({ children, className }: MermaidChartProps)
   return (
     <div className={`not-prose my-6 ${className || ''}`}>
       <div className="flex items-center justify-between mb-2 px-2">
-        <div className="text-xs text-gray-400">Scroll to zoom • Drag to pan</div>
+        <div className="text-xs text-fg-muted">Scroll to zoom • Drag to pan</div>
         <button
           onClick={handleReset}
-          className="text-xs px-3 py-1 rounded bg-[#21262d] text-gray-300 hover:bg-[#30363d] transition-colors"
+          className="text-xs px-3 py-1 rounded bg-hover text-fg-muted hover:bg-chrome transition-colors"
           type="button"
         >
           Reset View
@@ -151,6 +156,11 @@ export default function MermaidChart({ children, className }: MermaidChartProps)
           }
           .mermaid-container foreignObject > div {
             overflow: visible !important;
+          }
+          .mermaid-container .cluster-label,
+          .mermaid-container .cluster-label span,
+          .mermaid-container .cluster-label foreignObject div {
+            color: #e5e7eb !important;
           }
         `}
         </style>

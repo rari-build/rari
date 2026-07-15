@@ -1,6 +1,23 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('preferred-theme');
+          var preference = stored === 'light' || stored === 'dark' || stored === 'system'
+            ? stored
+            : 'system';
+          var resolved = preference === 'system'
+            ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+            : preference;
+          document.documentElement.classList.toggle('light', resolved === 'light');
+          document.documentElement.classList.toggle('dark', resolved === 'dark');
+        } catch (e) {
+          document.documentElement.classList.add('dark');
+        }
+      })();
+    </script>
     <script type="module">
       import "/src/app/globals.css";
 
@@ -20,7 +37,7 @@
     </script>
   </head>
 
-  <body class="min-h-screen bg-[#0d1117] text-gray-200">
+  <body class="min-h-screen bg-canvas text-fg-body">
     <div id="root" />
   </body>
 </html>
