@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import process from 'node:process'
 import { Readable } from 'node:stream'
 import { setTimeout as delay } from 'node:timers/promises'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { inspect, types } from 'node:util'
 
 async function runProbes() {
@@ -61,7 +61,7 @@ async function runProbes() {
       asyncLocalStorage: alsValue === 'e2e-store',
     },
     url: {
-      fileURLToPath: fileURLToPath(new URL('file:///tmp/node-apis')).includes('tmp'),
+      fileURLToPath: fileURLToPath(pathToFileURL(join(cwd, 'package.json'))) === join(cwd, 'package.json'),
     },
     events: {
       emit: emitted,
