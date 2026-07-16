@@ -56,9 +56,10 @@ impl JsRuntimePool {
                 continue;
             };
             let pool = self;
-            let fut = op(idx, Arc::clone(&runtime));
+            let expected = Arc::clone(&runtime);
+            let fut = op(idx, runtime);
             slot_futs.push(async move {
-                let _lease = match pool.acquire_slot_lease(idx).await {
+                let _lease = match pool.acquire_slot_lease_for_execute(idx, &expected).await {
                     Ok(guard) => guard,
                     Err(e) => return Err((idx, e)),
                 };
@@ -66,6 +67,7 @@ impl JsRuntimePool {
                     Ok(Ok(_)) => Ok(()),
                     Ok(Err(e)) => Err((idx, e)),
                     Err(_) => {
+                        pool.mark_unhealthy_if_runtime_matches(idx, &expected);
                         Err((idx, RariError::timeout(format!("timed out after {timeout_ms} ms"))))
                     }
                 }
@@ -84,7 +86,10 @@ impl JsRuntimePool {
             match result {
                 Ok(()) => {}
                 Err((idx, e)) => {
-                    self.mark_unhealthy(idx);
+                    let msg = e.to_string();
+                    if !msg.contains("no longer admissible") && !msg.contains("timed out") {
+                        self.mark_unhealthy(idx);
+                    }
                     errors.push(format_error(idx, &e));
                 }
             }
