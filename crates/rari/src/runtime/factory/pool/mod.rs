@@ -16,7 +16,10 @@ use parking_lot::RwLock;
 use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use serde_json::Value;
-use tokio::{sync::Mutex as AsyncMutex, time};
+use tokio::{
+    sync::{Mutex as AsyncMutex, MutexGuard as AsyncMutexGuard},
+    time,
+};
 
 use super::runtime::RariRuntime;
 
@@ -55,6 +58,8 @@ pub struct JsRuntimePool {
     unhealthy_since_ms: Vec<AtomicU64>,
     /// Per-slot lease so `with_request_context` cannot interleave on one runtime.
     slot_leases: Vec<Arc<AsyncMutex<()>>>,
+    /// Set when request-context cleanup fails or times out; blocks probe-only heal.
+    needs_rebuild: Vec<AtomicBool>,
     setup_mode: AtomicBool,
     timeout_ms: u64,
     heal_after_ms: u64,
@@ -133,6 +138,7 @@ impl JsRuntimePool {
         let healthy = runtimes.iter().map(|_| AtomicBool::new(true)).collect();
         let unhealthy_since_ms = runtimes.iter().map(|_| AtomicU64::new(0)).collect();
         let slot_leases = (0..pool_size).map(|_| Arc::new(AsyncMutex::new(()))).collect();
+        let needs_rebuild = (0..pool_size).map(|_| AtomicBool::new(false)).collect();
 
         Ok(Arc::new(Self {
             runtimes,
@@ -142,6 +148,7 @@ impl JsRuntimePool {
             healthy,
             unhealthy_since_ms,
             slot_leases,
+            needs_rebuild,
             setup_mode: AtomicBool::new(false),
             timeout_ms,
             heal_after_ms,
@@ -178,23 +185,56 @@ impl JsRuntimePool {
         }
     }
 
+    fn mark_needs_rebuild(&self, idx: usize) {
+        if let Some(flag) = self.needs_rebuild.get(idx) {
+            flag.store(true, Ordering::Release);
+        }
+    }
+
+    fn clear_needs_rebuild(&self, idx: usize) {
+        if let Some(flag) = self.needs_rebuild.get(idx) {
+            flag.store(false, Ordering::Release);
+        }
+    }
+
+    fn needs_rebuild(&self, idx: usize) -> bool {
+        self.needs_rebuild.get(idx).is_some_and(|f| f.load(Ordering::Acquire))
+    }
+
+    fn runtime_still_installed(&self, idx: usize, expected: &Arc<dyn JsRuntimeInterface>) -> bool {
+        self.runtime_at(idx).is_some_and(|current| Arc::ptr_eq(&current, expected))
+    }
+
+    pub(super) async fn acquire_slot_lease(
+        &self,
+        idx: usize,
+    ) -> Result<AsyncMutexGuard<'_, ()>, RariError> {
+        let Some(lease) = self.slot_leases.get(idx) else {
+            return Err(RariError::js_runtime(format!(
+                "No lease available for JS runtime pool slot {idx}"
+            )));
+        };
+        Ok(lease.lock().await)
+    }
+
     /// Replace the isolate in `idx` with a freshly constructed runtime.
     ///
     /// In-flight sticky handles keep the old `Arc` until dropped; new picks see the replacement.
-    pub fn rebuild_slot(&self, idx: usize) -> Result<(), RariError> {
+    pub fn rebuild_slot(&self, idx: usize) -> Result<Arc<dyn JsRuntimeInterface>, RariError> {
         if idx >= self.runtimes.len() {
             return Err(RariError::js_runtime(format!(
                 "Cannot rebuild JS runtime pool slot {idx}: out of range"
             )));
         }
         let replacement = (self.runtime_factory)();
+        let installed = Arc::clone(&replacement);
         if !self.replace_runtime_at(idx, replacement) {
             return Err(RariError::js_runtime(format!(
                 "Cannot rebuild JS runtime pool slot {idx}: slot missing"
             )));
         }
         tracing::info!(idx, "Rebuilt JS runtime pool slot");
-        Ok(())
+        Ok(installed)
     }
 
     pub fn pick(&self) -> Option<usize> {
@@ -274,7 +314,8 @@ impl JsRuntimePool {
     /// Successful probes call [`Self::mark_healthy`]. Failures rebuild the isolate and
     /// probe again; if that also fails the quarantine timestamp is refreshed.
     ///
-    /// Expired slots are probed concurrently so one hung isolate cannot delay the rest.
+    /// Each slot heals under its lease so concurrent callers cannot probe/rebuild the
+    /// same index at once, and request-context work cannot interleave mid-heal.
     pub async fn probe_and_heal(&self) {
         let indices = self.expired_unhealthy_indices();
         if indices.is_empty() {
@@ -282,29 +323,41 @@ impl JsRuntimePool {
         }
         let probe_timeout_ms = self.timeout_ms.clamp(1, 1_000);
 
-        let probe_futs = indices.iter().map(|&idx| {
-            let probe = self.probe_slot(idx, probe_timeout_ms);
-            async move { (idx, probe.await) }
-        });
-        let probe_results = join_all(probe_futs).await;
-
-        let mut rebuild_indices = Vec::new();
-        for (idx, ok) in probe_results {
-            if ok {
-                self.mark_healthy(idx);
-            } else {
-                rebuild_indices.push(idx);
-            }
-        }
-
-        let rebuild_futs = rebuild_indices.into_iter().map(|idx| async move {
-            tracing::warn!(idx, "Heal probe failed; rebuilding JS runtime pool slot");
-            if let Err(e) = self.rebuild_slot(idx) {
-                tracing::error!(idx, error = %e, "Failed to rebuild JS runtime pool slot");
-                self.refresh_unhealthy_timestamp(idx);
+        let heal_futs = indices.into_iter().map(|idx| async move {
+            let Ok(_lease) = self.acquire_slot_lease(idx).await else {
+                return;
+            };
+            if self.is_healthy(idx) {
                 return;
             }
-            if self.probe_slot(idx, probe_timeout_ms).await {
+
+            let force_rebuild = self.needs_rebuild(idx);
+            if !force_rebuild {
+                let Some(runtime) = self.runtime_at(idx) else {
+                    return;
+                };
+                if self.probe_runtime(idx, &runtime, probe_timeout_ms).await
+                    && self.runtime_still_installed(idx, &runtime)
+                    && !self.needs_rebuild(idx)
+                {
+                    self.mark_healthy(idx);
+                    return;
+                }
+            }
+
+            tracing::warn!(idx, "Heal probe failed; rebuilding JS runtime pool slot");
+            let replacement = match self.rebuild_slot(idx) {
+                Ok(runtime) => runtime,
+                Err(e) => {
+                    tracing::error!(idx, error = %e, "Failed to rebuild JS runtime pool slot");
+                    self.refresh_unhealthy_timestamp(idx);
+                    return;
+                }
+            };
+            if self.probe_runtime(idx, &replacement, probe_timeout_ms).await
+                && self.runtime_still_installed(idx, &replacement)
+            {
+                self.clear_needs_rebuild(idx);
                 self.mark_healthy(idx);
             } else {
                 tracing::warn!(
@@ -314,13 +367,15 @@ impl JsRuntimePool {
                 self.refresh_unhealthy_timestamp(idx);
             }
         });
-        join_all(rebuild_futs).await;
+        join_all(heal_futs).await;
     }
 
-    async fn probe_slot(&self, idx: usize, probe_timeout_ms: u64) -> bool {
-        let Some(runtime) = self.runtime_at(idx) else {
-            return false;
-        };
+    async fn probe_runtime(
+        &self,
+        idx: usize,
+        runtime: &Arc<dyn JsRuntimeInterface>,
+        probe_timeout_ms: u64,
+    ) -> bool {
         let probe = time::timeout(
             Duration::from_millis(probe_timeout_ms),
             runtime.execute_script("__pool_heal_probe__".into(), "1".into()),
@@ -383,6 +438,7 @@ impl JsRuntimePool {
         let idx = handle.idx();
         let runtime = Arc::clone(handle.runtime());
         let specifier = specifier.to_string();
+        let _lease = self.acquire_slot_lease(idx).await?;
         self.run_with_timeout_on_slot(idx, "load_and_evaluate_on_picked", async move {
             let module_id = runtime.load_es_module(&specifier).await?;
             let value = runtime.evaluate_module(module_id).await?;
@@ -420,13 +476,27 @@ impl JsRuntimePool {
             let Ok(op_result) =
                 time::timeout(Duration::from_millis(timeout_ms), op(Arc::clone(&runtime))).await
             else {
-                let cleanup = runtime.clear_request_context_if_matches(Arc::clone(&ctx)).await;
+                let cleanup = time::timeout(
+                    Duration::from_millis(timeout_ms),
+                    runtime.clear_request_context_if_matches(Arc::clone(&ctx)),
+                )
+                .await;
                 pool.mark_unhealthy(idx);
-                if let Err(cleanup_err) = cleanup {
-                    tracing::error!(
-                        "Failed to clear request context after timeout: {}",
-                        cleanup_err
-                    );
+                match cleanup {
+                    Ok(Ok(())) => {}
+                    Ok(Err(cleanup_err)) => {
+                        tracing::error!(
+                            "Failed to clear request context after timeout: {}",
+                            cleanup_err
+                        );
+                        pool.mark_needs_rebuild(idx);
+                    }
+                    Err(_) => {
+                        tracing::error!(
+                            "Clearing request context timed out after {timeout_ms} ms; slot needs rebuild"
+                        );
+                        pool.mark_needs_rebuild(idx);
+                    }
                 }
                 return Err(RariError::timeout(format!(
                     "with_request_context timed out after {timeout_ms} ms"
@@ -438,6 +508,7 @@ impl JsRuntimePool {
                 (Ok(value), Ok(())) => Ok(value),
                 (Ok(_value), Err(cleanup_err)) => {
                     pool.mark_unhealthy(idx);
+                    pool.mark_needs_rebuild(idx);
                     tracing::error!(
                         "Failed to clear request context after successful operation: {}",
                         cleanup_err
@@ -447,6 +518,7 @@ impl JsRuntimePool {
                 (Err(op_err), Ok(())) => Err(op_err),
                 (Err(op_err), Err(cleanup_err)) => {
                     pool.mark_unhealthy(idx);
+                    pool.mark_needs_rebuild(idx);
                     tracing::error!(
                         "Failed to clear request context after operation error: {}",
                         cleanup_err
