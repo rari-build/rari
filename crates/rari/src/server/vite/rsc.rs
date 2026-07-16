@@ -219,48 +219,7 @@ pub async fn reload_component_from_dist(
 
     run_with_renderer_result(renderer, move |renderer| async move {
         if is_esm {
-            renderer.clear_component_cache(&component_id);
-
-            if let Err(e) = renderer.runtime.invalidate_component(&component_id).await {
-                tracing::error!(
-                    component_id = component_id.as_str(),
-                    error = %e,
-                    "Failed to invalidate component during HMR"
-                );
-            }
-
             renderer.runtime.load_component_code(&component_id, &dist_code).await?;
-
-            renderer.clear_script_cache();
-
-            let dependencies = extract_dependencies(&dist_code);
-
-            {
-                let mut registry = renderer.component_registry.lock();
-
-                registry.remove_component(&component_id);
-
-                match registry.register_component(
-                    &component_id,
-                    &dist_code,
-                    dist_code.clone(),
-                    dependencies.into_iter().collect(),
-                ) {
-                    Ok(()) => {
-                        registry.mark_component_loaded(&component_id);
-                        registry.mark_component_initially_loaded(&component_id);
-                    }
-                    Err(e) => {
-                        tracing::error!(
-                            component_id = component_id.as_str(),
-                            error = %e,
-                            "Failed to register component during HMR reload"
-                        );
-                        registry.remove_component(&component_id);
-                        return Err(RariError::internal(format!("Failed to register component: {e}")));
-                    }
-                }
-            }
         } else {
             let wrapped_code = wrap_server_action_module(&dist_code, &component_id);
 
@@ -330,9 +289,7 @@ pub async fn reload_component_from_dist(
         };
 
         if let Some(success) = result_json.get("success").and_then(serde_json::Value::as_bool) {
-            if success {
-                Ok(())
-            } else {
+            if !success {
                 let actual_keys = result_json
                     .get("actualKeys")
                     .and_then(|v| v.as_array())
@@ -355,9 +312,9 @@ pub async fn reload_component_from_dist(
                     expected_key,
                     actual_keys
                 );
-                Err(RariError::js_runtime(format!(
+                return Err(RariError::js_runtime(format!(
                     "Component '{component_id}' not found in globalThis after reload. Expected key '{expected_key}' but found keys: [{actual_keys}]. Last known good version will be preserved."
-                )))
+                )));
             }
         } else {
             tracing::error!(
@@ -365,10 +322,46 @@ pub async fn reload_component_from_dist(
                 verification_result = ?result_json,
                 "Invalid verification result format. Last known good version will be preserved."
             );
-            Err(RariError::internal(
+            return Err(RariError::internal(
                 "Invalid verification result format. Last known good version will be preserved."
-            ))
+            ));
         }
+
+        if is_esm {
+            renderer.clear_component_cache(&component_id);
+            renderer.clear_script_cache();
+
+            let dependencies = extract_dependencies(&dist_code);
+
+            {
+                let mut registry = renderer.component_registry.lock();
+
+                registry.remove_component(&component_id);
+
+                match registry.register_component(
+                    &component_id,
+                    &dist_code,
+                    dist_code.clone(),
+                    dependencies.into_iter().collect(),
+                ) {
+                    Ok(()) => {
+                        registry.mark_component_loaded(&component_id);
+                        registry.mark_component_initially_loaded(&component_id);
+                    }
+                    Err(e) => {
+                        tracing::error!(
+                            component_id = component_id.as_str(),
+                            error = %e,
+                            "Failed to register component during HMR reload"
+                        );
+                        registry.remove_component(&component_id);
+                        return Err(RariError::internal(format!("Failed to register component: {e}")));
+                    }
+                }
+            }
+        }
+
+        Ok(())
     })
     .await
 }

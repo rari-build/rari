@@ -11,6 +11,7 @@ use std::{
 };
 
 use deno_core::ModuleId;
+use parking_lot::RwLock;
 use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use serde_json::Value;
@@ -40,8 +41,12 @@ pub const DEFAULT_HEAL_AFTER_MS: u64 = 30_000;
 /// Disable automatic healing (tests / explicit recovery only).
 pub const HEAL_DISABLED: u64 = u64::MAX;
 
+/// Creates a fresh isolate when heal rebuilds a quarantined slot.
+pub type RuntimeFactory = Arc<dyn Fn() -> Arc<dyn JsRuntimeInterface> + Send + Sync>;
+
 pub struct JsRuntimePool {
-    runtimes: Vec<Arc<dyn JsRuntimeInterface>>,
+    runtimes: Vec<RwLock<Arc<dyn JsRuntimeInterface>>>,
+    runtime_factory: RuntimeFactory,
     pick_strategy: Arc<dyn PickStrategy>,
     next_index: AtomicUsize,
     healthy: Vec<AtomicBool>,
@@ -97,10 +102,6 @@ impl JsRuntimePool {
         )
     }
 
-    #[expect(
-        clippy::needless_pass_by_value,
-        reason = "Each isolate needs an owned env map clone matching RariRuntime::new"
-    )]
     pub fn with_strategy_and_limits(
         pool_size: usize,
         env_vars: Option<FxHashMap<String, String>>,
@@ -119,15 +120,19 @@ impl JsRuntimePool {
             ));
         }
 
-        let runtimes: Vec<Arc<dyn JsRuntimeInterface>> = (0..pool_size)
-            .map(|_| Arc::new(RariRuntime::new(env_vars.clone())) as Arc<dyn JsRuntimeInterface>)
-            .collect();
+        let runtime_factory: RuntimeFactory = Arc::new(move || {
+            Arc::new(RariRuntime::new(env_vars.clone())) as Arc<dyn JsRuntimeInterface>
+        });
+
+        let runtimes: Vec<RwLock<Arc<dyn JsRuntimeInterface>>> =
+            (0..pool_size).map(|_| RwLock::new(runtime_factory())).collect();
 
         let healthy = runtimes.iter().map(|_| AtomicBool::new(true)).collect();
         let unhealthy_since_ms = runtimes.iter().map(|_| AtomicU64::new(0)).collect();
 
         Ok(Arc::new(Self {
             runtimes,
+            runtime_factory,
             pick_strategy: strategy,
             next_index: AtomicUsize::new(0),
             healthy,
@@ -151,12 +156,43 @@ impl JsRuntimePool {
     }
 
     pub fn runtime_at(&self, idx: usize) -> Option<Arc<dyn JsRuntimeInterface>> {
-        self.runtimes.get(idx).map(Arc::clone)
+        self.runtimes.get(idx).map(|slot| Arc::clone(&slot.read()))
+    }
+
+    fn replace_runtime_at(&self, idx: usize, runtime: Arc<dyn JsRuntimeInterface>) -> bool {
+        let Some(slot) = self.runtimes.get(idx) else {
+            return false;
+        };
+        *slot.write() = runtime;
+        true
+    }
+
+    fn refresh_unhealthy_timestamp(&self, idx: usize) {
+        if let Some(since) = self.unhealthy_since_ms.get(idx) {
+            since.store(unix_now_ms(), Ordering::Release);
+        }
+    }
+
+    /// Replace the isolate in `idx` with a freshly constructed runtime.
+    ///
+    /// In-flight sticky handles keep the old `Arc` until dropped; new picks see the replacement.
+    pub fn rebuild_slot(&self, idx: usize) -> Result<(), RariError> {
+        if idx >= self.runtimes.len() {
+            return Err(RariError::js_runtime(format!(
+                "Cannot rebuild JS runtime pool slot {idx}: out of range"
+            )));
+        }
+        let replacement = (self.runtime_factory)();
+        if !self.replace_runtime_at(idx, replacement) {
+            return Err(RariError::js_runtime(format!(
+                "Cannot rebuild JS runtime pool slot {idx}: slot missing"
+            )));
+        }
+        tracing::info!(idx, "Rebuilt JS runtime pool slot");
+        Ok(())
     }
 
     pub fn pick(&self) -> Option<usize> {
-        self.heal_expired();
-
         let healthy_indices: Vec<usize> = self
             .healthy
             .iter()
@@ -170,6 +206,14 @@ impl JsRuntimePool {
                 idx,
                 pool_size = self.runtimes.len(),
                 "PickStrategy returned out-of-range index"
+            );
+            return None;
+        }
+        if !healthy_indices.contains(&idx) {
+            tracing::error!(
+                idx,
+                ?healthy_indices,
+                "PickStrategy returned index not in healthy snapshot"
             );
             return None;
         }
@@ -196,24 +240,81 @@ impl JsRuntimePool {
         }
     }
 
-    /// Re-admit slots that have been unhealthy for at least `heal_after_ms`.
-    /// No-op when healing is disabled (`HEAL_DISABLED`).
-    fn heal_expired(&self) {
+    fn expired_unhealthy_indices(&self) -> Vec<usize> {
         if self.heal_after_ms == HEAL_DISABLED {
-            return;
+            return Vec::new();
         }
         let now = unix_now_ms();
-        for (idx, flag) in self.healthy.iter().enumerate() {
-            if flag.load(Ordering::Acquire) {
-                continue;
-            }
-            let since =
-                self.unhealthy_since_ms.get(idx).map(|s| s.load(Ordering::Acquire)).unwrap_or(0);
-            if since == 0 {
-                continue;
-            }
-            if now.saturating_sub(since) >= self.heal_after_ms {
+        self.healthy
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, flag)| {
+                if flag.load(Ordering::Acquire) {
+                    return None;
+                }
+                let since = self
+                    .unhealthy_since_ms
+                    .get(idx)
+                    .map(|s| s.load(Ordering::Acquire))
+                    .unwrap_or(0);
+                if since == 0 {
+                    return None;
+                }
+                if now.saturating_sub(since) >= self.heal_after_ms { Some(idx) } else { None }
+            })
+            .collect()
+    }
+
+    /// Probe expired-unhealthy slots with a lightweight script before re-admission.
+    /// Successful probes call [`Self::mark_healthy`]. Failures rebuild the isolate and
+    /// probe again; if that also fails the quarantine timestamp is refreshed.
+    pub async fn probe_and_heal(&self) {
+        let indices = self.expired_unhealthy_indices();
+        if indices.is_empty() {
+            return;
+        }
+        let probe_timeout_ms = self.timeout_ms.clamp(1, 1_000);
+        for idx in indices {
+            if self.probe_slot(idx, probe_timeout_ms).await {
                 self.mark_healthy(idx);
+                continue;
+            }
+            tracing::warn!(idx, "Heal probe failed; rebuilding JS runtime pool slot");
+            if let Err(e) = self.rebuild_slot(idx) {
+                tracing::error!(idx, error = %e, "Failed to rebuild JS runtime pool slot");
+                self.refresh_unhealthy_timestamp(idx);
+                continue;
+            }
+            if self.probe_slot(idx, probe_timeout_ms).await {
+                self.mark_healthy(idx);
+            } else {
+                tracing::warn!(
+                    idx,
+                    "Heal probe still failing after rebuild; keeping slot unhealthy"
+                );
+                self.refresh_unhealthy_timestamp(idx);
+            }
+        }
+    }
+
+    async fn probe_slot(&self, idx: usize, probe_timeout_ms: u64) -> bool {
+        let Some(runtime) = self.runtime_at(idx) else {
+            return false;
+        };
+        let probe = time::timeout(
+            Duration::from_millis(probe_timeout_ms),
+            runtime.execute_script("__pool_heal_probe__".into(), "1".into()),
+        )
+        .await;
+        match probe {
+            Ok(Ok(_)) => true,
+            Ok(Err(e)) => {
+                tracing::warn!(idx, error = %e, "Heal probe script failed");
+                false
+            }
+            Err(_) => {
+                tracing::warn!(idx, "Heal probe timed out");
+                false
             }
         }
     }
@@ -239,11 +340,14 @@ impl JsRuntimePool {
         tracing::info!("JS runtime pool setup_mode = {}", on);
     }
 
-    pub fn pick_runtime(&self) -> Result<PooledRuntime, RariError> {
+    pub async fn pick_runtime(&self) -> Result<PooledRuntime, RariError> {
+        self.probe_and_heal().await;
         let idx = self.pick().ok_or_else(|| {
             RariError::js_runtime("No healthy JS runtime available in pool".to_string())
         })?;
-        let runtime = Arc::clone(&self.runtimes[idx]);
+        let runtime = self.runtime_at(idx).ok_or_else(|| {
+            RariError::js_runtime("No healthy JS runtime available in pool".to_string())
+        })?;
         Ok(PooledRuntime::new(idx, runtime, self.timeout_ms))
     }
 
@@ -255,10 +359,11 @@ impl JsRuntimePool {
         &self,
         specifier: &str,
     ) -> Result<(ModuleId, Value), RariError> {
-        let handle = self.pick_runtime()?;
+        let handle = self.pick_runtime().await?;
+        let idx = handle.idx();
         let runtime = Arc::clone(handle.runtime());
         let specifier = specifier.to_string();
-        self.run_with_timeout("load_and_evaluate_on_picked", async move {
+        self.run_with_timeout_on_slot(idx, "load_and_evaluate_on_picked", async move {
             let module_id = runtime.load_es_module(&specifier).await?;
             let value = runtime.evaluate_module(module_id).await?;
             Ok((module_id, value))
@@ -275,36 +380,52 @@ impl JsRuntimePool {
         F: FnOnce(Arc<dyn JsRuntimeInterface>) -> Fut,
         Fut: Future<Output = Result<T, RariError>>,
     {
-        let handle = self.pick_runtime()?;
+        let handle = self.pick_runtime().await?;
+        let idx = handle.idx();
         let runtime = Arc::clone(handle.runtime());
-        self.run_with_timeout("with_request_context", async {
-            runtime.set_request_context(Arc::clone(&ctx)).await?;
-            let result = op(Arc::clone(&runtime)).await;
-            let cleanup = runtime.clear_request_context_if_matches(ctx).await;
-            match (result, cleanup) {
-                (Ok(value), Ok(())) => Ok(value),
-                (Ok(value), Err(cleanup_err)) => {
-                    tracing::error!(
-                        "Failed to clear request context after successful operation: {}",
-                        cleanup_err
-                    );
-                    Ok(value)
-                }
-                (Err(op_err), Ok(())) => Err(op_err),
-                (Err(op_err), Err(cleanup_err)) => {
-                    tracing::error!(
-                        "Failed to clear request context after operation error: {}",
-                        cleanup_err
-                    );
-                    Err(op_err)
-                }
+
+        runtime.set_request_context(Arc::clone(&ctx)).await?;
+
+        let Ok(op_result) =
+            time::timeout(Duration::from_millis(self.timeout_ms), op(Arc::clone(&runtime))).await
+        else {
+            let cleanup = runtime.clear_request_context_if_matches(Arc::clone(&ctx)).await;
+            self.mark_unhealthy(idx);
+            if let Err(cleanup_err) = cleanup {
+                tracing::error!("Failed to clear request context after timeout: {}", cleanup_err);
             }
-        })
-        .await
+            return Err(RariError::timeout(format!(
+                "with_request_context timed out after {} ms",
+                self.timeout_ms
+            )));
+        };
+
+        let cleanup = runtime.clear_request_context_if_matches(ctx).await;
+        match (op_result, cleanup) {
+            (Ok(value), Ok(())) => Ok(value),
+            (Ok(_value), Err(cleanup_err)) => {
+                self.mark_unhealthy(idx);
+                tracing::error!(
+                    "Failed to clear request context after successful operation: {}",
+                    cleanup_err
+                );
+                Err(cleanup_err)
+            }
+            (Err(op_err), Ok(())) => Err(op_err),
+            (Err(op_err), Err(cleanup_err)) => {
+                self.mark_unhealthy(idx);
+                tracing::error!(
+                    "Failed to clear request context after operation error: {}",
+                    cleanup_err
+                );
+                Err(op_err)
+            }
+        }
     }
 
-    pub(super) async fn run_with_timeout<T, Fut>(
+    pub(super) async fn run_with_timeout_on_slot<T, Fut>(
         &self,
+        idx: usize,
         label: &str,
         fut: Fut,
     ) -> Result<T, RariError>
@@ -314,6 +435,7 @@ impl JsRuntimePool {
         match time::timeout(Duration::from_millis(self.timeout_ms), fut).await {
             Ok(result) => result,
             Err(_) => {
+                self.mark_unhealthy(idx);
                 Err(RariError::timeout(format!("{label} timed out after {} ms", self.timeout_ms)))
             }
         }

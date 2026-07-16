@@ -510,15 +510,23 @@ async fn handle_js_request(
         JsRequest::AddModuleToLoader { specifier, code, result_tx } => {
             module_loader.set_module_code(specifier.clone(), code);
             let component_id = extract_component_id_from_specifier(&specifier);
+            let is_pending_hmr = specifier.contains("/rari_hmr/pending/");
             let is_hmr_specifier = specifier.contains("/rari_hmr/");
-            let existing_specifier =
-                module_loader.component_specifiers.get(&component_id).map(|entry| entry.clone());
-            let has_existing_hmr_mapping = existing_specifier
-                .as_ref()
-                .map(|spec| spec.contains("/rari_hmr/"))
-                .unwrap_or(false);
-            if is_hmr_specifier || !has_existing_hmr_mapping {
-                module_loader.register_component_specifier(&component_id, &specifier);
+            if is_pending_hmr {
+                let pending_id = format!("__rari_hmr_pending__:{component_id}");
+                module_loader.register_component_specifier(&pending_id, &specifier);
+            } else {
+                let existing_specifier = module_loader
+                    .component_specifiers
+                    .get(&component_id)
+                    .map(|entry| entry.clone());
+                let has_existing_hmr_mapping = existing_specifier
+                    .as_ref()
+                    .map(|spec| spec.contains("/rari_hmr/"))
+                    .unwrap_or(false);
+                if is_hmr_specifier || !has_existing_hmr_mapping {
+                    module_loader.register_component_specifier(&component_id, &specifier);
+                }
             }
             let _ = result_tx.send(Ok(()));
         }
@@ -905,8 +913,11 @@ fn extract_component_id_from_specifier(specifier: &str) -> String {
             .unwrap_or(after_component)
             .trim_end_matches(".js")
             .to_string()
+    } else if let Some(hmr_idx) = specifier.rfind("/rari_hmr/pending/") {
+        let after_hmr = &specifier[hmr_idx + "/rari_hmr/pending/".len()..];
+        after_hmr.split('?').next().unwrap_or(after_hmr).trim_end_matches(".js").to_string()
     } else if let Some(hmr_idx) = specifier.rfind("/rari_hmr/server/") {
-        let after_hmr = &specifier[hmr_idx + 17..];
+        let after_hmr = &specifier[hmr_idx + "/rari_hmr/server/".len()..];
         after_hmr.split('?').next().unwrap_or(after_hmr).trim_end_matches(".js").to_string()
     } else {
         specifier

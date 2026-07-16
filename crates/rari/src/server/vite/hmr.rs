@@ -533,10 +533,6 @@ async fn handle_reload_component(
         let renderer = Arc::clone(&state.renderer);
         let component_id = component_id.clone();
         run_with_renderer_result(renderer, move |renderer| async move {
-            if let Err(e) = renderer.runtime.invalidate_component(&component_id).await {
-                tracing::error!("Failed to invalidate component {}: {}", component_id, e);
-            }
-
             renderer.runtime.load_component_code(&component_id, &bundle_code).await?;
 
             let mut registry = renderer.component_registry.lock();
