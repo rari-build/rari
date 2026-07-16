@@ -307,14 +307,14 @@ async fn load_esm_component_code_atomic(
     if let Err(e) = runtime.clear_module_loader_caches(component_id).await {
         tracing::warn!("Failed to clear module loader caches for {}: {}", component_id, e);
     }
-    runtime.add_module_to_loader(&live_specifier, component_code.to_string()).await.map_err(
-        |e| {
-            let error_msg =
-                format!("Failed to promote live component module for {component_id}: {e}");
-            tracing::error!("{}", error_msg);
-            RariError::js_execution(error_msg)
-        },
-    )?;
+    if let Err(e) = runtime.add_module_to_loader(&live_specifier, component_code.to_string()).await
+    {
+        tracing::warn!(
+            "Failed to promote live component module for {} after successful swap: {}",
+            component_id,
+            e
+        );
+    }
 
     Ok(())
 }

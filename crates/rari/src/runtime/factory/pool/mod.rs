@@ -11,11 +11,12 @@ use std::{
 };
 
 use deno_core::ModuleId;
+use futures::future::join_all;
 use parking_lot::RwLock;
 use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use serde_json::Value;
-use tokio::time;
+use tokio::{sync::Mutex as AsyncMutex, time};
 
 use super::runtime::RariRuntime;
 
@@ -52,6 +53,8 @@ pub struct JsRuntimePool {
     healthy: Vec<AtomicBool>,
     /// Unix millis when the slot was marked unhealthy; `0` if healthy / unknown.
     unhealthy_since_ms: Vec<AtomicU64>,
+    /// Per-slot lease so `with_request_context` cannot interleave on one runtime.
+    slot_leases: Vec<Arc<AsyncMutex<()>>>,
     setup_mode: AtomicBool,
     timeout_ms: u64,
     heal_after_ms: u64,
@@ -129,6 +132,7 @@ impl JsRuntimePool {
 
         let healthy = runtimes.iter().map(|_| AtomicBool::new(true)).collect();
         let unhealthy_since_ms = runtimes.iter().map(|_| AtomicU64::new(0)).collect();
+        let slot_leases = (0..pool_size).map(|_| Arc::new(AsyncMutex::new(()))).collect();
 
         Ok(Arc::new(Self {
             runtimes,
@@ -137,6 +141,7 @@ impl JsRuntimePool {
             next_index: AtomicUsize::new(0),
             healthy,
             unhealthy_since_ms,
+            slot_leases,
             setup_mode: AtomicBool::new(false),
             timeout_ms,
             heal_after_ms,
@@ -268,22 +273,36 @@ impl JsRuntimePool {
     /// Probe expired-unhealthy slots with a lightweight script before re-admission.
     /// Successful probes call [`Self::mark_healthy`]. Failures rebuild the isolate and
     /// probe again; if that also fails the quarantine timestamp is refreshed.
+    ///
+    /// Expired slots are probed concurrently so one hung isolate cannot delay the rest.
     pub async fn probe_and_heal(&self) {
         let indices = self.expired_unhealthy_indices();
         if indices.is_empty() {
             return;
         }
         let probe_timeout_ms = self.timeout_ms.clamp(1, 1_000);
-        for idx in indices {
-            if self.probe_slot(idx, probe_timeout_ms).await {
+
+        let probe_futs = indices.iter().map(|&idx| {
+            let probe = self.probe_slot(idx, probe_timeout_ms);
+            async move { (idx, probe.await) }
+        });
+        let probe_results = join_all(probe_futs).await;
+
+        let mut rebuild_indices = Vec::new();
+        for (idx, ok) in probe_results {
+            if ok {
                 self.mark_healthy(idx);
-                continue;
+            } else {
+                rebuild_indices.push(idx);
             }
+        }
+
+        let rebuild_futs = rebuild_indices.into_iter().map(|idx| async move {
             tracing::warn!(idx, "Heal probe failed; rebuilding JS runtime pool slot");
             if let Err(e) = self.rebuild_slot(idx) {
                 tracing::error!(idx, error = %e, "Failed to rebuild JS runtime pool slot");
                 self.refresh_unhealthy_timestamp(idx);
-                continue;
+                return;
             }
             if self.probe_slot(idx, probe_timeout_ms).await {
                 self.mark_healthy(idx);
@@ -294,7 +313,8 @@ impl JsRuntimePool {
                 );
                 self.refresh_unhealthy_timestamp(idx);
             }
-        }
+        });
+        join_all(rebuild_futs).await;
     }
 
     async fn probe_slot(&self, idx: usize, probe_timeout_ms: u64) -> bool {
@@ -372,55 +392,71 @@ impl JsRuntimePool {
     }
 
     pub async fn with_request_context<F, Fut, T>(
-        &self,
+        self: &Arc<Self>,
         ctx: Arc<RequestContext>,
         op: F,
     ) -> Result<T, RariError>
     where
-        F: FnOnce(Arc<dyn JsRuntimeInterface>) -> Fut,
-        Fut: Future<Output = Result<T, RariError>>,
+        T: Send + 'static,
+        F: FnOnce(Arc<dyn JsRuntimeInterface>) -> Fut + Send + 'static,
+        Fut: Future<Output = Result<T, RariError>> + Send + 'static,
     {
         let handle = self.pick_runtime().await?;
         let idx = handle.idx();
         let runtime = Arc::clone(handle.runtime());
-
-        runtime.set_request_context(Arc::clone(&ctx)).await?;
-
-        let Ok(op_result) =
-            time::timeout(Duration::from_millis(self.timeout_ms), op(Arc::clone(&runtime))).await
-        else {
-            let cleanup = runtime.clear_request_context_if_matches(Arc::clone(&ctx)).await;
-            self.mark_unhealthy(idx);
-            if let Err(cleanup_err) = cleanup {
-                tracing::error!("Failed to clear request context after timeout: {}", cleanup_err);
-            }
-            return Err(RariError::timeout(format!(
-                "with_request_context timed out after {} ms",
-                self.timeout_ms
+        let Some(lease) = self.slot_leases.get(idx).cloned() else {
+            return Err(RariError::js_runtime(format!(
+                "No lease available for JS runtime pool slot {idx}"
             )));
         };
+        let pool = Arc::clone(self);
+        let timeout_ms = self.timeout_ms;
 
-        let cleanup = runtime.clear_request_context_if_matches(ctx).await;
-        match (op_result, cleanup) {
-            (Ok(value), Ok(())) => Ok(value),
-            (Ok(_value), Err(cleanup_err)) => {
-                self.mark_unhealthy(idx);
-                tracing::error!(
-                    "Failed to clear request context after successful operation: {}",
-                    cleanup_err
-                );
-                Err(cleanup_err)
+        tokio::spawn(async move {
+            let _lease_guard = lease.lock_owned().await;
+
+            runtime.set_request_context(Arc::clone(&ctx)).await?;
+
+            let Ok(op_result) =
+                time::timeout(Duration::from_millis(timeout_ms), op(Arc::clone(&runtime))).await
+            else {
+                let cleanup = runtime.clear_request_context_if_matches(Arc::clone(&ctx)).await;
+                pool.mark_unhealthy(idx);
+                if let Err(cleanup_err) = cleanup {
+                    tracing::error!(
+                        "Failed to clear request context after timeout: {}",
+                        cleanup_err
+                    );
+                }
+                return Err(RariError::timeout(format!(
+                    "with_request_context timed out after {timeout_ms} ms"
+                )));
+            };
+
+            let cleanup = runtime.clear_request_context_if_matches(ctx).await;
+            match (op_result, cleanup) {
+                (Ok(value), Ok(())) => Ok(value),
+                (Ok(_value), Err(cleanup_err)) => {
+                    pool.mark_unhealthy(idx);
+                    tracing::error!(
+                        "Failed to clear request context after successful operation: {}",
+                        cleanup_err
+                    );
+                    Err(cleanup_err)
+                }
+                (Err(op_err), Ok(())) => Err(op_err),
+                (Err(op_err), Err(cleanup_err)) => {
+                    pool.mark_unhealthy(idx);
+                    tracing::error!(
+                        "Failed to clear request context after operation error: {}",
+                        cleanup_err
+                    );
+                    Err(op_err)
+                }
             }
-            (Err(op_err), Ok(())) => Err(op_err),
-            (Err(op_err), Err(cleanup_err)) => {
-                self.mark_unhealthy(idx);
-                tracing::error!(
-                    "Failed to clear request context after operation error: {}",
-                    cleanup_err
-                );
-                Err(op_err)
-            }
-        }
+        })
+        .await
+        .map_err(|e| RariError::js_runtime(format!("with_request_context task join failed: {e}")))?
     }
 
     pub(super) async fn run_with_timeout_on_slot<T, Fut>(
