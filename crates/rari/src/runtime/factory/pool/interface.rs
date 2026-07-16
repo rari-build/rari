@@ -121,8 +121,8 @@ impl JsRuntimePool {
             let pool = Arc::clone(self);
             tokio::spawn(async move {
                 let _lease = lease;
-                let mut inner_rx = runtime.execute_script_batch(scripts).await;
                 let forward = async {
+                    let mut inner_rx = runtime.execute_script_batch(scripts).await;
                     while let Some(item) = inner_rx.recv().await {
                         if tx.send(item).is_err() {
                             break;
