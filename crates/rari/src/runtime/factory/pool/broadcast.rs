@@ -16,6 +16,18 @@ use super::{
 
 type DynRuntime = Arc<dyn JsRuntimeInterface>;
 
+fn default_slot_error(idx: usize, err: &RariError) -> String {
+    format!("runtime[{idx}]: {err}")
+}
+
+fn default_aggregate_error(label: &str, total: usize, errors: &[String]) -> RariError {
+    RariError::js_runtime(format!(
+        "{label} on {} of {total} runtimes: {}",
+        errors.len(),
+        errors.join("; ")
+    ))
+}
+
 impl JsRuntimePool {
     async fn broadcast_to_healthy<F, Fut, T, FormatError, MakeAggregateError>(
         &self,
@@ -81,13 +93,13 @@ impl JsRuntimePool {
         let script_name = invalidate_script_name(component_id);
         let component_id_msg = component_id.to_string();
         self.broadcast_to_healthy(
-            |idx, err: &RariError| format!("runtime[{idx}]: {err}"),
+            default_slot_error,
             |total, errors: &[String]| {
-                RariError::js_runtime(format!(
-                    "Failed to invalidate component {component_id_msg} on {} of {total} runtimes: {}",
-                    errors.len(),
-                    errors.join("; ")
-                ))
+                default_aggregate_error(
+                    &format!("Failed to invalidate component {component_id_msg}"),
+                    total,
+                    errors,
+                )
             },
             |_idx, runtime: DynRuntime| {
                 let script_name_local = script_name.clone();
@@ -107,13 +119,13 @@ impl JsRuntimePool {
         let component_id_op = component_id.to_string();
         let code = code.to_string();
         self.broadcast_to_healthy(
-            |idx, err: &RariError| format!("runtime[{idx}]: {err}"),
+            default_slot_error,
             |total, errors: &[String]| {
-                RariError::js_runtime(format!(
-                    "Failed to load component code for {component_id_msg} on {} of {total} runtimes: {}",
-                    errors.len(),
-                    errors.join("; ")
-                ))
+                default_aggregate_error(
+                    &format!("Failed to load component code for {component_id_msg}"),
+                    total,
+                    errors,
+                )
             },
             |_idx, runtime: DynRuntime| {
                 let component_id_local = component_id_op.clone();
@@ -135,13 +147,13 @@ impl JsRuntimePool {
         let script_name_op = script_name.to_string();
         let script_code = script_code.to_string();
         self.broadcast_to_healthy(
-            |idx, err: &RariError| format!("runtime[{idx}]: {err}"),
+            default_slot_error,
             |total, errors: &[String]| {
-                RariError::js_runtime(format!(
-                    "Failed to broadcast script {script_name_msg} on {} of {total} runtimes: {}",
-                    errors.len(),
-                    errors.join("; ")
-                ))
+                default_aggregate_error(
+                    &format!("Failed to broadcast script {script_name_msg}"),
+                    total,
+                    errors,
+                )
             },
             |_idx, runtime: DynRuntime| {
                 let name_local = script_name_op.clone();
@@ -160,13 +172,9 @@ impl JsRuntimePool {
         let specifier = specifier.to_string();
         let code = code.to_string();
         self.broadcast_to_healthy(
-            |idx, err: &RariError| format!("runtime[{idx}]: {err}"),
+            default_slot_error,
             |total, errors: &[String]| {
-                RariError::js_runtime(format!(
-                    "Failed to broadcast add_module_to_loader on {} of {total} runtimes: {}",
-                    errors.len(),
-                    errors.join("; ")
-                ))
+                default_aggregate_error("Failed to broadcast add_module_to_loader", total, errors)
             },
             |_idx, runtime: DynRuntime| {
                 let specifier_local = specifier.clone();
@@ -213,13 +221,15 @@ impl JsRuntimePool {
         let component_id_msg = component_id.to_string();
         let component_id_op = component_id.to_string();
         self.broadcast_to_healthy(
-            |idx, err: &RariError| format!("runtime[{idx}]: {err}"),
+            default_slot_error,
             |total, errors: &[String]| {
-                RariError::js_runtime(format!(
-                    "Failed to broadcast clear_module_loader_caches for {component_id_msg} on {} of {total} runtimes: {}",
-                    errors.len(),
-                    errors.join("; ")
-                ))
+                default_aggregate_error(
+                    &format!(
+                        "Failed to broadcast clear_module_loader_caches for {component_id_msg}"
+                    ),
+                    total,
+                    errors,
+                )
             },
             |_idx, runtime: DynRuntime| {
                 let component_id_local = component_id_op.clone();

@@ -11,7 +11,10 @@ use std::{
 use parking_lot::RwLock;
 use rari_error::RariError;
 use serde_json::{Value, json};
-use tokio::{sync::mpsc, time::sleep};
+use tokio::{
+    sync::{Mutex as AsyncMutex, mpsc},
+    time::sleep,
+};
 
 use super::*;
 use crate::server::middleware::request_context::RequestContext;
@@ -177,6 +180,7 @@ fn pool_from_runtimes(
         next_index: AtomicUsize::new(0),
         healthy: (0..size).map(|_| AtomicBool::new(true)).collect(),
         unhealthy_since_ms: (0..size).map(|_| AtomicU64::new(0)).collect(),
+        slot_leases: (0..size).map(|_| Arc::new(AsyncMutex::new(()))).collect(),
         setup_mode: AtomicBool::new(false),
         timeout_ms,
         heal_after_ms,
@@ -312,6 +316,7 @@ async fn probe_and_heal_rebuilds_and_re_admits_when_probe_fails() -> Result<(), 
         next_index: AtomicUsize::new(0),
         healthy: vec![AtomicBool::new(true)],
         unhealthy_since_ms: vec![AtomicU64::new(0)],
+        slot_leases: vec![Arc::new(AsyncMutex::new(()))],
         setup_mode: AtomicBool::new(false),
         timeout_ms: DEFAULT_TIMEOUT_MS,
         heal_after_ms: 1,
@@ -345,6 +350,7 @@ async fn probe_and_heal_keeps_unhealthy_when_rebuild_still_fails() -> Result<(),
         next_index: AtomicUsize::new(0),
         healthy: vec![AtomicBool::new(true)],
         unhealthy_since_ms: vec![AtomicU64::new(0)],
+        slot_leases: vec![Arc::new(AsyncMutex::new(()))],
         setup_mode: AtomicBool::new(false),
         timeout_ms: DEFAULT_TIMEOUT_MS,
         heal_after_ms: 1,
@@ -1035,6 +1041,77 @@ async fn with_request_context_cleans_up_even_when_op_errors() {
     assert!(
         last_seens[0].lock().map(|guard| guard.is_none()).unwrap_or(false),
         "ctx must be cleared even when op returns Err"
+    );
+}
+
+#[tokio::test]
+async fn with_request_context_serializes_same_slot_so_ops_see_own_context() {
+    let (pool, last_seens) = build_pool_with_distinct_request_context_runtimes(1);
+    let last_seen = Arc::clone(&last_seens[0]);
+
+    let ctx_a = Arc::new(RequestContext::new("/lease_a".to_string()));
+    let ctx_b = Arc::new(RequestContext::new("/lease_b".to_string()));
+
+    let pool_a = Arc::clone(&pool);
+    let last_a = Arc::clone(&last_seen);
+    let ctx_a_op = Arc::clone(&ctx_a);
+    let fut_a = async move {
+        pool_a
+            .with_request_context(Arc::clone(&ctx_a_op), move |_runtime| {
+                let last_a = last_a;
+                let ctx_a_op = ctx_a_op;
+                async move {
+                    sleep(Duration::from_millis(30)).await;
+                    let guard = last_a
+                        .lock()
+                        .map_err(|_| RariError::js_runtime("last_seen poisoned".to_string()))?;
+                    let current = guard.as_ref().ok_or_else(|| {
+                        RariError::js_runtime("expected request context during op A".to_string())
+                    })?;
+                    if !Arc::ptr_eq(current, &ctx_a_op) {
+                        return Err(RariError::js_runtime(
+                            "op A observed a different request context".to_string(),
+                        ));
+                    }
+                    Ok(())
+                }
+            })
+            .await
+    };
+
+    let pool_b = Arc::clone(&pool);
+    let last_b = Arc::clone(&last_seen);
+    let ctx_b_op = Arc::clone(&ctx_b);
+    let fut_b = async move {
+        pool_b
+            .with_request_context(Arc::clone(&ctx_b_op), move |_runtime| {
+                let last_b = last_b;
+                let ctx_b_op = ctx_b_op;
+                async move {
+                    sleep(Duration::from_millis(30)).await;
+                    let guard = last_b
+                        .lock()
+                        .map_err(|_| RariError::js_runtime("last_seen poisoned".to_string()))?;
+                    let current = guard.as_ref().ok_or_else(|| {
+                        RariError::js_runtime("expected request context during op B".to_string())
+                    })?;
+                    if !Arc::ptr_eq(current, &ctx_b_op) {
+                        return Err(RariError::js_runtime(
+                            "op B observed a different request context".to_string(),
+                        ));
+                    }
+                    Ok(())
+                }
+            })
+            .await
+    };
+
+    let (res_a, res_b) = tokio::join!(fut_a, fut_b);
+    assert!(res_a.is_ok(), "op A failed: {res_a:?}");
+    assert!(res_b.is_ok(), "op B failed: {res_b:?}");
+    assert!(
+        last_seen.lock().map(|guard| guard.is_none()).unwrap_or(false),
+        "request context must be cleared after both ops"
     );
 }
 

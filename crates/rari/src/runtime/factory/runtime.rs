@@ -22,6 +22,7 @@ use tokio::{
 use crate::{
     runtime::{
         factory::{
+            component_ops::pending_component_id,
             executor::{self, execute_script},
             interface::{AsyncBatchResult, JsRuntimeInterface},
             runtime_builder::build_js_runtime,
@@ -513,7 +514,7 @@ async fn handle_js_request(
             let is_pending_hmr = specifier.contains("/rari_hmr/pending/");
             let is_hmr_specifier = specifier.contains("/rari_hmr/");
             if is_pending_hmr {
-                let pending_id = format!("__rari_hmr_pending__:{component_id}");
+                let pending_id = pending_component_id(&component_id);
                 module_loader.register_component_specifier(&pending_id, &specifier);
             } else {
                 let existing_specifier = module_loader
