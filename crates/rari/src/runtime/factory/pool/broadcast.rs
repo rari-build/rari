@@ -65,7 +65,10 @@ impl JsRuntimePool {
                 };
                 match time::timeout(Duration::from_millis(timeout_ms), fut).await {
                     Ok(Ok(_)) => Ok(()),
-                    Ok(Err(e)) => Err((idx, e)),
+                    Ok(Err(e)) => {
+                        pool.mark_unhealthy_if_runtime_matches(idx, &expected);
+                        Err((idx, e))
+                    }
                     Err(_) => {
                         pool.mark_unhealthy_if_runtime_matches(idx, &expected);
                         Err((idx, RariError::timeout(format!("timed out after {timeout_ms} ms"))))
@@ -85,13 +88,7 @@ impl JsRuntimePool {
         for result in join_all(slot_futs).await {
             match result {
                 Ok(()) => {}
-                Err((idx, e)) => {
-                    let msg = e.to_string();
-                    if !msg.contains("no longer admissible") && !msg.contains("timed out") {
-                        self.mark_unhealthy(idx);
-                    }
-                    errors.push(format_error(idx, &e));
-                }
+                Err((idx, e)) => errors.push(format_error(idx, &e)),
             }
         }
 
