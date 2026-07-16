@@ -1,10 +1,13 @@
 use std::{
     future::Future,
     sync::{Arc, atomic::Ordering},
+    time::Duration,
 };
 
 use component_ops::{build_invalidate_script, invalidate_script_name, load_component_code};
+use futures::future::join_all;
 use rari_error::RariError;
+use tokio::time;
 
 use super::{
     super::{component_ops, interface::JsRuntimeInterface},
@@ -16,46 +19,61 @@ type DynRuntime = Arc<dyn JsRuntimeInterface>;
 impl JsRuntimePool {
     async fn broadcast_to_healthy<F, Fut, T, FormatError, MakeAggregateError>(
         &self,
-        label: &str,
-        mut format_error: FormatError,
+        format_error: FormatError,
         make_aggregate_error: MakeAggregateError,
-        mut op: F,
+        op: F,
     ) -> Result<(), RariError>
     where
-        F: FnMut(usize, DynRuntime) -> Fut,
+        F: Fn(usize, DynRuntime) -> Fut,
         Fut: Future<Output = Result<T, RariError>>,
-        FormatError: FnMut(usize, &RariError) -> String,
+        FormatError: Fn(usize, &RariError) -> String,
         MakeAggregateError: FnOnce(usize, &[String]) -> RariError,
     {
-        self.run_with_timeout(label, async {
-            self.heal_expired();
+        self.probe_and_heal().await;
 
-            let healthy_snapshot: Vec<bool> =
-                self.healthy.iter().map(|h| h.load(Ordering::Acquire)).collect();
-            let mut errors: Vec<String> = Vec::new();
-            let mut executed: usize = 0;
-            for (idx, runtime) in self.runtimes.iter().cloned().enumerate() {
-                if !healthy_snapshot[idx] {
-                    continue;
-                }
-                executed += 1;
-                match op(idx, runtime).await {
-                    Ok(_) => {}
-                    Err(e) => {
-                        self.mark_unhealthy(idx);
-                        errors.push(format_error(idx, &e));
+        let healthy_snapshot: Vec<bool> =
+            self.healthy.iter().map(|h| h.load(Ordering::Acquire)).collect();
+        let timeout_ms = self.timeout_ms;
+
+        let mut slot_futs = Vec::new();
+        for (idx, healthy) in healthy_snapshot.iter().enumerate() {
+            if !healthy {
+                continue;
+            }
+            let Some(runtime) = self.runtime_at(idx) else {
+                continue;
+            };
+            let fut = op(idx, runtime);
+            slot_futs.push(async move {
+                match time::timeout(Duration::from_millis(timeout_ms), fut).await {
+                    Ok(Ok(_)) => Ok(()),
+                    Ok(Err(e)) => Err((idx, e)),
+                    Err(_) => {
+                        Err((idx, RariError::timeout(format!("timed out after {timeout_ms} ms"))))
                     }
                 }
+            });
+        }
+
+        let executed = slot_futs.len();
+        if executed == 0 {
+            return Err(RariError::js_runtime(
+                "No healthy JS runtime available in pool".to_string(),
+            ));
+        }
+
+        let mut errors: Vec<String> = Vec::new();
+        for result in join_all(slot_futs).await {
+            match result {
+                Ok(()) => {}
+                Err((idx, e)) => {
+                    self.mark_unhealthy(idx);
+                    errors.push(format_error(idx, &e));
+                }
             }
-            if executed == 0 {
-                Err(RariError::js_runtime("No healthy JS runtime available in pool".to_string()))
-            } else if errors.is_empty() {
-                Ok(())
-            } else {
-                Err(make_aggregate_error(executed, &errors))
-            }
-        })
-        .await
+        }
+
+        if errors.is_empty() { Ok(()) } else { Err(make_aggregate_error(executed, &errors)) }
     }
 
     pub async fn invalidate_component_all(&self, component_id: &str) -> Result<(), RariError> {
@@ -63,7 +81,6 @@ impl JsRuntimePool {
         let script_name = invalidate_script_name(component_id);
         let component_id_msg = component_id.to_string();
         self.broadcast_to_healthy(
-            "invalidate_component_all",
             |idx, err: &RariError| format!("runtime[{idx}]: {err}"),
             |total, errors: &[String]| {
                 RariError::js_runtime(format!(
@@ -90,7 +107,6 @@ impl JsRuntimePool {
         let component_id_op = component_id.to_string();
         let code = code.to_string();
         self.broadcast_to_healthy(
-            "load_component_code_all",
             |idx, err: &RariError| format!("runtime[{idx}]: {err}"),
             |total, errors: &[String]| {
                 RariError::js_runtime(format!(
@@ -119,7 +135,6 @@ impl JsRuntimePool {
         let script_name_op = script_name.to_string();
         let script_code = script_code.to_string();
         self.broadcast_to_healthy(
-            "broadcast_script",
             |idx, err: &RariError| format!("runtime[{idx}]: {err}"),
             |total, errors: &[String]| {
                 RariError::js_runtime(format!(
@@ -145,7 +160,6 @@ impl JsRuntimePool {
         let specifier = specifier.to_string();
         let code = code.to_string();
         self.broadcast_to_healthy(
-            "broadcast_add_module_to_loader",
             |idx, err: &RariError| format!("runtime[{idx}]: {err}"),
             |total, errors: &[String]| {
                 RariError::js_runtime(format!(
@@ -169,7 +183,6 @@ impl JsRuntimePool {
     ) -> Result<(), RariError> {
         let specifier = specifier.to_string();
         self.broadcast_to_healthy(
-            "broadcast_load_and_evaluate_module",
             |_idx, err: &RariError| err.to_string(),
             |total, errors: &[String]| {
                 RariError::js_runtime(format!(
@@ -200,7 +213,6 @@ impl JsRuntimePool {
         let component_id_msg = component_id.to_string();
         let component_id_op = component_id.to_string();
         self.broadcast_to_healthy(
-            "broadcast_clear_module_loader_caches",
             |idx, err: &RariError| format!("runtime[{idx}]: {err}"),
             |total, errors: &[String]| {
                 RariError::js_runtime(format!(

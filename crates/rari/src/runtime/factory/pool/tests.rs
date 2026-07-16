@@ -5,9 +5,10 @@ use std::{
         Arc, Mutex,
         atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 
+use parking_lot::RwLock;
 use rari_error::RariError;
 use serde_json::{Value, json};
 use tokio::{sync::mpsc, time::sleep};
@@ -18,11 +19,18 @@ use crate::server::middleware::request_context::RequestContext;
 struct CountingRuntime {
     calls: Arc<AtomicUsize>,
     hang_script: Arc<AtomicBool>,
+    hang_load: Arc<AtomicBool>,
+    fail_script: Arc<AtomicBool>,
 }
 
 impl CountingRuntime {
     fn new(calls: Arc<AtomicUsize>) -> Self {
-        Self { calls, hang_script: Arc::new(AtomicBool::new(false)) }
+        Self {
+            calls,
+            hang_script: Arc::new(AtomicBool::new(false)),
+            hang_load: Arc::new(AtomicBool::new(false)),
+            fail_script: Arc::new(AtomicBool::new(false)),
+        }
     }
 }
 
@@ -34,11 +42,15 @@ impl JsRuntimeInterface for CountingRuntime {
     ) -> Pin<Box<dyn Future<Output = Result<Value, RariError>> + Send>> {
         let calls = Arc::clone(&self.calls);
         let hang = self.hang_script.load(Ordering::SeqCst);
+        let fail = self.fail_script.load(Ordering::SeqCst);
         Box::pin(async move {
             if hang {
                 sleep(Duration::from_secs(60)).await;
             }
             calls.fetch_add(1, Ordering::SeqCst);
+            if fail {
+                return Err(RariError::js_runtime("script failed".to_string()));
+            }
             Ok(json!({"ok": true}))
         })
     }
@@ -73,7 +85,13 @@ impl JsRuntimeInterface for CountingRuntime {
         &self,
         _specifier: &str,
     ) -> Pin<Box<dyn Future<Output = Result<deno_core::ModuleId, RariError>> + Send>> {
-        Box::pin(async move { Ok(0) })
+        let hang = self.hang_load.load(Ordering::SeqCst);
+        Box::pin(async move {
+            if hang {
+                sleep(Duration::from_secs(60)).await;
+            }
+            Ok(0)
+        })
     }
 
     fn evaluate_module(
@@ -134,6 +152,37 @@ impl JsRuntimeInterface for CountingRuntime {
     }
 }
 
+fn wrap_runtimes(
+    runtimes: Vec<Arc<dyn JsRuntimeInterface>>,
+) -> Vec<RwLock<Arc<dyn JsRuntimeInterface>>> {
+    runtimes.into_iter().map(RwLock::new).collect()
+}
+
+fn counting_runtime_factory() -> RuntimeFactory {
+    Arc::new(|| {
+        Arc::new(CountingRuntime::new(Arc::new(AtomicUsize::new(0)))) as Arc<dyn JsRuntimeInterface>
+    })
+}
+
+fn pool_from_runtimes(
+    runtimes: Vec<Arc<dyn JsRuntimeInterface>>,
+    timeout_ms: u64,
+    heal_after_ms: u64,
+) -> Arc<JsRuntimePool> {
+    let size = runtimes.len();
+    Arc::new(JsRuntimePool {
+        runtimes: wrap_runtimes(runtimes),
+        runtime_factory: counting_runtime_factory(),
+        pick_strategy: Arc::new(RoundRobinStrategy),
+        next_index: AtomicUsize::new(0),
+        healthy: (0..size).map(|_| AtomicBool::new(true)).collect(),
+        unhealthy_since_ms: (0..size).map(|_| AtomicU64::new(0)).collect(),
+        setup_mode: AtomicBool::new(false),
+        timeout_ms,
+        heal_after_ms,
+    })
+}
+
 fn build_pool_with_counters(size: usize) -> (Arc<JsRuntimePool>, Vec<Arc<AtomicUsize>>) {
     let mut runtimes: Vec<Arc<dyn JsRuntimeInterface>> = Vec::with_capacity(size);
     let mut counters: Vec<Arc<AtomicUsize>> = Vec::with_capacity(size);
@@ -145,20 +194,7 @@ fn build_pool_with_counters(size: usize) -> (Arc<JsRuntimePool>, Vec<Arc<AtomicU
         runtimes.push(Arc::new(runtime));
     }
 
-    let healthy = (0..size).map(|_| AtomicBool::new(true)).collect();
-    let unhealthy_since_ms = (0..size).map(|_| AtomicU64::new(0)).collect();
-
-    let pool = Arc::new(JsRuntimePool {
-        runtimes,
-        pick_strategy: Arc::new(RoundRobinStrategy),
-        next_index: AtomicUsize::new(0),
-        healthy,
-        unhealthy_since_ms,
-        setup_mode: AtomicBool::new(false),
-        timeout_ms: DEFAULT_TIMEOUT_MS,
-        heal_after_ms: HEAL_DISABLED,
-    });
-
+    let pool = pool_from_runtimes(runtimes, DEFAULT_TIMEOUT_MS, HEAL_DISABLED);
     (pool, counters)
 }
 
@@ -234,30 +270,91 @@ async fn mark_healthy_restores_round_robin() -> Result<(), RariError> {
 }
 
 #[tokio::test]
-async fn heal_expired_re_admits_unhealthy_slots() -> Result<(), RariError> {
+async fn probe_and_heal_re_admits_after_successful_probe() -> Result<(), RariError> {
     let (_unused, counters) = build_pool_with_counters(2);
     let runtimes = (0..2)
         .map(|i| {
             Arc::new(CountingRuntime::new(Arc::clone(&counters[i]))) as Arc<dyn JsRuntimeInterface>
         })
         .collect::<Vec<_>>();
-    let pool = Arc::new(JsRuntimePool {
-        runtimes,
-        pick_strategy: Arc::new(RoundRobinStrategy),
-        next_index: AtomicUsize::new(0),
-        healthy: (0..2).map(|_| AtomicBool::new(true)).collect(),
-        unhealthy_since_ms: (0..2).map(|_| AtomicU64::new(0)).collect(),
-        setup_mode: AtomicBool::new(false),
-        timeout_ms: DEFAULT_TIMEOUT_MS,
-        heal_after_ms: 1,
-    });
+    let pool = pool_from_runtimes(runtimes, DEFAULT_TIMEOUT_MS, 1);
 
     pool.mark_unhealthy(0);
     assert!(!pool.is_healthy(0));
 
     sleep(Duration::from_millis(5)).await;
     let _ = pool.pick();
-    assert!(pool.is_healthy(0), "expired unhealthy slot should be healed on pick");
+    assert!(!pool.is_healthy(0), "sync pick must not re-admit without a probe");
+
+    pool.probe_and_heal().await;
+    assert!(pool.is_healthy(0), "successful heal probe should re-admit the slot");
+    Ok(())
+}
+
+#[tokio::test]
+#[expect(clippy::expect_used)]
+async fn probe_and_heal_rebuilds_and_re_admits_when_probe_fails() -> Result<(), RariError> {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let runtime = CountingRuntime::new(Arc::clone(&calls));
+    runtime.fail_script.store(true, Ordering::SeqCst);
+    let original: Arc<dyn JsRuntimeInterface> = Arc::new(runtime);
+
+    let rebuilds = Arc::new(AtomicUsize::new(0));
+    let rebuilds_for_factory = Arc::clone(&rebuilds);
+    let pool = Arc::new(JsRuntimePool {
+        runtimes: wrap_runtimes(vec![Arc::clone(&original)]),
+        runtime_factory: Arc::new(move || {
+            rebuilds_for_factory.fetch_add(1, Ordering::SeqCst);
+            Arc::new(CountingRuntime::new(Arc::new(AtomicUsize::new(0))))
+                as Arc<dyn JsRuntimeInterface>
+        }),
+        pick_strategy: Arc::new(RoundRobinStrategy),
+        next_index: AtomicUsize::new(0),
+        healthy: vec![AtomicBool::new(true)],
+        unhealthy_since_ms: vec![AtomicU64::new(0)],
+        setup_mode: AtomicBool::new(false),
+        timeout_ms: DEFAULT_TIMEOUT_MS,
+        heal_after_ms: 1,
+    });
+
+    pool.mark_unhealthy(0);
+    sleep(Duration::from_millis(5)).await;
+    pool.probe_and_heal().await;
+
+    assert_eq!(rebuilds.load(Ordering::SeqCst), 1, "failed probe should rebuild once");
+    assert!(pool.is_healthy(0), "successful post-rebuild probe should re-admit");
+    let replacement = pool.runtime_at(0).expect("slot exists");
+    assert!(!Arc::ptr_eq(&original, &replacement), "slot must hold the rebuilt isolate");
+    Ok(())
+}
+
+#[tokio::test]
+async fn probe_and_heal_keeps_unhealthy_when_rebuild_still_fails() -> Result<(), RariError> {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let runtime = CountingRuntime::new(Arc::clone(&calls));
+    runtime.fail_script.store(true, Ordering::SeqCst);
+
+    let pool = Arc::new(JsRuntimePool {
+        runtimes: wrap_runtimes(vec![Arc::new(runtime)]),
+        runtime_factory: Arc::new(|| {
+            let rebuilt = CountingRuntime::new(Arc::new(AtomicUsize::new(0)));
+            rebuilt.fail_script.store(true, Ordering::SeqCst);
+            Arc::new(rebuilt) as Arc<dyn JsRuntimeInterface>
+        }),
+        pick_strategy: Arc::new(RoundRobinStrategy),
+        next_index: AtomicUsize::new(0),
+        healthy: vec![AtomicBool::new(true)],
+        unhealthy_since_ms: vec![AtomicU64::new(0)],
+        setup_mode: AtomicBool::new(false),
+        timeout_ms: DEFAULT_TIMEOUT_MS,
+        heal_after_ms: 1,
+    });
+
+    pool.mark_unhealthy(0);
+    sleep(Duration::from_millis(5)).await;
+    pool.probe_and_heal().await;
+    assert!(!pool.is_healthy(0), "slot must stay unhealthy when rebuild probe also fails");
+    assert!(calls.load(Ordering::SeqCst) >= 1, "original probe should have executed");
     Ok(())
 }
 
@@ -267,16 +364,7 @@ async fn execute_script_times_out_when_runtime_hangs() {
     let runtime = CountingRuntime::new(Arc::clone(&calls));
     runtime.hang_script.store(true, Ordering::SeqCst);
 
-    let pool = Arc::new(JsRuntimePool {
-        runtimes: vec![Arc::new(runtime)],
-        pick_strategy: Arc::new(RoundRobinStrategy),
-        next_index: AtomicUsize::new(0),
-        healthy: vec![AtomicBool::new(true)],
-        unhealthy_since_ms: vec![AtomicU64::new(0)],
-        setup_mode: AtomicBool::new(false),
-        timeout_ms: 20,
-        heal_after_ms: HEAL_DISABLED,
-    });
+    let pool = pool_from_runtimes(vec![Arc::new(runtime)], 20, HEAL_DISABLED);
 
     let result = pool.execute_script("hang.js".into(), "1".into()).await;
     assert!(result.is_err(), "expected timeout error");
@@ -437,19 +525,7 @@ fn build_pool_with_fail_flags(size: usize) -> (Arc<JsRuntimePool>, Vec<Arc<Atomi
         runtimes.push(Arc::new(BroadcastingRuntime { fail_next: Arc::clone(&flag) }));
     }
 
-    let healthy = (0..size).map(|_| AtomicBool::new(true)).collect();
-    let unhealthy_since_ms = (0..size).map(|_| AtomicU64::new(0)).collect();
-
-    let pool = Arc::new(JsRuntimePool {
-        runtimes,
-        pick_strategy: Arc::new(RoundRobinStrategy),
-        next_index: AtomicUsize::new(0),
-        healthy,
-        unhealthy_since_ms,
-        setup_mode: AtomicBool::new(false),
-        timeout_ms: DEFAULT_TIMEOUT_MS,
-        heal_after_ms: HEAL_DISABLED,
-    });
+    let pool = pool_from_runtimes(runtimes, DEFAULT_TIMEOUT_MS, HEAL_DISABLED);
 
     (pool, flags)
 }
@@ -524,6 +600,31 @@ async fn invalidate_component_all_succeeds_when_all_runtimes_ok() {
 
     let result = pool.invalidate_component_all("MyComponent").await;
     assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn broadcast_continues_when_one_runtime_hangs() {
+    let hang_calls = Arc::new(AtomicUsize::new(0));
+    let ok_calls = Arc::new(AtomicUsize::new(0));
+    let hang_runtime = CountingRuntime::new(Arc::clone(&hang_calls));
+    hang_runtime.hang_script.store(true, Ordering::SeqCst);
+    let ok_runtime = CountingRuntime::new(Arc::clone(&ok_calls));
+
+    let pool =
+        pool_from_runtimes(vec![Arc::new(hang_runtime), Arc::new(ok_runtime)], 30, HEAL_DISABLED);
+
+    let started = Instant::now();
+    let result = pool.broadcast_script("s.js", "1").await;
+    let elapsed = started.elapsed();
+
+    assert!(result.is_err(), "hanging slot should make broadcast report aggregate error");
+    assert!(ok_calls.load(Ordering::SeqCst) >= 1, "healthy slot must still run despite peer hang");
+    assert!(!pool.is_healthy(0), "timed-out slot must be marked unhealthy");
+    assert!(pool.is_healthy(1), "successful slot must stay healthy");
+    assert!(
+        elapsed < Duration::from_secs(2),
+        "peer hang must not serialize the full shared budget; elapsed={elapsed:?}"
+    );
 }
 
 #[tokio::test]
@@ -621,18 +722,18 @@ async fn execute_script_batch_emits_pool_unavailable_for_each_script_when_all_un
     Ok(())
 }
 
-#[test]
-fn pick_runtime_returns_error_when_all_unhealthy() {
+#[tokio::test]
+async fn pick_runtime_returns_error_when_all_unhealthy() {
     let (pool, _) = build_pool_with_counters(2);
     pool.mark_unhealthy(0);
     pool.mark_unhealthy(1);
-    assert!(pool.pick_runtime().is_err());
+    assert!(pool.pick_runtime().await.is_err());
 }
 
 #[tokio::test]
 async fn pooled_runtime_is_sticky_across_calls() -> Result<(), RariError> {
     let (pool, _counters) = build_pool_with_counters(3);
-    let handle = pool.pick_runtime()?;
+    let handle = pool.pick_runtime().await?;
     let expected_idx = handle.idx();
     let expected_runtime = Arc::clone(handle.runtime());
 
@@ -655,7 +756,7 @@ async fn pooled_runtime_is_sticky_across_calls() -> Result<(), RariError> {
 #[tokio::test]
 async fn pooled_runtime_routes_through_self_runtime_after_pool_changes() -> Result<(), RariError> {
     let (pool, counters) = build_pool_with_counters(3);
-    let handle = pool.pick_runtime()?;
+    let handle = pool.pick_runtime().await?;
     let picked_idx = handle.idx();
 
     pool.mark_unhealthy(0);
@@ -813,18 +914,7 @@ fn build_pool_with_distinct_request_context_runtimes(
             }) as Arc<dyn JsRuntimeInterface>
         })
         .collect();
-    let healthy = runtimes.iter().map(|_| AtomicBool::new(true)).collect();
-    let unhealthy_since_ms = runtimes.iter().map(|_| AtomicU64::new(0)).collect();
-    let pool = Arc::new(JsRuntimePool {
-        runtimes,
-        pick_strategy: Arc::new(RoundRobinStrategy),
-        next_index: AtomicUsize::new(0),
-        healthy,
-        unhealthy_since_ms,
-        setup_mode: AtomicBool::new(false),
-        timeout_ms: DEFAULT_TIMEOUT_MS,
-        heal_after_ms: HEAL_DISABLED,
-    });
+    let pool = pool_from_runtimes(runtimes, DEFAULT_TIMEOUT_MS, HEAL_DISABLED);
     (pool, last_seens)
 }
 
@@ -832,7 +922,7 @@ fn build_pool_with_distinct_request_context_runtimes(
 async fn pooled_runtime_set_and_clear_request_context_round_trip() -> Result<(), RariError> {
     let (pool, last_seens) = build_pool_with_distinct_request_context_runtimes(2);
 
-    let handle = pool.pick_runtime()?;
+    let handle = pool.pick_runtime().await?;
     let picked_idx = handle.idx();
     let ctx = Arc::new(RequestContext::new("/test".to_string()));
 
@@ -949,7 +1039,26 @@ async fn with_request_context_cleans_up_even_when_op_errors() {
 }
 
 #[tokio::test]
-async fn with_request_context_returns_op_value_when_cleanup_fails() -> Result<(), RariError> {
+async fn load_and_evaluate_on_picked_quarantines_timed_out_slot() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let runtime = CountingRuntime::new(Arc::clone(&calls));
+    runtime.hang_load.store(true, Ordering::SeqCst);
+
+    let pool = pool_from_runtimes(vec![Arc::new(runtime)], 20, HEAL_DISABLED);
+
+    let result = pool.load_and_evaluate_on_picked("m.js").await;
+    assert!(result.is_err(), "expected timeout");
+    let msg = match result {
+        Ok(_) => String::new(),
+        Err(e) => e.to_string(),
+    };
+    assert!(msg.contains("timed out"), "got: {msg}");
+    assert!(!pool.is_healthy(0), "timed-out slot must be quarantined");
+    assert!(pool.pick().is_none(), "quarantined slot must not be selected again");
+}
+
+#[tokio::test]
+async fn with_request_context_returns_cleanup_error_and_quarantines() {
     let fail_flag = Arc::new(AtomicBool::new(true));
     let last_seen = Arc::new(Mutex::new(None));
     let runtime: Arc<dyn JsRuntimeInterface> = Arc::new(RequestContextRuntime {
@@ -957,25 +1066,13 @@ async fn with_request_context_returns_op_value_when_cleanup_fails() -> Result<()
         fail_cleanup: Arc::clone(&fail_flag),
     });
     let runtimes: Vec<Arc<dyn JsRuntimeInterface>> = vec![Arc::clone(&runtime)];
-    let healthy = runtimes.iter().map(|_| AtomicBool::new(true)).collect();
-    let unhealthy_since_ms = runtimes.iter().map(|_| AtomicU64::new(0)).collect();
-    let pool = Arc::new(JsRuntimePool {
-        runtimes,
-        pick_strategy: Arc::new(RoundRobinStrategy),
-        next_index: AtomicUsize::new(0),
-        healthy,
-        unhealthy_since_ms,
-        setup_mode: AtomicBool::new(false),
-        timeout_ms: DEFAULT_TIMEOUT_MS,
-        heal_after_ms: HEAL_DISABLED,
-    });
+    let pool = pool_from_runtimes(runtimes, DEFAULT_TIMEOUT_MS, HEAL_DISABLED);
 
     let ctx = Arc::new(RequestContext::new("/cleanup_fails".to_string()));
 
-    let value =
-        pool.with_request_context(Arc::clone(&ctx), |_runtime| async { Ok(42_i32) }).await?;
-    assert_eq!(value, 42);
-    Ok(())
+    let result = pool.with_request_context(Arc::clone(&ctx), |_runtime| async { Ok(42_i32) }).await;
+    assert!(result.is_err(), "cleanup failure must be returned");
+    assert!(!pool.is_healthy(0), "cleanup failure must quarantine the slot");
 }
 
 #[tokio::test]
