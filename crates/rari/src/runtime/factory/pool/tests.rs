@@ -181,6 +181,7 @@ fn pool_from_runtimes(
         healthy: (0..size).map(|_| AtomicBool::new(true)).collect(),
         unhealthy_since_ms: (0..size).map(|_| AtomicU64::new(0)).collect(),
         slot_leases: (0..size).map(|_| Arc::new(AsyncMutex::new(()))).collect(),
+        needs_rebuild: (0..size).map(|_| AtomicBool::new(false)).collect(),
         setup_mode: AtomicBool::new(false),
         timeout_ms,
         heal_after_ms,
@@ -317,6 +318,7 @@ async fn probe_and_heal_rebuilds_and_re_admits_when_probe_fails() -> Result<(), 
         healthy: vec![AtomicBool::new(true)],
         unhealthy_since_ms: vec![AtomicU64::new(0)],
         slot_leases: vec![Arc::new(AsyncMutex::new(()))],
+        needs_rebuild: vec![AtomicBool::new(false)],
         setup_mode: AtomicBool::new(false),
         timeout_ms: DEFAULT_TIMEOUT_MS,
         heal_after_ms: 1,
@@ -351,6 +353,7 @@ async fn probe_and_heal_keeps_unhealthy_when_rebuild_still_fails() -> Result<(),
         healthy: vec![AtomicBool::new(true)],
         unhealthy_since_ms: vec![AtomicU64::new(0)],
         slot_leases: vec![Arc::new(AsyncMutex::new(()))],
+        needs_rebuild: vec![AtomicBool::new(false)],
         setup_mode: AtomicBool::new(false),
         timeout_ms: DEFAULT_TIMEOUT_MS,
         heal_after_ms: 1,
@@ -1142,14 +1145,39 @@ async fn with_request_context_returns_cleanup_error_and_quarantines() {
         last_seen: Arc::clone(&last_seen),
         fail_cleanup: Arc::clone(&fail_flag),
     });
-    let runtimes: Vec<Arc<dyn JsRuntimeInterface>> = vec![Arc::clone(&runtime)];
-    let pool = pool_from_runtimes(runtimes, DEFAULT_TIMEOUT_MS, HEAL_DISABLED);
+    let rebuilds = Arc::new(AtomicUsize::new(0));
+    let rebuilds_for_factory = Arc::clone(&rebuilds);
+    let pool = Arc::new(JsRuntimePool {
+        runtimes: wrap_runtimes(vec![runtime]),
+        runtime_factory: Arc::new(move || {
+            rebuilds_for_factory.fetch_add(1, Ordering::SeqCst);
+            Arc::new(CountingRuntime::new(Arc::new(AtomicUsize::new(0))))
+                as Arc<dyn JsRuntimeInterface>
+        }),
+        pick_strategy: Arc::new(RoundRobinStrategy),
+        next_index: AtomicUsize::new(0),
+        healthy: vec![AtomicBool::new(true)],
+        unhealthy_since_ms: vec![AtomicU64::new(0)],
+        slot_leases: vec![Arc::new(AsyncMutex::new(()))],
+        needs_rebuild: vec![AtomicBool::new(false)],
+        setup_mode: AtomicBool::new(false),
+        timeout_ms: DEFAULT_TIMEOUT_MS,
+        heal_after_ms: 1,
+    });
 
     let ctx = Arc::new(RequestContext::new("/cleanup_fails".to_string()));
-
     let result = pool.with_request_context(Arc::clone(&ctx), |_runtime| async { Ok(42_i32) }).await;
     assert!(result.is_err(), "cleanup failure must be returned");
     assert!(!pool.is_healthy(0), "cleanup failure must quarantine the slot");
+
+    sleep(Duration::from_millis(5)).await;
+    pool.probe_and_heal().await;
+    assert_eq!(
+        rebuilds.load(Ordering::SeqCst),
+        1,
+        "cleanup failure must force rebuild on heal, not probe-only re-admit"
+    );
+    assert!(pool.is_healthy(0), "successful rebuild probe should re-admit");
 }
 
 #[tokio::test]

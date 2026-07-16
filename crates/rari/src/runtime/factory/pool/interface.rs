@@ -43,7 +43,12 @@ impl JsRuntimePool {
                 };
                 let script_name = script_name.clone();
                 let script_code = script_code.clone();
+                let pool = self;
                 slot_futs.push(async move {
+                    let _lease = match pool.acquire_slot_lease(idx).await {
+                        Ok(guard) => guard,
+                        Err(e) => return Err(format!("runtime[{idx}]: {e}")),
+                    };
                     match time::timeout(
                         Duration::from_millis(timeout_ms),
                         runtime.execute_script(script_name, script_code),
@@ -89,6 +94,7 @@ impl JsRuntimePool {
             let Some(runtime) = self.runtime_at(idx) else {
                 return Err(pool_unavailable_error());
             };
+            let _lease = self.acquire_slot_lease(idx).await?;
             match time::timeout(
                 Duration::from_millis(timeout_ms),
                 runtime.execute_script(script_name, script_code),
@@ -132,6 +138,7 @@ impl JsRuntimePool {
         let Some(runtime) = self.runtime_at(idx) else {
             return Err(pool_unavailable_error());
         };
+        let _lease = self.acquire_slot_lease(idx).await?;
         let function_name = function_name.to_string();
         match time::timeout(
             Duration::from_millis(timeout_ms),

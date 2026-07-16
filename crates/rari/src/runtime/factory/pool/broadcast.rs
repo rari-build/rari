@@ -55,8 +55,13 @@ impl JsRuntimePool {
             let Some(runtime) = self.runtime_at(idx) else {
                 continue;
             };
-            let fut = op(idx, runtime);
+            let pool = self;
+            let fut = op(idx, Arc::clone(&runtime));
             slot_futs.push(async move {
+                let _lease = match pool.acquire_slot_lease(idx).await {
+                    Ok(guard) => guard,
+                    Err(e) => return Err((idx, e)),
+                };
                 match time::timeout(Duration::from_millis(timeout_ms), fut).await {
                     Ok(Ok(_)) => Ok(()),
                     Ok(Err(e)) => Err((idx, e)),
