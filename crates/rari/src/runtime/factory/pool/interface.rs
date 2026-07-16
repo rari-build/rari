@@ -14,10 +14,6 @@ fn pool_unavailable_error() -> RariError {
     RariError::js_runtime("No healthy JS runtime available in pool".to_string())
 }
 
-fn timeout_error(label: &str, timeout_ms: u64) -> RariError {
-    RariError::timeout(format!("{label} timed out after {timeout_ms} ms"))
-}
-
 impl JsRuntimePool {
     /// Execute a script on one healthy runtime, or on every healthy runtime when
     /// `setup_mode` is enabled. Setup broadcast keeps the first successful value and
@@ -88,33 +84,10 @@ impl JsRuntimePool {
                 )))
             }
         } else {
-            for attempt in 0..2 {
-                let Some(idx) = self.pick() else {
-                    return Err(pool_unavailable_error());
-                };
-                let Some(runtime) = self.runtime_at(idx) else {
-                    return Err(pool_unavailable_error());
-                };
-                let lease_result = self.acquire_slot_lease_for_execute(idx, &runtime).await;
-                match lease_result {
-                    Ok(_lease) => {}
-                    Err(_e) if attempt == 0 => continue,
-                    Err(e) => return Err(e),
-                }
-                match time::timeout(
-                    Duration::from_millis(timeout_ms),
-                    runtime.execute_script(script_name, script_code),
-                )
-                .await
-                {
-                    Ok(result) => return result,
-                    Err(_) => {
-                        self.mark_unhealthy_if_runtime_matches(idx, &runtime);
-                        return Err(timeout_error("execute_script", timeout_ms));
-                    }
-                }
-            }
-            Err(pool_unavailable_error())
+            self.execute_on_admitted_healthy_slot("execute_script", |runtime| {
+                runtime.execute_script(script_name.clone(), script_code.clone())
+            })
+            .await
         }
     }
 
@@ -123,14 +96,39 @@ impl JsRuntimePool {
         scripts: Vec<(String, String)>,
     ) -> UnboundedReceiver<(usize, Result<Value, RariError>)> {
         self.probe_and_heal().await;
-        let Some(runtime) = self.pick().and_then(|idx| self.runtime_at(idx)) else {
-            let (tx, rx) = unbounded_channel();
-            for (idx, _) in scripts.iter().enumerate() {
-                let _ = tx.send((idx, Err(pool_unavailable_error())));
+        let (tx, rx) = unbounded_channel();
+        let Some(first) = self.pick() else {
+            for (script_idx, _) in scripts.iter().enumerate() {
+                let _ = tx.send((script_idx, Err(pool_unavailable_error())));
             }
             return rx;
         };
-        runtime.execute_script_batch(scripts).await
+        let mut candidates: Vec<usize> = self.all_healthy_indices();
+        candidates.retain(|&i| i != first);
+        candidates.insert(0, first);
+        for idx in candidates {
+            let Some(runtime) = self.runtime_at(idx) else {
+                continue;
+            };
+            let Ok(lease) = self.acquire_owned_slot_lease_for_execute(idx, &runtime).await else {
+                continue;
+            };
+            let tx = tx.clone();
+            tokio::spawn(async move {
+                let _lease = lease;
+                let mut inner_rx = runtime.execute_script_batch(scripts).await;
+                while let Some(item) = inner_rx.recv().await {
+                    if tx.send(item).is_err() {
+                        break;
+                    }
+                }
+            });
+            return rx;
+        }
+        for (script_idx, _) in scripts.iter().enumerate() {
+            let _ = tx.send((script_idx, Err(pool_unavailable_error())));
+        }
+        rx
     }
 
     pub async fn execute_function(
@@ -139,34 +137,10 @@ impl JsRuntimePool {
         args: Vec<Value>,
     ) -> Result<Value, RariError> {
         self.probe_and_heal().await;
-        let timeout_ms = self.timeout_ms;
-        for attempt in 0..2 {
-            let Some(idx) = self.pick() else {
-                return Err(pool_unavailable_error());
-            };
-            let Some(runtime) = self.runtime_at(idx) else {
-                return Err(pool_unavailable_error());
-            };
-            let lease_result = self.acquire_slot_lease_for_execute(idx, &runtime).await;
-            match lease_result {
-                Ok(_lease) => {}
-                Err(_e) if attempt == 0 => continue,
-                Err(e) => return Err(e),
-            }
-            let function_name = function_name.to_string();
-            match time::timeout(
-                Duration::from_millis(timeout_ms),
-                runtime.execute_function(&function_name, args),
-            )
-            .await
-            {
-                Ok(result) => return result,
-                Err(_) => {
-                    self.mark_unhealthy_if_runtime_matches(idx, &runtime);
-                    return Err(timeout_error("execute_function", timeout_ms));
-                }
-            }
-        }
-        Err(pool_unavailable_error())
+        let function_name = function_name.to_string();
+        self.execute_on_admitted_healthy_slot("execute_function", move |runtime| {
+            runtime.execute_function(&function_name, args.clone())
+        })
+        .await
     }
 }

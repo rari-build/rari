@@ -17,7 +17,7 @@ use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use serde_json::Value;
 use tokio::{
-    sync::{Mutex as AsyncMutex, MutexGuard as AsyncMutexGuard},
+    sync::{Mutex as AsyncMutex, MutexGuard as AsyncMutexGuard, OwnedMutexGuard},
     time,
 };
 
@@ -271,6 +271,26 @@ impl JsRuntimePool {
         Ok(guard)
     }
 
+    /// Owned lease for work that must outlive `&self` (e.g. spawned batch forwarding).
+    pub(super) async fn acquire_owned_slot_lease_for_execute(
+        &self,
+        idx: usize,
+        expected: &Arc<dyn JsRuntimeInterface>,
+    ) -> Result<OwnedMutexGuard<()>, RariError> {
+        let Some(lease) = self.slot_leases.get(idx).cloned() else {
+            return Err(RariError::js_runtime(format!(
+                "No lease available for JS runtime pool slot {idx}"
+            )));
+        };
+        let guard = lease.lock_owned().await;
+        if !self.slot_admissible_for_execute(idx, expected) {
+            return Err(RariError::js_runtime(format!(
+                "JS runtime pool slot {idx} is no longer admissible for execution"
+            )));
+        }
+        Ok(guard)
+    }
+
     pub(super) fn mark_unhealthy_if_runtime_matches(
         &self,
         idx: usize,
@@ -279,6 +299,47 @@ impl JsRuntimePool {
         if self.runtime_still_installed(idx, expected) {
             self.mark_unhealthy(idx);
         }
+    }
+
+    /// Try each healthy slot until one admits the lease, then run `op` under timeout.
+    /// Propagates execution errors immediately; returns pool-unavailable only when every
+    /// candidate is missing or fails admission.
+    pub(super) async fn execute_on_admitted_healthy_slot<T, F, Fut>(
+        &self,
+        op_label: &str,
+        mut op: F,
+    ) -> Result<T, RariError>
+    where
+        T: Send,
+        F: FnMut(Arc<dyn JsRuntimeInterface>) -> Fut,
+        Fut: Future<Output = Result<T, RariError>> + Send,
+    {
+        let first = self.pick().ok_or_else(|| {
+            RariError::js_runtime("No healthy JS runtime available in pool".to_string())
+        })?;
+        let mut candidates: Vec<usize> = self.all_healthy_indices();
+        candidates.retain(|&i| i != first);
+        candidates.insert(0, first);
+
+        let timeout_ms = self.timeout_ms;
+        for idx in candidates {
+            let Some(runtime) = self.runtime_at(idx) else {
+                continue;
+            };
+            let Ok(_lease) = self.acquire_slot_lease_for_execute(idx, &runtime).await else {
+                continue;
+            };
+            match time::timeout(Duration::from_millis(timeout_ms), op(Arc::clone(&runtime))).await {
+                Ok(result) => return result,
+                Err(_) => {
+                    self.mark_unhealthy_if_runtime_matches(idx, &runtime);
+                    return Err(RariError::timeout(format!(
+                        "{op_label} timed out after {timeout_ms} ms"
+                    )));
+                }
+            }
+        }
+        Err(RariError::js_runtime("No healthy JS runtime available in pool".to_string()))
     }
 
     /// Replace the isolate in `idx`. Caller must hold the slot lease.
@@ -480,18 +541,24 @@ impl JsRuntimePool {
         &self,
         specifier: &str,
     ) -> Result<(ModuleId, Value), RariError> {
-        for attempt in 0..2 {
-            let handle = self.pick_runtime().await?;
-            let idx = handle.idx();
-            let runtime = Arc::clone(handle.runtime());
-            let specifier = specifier.to_string();
-            let lease_result = self.acquire_slot_lease_for_execute(idx, &runtime).await;
-            match lease_result {
-                Ok(_lease) => {}
-                Err(_e) if attempt == 0 => continue,
-                Err(e) => return Err(e),
-            }
+        self.probe_and_heal().await;
+        let specifier = specifier.to_string();
+        let first = self.pick().ok_or_else(|| {
+            RariError::js_runtime("No healthy JS runtime available in pool".to_string())
+        })?;
+        let mut candidates: Vec<usize> = self.all_healthy_indices();
+        candidates.retain(|&i| i != first);
+        candidates.insert(0, first);
+
+        for idx in candidates {
+            let Some(runtime) = self.runtime_at(idx) else {
+                continue;
+            };
+            let Ok(_lease) = self.acquire_slot_lease_for_execute(idx, &runtime).await else {
+                continue;
+            };
             let runtime_for_op = Arc::clone(&runtime);
+            let specifier = specifier.clone();
             return self
                 .run_with_timeout_on_slot(
                     idx,
@@ -521,18 +588,28 @@ impl JsRuntimePool {
         let handle = self.pick_runtime().await?;
         let idx = handle.idx();
         let runtime = Arc::clone(handle.runtime());
-        let Some(lease) = self.slot_leases.get(idx).cloned() else {
-            return Err(RariError::js_runtime(format!(
-                "No lease available for JS runtime pool slot {idx}"
-            )));
-        };
         let pool = Arc::clone(self);
         let timeout_ms = self.timeout_ms;
 
         tokio::spawn(async move {
-            let _lease_guard = lease.lock_owned().await;
+            let _lease_guard = pool.acquire_slot_lease_for_execute(idx, &runtime).await?;
 
-            runtime.set_request_context(Arc::clone(&ctx)).await?;
+            match time::timeout(
+                Duration::from_millis(timeout_ms),
+                runtime.set_request_context(Arc::clone(&ctx)),
+            )
+            .await
+            {
+                Ok(Ok(())) => {}
+                Ok(Err(e)) => return Err(e),
+                Err(_) => {
+                    pool.mark_unhealthy_if_runtime_matches(idx, &runtime);
+                    pool.mark_needs_rebuild(idx);
+                    return Err(RariError::timeout(format!(
+                        "set_request_context timed out after {timeout_ms} ms"
+                    )));
+                }
+            }
 
             let Ok(op_result) =
                 time::timeout(Duration::from_millis(timeout_ms), op(Arc::clone(&runtime))).await
@@ -564,10 +641,14 @@ impl JsRuntimePool {
                 )));
             };
 
-            let cleanup = runtime.clear_request_context_if_matches(ctx).await;
+            let cleanup = time::timeout(
+                Duration::from_millis(timeout_ms),
+                runtime.clear_request_context_if_matches(ctx),
+            )
+            .await;
             match (op_result, cleanup) {
-                (Ok(value), Ok(())) => Ok(value),
-                (Ok(_value), Err(cleanup_err)) => {
+                (Ok(value), Ok(Ok(()))) => Ok(value),
+                (Ok(_value), Ok(Err(cleanup_err))) => {
                     pool.mark_unhealthy_if_runtime_matches(idx, &runtime);
                     pool.mark_needs_rebuild(idx);
                     tracing::error!(
@@ -576,13 +657,28 @@ impl JsRuntimePool {
                     );
                     Err(cleanup_err)
                 }
-                (Err(op_err), Ok(())) => Err(op_err),
-                (Err(op_err), Err(cleanup_err)) => {
+                (Ok(_value), Err(_)) => {
+                    pool.mark_unhealthy_if_runtime_matches(idx, &runtime);
+                    pool.mark_needs_rebuild(idx);
+                    Err(RariError::timeout(format!(
+                        "clear_request_context timed out after {timeout_ms} ms"
+                    )))
+                }
+                (Err(op_err), Ok(Ok(()))) => Err(op_err),
+                (Err(op_err), Ok(Err(cleanup_err))) => {
                     pool.mark_unhealthy_if_runtime_matches(idx, &runtime);
                     pool.mark_needs_rebuild(idx);
                     tracing::error!(
                         "Failed to clear request context after operation error: {}",
                         cleanup_err
+                    );
+                    Err(op_err)
+                }
+                (Err(op_err), Err(_)) => {
+                    pool.mark_unhealthy_if_runtime_matches(idx, &runtime);
+                    pool.mark_needs_rebuild(idx);
+                    tracing::error!(
+                        "Clearing request context timed out after {timeout_ms} ms"
                     );
                     Err(op_err)
                 }

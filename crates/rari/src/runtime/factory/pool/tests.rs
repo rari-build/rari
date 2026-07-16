@@ -12,7 +12,8 @@ use parking_lot::RwLock;
 use rari_error::RariError;
 use serde_json::{Value, json};
 use tokio::{
-    sync::{Mutex as AsyncMutex, mpsc},
+    sync::{Mutex as AsyncMutex, Notify, mpsc},
+    task::yield_now,
     time::sleep,
 };
 
@@ -1187,34 +1188,35 @@ async fn queued_waiter_rejects_contaminated_slot_before_rebuild() {
     let runtime: Arc<dyn JsRuntimeInterface> = Arc::new(CountingRuntime::new(Arc::clone(&calls)));
     let pool = pool_from_runtimes(vec![Arc::clone(&runtime)], DEFAULT_TIMEOUT_MS, HEAL_DISABLED);
 
+    let context_installed = Arc::new(Notify::new());
+    let release_blocker = Arc::new(Notify::new());
+    let context_installed_blocker = Arc::clone(&context_installed);
+    let release_blocker_blocker = Arc::clone(&release_blocker);
+
     let pool_hold = Arc::clone(&pool);
     let blocker = tokio::spawn(async move {
         pool_hold
             .with_request_context(
                 Arc::new(RequestContext::new("/block".to_string())),
-                |_rt| async {
-                    sleep(Duration::from_millis(200)).await;
+                move |_rt| async move {
+                    context_installed_blocker.notify_waiters();
+                    release_blocker_blocker.notified().await;
                     Ok(())
                 },
             )
             .await
     });
 
-    sleep(Duration::from_millis(10)).await;
+    context_installed.notified().await;
     pool.mark_needs_rebuild(0);
 
     let pool_exec = Arc::clone(&pool);
     let exec = tokio::spawn(async move { pool_exec.execute_script("x".into(), "1".into()).await });
 
-    sleep(Duration::from_millis(50)).await;
-    assert_eq!(
-        calls.load(Ordering::SeqCst),
-        0,
-        "waiter must not execute while slot is contaminated"
-    );
-
-    let blocker_result = blocker.await.unwrap();
-    assert!(blocker_result.is_ok(), "blocker should complete cleanly");
+    for _ in 0..100 {
+        yield_now().await;
+    }
+    release_blocker.notify_one();
 
     let result = exec.await.unwrap();
     assert!(result.is_err(), "must reject contaminated slot after acquiring lease");
@@ -1223,6 +1225,9 @@ async fn queued_waiter_rejects_contaminated_slot_before_rebuild() {
         0,
         "waiter must not execute on contaminated runtime before rebuild"
     );
+
+    let blocker_result = blocker.await.unwrap();
+    assert!(blocker_result.is_ok(), "blocker should complete cleanly");
 }
 
 #[tokio::test]
