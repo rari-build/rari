@@ -1,4 +1,7 @@
-use std::{sync::atomic::Ordering, time::Duration};
+use std::{
+    sync::{Arc, atomic::Ordering},
+    time::Duration,
+};
 
 use futures::future::join_all;
 use rari_error::RariError;
@@ -92,7 +95,7 @@ impl JsRuntimePool {
     }
 
     pub async fn execute_script_batch(
-        &self,
+        self: &Arc<Self>,
         scripts: Vec<(String, String)>,
     ) -> UnboundedReceiver<(usize, Result<Value, RariError>)> {
         self.probe_and_heal().await;
@@ -106,6 +109,7 @@ impl JsRuntimePool {
         let mut candidates: Vec<usize> = self.all_healthy_indices();
         candidates.retain(|&i| i != first);
         candidates.insert(0, first);
+        let timeout_ms = self.timeout_ms;
         for idx in candidates {
             let Some(runtime) = self.runtime_at(idx) else {
                 continue;
@@ -114,13 +118,19 @@ impl JsRuntimePool {
                 continue;
             };
             let tx = tx.clone();
+            let pool = Arc::clone(self);
             tokio::spawn(async move {
                 let _lease = lease;
                 let mut inner_rx = runtime.execute_script_batch(scripts).await;
-                while let Some(item) = inner_rx.recv().await {
-                    if tx.send(item).is_err() {
-                        break;
+                let forward = async {
+                    while let Some(item) = inner_rx.recv().await {
+                        if tx.send(item).is_err() {
+                            break;
+                        }
                     }
+                };
+                if time::timeout(Duration::from_millis(timeout_ms), forward).await.is_err() {
+                    pool.mark_unhealthy_if_runtime_matches(idx, &runtime);
                 }
             });
             return rx;
