@@ -1,13 +1,7 @@
-use std::{
-    future::Future,
-    sync::{Arc, OnceLock},
-    time::{Duration, SystemTime, UNIX_EPOCH},
-};
+use std::{future::Future, sync::Arc, time::Duration};
 
-use cow_utils::CowUtils;
 use deno_core::ModuleId;
 use rari_error::RariError;
-use regex::Regex;
 use rustc_hash::FxHashMap;
 use serde_json::Value;
 use tokio::{
@@ -24,7 +18,12 @@ pub mod transpile;
 use factory::JsRuntimeInterface;
 
 use crate::{
-    runtime::factory::RariRuntime,
+    runtime::factory::{
+        RariRuntime,
+        component_ops::{
+            build_invalidate_script, invalidate_script_name, load_component_code as load_component,
+        },
+    },
     server::{
         middleware::request_context::RequestContext, rendering::metadata,
         routing::types::ParamValue,
@@ -40,23 +39,6 @@ impl Default for JsExecutionRuntime {
     fn default() -> Self {
         Self::new(None)
     }
-}
-
-fn escape_js_string(s: &str) -> String {
-    s.cow_replace('\\', "\\\\")
-        .cow_replace('"', r#"\""#)
-        .cow_replace('\n', "\\n")
-        .cow_replace('\r', "\\r")
-        .into_owned()
-}
-
-fn is_esm_code(code: &str) -> bool {
-    static ESM_REGEX: OnceLock<Regex> = OnceLock::new();
-    #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
-    let regex = ESM_REGEX
-        .get_or_init(|| Regex::new(r"(?m)^\s*export[\s{]").expect("Valid ESM detection regex"));
-
-    regex.is_match(code)
 }
 
 fn parse_string_array_value(value: &Value) -> Vec<String> {
@@ -309,90 +291,9 @@ impl JsExecutionRuntime {
     }
 
     pub async fn invalidate_component(&self, component_id: &str) -> Result<(), RariError> {
-        let escaped_component_id = escape_js_string(component_id);
+        let script = build_invalidate_script(component_id);
 
-        let script = format!(
-            r#"
-            (function() {{
-                const componentId = "{escaped_component_id}";
-                let deleted = false;
-
-                if (globalThis[componentId]) {{
-                    delete globalThis[componentId];
-                    deleted = true;
-                }}
-
-                const moduleNamespace = globalThis['~rsc']?.modules?.[componentId];
-                if (moduleNamespace) {{
-                    for (const key in moduleNamespace) {{
-                        if (key !== 'default' && typeof moduleNamespace[key] === 'function' && globalThis[key] === moduleNamespace[key]) {{
-                            delete globalThis[key];
-                            deleted = true;
-                        }}
-                    }}
-                }}
-
-                if (globalThis['~rsc']?.functions?.[componentId]) {{
-                    delete globalThis['~rsc'].functions[componentId];
-                    deleted = true;
-                }}
-
-                if (globalThis['~rari']?.ssrModules) {{
-                    const colonPrefix = componentId + ':';
-                    const hashPrefix = componentId + '#';
-                    for (const key in globalThis['~rari'].ssrModules) {{
-                        if (key === componentId || key.startsWith(colonPrefix) || key.startsWith(hashPrefix)) {{
-                            delete globalThis['~rari'].ssrModules[key];
-                            deleted = true;
-                        }}
-                    }}
-                }}
-
-                if (globalThis['~rari']?.serverManifest) {{
-                    const colonPrefix = componentId + ':';
-                    const hashPrefix = componentId + '#';
-                    for (const key in globalThis['~rari'].serverManifest) {{
-                        if (key === componentId || key.startsWith(colonPrefix) || key.startsWith(hashPrefix)) {{
-                            delete globalThis['~rari'].serverManifest[key];
-                            deleted = true;
-                        }}
-                    }}
-                }}
-
-                if (globalThis['~rari']?.registeredServerFunctions) {{
-                    const colonPrefix = componentId + ':';
-                    const hashPrefix = componentId + '#';
-                    for (const key of globalThis['~rari'].registeredServerFunctions) {{
-                        if (key === componentId || key.startsWith(colonPrefix) || key.startsWith(hashPrefix)) {{
-                            globalThis['~rari'].registeredServerFunctions.delete(key);
-                            deleted = true;
-                        }}
-                    }}
-                }}
-
-                if (globalThis['~rsc']?.modules?.[componentId]) {{
-                    delete globalThis['~rsc'].modules[componentId];
-                    deleted = true;
-                }}
-
-                if (globalThis.RscModuleManager && globalThis.RscModuleManager.unregister) {{
-                    try {{
-                        globalThis.RscModuleManager.unregister(componentId);
-                        deleted = true;
-                    }} catch (e) {{
-                        console.warn('Failed to unregister from RscModuleManager:', e);
-                    }}
-                }}
-
-                return {{ success: true, deleted: deleted }};
-            }})()
-            "#
-        );
-
-        match self
-            .execute_script(format!("invalidate_{}", component_id.cow_replace('/', "_")), script)
-            .await
-        {
+        match self.execute_script(invalidate_script_name(component_id), script).await {
             Ok(_) => Ok(()),
             Err(e) => {
                 tracing::error!("Failed to invalidate component {}: {}", component_id, e);
@@ -403,128 +304,26 @@ impl JsExecutionRuntime {
         }
     }
 
-    #[expect(clippy::too_many_lines)]
     pub async fn load_component_code(
         &self,
         component_id: &str,
         component_code: &str,
     ) -> Result<(), RariError> {
-        let is_esm = is_esm_code(component_code);
+        let runtime = Arc::clone(&self.runtime);
+        let component_id = component_id.to_string();
+        let component_code = component_code.to_string();
 
-        if is_esm {
-            let timestamp =
-                SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis();
-
-            let hmr_specifier = format!("file:///rari_hmr/server/{component_id}.js?v={timestamp}");
-
-            if let Err(e) = self.clear_module_loader_caches(component_id).await {
-                tracing::warn!("Failed to clear module loader caches for {}: {}", component_id, e);
-            }
-
-            self.add_module_to_loader(&hmr_specifier, component_code.to_string()).await.map_err(
-                |e| {
-                    let error_msg =
-                        format!("Failed to add component module to loader for {component_id}: {e}");
-                    tracing::error!("{}", error_msg);
-                    RariError::js_execution(error_msg)
-                },
-            )?;
-
-            let module_id = self.load_es_module(component_id).await.map_err(|e| {
-                let error_msg = format!("Failed to load ES module for {component_id}: {e}");
-                tracing::error!("{}", error_msg);
-                RariError::js_execution(error_msg)
-            })?;
-
-            self.evaluate_module(module_id).await.map_err(|e| {
-                let error_msg = format!("Failed to evaluate ES module for {component_id}: {e}");
-                tracing::error!("{}", error_msg);
-                RariError::js_execution(error_msg)
-            })?;
-
-            let escaped_component_id = escape_js_string(component_id);
-            let escaped_hmr_specifier = escape_js_string(&hmr_specifier);
-
-            let registration_script = format!(
-                r#"(async function() {{
-                    try {{
-                        const moduleNamespace = await import("{escaped_hmr_specifier}");
-                        const componentId = "{escaped_component_id}";
-
-                        if (!globalThis['~rsc']) globalThis['~rsc'] = {{}};
-                        if (!globalThis['~rsc'].modules) globalThis['~rsc'].modules = {{}};
-                        if (!globalThis['~rsc'].functions) globalThis['~rsc'].functions = {{}};
-
-                        globalThis['~rsc'].modules[componentId] = moduleNamespace;
-
-                        if (moduleNamespace.default) {{
-                            globalThis[componentId] = moduleNamespace.default;
-                        }} else {{
-                            const exports = Object.values(moduleNamespace).filter(v => typeof v === 'function');
-                            if (exports.length > 0) {{
-                                globalThis[componentId] = exports[0];
-                            }}
-                        }}
-
-                        const namedExports = {{}};
-                        for (const [key, value] of Object.entries(moduleNamespace)) {{
-                            if (key !== 'default' && typeof value === 'function') {{
-                                namedExports[key] = value;
-                            }}
-                        }}
-
-                        if (Object.keys(namedExports).length > 0) {{
-                            globalThis['~rsc'].functions[componentId] = namedExports;
-                        }}
-
-                        return {{ success: true }};
-                    }} catch (error) {{
-                        console.error('[rari] Failed to register component {escaped_component_id}:', error);
-                        return {{ success: false, error: error.message }};
-                    }}
-                }})()"#
-            );
-
-            let result = self
-                .execute_script(
-                    format!("register_component_{}.js", component_id.cow_replace('/', "_")),
-                    registration_script,
-                )
-                .await
-                .map_err(|e| {
-                    let error_msg =
-                        format!("Failed to register component {component_id} to globalThis: {e}");
-                    tracing::error!("{}", error_msg);
-                    RariError::js_execution(error_msg)
-                })?;
-
-            let success = result.get("success").and_then(Value::as_bool).unwrap_or(false);
-
-            if !success {
-                let error_msg =
-                    result.get("error").and_then(|v| v.as_str()).unwrap_or("Unknown error");
-                tracing::error!(
-                    "Component registration failed for {}: {}",
-                    component_id,
-                    error_msg
-                );
-                return Err(RariError::js_execution(format!(
-                    "Component registration failed for {component_id}: {error_msg}"
-                )));
-            }
-
-            Ok(())
-        } else {
-            let script_name = format!("load_component_{}", component_id.cow_replace('/', "_"));
-            match self.execute_script(script_name, component_code.to_string()).await {
-                Ok(_) => Ok(()),
-                Err(e) => {
-                    let error_msg =
-                        format!("Failed to execute component code for {component_id}: {e}");
-                    tracing::error!("{}", error_msg);
-                    Err(RariError::js_execution(error_msg))
-                }
-            }
+        match time::timeout(
+            Duration::from_millis(self.timeout_ms),
+            load_component(runtime.as_ref(), &component_id, &component_code),
+        )
+        .await
+        {
+            Ok(result) => result,
+            Err(_) => Err(RariError::timeout(format!(
+                "Loading component {component_id} timed out after {} ms",
+                self.timeout_ms
+            ))),
         }
     }
 

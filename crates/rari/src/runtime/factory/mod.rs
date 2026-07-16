@@ -1,6 +1,8 @@
+pub(crate) mod component_ops;
 mod create_params;
 mod executor;
 mod interface;
+pub mod pool;
 mod runtime;
 mod runtime_builder;
 pub(crate) mod utils;

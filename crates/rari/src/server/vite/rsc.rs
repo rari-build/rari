@@ -1,10 +1,6 @@
 #![expect(clippy::missing_errors_doc, clippy::too_many_lines)]
 
-use std::{
-    path::Path,
-    sync::Arc,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::{path::Path, sync::Arc};
 
 use axum::{extract::State, http::StatusCode, response::Json};
 use cow_utils::CowUtils;
@@ -15,6 +11,7 @@ use tokio::{fs, time};
 use crate::{
     rendering::base::run_with_renderer_result,
     rsc::extract_dependencies,
+    runtime::factory::component_ops::is_esm_code,
     server::{
         RegisterClientRequest, RegisterRequest, ServerState,
         core::utils::{
@@ -214,11 +211,7 @@ pub async fn reload_component_from_dist(
         dist_code = new_dist_code;
     }
 
-    let is_esm = dist_code.contains("export ")
-        || dist_code.contains("export{")
-        || dist_code.contains("export {")
-        || dist_code.contains("export\n")
-        || dist_code.contains("export\r");
+    let is_esm = is_esm_code(&dist_code);
 
     let dist_path_display = dist_path.display().to_string();
     let component_id = component_id.to_string();
@@ -228,134 +221,15 @@ pub async fn reload_component_from_dist(
         if is_esm {
             renderer.clear_component_cache(&component_id);
 
-            if let Err(e) = renderer.runtime.clear_module_loader_caches(&component_id).await {
-                tracing::error!("Failed to clear module loader caches for {}: {}", component_id, e);
+            if let Err(e) = renderer.runtime.invalidate_component(&component_id).await {
+                tracing::error!(
+                    component_id = component_id.as_str(),
+                    error = %e,
+                    "Failed to invalidate component during HMR"
+                );
             }
 
-            let timestamp =
-                SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis();
-
-            let hmr_specifier = format!("file:///rari_hmr/server/{component_id}.js?v={timestamp}");
-
-            renderer
-                .runtime
-                .add_module_to_loader(&hmr_specifier, dist_code.clone())
-                .await
-                .map_err(|e| {
-                    tracing::error!(
-                        component_id = component_id.as_str(),
-                        error = %e,
-                        "Failed to add HMR module to loader"
-                    );
-                    RariError::js_execution(format!("Failed to add HMR module to loader: {e}"))
-                })?;
-
-            let module_id = renderer.runtime.load_es_module(&component_id).await.map_err(|e| {
-                tracing::error!(
-                    component_id = component_id.as_str(),
-                    error = %e,
-                    "Failed to load ES module during HMR"
-                );
-                RariError::js_execution(format!("Failed to load ES module: {e}"))
-            })?;
-
-            renderer.runtime.evaluate_module(module_id).await.map_err(|e| {
-                tracing::error!(
-                    component_id = component_id.as_str(),
-                    module_id = module_id,
-                    error = %e,
-                    "Failed to evaluate module during HMR"
-                );
-                RariError::js_execution(format!("Failed to evaluate module: {e}"))
-            })?;
-
-            let clear_script = format!(
-                r#"(function() {{
-                const componentId = "{component_id}";
-
-                delete globalThis[componentId];
-
-                if (globalThis['~rsc'] && globalThis['~rsc'].modules) {{
-                    delete globalThis['~rsc'].modules[componentId];
-                }}
-
-                return {{ success: true }};
-            }})()"#
-            );
-
-            renderer
-                .runtime
-                .execute_script(
-                    format!("clear_old_{}.js", component_id.cow_replace('/', "_")),
-                    clear_script,
-                )
-                .await
-                .map_err(|e| {
-                    tracing::error!(
-                        component_id = component_id.as_str(),
-                        error = %e,
-                        "Failed to clear old component"
-                    );
-                    RariError::js_execution(format!("Failed to clear old component: {e}"))
-                })?;
-
-            let registration_script = format!(
-                r#"(async function() {{
-                try {{
-                    const moduleNamespace = await import("{hmr_specifier}");
-                    const componentId = "{component_id}";
-
-                    if (moduleNamespace.default) {{
-                        globalThis[componentId] = moduleNamespace.default;
-                        if (typeof globalThis[componentId] === 'function') {{
-                            globalThis[componentId].__hmr_timestamp = Date.now();
-                            globalThis[componentId].__hmr_specifier = "{hmr_specifier}";
-                        }}
-                    }} else {{
-                        const exports = Object.values(moduleNamespace).filter(v => typeof v === 'function');
-                        if (exports.length > 0) {{
-                            globalThis[componentId] = exports[0];
-                            if (typeof globalThis[componentId] === 'function') {{
-                                globalThis[componentId].__hmr_timestamp = Date.now();
-                                globalThis[componentId].__hmr_specifier = "{hmr_specifier}";
-                            }}
-                        }}
-                    }}
-
-                    for (const [key, value] of Object.entries(moduleNamespace)) {{
-                        if (key !== 'default' && typeof value === 'function') {{
-                            globalThis[key] = value;
-                        }}
-                    }}
-
-                    if (!globalThis['~rsc']) globalThis['~rsc'] = {{}};
-                    if (!globalThis['~rsc'].modules) globalThis['~rsc'].modules = {{}};
-                    globalThis['~rsc'].modules[componentId] = moduleNamespace;
-
-                    const component = globalThis[componentId];
-
-                    return {{ success: true, hasDefault: !!moduleNamespace.default, timestamp: component?.__hmr_timestamp }};
-                }} catch (error) {{
-                    return {{ success: false, error: error.message }};
-                }}
-            }})()"#
-            );
-
-            renderer
-                .runtime
-                .execute_script(
-                    format!("register_esm_{}.js", component_id.cow_replace('/', "_")),
-                    registration_script,
-                )
-                .await
-                .map_err(|e| {
-                    tracing::error!(
-                        component_id = component_id.as_str(),
-                        error = %e,
-                        "Failed to register ESM module exports to globalThis"
-                    );
-                    RariError::js_execution(format!("Failed to register ESM module: {e}"))
-                })?;
+            renderer.runtime.load_component_code(&component_id, &dist_code).await?;
 
             renderer.clear_script_cache();
 
