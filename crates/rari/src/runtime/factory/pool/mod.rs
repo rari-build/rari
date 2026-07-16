@@ -543,36 +543,15 @@ impl JsRuntimePool {
     ) -> Result<(ModuleId, Value), RariError> {
         self.probe_and_heal().await;
         let specifier = specifier.to_string();
-        let first = self.pick().ok_or_else(|| {
-            RariError::js_runtime("No healthy JS runtime available in pool".to_string())
-        })?;
-        let mut candidates: Vec<usize> = self.all_healthy_indices();
-        candidates.retain(|&i| i != first);
-        candidates.insert(0, first);
-
-        for idx in candidates {
-            let Some(runtime) = self.runtime_at(idx) else {
-                continue;
-            };
-            let Ok(_lease) = self.acquire_slot_lease_for_execute(idx, &runtime).await else {
-                continue;
-            };
-            let runtime_for_op = Arc::clone(&runtime);
+        self.execute_on_admitted_healthy_slot("load_and_evaluate_on_picked", move |runtime| {
             let specifier = specifier.clone();
-            return self
-                .run_with_timeout_on_slot(
-                    idx,
-                    "load_and_evaluate_on_picked",
-                    &runtime,
-                    async move {
-                        let module_id = runtime_for_op.load_es_module(&specifier).await?;
-                        let value = runtime_for_op.evaluate_module(module_id).await?;
-                        Ok((module_id, value))
-                    },
-                )
-                .await;
-        }
-        Err(RariError::js_runtime("No healthy JS runtime available in pool".to_string()))
+            async move {
+                let module_id = runtime.load_es_module(&specifier).await?;
+                let value = runtime.evaluate_module(module_id).await?;
+                Ok((module_id, value))
+            }
+        })
+        .await
     }
 
     pub async fn with_request_context<F, Fut, T>(
@@ -686,24 +665,5 @@ impl JsRuntimePool {
         })
         .await
         .map_err(|e| RariError::js_runtime(format!("with_request_context task join failed: {e}")))?
-    }
-
-    pub(super) async fn run_with_timeout_on_slot<T, Fut>(
-        &self,
-        idx: usize,
-        label: &str,
-        expected: &Arc<dyn JsRuntimeInterface>,
-        fut: Fut,
-    ) -> Result<T, RariError>
-    where
-        Fut: Future<Output = Result<T, RariError>>,
-    {
-        match time::timeout(Duration::from_millis(self.timeout_ms), fut).await {
-            Ok(result) => result,
-            Err(_) => {
-                self.mark_unhealthy_if_runtime_matches(idx, expected);
-                Err(RariError::timeout(format!("{label} timed out after {} ms", self.timeout_ms)))
-            }
-        }
     }
 }
