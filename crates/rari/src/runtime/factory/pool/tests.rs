@@ -1181,6 +1181,51 @@ async fn with_request_context_returns_cleanup_error_and_quarantines() {
 }
 
 #[tokio::test]
+#[expect(clippy::unwrap_used, reason = "test task joins are hard failures")]
+async fn queued_waiter_rejects_contaminated_slot_before_rebuild() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let runtime: Arc<dyn JsRuntimeInterface> = Arc::new(CountingRuntime::new(Arc::clone(&calls)));
+    let pool = pool_from_runtimes(vec![Arc::clone(&runtime)], DEFAULT_TIMEOUT_MS, HEAL_DISABLED);
+
+    let pool_hold = Arc::clone(&pool);
+    let blocker = tokio::spawn(async move {
+        pool_hold
+            .with_request_context(
+                Arc::new(RequestContext::new("/block".to_string())),
+                |_rt| async {
+                    sleep(Duration::from_millis(200)).await;
+                    Ok(())
+                },
+            )
+            .await
+    });
+
+    sleep(Duration::from_millis(10)).await;
+    pool.mark_needs_rebuild(0);
+
+    let pool_exec = Arc::clone(&pool);
+    let exec = tokio::spawn(async move { pool_exec.execute_script("x".into(), "1".into()).await });
+
+    sleep(Duration::from_millis(50)).await;
+    assert_eq!(
+        calls.load(Ordering::SeqCst),
+        0,
+        "waiter must not execute while slot is contaminated"
+    );
+
+    let blocker_result = blocker.await.unwrap();
+    assert!(blocker_result.is_ok(), "blocker should complete cleanly");
+
+    let result = exec.await.unwrap();
+    assert!(result.is_err(), "must reject contaminated slot after acquiring lease");
+    assert_eq!(
+        calls.load(Ordering::SeqCst),
+        0,
+        "waiter must not execute on contaminated runtime before rebuild"
+    );
+}
+
+#[tokio::test]
 async fn setup_mode_error_message_uses_executed_not_total() {
     let (pool, flags) = build_pool_with_fail_flags(4);
     pool.mark_unhealthy(1);

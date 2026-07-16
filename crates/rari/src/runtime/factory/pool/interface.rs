@@ -45,7 +45,7 @@ impl JsRuntimePool {
                 let script_code = script_code.clone();
                 let pool = self;
                 slot_futs.push(async move {
-                    let _lease = match pool.acquire_slot_lease(idx).await {
+                    let _lease = match pool.acquire_slot_lease_for_execute(idx, &runtime).await {
                         Ok(guard) => guard,
                         Err(e) => return Err(format!("runtime[{idx}]: {e}")),
                     };
@@ -88,25 +88,33 @@ impl JsRuntimePool {
                 )))
             }
         } else {
-            let Some(idx) = self.pick() else {
-                return Err(pool_unavailable_error());
-            };
-            let Some(runtime) = self.runtime_at(idx) else {
-                return Err(pool_unavailable_error());
-            };
-            let _lease = self.acquire_slot_lease(idx).await?;
-            match time::timeout(
-                Duration::from_millis(timeout_ms),
-                runtime.execute_script(script_name, script_code),
-            )
-            .await
-            {
-                Ok(result) => result,
-                Err(_) => {
-                    self.mark_unhealthy(idx);
-                    Err(timeout_error("execute_script", timeout_ms))
+            for attempt in 0..2 {
+                let Some(idx) = self.pick() else {
+                    return Err(pool_unavailable_error());
+                };
+                let Some(runtime) = self.runtime_at(idx) else {
+                    return Err(pool_unavailable_error());
+                };
+                let lease_result = self.acquire_slot_lease_for_execute(idx, &runtime).await;
+                match lease_result {
+                    Ok(_lease) => {}
+                    Err(_e) if attempt == 0 => continue,
+                    Err(e) => return Err(e),
+                }
+                match time::timeout(
+                    Duration::from_millis(timeout_ms),
+                    runtime.execute_script(script_name, script_code),
+                )
+                .await
+                {
+                    Ok(result) => return result,
+                    Err(_) => {
+                        self.mark_unhealthy_if_runtime_matches(idx, &runtime);
+                        return Err(timeout_error("execute_script", timeout_ms));
+                    }
                 }
             }
+            Err(pool_unavailable_error())
         }
     }
 
@@ -132,25 +140,33 @@ impl JsRuntimePool {
     ) -> Result<Value, RariError> {
         self.probe_and_heal().await;
         let timeout_ms = self.timeout_ms;
-        let Some(idx) = self.pick() else {
-            return Err(pool_unavailable_error());
-        };
-        let Some(runtime) = self.runtime_at(idx) else {
-            return Err(pool_unavailable_error());
-        };
-        let _lease = self.acquire_slot_lease(idx).await?;
-        let function_name = function_name.to_string();
-        match time::timeout(
-            Duration::from_millis(timeout_ms),
-            runtime.execute_function(&function_name, args),
-        )
-        .await
-        {
-            Ok(result) => result,
-            Err(_) => {
-                self.mark_unhealthy(idx);
-                Err(timeout_error("execute_function", timeout_ms))
+        for attempt in 0..2 {
+            let Some(idx) = self.pick() else {
+                return Err(pool_unavailable_error());
+            };
+            let Some(runtime) = self.runtime_at(idx) else {
+                return Err(pool_unavailable_error());
+            };
+            let lease_result = self.acquire_slot_lease_for_execute(idx, &runtime).await;
+            match lease_result {
+                Ok(_lease) => {}
+                Err(_e) if attempt == 0 => continue,
+                Err(e) => return Err(e),
+            }
+            let function_name = function_name.to_string();
+            match time::timeout(
+                Duration::from_millis(timeout_ms),
+                runtime.execute_function(&function_name, args),
+            )
+            .await
+            {
+                Ok(result) => return result,
+                Err(_) => {
+                    self.mark_unhealthy_if_runtime_matches(idx, &runtime);
+                    return Err(timeout_error("execute_function", timeout_ms));
+                }
             }
         }
+        Err(pool_unavailable_error())
     }
 }
