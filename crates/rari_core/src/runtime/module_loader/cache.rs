@@ -8,7 +8,7 @@ use dashmap::DashMap;
 use rari_error::RariError;
 use serde_json::Value;
 
-use crate::server::{
+use crate::{
     cache::{CacheHandlerRegistry, MemoryCacheHandler, MemoryConfig, handler::CacheHandler},
     config::CacheLayerConfig,
 };
@@ -194,7 +194,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_corrupt_data_evicts_key() {
-        use crate::server::cache::handler::CacheHandler;
+        use crate::cache::handler::CacheHandler;
 
         let handler = Arc::new(MemoryCacheHandler::default());
         let cache = ModuleCaching::with_handler(4, DEFAULT_TTL_SECS, handler.clone());

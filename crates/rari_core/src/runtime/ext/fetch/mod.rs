@@ -3,7 +3,7 @@ use std::sync::Arc;
 use deno_core::{Extension, ExtensionArguments, extension};
 
 use super::{ExtensionTrait, lazy};
-use crate::{runtime::ops, server::middleware::request_context::RequestContext};
+use crate::{request_context::RequestContext, runtime::ops};
 
 extension!(
     rari_fetch,

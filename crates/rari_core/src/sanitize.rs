@@ -72,6 +72,18 @@ pub fn sanitize_html_output(html: &str) -> String {
     sanitized_html
 }
 
+pub fn is_valid_cookie_name(s: &str) -> bool {
+    !s.is_empty() && s.bytes().all(|b| b > 32 && b < 127 && !b"()<>@,;:\\\"/[]?={} \t".contains(&b))
+}
+
+pub fn is_valid_cookie_value(s: &str) -> bool {
+    s.bytes().all(|b| matches!(b, 0x21 | 0x23..=0x2B | 0x2D..=0x3A | 0x3C..=0x5B | 0x5D..=0x7E))
+}
+
+pub fn is_valid_attr_value(s: &str) -> bool {
+    !s.is_empty() && s.is_ascii() && s.bytes().all(|b| b >= 32 && b != b';' && b != 127)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

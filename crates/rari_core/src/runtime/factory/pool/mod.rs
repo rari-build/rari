@@ -34,7 +34,7 @@ pub use handle::PooledRuntime;
 pub use strategy::{PickStrategy, RoundRobinStrategy};
 
 use super::interface::JsRuntimeInterface;
-use crate::server::middleware::request_context::RequestContext;
+use crate::request_context::RequestContext;
 
 /// Matches [`crate::runtime::JsExecutionRuntime`] default script timeout.
 pub const DEFAULT_TIMEOUT_MS: u64 = 30_000;

@@ -4,7 +4,7 @@ use rari_error::RariError;
 use serde_json::Value;
 use tokio::sync::{mpsc, mpsc::Sender};
 
-use crate::server::middleware::request_context::RequestContext;
+use crate::request_context::RequestContext;
 
 pub type BatchResultReceiver = mpsc::UnboundedReceiver<(usize, Result<Value, RariError>)>;
 pub type AsyncBatchResult = Pin<Box<dyn Future<Output = BatchResultReceiver> + Send>>;

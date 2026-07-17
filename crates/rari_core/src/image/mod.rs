@@ -23,7 +23,10 @@ pub use types::{DEFAULT_IMAGE_QUALITY, ImageFormat, OptimizeParams, OptimizedIma
 use crate::{config::Config, error_response};
 
 #[derive(Clone)]
-#[non_exhaustive]
+#[expect(
+    clippy::exhaustive_structs,
+    reason = "cross-crate boundary type: backends construct this exhaustively; in-tree so no semver isolation"
+)]
 pub struct ImageState {
     pub optimizer: Arc<ImageOptimizer>,
 }

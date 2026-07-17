@@ -6,7 +6,7 @@ use serde_json::Value;
 use tokio::{sync::mpsc::Sender, time};
 
 use super::super::interface::{AsyncBatchResult, JsRuntimeInterface};
-use crate::server::middleware::request_context::RequestContext;
+use crate::request_context::RequestContext;
 
 macro_rules! forward_async_to_runtime_with_timeout {
     ($(

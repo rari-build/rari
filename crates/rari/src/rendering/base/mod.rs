@@ -2,7 +2,7 @@ pub mod constants;
 pub mod loader;
 pub mod renderer;
 pub mod renderer_lock;
-pub mod sanitizer;
+pub use rari_core::sanitize as sanitizer;
 pub mod types;
 pub mod utils;
 

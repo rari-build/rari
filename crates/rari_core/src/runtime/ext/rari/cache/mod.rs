@@ -1,6 +1,6 @@
 use deno_core::{Extension, ExtensionArguments};
 
-use crate::server::config::CacheLayerConfig;
+use crate::config::CacheLayerConfig;
 
 pub mod redb_cache;
 pub mod redis_cache;
@@ -28,7 +28,7 @@ pub fn extensions(is_snapshot: bool) -> (Vec<Extension>, Vec<ExtensionArguments>
 #[cfg(test)]
 mod tests {
     use super::{configured_remote_handler, remote_layer_has_url};
-    use crate::server::config::CacheLayerConfig;
+    use crate::config::CacheLayerConfig;
 
     fn layer(handler: &str, url: Option<&str>) -> CacheLayerConfig {
         CacheLayerConfig {

@@ -16,12 +16,9 @@ use serde::Deserialize;
 use tokio::sync::mpsc;
 
 use crate::{
-    rendering::base,
-    server::{
-        actions,
-        core::utils::client,
-        middleware::request_context::{PendingCookie, PendingCookieKey, RequestContext},
-    },
+    client,
+    request_context::{PendingCookie, PendingCookieKey, RequestContext},
+    sanitize,
 };
 
 #[derive(Deserialize, Debug)]
@@ -379,7 +376,7 @@ pub fn op_internal_log(#[string] message: &str) {
 #[op2]
 #[string]
 pub fn op_sanitize_html(#[string] html: &str, #[string] _component_id: &str) -> String {
-    base::sanitize_html_output(html)
+    sanitize::sanitize_html_output(html)
 }
 
 fn http_status_text(status: u16) -> &'static str {
@@ -612,11 +609,11 @@ pub fn op_set_cookie(
     state: Rc<RefCell<OpState>>,
     #[serde] args: SetCookieArgs,
 ) -> Result<(), JsErrorBox> {
-    if !actions::is_valid_cookie_name(&args.name) {
+    if !sanitize::is_valid_cookie_name(&args.name) {
         return Err(JsErrorBox::type_error(format!("Invalid cookie name: '{}'", args.name)));
     }
 
-    if !actions::is_valid_cookie_value(&args.value) {
+    if !sanitize::is_valid_cookie_value(&args.value) {
         return Err(JsErrorBox::type_error(format!(
             "Invalid cookie value for '{}': contains invalid characters",
             args.name
@@ -624,7 +621,7 @@ pub fn op_set_cookie(
     }
 
     if let Some(ref path) = args.path
-        && !actions::is_valid_attr_value(path)
+        && !sanitize::is_valid_attr_value(path)
     {
         return Err(JsErrorBox::type_error(format!(
             "Invalid cookie path for '{}': '{}'",
@@ -633,7 +630,7 @@ pub fn op_set_cookie(
     }
 
     if let Some(ref domain) = args.domain
-        && !actions::is_valid_attr_value(domain)
+        && !sanitize::is_valid_attr_value(domain)
     {
         return Err(JsErrorBox::type_error(format!(
             "Invalid cookie domain for '{}': '{}'",

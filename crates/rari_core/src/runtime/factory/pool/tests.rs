@@ -18,7 +18,7 @@ use tokio::{
 };
 
 use super::*;
-use crate::server::middleware::request_context::RequestContext;
+use crate::request_context::RequestContext;
 
 struct CountingRuntime {
     calls: Arc<AtomicUsize>,

@@ -399,14 +399,7 @@ pub fn parse_action_form_state_from_cookie(cookie_header: Option<&str>) -> Optio
     decode_action_form_state_cookie_value(&encoded)
 }
 
-pub fn action_form_state_sync_script(form_state: Option<&Value>) -> String {
-    match form_state {
-        Some(state) => format!(
-            "globalThis['~rari'] = globalThis['~rari'] || {{}}; globalThis['~rari'].actionFormState = {state};"
-        ),
-        None => "if (globalThis['~rari']) delete globalThis['~rari'].actionFormState;".to_string(),
-    }
-}
+pub use rari_core::action_state::action_form_state_sync_script;
 
 fn action_export_name(action_id: &str) -> &str {
     action_id.rsplit_once('#').map_or("default", |(_, export_name)| export_name)
@@ -952,17 +945,7 @@ fn append_pending_cookies(
     }
 }
 
-pub fn is_valid_cookie_name(s: &str) -> bool {
-    !s.is_empty() && s.bytes().all(|b| b > 32 && b < 127 && !b"()<>@,;:\\\"/[]?={} \t".contains(&b))
-}
-
-pub fn is_valid_cookie_value(s: &str) -> bool {
-    s.bytes().all(|b| matches!(b, 0x21 | 0x23..=0x2B | 0x2D..=0x3A | 0x3C..=0x5B | 0x5D..=0x7E))
-}
-
-pub fn is_valid_attr_value(s: &str) -> bool {
-    !s.is_empty() && s.is_ascii() && s.bytes().all(|b| b >= 32 && b != b';' && b != 127)
-}
+pub use rari_core::sanitize::{is_valid_attr_value, is_valid_cookie_name, is_valid_cookie_value};
 
 pub fn build_set_cookie_header(cookie: &PendingCookie) -> Result<String, RariError> {
     if !is_valid_cookie_name(&cookie.name) {

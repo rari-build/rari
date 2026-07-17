@@ -1,7 +1,7 @@
-pub mod metadata;
+pub use rari_core::metadata;
 pub mod rendering;
 pub mod rsc;
-pub mod runtime;
+pub use rari_core::runtime;
 pub mod server;
 pub use rari_core::utils;
 pub use ::async_trait;

@@ -37,12 +37,13 @@ use super::{
     transpiler::{needs_jsx_transpilation, needs_typescript_transpilation},
 };
 use crate::{
-    rsc::{DependencyList, extract_dependencies},
+    cache::handler::CacheHandlerRegistry,
+    component::{DependencyList, extract_dependencies},
+    config::CacheLayerConfig,
     runtime::{
         ext::{NodeCodeTranslator, NpmPackageFolderResolverImpl, Resolver},
         transpile,
     },
-    server::{cache::handler::CacheHandlerRegistry, config::CacheLayerConfig},
     utils::path::path_to_file_url,
 };
 

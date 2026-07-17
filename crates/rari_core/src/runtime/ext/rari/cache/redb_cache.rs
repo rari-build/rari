@@ -16,7 +16,7 @@ use deno_error::JsErrorBox;
 use redb::ReadableDatabase;
 use tokio::task::{JoinError, spawn_blocking};
 
-use crate::{runtime::ext::ExtensionTrait, server::config::Config};
+use crate::{config::Config, runtime::ext::ExtensionTrait};
 
 const DEFAULT_TTL_SECS: u64 = 60;
 const EXPIRY_NEVER: u64 = 0;

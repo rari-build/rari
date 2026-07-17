@@ -1,4 +1,4 @@
-pub(crate) mod component_ops;
+pub mod component_ops;
 mod create_params;
 mod executor;
 mod interface;

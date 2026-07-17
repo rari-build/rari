@@ -5,7 +5,7 @@ use deno_error::JsErrorBox;
 use redis::{AsyncCommands, aio::MultiplexedConnection};
 use tokio::{sync::Mutex, time};
 
-use crate::{runtime::ext::ExtensionTrait, server::config::Config};
+use crate::{config::Config, runtime::ext::ExtensionTrait};
 
 const DEFAULT_TTL_SECS: u64 = 60;
 const MS_PER_SEC: u64 = 1_000;

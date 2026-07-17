@@ -19,15 +19,13 @@ use factory::JsRuntimeInterface;
 
 use crate::{
     metadata,
+    request_context::RequestContext,
+    routing::types::ParamValue,
     runtime::factory::{
         RariRuntime,
         component_ops::{
             build_invalidate_script, invalidate_script_name, load_component_code as load_component,
         },
-    },
-    server::{
-        middleware::request_context::RequestContext,
-        routing::types::ParamValue,
     },
 };
 
