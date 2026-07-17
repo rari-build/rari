@@ -14,7 +14,6 @@ use std::{
 };
 
 use cow_utils::CowUtils;
-use parking_lot::Mutex as PMutex;
 use rari_error::RariError;
 use regex::Regex;
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -67,8 +66,6 @@ pub fn hash_string(s: &str) -> String {
     s.hash(&mut hasher);
     format!("{:x}", hasher.finish())
 }
-
-static CIRCULAR_DETECTION: OnceLock<PMutex<FxHashSet<String>>> = OnceLock::new();
 
 type ComponentDependencies = DependencyList;
 
@@ -261,6 +258,7 @@ impl ComponentRegistry {
     pub fn get_unloaded_components_in_order(&self) -> ComponentDependencies {
         let mut result = ComponentDependencies::new();
         let mut visited = FxHashSet::default();
+        let mut circular_detection = FxHashSet::default();
 
         let unloaded: ComponentDependencies = self
             .components
@@ -270,7 +268,12 @@ impl ComponentRegistry {
             .collect();
 
         for component_id in unloaded {
-            self.topological_sort_helper(&component_id, &mut visited, &mut result);
+            self.topological_sort_helper(
+                &component_id,
+                &mut visited,
+                &mut circular_detection,
+                &mut result,
+            );
         }
 
         result
@@ -280,45 +283,30 @@ impl ComponentRegistry {
         &self,
         component_id: &str,
         visited: &mut FxHashSet<String>,
+        circular_detection: &mut FxHashSet<String>,
         result: &mut ComponentDependencies,
     ) {
         if visited.contains(component_id) {
             return;
         }
 
-        let has_circular_dependency = {
-            let circular_detection =
-                CIRCULAR_DETECTION.get_or_init(|| PMutex::new(FxHashSet::default()));
-            let mut circular_set = circular_detection.lock();
-            if circular_set.contains(component_id) {
-                true
-            } else {
-                circular_set.insert(component_id.to_string());
-                false
-            }
-        };
-
-        if has_circular_dependency {
+        if circular_detection.contains(component_id) {
             eprintln!("Warning: Circular dependency detected for component: {component_id}");
             return;
         }
 
+        circular_detection.insert(component_id.to_string());
         visited.insert(component_id.to_string());
 
         if let Some(deps) = self.dependency_graph.get(component_id) {
             for dep in deps {
                 if self.components.contains_key(dep) {
-                    self.topological_sort_helper(dep, visited, result);
+                    self.topological_sort_helper(dep, visited, circular_detection, result);
                 }
             }
         }
 
-        {
-            let circular_detection =
-                CIRCULAR_DETECTION.get_or_init(|| PMutex::new(FxHashSet::default()));
-            let mut circular_set = circular_detection.lock();
-            circular_set.remove(component_id);
-        }
+        circular_detection.remove(component_id);
 
         if let Some(component) = self.components.get(component_id)
             && !component.is_loaded
