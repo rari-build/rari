@@ -15,5 +15,8 @@ playwright/.cache
 crates/rari/src/runtime/ext/rari/react/vendor
 crates/rari/snapshots/*.bin
 crates/rari/snapshots/*.rs
+crates/rari_core/snapshots/*.bin
+crates/rari_core/snapshots/*.rs
+crates/rari_core/src/runtime/ext/rari/react/vendor
 .env
 *.node
