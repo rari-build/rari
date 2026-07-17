@@ -17,71 +17,12 @@ crate-type = [ "rlib" ]
 
 [features]
 default = []
-# Optional Deno leaf extensions
-ext-full = [
-  "dep:deno_webgpu",
-  "dep:deno_kv",
-  "dep:deno_cron",
-  "dep:deno_node_sqlite",
-]
+# Optional Deno leaf extensions — delegated to rari_core
+ext-full = ["rari_core/ext-full"]
 
 [dependencies]
 # === Shared core infrastructure ===
 rari_core = { path = "../rari_core" }
-
-# === Core Runtime Dependencies ===
-deno_core = { workspace = true }
-deno_error = { workspace = true }
-deno_features = { workspace = true }
-deno_bundle_runtime = { workspace = true }
-deno_runtime = { workspace = true }
-deno_permissions = { workspace = true }
-deno_process = { workspace = true }
-
-# === Essential Web APIs ===
-deno_cache = { workspace = true }
-deno_crypto = { workspace = true }
-deno_fetch = { workspace = true }
-deno_web = { workspace = true }
-deno_webidl = { workspace = true }
-deno_webstorage = { workspace = true }
-
-# === Network & HTTP ===
-deno_http = { workspace = true }
-deno_net = { workspace = true }
-deno_tls = { workspace = true }
-deno_websocket = { workspace = true }
-
-# === File System & I/O ===
-deno_fs = { workspace = true }
-deno_io = { workspace = true }
-
-# === Advanced Features ===
-deno_telemetry = { workspace = true }
-deno_webgpu = { workspace = true, optional = true }
-deno_kv = { workspace = true, optional = true }
-deno_cron = { workspace = true, optional = true }
-
-# === Node.js Integration ===
-deno_node = { workspace = true }
-deno_node_crypto = { workspace = true }
-deno_node_sqlite = { workspace = true, optional = true }
-deno_resolver = { workspace = true }
-node_resolver = { workspace = true }
-
-# === FFI & NAPI ===
-deno_ffi = { workspace = true }
-deno_napi = { workspace = true }
-
-# === Deno Tooling ===
-deno_ast = { workspace = true, features = [
-  "codegen",
-  "transforms",
-  "transpiling",
-  "visit"
-] }
-deno_package_json = { workspace = true }
-deno_semver = { workspace = true }
 
 # === Async & Concurrency ===
 async-compression = { version = "0.4.42", features = [
@@ -126,13 +67,11 @@ reqwest = { version = "0.13.4", default-features = false, features = [
   "rustls",
   "stream"
 ] }
-tokio-tungstenite = "0.30.0"
 tower = { version = "0.5.3", default-features = false, features = [ "util" ] }
 tower-http = { version = "0.7.0", features = [
   "compression-full",
   "fs"
 ] }
-tungstenite = "0.30.0"
 url = { workspace = true }
 urlencoding = "2.1.3"
 
@@ -154,25 +93,13 @@ zeno = "0.3.3"
 
 # === Serialization ===
 base64 = { workspace = true }
-rkyv = "0.8.17"
 serde = { workspace = true }
 serde_json = { workspace = true }
 
 # === System Integration ===
-hyper-util = { version = "0.1.20", features = [
-  "client-legacy",
-  "tokio"
-] }
 libc = "0.2.186"
 nix = { workspace = true, features = [ "term" ] }
 rustyline = { workspace = true }
-sys_traits = { workspace = true }
-windows-sys = { workspace = true, features = [
-  "Win32_Foundation",
-  "Win32_Storage_FileSystem",
-  "Win32_System_Console",
-  "Win32_UI_Input_KeyboardAndMouse",
-] }
 
 # === TLS & Crypto ===
 hex = { workspace = true }
@@ -186,14 +113,10 @@ sha2 = { workspace = true }
 bytes = { version = "1.12.1", features = [ "serde" ] }
 cow-utils = { workspace = true }
 dashmap = "6.2.1"
-lru = "0.18.1"
 parking_lot = { workspace = true }
-redis = { version = "1.3.0", default-features = false, features = [ "tokio-comp" ] }
-redb = "4.1.0"
 regex = { workspace = true }
 rustc-hash = { workspace = true }
 smallvec = { workspace = true }
-uuid = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 signal-hook = { version = "0.4.4", features = [ "iterator" ] }
