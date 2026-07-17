@@ -77,9 +77,9 @@ pub(crate) async fn invalidate_route_caches(
     state: &ServerState,
     path: &str,
 ) -> Result<(), RariError> {
-    state.response_cache.invalidate(path).await;
-    state.response_cache.invalidate_by_tag(path).await;
-    response::invalidate_static_fast_cache_for_path(&state.static_fast_cache, path);
+    state.core.response_cache.invalidate(path).await;
+    state.core.response_cache.invalidate_by_tag(path).await;
+    response::invalidate_static_fast_cache_for_path(&state.core.static_fast_cache, path);
     state.html_cache.remove(path);
 
     if let Err(e) = invalidate_use_cache_entries(&state.renderer, None, Some(path)).await {
@@ -89,11 +89,11 @@ pub(crate) async fn invalidate_route_caches(
 
     let rsc_cache_key =
         response::ResponseCache::generate_cache_key_with_mode(path, None, Some("rsc"), None);
-    state.response_cache.invalidate(&rsc_cache_key).await;
+    state.core.response_cache.invalidate(&rsc_cache_key).await;
 
-    for key in state.response_cache.get_all_keys() {
+    for key in state.core.response_cache.get_all_keys() {
         if response::ResponseCache::cache_key_matches_route(&key, path) {
-            state.response_cache.invalidate(&key).await;
+            state.core.response_cache.invalidate(&key).await;
         }
     }
 
@@ -158,8 +158,8 @@ pub async fn revalidate_by_path(
                 }
             }
 
-            state.response_cache.invalidate_by_tag(tag).await;
-            response::invalidate_static_fast_cache_for_path(&state.static_fast_cache, tag);
+            state.core.response_cache.invalidate_by_tag(tag).await;
+            response::invalidate_static_fast_cache_for_path(&state.core.static_fast_cache, tag);
             let use_cache_result =
                 invalidate_use_cache_entries(&state.renderer, Some(tag), None).await;
 

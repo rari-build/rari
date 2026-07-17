@@ -1,5 +1,2 @@
-pub mod metadata;
 pub mod metadata_injection;
-pub mod pretty_html;
-pub mod streaming_response;
-pub mod utils;
+pub use rari_core::rendering::{pretty_html, streaming_response, utils};

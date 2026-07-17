@@ -1,3 +1,2 @@
 pub mod proxy;
-pub mod request;
-pub mod request_context;
+pub use rari_core::{middleware::request, request_context};

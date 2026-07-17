@@ -1,674 +1,93 @@
-use std::{
-    borrow::Cow,
-    collections::hash_map::DefaultHasher,
-    hash::{Hash, Hasher},
-    sync::OnceLock,
-    time::Instant,
-};
+//! Backend-specific React Server Component (Flight) registry extension.
+//!
+//! This module re-exports the protocol-agnostic [`ComponentRegistry`] and
+//! provides a [`ClientReferenceRegistry`] side-map for Flight-specific
+//! client-reference metadata that is intentionally kept out of the base
+//! registy to keep it reusable across backends (TanStack Start, etc.).
 
 use cow_utils::CowUtils;
-use parking_lot::Mutex;
-use rari_error::RariError;
-use regex::Regex;
-use rustc_hash::{FxHashMap, FxHashSet};
-use serde::{Deserialize, Serialize};
-use smallvec::SmallVec;
+pub use rari_core::component_registry::*;
+use rustc_hash::FxHashMap;
 
-pub type DependencyList = SmallVec<[String; 4]>;
+// ---- Flight-specific client-reference registry ----------------------------
 
-static IMPORT_REGEX: OnceLock<Regex> = OnceLock::new();
-
-fn get_import_regex() -> &'static Regex {
-    IMPORT_REGEX.get_or_init(|| {
-        #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
-        Regex::new(r#"(?:import|from)\s*((?:['"])(.*?)(?:['"]))"#)
-            .expect("Failed to compile dependency extraction regex")
-    })
-}
-
-pub fn extract_dependencies(code: &str) -> DependencyList {
-    let import_regex = get_import_regex();
-    let mut dependencies = SmallVec::new();
-
-    for captures in import_regex.captures_iter(code) {
-        if captures.len() >= 3
-            && let Some(import_path) = captures.get(2)
-        {
-            let import_path_str = import_path.as_str().to_string();
-            if !import_path_str.starts_with("react")
-                && (import_path_str.starts_with('.')
-                    || import_path_str.starts_with('/')
-                    || import_path_str.contains('/'))
-            {
-                dependencies.push(import_path_str);
-            }
-        }
-    }
-
-    dependencies
-}
-
-pub fn hash_string(s: &str) -> String {
-    let mut hasher = DefaultHasher::new();
-    s.hash(&mut hasher);
-    format!("{:x}", hasher.finish())
-}
-
-static CIRCULAR_DETECTION: OnceLock<Mutex<FxHashSet<String>>> = OnceLock::new();
-
-type ComponentDependencies = DependencyList;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[non_exhaustive]
-pub enum ComponentType {
-    Client,
-    Server,
-    Shared,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[non_exhaustive]
-pub struct ComponentProp {
-    pub value: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[non_exhaustive]
-pub struct ComponentContext {
-    pub values: FxHashMap<String, String>,
-}
-
-#[derive(Clone)]
-#[non_exhaustive]
+/// Metadata for a component that has been designated as a Flight client
+/// reference (i.e. a "use client" boundary).
+#[derive(Debug, Clone)]
 #[expect(
-    clippy::struct_excessive_bools,
-    reason = "Component flags are intentionally boolean for clarity"
+    clippy::exhaustive_structs,
+    reason = "Known set of fields; backends construct exhaustively"
 )]
-pub struct TransformedComponent {
-    pub id: String,
-    pub source: String,
-    pub transformed_source: String,
-    pub dependencies: ComponentDependencies,
-    pub is_loaded: bool,
-    pub initially_loaded: bool,
-    pub module_specifier: Option<String>,
-    pub module_id: Option<usize>,
-    pub is_client_reference: bool,
-    pub client_reference_path: Option<String>,
-    pub client_reference_export: Option<String>,
-    pub is_stale: bool,
-    pub last_reload_timestamp: Option<Instant>,
-    pub reload_attempt_count: usize,
+pub struct ClientRefInfo {
+    pub file_path: String,
+    pub export_name: String,
 }
 
-pub struct ComponentRegistry {
-    components: FxHashMap<String, TransformedComponent>,
-    dependency_graph: FxHashMap<String, FxHashSet<String>>,
-    reverse_dependency_graph: FxHashMap<String, FxHashSet<String>>,
-    specifier_to_id: FxHashMap<String, String>,
+/// A side-map for client-reference metadata.
+///
+/// Flight protocol requires tracking which components are "client references"
+/// and their corresponding file/export identity.  This information lives here
+/// rather than on [`TransformedComponent`] so the base registry stays
+/// protocol-agnostic.
+pub struct ClientReferenceRegistry {
+    refs: FxHashMap<String, ClientRefInfo>,
 }
 
-impl ComponentRegistry {
+impl ClientReferenceRegistry {
     pub fn new() -> Self {
-        Self {
-            components: FxHashMap::default(),
-            dependency_graph: FxHashMap::default(),
-            reverse_dependency_graph: FxHashMap::default(),
-            specifier_to_id: FxHashMap::default(),
-        }
+        Self { refs: FxHashMap::default() }
     }
 
-    fn normalize_id(id: &str) -> Cow<'_, str> {
-        id.cow_replace('\\', "/")
+    /// Normalize backslashes to forward slashes for consistent keys.
+    fn normalize_id(id: &str) -> String {
+        id.cow_replace('\\', "/").into_owned()
     }
 
-    #[expect(clippy::missing_errors_doc)]
-    pub fn register_component(
-        &mut self,
-        id: &str,
-        source: &str,
-        transformed_source: String,
-        dependencies: ComponentDependencies,
-    ) -> Result<(), RariError> {
-        let component_id = Self::normalize_id(id).into_owned();
-        let dependencies: ComponentDependencies =
-            dependencies.into_iter().map(|dep| Self::normalize_id(&dep).into_owned()).collect();
-        let deps_set: FxHashSet<String> = dependencies.iter().cloned().collect();
-
-        if let Some(existing) = self.components.get(&component_id)
-            && let Some(old_specifier) = &existing.module_specifier
-        {
-            self.specifier_to_id.remove(old_specifier);
-        }
-
-        if let Some(old_deps) = self.dependency_graph.get(&component_id) {
-            let removed_deps: FxHashSet<_> = old_deps.difference(&deps_set).cloned().collect();
-            for dep in removed_deps {
-                if let Some(dependents) = self.reverse_dependency_graph.get_mut(&dep) {
-                    dependents.remove(&component_id);
-                    if dependents.is_empty() {
-                        self.reverse_dependency_graph.remove(&dep);
-                    }
-                }
-            }
-        }
-
-        self.components.insert(
-            component_id.clone(),
-            TransformedComponent {
-                id: component_id.clone(),
-                source: source.to_string(),
-                transformed_source,
-                dependencies,
-                is_loaded: false,
-                initially_loaded: false,
-                module_specifier: None,
-                module_id: None,
-                is_client_reference: false,
-                client_reference_path: None,
-                client_reference_export: None,
-                is_stale: false,
-                last_reload_timestamp: None,
-                reload_attempt_count: 0,
-            },
-        );
-
-        self.dependency_graph.insert(component_id.clone(), deps_set.clone());
-
-        for dep in deps_set {
-            self.reverse_dependency_graph
-                .entry(dep.clone())
-                .or_default()
-                .insert(component_id.clone());
-        }
-
-        Ok(())
-    }
-
-    pub fn mark_component_loaded(&mut self, id: &str) {
-        let normalized_id = Self::normalize_id(id);
-        if let Some(component) = self.components.get_mut(normalized_id.as_ref()) {
-            component.is_loaded = true;
-        }
-    }
-
-    pub fn mark_component_not_loaded(&mut self, id: &str) {
-        let normalized_id = Self::normalize_id(id);
-        if let Some(component) = self.components.get_mut(normalized_id.as_ref()) {
-            component.is_loaded = false;
-        }
-    }
-
-    pub fn mark_component_initially_loaded(&mut self, id: &str) {
-        let normalized_id = Self::normalize_id(id);
-        if let Some(component) = self.components.get_mut(normalized_id.as_ref()) {
-            component.initially_loaded = true;
-        }
-    }
-
-    pub fn mark_component_not_initially_loaded(&mut self, id: &str) {
-        let normalized_id = Self::normalize_id(id);
-        if let Some(component) = self.components.get_mut(normalized_id.as_ref()) {
-            component.initially_loaded = false;
-        }
-    }
-
-    #[cfg(test)]
-    pub fn has_been_initially_loaded(&self, id: &str) -> bool {
-        let normalized_id = Self::normalize_id(id);
-        self.components.get(normalized_id.as_ref()).is_some_and(|c| c.initially_loaded)
-    }
-
-    pub fn is_component_loaded(&self, id: &str) -> bool {
-        let normalized_id = Self::normalize_id(id);
-        self.components.get(normalized_id.as_ref()).is_some_and(|c| c.is_loaded)
-    }
-
-    pub fn get_component(&self, id: &str) -> Option<&TransformedComponent> {
-        let normalized_id = Self::normalize_id(id);
-        self.components.get(normalized_id.as_ref())
-    }
-
-    pub fn get_component_mut(&mut self, id: &str) -> Option<&mut TransformedComponent> {
-        let normalized_id = Self::normalize_id(id);
-        self.components.get_mut(normalized_id.as_ref())
-    }
-
-    pub fn get_all_components(&self) -> &FxHashMap<String, TransformedComponent> {
-        &self.components
-    }
-
-    pub fn get_unloaded_components_in_order(&self) -> ComponentDependencies {
-        let mut result = ComponentDependencies::new();
-        let mut visited = FxHashSet::default();
-
-        let unloaded: ComponentDependencies = self
-            .components
-            .iter()
-            .filter(|(_, c)| !c.is_loaded)
-            .map(|(id, _)| id.clone())
-            .collect();
-
-        for component_id in unloaded {
-            self.topological_sort_helper(&component_id, &mut visited, &mut result);
-        }
-
-        result
-    }
-
-    fn topological_sort_helper(
-        &self,
-        component_id: &str,
-        visited: &mut FxHashSet<String>,
-        result: &mut ComponentDependencies,
-    ) {
-        if visited.contains(component_id) {
-            return;
-        }
-
-        let has_circular_dependency = {
-            let circular_detection =
-                CIRCULAR_DETECTION.get_or_init(|| Mutex::new(FxHashSet::default()));
-            let mut circular_set = circular_detection.lock();
-            if circular_set.contains(component_id) {
-                true
-            } else {
-                circular_set.insert(component_id.to_string());
-                false
-            }
-        };
-
-        if has_circular_dependency {
-            eprintln!("Warning: Circular dependency detected for component: {component_id}");
-            return;
-        }
-
-        visited.insert(component_id.to_string());
-
-        if let Some(deps) = self.dependency_graph.get(component_id) {
-            for dep in deps {
-                if self.components.contains_key(dep) {
-                    self.topological_sort_helper(dep, visited, result);
-                }
-            }
-        }
-
-        {
-            let circular_detection =
-                CIRCULAR_DETECTION.get_or_init(|| Mutex::new(FxHashSet::default()));
-            let mut circular_set = circular_detection.lock();
-            circular_set.remove(component_id);
-        }
-
-        if let Some(component) = self.components.get(component_id)
-            && !component.is_loaded
-        {
-            result.push(component_id.to_string());
-        }
-    }
-
-    #[cfg(test)]
-    pub fn get_dependencies(&self, component_id: &str) -> Option<ComponentDependencies> {
-        let normalized_id = Self::normalize_id(component_id);
-        self.dependency_graph.get(normalized_id.as_ref()).map(|deps| deps.iter().cloned().collect())
-    }
-
-    #[cfg(test)]
-    pub fn get_dependents(&self, component_id: &str) -> Option<ComponentDependencies> {
-        let normalized_id = Self::normalize_id(component_id);
-        self.reverse_dependency_graph
-            .get(normalized_id.as_ref())
-            .map(|deps| deps.iter().cloned().collect())
-    }
-
-    #[cfg(test)]
-    pub fn set_module_info(&mut self, id: &str, specifier: String, module_id: usize) {
-        let normalized_id = Self::normalize_id(id);
-        if let Some(component) = self.components.get_mut(normalized_id.as_ref()) {
-            if let Some(old_specifier) = &component.module_specifier {
-                self.specifier_to_id.remove(old_specifier);
-            }
-
-            component.module_id = Some(module_id);
-            component.module_specifier = Some(specifier.clone());
-            component.is_loaded = true;
-
-            self.specifier_to_id.insert(specifier, normalized_id.into_owned());
-        }
-    }
-
-    #[cfg(test)]
-    pub fn has_module_info(&self, id: &str) -> bool {
-        let normalized_id = Self::normalize_id(id);
-        self.components
-            .get(normalized_id.as_ref())
-            .map(|c| c.module_id.is_some() && c.module_specifier.is_some())
-            .unwrap_or(false)
-    }
-
-    #[cfg(test)]
-    pub fn get_module_id(&self, id: &str) -> Option<usize> {
-        let normalized_id = Self::normalize_id(id);
-        self.components.get(normalized_id.as_ref()).and_then(|c| c.module_id)
-    }
-
-    #[cfg(test)]
-    pub fn get_module_specifier(&self, id: &str) -> Option<&str> {
-        let normalized_id = Self::normalize_id(id);
-        self.components.get(normalized_id.as_ref()).and_then(|c| c.module_specifier.as_deref())
-    }
-
-    pub fn get_by_specifier(&self, specifier: &str) -> Option<TransformedComponent> {
-        self.specifier_to_id.get(specifier).and_then(|id| self.components.get(id)).cloned()
-    }
-
-    pub fn create_module_specifier(&self, component_id: &str) -> String {
-        format!("file:///components/{component_id}.js")
-    }
-
-    pub fn is_component_registered(&self, id: &str) -> bool {
-        let normalized_id = Self::normalize_id(id);
-        self.components.contains_key(normalized_id.as_ref())
-    }
-
-    pub fn list_component_ids(&self) -> Vec<String> {
-        self.components.keys().cloned().collect()
-    }
-
-    pub fn mark_module_stale(&mut self, id: &str) {
-        let normalized_id = Self::normalize_id(id);
-        if let Some(component) = self.components.get_mut(normalized_id.as_ref()) {
-            component.is_stale = true;
-        }
-    }
-
-    #[cfg(test)]
-    pub fn is_module_stale(&self, id: &str) -> bool {
-        let normalized_id = Self::normalize_id(id);
-        self.components.get(normalized_id.as_ref()).map(|c| c.is_stale).unwrap_or(false)
-    }
-
-    pub fn get_stale_modules(&self) -> Vec<String> {
-        self.components
-            .iter()
-            .filter(|(_, component)| component.is_stale)
-            .map(|(id, _)| id.clone())
-            .collect()
-    }
-
-    pub fn update_module_reload_timestamp(&mut self, id: &str, timestamp: Instant) {
-        let normalized_id = Self::normalize_id(id);
-        if let Some(component) = self.components.get_mut(normalized_id.as_ref()) {
-            component.last_reload_timestamp = Some(timestamp);
-            component.is_stale = false;
-            component.reload_attempt_count += 1;
-        }
-    }
-
-    pub fn get_module_reload_timestamp(&self, id: &str) -> Option<Instant> {
-        let normalized_id = Self::normalize_id(id);
-        self.components.get(normalized_id.as_ref()).and_then(|c| c.last_reload_timestamp)
-    }
-
-    pub fn register_client_reference(&mut self, id: &str, file_path: &str, export_name: &str) {
+    /// Register a component as a client reference.
+    pub fn register(&mut self, id: &str, file_path: &str, export_name: &str) {
         let normalized_id = Self::normalize_id(id);
         let normalized_file_path = Self::normalize_id(file_path);
-
-        if let Some(component) = self.components.get_mut(normalized_id.as_ref()) {
-            component.is_client_reference = true;
-            component.client_reference_path = Some(normalized_file_path.into_owned());
-            component.client_reference_export = Some(export_name.to_string());
-        }
+        self.refs.insert(
+            normalized_id,
+            ClientRefInfo { file_path: normalized_file_path, export_name: export_name.to_string() },
+        );
     }
 
-    pub fn is_client_reference(&self, id: &str) -> bool {
+    /// Check whether the given component is a client reference.
+    pub fn is_reference(&self, id: &str) -> bool {
         let normalized_id = Self::normalize_id(id);
-        self.components.get(normalized_id.as_ref()).map(|c| c.is_client_reference).unwrap_or(false)
+        self.refs.contains_key(&normalized_id)
     }
 
-    #[cfg(test)]
-    pub fn get_client_reference_info(&self, id: &str) -> Option<(String, String)> {
+    /// Look up the file-path and export name for a client reference.
+    pub fn get_info(&self, id: &str) -> Option<&ClientRefInfo> {
         let normalized_id = Self::normalize_id(id);
-        self.components.get(normalized_id.as_ref()).and_then(|c| {
-            if c.is_client_reference {
-                c.client_reference_path
-                    .as_ref()
-                    .zip(c.client_reference_export.as_ref())
-                    .map(|(path, export)| (path.clone(), export.clone()))
-            } else {
-                None
-            }
-        })
-    }
-
-    pub fn find_dependency_code(&self, id: &str) -> Option<String> {
-        let normalized_id = Self::normalize_id(id);
-
-        if let Some(component) = self.components.get(normalized_id.as_ref()) {
-            return Some(component.source.clone());
-        }
-
-        let further_normalized_id = Self::normalize_component_id(normalized_id.as_ref());
-        if let Some(component) = self.components.get(&further_normalized_id) {
-            return Some(component.source.clone());
-        }
-
-        for (component_id, component) in &self.components {
-            if component_id.ends_with(&format!("/{further_normalized_id}"))
-                || component_id == &further_normalized_id
-            {
-                return Some(component.source.clone());
-            }
-        }
-
-        None
-    }
-
-    pub fn remove_component(&mut self, id: &str) {
-        let normalized_id = Self::normalize_id(id);
-        if let Some(component) = self.components.remove(normalized_id.as_ref()) {
-            self.dependency_graph.remove(normalized_id.as_ref());
-            for dependents in self.reverse_dependency_graph.values_mut() {
-                dependents.remove(normalized_id.as_ref());
-            }
-            if let Some(specifier) = &component.module_specifier {
-                self.specifier_to_id.remove(specifier);
-            }
-        }
-    }
-
-    fn normalize_component_id(id: &str) -> String {
-        let mut clean_id = id;
-        let is_relative = id.starts_with("./") || id.starts_with("../");
-
-        clean_id = clean_id.strip_prefix("./").unwrap_or(clean_id);
-        clean_id = clean_id.strip_prefix("../").unwrap_or(clean_id);
-
-        if is_relative && let Some(slash_idx) = clean_id.rfind('/') {
-            clean_id = &clean_id[slash_idx + 1..];
-        }
-
-        if let Some(dot_idx) = clean_id.rfind('.') {
-            clean_id[..dot_idx].to_string()
-        } else {
-            clean_id.to_string()
-        }
+        self.refs.get(&normalized_id)
     }
 }
 
-impl Default for ComponentRegistry {
+impl Default for ClientReferenceRegistry {
     fn default() -> Self {
         Self::new()
     }
 }
 
+// ---- Tests -----------------------------------------------------------------
+
 #[cfg(test)]
 #[expect(clippy::expect_used, clippy::unwrap_used)]
 mod tests {
-    use smallvec::smallvec;
+    use smallvec::SmallVec;
 
     use super::*;
 
     #[test]
-    fn test_extract_dependencies() {
-        let code = r"
-        import React from 'react';
-        import { useState } from 'react';
-        import Button from './Button';
-        import { Card, CardContent } from '../components/Card';
-
-        export default function Component() {
-            return <div>Test</div>;
-        }
-        ";
-
-        let dependencies = extract_dependencies(code);
-        assert_eq!(dependencies.len(), 2);
-        assert!(dependencies.contains(&"./Button".to_string()));
-        assert!(dependencies.contains(&"../components/Card".to_string()));
-    }
-
-    #[test]
-    fn test_component_type() {
-        let client_type = ComponentType::Client;
-        let server_type = ComponentType::Server;
-        let shared_type = ComponentType::Shared;
-
-        assert_eq!(format!("{client_type:?}"), "Client");
-        assert_eq!(format!("{server_type:?}"), "Server");
-        assert_eq!(format!("{shared_type:?}"), "Shared");
-    }
-
-    #[test]
-    fn test_component_prop() {
-        let prop = ComponentProp { value: "test value".to_string() };
-        assert_eq!(prop.value, "test value");
-    }
-
-    #[test]
-    fn test_component_registry() {
-        let mut registry = ComponentRegistry::new();
-
-        registry
-            .register_component(
-                "TestComponent",
-                "function TestComponent() { return <div>Test</div>; }",
-                "function TestComponent() { return React.createElement('div', null, 'Test'); }"
-                    .to_string(),
-                smallvec![],
-            )
-            .expect("Failed to register test component");
-
-        let component =
-            registry.get_component("TestComponent").expect("TestComponent should be registered");
-        assert_eq!(component.id, "TestComponent");
-        assert_eq!(
-            component.transformed_source,
-            "function TestComponent() { return React.createElement('div', null, 'Test'); }"
-        );
-
-        assert!(registry.get_component("NonExistentComponent").is_none());
-    }
-
-    #[test]
-    fn test_dependency_resolution() {
-        let mut registry = ComponentRegistry::new();
-
-        registry
-            .register_component(
-                "ComponentA",
-                "source A",
-                "transformed A".to_string(),
-                smallvec!["ComponentB".to_string(), "ComponentC".to_string()],
-            )
-            .expect("Failed to register ComponentA");
-
-        registry
-            .register_component(
-                "ComponentB",
-                "source B",
-                "transformed B".to_string(),
-                smallvec!["ComponentC".to_string()],
-            )
-            .expect("Failed to register ComponentB");
-
-        registry
-            .register_component("ComponentC", "source C", "transformed C".to_string(), smallvec![])
-            .expect("Failed to register ComponentC");
-
-        let order = registry.get_unloaded_components_in_order();
-
-        assert!(
-            order.iter().position(|id| id == "ComponentC").expect("ComponentC should be in order")
-                < order
-                    .iter()
-                    .position(|id| id == "ComponentB")
-                    .expect("ComponentB should be in order")
-        );
-
-        assert!(
-            order.iter().position(|id| id == "ComponentB").expect("ComponentB should be in order")
-                < order
-                    .iter()
-                    .position(|id| id == "ComponentA")
-                    .expect("ComponentA should be in order")
-        );
-    }
-
-    #[test]
-    fn test_circular_dependency_resolution() {
-        let mut registry = ComponentRegistry::new();
-
-        registry
-            .register_component(
-                "ComponentX",
-                "source X",
-                "transformed X".to_string(),
-                smallvec!["ComponentY".to_string()],
-            )
-            .expect("Failed to register ComponentX with dependency");
-
-        registry
-            .register_component(
-                "ComponentY",
-                "source Y",
-                "transformed Y".to_string(),
-                smallvec!["ComponentZ".to_string()],
-            )
-            .expect("Failed to register ComponentY with dependency");
-
-        registry
-            .register_component(
-                "ComponentZ",
-                "source Z",
-                "transformed Z".to_string(),
-                smallvec!["ComponentX".to_string()],
-            )
-            .expect("Failed to register ComponentZ with dependency");
-
-        let order = registry.get_unloaded_components_in_order();
-
-        assert_eq!(order.len(), 3);
-        assert!(order.contains(&"ComponentX".to_string()));
-        assert!(order.contains(&"ComponentY".to_string()));
-        assert!(order.contains(&"ComponentZ".to_string()));
-    }
-
-    #[test]
-    fn test_normalize_component_id() {
-        assert_eq!(ComponentRegistry::normalize_component_id("./component.tsx"), "component");
-        assert_eq!(ComponentRegistry::normalize_component_id("../utils/helper.js"), "helper");
-        assert_eq!(ComponentRegistry::normalize_component_id("Button"), "Button");
-        assert_eq!(
-            ComponentRegistry::normalize_component_id("components/Button.jsx"),
-            "components/Button"
-        );
-    }
-
-    #[test]
     fn test_client_reference_functionality() {
-        let mut registry = ComponentRegistry::new();
+        let mut client_refs = ClientReferenceRegistry::new();
 
+        // Component must be registered in the base registry as well for a
+        // realistic scenario, but the side-map operates independently.
+        let mut registry = ComponentRegistry::new();
         registry
             .register_component(
                 "MyComponent",
@@ -678,168 +97,42 @@ mod tests {
             )
             .expect("Failed to register MyComponent");
 
-        assert!(!registry.is_client_reference("MyComponent"));
-        assert!(registry.get_client_reference_info("MyComponent").is_none());
+        assert!(!client_refs.is_reference("MyComponent"));
+        assert!(client_refs.get_info("MyComponent").is_none());
 
-        registry.register_client_reference("MyComponent", "/components/MyComponent.tsx", "default");
+        client_refs.register("MyComponent", "/components/MyComponent.tsx", "default");
 
-        assert!(registry.is_client_reference("MyComponent"));
+        assert!(client_refs.is_reference("MyComponent"));
 
-        let info = registry.get_client_reference_info("MyComponent");
+        let info = client_refs.get_info("MyComponent");
         assert!(info.is_some());
-        let (path, export) = info.expect("Component info should be available");
-        assert_eq!(path, "/components/MyComponent.tsx");
-        assert_eq!(export, "default");
+        assert_eq!(info.unwrap().file_path, "/components/MyComponent.tsx");
+        assert_eq!(info.unwrap().export_name, "default");
 
-        assert!(!registry.is_client_reference("NonExistent"));
-        assert!(registry.get_client_reference_info("NonExistent").is_none());
-    }
-
-    #[test]
-    fn test_path_normalization_with_backslashes() {
-        let mut registry = ComponentRegistry::new();
-
-        registry
-            .register_component("a\\b", "source", "transformed".to_string(), smallvec![])
-            .expect("Failed to register component with backslash");
-
-        assert!(registry.is_component_registered("a/b"));
-        assert!(registry.is_component_registered("a\\b"));
-        assert!(registry.get_component("a/b").is_some());
-        assert!(registry.get_component("a\\b").is_some());
-
-        let component = registry.get_component("a/b").unwrap();
-        assert_eq!(component.id, "a/b");
-    }
-
-    #[test]
-    fn test_path_normalization_with_mixed_separators() {
-        let mut registry = ComponentRegistry::new();
-
-        registry
-            .register_component("a/b\\c", "source", "transformed".to_string(), smallvec![])
-            .expect("Failed to register component with mixed separators");
-
-        assert!(registry.is_component_registered("a/b/c"));
-        assert!(registry.is_component_registered("a/b\\c"));
-        assert!(registry.is_component_registered("a\\b/c"));
-        assert!(registry.is_component_registered("a\\b\\c"));
-
-        let component = registry.get_component("a/b/c").unwrap();
-        assert_eq!(component.id, "a/b/c");
-    }
-
-    #[test]
-    fn test_dependency_normalization_with_backslashes() {
-        let mut registry = ComponentRegistry::new();
-
-        registry
-            .register_component(
-                "ComponentA",
-                "source A",
-                "transformed A".to_string(),
-                smallvec!["utils\\ComponentB".to_string(), "lib/ComponentC".to_string()],
-            )
-            .expect("Failed to register ComponentA");
-
-        registry
-            .register_component(
-                "utils/ComponentB",
-                "source B",
-                "transformed B".to_string(),
-                smallvec!["lib\\ComponentC".to_string()],
-            )
-            .expect("Failed to register ComponentB");
-
-        registry
-            .register_component(
-                "lib\\ComponentC",
-                "source C",
-                "transformed C".to_string(),
-                smallvec![],
-            )
-            .expect("Failed to register ComponentC");
-
-        let deps_a = registry.get_dependencies("ComponentA").unwrap();
-        assert!(deps_a.contains(&"utils/ComponentB".to_string()));
-        assert!(deps_a.contains(&"lib/ComponentC".to_string()));
-
-        let deps_b = registry.get_dependencies("utils\\ComponentB").unwrap();
-        assert!(deps_b.contains(&"lib/ComponentC".to_string()));
-
-        let dependents_c = registry.get_dependents("lib/ComponentC").unwrap();
-        assert!(dependents_c.contains(&"ComponentA".to_string()));
-        assert!(dependents_c.contains(&"utils/ComponentB".to_string()));
-    }
-
-    #[test]
-    fn test_module_info_normalization() {
-        let mut registry = ComponentRegistry::new();
-
-        registry
-            .register_component(
-                "components\\Button",
-                "source",
-                "transformed".to_string(),
-                smallvec![],
-            )
-            .expect("Failed to register component");
-
-        registry.set_module_info("components\\Button", "file:///button.js".to_string(), 42);
-
-        assert!(registry.has_module_info("components/Button"));
-        assert!(registry.has_module_info("components\\Button"));
-        assert_eq!(registry.get_module_id("components/Button"), Some(42));
-        assert_eq!(registry.get_module_id("components\\Button"), Some(42));
-        assert_eq!(registry.get_module_specifier("components/Button"), Some("file:///button.js"));
+        assert!(!client_refs.is_reference("NonExistent"));
+        assert!(client_refs.get_info("NonExistent").is_none());
     }
 
     #[test]
     fn test_client_reference_normalization() {
-        let mut registry = ComponentRegistry::new();
+        let mut client_refs = ClientReferenceRegistry::new();
 
+        let mut registry = ComponentRegistry::new();
         registry
-            .register_component("ui\\Button", "source", "transformed".to_string(), smallvec![])
+            .register_component("ui\\Button", "source", "transformed".to_string(), SmallVec::new())
             .expect("Failed to register component");
 
-        registry.register_client_reference("ui\\Button", "src\\components\\Button.tsx", "default");
+        client_refs.register("ui\\Button", "src\\components\\Button.tsx", "default");
 
-        assert!(registry.is_client_reference("ui/Button"));
-        assert!(registry.is_client_reference("ui\\Button"));
+        assert!(client_refs.is_reference("ui/Button"));
+        assert!(client_refs.is_reference("ui\\Button"));
 
-        let info = registry.get_client_reference_info("ui/Button").unwrap();
-        assert_eq!(info.0, "src/components/Button.tsx");
-        assert_eq!(info.1, "default");
+        let info = client_refs.get_info("ui/Button").unwrap();
+        assert_eq!(info.file_path, "src/components/Button.tsx");
+        assert_eq!(info.export_name, "default");
 
-        let info2 = registry.get_client_reference_info("ui\\Button").unwrap();
-        assert_eq!(info2.0, "src/components/Button.tsx");
-        assert_eq!(info2.1, "default");
-    }
-
-    #[test]
-    fn test_component_operations_with_normalized_paths() {
-        let mut registry = ComponentRegistry::new();
-
-        registry
-            .register_component(
-                "app\\components\\Header",
-                "source",
-                "transformed".to_string(),
-                smallvec![],
-            )
-            .expect("Failed to register component");
-
-        registry.mark_component_loaded("app/components\\Header");
-        assert!(registry.is_component_loaded("app\\components/Header"));
-
-        registry.mark_component_initially_loaded("app\\components\\Header");
-        assert!(registry.has_been_initially_loaded("app/components/Header"));
-
-        registry.mark_module_stale("app/components\\Header");
-        assert!(registry.is_module_stale("app\\components\\Header"));
-
-        registry.remove_component("app\\components/Header");
-        assert!(!registry.is_component_registered("app/components/Header"));
-        assert!(!registry.is_component_registered("app\\components\\Header"));
+        let info2 = client_refs.get_info("ui\\Button").unwrap();
+        assert_eq!(info2.file_path, "src/components/Button.tsx");
+        assert_eq!(info2.export_name, "default");
     }
 }

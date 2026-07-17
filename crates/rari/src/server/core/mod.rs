@@ -19,6 +19,7 @@ use axum::{
 };
 use colored::Colorize;
 use dashmap::DashMap;
+use rari_core::state::CoreState;
 use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use tokio::{
@@ -206,12 +207,31 @@ impl Server {
 
         let layout_layer = config.cache.layer(CACHE_LAYER_LAYOUT);
 
-        let state = ServerState {
-            renderer: renderer_arc,
-            ssr_renderer,
+        // --- build image optimizer (needed by CoreState) ---
+        let image_cache = Arc::new(ImageCache::with_handler(
+            Arc::clone(&image_handler),
+            config.images.max_cache_size,
+            &project_root,
+        ));
+        let image_optimizer =
+            Arc::new(ImageOptimizer::with_cache(config.images.clone(), &project_root, image_cache));
+
+        // --- build CoreState (protocol-agnostic shared state) ---
+        let core_state = CoreState {
             config: Arc::new(config.clone()),
             request_count: Arc::new(AtomicU64::new(0)),
             start_time: Instant::now(),
+            response_cache,
+            static_fast_cache: Arc::new(DashMap::new()),
+            project_root: project_root.clone(),
+            image_optimizer: Some(image_optimizer),
+            cache_registry: Arc::clone(&cache_registry),
+        };
+
+        let state = ServerState {
+            core: Arc::new(core_state),
+            renderer: renderer_arc,
+            ssr_renderer,
             component_cache_configs: Arc::new(RwLock::new(FxHashMap::default())),
             page_cache_configs: Arc::new(RwLock::new(FxHashMap::default())),
             app_router,
@@ -221,13 +241,7 @@ impl Server {
                 &layout_layer,
                 &cache_registry,
             ),
-            response_cache,
-            static_fast_cache: Arc::new(DashMap::new()),
             og_generator,
-            project_root,
-            image_optimizer: None,
-            cache_registry: Arc::clone(&cache_registry),
-            image_handler,
         };
 
         if config.is_production() {
@@ -266,24 +280,23 @@ impl Server {
         Ok(Self { router, config, listener, address: socket_addr })
     }
 
-    async fn build_router(config: &Config, mut state: ServerState) -> Result<Router, RariError> {
+    async fn build_router(config: &Config, state: ServerState) -> Result<Router, RariError> {
         let small_body_limit = DefaultBodyLimit::max(100 * 1024);
         let medium_body_limit = DefaultBodyLimit::max(1024 * 1024);
 
-        let image_cache = Arc::new(ImageCache::with_handler(
-            Arc::clone(&state.image_handler),
-            config.images.max_cache_size,
-            &state.project_root,
-        ));
-        let image_optimizer = Arc::new(ImageOptimizer::with_cache(
-            config.images.clone(),
-            &state.project_root,
-            image_cache,
-        ));
-
-        state.image_optimizer = Some(Arc::clone(&image_optimizer));
-
-        let image_state = ImageState { optimizer: image_optimizer };
+        let image_state = ImageState {
+            #[expect(
+                clippy::expect_used,
+                reason = "ImageOptimizer is initialized in Server::new before build_router runs"
+            )]
+            optimizer: Arc::clone(
+                state
+                    .core
+                    .image_optimizer
+                    .as_ref()
+                    .expect("ImageOptimizer must be initialized in CoreState"),
+            ),
+        };
 
         let revalidation_router = Router::new()
             .route("/_rari/revalidate", routing::post(revalidate_by_path))

@@ -399,14 +399,7 @@ pub fn parse_action_form_state_from_cookie(cookie_header: Option<&str>) -> Optio
     decode_action_form_state_cookie_value(&encoded)
 }
 
-pub fn action_form_state_sync_script(form_state: Option<&Value>) -> String {
-    match form_state {
-        Some(state) => format!(
-            "globalThis['~rari'] = globalThis['~rari'] || {{}}; globalThis['~rari'].actionFormState = {state};"
-        ),
-        None => "if (globalThis['~rari']) delete globalThis['~rari'].actionFormState;".to_string(),
-    }
-}
+pub use rari_core::action_state::action_form_state_sync_script;
 
 fn action_export_name(action_id: &str) -> &str {
     action_id.rsplit_once('#').map_or("default", |(_, export_name)| export_name)
@@ -636,9 +629,9 @@ async fn handle_server_action_at_path(
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<Response, StatusCode> {
-    let allowed_origins = state.config.action_origins();
+    let allowed_origins = state.core.config.action_origins();
     if let Err(e) = check_origin(&headers, &allowed_origins) {
-        return Ok(rpc_action_error_response(&e, state.config.is_development(), None));
+        return Ok(rpc_action_error_response(&e, state.core.config.is_development(), None));
     }
 
     let action_id = headers
@@ -667,7 +660,7 @@ async fn handle_server_action_at_path(
                 &RariError::bad_request(format!(
                     "Invalid export name '{export_name}': reserved for internal use"
                 )),
-                state.config.is_development(),
+                state.core.config.is_development(),
                 Some(&request_context.pending_cookies),
             ));
         }
@@ -689,7 +682,7 @@ async fn handle_server_action_at_path(
             tracing::error!("Failed to build action script: {}", e);
             return Ok(rpc_action_error_response(
                 &e,
-                state.config.is_development(),
+                state.core.config.is_development(),
                 Some(&request_context.pending_cookies),
             ));
         }
@@ -712,7 +705,7 @@ async fn handle_server_action_at_path(
                 let mut response = Response::builder()
                     .status(error_response::status(&e))
                     .header(header::CACHE_CONTROL, "no-store, no-cache, must-revalidate, private")
-                    .body(Body::from(e.safe_message(state.config.is_development())))
+                    .body(Body::from(e.safe_message(state.core.config.is_development())))
                     .expect("Valid error response");
                 append_pending_cookies(response.headers_mut(), &request_context.pending_cookies);
                 return Ok(response);
@@ -720,13 +713,13 @@ async fn handle_server_action_at_path(
 
             return Ok(rpc_action_error_response(
                 &e,
-                state.config.is_development(),
+                state.core.config.is_development(),
                 Some(&request_context.pending_cookies),
             ));
         }
     };
 
-    let redirect_config = state.config.redirect_config();
+    let redirect_config = state.core.config.redirect_config();
     if is_document_form_post {
         if let Some(form_state) = extract_and_strip_form_state(&mut value) {
             stage_action_form_state_cookie(&request_context.pending_cookies, &form_state);
@@ -826,7 +819,7 @@ async fn handle_server_action_at_path(
         tracing::error!("Failed to encode action flight response: {}", error);
         return Ok(rpc_action_error_response(
             &error,
-            state.config.is_development(),
+            state.core.config.is_development(),
             Some(&request_context.pending_cookies),
         ));
     }
@@ -837,7 +830,7 @@ async fn handle_server_action_at_path(
             tracing::error!("Failed to read action flight response: {}", e);
             return Ok(rpc_action_error_response(
                 &e,
-                state.config.is_development(),
+                state.core.config.is_development(),
                 Some(&request_context.pending_cookies),
             ));
         }
@@ -847,7 +840,7 @@ async fn handle_server_action_at_path(
         tracing::error!("RPC server action did not produce a Flight response payload");
         return Ok(rpc_action_error_response(
             &RariError::internal("RPC server action did not produce a Flight response payload"),
-            state.config.is_development(),
+            state.core.config.is_development(),
             Some(&request_context.pending_cookies),
         ));
     };
@@ -952,17 +945,7 @@ fn append_pending_cookies(
     }
 }
 
-pub fn is_valid_cookie_name(s: &str) -> bool {
-    !s.is_empty() && s.bytes().all(|b| b > 32 && b < 127 && !b"()<>@,;:\\\"/[]?={} \t".contains(&b))
-}
-
-pub fn is_valid_cookie_value(s: &str) -> bool {
-    s.bytes().all(|b| matches!(b, 0x21 | 0x23..=0x2B | 0x2D..=0x3A | 0x3C..=0x5B | 0x5D..=0x7E))
-}
-
-pub fn is_valid_attr_value(s: &str) -> bool {
-    !s.is_empty() && s.is_ascii() && s.bytes().all(|b| b >= 32 && b != b';' && b != 127)
-}
+pub use rari_core::sanitize::{is_valid_attr_value, is_valid_cookie_name, is_valid_cookie_value};
 
 pub fn build_set_cookie_header(cookie: &PendingCookie) -> Result<String, RariError> {
     if !is_valid_cookie_name(&cookie.name) {

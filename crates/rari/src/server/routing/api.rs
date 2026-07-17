@@ -41,7 +41,7 @@ pub async fn api_cors_preflight(
         let headers = builder.headers_mut().expect("Response builder should have headers");
 
         let origin = request_headers.get("origin").and_then(|v| v.to_str().ok());
-        let cors_config = state.config.cors_config();
+        let cors_config = state.core.config.cors_config();
 
         add_api_cors_headers(
             headers,
@@ -75,10 +75,10 @@ pub async fn handle_api_route(
 ) -> Result<Response<Body>, StatusCode> {
     let path = req.uri().path().to_string();
     let method = req.method().to_string();
-    let is_development = state.config.is_development();
+    let is_development = state.core.config.is_development();
 
     let origin = req.headers().get("origin").and_then(|v| v.to_str().ok()).map(ToString::to_string);
-    let cors_config = state.config.cors_config();
+    let cors_config = state.core.config.cors_config();
 
     let Some(api_handler) = &state.api_route_handler else {
         return Ok(create_generic_error_response(

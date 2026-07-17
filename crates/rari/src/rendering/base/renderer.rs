@@ -32,7 +32,7 @@ use super::{
 };
 use crate::{
     rendering::base::loader::{RscJsLoader, RscModuleOperation},
-    rsc::{self, ComponentRegistry},
+    rsc::{self, ClientReferenceRegistry, ComponentRegistry},
     runtime::JsExecutionRuntime,
     server::middleware::request_context::RequestContext,
     utils::cast,
@@ -43,6 +43,7 @@ pub struct RscRenderer {
     pub(crate) timeout_ms: u64,
     pub(crate) initialized: bool,
     pub(crate) component_registry: Arc<Mutex<ComponentRegistry>>,
+    pub(crate) client_ref_registry: Arc<Mutex<ClientReferenceRegistry>>,
     pub(crate) script_cache: DashMap<String, String>,
     pub(crate) resource_limits: ResourceLimits,
     pub(crate) resource_tracker: Arc<ResourceTracker>,
@@ -62,6 +63,7 @@ impl RscRenderer {
             timeout_ms: 30000,
             initialized: false,
             component_registry: Arc::new(Mutex::new(ComponentRegistry::new())),
+            client_ref_registry: Arc::new(Mutex::new(ClientReferenceRegistry::new())),
             script_cache: DashMap::new(),
             resource_limits,
             resource_tracker: Arc::new(ResourceTracker::new()),
@@ -743,8 +745,8 @@ globalThis['~errors'].batch.push({{
     }
 
     pub fn is_client_reference(&self, component_id: &str) -> impl Future<Output = bool> {
-        let registry = self.component_registry.lock();
-        future::ready(registry.is_client_reference(component_id))
+        let refs = self.client_ref_registry.lock();
+        future::ready(refs.is_reference(component_id))
     }
 
     pub fn register_client_component(
@@ -753,8 +755,8 @@ globalThis['~errors'].batch.push({{
         file_path: &str,
         export_name: &str,
     ) {
-        let mut registry = self.component_registry.lock();
-        registry.register_client_reference(component_id, file_path, export_name);
+        let mut refs = self.client_ref_registry.lock();
+        refs.register(component_id, file_path, export_name);
     }
 
     pub fn list_components(&self) -> Vec<String> {

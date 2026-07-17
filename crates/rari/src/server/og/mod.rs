@@ -1,14 +1,5 @@
 #![expect(clippy::missing_errors_doc)]
 
-mod cache;
-mod generator;
-mod layout;
-mod rendering;
-mod resources;
-mod types;
-
-pub(super) const MAX_OG_IMAGE_BYTES: usize = 10 * 1024 * 1024;
-
 use std::env;
 
 use axum::{
@@ -16,10 +7,17 @@ use axum::{
     http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
-pub use cache::OgImageCache;
-pub use generator::OgImageGenerator;
 use rari_error::RariError;
-pub use types::{OgImageEntry, OgImageParams, OgImageResult};
+
+mod generator;
+mod layout;
+mod rendering;
+mod resources;
+
+pub(super) const MAX_OG_IMAGE_BYTES: usize = 10 * 1024 * 1024;
+
+pub use generator::OgImageGenerator;
+pub use rari_core::og::{OgImageCache, OgImageEntry, OgImageParams, OgImageResult, cache, types};
 
 use crate::server::{ServerState, config::Config, error_response};
 
