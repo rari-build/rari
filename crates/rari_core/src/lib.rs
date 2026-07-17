@@ -18,7 +18,7 @@ pub mod error_response;
 pub mod metadata;
 pub mod runtime;
 pub mod sanitize;
-pub mod component;
+pub mod component_registry;
 pub mod action_state;
 pub mod rendering;
 pub mod middleware;
