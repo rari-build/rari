@@ -14,7 +14,10 @@ use std::{
 use dashmap::DashMap;
 
 use crate::{
-    cache::{handler::CacheHandler, response::{PrebuiltResponse, ResponseCache}},
+    cache::{
+        handler::CacheHandler,
+        response::{PrebuiltResponse, ResponseCache},
+    },
     config::Config,
     image::ImageOptimizer,
 };
@@ -24,7 +27,10 @@ use crate::{
 /// Every backend (RSC, TanStack, etc.) wraps this in its own state and merges
 /// routes via `Router<()>`.
 #[derive(Clone)]
-#[expect(clippy::exhaustive_structs, reason = "Shared across crate boundary; backend-specific state constructs via literal syntax")]
+#[expect(
+    clippy::exhaustive_structs,
+    reason = "Shared across crate boundary; backend-specific state constructs via literal syntax"
+)]
 pub struct CoreState {
     /// Global configuration.
     pub config: Arc<Config>,

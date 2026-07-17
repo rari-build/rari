@@ -677,7 +677,8 @@ pub async fn render_synchronous(
                     wrap_html_with_metadata(html_with_assets, context.metadata.as_ref(), &state);
 
                 let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
-                let cache_control = state.core.config.get_cache_control_for_route(&context.pathname);
+                let cache_control =
+                    state.core.config.get_cache_control_for_route(&context.pathname);
 
                 #[expect(
                     clippy::expect_used,

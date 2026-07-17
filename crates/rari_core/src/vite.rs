@@ -10,8 +10,7 @@ use axum::{
     http::{HeaderName, HeaderValue, Uri},
     response::{IntoResponse, Response},
 };
-use futures::StreamExt as FuturesStreamExt;
-use futures::SinkExt;
+use futures::{SinkExt, StreamExt as FuturesStreamExt};
 use http::uri::PathAndQuery;
 use rari_error::RariError;
 use reqwest::Client;

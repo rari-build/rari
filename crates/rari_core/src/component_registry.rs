@@ -75,10 +75,7 @@ type ComponentDependencies = DependencyList;
 // ---- Data types (protocol-agnostic) ---------------------------------------
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[expect(
-    clippy::exhaustive_enums,
-    reason = "Known set of component types; cross-crate boundary"
-)]
+#[expect(clippy::exhaustive_enums, reason = "Known set of component types; cross-crate boundary")]
 pub enum ComponentType {
     Client,
     Server,

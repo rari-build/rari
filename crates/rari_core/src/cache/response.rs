@@ -20,7 +20,10 @@ use crate::{
 };
 
 #[derive(Clone)]
-#[expect(clippy::exhaustive_structs, reason = "Shared across crate boundary; constructed in backend via literal syntax")]
+#[expect(
+    clippy::exhaustive_structs,
+    reason = "Shared across crate boundary; constructed in backend via literal syntax"
+)]
 pub struct PrebuiltResponse {
     pub identity: Bytes,
     pub gzip: Option<Bytes>,
@@ -53,7 +56,10 @@ impl PrebuiltResponse {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-#[expect(clippy::exhaustive_structs, reason = "Shared across crate boundary; backend constructs via literal syntax")]
+#[expect(
+    clippy::exhaustive_structs,
+    reason = "Shared across crate boundary; backend constructs via literal syntax"
+)]
 pub struct CacheMetadata {
     #[serde(with = "instant_serde")]
     pub cached_at: Instant,
@@ -63,7 +69,10 @@ pub struct CacheMetadata {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-#[expect(clippy::exhaustive_structs, reason = "Shared across crate boundary; backend constructs via literal syntax")]
+#[expect(
+    clippy::exhaustive_structs,
+    reason = "Shared across crate boundary; backend constructs via literal syntax"
+)]
 pub struct CachedResponse {
     pub body: Bytes,
     #[serde(with = "header_map_serde")]
@@ -111,7 +120,10 @@ pub fn invalidate_static_fast_cache_for_path(
 }
 
 #[derive(Clone, Debug)]
-#[expect(clippy::exhaustive_structs, reason = "Shared across crate boundary; backend constructs via literal syntax")]
+#[expect(
+    clippy::exhaustive_structs,
+    reason = "Shared across crate boundary; backend constructs via literal syntax"
+)]
 pub struct CacheConfig {
     pub max_entries: usize,
     pub default_ttl: u64,
@@ -159,7 +171,10 @@ impl CacheConfig {
 }
 
 #[derive(Clone, Debug)]
-#[expect(clippy::exhaustive_structs, reason = "Shared across crate boundary; backend constructs via literal syntax")]
+#[expect(
+    clippy::exhaustive_structs,
+    reason = "Shared across crate boundary; backend constructs via literal syntax"
+)]
 pub struct RouteCachePolicy {
     pub ttl: u64,
     pub enabled: bool,
@@ -216,7 +231,10 @@ impl Default for CacheConfig {
 }
 
 #[derive(Clone, Debug, Default)]
-#[expect(clippy::exhaustive_structs, reason = "Shared across crate boundary; accessed across crate boundary")]
+#[expect(
+    clippy::exhaustive_structs,
+    reason = "Shared across crate boundary; accessed across crate boundary"
+)]
 pub struct CacheMetrics {
     pub total_entries: usize,
     pub cache_hits: u64,

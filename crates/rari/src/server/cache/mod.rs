@@ -14,7 +14,7 @@ mod tests {
     use bytes::Bytes;
     use rari_core::cache::{
         handler::{CacheHandler, MemoryCacheHandler, MemoryConfig},
-        response::{CacheConfig, CachedResponse, CacheMetadata, ResponseCache},
+        response::{CacheConfig, CacheMetadata, CachedResponse, ResponseCache},
     };
 
     use crate::server::og::OgImageCache;
@@ -50,20 +50,12 @@ mod tests {
         let test_dir = env::temp_dir().join("rari-test-cache-namespace");
         let og_cache = OgImageCache::with_handler(shared.clone(), &test_dir);
 
-        response_cache
-            .set("/about".to_string(), create_test_response("response-body", 60))
-            .await;
+        response_cache.set("/about".to_string(), create_test_response("response-body", 60)).await;
         let og_payload = vec![0x52, 0x49, 0x46, 0x46];
-        og_cache
-            .insert("/about".to_string(), og_payload.clone())
-            .await
-            .expect("og insert");
+        og_cache.insert("/about".to_string(), og_payload.clone()).await.expect("og insert");
 
         let response_got = response_cache.get("/about").await;
-        assert!(
-            response_got.is_some(),
-            "response cache must not be polluted by og write"
-        );
+        assert!(response_got.is_some(), "response cache must not be polluted by og write");
         assert_eq!(response_got.unwrap().body, Bytes::from("response-body"));
 
         let og_got = og_cache.get("/about").await;

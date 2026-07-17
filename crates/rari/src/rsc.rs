@@ -6,9 +6,8 @@
 //! registy to keep it reusable across backends (TanStack Start, etc.).
 
 use cow_utils::CowUtils;
-use rustc_hash::FxHashMap;
-
 pub use rari_core::component_registry::*;
+use rustc_hash::FxHashMap;
 
 // ---- Flight-specific client-reference registry ----------------------------
 
@@ -50,10 +49,7 @@ impl ClientReferenceRegistry {
         let normalized_file_path = Self::normalize_id(file_path);
         self.refs.insert(
             normalized_id,
-            ClientRefInfo {
-                file_path: normalized_file_path,
-                export_name: export_name.to_string(),
-            },
+            ClientRefInfo { file_path: normalized_file_path, export_name: export_name.to_string() },
         );
     }
 

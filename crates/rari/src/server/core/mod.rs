@@ -19,6 +19,7 @@ use axum::{
 };
 use colored::Colorize;
 use dashmap::DashMap;
+use rari_core::state::CoreState;
 use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use tokio::{
@@ -31,7 +32,6 @@ use tower_http::{
     services::ServeDir,
 };
 use types::ServerState;
-use rari_core::state::CoreState;
 
 use crate::{
     RscHtmlRenderer, RscRenderer,
@@ -287,9 +287,16 @@ impl Server {
         let medium_body_limit = DefaultBodyLimit::max(1024 * 1024);
 
         let image_state = ImageState {
-            #[expect(clippy::expect_used, reason = "ImageOptimizer is initialized in Server::new before build_router runs")]
+            #[expect(
+                clippy::expect_used,
+                reason = "ImageOptimizer is initialized in Server::new before build_router runs"
+            )]
             optimizer: Arc::clone(
-                state.core.image_optimizer.as_ref().expect("ImageOptimizer must be initialized in CoreState"),
+                state
+                    .core
+                    .image_optimizer
+                    .as_ref()
+                    .expect("ImageOptimizer must be initialized in CoreState"),
             ),
         };
 

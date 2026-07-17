@@ -178,7 +178,7 @@ mod tests {
     use std::env::temp_dir;
 
     use super::*;
-    use crate::cache::handler::{MemoryConfig, MemoryCacheHandler};
+    use crate::cache::handler::{MemoryCacheHandler, MemoryConfig};
 
     fn test_project_path(test_name: &str) -> PathBuf {
         temp_dir().join(format!("rari-test-image-cache-{test_name}"))
