@@ -20,7 +20,6 @@ pub fn u32_to_u16(value: u32) -> u16 {
     u16::try_from(value).unwrap_or(u16::MAX)
 }
 
-#[cfg(test)]
 #[expect(clippy::cast_possible_truncation, clippy::cast_precision_loss, clippy::cast_sign_loss)]
 #[inline]
 #[must_use]

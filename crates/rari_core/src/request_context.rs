@@ -17,10 +17,13 @@ use serde_json::Value;
 use tokio::sync::Mutex as TokioMutex;
 use uuid::Uuid;
 
-use crate::server::core::utils::{client::get_http_client, http};
+use crate::{client::get_http_client, http};
 
 #[derive(Clone, Debug)]
-#[non_exhaustive]
+#[expect(
+    clippy::exhaustive_structs,
+    reason = "cross-crate boundary type: backends construct this exhaustively; in-tree so no semver isolation"
+)]
 pub struct PendingCookie {
     pub name: String,
     pub value: String,

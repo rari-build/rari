@@ -1,4 +1,4 @@
-pub mod client;
+pub use rari_core::{client, http};
+
 pub mod component;
-pub mod http;
 pub mod path_validation;

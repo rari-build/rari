@@ -13,7 +13,10 @@ pub enum RouteSegmentType {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[non_exhaustive]
+#[expect(
+    clippy::exhaustive_structs,
+    reason = "cross-crate boundary type: backends construct this exhaustively; in-tree so no semver isolation"
+)]
 pub struct RouteSegment {
     #[serde(rename = "type")]
     pub segment_type: RouteSegmentType,
@@ -40,7 +43,6 @@ impl fmt::Display for ParamValue {
 }
 
 impl ParamValue {
-    #[cfg(test)]
     pub fn as_string(&self) -> Option<&String> {
         match self {
             Self::Single(s) => Some(s),
@@ -48,7 +50,6 @@ impl ParamValue {
         }
     }
 
-    #[cfg(test)]
     pub fn as_vec(&self) -> Option<&Vec<String>> {
         match self {
             Self::Single(_) => None,

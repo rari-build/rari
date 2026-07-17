@@ -75,7 +75,10 @@ pub trait CacheHandler: Send + Sync + fmt::Debug {
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-#[non_exhaustive]
+#[expect(
+    clippy::exhaustive_structs,
+    reason = "cross-crate boundary type: backends construct this exhaustively; in-tree so no semver isolation"
+)]
 pub struct SetOutcome {
     pub replaced: bool,
     pub evicted: usize,
@@ -90,7 +93,10 @@ struct MemEntry {
 }
 
 #[derive(Clone, Debug)]
-#[non_exhaustive]
+#[expect(
+    clippy::exhaustive_structs,
+    reason = "cross-crate boundary type: backends construct this exhaustively; in-tree so no semver isolation"
+)]
 pub struct MemoryConfig {
     pub max_entries: usize,
     pub default_ttl: u64,
@@ -369,7 +375,10 @@ impl CacheHandler for MemoryCacheHandler {
 }
 
 #[derive(Debug, Default, Clone, Copy)]
-#[non_exhaustive]
+#[expect(
+    clippy::exhaustive_structs,
+    reason = "cross-crate boundary type: backends construct this exhaustively; in-tree so no semver isolation"
+)]
 pub struct NoOpCacheHandler;
 
 #[async_trait::async_trait]
