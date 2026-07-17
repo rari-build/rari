@@ -38,7 +38,7 @@ use super::{
 };
 use crate::{
     cache::handler::CacheHandlerRegistry,
-    component::{DependencyList, extract_dependencies},
+    component_registry::{DependencyList, extract_dependencies},
     config::CacheLayerConfig,
     runtime::{
         ext::{NodeCodeTranslator, NpmPackageFolderResolverImpl, Resolver},

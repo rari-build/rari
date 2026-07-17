@@ -40,8 +40,8 @@ pub async fn register_component(
             renderer.register_component(&component_id, &component_code).await?;
 
             let is_client = {
-                let registry = renderer.component_registry.lock();
-                registry.is_client_reference(&component_id)
+                let refs = renderer.client_ref_registry.lock();
+                refs.is_reference(&component_id)
             };
 
             if is_client {

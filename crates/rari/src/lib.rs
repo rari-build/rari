@@ -9,4 +9,4 @@ pub use rendering::{
     base::{RscJsLoader, RscRenderer},
     r#static::RscHtmlRenderer,
 };
-pub use rsc::{ComponentRegistry, extract_dependencies};
+pub use rsc::{ClientReferenceRegistry, ComponentRegistry, extract_dependencies};
