@@ -23,5 +23,6 @@ pub mod routing;
 pub mod runtime;
 pub mod sanitize;
 pub mod state;
+pub mod static_assets;
 pub mod utils;
 pub mod vite;
