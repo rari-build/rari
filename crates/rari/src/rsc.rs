@@ -471,7 +471,7 @@ impl Default for ComponentRegistry {
 #[cfg(test)]
 #[expect(clippy::expect_used, clippy::unwrap_used)]
 mod tests {
-    use smallvec::smallvec;
+    use smallvec::{smallvec, SmallVec};
 
     use super::*;
 

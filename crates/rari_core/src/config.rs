@@ -72,7 +72,10 @@ impl Default for CorsConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[non_exhaustive]
+#[expect(
+    clippy::exhaustive_structs,
+    reason = "cross-crate boundary type: backends construct this exhaustively; in-tree so no semver isolation"
+)]
 pub struct RedirectConfig {
     pub allowed_hosts: Vec<String>,
     pub allow_relative: bool,

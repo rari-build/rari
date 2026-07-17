@@ -319,6 +319,14 @@ async fn load_esm_component_code_atomic(
     Ok(())
 }
 
+/// Loads `component_code` into the runtime under `component_id`.
+///
+/// Uses the ESM path when the code parses as a module, otherwise evaluates it
+/// as a script.
+///
+/// # Errors
+///
+/// Returns a [`RariError`] if the runtime fails to load or evaluate the code.
 pub async fn load_component_code(
     runtime: &dyn JsRuntimeInterface,
     component_id: &str,
