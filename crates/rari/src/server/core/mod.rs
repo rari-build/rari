@@ -225,7 +225,7 @@ impl Server {
             static_fast_cache: Arc::new(DashMap::new()),
             project_root: project_root.clone(),
             image_optimizer: Some(image_optimizer),
-            image_handler,
+            cache_registry: Arc::clone(&cache_registry),
         };
 
         let state = ServerState {
@@ -242,8 +242,6 @@ impl Server {
                 &cache_registry,
             ),
             og_generator,
-            cache_registry: Arc::clone(&cache_registry),
-            project_root,
         };
 
         if config.is_production() {

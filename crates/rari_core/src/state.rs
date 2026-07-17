@@ -1,9 +1,8 @@
 //! Protocol-agnostic core server state shared across all backends.
 //!
-//! Backend-specific state (e.g. `ServerState` in the `rari` crate) holds an
-//! `Arc<CoreState>` plus any backend-only fields.  Handlers that only need
-//! core infrastructure take `State(Arc<CoreState>)` directly; handlers that
-//! also need backend fields take the backend state and access `core` through it.
+//! Backend-specific state holds an `Arc<CoreState>` plus any backend-only
+//! fields.  Handlers that only need core infrastructure can extract
+//! `Arc<CoreState>` from the backend state via axum's `FromRef` trait.
 
 use std::{
     path::PathBuf,
@@ -15,7 +14,7 @@ use dashmap::DashMap;
 
 use crate::{
     cache::{
-        handler::CacheHandler,
+        handler::CacheHandlerRegistry,
         response::{PrebuiltResponse, ResponseCache},
     },
     config::Config,
@@ -23,9 +22,6 @@ use crate::{
 };
 
 /// Shared server infrastructure that is independent of the rendering backend.
-///
-/// Every backend (RSC, TanStack, etc.) wraps this in its own state and merges
-/// routes via `Router<()>`.
 #[derive(Clone)]
 #[expect(
     clippy::exhaustive_structs,
@@ -47,6 +43,8 @@ pub struct CoreState {
     pub project_root: PathBuf,
     /// Optional image optimizer (resize, format conversion, caching).
     pub image_optimizer: Option<Arc<ImageOptimizer>>,
-    /// Shared byte-level cache handler used by the image pipeline.
-    pub image_handler: Arc<dyn CacheHandler>,
+    /// Named cache handler registry — resolves logical cache layers to
+    /// concrete [`CacheHandler`](crate::cache::handler::CacheHandler)
+    /// implementations (memory, Redis, etc.).
+    pub cache_registry: Arc<CacheHandlerRegistry>,
 }

@@ -1,5 +1,6 @@
-use std::{path::PathBuf, sync::Arc};
+use std::sync::Arc;
 
+use axum::extract::FromRef;
 use dashmap::DashMap;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
@@ -14,7 +15,6 @@ use crate::{
     RscHtmlRenderer, RscRenderer,
     rendering::layout::LayoutHtmlCache,
     server::{
-        cache::CacheHandlerRegistry,
         og::OgImageGenerator,
         routing::{ApiRouteHandler, AppRouter},
     },
@@ -23,7 +23,7 @@ use crate::{
 #[derive(Clone)]
 #[expect(clippy::exhaustive_structs, reason = "Shared across crate boundary")]
 pub struct ServerState {
-    /// Shared core infrastructure (config, caches, image pipeline, etc.).
+    /// Shared core infrastructure (config, caches, cache registry, image pipeline, etc.).
     pub core: Arc<CoreState>,
     /// RSC Flight-protocol renderer.
     pub renderer: Arc<Mutex<RscRenderer>>,
@@ -43,10 +43,12 @@ pub struct ServerState {
     pub layout_html_cache: Arc<LayoutHtmlCache>,
     /// Optional OG image generator.
     pub og_generator: Option<Arc<OgImageGenerator>>,
-    /// Cache handler registry (resolves named cache layers to handlers).
-    pub cache_registry: Arc<CacheHandlerRegistry>,
-    /// Project root directory (duplicated from core for ergonomics).
-    pub project_root: PathBuf,
+}
+
+impl FromRef<ServerState> for Arc<CoreState> {
+    fn from_ref(state: &ServerState) -> Self {
+        Self::clone(&state.core)
+    }
 }
 
 #[derive(Debug, Deserialize)]
