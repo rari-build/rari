@@ -623,8 +623,10 @@ mod tests {
     use tokio::time;
 
     use super::*;
-    use crate::cache::handler::{CacheError, SetOutcome};
-    use crate::og::OgImageCache;
+    use crate::{
+        cache::handler::{CacheError, SetOutcome},
+        og::OgImageCache,
+    };
 
     fn create_test_response(body: &str, ttl: u64) -> CachedResponse {
         CachedResponse {

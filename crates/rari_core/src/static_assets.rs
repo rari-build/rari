@@ -15,10 +15,7 @@ use rari_error::RariError;
 use tokio::fs;
 
 use crate::{
-    config::Config,
-    error_response::HttpError,
-    http::get_content_type,
-    state::CoreState,
+    config::Config, error_response::HttpError, http::get_content_type, state::CoreState,
     utils::path_validation::validate_safe_path,
 };
 
@@ -165,10 +162,7 @@ pub async fn static_or_spa_handler(path: &str) -> Result<Response, HttpError> {
 ///
 /// Takes [`CoreState`] via `&CoreState` so the caller can provide state
 /// from whichever backend state type they use.
-pub async fn serve_static_asset(
-    core: &CoreState,
-    asset_path: &str,
-) -> Result<Response, HttpError> {
+pub async fn serve_static_asset(core: &CoreState, asset_path: &str) -> Result<Response, HttpError> {
     if asset_path.contains("server/manifest.json")
         || asset_path.contains("server/routes.json")
         || asset_path.starts_with("../")
@@ -214,5 +208,3 @@ pub async fn serve_static_asset(
         }
     }
 }
-
-

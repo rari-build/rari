@@ -1,10 +1,9 @@
 use std::path::{Path, PathBuf};
 
 use cow_utils::CowUtils;
-use rari_error::RariError;
-
 /// Re-export the core path-safety validator.
 pub use rari_core::utils::path_validation::validate_safe_path;
+use rari_error::RariError;
 
 pub fn normalize_component_path(file_path: &str) -> String {
     let path = Path::new(file_path);
