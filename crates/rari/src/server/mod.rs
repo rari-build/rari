@@ -1,6 +1,6 @@
 pub mod actions;
 pub mod cache;
-pub mod compression;
+pub use rari_core::compression;
 pub mod config;
 pub mod core;
 pub mod error_response;

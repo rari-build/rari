@@ -7598,6 +7598,7 @@ dependencies = [
  "node_resolver",
  "parking_lot",
  "parley",
+ "rari_core",
  "rari_error",
  "redb",
  "redis",
@@ -7631,6 +7632,19 @@ dependencies = [
  "windows-sys 0.59.0",
  "wuff",
  "zeno",
+]
+
+[[package]]
+name = "rari_core"
+version = "0.0.0"
+dependencies = [
+ "async-compression",
+ "bytes",
+ "cow-utils",
+ "futures",
+ "tokio",
+ "tracing",
+ "url",
 ]
 
 [[package]]

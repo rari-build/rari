@@ -49,7 +49,7 @@ impl PrebuiltResponse {
                 Some(b) => (b.clone(), Some("gzip")),
                 None => (self.identity.clone(), None),
             },
-            CompressionEncoding::Identity => (self.identity.clone(), None),
+            _ => (self.identity.clone(), None),
         }
     }
 }
@@ -87,7 +87,7 @@ impl CachedResponse {
             CompressionEncoding::Zstd => self.compressed_zstd.as_ref(),
             CompressionEncoding::Brotli => self.compressed_br.as_ref(),
             CompressionEncoding::Gzip => self.compressed_gzip.as_ref(),
-            CompressionEncoding::Identity => None,
+            _ => None,
         }
     }
 }

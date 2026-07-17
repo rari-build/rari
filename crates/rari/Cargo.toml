@@ -26,6 +26,9 @@ ext-full = [
 ]
 
 [dependencies]
+# === Shared core infrastructure ===
+rari_core = { path = "../rari_core" }
+
 # === Core Runtime Dependencies ===
 deno_core = { workspace = true }
 deno_error = { workspace = true }

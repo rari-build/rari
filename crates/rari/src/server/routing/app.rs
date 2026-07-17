@@ -167,7 +167,7 @@ async fn decompress_bytes(data: &Bytes, encoding: CompressionEncoding) -> Result
             decoder.read_to_end(&mut decompressed).await?;
             Ok(Bytes::from(decompressed))
         }
-        CompressionEncoding::Identity => Ok(data),
+        _ => Ok(data),
     }
 }
 
@@ -1322,7 +1322,7 @@ pub async fn handle_app_route(
                                 CompressionEncoding::Gzip => {
                                     updated.compressed_gzip = Some(compressed.clone());
                                 }
-                                CompressionEncoding::Identity => {}
+                                _ => {}
                             }
                             state.response_cache.update_in_place(&cache_key, updated).await;
                         }
@@ -1435,7 +1435,7 @@ pub async fn handle_app_route(
                                             CompressionEncoding::Zstd => {
                                                 (None, None, Some(compressed_variant))
                                             }
-                                            CompressionEncoding::Identity => (None, None, None),
+                                            _ => (None, None, None),
                                         };
                                         (raw, gzip, br, zstd)
                                     }
