@@ -36,23 +36,23 @@ build: bundle-react-esm build-snapshot build-rust build-node
 # Rebuilds when snapshot is missing, empty, or stale (older than Cargo.toml or extension sources)
 build-snapshot:
     #!/usr/bin/env bash
-    SNAPSHOT="crates/rari/snapshots/RARI_SNAPSHOT.bin"
+    SNAPSHOT="crates/rari_core/snapshots/RARI_SNAPSHOT.bin"
     NEEDS_REBUILD=false
     if [ ! -s "$SNAPSHOT" ]; then
         NEEDS_REBUILD=true
     else
-        STALE_SOURCES=$(find Cargo.toml crates/rari/Cargo.toml crates/rari/src/runtime/ext -newer "$SNAPSHOT" \( -name "*.toml" -o -name "*.js" -o -name "*.ts" \) 2>/dev/null | head -1)
+        STALE_SOURCES=$(find Cargo.toml crates/rari_core/Cargo.toml crates/rari_core/src/runtime/ext -newer "$SNAPSHOT" \( -name "*.toml" -o -name "*.js" -o -name "*.ts" \) 2>/dev/null | head -1)
         if [ -n "$STALE_SOURCES" ]; then
             NEEDS_REBUILD=true
         fi
     fi
     if [ "$NEEDS_REBUILD" = true ]; then
         echo "Generating V8 snapshot..."
-        mkdir -p crates/rari/snapshots
+        mkdir -p crates/rari_core/snapshots
         touch "$SNAPSHOT"
-        echo 'pub static RESIDUAL_LAZY_ESM_SOURCES: &[(&str, &str)] = &[];' > crates/rari/snapshots/residual_lazy_sources.rs
-        echo 'pub static RESIDUAL_LAZY_JS_SOURCES: &[(&str, &str)] = &[];' >> crates/rari/snapshots/residual_lazy_sources.rs
-        cargo run --manifest-path tools/snapshot/Cargo.toml -- crates/rari/snapshots
+        echo 'pub static RESIDUAL_LAZY_ESM_SOURCES: &[(&str, &str)] = &[];' > crates/rari_core/snapshots/residual_lazy_sources.rs
+        echo 'pub static RESIDUAL_LAZY_JS_SOURCES: &[(&str, &str)] = &[];' >> crates/rari_core/snapshots/residual_lazy_sources.rs
+        cargo run --manifest-path tools/snapshot/Cargo.toml -- crates/rari_core/snapshots
     else
         echo "V8 snapshot is up to date."
     fi
@@ -262,14 +262,14 @@ quick-check: lint-rust typecheck
 ci-create-snapshot-placeholder:
     #!/usr/bin/env bash
     set -euo pipefail
-    mkdir -p crates/rari/snapshots
-    touch crates/rari/snapshots/RARI_SNAPSHOT.bin
-    echo 'pub static RESIDUAL_LAZY_ESM_SOURCES: &[(&str, &str)] = &[];' > crates/rari/snapshots/residual_lazy_sources.rs
-    echo 'pub static RESIDUAL_LAZY_JS_SOURCES: &[(&str, &str)] = &[];' >> crates/rari/snapshots/residual_lazy_sources.rs
+    mkdir -p crates/rari_core/snapshots
+    touch crates/rari_core/snapshots/RARI_SNAPSHOT.bin
+    echo 'pub static RESIDUAL_LAZY_ESM_SOURCES: &[(&str, &str)] = &[];' > crates/rari_core/snapshots/residual_lazy_sources.rs
+    echo 'pub static RESIDUAL_LAZY_JS_SOURCES: &[(&str, &str)] = &[];' >> crates/rari_core/snapshots/residual_lazy_sources.rs
 
 # Generate V8 snapshot for the current host (OS/arch-specific; do not reuse across platforms)
 ci-generate-snapshot: ci-create-snapshot-placeholder
-    cargo run --manifest-path tools/snapshot/Cargo.toml -- crates/rari/snapshots
+    cargo run --manifest-path tools/snapshot/Cargo.toml -- crates/rari_core/snapshots
 
 # Rust fmt, clippy, and tests
 ci-rust-check:

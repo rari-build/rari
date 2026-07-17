@@ -12,7 +12,7 @@ use deno_ast::MediaType;
 use deno_core::{ModuleCodeString, ModuleName, SourceMapData, snapshot, v8};
 use deno_error::JsErrorBox;
 use deno_node::{ContextInitMode, VM_CONTEXT_INDEX, create_v8_context, init_global_template};
-use rari::runtime::{
+use rari_core::runtime::{
     ext::{self, ExtensionOptions},
     transpile,
 };
@@ -28,7 +28,7 @@ fn main() {
     let output_dir = env::args()
         .nth(1)
         .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("crates/rari/snapshots"));
+        .unwrap_or_else(|| PathBuf::from("crates/rari_core/snapshots"));
 
     #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
     fs::create_dir_all(&output_dir).expect("Failed to create output directory");

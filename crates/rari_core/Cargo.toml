@@ -27,7 +27,7 @@ serde = { workspace = true }
 
 # compression
 async-compression = { version = "0.4.42", features = ["brotli", "gzip", "tokio", "zstd"] }
-bytes = "1.12.1"
+bytes = { version = "1.12.1", features = ["serde"] }
 futures = "0.3.32"
 tokio = { workspace = true, features = ["io-util", "macros", "rt", "time"] }
 tracing = { workspace = true }
@@ -40,7 +40,7 @@ parking_lot = { workspace = true }
 thiserror = { workspace = true }
 
 # http / client
-axum = { version = "0.8.9", features = ["macros"] }
+axum = { version = "0.8.9", features = ["macros", "ws"] }
 reqwest = { version = "0.13.4", default-features = false, features = ["blocking", "rustls", "stream"] }
 rari_error = { workspace = true }
 rustc-hash = { workspace = true }

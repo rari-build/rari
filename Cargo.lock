@@ -7762,7 +7762,7 @@ dependencies = [
  "deno_core",
  "deno_error",
  "deno_node",
- "rari",
+ "rari_core",
  "rustc-hash 2.1.3",
  "url",
 ]
