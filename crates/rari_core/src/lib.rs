@@ -12,3 +12,6 @@ pub mod cache;
 pub mod client;
 pub mod http;
 pub mod request_context;
+pub mod image;
+pub mod config;
+pub mod error_response;

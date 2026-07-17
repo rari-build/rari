@@ -14,7 +14,7 @@ use http::HeaderValue;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 
-use crate::server::image::ImageConfig;
+use crate::image::ImageConfig;
 
 pub static GLOBAL_CONFIG: OnceLock<Config> = OnceLock::new();
 

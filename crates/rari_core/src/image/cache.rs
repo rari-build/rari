@@ -12,10 +12,7 @@ use rkyv::{Archive, Deserialize as RkyvDeserialize, Serialize as RkyvSerialize, 
 use tokio::task;
 
 use super::types::ImageFormat;
-use crate::server::cache::{
-    MemoryConfig,
-    handler::{CacheHandler, MemoryCacheHandler},
-};
+use crate::cache::handler::{CacheHandler, MemoryCacheHandler, MemoryConfig};
 
 #[derive(Debug, Clone, Archive, RkyvDeserialize, RkyvSerialize)]
 #[rkyv(compare(PartialEq), derive(Debug))]

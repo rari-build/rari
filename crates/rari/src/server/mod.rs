@@ -1,10 +1,10 @@
 pub mod actions;
 pub mod cache;
 pub use rari_core::compression;
-pub mod config;
+pub use rari_core::config;
 pub mod core;
-pub mod error_response;
-pub mod image;
+pub use rari_core::error_response;
+pub use rari_core::image;
 pub mod loader;
 pub mod middleware;
 pub mod og;

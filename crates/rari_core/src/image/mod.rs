@@ -20,7 +20,7 @@ use rari_error::RariError;
 pub use scanner::{ImageUsageManifest, ScanError, scan_for_image_usage};
 pub use types::{DEFAULT_IMAGE_QUALITY, ImageFormat, OptimizeParams, OptimizedImage};
 
-use crate::server::{config::Config, error_response};
+use crate::{config::Config, error_response};
 
 #[derive(Clone)]
 #[non_exhaustive]

@@ -7644,12 +7644,17 @@ dependencies = [
  "bytes",
  "cow-utils",
  "dashmap 6.2.1",
+ "deno_core",
  "futures",
  "hex",
+ "http",
+ "image",
  "lru",
  "parking_lot",
  "rari_error",
+ "regex",
  "reqwest",
+ "rkyv",
  "rustc-hash 2.1.3",
  "serde",
  "serde_json",
@@ -7658,7 +7663,9 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
+ "urlencoding",
  "uuid",
+ "webp",
 ]
 
 [[package]]
