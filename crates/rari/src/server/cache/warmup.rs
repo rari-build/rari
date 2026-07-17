@@ -155,9 +155,9 @@ async fn warm_route(
     };
 
     let html_cache_key = response::ResponseCache::generate_cache_key(path, None);
-    let cache_control = state.config.get_cache_control_for_route(path);
+    let cache_control = state.core.config.get_cache_control_for_route(path);
     let cache_policy = response::RouteCachePolicy::from_cache_control(cache_control, path);
-    let for_response_cache = cache_policy.enabled && state.response_cache.config.enabled;
+    let for_response_cache = cache_policy.enabled && state.core.response_cache.config.enabled;
 
     let html = wrap_html_with_metadata(html, context.metadata.as_ref(), state);
     let etag = response::ResponseCache::generate_etag(html.as_bytes());
@@ -187,7 +187,7 @@ async fn warm_route(
             if matches!(enc, CompressionEncoding::Brotli) { Some(compressed) } else { None }
         };
 
-        state.static_fast_cache.insert(
+        state.core.static_fast_cache.insert(
             path.to_string(),
             Arc::new(response::PrebuiltResponse {
                 identity: body_bytes.clone(),
@@ -215,7 +215,7 @@ async fn warm_route(
             compressed_gzip,
         };
 
-        state.response_cache.set(html_cache_key, cached_response).await;
+        state.core.response_cache.set(html_cache_key, cached_response).await;
     }
 
     let rsc_result =
@@ -252,7 +252,7 @@ async fn warm_route(
                 compressed_gzip: None,
             };
 
-            state.response_cache.set(rsc_cache_key, cached_response).await;
+            state.core.response_cache.set(rsc_cache_key, cached_response).await;
         }
     }
 

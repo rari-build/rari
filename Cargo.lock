@@ -7639,6 +7639,7 @@ name = "rari_core"
 version = "0.0.0"
 dependencies = [
  "async-compression",
+ "async-stream",
  "async-trait",
  "axum",
  "base64 0.22.1",
@@ -7702,7 +7703,9 @@ dependencies = [
  "sys_traits",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-tungstenite 0.30.0",
  "tracing",
+ "tungstenite 0.30.0",
  "url",
  "urlencoding",
  "uuid",

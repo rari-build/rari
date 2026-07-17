@@ -188,7 +188,7 @@ async fn handle_register(state: ServerState, file_path: String) -> Result<Json<V
     let reloaded = reload_result.is_ok();
 
     let response = if reloaded {
-        invalidate_component_cache(&state.response_cache, &component_id).await;
+        invalidate_component_cache(&state.core.response_cache, &component_id).await;
 
         let route_cache_patterns: Vec<String> = vec![
             file_path.cow_replace("src/app/", "/").cow_replace("/page.tsx", "").into_owned(),
@@ -198,10 +198,10 @@ async fn handle_register(state: ServerState, file_path: String) -> Result<Json<V
         .filter(|p| p.len() > 1)
         .collect();
         for pattern in route_cache_patterns {
-            let all_keys = state.response_cache.get_all_keys();
+            let all_keys = state.core.response_cache.get_all_keys();
             for key in all_keys {
                 if key.starts_with(&pattern) {
-                    state.response_cache.invalidate(&key).await;
+                    state.core.response_cache.invalidate(&key).await;
                 }
             }
         }
@@ -565,7 +565,7 @@ async fn handle_reload_component(
 
     match load_result {
         Ok(()) => {
-            invalidate_component_cache(&state.response_cache, &component_id).await;
+            invalidate_component_cache(&state.core.response_cache, &component_id).await;
 
             Ok(Json(serde_json::json!({
                 "success": true,

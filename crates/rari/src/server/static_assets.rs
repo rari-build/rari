@@ -165,7 +165,7 @@ pub async fn serve_static_asset(
         return Ok(StatusCode::NOT_FOUND.into_response());
     }
 
-    let assets_dir = state.config.public_dir().join("assets");
+    let assets_dir = state.core.config.public_dir().join("assets");
 
     let Ok(file_path) = validate_safe_path(&assets_dir, &asset_path).await else {
         return Ok(StatusCode::NOT_FOUND.into_response());
@@ -182,7 +182,7 @@ pub async fn serve_static_asset(
     match fs::read(&file_path).await {
         Ok(content) => {
             let content_type = get_content_type(&asset_path);
-            let cache_control = &state.config.caching.static_files;
+            let cache_control = &state.core.config.caching.static_files;
 
             #[expect(
                 clippy::expect_used,

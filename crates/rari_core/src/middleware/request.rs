@@ -4,7 +4,7 @@ use axum::{
     middleware::Next,
 };
 
-use crate::server::config::Config;
+use crate::config::Config;
 
 const ACCESS_CONTROL_ALLOW_ORIGIN: &str = "Access-Control-Allow-Origin";
 const ACCESS_CONTROL_ALLOW_METHODS: &str = "Access-Control-Allow-Methods";

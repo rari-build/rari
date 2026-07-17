@@ -132,7 +132,7 @@ async fn should_store_response_cache(
     state: &ServerState,
     cache_policy: &response::RouteCachePolicy,
 ) -> bool {
-    if !cache_policy.enabled || !state.response_cache.config.enabled {
+    if !cache_policy.enabled || !state.core.response_cache.config.enabled {
         return false;
     }
 
@@ -192,7 +192,7 @@ pub(crate) fn wrap_html_with_metadata(
 
     let html = if is_complete {
         if let Some(metadata) = metadata {
-            inject_metadata(&html_content, metadata, state.image_optimizer.as_deref())
+            inject_metadata(&html_content, metadata, state.core.image_optimizer.as_deref())
         } else {
             html_content
         }
@@ -200,7 +200,7 @@ pub(crate) fn wrap_html_with_metadata(
         html_content
     };
 
-    if state.config.is_development() { pretty_print_html(&html) } else { html }
+    if state.core.config.is_development() { pretty_print_html(&html) } else { html }
 }
 
 fn should_use_streaming(route_match: &AppRouteMatch, config: &Config) -> bool {
@@ -281,7 +281,7 @@ async fn inject_og_image_into_metadata(
     metadata: &mut PageMetadata,
     context: &LayoutRenderContext,
 ) {
-    let base_url = get_base_url_from_context(context, &state.config);
+    let base_url = get_base_url_from_context(context, &state.core.config);
     let current_url = format!("{base_url}{route_path}");
 
     if let Some(ref mut og) = metadata.open_graph {
@@ -587,7 +587,7 @@ fn render_chunked_response(
         if encoding.as_header_value().is_some() { "Accept, Accept-Encoding" } else { "Accept" };
 
     let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
-    let cache_control = state.config.get_cache_control_for_route(&context.pathname);
+    let cache_control = state.core.config.get_cache_control_for_route(&context.pathname);
 
     let mut response_builder = Response::builder()
         .status(status_code)
@@ -665,7 +665,7 @@ pub async fn render_synchronous(
         Ok(render_result) => match render_result {
             RenderResult::Static(html_content) => {
                 let html_with_assets =
-                    match inject_assets_into_html(&html_content, &state.config).await {
+                    match inject_assets_into_html(&html_content, &state.core.config).await {
                         Ok(html) => html,
                         Err(e) => {
                             tracing::error!("Failed to inject assets into HTML: {}", e);
@@ -677,7 +677,7 @@ pub async fn render_synchronous(
                     wrap_html_with_metadata(html_with_assets, context.metadata.as_ref(), &state);
 
                 let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
-                let cache_control = state.config.get_cache_control_for_route(&context.pathname);
+                let cache_control = state.core.config.get_cache_control_for_route(&context.pathname);
 
                 #[expect(
                     clippy::expect_used,
@@ -800,7 +800,7 @@ pub async fn render_streaming_with_layout(
         RenderResult::Static(html) => {
             use crate::server::compression::compress_body;
 
-            let html_with_assets = match inject_assets_into_html(&html, &state.config).await {
+            let html_with_assets = match inject_assets_into_html(&html, &state.core.config).await {
                 Ok(html) => html,
                 Err(e) => {
                     tracing::error!("Failed to inject assets into HTML: {}", e);
@@ -812,7 +812,7 @@ pub async fn render_streaming_with_layout(
                 wrap_html_with_metadata(html_with_assets, context.metadata.as_ref(), &state);
 
             let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
-            let cache_control = state.config.get_cache_control_for_route(&context.pathname);
+            let cache_control = state.core.config.get_cache_control_for_route(&context.pathname);
 
             let encoding = CompressionEncoding::from_accept_encoding(accept_encoding);
             let (body_bytes, actual_encoding) =
@@ -852,19 +852,19 @@ pub async fn render_fallback_html(
     path: &str,
     is_not_found: bool,
 ) -> Result<Response, StatusCode> {
-    let index_path = if state.config.is_development() {
+    let index_path = if state.core.config.is_development() {
         let root_index = PathBuf::from("index.html");
         if fs::try_exists(&root_index).await.unwrap_or(false) {
             root_index
         } else {
-            state.config.public_dir().join("index.html")
+            state.core.config.public_dir().join("index.html")
         }
     } else {
-        state.config.public_dir().join("index.html")
+        state.core.config.public_dir().join("index.html")
     };
 
     if fs::try_exists(&index_path).await.unwrap_or(false) {
-        if state.config.is_production()
+        if state.core.config.is_production()
             && let Some(cached_html) = state.html_cache.get(path)
         {
             let html = cached_html.clone();
@@ -881,17 +881,17 @@ pub async fn render_fallback_html(
         }
 
         if let Ok(html_content) = fs::read_to_string(&index_path).await {
-            let mut final_html = if state.config.is_development() {
-                inject_vite_client(&html_content, state.config.vite.port)
+            let mut final_html = if state.core.config.is_development() {
+                inject_vite_client(&html_content, state.core.config.vite.port)
             } else {
                 html_content
             };
 
-            if state.config.is_development() {
+            if state.core.config.is_development() {
                 final_html = pretty_print_html(&final_html);
             }
 
-            if state.config.is_production() {
+            if state.core.config.is_production() {
                 state.html_cache.insert(path.to_string(), final_html.clone());
             }
 
@@ -910,8 +910,8 @@ pub async fn render_fallback_html(
         }
     }
 
-    if state.config.is_development() {
-        let vite_port = state.config.vite.port;
+    if state.core.config.is_development() {
+        let vite_port = state.core.config.vite.port;
         let mut html_shell = format!(
             r#"<!DOCTYPE html>
 <html lang="en">
@@ -930,7 +930,7 @@ pub async fn render_fallback_html(
 </html>"#
         );
 
-        if state.config.is_development() {
+        if state.core.config.is_development() {
             html_shell = pretty_print_html(&html_shell);
         }
 
@@ -1006,14 +1006,14 @@ pub async fn handle_app_route(
             }
 
             if let Ok(file_path) =
-                validate_safe_path(state.config.public_dir(), path_without_leading_slash).await
+                validate_safe_path(state.core.config.public_dir(), path_without_leading_slash).await
                 && let Ok(metadata) = fs::metadata(&file_path).await
                 && metadata.is_file()
             {
                 match fs::read(&file_path).await {
                     Ok(content) => {
                         let content_type = get_content_type(path_without_leading_slash);
-                        let cache_control = &state.config.caching.static_files;
+                        let cache_control = &state.core.config.caching.static_files;
                         #[expect(
                             clippy::expect_used,
                             reason = "Response::builder() with valid components never fails"
@@ -1071,7 +1071,7 @@ pub async fn handle_app_route(
         let fast_key =
             response::ResponseCache::generate_static_fast_cache_key(path, query_params_ref, None);
 
-        if let Some(prebuilt) = state.static_fast_cache.get(&fast_key) {
+        if let Some(prebuilt) = state.core.static_fast_cache.get(&fast_key) {
             let prebuilt = Arc::clone(prebuilt.value());
 
             if let Some(client_etag) = headers.get("if-none-match").and_then(|v| v.to_str().ok())
@@ -1145,7 +1145,7 @@ pub async fn handle_app_route(
 
     match render_mode {
         RenderMode::RscNavigation => {
-            let use_streaming = should_use_streaming(&route_match, &state.config);
+            let use_streaming = should_use_streaming(&route_match, &state.core.config);
 
             if use_streaming {
                 context.metadata = collect_page_metadata(&state, &route_match, &context).await;
@@ -1161,7 +1161,7 @@ pub async fn handle_app_route(
             let cache_key = response_cache_key(path, query_params_ref, Some("rsc"), cookie_header);
 
             if context.template_navigation_id.is_none()
-                && let Some(cached) = state.response_cache.get(&cache_key).await
+                && let Some(cached) = state.core.response_cache.get(&cache_key).await
             {
                 let status_code = if route_match.not_found.is_some() {
                     StatusCode::NOT_FOUND
@@ -1224,7 +1224,7 @@ pub async fn handle_app_route(
                         }
                     }
 
-                    let cache_control = state.config.get_cache_control_for_route(path);
+                    let cache_control = state.core.config.get_cache_control_for_route(path);
                     let cache_policy =
                         response::RouteCachePolicy::from_cache_control(cache_control, path);
 
@@ -1252,7 +1252,7 @@ pub async fn handle_app_route(
                             compressed_gzip: None,
                         };
 
-                        state.response_cache.set(cache_key, cached_response).await;
+                        state.core.response_cache.set(cache_key, cached_response).await;
                     }
 
                     #[expect(
@@ -1274,7 +1274,7 @@ pub async fn handle_app_route(
 
             let client_etag = headers.get("if-none-match").and_then(|v| v.to_str().ok());
 
-            if let Some(cached) = state.response_cache.get(&cache_key).await {
+            if let Some(cached) = state.core.response_cache.get(&cache_key).await {
                 if let (Some(cached_etag), Some(client_etag)) = (&cached.metadata.etag, client_etag)
                     && cached_etag == client_etag
                 {
@@ -1324,7 +1324,7 @@ pub async fn handle_app_route(
                                 }
                                 _ => {}
                             }
-                            state.response_cache.update_in_place(&cache_key, updated).await;
+                            state.core.response_cache.update_in_place(&cache_key, updated).await;
                         }
                         (compressed, actual_enc)
                     };
@@ -1365,7 +1365,7 @@ pub async fn handle_app_route(
 
             context.metadata = collect_page_metadata(&state, &route_match, &context).await;
 
-            let use_streaming = should_use_streaming(&route_match, &state.config);
+            let use_streaming = should_use_streaming(&route_match, &state.core.config);
 
             if use_streaming {
                 let response = render_with_fallback(
@@ -1396,7 +1396,7 @@ pub async fn handle_app_route(
                         response::RouteCachePolicy::from_cache_control(cc, path)
                     } else {
                         let mut policy = response::RouteCachePolicy {
-                            ttl: state.response_cache.config.default_ttl,
+                            ttl: state.core.response_cache.config.default_ttl,
                             ..Default::default()
                         };
                         policy.tags.push(path.to_string());
@@ -1475,7 +1475,7 @@ pub async fn handle_app_route(
                             compressed_gzip,
                         };
 
-                        state.response_cache.set(cache_key.clone(), cached_response).await;
+                        state.core.response_cache.set(cache_key.clone(), cached_response).await;
 
                         let merged_vary = static_html_vary_header(cookie_header);
 
@@ -1522,7 +1522,7 @@ pub async fn handle_app_route(
                 }
             };
 
-            let cache_control_value = state.config.get_cache_control_for_route(path);
+            let cache_control_value = state.core.config.get_cache_control_for_route(path);
             let cache_policy =
                 response::RouteCachePolicy::from_cache_control(cache_control_value, path);
             let for_response_cache = should_store_response_cache(&state, &cache_policy).await;
@@ -1530,7 +1530,7 @@ pub async fn handle_app_route(
             let (final_html, etag) = match render_result {
                 RenderResult::Static(html_content) => {
                     let html_with_assets =
-                        match inject_assets_into_html(&html_content, &state.config).await {
+                        match inject_assets_into_html(&html_content, &state.core.config).await {
                             Ok(html) => html,
                             Err(e) => {
                                 tracing::error!("Failed to inject assets into HTML: {}", e);
@@ -1631,7 +1631,7 @@ pub async fn handle_app_route(
                         query_params_ref,
                         None,
                     );
-                    state.static_fast_cache.insert(
+                    state.core.static_fast_cache.insert(
                         fast_key,
                         Arc::new(response::PrebuiltResponse {
                             identity: body_bytes.clone(),
@@ -1660,7 +1660,7 @@ pub async fn handle_app_route(
                     compressed_gzip,
                 };
 
-                state.response_cache.set(cache_key, cached_response).await;
+                state.core.response_cache.set(cache_key, cached_response).await;
             }
 
             {

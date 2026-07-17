@@ -629,9 +629,9 @@ async fn handle_server_action_at_path(
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<Response, StatusCode> {
-    let allowed_origins = state.config.action_origins();
+    let allowed_origins = state.core.config.action_origins();
     if let Err(e) = check_origin(&headers, &allowed_origins) {
-        return Ok(rpc_action_error_response(&e, state.config.is_development(), None));
+        return Ok(rpc_action_error_response(&e, state.core.config.is_development(), None));
     }
 
     let action_id = headers
@@ -660,7 +660,7 @@ async fn handle_server_action_at_path(
                 &RariError::bad_request(format!(
                     "Invalid export name '{export_name}': reserved for internal use"
                 )),
-                state.config.is_development(),
+                state.core.config.is_development(),
                 Some(&request_context.pending_cookies),
             ));
         }
@@ -682,7 +682,7 @@ async fn handle_server_action_at_path(
             tracing::error!("Failed to build action script: {}", e);
             return Ok(rpc_action_error_response(
                 &e,
-                state.config.is_development(),
+                state.core.config.is_development(),
                 Some(&request_context.pending_cookies),
             ));
         }
@@ -705,7 +705,7 @@ async fn handle_server_action_at_path(
                 let mut response = Response::builder()
                     .status(error_response::status(&e))
                     .header(header::CACHE_CONTROL, "no-store, no-cache, must-revalidate, private")
-                    .body(Body::from(e.safe_message(state.config.is_development())))
+                    .body(Body::from(e.safe_message(state.core.config.is_development())))
                     .expect("Valid error response");
                 append_pending_cookies(response.headers_mut(), &request_context.pending_cookies);
                 return Ok(response);
@@ -713,13 +713,13 @@ async fn handle_server_action_at_path(
 
             return Ok(rpc_action_error_response(
                 &e,
-                state.config.is_development(),
+                state.core.config.is_development(),
                 Some(&request_context.pending_cookies),
             ));
         }
     };
 
-    let redirect_config = state.config.redirect_config();
+    let redirect_config = state.core.config.redirect_config();
     if is_document_form_post {
         if let Some(form_state) = extract_and_strip_form_state(&mut value) {
             stage_action_form_state_cookie(&request_context.pending_cookies, &form_state);
@@ -819,7 +819,7 @@ async fn handle_server_action_at_path(
         tracing::error!("Failed to encode action flight response: {}", error);
         return Ok(rpc_action_error_response(
             &error,
-            state.config.is_development(),
+            state.core.config.is_development(),
             Some(&request_context.pending_cookies),
         ));
     }
@@ -830,7 +830,7 @@ async fn handle_server_action_at_path(
             tracing::error!("Failed to read action flight response: {}", e);
             return Ok(rpc_action_error_response(
                 &e,
-                state.config.is_development(),
+                state.core.config.is_development(),
                 Some(&request_context.pending_cookies),
             ));
         }
@@ -840,7 +840,7 @@ async fn handle_server_action_at_path(
         tracing::error!("RPC server action did not produce a Flight response payload");
         return Ok(rpc_action_error_response(
             &RariError::internal("RPC server action did not produce a Flight response payload"),
-            state.config.is_development(),
+            state.core.config.is_development(),
             Some(&request_context.pending_cookies),
         ));
     };

@@ -13,16 +13,14 @@ use dashmap::DashMap;
 use parking_lot::Mutex;
 
 use crate::{
-    server::{
-        cache::handler::{CacheHandler, MemoryCacheHandler, MemoryConfig},
-        compression::CompressionEncoding,
-        config::CacheLayerConfig,
-    },
+    cache::handler::{CacheHandler, MemoryCacheHandler, MemoryConfig},
+    compression::CompressionEncoding,
+    config::CacheLayerConfig,
     utils::float,
 };
 
 #[derive(Clone)]
-#[non_exhaustive]
+#[expect(clippy::exhaustive_structs, reason = "Shared across crate boundary; constructed in backend via literal syntax")]
 pub struct PrebuiltResponse {
     pub identity: Bytes,
     pub gzip: Option<Bytes>,
@@ -55,7 +53,7 @@ impl PrebuiltResponse {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-#[non_exhaustive]
+#[expect(clippy::exhaustive_structs, reason = "Shared across crate boundary; backend constructs via literal syntax")]
 pub struct CacheMetadata {
     #[serde(with = "instant_serde")]
     pub cached_at: Instant,
@@ -65,7 +63,7 @@ pub struct CacheMetadata {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-#[non_exhaustive]
+#[expect(clippy::exhaustive_structs, reason = "Shared across crate boundary; backend constructs via literal syntax")]
 pub struct CachedResponse {
     pub body: Bytes,
     #[serde(with = "header_map_serde")]
@@ -113,7 +111,7 @@ pub fn invalidate_static_fast_cache_for_path(
 }
 
 #[derive(Clone, Debug)]
-#[non_exhaustive]
+#[expect(clippy::exhaustive_structs, reason = "Shared across crate boundary; backend constructs via literal syntax")]
 pub struct CacheConfig {
     pub max_entries: usize,
     pub default_ttl: u64,
@@ -161,7 +159,7 @@ impl CacheConfig {
 }
 
 #[derive(Clone, Debug)]
-#[non_exhaustive]
+#[expect(clippy::exhaustive_structs, reason = "Shared across crate boundary; backend constructs via literal syntax")]
 pub struct RouteCachePolicy {
     pub ttl: u64,
     pub enabled: bool,
@@ -218,7 +216,7 @@ impl Default for CacheConfig {
 }
 
 #[derive(Clone, Debug, Default)]
-#[non_exhaustive]
+#[expect(clippy::exhaustive_structs, reason = "Shared across crate boundary; accessed across crate boundary")]
 pub struct CacheMetrics {
     pub total_entries: usize,
     pub cache_hits: u64,
@@ -607,7 +605,7 @@ mod tests {
     use tokio::time;
 
     use super::*;
-    use crate::server::cache::handler::{CacheError, SetOutcome};
+    use crate::cache::handler::{CacheError, SetOutcome};
 
     fn create_test_response(body: &str, ttl: u64) -> CachedResponse {
         CachedResponse {
@@ -981,47 +979,6 @@ mod tests {
 
         cache.invalidate("k").await;
         assert!(stub.map.lock().is_empty());
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_namespace_isolates_response_cache_from_og_and_image_layers() {
-        use crate::server::og::OgImageCache;
-
-        let shared: Arc<dyn CacheHandler> =
-            Arc::new(MemoryCacheHandler::with_config(&MemoryConfig {
-                max_entries: 32,
-                default_ttl: 60,
-            }));
-
-        let response_cache = ResponseCache::new_with_handler(
-            CacheConfig { max_entries: 32, default_ttl: 60, enabled: true },
-            shared.clone(),
-        );
-        let test_dir = env::temp_dir().join("rari-test-cache-namespace");
-        let og_cache = OgImageCache::with_handler(shared.clone(), &test_dir);
-
-        response_cache.set("/about".to_string(), create_test_response("response-body", 60)).await;
-        let og_payload = vec![0x52, 0x49, 0x46, 0x46];
-        og_cache.insert("/about".to_string(), og_payload.clone()).await.expect("og insert");
-
-        let response_got = response_cache.get("/about").await;
-        assert!(response_got.is_some(), "response cache must not be polluted by og write");
-        assert_eq!(response_got.unwrap().body, Bytes::from("response-body"));
-
-        let og_got = og_cache.get("/about").await;
-        assert_eq!(
-            og_got,
-            Some(og_payload.clone()),
-            "og cache must not be polluted by response write"
-        );
-
-        response_cache.invalidate("/about").await;
-        let og_after = og_cache.get("/about").await;
-        assert_eq!(
-            og_after,
-            Some(og_payload),
-            "og cache must survive response-cache invalidation under shared handler"
-        );
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

@@ -4,7 +4,7 @@ use axum::http::StatusCode;
 use cow_utils::CowUtils;
 use tokio::fs;
 
-use crate::server::config::Config;
+use crate::config::Config;
 
 pub async fn extract_asset_links_from_index_html() -> Option<String> {
     use tokio::fs;

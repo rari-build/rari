@@ -1,8 +1,4 @@
-use std::{
-    path::PathBuf,
-    sync::{Arc, atomic::AtomicU64},
-    time::Instant,
-};
+use std::{path::PathBuf, sync::Arc};
 
 use dashmap::DashMap;
 use rustc_hash::FxHashMap;
@@ -12,47 +8,49 @@ use tokio::sync::{Mutex, RwLock};
 
 pub mod request;
 
+use rari_core::state::CoreState;
+
 use crate::{
     RscHtmlRenderer, RscRenderer,
     rendering::layout::LayoutHtmlCache,
     server::{
-        cache::{
-            CacheHandlerRegistry,
-            handler::CacheHandler,
-            response::{PrebuiltResponse, ResponseCache},
-        },
-        config::Config,
-        image::ImageOptimizer,
+        cache::CacheHandlerRegistry,
         og::OgImageGenerator,
         routing::{ApiRouteHandler, AppRouter},
     },
 };
 
 #[derive(Clone)]
-#[non_exhaustive]
+#[expect(clippy::exhaustive_structs, reason = "Shared across crate boundary")]
 pub struct ServerState {
+    /// Shared core infrastructure (config, caches, image pipeline, etc.).
+    pub core: Arc<CoreState>,
+    /// RSC Flight-protocol renderer.
     pub renderer: Arc<Mutex<RscRenderer>>,
+    /// React SSR renderer (Fizz).
     pub ssr_renderer: Arc<RscHtmlRenderer>,
-    pub config: Arc<Config>,
-    pub request_count: Arc<AtomicU64>,
-    pub start_time: Instant,
+    /// Component-level cache configuration overrides.
     pub component_cache_configs: Arc<RwLock<FxHashMap<String, FxHashMap<String, String>>>>,
+    /// Page-level cache configuration overrides.
     pub page_cache_configs: Arc<RwLock<FxHashMap<String, FxHashMap<String, String>>>>,
+    /// Application route table (from routes manifest).
     pub app_router: Option<Arc<AppRouter>>,
+    /// API route handler.
     pub api_route_handler: Option<Arc<ApiRouteHandler>>,
+    /// General-purpose string HTML cache.
     pub html_cache: Arc<DashMap<String, String>>,
+    /// Layout HTML cache (Fizz-rendered layout output).
     pub layout_html_cache: Arc<LayoutHtmlCache>,
-    pub response_cache: Arc<ResponseCache>,
-    pub static_fast_cache: Arc<DashMap<String, Arc<PrebuiltResponse>>>,
+    /// Optional OG image generator.
     pub og_generator: Option<Arc<OgImageGenerator>>,
-    pub project_root: PathBuf,
-    pub image_optimizer: Option<Arc<ImageOptimizer>>,
+    /// Cache handler registry (resolves named cache layers to handlers).
     pub cache_registry: Arc<CacheHandlerRegistry>,
-    pub image_handler: Arc<dyn CacheHandler>,
+    /// Project root directory (duplicated from core for ergonomics).
+    pub project_root: PathBuf,
 }
 
 #[derive(Debug, Deserialize)]
-#[non_exhaustive]
+#[expect(clippy::exhaustive_structs, reason = "Shared across crate boundary")]
 pub struct RenderRequest {
     pub component_id: String,
     pub props: Option<Value>,
@@ -60,7 +58,7 @@ pub struct RenderRequest {
 }
 
 #[derive(Debug, Serialize)]
-#[non_exhaustive]
+#[expect(clippy::exhaustive_structs, reason = "Shared across crate boundary")]
 pub struct RenderResponse {
     pub success: bool,
     pub data: Option<String>,
@@ -70,7 +68,7 @@ pub struct RenderResponse {
 }
 
 #[derive(Debug, Deserialize)]
-#[non_exhaustive]
+#[expect(clippy::exhaustive_structs, reason = "Shared across crate boundary")]
 pub struct RegisterRequest {
     pub component_id: String,
     pub component_code: String,
@@ -78,7 +76,7 @@ pub struct RegisterRequest {
 }
 
 #[derive(Debug, Deserialize)]
-#[non_exhaustive]
+#[expect(clippy::exhaustive_structs, reason = "Shared across crate boundary")]
 pub struct RegisterClientRequest {
     pub component_id: String,
     pub file_path: String,
@@ -86,20 +84,20 @@ pub struct RegisterClientRequest {
 }
 
 #[derive(Debug, Deserialize)]
-#[non_exhaustive]
+#[expect(clippy::exhaustive_structs, reason = "Shared across crate boundary")]
 pub struct HmrRegisterRequest {
     pub file_path: String,
 }
 
 #[derive(Debug, Deserialize)]
-#[non_exhaustive]
+#[expect(clippy::exhaustive_structs, reason = "Shared across crate boundary")]
 pub struct ReloadComponentRequest {
     pub component_id: String,
     pub bundle_path: String,
 }
 
 #[derive(Debug, Serialize)]
-#[non_exhaustive]
+#[expect(clippy::exhaustive_structs, reason = "Shared across crate boundary")]
 pub struct ReloadComponentResponse {
     pub success: bool,
     pub message: String,
