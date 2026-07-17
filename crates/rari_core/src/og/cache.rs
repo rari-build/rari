@@ -10,7 +10,7 @@ use std::{
 use rari_error::RariError;
 use tokio::{fs, task};
 
-use crate::server::{
+use crate::{
     cache::{
         MemoryConfig,
         handler::{CacheError, CacheHandler, MemoryCacheHandler},
@@ -171,7 +171,7 @@ mod tests {
     use std::env::temp_dir;
 
     use super::*;
-    use crate::server::cache::handler::MemoryCacheHandler;
+    use crate::cache::handler::MemoryCacheHandler;
 
     fn test_project_path(test_name: &str) -> PathBuf {
         temp_dir().join(format!("rari-test-og-cache-{test_name}"))
