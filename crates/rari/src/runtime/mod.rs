@@ -18,6 +18,7 @@ pub mod transpile;
 use factory::JsRuntimeInterface;
 
 use crate::{
+    metadata,
     runtime::factory::{
         RariRuntime,
         component_ops::{
@@ -25,7 +26,7 @@ use crate::{
         },
     },
     server::{
-        middleware::request_context::RequestContext, rendering::metadata,
+        middleware::request_context::RequestContext,
         routing::types::ParamValue,
     },
 };

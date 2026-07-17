@@ -1,3 +1,4 @@
+pub mod metadata;
 pub mod rendering;
 pub mod rsc;
 pub mod runtime;
