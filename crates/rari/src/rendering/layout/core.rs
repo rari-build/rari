@@ -122,7 +122,7 @@ impl LayoutHtmlCache {
             Arc::new(MemoryCacheHandler::with_config(&MemoryConfig {
                 max_entries: 5000,
                 default_ttl: 3600,
-                max_bytes: 0,
+                ..Default::default()
             })),
             3600,
         )

@@ -782,7 +782,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_cache_basic_operations() {
-        let config = CacheConfig { max_entries: 10, default_ttl: 60, enabled: true, max_bytes: 0 };
+        let config =
+            CacheConfig { max_entries: 10, default_ttl: 60, enabled: true, ..Default::default() };
         let cache = ResponseCache::new(config);
 
         assert!(cache.get("test-key").await.is_none());
@@ -802,7 +803,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_cache_expiration() {
-        let config = CacheConfig { max_entries: 10, default_ttl: 60, enabled: true, max_bytes: 0 };
+        let config =
+            CacheConfig { max_entries: 10, default_ttl: 60, enabled: true, ..Default::default() };
         let cache = ResponseCache::new(config);
 
         let response = create_test_response("test body", 0);
@@ -815,7 +817,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_cache_invalidation() {
-        let config = CacheConfig { max_entries: 10, default_ttl: 60, enabled: true, max_bytes: 0 };
+        let config =
+            CacheConfig { max_entries: 10, default_ttl: 60, enabled: true, ..Default::default() };
         let cache = ResponseCache::new(config);
 
         let response = create_test_response("test body", 60);
@@ -830,7 +833,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_cache_tag_invalidation() {
-        let config = CacheConfig { max_entries: 10, default_ttl: 60, enabled: true, max_bytes: 0 };
+        let config =
+            CacheConfig { max_entries: 10, default_ttl: 60, enabled: true, ..Default::default() };
         let cache = ResponseCache::new(config);
 
         let mut response1 = create_test_response("body1", 60);
@@ -853,7 +857,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_cache_lru_eviction() {
-        let config = CacheConfig { max_entries: 2, default_ttl: 60, enabled: true, max_bytes: 0 };
+        let config =
+            CacheConfig { max_entries: 2, default_ttl: 60, enabled: true, ..Default::default() };
         let cache = ResponseCache::new(config);
 
         cache.set("key1".to_string(), create_test_response("body1", 60)).await;
@@ -871,7 +876,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_cache_disabled() {
-        let config = CacheConfig { max_entries: 10, default_ttl: 60, enabled: false, max_bytes: 0 };
+        let config =
+            CacheConfig { max_entries: 10, default_ttl: 60, enabled: false, ..Default::default() };
         let cache = ResponseCache::new(config);
 
         let response = create_test_response("test body", 60);
@@ -882,7 +888,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_cache_clear() {
-        let config = CacheConfig { max_entries: 10, default_ttl: 60, enabled: true, max_bytes: 0 };
+        let config =
+            CacheConfig { max_entries: 10, default_ttl: 60, enabled: true, ..Default::default() };
         let cache = ResponseCache::new(config);
 
         cache.set("key1".to_string(), create_test_response("body1", 60)).await;
@@ -899,7 +906,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_clear_percentage() {
-        let config = CacheConfig { max_entries: 10, default_ttl: 60, enabled: true, max_bytes: 0 };
+        let config =
+            CacheConfig { max_entries: 10, default_ttl: 60, enabled: true, ..Default::default() };
         let cache = ResponseCache::new(config);
 
         for i in 0..10 {
@@ -917,7 +925,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_memory_pressure_detection() {
-        let config = CacheConfig { max_entries: 10, default_ttl: 60, enabled: true, max_bytes: 0 };
+        let config =
+            CacheConfig { max_entries: 10, default_ttl: 60, enabled: true, ..Default::default() };
         let cache = ResponseCache::new(config);
 
         for i in 0..8 {
@@ -1075,7 +1084,8 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_handler_is_memory_by_default() {
-        let config = CacheConfig { max_entries: 2, default_ttl: 60, enabled: true, max_bytes: 0 };
+        let config =
+            CacheConfig { max_entries: 2, default_ttl: 60, enabled: true, ..Default::default() };
         let cache = ResponseCache::new(config);
 
         cache.set("a".to_string(), create_test_response("body-a", 60)).await;
@@ -1089,7 +1099,8 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_new_with_custom_handler() {
         let stub = Arc::new(StubHandler::default());
-        let config = CacheConfig { max_entries: 100, default_ttl: 60, enabled: true, max_bytes: 0 };
+        let config =
+            CacheConfig { max_entries: 100, default_ttl: 60, enabled: true, ..Default::default() };
         let cache = ResponseCache::new_with_handler(config, stub.clone());
 
         cache.set("k".to_string(), create_test_response("v", 60)).await;
@@ -1110,11 +1121,11 @@ mod tests {
             Arc::new(MemoryCacheHandler::with_config(&MemoryConfig {
                 max_entries: 32,
                 default_ttl: 60,
-                max_bytes: 0,
+                ..Default::default()
             }));
 
         let response_cache = ResponseCache::new_with_handler(
-            CacheConfig { max_entries: 32, default_ttl: 60, enabled: true, max_bytes: 0 },
+            CacheConfig { max_entries: 32, default_ttl: 60, enabled: true, ..Default::default() },
             shared.clone(),
         );
         let test_dir = env::temp_dir().join("rari-test-cache-namespace");
@@ -1146,7 +1157,8 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_serialized_response_round_trip() {
-        let config = CacheConfig { max_entries: 10, default_ttl: 60, enabled: true, max_bytes: 0 };
+        let config =
+            CacheConfig { max_entries: 10, default_ttl: 60, enabled: true, ..Default::default() };
         let cache = ResponseCache::new(config);
 
         let mut headers = HeaderMap::new();
@@ -1191,7 +1203,8 @@ mod tests {
         // paths like `update_in_place` that re-serialize an existing
         // `CachedResponse` would silently reset `cached_at` to the moment of
         // the call, extending the entry's effective TTL.
-        let config = CacheConfig { max_entries: 10, default_ttl: 60, enabled: true, max_bytes: 0 };
+        let config =
+            CacheConfig { max_entries: 10, default_ttl: 60, enabled: true, ..Default::default() };
         let cache = ResponseCache::new(config);
 
         // Backdate `cached_at` so the age is clearly distinguishable from "now".
