@@ -63,6 +63,17 @@ pub struct CachedFetchResult {
     pub was_cached: bool,
     pub tags: Vec<String>,
 }
+
+impl CachedFetchResult {
+    /// 5xx responses are never cached: a transient backend error cached here
+    /// is replayed to every render for the TTL (default 60s), turning a blip
+    /// into a minute of failures. 4xx stays cacheable — a missing article is
+    /// stable data worth deduplicating.
+    fn is_cacheable(&self) -> bool {
+        self.status < 500
+    }
+}
+
 type InFlightFetches =
     Arc<DashMap<String, Arc<TokioMutex<Option<Result<CachedFetchResult, RariError>>>>>>;
 
@@ -278,8 +289,10 @@ impl RequestContext {
                 if let Ok(ref mut cached) = result {
                     cached.tags = Self::merge_and_sort_tags(mem::take(&mut cached.tags), tags);
                     *guard = Some(Ok(cached.clone()));
-                    let mut cache = fetch_cache.lock();
-                    cache.put(cache_key_for_task, cached.clone());
+                    if cached.is_cacheable() {
+                        let mut cache = fetch_cache.lock();
+                        cache.put(cache_key_for_task, cached.clone());
+                    }
                 }
                 return result;
             }
@@ -292,7 +305,9 @@ impl RequestContext {
 
             *guard = Some(fetch_result.clone());
 
-            if let Ok(ref cached_result) = fetch_result {
+            if let Ok(ref cached_result) = fetch_result
+                && cached_result.is_cacheable()
+            {
                 let mut cache = fetch_cache.lock();
                 cache.put(cache_key_for_task, cached_result.clone());
             }
