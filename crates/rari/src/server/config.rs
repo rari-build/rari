@@ -1397,7 +1397,7 @@ mod tests {
             url: None,
             max_entries: 500,
             default_ttl_secs: 60,
-            max_bytes: 0,
+            ..Default::default()
         };
         let json = serde_json::to_value(&layer).unwrap();
         assert_eq!(json["handler"], "memory");

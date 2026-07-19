@@ -174,7 +174,7 @@ impl RariModuleLoader {
             url: None,
             max_entries: config.cache_size_limit,
             default_ttl_secs: DEFAULT_TTL_SECS,
-            max_bytes: 0,
+            ..Default::default()
         };
         let module_caching = ModuleCaching::from_config(&layer, registry);
         let node_resolver = resolver.node_resolver();

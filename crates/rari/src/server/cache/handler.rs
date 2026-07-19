@@ -157,6 +157,17 @@ impl MemoryCacheHandler {
         self.total_bytes.load(std::sync::atomic::Ordering::Relaxed)
     }
 
+    /// Saturating subtraction: a raw `fetch_sub` wraps on underflow, and a
+    /// wrapped counter makes the byte-budget check pass forever. Any
+    /// accounting drift saturates at 0 instead of disabling the budget.
+    fn sub_stored_bytes(&self, n: usize) {
+        let _ = self.total_bytes.fetch_update(
+            std::sync::atomic::Ordering::Relaxed,
+            std::sync::atomic::Ordering::Relaxed,
+            |current| Some(current.saturating_sub(n)),
+        );
+    }
+
     fn expires_at(ttl_secs: u64) -> Option<Instant> {
         if ttl_secs == 0 {
             Some(Instant::now())
@@ -177,7 +188,7 @@ impl MemoryCacheHandler {
         let (_key, entry) = self.cache.remove(key)?;
         self.remove_from_tag_index(key, &entry.tags);
         self.lru.lock().pop(key);
-        self.total_bytes.fetch_sub(entry.bytes.len(), std::sync::atomic::Ordering::Relaxed);
+        self.sub_stored_bytes(entry.bytes.len());
         Some(entry)
     }
 
@@ -391,7 +402,7 @@ impl CacheHandler for MemoryCacheHandler {
                 true
             }
         });
-        self.total_bytes.fetch_sub(removed_bytes, std::sync::atomic::Ordering::Relaxed);
+        self.sub_stored_bytes(removed_bytes);
         let removed = removed_entries.len();
         {
             let mut lru = self.lru.lock();
@@ -549,7 +560,7 @@ mod tests {
         let handler = MemoryCacheHandler::with_config(&MemoryConfig {
             max_entries: 2,
             default_ttl: 60,
-            max_bytes: 0,
+            ..Default::default()
         });
         handler.set("a", b"1".to_vec(), 60).await.unwrap();
         handler.set("b", b"2".to_vec(), 60).await.unwrap();

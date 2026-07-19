@@ -31,7 +31,7 @@ impl OgImageCache {
         let handler = MemoryCacheHandler::with_config(&MemoryConfig {
             max_entries: memory_capacity.max(1),
             default_ttl: 0,
-            max_bytes: 0,
+            ..Default::default()
         });
         Self::with_handler(Arc::new(handler), project_path)
     }
@@ -182,7 +182,7 @@ mod tests {
         let handler = Arc::new(MemoryCacheHandler::with_config(&MemoryConfig {
             max_entries: memory_capacity.max(1),
             default_ttl: 0,
-            max_bytes: 0,
+            ..Default::default()
         }));
         OgImageCache::with_handler(handler, &test_project_path(test_name))
     }
@@ -237,7 +237,7 @@ mod tests {
         let handler_a = Arc::new(MemoryCacheHandler::with_config(&MemoryConfig {
             max_entries: 8,
             default_ttl: 0,
-            max_bytes: 0,
+            ..Default::default()
         }));
         let cache_a = OgImageCache::with_handler(handler_a, &project_path);
 
@@ -249,7 +249,7 @@ mod tests {
         let handler_b = Arc::new(MemoryCacheHandler::with_config(&MemoryConfig {
             max_entries: 8,
             default_ttl: 0,
-            max_bytes: 0,
+            ..Default::default()
         }));
         let cache_b = OgImageCache::with_handler(
             Arc::clone(&handler_b) as Arc<dyn CacheHandler>,
