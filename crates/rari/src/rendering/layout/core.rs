@@ -181,6 +181,10 @@ impl LayoutHtmlCache {
     ) -> Result<(), CacheError> {
         let ttl_secs =
             route_max_age_secs.map_or(self.default_ttl_secs, |m| m.min(self.default_ttl_secs));
+        if ttl_secs == 0 {
+            // max-age=0: the entry would be born expired; skip the write.
+            return Ok(());
+        }
         self.handler
             .set_with_tags(&Self::namespaced(key), html.into_bytes(), ttl_secs, tags)
             .await?;
@@ -1511,12 +1515,13 @@ mod tests {
     #[tokio::test]
     async fn test_layout_route_max_age_clamps_ttl() {
         let handler = Arc::new(MemoryCacheHandler::default());
-        let cache = LayoutHtmlCache::with_ttl(handler, 3600);
+        let cache = LayoutHtmlCache::with_ttl(Arc::clone(&handler) as Arc<_>, 3600);
 
-        // Route max-age below the layer default wins: max-age=0 expires the
-        // entry immediately instead of living the full 3600s.
+        // max-age=0: the entry would be born expired, so the write is skipped
+        // entirely — nothing stored, nothing served.
         cache.insert_with_tags(1, "short-lived".to_string(), &[], Some(0)).await.expect("insert");
         assert!(cache.get(1).await.is_none());
+        assert!(handler.is_empty(), "max-age=0 must not store an entry");
 
         // A max-age above the default is clamped down to it, never up.
         cache
