@@ -93,7 +93,13 @@ pub trait CacheHandler: Send + Sync + fmt::Debug {
 pub struct SetOutcome {
     pub replaced: bool,
     pub evicted: usize,
+    /// Bytes removed from the cache by this set: LRU/byte-budget evictions
+    /// plus any replaced entry under the same key. Callers mirroring their
+    /// own byte accounting subtract this.
     pub evicted_bytes: usize,
+    /// `false` when the value was not admitted (e.g. larger than the whole
+    /// byte budget); callers that pre-counted the value must back it out.
+    pub stored: bool,
 }
 
 #[derive(Debug)]
@@ -309,9 +315,10 @@ impl CacheHandler for MemoryCacheHandler {
             tag_count = tags.len(),
             "memory cache set_with_tags"
         );
-        let replaced = self.remove_entry(key).is_some();
+        let old_bytes = self.remove_entry(key).map(|e| e.bytes.len());
+        let replaced = old_bytes.is_some();
         let mut evicted = 0usize;
-        let mut evicted_bytes = 0usize;
+        let mut evicted_bytes = old_bytes.unwrap_or(0);
 
         // A single value larger than the whole byte budget can never fit;
         // storing it would evict everything else for a guaranteed-evicted
@@ -325,7 +332,7 @@ impl CacheHandler for MemoryCacheHandler {
                 max_bytes = self.max_bytes,
                 "memory cache value exceeds byte budget; not cached"
             );
-            return Ok(SetOutcome { replaced, evicted, evicted_bytes });
+            return Ok(SetOutcome { replaced, evicted, evicted_bytes, stored: false });
         }
 
         // Evict LRU entries until the new value fits the byte budget.
@@ -365,7 +372,7 @@ impl CacheHandler for MemoryCacheHandler {
             }
         }
 
-        Ok(SetOutcome { replaced, evicted, evicted_bytes })
+        Ok(SetOutcome { replaced, evicted, evicted_bytes, stored: true })
     }
 
     async fn invalidate(&self, key: &str) -> Result<bool, CacheError> {

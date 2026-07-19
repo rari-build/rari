@@ -162,11 +162,15 @@ impl ImageCache {
         }
 
         match self.handler.set(&Self::ns(&key), serialized, IMG_TTL_SECS).await {
-            Ok(outcome) if outcome.evicted_bytes > 0 => {
+            Ok(outcome) => {
+                // Mirror the handler: subtract evicted/replaced bytes, and
+                // back out the pre-counted value if it was not admitted.
                 let mut size = self.current_memory_size.lock();
                 *size = size.saturating_sub(outcome.evicted_bytes);
+                if !outcome.stored {
+                    *size = size.saturating_sub(data_size);
+                }
             }
-            Ok(_) => {}
             Err(e) => {
                 tracing::error!("Failed to write image to handler cache: {}", e);
                 let mut size = self.current_memory_size.lock();
