@@ -94,11 +94,19 @@ pub struct CacheLayerConfig {
     pub url: Option<String>,
     pub max_entries: usize,
     pub default_ttl_secs: u64,
+    /// Total payload byte budget for memory layers. `0` = unlimited.
+    pub max_bytes: usize,
 }
 
 impl Default for CacheLayerConfig {
     fn default() -> Self {
-        Self { handler: "memory".to_string(), url: None, max_entries: 1000, default_ttl_secs: 60 }
+        Self {
+            handler: "memory".to_string(),
+            url: None,
+            max_entries: 1000,
+            default_ttl_secs: 60,
+            max_bytes: 0,
+        }
     }
 }
 
@@ -1389,6 +1397,7 @@ mod tests {
             url: None,
             max_entries: 500,
             default_ttl_secs: 60,
+            max_bytes: 0,
         };
         let json = serde_json::to_value(&layer).unwrap();
         assert_eq!(json["handler"], "memory");
