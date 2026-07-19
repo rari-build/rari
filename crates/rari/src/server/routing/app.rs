@@ -1606,10 +1606,15 @@ pub async fn handle_app_route(
             }
             insert_response_cache_vary_header(&mut response_headers, cookie_header, true);
 
+            // One refcounted buffer serves the response cache, the fast
+            // cache, and the response body — the page was previously cloned
+            // in full for the cache and again for the body.
+            let final_html = Bytes::from(final_html);
+
             if for_response_cache {
                 let response_cache_tags =
                     merge_response_cache_tags(&state, cache_policy.tags.clone()).await;
-                let body_bytes = Bytes::from(final_html.clone());
+                let body_bytes = final_html.clone();
 
                 let (compressed_gzip, compressed_zstd, compressed_br) = {
                     let (gz, gz_enc) =
@@ -1666,8 +1671,7 @@ pub async fn handle_app_route(
             {
                 use crate::server::compression::{CompressionEncoding, compress_body};
                 let encoding = CompressionEncoding::from_accept_encoding(accept_encoding);
-                let (body_bytes, actual_encoding) =
-                    compress_body(Bytes::from(final_html), encoding).await;
+                let (body_bytes, actual_encoding) = compress_body(final_html, encoding).await;
 
                 if let Some(encoding_header) = actual_encoding.as_header_value() {
                     response_builder = response_builder.header("content-encoding", encoding_header);
