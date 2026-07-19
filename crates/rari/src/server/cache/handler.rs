@@ -78,6 +78,14 @@ pub trait CacheHandler: Send + Sync + fmt::Debug {
     fn total_bytes(&self) -> Option<usize> {
         None
     }
+
+    /// Exact payload bytes stored under `prefix`, when the backend can
+    /// report it. `None` when the backend cannot. Callers sharing one
+    /// handler across cache layers need this instead of `total_bytes`,
+    /// which counts every layer's entries.
+    fn prefix_bytes(&self, _prefix: &str) -> Option<usize> {
+        None
+    }
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -307,7 +315,9 @@ impl CacheHandler for MemoryCacheHandler {
 
         // A single value larger than the whole byte budget can never fit;
         // storing it would evict everything else for a guaranteed-evicted
-        // entry. Skip caching it.
+        // entry. Skip caching it. The old entry stays removed on purpose:
+        // set() means the old value is outdated, and a miss beats serving
+        // stale data.
         if self.max_bytes > 0 && value.len() > self.max_bytes {
             tracing::warn!(
                 key = %key,
@@ -425,6 +435,16 @@ impl CacheHandler for MemoryCacheHandler {
 
     fn total_bytes(&self) -> Option<usize> {
         Some(self.stored_bytes())
+    }
+
+    fn prefix_bytes(&self, prefix: &str) -> Option<usize> {
+        Some(
+            self.cache
+                .iter()
+                .filter(|e| e.key().starts_with(prefix))
+                .map(|e| e.value().bytes.len())
+                .sum(),
+        )
     }
 }
 

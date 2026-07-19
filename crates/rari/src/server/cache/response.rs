@@ -637,8 +637,10 @@ impl ResponseCache {
     fn update_entry_count_metrics(&self) {
         let n = self.entry_count.load(Ordering::Relaxed);
         // Exact when the backend reports payload bytes; rough per-entry
-        // estimate otherwise.
-        let usage = self.handler.total_bytes().unwrap_or(n * 10_000);
+        // estimate otherwise. Scoped to this cache's key prefix: the handler
+        // may be shared with other cache layers (image, OG), whose bytes
+        // must not count here.
+        let usage = self.handler.prefix_bytes(Self::KEY_PREFIX).unwrap_or(n * 10_000);
         let mut metrics = self.metrics.lock();
         metrics.total_entries = n;
         metrics.memory_usage_bytes = usage;
