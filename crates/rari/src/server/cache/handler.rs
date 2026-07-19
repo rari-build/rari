@@ -349,7 +349,12 @@ impl CacheHandler for MemoryCacheHandler {
         self.total_bytes.fetch_add(value.len(), std::sync::atomic::Ordering::Relaxed);
         let entry =
             MemEntry { bytes: value, expires_at: Self::expires_at(ttl_secs), tags: tags.to_vec() };
-        self.cache.insert(key.to_string(), entry);
+        // A concurrent set of the same key can land between the remove_entry
+        // above and this insert; the overwritten entry's bytes must come off
+        // the counter or they leak until the byte budget is exhausted.
+        if let Some(old_entry) = self.cache.insert(key.to_string(), entry) {
+            self.sub_stored_bytes(old_entry.bytes.len());
+        }
         self.insert_tag_index(key, tags);
 
         if let Some((evicted_key, ())) = lru.push(key.to_string(), ()) {
