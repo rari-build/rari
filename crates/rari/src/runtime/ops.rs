@@ -573,7 +573,12 @@ pub async fn op_fetch_with_cache(
     } else {
         match perform_simple_fetch(&url, &options).await {
             Ok((status, body, headers)) => Ok(serde_json::json!({
-                "ok": (200..300).contains(&status),
+                // Any completed HTTP exchange is ok — a 404/500 response is
+                // data for the caller, not a fetch failure. Gating ok on 2xx
+                // made the JS wrapper throw bare "Fetch failed" for every
+                // non-2xx and re-fetch the same URL through the fallback path.
+                // Matches the request-context branch above.
+                "ok": true,
                 "status": status,
                 "statusText": http_status_text(status),
                 "body": body,
