@@ -266,6 +266,13 @@ impl RouteCachePolicy {
         base
     }
 
+    /// The `max-age` value declared in a Cache-Control header, if any.
+    pub fn max_age_from_cache_control(cache_control: &str) -> Option<u64> {
+        cache_control.split(',').find_map(|directive| {
+            directive.trim().strip_prefix("max-age=").and_then(|v| v.trim().parse().ok())
+        })
+    }
+
     pub fn from_cache_control(cache_control: &str, route_path: &str) -> Self {
         let mut policy = Self::default();
         policy.tags.push(route_path.to_string());
@@ -909,6 +916,16 @@ mod tests {
         assert_eq!(policy.ttl, 3600);
         assert!(policy.enabled);
         assert_eq!(policy.tags, vec!["/test".to_string()]);
+    }
+
+    #[test]
+    fn test_max_age_from_cache_control() {
+        let max_age = RouteCachePolicy::max_age_from_cache_control;
+        assert_eq!(max_age("public, max-age=60"), Some(60));
+        assert_eq!(max_age("max-age=3600, stale-while-revalidate=86400"), Some(3600));
+        assert_eq!(max_age("public"), None);
+        assert_eq!(max_age("max-age=garbage"), None);
+        assert_eq!(max_age(""), None);
     }
 
     #[test]

@@ -164,17 +164,25 @@ impl LayoutHtmlCache {
     }
 
     pub async fn insert(&self, key: u64, html: String) -> Result<(), CacheError> {
-        self.insert_with_tags(key, html, &[]).await
+        self.insert_with_tags(key, html, &[], None).await
     }
 
+    /// `route_max_age_secs` is the route's declared Cache-Control max-age, if
+    /// any. Entries never outlive the route's own freshness contract: the
+    /// effective TTL is min(route max-age, layer default), so a max-age=60
+    /// route can't be served hour-old layout HTML. Routes without a max-age
+    /// keep the layer default.
     pub async fn insert_with_tags(
         &self,
         key: u64,
         html: String,
         tags: &[String],
+        route_max_age_secs: Option<u64>,
     ) -> Result<(), CacheError> {
+        let ttl_secs =
+            route_max_age_secs.map_or(self.default_ttl_secs, |m| m.min(self.default_ttl_secs));
         self.handler
-            .set_with_tags(&Self::namespaced(key), html.into_bytes(), self.default_ttl_secs, tags)
+            .set_with_tags(&Self::namespaced(key), html.into_bytes(), ttl_secs, tags)
             .await?;
         Ok(())
     }
@@ -1097,9 +1105,19 @@ impl LayoutRenderer {
                 if !layout_cache_tags.iter().any(|tag| tag == &route_path) {
                     layout_cache_tags.push(route_path);
                 }
+                let route_max_age = Config::get().and_then(|config| {
+                    RouteCachePolicy::max_age_from_cache_control(
+                        config.get_cache_control_for_route(&route_match.pathname),
+                    )
+                });
                 let _ = self
                     .html_cache
-                    .insert_with_tags(cache_key, html.clone(), &layout_cache_tags)
+                    .insert_with_tags(
+                        cache_key,
+                        html.clone(),
+                        &layout_cache_tags,
+                        route_max_age,
+                    )
                     .await;
             }
 
@@ -1491,10 +1509,32 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_layout_route_max_age_clamps_ttl() {
+        let handler = Arc::new(MemoryCacheHandler::default());
+        let cache = LayoutHtmlCache::with_ttl(handler, 3600);
+
+        // Route max-age below the layer default wins: max-age=0 expires the
+        // entry immediately instead of living the full 3600s.
+        cache.insert_with_tags(1, "short-lived".to_string(), &[], Some(0)).await.expect("insert");
+        assert!(cache.get(1).await.is_none());
+
+        // A max-age above the default is clamped down to it, never up.
+        cache
+            .insert_with_tags(2, "default-lived".to_string(), &[], Some(999_999))
+            .await
+            .expect("insert");
+        assert!(cache.get(2).await.is_some());
+
+        // No max-age keeps the layer default.
+        cache.insert_with_tags(3, "default".to_string(), &[], None).await.expect("insert");
+        assert!(cache.get(3).await.is_some());
+    }
+
+    #[tokio::test]
     async fn test_layout_invalidate_by_tag() {
         let cache = LayoutHtmlCache::new();
         cache
-            .insert_with_tags(42, "tagged".to_string(), &["products".to_string()])
+            .insert_with_tags(42, "tagged".to_string(), &["products".to_string()], None)
             .await
             .expect("insert");
         assert!(cache.get(42).await.is_some());
