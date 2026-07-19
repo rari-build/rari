@@ -32,7 +32,6 @@ const KEY_PREFIX: &str = "image:";
 pub struct ImageCache {
     handler: Arc<dyn CacheHandler>,
     cache_dir: PathBuf,
-    max_memory_size: usize,
     current_memory_size: Mutex<usize>,
 }
 
@@ -49,13 +48,15 @@ impl ImageCache {
         Self::with_handler(Arc::new(handler), max_memory_size, project_path)
     }
 
+    /// The memory budget lives in the handler's entry/byte caps; this type
+    /// only mirrors the handler's usage in `current_memory_size`.
     pub fn with_handler(
         handler: Arc<dyn CacheHandler>,
-        max_memory_size: usize,
+        _max_memory_size: usize,
         project_path: &Path,
     ) -> Self {
         let cache_dir = Self::resolve_cache_dir(project_path);
-        Self { handler, cache_dir, max_memory_size, current_memory_size: Mutex::new(0) }
+        Self { handler, cache_dir, current_memory_size: Mutex::new(0) }
     }
 
     fn ns(key: &str) -> String {
