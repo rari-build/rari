@@ -45,6 +45,7 @@ impl ModuleCaching {
             Arc::new(MemoryCacheHandler::with_config(&MemoryConfig {
                 max_entries: cache_size.max(1),
                 default_ttl: ttl_secs,
+                max_bytes: 0,
             })),
         )
     }

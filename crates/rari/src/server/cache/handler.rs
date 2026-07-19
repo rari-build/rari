@@ -72,6 +72,12 @@ pub trait CacheHandler: Send + Sync + fmt::Debug {
     }
 
     fn get_all_keys(&self) -> Vec<String>;
+
+    /// Exact total payload bytes currently stored, when the backend can
+    /// report it. `None` when the backend cannot.
+    fn total_bytes(&self) -> Option<usize> {
+        None
+    }
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -94,11 +100,15 @@ struct MemEntry {
 pub struct MemoryConfig {
     pub max_entries: usize,
     pub default_ttl: u64,
+    /// Total payload byte budget across all entries. `0` = unlimited
+    /// (entry-count LRU only). Entry counts alone don't bound memory:
+    /// 1000 multi-MB pages is gigabytes resident.
+    pub max_bytes: usize,
 }
 
 impl Default for MemoryConfig {
     fn default() -> Self {
-        Self { max_entries: 1000, default_ttl: 31_536_000 }
+        Self { max_entries: 1000, default_ttl: 31_536_000, max_bytes: 0 }
     }
 }
 
@@ -108,6 +118,8 @@ pub struct MemoryCacheHandler {
     lru: Mutex<LruCache<String, ()>>,
     tag_index: DashMap<String, Vec<String>>,
     max_entries: usize,
+    max_bytes: usize,
+    total_bytes: std::sync::atomic::AtomicUsize,
 }
 
 impl MemoryCacheHandler {
@@ -124,6 +136,8 @@ impl MemoryCacheHandler {
             lru: Mutex::new(LruCache::new(max_entries)),
             tag_index: DashMap::new(),
             max_entries: max_entries.get(),
+            max_bytes: config.max_bytes,
+            total_bytes: std::sync::atomic::AtomicUsize::new(0),
         }
     }
 
@@ -137,6 +151,10 @@ impl MemoryCacheHandler {
 
     pub fn max_entries(&self) -> usize {
         self.max_entries
+    }
+
+    fn stored_bytes(&self) -> usize {
+        self.total_bytes.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     fn expires_at(ttl_secs: u64) -> Option<Instant> {
@@ -159,6 +177,7 @@ impl MemoryCacheHandler {
         let (_key, entry) = self.cache.remove(key)?;
         self.remove_from_tag_index(key, &entry.tags);
         self.lru.lock().pop(key);
+        self.total_bytes.fetch_sub(entry.bytes.len(), std::sync::atomic::Ordering::Relaxed);
         Some(entry)
     }
 
@@ -275,6 +294,27 @@ impl CacheHandler for MemoryCacheHandler {
         let mut evicted = 0usize;
         let mut evicted_bytes = 0usize;
 
+        // A single value larger than the whole byte budget can never fit;
+        // storing it would evict everything else for a guaranteed-evicted
+        // entry. Skip caching it.
+        if self.max_bytes > 0 && value.len() > self.max_bytes {
+            tracing::warn!(
+                key = %key,
+                size_bytes = value.len(),
+                max_bytes = self.max_bytes,
+                "memory cache value exceeds byte budget; not cached"
+            );
+            return Ok(SetOutcome { replaced, evicted, evicted_bytes });
+        }
+
+        // Evict LRU entries until the new value fits the byte budget.
+        while self.max_bytes > 0 && self.stored_bytes().saturating_add(value.len()) > self.max_bytes
+        {
+            let Some(entry) = self.evict_lru_with_entry() else { break };
+            evicted += 1;
+            evicted_bytes = evicted_bytes.saturating_add(entry.bytes.len());
+        }
+
         let mut lru = self.lru.lock();
         if !replaced && lru.len() >= self.max_entries {
             drop(lru);
@@ -285,6 +325,7 @@ impl CacheHandler for MemoryCacheHandler {
             lru = self.lru.lock();
         }
 
+        self.total_bytes.fetch_add(value.len(), std::sync::atomic::Ordering::Relaxed);
         let entry =
             MemEntry { bytes: value, expires_at: Self::expires_at(ttl_secs), tags: tags.to_vec() };
         self.cache.insert(key.to_string(), entry);
@@ -330,6 +371,7 @@ impl CacheHandler for MemoryCacheHandler {
         let n = self.cache.len();
         self.cache.clear();
         self.tag_index.clear();
+        self.total_bytes.store(0, std::sync::atomic::Ordering::Relaxed);
         let mut lru = self.lru.lock();
         lru.clear();
         tracing::debug!(cleared_entries = n, "memory cache clear");
@@ -339,14 +381,17 @@ impl CacheHandler for MemoryCacheHandler {
     async fn clear_prefix(&self, prefix: &str) -> Result<usize, CacheError> {
         let prefix = prefix.to_owned();
         let mut removed_entries: Vec<(String, Vec<String>)> = Vec::new();
+        let mut removed_bytes = 0usize;
         self.cache.retain(|key, entry| {
             if key.starts_with(&prefix) {
                 removed_entries.push((key.clone(), entry.tags.clone()));
+                removed_bytes = removed_bytes.saturating_add(entry.bytes.len());
                 false
             } else {
                 true
             }
         });
+        self.total_bytes.fetch_sub(removed_bytes, std::sync::atomic::Ordering::Relaxed);
         let removed = removed_entries.len();
         {
             let mut lru = self.lru.lock();
@@ -365,6 +410,10 @@ impl CacheHandler for MemoryCacheHandler {
 
     fn get_all_keys(&self) -> Vec<String> {
         self.cache.iter().map(|e| e.key().clone()).collect()
+    }
+
+    fn total_bytes(&self) -> Option<usize> {
+        Some(self.stored_bytes())
     }
 }
 
@@ -497,8 +546,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_memory_lru_eviction() {
-        let handler =
-            MemoryCacheHandler::with_config(&MemoryConfig { max_entries: 2, default_ttl: 60 });
+        let handler = MemoryCacheHandler::with_config(&MemoryConfig {
+            max_entries: 2,
+            default_ttl: 60,
+            max_bytes: 0,
+        });
         handler.set("a", b"1".to_vec(), 60).await.unwrap();
         handler.set("b", b"2".to_vec(), 60).await.unwrap();
         let _ = handler.get("a").await.unwrap();
@@ -506,6 +558,69 @@ mod tests {
         assert_eq!(handler.get("a").await.unwrap(), Some(b"1".to_vec()));
         assert_eq!(handler.get("b").await.unwrap(), None);
         assert_eq!(handler.get("c").await.unwrap(), Some(b"3".to_vec()));
+    }
+
+    #[tokio::test]
+    async fn test_byte_budget_evicts_lru_until_fit() {
+        let handler = MemoryCacheHandler::with_config(&MemoryConfig {
+            max_entries: 100,
+            default_ttl: 60,
+            max_bytes: 10,
+        });
+        handler.set("a", vec![0u8; 4], 60).await.unwrap();
+        handler.set("b", vec![0u8; 4], 60).await.unwrap();
+        // "a" is LRU; inserting 4 more bytes exceeds the 10-byte budget.
+        let outcome = handler.set("c", vec![0u8; 4], 60).await.unwrap();
+
+        assert_eq!(outcome.evicted, 1);
+        assert_eq!(outcome.evicted_bytes, 4);
+        assert_eq!(handler.get("a").await.unwrap(), None);
+        assert!(handler.get("b").await.unwrap().is_some());
+        assert!(handler.get("c").await.unwrap().is_some());
+        assert_eq!(handler.total_bytes(), Some(8));
+    }
+
+    #[tokio::test]
+    async fn test_byte_budget_rejects_oversized_value() {
+        let handler = MemoryCacheHandler::with_config(&MemoryConfig {
+            max_entries: 100,
+            default_ttl: 60,
+            max_bytes: 10,
+        });
+        handler.set("small", vec![0u8; 4], 60).await.unwrap();
+        // Larger than the whole budget: not cached, existing entries survive.
+        let outcome = handler.set("huge", vec![0u8; 11], 60).await.unwrap();
+
+        assert_eq!(outcome.evicted, 0);
+        assert_eq!(handler.get("huge").await.unwrap(), None);
+        assert!(handler.get("small").await.unwrap().is_some());
+        assert_eq!(handler.total_bytes(), Some(4));
+    }
+
+    #[tokio::test]
+    async fn test_total_bytes_tracks_all_removal_paths() {
+        let handler = MemoryCacheHandler::default();
+        handler.set("a", vec![0u8; 3], 60).await.unwrap();
+        handler.set_with_tags("b", vec![0u8; 5], 60, &["t".to_string()]).await.unwrap();
+        handler.set("p:c", vec![0u8; 7], 60).await.unwrap();
+        assert_eq!(handler.total_bytes(), Some(15));
+
+        // replace
+        handler.set("a", vec![0u8; 4], 60).await.unwrap();
+        assert_eq!(handler.total_bytes(), Some(16));
+
+        // invalidate + by-tag + prefix
+        handler.invalidate("a").await.unwrap();
+        assert_eq!(handler.total_bytes(), Some(12));
+        handler.invalidate_by_tag("t").await.unwrap();
+        assert_eq!(handler.total_bytes(), Some(7));
+        handler.clear_prefix("p:").await.unwrap();
+        assert_eq!(handler.total_bytes(), Some(0));
+
+        // clear
+        handler.set("d", vec![0u8; 9], 60).await.unwrap();
+        handler.clear().await.unwrap();
+        assert_eq!(handler.total_bytes(), Some(0));
     }
 
     #[tokio::test]

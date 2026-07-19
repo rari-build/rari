@@ -36,6 +36,7 @@ mod tests {
             url: url.map(String::from),
             max_entries: 1000,
             default_ttl_secs: 60,
+            max_bytes: 0,
         }
     }
 

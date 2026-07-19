@@ -196,6 +196,8 @@ pub struct CacheConfig {
     pub max_entries: usize,
     pub default_ttl: u64,
     pub enabled: bool,
+    /// Total payload byte budget for the memory handler. `0` = unlimited.
+    pub max_bytes: usize,
 }
 
 impl CacheConfig {
@@ -217,6 +219,10 @@ impl CacheConfig {
                 .ok()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(is_production),
+            max_bytes: env::var("RARI_CACHE_MAX_BYTES")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(0),
         }
     }
 
@@ -234,6 +240,10 @@ impl CacheConfig {
                 .ok()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(is_production),
+            max_bytes: env::var("RARI_CACHE_MAX_BYTES")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(layer.max_bytes),
         }
     }
 }
@@ -305,7 +315,7 @@ impl RouteCachePolicy {
 
 impl Default for CacheConfig {
     fn default() -> Self {
-        Self { max_entries: 1000, default_ttl: 60, enabled: true }
+        Self { max_entries: 1000, default_ttl: 60, enabled: true, max_bytes: 0 }
     }
 }
 
@@ -339,6 +349,7 @@ impl ResponseCache {
         let handler = MemoryCacheHandler::with_config(&MemoryConfig {
             max_entries: config.max_entries,
             default_ttl: config.default_ttl,
+            max_bytes: config.max_bytes,
         });
         Self::new_with_handler(config, Arc::new(handler))
     }
@@ -625,9 +636,12 @@ impl ResponseCache {
 
     fn update_entry_count_metrics(&self) {
         let n = self.entry_count.load(Ordering::Relaxed);
+        // Exact when the backend reports payload bytes; rough per-entry
+        // estimate otherwise.
+        let usage = self.handler.total_bytes().unwrap_or(n * 10_000);
         let mut metrics = self.metrics.lock();
         metrics.total_entries = n;
-        metrics.memory_usage_bytes = n * 10_000;
+        metrics.memory_usage_bytes = usage;
     }
 
     fn resync_entry_count(&self) {
@@ -768,7 +782,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_cache_basic_operations() {
-        let config = CacheConfig { max_entries: 10, default_ttl: 60, enabled: true };
+        let config = CacheConfig { max_entries: 10, default_ttl: 60, enabled: true, max_bytes: 0 };
         let cache = ResponseCache::new(config);
 
         assert!(cache.get("test-key").await.is_none());
@@ -788,7 +802,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_cache_expiration() {
-        let config = CacheConfig { max_entries: 10, default_ttl: 60, enabled: true };
+        let config = CacheConfig { max_entries: 10, default_ttl: 60, enabled: true, max_bytes: 0 };
         let cache = ResponseCache::new(config);
 
         let response = create_test_response("test body", 0);
@@ -801,7 +815,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_cache_invalidation() {
-        let config = CacheConfig { max_entries: 10, default_ttl: 60, enabled: true };
+        let config = CacheConfig { max_entries: 10, default_ttl: 60, enabled: true, max_bytes: 0 };
         let cache = ResponseCache::new(config);
 
         let response = create_test_response("test body", 60);
@@ -816,7 +830,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_cache_tag_invalidation() {
-        let config = CacheConfig { max_entries: 10, default_ttl: 60, enabled: true };
+        let config = CacheConfig { max_entries: 10, default_ttl: 60, enabled: true, max_bytes: 0 };
         let cache = ResponseCache::new(config);
 
         let mut response1 = create_test_response("body1", 60);
@@ -839,7 +853,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_cache_lru_eviction() {
-        let config = CacheConfig { max_entries: 2, default_ttl: 60, enabled: true };
+        let config = CacheConfig { max_entries: 2, default_ttl: 60, enabled: true, max_bytes: 0 };
         let cache = ResponseCache::new(config);
 
         cache.set("key1".to_string(), create_test_response("body1", 60)).await;
@@ -857,7 +871,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_cache_disabled() {
-        let config = CacheConfig { max_entries: 10, default_ttl: 60, enabled: false };
+        let config = CacheConfig { max_entries: 10, default_ttl: 60, enabled: false, max_bytes: 0 };
         let cache = ResponseCache::new(config);
 
         let response = create_test_response("test body", 60);
@@ -868,7 +882,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_cache_clear() {
-        let config = CacheConfig { max_entries: 10, default_ttl: 60, enabled: true };
+        let config = CacheConfig { max_entries: 10, default_ttl: 60, enabled: true, max_bytes: 0 };
         let cache = ResponseCache::new(config);
 
         cache.set("key1".to_string(), create_test_response("body1", 60)).await;
@@ -885,7 +899,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_clear_percentage() {
-        let config = CacheConfig { max_entries: 10, default_ttl: 60, enabled: true };
+        let config = CacheConfig { max_entries: 10, default_ttl: 60, enabled: true, max_bytes: 0 };
         let cache = ResponseCache::new(config);
 
         for i in 0..10 {
@@ -903,7 +917,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_memory_pressure_detection() {
-        let config = CacheConfig { max_entries: 10, default_ttl: 60, enabled: true };
+        let config = CacheConfig { max_entries: 10, default_ttl: 60, enabled: true, max_bytes: 0 };
         let cache = ResponseCache::new(config);
 
         for i in 0..8 {
@@ -1061,7 +1075,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_handler_is_memory_by_default() {
-        let config = CacheConfig { max_entries: 2, default_ttl: 60, enabled: true };
+        let config = CacheConfig { max_entries: 2, default_ttl: 60, enabled: true, max_bytes: 0 };
         let cache = ResponseCache::new(config);
 
         cache.set("a".to_string(), create_test_response("body-a", 60)).await;
@@ -1075,7 +1089,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_new_with_custom_handler() {
         let stub = Arc::new(StubHandler::default());
-        let config = CacheConfig { max_entries: 100, default_ttl: 60, enabled: true };
+        let config = CacheConfig { max_entries: 100, default_ttl: 60, enabled: true, max_bytes: 0 };
         let cache = ResponseCache::new_with_handler(config, stub.clone());
 
         cache.set("k".to_string(), create_test_response("v", 60)).await;
@@ -1096,10 +1110,11 @@ mod tests {
             Arc::new(MemoryCacheHandler::with_config(&MemoryConfig {
                 max_entries: 32,
                 default_ttl: 60,
+                max_bytes: 0,
             }));
 
         let response_cache = ResponseCache::new_with_handler(
-            CacheConfig { max_entries: 32, default_ttl: 60, enabled: true },
+            CacheConfig { max_entries: 32, default_ttl: 60, enabled: true, max_bytes: 0 },
             shared.clone(),
         );
         let test_dir = env::temp_dir().join("rari-test-cache-namespace");
@@ -1131,7 +1146,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_serialized_response_round_trip() {
-        let config = CacheConfig { max_entries: 10, default_ttl: 60, enabled: true };
+        let config = CacheConfig { max_entries: 10, default_ttl: 60, enabled: true, max_bytes: 0 };
         let cache = ResponseCache::new(config);
 
         let mut headers = HeaderMap::new();
@@ -1176,7 +1191,7 @@ mod tests {
         // paths like `update_in_place` that re-serialize an existing
         // `CachedResponse` would silently reset `cached_at` to the moment of
         // the call, extending the entry's effective TTL.
-        let config = CacheConfig { max_entries: 10, default_ttl: 60, enabled: true };
+        let config = CacheConfig { max_entries: 10, default_ttl: 60, enabled: true, max_bytes: 0 };
         let cache = ResponseCache::new(config);
 
         // Backdate `cached_at` so the age is clearly distinguishable from "now".
