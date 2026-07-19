@@ -395,9 +395,16 @@ impl CacheHandler for MemoryCacheHandler {
 
     async fn clear(&self) -> Result<(), CacheError> {
         let n = self.cache.len();
-        self.cache.clear();
+        // Subtract exactly what was removed instead of store(0): a concurrent
+        // set landing around the reset would leave its inserted bytes
+        // untracked (or tracked twice) forever.
+        let mut removed_bytes = 0usize;
+        self.cache.retain(|_, entry| {
+            removed_bytes = removed_bytes.saturating_add(entry.bytes.len());
+            false
+        });
         self.tag_index.clear();
-        self.total_bytes.store(0, std::sync::atomic::Ordering::Relaxed);
+        self.sub_stored_bytes(removed_bytes);
         let mut lru = self.lru.lock();
         lru.clear();
         tracing::debug!(cleared_entries = n, "memory cache clear");
