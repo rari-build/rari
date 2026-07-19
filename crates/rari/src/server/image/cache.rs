@@ -118,21 +118,27 @@ impl ImageCache {
         };
 
         let cached_arc = Arc::new(cached);
-        let data_size = cached_arc.data.len();
+        // Track the serialized size: that is what the handler stores and what
+        // its evicted_bytes are denominated in.
+        let serialized_size = read_result.len();
 
-        if let Err(e) = self.handler.set(&Self::ns(key), read_result, IMG_TTL_SECS).await {
-            tracing::debug!("Image cache write-through to handler failed: {}", e);
-        } else {
-            let mut size = self.current_memory_size.lock();
-            *size = size.saturating_add(data_size);
+        match self.handler.set(&Self::ns(key), read_result, IMG_TTL_SECS).await {
+            Ok(outcome) => {
+                let mut size = self.current_memory_size.lock();
+                *size = size.saturating_sub(outcome.evicted_bytes);
+                if outcome.stored {
+                    *size = size.saturating_add(serialized_size);
+                }
+            }
+            Err(e) => {
+                tracing::debug!("Image cache write-through to handler failed: {}", e);
+            }
         }
 
         Some(cached_arc)
     }
 
     pub async fn put(&self, key: String, cached: CachedImage) {
-        let data_size = cached.data.len();
-
         let serialized = match rkyv::to_bytes::<rancor::Error>(&cached) {
             Ok(b) => b.into_vec(),
             Err(e) => {
@@ -153,28 +159,19 @@ impl ImageCache {
             Err(e) => tracing::error!("Failed to spawn disk write task: {}", e),
         }
 
-        {
-            let mut size = self.current_memory_size.lock();
-            *size = size.saturating_add(data_size);
-            if *size > self.max_memory_size {
-                *size = self.max_memory_size;
-            }
-        }
-
+        // Track the serialized size after the set resolves: that is what the
+        // handler stores and what its evicted_bytes are denominated in.
+        let serialized_size = serialized.len();
         match self.handler.set(&Self::ns(&key), serialized, IMG_TTL_SECS).await {
             Ok(outcome) => {
-                // Mirror the handler: subtract evicted/replaced bytes, and
-                // back out the pre-counted value if it was not admitted.
                 let mut size = self.current_memory_size.lock();
                 *size = size.saturating_sub(outcome.evicted_bytes);
-                if !outcome.stored {
-                    *size = size.saturating_sub(data_size);
+                if outcome.stored {
+                    *size = size.saturating_add(serialized_size);
                 }
             }
             Err(e) => {
                 tracing::error!("Failed to write image to handler cache: {}", e);
-                let mut size = self.current_memory_size.lock();
-                *size = size.saturating_sub(data_size);
             }
         }
     }
