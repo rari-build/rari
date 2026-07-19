@@ -266,11 +266,18 @@ impl RouteCachePolicy {
         base
     }
 
-    /// The `max-age` value declared in a Cache-Control header, if any.
+    /// The shared-cache freshness lifetime declared in a Cache-Control header,
+    /// if any. `s-maxage` takes precedence over `max-age` (RFC 9111 §5.2.2.10):
+    /// the server-side cache is a shared cache, and `max-age=0, s-maxage=3600`
+    /// means "browsers revalidate, shared caches hold for an hour" — reading
+    /// only `max-age` there would disable caching the route asked for.
     pub fn max_age_from_cache_control(cache_control: &str) -> Option<u64> {
-        cache_control.split(',').find_map(|directive| {
-            directive.trim().strip_prefix("max-age=").and_then(|v| v.trim().parse().ok())
-        })
+        let directive_value = |prefix: &str| {
+            cache_control.split(',').find_map(|directive| {
+                directive.trim().strip_prefix(prefix).and_then(|v| v.trim().parse().ok())
+            })
+        };
+        directive_value("s-maxage=").or_else(|| directive_value("max-age="))
     }
 
     pub fn from_cache_control(cache_control: &str, route_path: &str) -> Self {
@@ -923,6 +930,9 @@ mod tests {
         let max_age = RouteCachePolicy::max_age_from_cache_control;
         assert_eq!(max_age("public, max-age=60"), Some(60));
         assert_eq!(max_age("max-age=3600, stale-while-revalidate=86400"), Some(3600));
+        assert_eq!(max_age("max-age=0, s-maxage=3600"), Some(3600));
+        assert_eq!(max_age("s-maxage=60"), Some(60));
+        assert_eq!(max_age("s-maxage=garbage, max-age=60"), Some(60));
         assert_eq!(max_age("public"), None);
         assert_eq!(max_age("max-age=garbage"), None);
         assert_eq!(max_age(""), None);
