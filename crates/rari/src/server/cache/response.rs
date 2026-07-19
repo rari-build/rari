@@ -1057,7 +1057,7 @@ mod tests {
         ) -> Result<SetOutcome, CacheError> {
             self.set_calls.lock().push(key.to_string());
             let replaced = self.map.lock().insert(key.to_string(), value).is_some();
-            Ok(SetOutcome { replaced, evicted: 0, evicted_bytes: 0 })
+            Ok(SetOutcome { replaced, evicted: 0, evicted_bytes: 0, stored: true })
         }
         async fn set_with_tags(
             &self,
