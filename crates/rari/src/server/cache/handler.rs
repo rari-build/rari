@@ -161,7 +161,7 @@ impl MemoryCacheHandler {
     /// wrapped counter makes the byte-budget check pass forever. Any
     /// accounting drift saturates at 0 instead of disabling the budget.
     fn sub_stored_bytes(&self, n: usize) {
-        let _ = self.total_bytes.fetch_update(
+        let _ = self.total_bytes.try_update(
             std::sync::atomic::Ordering::Relaxed,
             std::sync::atomic::Ordering::Relaxed,
             |current| Some(current.saturating_sub(n)),
