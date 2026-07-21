@@ -3,6 +3,7 @@
 use std::{
     fmt::{self, Formatter, Result as FmtResult},
     future::Future,
+    pin::Pin,
     sync::{
         Arc,
         atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
@@ -48,6 +49,27 @@ pub const HEAL_DISABLED: u64 = u64::MAX;
 /// Creates a fresh isolate when heal rebuilds a quarantined slot.
 pub type RuntimeFactory = Arc<dyn Fn() -> Arc<dyn JsRuntimeInterface> + Send + Sync>;
 
+/// Decrements a slot's soft stream load when dropped.
+pub struct StreamingSlotGuard {
+    load: Arc<AtomicUsize>,
+}
+
+impl Drop for StreamingSlotGuard {
+    fn drop(&mut self) {
+        self.load.fetch_sub(1, Ordering::Release);
+    }
+}
+
+/// Called after a slot isolate is rebuilt and passes the basic probe.
+pub type PostRebuildHook = Arc<
+    dyn Fn(
+            usize,
+            Arc<dyn JsRuntimeInterface>,
+        ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>>
+        + Send
+        + Sync,
+>;
+
 pub struct JsRuntimePool {
     runtimes: Vec<RwLock<Arc<dyn JsRuntimeInterface>>>,
     runtime_factory: RuntimeFactory,
@@ -58,11 +80,15 @@ pub struct JsRuntimePool {
     unhealthy_since_ms: Vec<AtomicU64>,
     /// Per-slot lease so `with_request_context` cannot interleave on one runtime.
     slot_leases: Vec<Arc<AsyncMutex<()>>>,
+    /// Soft in-flight stream counts for least-busy streaming admission.
+    stream_load: Vec<Arc<AtomicUsize>>,
     /// Set when request-context cleanup fails or times out; blocks probe-only heal.
     needs_rebuild: Vec<AtomicBool>,
     setup_mode: AtomicBool,
     timeout_ms: u64,
     heal_after_ms: u64,
+    /// Optional app-level resync after isolate rebuild (pipelines + components).
+    post_rebuild_hook: parking_lot::RwLock<Option<PostRebuildHook>>,
 }
 
 #[expect(
@@ -138,6 +164,7 @@ impl JsRuntimePool {
         let healthy = runtimes.iter().map(|_| AtomicBool::new(true)).collect();
         let unhealthy_since_ms = runtimes.iter().map(|_| AtomicU64::new(0)).collect();
         let slot_leases = (0..pool_size).map(|_| Arc::new(AsyncMutex::new(()))).collect();
+        let stream_load = (0..pool_size).map(|_| Arc::new(AtomicUsize::new(0))).collect();
         let needs_rebuild = (0..pool_size).map(|_| AtomicBool::new(false)).collect();
 
         Ok(Arc::new(Self {
@@ -148,11 +175,17 @@ impl JsRuntimePool {
             healthy,
             unhealthy_since_ms,
             slot_leases,
+            stream_load,
             needs_rebuild,
             setup_mode: AtomicBool::new(false),
             timeout_ms,
             heal_after_ms,
+            post_rebuild_hook: parking_lot::RwLock::new(None),
         }))
+    }
+
+    pub fn set_post_rebuild_hook(&self, hook: PostRebuildHook) {
+        *self.post_rebuild_hook.write() = Some(hook);
     }
 
     pub fn size(&self) -> usize {
@@ -216,6 +249,11 @@ impl JsRuntimePool {
             self.unhealthy_since_ms.get(idx).map(|s| s.load(Ordering::Acquire)).unwrap_or(0);
         if since == 0 {
             return false;
+        }
+        // Never leave the pool with zero healthy slots waiting on the heal delay —
+        // especially critical for pool size 1.
+        if self.healthy_count() == 0 {
+            return true;
         }
         let now = unix_now_ms();
         now.saturating_sub(since) >= self.heal_after_ms
@@ -464,8 +502,35 @@ impl JsRuntimePool {
             if self.probe_runtime(idx, &replacement, probe_timeout_ms).await
                 && self.runtime_still_installed(idx, &replacement)
             {
-                self.clear_needs_rebuild(idx);
-                self.mark_healthy(idx);
+                let hook = self.post_rebuild_hook.read().clone();
+                let resync_ok = if let Some(hook) = hook {
+                    match hook(idx, Arc::clone(&replacement)).await {
+                        Ok(()) => true,
+                        Err(e) => {
+                            tracing::error!(
+                                idx,
+                                error = %e,
+                                "Post-rebuild resync failed; keeping slot unhealthy"
+                            );
+                            false
+                        }
+                    }
+                } else if self.runtimes.len() > 1 {
+                    tracing::error!(
+                        idx,
+                        "Rebuilt JS runtime pool slot left unhealthy: post-rebuild resync required for pool_size > 1"
+                    );
+                    false
+                } else {
+                    true
+                };
+
+                if resync_ok {
+                    self.clear_needs_rebuild(idx);
+                    self.mark_healthy(idx);
+                } else {
+                    self.refresh_unhealthy_timestamp(idx);
+                }
             } else {
                 tracing::warn!(
                     idx,
@@ -533,6 +598,55 @@ impl JsRuntimePool {
         Ok(PooledRuntime::new(idx, runtime, self.timeout_ms))
     }
 
+    /// Prefer healthy slots with the fewest in-flight streams (soft lease).
+    pub fn pick_least_busy(&self) -> Option<usize> {
+        let healthy_indices: Vec<usize> = self
+            .healthy
+            .iter()
+            .enumerate()
+            .filter_map(|(i, h)| if h.load(Ordering::Acquire) { Some(i) } else { None })
+            .collect();
+        if healthy_indices.is_empty() {
+            return None;
+        }
+
+        let min_load = healthy_indices
+            .iter()
+            .filter_map(|&i| self.stream_load.get(i).map(|c| c.load(Ordering::Acquire)))
+            .min()?;
+        let candidates: Vec<usize> = healthy_indices
+            .into_iter()
+            .filter(|&i| {
+                self.stream_load.get(i).is_some_and(|c| c.load(Ordering::Acquire) == min_load)
+            })
+            .collect();
+        self.pick_strategy
+            .pick(&candidates, &self.next_index)
+            .filter(|&idx| idx < self.runtimes.len() && self.is_healthy(idx))
+    }
+
+    /// Sticky streaming pick that increments soft load until the guard drops.
+    pub async fn pick_runtime_for_streaming(
+        &self,
+    ) -> Result<(PooledRuntime, StreamingSlotGuard), RariError> {
+        self.probe_and_heal().await;
+        let idx = self.pick_least_busy().ok_or_else(|| {
+            RariError::js_runtime("No healthy JS runtime available in pool".to_string())
+        })?;
+        let runtime = self.runtime_at(idx).ok_or_else(|| {
+            RariError::js_runtime("No healthy JS runtime available in pool".to_string())
+        })?;
+        let load = self.stream_load.get(idx).cloned().ok_or_else(|| {
+            RariError::js_runtime("No healthy JS runtime available in pool".to_string())
+        })?;
+        load.fetch_add(1, Ordering::AcqRel);
+        Ok((PooledRuntime::new(idx, runtime, self.timeout_ms), StreamingSlotGuard { load }))
+    }
+
+    pub fn stream_load_at(&self, idx: usize) -> usize {
+        self.stream_load.get(idx).map(|c| c.load(Ordering::Acquire)).unwrap_or(0)
+    }
+
     /// Load+evaluate on a single picked isolate.
     ///
     /// `ModuleId` values are isolate-local. For bootstrap / HMR that must reach every
@@ -593,12 +707,13 @@ impl JsRuntimePool {
             let Ok(op_result) =
                 time::timeout(Duration::from_millis(timeout_ms), op(Arc::clone(&runtime))).await
             else {
+                // A hung operation is not proof the isolate is dead. Only quarantine when
+                // cleanup fails or times out (isolate unresponsive).
                 let cleanup = time::timeout(
                     Duration::from_millis(timeout_ms),
                     runtime.clear_request_context_if_matches(Arc::clone(&ctx)),
                 )
                 .await;
-                pool.mark_unhealthy_if_runtime_matches(idx, &runtime);
                 match cleanup {
                     Ok(Ok(())) => {}
                     Ok(Err(cleanup_err)) => {
@@ -606,12 +721,14 @@ impl JsRuntimePool {
                             "Failed to clear request context after timeout: {}",
                             cleanup_err
                         );
+                        pool.mark_unhealthy_if_runtime_matches(idx, &runtime);
                         pool.mark_needs_rebuild(idx);
                     }
                     Err(_) => {
                         tracing::error!(
                             "Clearing request context timed out after {timeout_ms} ms; slot needs rebuild"
                         );
+                        pool.mark_unhealthy_if_runtime_matches(idx, &runtime);
                         pool.mark_needs_rebuild(idx);
                     }
                 }

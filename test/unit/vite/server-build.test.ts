@@ -648,13 +648,14 @@ export async function action() { return {} }`)
         csp: {
           scriptSrc: ['self'],
         },
+        jsPoolSize: 2,
       })
 
       await builderWithConfig.buildServerComponents()
 
       expect(fsSync.promises.writeFile).toHaveBeenCalledWith(
         expect.stringContaining('config.json'),
-        expect.any(String),
+        expect.stringContaining('"jsPoolSize":2'),
         'utf-8',
       )
     })

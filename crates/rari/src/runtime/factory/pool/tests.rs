@@ -18,7 +18,10 @@ use tokio::{
 };
 
 use super::*;
-use crate::server::middleware::request_context::RequestContext;
+use crate::{
+    runtime::factory::interface::QueueStreamingScriptFuture,
+    server::middleware::request_context::RequestContext,
+};
 
 struct CountingRuntime {
     calls: Arc<AtomicUsize>,
@@ -126,10 +129,6 @@ impl JsRuntimeInterface for CountingRuntime {
         Box::pin(async move { Ok(()) })
     }
 
-    fn clear_request_context(&self) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>> {
-        Box::pin(async move { Ok(()) })
-    }
-
     fn clear_request_context_if_matches(
         &self,
         _expected_context: Arc<RequestContext>,
@@ -137,20 +136,41 @@ impl JsRuntimeInterface for CountingRuntime {
         Box::pin(async move { Ok(()) })
     }
 
-    fn execute_script_with_request_context(
-        &self,
-        _request_context: Arc<RequestContext>,
-        script_name: String,
-        script_code: String,
-    ) -> Pin<Box<dyn Future<Output = Result<Value, RariError>> + Send>> {
-        self.execute_script(script_name, script_code)
-    }
-
     fn execute_script_for_streaming(
         &self,
+        _stream_id: String,
         _script_name: String,
         _script_code: String,
         _chunk_sender: mpsc::Sender<Result<Vec<u8>, RariError>>,
+    ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>> {
+        Box::pin(async move { Ok(()) })
+    }
+
+    fn queue_script_for_streaming(
+        &self,
+        _stream_id: String,
+        _script_name: String,
+        _script_code: String,
+        _chunk_sender: mpsc::Sender<Result<Vec<u8>, RariError>>,
+        _request_context: Option<Arc<RequestContext>>,
+    ) -> QueueStreamingScriptFuture {
+        Box::pin(async move {
+            let completion: Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>> =
+                Box::pin(async move { Ok(()) });
+            Ok(completion)
+        })
+    }
+
+    fn register_request_context(
+        &self,
+        _request_context: Arc<RequestContext>,
+    ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>> {
+        Box::pin(async move { Ok(()) })
+    }
+
+    fn unregister_request_context(
+        &self,
+        _request_id: &str,
     ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>> {
         Box::pin(async move { Ok(()) })
     }
@@ -182,10 +202,12 @@ fn pool_from_runtimes(
         healthy: (0..size).map(|_| AtomicBool::new(true)).collect(),
         unhealthy_since_ms: (0..size).map(|_| AtomicU64::new(0)).collect(),
         slot_leases: (0..size).map(|_| Arc::new(AsyncMutex::new(()))).collect(),
+        stream_load: (0..size).map(|_| Arc::new(AtomicUsize::new(0))).collect(),
         needs_rebuild: (0..size).map(|_| AtomicBool::new(false)).collect(),
         setup_mode: AtomicBool::new(false),
         timeout_ms,
         heal_after_ms,
+        post_rebuild_hook: parking_lot::RwLock::new(None),
     })
 }
 
@@ -319,10 +341,12 @@ async fn probe_and_heal_rebuilds_and_re_admits_when_probe_fails() -> Result<(), 
         healthy: vec![AtomicBool::new(true)],
         unhealthy_since_ms: vec![AtomicU64::new(0)],
         slot_leases: vec![Arc::new(AsyncMutex::new(()))],
+        stream_load: vec![Arc::new(AtomicUsize::new(0))],
         needs_rebuild: vec![AtomicBool::new(false)],
         setup_mode: AtomicBool::new(false),
         timeout_ms: DEFAULT_TIMEOUT_MS,
         heal_after_ms: 1,
+        post_rebuild_hook: parking_lot::RwLock::new(None),
     });
 
     pool.mark_unhealthy(0);
@@ -354,10 +378,12 @@ async fn probe_and_heal_keeps_unhealthy_when_rebuild_still_fails() -> Result<(),
         healthy: vec![AtomicBool::new(true)],
         unhealthy_since_ms: vec![AtomicU64::new(0)],
         slot_leases: vec![Arc::new(AsyncMutex::new(()))],
+        stream_load: vec![Arc::new(AtomicUsize::new(0))],
         needs_rebuild: vec![AtomicBool::new(false)],
         setup_mode: AtomicBool::new(false),
         timeout_ms: DEFAULT_TIMEOUT_MS,
         heal_after_ms: 1,
+        post_rebuild_hook: parking_lot::RwLock::new(None),
     });
 
     pool.mark_unhealthy(0);
@@ -495,10 +521,6 @@ impl JsRuntimeInterface for BroadcastingRuntime {
         Box::pin(async move { Ok(()) })
     }
 
-    fn clear_request_context(&self) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>> {
-        Box::pin(async move { Ok(()) })
-    }
-
     fn clear_request_context_if_matches(
         &self,
         _expected_context: Arc<RequestContext>,
@@ -506,20 +528,41 @@ impl JsRuntimeInterface for BroadcastingRuntime {
         Box::pin(async move { Ok(()) })
     }
 
-    fn execute_script_with_request_context(
-        &self,
-        _request_context: Arc<RequestContext>,
-        script_name: String,
-        script_code: String,
-    ) -> Pin<Box<dyn Future<Output = Result<Value, RariError>> + Send>> {
-        self.execute_script(script_name, script_code)
-    }
-
     fn execute_script_for_streaming(
         &self,
+        _stream_id: String,
         _script_name: String,
         _script_code: String,
         _chunk_sender: mpsc::Sender<Result<Vec<u8>, RariError>>,
+    ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>> {
+        Box::pin(async move { Ok(()) })
+    }
+
+    fn queue_script_for_streaming(
+        &self,
+        _stream_id: String,
+        _script_name: String,
+        _script_code: String,
+        _chunk_sender: mpsc::Sender<Result<Vec<u8>, RariError>>,
+        _request_context: Option<Arc<RequestContext>>,
+    ) -> QueueStreamingScriptFuture {
+        Box::pin(async move {
+            let completion: Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>> =
+                Box::pin(async move { Ok(()) });
+            Ok(completion)
+        })
+    }
+
+    fn register_request_context(
+        &self,
+        _request_context: Arc<RequestContext>,
+    ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>> {
+        Box::pin(async move { Ok(()) })
+    }
+
+    fn unregister_request_context(
+        &self,
+        _request_id: &str,
     ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>> {
         Box::pin(async move { Ok(()) })
     }
@@ -862,10 +905,6 @@ impl JsRuntimeInterface for RequestContextRuntime {
         })
     }
 
-    fn clear_request_context(&self) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>> {
-        Box::pin(async move { Ok(()) })
-    }
-
     fn clear_request_context_if_matches(
         &self,
         expected_context: Arc<RequestContext>,
@@ -890,20 +929,41 @@ impl JsRuntimeInterface for RequestContextRuntime {
         })
     }
 
-    fn execute_script_with_request_context(
-        &self,
-        _request_context: Arc<RequestContext>,
-        script_name: String,
-        script_code: String,
-    ) -> Pin<Box<dyn Future<Output = Result<Value, RariError>> + Send>> {
-        self.execute_script(script_name, script_code)
-    }
-
     fn execute_script_for_streaming(
         &self,
+        _stream_id: String,
         _script_name: String,
         _script_code: String,
         _chunk_sender: mpsc::Sender<Result<Vec<u8>, RariError>>,
+    ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>> {
+        Box::pin(async move { Ok(()) })
+    }
+
+    fn queue_script_for_streaming(
+        &self,
+        _stream_id: String,
+        _script_name: String,
+        _script_code: String,
+        _chunk_sender: mpsc::Sender<Result<Vec<u8>, RariError>>,
+        _request_context: Option<Arc<RequestContext>>,
+    ) -> QueueStreamingScriptFuture {
+        Box::pin(async move {
+            let completion: Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>> =
+                Box::pin(async move { Ok(()) });
+            Ok(completion)
+        })
+    }
+
+    fn register_request_context(
+        &self,
+        _request_context: Arc<RequestContext>,
+    ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>> {
+        Box::pin(async move { Ok(()) })
+    }
+
+    fn unregister_request_context(
+        &self,
+        _request_id: &str,
     ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>> {
         Box::pin(async move { Ok(()) })
     }
@@ -1160,10 +1220,12 @@ async fn with_request_context_returns_cleanup_error_and_quarantines() {
         healthy: vec![AtomicBool::new(true)],
         unhealthy_since_ms: vec![AtomicU64::new(0)],
         slot_leases: vec![Arc::new(AsyncMutex::new(()))],
+        stream_load: vec![Arc::new(AtomicUsize::new(0))],
         needs_rebuild: vec![AtomicBool::new(false)],
         setup_mode: AtomicBool::new(false),
         timeout_ms: DEFAULT_TIMEOUT_MS,
         heal_after_ms: 1,
+        post_rebuild_hook: parking_lot::RwLock::new(None),
     });
 
     let ctx = Arc::new(RequestContext::new("/cleanup_fails".to_string()));
@@ -1248,6 +1310,78 @@ async fn setup_mode_error_message_uses_executed_not_total() {
         "error must report failed/attempted (1 of 2), got: {msg}"
     );
     assert!(!msg.contains("1 of 4 runtimes"), "error must not use total pool size, got: {msg}");
+}
+
+#[tokio::test]
+async fn with_request_context_op_timeout_keeps_slot_healthy_when_cleanup_ok() {
+    let last_seen = Arc::new(Mutex::new(None));
+    let runtime: Arc<dyn JsRuntimeInterface> = Arc::new(RequestContextRuntime {
+        last_seen: Arc::clone(&last_seen),
+        fail_cleanup: Arc::new(AtomicBool::new(false)),
+    });
+    let pool = pool_from_runtimes(vec![runtime], 30, HEAL_DISABLED);
+    let ctx = Arc::new(RequestContext::new("/timeout_ok_cleanup".to_string()));
+
+    let result = pool
+        .with_request_context(Arc::clone(&ctx), |_runtime| async {
+            sleep(Duration::from_millis(80)).await;
+            Ok(1_i32)
+        })
+        .await;
+
+    assert!(result.is_err(), "expected timeout error");
+    let msg = match result {
+        Ok(_) => String::new(),
+        Err(e) => e.to_string(),
+    };
+    assert!(msg.contains("timed out"), "got: {msg}");
+    assert!(
+        pool.is_healthy(0),
+        "successful cleanup after op timeout must not quarantine the only slot"
+    );
+    assert!(
+        last_seen.lock().map(|guard| guard.is_none()).unwrap_or(false),
+        "request context must be cleared after timed-out op"
+    );
+}
+
+#[tokio::test]
+async fn probe_and_heal_immediately_when_no_healthy_slots() -> Result<(), RariError> {
+    let runtime = CountingRuntime::new(Arc::new(AtomicUsize::new(0)));
+    let pool = pool_from_runtimes(vec![Arc::new(runtime)], DEFAULT_TIMEOUT_MS, 60_000);
+    pool.mark_unhealthy(0);
+    assert_eq!(pool.healthy_count(), 0);
+
+    pool.probe_and_heal().await;
+    assert!(pool.is_healthy(0), "empty pool must heal immediately without waiting heal_after_ms");
+    Ok(())
+}
+
+#[tokio::test]
+async fn pick_runtime_for_streaming_prefers_least_busy_slot() -> Result<(), RariError> {
+    let (pool, _counters) = build_pool_with_counters(3);
+
+    let (first, guard0) = pool.pick_runtime_for_streaming().await?;
+    assert_eq!(pool.stream_load_at(first.idx()), 1);
+
+    let (second, guard1) = pool.pick_runtime_for_streaming().await?;
+    assert_ne!(second.idx(), first.idx());
+    assert_eq!(pool.stream_load_at(second.idx()), 1);
+
+    let (third, guard2) = pool.pick_runtime_for_streaming().await?;
+    assert_ne!(third.idx(), first.idx());
+    assert_ne!(third.idx(), second.idx());
+
+    let busy_idx = first.idx();
+    drop(guard0);
+    assert_eq!(pool.stream_load_at(busy_idx), 0);
+
+    let (again, _guard) = pool.pick_runtime_for_streaming().await?;
+    assert_eq!(again.idx(), busy_idx, "freed slot should be preferred over busier ones");
+
+    drop(guard1);
+    drop(guard2);
+    Ok(())
 }
 
 #[tokio::test]

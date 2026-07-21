@@ -70,7 +70,7 @@ pub(crate) async fn invalidate_use_cache_entries(
         Arc::clone(&renderer.runtime)
     };
 
-    runtime.execute_script("use_cache_invalidate".to_string(), script).await.map(|_| ())
+    runtime.broadcast_script("use_cache_invalidate", &script).await
 }
 
 pub(crate) async fn invalidate_route_caches(

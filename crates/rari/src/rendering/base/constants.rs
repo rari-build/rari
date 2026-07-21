@@ -16,7 +16,7 @@ pub const DEFAULT_MAX_MEMORY_PER_COMPONENT_MB: usize = 50;
 pub const DEFAULT_MAX_CACHE_SIZE: usize = 1000;
 
 pub const V8_CACHE_CLEAR_SCRIPT: &str = include_str!("js/v8_cache_clear.ts");
-// Embedded action handler scripts (validation core v2: isolate-safe init)
+
 pub const ACTION_FLIGHT_ENCODE_SCRIPT: &str = concat!(
     include_str!("js/action_flight_shared.ts"),
     include_str!("js/action_flight_encode.ts"),
@@ -108,17 +108,24 @@ pub fn resolve_server_functions_for_component(component_id: &str) -> String {
     )
 }
 
-pub fn module_registration_script(module_namespace_json: &str, component_id: &str) -> String {
+pub fn module_registration_script_from_import(
+    module_specifier: &str,
+    component_id: &str,
+) -> String {
+    let specifier_json =
+        serde_json::to_string(module_specifier).unwrap_or_else(|_| "\"\"".to_string());
+    let component_id_json =
+        serde_json::to_string(component_id).unwrap_or_else(|_| "\"\"".to_string());
     format!(
-        r"(function () {{
+        r"(async function () {{
   try {{
-    const moduleNamespace = {module_namespace_json};
+    const moduleNamespace = await import({specifier_json});
     if (typeof globalThis.RscModuleManager?.register === 'function') {{
-      const result = globalThis.RscModuleManager.register(moduleNamespace, '{component_id}');
-      return {{ success: true, module: '{component_id}', exports: result.exportCount }};
+      const result = globalThis.RscModuleManager.register(moduleNamespace, {component_id_json});
+      return {{ success: true, module: {component_id_json}, exports: result.exportCount }};
     }} else if (typeof globalThis.registerModule === 'function') {{
-      const result = globalThis.registerModule(moduleNamespace, '{component_id}');
-      return {{ success: true, module: '{component_id}', exports: result.exportCount }};
+      const result = globalThis.registerModule(moduleNamespace, {component_id_json});
+      return {{ success: true, module: {component_id_json}, exports: result.exportCount }};
     }} else {{
       return {{ success: false, error: 'No module registration function available' }};
     }}

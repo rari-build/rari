@@ -516,7 +516,7 @@ declare global {
 
     namespace core {
       namespace ops {
-        function op_fetch_with_cache(url: string, options: string): Promise<{
+        function op_fetch_with_cache(url: string, options: string, requestId?: string): Promise<{
           ok: boolean
           error?: string
           body?: string

@@ -23,7 +23,10 @@ use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use tokio::{
     fs,
-    sync::mpsc::Receiver,
+    sync::{
+        mpsc::{Receiver, error::TryRecvError},
+        oneshot,
+    },
     time::{self, Duration},
 };
 
@@ -56,7 +59,10 @@ use crate::{
         error_response,
         middleware::request_context::RequestContext,
         rendering::{
-            metadata_injection::inject_metadata,
+            html_bots::is_html_limited_bot,
+            metadata_injection::{
+                apply_blocking_streaming_metadata, inject_metadata, streaming_metadata_chunk,
+            },
             pretty_html::pretty_print_html,
             utils::{inject_assets_into_html, inject_vite_client},
         },
@@ -208,6 +214,22 @@ fn should_use_streaming(route_match: &AppRouteMatch, config: &Config) -> bool {
         return false;
     }
     config.loading.enabled && route_match.loading.is_some()
+}
+
+/// Start `generateMetadata` off the critical path. Caller awaits/joins before
+/// injecting into a static document, or passes the receiver into streaming so
+/// tags can be flushed without blocking Fizz/Suspense start.
+fn spawn_page_metadata(
+    state: ServerState,
+    route_match: AppRouteMatch,
+    context: LayoutRenderContext,
+) -> oneshot::Receiver<Option<PageMetadata>> {
+    let (tx, rx) = oneshot::channel();
+    tokio::spawn(async move {
+        let metadata = collect_page_metadata(&state, &route_match, &context).await;
+        let _ = tx.send(metadata);
+    });
+    rx
 }
 
 pub(crate) async fn collect_page_metadata(
@@ -367,6 +389,7 @@ pub async fn render_with_fallback(
     route_match: AppRouteMatch,
     context: LayoutRenderContext,
     accept_encoding: Option<&str>,
+    metadata_rx: Option<oneshot::Receiver<Option<PageMetadata>>>,
 ) -> Result<Response, StatusCode> {
     let layout_renderer = LayoutRenderer::with_shared_cache(
         Arc::clone(&state.renderer),
@@ -379,6 +402,7 @@ pub async fn render_with_fallback(
         context.clone(),
         &layout_renderer,
         accept_encoding,
+        metadata_rx,
     )
     .await
     {
@@ -413,6 +437,7 @@ pub async fn render_rsc_navigation_streaming(
             &context,
             Some(Arc::clone(&request_context)),
             true,
+            None,
         )
         .await
     {
@@ -442,6 +467,7 @@ pub async fn render_rsc_navigation_streaming(
             chunks,
             is_not_found,
             accept_encoding,
+            None,
         )),
         RenderResult::Chunked { content_type: ChunkedContentType::Html, .. } => {
             tracing::error!("HTML chunked render not supported in RSC-only mode");
@@ -514,39 +540,202 @@ fn render_chunked_response(
     mut chunks: Receiver<Result<Vec<u8>, RariError>>,
     is_not_found: bool,
     accept_encoding: Option<&str>,
+    mut metadata_rx: Option<oneshot::Receiver<Option<PageMetadata>>>,
 ) -> http::Response<Body> {
     let stall_timeout = Duration::from_millis(chunked_stream_stall_timeout_ms());
+    let image_optimizer = state.image_optimizer.clone();
 
     let byte_stream = async_stream::stream! {
         match content_type {
             ChunkedContentType::Html => {
+                // After Suspense starts resolving, a large HTML chunk is often
+                // followed within ~1ms by the final flight/complete tail on the
+                // isolate thread. Wait only after large chunks so we don't tax
+                // every small endgame write.
+                const ENDGAME_AFTER: Duration = Duration::from_millis(800);
+                const ENDGAME_WAIT: Duration = Duration::from_micros(500);
+                const ENDGAME_LARGE_MIN: usize = 1024;
+
+                let t0 = Instant::now();
+                let mut finished = false;
+
                 yield Ok::<_, Error>(shell);
 
-                loop {
+                // Stream metadata for browsers without blocking UI.
+                // Flush head tags when ready without awaiting before Fizz start;
+                // Suspense timers already run in the isolate.
+                let mut metadata_pending = metadata_rx.take();
+                match metadata_pending.as_mut().map(oneshot::Receiver::try_recv) {
+                    Some(Ok(metadata)) => {
+                        if let Some(tags) =
+                            streaming_metadata_chunk(metadata.as_ref(), image_optimizer.as_deref())
+                        {
+                            yield Ok(Bytes::from(tags));
+                        }
+                        metadata_pending = None;
+                    }
+                    Some(Err(oneshot::error::TryRecvError::Closed)) => {
+                        metadata_pending = None;
+                    }
+                    Some(Err(oneshot::error::TryRecvError::Empty)) | None => {}
+                }
+
+                while !finished {
+                    if let Some(ref mut rx) = metadata_pending {
+                        tokio::select! {
+                            biased;
+                            metadata = &mut *rx => {
+                                metadata_pending = None;
+                                if let Ok(metadata) = metadata
+                                    && let Some(tags) = streaming_metadata_chunk(
+                                        metadata.as_ref(),
+                                        image_optimizer.as_deref(),
+                                    )
+                                {
+                                    yield Ok(Bytes::from(tags));
+                                }
+                                continue;
+                            }
+                            chunk = time::timeout(stall_timeout, chunks.recv()) => {
+                                match chunk {
+                                    Ok(Some(Ok(chunk_bytes))) => {
+                                        if chunk_bytes.is_empty() {
+                                            continue;
+                                        }
+                                        yield Ok(Bytes::from(chunk_bytes));
+                                    }
+                                    Ok(Some(Err(e))) => {
+                                        tracing::error!("Error in chunked HTML stream: {}", e);
+                                        yield Err(Error::other(e.to_string()));
+                                        finished = true;
+                                    }
+                                    Ok(None) => {
+                                        finished = true;
+                                    }
+                                    Err(_) => {
+                                        tracing::error!(
+                                            "Chunked HTML stream stalled: no chunk received within {} ms",
+                                            stall_timeout.as_millis()
+                                        );
+                                        yield Ok(chunked_stream_error_chunk(
+                                            "Stream timed out waiting for content",
+                                        ));
+                                        finished = true;
+                                    }
+                                }
+                                continue;
+                            }
+                        }
+                    }
+
                     match time::timeout(stall_timeout, chunks.recv()).await {
                         Ok(Some(Ok(chunk_bytes))) => {
-                            if !chunk_bytes.is_empty() {
-                                yield Ok(Bytes::from(chunk_bytes));
+                            if chunk_bytes.is_empty() {
+                                continue;
+                            }
+                            let mut buf = chunk_bytes;
+                            let mut stream_error: Option<RariError> = None;
+
+                            loop {
+                                match chunks.try_recv() {
+                                    Ok(Ok(more)) => {
+                                        if !more.is_empty() {
+                                            buf.extend_from_slice(&more);
+                                        }
+                                    }
+                                    Ok(Err(e)) => {
+                                        stream_error = Some(e);
+                                        finished = true;
+                                        break;
+                                    }
+                                    Err(TryRecvError::Empty) => break,
+                                    Err(TryRecvError::Disconnected) => {
+                                        finished = true;
+                                        break;
+                                    }
+                                }
+                            }
+
+                            if !finished
+                                && stream_error.is_none()
+                                && t0.elapsed() >= ENDGAME_AFTER
+                                && buf.len() >= ENDGAME_LARGE_MIN
+                            {
+                                match time::timeout(ENDGAME_WAIT, chunks.recv()).await {
+                                    Ok(Some(Ok(more))) => {
+                                        if !more.is_empty() {
+                                            buf.extend_from_slice(&more);
+                                        }
+                                        loop {
+                                            match chunks.try_recv() {
+                                                Ok(Ok(more)) => {
+                                                    if !more.is_empty() {
+                                                        buf.extend_from_slice(&more);
+                                                    }
+                                                }
+                                                Ok(Err(e)) => {
+                                                    stream_error = Some(e);
+                                                    finished = true;
+                                                    break;
+                                                }
+                                                Err(TryRecvError::Empty) => break,
+                                                Err(TryRecvError::Disconnected) => {
+                                                    finished = true;
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                    Ok(Some(Err(e))) => {
+                                        stream_error = Some(e);
+                                        finished = true;
+                                    }
+                                    Ok(None) => {
+                                        finished = true;
+                                    }
+                                    Err(_) => {}
+                                }
+                            }
+
+                            yield Ok(Bytes::from(buf));
+
+                            if let Some(e) = stream_error {
+                                tracing::error!("Error in chunked HTML stream: {}", e);
+                                yield Err(Error::other(e.to_string()));
                             }
                         }
                         Ok(Some(Err(e))) => {
                             tracing::error!("Error in chunked HTML stream: {}", e);
                             yield Err(Error::other(e.to_string()));
-                            break;
+                            finished = true;
                         }
-                        Ok(None) => break,
+                        Ok(None) => {
+                            finished = true;
+                        }
                         Err(_) => {
                             tracing::error!(
                                 "Chunked HTML stream stalled: no chunk received within {} ms",
                                 stall_timeout.as_millis()
                             );
-                            yield Ok(chunked_stream_error_chunk("Stream timed out waiting for content"));
-                            break;
+                            yield Ok(chunked_stream_error_chunk(
+                                "Stream timed out waiting for content",
+                            ));
+                            finished = true;
                         }
                     }
                 }
 
-                yield Ok(closing);
+                if let Some(rx) = metadata_pending
+                    && let Ok(metadata) = rx.await
+                    && let Some(tags) =
+                        streaming_metadata_chunk(metadata.as_ref(), image_optimizer.as_deref())
+                {
+                    yield Ok(Bytes::from(tags));
+                }
+
+                if !closing.is_empty() {
+                    yield Ok(closing);
+                }
             }
             ChunkedContentType::RscFlight => {
                 loop {
@@ -581,7 +770,11 @@ fn render_chunked_response(
         }
     };
 
-    let encoding = CompressionEncoding::from_accept_encoding(accept_encoding);
+    let encoding = match content_type {
+        // Prefer identity for streaming HTML so compressor setup does not delay the shell.
+        ChunkedContentType::Html => CompressionEncoding::Identity,
+        ChunkedContentType::RscFlight => CompressionEncoding::from_accept_encoding(accept_encoding),
+    };
     let compressed_stream = compress_stream(byte_stream, encoding);
     let vary =
         if encoding.as_header_value().is_some() { "Accept, Accept-Encoding" } else { "Accept" };
@@ -659,7 +852,7 @@ pub async fn render_synchronous(
     let is_not_found = route_match.not_found.is_some();
 
     match layout_renderer
-        .render_route_with_streaming(&route_match, &context, Some(request_context), false)
+        .render_route_with_streaming(&route_match, &context, Some(request_context), false, None)
         .await
     {
         Ok(render_result) => match render_result {
@@ -706,6 +899,7 @@ pub async fn render_synchronous(
                 chunks,
                 is_not_found,
                 accept_encoding,
+                None,
             )),
             RenderResult::StaticBinary(bytes) => {
                 let html_content = String::from_utf8_lossy(&bytes).into_owned();
@@ -738,9 +932,10 @@ pub async fn render_synchronous(
 pub async fn render_streaming_with_layout(
     state: Arc<ServerState>,
     route_match: AppRouteMatch,
-    context: LayoutRenderContext,
+    mut context: LayoutRenderContext,
     layout_renderer: &LayoutRenderer,
     accept_encoding: Option<&str>,
+    metadata_rx: Option<oneshot::Receiver<Option<PageMetadata>>>,
 ) -> Result<Response, StatusCode> {
     let layout_count = route_match.layouts.len();
     let is_not_found = route_match.not_found.is_some();
@@ -750,8 +945,10 @@ pub async fn render_streaming_with_layout(
             .with_http_headers(context.headers.clone()),
     );
 
+    // Keep metadata_rx for HTTP injection / static wrap. Do not pass it into
+    // Fizz setup — try_recv there would drop a still-pending receiver.
     let render_result = match layout_renderer
-        .render_route_with_streaming(&route_match, &context, Some(request_context), false)
+        .render_route_with_streaming(&route_match, &context, Some(request_context), false, None)
         .await
     {
         Ok(result) => result,
@@ -796,9 +993,14 @@ pub async fn render_streaming_with_layout(
             chunks,
             is_not_found,
             accept_encoding,
+            metadata_rx,
         )),
         RenderResult::Static(html) => {
             use crate::server::compression::compress_body;
+
+            if let Some(rx) = metadata_rx {
+                context.metadata = rx.await.ok().flatten();
+            }
 
             let html_with_assets = match inject_assets_into_html(&html, &state.config).await {
                 Ok(html) => html,
@@ -1192,13 +1394,16 @@ pub async fn handle_app_route(
                     .expect("Valid cached RSC response"));
             }
 
-            context.metadata = collect_page_metadata(&state, &route_match, &context).await;
+            let metadata_rx =
+                spawn_page_metadata(state.clone(), route_match.clone(), context.clone());
 
             match layout_renderer
                 .render_route_by_mode(&route_match, &context, Some(Arc::clone(&request_context)))
                 .await
             {
                 Ok(rsc_flight_protocol) => {
+                    context.metadata = metadata_rx.await.ok().flatten();
+
                     let status_code = if route_match.not_found.is_some() {
                         StatusCode::NOT_FOUND
                     } else {
@@ -1363,18 +1568,59 @@ pub async fn handle_app_route(
                     .expect("Valid cached response"));
             }
 
-            context.metadata = collect_page_metadata(&state, &route_match, &context).await;
-
             let use_streaming = should_use_streaming(&route_match, &state.config);
 
             if use_streaming {
-                let response = render_with_fallback(
-                    Arc::new(state.clone()),
-                    route_match.clone(),
-                    context.clone(),
-                    accept_encoding,
-                )
-                .await?;
+                // HTML-limited bots (Twitterbot, Slackbot, …) block on
+                // generateMetadata so tags land in the initial <head>. Browsers/capable
+                // crawlers get streaming metadata flushed when ready.
+                let user_agent = context.headers.get("user-agent").map(String::as_str);
+                let block_metadata =
+                    is_html_limited_bot(user_agent, state.config.html_limited_bots.as_deref());
+
+                let response = if block_metadata {
+                    let mut context = context.clone();
+                    let metadata = collect_page_metadata(&state, &route_match, &context).await;
+                    apply_blocking_streaming_metadata(
+                        &mut context,
+                        metadata,
+                        state.image_optimizer.as_deref(),
+                    );
+                    render_with_fallback(
+                        Arc::new(state.clone()),
+                        route_match.clone(),
+                        context,
+                        accept_encoding,
+                        None,
+                    )
+                    .await?
+                } else {
+                    // Start Fizz first (priority queue), then collect metadata.
+                    // Spawning collect before Fizz contended for isolate time and
+                    // pushed lastByte behind Next; after queue, Suspense timers are
+                    // already running so metadata can share the wait window.
+                    let (metadata_tx, metadata_rx) = oneshot::channel();
+                    let response = render_with_fallback(
+                        Arc::new(state.clone()),
+                        route_match.clone(),
+                        context.clone(),
+                        accept_encoding,
+                        Some(metadata_rx),
+                    )
+                    .await?;
+
+                    let state_meta = state.clone();
+                    let route_match_meta = route_match.clone();
+                    let context_meta = context.clone();
+                    tokio::spawn(async move {
+                        let metadata =
+                            collect_page_metadata(&state_meta, &route_match_meta, &context_meta)
+                                .await;
+                        let _ = metadata_tx.send(metadata);
+                    });
+
+                    response
+                };
 
                 if (response.status() == StatusCode::OK
                     || response.status() == StatusCode::NOT_FOUND)
@@ -1505,12 +1751,16 @@ pub async fn handle_app_route(
                 return Ok(response);
             }
 
+            let metadata_rx =
+                spawn_page_metadata(state.clone(), route_match.clone(), context.clone());
+
             let render_result = match layout_renderer
                 .render_route_with_streaming(
                     &route_match,
                     &context,
                     Some(Arc::clone(&request_context)),
                     false,
+                    None,
                 )
                 .await
             {
@@ -1521,6 +1771,9 @@ pub async fn handle_app_route(
                         .await;
                 }
             };
+
+            let metadata = metadata_rx.await.ok().flatten();
+            context.metadata = metadata;
 
             let cache_control_value = state.config.get_cache_control_for_route(path);
             let cache_policy =

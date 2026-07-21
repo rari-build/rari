@@ -17,8 +17,13 @@
     return name.toLowerCase()
   }
 
+  function currentRequestId(): string {
+    const id = g['~rari']?.currentRequestId?.()
+    return typeof id === 'string' ? id : ''
+  }
+
   function parseRequestHeaders(): Map<string, string> {
-    const raw = Deno.core.ops.op_get_request_headers()
+    const raw = Deno.core.ops.op_get_request_headers(currentRequestId())
     if (!raw)
       return new Map()
 

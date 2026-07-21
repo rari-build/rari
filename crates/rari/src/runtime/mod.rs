@@ -1,13 +1,9 @@
-use std::{future::Future, sync::Arc, time::Duration};
+use std::{env, future::Future, sync::Arc};
 
-use deno_core::ModuleId;
 use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use serde_json::Value;
-use tokio::{
-    sync::mpsc::{Sender, UnboundedReceiver},
-    time,
-};
+use tokio::sync::mpsc::{Sender, UnboundedReceiver};
 
 pub mod ext;
 pub mod factory;
@@ -15,24 +11,16 @@ pub mod module_loader;
 pub mod ops;
 pub mod transpile;
 
-use factory::JsRuntimeInterface;
+use factory::{JsRuntimePool, PooledRuntime};
 
-use crate::{
-    runtime::factory::{
-        RariRuntime,
-        component_ops::{
-            build_invalidate_script, invalidate_script_name, load_component_code as load_component,
-        },
-    },
-    server::{
-        middleware::request_context::RequestContext, rendering::metadata,
-        routing::types::ParamValue,
-    },
+use crate::server::{
+    middleware::request_context::RequestContext, rendering::metadata, routing::types::ParamValue,
 };
 
+pub const DEFAULT_JS_POOL_SIZE: usize = 1;
+
 pub struct JsExecutionRuntime {
-    runtime: Arc<RariRuntime>,
-    timeout_ms: u64,
+    pool: Arc<JsRuntimePool>,
 }
 
 impl Default for JsExecutionRuntime {
@@ -53,16 +41,60 @@ fn parse_string_array_value(value: &Value) -> Vec<String> {
     Vec::new()
 }
 
+fn pool_size_from_env() -> usize {
+    env::var("RARI_JS_POOL_SIZE")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .filter(|&n| n >= 1)
+        .unwrap_or(DEFAULT_JS_POOL_SIZE)
+}
+
 #[expect(clippy::missing_errors_doc)]
 impl JsExecutionRuntime {
     pub fn new(env_vars: Option<FxHashMap<String, String>>) -> Self {
-        let runtime = if let Some(env_vars) = env_vars {
-            factory::create_runtime_with_env(env_vars)
-        } else {
-            factory::create_runtime()
-        };
+        Self::with_pool_size(env_vars, pool_size_from_env())
+    }
 
-        Self { runtime, timeout_ms: 30000 }
+    pub fn with_pool_size(env_vars: Option<FxHashMap<String, String>>, pool_size: usize) -> Self {
+        let pool_size = pool_size.max(1);
+        #[expect(
+            clippy::expect_used,
+            reason = "JsRuntimePool::new only fails when size is 0, which is prevented above"
+        )]
+        let pool = JsRuntimePool::new(pool_size, env_vars)
+            .expect("JS runtime pool construction cannot fail for size >= 1");
+
+        Self { pool }
+    }
+
+    pub fn pool(&self) -> &Arc<JsRuntimePool> {
+        &self.pool
+    }
+
+    pub fn pool_size(&self) -> usize {
+        self.pool.size()
+    }
+
+    pub fn set_setup_mode(&self, on: bool) {
+        self.pool.set_setup_mode(on);
+    }
+
+    pub fn set_post_rebuild_hook(&self, hook: factory::PostRebuildHook) {
+        self.pool.set_post_rebuild_hook(hook);
+    }
+
+    pub async fn pick_runtime(&self) -> Result<PooledRuntime, RariError> {
+        self.pool.pick_runtime().await
+    }
+
+    pub async fn pick_runtime_for_streaming(
+        &self,
+    ) -> Result<(PooledRuntime, factory::StreamingSlotGuard), RariError> {
+        self.pool.pick_runtime_for_streaming().await
+    }
+
+    pub fn stream_load_at(&self, idx: usize) -> usize {
+        self.pool.stream_load_at(idx)
     }
 
     pub async fn execute_script(
@@ -70,39 +102,25 @@ impl JsExecutionRuntime {
         script_name: String,
         script_code: String,
     ) -> Result<Value, RariError> {
-        let runtime = Arc::clone(&self.runtime);
-        let script_name_clone = script_name.clone();
-        let script_code_clone = script_code.clone();
-
-        match time::timeout(
-            Duration::from_millis(self.timeout_ms),
-            runtime.execute_script(script_name_clone, script_code_clone),
-        )
-        .await
-        {
-            Ok(result) => result,
-            Err(_) => Err(RariError::timeout(format!(
-                "Script execution timed out after {} ms",
-                self.timeout_ms
-            ))),
-        }
+        self.pool.execute_script(script_name, script_code).await
     }
 
     pub async fn execute_script_batch(
-        &self,
+        self: &Arc<Self>,
         scripts: Vec<(String, String)>,
     ) -> UnboundedReceiver<(usize, Result<Value, RariError>)> {
-        self.runtime.execute_script_batch(scripts).await
+        self.pool.execute_script_batch(scripts).await
     }
 
     pub async fn execute_script_for_streaming(
         &self,
+        stream_id: String,
         script_name: String,
         script_code: String,
         chunk_sender: Sender<Result<Vec<u8>, RariError>>,
     ) -> Result<(), RariError> {
-        let runtime = Arc::clone(&self.runtime);
-        runtime.execute_script_for_streaming(script_name, script_code, chunk_sender).await
+        let (handle, _stream_lease) = self.pool.pick_runtime_for_streaming().await?;
+        handle.execute_script_for_streaming(stream_id, script_name, script_code, chunk_sender).await
     }
 
     pub async fn collect_metadata(
@@ -181,56 +199,19 @@ impl JsExecutionRuntime {
         function_name: &str,
         args: Vec<Value>,
     ) -> Result<Value, RariError> {
-        let runtime = Arc::clone(&self.runtime);
-        let function_name = function_name.to_string();
-
-        match time::timeout(
-            Duration::from_millis(self.timeout_ms),
-            runtime.execute_function(&function_name, args),
-        )
-        .await
-        {
-            Ok(result) => result,
-            Err(_) => Err(RariError::timeout(format!(
-                "Function execution timed out after {} ms",
-                self.timeout_ms
-            ))),
-        }
+        self.pool.execute_function(function_name, args).await
     }
 
-    pub async fn load_es_module(&self, specifier: &str) -> Result<ModuleId, RariError> {
-        let runtime = Arc::clone(&self.runtime);
-        let specifier = specifier.to_string();
-
-        match time::timeout(
-            Duration::from_millis(self.timeout_ms),
-            runtime.load_es_module(&specifier),
-        )
-        .await
-        {
-            Ok(result) => result,
-            Err(_) => Err(RariError::timeout(format!(
-                "Module loading timed out after {} ms for {}",
-                self.timeout_ms, specifier
-            ))),
-        }
+    pub async fn load_and_evaluate_module(&self, specifier: &str) -> Result<(), RariError> {
+        self.pool.broadcast_load_and_evaluate_module(specifier).await
     }
 
-    pub async fn evaluate_module(&self, module_id: ModuleId) -> Result<Value, RariError> {
-        let runtime = Arc::clone(&self.runtime);
-
-        match time::timeout(
-            Duration::from_millis(self.timeout_ms),
-            runtime.evaluate_module(module_id),
-        )
-        .await
-        {
-            Ok(result) => result,
-            Err(_) => Err(RariError::timeout(format!(
-                "Module evaluation timed out after {} ms",
-                self.timeout_ms
-            ))),
-        }
+    pub async fn broadcast_script(
+        &self,
+        script_name: &str,
+        script_code: &str,
+    ) -> Result<(), RariError> {
+        self.pool.broadcast_script(script_name, script_code).await
     }
 
     pub async fn add_module_to_loader(
@@ -238,63 +219,16 @@ impl JsExecutionRuntime {
         specifier: &str,
         code: String,
     ) -> Result<(), RariError> {
-        let runtime = Arc::clone(&self.runtime);
-        let specifier = specifier.to_string();
-
-        match time::timeout(
-            Duration::from_millis(self.timeout_ms),
-            runtime.add_module_to_loader(&specifier, code),
-        )
-        .await
-        {
-            Ok(result) => result,
-            Err(_) => Err(RariError::timeout(format!(
-                "Adding module to loader timed out after {} ms for {}",
-                self.timeout_ms, specifier
-            ))),
-        }
+        self.pool.broadcast_add_module_to_loader(specifier, &code).await
     }
 
     pub async fn clear_module_loader_caches(&self, component_id: &str) -> Result<(), RariError> {
-        let runtime = Arc::clone(&self.runtime);
-        let component_id = component_id.to_string();
-
-        match time::timeout(
-            Duration::from_millis(self.timeout_ms),
-            runtime.clear_module_loader_caches(&component_id),
-        )
-        .await
-        {
-            Ok(result) => result,
-            Err(_) => Err(RariError::timeout(format!(
-                "Clearing module loader caches timed out after {} ms for {}",
-                self.timeout_ms, component_id
-            ))),
-        }
-    }
-
-    pub async fn get_module_namespace(&self, module_id: ModuleId) -> Result<Value, RariError> {
-        let runtime = Arc::clone(&self.runtime);
-
-        match time::timeout(
-            Duration::from_millis(self.timeout_ms),
-            runtime.get_module_namespace(module_id),
-        )
-        .await
-        {
-            Ok(result) => result,
-            Err(_) => Err(RariError::timeout(format!(
-                "Getting module namespace timed out after {} ms",
-                self.timeout_ms
-            ))),
-        }
+        self.pool.broadcast_clear_module_loader_caches(component_id).await
     }
 
     pub async fn invalidate_component(&self, component_id: &str) -> Result<(), RariError> {
-        let script = build_invalidate_script(component_id);
-
-        match self.execute_script(invalidate_script_name(component_id), script).await {
-            Ok(_) => Ok(()),
+        match self.pool.invalidate_component_all(component_id).await {
+            Ok(()) => Ok(()),
             Err(e) => {
                 tracing::error!("Failed to invalidate component {}: {}", component_id, e);
                 Err(RariError::js_runtime(format!(
@@ -309,143 +243,144 @@ impl JsExecutionRuntime {
         component_id: &str,
         component_code: &str,
     ) -> Result<(), RariError> {
-        let runtime = Arc::clone(&self.runtime);
-        let component_id = component_id.to_string();
-        let component_code = component_code.to_string();
-
-        match time::timeout(
-            Duration::from_millis(self.timeout_ms),
-            load_component(runtime.as_ref(), &component_id, &component_code),
-        )
-        .await
-        {
-            Ok(result) => result,
-            Err(_) => Err(RariError::timeout(format!(
-                "Loading component {component_id} timed out after {} ms",
-                self.timeout_ms
-            ))),
-        }
+        self.pool.load_component_code_all(component_id, component_code).await
     }
 
     pub async fn execute_script_with_request_context(
-        &self,
+        self: &Arc<Self>,
         request_context: Arc<RequestContext>,
         script_name: String,
         script_code: String,
     ) -> Result<Value, RariError> {
-        let runtime = Arc::clone(&self.runtime);
-
-        match time::timeout(
-            Duration::from_millis(self.timeout_ms),
-            runtime.execute_script_with_request_context(request_context, script_name, script_code),
-        )
-        .await
-        {
-            Ok(result) => result,
-            Err(_) => Err(RariError::timeout(format!(
-                "Script execution with request context timed out after {} ms",
-                self.timeout_ms
-            ))),
-        }
-    }
-
-    pub async fn set_request_context(
-        &self,
-        request_context: Arc<RequestContext>,
-    ) -> Result<(), RariError> {
-        let runtime = Arc::clone(&self.runtime);
-
-        match time::timeout(
-            Duration::from_millis(self.timeout_ms),
-            runtime.set_request_context(request_context),
-        )
-        .await
-        {
-            Ok(result) => result,
-            Err(_) => Err(RariError::timeout(format!(
-                "Setting request context timed out after {} ms",
-                self.timeout_ms
-            ))),
-        }
-    }
-
-    pub async fn clear_request_context(&self) -> Result<(), RariError> {
-        let runtime = Arc::clone(&self.runtime);
-
-        match time::timeout(Duration::from_millis(self.timeout_ms), runtime.clear_request_context())
+        self.pool
+            .with_request_context(request_context, move |runtime| async move {
+                runtime.execute_script(script_name, script_code).await
+            })
             .await
-        {
-            Ok(result) => result,
-            Err(_) => Err(RariError::timeout(format!(
-                "Clearing request context timed out after {} ms",
-                self.timeout_ms
-            ))),
-        }
     }
 
-    pub async fn clear_request_context_if_matches(
-        &self,
-        expected_context: Arc<RequestContext>,
-    ) -> Result<(), RariError> {
-        let runtime = Arc::clone(&self.runtime);
-
-        match time::timeout(
-            Duration::from_millis(self.timeout_ms),
-            runtime.clear_request_context_if_matches(expected_context),
-        )
-        .await
-        {
-            Ok(result) => result,
-            Err(_) => Err(RariError::timeout(format!(
-                "Clearing request context (if matches) timed out after {} ms",
-                self.timeout_ms
-            ))),
-        }
-    }
-
-    pub async fn execute_with_request_context<F, T>(
-        &self,
+    pub async fn with_request_context<F, Fut, T>(
+        self: &Arc<Self>,
         request_context: Arc<RequestContext>,
         operation: F,
     ) -> Result<T, RariError>
     where
-        F: Future<Output = Result<T, RariError>>,
+        T: Send + 'static,
+        F: FnOnce(Arc<dyn factory::JsRuntimeInterface>) -> Fut + Send + 'static,
+        Fut: Future<Output = Result<T, RariError>> + Send + 'static,
     {
-        self.set_request_context(request_context).await?;
+        self.pool.with_request_context(request_context, operation).await
+    }
+}
 
-        let result = operation.await;
+#[cfg(test)]
+#[expect(clippy::expect_used)]
+mod overlapping_stream_tests {
+    use std::{
+        sync::Arc,
+        time::{Duration, Instant},
+    };
 
-        let clear_result = self.clear_request_context().await;
+    use rari_error::RariError;
+    use tokio::sync::mpsc;
 
-        match (result, clear_result) {
-            (Ok(value), Ok(())) => Ok(value),
-            (Ok(value), Err(clear_err)) => {
-                tracing::error!(
-                    "Failed to clear request context after successful operation: {}",
-                    clear_err
+    use super::JsExecutionRuntime;
+
+    #[tokio::test]
+    async fn overlapping_streams_on_one_isolate_finish_near_max_delay() {
+        let runtime = Arc::new(JsExecutionRuntime::with_pool_size(None, 1));
+        let delay_ms = 200u64;
+        let stream_count = 4usize;
+
+        let start = Instant::now();
+        let mut join_handles = Vec::with_capacity(stream_count);
+
+        for i in 0..stream_count {
+            let runtime = Arc::clone(&runtime);
+            let stream_id = format!("overlap-{i}");
+            let (tx, mut rx) = mpsc::channel::<Result<Vec<u8>, RariError>>(8);
+            let script = format!(
+                r#"(async function() {{
+                    await new Promise((resolve) => setTimeout(resolve, {delay_ms}));
+                    await Deno.core.ops.op_fizz_chunk("{stream_id}", "chunk-{i}");
+                    Deno.core.ops.op_fizz_done("{stream_id}");
+                }})()"#
+            );
+
+            join_handles.push(tokio::spawn(async move {
+                let exec = runtime.execute_script_for_streaming(
+                    stream_id.clone(),
+                    format!("overlap_stream_{i}"),
+                    script,
+                    tx,
                 );
-                Ok(value)
-            }
-            (Err(op_err), Err(clear_err)) => {
-                tracing::error!(
-                    "Failed to clear request context after operation error: {}",
-                    clear_err
-                );
-                Err(op_err)
-            }
-            (Err(op_err), Ok(())) => Err(op_err),
+                let drain = async {
+                    let mut got = Vec::new();
+                    while let Some(chunk) = rx.recv().await {
+                        got.push(chunk);
+                    }
+                    got
+                };
+                let (exec_result, chunks) = tokio::join!(exec, drain);
+                (exec_result, chunks)
+            }));
         }
+
+        let mut successes = 0usize;
+        for handle in join_handles {
+            let (exec_result, chunks) = handle.await.expect("join");
+            exec_result.expect("stream execute");
+            assert!(
+                chunks.iter().any(|c| c.as_ref().is_ok_and(|b| !b.is_empty())),
+                "expected at least one chunk"
+            );
+            successes += 1;
+        }
+
+        let elapsed = start.elapsed();
+        assert_eq!(successes, stream_count);
+        // Serial would be ~800ms; overlapped should be near 200ms (+ runtime overhead).
+        assert!(
+            elapsed < Duration::from_millis(delay_ms * stream_count as u64 / 2 + 400),
+            "expected overlapped streams, elapsed={elapsed:?}"
+        );
+        assert!(
+            elapsed >= Duration::from_millis(delay_ms.saturating_sub(50)),
+            "elapsed unexpectedly fast: {elapsed:?}"
+        );
     }
 
-    pub async fn execute_with_persistent_request_context<F, T>(
-        &self,
-        request_context: Arc<RequestContext>,
-        operation: F,
-    ) -> Result<T, RariError>
-    where
-        F: Future<Output = Result<T, RariError>>,
-    {
-        self.set_request_context(request_context).await?;
-        operation.await
+    #[tokio::test]
+    async fn pool_size_two_broadcast_reaches_every_slot() {
+        let runtime = Arc::new(JsExecutionRuntime::with_pool_size(None, 2));
+        assert_eq!(runtime.pool_size(), 2);
+
+        runtime
+            .broadcast_script("pool_init_marker", "globalThis.__rariPoolMarker = 0")
+            .await
+            .expect("broadcast init");
+        runtime
+            .broadcast_script(
+                "pool_inc_marker",
+                "globalThis.__rariPoolMarker = (globalThis.__rariPoolMarker || 0) + 1",
+            )
+            .await
+            .expect("broadcast increment");
+
+        let first = runtime.pick_runtime().await.expect("pick 0");
+        let second = runtime.pick_runtime().await.expect("pick 1");
+        assert_ne!(first.idx(), second.idx(), "round-robin should yield distinct slots");
+
+        let v0 = first
+            .execute_script("read_marker".into(), "globalThis.__rariPoolMarker".into())
+            .await
+            .expect("read slot 0");
+        let v1 = second
+            .execute_script("read_marker".into(), "globalThis.__rariPoolMarker".into())
+            .await
+            .expect("read slot 1");
+
+        assert_eq!(v0.as_i64(), Some(1));
+        assert_eq!(v1.as_i64(), Some(1));
     }
 }

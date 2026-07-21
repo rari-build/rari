@@ -334,94 +334,91 @@ impl ApiRouteHandler {
                 .with_http_headers(extract_headers(&parts.headers)),
         );
 
-        self.runtime
-            .execute_with_request_context(request_context, async {
-                let dist_path = Self::resolve_route_dist_path(&route_match.route);
-                let canonical_path = fs::canonicalize(&dist_path).await.map_err(|e| {
-                    RariError::io(format!(
-                        "Failed to canonicalize API route path {}: {e}",
-                        dist_path.display()
-                    ))
-                })?;
-                let module_specifier = url::Url::from_file_path(&canonical_path)
-                    .map_err(|()| {
-                        RariError::configuration(format!(
-                            "Failed to create file URL from path: {}",
-                            canonical_path.display()
-                        ))
-                    })?
-                    .to_string();
+        let dist_path = Self::resolve_route_dist_path(&route_match.route);
+        let canonical_path = fs::canonicalize(&dist_path).await.map_err(|e| {
+            RariError::io(format!(
+                "Failed to canonicalize API route path {}: {e}",
+                dist_path.display()
+            ))
+        })?;
+        let module_specifier = url::Url::from_file_path(&canonical_path)
+            .map_err(|()| {
+                RariError::configuration(format!(
+                    "Failed to create file URL from path: {}",
+                    canonical_path.display()
+                ))
+            })?
+            .to_string();
 
-                let component_id = create_component_id(&route_match.route.file_path);
+        let component_id = create_component_id(&route_match.route.file_path);
 
-                if let Err(e) =
-                    self.runtime.add_module_to_loader(&module_specifier, handler.code.clone()).await
-                {
-                    tracing::error!(
-                        route_path = %route_match.route.path,
-                        method = %route_match.method,
-                        component_id = %component_id,
-                        error = %e,
-                        "Failed to add API route module to loader"
-                    );
-                    return Err(RariError::js_execution(format!(
-                        "Failed to add module to loader: {e}"
-                    )));
-                }
+        if let Err(e) =
+            self.runtime.add_module_to_loader(&module_specifier, handler.code.clone()).await
+        {
+            tracing::error!(
+                route_path = %route_match.route.path,
+                method = %route_match.method,
+                component_id = %component_id,
+                error = %e,
+                "Failed to add API route module to loader"
+            );
+            return Err(RariError::js_execution(format!("Failed to add module to loader: {e}")));
+        }
 
-                let module_id = self.runtime.load_es_module(&component_id).await.map_err(|e| {
-                    tracing::error!(
-                        route_path = %route_match.route.path,
-                        method = %route_match.method,
-                        component_id = %component_id,
-                        error = %e,
-                        "Failed to load API route as ES module"
-                    );
-                    RariError::js_execution(format!("Failed to load ES module: {e}"))
-                })?;
+        // Ensure the module is evaluated on every isolate before the sticky request path runs.
+        if let Err(e) = self.runtime.load_and_evaluate_module(&component_id).await {
+            tracing::error!(
+                route_path = %route_match.route.path,
+                method = %route_match.method,
+                component_id = %component_id,
+                error = %e,
+                "Failed to load/evaluate API route module"
+            );
+            return Err(RariError::js_execution(format!("Failed to load/evaluate ES module: {e}")));
+        }
 
-                if let Err(e) = self.runtime.evaluate_module(module_id).await {
-                    tracing::error!(
-                        route_path = %route_match.route.path,
-                        method = %route_match.method,
-                        component_id = %component_id,
-                        error = %e,
-                        "Failed to evaluate API route module"
-                    );
-                    return Err(RariError::js_execution(format!("Failed to evaluate module: {e}")));
-                }
+        let method = route_match.method.clone();
+        let route_path = route_match.route.path.clone();
+        let runtime = Arc::clone(&self.runtime);
+        let request_json = serde_json::to_string(&request_obj)
+            .map_err(|e| RariError::serialization(format!("Failed to serialize request: {e}")))?;
+        let script = format!(
+            r#"globalThis['~rari'].apiHandler.callHandler({}, "{}", "{}")"#,
+            request_json,
+            module_specifier.cow_replace('\\', "\\\\").cow_replace('"', "\\\""),
+            method.cow_replace('\\', "\\\\").cow_replace('"', "\\\"")
+        );
+        let trimmed = module_specifier.trim_start_matches("file://");
+        let with_underscores = trimmed.cow_replace('/', "_");
+        let script_name = format!("api_route_call_{}", with_underscores.cow_replace(':', "_"));
 
-                let result = self
-                    .execute_handler_from_namespace(
-                        &route_match.method,
-                        &request_obj,
-                        &module_specifier,
-                    )
+        let result = runtime
+            .with_request_context(request_context, move |rt| async move {
+                rt.execute_script(script_name, script)
                     .await
-                    .map_err(|e| {
-                        tracing::error!(
-                            route_path = %route_match.route.path,
-                            method = %route_match.method,
-                            component_id = %component_id,
-                            error = %e,
-                            "Handler execution failed"
-                        );
-                        RariError::js_execution(format!("Handler execution failed: {e}"))
-                    })?;
-
-                let response = Self::create_response(&result).map_err(|e| {
-                    tracing::error!(
-                        route_path = %route_match.route.path,
-                        method = %route_match.method,
-                        error = %e,
-                        "Failed to create response from handler result"
-                    );
-                    e
-                })?;
-
-                Ok(response)
+                    .map_err(|e| RariError::js_execution(format!("Failed to execute handler: {e}")))
             })
             .await
+            .map_err(|e| {
+                tracing::error!(
+                    route_path = %route_path,
+                    method = %method,
+                    component_id = %component_id,
+                    error = %e,
+                    "Handler execution failed"
+                );
+                RariError::js_execution(format!("Handler execution failed: {e}"))
+            })?;
+
+        Self::create_response(&result).map_err(|e| {
+            tracing::error!(
+                route_path = %route_path,
+                method = %method,
+                error = %e,
+                "Failed to create response from handler result"
+            );
+            e
+        })
     }
     #[expect(clippy::unnecessary_wraps, reason = "Result return type maintains API consistency")]
     fn create_request_object(
@@ -447,32 +444,6 @@ impl ApiRouteHandler {
         });
 
         Ok(request_obj)
-    }
-
-    async fn execute_handler_from_namespace(
-        &self,
-        method: &str,
-        request_obj: &Value,
-        module_specifier: &str,
-    ) -> Result<Value, RariError> {
-        let request_json = serde_json::to_string(request_obj)
-            .map_err(|e| RariError::serialization(format!("Failed to serialize request: {e}")))?;
-
-        let script = format!(
-            r#"globalThis['~rari'].apiHandler.callHandler({}, "{}", "{}")"#,
-            request_json,
-            module_specifier.cow_replace('\\', "\\\\").cow_replace('"', "\\\""),
-            method.cow_replace('\\', "\\\\").cow_replace('"', "\\\"")
-        );
-
-        let trimmed = module_specifier.trim_start_matches("file://");
-        let with_underscores = trimmed.cow_replace('/', "_");
-        let script_name = with_underscores.cow_replace(':', "_");
-
-        self.runtime
-            .execute_script(format!("api_route_call_{script_name}"), script)
-            .await
-            .map_err(|e| RariError::js_execution(format!("Failed to execute handler: {e}")))
     }
 
     fn create_response(result: &Value) -> Result<Response<Body>, RariError> {

@@ -117,19 +117,24 @@ declare global {
       useCacheDynamicDepth?: number
       markUseCacheDynamic?: () => void
       invalidateUseCache?: (input: { tag?: string, path?: string }) => Promise<void>
+      requestStorage?: {
+        run: <T>(store: { requestId: string, streamId?: string }, fn: () => T) => T
+        getStore: () => { requestId?: string, streamId?: string } | undefined
+      }
+      currentRequestId?: () => string
       renderStreamingDocument?: (options: {
         capturedElement: unknown
         headContent: string
         caughtErrors: unknown[]
+        streamId: string
       }) => Promise<void>
       renderStaticDocument?: (options: {
         capturedElement: unknown
         headContent: string
         caughtErrors: unknown[]
+        streamId?: string
       }) => Promise<string>
-      pumpStreamingCompleteScript?: () => Promise<void>
-      injectStreamError?: (caughtErrors: unknown[]) => Promise<void>
-      pumpFizzChunk?: (text: string) => Promise<boolean>
+      injectStreamError?: (caughtErrors: unknown[], streamId: string) => Promise<void>
       pumpRscElementStream?: (element: unknown, pumpChunk: (text: string) => Promise<boolean>) => Promise<void>
       streaming?: { complete?: boolean }
       loadFullReactVendors?: () => boolean
@@ -140,8 +145,8 @@ declare global {
   namespace Deno {
     namespace core {
       namespace ops {
-        function op_get_cookies(): string
-        function op_get_request_headers(): string
+        function op_get_cookies(requestId?: string): string
+        function op_get_request_headers(requestId?: string): string
         function op_set_cookie(options: {
           name: string
           value: string
@@ -154,10 +159,11 @@ declare global {
           sameSite?: 'strict' | 'lax' | 'none'
           priority?: 'low' | 'medium' | 'high'
           partitioned?: boolean
+          requestId?: string
         }): void
-        function op_delete_cookie(name: string): void
-        function op_cache_get(key: string): any
-        function op_cache_set(key: string, value: any): void
+        function op_delete_cookie(name: string, requestId?: string): void
+        function op_cache_get(key: string, requestId?: string): any
+        function op_cache_set(key: string, value: any, requestId?: string): void
       }
     }
   }

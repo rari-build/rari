@@ -13,19 +13,14 @@ pub use utils::{create_layout_context, sort_flight_protocol};
 #[cfg(test)]
 #[expect(clippy::unwrap_used)]
 mod tests {
-    use std::{path::Path, sync::Arc};
+    use std::path::Path;
 
     use rustc_hash::FxHashMap;
-    use tokio::sync::Mutex;
 
     use super::*;
-    use crate::{
-        rendering::base::RscRenderer,
-        runtime::JsExecutionRuntime,
-        server::routing::{
-            app_router::{AppRouteEntry, AppRouteMatch, LayoutEntry},
-            types::ParamValue,
-        },
+    use crate::server::routing::{
+        app_router::{AppRouteEntry, AppRouteMatch, LayoutEntry},
+        types::ParamValue,
     };
 
     #[test]
@@ -74,6 +69,7 @@ mod tests {
             pathname: "/test".to_string(),
             template_navigation_id: None,
             metadata: None,
+            streaming_head_extra: None,
         };
 
         let route_match = AppRouteMatch {
@@ -103,10 +99,6 @@ mod tests {
 
     #[test]
     fn test_build_composition_script_with_use_suspense_true() {
-        let renderer = LayoutRenderer::new(Arc::new(Mutex::new(RscRenderer::new(Arc::new(
-            JsExecutionRuntime::new(None),
-        )))));
-
         let route_match = AppRouteMatch {
             route: AppRouteEntry {
                 path: "/test".to_string(),
@@ -134,11 +126,17 @@ mod tests {
             pathname: "/test".to_string(),
             template_navigation_id: None,
             metadata: None,
+            streaming_head_extra: None,
         };
 
-        let script = renderer
-            .build_composition_script(&route_match, &context, Some("app/test/loading"), true, false)
-            .unwrap();
+        let script = LayoutRenderer::build_composition_script(
+            &route_match,
+            &context,
+            Some("app/test/loading"),
+            true,
+            false,
+        )
+        .unwrap();
 
         assert!(script.contains("const useSuspense = true"));
         assert!(
@@ -148,10 +146,6 @@ mod tests {
 
     #[test]
     fn test_build_composition_script_with_use_suspense_false() {
-        let renderer = LayoutRenderer::new(Arc::new(Mutex::new(RscRenderer::new(Arc::new(
-            JsExecutionRuntime::new(None),
-        )))));
-
         let route_match = AppRouteMatch {
             route: AppRouteEntry {
                 path: "/test".to_string(),
@@ -179,17 +173,17 @@ mod tests {
             pathname: "/test".to_string(),
             template_navigation_id: None,
             metadata: None,
+            streaming_head_extra: None,
         };
 
-        let script = renderer
-            .build_composition_script(
-                &route_match,
-                &context,
-                Some("app/test/loading"),
-                false,
-                false,
-            )
-            .unwrap();
+        let script = LayoutRenderer::build_composition_script(
+            &route_match,
+            &context,
+            Some("app/test/loading"),
+            false,
+            false,
+        )
+        .unwrap();
 
         assert!(script.contains("const useSuspense = false"));
         assert!(
@@ -199,10 +193,6 @@ mod tests {
 
     #[test]
     fn test_composition_script_includes_layout_structure_markers() {
-        let renderer = LayoutRenderer::new(Arc::new(Mutex::new(RscRenderer::new(Arc::new(
-            JsExecutionRuntime::new(None),
-        )))));
-
         let route_match = AppRouteMatch {
             route: AppRouteEntry {
                 path: "/test".to_string(),
@@ -238,10 +228,12 @@ mod tests {
             pathname: "/test".to_string(),
             template_navigation_id: None,
             metadata: None,
+            streaming_head_extra: None,
         };
 
         let script =
-            renderer.build_composition_script(&route_match, &context, None, true, false).unwrap();
+            LayoutRenderer::build_composition_script(&route_match, &context, None, true, false)
+                .unwrap();
 
         assert!(!script.contains("'data-content-slot': true"));
         assert!(!script.contains("const contentSlot = React.createElement"));
@@ -251,10 +243,6 @@ mod tests {
 
     #[test]
     fn test_mode_consistency_metadata_structure() {
-        let renderer = LayoutRenderer::new(Arc::new(Mutex::new(RscRenderer::new(Arc::new(
-            JsExecutionRuntime::new(None),
-        )))));
-
         let route_match = AppRouteMatch {
             route: AppRouteEntry {
                 path: "/test".to_string(),
@@ -282,12 +270,15 @@ mod tests {
             pathname: "/test".to_string(),
             template_navigation_id: None,
             metadata: None,
+            streaming_head_extra: None,
         };
 
         let script_ssr =
-            renderer.build_composition_script(&route_match, &context, None, true, false).unwrap();
+            LayoutRenderer::build_composition_script(&route_match, &context, None, true, false)
+                .unwrap();
         let script_rsc =
-            renderer.build_composition_script(&route_match, &context, None, false, false).unwrap();
+            LayoutRenderer::build_composition_script(&route_match, &context, None, false, false)
+                .unwrap();
 
         assert!(script_ssr.contains("rsc_data: rscData"));
         assert!(script_rsc.contains("rsc_data: rscData"));
@@ -304,10 +295,6 @@ mod tests {
 
     #[test]
     fn test_mode_consistency_async_component_handling_with_loading() {
-        let renderer = LayoutRenderer::new(Arc::new(Mutex::new(RscRenderer::new(Arc::new(
-            JsExecutionRuntime::new(None),
-        )))));
-
         let route_match = AppRouteMatch {
             route: AppRouteEntry {
                 path: "/test".to_string(),
@@ -335,20 +322,25 @@ mod tests {
             pathname: "/test".to_string(),
             template_navigation_id: None,
             metadata: None,
+            streaming_head_extra: None,
         };
 
-        let script_ssr = renderer
-            .build_composition_script(&route_match, &context, Some("app/test/loading"), true, false)
-            .unwrap();
-        let script_rsc = renderer
-            .build_composition_script(
-                &route_match,
-                &context,
-                Some("app/test/loading"),
-                false,
-                false,
-            )
-            .unwrap();
+        let script_ssr = LayoutRenderer::build_composition_script(
+            &route_match,
+            &context,
+            Some("app/test/loading"),
+            true,
+            false,
+        )
+        .unwrap();
+        let script_rsc = LayoutRenderer::build_composition_script(
+            &route_match,
+            &context,
+            Some("app/test/loading"),
+            false,
+            false,
+        )
+        .unwrap();
 
         assert!(script_ssr.contains("const useSuspense = true"));
         assert!(
@@ -365,10 +357,6 @@ mod tests {
 
     #[test]
     fn test_mode_consistency_wrapper_elements() {
-        let renderer = LayoutRenderer::new(Arc::new(Mutex::new(RscRenderer::new(Arc::new(
-            JsExecutionRuntime::new(None),
-        )))));
-
         let route_match = AppRouteMatch {
             route: AppRouteEntry {
                 path: "/test".to_string(),
@@ -396,12 +384,15 @@ mod tests {
             pathname: "/test".to_string(),
             template_navigation_id: None,
             metadata: None,
+            streaming_head_extra: None,
         };
 
         let script_ssr =
-            renderer.build_composition_script(&route_match, &context, None, true, false).unwrap();
+            LayoutRenderer::build_composition_script(&route_match, &context, None, true, false)
+                .unwrap();
         let script_rsc =
-            renderer.build_composition_script(&route_match, &context, None, false, false).unwrap();
+            LayoutRenderer::build_composition_script(&route_match, &context, None, false, false)
+                .unwrap();
 
         assert!(!script_ssr.contains("const contentSlot = React.createElement"));
         assert!(!script_ssr.contains("'data-content-slot': true"));
@@ -417,10 +408,6 @@ mod tests {
 
     #[test]
     fn test_mode_consistency_error_handling() {
-        let renderer = LayoutRenderer::new(Arc::new(Mutex::new(RscRenderer::new(Arc::new(
-            JsExecutionRuntime::new(None),
-        )))));
-
         let route_match = AppRouteMatch {
             route: AppRouteEntry {
                 path: "/test".to_string(),
@@ -448,12 +435,15 @@ mod tests {
             pathname: "/test".to_string(),
             template_navigation_id: None,
             metadata: None,
+            streaming_head_extra: None,
         };
 
         let script_ssr =
-            renderer.build_composition_script(&route_match, &context, None, true, false).unwrap();
+            LayoutRenderer::build_composition_script(&route_match, &context, None, true, false)
+                .unwrap();
         let script_rsc =
-            renderer.build_composition_script(&route_match, &context, None, false, false).unwrap();
+            LayoutRenderer::build_composition_script(&route_match, &context, None, false, false)
+                .unwrap();
 
         assert!(script_ssr.contains("React.createElement"));
         assert!(script_rsc.contains("React.createElement"));

@@ -207,6 +207,8 @@ export interface ServerBuildOptions {
   csp?: ServerCSPConfig
   cacheControl?: ServerCacheControlConfig
   cache?: ServerCacheConfig
+  jsPoolSize?: number
+  htmlLimitedBots?: string
   moduleAnalysisCache?: ModuleAnalysisCache
   experimental?: {
     useCache?: boolean
@@ -222,11 +224,13 @@ export interface ComponentRebuildResult {
   error?: string
 }
 
-type ResolvedServerBuildOptions = Required<Omit<ServerBuildOptions, 'csp' | 'cacheControl' | 'cache' | 'define' | 'serverConfigPath' | 'experimental' | 'moduleAnalysisCache' | 'mdx'>> & {
+type ResolvedServerBuildOptions = Required<Omit<ServerBuildOptions, 'csp' | 'cacheControl' | 'cache' | 'jsPoolSize' | 'htmlLimitedBots' | 'define' | 'serverConfigPath' | 'experimental' | 'moduleAnalysisCache' | 'mdx'>> & {
   serverConfigPath: string
   csp?: ServerBuildOptions['csp']
   cacheControl?: ServerBuildOptions['cacheControl']
   cache?: ServerBuildOptions['cache']
+  jsPoolSize?: ServerBuildOptions['jsPoolSize']
+  htmlLimitedBots?: ServerBuildOptions['htmlLimitedBots']
   define?: ServerBuildOptions['define']
   experimental?: ServerBuildOptions['experimental']
   moduleAnalysisCache?: ModuleAnalysisCache
@@ -423,6 +427,8 @@ export class ServerComponentBuilder {
       define: options.define,
       csp: options.csp,
       cacheControl: options.cacheControl,
+      cache: options.cache,
+      jsPoolSize: options.jsPoolSize,
       experimental: options.experimental,
       mdx: options.mdx,
     }
@@ -1379,6 +1385,10 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
       serverConfig.cacheControl = this.options.cacheControl
     if (this.options.cache)
       serverConfig.cache = this.options.cache
+    if (this.options.jsPoolSize != null)
+      serverConfig.jsPoolSize = this.options.jsPoolSize
+    if (this.options.htmlLimitedBots != null)
+      serverConfig.htmlLimitedBots = this.options.htmlLimitedBots
     if (this.options.experimental?.useCacheRemote || this.useCacheBuildId) {
       serverConfig.useCache = {
         ...(this.options.experimental?.useCacheRemote

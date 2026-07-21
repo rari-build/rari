@@ -14,6 +14,7 @@ pub struct LayoutRenderContext {
     pub pathname: String,
     pub template_navigation_id: Option<u32>,
     pub metadata: Option<PageMetadata>,
+    pub streaming_head_extra: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

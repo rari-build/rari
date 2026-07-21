@@ -16,6 +16,7 @@ use axum::{
     extract::DefaultBodyLimit,
     middleware::{self},
     routing,
+    serve::ListenerExt,
 };
 use colored::Colorize;
 use dashmap::DashMap;
@@ -115,7 +116,11 @@ impl Server {
         };
 
         let env_vars: rustc_hash::FxHashMap<String, String> = env::vars().collect();
-        let js_runtime = Arc::new(JsExecutionRuntime::new(Some(env_vars)));
+        let js_runtime = Arc::new(JsExecutionRuntime::with_pool_size(
+            Some(env_vars),
+            config.server.js_pool_size,
+        ));
+        js_runtime.set_setup_mode(true);
         let mut renderer =
             RscRenderer::with_resource_limits(Arc::clone(&js_runtime), resource_limits);
         renderer.initialize().await?;
@@ -137,6 +142,7 @@ impl Server {
 
         ComponentLoader::load_ssr_client_components(&renderer.runtime).await?;
         ComponentLoader::load_client_reference_manifest(&renderer.runtime).await?;
+        js_runtime.set_setup_mode(false);
 
         let routes_manifest = RoutesManifest::load_from_file(ROUTES_MANIFEST_PATH).await;
 
@@ -167,6 +173,17 @@ impl Server {
         };
 
         let renderer_arc = Arc::new(Mutex::new(renderer));
+
+        {
+            let renderer_for_hook = Arc::clone(&renderer_arc);
+            js_runtime.set_post_rebuild_hook(Arc::new(move |_idx, slot_runtime| {
+                let renderer_for_hook = Arc::clone(&renderer_for_hook);
+                Box::pin(async move {
+                    let renderer = renderer_for_hook.lock().await;
+                    renderer.resync_slot(slot_runtime).await
+                })
+            }));
+        }
 
         let project_root = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
 
@@ -394,7 +411,15 @@ impl Server {
     ) -> Result<(), RariError> {
         self.display_startup_message();
 
-        axum::serve(self.listener, self.router.into_make_service_with_connect_info::<SocketAddr>())
+        // Disable Nagle so the final streaming chunk is not delayed ~20–40ms waiting
+        // for a delayed ACK (classic last-byte tax on short responses / localhost).
+        let listener = self.listener.tap_io(|tcp_stream| {
+            if let Err(err) = tcp_stream.set_nodelay(true) {
+                tracing::warn!("failed to set TCP_NODELAY on incoming connection: {err}");
+            }
+        });
+
+        axum::serve(listener, self.router.into_make_service_with_connect_info::<SocketAddr>())
             .with_graceful_shutdown(shutdown)
             .await
             .map_err(|e| RariError::network(format!("Server error: {e}")))?;

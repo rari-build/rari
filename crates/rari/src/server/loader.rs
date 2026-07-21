@@ -83,42 +83,31 @@ impl ComponentLoader {
                     continue;
                 }
 
-                match renderer.runtime.load_es_module(component_id).await {
-                    Ok(module_id) => {
-                        if let Err(e) = renderer.runtime.evaluate_module(module_id).await {
-                            tracing::error!(
-                                "Failed to evaluate module {} (id: {}): {}",
-                                component_id,
-                                module_id,
-                                e
-                            );
-                            continue;
-                        }
+                if let Err(e) = renderer.runtime.load_and_evaluate_module(component_id).await {
+                    tracing::error!(
+                        "Failed to load/evaluate component {} as ESM module: {}",
+                        component_id,
+                        e
+                    );
+                    continue;
+                }
 
-                        match renderer.runtime.get_module_namespace(module_id).await {
-                            Ok(_namespace) => {
-                                let specifier_json = serde_json::to_string(specifier)
-                                    .unwrap_or_else(|e| {
-                                        tracing::error!(
-                                            "Failed to serialize module specifier for {}: {}",
-                                            component_id,
-                                            e
-                                        );
-                                        "\"\"".to_string()
-                                    });
-                                let component_id_json = serde_json::to_string(component_id)
-                                    .unwrap_or_else(|e| {
-                                        tracing::error!(
-                                            "Failed to serialize component_id {}: {}",
-                                            component_id,
-                                            e
-                                        );
-                                        "\"\"".to_string()
-                                    });
+                let specifier_json = serde_json::to_string(specifier).unwrap_or_else(|e| {
+                    tracing::error!(
+                        "Failed to serialize module specifier for {}: {}",
+                        component_id,
+                        e
+                    );
+                    "\"\"".to_string()
+                });
+                let component_id_json = serde_json::to_string(component_id).unwrap_or_else(|e| {
+                    tracing::error!("Failed to serialize component_id {}: {}", component_id, e);
+                    "\"\"".to_string()
+                });
 
-                                if is_server_action {
-                                    let action_registration_script = format!(
-                                        r#"(async function() {{
+                if is_server_action {
+                    let action_registration_script = format!(
+                        r#"(async function() {{
                                             try {{
                                                 const moduleNamespace = await import({specifier_json});
                                                 if (!globalThis['~rari']) {{
@@ -152,97 +141,71 @@ impl ComponentLoader {
                                                 return {{ success: false, error: error.message }};
                                             }}
                                         }})()"#
-                                    );
+                    );
 
-                                    match renderer
-                                        .runtime
-                                        .execute_script(
-                                            format!(
-                                                "register_action_{}.js",
-                                                component_id.cow_replace('/', "_")
-                                            ),
-                                            action_registration_script,
-                                        )
-                                        .await
-                                    {
-                                        Ok(result) => {
-                                            if let Some(success) = result
-                                                .get("success")
-                                                .and_then(serde_json::Value::as_bool)
-                                                && !success
-                                            {
-                                                tracing::error!(
-                                                    "Failed to register server action {}: {:?}",
-                                                    component_id,
-                                                    result.get("error")
-                                                );
-                                            }
-                                        }
-                                        Err(e) => {
-                                            tracing::error!(
-                                                "Failed to register server action {}: {}",
-                                                component_id,
-                                                e
-                                            );
-                                        }
-                                    }
-                                }
-
-                                if !is_server_action {
-                                    let skip_global_binding = component_id.starts_with("lib/");
-                                    let registration_script = format!(
-                                        r"globalThis['~rari'].componentLoader.registerComponent({specifier_json}, {component_id_json}, {skip_global_binding})"
-                                    );
-
-                                    match renderer
-                                        .runtime
-                                        .execute_script(
-                                            format!(
-                                                "register_{}.js",
-                                                component_id.cow_replace('/', "_")
-                                            ),
-                                            registration_script,
-                                        )
-                                        .await
-                                    {
-                                        Ok(result) => {
-                                            if let Some(success) = result
-                                                .get("success")
-                                                .and_then(serde_json::Value::as_bool)
-                                                && !success
-                                            {
-                                                tracing::error!(
-                                                    "Failed to register component {} to globalThis: {:?}",
-                                                    component_id,
-                                                    result.get("error")
-                                                );
-                                            }
-                                        }
-                                        Err(e) => {
-                                            tracing::error!(
-                                                "Failed to register component {} to globalThis: {}",
-                                                component_id,
-                                                e
-                                            );
-                                        }
-                                    }
-                                }
-                            }
-                            Err(e) => {
+                    match renderer
+                        .runtime
+                        .execute_script(
+                            format!("register_action_{}.js", component_id.cow_replace('/', "_")),
+                            action_registration_script,
+                        )
+                        .await
+                    {
+                        Ok(result) => {
+                            if let Some(success) =
+                                result.get("success").and_then(serde_json::Value::as_bool)
+                                && !success
+                            {
                                 tracing::error!(
-                                    "Failed to get module namespace for {}: {}",
+                                    "Failed to register server action {}: {:?}",
                                     component_id,
-                                    e
+                                    result.get("error")
                                 );
                             }
                         }
+                        Err(e) => {
+                            tracing::error!(
+                                "Failed to register server action {}: {}",
+                                component_id,
+                                e
+                            );
+                        }
                     }
-                    Err(e) => {
-                        tracing::error!(
-                            "Failed to load component {} as ESM module: {}",
-                            component_id,
-                            e
-                        );
+                }
+
+                if !is_server_action {
+                    let skip_global_binding = component_id.starts_with("lib/");
+                    let registration_script = format!(
+                        r"globalThis['~rari'].componentLoader.registerComponent({specifier_json}, {component_id_json}, {skip_global_binding})"
+                    );
+
+                    match renderer
+                        .runtime
+                        .execute_script(
+                            format!("register_{}.js", component_id.cow_replace('/', "_")),
+                            registration_script,
+                        )
+                        .await
+                    {
+                        Ok(result) => {
+                            if let Some(success) =
+                                result.get("success").and_then(serde_json::Value::as_bool)
+                                && !success
+                            {
+                                tracing::error!(
+                                    "Failed to register component {} to globalThis: {:?}",
+                                    component_id,
+                                    result.get("error")
+                                );
+                            }
+                        }
+                        Err(e) => {
+                            tracing::error!(
+                                "Failed to register component {} to globalThis: {}",
+                                component_id,
+                                e
+                            );
+                        }
                     }
                 }
             } else {
@@ -328,40 +291,36 @@ impl ComponentLoader {
                                         .await;
 
                                     if esm_load_result.is_ok() {
-                                        match renderer.runtime.load_es_module(&action_id).await {
-                                            Ok(module_id) => {
-                                                if let Err(e) = renderer
-                                                    .runtime
-                                                    .evaluate_module(module_id)
-                                                    .await
-                                                {
-                                                    tracing::error!(
-                                                        "Failed to evaluate server action module {}: {}",
-                                                        action_id,
-                                                        e
-                                                    );
-                                                } else {
-                                                    let module_specifier_json = serde_json::to_string(&module_specifier)
+                                        if let Err(e) = renderer
+                                            .runtime
+                                            .load_and_evaluate_module(&action_id)
+                                            .await
+                                        {
+                                            tracing::error!(
+                                                "Failed to load/evaluate server action module {}: {}",
+                                                action_id,
+                                                e
+                                            );
+                                        } else {
+                                            let module_specifier_json = serde_json::to_string(&module_specifier)
                                                         .map_err(|e| {
                                                             tracing::error!("Failed to serialize module_specifier for {}: {}", action_id, e);
                                                             RariError::internal(format!("Failed to serialize module_specifier: {e}"))
                                                         })?;
-                                                    let action_id_json = serde_json::to_string(
-                                                        &action_id,
-                                                    )
-                                                    .map_err(|e| {
-                                                        tracing::error!(
-                                                            "Failed to serialize action_id {}: {}",
-                                                            action_id,
-                                                            e
-                                                        );
-                                                        RariError::internal(format!(
-                                                            "Failed to serialize action_id: {e}"
-                                                        ))
-                                                    })?;
+                                            let action_id_json = serde_json::to_string(&action_id)
+                                                .map_err(|e| {
+                                                    tracing::error!(
+                                                        "Failed to serialize action_id {}: {}",
+                                                        action_id,
+                                                        e
+                                                    );
+                                                    RariError::internal(format!(
+                                                        "Failed to serialize action_id: {e}"
+                                                    ))
+                                                })?;
 
-                                                    let registration_script = format!(
-                                                        r#"(async function() {{
+                                            let registration_script = format!(
+                                                r#"(async function() {{
                                                             try {{
                                                                 const moduleNamespace = await import({module_specifier_json});
                                                                 if (!globalThis['~rari']) {{
@@ -395,59 +354,49 @@ impl ComponentLoader {
                                                                 return {{ success: false, error: error.message }};
                                                             }}
                                                         }})()"#
-                                                    );
+                                            );
 
-                                                    match renderer
-                                                        .runtime
-                                                        .execute_script(
-                                                            format!(
-                                                                "register_action_{}.js",
-                                                                action_id.cow_replace('/', "_")
-                                                            ),
-                                                            registration_script,
-                                                        )
-                                                        .await
+                                            match renderer
+                                                .runtime
+                                                .execute_script(
+                                                    format!(
+                                                        "register_action_{}.js",
+                                                        action_id.cow_replace('/', "_")
+                                                    ),
+                                                    registration_script,
+                                                )
+                                                .await
+                                            {
+                                                Ok(result) => {
+                                                    if let Some(success) = result
+                                                        .get("success")
+                                                        .and_then(serde_json::Value::as_bool)
+                                                        && !success
                                                     {
-                                                        Ok(result) => {
-                                                            if let Some(success) =
-                                                                result.get("success").and_then(
-                                                                    serde_json::Value::as_bool,
-                                                                )
-                                                                && !success
-                                                            {
-                                                                if let Some(error_msg) = result
-                                                                    .get("error")
-                                                                    .and_then(|v| v.as_str())
-                                                                {
-                                                                    tracing::error!(
-                                                                        "Failed to register server action {}: {}",
-                                                                        action_id,
-                                                                        error_msg
-                                                                    );
-                                                                } else {
-                                                                    tracing::error!(
-                                                                        "Failed to register server action {}: unknown error",
-                                                                        action_id
-                                                                    );
-                                                                }
-                                                            }
-                                                        }
-                                                        Err(e) => {
+                                                        if let Some(error_msg) = result
+                                                            .get("error")
+                                                            .and_then(|v| v.as_str())
+                                                        {
                                                             tracing::error!(
                                                                 "Failed to register server action {}: {}",
                                                                 action_id,
-                                                                e
+                                                                error_msg
+                                                            );
+                                                        } else {
+                                                            tracing::error!(
+                                                                "Failed to register server action {}: unknown error",
+                                                                action_id
                                                             );
                                                         }
                                                     }
                                                 }
-                                            }
-                                            Err(e) => {
-                                                tracing::error!(
-                                                    "Failed to load server action {} as ESM module: {}",
-                                                    action_id,
-                                                    e
-                                                );
+                                                Err(e) => {
+                                                    tracing::error!(
+                                                        "Failed to register server action {}: {}",
+                                                        action_id,
+                                                        e
+                                                    );
+                                                }
                                             }
                                         }
                                     } else {
@@ -555,44 +504,40 @@ impl ComponentLoader {
                             .await;
 
                         if esm_load_result.is_ok() {
-                            match renderer.runtime.load_es_module(&relative_str).await {
-                                Ok(module_id) => {
-                                    if let Err(e) =
-                                        renderer.runtime.evaluate_module(module_id).await
-                                    {
+                            if let Err(e) =
+                                renderer.runtime.load_and_evaluate_module(&relative_str).await
+                            {
+                                tracing::error!(
+                                    "Failed to load/evaluate server action module {}: {}",
+                                    relative_str,
+                                    e
+                                );
+                            } else {
+                                let module_specifier_json =
+                                    serde_json::to_string(&module_specifier).map_err(|e| {
                                         tracing::error!(
-                                            "Failed to evaluate server action module {}: {}",
+                                            "Failed to serialize module_specifier for {}: {}",
                                             relative_str,
                                             e
                                         );
-                                    } else {
-                                        let module_specifier_json = serde_json::to_string(
-                                            &module_specifier,
-                                        )
-                                        .map_err(|e| {
-                                            tracing::error!(
-                                                "Failed to serialize module_specifier for {}: {}",
-                                                relative_str,
-                                                e
-                                            );
-                                            RariError::internal(format!(
-                                                "Failed to serialize module_specifier: {e}"
-                                            ))
-                                        })?;
-                                        let relative_str_json =
-                                            serde_json::to_string(&relative_str).map_err(|e| {
-                                                tracing::error!(
-                                                    "Failed to serialize relative_str {}: {}",
-                                                    relative_str,
-                                                    e
-                                                );
-                                                RariError::internal(format!(
-                                                    "Failed to serialize relative_str: {e}"
-                                                ))
-                                            })?;
+                                        RariError::internal(format!(
+                                            "Failed to serialize module_specifier: {e}"
+                                        ))
+                                    })?;
+                                let relative_str_json = serde_json::to_string(&relative_str)
+                                    .map_err(|e| {
+                                        tracing::error!(
+                                            "Failed to serialize relative_str {}: {}",
+                                            relative_str,
+                                            e
+                                        );
+                                        RariError::internal(format!(
+                                            "Failed to serialize relative_str: {e}"
+                                        ))
+                                    })?;
 
-                                        let registration_script = format!(
-                                            r#"(async function() {{
+                                let registration_script = format!(
+                                    r#"(async function() {{
                                                 try {{
                                                     const moduleNamespace = await import({module_specifier_json});
                                                     if (!globalThis['~rari']) {{
@@ -626,57 +571,48 @@ impl ComponentLoader {
                                                     return {{ success: false, error: error.message }};
                                                 }}
                                             }})()"#
-                                        );
+                                );
 
-                                        match renderer
-                                            .runtime
-                                            .execute_script(
-                                                format!(
-                                                    "register_{}.js",
-                                                    relative_str.cow_replace('/', "_")
-                                                ),
-                                                registration_script,
-                                            )
-                                            .await
+                                match renderer
+                                    .runtime
+                                    .execute_script(
+                                        format!(
+                                            "register_{}.js",
+                                            relative_str.cow_replace('/', "_")
+                                        ),
+                                        registration_script,
+                                    )
+                                    .await
+                                {
+                                    Ok(result) => {
+                                        if let Some(success) = result
+                                            .get("success")
+                                            .and_then(serde_json::Value::as_bool)
+                                            && !success
                                         {
-                                            Ok(result) => {
-                                                if let Some(success) = result
-                                                    .get("success")
-                                                    .and_then(serde_json::Value::as_bool)
-                                                    && !success
-                                                {
-                                                    if let Some(error_msg) =
-                                                        result.get("error").and_then(|v| v.as_str())
-                                                    {
-                                                        tracing::error!(
-                                                            "Failed to register server functions from {}: {}",
-                                                            relative_str,
-                                                            error_msg
-                                                        );
-                                                    } else {
-                                                        tracing::error!(
-                                                            "Failed to register server functions from {}: unknown error",
-                                                            relative_str
-                                                        );
-                                                    }
-                                                }
-                                            }
-                                            Err(e) => {
+                                            if let Some(error_msg) =
+                                                result.get("error").and_then(|v| v.as_str())
+                                            {
                                                 tracing::error!(
                                                     "Failed to register server functions from {}: {}",
                                                     relative_str,
-                                                    e
+                                                    error_msg
+                                                );
+                                            } else {
+                                                tracing::error!(
+                                                    "Failed to register server functions from {}: unknown error",
+                                                    relative_str
                                                 );
                                             }
                                         }
                                     }
-                                }
-                                Err(e) => {
-                                    tracing::error!(
-                                        "Failed to load server action {} as ESM module: {}",
-                                        relative_str,
-                                        e
-                                    );
+                                    Err(e) => {
+                                        tracing::error!(
+                                            "Failed to register server functions from {}: {}",
+                                            relative_str,
+                                            e
+                                        );
+                                    }
                                 }
                             }
                         } else {
@@ -739,83 +675,79 @@ impl ComponentLoader {
                         .await;
 
                     if esm_load_result.is_ok() {
-                        match renderer.runtime.load_es_module(&component_id).await {
-                            Ok(module_id) => {
-                                if let Err(e) = renderer.runtime.evaluate_module(module_id).await {
+                        if let Err(e) =
+                            renderer.runtime.load_and_evaluate_module(&component_id).await
+                        {
+                            tracing::error!(
+                                "Failed to load/evaluate ESM module {}: {}",
+                                component_id,
+                                e
+                            );
+                        } else {
+                            let skip_global_binding = component_id.starts_with("lib/");
+                            let module_specifier_json = serde_json::to_string(&module_specifier)
+                                .map_err(|e| {
                                     tracing::error!(
-                                        "Failed to evaluate ESM module {} (id: {}): {}",
+                                        "Failed to serialize module_specifier for {}: {}",
                                         component_id,
-                                        module_id,
                                         e
                                     );
-                                } else {
-                                    let skip_global_binding = component_id.starts_with("lib/");
-                                    let module_specifier_json =
-                                        serde_json::to_string(&module_specifier).map_err(|e| {
-                                            tracing::error!(
-                                                "Failed to serialize module_specifier for {}: {}",
-                                                component_id,
-                                                e
-                                            );
-                                            RariError::internal(format!(
-                                                "Failed to serialize module_specifier: {e}"
-                                            ))
-                                        })?;
-                                    let component_id_json = serde_json::to_string(&component_id)
-                                        .map_err(|e| {
+                                    RariError::internal(format!(
+                                        "Failed to serialize module_specifier: {e}"
+                                    ))
+                                })?;
+                            let component_id_json =
+                                serde_json::to_string(&component_id).map_err(|e| {
+                                    tracing::error!(
+                                        "Failed to serialize component_id {}: {}",
+                                        component_id,
+                                        e
+                                    );
+                                    RariError::internal(format!(
+                                        "Failed to serialize component_id: {e}"
+                                    ))
+                                })?;
+                            let registration_script = format!(
+                                r"globalThis['~rari'].componentLoader.registerComponent({module_specifier_json}, {component_id_json}, {skip_global_binding})"
+                            );
+
+                            match renderer
+                                .runtime
+                                .execute_script(
+                                    format!("register_{}.js", component_id.cow_replace('/', "_")),
+                                    registration_script,
+                                )
+                                .await
+                            {
+                                Ok(result) => {
+                                    let registration_succeeded = result
+                                        .get("success")
+                                        .and_then(serde_json::Value::as_bool)
+                                        .unwrap_or(false);
+
+                                    if !registration_succeeded {
+                                        tracing::error!(
+                                            "Failed to register component {} to globalThis: {:?}",
+                                            component_id,
+                                            result.get("error")
+                                        );
+                                    }
+
+                                    if registration_succeeded && is_client_component {
+                                        let component_id_json = serde_json::to_string(
+                                            &component_id,
+                                        )
+                                        .unwrap_or_else(|e| {
                                             tracing::error!(
                                                 "Failed to serialize component_id {}: {}",
                                                 component_id,
                                                 e
                                             );
-                                            RariError::internal(format!(
-                                                "Failed to serialize component_id: {e}"
-                                            ))
-                                        })?;
-                                    let registration_script = format!(
-                                        r"globalThis['~rari'].componentLoader.registerComponent({module_specifier_json}, {component_id_json}, {skip_global_binding})"
-                                    );
-
-                                    match renderer
-                                        .runtime
-                                        .execute_script(
+                                            "\"\"".to_string()
+                                        });
+                                        let mark_client_script = if skip_global_binding {
                                             format!(
-                                                "register_{}.js",
-                                                component_id.cow_replace('/', "_")
-                                            ),
-                                            registration_script,
-                                        )
-                                        .await
-                                    {
-                                        Ok(result) => {
-                                            let registration_succeeded = result
-                                                .get("success")
-                                                .and_then(serde_json::Value::as_bool)
-                                                .unwrap_or(false);
-
-                                            if !registration_succeeded {
-                                                tracing::error!(
-                                                    "Failed to register component {} to globalThis: {:?}",
-                                                    component_id,
-                                                    result.get("error")
-                                                );
-                                            }
-
-                                            if registration_succeeded && is_client_component {
-                                                let component_id_json = serde_json::to_string(
-                                                    &component_id,
-                                                )
-                                                .unwrap_or_else(|e| {
-                                                    tracing::error!(
-                                                        "Failed to serialize component_id {}: {}",
-                                                        component_id,
-                                                        e
-                                                    );
-                                                    "\"\"".to_string()
-                                                });
-                                                let mark_client_script = if skip_global_binding {
-                                                    format!(
-                                                        r"(function() {{
+                                                r"(function() {{
                                                             const module = globalThis['~rsc']?.modules?.[{component_id_json}];
                                                             if (module) {{
                                                                 const comp = module.default || Object.values(module).find(v => typeof v === 'function');
@@ -826,10 +758,10 @@ impl ComponentLoader {
                                                             }}
                                                             return {{ componentId: {component_id_json}, isClient: true }};
                                                         }})()"
-                                                    )
-                                                } else {
-                                                    format!(
-                                                        r"(function() {{
+                                            )
+                                        } else {
+                                            format!(
+                                                r"(function() {{
                                                             const comp = globalThis[{component_id_json}];
                                                             if (comp && typeof comp === 'function') {{
                                                                 comp['~isClientComponent'] = true;
@@ -837,44 +769,35 @@ impl ComponentLoader {
                                                             }}
                                                             return {{ componentId: {component_id_json}, isClient: true }};
                                                         }})()"
-                                                    )
-                                                };
+                                            )
+                                        };
 
-                                                if let Err(e) = renderer
-                                                    .runtime
-                                                    .execute_script(
-                                                        format!(
-                                                            "mark_client_{}.js",
-                                                            component_id.cow_replace('/', "_")
-                                                        ),
-                                                        mark_client_script,
-                                                    )
-                                                    .await
-                                                {
-                                                    tracing::error!(
-                                                        "Failed to mark component {} as client: {}",
-                                                        component_id,
-                                                        e
-                                                    );
-                                                }
-                                            }
-                                        }
-                                        Err(e) => {
+                                        if let Err(e) = renderer
+                                            .runtime
+                                            .execute_script(
+                                                format!(
+                                                    "mark_client_{}.js",
+                                                    component_id.cow_replace('/', "_")
+                                                ),
+                                                mark_client_script,
+                                            )
+                                            .await
+                                        {
                                             tracing::error!(
-                                                "Failed to register component {}: {}",
+                                                "Failed to mark component {} as client: {}",
                                                 component_id,
                                                 e
                                             );
                                         }
                                     }
                                 }
-                            }
-                            Err(e) => {
-                                tracing::error!(
-                                    "Failed to load component {} as ESM module: {}",
-                                    component_id,
-                                    e
-                                );
+                                Err(e) => {
+                                    tracing::error!(
+                                        "Failed to register component {}: {}",
+                                        component_id,
+                                        e
+                                    );
+                                }
                             }
                         }
                     } else {

@@ -304,35 +304,19 @@ pub async fn initialize_proxy(state: &ServerState) -> Result<(), RariError> {
             try {{
                 const {{ initializeProxyExecutor }} = await import("{executor_specifier}");
                 const success = await initializeProxyExecutor("{proxy_specifier}", "{rari_request_specifier}");
-                return {{ success }};
+                if (!success) {{
+                    throw new Error("initializeProxyExecutor returned false");
+                }}
+                return {{ success: true }};
             }} catch (error) {{
                 console.error("[rari] Proxy: Failed to initialize:", error);
-                return {{ success: false, error: error.message }};
+                throw error;
             }}
         }})()"#
     );
 
-    match runtime.execute_script("initialize_proxy_executor".to_string(), init_script).await {
-        Ok(result) => {
-            if let Some(success) = result.get("success").and_then(serde_json::Value::as_bool) {
-                if success {
-                    Ok(())
-                } else {
-                    let error_msg = result
-                        .get("error")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("Unknown error during proxy initialization");
-                    tracing::error!("Proxy initialization failed: {error_msg}");
-                    Err(RariError::js_runtime(format!("Proxy initialization failed: {error_msg}")))
-                }
-            } else {
-                tracing::error!("Proxy initialization returned invalid result format");
-                Err(RariError::js_runtime("Proxy initialization returned invalid result format"))
-            }
-        }
-        Err(e) => {
-            tracing::error!("Failed to register proxy function: {}", e);
-            Err(e)
-        }
-    }
+    runtime.broadcast_script("initialize_proxy_executor", &init_script).await.map_err(|e| {
+        tracing::error!("Failed to register proxy function: {}", e);
+        e
+    })
 }

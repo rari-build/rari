@@ -125,17 +125,18 @@ async fn warm_route(
 
     let _render_guard = warmup_render_lock().await.lock_owned().await;
 
+    context.metadata = collect_page_metadata(state, &route_match, &context).await;
+
     let render_result = layout_renderer
         .render_route_with_streaming(
             &route_match,
             &context,
             Some(Arc::clone(&request_context)),
             false,
+            None,
         )
         .await
         .map_err(|e| RariError::internal(format!("Render failed: {e}")))?;
-
-    context.metadata = collect_page_metadata(state, &route_match, &context).await;
 
     let html = match render_result {
         RenderResult::Static(html) => html,
@@ -273,5 +274,6 @@ fn create_warmup_context(route_match: &AppRouteMatch) -> LayoutRenderContext {
         pathname: route_match.pathname.clone(),
         template_navigation_id: None,
         metadata: None,
+        streaming_head_extra: None,
     }
 }

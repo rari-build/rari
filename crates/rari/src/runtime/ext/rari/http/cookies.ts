@@ -82,22 +82,27 @@
     return normalized
   }
 
+  function currentRequestId(): string {
+    const id = g['~rari']?.currentRequestId?.()
+    return typeof id === 'string' ? id : ''
+  }
+
   function createCookieStore(): RariCookieStore {
     return {
       get: (name: string): RariCookie | undefined => {
-        const map = parseCookieHeader(Deno.core.ops.op_get_cookies())
+        const map = parseCookieHeader(Deno.core.ops.op_get_cookies(currentRequestId()))
         const value = map.get(name)
         return value !== undefined ? { name, value } : undefined
       },
 
       getAll: (name?: string): RariCookie[] => {
-        const map = parseCookieHeader(Deno.core.ops.op_get_cookies())
+        const map = parseCookieHeader(Deno.core.ops.op_get_cookies(currentRequestId()))
         const all = Array.from(map.entries()).map(([n, v]) => ({ name: n, value: v }))
         return name ? all.filter(c => c.name === name) : all
       },
 
       has: (name: string): boolean => {
-        return parseCookieHeader(Deno.core.ops.op_get_cookies()).has(name)
+        return parseCookieHeader(Deno.core.ops.op_get_cookies(currentRequestId())).has(name)
       },
 
       set: ((nameOrOptions: string | (RariCookieSetOptions & { name: string, value: string }), value?: string, options?: RariCookieSetOptions): void => {
@@ -115,6 +120,7 @@
             sameSite: opts.sameSite as 'strict' | 'lax' | 'none' | undefined,
             priority: opts.priority as 'low' | 'medium' | 'high' | undefined,
             partitioned: opts.partitioned,
+            requestId: currentRequestId() || undefined,
           })
         }
         else {
@@ -131,16 +137,17 @@
             sameSite: opts.sameSite as 'strict' | 'lax' | 'none' | undefined,
             priority: opts.priority as 'low' | 'medium' | 'high' | undefined,
             partitioned: opts.partitioned,
+            requestId: currentRequestId() || undefined,
           })
         }
       }) as RariCookieStore['set'],
 
       delete: (name: string): void => {
-        Deno.core.ops.op_delete_cookie(name)
+        Deno.core.ops.op_delete_cookie(name, currentRequestId())
       },
 
       toString: (): string => {
-        return Deno.core.ops.op_get_cookies()
+        return Deno.core.ops.op_get_cookies(currentRequestId())
       },
     }
   }

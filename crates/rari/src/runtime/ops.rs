@@ -12,6 +12,7 @@ use deno_core::{ModuleSpecifier, OpDecl, OpState, op2};
 use deno_error::JsErrorBox;
 use deno_runtime::BootstrapOptions;
 use rari_error::RariError;
+use rustc_hash::FxHashMap;
 use serde::Deserialize;
 use tokio::sync::mpsc;
 
@@ -62,17 +63,84 @@ enum RscStreamOperation {
 #[derive(Default)]
 #[non_exhaustive]
 pub struct StreamOpState {
-    pub chunk_sender: Option<mpsc::Sender<Result<Vec<u8>, RariError>>>,
-    pub current_stream_id: Option<String>,
-    pub row_counter: u32,
+    /// Per-stream chunk senders so concurrent streams on one isolate don't clobber each other.
+    pub chunk_senders: FxHashMap<String, mpsc::Sender<Result<Vec<u8>, RariError>>>,
+    pub row_counters: FxHashMap<String, u32>,
+    /// Filled by `op_stream_promise_settled` so the isolate worker can complete
+    /// pending streams without polling V8 via `execute_script` every pump tick.
+    pub settled: FxHashMap<String, Result<(), String>>,
 }
 
 impl StreamOpState {
-    pub fn get_next_row_id(&mut self) -> String {
-        let id = format!("{:x}", self.row_counter);
-        self.row_counter += 1;
+    pub fn register_sender(
+        &mut self,
+        stream_id: String,
+        sender: mpsc::Sender<Result<Vec<u8>, RariError>>,
+    ) {
+        self.chunk_senders.insert(stream_id.clone(), sender);
+        self.row_counters.entry(stream_id).or_insert(0);
+    }
+
+    pub fn take_sender(
+        &mut self,
+        stream_id: &str,
+    ) -> Option<mpsc::Sender<Result<Vec<u8>, RariError>>> {
+        self.row_counters.remove(stream_id);
+        self.chunk_senders.remove(stream_id)
+    }
+
+    pub fn get_sender(&self, stream_id: &str) -> Option<mpsc::Sender<Result<Vec<u8>, RariError>>> {
+        self.chunk_senders.get(stream_id).cloned()
+    }
+
+    pub fn take_settled(&mut self, stream_id: &str) -> Option<Result<(), String>> {
+        self.settled.remove(stream_id)
+    }
+
+    pub fn mark_settled(&mut self, stream_id: String, result: Result<(), String>) {
+        self.settled.insert(stream_id, result);
+    }
+
+    pub fn get_next_row_id(&mut self, stream_id: &str) -> String {
+        let counter = self.row_counters.entry(stream_id.to_string()).or_insert(0);
+        let id = format!("{:x}", *counter);
+        *counter += 1;
         id
     }
+}
+
+/// Multiplexed request contexts keyed by `RequestContext::request_id`.
+#[derive(Default)]
+#[non_exhaustive]
+pub struct RequestContextStore {
+    pub by_id: FxHashMap<String, Arc<RequestContext>>,
+}
+
+impl RequestContextStore {
+    pub fn insert(&mut self, ctx: Arc<RequestContext>) {
+        self.by_id.insert(ctx.request_id().to_string(), ctx);
+    }
+
+    pub fn remove(&mut self, request_id: &str) -> Option<Arc<RequestContext>> {
+        self.by_id.remove(request_id)
+    }
+
+    pub fn get(&self, request_id: &str) -> Option<Arc<RequestContext>> {
+        self.by_id.get(request_id).cloned()
+    }
+}
+
+fn resolve_request_context(
+    op_state: &OpState,
+    request_id: Option<&str>,
+) -> Option<Arc<RequestContext>> {
+    if let Some(id) = request_id.filter(|id| !id.is_empty())
+        && let Some(store) = op_state.try_borrow::<RequestContextStore>()
+        && let Some(ctx) = store.get(id)
+    {
+        return Some(ctx);
+    }
+    op_state.try_borrow::<Arc<RequestContext>>().cloned()
 }
 
 fn parse_hex_row_id(row_id: &str, context: &str) -> Result<u32, JsErrorBox> {
@@ -95,6 +163,7 @@ fn parse_hex_row_id(row_id: &str, context: &str) -> Result<u32, JsErrorBox> {
 #[op2]
 pub async fn op_send_chunk_to_rust(
     state: Rc<RefCell<OpState>>,
+    #[string] stream_id: String,
     #[string] operation_json: String,
 ) -> Result<(), JsErrorBox> {
     let operation: RscStreamOperation = match serde_json::from_str(&operation_json) {
@@ -117,9 +186,9 @@ pub async fn op_send_chunk_to_rust(
 
         match &operation {
             RscStreamOperation::Complete { .. } | RscStreamOperation::Error { .. } => {
-                stream_op_state.chunk_sender.take()
+                stream_op_state.take_sender(&stream_id)
             }
-            _ => stream_op_state.chunk_sender.clone(),
+            _ => stream_op_state.get_sender(&stream_id),
         }
     };
 
@@ -324,8 +393,10 @@ pub fn get_streaming_ops() -> Vec<OpDecl> {
         op_main_module(),
         op_ppid(),
         op_send_chunk_to_rust(),
+        op_fizz_chunk_try(),
         op_fizz_chunk(),
         op_fizz_done(),
+        op_stream_promise_settled(),
         op_internal_log(),
         op_sanitize_html(),
         op_get_cookies(),
@@ -335,39 +406,79 @@ pub fn get_streaming_ops() -> Vec<OpDecl> {
     ]
 }
 
+/// Sync try-send for Fizz chunks. Returns: `0` sent, `1` full (use async op), `2` disconnected.
+#[op2(fast)]
+pub fn op_fizz_chunk_try(state: &OpState, #[string] stream_id: &str, #[string] html: &str) -> u8 {
+    let Some(stream_op_state) = state.try_borrow::<StreamOpState>() else {
+        return 2;
+    };
+    let Some(sender) = stream_op_state.get_sender(stream_id) else {
+        return 2;
+    };
+    match sender.try_send(Ok(html.as_bytes().to_vec())) {
+        Ok(()) => 0,
+        Err(mpsc::error::TrySendError::Full(_)) => 1,
+        Err(mpsc::error::TrySendError::Closed(_)) => 2,
+    }
+}
+
 #[op2]
 pub async fn op_fizz_chunk(
     state: Rc<RefCell<OpState>>,
+    #[string] stream_id: String,
     #[string] html: String,
 ) -> Result<(), JsErrorBox> {
     let sender = {
-        let mut op_state_ref = state.borrow_mut();
-        let Some(stream_op_state) = op_state_ref.try_borrow_mut::<StreamOpState>() else {
+        let op_state_ref = state.borrow();
+        let Some(stream_op_state) = op_state_ref.try_borrow::<StreamOpState>() else {
             return Err(JsErrorBox::generic("StreamOpState not found."));
         };
-        stream_op_state.chunk_sender.clone()
+        stream_op_state.get_sender(&stream_id)
     };
 
     match sender {
         Some(sender) => {
-            if sender.send(Ok(html.into_bytes())).await.is_err() {
-                let mut op_state_ref = state.borrow_mut();
-                if let Some(stream_op_state) = op_state_ref.try_borrow_mut::<StreamOpState>() {
-                    stream_op_state.chunk_sender.take();
+            let bytes = html.into_bytes();
+            // Prefer try_send so the common path doesn't await the channel. Fall back to
+            // async send only under backpressure — never blocking_send (panics in Tokio).
+            match sender.try_send(Ok(bytes)) {
+                Ok(()) => Ok(()),
+                Err(mpsc::error::TrySendError::Full(msg)) => {
+                    if sender.send(msg).await.is_err() {
+                        tracing::debug!("Fizz stream client disconnected before chunk was sent");
+                        return Err(JsErrorBox::generic("Fizz stream receiver disconnected"));
+                    }
+                    Ok(())
                 }
-                tracing::debug!("Fizz stream client disconnected before chunk was sent");
-                return Err(JsErrorBox::generic("Fizz stream receiver disconnected"));
+                Err(mpsc::error::TrySendError::Closed(_)) => {
+                    // Leave the map entry for op_fizz_done / settle cleanup; just
+                    // signal disconnect so JS stops pumping this stream.
+                    tracing::debug!("Fizz stream client disconnected before chunk was sent");
+                    Err(JsErrorBox::generic("Fizz stream receiver disconnected"))
+                }
             }
-            Ok(())
         }
         None => Err(JsErrorBox::generic("No chunk sender available for Fizz chunk")),
     }
 }
 
 #[op2(fast)]
-pub fn op_fizz_done(state: &mut OpState) {
+pub fn op_fizz_done(state: &mut OpState, #[string] stream_id: &str) {
     if let Some(stream_op_state) = state.try_borrow_mut::<StreamOpState>() {
-        stream_op_state.chunk_sender.take();
+        stream_op_state.take_sender(stream_id);
+    }
+}
+
+#[op2(fast)]
+pub fn op_stream_promise_settled(
+    state: &mut OpState,
+    #[string] stream_id: &str,
+    ok: bool,
+    #[string] error: &str,
+) {
+    if let Some(stream_op_state) = state.try_borrow_mut::<StreamOpState>() {
+        let result = if ok { Ok(()) } else { Err(error.to_string()) };
+        stream_op_state.mark_settled(stream_id.to_string(), result);
     }
 }
 
@@ -424,13 +535,14 @@ pub async fn op_fetch_with_cache(
     state: Rc<RefCell<OpState>>,
     #[string] url: String,
     #[string] options_json: String,
+    #[string] request_id: String,
 ) -> Result<serde_json::Value, JsErrorBox> {
     let options: rustc_hash::FxHashMap<String, String> = serde_json::from_str(&options_json)
         .map_err(|e| JsErrorBox::generic(format!("Invalid options JSON: {e}")))?;
 
     let request_context = {
         let op_state_ref = state.borrow();
-        op_state_ref.try_borrow::<Arc<RequestContext>>().cloned()
+        resolve_request_context(&op_state_ref, Some(request_id.as_str()))
     };
 
     if let Some(ctx) = request_context {
@@ -524,9 +636,9 @@ async fn perform_simple_fetch(
 #[allow(clippy::allow_attributes, clippy::needless_pass_by_value)]
 #[op2]
 #[string]
-pub fn op_get_cookies(state: Rc<RefCell<OpState>>) -> String {
+pub fn op_get_cookies(state: Rc<RefCell<OpState>>, #[string] request_id: String) -> String {
     let op_state_ref = state.borrow();
-    let Some(ctx) = op_state_ref.try_borrow::<Arc<RequestContext>>() else {
+    let Some(ctx) = resolve_request_context(&op_state_ref, Some(request_id.as_str())) else {
         return String::new();
     };
 
@@ -576,9 +688,9 @@ pub fn op_get_cookies(state: Rc<RefCell<OpState>>) -> String {
 #[allow(clippy::allow_attributes, clippy::needless_pass_by_value)]
 #[op2]
 #[string]
-pub fn op_get_request_headers(state: Rc<RefCell<OpState>>) -> String {
+pub fn op_get_request_headers(state: Rc<RefCell<OpState>>, #[string] request_id: String) -> String {
     let op_state_ref = state.borrow();
-    let Some(ctx) = op_state_ref.try_borrow::<Arc<RequestContext>>() else {
+    let Some(ctx) = resolve_request_context(&op_state_ref, Some(request_id.as_str())) else {
         return "{}".to_string();
     };
 
@@ -603,6 +715,8 @@ pub struct SetCookieArgs {
     priority: Option<String>,
     #[serde(default)]
     partitioned: bool,
+    #[serde(rename = "requestId", default)]
+    request_id: Option<String>,
 }
 
 #[allow(clippy::allow_attributes, clippy::needless_pass_by_value)]
@@ -642,7 +756,7 @@ pub fn op_set_cookie(
     }
 
     let op_state_ref = state.borrow();
-    if let Some(ctx) = op_state_ref.try_borrow::<Arc<RequestContext>>() {
+    if let Some(ctx) = resolve_request_context(&op_state_ref, args.request_id.as_deref()) {
         let path = args.path.or_else(|| Some("/".to_string()));
         ctx.pending_cookies.insert(
             PendingCookieKey::new(&args.name, path.as_deref(), args.domain.as_deref()),
@@ -667,9 +781,13 @@ pub fn op_set_cookie(
 
 #[allow(clippy::allow_attributes, clippy::needless_pass_by_value)]
 #[op2(fast)]
-pub fn op_delete_cookie(state: Rc<RefCell<OpState>>, #[string] name: String) {
+pub fn op_delete_cookie(
+    state: Rc<RefCell<OpState>>,
+    #[string] name: String,
+    #[string] request_id: String,
+) {
     let op_state_ref = state.borrow();
-    if let Some(ctx) = op_state_ref.try_borrow::<Arc<RequestContext>>() {
+    if let Some(ctx) = resolve_request_context(&op_state_ref, Some(request_id.as_str())) {
         let cookies_to_delete: Vec<(Option<String>, Option<String>)> = ctx
             .pending_cookies
             .iter()
@@ -726,9 +844,10 @@ pub fn op_delete_cookie(state: Rc<RefCell<OpState>>, #[string] name: String) {
 pub fn op_cache_get(
     state: Rc<RefCell<OpState>>,
     #[string] cache_key: &str,
+    #[string] request_id: &str,
 ) -> Option<serde_json::Value> {
     let op_state_ref = state.borrow();
-    if let Some(ctx) = op_state_ref.try_borrow::<Arc<RequestContext>>() {
+    if let Some(ctx) = resolve_request_context(&op_state_ref, Some(request_id)) {
         ctx.function_cache.get(cache_key).map(|entry| entry.value().clone())
     } else {
         None
@@ -741,9 +860,10 @@ pub fn op_cache_set(
     state: Rc<RefCell<OpState>>,
     #[string] cache_key: String,
     #[serde] value: serde_json::Value,
+    #[string] request_id: &str,
 ) {
     let op_state_ref = state.borrow();
-    if let Some(ctx) = op_state_ref.try_borrow::<Arc<RequestContext>>() {
+    if let Some(ctx) = resolve_request_context(&op_state_ref, Some(request_id)) {
         ctx.function_cache.insert(cache_key, value);
     }
 }
@@ -757,18 +877,21 @@ mod tests {
     #[test]
     fn test_stream_op_state_operations() {
         let mut stream_state = StreamOpState::default();
+        let stream_id = "s1";
 
-        let row_id_1 = stream_state.get_next_row_id();
-        let row_id_2 = stream_state.get_next_row_id();
+        let row_id_1 = stream_state.get_next_row_id(stream_id);
+        let row_id_2 = stream_state.get_next_row_id(stream_id);
 
         assert_eq!(row_id_1, "0");
         assert_eq!(row_id_2, "1");
-        assert_eq!(stream_state.row_counter, 2);
+        assert_eq!(stream_state.row_counters.get(stream_id), Some(&2));
 
         let (sender, _receiver) = mpsc::channel::<Result<Vec<u8>, RariError>>(32);
-        stream_state.chunk_sender = Some(sender);
+        stream_state.register_sender(stream_id.to_string(), sender);
 
-        assert!(stream_state.chunk_sender.is_some());
+        assert!(stream_state.get_sender(stream_id).is_some());
+        assert!(stream_state.take_sender(stream_id).is_some());
+        assert!(stream_state.get_sender(stream_id).is_none());
     }
 
     #[test]

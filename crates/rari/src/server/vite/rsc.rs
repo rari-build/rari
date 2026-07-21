@@ -57,9 +57,9 @@ pub async fn register_component(
 
                 if let Err(e) = renderer
                     .runtime
-                    .execute_script(
-                        format!("mark_client_{}.js", component_id.cow_replace('/', "_")),
-                        mark_script,
+                    .broadcast_script(
+                        &format!("mark_client_{}.js", component_id.cow_replace('/', "_")),
+                        &mark_script,
                     )
                     .await
                 {
@@ -225,9 +225,9 @@ pub async fn reload_component_from_dist(
 
             let execution_result = renderer
                 .runtime
-                .execute_script(
-                    format!("hmr_reload_{}.js", component_id.cow_replace('/', "_")),
-                    wrapped_code.clone(),
+                .broadcast_script(
+                    &format!("hmr_reload_{}.js", component_id.cow_replace('/', "_")),
+                    &wrapped_code,
                 )
                 .await;
 
@@ -267,64 +267,34 @@ pub async fn reload_component_from_dist(
         }})()"
         );
 
-        let result_json = match renderer
+        let checked_verification = format!(
+            r"(function() {{
+                const result = {verification_script};
+                if (!result || result.success !== true) {{
+                    throw new Error(
+                        'Component missing after reload: ' + String(result?.expectedKey || '{component_id}')
+                    );
+                }}
+                return result;
+            }})()"
+        );
+
+        if let Err(e) = renderer
             .runtime
-            .execute_script(
-                format!("verify_{}.js", component_id.cow_replace('/', "_")),
-                verification_script,
+            .broadcast_script(
+                &format!("verify_{}.js", component_id.cow_replace('/', "_")),
+                &checked_verification,
             )
             .await
         {
-            Ok(json) => json,
-            Err(e) => {
-                tracing::error!(
-                    component_id = component_id.as_str(),
-                    error = %e,
-                    "Failed to execute verification script. Last known good version will be preserved."
-                );
-                return Err(RariError::js_execution(format!(
-                    "Failed to verify component reload: {e}. Last known good version will be preserved."
-                )));
-            }
-        };
-
-        if let Some(success) = result_json.get("success").and_then(serde_json::Value::as_bool) {
-            if !success {
-                let actual_keys = result_json
-                    .get("actualKeys")
-                    .and_then(|v| v.as_array())
-                    .map(|arr| {
-                        arr.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>().join(", ")
-                    })
-                    .unwrap_or_else(|| "unknown".to_string());
-
-                let expected_key = result_json
-                    .get("expectedKey")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or(&component_id);
-
-                tracing::error!(
-                    component_id = component_id.as_str(),
-                    expected_key = expected_key,
-                    actual_keys = actual_keys,
-                    verification_result = ?result_json,
-                    "Component not found in globalThis after reload. Expected key '{}' not found. Available keys: [{}]. Last known good version will be preserved.",
-                    expected_key,
-                    actual_keys
-                );
-                return Err(RariError::js_runtime(format!(
-                    "Component '{component_id}' not found in globalThis after reload. Expected key '{expected_key}' but found keys: [{actual_keys}]. Last known good version will be preserved."
-                )));
-            }
-        } else {
             tracing::error!(
                 component_id = component_id.as_str(),
-                verification_result = ?result_json,
-                "Invalid verification result format. Last known good version will be preserved."
+                error = %e,
+                "Failed to execute verification script. Last known good version will be preserved."
             );
-            return Err(RariError::internal(
-                "Invalid verification result format. Last known good version will be preserved."
-            ));
+            return Err(RariError::js_execution(format!(
+                "Failed to verify component reload: {e}. Last known good version will be preserved."
+            )));
         }
 
         if is_esm {
