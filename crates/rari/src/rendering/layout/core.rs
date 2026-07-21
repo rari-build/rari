@@ -324,6 +324,17 @@ impl LayoutRenderer {
         route_match: &AppRouteMatch,
         context: &LayoutRenderContext,
     ) -> Result<bool, RariError> {
+        self.check_page_not_found_on(route_match, context, None).await
+    }
+
+    /// Prefer [`Self::check_page_not_found_on`] with a sticky runtime when the caller
+    /// already holds a pool slot lease — using the pool here would re-acquire it and deadlock.
+    pub async fn check_page_not_found_on(
+        &self,
+        route_match: &AppRouteMatch,
+        context: &LayoutRenderContext,
+        sticky_runtime: Option<&Arc<dyn JsRuntimeInterface>>,
+    ) -> Result<bool, RariError> {
         let page_props = utils::create_page_props(route_match, context)?;
         let page_props_json = serde_json::to_string(&page_props)?;
 
@@ -365,11 +376,14 @@ impl LayoutRenderer {
             "#
         );
 
-        let renderer = self.renderer.lock().await;
-        let runtime = Arc::clone(&renderer.runtime);
-        drop(renderer);
-
-        let result = runtime.execute_script("check_not_found".to_string(), check_script).await?;
+        let result = if let Some(runtime) = sticky_runtime {
+            runtime.execute_script("check_not_found".to_string(), check_script).await?
+        } else {
+            let renderer = self.renderer.lock().await;
+            let runtime = Arc::clone(&renderer.runtime);
+            drop(renderer);
+            runtime.execute_script("check_not_found".to_string(), check_script).await?
+        };
 
         let not_found =
             result.get("notFound").and_then(serde_json::Value::as_bool).unwrap_or(false);
