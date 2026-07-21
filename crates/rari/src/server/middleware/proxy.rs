@@ -62,15 +62,28 @@ fn append_header_map(headers: &mut HeaderMap, map: FxHashMap<String, JsonHeaderV
 }
 
 fn apply_response_headers(headers: &mut HeaderMap, map: FxHashMap<String, JsonHeaderValue>) {
-    for (key, value) in map {
+    let mut entries: Vec<(String, JsonHeaderValue)> = map.into_iter().collect();
+    entries.sort_by(|a, b| a.0.cmp(&b.0));
+
+    let mut grouped: FxHashMap<HeaderName, Vec<String>> = FxHashMap::default();
+    for (key, value) in entries {
         let Ok(header_name) = key.parse::<HeaderName>() else {
             continue;
         };
+        let values: Vec<String> = value.as_strs().into_iter().map(str::to_owned).collect();
+        if header_name == header::SET_COOKIE {
+            grouped.entry(header_name).or_default().extend(values);
+        } else {
+            grouped.insert(header_name, values);
+        }
+    }
+
+    for (header_name, values) in grouped {
         if header_name != header::SET_COOKIE {
             headers.remove(&header_name);
         }
-        for value_str in value.as_strs() {
-            let Ok(header_value) = value_str.parse::<HeaderValue>() else {
+        for value_str in values {
+            let Ok(header_value) = HeaderValue::from_str(&value_str) else {
                 continue;
             };
             headers.append(header_name.clone(), header_value);
@@ -422,5 +435,39 @@ mod tests {
         let set_cookies: Vec<_> =
             headers.get_all(header::SET_COOKIE).iter().map(|v| v.to_str().unwrap()).collect();
         assert_eq!(set_cookies, vec!["a=1", "b=2", "c=3"]);
+    }
+
+    #[test]
+    fn apply_response_headers_case_variants_last_win_deterministically() {
+        let mut headers = HeaderMap::new();
+        headers
+            .insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/html"));
+
+        let mut map = FxHashMap::default();
+        map.insert("Content-Type".to_string(), JsonHeaderValue::Single("text/plain".to_string()));
+        map.insert(
+            "content-type".to_string(),
+            JsonHeaderValue::Single("application/json".to_string()),
+        );
+
+        apply_response_headers(&mut headers, map);
+
+        let content_types: Vec<_> =
+            headers.get_all("content-type").iter().map(|v| v.to_str().unwrap()).collect();
+        assert_eq!(content_types, vec!["application/json"]);
+    }
+
+    #[test]
+    fn apply_response_headers_set_cookie_case_variants_concatenate_in_key_order() {
+        let mut headers = HeaderMap::new();
+        let mut map = FxHashMap::default();
+        map.insert("Set-Cookie".to_string(), JsonHeaderValue::Single("a=1".to_string()));
+        map.insert("set-cookie".to_string(), JsonHeaderValue::Single("b=2".to_string()));
+
+        apply_response_headers(&mut headers, map);
+
+        let set_cookies: Vec<_> =
+            headers.get_all(header::SET_COOKIE).iter().map(|v| v.to_str().unwrap()).collect();
+        assert_eq!(set_cookies, vec!["a=1", "b=2"]);
     }
 }
