@@ -423,25 +423,27 @@ impl LayoutRenderer {
         )?;
 
         let renderer = Arc::clone(&self.renderer);
-        run_with_renderer_result(renderer, move |renderer| async move {
-            renderer.ensure_rsc_pipeline().await?;
-            if let Some(ctx) = request_context {
-                let runtime = Arc::clone(&renderer.runtime);
-                runtime
-                    .with_request_context(ctx, move |rt| async move {
-                        Self::execute_composition_and_serialize_on(
-                            &renderer,
-                            Some(rt),
-                            composition_script,
-                        )
+        let runtime = {
+            run_with_renderer_result(Arc::clone(&renderer), move |renderer| async move {
+                renderer.ensure_rsc_pipeline().await?;
+                Ok(Arc::clone(&renderer.runtime))
+            })
+            .await?
+        };
+
+        if let Some(ctx) = request_context {
+            runtime
+                .with_request_context(ctx, move |rt| async move {
+                    Self::execute_composition_and_serialize_on(None, Some(rt), composition_script)
                         .await
-                    })
-                    .await
-            } else {
+                })
+                .await
+        } else {
+            run_with_renderer_result(renderer, move |renderer| async move {
                 Self::execute_composition_and_serialize(&renderer, composition_script).await
-            }
-        })
-        .await
+            })
+            .await
+        }
     }
 
     pub async fn render_route_by_mode(
@@ -480,23 +482,25 @@ impl LayoutRenderer {
         )?;
 
         let set_search_script = format!(
-            "globalThis['~rari'] = globalThis['~rari'] || {{}}; globalThis['~rari'].actionRefreshSearch = {};",
+            "globalThis['~rari'] = globalThis['~rari'] || {{}}; globalThis['~rari'].isActionRefreshCompose = true; globalThis['~rari'].actionRefreshSearch = {};",
             serde_json::to_string(&action_refresh_search)
                 .map_err(|e| RariError::serialization(e.to_string()))?
         );
 
-        let renderer = Arc::clone(&self.renderer);
-        run_with_renderer_result(renderer, move |renderer| async move {
-            renderer.ensure_rsc_pipeline().await?;
-            let runtime = Arc::clone(&renderer.runtime);
-            runtime
-                .with_request_context(request_context, move |rt| async move {
-                    Self::run_action_refresh_scripts(&rt, set_search_script, composition_script)
-                        .await
-                })
-                .await
-        })
-        .await
+        let runtime = {
+            let renderer = Arc::clone(&self.renderer);
+            run_with_renderer_result(renderer, move |renderer| async move {
+                renderer.ensure_rsc_pipeline().await?;
+                Ok(Arc::clone(&renderer.runtime))
+            })
+            .await?
+        };
+
+        runtime
+            .with_request_context(request_context, move |rt| async move {
+                Self::run_action_refresh_scripts(&rt, set_search_script, composition_script).await
+            })
+            .await
     }
 
     pub async fn compose_route_for_action_refresh_on(
@@ -526,18 +530,12 @@ impl LayoutRenderer {
         )?;
 
         let set_search_script = format!(
-            "globalThis['~rari'] = globalThis['~rari'] || {{}}; globalThis['~rari'].actionRefreshSearch = {};",
+            "globalThis['~rari'] = globalThis['~rari'] || {{}}; globalThis['~rari'].isActionRefreshCompose = true; globalThis['~rari'].actionRefreshSearch = {};",
             serde_json::to_string(&action_refresh_search)
                 .map_err(|e| RariError::serialization(e.to_string()))?
         );
 
-        let renderer = Arc::clone(&self.renderer);
-        let runtime = Arc::clone(runtime);
-        run_with_renderer_result(renderer, move |renderer| async move {
-            renderer.ensure_rsc_pipeline().await?;
-            Self::run_action_refresh_scripts(&runtime, set_search_script, composition_script).await
-        })
-        .await
+        Self::run_action_refresh_scripts(runtime, set_search_script, composition_script).await
     }
 
     async fn run_action_refresh_scripts(
@@ -588,18 +586,18 @@ impl LayoutRenderer {
 
         if return_rsc_on_fallback {
             if needs_streaming {
-                let composition_script = Self::build_composition_script(
+                let (chunk_sender, chunk_receiver) =
+                    mpsc::channel::<Result<Vec<u8>, RariError>>(128);
+
+                let stream_id = Uuid::new_v4().to_string();
+                let composition_script = Self::build_composition_script_with_stream(
                     route_match,
                     context,
                     loading_component_id.as_deref(),
                     true,
                     true,
+                    Some(&stream_id),
                 )?;
-
-                let (chunk_sender, chunk_receiver) =
-                    mpsc::channel::<Result<Vec<u8>, RariError>>(128);
-
-                let stream_id = Uuid::new_v4().to_string();
 
                 let script = format!(
                     r"(async function() {{
@@ -609,7 +607,12 @@ impl LayoutRenderer {
                             console.error('[rari] Composition error in RSC streaming nav:', e);
                         }}
 
-                        const capturedElement = globalThis['~rari']?.capturedElement;
+                        const byStream = globalThis['~rari']?.capturedByStream;
+                        const capturedElement = (byStream && __RARI_STREAM_ID__ in byStream)
+                            ? byStream[__RARI_STREAM_ID__]
+                            : globalThis['~rari']?.capturedElement;
+                        if (byStream && __RARI_STREAM_ID__ in byStream)
+                            delete byStream[__RARI_STREAM_ID__];
                         if (!capturedElement) {{
                             return;
                         }}
@@ -679,50 +682,53 @@ impl LayoutRenderer {
                 false,
             )?;
 
-            let rsc_payload =
-                run_with_renderer_result(Arc::clone(&self.renderer), move |renderer| async move {
-                    renderer.ensure_rsc_pipeline().await?;
-                    if let Some(ctx) = request_context {
-                        let runtime = Arc::clone(&renderer.runtime);
-                        runtime
-                            .with_request_context(ctx, move |rt| async move {
-                                let result = Self::run_composition_on(
-                                    &renderer,
-                                    Some(Arc::clone(&rt)),
-                                    composition_script,
-                                )
-                                .await?;
+            let rsc_payload = {
+                let runtime = {
+                    run_with_renderer_result(
+                        Arc::clone(&self.renderer),
+                        move |renderer| async move {
+                            renderer.ensure_rsc_pipeline().await?;
+                            Ok(Arc::clone(&renderer.runtime))
+                        },
+                    )
+                    .await?
+                };
 
-                                if let Some(bytes) =
-                                    Self::capture_last_rsc_binary_on(Some(rt)).await?
-                                    && !bytes.is_empty()
-                                {
-                                    return Ok(RscNavPayload::Binary(bytes));
-                                }
+                if let Some(ctx) = request_context {
+                    runtime
+                        .with_request_context(ctx, move |rt| async move {
+                            let result = Self::run_composition_on(
+                                None,
+                                Some(Arc::clone(&rt)),
+                                composition_script,
+                            )
+                            .await?;
 
-                                Ok(RscNavPayload::Text(Self::extract_flight_text(&result)?))
-                            })
-                            .await
+                            if let Some(bytes) = Self::capture_last_rsc_binary_on(Some(rt)).await?
+                                && !bytes.is_empty()
+                            {
+                                return Ok(RscNavPayload::Binary(bytes));
+                            }
+
+                            Ok(RscNavPayload::Text(Self::extract_flight_text(&result)?))
+                        })
+                        .await?
+                } else {
+                    let handle = runtime.pick_runtime().await?;
+                    let rt = Arc::clone(handle.runtime());
+                    let result =
+                        Self::run_composition_on(None, Some(Arc::clone(&rt)), composition_script)
+                            .await?;
+
+                    if let Some(bytes) = Self::capture_last_rsc_binary_on(Some(rt)).await?
+                        && !bytes.is_empty()
+                    {
+                        RscNavPayload::Binary(bytes)
                     } else {
-                        let handle = renderer.runtime.pick_runtime().await?;
-                        let rt = Arc::clone(handle.runtime());
-                        let result = Self::run_composition_on(
-                            &renderer,
-                            Some(Arc::clone(&rt)),
-                            composition_script,
-                        )
-                        .await?;
-
-                        if let Some(bytes) = Self::capture_last_rsc_binary_on(Some(rt)).await?
-                            && !bytes.is_empty()
-                        {
-                            return Ok(RscNavPayload::Binary(bytes));
-                        }
-
-                        Ok(RscNavPayload::Text(Self::extract_flight_text(&result)?))
+                        RscNavPayload::Text(Self::extract_flight_text(&result)?)
                     }
-                })
-                .await?;
+                }
+            };
 
             match rsc_payload {
                 RscNavPayload::Binary(bytes) => Ok(RenderResult::StaticBinary(bytes)),
@@ -757,12 +763,13 @@ impl LayoutRenderer {
                     }
                 }
 
-                let composition_script = match Self::build_composition_script(
+                let composition_script = match Self::build_composition_script_with_stream(
                     &route_match,
                     &context,
                     loading_component_id.as_deref(),
                     true,
                     true,
+                    Some(&stream_id),
                 ) {
                     Ok(script) => script,
                     Err(e) => {
@@ -818,7 +825,12 @@ impl LayoutRenderer {
                             console.error('[rari] Composition error in streaming:', e);
                         }}
 
-                        const capturedElement = globalThis['~rari']?.capturedElement;
+                        const byStream = globalThis['~rari']?.capturedByStream;
+                        const capturedElement = (byStream && __RARI_STREAM_ID__ in byStream)
+                            ? byStream[__RARI_STREAM_ID__]
+                            : globalThis['~rari']?.capturedElement;
+                        if (byStream && __RARI_STREAM_ID__ in byStream)
+                            delete byStream[__RARI_STREAM_ID__];
                         if (!capturedElement) {{
                             Deno.core.ops.op_fizz_done(__RARI_STREAM_ID__);
                             return;
@@ -912,29 +924,34 @@ impl LayoutRenderer {
                 let config = config.clone();
                 let request_context = request_context.clone();
 
-                run_with_renderer_result(Arc::clone(&self.renderer), move |renderer| async move {
-                    renderer.ensure_streaming_pipeline().await?;
+                let prepared = {
+                    let composition_script = composition_script.clone();
+                    run_with_renderer_result(Arc::clone(&self.renderer), move |renderer| async move {
+                        renderer.ensure_streaming_pipeline().await?;
 
-                    let html_renderer = Arc::new(RscHtmlRenderer::new(Arc::clone(&renderer.runtime)));
-                    let css_links = RscHtmlRenderer::css_links_for_route(&route_match);
-                    let cache_template = config.rsc_html.cache_template;
-                    let is_dev_mode = config.is_development();
-                    let template = html_renderer.load_template(cache_template, is_dev_mode).await?;
-                    let template = RscHtmlRenderer::inject_css_links(&template, &css_links);
+                        let runtime = Arc::clone(&renderer.runtime);
+                        let html_renderer =
+                            Arc::new(RscHtmlRenderer::new(Arc::clone(&renderer.runtime)));
+                        let css_links = RscHtmlRenderer::css_links_for_route(&route_match);
+                        let cache_template = config.rsc_html.cache_template;
+                        let is_dev_mode = config.is_development();
+                        let template =
+                            html_renderer.load_template(cache_template, is_dev_mode).await?;
+                        let template = RscHtmlRenderer::inject_css_links(&template, &css_links);
 
-                    let head_content = template
-                        .find("<head>")
-                        .and_then(|start| {
-                            template.find("</head>").map(|end| &template[start + 6..end])
-                        })
-                        .unwrap_or("")
-                        .to_string();
+                        let head_content = template
+                            .find("<head>")
+                            .and_then(|start| {
+                                template.find("</head>").map(|end| &template[start + 6..end])
+                            })
+                            .unwrap_or("")
+                            .to_string();
 
-                    let head_content_json =
-                        serde_json::to_string(&head_content).unwrap_or_else(|_| "\"\"".to_string());
+                        let head_content_json = serde_json::to_string(&head_content)
+                            .unwrap_or_else(|_| "\"\"".to_string());
 
-                    let script = format!(
-                        r"(async function() {{
+                        let script = format!(
+                            r"(async function() {{
                         let caughtErrors = [];
                         try {{
                             try {{ await ({composition_script}); }} catch(e) {{
@@ -974,83 +991,88 @@ impl LayoutRenderer {
                             return {{ ok: false, error: String(e?.message || e) }};
                         }}
                     }})()",
-                    );
+                        );
 
-                    let render_static = {
+                        Ok((
+                            runtime,
+                            html_renderer,
+                            css_links,
+                            script,
+                            cache_template,
+                            is_dev_mode,
+                        ))
+                    })
+                    .await?
+                };
+
+                let (runtime, html_renderer, css_links, script, cache_template, is_dev_mode) =
+                    prepared;
+
+                let render_static = {
+                    let script = script.clone();
+                    let html_renderer = Arc::clone(&html_renderer);
+                    let css_links = css_links.clone();
+                    move |rt: Arc<dyn JsRuntimeInterface>| {
                         let script = script.clone();
                         let html_renderer = Arc::clone(&html_renderer);
                         let css_links = css_links.clone();
-                        move |rt: Arc<dyn JsRuntimeInterface>| {
-                            let script = script.clone();
-                            let html_renderer = Arc::clone(&html_renderer);
-                            let css_links = css_links.clone();
-                            async move {
-                                let result = rt
-                                    .execute_script("static_document_render".to_string(), script)
-                                    .await?;
+                        async move {
+                            let result = rt
+                                .execute_script("static_document_render".to_string(), script)
+                                .await?;
 
-                                let ok = result.get("ok").and_then(Value::as_bool).unwrap_or(false);
-                                if !ok {
-                                    let err = result
-                                        .get("error")
-                                        .and_then(|v| v.as_str())
-                                        .unwrap_or("unknown");
-                                    return Err(RariError::internal(format!(
-                                        "Static document render failed: {err}"
-                                    )));
-                                }
-
-                                let html = result
-                                    .get("html")
+                            let ok = result.get("ok").and_then(Value::as_bool).unwrap_or(false);
+                            if !ok {
+                                let err = result
+                                    .get("error")
                                     .and_then(|v| v.as_str())
-                                    .unwrap_or_default()
-                                    .to_string();
-
-                                let assembled = html_renderer
-                                    .assemble_document(
-                                        html,
-                                        cache_template,
-                                        is_dev_mode,
-                                        &css_links,
-                                    )
-                                    .await?;
-
-                                let is_dynamic = result
-                                    .get("isDynamic")
-                                    .and_then(Value::as_bool)
-                                    .unwrap_or(false);
-
-                                let page_cache_tags = if is_dynamic {
-                                    Vec::new()
-                                } else {
-                                    result
-                                        .get("pageCacheTags")
-                                        .and_then(|v| {
-                                            v.as_array().map(|arr| {
-                                                arr.iter()
-                                                    .filter_map(|item| {
-                                                        item.as_str().map(str::to_string)
-                                                    })
-                                                    .collect::<Vec<_>>()
-                                            })
-                                        })
-                                        .unwrap_or_default()
-                                };
-
-                                Ok((assembled, is_dynamic, page_cache_tags))
+                                    .unwrap_or("unknown");
+                                return Err(RariError::internal(format!(
+                                    "Static document render failed: {err}"
+                                )));
                             }
-                        }
-                    };
 
-                    if let Some(ctx) = request_context {
-                        let runtime = Arc::clone(&renderer.runtime);
-                        runtime.with_request_context(ctx, render_static).await
-                    } else {
-                        let handle = renderer.runtime.pick_runtime().await?;
-                        render_static(Arc::clone(handle.runtime())).await
+                            let html = result
+                                .get("html")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or_default()
+                                .to_string();
+
+                            let assembled = html_renderer
+                                .assemble_document(html, cache_template, is_dev_mode, &css_links)
+                                .await?;
+
+                            let is_dynamic =
+                                result.get("isDynamic").and_then(Value::as_bool).unwrap_or(false);
+
+                            let page_cache_tags = if is_dynamic {
+                                Vec::new()
+                            } else {
+                                result
+                                    .get("pageCacheTags")
+                                    .and_then(|v| {
+                                        v.as_array().map(|arr| {
+                                            arr.iter()
+                                                .filter_map(|item| {
+                                                    item.as_str().map(str::to_string)
+                                                })
+                                                .collect::<Vec<_>>()
+                                        })
+                                    })
+                                    .unwrap_or_default()
+                            };
+
+                            Ok((assembled, is_dynamic, page_cache_tags))
+                        }
                     }
-                })
-                .await?
+                };
+
+                if let Some(ctx) = request_context {
+                    runtime.with_request_context(ctx, render_static).await?
+                } else {
+                    let handle = runtime.pick_runtime().await?;
+                    render_static(Arc::clone(handle.runtime())).await?
+                }
             };
 
             let (html, is_dynamic_render, page_cache_tags) = html;
@@ -1075,11 +1097,11 @@ impl LayoutRenderer {
         renderer: &RscRenderer,
         composition_script: String,
     ) -> Result<String, RariError> {
-        Self::execute_composition_and_serialize_on(renderer, None, composition_script).await
+        Self::execute_composition_and_serialize_on(Some(renderer), None, composition_script).await
     }
 
     async fn execute_composition_and_serialize_on(
-        renderer: &RscRenderer,
+        renderer: Option<&RscRenderer>,
         runtime: Option<Arc<dyn JsRuntimeInterface>>,
         composition_script: String,
     ) -> Result<String, RariError> {
@@ -1088,13 +1110,16 @@ impl LayoutRenderer {
     }
 
     async fn run_composition_on(
-        renderer: &RscRenderer,
+        renderer: Option<&RscRenderer>,
         runtime: Option<Arc<dyn JsRuntimeInterface>>,
         composition_script: String,
     ) -> Result<Value, RariError> {
         let rt = if let Some(rt) = runtime {
             rt
         } else {
+            let renderer = renderer.ok_or_else(|| {
+                RariError::internal("run_composition_on requires renderer or runtime")
+            })?;
             renderer.ensure_rsc_pipeline().await?;
             let handle = renderer.runtime.pick_runtime().await?;
             Arc::clone(handle.runtime())
@@ -1152,6 +1177,25 @@ impl LayoutRenderer {
         loading_component_id: Option<&str>,
         use_suspense: bool,
         defer_rsc: bool,
+    ) -> Result<String, RariError> {
+        Self::build_composition_script_with_stream(
+            route_match,
+            context,
+            loading_component_id,
+            use_suspense,
+            defer_rsc,
+            None,
+        )
+    }
+
+    #[expect(clippy::too_many_lines)]
+    pub fn build_composition_script_with_stream(
+        route_match: &AppRouteMatch,
+        context: &LayoutRenderContext,
+        loading_component_id: Option<&str>,
+        use_suspense: bool,
+        defer_rsc: bool,
+        capture_stream_id: Option<&str>,
     ) -> Result<String, RariError> {
         let page_props = utils::create_page_props(route_match, context).map_err(|e| {
             tracing::error!(
@@ -1305,6 +1349,7 @@ impl LayoutRenderer {
             &metadata_json,
             defer_rsc,
             &action_post_url_json,
+            capture_stream_id,
         );
 
         Ok(script)

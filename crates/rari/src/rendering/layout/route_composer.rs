@@ -54,6 +54,7 @@ impl RouteComposer {
             metadata_json,
             false,
             pathname_json,
+            None,
         )
     }
 
@@ -71,6 +72,7 @@ impl RouteComposer {
         metadata_json: &str,
         defer_rsc: bool,
         action_post_url_json: &str,
+        capture_stream_id: Option<&str>,
     ) -> String {
         let mut script = format!(
             r"
@@ -128,6 +130,7 @@ impl RouteComposer {
             error_boundary,
             metadata_json,
             defer_rsc,
+            capture_stream_id,
         ));
 
         script
@@ -190,6 +193,7 @@ impl RouteComposer {
         error_boundary: Option<&ErrorBoundaryInfo>,
         metadata_json: &str,
         defer_rsc: bool,
+        capture_stream_id: Option<&str>,
     ) -> String {
         let wrap_with_error_boundary = error_boundary.is_some();
         let error_component_id_json = error_boundary
@@ -197,15 +201,34 @@ impl RouteComposer {
             .unwrap_or_else(|| "\"\"".to_string());
 
         let rsc_render = if defer_rsc {
-            r"
-                if (!globalThis['~rari']) globalThis['~rari'] = {};
-                globalThis['~rari'].capturedElement = elementToRender;
+            if let Some(stream_id) = capture_stream_id {
+                let stream_id_json =
+                    serde_json::to_string(stream_id).unwrap_or_else(|_| "\"\"".to_string());
+                format!(
+                    r"
+                if (!globalThis['~rari']) globalThis['~rari'] = {{}};
+                if (!globalThis['~rari'].capturedByStream) globalThis['~rari'].capturedByStream = Object.create(null);
+                globalThis['~rari'].capturedByStream[{stream_id_json}] = elementToRender;
                 return;
             "
+                )
+            } else {
+                r"
+                if (!globalThis['~rari']) globalThis['~rari'] = {};
+                if (globalThis['~rari'].isActionRefreshCompose) {
+                    globalThis['~rari'].actionRefreshElement = elementToRender;
+                } else {
+                    globalThis['~rari'].capturedElement = elementToRender;
+                }
+                return;
+            "
+                .to_string()
+            }
         } else {
             r"
                 let rscData = await globalThis.renderToRsc(elementToRender);
             "
+            .to_string()
         };
 
         format!(
@@ -371,7 +394,8 @@ mod tests {
 
     #[test]
     fn test_generate_rsc_conversion() {
-        let conversion = RouteComposer::generate_rsc_conversion("finalElement", None, "{}", false);
+        let conversion =
+            RouteComposer::generate_rsc_conversion("finalElement", None, "{}", false, None);
 
         assert!(conversion.contains("elementToRender = finalElement"));
         assert!(conversion.contains("renderToRsc(elementToRender"));
@@ -392,6 +416,7 @@ mod tests {
             Some(&error_boundary),
             "{}",
             false,
+            None,
         );
 
         assert!(conversion.contains("virtual:error-boundary-wrapper.tsx#ErrorBoundaryWrapper"));
@@ -404,15 +429,21 @@ mod tests {
     #[test]
     fn test_generate_rsc_conversion_with_metadata() {
         let metadata_json = r#"{"title":"Test Page","description":"A test"}"#;
-        let conversion =
-            RouteComposer::generate_rsc_conversion("finalElement", None, metadata_json, false);
+        let conversion = RouteComposer::generate_rsc_conversion(
+            "finalElement",
+            None,
+            metadata_json,
+            false,
+            None,
+        );
 
         assert!(conversion.contains(r#"metadata: {"title":"Test Page","description":"A test"}"#));
     }
 
     #[test]
     fn test_generate_rsc_conversion_deferred() {
-        let conversion = RouteComposer::generate_rsc_conversion("finalElement", None, "{}", true);
+        let conversion =
+            RouteComposer::generate_rsc_conversion("finalElement", None, "{}", true, None);
 
         assert!(conversion.contains("capturedElement = elementToRender"));
         assert!(!conversion.contains("renderToRsc(elementToRender"));
@@ -446,6 +477,7 @@ mod tests {
             "{}",
             false,
             "\"/\"",
+            None,
         );
         assert_eq!(empty_tpl, no_tpl);
     }
@@ -462,6 +494,7 @@ mod tests {
             "{}",
             false,
             "\"/about\"",
+            None,
         );
 
         assert!(script.contains("TemplateComponent0"));
@@ -490,6 +523,7 @@ mod tests {
             "{}",
             false,
             "\"/blog/hello\"",
+            None,
         );
 
         let page_idx = script.find("pageElement").expect("pageElement present");
@@ -512,6 +546,7 @@ mod tests {
             "{}",
             false,
             "\"/about\"",
+            None,
         );
 
         assert!(script.contains("TemplateComponent0"));

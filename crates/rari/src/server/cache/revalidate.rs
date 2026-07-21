@@ -9,6 +9,7 @@ use tokio::sync::Mutex;
 
 use crate::{
     rendering::base::RscRenderer,
+    runtime::factory::JsRuntimeInterface,
     server::{ServerState, cache::response},
 };
 
@@ -41,6 +42,24 @@ pub(crate) async fn invalidate_use_cache_entries(
     tag: Option<&str>,
     path: Option<&str>,
 ) -> Result<(), RariError> {
+    let script = use_cache_invalidate_script(tag, path);
+    let runtime = {
+        let renderer = renderer.lock().await;
+        Arc::clone(&renderer.runtime)
+    };
+    runtime.broadcast_script("use_cache_invalidate", &script).await
+}
+
+pub(crate) async fn invalidate_use_cache_entries_on(
+    sticky_runtime: &Arc<dyn JsRuntimeInterface>,
+    tag: Option<&str>,
+    path: Option<&str>,
+) -> Result<(), RariError> {
+    let script = use_cache_invalidate_script(tag, path);
+    sticky_runtime.execute_script("use_cache_invalidate".to_string(), script).await.map(|_| ())
+}
+
+fn use_cache_invalidate_script(tag: Option<&str>, path: Option<&str>) -> String {
     let tag_literal = tag
         .and_then(|value| serde_json::to_string(value).ok())
         .unwrap_or_else(|| "undefined".to_string());
@@ -48,7 +67,7 @@ pub(crate) async fn invalidate_use_cache_entries(
         .and_then(|value| serde_json::to_string(value).ok())
         .unwrap_or_else(|| "undefined".to_string());
 
-    let script = format!(
+    format!(
         "(async () => {{
             const invalidateDirect = globalThis.__rariInvalidateUseCache;
             const invalidateBridge = globalThis['~rari']?.invalidateUseCache;
@@ -63,26 +82,42 @@ pub(crate) async fn invalidate_use_cache_entries(
                 await invalidateBridge({{ tag: {tag_literal}, path: {path_literal} }});
             }}
         }})()"
-    );
-
-    let runtime = {
-        let renderer = renderer.lock().await;
-        Arc::clone(&renderer.runtime)
-    };
-
-    runtime.broadcast_script("use_cache_invalidate", &script).await
+    )
 }
 
 pub(crate) async fn invalidate_route_caches(
     state: &ServerState,
     path: &str,
 ) -> Result<(), RariError> {
+    invalidate_route_caches_inner(state, path, None).await
+}
+
+/// Like [`invalidate_route_caches`], but runs use-cache invalidation on `sticky_runtime`
+/// instead of broadcasting (avoids re-entering a held pool slot lease).
+pub(crate) async fn invalidate_route_caches_on(
+    state: &ServerState,
+    path: &str,
+    sticky_runtime: &Arc<dyn JsRuntimeInterface>,
+) -> Result<(), RariError> {
+    invalidate_route_caches_inner(state, path, Some(sticky_runtime)).await
+}
+
+async fn invalidate_route_caches_inner(
+    state: &ServerState,
+    path: &str,
+    sticky_runtime: Option<&Arc<dyn JsRuntimeInterface>>,
+) -> Result<(), RariError> {
     state.response_cache.invalidate(path).await;
     state.response_cache.invalidate_by_tag(path).await;
     response::invalidate_static_fast_cache_for_path(&state.static_fast_cache, path);
     state.html_cache.remove(path);
 
-    if let Err(e) = invalidate_use_cache_entries(&state.renderer, None, Some(path)).await {
+    let use_cache_result = if let Some(runtime) = sticky_runtime {
+        invalidate_use_cache_entries_on(runtime, None, Some(path)).await
+    } else {
+        invalidate_use_cache_entries(&state.renderer, None, Some(path)).await
+    };
+    if let Err(e) = use_cache_result {
         tracing::warn!(error = %e, path = %path, "use cache invalidate failed during route cache invalidation");
         return Err(e);
     }

@@ -100,8 +100,11 @@ declare global {
       lastRscBinary?: Uint8Array
       actionPostUrl?: string
       actionRefreshSearch?: string
+      isActionRefreshCompose?: boolean
+      actionRefreshElement?: unknown
       actionFormState?: unknown
       capturedElement?: unknown
+      capturedByStream?: Record<string, unknown>
       pendingActionResult?: unknown
       exportOwners?: Record<string, string>
       metadataCollector?: {
@@ -118,8 +121,8 @@ declare global {
       markUseCacheDynamic?: () => void
       invalidateUseCache?: (input: { tag?: string, path?: string }) => Promise<void>
       requestStorage?: {
-        run: <T>(store: { requestId: string, streamId?: string }, fn: () => T) => T
-        getStore: () => { requestId?: string, streamId?: string } | undefined
+        run: <T>(store: { requestId: string, streamId?: string, capturedElement?: unknown }, fn: () => T) => T
+        getStore: () => { requestId?: string, streamId?: string, capturedElement?: unknown } | undefined
       }
       currentRequestId?: () => string
       renderStreamingDocument?: (options: {
