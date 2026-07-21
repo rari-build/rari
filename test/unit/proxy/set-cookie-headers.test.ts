@@ -78,4 +78,18 @@ describe('proxy response Set-Cookie serialization', () => {
     expect(requestHeaders).toEqual({ 'x-custom': '1' })
     expect(responseHeaders?.['set-cookie']).toEqual(['a=1', 'b=2'])
   })
+
+  it('falls back to forEach when getSetCookie is unavailable', () => {
+    const setCookieValues = ['a=1', 'b=2']
+    const headers = {
+      forEach(callback: (value: string, key: string) => void) {
+        callback('application/json', 'content-type')
+        for (const value of setCookieValues)
+          callback(value, 'set-cookie')
+      },
+    }
+
+    const collected = collectAllHeaders(headers)
+    expect(collected['set-cookie']).toEqual(setCookieValues)
+  })
 })
