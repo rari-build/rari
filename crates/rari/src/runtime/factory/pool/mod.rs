@@ -27,11 +27,13 @@ use super::runtime::RariRuntime;
 mod broadcast;
 mod handle;
 mod interface;
+mod lease;
 mod strategy;
 #[cfg(test)]
 mod tests;
 
 pub use handle::PooledRuntime;
+pub use lease::LeasedRequestRuntime;
 pub use strategy::{PickStrategy, RoundRobinStrategy};
 
 use super::interface::JsRuntimeInterface;
@@ -78,6 +80,9 @@ pub struct JsRuntimePool {
     healthy: Vec<AtomicBool>,
     /// Unix millis when the slot was marked unhealthy; `0` if healthy / unknown.
     unhealthy_since_ms: Vec<AtomicU64>,
+    /// True after an immediate zero-healthy heal attempt until the slot recovers
+    /// or is freshly marked unhealthy. Prevents heal storms while quarantine runs.
+    heal_attempted: Vec<AtomicBool>,
     /// Per-slot lease so `with_request_context` cannot interleave on one runtime.
     slot_leases: Vec<Arc<AsyncMutex<()>>>,
     /// Soft in-flight stream counts for least-busy streaming admission.
@@ -163,6 +168,7 @@ impl JsRuntimePool {
 
         let healthy = runtimes.iter().map(|_| AtomicBool::new(true)).collect();
         let unhealthy_since_ms = runtimes.iter().map(|_| AtomicU64::new(0)).collect();
+        let heal_attempted = runtimes.iter().map(|_| AtomicBool::new(false)).collect();
         let slot_leases = (0..pool_size).map(|_| Arc::new(AsyncMutex::new(()))).collect();
         let stream_load = (0..pool_size).map(|_| Arc::new(AtomicUsize::new(0))).collect();
         let needs_rebuild = (0..pool_size).map(|_| AtomicBool::new(false)).collect();
@@ -174,6 +180,7 @@ impl JsRuntimePool {
             next_index: AtomicUsize::new(0),
             healthy,
             unhealthy_since_ms,
+            heal_attempted,
             slot_leases,
             stream_load,
             needs_rebuild,
@@ -250,13 +257,18 @@ impl JsRuntimePool {
         if since == 0 {
             return false;
         }
-        // Never leave the pool with zero healthy slots waiting on the heal delay —
-        // especially critical for pool size 1.
-        if self.healthy_count() == 0 {
+        let now = unix_now_ms();
+        let quarantine_elapsed = now.saturating_sub(since) >= self.heal_after_ms;
+        if quarantine_elapsed {
             return true;
         }
-        let now = unix_now_ms();
-        now.saturating_sub(since) >= self.heal_after_ms
+        // Never leave the pool with zero healthy slots waiting on the heal delay —
+        // allow one immediate attempt per outage, then enforce quarantine.
+        if self.healthy_count() == 0 {
+            let attempted = self.heal_attempted.get(idx).is_some_and(|f| f.load(Ordering::Acquire));
+            return !attempted;
+        }
+        false
     }
 
     fn slot_admissible_for_execute(
@@ -434,6 +446,9 @@ impl JsRuntimePool {
             if let Some(since) = self.unhealthy_since_ms.get(idx) {
                 since.store(unix_now_ms(), Ordering::Release);
             }
+            if let Some(attempted) = self.heal_attempted.get(idx) {
+                attempted.store(false, Ordering::Release);
+            }
             tracing::warn!("Marked JS runtime pool slot {} as unhealthy", idx);
         }
     }
@@ -443,6 +458,9 @@ impl JsRuntimePool {
             h.store(true, Ordering::Release);
             if let Some(since) = self.unhealthy_since_ms.get(idx) {
                 since.store(0, Ordering::Release);
+            }
+            if let Some(attempted) = self.heal_attempted.get(idx) {
+                attempted.store(false, Ordering::Release);
             }
             tracing::info!("Marked JS runtime pool slot {} as healthy", idx);
         }
@@ -476,6 +494,10 @@ impl JsRuntimePool {
                 return;
             }
 
+            if let Some(attempted) = self.heal_attempted.get(idx) {
+                attempted.store(true, Ordering::Release);
+            }
+
             let force_rebuild = self.needs_rebuild(idx);
             if !force_rebuild {
                 let Some(runtime) = self.runtime_at(idx) else {
@@ -504,13 +526,26 @@ impl JsRuntimePool {
             {
                 let hook = self.post_rebuild_hook.read().clone();
                 let resync_ok = if let Some(hook) = hook {
-                    match hook(idx, Arc::clone(&replacement)).await {
-                        Ok(()) => true,
-                        Err(e) => {
+                    match time::timeout(
+                        Duration::from_millis(self.timeout_ms),
+                        hook(idx, Arc::clone(&replacement)),
+                    )
+                    .await
+                    {
+                        Ok(Ok(())) => true,
+                        Ok(Err(e)) => {
                             tracing::error!(
                                 idx,
                                 error = %e,
                                 "Post-rebuild resync failed; keeping slot unhealthy"
+                            );
+                            false
+                        }
+                        Err(_) => {
+                            tracing::error!(
+                                idx,
+                                timeout_ms = self.timeout_ms,
+                                "Post-rebuild resync timed out; keeping slot unhealthy"
                             );
                             false
                         }

@@ -9,30 +9,31 @@ static DEFAULT_HTML_LIMITED_BOTS: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(HTML_LIMITED_BOT_UA_RE).expect("default htmlLimitedBots regex is valid")
 });
 
+/// Compile an `htmlLimitedBots` override pattern.
+///
+/// # Errors
+///
+/// Returns the underlying [`regex::Error`] when `pattern` is not a valid regex.
+pub fn compile_html_limited_bots_pattern(pattern: &str) -> Result<Regex, regex::Error> {
+    Regex::new(pattern)
+}
+
 /// Validate an `htmlLimitedBots` override pattern. Returns `Ok` when it compiles.
 ///
 /// # Errors
 ///
 /// Returns the underlying [`regex::Error`] when `pattern` is not a valid regex.
 pub fn validate_html_limited_bots_pattern(pattern: &str) -> Result<(), regex::Error> {
-    Regex::new(pattern).map(|_| ())
+    compile_html_limited_bots_pattern(pattern).map(|_| ())
 }
 
-pub fn is_html_limited_bot(user_agent: Option<&str>, override_pattern: Option<&str>) -> bool {
+pub fn is_html_limited_bot(user_agent: Option<&str>, override_regex: Option<&Regex>) -> bool {
     let Some(ua) = user_agent.map(str::trim).filter(|s| !s.is_empty()) else {
         return false;
     };
 
-    match override_pattern {
-        Some(pattern) => match Regex::new(pattern) {
-            Ok(re) => re.is_match(ua),
-            Err(err) => {
-                tracing::warn!(
-                    "Invalid htmlLimitedBots regex {pattern:?}: {err}. Falling back to default list."
-                );
-                DEFAULT_HTML_LIMITED_BOTS.is_match(ua)
-            }
-        },
+    match override_regex {
+        Some(re) => re.is_match(ua),
         None => DEFAULT_HTML_LIMITED_BOTS.is_match(ua),
     }
 }
@@ -74,13 +75,14 @@ mod tests {
 
     #[test]
     fn override_replaces_default_list() {
-        assert!(!is_html_limited_bot(Some("Twitterbot/1.0"), Some(r"OnlyMyBot")));
-        assert!(is_html_limited_bot(Some("OnlyMyBot/2.0"), Some(r"OnlyMyBot")));
+        #[expect(clippy::expect_used, reason = "test fixture with known-valid pattern")]
+        let only_mine = compile_html_limited_bots_pattern(r"OnlyMyBot").expect("valid");
+        assert!(!is_html_limited_bot(Some("Twitterbot/1.0"), Some(&only_mine)));
+        assert!(is_html_limited_bot(Some("OnlyMyBot/2.0"), Some(&only_mine)));
     }
 
     #[test]
-    fn invalid_override_falls_back_to_default() {
-        assert!(is_html_limited_bot(Some("Twitterbot/1.0"), Some(r"(OnlyMyBot")));
+    fn invalid_override_rejected_by_validate() {
         assert!(validate_html_limited_bots_pattern(r"(OnlyMyBot").is_err());
         assert!(validate_html_limited_bots_pattern(r"OnlyMyBot").is_ok());
     }

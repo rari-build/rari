@@ -649,13 +649,19 @@ export async function action() { return {} }`)
           scriptSrc: ['self'],
         },
         jsPoolSize: 2,
+        htmlLimitedBots: 'OnlyMyBot',
       })
 
       await builderWithConfig.buildServerComponents()
 
       expect(fsSync.promises.writeFile).toHaveBeenCalledWith(
         expect.stringContaining('config.json'),
-        expect.stringContaining('"jsPoolSize":2'),
+        expect.stringMatching(/"jsPoolSize":2/),
+        'utf-8',
+      )
+      expect(fsSync.promises.writeFile).toHaveBeenCalledWith(
+        expect.stringContaining('config.json'),
+        expect.stringContaining('"htmlLimitedBots":"OnlyMyBot"'),
         'utf-8',
       )
     })

@@ -41,7 +41,11 @@ pub const GET_RSC_BINARY_B64: &str = r"(function() {
 })()";
 
 pub const FIZZ_RENDER_SCRIPT: &str = include_str!("../layout/js/fizz_render.ts");
-pub const STREAMING_FIZZ_SCRIPT: &str = include_str!("../layout/js/streaming_fizz.ts");
+pub const STREAMING_FIZZ_SCRIPT: &str = concat!(
+    include_str!("../layout/js/html_boundaries.ts"),
+    "\n",
+    include_str!("../layout/js/streaming_fizz.ts"),
+);
 pub const RSC_RENDERER_SCRIPT: &str = include_str!("js/rsc_renderer.ts");
 
 pub const STREAMING_PIPELINE_READY_CHECK: &str = "typeof globalThis['~rari']?.renderStreamingDocument === 'function' \
@@ -127,10 +131,10 @@ pub fn module_registration_script_from_import(
       const result = globalThis.registerModule(moduleNamespace, {component_id_json});
       return {{ success: true, module: {component_id_json}, exports: result.exportCount }};
     }} else {{
-      return {{ success: false, error: 'No module registration function available' }};
+      throw new Error('No module registration function available');
     }}
   }} catch (error) {{
-    return {{ success: false, error: error.message }};
+    throw error;
   }}
 }})()"
     )

@@ -271,6 +271,13 @@ impl JsExecutionRuntime {
     {
         self.pool.with_request_context(request_context, operation).await
     }
+
+    pub async fn acquire_request_runtime(
+        self: &Arc<Self>,
+        request_context: Arc<RequestContext>,
+    ) -> Result<factory::LeasedRequestRuntime, RariError> {
+        self.pool.acquire_request_runtime(request_context).await
+    }
 }
 
 #[cfg(test)]

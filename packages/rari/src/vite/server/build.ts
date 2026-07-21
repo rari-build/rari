@@ -429,6 +429,7 @@ export class ServerComponentBuilder {
       cacheControl: options.cacheControl,
       cache: options.cache,
       jsPoolSize: options.jsPoolSize,
+      htmlLimitedBots: options.htmlLimitedBots,
       experimental: options.experimental,
       mdx: options.mdx,
     }

@@ -134,11 +134,8 @@ fn resolve_request_context(
     op_state: &OpState,
     request_id: Option<&str>,
 ) -> Option<Arc<RequestContext>> {
-    if let Some(id) = request_id.filter(|id| !id.is_empty())
-        && let Some(store) = op_state.try_borrow::<RequestContextStore>()
-        && let Some(ctx) = store.get(id)
-    {
-        return Some(ctx);
+    if let Some(id) = request_id.filter(|id| !id.is_empty()) {
+        return op_state.try_borrow::<RequestContextStore>().and_then(|store| store.get(id));
     }
     op_state.try_borrow::<Arc<RequestContext>>().cloned()
 }

@@ -170,13 +170,17 @@ pub struct RariRuntime {
 
 fn is_priority_js_request(req: &JsRequest) -> bool {
     match req {
-        JsRequest::ExecuteScriptForStreaming { .. } | JsRequest::RegisterRequestContext { .. } => {
-            true
-        }
+        JsRequest::ExecuteScriptForStreaming { .. }
+        | JsRequest::RegisterRequestContext { .. }
+        | JsRequest::UnregisterRequestContext { .. } => true,
         JsRequest::ExecuteScript { script_name, .. } => script_name.starts_with("execute_action_"),
         _ => false,
     }
 }
+
+/// After this many consecutive priority receives while streams/batches are pending,
+/// force an event-loop pump so timers/chunk ops are not starved.
+const PRIORITY_FAIRNESS_QUOTA: u32 = 8;
 
 async fn recv_js_request(
     priority_receiver: &mut mpsc::Receiver<JsRequest>,
@@ -227,6 +231,7 @@ impl RariRuntime {
                     let mut pending_batches: Vec<PendingBatch> = Vec::new();
                     let mut pending_streams: Vec<PendingStream> = Vec::new();
                     let mut batch_id_counter: u64 = 0;
+                    let mut priority_streak: u32 = 0;
 
                     while continue_processing {
                         let has_pending =
@@ -235,52 +240,88 @@ impl RariRuntime {
                             // Short polls keep Suspense timers and chunk ops progressing under load.
                             // Longer polls delay timer wakeups and stretch stream latency.
                             let pump_budget_ms = if pending_streams.is_empty() { 50 } else { 2 };
-                            tokio::select! {
-                                biased;
-                                request = recv_js_request(&mut priority_receiver, &mut request_receiver) => {
-                                    match request {
-                                        Some(req) => {
-                                            let result = handle_js_request(
-                                                req,
-                                                &mut js_runtime,
-                                                &module_loader,
-                                                &mut continue_processing,
-                                                &mut pending_batches,
-                                                &mut pending_streams,
-                                                &mut batch_id_counter,
-                                            ).await;
-                                            if let Err(e) = result {
-                                                eprintln!("[rari] Error processing request: {e}");
-                                                break;
-                                            }
-                                        }
-                                        None => {
-                                            continue_processing = false;
-                                        }
-                                    }
-                                }
-                                event_loop_result = time::timeout(
+                            if priority_streak >= PRIORITY_FAIRNESS_QUOTA {
+                                priority_streak = 0;
+                                let event_loop_result = time::timeout(
                                     Duration::from_millis(pump_budget_ms),
                                     utils::v8::run_event_loop_with_error_handling(
-                                        &mut js_runtime, "concurrent pending"
+                                        &mut js_runtime,
+                                        "priority fairness pump",
                                     ),
-                                ) => {
-                                    if let Ok(Err(e)) = event_loop_result {
-                                        eprintln!("[rari] Event loop error: {e}");
-                                        if is_runtime_restart_needed(&e) {
-                                            for batch in pending_batches.drain(..) {
-                                                for sender in batch.senders.into_iter().flatten() {
-                                                    let _ = sender.send(Err(create_graceful_error()));
+                                )
+                                .await;
+                                if let Ok(Err(e)) = event_loop_result {
+                                    eprintln!("[rari] Event loop error: {e}");
+                                    if is_runtime_restart_needed(&e) {
+                                        for batch in pending_batches.drain(..) {
+                                            for sender in batch.senders.into_iter().flatten() {
+                                                let _ = sender.send(Err(create_graceful_error()));
+                                            }
+                                        }
+                                        for mut stream in pending_streams.drain(..) {
+                                            fail_pending_stream(
+                                                &mut js_runtime,
+                                                &mut stream,
+                                                create_graceful_error(),
+                                            );
+                                        }
+                                        break;
+                                    }
+                                }
+                            } else {
+                                tokio::select! {
+                                    biased;
+                                    request = recv_js_request(&mut priority_receiver, &mut request_receiver) => {
+                                        match request {
+                                            Some(req) => {
+                                                if is_priority_js_request(&req) {
+                                                    priority_streak =
+                                                        priority_streak.saturating_add(1);
+                                                } else {
+                                                    priority_streak = 0;
+                                                }
+                                                let result = handle_js_request(
+                                                    req,
+                                                    &mut js_runtime,
+                                                    &module_loader,
+                                                    &mut continue_processing,
+                                                    &mut pending_batches,
+                                                    &mut pending_streams,
+                                                    &mut batch_id_counter,
+                                                ).await;
+                                                if let Err(e) = result {
+                                                    eprintln!("[rari] Error processing request: {e}");
+                                                    break;
                                                 }
                                             }
-                                            for mut stream in pending_streams.drain(..) {
-                                                fail_pending_stream(
-                                                    &mut js_runtime,
-                                                    &mut stream,
-                                                    create_graceful_error(),
-                                                );
+                                            None => {
+                                                continue_processing = false;
                                             }
-                                            break;
+                                        }
+                                    }
+                                    event_loop_result = time::timeout(
+                                        Duration::from_millis(pump_budget_ms),
+                                        utils::v8::run_event_loop_with_error_handling(
+                                            &mut js_runtime, "concurrent pending"
+                                        ),
+                                    ) => {
+                                        if let Ok(Err(e)) = event_loop_result {
+                                            eprintln!("[rari] Event loop error: {e}");
+                                            if is_runtime_restart_needed(&e) {
+                                                for batch in pending_batches.drain(..) {
+                                                    for sender in batch.senders.into_iter().flatten() {
+                                                        let _ = sender.send(Err(create_graceful_error()));
+                                                    }
+                                                }
+                                                for mut stream in pending_streams.drain(..) {
+                                                    fail_pending_stream(
+                                                        &mut js_runtime,
+                                                        &mut stream,
+                                                        create_graceful_error(),
+                                                    );
+                                                }
+                                                break;
+                                            }
                                         }
                                     }
                                 }
@@ -291,6 +332,7 @@ impl RariRuntime {
                             check_pending_streams(&mut js_runtime, &mut pending_streams);
                             pending_streams.retain(|s| !s.done);
                         } else {
+                            priority_streak = 0;
                             match recv_js_request(&mut priority_receiver, &mut request_receiver).await {
                                 Some(req) => {
                                     let result = handle_js_request(

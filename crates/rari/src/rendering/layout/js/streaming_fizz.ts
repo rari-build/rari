@@ -1,5 +1,12 @@
 /// <reference path="../../types.d.ts" />
 
+declare function rariCreateHtmlBoundaryTracker(): {
+  reset: () => void
+  safeToInjectFlight: () => boolean
+  trackHtmlBoundaries: (text: string) => boolean
+  getState: () => string
+}
+
 ;(() => {
   if (typeof g['~rari']?.renderStreamingDocument === 'function')
     return
@@ -65,87 +72,25 @@
   interface RariFizzSession {
     streamId: string
     disconnected: boolean
-    htmlState: RariHtmlStreamState
-    pendingTagStart: number
-    pendingRawTextClose: string
     resetHtmlState: () => void
     safeToInjectFlight: () => boolean
     trackHtmlBoundaries: (text: string) => boolean
     pumpFizzChunk: (text: string) => Promise<boolean>
   }
 
-  type RariHtmlStreamState = 'outside' | 'in_tag' | 'in_inline_script' | 'in_raw_text'
-
   function rariCreateFizzSession(streamId: string): RariFizzSession {
+    const boundaries = rariCreateHtmlBoundaryTracker()
     const session: RariFizzSession = {
       streamId,
       disconnected: false,
-      htmlState: 'outside',
-      pendingTagStart: -1,
-      pendingRawTextClose: '',
       resetHtmlState() {
-        session.htmlState = 'outside'
-        session.pendingTagStart = -1
-        session.pendingRawTextClose = ''
+        boundaries.reset()
       },
       safeToInjectFlight() {
-        return session.htmlState === 'outside'
+        return boundaries.safeToInjectFlight()
       },
       trackHtmlBoundaries(text: string) {
-        let i = 0
-        const lower = text.toLowerCase()
-
-        while (i < text.length) {
-          switch (session.htmlState) {
-            case 'outside': {
-              const openAt = lower.indexOf('<', i)
-              if (openAt === -1)
-                return true
-              session.htmlState = 'in_tag'
-              session.pendingTagStart = openAt
-              i = openAt + 1
-              break
-            }
-            case 'in_tag': {
-              const closeAt = text.indexOf('>', i)
-              if (closeAt === -1)
-                return false
-              const openTag = text.slice(session.pendingTagStart, closeAt + 1)
-              const rawTextTag = /^<(style|title|textarea|xmp)\b/i.exec(openTag)
-              if (rawTextTag) {
-                session.htmlState = 'in_raw_text'
-                session.pendingRawTextClose = `</${rawTextTag[1]!.toLowerCase()}>`
-              }
-              else {
-                const isInlineScript = /^<script/i.test(openTag) && !/\bsrc\s*=/.test(openTag)
-                session.htmlState = isInlineScript ? 'in_inline_script' : 'outside'
-              }
-              session.pendingTagStart = -1
-              i = closeAt + 1
-              break
-            }
-            case 'in_raw_text': {
-              const closeTag = session.pendingRawTextClose
-              const closeAt = lower.indexOf(closeTag, i)
-              if (closeAt === -1)
-                return false
-              session.htmlState = 'outside'
-              session.pendingRawTextClose = ''
-              i = closeAt + closeTag.length
-              break
-            }
-            case 'in_inline_script': {
-              const closeAt = lower.indexOf('</script>', i)
-              if (closeAt === -1)
-                return false
-              session.htmlState = 'outside'
-              i = closeAt + 9
-              break
-            }
-          }
-        }
-
-        return session.safeToInjectFlight()
+        return boundaries.trackHtmlBoundaries(text)
       },
       async pumpFizzChunk(text: string) {
         if (!text || session.disconnected)

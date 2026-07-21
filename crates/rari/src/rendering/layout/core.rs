@@ -241,11 +241,18 @@ async fn queue_streaming_script(
     (Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>>, StreamingSlotGuard),
     RariError,
 > {
-    let (handle, stream_lease) = runtime.pick_runtime_for_streaming().await?;
+    let err_sender = chunk_sender.clone();
+    let (handle, stream_lease) = match runtime.pick_runtime_for_streaming().await {
+        Ok(picked) => picked,
+        Err(e) => {
+            let _ = err_sender.send(Err(e.clone())).await;
+            return Err(e);
+        }
+    };
     if let Some(context) = request_context {
         let request_id = context.request_id().to_string();
         let wrapped = wrap_streaming_script(Some(&request_id), &stream_id, &script);
-        let completion = handle
+        let completion = match handle
             .queue_script_for_streaming(
                 stream_id,
                 script_name,
@@ -253,7 +260,14 @@ async fn queue_streaming_script(
                 chunk_sender,
                 Some(Arc::clone(&context)),
             )
-            .await?;
+            .await
+        {
+            Ok(completion) => completion,
+            Err(e) => {
+                let _ = err_sender.send(Err(e.clone())).await;
+                return Err(e);
+            }
+        };
         let completion = Box::pin(async move {
             let result = completion.await;
             let clear_result = handle.unregister_request_context(&request_id).await;
@@ -263,9 +277,16 @@ async fn queue_streaming_script(
         Ok((completion, stream_lease))
     } else {
         let wrapped = wrap_streaming_script(None, &stream_id, &script);
-        let completion = handle
+        let completion = match handle
             .queue_script_for_streaming(stream_id, script_name, wrapped, chunk_sender, None)
-            .await?;
+            .await
+        {
+            Ok(completion) => completion,
+            Err(e) => {
+                let _ = err_sender.send(Err(e.clone())).await;
+                return Err(e);
+            }
+        };
         Ok((completion, stream_lease))
     }
 }
@@ -470,15 +491,63 @@ impl LayoutRenderer {
             let runtime = Arc::clone(&renderer.runtime);
             runtime
                 .with_request_context(request_context, move |rt| async move {
-                    rt.execute_script("set_action_refresh_search".to_string(), set_search_script)
-                        .await?;
-                    rt.execute_script("action_refresh_compose".to_string(), composition_script)
-                        .await?;
-                    Ok(())
+                    Self::run_action_refresh_scripts(&rt, set_search_script, composition_script)
+                        .await
                 })
                 .await
         })
         .await
+    }
+
+    pub async fn compose_route_for_action_refresh_on(
+        &self,
+        runtime: &Arc<dyn JsRuntimeInterface>,
+        route_match: &AppRouteMatch,
+        context: &LayoutRenderContext,
+        action_refresh_search: String,
+    ) -> Result<(), RariError> {
+        let loading_enabled = Config::get().map(|config| config.loading.enabled).unwrap_or(true);
+
+        let loading_component_id = if loading_enabled {
+            route_match
+                .loading
+                .as_ref()
+                .map(|loading_entry| utils::create_component_id(&loading_entry.file_path))
+        } else {
+            None
+        };
+
+        let composition_script = Self::build_composition_script(
+            route_match,
+            context,
+            loading_component_id.as_deref(),
+            false,
+            true,
+        )?;
+
+        let set_search_script = format!(
+            "globalThis['~rari'] = globalThis['~rari'] || {{}}; globalThis['~rari'].actionRefreshSearch = {};",
+            serde_json::to_string(&action_refresh_search)
+                .map_err(|e| RariError::serialization(e.to_string()))?
+        );
+
+        let renderer = Arc::clone(&self.renderer);
+        let runtime = Arc::clone(runtime);
+        run_with_renderer_result(renderer, move |renderer| async move {
+            renderer.ensure_rsc_pipeline().await?;
+            Self::run_action_refresh_scripts(&runtime, set_search_script, composition_script).await
+        })
+        .await
+    }
+
+    async fn run_action_refresh_scripts(
+        runtime: &Arc<dyn JsRuntimeInterface>,
+        set_search_script: String,
+        composition_script: String,
+    ) -> Result<(), RariError> {
+        runtime.execute_script("set_action_refresh_search".to_string(), set_search_script).await?;
+        runtime.execute_script("action_refresh_compose".to_string(), composition_script).await?;
+        Ok(())
     }
 
     #[expect(clippy::too_many_lines)]

@@ -201,6 +201,7 @@ fn pool_from_runtimes(
         next_index: AtomicUsize::new(0),
         healthy: (0..size).map(|_| AtomicBool::new(true)).collect(),
         unhealthy_since_ms: (0..size).map(|_| AtomicU64::new(0)).collect(),
+        heal_attempted: (0..size).map(|_| AtomicBool::new(false)).collect(),
         slot_leases: (0..size).map(|_| Arc::new(AsyncMutex::new(()))).collect(),
         stream_load: (0..size).map(|_| Arc::new(AtomicUsize::new(0))).collect(),
         needs_rebuild: (0..size).map(|_| AtomicBool::new(false)).collect(),
@@ -340,6 +341,7 @@ async fn probe_and_heal_rebuilds_and_re_admits_when_probe_fails() -> Result<(), 
         next_index: AtomicUsize::new(0),
         healthy: vec![AtomicBool::new(true)],
         unhealthy_since_ms: vec![AtomicU64::new(0)],
+        heal_attempted: vec![AtomicBool::new(false)],
         slot_leases: vec![Arc::new(AsyncMutex::new(()))],
         stream_load: vec![Arc::new(AtomicUsize::new(0))],
         needs_rebuild: vec![AtomicBool::new(false)],
@@ -377,6 +379,7 @@ async fn probe_and_heal_keeps_unhealthy_when_rebuild_still_fails() -> Result<(),
         next_index: AtomicUsize::new(0),
         healthy: vec![AtomicBool::new(true)],
         unhealthy_since_ms: vec![AtomicU64::new(0)],
+        heal_attempted: vec![AtomicBool::new(false)],
         slot_leases: vec![Arc::new(AsyncMutex::new(()))],
         stream_load: vec![Arc::new(AtomicUsize::new(0))],
         needs_rebuild: vec![AtomicBool::new(false)],
@@ -1044,6 +1047,21 @@ async fn load_and_evaluate_on_picked_returns_pool_unavailable_when_all_unhealthy
 }
 
 #[tokio::test]
+#[expect(clippy::expect_used)]
+async fn acquire_request_runtime_is_sticky_across_scripts() {
+    let (pool, _) = build_pool_with_distinct_request_context_runtimes(2);
+    let ctx = Arc::new(RequestContext::new("/sticky_lease".to_string()));
+
+    let leased = pool.acquire_request_runtime(Arc::clone(&ctx)).await.expect("acquire lease");
+    let first = Arc::clone(leased.runtime());
+    assert!(leased.execute_script("a".into(), "1".into()).await.is_ok(), "first script");
+    let second = Arc::clone(leased.runtime());
+    assert!(leased.execute_script("b".into(), "2".into()).await.is_ok(), "second script");
+    assert!(Arc::ptr_eq(&first, &second), "sticky lease must keep the same isolate across scripts");
+    assert!(leased.release().await.is_ok(), "release");
+}
+
+#[tokio::test]
 async fn with_request_context_runs_op_and_cleans_up() {
     let (pool, last_seens) = build_pool_with_distinct_request_context_runtimes(2);
 
@@ -1219,6 +1237,7 @@ async fn with_request_context_returns_cleanup_error_and_quarantines() {
         next_index: AtomicUsize::new(0),
         healthy: vec![AtomicBool::new(true)],
         unhealthy_since_ms: vec![AtomicU64::new(0)],
+        heal_attempted: vec![AtomicBool::new(false)],
         slot_leases: vec![Arc::new(AsyncMutex::new(()))],
         stream_load: vec![Arc::new(AtomicUsize::new(0))],
         needs_rebuild: vec![AtomicBool::new(false)],

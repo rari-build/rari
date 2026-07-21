@@ -138,74 +138,48 @@ impl ComponentLoader {
                                                 return {{ success: true }};
                                             }} catch (error) {{
                                                 console.error("Failed to register server action " + {component_id_json}, error);
-                                                return {{ success: false, error: error.message }};
+                                                throw error;
                                             }}
                                         }})()"#
                     );
 
-                    match renderer
+                    if let Err(e) = renderer
                         .runtime
-                        .execute_script(
-                            format!("register_action_{}.js", component_id.cow_replace('/', "_")),
-                            action_registration_script,
+                        .broadcast_script(
+                            &format!("register_action_{}.js", component_id.cow_replace('/', "_")),
+                            &action_registration_script,
                         )
                         .await
                     {
-                        Ok(result) => {
-                            if let Some(success) =
-                                result.get("success").and_then(serde_json::Value::as_bool)
-                                && !success
-                            {
-                                tracing::error!(
-                                    "Failed to register server action {}: {:?}",
-                                    component_id,
-                                    result.get("error")
-                                );
-                            }
-                        }
-                        Err(e) => {
-                            tracing::error!(
-                                "Failed to register server action {}: {}",
-                                component_id,
-                                e
-                            );
-                        }
+                        tracing::error!("Failed to register server action {}: {}", component_id, e);
                     }
                 }
 
                 if !is_server_action {
                     let skip_global_binding = component_id.starts_with("lib/");
                     let registration_script = format!(
-                        r"globalThis['~rari'].componentLoader.registerComponent({specifier_json}, {component_id_json}, {skip_global_binding})"
+                        r"(async function() {{
+                            const result = await globalThis['~rari'].componentLoader.registerComponent({specifier_json}, {component_id_json}, {skip_global_binding});
+                            if (!result || result.success !== true) {{
+                                throw new Error((result && result.error) || 'Component registration failed');
+                            }}
+                            return result;
+                        }})()"
                     );
 
-                    match renderer
+                    if let Err(e) = renderer
                         .runtime
-                        .execute_script(
-                            format!("register_{}.js", component_id.cow_replace('/', "_")),
-                            registration_script,
+                        .broadcast_script(
+                            &format!("register_{}.js", component_id.cow_replace('/', "_")),
+                            &registration_script,
                         )
                         .await
                     {
-                        Ok(result) => {
-                            if let Some(success) =
-                                result.get("success").and_then(serde_json::Value::as_bool)
-                                && !success
-                            {
-                                tracing::error!(
-                                    "Failed to register component {} to globalThis: {:?}",
-                                    component_id,
-                                    result.get("error")
-                                );
-                            }
-                        }
-                        Err(e) => {
-                            tracing::error!(
-                                "Failed to register component {} to globalThis: {}",
-                                component_id,
-                                e
-                            );
-                        }
+                        tracing::error!(
+                            "Failed to register component {} to globalThis: {}",
+                            component_id,
+                            e
+                        );
                     }
                 }
             } else {
@@ -351,76 +325,48 @@ impl ComponentLoader {
                                                                 return {{ success: true }};
                                                             }} catch (error) {{
                                                                 console.error("Failed to register server action " + {action_id_json}, error);
-                                                                return {{ success: false, error: error.message }};
+                                                                throw error;
                                                             }}
                                                         }})()"#
                                             );
 
-                                            match renderer
+                                            if let Err(e) = renderer
                                                 .runtime
-                                                .execute_script(
-                                                    format!(
+                                                .broadcast_script(
+                                                    &format!(
                                                         "register_action_{}.js",
                                                         action_id.cow_replace('/', "_")
                                                     ),
-                                                    registration_script,
+                                                    &registration_script,
                                                 )
                                                 .await
                                             {
-                                                Ok(result) => {
-                                                    if let Some(success) = result
-                                                        .get("success")
-                                                        .and_then(serde_json::Value::as_bool)
-                                                        && !success
-                                                    {
-                                                        if let Some(error_msg) = result
-                                                            .get("error")
-                                                            .and_then(|v| v.as_str())
-                                                        {
-                                                            tracing::error!(
-                                                                "Failed to register server action {}: {}",
-                                                                action_id,
-                                                                error_msg
-                                                            );
-                                                        } else {
-                                                            tracing::error!(
-                                                                "Failed to register server action {}: unknown error",
-                                                                action_id
-                                                            );
-                                                        }
-                                                    }
-                                                }
-                                                Err(e) => {
-                                                    tracing::error!(
-                                                        "Failed to register server action {}: {}",
-                                                        action_id,
-                                                        e
-                                                    );
-                                                }
+                                                tracing::error!(
+                                                    "Failed to register server action {}: {}",
+                                                    action_id,
+                                                    e
+                                                );
                                             }
                                         }
                                     } else {
                                         let wrapped_code =
                                             wrap_server_action_module(&dist_code, &action_id);
-                                        match renderer
+                                        if let Err(e) = renderer
                                             .runtime
-                                            .execute_script(
-                                                format!(
+                                            .broadcast_script(
+                                                &format!(
                                                     "load_action_{}.js",
                                                     action_id.cow_replace('/', "_")
                                                 ),
-                                                wrapped_code,
+                                                &wrapped_code,
                                             )
                                             .await
                                         {
-                                            Ok(_) => {}
-                                            Err(e) => {
-                                                tracing::error!(
-                                                    "Failed to load server action {}: {}",
-                                                    action_id,
-                                                    e
-                                                );
-                                            }
+                                            tracing::error!(
+                                                "Failed to load server action {}: {}",
+                                                action_id,
+                                                e
+                                            );
                                         }
                                     }
                                 }
@@ -568,72 +514,45 @@ impl ComponentLoader {
                                                     return {{ success: true }};
                                                 }} catch (error) {{
                                                     console.error("Failed to register server action " + {relative_str_json}, error);
-                                                    return {{ success: false, error: error.message }};
+                                                    throw error;
                                                 }}
                                             }})()"#
                                 );
 
-                                match renderer
+                                if let Err(e) = renderer
                                     .runtime
-                                    .execute_script(
-                                        format!(
+                                    .broadcast_script(
+                                        &format!(
                                             "register_{}.js",
                                             relative_str.cow_replace('/', "_")
                                         ),
-                                        registration_script,
+                                        &registration_script,
                                     )
                                     .await
                                 {
-                                    Ok(result) => {
-                                        if let Some(success) = result
-                                            .get("success")
-                                            .and_then(serde_json::Value::as_bool)
-                                            && !success
-                                        {
-                                            if let Some(error_msg) =
-                                                result.get("error").and_then(|v| v.as_str())
-                                            {
-                                                tracing::error!(
-                                                    "Failed to register server functions from {}: {}",
-                                                    relative_str,
-                                                    error_msg
-                                                );
-                                            } else {
-                                                tracing::error!(
-                                                    "Failed to register server functions from {}: unknown error",
-                                                    relative_str
-                                                );
-                                            }
-                                        }
-                                    }
-                                    Err(e) => {
-                                        tracing::error!(
-                                            "Failed to register server functions from {}: {}",
-                                            relative_str,
-                                            e
-                                        );
-                                    }
+                                    tracing::error!(
+                                        "Failed to register server functions from {}: {}",
+                                        relative_str,
+                                        e
+                                    );
                                 }
                             }
                         } else {
                             let wrapped_code =
                                 wrap_server_action_module(&component_code, &relative_str);
-                            match renderer
+                            if let Err(e) = renderer
                                 .runtime
-                                .execute_script(
-                                    format!("load_{}.js", relative_str.cow_replace('/', "_")),
-                                    wrapped_code,
+                                .broadcast_script(
+                                    &format!("load_{}.js", relative_str.cow_replace('/', "_")),
+                                    &wrapped_code,
                                 )
                                 .await
                             {
-                                Ok(_) => {}
-                                Err(e) => {
-                                    tracing::error!(
-                                        "Failed to load server actions from {}: {}",
-                                        relative_str,
-                                        e
-                                    );
-                                }
+                                tracing::error!(
+                                    "Failed to load server actions from {}: {}",
+                                    relative_str,
+                                    e
+                                );
                             }
                         }
                         continue;
@@ -708,32 +627,25 @@ impl ComponentLoader {
                                     ))
                                 })?;
                             let registration_script = format!(
-                                r"globalThis['~rari'].componentLoader.registerComponent({module_specifier_json}, {component_id_json}, {skip_global_binding})"
+                                r"(async function() {{
+                                    const result = await globalThis['~rari'].componentLoader.registerComponent({module_specifier_json}, {component_id_json}, {skip_global_binding});
+                                    if (!result || result.success !== true) {{
+                                        throw new Error((result && result.error) || 'Component registration failed');
+                                    }}
+                                    return result;
+                                }})()"
                             );
 
                             match renderer
                                 .runtime
-                                .execute_script(
-                                    format!("register_{}.js", component_id.cow_replace('/', "_")),
-                                    registration_script,
+                                .broadcast_script(
+                                    &format!("register_{}.js", component_id.cow_replace('/', "_")),
+                                    &registration_script,
                                 )
                                 .await
                             {
-                                Ok(result) => {
-                                    let registration_succeeded = result
-                                        .get("success")
-                                        .and_then(serde_json::Value::as_bool)
-                                        .unwrap_or(false);
-
-                                    if !registration_succeeded {
-                                        tracing::error!(
-                                            "Failed to register component {} to globalThis: {:?}",
-                                            component_id,
-                                            result.get("error")
-                                        );
-                                    }
-
-                                    if registration_succeeded && is_client_component {
+                                Ok(()) => {
+                                    if is_client_component {
                                         let component_id_json = serde_json::to_string(
                                             &component_id,
                                         )
@@ -774,12 +686,12 @@ impl ComponentLoader {
 
                                         if let Err(e) = renderer
                                             .runtime
-                                            .execute_script(
-                                                format!(
+                                            .broadcast_script(
+                                                &format!(
                                                     "mark_client_{}.js",
                                                     component_id.cow_replace('/', "_")
                                                 ),
-                                                mark_client_script,
+                                                &mark_client_script,
                                             )
                                             .await
                                         {
@@ -803,13 +715,13 @@ impl ComponentLoader {
                     } else {
                         match renderer
                             .runtime
-                            .execute_script(
-                                format!("load_{}.js", component_id.cow_replace('/', "_")),
-                                transformed_module_code,
+                            .broadcast_script(
+                                &format!("load_{}.js", component_id.cow_replace('/', "_")),
+                                &transformed_module_code,
                             )
                             .await
                         {
-                            Ok(_) => {
+                            Ok(()) => {
                                 if is_client_component {
                                     let skip_global_binding = component_id.starts_with("lib/");
                                     let component_id_json = serde_json::to_string(&component_id)
@@ -851,12 +763,12 @@ impl ComponentLoader {
 
                                     if let Err(e) = renderer
                                         .runtime
-                                        .execute_script(
-                                            format!(
+                                        .broadcast_script(
+                                            &format!(
                                                 "mark_client_{}.js",
                                                 component_id.cow_replace('/', "_")
                                             ),
-                                            mark_client_script,
+                                            &mark_client_script,
                                         )
                                         .await
                                     {
@@ -947,7 +859,7 @@ impl ComponentLoader {
             }
         ";
         runtime
-            .execute_script("init_ssr_modules".to_string(), init_script.to_string())
+            .broadcast_script("init_ssr_modules", init_script)
             .await
             .map_err(|e| RariError::internal(format!("Failed to initialize ssrModules: {e}")))?;
 
@@ -1003,7 +915,7 @@ impl ComponentLoader {
                         const mod = await import({specifier});
                         if (!globalThis['~rari'] || !globalThis['~rari'].ssrModules) {{
                             console.error('[rari] SSR: globalThis[~rari].ssrModules not initialized');
-                            return false;
+                            throw new Error('globalThis[~rari].ssrModules not initialized');
                         }}
                         globalThis['~rari'].ssrModules[{path}] = mod;
 
@@ -1016,7 +928,7 @@ impl ComponentLoader {
                         return true;
                     }} catch (e) {{
                         console.error('[rari] SSR: Failed to import module ' + {path} + ':', e?.message || e);
-                        return false;
+                        throw e instanceof Error ? e : new Error(String(e?.message || e));
                     }}
                 }})()",
                 specifier = serde_json::to_string(&module_specifier).unwrap_or_default(),
@@ -1025,9 +937,9 @@ impl ComponentLoader {
             );
 
             if let Err(e) = runtime
-                .execute_script(
-                    format!("ssr_load_{}.js", module_path.cow_replace('/', "_")),
-                    register_script,
+                .broadcast_script(
+                    &format!("ssr_load_{}.js", module_path.cow_replace('/', "_")),
+                    &register_script,
                 )
                 .await
             {
@@ -1060,12 +972,9 @@ impl ComponentLoader {
             }})()"
         );
 
-        runtime
-            .execute_script("init_client_reference_manifest".to_string(), init_script)
-            .await
-            .map_err(|e| {
-                RariError::internal(format!("Failed to initialize client reference manifest: {e}"))
-            })?;
+        runtime.broadcast_script("init_client_reference_manifest", &init_script).await.map_err(
+            |e| RariError::internal(format!("Failed to initialize client reference manifest: {e}")),
+        )?;
 
         Ok(())
     }
@@ -1095,13 +1004,9 @@ impl ComponentLoader {
             }})()"
         );
 
-        renderer
-            .runtime
-            .execute_script("init_use_cache_build_id".to_string(), init_script)
-            .await
-            .map_err(|e| {
-            RariError::internal(format!("Failed to initialize use cache build id: {e}"))
-        })?;
+        renderer.runtime.broadcast_script("init_use_cache_build_id", &init_script).await.map_err(
+            |e| RariError::internal(format!("Failed to initialize use cache build id: {e}")),
+        )?;
 
         Ok(())
     }
