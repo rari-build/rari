@@ -28,6 +28,7 @@ use sys_traits::impls::RealSys;
 use super::{
     cache::{DEFAULT_TTL_SECS, ModuleCaching},
     config::RuntimeConfig,
+    react_vendor,
     storage::ModuleStorage,
     stubs::{
         FALLBACK_MODULE_TEMPLATE, LOADER_STUB_TEMPLATE, RARI_CACHE_STUB, RARI_CALL_SERVER_STUB,
@@ -126,6 +127,7 @@ fn is_virtual_referrer(referrer: &str) -> bool {
         || referrer.contains(RARI_INTERNAL_PATH)
         || referrer.contains(RARI_STUB_PATH)
         || referrer.contains("/react_vendor/")
+        || referrer.starts_with(react_vendor::NODE_VENDOR_PREFIX)
         || referrer.contains("/rari_hmr/")
         || referrer.starts_with("ext:")
 }
@@ -707,6 +709,20 @@ export default {{}};
         None
     }
 
+    fn handle_react_vendor_shim(
+        specifier_str: &str,
+        module_specifier: &ModuleSpecifier,
+    ) -> Option<ModuleLoadResponse> {
+        let module_name = specifier_str.strip_prefix(react_vendor::NODE_VENDOR_PREFIX)?;
+        let source = react_vendor::reexport_shim_source(module_name)?;
+        Some(ModuleLoadResponse::Sync(Ok(ModuleSource::new(
+            ModuleType::JavaScript,
+            ModuleSourceCode::String(source.into()),
+            module_specifier,
+            None,
+        ))))
+    }
+
     fn handle_file_protocol_modules(
         &self,
         specifier_str: &str,
@@ -947,12 +963,22 @@ impl ModuleLoader for RariModuleLoader {
             }
         }
 
-        if specifier.contains("/react_vendor/") {
-            let module_name =
-                specifier.rsplit("/react_vendor/").next().unwrap_or("").trim_end_matches(".mjs");
-
-            let ext_specifier = format!("ext:rari/react/vendor/{module_name}");
-            let url = ModuleSpecifier::parse(&ext_specifier)
+        // App `file://` modules must not resolve to `ext:` (deno_core 0.408+).
+        // Map to `node:rari/react-vendor/*` shims that `export *` from the real
+        // `ext:rari/react/vendor/*` modules (`node:` may import `ext:`).
+        if specifier.contains("/react_vendor/")
+            || specifier.starts_with(react_vendor::NODE_VENDOR_PREFIX)
+        {
+            let raw_name = specifier
+                .strip_prefix(react_vendor::NODE_VENDOR_PREFIX)
+                .or_else(|| specifier.rsplit("/react_vendor/").next())
+                .unwrap_or("");
+            let Some(module_name) = react_vendor::normalize_vendor_module_name(raw_name) else {
+                return Err(JsErrorBox::generic(format!(
+                    "Unknown React vendor module: {raw_name}"
+                )));
+            };
+            let url = ModuleSpecifier::parse(&react_vendor::node_vendor_specifier(&module_name))
                 .map_err(|err| JsErrorBox::generic(format!("Invalid URL: {err}")))?;
             return Ok(url);
         }
@@ -1017,9 +1043,9 @@ impl ModuleLoader for RariModuleLoader {
                         | "react/jsx-dev-runtime"
                         | "react/jsx-dev-runtime.js"
                 ) {
-                    "file:///react_vendor/react-jsx-runtime.js".to_string()
+                    react_vendor::node_vendor_specifier("react-jsx-runtime.js")
                 } else {
-                    "file:///react_vendor/react.js".to_string()
+                    react_vendor::node_vendor_specifier("react.js")
                 };
                 return self.resolve(&react_url, referrer, kind);
             }
@@ -1030,11 +1056,19 @@ impl ModuleLoader for RariModuleLoader {
             ) || (specifier.starts_with("react-dom/")
                 && !matches!(specifier, "react-dom/client" | "react-dom/client.js" | "react-dom"))
             {
-                return self.resolve("file:///react_vendor/react-dom-server.js", referrer, kind);
+                return self.resolve(
+                    &react_vendor::node_vendor_specifier("react-dom-server.js"),
+                    referrer,
+                    kind,
+                );
             }
 
             if matches!(specifier, "react-dom") {
-                return self.resolve("file:///react_vendor/react-dom.js", referrer, kind);
+                return self.resolve(
+                    &react_vendor::node_vendor_specifier("react-dom.js"),
+                    referrer,
+                    kind,
+                );
             }
 
             if matches!(
@@ -1045,7 +1079,7 @@ impl ModuleLoader for RariModuleLoader {
                     | "react-server-dom-webpack/server.edge"
             ) {
                 return self.resolve(
-                    "file:///react_vendor/react-server-dom-webpack-server.js",
+                    &react_vendor::node_vendor_specifier("react-server-dom-webpack-server.js"),
                     referrer,
                     kind,
                 );
@@ -1059,7 +1093,7 @@ impl ModuleLoader for RariModuleLoader {
                     | "react-server-dom-webpack/client.edge"
             ) {
                 return self.resolve(
-                    "file:///react_vendor/react-server-dom-webpack-client.js",
+                    &react_vendor::node_vendor_specifier("react-server-dom-webpack-client.js"),
                     referrer,
                     kind,
                 );
@@ -1152,6 +1186,10 @@ impl ModuleLoader for RariModuleLoader {
         }
 
         if let Some(response) = Self::handle_rari_stub_modules(&specifier_str, module_specifier) {
+            return response;
+        }
+
+        if let Some(response) = Self::handle_react_vendor_shim(&specifier_str, module_specifier) {
             return response;
         }
 
