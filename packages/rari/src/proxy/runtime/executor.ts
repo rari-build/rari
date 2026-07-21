@@ -138,9 +138,16 @@ export class ProxyExecutor {
           target[key] = [existing, value]
       }
 
+      const setCookiesFromForEach: string[] = []
+      const hasGetSetCookie = typeof response.headers.getSetCookie === 'function'
+
       response.headers.forEach((value, key) => {
-        if (key.toLowerCase() === 'set-cookie')
+        if (key.toLowerCase() === 'set-cookie') {
+          if (!hasGetSetCookie)
+            setCookiesFromForEach.push(value)
+
           return
+        }
         if (key.startsWith('x-rari-proxy-request-')) {
           const headerName = key.replace('x-rari-proxy-request-', '')
           merge(requestHeaders, headerName, value)
@@ -150,7 +157,10 @@ export class ProxyExecutor {
         }
       })
 
-      for (const value of response.headers.getSetCookie())
+      const setCookies = hasGetSetCookie
+        ? response.headers.getSetCookie()
+        : setCookiesFromForEach
+      for (const value of setCookies)
         merge(responseHeaders, 'set-cookie', value)
 
       if ('cookies' in response && typeof response.cookies.toSetCookieHeaders === 'function') {

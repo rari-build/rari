@@ -30,10 +30,16 @@ function serializeResponseHeaders(
   extraSetCookies: string[] = [],
 ): Record<string, string | string[]> {
   const out: Record<string, string | string[]> = {}
+  const setCookiesFromForEach: string[] = []
+  const hasGetSetCookie = typeof headers.getSetCookie === 'function'
 
   headers.forEach((value, key) => {
-    if (key.toLowerCase() === 'set-cookie')
+    if (key.toLowerCase() === 'set-cookie') {
+      if (!hasGetSetCookie)
+        setCookiesFromForEach.push(value)
+
       return
+    }
     const existing = out[key]
     if (existing === undefined)
       out[key] = value
@@ -44,7 +50,7 @@ function serializeResponseHeaders(
   })
 
   const setCookies = [
-    ...(typeof headers.getSetCookie === 'function' ? headers.getSetCookie() : []),
+    ...(hasGetSetCookie ? headers.getSetCookie() : setCookiesFromForEach),
     ...extraSetCookies,
   ]
   if (setCookies.length === 1)

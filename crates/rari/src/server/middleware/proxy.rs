@@ -61,6 +61,21 @@ fn append_header_map(headers: &mut HeaderMap, map: FxHashMap<String, JsonHeaderV
     }
 }
 
+fn apply_request_headers(headers: &mut HeaderMap, map: FxHashMap<String, JsonHeaderValue>) {
+    for (key, value) in map {
+        let Ok(header_name) = key.parse::<HeaderName>() else {
+            continue;
+        };
+        headers.remove(&header_name);
+        for value_str in value.as_strs() {
+            let Ok(header_value) = value_str.parse::<HeaderValue>() else {
+                continue;
+            };
+            headers.append(header_name.clone(), header_value);
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 struct ProxyResult {
     #[serde(rename = "continue")]
@@ -223,17 +238,7 @@ where
                     }
 
                     if let Some(headers) = result.request_headers {
-                        for (key, value) in headers {
-                            if let Ok(header_name) = key.parse::<HeaderName>() {
-                                for value_str in value.as_strs() {
-                                    if let Ok(header_value) = value_str.parse::<HeaderValue>() {
-                                        request
-                                            .headers_mut()
-                                            .append(header_name.clone(), header_value);
-                                    }
-                                }
-                            }
-                        }
+                        apply_request_headers(request.headers_mut(), headers);
                     }
 
                     if let Some(proxy_response) = result.response {
@@ -344,4 +349,33 @@ pub async fn initialize_proxy(state: &ServerState) -> Result<(), RariError> {
         tracing::error!("Failed to register proxy function: {}", e);
         e
     })
+}
+
+#[cfg(test)]
+#[expect(clippy::unwrap_used)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn apply_request_headers_replaces_existing_authorization() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            HeaderName::from_static("authorization"),
+            HeaderValue::from_static("Bearer old"),
+        );
+        headers.insert(HeaderName::from_static("x-keep"), HeaderValue::from_static("1"));
+
+        let mut map = FxHashMap::default();
+        map.insert(
+            "authorization".to_string(),
+            JsonHeaderValue::Single("Bearer proxy".to_string()),
+        );
+
+        apply_request_headers(&mut headers, map);
+
+        let auth: Vec<_> =
+            headers.get_all("authorization").iter().map(|v| v.to_str().unwrap()).collect();
+        assert_eq!(auth, vec!["Bearer proxy"]);
+        assert_eq!(headers.get("x-keep").and_then(|v| v.to_str().ok()), Some("1"));
+    }
 }
