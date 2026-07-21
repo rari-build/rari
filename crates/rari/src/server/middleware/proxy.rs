@@ -10,7 +10,7 @@ use std::{
 use axum::{
     body::Body,
     extract::Request,
-    http::{HeaderName, HeaderValue, StatusCode},
+    http::{HeaderMap, HeaderName, HeaderValue, StatusCode},
     response::Response,
 };
 use futures_util::future::BoxFuture;
@@ -32,14 +32,44 @@ async fn clone_renderer_runtime(state: &ServerState) -> Arc<JsExecutionRuntime> 
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+enum JsonHeaderValue {
+    Single(String),
+    Multiple(Vec<String>),
+}
+
+impl JsonHeaderValue {
+    fn as_strs(&self) -> Vec<&str> {
+        match self {
+            Self::Single(value) => vec![value.as_str()],
+            Self::Multiple(values) => values.iter().map(String::as_str).collect(),
+        }
+    }
+}
+
+fn append_header_map(headers: &mut HeaderMap, map: FxHashMap<String, JsonHeaderValue>) {
+    for (key, value) in map {
+        let Ok(header_name) = key.parse::<HeaderName>() else {
+            continue;
+        };
+        for value_str in value.as_strs() {
+            let Ok(header_value) = value_str.parse::<HeaderValue>() else {
+                continue;
+            };
+            headers.append(header_name.clone(), header_value);
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 struct ProxyResult {
     #[serde(rename = "continue")]
     continue_: bool,
     response: Option<ProxyResponse>,
     #[serde(rename = "requestHeaders")]
-    request_headers: Option<FxHashMap<String, String>>,
+    request_headers: Option<FxHashMap<String, JsonHeaderValue>>,
     #[serde(rename = "responseHeaders")]
-    response_headers: Option<FxHashMap<String, String>>,
+    response_headers: Option<FxHashMap<String, JsonHeaderValue>>,
     rewrite: Option<String>,
     redirect: Option<RedirectInfo>,
 }
@@ -47,7 +77,7 @@ struct ProxyResult {
 #[derive(Debug, Serialize, Deserialize)]
 struct ProxyResponse {
     status: u16,
-    headers: FxHashMap<String, String>,
+    headers: FxHashMap<String, JsonHeaderValue>,
     body: Option<String>,
 }
 
@@ -194,40 +224,35 @@ where
 
                     if let Some(headers) = result.request_headers {
                         for (key, value) in headers {
-                            if let Ok(header_name) = key.parse::<HeaderName>()
-                                && let Ok(header_value) = value.parse::<HeaderValue>()
-                            {
-                                request.headers_mut().insert(header_name, header_value);
+                            if let Ok(header_name) = key.parse::<HeaderName>() {
+                                for value_str in value.as_strs() {
+                                    if let Ok(header_value) = value_str.parse::<HeaderValue>() {
+                                        request
+                                            .headers_mut()
+                                            .append(header_name.clone(), header_value);
+                                    }
+                                }
                             }
                         }
                     }
 
                     if let Some(proxy_response) = result.response {
-                        let mut response_builder =
-                            Response::builder().status(proxy_response.status);
-
-                        for (key, value) in proxy_response.headers {
-                            response_builder = response_builder.header(key, value);
-                        }
-
-                        let body = proxy_response.body.unwrap_or_default();
-                        return match response_builder.body(Body::from(body)) {
-                            Ok(response) => Ok(response),
-                            Err(_) => inner.call(request).await,
+                        let Ok(mut response) = Response::builder()
+                            .status(proxy_response.status)
+                            .body(Body::from(proxy_response.body.unwrap_or_default()))
+                        else {
+                            return inner.call(request).await;
                         };
+
+                        append_header_map(response.headers_mut(), proxy_response.headers);
+                        return Ok(response);
                     }
 
                     if result.continue_ {
                         let mut response = inner.call(request).await?;
 
                         if let Some(headers) = result.response_headers {
-                            for (key, value) in headers {
-                                if let Ok(header_name) = key.parse::<HeaderName>()
-                                    && let Ok(header_value) = value.parse::<HeaderValue>()
-                                {
-                                    response.headers_mut().insert(header_name, header_value);
-                                }
-                            }
+                            append_header_map(response.headers_mut(), headers);
                         }
 
                         return Ok(response);

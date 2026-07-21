@@ -39,6 +39,7 @@ export interface ResponseCookies {
   getAll: () => Array<{ name: string, value: string, path?: string }>
   set: ((name: string, value: string, options?: CookieOptions) => void) & ((options: { name: string, value: string } & CookieOptions) => void)
   delete: (name: string) => void
+  toSetCookieHeaders: () => string[]
 }
 
 export interface CookieOptions {
@@ -90,8 +91,8 @@ export interface ProxyModule {
 export interface ProxyResult {
   continue: boolean
   response?: Response
-  requestHeaders?: Record<string, string>
-  responseHeaders?: Record<string, string>
+  requestHeaders?: Record<string, string | string[]>
+  responseHeaders?: Record<string, string | string[]>
   rewrite?: string
   redirect?: {
     destination: string

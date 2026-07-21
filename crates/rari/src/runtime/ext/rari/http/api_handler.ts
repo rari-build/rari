@@ -11,7 +11,7 @@ interface RequestData {
 interface ApiResponse {
   status: number
   statusText: string
-  headers: Record<string, string>
+  headers: Record<string, string | string[]>
   body: string
 }
 
@@ -20,6 +20,48 @@ interface ApiContext {
 }
 
 type ApiHandler = (request: Request, context: ApiContext) => Promise<Response | unknown>
+
+interface ResponseCookiesLike {
+  toSetCookieHeaders?: () => string[]
+}
+
+function serializeResponseHeaders(
+  headers: Headers,
+  extraSetCookies: string[] = [],
+): Record<string, string | string[]> {
+  const out: Record<string, string | string[]> = {}
+
+  headers.forEach((value, key) => {
+    if (key.toLowerCase() === 'set-cookie')
+      return
+    const existing = out[key]
+    if (existing === undefined)
+      out[key] = value
+    else if (Array.isArray(existing))
+      existing.push(value)
+    else
+      out[key] = [existing, value]
+  })
+
+  const setCookies = [
+    ...(typeof headers.getSetCookie === 'function' ? headers.getSetCookie() : []),
+    ...extraSetCookies,
+  ]
+  if (setCookies.length === 1)
+    out['set-cookie'] = setCookies[0]!
+  else if (setCookies.length > 1)
+    out['set-cookie'] = setCookies
+
+  return out
+}
+
+function cookiesFromResponse(result: Response): string[] {
+  const cookies = (result as Response & { cookies?: ResponseCookiesLike }).cookies
+  if (cookies && typeof cookies.toSetCookieHeaders === 'function')
+    return cookies.toSetCookieHeaders()
+
+  return []
+}
 
 async function callHandler(
   requestData: RequestData,
@@ -56,15 +98,10 @@ async function callHandler(
 
     if (result instanceof Response) {
       const body = await result.text()
-      const responseHeaders: Record<string, string> = {}
-      result.headers.forEach((value, key) => {
-        responseHeaders[key] = value
-      })
-
       return {
         status: result.status,
         statusText: result.statusText,
-        headers: responseHeaders,
+        headers: serializeResponseHeaders(result.headers, cookiesFromResponse(result)),
         body,
       }
     }

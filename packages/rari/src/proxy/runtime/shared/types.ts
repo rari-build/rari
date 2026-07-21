@@ -24,7 +24,11 @@ export interface ResponseLike {
   status?: number
   headers?: {
     get?: (name: string) => string | null
+    getSetCookie?: () => string[]
     forEach?: (callback: (value: string, key: string) => void) => void
+  }
+  cookies?: {
+    toSetCookieHeaders?: () => string[]
   }
   text?: () => Promise<string>
   body?: any

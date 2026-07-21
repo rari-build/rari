@@ -121,18 +121,42 @@ export class ProxyExecutor {
     }
 
     if (continueHeader === 'true') {
-      const requestHeaders: Record<string, string> = {}
-      const responseHeaders: Record<string, string> = {}
+      const requestHeaders: Record<string, string | string[]> = {}
+      const responseHeaders: Record<string, string | string[]> = {}
+
+      const merge = (
+        target: Record<string, string | string[]>,
+        key: string,
+        value: string,
+      ) => {
+        const existing = target[key]
+        if (existing === undefined)
+          target[key] = value
+        else if (Array.isArray(existing))
+          existing.push(value)
+        else
+          target[key] = [existing, value]
+      }
 
       response.headers.forEach((value, key) => {
+        if (key.toLowerCase() === 'set-cookie')
+          return
         if (key.startsWith('x-rari-proxy-request-')) {
           const headerName = key.replace('x-rari-proxy-request-', '')
-          requestHeaders[headerName] = value
+          merge(requestHeaders, headerName, value)
         }
         else if (!key.startsWith('x-rari-proxy-')) {
-          responseHeaders[key] = value
+          merge(responseHeaders, key, value)
         }
       })
+
+      for (const value of response.headers.getSetCookie())
+        merge(responseHeaders, 'set-cookie', value)
+
+      if ('cookies' in response && typeof response.cookies.toSetCookieHeaders === 'function') {
+        for (const value of response.cookies.toSetCookieHeaders())
+          merge(responseHeaders, 'set-cookie', value)
+      }
 
       return {
         continue: true,
