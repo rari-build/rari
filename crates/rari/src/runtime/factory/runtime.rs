@@ -11,7 +11,7 @@ use std::{
 use base64::engine::general_purpose::STANDARD;
 use deno_core::{ModuleSpecifier, v8};
 use rari_error::RariError;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use serde_json::Value;
 use tokio::{
     runtime::Builder,
@@ -99,6 +99,7 @@ struct PendingBatch {
 struct PendingStream {
     stream_id: String,
     slot_key: String,
+    request_id: Option<String>,
     result_tx: Option<oneshot::Sender<Result<(), RariError>>>,
     start: Instant,
     timeout: Duration,
@@ -307,6 +308,7 @@ impl RariRuntime {
                             pending_batches.retain(|b| b.remaining > 0 && b.start.elapsed() < b.timeout);
                             check_pending_streams(&mut js_runtime, &mut pending_streams);
                             pending_streams.retain(|s| !s.done);
+                            prune_orphaned_settled(&js_runtime, &pending_streams);
                         } else {
                             priority_streak = 0;
                             match recv_js_request(&mut priority_receiver, &mut request_receiver).await {
@@ -344,6 +346,7 @@ impl RariRuntime {
                                     break;
                                 }
                             }
+                            prune_orphaned_settled(&js_runtime, &pending_streams);
                         }
                     }
 
@@ -640,6 +643,7 @@ async fn handle_js_request(
             result_tx,
         } => {
             if let Some(request_context) = request_context {
+                let request_id = request_context.request_id().to_string();
                 let op_state = js_runtime.op_state();
                 let mut borrowed = op_state.borrow_mut();
                 if let Some(store) = borrowed.try_borrow_mut::<RequestContextStore>() {
@@ -649,30 +653,60 @@ async fn handle_js_request(
                     store.insert(request_context);
                     borrowed.put(store);
                 }
-            }
-            match executor::start_streaming_script(
-                js_runtime,
-                &script_name,
-                &script_code,
-                &stream_id,
-                chunk_sender,
-            ) {
-                Ok(slot_key) => {
-                    pending_streams.push(PendingStream {
-                        stream_id,
-                        slot_key,
-                        result_tx: Some(result_tx),
-                        start: Instant::now(),
-                        timeout: Duration::from_millis(executor::streaming_promise_timeout_ms()),
-                        done: false,
-                    });
-                }
-                Err(e) => {
-                    if is_runtime_restart_needed(&e) {
-                        let _ = result_tx.send(Err(create_graceful_error()));
-                        return Err(RariError::internal("Runtime restart needed".to_string()));
+                drop(borrowed);
+                match executor::start_streaming_script(
+                    js_runtime,
+                    &script_name,
+                    &script_code,
+                    &stream_id,
+                    chunk_sender,
+                ) {
+                    Ok(slot_key) => {
+                        pending_streams.push(PendingStream {
+                            stream_id,
+                            slot_key,
+                            request_id: Some(request_id),
+                            result_tx: Some(result_tx),
+                            start: Instant::now(),
+                            timeout: Duration::from_millis(executor::streaming_promise_timeout_ms()),
+                            done: false,
+                        });
                     }
-                    let _ = result_tx.send(Err(e));
+                    Err(e) => {
+                        clear_stream_request_context(js_runtime, Some(&request_id));
+                        if is_runtime_restart_needed(&e) {
+                            let _ = result_tx.send(Err(create_graceful_error()));
+                            return Err(RariError::internal("Runtime restart needed".to_string()));
+                        }
+                        let _ = result_tx.send(Err(e));
+                    }
+                }
+            } else {
+                match executor::start_streaming_script(
+                    js_runtime,
+                    &script_name,
+                    &script_code,
+                    &stream_id,
+                    chunk_sender,
+                ) {
+                    Ok(slot_key) => {
+                        pending_streams.push(PendingStream {
+                            stream_id,
+                            slot_key,
+                            request_id: None,
+                            result_tx: Some(result_tx),
+                            start: Instant::now(),
+                            timeout: Duration::from_millis(executor::streaming_promise_timeout_ms()),
+                            done: false,
+                        });
+                    }
+                    Err(e) => {
+                        if is_runtime_restart_needed(&e) {
+                            let _ = result_tx.send(Err(create_graceful_error()));
+                            return Err(RariError::internal("Runtime restart needed".to_string()));
+                        }
+                        let _ = result_tx.send(Err(e));
+                    }
                 }
             }
         }
@@ -992,6 +1026,26 @@ fn take_stream_sender(
     borrowed.try_borrow_mut::<StreamOpState>().and_then(|state| state.take_sender(stream_id))
 }
 
+fn clear_stream_request_context(js_runtime: &deno_core::JsRuntime, request_id: Option<&str>) {
+    let Some(request_id) = request_id.filter(|id| !id.is_empty()) else {
+        return;
+    };
+    let op_state = js_runtime.op_state();
+    let mut borrowed = op_state.borrow_mut();
+    if let Some(store) = borrowed.try_borrow_mut::<RequestContextStore>() {
+        store.remove(request_id);
+    }
+}
+
+fn prune_orphaned_settled(js_runtime: &deno_core::JsRuntime, pending_streams: &[PendingStream]) {
+    let active: FxHashSet<&str> = pending_streams.iter().map(|s| s.stream_id.as_str()).collect();
+    let op_state = js_runtime.op_state();
+    let mut borrowed = op_state.borrow_mut();
+    if let Some(state) = borrowed.try_borrow_mut::<StreamOpState>() {
+        state.settled.retain(|id, _| active.contains(id.as_str()));
+    }
+}
+
 fn fail_pending_stream(
     js_runtime: &mut deno_core::JsRuntime,
     stream: &mut PendingStream,
@@ -1020,6 +1074,7 @@ fn fail_pending_stream(
             let _ = state.take_settled(&stream.stream_id);
         }
     }
+    clear_stream_request_context(js_runtime, stream.request_id.as_deref());
     if let Some(tx) = stream.result_tx.take() {
         let _ = tx.send(Err(err));
     }
@@ -1080,6 +1135,7 @@ fn check_pending_streams(
             };
             let _ = sender.try_send(Err(stream_err.clone()));
             if result.is_ok() {
+                clear_stream_request_context(js_runtime, stream.request_id.as_deref());
                 if let Some(tx) = stream.result_tx.take() {
                     let _ = tx.send(Err(stream_err));
                 }
@@ -1088,6 +1144,7 @@ fn check_pending_streams(
             }
         }
 
+        clear_stream_request_context(js_runtime, stream.request_id.as_deref());
         if let Some(tx) = stream.result_tx.take() {
             let _ = tx.send(result);
         }
