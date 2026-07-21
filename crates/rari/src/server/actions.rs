@@ -534,6 +534,7 @@ async fn compose_action_refresh_route(
     state: &ServerState,
     headers: &HeaderMap,
     request_context: Arc<RequestContext>,
+    sticky_runtime: Option<&Arc<dyn JsRuntimeInterface>>,
 ) -> Result<Option<String>, RariError> {
     let Some((pathname, search, query_params)) = parse_action_refresh_target(headers) else {
         return Ok(None);
@@ -591,9 +592,15 @@ async fn compose_action_refresh_route(
         Arc::clone(&state.renderer),
         Arc::clone(&state.layout_html_cache),
     );
-    layout_renderer
-        .compose_route_for_action_refresh(&route_match, &context, request_context, search)
-        .await?;
+    if let Some(runtime) = sticky_runtime {
+        layout_renderer
+            .compose_route_for_action_refresh_on(runtime, &route_match, &context, search)
+            .await?;
+    } else {
+        layout_renderer
+            .compose_route_for_action_refresh(&route_match, &context, request_context, search)
+            .await?;
+    }
 
     Ok(Some(pathname))
 }
@@ -686,13 +693,36 @@ async fn handle_server_action_at_path(
 
     let script_name = action_script_name(action_id);
 
-    let mut value = match runtime
-        .execute_script_with_request_context(Arc::clone(&request_context), script_name, script)
-        .await
-    {
+    let leased = match runtime.acquire_request_runtime(Arc::clone(&request_context)).await {
+        Ok(leased) => leased,
+        Err(e) => {
+            tracing::error!("Failed to acquire JS runtime for server action: {}", e);
+            if is_document_form_post {
+                #[expect(
+                    clippy::expect_used,
+                    reason = "Response::builder() with valid components never fails"
+                )]
+                let mut response = Response::builder()
+                    .status(error_response::status(&e))
+                    .header(header::CACHE_CONTROL, "no-store, no-cache, must-revalidate, private")
+                    .body(Body::from(e.safe_message(state.config.is_development())))
+                    .expect("Valid error response");
+                append_pending_cookies(response.headers_mut(), &request_context.pending_cookies);
+                return Ok(response);
+            }
+            return Ok(rpc_action_error_response(
+                &e,
+                state.config.is_development(),
+                Some(&request_context.pending_cookies),
+            ));
+        }
+    };
+
+    let mut value = match leased.execute_script(script_name, script).await {
         Ok(value) => value,
         Err(e) => {
             tracing::error!("Server action execution failed: {}", e);
+            let _ = leased.release().await;
             if is_document_form_post {
                 #[expect(
                     clippy::expect_used,
@@ -729,6 +759,7 @@ async fn handle_server_action_at_path(
     }
 
     if is_document_form_post {
+        let _ = leased.release().await;
         if is_failed_action_result(&value) {
             let error_message = value
                 .get("error")
@@ -785,8 +816,13 @@ async fn handle_server_action_at_path(
 
     let mut revalidated_path = None;
     if redirect.is_none() {
-        let refresh_result =
-            compose_action_refresh_route(&state, &headers, Arc::clone(&request_context)).await;
+        let refresh_result = compose_action_refresh_route(
+            &state,
+            &headers,
+            Arc::clone(&request_context),
+            Some(leased.runtime()),
+        )
+        .await;
         revalidated_path = match refresh_result {
             Ok(path) => path,
             Err(error) => {
@@ -804,16 +840,16 @@ async fn handle_server_action_at_path(
         format!("action_flight_encode_req{nonce}.ts")
     };
 
-    let flight_body = match runtime
-        .with_request_context(Arc::clone(&request_context), move |rt| async move {
-            rt.execute_script(encode_script_name, ACTION_FLIGHT_ENCODE_SCRIPT.to_string()).await?;
-            capture_last_action_flight_binary(&rt).await
-        })
-        .await
+    let flight_body = match async {
+        leased.execute_script(encode_script_name, ACTION_FLIGHT_ENCODE_SCRIPT.to_string()).await?;
+        capture_last_action_flight_binary(leased.runtime()).await
+    }
+    .await
     {
         Ok(body) => body,
         Err(error) => {
             tracing::error!("Failed to encode action flight response: {}", error);
+            let _ = leased.release().await;
             return Ok(rpc_action_error_response(
                 &error,
                 state.config.is_development(),
@@ -821,6 +857,10 @@ async fn handle_server_action_at_path(
             ));
         }
     };
+
+    if let Err(e) = leased.release().await {
+        tracing::error!("Failed to release action runtime lease: {}", e);
+    }
 
     let Some(flight_body) = flight_body else {
         tracing::error!("RPC server action did not produce a Flight response payload");

@@ -355,6 +355,15 @@ export function defineRariOptions(config: RariOptions): RariOptions {
 }
 
 export function rari(options: RariOptions = {}): RariPlugin[] {
+  if (options.jsPoolSize != null) {
+    const size = options.jsPoolSize
+    if (!Number.isInteger(size) || size < 1 || !Number.isFinite(size)) {
+      throw new Error(
+        `jsPoolSize must be a finite positive integer; received ${String(size)}`,
+      )
+    }
+  }
+
   const componentTypeCache = new Map<string, 'client' | 'server' | 'unknown'>()
   const clientComponents = new Set<string>()
   const moduleAnalysisCache = new ModuleAnalysisCache()
@@ -1458,9 +1467,12 @@ ${clientTransformedCode}`
             ...process.env,
             RUST_LOG: process.env.RUST_LOG || 'error',
             RARI_VITE_PORT: vitePort.toString(),
-            // Dev starts the binary before config.json is written; pass pool size via env.
+            // Dev starts the binary before config.json is written; pass pool size / bots via env.
             ...(options.jsPoolSize != null && !process.env.RARI_JS_POOL_SIZE
               ? { RARI_JS_POOL_SIZE: String(options.jsPoolSize) }
+              : {}),
+            ...(options.htmlLimitedBots != null && !process.env.RARI_HTML_LIMITED_BOTS
+              ? { RARI_HTML_LIMITED_BOTS: options.htmlLimitedBots }
               : {}),
           },
         })

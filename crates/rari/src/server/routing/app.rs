@@ -998,8 +998,13 @@ pub async fn render_streaming_with_layout(
         RenderResult::Static(html) => {
             use crate::server::compression::compress_body;
 
-            if let Some(rx) = metadata_rx {
-                context.metadata = rx.await.ok().flatten();
+            // Deferred metadata_rx is only fed after this function returns
+            // (Fizz-first spawn in the caller). Static fallback must resolve
+            // metadata here or the request deadlocks waiting on a sender that
+            // never starts.
+            if metadata_rx.is_some() {
+                drop(metadata_rx);
+                context.metadata = collect_page_metadata(&state, &route_match, &context).await;
             }
 
             let html_with_assets = match inject_assets_into_html(&html, &state.config).await {
@@ -1576,7 +1581,7 @@ pub async fn handle_app_route(
                 // crawlers get streaming metadata flushed when ready.
                 let user_agent = context.headers.get("user-agent").map(String::as_str);
                 let block_metadata =
-                    is_html_limited_bot(user_agent, state.config.html_limited_bots.as_deref());
+                    is_html_limited_bot(user_agent, state.config.html_limited_bots_regex.as_ref());
 
                 let response = if block_metadata {
                     let mut context = context.clone();
@@ -1821,8 +1826,10 @@ pub async fn handle_app_route(
                             .await;
                         }
                     };
-                    let etag = response::ResponseCache::generate_etag(html.as_bytes());
-                    (html, etag)
+                    let final_html =
+                        wrap_html_with_metadata(html, context.metadata.as_ref(), &state);
+                    let etag = response::ResponseCache::generate_etag(final_html.as_bytes());
+                    (final_html, etag)
                 }
                 RenderResult::StaticBinary(_bytes) => {
                     tracing::error!("StaticBinary not supported in build mode");

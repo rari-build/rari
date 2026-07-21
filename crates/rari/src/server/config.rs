@@ -14,7 +14,7 @@ use http::HeaderValue;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 
-use crate::server::{image::ImageConfig, rendering::html_bots::validate_html_limited_bots_pattern};
+use crate::server::{image::ImageConfig, rendering::html_bots::compile_html_limited_bots_pattern};
 
 pub static GLOBAL_CONFIG: OnceLock<Config> = OnceLock::new();
 
@@ -381,6 +381,9 @@ pub struct Config {
     pub use_cache: UseCacheConfig,
     #[serde(default, rename = "htmlLimitedBots")]
     pub html_limited_bots: Option<String>,
+    /// Precompiled override from `html_limited_bots`; `None` uses the default list.
+    #[serde(skip)]
+    pub html_limited_bots_regex: Option<regex::Regex>,
 }
 
 impl Config {
@@ -629,9 +632,10 @@ impl Config {
                 if let Some(pattern) =
                     config_data.get("htmlLimitedBots").and_then(serde_json::Value::as_str)
                 {
-                    match validate_html_limited_bots_pattern(pattern) {
-                        Ok(()) => {
+                    match compile_html_limited_bots_pattern(pattern) {
+                        Ok(re) => {
                             config.html_limited_bots = Some(pattern.to_string());
+                            config.html_limited_bots_regex = Some(re);
                         }
                         Err(err) => {
                             tracing::warn!(
@@ -753,6 +757,20 @@ impl Config {
                 return Err(ConfigError::Config("RARI_JS_POOL_SIZE must be >= 1".to_string()));
             }
             config.server.js_pool_size = pool_size;
+        }
+
+        if let Ok(pattern) = env::var("RARI_HTML_LIMITED_BOTS") {
+            match compile_html_limited_bots_pattern(&pattern) {
+                Ok(re) => {
+                    config.html_limited_bots = Some(pattern);
+                    config.html_limited_bots_regex = Some(re);
+                }
+                Err(err) => {
+                    tracing::warn!(
+                        "Invalid RARI_HTML_LIMITED_BOTS regex ({pattern:?}): {err}. Ignoring override."
+                    );
+                }
+            }
         }
 
         if config.mode == Mode::Development {
@@ -1176,6 +1194,7 @@ mod tests {
             .unwrap();
         let valid = Config::from_env_with_base(Some(&temp_dir)).unwrap();
         assert_eq!(valid.html_limited_bots.as_deref(), Some("OnlyMyBot"));
+        assert!(valid.html_limited_bots_regex.is_some());
 
         fs::write(dist_server_dir.join("config.json"), r#"{"htmlLimitedBots":"(OnlyMyBot"}"#)
             .unwrap();
@@ -1184,6 +1203,7 @@ mod tests {
             invalid.html_limited_bots.is_none(),
             "invalid regex must fall back to default (None override)"
         );
+        assert!(invalid.html_limited_bots_regex.is_none());
 
         let _ = fs::remove_dir_all(&temp_dir);
     }
