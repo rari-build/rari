@@ -579,7 +579,8 @@ async fn compose_action_refresh_route(
             Arc::clone(&state.renderer),
             Arc::clone(&state.layout_html_cache),
         );
-        match layout_renderer.check_page_not_found(&route_match, &context).await {
+        match layout_renderer.check_page_not_found_on(&route_match, &context, sticky_runtime).await
+        {
             Ok(true) => {
                 if let Some(not_found_entry) = app_router.find_not_found(&route_match.route.path) {
                     route_match.not_found = Some(not_found_entry);

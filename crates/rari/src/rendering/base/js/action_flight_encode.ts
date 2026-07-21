@@ -19,6 +19,7 @@
       delete g['~rari'].actionRefreshElement
       delete g['~rari'].actionRefreshSearch
       delete g['~rari'].pendingActionResult
+      delete g['~rari'].capturedElement
     }
   }
 })()
