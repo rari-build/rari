@@ -253,18 +253,6 @@ impl RariRuntime {
                                 if let Ok(Err(e)) = event_loop_result {
                                     eprintln!("[rari] Event loop error: {e}");
                                     if is_runtime_restart_needed(&e) {
-                                        for batch in pending_batches.drain(..) {
-                                            for sender in batch.senders.into_iter().flatten() {
-                                                let _ = sender.send(Err(create_graceful_error()));
-                                            }
-                                        }
-                                        for mut stream in pending_streams.drain(..) {
-                                            fail_pending_stream(
-                                                &mut js_runtime,
-                                                &mut stream,
-                                                create_graceful_error(),
-                                            );
-                                        }
                                         break;
                                     }
                                 }
@@ -308,18 +296,6 @@ impl RariRuntime {
                                         if let Ok(Err(e)) = event_loop_result {
                                             eprintln!("[rari] Event loop error: {e}");
                                             if is_runtime_restart_needed(&e) {
-                                                for batch in pending_batches.drain(..) {
-                                                    for sender in batch.senders.into_iter().flatten() {
-                                                        let _ = sender.send(Err(create_graceful_error()));
-                                                    }
-                                                }
-                                                for mut stream in pending_streams.drain(..) {
-                                                    fail_pending_stream(
-                                                        &mut js_runtime,
-                                                        &mut stream,
-                                                        create_graceful_error(),
-                                                    );
-                                                }
                                                 break;
                                             }
                                         }
@@ -369,6 +345,19 @@ impl RariRuntime {
                                 }
                             }
                         }
+                    }
+
+                    for batch in pending_batches.drain(..) {
+                        for sender in batch.senders.into_iter().flatten() {
+                            let _ = sender.send(Err(create_graceful_error()));
+                        }
+                    }
+                    for mut stream in pending_streams.drain(..) {
+                        fail_pending_stream(
+                            &mut js_runtime,
+                            &mut stream,
+                            create_graceful_error(),
+                        );
                     }
 
                     if !continue_processing {
