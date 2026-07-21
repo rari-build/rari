@@ -92,7 +92,10 @@ test.describe('Streaming load validation', () => {
 
       const match = body.match(/data-testid="component-c"[^>]*>[\s\S]*?(\d{4}-\d{2}-\d{2}T[\d:.]+Z)/)
       expect(match, `response ${index} should include a component-c timestamp`).toBeTruthy()
-      return String(index)
+
+      const runId = body.match(/data-testid="run-id">(\d+)/)?.[1]
+      expect(runId, `response ${index} should include a run-id`).toBe(String(index))
+      return runId
     })
 
     expect(new Set(runIds).size).toBe(concurrency)
