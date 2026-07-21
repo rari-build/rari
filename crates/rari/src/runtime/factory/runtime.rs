@@ -9,7 +9,7 @@ use std::{
 };
 
 use base64::engine::general_purpose::STANDARD;
-use deno_core::{ModuleSpecifier, PollEventLoopOptions, v8};
+use deno_core::{ModuleSpecifier, v8};
 use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use serde_json::Value;
@@ -354,10 +354,20 @@ impl RariRuntime {
                                 }
                             }
 
-                            let _ = time::timeout(
+                            let event_loop_result = time::timeout(
                                 Duration::from_millis(10),
-                                js_runtime.run_event_loop(PollEventLoopOptions::default()),
-                            ).await;
+                                utils::v8::run_event_loop_with_error_handling(
+                                    &mut js_runtime,
+                                    "idle pump",
+                                ),
+                            )
+                            .await;
+                            if let Ok(Err(e)) = event_loop_result {
+                                eprintln!("[rari] Event loop error: {e}");
+                                if is_runtime_restart_needed(&e) {
+                                    break;
+                                }
+                            }
                         }
                     }
 
