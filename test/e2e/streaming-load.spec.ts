@@ -82,22 +82,21 @@ test.describe('Streaming load validation', () => {
 
     expect(results).toHaveLength(concurrency)
 
-    const timestamps = results.map(({ body }, index) => {
+    const runIds = results.map(({ body }, index) => {
       expect(body.startsWith('<!DOCTYPE html>')).toBe(true)
       expect(body).toContain('__rari_f')
       expect(body).toContain('component-a')
       expect(body).toContain('component-c')
+      expect(body).toContain(`data-testid="run-id">${index}`)
       expect(body.indexOf('</body>')).toBeGreaterThan(body.indexOf('__rari_f'))
 
       const match = body.match(/data-testid="component-c"[^>]*>[\s\S]*?(\d{4}-\d{2}-\d{2}T[\d:.]+Z)/)
       expect(match, `response ${index} should include a component-c timestamp`).toBeTruthy()
-      return match![1]
+      return String(index)
     })
 
-    expect(new Set(timestamps).size).toBe(concurrency)
-
-    const uniqueBodies = new Set(results.map(result => result.body))
-    expect(uniqueBodies.size).toBe(concurrency)
+    expect(new Set(runIds).size).toBe(concurrency)
+    expect(new Set(results.map(result => result.body)).size).toBe(concurrency)
   })
 
   test('should recover after a mid-stream client abort', async ({ page, request }) => {

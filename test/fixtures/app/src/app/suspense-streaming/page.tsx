@@ -6,10 +6,13 @@ interface SlowProps {
   delay: number
 }
 
-export default function SuspenseStreamingPage(_params: PageProps) {
+export default function SuspenseStreamingPage({ searchParams }: PageProps) {
+  const rawRun = searchParams?.run
+  const runId = Array.isArray(rawRun) ? rawRun[0] : rawRun
   return (
     <div>
       <h1>Suspense Streaming Test</h1>
+      {runId ? <div data-testid="run-id">{runId}</div> : null}
       <Suspense fallback={<div data-testid="loading-a">Loading A...</div>}>
         <SlowComponent name="A" delay={1000} />
       </Suspense>

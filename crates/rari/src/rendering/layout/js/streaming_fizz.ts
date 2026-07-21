@@ -398,11 +398,29 @@ declare function rariCreateHtmlBoundaryTracker(): {
     return createElement(RariStreamingApp, null)
   }
 
+  function rariFormatCaughtErrorHtml(caughtErrors: unknown[]): string {
+    if (caughtErrors.length === 0)
+      return ''
+    const displayError = caughtErrors.find((e) => {
+      if (!e || typeof e !== 'object' || !('message' in e))
+        return false
+      const message = String((e as { message: unknown }).message)
+      return message && !message.includes('omitted in production')
+    }) || caughtErrors[0]
+    const errMsg = String(
+      displayError && typeof displayError === 'object' && 'message' in displayError
+        ? (displayError as { message: unknown }).message
+        : 'Unknown error',
+    ).split('<').join('&lt;')
+    return `<div class=rari-error style=color:red;border:1px_solid_red;padding:10px;border-radius:4px;background-color:#fff5f5><strong>Error loading content: </strong>${errMsg}</div>`
+  }
+
   async function rariPumpLiveMux(
     session: RariFizzSession,
     fizzStream: ReadableStream & { allReady?: Promise<void> },
     liveFlight: ReturnType<typeof rariCreateLiveFlightSource>,
     ensureSourceComplete?: () => Promise<void>,
+    caughtErrors?: unknown[],
   ) {
     const reader = fizzStream.getReader()
     const decoder = new TextDecoder()
@@ -419,6 +437,14 @@ declare function rariCreateHtmlBoundaryTracker(): {
         return ''
       flightBootstrapped = true
       return rariFormatFlightScriptPush(0)
+    }
+
+    const takeErrorHtml = (): string => {
+      if (!caughtErrors || caughtErrors.length === 0)
+        return ''
+      const html = rariFormatCaughtErrorHtml(caughtErrors)
+      caughtErrors.length = 0
+      return html
     }
 
     const collectPendingFlight = (): string => {
@@ -500,7 +526,7 @@ declare function rariCreateHtmlBoundaryTracker(): {
       const flight = takeFlightBootstrap() + await liveFlight.collectAllRemainingText()
       if (before)
         session.trackHtmlBoundaries(before)
-      const combined = before + flight + takeCompleteScript() + after
+      const combined = before + flight + takeErrorHtml() + takeCompleteScript() + after
       if (!combined)
         return true
 
@@ -554,7 +580,7 @@ declare function rariCreateHtmlBoundaryTracker(): {
           await ensureSourceComplete()
         const flight = takeFlightBootstrap() + await liveFlight.collectAllRemainingText()
         const complete = takeCompleteScript()
-        const tail = flight + complete
+        const tail = takeErrorHtml() + flight + complete
         if (tail) {
           const status = Deno.core.ops.op_fizz_chunk_try(session.streamId, tail)
           if (status === 2) {
@@ -588,20 +614,10 @@ declare function rariCreateHtmlBoundaryTracker(): {
   }
 
   async function injectStreamError(caughtErrors: unknown[], streamId: string) {
-    if (caughtErrors.length === 0)
+    const errorHtml = rariFormatCaughtErrorHtml(caughtErrors)
+    if (!errorHtml)
       return
-    const displayError = caughtErrors.find((e) => {
-      if (!e || typeof e !== 'object' || !('message' in e))
-        return false
-      const message = String((e as { message: unknown }).message)
-      return message && !message.includes('omitted in production')
-    }) || caughtErrors[0]
-    const errMsg = String(
-      displayError && typeof displayError === 'object' && 'message' in displayError
-        ? (displayError as { message: unknown }).message
-        : 'Unknown error',
-    ).split('<').join('&lt;')
-    const errorHtml = `<div class=rari-error style=color:red;border:1px_solid_red;padding:10px;border-radius:4px;background-color:#fff5f5><strong>Error loading content: </strong>${errMsg}</div>`
+    caughtErrors.length = 0
     const session = rariCreateFizzSession(streamId)
     await session.pumpFizzChunk(errorHtml)
   }
@@ -674,7 +690,7 @@ declare function rariCreateHtmlBoundaryTracker(): {
     }) as ReadableStream & { allReady?: Promise<void> }
     rariStreamLog('fizz.stream.ready')
 
-    await rariPumpLiveMux(session, fizzStream, liveFlight, ensureSourceComplete)
+    await rariPumpLiveMux(session, fizzStream, liveFlight, ensureSourceComplete, caughtErrors)
     rariStreamLog('render.done')
   }
 

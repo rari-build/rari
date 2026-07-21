@@ -1,6 +1,6 @@
 /// <reference path="../types.d.ts" />
 
-// @ts-expect-error TS2307
+// @ts-ignore
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { core, internals } from 'ext:core/mod.js'
 
@@ -27,6 +27,7 @@ if (!g['~rari'].requestStorage) {
   g['~rari'].requestStorage = new AsyncLocalStorage<{
     requestId: string
     streamId?: string
+    capturedElement?: unknown
   }>()
 }
 g['~rari'].currentRequestId = () => {

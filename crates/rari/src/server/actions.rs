@@ -25,13 +25,16 @@ use serde_json::Value;
 
 use crate::{
     rendering::{
-        base::constants::{ACTION_FLIGHT_ENCODE_SCRIPT, ACTION_HANDLER_SCRIPT, GET_RSC_BINARY_B64},
+        base::{
+            constants::{ACTION_FLIGHT_ENCODE_SCRIPT, ACTION_HANDLER_SCRIPT, GET_RSC_BINARY_B64},
+            run_with_renderer_result,
+        },
         layout::{LayoutRenderer, create_layout_context},
     },
     runtime::factory::JsRuntimeInterface,
     server::{
         ServerState,
-        cache::revalidate::invalidate_route_caches,
+        cache::revalidate::{invalidate_route_caches, invalidate_route_caches_on},
         config::RedirectConfig,
         core::utils::http::{extract_headers, extract_search_params, is_origin_allowed},
         error_response,
@@ -260,9 +263,18 @@ fn redirect_target_path(redirect_url: &str) -> String {
     }
 }
 
-async fn invalidate_redirect_target_caches(state: &ServerState, redirect_url: &str) {
+async fn invalidate_redirect_target_caches(
+    state: &ServerState,
+    redirect_url: &str,
+    sticky_runtime: Option<&Arc<dyn crate::runtime::factory::JsRuntimeInterface>>,
+) {
     let redirect_path = redirect_target_path(redirect_url);
-    if let Err(e) = invalidate_route_caches(state, &redirect_path).await {
+    let result = if let Some(runtime) = sticky_runtime {
+        invalidate_route_caches_on(state, &redirect_path, runtime).await
+    } else {
+        invalidate_route_caches(state, &redirect_path).await
+    };
+    if let Err(e) = result {
         tracing::warn!(
             error = %e,
             path = %redirect_path,
@@ -580,7 +592,11 @@ async fn compose_action_refresh_route(
         }
     }
 
-    if let Err(error) = invalidate_route_caches(state, &pathname).await {
+    if let Err(error) = if let Some(runtime) = sticky_runtime {
+        invalidate_route_caches_on(state, &pathname, runtime).await
+    } else {
+        invalidate_route_caches(state, &pathname).await
+    } {
         tracing::warn!(
             error = %error,
             path = %pathname,
@@ -693,6 +709,19 @@ async fn handle_server_action_at_path(
 
     let script_name = action_script_name(action_id);
 
+    if let Err(e) = run_with_renderer_result(Arc::clone(&state.renderer), |renderer| async move {
+        renderer.ensure_rsc_pipeline().await
+    })
+    .await
+    {
+        tracing::error!("Failed to ensure RSC pipeline for server action: {}", e);
+        return Ok(rpc_action_error_response(
+            &e,
+            state.config.is_development(),
+            Some(&request_context.pending_cookies),
+        ));
+    }
+
     let leased = match runtime.acquire_request_runtime(Arc::clone(&request_context)).await {
         Ok(leased) => leased,
         Err(e) => {
@@ -755,7 +784,7 @@ async fn handle_server_action_at_path(
     let redirect = extract_redirect_from_result(&value, &redirect_config);
 
     if let Some(ref redirect_url) = redirect {
-        invalidate_redirect_target_caches(&state, redirect_url).await;
+        invalidate_redirect_target_caches(&state, redirect_url, Some(leased.runtime())).await;
     }
 
     if is_document_form_post {
@@ -794,7 +823,7 @@ async fn handle_server_action_at_path(
             .or(page_form_redirect_path);
 
         if let Some(document_redirect_target) = document_redirect_target {
-            invalidate_redirect_target_caches(&state, &document_redirect_target).await;
+            invalidate_redirect_target_caches(&state, &document_redirect_target, None).await;
             return Ok(document_form_redirect_response(
                 &document_redirect_target,
                 &request_context.pending_cookies,
