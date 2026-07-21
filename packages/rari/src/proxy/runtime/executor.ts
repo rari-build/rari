@@ -163,8 +163,9 @@ export class ProxyExecutor {
       for (const value of setCookies)
         merge(responseHeaders, 'set-cookie', value)
 
-      if ('cookies' in response && typeof response.cookies.toSetCookieHeaders === 'function') {
-        for (const value of response.cookies.toSetCookieHeaders())
+      const cookies = 'cookies' in response ? response.cookies : undefined
+      if (cookies && typeof cookies.toSetCookieHeaders === 'function') {
+        for (const value of cookies.toSetCookieHeaders())
           merge(responseHeaders, 'set-cookie', value)
       }
 
