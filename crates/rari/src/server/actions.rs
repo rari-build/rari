@@ -266,7 +266,7 @@ fn redirect_target_path(redirect_url: &str) -> String {
 async fn invalidate_redirect_target_caches(
     state: &ServerState,
     redirect_url: &str,
-    sticky_runtime: Option<&Arc<dyn crate::runtime::factory::JsRuntimeInterface>>,
+    sticky_runtime: Option<&Arc<dyn JsRuntimeInterface>>,
 ) {
     let redirect_path = redirect_target_path(redirect_url);
     let result = if let Some(runtime) = sticky_runtime {

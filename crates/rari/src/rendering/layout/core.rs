@@ -1184,7 +1184,6 @@ impl LayoutRenderer {
         ))
     }
 
-    #[expect(clippy::too_many_lines)]
     pub fn build_composition_script(
         route_match: &AppRouteMatch,
         context: &LayoutRenderContext,
