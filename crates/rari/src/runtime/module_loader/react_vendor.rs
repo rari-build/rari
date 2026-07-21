@@ -29,7 +29,7 @@ pub fn node_vendor_specifier(module_name: &str) -> String {
 }
 
 pub fn reexport_shim_source(module_name: &str) -> Option<String> {
-    normalize_vendor_module_name(module_name)?;
+    let module_name = normalize_vendor_module_name(module_name)?;
     let ext = format!("ext:rari/react/vendor/{module_name}");
     Some(format!("export * from \"{ext}\";\nexport {{ default }} from \"{ext}\";\n"))
 }
