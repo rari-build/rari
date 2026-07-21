@@ -7,7 +7,7 @@ use std::{
 use axum::{
     body,
     body::Body,
-    http::{HeaderMap, Request, Response, StatusCode},
+    http::{HeaderMap, HeaderName, HeaderValue, Request, Response, StatusCode},
 };
 use cow_utils::CowUtils;
 use dashmap::DashMap;
@@ -468,19 +468,17 @@ impl ApiRouteHandler {
                 StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
             let body_str = result.get("body").and_then(|v| v.as_str()).unwrap_or("").to_string();
 
-            let mut response = Response::builder().status(status_code);
+            let mut response =
+                Response::builder()
+                    .status(status_code)
+                    .body(Body::from(body_str))
+                    .map_err(|e| RariError::internal(format!("Failed to build response: {e}")))?;
 
             if let Some(headers_obj) = result.get("headers").and_then(|v| v.as_object()) {
-                for (key, value) in headers_obj {
-                    if let Some(value_str) = value.as_str() {
-                        response = response.header(key, value_str);
-                    }
-                }
+                append_json_headers(response.headers_mut(), headers_obj);
             }
 
-            response
-                .body(Body::from(body_str))
-                .map_err(|e| RariError::internal(format!("Failed to build response: {e}")))
+            Ok(response)
         } else {
             let body = serde_json::to_string(&result).map_err(|e| {
                 RariError::serialization(format!("Failed to serialize response: {e}"))
@@ -491,6 +489,25 @@ impl ApiRouteHandler {
                 .header("content-type", "application/json")
                 .body(Body::from(body))
                 .map_err(|e| RariError::internal(format!("Failed to build response: {e}")))
+        }
+    }
+}
+
+fn append_json_headers(headers: &mut HeaderMap, headers_obj: &serde_json::Map<String, Value>) {
+    for (key, value) in headers_obj {
+        let Ok(header_name) = HeaderName::from_bytes(key.as_bytes()) else {
+            continue;
+        };
+        let values: Vec<&str> = match value {
+            Value::String(s) => vec![s.as_str()],
+            Value::Array(items) => items.iter().filter_map(Value::as_str).collect(),
+            _ => continue,
+        };
+        for value_str in values {
+            let Ok(header_value) = HeaderValue::from_str(value_str) else {
+                continue;
+            };
+            headers.append(header_name.clone(), header_value);
         }
     }
 }
@@ -551,6 +568,26 @@ mod tests {
         assert_eq!(response.status(), StatusCode::CREATED);
         assert_eq!(response.headers().get("content-type").unwrap(), "application/json");
         assert_eq!(response.headers().get("x-custom").unwrap(), "value");
+    }
+
+    #[tokio::test]
+    async fn test_create_response_preserves_multiple_set_cookie_headers() {
+        let response_json = json!({
+            "status": 200,
+            "headers": {
+                "content-type": "application/json",
+                "set-cookie": ["foo=bar; Path=/", "hello=world; Path=/"]
+            },
+            "body": r#"{"ok":true}"#
+        });
+
+        let response = ApiRouteHandler::create_response(&response_json).unwrap();
+        let set_cookies: Vec<_> =
+            response.headers().get_all("set-cookie").iter().map(|v| v.to_str().unwrap()).collect();
+
+        assert_eq!(set_cookies.len(), 2);
+        assert!(set_cookies.iter().any(|v| v.starts_with("foo=bar")));
+        assert!(set_cookies.iter().any(|v| v.starts_with("hello=world")));
     }
 
     #[tokio::test]

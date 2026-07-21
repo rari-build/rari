@@ -114,7 +114,7 @@ describe('RariResponse', () => {
 
       res.cookies.set('session', 'abc123')
 
-      const headers = (res.cookies as any).toSetCookieHeaders()
+      const headers = res.cookies.toSetCookieHeaders()
 
       expect(headers).toHaveLength(1)
       expect(headers[0]).toBe('session=abc123')
@@ -125,7 +125,7 @@ describe('RariResponse', () => {
 
       res.cookies.set('token', 'xyz', { path: '/api' })
 
-      const headers = (res.cookies as any).toSetCookieHeaders()
+      const headers = res.cookies.toSetCookieHeaders()
 
       expect(headers[0]).toBe('token=xyz; Path=/api')
     })
@@ -135,7 +135,7 @@ describe('RariResponse', () => {
 
       res.cookies.set('user', 'john', { domain: 'example.com' })
 
-      const headers = (res.cookies as any).toSetCookieHeaders()
+      const headers = res.cookies.toSetCookieHeaders()
 
       expect(headers[0]).toBe('user=john; Domain=example.com')
     })
@@ -145,7 +145,7 @@ describe('RariResponse', () => {
 
       res.cookies.set('temp', 'value', { maxAge: 3600 })
 
-      const headers = (res.cookies as any).toSetCookieHeaders()
+      const headers = res.cookies.toSetCookieHeaders()
 
       expect(headers[0]).toBe('temp=value; Max-Age=3600')
     })
@@ -156,7 +156,7 @@ describe('RariResponse', () => {
 
       res.cookies.set('persistent', 'value', { expires })
 
-      const headers = (res.cookies as any).toSetCookieHeaders()
+      const headers = res.cookies.toSetCookieHeaders()
 
       expect(headers[0]).toBe(`persistent=value; Expires=${expires.toUTCString()}`)
     })
@@ -166,7 +166,7 @@ describe('RariResponse', () => {
 
       res.cookies.set('secure', 'value', { httpOnly: true })
 
-      const headers = (res.cookies as any).toSetCookieHeaders()
+      const headers = res.cookies.toSetCookieHeaders()
 
       expect(headers[0]).toBe('secure=value; HttpOnly')
     })
@@ -176,7 +176,7 @@ describe('RariResponse', () => {
 
       res.cookies.set('token', 'value', { secure: true })
 
-      const headers = (res.cookies as any).toSetCookieHeaders()
+      const headers = res.cookies.toSetCookieHeaders()
 
       expect(headers[0]).toBe('token=value; Secure')
     })
@@ -186,7 +186,7 @@ describe('RariResponse', () => {
 
       res.cookies.set('session', 'token', { sameSite: 'strict' })
 
-      const headers = (res.cookies as any).toSetCookieHeaders()
+      const headers = res.cookies.toSetCookieHeaders()
 
       expect(headers[0]).toBe('session=token; SameSite=strict')
     })
@@ -205,7 +205,7 @@ describe('RariResponse', () => {
         sameSite: 'lax',
       })
 
-      const headers = (res.cookies as any).toSetCookieHeaders()
+      const headers = res.cookies.toSetCookieHeaders()
 
       expect(headers[0]).toBe(
         `full=value; Path=/app; Domain=example.com; Max-Age=3600; Expires=${expires.toUTCString()}; HttpOnly; Secure; SameSite=lax`,
@@ -218,7 +218,7 @@ describe('RariResponse', () => {
       res.cookies.set('a', '1', { path: '/a' })
       res.cookies.set('b', '2', { path: '/b' })
 
-      const headers = (res.cookies as any).toSetCookieHeaders()
+      const headers = res.cookies.toSetCookieHeaders()
 
       expect(headers).toHaveLength(2)
       expect(headers).toContain('a=1; Path=/a')

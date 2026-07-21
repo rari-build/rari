@@ -1,5 +1,5 @@
 import type { ResponseLike, SimpleProxyResult } from './types'
-import { collectAllHeaders, extractProxyHeaders } from './headers'
+import { applyResponseCookies, collectAllHeaders, extractProxyHeaders } from './headers'
 
 export function checkForRewrite(result: ResponseLike | null): SimpleProxyResult | null {
   if (!result)
@@ -37,16 +37,18 @@ export function checkForRedirect(result: ResponseLike | null): SimpleProxyResult
 }
 
 export function handleContinueWithHeaders(result: ResponseLike): SimpleProxyResult {
-  const { requestHeaders, responseHeaders } = extractProxyHeaders(result.headers)
+  const { requestHeaders, responseHeaders = {} } = extractProxyHeaders(result.headers)
+  applyResponseCookies(result, responseHeaders)
   return {
     continue: true,
     requestHeaders,
-    responseHeaders,
+    responseHeaders: Object.keys(responseHeaders).length > 0 ? responseHeaders : undefined,
   }
 }
 
 export async function handleDirectResponse(result: ResponseLike): Promise<SimpleProxyResult> {
   const headers = collectAllHeaders(result.headers)
+  applyResponseCookies(result, headers)
 
   let body: string | undefined
   try {
