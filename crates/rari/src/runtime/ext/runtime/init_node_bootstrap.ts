@@ -1,7 +1,7 @@
 /// <reference path="../types.d.ts" />
 /// <reference path="../rari/core/types.d.ts" />
 
-// @ts-expect-error TS2307 — Deno runtime has no ambient types for node:async_hooks
+// @ts-expect-error TS2307 - Deno runtime has no ambient types for node:async_hooks
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { core, internals } from 'ext:core/mod.js'
 
