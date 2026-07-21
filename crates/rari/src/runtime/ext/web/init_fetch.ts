@@ -170,7 +170,12 @@ async function fetchWithRustCache(input: RequestInfo | URL, init: RequestInit & 
   options.timeout = String(typeof timeoutMs === 'number' && timeoutMs > 0 ? timeoutMs : 5000)
 
   try {
-    const result = await Deno.core.ops.op_fetch_with_cache(url, JSON.stringify(options))
+    const rariGlobal = (globalThis as { '~rari'?: { currentRequestId?: () => string } })['~rari']
+    const result = await Deno.core.ops.op_fetch_with_cache(
+      url,
+      JSON.stringify(options),
+      rariGlobal?.currentRequestId?.() || '',
+    )
 
     if (!result.ok)
       throw new Error(result.error || 'Fetch failed')

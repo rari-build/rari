@@ -192,6 +192,14 @@ impl ComponentRegistry {
         }
     }
 
+    pub fn get_loaded_component_ids(&self) -> Vec<String> {
+        self.components
+            .iter()
+            .filter(|(_, component)| component.is_loaded)
+            .map(|(id, _)| id.clone())
+            .collect()
+    }
+
     pub fn mark_component_not_loaded(&mut self, id: &str) {
         let normalized_id = Self::normalize_id(id);
         if let Some(component) = self.components.get_mut(normalized_id.as_ref()) {

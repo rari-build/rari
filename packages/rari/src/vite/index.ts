@@ -162,6 +162,8 @@ export interface RariOptions {
   cacheControl?: {
     routes: Record<string, string>
   }
+  jsPoolSize?: number
+  htmlLimitedBots?: string
   cache?: ServerCacheConfig
   experimental?: {
     useCache?: boolean
@@ -1291,6 +1293,8 @@ ${clientTransformedCode}`
             csp: options.csp,
             cacheControl: options.cacheControl,
             cache: options.cache,
+            jsPoolSize: options.jsPoolSize,
+            htmlLimitedBots: options.htmlLimitedBots,
             experimental: options.experimental,
             moduleAnalysisCache,
           })
@@ -1454,6 +1458,10 @@ ${clientTransformedCode}`
             ...process.env,
             RUST_LOG: process.env.RUST_LOG || 'error',
             RARI_VITE_PORT: vitePort.toString(),
+            // Dev starts the binary before config.json is written; pass pool size via env.
+            ...(options.jsPoolSize != null && !process.env.RARI_JS_POOL_SIZE
+              ? { RARI_JS_POOL_SIZE: String(options.jsPoolSize) }
+              : {}),
           },
         })
 
@@ -2246,6 +2254,8 @@ export const createTemporaryReferenceSet = module.exports.createTemporaryReferen
     csp: options.csp,
     cacheControl: options.cacheControl,
     cache: options.cache,
+    jsPoolSize: options.jsPoolSize,
+    htmlLimitedBots: options.htmlLimitedBots,
     experimental: options.experimental,
     moduleAnalysisCache,
     mdx: options.mdx,

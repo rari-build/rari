@@ -2,7 +2,9 @@ use std::fmt::Write;
 
 use crate::{
     rendering::{
-        layout::types::{IconValue, OpenGraphImage, PageMetadata, ThemeColorMetadata},
+        layout::types::{
+            IconValue, LayoutRenderContext, OpenGraphImage, PageMetadata, ThemeColorMetadata,
+        },
         r#static::escape_html,
     },
     server::image::ImageOptimizer,
@@ -531,6 +533,64 @@ pub fn inject_metadata(
     result
 }
 
+/// Head-inner HTML for streaming injection (title/meta/og/etc.) without a full document wrap.
+/// Used when Fizz has already started; tags may land before or after `<head>` closes and
+/// browsers/crawlers that buffer the full response still apply them.
+pub fn metadata_head_fragment(
+    metadata: &PageMetadata,
+    image_optimizer: Option<&ImageOptimizer>,
+) -> String {
+    let stub = "<!DOCTYPE html><html><head><title></title></head><body></body></html>";
+    let injected = inject_metadata(stub, metadata, image_optimizer);
+    let Some(head_open) = injected.find("<head>") else {
+        return String::new();
+    };
+    let inner_start = head_open + "<head>".len();
+    let Some(rel_end) = injected[inner_start..].find("</head>") else {
+        return String::new();
+    };
+    injected[inner_start..inner_start + rel_end].replace("<title></title>", "").trim().to_string()
+}
+
+/// Apply resolved metadata for HTML-limited bots: store on context and attach
+/// head tags so Fizz emits them inside the initial `<head>`.
+pub fn apply_blocking_streaming_metadata(
+    context: &mut LayoutRenderContext,
+    metadata: Option<PageMetadata>,
+    image_optimizer: Option<&ImageOptimizer>,
+) {
+    context.metadata = metadata;
+    if let Some(ref meta) = context.metadata {
+        let fragment = metadata_head_fragment(meta, image_optimizer);
+        if !fragment.is_empty() {
+            context.streaming_head_extra = Some(fragment);
+        }
+    }
+}
+
+/// Tags to flush into a streaming HTML body when deferred metadata resolves.
+pub fn streaming_metadata_chunk(
+    metadata: Option<&PageMetadata>,
+    image_optimizer: Option<&ImageOptimizer>,
+) -> Option<String> {
+    let metadata = metadata?;
+    let tags = metadata_head_fragment(metadata, image_optimizer);
+    if tags.is_empty() { None } else { Some(tags) }
+}
+
+/// Merge bot blocking head tags into the Fizz document head content.
+pub fn merge_streaming_head_content(template_head: &str, extra: Option<&str>) -> String {
+    match extra.filter(|s| !s.is_empty()) {
+        Some(extra) => {
+            let mut head = String::with_capacity(template_head.len() + extra.len());
+            head.push_str(template_head);
+            head.push_str(extra);
+            head
+        }
+        None => template_head.to_string(),
+    }
+}
+
 #[cfg(test)]
 #[expect(clippy::expect_used)]
 mod tests {
@@ -538,8 +598,8 @@ mod tests {
 
     use super::*;
     use crate::rendering::layout::types::{
-        AlternatesMetadata, OpenGraphImage, OpenGraphImageDescriptor, OpenGraphMetadata,
-        RobotsMetadata, TwitterMetadata,
+        AlternatesMetadata, LayoutRenderContext, OpenGraphImage, OpenGraphImageDescriptor,
+        OpenGraphMetadata, RobotsMetadata, TwitterMetadata,
     };
 
     #[test]
@@ -574,6 +634,100 @@ mod tests {
         assert!(result.contains("<title>Test Page</title>"));
         assert!(result.contains(r#"<meta name="description" content="Test description" />"#));
         assert!(result.contains(r#"<meta name="keywords" content="test, page" />"#));
+    }
+
+    #[test]
+    fn test_metadata_head_fragment_includes_title() {
+        let metadata = PageMetadata {
+            title: Some("Hello".to_string()),
+            description: Some("World".to_string()),
+            keywords: None,
+            open_graph: None,
+            twitter: None,
+            robots: None,
+            viewport: None,
+            canonical: None,
+            icons: None,
+            manifest: None,
+            theme_color: None,
+            apple_web_app: None,
+            alternates: None,
+        };
+        let fragment = metadata_head_fragment(&metadata, None);
+        assert!(fragment.contains("<title>Hello</title>"), "{fragment}");
+        assert!(fragment.contains(r#"content="World""#), "{fragment}");
+    }
+
+    #[test]
+    fn bot_blocking_metadata_lands_in_streaming_head_extra() {
+        let metadata = PageMetadata {
+            title: Some("Bot Title".to_string()),
+            description: Some("Bot Desc".to_string()),
+            keywords: None,
+            open_graph: None,
+            twitter: None,
+            robots: None,
+            viewport: None,
+            canonical: None,
+            icons: None,
+            manifest: None,
+            theme_color: None,
+            apple_web_app: None,
+            alternates: None,
+        };
+        let mut context = LayoutRenderContext {
+            params: FxHashMap::default(),
+            search_params: FxHashMap::default(),
+            headers: FxHashMap::default(),
+            pathname: "/stream".to_string(),
+            template_navigation_id: None,
+            metadata: None,
+            streaming_head_extra: None,
+        };
+        apply_blocking_streaming_metadata(&mut context, Some(metadata), None);
+        let extra = context.streaming_head_extra.as_deref().expect("bot head tags");
+        assert!(extra.contains("<title>Bot Title</title>"), "{extra}");
+        assert!(extra.contains(r#"content="Bot Desc""#), "{extra}");
+        assert!(context.metadata.is_some());
+
+        let merged = merge_streaming_head_content(
+            r#"<link rel="stylesheet" href="/app.css" />"#,
+            context.streaming_head_extra.as_deref(),
+        );
+        assert!(merged.contains("app.css"));
+        assert!(merged.contains("<title>Bot Title</title>"));
+        // Tags must appear in the same head string Fizz will emit (before </head>).
+        assert!(merged.find("app.css").expect("css") < merged.find("<title>").expect("title"));
+    }
+
+    #[test]
+    fn deferred_metadata_chunk_for_streaming_flush() {
+        let metadata = PageMetadata {
+            title: Some("Late Title".to_string()),
+            description: Some("Late Desc".to_string()),
+            keywords: None,
+            open_graph: None,
+            twitter: None,
+            robots: None,
+            viewport: None,
+            canonical: None,
+            icons: None,
+            manifest: None,
+            theme_color: None,
+            apple_web_app: None,
+            alternates: None,
+        };
+        let chunk = streaming_metadata_chunk(Some(&metadata), None).expect("chunk");
+        assert!(chunk.contains("<title>Late Title</title>"), "{chunk}");
+        assert!(chunk.contains(r#"content="Late Desc""#), "{chunk}");
+        assert!(streaming_metadata_chunk(None, None).is_none());
+    }
+
+    #[test]
+    fn merge_streaming_head_skips_empty_extra() {
+        assert_eq!(merge_streaming_head_content("base", None), "base");
+        assert_eq!(merge_streaming_head_content("base", Some("")), "base");
+        assert_eq!(merge_streaming_head_content("base", Some("extra")), "baseextra");
     }
 
     #[test]

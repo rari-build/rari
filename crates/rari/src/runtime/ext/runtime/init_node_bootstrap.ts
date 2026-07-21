@@ -1,5 +1,7 @@
 /// <reference path="../types.d.ts" />
 
+// @ts-expect-error TS2307
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { core, internals } from 'ext:core/mod.js'
 
 // 99_main.js normally calls core.setBuildInfo during bootstrap. Without it,
@@ -16,4 +18,21 @@ internals.__nodeBootstrapArgs = {
   nodeDebug: '',
   denoArgs: core.ops.op_bootstrap_args(),
   denoVersion: Deno.version,
+}
+
+// Per-request async context for concurrent streams on one isolate.
+if (!g['~rari'])
+  g['~rari'] = {}
+if (!g['~rari'].requestStorage) {
+  g['~rari'].requestStorage = new AsyncLocalStorage<{
+    requestId: string
+    streamId?: string
+  }>()
+}
+g['~rari'].currentRequestId = () => {
+  const store = g['~rari']?.requestStorage?.getStore?.()
+  if (store && typeof store === 'object' && store.requestId != null)
+    return String(store.requestId)
+
+  return ''
 }

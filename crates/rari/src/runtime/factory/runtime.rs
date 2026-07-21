@@ -24,7 +24,7 @@ use crate::{
         factory::{
             component_ops::pending_component_id,
             executor::{self, execute_script},
-            interface::{AsyncBatchResult, JsRuntimeInterface},
+            interface::{AsyncBatchResult, JsRuntimeInterface, QueueStreamingScriptFuture},
             runtime_builder::build_js_runtime,
             utils::{
                 self,
@@ -38,6 +38,7 @@ use crate::{
             },
         },
         module_loader::RariModuleLoader,
+        ops::{RequestContextStore, StreamOpState},
     },
     server::{actions::action_form_state_sync_script, middleware::request_context::RequestContext},
     with_scope,
@@ -95,6 +96,15 @@ struct PendingBatch {
     batch_id: u64,
 }
 
+struct PendingStream {
+    stream_id: String,
+    slot_key: String,
+    result_tx: Option<oneshot::Sender<Result<(), RariError>>>,
+    start: Instant,
+    timeout: Duration,
+    done: bool,
+}
+
 enum JsRequest {
     ExecuteScript {
         script_name: String,
@@ -130,23 +140,24 @@ enum JsRequest {
         request_context: Arc<RequestContext>,
         result_tx: oneshot::Sender<Result<(), RariError>>,
     },
-    ClearRequestContext {
-        result_tx: oneshot::Sender<Result<(), RariError>>,
-    },
     ClearRequestContextIfMatches {
         expected_context: Arc<RequestContext>,
         result_tx: oneshot::Sender<Result<(), RariError>>,
     },
-    ExecuteScriptWithRequestContext {
-        request_context: Arc<RequestContext>,
-        script_name: String,
-        script_code: String,
-        result_tx: oneshot::Sender<Result<Value, RariError>>,
-    },
     ExecuteScriptForStreaming {
+        stream_id: String,
         script_name: String,
         script_code: String,
         chunk_sender: mpsc::Sender<Result<Vec<u8>, RariError>>,
+        request_context: Option<Arc<RequestContext>>,
+        result_tx: oneshot::Sender<Result<(), RariError>>,
+    },
+    RegisterRequestContext {
+        request_context: Arc<RequestContext>,
+        result_tx: oneshot::Sender<Result<(), RariError>>,
+    },
+    UnregisterRequestContext {
+        request_id: String,
         result_tx: oneshot::Sender<Result<(), RariError>>,
     },
 }
@@ -159,7 +170,9 @@ pub struct RariRuntime {
 
 fn is_priority_js_request(req: &JsRequest) -> bool {
     match req {
-        JsRequest::ExecuteScriptWithRequestContext { .. } => true,
+        JsRequest::ExecuteScriptForStreaming { .. } | JsRequest::RegisterRequestContext { .. } => {
+            true
+        }
         JsRequest::ExecuteScript { script_name, .. } => script_name.starts_with("execute_action_"),
         _ => false,
     }
@@ -212,30 +225,16 @@ impl RariRuntime {
 
                     let mut continue_processing = true;
                     let mut pending_batches: Vec<PendingBatch> = Vec::new();
+                    let mut pending_streams: Vec<PendingStream> = Vec::new();
                     let mut batch_id_counter: u64 = 0;
 
                     while continue_processing {
-                        if pending_batches.is_empty() {
-                            match recv_js_request(&mut priority_receiver, &mut request_receiver).await {
-                                Some(req) => {
-                                    let result = handle_js_request(
-                                        req,
-                                        &mut js_runtime,
-                                        &module_loader,
-                                        &mut continue_processing,
-                                        &mut pending_batches,
-                                        &mut batch_id_counter,
-                                    ).await;
-                                    if let Err(e) = result {
-                                        eprintln!("[rari] Error processing request: {e}");
-                                        break;
-                                    }
-                                }
-                                None => {
-                                    continue_processing = false;
-                                }
-                            }
-                        } else {
+                        let has_pending =
+                            !pending_batches.is_empty() || !pending_streams.is_empty();
+                        if has_pending {
+                            // Short polls keep Suspense timers and chunk ops progressing under load.
+                            // Longer polls delay timer wakeups and stretch stream latency.
+                            let pump_budget_ms = if pending_streams.is_empty() { 50 } else { 2 };
                             tokio::select! {
                                 biased;
                                 request = recv_js_request(&mut priority_receiver, &mut request_receiver) => {
@@ -247,6 +246,7 @@ impl RariRuntime {
                                                 &module_loader,
                                                 &mut continue_processing,
                                                 &mut pending_batches,
+                                                &mut pending_streams,
                                                 &mut batch_id_counter,
                                             ).await;
                                             if let Err(e) = result {
@@ -260,9 +260,9 @@ impl RariRuntime {
                                     }
                                 }
                                 event_loop_result = time::timeout(
-                                    Duration::from_millis(50),
+                                    Duration::from_millis(pump_budget_ms),
                                     utils::v8::run_event_loop_with_error_handling(
-                                        &mut js_runtime, "concurrent batch"
+                                        &mut js_runtime, "concurrent pending"
                                     ),
                                 ) => {
                                     if let Ok(Err(e)) = event_loop_result {
@@ -273,6 +273,13 @@ impl RariRuntime {
                                                     let _ = sender.send(Err(create_graceful_error()));
                                                 }
                                             }
+                                            for mut stream in pending_streams.drain(..) {
+                                                fail_pending_stream(
+                                                    &mut js_runtime,
+                                                    &mut stream,
+                                                    create_graceful_error(),
+                                                );
+                                            }
                                             break;
                                         }
                                     }
@@ -281,12 +288,35 @@ impl RariRuntime {
 
                             check_pending_batches(&mut js_runtime, &mut pending_batches);
                             pending_batches.retain(|b| b.remaining > 0 && b.start.elapsed() < b.timeout);
-                        }
+                            check_pending_streams(&mut js_runtime, &mut pending_streams);
+                            pending_streams.retain(|s| !s.done);
+                        } else {
+                            match recv_js_request(&mut priority_receiver, &mut request_receiver).await {
+                                Some(req) => {
+                                    let result = handle_js_request(
+                                        req,
+                                        &mut js_runtime,
+                                        &module_loader,
+                                        &mut continue_processing,
+                                        &mut pending_batches,
+                                        &mut pending_streams,
+                                        &mut batch_id_counter,
+                                    ).await;
+                                    if let Err(e) = result {
+                                        eprintln!("[rari] Error processing request: {e}");
+                                        break;
+                                    }
+                                }
+                                None => {
+                                    continue_processing = false;
+                                }
+                            }
 
-                        let _ = time::timeout(
-                            Duration::from_millis(10),
-                            js_runtime.run_event_loop(PollEventLoopOptions::default()),
-                        ).await;
+                            let _ = time::timeout(
+                                Duration::from_millis(10),
+                                js_runtime.run_event_loop(PollEventLoopOptions::default()),
+                            ).await;
+                        }
                     }
 
                     if !continue_processing {
@@ -458,6 +488,7 @@ async fn handle_js_request(
     module_loader: &Rc<RariModuleLoader>,
     continue_processing: &mut bool,
     pending_batches: &mut Vec<PendingBatch>,
+    pending_streams: &mut Vec<PendingStream>,
     batch_id_counter: &mut u64,
 ) -> Result<(), RariError> {
     match request {
@@ -542,11 +573,6 @@ async fn handle_js_request(
             js_runtime.op_state().borrow_mut().put(request_context);
             let _ = result_tx.send(Ok(()));
         }
-        JsRequest::ClearRequestContext { result_tx } => {
-            js_runtime.op_state().borrow_mut().try_take::<Arc<RequestContext>>();
-            clear_action_form_state(js_runtime);
-            let _ = result_tx.send(Ok(()));
-        }
         JsRequest::ClearRequestContextIfMatches { expected_context, result_tx } => {
             let should_clear = {
                 let op_state = js_runtime.op_state();
@@ -564,56 +590,70 @@ async fn handle_js_request(
             }
             let _ = result_tx.send(Ok(()));
         }
-        JsRequest::ExecuteScriptWithRequestContext {
-            request_context,
-            script_name,
-            script_code,
-            result_tx,
-        } => {
-            let previous_context =
-                js_runtime.op_state().borrow_mut().try_take::<Arc<RequestContext>>();
-            clear_page_cache_tags(js_runtime);
-            reset_use_cache_dynamic_context(js_runtime);
-            sync_action_form_state_for_context(js_runtime, &request_context);
-            js_runtime.op_state().borrow_mut().put(request_context);
-            let result =
-                execute_script(js_runtime, module_loader, &script_name, &script_code).await;
-            js_runtime.op_state().borrow_mut().try_take::<Arc<RequestContext>>();
-            if let Some(previous_context) = previous_context {
-                sync_action_form_state_for_context(js_runtime, &previous_context);
-                js_runtime.op_state().borrow_mut().put(previous_context);
-            } else {
-                clear_action_form_state(js_runtime);
-            }
-            if let Err(e) = &result
-                && is_runtime_restart_needed(e)
-            {
-                let _ = result_tx.send(Err(create_graceful_error()));
-                return Err(RariError::internal("Runtime restart needed".to_string()));
-            }
-            let _ = result_tx.send(result);
-        }
         JsRequest::ExecuteScriptForStreaming {
+            stream_id,
             script_name,
             script_code,
             chunk_sender,
+            request_context,
             result_tx,
         } => {
-            let result = executor::execute_script_for_streaming(
+            if let Some(request_context) = request_context {
+                let op_state = js_runtime.op_state();
+                let mut borrowed = op_state.borrow_mut();
+                if let Some(store) = borrowed.try_borrow_mut::<RequestContextStore>() {
+                    store.insert(request_context);
+                } else {
+                    let mut store = RequestContextStore::default();
+                    store.insert(request_context);
+                    borrowed.put(store);
+                }
+            }
+            match executor::start_streaming_script(
                 js_runtime,
-                module_loader,
                 &script_name,
                 &script_code,
+                &stream_id,
                 chunk_sender,
-            )
-            .await;
-            if let Err(e) = &result
-                && is_runtime_restart_needed(e)
-            {
-                let _ = result_tx.send(Err(create_graceful_error()));
-                return Err(RariError::internal("Runtime restart needed".to_string()));
+            ) {
+                Ok(slot_key) => {
+                    pending_streams.push(PendingStream {
+                        stream_id,
+                        slot_key,
+                        result_tx: Some(result_tx),
+                        start: Instant::now(),
+                        timeout: Duration::from_millis(executor::streaming_promise_timeout_ms()),
+                        done: false,
+                    });
+                }
+                Err(e) => {
+                    if is_runtime_restart_needed(&e) {
+                        let _ = result_tx.send(Err(create_graceful_error()));
+                        return Err(RariError::internal("Runtime restart needed".to_string()));
+                    }
+                    let _ = result_tx.send(Err(e));
+                }
             }
-            let _ = result_tx.send(result);
+        }
+        JsRequest::RegisterRequestContext { request_context, result_tx } => {
+            let op_state = js_runtime.op_state();
+            let mut borrowed = op_state.borrow_mut();
+            if let Some(store) = borrowed.try_borrow_mut::<RequestContextStore>() {
+                store.insert(request_context);
+            } else {
+                let mut store = RequestContextStore::default();
+                store.insert(request_context);
+                borrowed.put(store);
+            }
+            let _ = result_tx.send(Ok(()));
+        }
+        JsRequest::UnregisterRequestContext { request_id, result_tx } => {
+            let op_state = js_runtime.op_state();
+            let mut borrowed = op_state.borrow_mut();
+            if let Some(store) = borrowed.try_borrow_mut::<RequestContextStore>() {
+                store.remove(&request_id);
+            }
+            let _ = result_tx.send(Ok(()));
         }
     }
     Ok(())
@@ -902,6 +942,118 @@ fn check_pending_batches(
     }
 }
 
+fn take_stream_sender(
+    js_runtime: &deno_core::JsRuntime,
+    stream_id: &str,
+) -> Option<mpsc::Sender<Result<Vec<u8>, RariError>>> {
+    let op_state = js_runtime.op_state();
+    let mut borrowed = op_state.borrow_mut();
+    borrowed.try_borrow_mut::<StreamOpState>().and_then(|state| state.take_sender(stream_id))
+}
+
+fn fail_pending_stream(
+    js_runtime: &mut deno_core::JsRuntime,
+    stream: &mut PendingStream,
+    err: RariError,
+) {
+    let slot_key = &stream.slot_key;
+    let cleanup = format!(
+        r"(function() {{
+            if (globalThis['~rari_concurrent'] && globalThis['~rari_concurrent']['{slot_key}']) {{
+                delete globalThis['~rari_concurrent']['{slot_key}'];
+            }}
+            if (globalThis['{slot_key}']) {{
+                delete globalThis['{slot_key}'];
+            }}
+        }})()"
+    );
+    let _ = js_runtime.execute_script(format!("cleanup_stream_fail_{slot_key}"), cleanup);
+
+    if let Some(sender) = take_stream_sender(js_runtime, &stream.stream_id) {
+        let _ = sender.try_send(Err(err.clone()));
+    }
+    {
+        let op_state = js_runtime.op_state();
+        let mut borrowed = op_state.borrow_mut();
+        if let Some(state) = borrowed.try_borrow_mut::<StreamOpState>() {
+            let _ = state.take_settled(&stream.stream_id);
+        }
+    }
+    if let Some(tx) = stream.result_tx.take() {
+        let _ = tx.send(Err(err));
+    }
+    stream.done = true;
+}
+
+fn check_pending_streams(
+    js_runtime: &mut deno_core::JsRuntime,
+    pending_streams: &mut [PendingStream],
+) {
+    for stream in pending_streams.iter_mut() {
+        if stream.done {
+            continue;
+        }
+
+        let settled = {
+            let op_state = js_runtime.op_state();
+            let mut borrowed = op_state.borrow_mut();
+            borrowed
+                .try_borrow_mut::<StreamOpState>()
+                .and_then(|state| state.take_settled(&stream.stream_id))
+        };
+
+        let Some(settled) = settled else {
+            if stream.start.elapsed() >= stream.timeout {
+                let err = RariError::timeout(format!(
+                    "Streaming script timed out for '{}'",
+                    stream.stream_id
+                ));
+                fail_pending_stream(js_runtime, stream, err);
+            }
+            continue;
+        };
+
+        let slot_key = &stream.slot_key;
+        let cleanup = format!(
+            r"(function() {{
+                if (globalThis['~rari_concurrent'] && globalThis['~rari_concurrent']['{slot_key}']) {{
+                    delete globalThis['~rari_concurrent']['{slot_key}'];
+                }}
+                if (globalThis['{slot_key}']) {{
+                    delete globalThis['{slot_key}'];
+                }}
+            }})()"
+        );
+        let _ = js_runtime.execute_script(format!("cleanup_stream_{slot_key}"), cleanup);
+
+        let result = settled.map_err(RariError::js_execution);
+
+        let leftover = take_stream_sender(js_runtime, &stream.stream_id);
+        if let Some(sender) = leftover {
+            let stream_err = match &result {
+                Err(err) => err.clone(),
+                Ok(()) => RariError::js_execution(format!(
+                    "Streaming script for '{}' ended without completing the stream",
+                    stream.stream_id
+                )),
+            };
+            let _ = sender.try_send(Err(stream_err.clone()));
+            if result.is_ok() {
+                if let Some(tx) = stream.result_tx.take() {
+                    let _ = tx.send(Err(stream_err));
+                }
+                stream.done = true;
+                continue;
+            }
+        }
+
+        if let Some(tx) = stream.result_tx.take() {
+            let _ = tx.send(result);
+        }
+        stream.done = true;
+    }
+}
+
 fn extract_component_id_from_specifier(specifier: &str) -> String {
     if let Some(server_idx) = specifier.rfind("/server/") {
         let after_server = &specifier[server_idx + 8..];
@@ -1178,27 +1330,6 @@ impl JsRuntimeInterface for RariRuntime {
         })
     }
 
-    fn clear_request_context(&self) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>> {
-        let request_sender = self.request_sender.clone();
-
-        Box::pin(async move {
-            let (response_sender, response_receiver) = oneshot::channel();
-            request_sender
-                .send(JsRequest::ClearRequestContext { result_tx: response_sender })
-                .await
-                .map_err(|_| {
-                    RariError::js_runtime(
-                        "JS executor channel closed (clear_request_context)".to_string(),
-                    )
-                })?;
-            response_receiver.await.map_err(|_| {
-                RariError::js_runtime(
-                    "JS executor failed to respond (clear_request_context)".to_string(),
-                )
-            })?
-        })
-    }
-
     fn clear_request_context_if_matches(
         &self,
         expected_context: Arc<RequestContext>,
@@ -1226,61 +1357,112 @@ impl JsRuntimeInterface for RariRuntime {
         })
     }
 
-    fn execute_script_with_request_context(
+    fn execute_script_for_streaming(
         &self,
-        request_context: Arc<RequestContext>,
+        stream_id: String,
         script_name: String,
         script_code: String,
-    ) -> Pin<Box<dyn Future<Output = Result<Value, RariError>> + Send>> {
-        let runtime = self.clone();
+        chunk_sender: mpsc::Sender<Result<Vec<u8>, RariError>>,
+    ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>> {
+        let runtime = Self {
+            request_sender: self.request_sender.clone(),
+            priority_sender: self.priority_sender.clone(),
+        };
+
+        Box::pin(async move {
+            let completion = runtime
+                .queue_script_for_streaming(stream_id, script_name, script_code, chunk_sender, None)
+                .await?;
+            completion.await
+        })
+    }
+
+    fn queue_script_for_streaming(
+        &self,
+        stream_id: String,
+        script_name: String,
+        script_code: String,
+        chunk_sender: mpsc::Sender<Result<Vec<u8>, RariError>>,
+        request_context: Option<Arc<RequestContext>>,
+    ) -> QueueStreamingScriptFuture {
+        let runtime = Self {
+            request_sender: self.request_sender.clone(),
+            priority_sender: self.priority_sender.clone(),
+        };
+
+        Box::pin(async move {
+            let (response_sender, response_receiver) = oneshot::channel();
+
+            runtime
+                .send_js_request(JsRequest::ExecuteScriptForStreaming {
+                    stream_id,
+                    script_name,
+                    script_code,
+                    chunk_sender,
+                    request_context,
+                    result_tx: response_sender,
+                })
+                .await?;
+
+            let completion: Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>> =
+                Box::pin(async move {
+                    response_receiver.await.map_err(|_| {
+                        RariError::js_runtime(
+                            "JS executor failed to respond (execute_script_for_streaming)"
+                                .to_string(),
+                        )
+                    })?
+                });
+            Ok(completion)
+        })
+    }
+
+    fn register_request_context(
+        &self,
+        request_context: Arc<RequestContext>,
+    ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>> {
+        let runtime = Self {
+            request_sender: self.request_sender.clone(),
+            priority_sender: self.priority_sender.clone(),
+        };
 
         Box::pin(async move {
             let (response_sender, response_receiver) = oneshot::channel();
             runtime
-                .send_js_request(JsRequest::ExecuteScriptWithRequestContext {
+                .send_js_request(JsRequest::RegisterRequestContext {
                     request_context,
-                    script_name,
-                    script_code,
                     result_tx: response_sender,
                 })
                 .await?;
             response_receiver.await.map_err(|_| {
                 RariError::js_runtime(
-                    "JS executor failed to respond (execute_script_with_request_context)"
-                        .to_string(),
+                    "JS executor failed to respond (register_request_context)".to_string(),
                 )
             })?
         })
     }
 
-    fn execute_script_for_streaming(
+    fn unregister_request_context(
         &self,
-        script_name: String,
-        script_code: String,
-        chunk_sender: mpsc::Sender<Result<Vec<u8>, RariError>>,
+        request_id: &str,
     ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>> {
-        let request_sender = self.request_sender.clone();
+        let runtime = Self {
+            request_sender: self.request_sender.clone(),
+            priority_sender: self.priority_sender.clone(),
+        };
+        let request_id = request_id.to_string();
 
         Box::pin(async move {
             let (response_sender, response_receiver) = oneshot::channel();
-
-            request_sender
-                .send(JsRequest::ExecuteScriptForStreaming {
-                    script_name,
-                    script_code,
-                    chunk_sender,
+            runtime
+                .send_js_request(JsRequest::UnregisterRequestContext {
+                    request_id,
                     result_tx: response_sender,
                 })
-                .await
-                .map_err(|_| {
-                    RariError::js_runtime(
-                        "JS executor channel closed (execute_script_for_streaming)".to_string(),
-                    )
-                })?;
-
+                .await?;
             response_receiver.await.map_err(|_| {
                 RariError::js_runtime(
-                    "JS executor failed to respond (execute_script_for_streaming)".to_string(),
+                    "JS executor failed to respond (unregister_request_context)".to_string(),
                 )
             })?
         })

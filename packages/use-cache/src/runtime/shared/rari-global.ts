@@ -10,6 +10,7 @@ export interface RariGlobalSlice {
   pageCacheTags?: Set<string>
   invalidateUseCache?: (input: InvalidateUseCacheInput) => Promise<void>
   markUseCacheDynamic?: () => void
+  currentRequestId?: () => string
 }
 
 export interface RariGlobal {

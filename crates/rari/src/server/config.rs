@@ -14,7 +14,7 @@ use http::HeaderValue;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 
-use crate::server::image::ImageConfig;
+use crate::server::{image::ImageConfig, rendering::html_bots::validate_html_limited_bots_pattern};
 
 pub static GLOBAL_CONFIG: OnceLock<Config> = OnceLock::new();
 
@@ -43,6 +43,12 @@ pub struct ServerConfig {
     pub origin: Option<String>,
     pub enable_logging: bool,
     pub timeout_seconds: u64,
+    #[serde(default = "default_js_pool_size")]
+    pub js_pool_size: usize,
+}
+
+fn default_js_pool_size() -> usize {
+    1
 }
 
 impl Default for ServerConfig {
@@ -53,6 +59,7 @@ impl Default for ServerConfig {
             origin: None,
             enable_logging: true,
             timeout_seconds: 30,
+            js_pool_size: default_js_pool_size(),
         }
     }
 }
@@ -370,8 +377,10 @@ pub struct Config {
     pub images: ImageConfig,
     #[serde(default)]
     pub cache: CacheConfig,
-    #[serde(default, rename = "useCache")]
+    #[serde(default)]
     pub use_cache: UseCacheConfig,
+    #[serde(default, rename = "htmlLimitedBots")]
+    pub html_limited_bots: Option<String>,
 }
 
 impl Config {
@@ -535,169 +544,215 @@ impl Config {
 
         if let Ok(server_config_json) = fs::read_to_string(&config_path) {
             let config_data = match serde_json::from_str::<serde_json::Value>(&server_config_json) {
-                Ok(data) => data,
+                Ok(data) => Some(data),
                 Err(e) => {
                     tracing::warn!(
                         "Failed to parse dist/server/config.json: {}. Using defaults.",
                         e
                     );
-                    return Ok(config);
+                    None
                 }
             };
-            if let Some(csp_data) = config_data.get("csp") {
-                if let Some(script_src) = csp_data.get("scriptSrc").and_then(|v| v.as_array()) {
-                    config.csp.script_src = script_src
-                        .iter()
-                        .filter_map(|v| v.as_str().map(ToString::to_string))
-                        .collect();
+            if let Some(config_data) = config_data {
+                if let Some(csp_data) = config_data.get("csp") {
+                    if let Some(script_src) = csp_data.get("scriptSrc").and_then(|v| v.as_array()) {
+                        config.csp.script_src = script_src
+                            .iter()
+                            .filter_map(|v| v.as_str().map(ToString::to_string))
+                            .collect();
+                    }
+                    if let Some(style_src) = csp_data.get("styleSrc").and_then(|v| v.as_array()) {
+                        config.csp.style_src = style_src
+                            .iter()
+                            .filter_map(|v| v.as_str().map(ToString::to_string))
+                            .collect();
+                    }
+                    if let Some(img_src) = csp_data.get("imgSrc").and_then(|v| v.as_array()) {
+                        config.csp.img_src = img_src
+                            .iter()
+                            .filter_map(|v| v.as_str().map(ToString::to_string))
+                            .collect();
+                    }
+                    if let Some(font_src) = csp_data.get("fontSrc").and_then(|v| v.as_array()) {
+                        config.csp.font_src = font_src
+                            .iter()
+                            .filter_map(|v| v.as_str().map(ToString::to_string))
+                            .collect();
+                    }
+                    if let Some(connect_src) = csp_data.get("connectSrc").and_then(|v| v.as_array())
+                    {
+                        config.csp.connect_src = connect_src
+                            .iter()
+                            .filter_map(|v| v.as_str().map(ToString::to_string))
+                            .collect();
+                    }
+                    if let Some(default_src) = csp_data.get("defaultSrc").and_then(|v| v.as_array())
+                    {
+                        config.csp.default_src = default_src
+                            .iter()
+                            .filter_map(|v| v.as_str().map(ToString::to_string))
+                            .collect();
+                    }
+                    if let Some(worker_src) = csp_data.get("workerSrc").and_then(|v| v.as_array()) {
+                        config.csp.worker_src = worker_src
+                            .iter()
+                            .filter_map(|v| v.as_str().map(ToString::to_string))
+                            .collect();
+                    }
                 }
-                if let Some(style_src) = csp_data.get("styleSrc").and_then(|v| v.as_array()) {
-                    config.csp.style_src = style_src
-                        .iter()
-                        .filter_map(|v| v.as_str().map(ToString::to_string))
-                        .collect();
-                }
-                if let Some(img_src) = csp_data.get("imgSrc").and_then(|v| v.as_array()) {
-                    config.csp.img_src = img_src
-                        .iter()
-                        .filter_map(|v| v.as_str().map(ToString::to_string))
-                        .collect();
-                }
-                if let Some(font_src) = csp_data.get("fontSrc").and_then(|v| v.as_array()) {
-                    config.csp.font_src = font_src
-                        .iter()
-                        .filter_map(|v| v.as_str().map(ToString::to_string))
-                        .collect();
-                }
-                if let Some(connect_src) = csp_data.get("connectSrc").and_then(|v| v.as_array()) {
-                    config.csp.connect_src = connect_src
-                        .iter()
-                        .filter_map(|v| v.as_str().map(ToString::to_string))
-                        .collect();
-                }
-                if let Some(default_src) = csp_data.get("defaultSrc").and_then(|v| v.as_array()) {
-                    config.csp.default_src = default_src
-                        .iter()
-                        .filter_map(|v| v.as_str().map(ToString::to_string))
-                        .collect();
-                }
-                if let Some(worker_src) = csp_data.get("workerSrc").and_then(|v| v.as_array()) {
-                    config.csp.worker_src = worker_src
-                        .iter()
-                        .filter_map(|v| v.as_str().map(ToString::to_string))
-                        .collect();
-                }
-            }
 
-            if let Some(action_data) = config_data.get("action")
-                && let Some(allowed_origins) =
-                    action_data.get("allowedOrigins").and_then(|v| v.as_array())
-            {
-                config.action.allowed_origins = allowed_origins
-                    .iter()
-                    .filter_map(|v| v.as_str().map(ToString::to_string))
-                    .collect();
-            }
+                if let Some(action_data) = config_data.get("action")
+                    && let Some(allowed_origins) =
+                        action_data.get("allowedOrigins").and_then(|v| v.as_array())
+                {
+                    config.action.allowed_origins = allowed_origins
+                        .iter()
+                        .filter_map(|v| v.as_str().map(ToString::to_string))
+                        .collect();
+                }
 
-            if let Some(cache_control_data) = config_data.get("cacheControl")
-                && let Some(routes) = cache_control_data.get("routes").and_then(|v| v.as_object())
-            {
-                for (route, cache_value) in routes {
-                    if let Some(cache_str) = cache_value.as_str() {
-                        if HeaderValue::from_str(cache_str).is_ok() {
-                            config.caching.routes.insert(route.clone(), cache_str.to_string());
+                if let Some(pool_size) =
+                    config_data.get("jsPoolSize").and_then(serde_json::Value::as_u64)
+                {
+                    match usize::try_from(pool_size) {
+                        Ok(0) | Err(_) => {
+                            tracing::warn!(
+                                "jsPoolSize must be >= 1 and fit in usize; ignoring value from config.json"
+                            );
+                        }
+                        Ok(size) => {
+                            config.server.js_pool_size = size;
+                        }
+                    }
+                }
+
+                if let Some(pattern) =
+                    config_data.get("htmlLimitedBots").and_then(serde_json::Value::as_str)
+                {
+                    match validate_html_limited_bots_pattern(pattern) {
+                        Ok(()) => {
+                            config.html_limited_bots = Some(pattern.to_string());
+                        }
+                        Err(err) => {
+                            tracing::warn!(
+                                "Invalid htmlLimitedBots regex in config.json ({pattern:?}): {err}. Using default list."
+                            );
+                        }
+                    }
+                }
+
+                if let Some(cache_control_data) = config_data.get("cacheControl")
+                    && let Some(routes) =
+                        cache_control_data.get("routes").and_then(|v| v.as_object())
+                {
+                    for (route, cache_value) in routes {
+                        if let Some(cache_str) = cache_value.as_str() {
+                            if HeaderValue::from_str(cache_str).is_ok() {
+                                config.caching.routes.insert(route.clone(), cache_str.to_string());
+                            } else {
+                                tracing::warn!(
+                                    "Invalid cache-control header value for route '{}': '{}' (contains invalid characters)",
+                                    route,
+                                    cache_str
+                                );
+                            }
                         } else {
                             tracing::warn!(
-                                "Invalid cache-control header value for route '{}': '{}' (contains invalid characters)",
+                                "Invalid cache-control value type for route '{}': expected string, got {:?}",
                                 route,
-                                cache_str
-                            );
-                        }
-                    } else {
-                        tracing::warn!(
-                            "Invalid cache-control value type for route '{}': expected string, got {:?}",
-                            route,
-                            cache_value
-                        );
-                    }
-                }
-            }
-
-            if let Some(cache_data) = config_data.get("cache")
-                && let Some(layers_data) = cache_data.get("layers").and_then(|v| v.as_object())
-            {
-                for (layer_name, layer_value) in layers_data {
-                    if !layer_value.is_object() {
-                        tracing::warn!(
-                            "Invalid cache.layers.{} value type: expected object, got {:?}",
-                            layer_name,
-                            layer_value
-                        );
-                        continue;
-                    }
-                    match serde_json::from_value::<CacheLayerConfig>(layer_value.clone()) {
-                        Ok(layer) => {
-                            config.cache.layers.insert(layer_name.clone(), layer);
-                        }
-                        Err(e) => {
-                            tracing::warn!(
-                                "Failed to parse cache.layers.{}: {}. Using default.",
-                                layer_name,
-                                e
+                                cache_value
                             );
                         }
                     }
                 }
-            }
 
-            if let Some(use_cache_data) = config_data.get("useCache") {
-                if let Some(build_id) =
-                    use_cache_data.get("buildId").and_then(|value| value.as_str())
+                if let Some(cache_data) = config_data.get("cache")
+                    && let Some(layers_data) = cache_data.get("layers").and_then(|v| v.as_object())
                 {
-                    config.use_cache.build_id = Some(build_id.to_string());
-                }
-
-                if let Some(remote_value) = use_cache_data.get("remote") {
-                    match serde_json::from_value::<CacheLayerConfig>(remote_value.clone()) {
-                        Ok(mut layer) => {
-                            let trimmed_url = layer.url.as_deref().map(str::trim);
-                            let missing_url = trimmed_url.is_none_or(str::is_empty);
-
-                            match layer.handler.as_str() {
-                                "test" if config.mode == Mode::Production => {
-                                    tracing::warn!(
-                                        "Invalid useCache.remote: handler='test' is for e2e tests only and is not allowed in production. Ignoring remote cache config."
-                                    );
-                                }
-                                "redis" | "redb" if missing_url => {
-                                    tracing::warn!(
-                                        "Invalid useCache.remote: handler={} requires a non-empty url. Ignoring remote cache config.",
-                                        layer.handler
-                                    );
-                                }
-                                "redis" | "redb" | "test" => {
-                                    layer.url = trimmed_url.map(String::from);
-                                    config.use_cache.remote = Some(layer);
-                                }
-                                _ => {
-                                    tracing::warn!(
-                                        "Invalid useCache.remote: handler='{}' is not supported (allowed: test, redis, redb). Ignoring remote cache config.",
-                                        layer.handler
-                                    );
-                                }
+                    for (layer_name, layer_value) in layers_data {
+                        if !layer_value.is_object() {
+                            tracing::warn!(
+                                "Invalid cache.layers.{} value type: expected object, got {:?}",
+                                layer_name,
+                                layer_value
+                            );
+                            continue;
+                        }
+                        match serde_json::from_value::<CacheLayerConfig>(layer_value.clone()) {
+                            Ok(layer) => {
+                                config.cache.layers.insert(layer_name.clone(), layer);
+                            }
+                            Err(e) => {
+                                tracing::warn!(
+                                    "Failed to parse cache.layers.{}: {}. Using default.",
+                                    layer_name,
+                                    e
+                                );
                             }
                         }
-                        Err(e) => {
-                            tracing::warn!(
-                                "Failed to parse useCache.remote: {}. Using default.",
-                                e
-                            );
+                    }
+                }
+
+                if let Some(use_cache_data) = config_data.get("useCache") {
+                    if let Some(build_id) =
+                        use_cache_data.get("buildId").and_then(|value| value.as_str())
+                    {
+                        config.use_cache.build_id = Some(build_id.to_string());
+                    }
+
+                    if let Some(remote_value) = use_cache_data.get("remote") {
+                        match serde_json::from_value::<CacheLayerConfig>(remote_value.clone()) {
+                            Ok(mut layer) => {
+                                let trimmed_url = layer.url.as_deref().map(str::trim);
+                                let missing_url = trimmed_url.is_none_or(str::is_empty);
+
+                                match layer.handler.as_str() {
+                                    "test" if config.mode == Mode::Production => {
+                                        tracing::warn!(
+                                            "Invalid useCache.remote: handler='test' is for e2e tests only and is not allowed in production. Ignoring remote cache config."
+                                        );
+                                    }
+                                    "redis" | "redb" if missing_url => {
+                                        tracing::warn!(
+                                            "Invalid useCache.remote: handler={} requires a non-empty url. Ignoring remote cache config.",
+                                            layer.handler
+                                        );
+                                    }
+                                    "redis" | "redb" | "test" => {
+                                        layer.url = trimmed_url.map(String::from);
+                                        config.use_cache.remote = Some(layer);
+                                    }
+                                    _ => {
+                                        tracing::warn!(
+                                            "Invalid useCache.remote: handler='{}' is not supported (allowed: test, redis, redb). Ignoring remote cache config.",
+                                            layer.handler
+                                        );
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                tracing::warn!(
+                                    "Failed to parse useCache.remote: {}. Using default.",
+                                    e
+                                );
+                            }
                         }
                     }
                 }
-            }
+            } // if let Some(config_data)
         } else {
             tracing::debug!("No dist/server/config.json found, using defaults");
+        }
+
+        // Env wins over config.json for deploy-time overrides.
+        if let Ok(pool_size_str) = env::var("RARI_JS_POOL_SIZE") {
+            let pool_size: usize = pool_size_str
+                .parse()
+                .map_err(|_| ConfigError::Config("RARI_JS_POOL_SIZE".to_string()))?;
+            if pool_size == 0 {
+                return Err(ConfigError::Config("RARI_JS_POOL_SIZE must be >= 1".to_string()));
+            }
+            config.server.js_pool_size = pool_size;
         }
 
         if config.mode == Mode::Development {
@@ -1082,6 +1137,55 @@ mod tests {
             !config.caching.routes.contains_key("/invalid-type"),
             "Non-string cache-control value should be rejected"
         );
+    }
+
+    #[test]
+    fn test_js_pool_size_config_json_and_env_precedence() {
+        let temp_dir = env::temp_dir().join(format!("rari_test_pool_size_{}", process::id()));
+        let dist_server_dir = temp_dir.join("dist").join("server");
+        fs::create_dir_all(&dist_server_dir).unwrap();
+
+        let prev = env::var("RARI_JS_POOL_SIZE").ok();
+        // SAFETY: test-only env mutation; restored below. Keep both cases in one
+        // test so parallel suite workers cannot race on this process-global var.
+        unsafe { env::remove_var("RARI_JS_POOL_SIZE") };
+
+        fs::write(dist_server_dir.join("config.json"), r#"{"jsPoolSize":3}"#).unwrap();
+        let from_json = Config::from_env_with_base(Some(&temp_dir)).unwrap();
+        assert_eq!(from_json.server.js_pool_size, 3);
+
+        unsafe { env::set_var("RARI_JS_POOL_SIZE", "4") };
+        let from_env = Config::from_env_with_base(Some(&temp_dir)).unwrap();
+        assert_eq!(from_env.server.js_pool_size, 4);
+
+        let _ = fs::remove_dir_all(&temp_dir);
+        match prev {
+            Some(v) => unsafe { env::set_var("RARI_JS_POOL_SIZE", v) },
+            None => unsafe { env::remove_var("RARI_JS_POOL_SIZE") },
+        }
+    }
+
+    #[test]
+    fn test_html_limited_bots_config_validates_regex() {
+        let temp_dir =
+            env::temp_dir().join(format!("rari_test_html_limited_bots_{}", process::id()));
+        let dist_server_dir = temp_dir.join("dist").join("server");
+        fs::create_dir_all(&dist_server_dir).unwrap();
+
+        fs::write(dist_server_dir.join("config.json"), r#"{"htmlLimitedBots":"OnlyMyBot"}"#)
+            .unwrap();
+        let valid = Config::from_env_with_base(Some(&temp_dir)).unwrap();
+        assert_eq!(valid.html_limited_bots.as_deref(), Some("OnlyMyBot"));
+
+        fs::write(dist_server_dir.join("config.json"), r#"{"htmlLimitedBots":"(OnlyMyBot"}"#)
+            .unwrap();
+        let invalid = Config::from_env_with_base(Some(&temp_dir)).unwrap();
+        assert!(
+            invalid.html_limited_bots.is_none(),
+            "invalid regex must fall back to default (None override)"
+        );
+
+        let _ = fs::remove_dir_all(&temp_dir);
     }
 
     #[test]

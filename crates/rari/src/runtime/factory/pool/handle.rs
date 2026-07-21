@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::{future::Future, pin::Pin, sync::Arc, time::Duration};
 
 use deno_core::ModuleId;
 use rari_error::RariError;
@@ -62,11 +62,33 @@ impl PooledRuntime {
     /// (matches [`crate::runtime::JsExecutionRuntime::execute_script_for_streaming`]).
     pub async fn execute_script_for_streaming(
         &self,
+        stream_id: String,
         script_name: String,
         script_code: String,
         chunk_sender: Sender<Result<Vec<u8>, RariError>>,
     ) -> Result<(), RariError> {
-        self.runtime.execute_script_for_streaming(script_name, script_code, chunk_sender).await
+        self.runtime
+            .execute_script_for_streaming(stream_id, script_name, script_code, chunk_sender)
+            .await
+    }
+
+    pub async fn queue_script_for_streaming(
+        &self,
+        stream_id: String,
+        script_name: String,
+        script_code: String,
+        chunk_sender: Sender<Result<Vec<u8>, RariError>>,
+        request_context: Option<Arc<RequestContext>>,
+    ) -> Result<Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>>, RariError> {
+        self.runtime
+            .queue_script_for_streaming(
+                stream_id,
+                script_name,
+                script_code,
+                chunk_sender,
+                request_context,
+            )
+            .await
     }
 
     forward_async_to_runtime_with_timeout! {
@@ -78,8 +100,8 @@ impl PooledRuntime {
         pub async fn evaluate_module(&self, module_id: ModuleId) -> Result<Value, RariError>;
         pub async fn get_module_namespace(&self, module_id: ModuleId) -> Result<Value, RariError>;
         pub async fn set_request_context(&self, request_context: Arc<RequestContext>) -> Result<(), RariError>;
-        pub async fn clear_request_context(&self) -> Result<(), RariError>;
         pub async fn clear_request_context_if_matches(&self, expected_context: Arc<RequestContext>) -> Result<(), RariError>;
-        pub async fn execute_script_with_request_context(&self, request_context: Arc<RequestContext>, script_name: String, script_code: String) -> Result<Value, RariError>;
+        pub async fn register_request_context(&self, request_context: Arc<RequestContext>) -> Result<(), RariError>;
+        pub async fn unregister_request_context(&self, request_id: &str) -> Result<(), RariError>;
     }
 }

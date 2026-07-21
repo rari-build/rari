@@ -28,7 +28,7 @@ use crate::{
         base::constants::{ACTION_FLIGHT_ENCODE_SCRIPT, ACTION_HANDLER_SCRIPT, GET_RSC_BINARY_B64},
         layout::{LayoutRenderer, create_layout_context},
     },
-    runtime::JsExecutionRuntime,
+    runtime::factory::JsRuntimeInterface,
     server::{
         ServerState,
         cache::revalidate::invalidate_route_caches,
@@ -458,7 +458,7 @@ fn rpc_action_flight_response(
 }
 
 async fn capture_last_action_flight_binary(
-    runtime: &JsExecutionRuntime,
+    runtime: &Arc<dyn JsRuntimeInterface>,
 ) -> Result<Option<Vec<u8>>, RariError> {
     let result = runtime
         .execute_script("get_action_flight_binary_b64".to_string(), GET_RSC_BINARY_B64.to_string())
@@ -592,19 +592,8 @@ async fn compose_action_refresh_route(
         Arc::clone(&state.layout_html_cache),
     );
     layout_renderer
-        .compose_route_for_action_refresh(&route_match, &context, request_context)
+        .compose_route_for_action_refresh(&route_match, &context, request_context, search)
         .await?;
-
-    let runtime = {
-        let renderer = state.renderer.lock().await;
-        Arc::clone(&renderer.runtime)
-    };
-
-    let set_search_script = format!(
-        "globalThis['~rari'] = globalThis['~rari'] || {{}}; globalThis['~rari'].actionRefreshSearch = {};",
-        serde_json::to_string(&search).map_err(|e| RariError::serialization(e.to_string()))?
-    );
-    runtime.execute_script("set_action_refresh_search".to_string(), set_search_script).await?;
 
     Ok(Some(pathname))
 }
@@ -815,28 +804,18 @@ async fn handle_server_action_at_path(
         format!("action_flight_encode_req{nonce}.ts")
     };
 
-    if let Err(error) = runtime
-        .execute_script_with_request_context(
-            Arc::clone(&request_context),
-            encode_script_name,
-            ACTION_FLIGHT_ENCODE_SCRIPT.to_string(),
-        )
+    let flight_body = match runtime
+        .with_request_context(Arc::clone(&request_context), move |rt| async move {
+            rt.execute_script(encode_script_name, ACTION_FLIGHT_ENCODE_SCRIPT.to_string()).await?;
+            capture_last_action_flight_binary(&rt).await
+        })
         .await
     {
-        tracing::error!("Failed to encode action flight response: {}", error);
-        return Ok(rpc_action_error_response(
-            &error,
-            state.config.is_development(),
-            Some(&request_context.pending_cookies),
-        ));
-    }
-
-    let flight_body = match capture_last_action_flight_binary(&runtime).await {
         Ok(body) => body,
-        Err(e) => {
-            tracing::error!("Failed to read action flight response: {}", e);
+        Err(error) => {
+            tracing::error!("Failed to encode action flight response: {}", error);
             return Ok(rpc_action_error_response(
-                &e,
+                &error,
                 state.config.is_development(),
                 Some(&request_context.pending_cookies),
             ));

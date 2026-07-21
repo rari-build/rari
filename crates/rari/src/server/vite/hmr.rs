@@ -344,9 +344,9 @@ async fn handle_invalidate(
 
             renderer
                 .runtime
-                .execute_script(
-                    format!("hmr_clear_cache_{}.js", component_id.cow_replace('/', "_")),
-                    clear_script,
+                .broadcast_script(
+                    &format!("hmr_clear_cache_{}.js", component_id.cow_replace('/', "_")),
+                    &clear_script,
                 )
                 .await
         })

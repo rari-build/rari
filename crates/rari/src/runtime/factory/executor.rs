@@ -85,8 +85,107 @@ fn default_promise_timeout_ms() -> u64 {
     env::var("RARI_PROMISE_RESOLUTION_TIMEOUT_MS").ok().and_then(|s| s.parse().ok()).unwrap_or(5000)
 }
 
-fn streaming_promise_timeout_ms() -> u64 {
+pub fn streaming_promise_timeout_ms() -> u64 {
     env::var("RARI_STREAMING_SCRIPT_TIMEOUT_MS").ok().and_then(|s| s.parse().ok()).unwrap_or(30000)
+}
+
+fn sanitize_stream_id_for_slot(stream_id: &str) -> String {
+    stream_id.chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect()
+}
+
+/// Register a chunk sender and kick off concurrent promise tracking without awaiting.
+/// Returns the `~rari_concurrent` slot key for cooperative polling.
+pub fn start_streaming_script(
+    runtime: &mut JsRuntime,
+    script_name: &str,
+    script_code: &str,
+    stream_id: &str,
+    chunk_sender: mpsc::Sender<Result<Vec<u8>, RariError>>,
+) -> Result<String, RariError> {
+    {
+        let op_state_rc = runtime.op_state();
+        let mut op_state = op_state_rc.borrow_mut();
+        if let Some(stream_state) = op_state.try_borrow_mut::<StreamOpState>() {
+            stream_state.register_sender(stream_id.to_string(), chunk_sender);
+        } else {
+            return Err(RariError::js_runtime(
+                "StreamOpState not available in runtime".to_string(),
+            ));
+        }
+    }
+
+    let slot_key = format!("__rari_s{}__", sanitize_stream_id_for_slot(stream_id));
+
+    let cleanup_sender = |runtime: &mut JsRuntime| {
+        let op_state_rc = runtime.op_state();
+        let mut op_state = op_state_rc.borrow_mut();
+        if let Some(stream_state) = op_state.try_borrow_mut::<StreamOpState>() {
+            let _ = stream_state.take_sender(stream_id);
+        }
+    };
+
+    let v8_val = match runtime.execute_script(script_name.to_string(), script_code.to_string()) {
+        Ok(val) => val,
+        Err(e) => {
+            cleanup_sender(runtime);
+            return Err(RariError::js_execution(format!(
+                "Failed to execute streaming script '{script_name}': {e}"
+            )));
+        }
+    };
+
+    let store_result = with_scope!(runtime, |scope| {
+        let local_val = deno_core::v8::Local::new(scope, &v8_val);
+        let context = scope.get_current_context();
+        let global = context.global(scope);
+        if let Some(key_str) = v8::String::new(scope, &slot_key) {
+            global.set(scope, key_str.into(), local_val);
+            Ok::<(), RariError>(())
+        } else {
+            Err(RariError::internal("Failed to create V8 key string".to_string()))
+        }
+    });
+
+    if let Err(e) = store_result {
+        cleanup_sender(runtime);
+        return Err(e);
+    }
+
+    let setup = format!(
+        r"(function() {{
+            if (!globalThis['~rari_concurrent']) globalThis['~rari_concurrent'] = {{}};
+            const val = globalThis['{slot_key}'];
+            const settle = function(ok, error) {{
+                Deno.core.ops.op_stream_promise_settled('{stream_id}', ok, error);
+            }};
+            if (val && typeof val.then === 'function') {{
+                globalThis['~rari_concurrent']['{slot_key}'] = {{ done: false, result: null, error: null }};
+                val.then(function(r) {{
+                    globalThis['~rari_concurrent']['{slot_key}'] = {{ done: true, result: r, error: null }};
+                    settle(true, '');
+                }}).catch(function(e) {{
+                    globalThis['~rari_concurrent']['{slot_key}'] = {{ done: true, result: null, error: String(e) }};
+                    settle(false, String(e));
+                }});
+            }} else {{
+                globalThis['~rari_concurrent']['{slot_key}'] = {{ done: true, result: val, error: null }};
+                settle(true, '');
+            }}
+        }})()"
+    );
+
+    if let Err(e) = runtime.execute_script(format!("setup_stream_{slot_key}"), setup) {
+        let cleanup = format!(
+            "delete globalThis['{slot_key}']; delete globalThis['~rari_concurrent']['{slot_key}']"
+        );
+        let _ = runtime.execute_script(format!("cleanup_stream_setup_{slot_key}"), cleanup);
+        cleanup_sender(runtime);
+        return Err(RariError::internal(format!(
+            "Failed to setup streaming concurrent tracking: {e}"
+        )));
+    }
+
+    Ok(slot_key)
 }
 
 async fn execute_as_module(
@@ -407,55 +506,4 @@ async fn retry_as_module(
         .await?;
 
     Ok(Value::Null)
-}
-
-pub async fn execute_script_for_streaming(
-    runtime: &mut JsRuntime,
-    module_loader: &Rc<RariModuleLoader>,
-    script_name: &str,
-    script_code: &str,
-    chunk_sender: mpsc::Sender<Result<Vec<u8>, RariError>>,
-) -> Result<(), RariError> {
-    {
-        let op_state_rc = runtime.op_state();
-        let mut op_state = op_state_rc.borrow_mut();
-        if let Some(stream_state) = op_state.try_borrow_mut::<StreamOpState>() {
-            stream_state.chunk_sender = Some(chunk_sender);
-        } else {
-            return Err(RariError::js_runtime(
-                "StreamOpState not available in runtime".to_string(),
-            ));
-        }
-    }
-
-    let result = execute_as_script(
-        runtime,
-        module_loader,
-        script_name,
-        script_code,
-        streaming_promise_timeout_ms(),
-    )
-    .await;
-
-    let leftover_sender = {
-        let op_state_rc = runtime.op_state();
-        let mut op_state = op_state_rc.borrow_mut();
-        op_state
-            .try_borrow_mut::<StreamOpState>()
-            .and_then(|stream_state| stream_state.chunk_sender.take())
-    };
-
-    if let Some(sender) = leftover_sender {
-        let stream_err = match &result {
-            Err(err) => err.clone(),
-            Ok(_) => RariError::js_execution(format!(
-                "Streaming script '{script_name}' ended without completing the stream"
-            )),
-        };
-
-        let _ = sender.send(Err(stream_err)).await;
-    }
-
-    result?;
-    Ok(())
 }

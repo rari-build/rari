@@ -33,4 +33,6 @@ export interface ServerConfig {
   cacheControl?: ServerCacheControlConfig
   cache?: ServerCacheConfig
   useCache?: ServerUseCacheConfig
+  jsPoolSize?: number
+  htmlLimitedBots?: string
 }

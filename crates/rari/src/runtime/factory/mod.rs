@@ -10,6 +10,7 @@ pub(crate) mod utils;
 use std::sync::Arc;
 
 pub use interface::JsRuntimeInterface;
+pub use pool::{JsRuntimePool, PooledRuntime, PostRebuildHook, StreamingSlotGuard};
 pub use runtime::RariRuntime;
 use rustc_hash::FxHashMap;
 

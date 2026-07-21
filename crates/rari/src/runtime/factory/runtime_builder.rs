@@ -64,6 +64,7 @@ pub fn build_js_runtime(
         ops: Cow::Owned(streaming_ops),
         op_state_fn: Some(Box::new(|state| {
             state.put(StreamOpState::default());
+            state.put(ops::RequestContextStore::default());
             state.put(ops::rari_main_module());
             let feature_checker = deno_features::FeatureChecker::default();
             state.put(Arc::new(feature_checker));

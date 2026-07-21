@@ -115,7 +115,8 @@ export function getPrivateCachePartitionKey(): string {
 
   const cookiesOp = runtime.Deno?.core?.ops?.op_get_cookies
   if (typeof cookiesOp === 'function') {
-    const raw = cookiesOp()
+    const requestId = getRariGlobal().currentRequestId?.() ?? ''
+    const raw = cookiesOp(requestId)
     if (typeof raw === 'string' && raw.length > 0)
       return raw
   }
