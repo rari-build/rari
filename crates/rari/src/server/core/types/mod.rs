@@ -35,21 +35,49 @@ use crate::{
 /// growing without bound under path-diverse traffic (e.g. a crawler walking
 /// unknown URLs). One shared `Bytes` serves every path; `clear` forces a
 /// re-read from disk on the next request.
+///
+/// `clear` bumps a generation so an in-flight disk read that started before
+/// the clear cannot repopulate the cache via [`Self::set_if_generation`].
 #[derive(Clone, Default)]
-pub struct FallbackHtmlCache(Arc<parking_lot::RwLock<Option<Bytes>>>);
+pub struct FallbackHtmlCache(Arc<parking_lot::RwLock<FallbackHtmlCacheState>>);
+
+#[derive(Default)]
+struct FallbackHtmlCacheState {
+    html: Option<Bytes>,
+    generation: u64,
+}
 
 impl FallbackHtmlCache {
     #[must_use]
     pub fn get(&self) -> Option<Bytes> {
-        self.0.read().clone()
+        self.0.read().html.clone()
+    }
+
+    #[must_use]
+    pub fn generation(&self) -> u64 {
+        self.0.read().generation
     }
 
     pub fn set(&self, html: Bytes) {
-        *self.0.write() = Some(html);
+        self.0.write().html = Some(html);
+    }
+
+    /// Store `html` only if `generation` still matches. Returns whether the
+    /// value was stored. Use after a cache miss: capture [`Self::generation`]
+    /// before the async disk read, then call this with that snapshot.
+    pub fn set_if_generation(&self, html: Bytes, generation: u64) -> bool {
+        let mut state = self.0.write();
+        if state.generation != generation {
+            return false;
+        }
+        state.html = Some(html);
+        true
     }
 
     pub fn clear(&self) {
-        *self.0.write() = None;
+        let mut state = self.0.write();
+        state.html = None;
+        state.generation = state.generation.wrapping_add(1);
     }
 }
 
@@ -155,5 +183,24 @@ mod tests {
 
         cache.clear();
         assert!(cache.get().is_none());
+    }
+
+    #[test]
+    fn test_fallback_html_cache_ignores_stale_fill_after_clear() {
+        let cache = FallbackHtmlCache::default();
+        let generation = cache.generation();
+
+        cache.set(Bytes::from("<html>old</html>"));
+        cache.clear();
+
+        assert!(
+            !cache.set_if_generation(Bytes::from("<html>stale</html>"), generation),
+            "fill started before clear must not repopulate"
+        );
+        assert!(cache.get().is_none());
+
+        let next = cache.generation();
+        assert!(cache.set_if_generation(Bytes::from("<html>fresh</html>"), next));
+        assert_eq!(cache.get().expect("fresh"), Bytes::from("<html>fresh</html>"));
     }
 }
