@@ -19,7 +19,7 @@ use crate::{
         cache::{
             CacheHandlerRegistry,
             handler::CacheHandler,
-            response::{PrebuiltResponse, ResponseCache},
+            response::{ResponseCache, StaticFastCache},
         },
         config::Config,
         image::ImageOptimizer,
@@ -43,7 +43,7 @@ pub struct ServerState {
     pub html_cache: Arc<DashMap<String, String>>,
     pub layout_html_cache: Arc<LayoutHtmlCache>,
     pub response_cache: Arc<ResponseCache>,
-    pub static_fast_cache: Arc<DashMap<String, Arc<PrebuiltResponse>>>,
+    pub static_fast_cache: Arc<StaticFastCache>,
     pub og_generator: Option<Arc<OgImageGenerator>>,
     pub project_root: PathBuf,
     pub image_optimizer: Option<Arc<ImageOptimizer>>,
