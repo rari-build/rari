@@ -1131,18 +1131,7 @@ pub async fn render_fallback_html(
             html_shell = pretty_print_html(&html_shell);
         }
 
-        let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
-
-        #[expect(
-            clippy::expect_used,
-            reason = "Response::builder() with valid components never fails"
-        )]
-        return Ok(Response::builder()
-            .status(status_code)
-            .header("content-type", "text/html; charset=utf-8")
-            .header("vary", "Accept")
-            .body(Body::from(html_shell))
-            .expect("Valid HTML response"));
+        return Ok(fallback_html_response(Bytes::from(html_shell), is_not_found));
     }
 
     let error_html = r#"<!DOCTYPE html>
@@ -1163,15 +1152,7 @@ pub async fn render_fallback_html(
 </body>
 </html>"#;
 
-    let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
-
-    #[expect(clippy::expect_used, reason = "Response::builder() with valid components never fails")]
-    Ok(Response::builder()
-        .status(status_code)
-        .header("content-type", "text/html; charset=utf-8")
-        .header("vary", "Accept")
-        .body(Body::from(error_html))
-        .expect("Valid HTML response"))
+    Ok(fallback_html_response(Bytes::from(error_html), is_not_found))
 }
 
 #[axum::debug_handler]
@@ -1931,8 +1912,30 @@ pub async fn handle_app_route(
 }
 
 #[cfg(test)]
+#[expect(clippy::expect_used)]
 mod tests {
+    use std::{
+        fs, process,
+        sync::atomic::AtomicU64,
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
+    use tokio::sync::{Mutex, RwLock};
+
     use super::*;
+    use crate::{
+        RscHtmlRenderer, RscRenderer,
+        rendering::layout::LayoutHtmlCache,
+        runtime::JsExecutionRuntime,
+        server::{
+            FallbackHtmlCache,
+            cache::{
+                handler::{CacheHandlerRegistry, MemoryCacheHandler},
+                response::{CacheConfig, ResponseCache, StaticFastCache},
+            },
+            config::Mode,
+        },
+    };
 
     #[test]
     fn test_fallback_html_response_status_from_is_not_found() {
@@ -1943,5 +1946,60 @@ mod tests {
 
         let not_found = fallback_html_response(body, true);
         assert_eq!(not_found.status(), StatusCode::NOT_FOUND);
+    }
+
+    fn production_state_with_html_cache(
+        html_cache: FallbackHtmlCache,
+        public_dir: PathBuf,
+    ) -> ServerState {
+        let runtime = Arc::new(JsExecutionRuntime::new(None));
+        let renderer = Arc::new(Mutex::new(RscRenderer::new(Arc::clone(&runtime))));
+        let ssr_renderer = Arc::new(RscHtmlRenderer::new(runtime));
+        let cache_registry = Arc::new(CacheHandlerRegistry::default_with_memory());
+        let image_handler = Arc::new(MemoryCacheHandler::default());
+
+        let mut config = Config::new(Mode::Production);
+        config.static_files.prod_public_dir = public_dir;
+
+        ServerState {
+            renderer,
+            ssr_renderer,
+            config: Arc::new(config),
+            request_count: Arc::new(AtomicU64::new(0)),
+            start_time: Instant::now(),
+            component_cache_configs: Arc::new(RwLock::new(FxHashMap::default())),
+            page_cache_configs: Arc::new(RwLock::new(FxHashMap::default())),
+            app_router: None,
+            api_route_handler: None,
+            html_cache,
+            layout_html_cache: Arc::new(LayoutHtmlCache::new()),
+            response_cache: Arc::new(ResponseCache::new(CacheConfig::default())),
+            static_fast_cache: Arc::new(StaticFastCache::new()),
+            og_generator: None,
+            project_root: PathBuf::from("."),
+            image_optimizer: None,
+            cache_registry,
+            image_handler,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_render_fallback_html_cache_hit_returns_not_found() {
+        let public_dir = env::temp_dir().join(format!(
+            "rari-fallback-html-{}-{}",
+            process::id(),
+            SystemTime::now().duration_since(UNIX_EPOCH).expect("time").as_nanos()
+        ));
+        fs::create_dir_all(&public_dir).expect("temp public dir");
+        fs::write(public_dir.join("index.html"), "<html>disk</html>").expect("index.html");
+
+        let html_cache = FallbackHtmlCache::default();
+        html_cache.set(Bytes::from("<html>cached</html>"));
+
+        let state = production_state_with_html_cache(html_cache, public_dir.clone());
+        let response = render_fallback_html(&state, true).await.expect("cache hit response");
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+        let _ = fs::remove_dir_all(public_dir);
     }
 }
