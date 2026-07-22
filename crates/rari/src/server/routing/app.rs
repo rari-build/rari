@@ -1054,6 +1054,17 @@ pub async fn render_streaming_with_layout(
     }
 }
 
+fn fallback_html_response(html: Bytes, is_not_found: bool) -> Response {
+    let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
+    #[expect(clippy::expect_used, reason = "Response::builder() with valid components never fails")]
+    Response::builder()
+        .status(status_code)
+        .header("content-type", "text/html; charset=utf-8")
+        .header("vary", "Accept")
+        .body(Body::from(html))
+        .expect("Valid HTML response")
+}
+
 pub async fn render_fallback_html(
     state: &ServerState,
     is_not_found: bool,
@@ -1073,17 +1084,7 @@ pub async fn render_fallback_html(
         if state.config.is_production()
             && let Some(html) = state.html_cache.get()
         {
-            let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
-            #[expect(
-                clippy::expect_used,
-                reason = "Response::builder() with valid components never fails"
-            )]
-            return Ok(Response::builder()
-                .status(status_code)
-                .header("content-type", "text/html; charset=utf-8")
-                .header("vary", "Accept")
-                .body(Body::from(html))
-                .expect("Valid HTML response"));
+            return Ok(fallback_html_response(html, is_not_found));
         }
 
         if let Ok(html_content) = fs::read_to_string(&index_path).await {
@@ -1097,22 +1098,12 @@ pub async fn render_fallback_html(
                 final_html = pretty_print_html(&final_html);
             }
 
+            let body = Bytes::from(final_html);
             if state.config.is_production() {
-                state.html_cache.set(Bytes::from(final_html.clone()));
+                state.html_cache.set(body.clone());
             }
 
-            let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
-
-            #[expect(
-                clippy::expect_used,
-                reason = "Response::builder() with valid components never fails"
-            )]
-            return Ok(Response::builder()
-                .status(status_code)
-                .header("content-type", "text/html; charset=utf-8")
-                .header("vary", "Accept")
-                .body(Body::from(final_html))
-                .expect("Valid HTML response"));
+            return Ok(fallback_html_response(body, is_not_found));
         }
     }
 
@@ -1936,5 +1927,21 @@ pub async fn handle_app_route(
                 Ok(response_builder.body(Body::from(body_bytes)).expect("Valid HTML response"))
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_fallback_html_response_status_from_is_not_found() {
+        let body = Bytes::from("<html>fallback</html>");
+
+        let ok = fallback_html_response(body.clone(), false);
+        assert_eq!(ok.status(), StatusCode::OK);
+
+        let not_found = fallback_html_response(body, true);
+        assert_eq!(not_found.status(), StatusCode::NOT_FOUND);
     }
 }
