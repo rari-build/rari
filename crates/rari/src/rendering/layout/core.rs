@@ -1116,12 +1116,7 @@ impl LayoutRenderer {
                 });
                 let _ = self
                     .html_cache
-                    .insert_with_tags(
-                        cache_key,
-                        html.clone(),
-                        &layout_cache_tags,
-                        route_max_age,
-                    )
+                    .insert_with_tags(cache_key, html.clone(), &layout_cache_tags, route_max_age)
                     .await;
             }
 
