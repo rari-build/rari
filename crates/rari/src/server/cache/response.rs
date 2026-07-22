@@ -112,6 +112,42 @@ pub fn invalidate_static_fast_cache_for_path(
     }
 }
 
+pub fn insert_static_fast_cache(
+    cache: &DashMap<String, Arc<PrebuiltResponse>>,
+    key: &str,
+    value: Arc<PrebuiltResponse>,
+    max_entries: usize,
+) {
+    if max_entries == 0 {
+        return;
+    }
+
+    let replacing = cache.contains_key(key);
+    cache.insert(key.to_string(), value);
+    if replacing {
+        return;
+    }
+
+    while cache.len() > max_entries {
+        let victim = cache
+            .iter()
+            .find(|entry| entry.key().as_str() != key && entry.key().contains('?'))
+            .map(|entry| entry.key().clone())
+            .or_else(|| {
+                cache
+                    .iter()
+                    .find(|entry| entry.key().as_str() != key)
+                    .map(|entry| entry.key().clone())
+            });
+        match victim {
+            Some(victim_key) => {
+                cache.remove(&victim_key);
+            }
+            None => break,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct CacheConfig {
@@ -1130,5 +1166,42 @@ mod tests {
         assert!(!cache.contains_key("/about?tab=1"));
         assert!(!cache.contains_key("/about#cookie:abc123"));
         assert!(cache.contains_key("/other"));
+    }
+
+    #[test]
+    fn test_insert_static_fast_cache_caps_and_prefers_query_eviction() {
+        let cache: DashMap<String, Arc<PrebuiltResponse>> = DashMap::new();
+        let body = Bytes::from("html");
+        let make_entry = || {
+            Arc::new(PrebuiltResponse {
+                identity: body.clone(),
+                gzip: None,
+                br: None,
+                zstd: None,
+                etag: "W/\"1\"".to_string(),
+                content_type: "text/html; charset=utf-8".to_string(),
+                cache_control: "public".to_string(),
+                is_not_found: false,
+            })
+        };
+
+        insert_static_fast_cache(&cache, "/", make_entry(), 2);
+        insert_static_fast_cache(&cache, "/?utm=1", make_entry(), 2);
+        assert_eq!(cache.len(), 2);
+
+        insert_static_fast_cache(&cache, "/blog", make_entry(), 2);
+        assert_eq!(cache.len(), 2);
+        assert!(cache.contains_key("/"));
+        assert!(cache.contains_key("/blog"));
+        assert!(!cache.contains_key("/?utm=1"));
+
+        insert_static_fast_cache(&cache, "/", make_entry(), 2);
+        assert_eq!(cache.len(), 2);
+        assert!(cache.contains_key("/"));
+        assert!(cache.contains_key("/blog"));
+
+        insert_static_fast_cache(&cache, "/x", make_entry(), 0);
+        assert!(!cache.contains_key("/x"));
+        assert_eq!(cache.len(), 2);
     }
 }
