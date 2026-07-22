@@ -924,7 +924,7 @@ pub async fn render_synchronous(
         },
         Err(e) => {
             tracing::error!("Synchronous rendering failed: {}", e);
-            render_fallback_html(&state, &route_match.route.path, is_not_found).await
+            render_fallback_html(&state, is_not_found).await
         }
     }
 }
@@ -1056,7 +1056,6 @@ pub async fn render_streaming_with_layout(
 
 pub async fn render_fallback_html(
     state: &ServerState,
-    path: &str,
     is_not_found: bool,
 ) -> Result<Response, StatusCode> {
     let index_path = if state.config.is_development() {
@@ -1072,15 +1071,15 @@ pub async fn render_fallback_html(
 
     if fs::try_exists(&index_path).await.unwrap_or(false) {
         if state.config.is_production()
-            && let Some(cached_html) = state.html_cache.get(path)
+            && let Some(html) = state.html_cache.get()
         {
-            let html = cached_html.clone();
+            let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
             #[expect(
                 clippy::expect_used,
                 reason = "Response::builder() with valid components never fails"
             )]
             return Ok(Response::builder()
-                .status(StatusCode::OK)
+                .status(status_code)
                 .header("content-type", "text/html; charset=utf-8")
                 .header("vary", "Accept")
                 .body(Body::from(html))
@@ -1099,7 +1098,7 @@ pub async fn render_fallback_html(
             }
 
             if state.config.is_production() {
-                state.html_cache.insert(path.to_string(), final_html.clone());
+                state.html_cache.set(Bytes::from(final_html.clone()));
             }
 
             let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
@@ -1770,8 +1769,7 @@ pub async fn handle_app_route(
                 Ok(result) => result,
                 Err(e) => {
                     tracing::error!("Direct HTML rendering failed: {}, falling back to shell", e);
-                    return render_fallback_html(&state, path, route_match.not_found.is_some())
-                        .await;
+                    return render_fallback_html(&state, route_match.not_found.is_some()).await;
                 }
             };
 
@@ -1816,12 +1814,8 @@ pub async fn handle_app_route(
                             tracing::error!(
                                 "Failed to drain chunked HTML stream for build cache: {error}"
                             );
-                            return render_fallback_html(
-                                &state,
-                                path,
-                                route_match.not_found.is_some(),
-                            )
-                            .await;
+                            return render_fallback_html(&state, route_match.not_found.is_some())
+                                .await;
                         }
                     };
                     let final_html =
@@ -1831,15 +1825,13 @@ pub async fn handle_app_route(
                 }
                 RenderResult::StaticBinary(_bytes) => {
                     tracing::error!("StaticBinary not supported in build mode");
-                    return render_fallback_html(&state, path, route_match.not_found.is_some())
-                        .await;
+                    return render_fallback_html(&state, route_match.not_found.is_some()).await;
                 }
                 RenderResult::Chunked { content_type: ChunkedContentType::RscFlight, .. } => {
                     tracing::error!(
                         "RSC chunked render not supported in build mode HTML rendering"
                     );
-                    return render_fallback_html(&state, path, route_match.not_found.is_some())
-                        .await;
+                    return render_fallback_html(&state, route_match.not_found.is_some()).await;
                 }
             };
 

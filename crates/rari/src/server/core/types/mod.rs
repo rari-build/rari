@@ -4,7 +4,7 @@ use std::{
     time::Instant,
 };
 
-use dashmap::DashMap;
+use bytes::Bytes;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -28,6 +28,31 @@ use crate::{
     },
 };
 
+/// Single-entry cache for the production fallback index.html body.
+///
+/// The served body is the index.html file content — identical for every
+/// request path — so a per-path map only accumulates copies of the same page,
+/// growing without bound under path-diverse traffic (e.g. a crawler walking
+/// unknown URLs). One shared `Bytes` serves every path; `clear` forces a
+/// re-read from disk on the next request.
+#[derive(Clone, Default)]
+pub struct FallbackHtmlCache(Arc<parking_lot::RwLock<Option<Bytes>>>);
+
+impl FallbackHtmlCache {
+    #[must_use]
+    pub fn get(&self) -> Option<Bytes> {
+        self.0.read().clone()
+    }
+
+    pub fn set(&self, html: Bytes) {
+        *self.0.write() = Some(html);
+    }
+
+    pub fn clear(&self) {
+        *self.0.write() = None;
+    }
+}
+
 #[derive(Clone)]
 #[non_exhaustive]
 pub struct ServerState {
@@ -40,7 +65,7 @@ pub struct ServerState {
     pub page_cache_configs: Arc<RwLock<FxHashMap<String, FxHashMap<String, String>>>>,
     pub app_router: Option<Arc<AppRouter>>,
     pub api_route_handler: Option<Arc<ApiRouteHandler>>,
-    pub html_cache: Arc<DashMap<String, String>>,
+    pub html_cache: FallbackHtmlCache,
     pub layout_html_cache: Arc<LayoutHtmlCache>,
     pub response_cache: Arc<ResponseCache>,
     pub static_fast_cache: Arc<StaticFastCache>,
@@ -103,4 +128,32 @@ pub struct ReloadComponentRequest {
 pub struct ReloadComponentResponse {
     pub success: bool,
     pub message: String,
+}
+
+#[cfg(test)]
+#[expect(clippy::expect_used)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_fallback_html_cache_single_shared_entry() {
+        // Regression: the fallback body is path-independent, so the cache
+        // holds exactly one copy shared by every reader (Bytes refcount, no
+        // per-path duplication) until cleared.
+        let cache = FallbackHtmlCache::default();
+        assert!(cache.get().is_none());
+
+        cache.set(Bytes::from("<html>fallback</html>"));
+
+        let a = cache.get().expect("cached");
+        let b = cache.get().expect("cached");
+        assert_eq!(a, b);
+        assert_eq!(a.as_ptr(), b.as_ptr(), "readers must share one buffer, not copies");
+
+        cache.set(Bytes::from("<html>updated</html>"));
+        assert_eq!(cache.get().expect("cached"), Bytes::from("<html>updated</html>"));
+
+        cache.clear();
+        assert!(cache.get().is_none());
+    }
 }
