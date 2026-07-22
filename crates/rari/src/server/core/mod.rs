@@ -19,7 +19,6 @@ use axum::{
     serve::ListenerExt,
 };
 use colored::Colorize;
-use dashmap::DashMap;
 use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use tokio::{
@@ -31,7 +30,7 @@ use tower_http::{
     compression::{CompressionLayer, Predicate},
     services::ServeDir,
 };
-use types::ServerState;
+use types::{FallbackHtmlCache, ServerState};
 
 use crate::{
     RscHtmlRenderer, RscRenderer,
@@ -233,7 +232,7 @@ impl Server {
             page_cache_configs: Arc::new(RwLock::new(FxHashMap::default())),
             app_router,
             api_route_handler,
-            html_cache: Arc::new(DashMap::new()),
+            html_cache: FallbackHtmlCache::default(),
             layout_html_cache: LayoutRenderer::create_shared_cache_from_config(
                 &layout_layer,
                 &cache_registry,

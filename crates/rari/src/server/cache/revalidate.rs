@@ -110,7 +110,7 @@ async fn invalidate_route_caches_inner(
     state.response_cache.invalidate(path).await;
     state.response_cache.invalidate_by_tag(path).await;
     response::invalidate_static_fast_cache_for_path(&state.static_fast_cache, path);
-    state.html_cache.remove(path);
+    state.html_cache.clear();
 
     let use_cache_result = if let Some(runtime) = sticky_runtime {
         invalidate_use_cache_entries_on(runtime, None, Some(path)).await
