@@ -1,6 +1,5 @@
 use std::{
     env,
-    ops::Deref,
     sync::{
         Arc,
         atomic::{AtomicUsize, Ordering},
@@ -107,19 +106,19 @@ impl StaticFastCache {
     pub fn entry_count(&self) -> usize {
         self.entry_count.load(Ordering::Relaxed)
     }
+
+    pub fn get(&self, key: &str) -> Option<Arc<PrebuiltResponse>> {
+        self.map.get(key).map(|entry| Arc::clone(entry.value()))
+    }
+
+    pub fn contains_key(&self, key: &str) -> bool {
+        self.map.contains_key(key)
+    }
 }
 
 impl Default for StaticFastCache {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-impl Deref for StaticFastCache {
-    type Target = DashMap<String, Arc<PrebuiltResponse>>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.map
     }
 }
 

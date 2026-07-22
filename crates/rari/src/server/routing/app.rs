@@ -1279,8 +1279,6 @@ pub async fn handle_app_route(
             response::ResponseCache::generate_static_fast_cache_key(path, query_params_ref, None);
 
         if let Some(prebuilt) = state.static_fast_cache.get(&fast_key) {
-            let prebuilt = Arc::clone(prebuilt.value());
-
             if let Some(client_etag) = headers.get("if-none-match").and_then(|v| v.to_str().ok())
                 && client_etag == prebuilt.etag
             {
