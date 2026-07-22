@@ -1249,6 +1249,35 @@ mod tests {
     }
 
     #[test]
+    fn test_insert_static_fast_cache_replace_updates_value_not_count() {
+        let cache = StaticFastCache::new();
+        let make_entry = |body: &'static str, etag: &'static str| {
+            Arc::new(PrebuiltResponse {
+                identity: Bytes::from(body),
+                gzip: None,
+                br: None,
+                zstd: None,
+                etag: etag.to_string(),
+                content_type: "text/html; charset=utf-8".to_string(),
+                cache_control: "public".to_string(),
+                is_not_found: false,
+            })
+        };
+
+        insert_static_fast_cache(&cache, "/", make_entry("v1", "W/\"1\""), 2);
+        insert_static_fast_cache(&cache, "/other", make_entry("other", "W/\"o\""), 2);
+        assert_eq!(cache.entry_count(), 2);
+
+        insert_static_fast_cache(&cache, "/", make_entry("v2", "W/\"2\""), 2);
+        assert_eq!(cache.entry_count(), 2);
+        assert!(cache.contains_key("/other"));
+
+        let stored = cache.get("/").expect("replaced entry");
+        assert_eq!(stored.identity.as_ref(), b"v2");
+        assert_eq!(stored.etag, "W/\"2\"");
+    }
+
+    #[test]
     fn test_insert_static_fast_cache_concurrent_never_exceeds_max() {
         let cache = Arc::new(StaticFastCache::new());
         let max_entries = 32usize;
