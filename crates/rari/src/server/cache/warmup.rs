@@ -188,8 +188,9 @@ async fn warm_route(
             if matches!(enc, CompressionEncoding::Brotli) { Some(compressed) } else { None }
         };
 
-        state.static_fast_cache.insert(
-            path.to_string(),
+        response::insert_static_fast_cache(
+            &state.static_fast_cache,
+            path,
             Arc::new(response::PrebuiltResponse {
                 identity: body_bytes.clone(),
                 gzip: compressed_gzip.clone(),
@@ -200,6 +201,7 @@ async fn warm_route(
                 cache_control: cache_control.to_string(),
                 is_not_found: false,
             }),
+            state.response_cache.config.max_entries,
         );
 
         let cached_response = response::CachedResponse {

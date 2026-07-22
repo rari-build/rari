@@ -1896,8 +1896,9 @@ pub async fn handle_app_route(
                         query_params_ref,
                         None,
                     );
-                    state.static_fast_cache.insert(
-                        fast_key,
+                    response::insert_static_fast_cache(
+                        &state.static_fast_cache,
+                        &fast_key,
                         Arc::new(response::PrebuiltResponse {
                             identity: body_bytes.clone(),
                             gzip: compressed_gzip.clone(),
@@ -1908,6 +1909,7 @@ pub async fn handle_app_route(
                             cache_control: cache_control_value.to_string(),
                             is_not_found: route_match.not_found.is_some(),
                         }),
+                        state.response_cache.config.max_entries,
                     );
                 }
 
