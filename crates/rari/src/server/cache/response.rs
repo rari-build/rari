@@ -1,5 +1,6 @@
 use std::{
     env,
+    ops::Deref,
     sync::{
         Arc,
         atomic::{AtomicUsize, Ordering},
@@ -92,14 +93,45 @@ impl CachedResponse {
     }
 }
 
-pub fn invalidate_static_fast_cache_for_path(
-    cache: &DashMap<String, Arc<PrebuiltResponse>>,
-    path: &str,
-) {
-    cache.remove(path);
+pub struct StaticFastCache {
+    map: DashMap<String, Arc<PrebuiltResponse>>,
+    insert_lock: Mutex<()>,
+    entry_count: AtomicUsize,
+}
+
+impl StaticFastCache {
+    pub fn new() -> Self {
+        Self { map: DashMap::new(), insert_lock: Mutex::new(()), entry_count: AtomicUsize::new(0) }
+    }
+
+    pub fn entry_count(&self) -> usize {
+        self.entry_count.load(Ordering::Relaxed)
+    }
+}
+
+impl Default for StaticFastCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Deref for StaticFastCache {
+    type Target = DashMap<String, Arc<PrebuiltResponse>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.map
+    }
+}
+
+pub fn invalidate_static_fast_cache_for_path(cache: &StaticFastCache, path: &str) {
+    let _guard = cache.insert_lock.lock();
+    if cache.map.remove(path).is_some() {
+        cache.entry_count.fetch_sub(1, Ordering::Relaxed);
+    }
     let query_prefix = format!("{path}?");
     let hash_prefix = format!("{path}#");
     let keys: Vec<String> = cache
+        .map
         .iter()
         .filter(|entry| {
             let key = entry.key();
@@ -108,12 +140,14 @@ pub fn invalidate_static_fast_cache_for_path(
         .map(|entry| entry.key().clone())
         .collect();
     for key in keys {
-        cache.remove(&key);
+        if cache.map.remove(&key).is_some() {
+            cache.entry_count.fetch_sub(1, Ordering::Relaxed);
+        }
     }
 }
 
 pub fn insert_static_fast_cache(
-    cache: &DashMap<String, Arc<PrebuiltResponse>>,
+    cache: &StaticFastCache,
     key: &str,
     value: Arc<PrebuiltResponse>,
     max_entries: usize,
@@ -122,30 +156,39 @@ pub fn insert_static_fast_cache(
         return;
     }
 
-    let replacing = cache.contains_key(key);
-    cache.insert(key.to_string(), value);
+    let _guard = cache.insert_lock.lock();
+    let replacing = cache.map.insert(key.to_string(), value).is_some();
+    if !replacing {
+        cache.entry_count.fetch_add(1, Ordering::Relaxed);
+    }
     if replacing {
         return;
     }
 
-    while cache.len() > max_entries {
+    while cache.entry_count.load(Ordering::Relaxed) > max_entries {
         let victim = cache
+            .map
             .iter()
             .find(|entry| entry.key().as_str() != key && entry.key().contains('?'))
             .map(|entry| entry.key().clone())
             .or_else(|| {
                 cache
+                    .map
                     .iter()
                     .find(|entry| entry.key().as_str() != key)
                     .map(|entry| entry.key().clone())
             });
         match victim {
             Some(victim_key) => {
-                cache.remove(&victim_key);
+                if cache.map.remove(&victim_key).is_some() {
+                    cache.entry_count.fetch_sub(1, Ordering::Relaxed);
+                }
             }
             None => break,
         }
     }
+
+    debug_assert!(cache.entry_count.load(Ordering::Relaxed) <= max_entries);
 }
 
 #[derive(Clone, Debug)]
@@ -636,7 +679,7 @@ mod header_map_serde {
 #[cfg(test)]
 #[expect(clippy::expect_used, clippy::unwrap_used, clippy::clone_on_ref_ptr)]
 mod tests {
-    use std::{sync::Arc, time::Duration};
+    use std::{sync::Arc, thread, time::Duration};
 
     use parking_lot::Mutex as PMutex;
     use rustc_hash::FxHashMap;
@@ -1140,7 +1183,7 @@ mod tests {
 
     #[test]
     fn test_invalidate_static_fast_cache_for_path() {
-        let cache: DashMap<String, Arc<PrebuiltResponse>> = DashMap::new();
+        let cache = StaticFastCache::new();
         let body = Bytes::from("html");
         let make_entry = || {
             Arc::new(PrebuiltResponse {
@@ -1155,10 +1198,10 @@ mod tests {
             })
         };
 
-        cache.insert("/about".to_string(), make_entry());
-        cache.insert("/about?tab=1".to_string(), make_entry());
-        cache.insert("/about#cookie:abc123".to_string(), make_entry());
-        cache.insert("/other".to_string(), make_entry());
+        insert_static_fast_cache(&cache, "/about", make_entry(), 10);
+        insert_static_fast_cache(&cache, "/about?tab=1", make_entry(), 10);
+        insert_static_fast_cache(&cache, "/about#cookie:abc123", make_entry(), 10);
+        insert_static_fast_cache(&cache, "/other", make_entry(), 10);
 
         invalidate_static_fast_cache_for_path(&cache, "/about");
 
@@ -1166,11 +1209,12 @@ mod tests {
         assert!(!cache.contains_key("/about?tab=1"));
         assert!(!cache.contains_key("/about#cookie:abc123"));
         assert!(cache.contains_key("/other"));
+        assert_eq!(cache.entry_count(), 1);
     }
 
     #[test]
     fn test_insert_static_fast_cache_caps_and_prefers_query_eviction() {
-        let cache: DashMap<String, Arc<PrebuiltResponse>> = DashMap::new();
+        let cache = StaticFastCache::new();
         let body = Bytes::from("html");
         let make_entry = || {
             Arc::new(PrebuiltResponse {
@@ -1187,21 +1231,59 @@ mod tests {
 
         insert_static_fast_cache(&cache, "/", make_entry(), 2);
         insert_static_fast_cache(&cache, "/?utm=1", make_entry(), 2);
-        assert_eq!(cache.len(), 2);
+        assert_eq!(cache.entry_count(), 2);
 
         insert_static_fast_cache(&cache, "/blog", make_entry(), 2);
-        assert_eq!(cache.len(), 2);
+        assert_eq!(cache.entry_count(), 2);
         assert!(cache.contains_key("/"));
         assert!(cache.contains_key("/blog"));
         assert!(!cache.contains_key("/?utm=1"));
 
         insert_static_fast_cache(&cache, "/", make_entry(), 2);
-        assert_eq!(cache.len(), 2);
+        assert_eq!(cache.entry_count(), 2);
         assert!(cache.contains_key("/"));
         assert!(cache.contains_key("/blog"));
 
         insert_static_fast_cache(&cache, "/x", make_entry(), 0);
         assert!(!cache.contains_key("/x"));
-        assert_eq!(cache.len(), 2);
+        assert_eq!(cache.entry_count(), 2);
+    }
+
+    #[test]
+    fn test_insert_static_fast_cache_concurrent_never_exceeds_max() {
+        let cache = Arc::new(StaticFastCache::new());
+        let max_entries = 32usize;
+        let threads = 8usize;
+        let per_thread = 200usize;
+        let body = Bytes::from("html");
+
+        let mut handles = Vec::with_capacity(threads);
+        for thread_id in 0..threads {
+            let cache = Arc::clone(&cache);
+            let body = body.clone();
+            handles.push(thread::spawn(move || {
+                for i in 0..per_thread {
+                    let key = format!("/t{thread_id}?n={i}");
+                    let entry = Arc::new(PrebuiltResponse {
+                        identity: body.clone(),
+                        gzip: None,
+                        br: None,
+                        zstd: None,
+                        etag: "W/\"1\"".to_string(),
+                        content_type: "text/html; charset=utf-8".to_string(),
+                        cache_control: "public".to_string(),
+                        is_not_found: false,
+                    });
+                    insert_static_fast_cache(&cache, &key, entry, max_entries);
+                }
+            }));
+        }
+
+        for handle in handles {
+            handle.join().expect("worker thread panicked");
+        }
+
+        assert!(cache.entry_count() <= max_entries);
+        assert_eq!(cache.entry_count(), max_entries);
     }
 }

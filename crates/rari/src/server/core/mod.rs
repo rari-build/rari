@@ -239,7 +239,7 @@ impl Server {
                 &cache_registry,
             ),
             response_cache,
-            static_fast_cache: Arc::new(DashMap::new()),
+            static_fast_cache: Arc::new(response::StaticFastCache::new()),
             og_generator,
             project_root,
             image_optimizer: None,
