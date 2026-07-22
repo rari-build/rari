@@ -1087,6 +1087,10 @@ pub async fn render_fallback_html(
             return Ok(fallback_html_response(html, is_not_found));
         }
 
+        // Capture before the async disk read so a concurrent clear() cannot
+        // be undone by this request writing stale HTML back into the cache.
+        let cache_generation = state.config.is_production().then(|| state.html_cache.generation());
+
         if let Ok(html_content) = fs::read_to_string(&index_path).await {
             let mut final_html = if state.config.is_development() {
                 inject_vite_client(&html_content, state.config.vite.port)
@@ -1099,8 +1103,8 @@ pub async fn render_fallback_html(
             }
 
             let body = Bytes::from(final_html);
-            if state.config.is_production() {
-                state.html_cache.set(body.clone());
+            if let Some(generation) = cache_generation {
+                state.html_cache.set_if_generation(body.clone(), generation);
             }
 
             return Ok(fallback_html_response(body, is_not_found));
