@@ -27,7 +27,7 @@ export const fmt: OxfmtConfig = {
       'unknown',
     ],
   },
-  ignorePatterns,
+  ignorePatterns: [...ignorePatterns, '**/*.mdx'],
   overrides: [
     {
       files: ['**/*.{json,jsonc}'],

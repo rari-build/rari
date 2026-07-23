@@ -1,6 +1,5 @@
 export const title = 'Routing'
-export const description =
-  'Learn how file-based routing works in rari. Pages, layouts, dynamic segments, loading states, error boundaries, and not-found handling.'
+export const description = 'Learn how file-based routing works in rari. Pages, layouts, dynamic segments, loading states, error boundaries, and not-found handling.'
 
 <PageHeader title="Routing" />
 
@@ -10,15 +9,15 @@ File-based routing means your file structure inside `src/app/` becomes your URL 
 
 Each directory in `src/app/` can contain these special files:
 
-| File                  | Purpose                                                                              |
-| --------------------- | ------------------------------------------------------------------------------------ |
-| `page.tsx`            | The UI for a route. Makes the directory publicly accessible                          |
-| `layout.tsx`          | Shared UI that wraps child routes and persists across navigation                     |
-| `loading.tsx`         | Loading UI shown while the page is streaming (wraps the page in a Suspense boundary) |
-| `error.tsx`           | Error UI shown when a page or layout throws (wraps the page in an error boundary)    |
-| `not-found.tsx`       | Fallback UI shown when no route matches the requested path                           |
-| `route.ts`            | API endpoint handler (cannot coexist with `page.tsx` in the same directory)          |
-| `opengraph-image.tsx` | Dynamically generated Open Graph image for the route                                 |
+| File | Purpose |
+|---|---|
+| `page.tsx` | The UI for a route. Makes the directory publicly accessible |
+| `layout.tsx` | Shared UI that wraps child routes and persists across navigation |
+| `loading.tsx` | Loading UI shown while the page is streaming (wraps the page in a Suspense boundary) |
+| `error.tsx` | Error UI shown when a page or layout throws (wraps the page in an error boundary) |
+| `not-found.tsx` | Fallback UI shown when no route matches the requested path |
+| `route.ts` | API endpoint handler (cannot coexist with `page.tsx` in the same directory) |
+| `opengraph-image.tsx` | Dynamically generated Open Graph image for the route |
 
 UI files also support `.jsx` extensions, and `route.ts` can be written as `route.js`.
 
@@ -47,14 +46,13 @@ Pages are React Server Components by default. They can be `async` and fetch data
 <CodeBlock filename="src/app/posts/page.tsx" language="tsx">{`export default async function PostsPage() {
   const posts = await fetch('https://api.example.com/posts').then(r => r.json())
 
-return (
-
-<ul>
-{posts.map((post: any) => (
-<li key={post.id}>{post.title}</li>
-))}
-</ul>
-)
+  return (
+    <ul>
+      {posts.map((post: any) => (
+        <li key={post.id}>{post.title}</li>
+      ))}
+    </ul>
+  )
 }
 `}</CodeBlock>
 
@@ -156,13 +154,12 @@ src/app/users/[id]/page.tsx   →  /users/123, /users/abc
 export default async function BlogPost({ params }: PageProps<{ slug: string }>) {
   const post = await fetch(\`https://api.example.com/posts/\${params.slug}\`).then(r => r.json())
 
-return (
-
-<article>
-<h1>{post.title}</h1>
-<p>{post.content}</p>
-</article>
-)
+  return (
+    <article>
+      <h1>{post.title}</h1>
+      <p>{post.content}</p>
+    </article>
+  )
 }
 `}</CodeBlock>
 
@@ -180,7 +177,7 @@ Use `[...param]` to match one or more segments:
 export default function DocsPage({ params }: PageProps<{ slug: string[] }>) {
   const path = params.slug.join('/')
 
-return <h1>Docs: {path}</h1>
+  return <h1>Docs: {path}</h1>
 }
 `}</CodeBlock>
 
@@ -203,7 +200,7 @@ export default function DocsPage({ params }: PageProps<{ slug?: string[] }>) {
     return <h1>Docs Home</h1>
   }
 
-return <h1>Docs: {params.slug.join('/')}</h1>
+  return <h1>Docs: {params.slug.join('/')}</h1>
 }
 `}</CodeBlock>
 
@@ -225,10 +222,7 @@ A `loading.tsx` file creates a loading UI that's shown immediately while the pag
 └── page.tsx       # The actual page (async)
 `}</CodeBlock>
 
-<CodeBlock
-  filename="src/app/dashboard/loading.tsx"
-  language="tsx"
->{`export default function DashboardLoading() {
+<CodeBlock filename="src/app/dashboard/loading.tsx" language="tsx">{`export default function DashboardLoading() {
   return (
     <div>
       <p>Loading dashboard...</p>
@@ -241,13 +235,12 @@ A `loading.tsx` file creates a loading UI that's shown immediately while the pag
   // This fetch might take a moment. loading.tsx is shown in the meantime
   const stats = await fetch('https://api.example.com/stats').then(r => r.json())
 
-return (
-
-<div>
-<h1>Dashboard</h1>
-<p>Total users: {stats.totalUsers}</p>
-</div>
-)
+  return (
+    <div>
+      <h1>Dashboard</h1>
+      <p>Total users: {stats.totalUsers}</p>
+    </div>
+  )
 }
 `}</CodeBlock>
 
@@ -345,14 +338,14 @@ Create API endpoints by exporting HTTP method handlers from a `route.ts` file:
 export const GET: RouteHandler = async (request) => {
   const users = await fetchUsers()
 
-return Response.json(users)
+  return Response.json(users)
 }
 
 export const POST: RouteHandler = async (request) => {
   const body = await request.json()
   const user = await createUser(body)
 
-return Response.json(user, { status: 201 })
+  return Response.json(user, { status: 201 })
 }
 `}</CodeBlock>
 
@@ -362,19 +355,19 @@ export const GET: RouteHandler<{ id: string }> = async (request, context) => {
   // context is always provided for dynamic routes
   const { id } = context!.params
 
-const user = await fetchUser(id)
-if (!user) {
-return Response.json({ error: 'Not found' }, { status: 404 })
-}
+  const user = await fetchUser(id)
+  if (!user) {
+    return Response.json({ error: 'Not found' }, { status: 404 })
+  }
 
-return Response.json(user)
+  return Response.json(user)
 }
 
 export const DELETE: RouteHandler<{ id: string }> = async (request, context) => {
   const { id } = context!.params
   await deleteUser(id)
 
-return new Response(null, { status: 204 })
+  return new Response(null, { status: 204 })
 }
 `}</CodeBlock>
 

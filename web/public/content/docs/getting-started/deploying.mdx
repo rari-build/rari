@@ -1,6 +1,5 @@
 export const title = 'Deploying'
-export const description =
-  'Build and deploy your rari application to Railway, Render, or any Node.js hosting platform.'
+export const description = 'Build and deploy your rari application to Railway, Render, or any Node.js hosting platform.'
 
 <PageHeader title="Deploying" />
 
@@ -30,13 +29,13 @@ The server binds to `127.0.0.1:3000` by default. On supported platforms (Railway
 
 ## Environment Variables
 
-| Variable    | Description                                                        | Default                                                     |
-| ----------- | ------------------------------------------------------------------ | ----------------------------------------------------------- |
-| `PORT`      | Server port                                                        | `3000`                                                      |
-| `RSC_PORT`  | Alternative server port (fallback if `PORT` is not set)            | `3000`                                                      |
-| `NODE_ENV`  | Environment mode                                                   | `production` for `rari start`, `development` for `rari dev` |
-| `RUST_LOG`  | Rust runtime log level (`error`, `warn`, `info`, `debug`, `trace`) | `error`                                                     |
-| `RARI_HOST` | Server bind address                                                | `127.0.0.1` (`0.0.0.0` on Railway and Render)               |
+| Variable | Description | Default |
+|---|---|---|
+| `PORT` | Server port | `3000` |
+| `RSC_PORT` | Alternative server port (fallback if `PORT` is not set) | `3000` |
+| `NODE_ENV` | Environment mode | `production` for `rari start`, `development` for `rari dev` |
+| `RUST_LOG` | Rust runtime log level (`error`, `warn`, `info`, `debug`, `trace`) | `error` |
+| `RARI_HOST` | Server bind address | `127.0.0.1` (`0.0.0.0` on Railway and Render) |
 
 `PORT` takes precedence over `RSC_PORT`. Most hosting platforms set `PORT` automatically.
 
@@ -53,7 +52,7 @@ builder = "RAILPACK"
 
 [deploy]
 startCommand = "npm start"
-healthcheckPath = "/\_rari/health"
+healthcheckPath = "/_rari/health"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
@@ -81,8 +80,8 @@ Railway is auto-detected via the `RAILWAY_ENVIRONMENT` environment variable, and
 
 The Rust runtime requires `libfontconfig1` for image and font rendering. On Railway, add this variable to your service:
 
-| Variable                       | Value            |
-| ------------------------------ | ---------------- |
+| Variable | Value |
+|---|---|
 | `RAILPACK_DEPLOY_APT_PACKAGES` | `libfontconfig1` |
 
 You can set this in the Railway dashboard under your service's Variables tab.
@@ -134,11 +133,9 @@ You can deploy rari to any platform that runs Node.js ≥ 22.18.0. The general s
 npm install
 
 # Build for production
-
 npx rari build
 
 # Start the server
-
 PORT=8080 npx rari start
 `}</CodeBlock>
 
@@ -154,7 +151,7 @@ For containerized deployments, a minimal Dockerfile:
 
 <CodeBlock filename="Dockerfile" language="dockerfile">{`FROM node:22.12-slim
 
-RUN apt-get update && apt-get install -y libfontconfig1 && rm -rf /var/lib/apt/lists/\*
+RUN apt-get update && apt-get install -y libfontconfig1 && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
