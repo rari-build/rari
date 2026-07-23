@@ -1,3 +1,16 @@
+## [@rari/use-cache@0.15.5] - 2026-07-23
+
+### 🚀 Features
+
+- wire JS pool into streaming and cut Suspense stream latency by @skiniks
+
+### ⚙️ Miscellaneous Tasks
+
+- *(dependencies)* update various package versions by @skiniks
+- *(use-cache)* update optional dependencies to version 0.15.5 by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/@rari/use-cache@0.15.4...@rari/use-cache@0.15.5
 ## [@rari/use-cache@0.15.3] - 2026-07-15
 
 ### ⚙️ Miscellaneous Tasks
