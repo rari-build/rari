@@ -263,7 +263,7 @@ async fn run_non_interactive(
         } else if generates_changelog {
             println!("  {} Generating changelog...", "→".cyan());
             let package_path = unit.paths()[0];
-            changelog::generate(&tag, unit_name, package_path).await?;
+            changelog::generate(&tag, &new_version, unit_name, package_path).await?;
             if let Some((_, body)) = &manual_notes {
                 if changelog::inject_manual_notes(package_path, &tag, &new_version, body).await? {
                     println!("  {} Injected manual notes into CHANGELOG.md", "✓".green());

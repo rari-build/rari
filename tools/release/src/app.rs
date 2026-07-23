@@ -317,7 +317,7 @@ impl App {
                         } else {
                             self.status_messages.push("Generating changelog...".to_string());
                             let package_path = unit.paths()[0];
-                            changelog::generate(&tag, unit_name, package_path).await?;
+                            changelog::generate(&tag, version, unit_name, package_path).await?;
                             if let Some((_, body)) = &manual_notes {
                                 if changelog::inject_manual_notes(package_path, &tag, version, body)
                                     .await?

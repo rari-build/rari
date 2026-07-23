@@ -188,17 +188,60 @@ test-watch:
 
 # --- Release commands ---
 
-# Generate changelog
-changelog:
-    git-cliff --output CHANGELOG.md
+# Preview unreleased changelog for a package (stdout only; does not write files).
+# Package CHANGELOG.md updates happen in `just release` via git-cliff --prepend
+# with a package --tag-pattern so v* / cross-package tags are not mixed in.
+# Usage: just changelog
+#        just changelog create-rari-app
+#        just changelog use-cache
+changelog package="rari":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    case "{{package}}" in
+      rari)
+        git-cliff --unreleased --tag-pattern '^rari@' \
+          --include-path 'packages/rari/**' --include-path 'crates/rari/**'
+        ;;
+      create-rari-app)
+        git-cliff --unreleased --tag-pattern '^create-rari-app@' \
+          --include-path 'packages/create-rari-app/**'
+        ;;
+      use-cache|"@rari/use-cache")
+        git-cliff --unreleased --tag-pattern '^@rari/use-cache@' \
+          --include-path 'packages/use-cache/**' --include-path 'crates/rari_use_cache/**'
+        ;;
+      *)
+        echo "Unknown package: {{package}} (expected rari | create-rari-app | use-cache)" >&2
+        exit 1
+        ;;
+    esac
 
-# Preview unreleased changelog
-changelog-preview:
-    git-cliff --unreleased
+# Alias for clarity
+changelog-preview package="rari":
+    just changelog {{package}}
 
-# Show latest changelog entry
-changelog-latest:
-    git-cliff --latest
+# Show latest tagged changelog section for a package (stdout only)
+changelog-latest package="rari":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    case "{{package}}" in
+      rari)
+        git-cliff --latest --tag-pattern '^rari@' \
+          --include-path 'packages/rari/**' --include-path 'crates/rari/**'
+        ;;
+      create-rari-app)
+        git-cliff --latest --tag-pattern '^create-rari-app@' \
+          --include-path 'packages/create-rari-app/**'
+        ;;
+      use-cache|"@rari/use-cache")
+        git-cliff --latest --tag-pattern '^@rari/use-cache@' \
+          --include-path 'packages/use-cache/**' --include-path 'crates/rari_use_cache/**'
+        ;;
+      *)
+        echo "Unknown package: {{package}} (expected rari | create-rari-app | use-cache)" >&2
+        exit 1
+        ;;
+    esac
 
 # Run release process
 # Usage: just release

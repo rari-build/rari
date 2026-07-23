@@ -7,26 +7,32 @@ const NOTES_DIR: &str = ".github/release-notes";
 
 pub const CHANGELOG_FALLBACK_NOTES: &str = "See CHANGELOG.md for details.";
 
-pub async fn generate(tag: &str, package_name: &str, package_path: &Path) -> Result<()> {
+pub async fn generate(
+    tag: &str,
+    version: &str,
+    package_name: &str,
+    package_path: &Path,
+) -> Result<()> {
     let changelog_path = package_path.join("CHANGELOG.md");
 
-    let mut args = vec![
-        "--tag".to_string(),
-        tag.to_string(),
-        "--include-path".to_string(),
-        format!("{}/**", package_path.display()),
-    ];
-
-    if package_name == "rari" {
-        args.push("--include-path".to_string());
-        args.push("crates/rari/**".to_string());
-    } else if package_name == "@rari/use-cache" {
-        args.push("--include-path".to_string());
-        args.push("crates/rari_use_cache/**".to_string());
+    if changelog_path.exists() {
+        let content = fs::read_to_string(&changelog_path).await?;
+        if find_changelog_heading(&content, tag, version).is_some() {
+            return Ok(());
+        }
     }
 
-    args.push("--output".to_string());
-    args.push(changelog_path.display().to_string());
+    let mut args = vec!["--tag".to_string(), tag.to_string()];
+    push_package_cliff_args(&mut args, package_name, package_path);
+
+    if changelog_path.exists() {
+        args.push("--unreleased".to_string());
+        args.push("--prepend".to_string());
+        args.push(changelog_path.display().to_string());
+    } else {
+        args.push("--output".to_string());
+        args.push(changelog_path.display().to_string());
+    }
 
     let output = Command::new("git-cliff").args(&args).output().await?;
 
@@ -39,6 +45,31 @@ pub async fn generate(tag: &str, package_name: &str, package_path: &Path) -> Res
     }
 
     Ok(())
+}
+
+fn push_package_cliff_args(args: &mut Vec<String>, package_name: &str, package_path: &Path) {
+    args.push("--include-path".to_string());
+    args.push(format!("{}/**", package_path.display()));
+
+    match package_name {
+        "rari" => {
+            args.push("--include-path".to_string());
+            args.push("crates/rari/**".to_string());
+            args.push("--tag-pattern".to_string());
+            args.push("^rari@".to_string());
+        }
+        "create-rari-app" => {
+            args.push("--tag-pattern".to_string());
+            args.push("^create-rari-app@".to_string());
+        }
+        "@rari/use-cache" => {
+            args.push("--include-path".to_string());
+            args.push("crates/rari_use_cache/**".to_string());
+            args.push("--tag-pattern".to_string());
+            args.push("^@rari/use-cache@".to_string());
+        }
+        _ => {}
+    }
 }
 
 /// Resolve manual release notes path.
@@ -80,12 +111,27 @@ pub async fn load_manual_notes(
     };
 
     let content = fs::read_to_string(&path).await?;
-    let content = content.trim().to_string();
+    let content = strip_html_comments(&content).trim().to_string();
     if content.is_empty() {
         return Ok(None);
     }
 
     Ok(Some((path, content)))
+}
+
+/// Remove `<!-- ... -->` blocks (including the template footer in release-notes files).
+fn strip_html_comments(content: &str) -> String {
+    let mut out = String::with_capacity(content.len());
+    let mut rest = content;
+    while let Some(start) = rest.find("<!--") {
+        out.push_str(&rest[..start]);
+        match rest[start..].find("-->") {
+            Some(end) => rest = &rest[start + end + 3..],
+            None => return out,
+        }
+    }
+    out.push_str(rest);
+    out
 }
 
 pub fn compose_release_notes(manual: Option<&str>, auto: &str) -> String {
@@ -101,8 +147,8 @@ pub fn compose_release_notes(manual: Option<&str>, auto: &str) -> String {
 
 /// Insert manual notes under the newly generated version heading in CHANGELOG.md.
 ///
-/// Returns `Ok(true)` when notes were injected, or `Ok(false)` when no matching
-/// heading was found (caller should warn; this is not treated as a hard error).
+/// Returns `Ok(true)` when notes were injected (or already present), or `Ok(false)`
+/// when no matching heading was found (caller should warn; not a hard error).
 pub async fn inject_manual_notes(
     package_path: &Path,
     tag: &str,
@@ -120,6 +166,10 @@ pub async fn inject_manual_notes(
     let Some(idx) = find_changelog_heading(&content, tag, version) else {
         return Ok(false);
     };
+
+    if section_contains_notes(&content, idx, manual) {
+        return Ok(true);
+    }
 
     let line_end = content[idx..].find('\n').map_or(content.len(), |i| idx + i + 1);
     let mut insert_at = line_end;
@@ -155,6 +205,16 @@ fn find_changelog_heading(content: &str, tag: &str, version: &str) -> Option<usi
     content.find(&cliff_heading).or_else(|| {
         if cliff_heading == version_heading { None } else { content.find(&version_heading) }
     })
+}
+
+fn section_contains_notes(content: &str, heading_idx: usize, manual: &str) -> bool {
+    let Some(fingerprint) = manual.lines().map(str::trim).find(|line| !line.is_empty()) else {
+        return false;
+    };
+
+    let after = &content[heading_idx..];
+    let section_end = after[1..].find("\n## [").map_or(after.len(), |i| i + 1);
+    after[..section_end].contains(fingerprint)
 }
 
 pub async fn generate_release_notes(

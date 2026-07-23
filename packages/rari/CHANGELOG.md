@@ -1,4 +1,4 @@
-## [0.15.4] - 2026-07-15
+## [rari@0.15.4] - 2026-07-15
 
 ### 🐛 Bug Fixes
 
@@ -9,17 +9,8 @@
 - simplify path resolution and handler cache management in API routes by @skiniks
 - remove unnecessary clone by @skiniks
 
-
-**Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.15.3...v0.15.4
+**Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.15.3...rari@0.15.4
 ## [rari@0.15.3] - 2026-07-15
-
-### ⚙️ Miscellaneous Tasks
-
-- update optional dependencies to version 0.15.3 by @skiniks
-
-
-**Full Changelog**: https://github.com/rari-build/rari/compare/v0.15.3...rari@0.15.3
-## [0.15.3] - 2026-07-15
 
 ### 🐛 Bug Fixes
 
@@ -29,37 +20,18 @@
 
 - clean up node_console_scope and enhance module resolution logic in build.ts by @skiniks
 
+### ⚙️ Miscellaneous Tasks
 
-**Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.15.2...v0.15.3
+- update optional dependencies to version 0.15.3 by @skiniks
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.15.2...rari@0.15.3
 ## [rari@0.15.2] - 2026-07-14
 
 ### ⚙️ Miscellaneous Tasks
 
 - update optional dependencies to version 0.15.2 in pnpm-lock.yaml and pnpm-workspace.yaml by @skiniks
 
-
-**Full Changelog**: https://github.com/rari-build/rari/compare/use-cache-binaries@0.15.2...rari@0.15.2
-## [use-cache-binaries@0.15.2] - 2026-07-14
-
-### 🚜 Refactor
-
-- replace String error types with RariError in various modules for improved error handling by @skiniks
-- enhance error handling by replacing string error messages with RariError in multiple modules by @skiniks
-- improve error response handling by appending pending cookies in server actions and adjusting development flag usage in vite module by @skiniks
-- streamline error response handling in server actions by utilizing RariError and conditional pending cookies by @skiniks
-- update error response status handling in server actions to utilize dynamic status codes from error_response module by @skiniks
-- simplify directive detection logic and enhance component ID handling with new utility functions and test fixtures by @skiniks
-- enhance directive parsing logic and add new test cases for mixed use directives by @skiniks
-- enhance directive scanning logic to support top-level directive detection and update related test cases by @skiniks
-- update module loader to utilize new resolver structure and enhance test configurations by @skiniks
-- update module resolution logic to handle node_modules references and improve import resolution by @skiniks
-
-### ⚙️ Miscellaneous Tasks
-
-- bump rari package version to 0.15.2 in Cargo.toml by @skiniks
-
-
-**Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.15.1...use-cache-binaries@0.15.2
+**Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.15.1...rari@0.15.2
 ## [rari@0.15.1] - 2026-07-13
 
 ### 🐛 Bug Fixes
@@ -70,21 +42,26 @@
 
 - *(workflows)* update release workflow to use Ubuntu 22.04 for Linux targets and adjust file resolution extensions in build script by @skiniks
 
-
 **Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.15.0...rari@0.15.1
 ## [rari@0.15.0] - 2026-07-13
 
-### 🐛 Bug Fixes
+## Highlights
 
-- *(package)* downgrade rari version from 0.15.0 to 0.14.12 in package.json by @skiniks
+- **React Flight + Fizz RSC stack:** the runtime renders with official React Server Components: Flight for the RSC payload / client hydration path, and Fizz for HTML SSR and streaming. Wire-format naming and the client Flight bundle are aligned with that model.
+- **Server actions on Flight:** actions use React Flight decode/encode end-to-end (`decodeAction` / `decodeReply`, form state, action refresh), with cookie-partitioned response cache keys after mutations.
+- Experimental `'use cache'` with a native transform addon, memory/private storage, and remote backends (Redis and redb). Enable with `experimental.useCache` / `experimental.useCacheRemote`. APIs: `cacheLife`, `cacheTag`, `revalidateTag`, `revalidatePath`, `updateTag`.
+- Production routing loads a unified `RoutesManifest` (`routes.json`) plus server component manifest; external framework client components such as `rari/image` resolve during SSR.
+- MDX component registry via `defineMdxComponents` / `rari/mdx/registry` for shared MDX UI across the app.
+- Image usage scanning runs in Rust (faster builds, same CLI surface).
+- Dev HTML pretty-printing for local responses.
+- Tooling: TypeScript 7 available side-by-side in the workspace catalog; create-rari-app templates target it. Node engine floor is `>=22.18.0`.
 
-### ⚙️ Miscellaneous Tasks
+## Breaking Changes
 
-- *(dependencies)* upgrade rari packages to version 0.15.0 in pnpm-lock.yaml, pnpm-workspace.yaml, and package.json by @skiniks
-
-
-**Full Changelog**: https://github.com/rari-build/rari/compare/v0.15.0...rari@0.15.0
-## [0.15.0] - 2026-07-13
+- **Server action client entry:** `rari/runtime/actions` is removed. Import `callServer` from `rari/runtime/call-server` (the Vite plugin already injects this for transformed modules).
+- **Form action endpoint:** `POST /_rari/form-action` is removed. Progressive enhancement and client actions use `POST /_rari/action` (and page POSTs) on the React Flight action path.
+- **Node.js:** `engines.node` is now `>=22.18.0` (was `>=22.12.0`).
+- **`'use cache'`:** remains behind `experimental.useCache` / `experimental.useCacheRemote`. Remote storage needs a matching `@rari/use-cache-*` native addon for your platform.
 
 ### 🚀 Features
 
@@ -317,7 +294,7 @@
 
 - @adambenhassen made their first contribution
 
-**Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.14.12...v0.15.0
+**Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.14.12...rari@0.15.0
 ## [0.14.12] - 2026-06-16
 
 ### 🚀 Features

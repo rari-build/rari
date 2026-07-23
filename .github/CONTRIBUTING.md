@@ -473,6 +473,10 @@ Lookup order: `--notes-file` / `RELEASE_NOTES_FILE` → `<tag>.md` (scoped `/` �
 
 Manual notes are prepended to the GitHub release body (above the auto-generated commit list) and injected into `CHANGELOG.md` under the new version heading. Patch releases can skip this and stay cliff-only.
 
+The release tool **prepends** only the new version section into each package `CHANGELOG.md`, so older curated Highlights / Breaking Changes are kept. It also passes a package `--tag-pattern` (e.g. `^rari@`) so binary `v*` tags and other packages are not mixed into the same changelog.
+
+`just changelog` / `just changelog-preview` only print unreleased commits to stdout — they do not rewrite `CHANGELOG.md`.
+
 ## Pull Request Guidelines
 
 ### Before Submitting
