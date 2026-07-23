@@ -1000,12 +1000,8 @@ mod tests {
 
     #[test]
     fn test_memory_config_carries_byte_budget() {
-        let config = CacheConfig {
-            max_entries: 50,
-            default_ttl: 120,
-            enabled: true,
-            max_bytes: 1_048_576,
-        };
+        let config =
+            CacheConfig { max_entries: 50, default_ttl: 120, enabled: true, max_bytes: 1_048_576 };
         let memory = config.memory_config();
         assert_eq!(memory.max_entries, 50);
         assert_eq!(memory.default_ttl, 120);
