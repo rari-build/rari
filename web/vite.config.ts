@@ -35,6 +35,16 @@ export default defineConfig({
           '/enterprise/*': 'public, max-age=300, stale-while-revalidate=600',
         },
       },
+      cache: {
+        layers: {
+          response: {
+            handler: 'memory',
+            maxEntries: 1000,
+            // @ts-expect-error maxBytes missing from ServerCacheLayerConfig -- add in next release
+            maxBytes: 128 * 1024 * 1024,
+          },
+        },
+      },
     }),
     tailwindcss(),
   ],
