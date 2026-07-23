@@ -343,6 +343,7 @@ pub struct ResponseCache {
     pub config: CacheConfig,
     metrics: Arc<Mutex<CacheMetrics>>,
     entry_count: Arc<AtomicUsize>,
+    payload_bytes: Arc<AtomicUsize>,
 }
 
 impl ResponseCache {
@@ -364,6 +365,7 @@ impl ResponseCache {
             config,
             metrics: Arc::new(Mutex::new(CacheMetrics::default())),
             entry_count: Arc::new(AtomicUsize::new(0)),
+            payload_bytes: Arc::new(AtomicUsize::new(0)),
         }
     }
 
@@ -519,12 +521,16 @@ impl ResponseCache {
             self.handler.set_with_tags(&ns_key, bytes, ttl, &tags).await
         };
 
-        if let Err(e) = result {
-            tracing::warn!(error = %e, key = %key, "cache set failed");
-            return;
+        match result {
+            Err(e) => {
+                tracing::warn!(error = %e, key = %key, "cache set failed");
+            }
+            Ok(outcome) => {
+                if outcome.stored || outcome.replaced || outcome.evicted > 0 {
+                    self.resync_entry_count();
+                }
+            }
         }
-
-        self.resync_entry_count();
     }
 
     pub async fn update_in_place(&self, key: &str, response: CachedResponse) {
@@ -547,10 +553,16 @@ impl ResponseCache {
         } else {
             self.handler.set_with_tags(&ns_key, bytes, ttl, &tags).await
         };
-        if let Err(e) = result {
-            tracing::warn!(error = %e, key = %key, "cache update_in_place failed");
+        match result {
+            Err(e) => {
+                tracing::warn!(error = %e, key = %key, "cache update_in_place failed");
+            }
+            Ok(outcome) => {
+                if outcome.stored || outcome.replaced || outcome.evicted > 0 {
+                    self.resync_entry_count();
+                }
+            }
         }
-        self.resync_entry_count();
     }
 
     pub async fn invalidate(&self, key: &str) {
@@ -640,20 +652,17 @@ impl ResponseCache {
 
     fn update_entry_count_metrics(&self) {
         let n = self.entry_count.load(Ordering::Relaxed);
-        // Exact when the backend reports payload bytes; rough per-entry
-        // estimate otherwise. Scoped to this cache's key prefix: the handler
-        // may be shared with other cache layers (image, OG), whose bytes
-        // must not count here.
-        let usage = self.handler.prefix_bytes(Self::KEY_PREFIX).unwrap_or(n * 10_000);
+        let usage = self.payload_bytes.load(Ordering::Relaxed);
         let mut metrics = self.metrics.lock();
         metrics.total_entries = n;
         metrics.memory_usage_bytes = usage;
     }
 
     fn resync_entry_count(&self) {
-        let live =
-            self.handler.get_all_keys().iter().filter(|k| k.starts_with(Self::KEY_PREFIX)).count();
+        let (live, exact_bytes) = self.handler.prefix_stats(Self::KEY_PREFIX);
+        let usage = exact_bytes.unwrap_or(live.saturating_mul(10_000));
         self.entry_count.store(live, Ordering::Relaxed);
+        self.payload_bytes.store(usage, Ordering::Relaxed);
         self.update_entry_count_metrics();
     }
 }

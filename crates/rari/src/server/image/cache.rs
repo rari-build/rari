@@ -7,7 +7,6 @@ use std::{
     sync::Arc,
 };
 
-use parking_lot::Mutex;
 use rkyv::{Archive, Deserialize as RkyvDeserialize, Serialize as RkyvSerialize, rancor};
 use tokio::task;
 
@@ -32,7 +31,6 @@ const KEY_PREFIX: &str = "image:";
 pub struct ImageCache {
     handler: Arc<dyn CacheHandler>,
     cache_dir: PathBuf,
-    current_memory_size: Mutex<usize>,
 }
 
 impl ImageCache {
@@ -48,15 +46,13 @@ impl ImageCache {
         Self::with_handler(Arc::new(handler), max_memory_size, project_path)
     }
 
-    /// The memory budget lives in the handler's entry/byte caps; this type
-    /// only mirrors the handler's usage in `current_memory_size`.
     pub fn with_handler(
         handler: Arc<dyn CacheHandler>,
         _max_memory_size: usize,
         project_path: &Path,
     ) -> Self {
         let cache_dir = Self::resolve_cache_dir(project_path);
-        Self { handler, cache_dir, current_memory_size: Mutex::new(0) }
+        Self { handler, cache_dir }
     }
 
     fn ns(key: &str) -> String {
@@ -119,21 +115,9 @@ impl ImageCache {
         };
 
         let cached_arc = Arc::new(cached);
-        // Track the serialized size: that is what the handler stores and what
-        // its evicted_bytes are denominated in.
-        let serialized_size = read_result.len();
 
-        match self.handler.set(&Self::ns(key), read_result, IMG_TTL_SECS).await {
-            Ok(outcome) => {
-                let mut size = self.current_memory_size.lock();
-                *size = size.saturating_sub(outcome.evicted_bytes);
-                if outcome.stored {
-                    *size = size.saturating_add(serialized_size);
-                }
-            }
-            Err(e) => {
-                tracing::debug!("Image cache write-through to handler failed: {}", e);
-            }
+        if let Err(e) = self.handler.set(&Self::ns(key), read_result, IMG_TTL_SECS).await {
+            tracing::debug!("Image cache write-through to handler failed: {}", e);
         }
 
         Some(cached_arc)
@@ -160,20 +144,8 @@ impl ImageCache {
             Err(e) => tracing::error!("Failed to spawn disk write task: {}", e),
         }
 
-        // Track the serialized size after the set resolves: that is what the
-        // handler stores and what its evicted_bytes are denominated in.
-        let serialized_size = serialized.len();
-        match self.handler.set(&Self::ns(&key), serialized, IMG_TTL_SECS).await {
-            Ok(outcome) => {
-                let mut size = self.current_memory_size.lock();
-                *size = size.saturating_sub(outcome.evicted_bytes);
-                if outcome.stored {
-                    *size = size.saturating_add(serialized_size);
-                }
-            }
-            Err(e) => {
-                tracing::error!("Failed to write image to handler cache: {}", e);
-            }
+        if let Err(e) = self.handler.set(&Self::ns(&key), serialized, IMG_TTL_SECS).await {
+            tracing::error!("Failed to write image to handler cache: {}", e);
         }
     }
 }
