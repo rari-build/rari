@@ -39,11 +39,8 @@ use crate::{
     server::{
         actions::{handle_page_server_action, handle_server_action},
         cache::{
-            handler::CacheHandlerRegistry,
-            loader::CacheLoader,
-            response,
-            revalidate::revalidate_by_path,
-            warmup,
+            handler::CacheHandlerRegistry, loader::CacheLoader, response,
+            revalidate::revalidate_by_path, warmup,
         },
         config::{
             CACHE_LAYER_IMAGE, CACHE_LAYER_LAYOUT, CACHE_LAYER_OG, CACHE_LAYER_RESPONSE, Config,
