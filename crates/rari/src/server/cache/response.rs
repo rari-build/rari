@@ -269,7 +269,7 @@ impl RouteCachePolicy {
     /// The shared-cache freshness lifetime declared in a Cache-Control header,
     /// if any. `s-maxage` takes precedence over `max-age` (RFC 9111 §5.2.2.10):
     /// the server-side cache is a shared cache, and `max-age=0, s-maxage=3600`
-    /// means "browsers revalidate, shared caches hold for an hour" — reading
+    /// means "browsers revalidate, shared caches hold for an hour" -- reading
     /// only `max-age` there would disable caching the route asked for.
     pub fn max_age_from_cache_control(cache_control: &str) -> Option<u64> {
         let directive_value = |prefix: &str| {
@@ -1164,7 +1164,7 @@ mod tests {
         assert_eq!(got.compressed_zstd, original.compressed_zstd);
         assert_eq!(got.compressed_br, original.compressed_br);
         assert_eq!(got.compressed_gzip, original.compressed_gzip);
-        // cached_at was reconstructed from elapsed ms — still recent.
+        // cached_at was reconstructed from elapsed ms -- still recent.
         assert!(got.metadata.cached_at.elapsed().as_secs() <= 1);
         assert!(got.is_valid());
     }

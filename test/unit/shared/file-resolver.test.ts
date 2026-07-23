@@ -1,9 +1,23 @@
+import type { Stats } from 'node:fs'
 import fs from 'node:fs'
 import path from 'node:path'
-import { clearFileResolverCache, resolveIndexFile, resolveWithExtensions } from '@rari/shared/utils/file-resolver'
+import {
+  clearFileResolverCache,
+  resolveIndexFile,
+  resolveWithExtensions,
+} from '@rari/shared/utils/file-resolver'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
+import { castMock } from '../../helpers/mock-cast'
 
 vi.mock('node:fs')
+
+const DIR_STAT = castMock<Stats>({
+  isDirectory: () => true,
+})
+
+const NON_DIR_STAT = castMock<Stats>({
+  isDirectory: () => false,
+})
 
 describe('file-resolver', () => {
   beforeEach(() => {
@@ -20,9 +34,7 @@ describe('file-resolver', () => {
       const basePath = '/test/component'
       const extensions = ['.tsx', '.ts', '.jsx', '.js']
 
-      vi.mocked(fs.existsSync)
-        .mockReturnValueOnce(false)
-        .mockReturnValueOnce(true)
+      vi.mocked(fs.existsSync).mockReturnValueOnce(false).mockReturnValueOnce(true)
 
       const result = resolveWithExtensions(basePath, extensions)
 
@@ -103,9 +115,7 @@ describe('file-resolver', () => {
         .mockReturnValueOnce(false)
         .mockReturnValueOnce(true)
 
-      vi.mocked(fs.statSync).mockReturnValue({
-        isDirectory: () => true,
-      } as any)
+      vi.mocked(fs.statSync).mockReturnValue(DIR_STAT)
 
       const result = resolveIndexFile(dirPath, extensions)
 
@@ -121,9 +131,7 @@ describe('file-resolver', () => {
         .mockReturnValueOnce(false)
         .mockReturnValueOnce(false)
 
-      vi.mocked(fs.statSync).mockReturnValue({
-        isDirectory: () => true,
-      } as any)
+      vi.mocked(fs.statSync).mockReturnValue(DIR_STAT)
 
       const result = resolveIndexFile(dirPath, extensions)
 
@@ -141,9 +149,7 @@ describe('file-resolver', () => {
         .mockReturnValueOnce(false)
         .mockReturnValueOnce(true)
 
-      vi.mocked(fs.statSync).mockReturnValue({
-        isDirectory: () => true,
-      } as any)
+      vi.mocked(fs.statSync).mockReturnValue(DIR_STAT)
 
       const result = resolveIndexFile(dirPath, extensions)
 
@@ -161,9 +167,7 @@ describe('file-resolver', () => {
       const extensions: string[] = []
 
       vi.mocked(fs.existsSync).mockReturnValueOnce(true)
-      vi.mocked(fs.statSync).mockReturnValue({
-        isDirectory: () => true,
-      } as any)
+      vi.mocked(fs.statSync).mockReturnValue(DIR_STAT)
 
       const result = resolveIndexFile(dirPath, extensions)
 
@@ -175,13 +179,9 @@ describe('file-resolver', () => {
       const dirPath = '/test/components/'
       const extensions = ['.tsx']
 
-      vi.mocked(fs.existsSync)
-        .mockReturnValueOnce(true)
-        .mockReturnValueOnce(true)
+      vi.mocked(fs.existsSync).mockReturnValueOnce(true).mockReturnValueOnce(true)
 
-      vi.mocked(fs.statSync).mockReturnValue({
-        isDirectory: () => true,
-      } as any)
+      vi.mocked(fs.statSync).mockReturnValue(DIR_STAT)
 
       const result = resolveIndexFile(dirPath, extensions)
 
@@ -192,13 +192,9 @@ describe('file-resolver', () => {
       const dirPath = '/test/components'
       const extensions = ['.tsx', '.ts', '.jsx', '.js']
 
-      vi.mocked(fs.existsSync)
-        .mockReturnValueOnce(true)
-        .mockReturnValueOnce(true)
+      vi.mocked(fs.existsSync).mockReturnValueOnce(true).mockReturnValueOnce(true)
 
-      vi.mocked(fs.statSync).mockReturnValue({
-        isDirectory: () => true,
-      } as any)
+      vi.mocked(fs.statSync).mockReturnValue(DIR_STAT)
 
       const result = resolveIndexFile(dirPath, extensions)
 
@@ -211,9 +207,7 @@ describe('file-resolver', () => {
       const extensions = ['.tsx', '.ts']
 
       vi.mocked(fs.existsSync).mockReturnValueOnce(true)
-      vi.mocked(fs.statSync).mockReturnValue({
-        isDirectory: () => false,
-      } as any)
+      vi.mocked(fs.statSync).mockReturnValue(NON_DIR_STAT)
 
       const result = resolveIndexFile(dirPath, extensions)
 
@@ -230,13 +224,9 @@ describe('file-resolver', () => {
       const withExt = resolveWithExtensions(basePath, extensions)
       expect(withExt).toBeNull()
 
-      vi.mocked(fs.existsSync)
-        .mockReturnValueOnce(true)
-        .mockReturnValueOnce(true)
+      vi.mocked(fs.existsSync).mockReturnValueOnce(true).mockReturnValueOnce(true)
 
-      vi.mocked(fs.statSync).mockReturnValue({
-        isDirectory: () => true,
-      } as any)
+      vi.mocked(fs.statSync).mockReturnValue(DIR_STAT)
 
       const indexFile = resolveIndexFile(basePath, extensions)
       expect(indexFile).toBe(path.join('/test', 'Button', 'index.tsx'))
@@ -257,13 +247,9 @@ describe('file-resolver', () => {
       const basePath = 'C:\\test\\components'
       const extensions = ['.tsx', '.ts']
 
-      vi.mocked(fs.existsSync)
-        .mockReturnValueOnce(true)
-        .mockReturnValueOnce(true)
+      vi.mocked(fs.existsSync).mockReturnValueOnce(true).mockReturnValueOnce(true)
 
-      vi.mocked(fs.statSync).mockReturnValue({
-        isDirectory: () => true,
-      } as any)
+      vi.mocked(fs.statSync).mockReturnValue(DIR_STAT)
 
       const result = resolveIndexFile(basePath, extensions)
 

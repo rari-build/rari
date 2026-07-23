@@ -7,22 +7,12 @@ repository = { workspace = true }
 publish = false
 
 [lib]
-crate-type = [
-  "cdylib",
-  "rlib",
-]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-deno_ast = { workspace = true, features = [
-  "codegen",
-  "transforms",
-  "visit"
-] }
+deno_ast = { workspace = true, features = ["codegen", "transforms", "visit"] }
 hex = { workspace = true }
-napi = { version = "3.11.0", features = [
-  "napi6",
-  "serde-json",
-] }
+napi = { version = "3.11.0", features = ["napi6", "serde-json"] }
 napi-derive = "3.6.0"
 rustc-hash = { workspace = true }
 sha2 = { workspace = true }

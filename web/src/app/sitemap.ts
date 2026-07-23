@@ -23,8 +23,7 @@ async function getDocPages(): Promise<DocPage[]> {
 
         if (entry.isDirectory()) {
           await scanDir(fullPath, basePath ? `${basePath}/${entry.name}` : entry.name)
-        }
-        else if (entry.name.endsWith('.mdx')) {
+        } else if (entry.name.endsWith('.mdx')) {
           const slug = entry.name.replace('.mdx', '')
           const finalSlug = basePath ? `${basePath}/${slug}` : slug
 
@@ -34,12 +33,10 @@ async function getDocPages(): Promise<DocPage[]> {
               slug: finalSlug,
               lastModified: new Date(),
             })
-          }
-          catch {}
+          } catch {}
         }
       }
-    }
-    catch {}
+    } catch {}
   }
 
   const docsDir = join(process.cwd(), 'public', 'content', 'docs')

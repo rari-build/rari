@@ -67,7 +67,7 @@ pub struct CachedFetchResult {
 impl CachedFetchResult {
     /// 5xx responses are never cached: a transient backend error cached here
     /// is replayed to every render for the TTL (default 60s), turning a blip
-    /// into a minute of failures. 4xx stays cacheable — a missing article is
+    /// into a minute of failures. 4xx stays cacheable -- a missing article is
     /// stable data worth deduplicating.
     fn is_cacheable(&self) -> bool {
         self.status < 500

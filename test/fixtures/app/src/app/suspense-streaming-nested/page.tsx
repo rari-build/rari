@@ -18,8 +18,8 @@ export default function NestedSuspensePage() {
 }
 
 interface OuterProps {
-  delay: number
-  children: ReactNode
+  readonly delay: number
+  readonly children: ReactNode
 }
 
 async function OuterComponent({ delay, children }: OuterProps) {
@@ -36,8 +36,8 @@ async function OuterComponent({ delay, children }: OuterProps) {
 }
 
 interface InnerProps {
-  delay: number
-  name: string
+  readonly delay: number
+  readonly name: string
 }
 
 async function InnerComponent({ delay, name }: InnerProps) {
@@ -46,9 +46,7 @@ async function InnerComponent({ delay, name }: InnerProps) {
   const timestamp = new Date().toISOString()
   return (
     <div data-testid={`component-${name.toLowerCase()}`}>
-      {name}
-      :
-      {timestamp}
+      {name}:{timestamp}
     </div>
   )
 }

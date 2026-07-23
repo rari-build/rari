@@ -1,26 +1,8 @@
-interface ActionValidationConfig {
-  maxDepth: number
-  maxStringLength: number
-  maxArrayLength: number
-  maxObjectKeys: number
-  maxTotalElements: number
-}
+/// <reference path="../../types.d.ts" />
 
-interface ActionArgsValidationApi {
-  productionValidationConfig: () => ActionValidationConfig
-  developmentValidationConfig: () => ActionValidationConfig
-  validateActionArgsWithConfig: (args: unknown[], config: ActionValidationConfig) => unknown[]
-  validateFormDataWithConfig: (formData: FormData, config: ActionValidationConfig) => void
-  isDangerousActionProperty: (key: string) => boolean
-}
-
-;(function initActionArgsValidationCore() {
-  const globalScope = globalThis as typeof globalThis & {
-    __RARI_ACTION_ARGS_VALIDATION__?: ActionArgsValidationApi
-  }
-
-  if (globalScope.__RARI_ACTION_ARGS_VALIDATION__)
-    return
+// oxlint-disable-next-line typescript/prefer-readonly-parameter-types
+;(function initActionArgsValidationCore(g: GlobalThis) {
+  if (g.__RARI_ACTION_ARGS_VALIDATION__ !== undefined) return
 
   const MAX_BOUND_ARGS = 1000
   const MAX_FORM_FIELDS = 1000
@@ -47,13 +29,15 @@ interface ActionArgsValidationApi {
   }
 
   function isDangerousActionProperty(key: string): boolean {
-    return key === '__proto__'
-      || key === 'constructor'
-      || key === 'prototype'
-      || key === '__defineGetter__'
-      || key === '__defineSetter__'
-      || key === '__lookupGetter__'
-      || key === '__lookupSetter__'
+    return (
+      key === '__proto__' ||
+      key === 'constructor' ||
+      key === 'prototype' ||
+      key === '__defineGetter__' ||
+      key === '__defineSetter__' ||
+      key === '__lookupGetter__' ||
+      key === '__lookupSetter__'
+    )
   }
 
   function isFlightFormMetadataKey(key: string): boolean {
@@ -61,14 +45,15 @@ interface ActionArgsValidationApi {
   }
 
   function isOpaqueActionArg(value: unknown): boolean {
-    return value instanceof FormData
-      || (typeof Blob !== 'undefined' && value instanceof Blob)
-      || (typeof File !== 'undefined' && value instanceof File)
+    return (
+      value instanceof FormData ||
+      (typeof Blob !== 'undefined' && value instanceof Blob) ||
+      (typeof File !== 'undefined' && value instanceof File)
+    )
   }
 
   function estimatedDigitCount(absValue: number): number {
-    if (absValue === 0)
-      return 1
+    if (absValue === 0) return 1
 
     return Math.floor(Math.log10(absValue)) + 1
   }
@@ -79,6 +64,7 @@ interface ActionArgsValidationApi {
   }
 
   function bumpActionValidationCount(
+    // oxlint-disable-next-line typescript/prefer-readonly-parameter-types -- ctx is intentionally mutated in place as a running counter
     ctx: ActionValidationContext,
     count: number,
     config: ActionValidationConfig,
@@ -86,8 +72,8 @@ interface ActionArgsValidationApi {
     ctx.totalElements += count
     if (ctx.hasFork && ctx.totalElements > config.maxTotalElements) {
       throw new TypeError(
-        `Maximum array nesting exceeded: ${ctx.totalElements} > ${config.maxTotalElements}. `
-        + 'Large nested arrays can be dangerous. Try adding intermediate objects.',
+        `Maximum array nesting exceeded: ${ctx.totalElements} > ${config.maxTotalElements}. ` +
+          'Large nested arrays can be dangerous. Try adding intermediate objects.',
       )
     }
   }
@@ -96,16 +82,15 @@ interface ActionArgsValidationApi {
     value: unknown,
     config: ActionValidationConfig,
     depth: number,
+    // oxlint-disable-next-line typescript/prefer-readonly-parameter-types -- ctx is intentionally mutated in place as a running counter
     ctx: ActionValidationContext,
   ): unknown {
-    if (isOpaqueActionArg(value))
-      return value
+    if (isOpaqueActionArg(value)) return value
 
     if (depth > config.maxDepth)
       throw new TypeError(`Maximum nesting depth exceeded: ${depth} > ${config.maxDepth}`)
 
-    if (value === null || typeof value === 'boolean')
-      return value
+    if (value === null || typeof value === 'boolean') return value
 
     if (typeof value === 'string') {
       if (value.length > config.maxStringLength) {
@@ -136,8 +121,7 @@ interface ActionArgsValidationApi {
       if (value.length > config.maxArrayLength) {
         throw new TypeError(`Array too large: ${value.length} > ${config.maxArrayLength}`)
       }
-      if (value.length > 1)
-        ctx.hasFork = true
+      if (value.length > 1) ctx.hasFork = true
       bumpActionValidationCount(ctx, value.length + 1, config)
       return value.map(item => validateActionValue(item, config, depth + 1, ctx))
     }
@@ -153,8 +137,7 @@ interface ActionArgsValidationApi {
       return value
     }
 
-    if (typeof Date !== 'undefined' && value instanceof Date)
-      return value
+    if (typeof Date !== 'undefined' && value instanceof Date) return value
 
     if (typeof Map !== 'undefined' && value instanceof Map)
       throw new TypeError('Map is not supported in server action arguments')
@@ -162,21 +145,22 @@ interface ActionArgsValidationApi {
     if (typeof Set !== 'undefined' && value instanceof Set)
       throw new TypeError('Set is not supported in server action arguments')
 
-    if (typeof ArrayBuffer !== 'undefined' && (value instanceof ArrayBuffer || ArrayBuffer.isView(value)))
+    if (
+      typeof ArrayBuffer !== 'undefined' &&
+      (value instanceof ArrayBuffer || ArrayBuffer.isView(value))
+    )
       return value
 
     if (typeof value === 'object') {
-      const objectValue = value as Record<string, unknown>
-      const keys = Object.keys(objectValue)
-      if (keys.length > config.maxObjectKeys) {
-        throw new TypeError(`Too many object keys: ${keys.length} > ${config.maxObjectKeys}`)
+      const entries = Object.entries(value)
+      if (entries.length > config.maxObjectKeys) {
+        throw new TypeError(`Too many object keys: ${entries.length} > ${config.maxObjectKeys}`)
       }
 
       const sanitized: Record<string, unknown> = {}
-      for (const key of keys) {
-        if (isDangerousActionProperty(key))
-          continue
-        sanitized[key] = validateActionValue(objectValue[key], config, depth + 1, ctx)
+      for (const [key, entryValue] of entries) {
+        if (isDangerousActionProperty(key)) continue
+        sanitized[key] = validateActionValue(entryValue, config, depth + 1, ctx)
       }
 
       return sanitized
@@ -185,7 +169,10 @@ interface ActionArgsValidationApi {
     return value
   }
 
-  function validateActionArgsWithConfig(args: unknown[], config: ActionValidationConfig): unknown[] {
+  function validateActionArgsWithConfig(
+    args: readonly unknown[],
+    config: ActionValidationConfig,
+  ): unknown[] {
     if (args.length > MAX_BOUND_ARGS) {
       throw new TypeError(
         `Server Function has too many bound arguments. Received ${args.length} but the limit is ${MAX_BOUND_ARGS}.`,
@@ -205,8 +192,7 @@ interface ActionArgsValidationApi {
         throw new TypeError(`Too many form fields: ${fieldCount} > ${MAX_FORM_FIELDS}`)
       }
 
-      if (isFlightFormMetadataKey(key))
-        continue
+      if (isFlightFormMetadataKey(key)) continue
 
       if (typeof value === 'string' && value.length > config.maxStringLength) {
         throw new TypeError(
@@ -216,11 +202,11 @@ interface ActionArgsValidationApi {
     }
   }
 
-  globalScope.__RARI_ACTION_ARGS_VALIDATION__ = {
+  g.__RARI_ACTION_ARGS_VALIDATION__ = {
     productionValidationConfig,
     developmentValidationConfig,
     validateActionArgsWithConfig,
     validateFormDataWithConfig,
     isDangerousActionProperty,
   }
-})()
+})(globalThis.g)

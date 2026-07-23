@@ -1,21 +1,29 @@
 import process from 'node:process'
 import { defineConfig, devices } from '@playwright/test'
-
 import { getRariLogPath } from './test/e2e/shared/helpers'
+
+function env(name: string): string | undefined {
+  const value = process.env[name]
+  return typeof value === 'string' && value !== '' ? value : undefined
+}
+
+const port = env('PORT') ?? '3000'
+const baseURL = env('BASE_URL') ?? `http://localhost:${port}`
+const isCI = env('CI') != null
 
 export default defineConfig({
   testDir: './test/e2e',
   fullyParallel: true,
-  forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
+  forbidOnly: isCI,
+  retries: isCI ? 2 : 0,
   workers: (() => {
-    const parsed = Number(process.env.E2E_WORKERS)
+    const parsed = Number(env('E2E_WORKERS'))
     return Number.isFinite(parsed) && parsed > 0 ? parsed : 1
   })(),
-  reporter: process.env.CI ? 'github' : 'html',
+  reporter: isCI ? 'github' : 'html',
 
   use: {
-    baseURL: process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}`,
+    baseURL,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -23,10 +31,10 @@ export default defineConfig({
 
   webServer: {
     command: `pnpm --filter rari build && pnpm --filter @test/app build && pnpm --filter @test/app start > "${getRariLogPath()}" 2>&1`,
-    url: `http://localhost:${process.env.PORT || 3000}`,
+    url: `http://localhost:${port}`,
     // Reusing a running server after `pnpm build` serves stale SSR HTML with outdated
     // asset hashes (client JS 404s). Set E2E_REUSE_SERVER=1 to opt in locally.
-    reuseExistingServer: process.env.E2E_REUSE_SERVER === '1',
+    reuseExistingServer: env('E2E_REUSE_SERVER') === '1',
     timeout: 120000,
     env: {
       NODE_ENV: 'production',
@@ -42,7 +50,12 @@ export default defineConfig({
       use: {
         ...devices['Pixel 5'],
         launchOptions: {
-          slowMo: process.env.SLOW_MO ? Number(process.env.SLOW_MO) || 0 : 0,
+          slowMo: (() => {
+            const value = env('SLOW_MO')
+            if (value == null) return 0
+            const parsed = Number(value)
+            return Number.isFinite(parsed) ? parsed : 0
+          })(),
         },
       },
     },

@@ -16,12 +16,6 @@ applyToGlobal({
       return lazyCache().cacheStorage()
     },
   },
-  CacheStorage: propNonEnumerableLazyLoaded(
-    c => c.CacheStorage,
-    lazyCache,
-  ),
-  Cache: propNonEnumerableLazyLoaded(
-    c => c.Cache,
-    lazyCache,
-  ),
+  CacheStorage: propNonEnumerableLazyLoaded(c => c.CacheStorage, lazyCache),
+  Cache: propNonEnumerableLazyLoaded(c => c.Cache, lazyCache),
 })

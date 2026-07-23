@@ -3,6 +3,7 @@ import { $$cache__, setUseCacheBuildId } from '@rari/use-cache/runtime/cache-wra
 import { REDB_CACHE_OPS } from '@rari/use-cache/runtime/storage/redb'
 import { REDIS_CACHE_OPS } from '@rari/use-cache/runtime/storage/redis'
 import { afterEach, beforeEach, describe, expect, it } from 'vite-plus/test'
+import { isThenable } from '../../helpers/is-thenable'
 import { patchDenoBackend, patchDenoOps, restoreDeno } from './deno-mock'
 
 function installOpsMock(backend: MockBackend, remoteHandler: 'redis' | 'redb' | 'test' = 'redis') {
@@ -25,10 +26,8 @@ async function callCache<Args extends unknown[]>(
 ): Promise<unknown> {
   try {
     return $$cache__(kind, id, argCount, fn, args)
-  }
-  catch (e) {
-    if (e instanceof Promise)
-      return await e
+  } catch (e) {
+    if (isThenable(e)) return e
     throw e
   }
 }
@@ -109,7 +108,7 @@ describe('$$cache__', () => {
 
   it('uses different cache keys when plain object key insertion order differs', async () => {
     let callCount = 0
-    const fn = (..._args: unknown[]) => {
+    const fn = (..._args: readonly unknown[]) => {
       callCount++
       return 'ok'
     }
@@ -122,7 +121,7 @@ describe('$$cache__', () => {
 
   it('supports rich and circular cache key args', async () => {
     let callCount = 0
-    const fn = (..._args: unknown[]) => {
+    const fn = (..._args: readonly unknown[]) => {
       callCount++
       return 'ok'
     }
@@ -195,18 +194,18 @@ describe('$$cache__', () => {
     let redisSetCalls = 0
 
     patchDenoOps({
-      [REDB_CACHE_OPS.get]: async () => {
+      [REDB_CACHE_OPS.get]: () => {
         redbGetCalls++
         return null
       },
-      [REDB_CACHE_OPS.set]: async () => {
+      [REDB_CACHE_OPS.set]: () => {
         redbSetCalls++
       },
-      [REDIS_CACHE_OPS.get]: async () => {
+      [REDIS_CACHE_OPS.get]: () => {
         redisGetCalls++
         return null
       },
-      [REDIS_CACHE_OPS.set]: async () => {
+      [REDIS_CACHE_OPS.set]: () => {
         redisSetCalls++
       },
     })
@@ -229,7 +228,7 @@ describe('$$cache__', () => {
   it('includes bound closure values in cache keys', async () => {
     const prefix = 'v1'
     let calls = 0
-    const fn = (_bound: unknown[], id: string) => {
+    const fn = (_bound: readonly unknown[], id: string) => {
       calls++
       return `${prefix}:${id}`
     }
@@ -243,7 +242,7 @@ describe('$$cache__', () => {
   it('reuses cache entries when bound closure values are unchanged', async () => {
     const prefix = 'stable'
     let calls = 0
-    const fn = (_bound: unknown[], id: string) => {
+    const fn = (_bound: readonly unknown[], id: string) => {
       calls++
       return `${prefix}:${id}`
     }
@@ -285,16 +284,15 @@ describe('$$cache__', () => {
       return 'remote'
     }
 
-    const { runWithUseCacheDynamicContext, resetUseCacheDynamicContextForTests } = await import('@rari/use-cache/runtime/cache-dynamic-context')
+    const { runWithUseCacheDynamicContext, resetUseCacheDynamicContextForTests } =
+      await import('@rari/use-cache/runtime/cache-dynamic-context')
     const { $$cache__ } = await import('@rari/use-cache/runtime/cache-wrapper')
 
     async function call(kind: string, id: string, fn: () => string) {
       try {
         return $$cache__(kind, id, 0, fn, [])
-      }
-      catch (e) {
-        if (e instanceof Promise)
-          return await e
+      } catch (e) {
+        if (isThenable(e)) return e
         throw e
       }
     }

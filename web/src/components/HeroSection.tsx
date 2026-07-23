@@ -11,7 +11,10 @@ export default function HeroSection() {
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 w-full">
         <div className="text-center mb-12">
           <div className="flex items-center justify-center mb-8">
-            <Rari className="w-64 h-20 lg:w-80 lg:h-24 transition-transform hover:scale-105" aria-hidden="true" />
+            <Rari
+              className="w-64 h-20 lg:w-80 lg:h-24 transition-transform hover:scale-105"
+              aria-hidden="true"
+            />
             <h1 className="sr-only">rari</h1>
           </div>
 
@@ -20,8 +23,7 @@ export default function HeroSection() {
           </p>
 
           <p className="text-lg lg:text-xl text-fg-muted mb-12 max-w-2xl mx-auto leading-relaxed text-balance">
-            A React framework where the HTTP server, RSC renderer, and routing all run in a
-            {' '}
+            A React framework where the HTTP server, RSC renderer, and routing all run in a{' '}
             <span className="text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover font-semibold">
               Rust runtime with embedded V8
             </span>
@@ -51,12 +53,35 @@ export default function HeroSection() {
 
         <div className="flex flex-wrap items-center justify-center gap-3">
           {[
-            { id: 'rust-v8', label: 'Rust Runtime + V8', bg: 'bg-[#D34516]/10', text: 'text-[#D34516]', border: 'border-[#D34516]/20' },
-            { id: 'rsc', label: 'React Server Components', bg: 'bg-[#61dafb]/10', text: 'text-[#61dafb]', border: 'border-[#61dafb]/20' },
-            { id: 'streaming', label: 'Streaming & Suspense', bg: 'bg-yellow-500/10', text: 'text-yellow-600', border: 'border-yellow-500/20' },
-            { id: 'zero-config', label: 'Zero Config', bg: 'bg-purple-500/10', text: 'text-purple-400', border: 'border-purple-500/20' },
+            {
+              id: 'rust-v8',
+              label: 'Rust Runtime + V8',
+              bg: 'bg-[#D34516]/10',
+              text: 'text-[#D34516]',
+              border: 'border-[#D34516]/20',
+            },
+            {
+              id: 'rsc',
+              label: 'React Server Components',
+              bg: 'bg-[#61dafb]/10',
+              text: 'text-[#61dafb]',
+              border: 'border-[#61dafb]/20',
+            },
+            {
+              id: 'streaming',
+              label: 'Streaming & Suspense',
+              bg: 'bg-yellow-500/10',
+              text: 'text-yellow-600',
+              border: 'border-yellow-500/20',
+            },
+            {
+              id: 'zero-config',
+              label: 'Zero Config',
+              bg: 'bg-purple-500/10',
+              text: 'text-purple-400',
+              border: 'border-purple-500/20',
+            },
           ].map(feature => (
-
             <div
               key={feature.id}
               className={`px-4 py-2 ${feature.bg} border ${feature.border} rounded-full text-xs font-medium ${feature.text} backdrop-blur-sm`}

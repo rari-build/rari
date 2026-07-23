@@ -1,7 +1,13 @@
+/** `Error` as exposed via `primordials`, matching the legacy 3-arg (message, fileName, lineNumber) constructor still used by some runtime shims. */
+interface PrimordialErrorConstructor extends ErrorConstructor {
+  new (message?: string, fileName?: string, lineNumber?: number): Error
+  (message?: string, fileName?: string, lineNumber?: number): Error
+}
+
 declare module 'ext:core/mod.js' {
   export const core: {
-    loadExtScript: (path: string) => any
-    ops: Record<string, (...args: any[]) => any> & {
+    loadExtScript: <T = unknown>(path: string) => T // oxlint-disable-line typescript/no-unnecessary-type-parameters -- Deno ext script loader
+    ops: Record<string, (...args: readonly any[]) => any> & {
       op_bootstrap_args: () => string[]
       op_bootstrap_pid: () => number
       op_ppid: () => number
@@ -19,22 +25,36 @@ declare module 'ext:core/mod.js' {
     NotCapable: typeof Error
     registerErrorClass: (name: string, ctor: any) => void
     registerErrorBuilder: (name: string, builder: (msg?: string) => Error) => void
-    setUnhandledPromiseRejectionHandler: (handler: (promise: Promise<unknown>, reason: unknown) => boolean) => void
-    setHandledPromiseRejectionHandler: (handler: (promise: Promise<unknown>, reason: unknown) => void) => void
+    setUnhandledPromiseRejectionHandler: (
+      handler: (promise: Promise<unknown>, reason: unknown) => boolean,
+    ) => void
+    setHandledPromiseRejectionHandler: (
+      handler: (promise: Promise<unknown>, reason: unknown) => void,
+    ) => void
     setReportExceptionCallback: (callback: (error: unknown) => void) => void
     isNativeError: (value: unknown) => boolean
-    createLazyLoader: <T = { default: unknown }>(specifier: string) => () => T
+    createLazyLoader: <T = { default: unknown }>(specifier: string) => () => T // oxlint-disable-line typescript/no-unnecessary-type-parameters -- Deno lazy module loader
     setBuildInfo: (target: string) => void
     [key: string]: unknown
   }
-  export const internals: any
-  export const primordials: any
+  export const internals: {
+    nodeProcessUnhandledRejectionCallback?: (event: unknown) => void
+    nodeProcessRejectionHandledCallback?: (event: unknown) => void
+    [key: string]: unknown
+  }
+  export const primordials: {
+    ObjectSetPrototypeOf: typeof Object.setPrototypeOf
+    Error: PrimordialErrorConstructor
+    ErrorPrototype: Error
+    ObjectPrototypeIsPrototypeOf: (prototype: object, value: unknown) => boolean
+    [key: string]: unknown
+  }
 }
 
 declare module 'ext:core/ops' {
-  export function op_net_listen_udp(...args: any[]): any
-  export function op_net_listen_unixpacket(...args: any[]): any
-  export function op_set_format_exception_callback(...args: any[]): any
+  export function op_net_listen_udp(...args: readonly any[]): any
+  export function op_net_listen_unixpacket(...args: readonly any[]): any
+  export function op_set_format_exception_callback(...args: readonly any[]): any
 }
 
 declare module 'ext:init_utilities/utilities.ts' {
@@ -44,13 +64,21 @@ declare module 'ext:init_utilities/utilities.ts' {
   export function readOnly(value: any): PropertyDescriptor
   export function getterOnly(fn: () => any): PropertyDescriptor
   export function writeable(value: any): PropertyDescriptor
-  export function loadExtScriptOnce(specifier: string): unknown
+  /* oxlint-disable typescript/no-unnecessary-type-parameters -- Deno ext loader factories */
+  export function loadExtScriptOnce<T>(specifier: string): T
   export function lazyExtScript<T>(specifier: string): () => T
   export function lazyExtModule<T>(specifier: string): () => T
-  export function propNonEnumerableLazyLoaded<T, V>(select: (mod: T) => V, load: () => T): PropertyDescriptor
-  export function propWritableLazyLoaded<T, V>(select: (mod: T) => V, load: () => T): PropertyDescriptor
+  export function propNonEnumerableLazyLoaded<T, V>(
+    select: (mod: T) => V,
+    load: () => T,
+  ): PropertyDescriptor
+  export function propWritableLazyLoaded<T, V>(
+    select: (mod: T) => V,
+    load: () => T,
+  ): PropertyDescriptor
+  /* oxlint-enable typescript/no-unnecessary-type-parameters */
   export function nonEnumerableGetter(get: () => unknown): PropertyDescriptor
-  export function defineDenoLazyProps<T>(load: () => T, keys: (keyof T & string)[]): void
+  export function defineDenoLazyProps<T>(load: () => T, keys: ReadonlyArray<keyof T & string>): void
 }
 
 declare module 'ext:deno_websocket/01_websocket.js' {
@@ -68,8 +96,8 @@ declare module 'ext:deno_net/01_net.js' {
   export function listen(options: unknown): unknown
   export function resolveDns(name: string, recordType: string, options?: unknown): Promise<string[]>
   export function createListenDatagram(
-    opListenUdp: (...args: unknown[]) => unknown,
-    opListenUnixpacket: (...args: unknown[]) => unknown,
+    opListenUdp: (...args: readonly unknown[]) => unknown,
+    opListenUnixpacket: (...args: readonly unknown[]) => unknown,
   ): typeof Deno.listenDatagram
 }
 
@@ -85,7 +113,10 @@ declare module 'ext:runtime/98_global_scope_shared.js' {
 }
 
 declare module 'ext:runtime/98_global_scope_window.js' {
-  const scopeWindow: Record<string, any>
+  const scopeWindow: {
+    memoizeLazy: <T>(fn: () => T) => () => T
+    [key: string]: unknown
+  }
   export = scopeWindow
 }
 
@@ -102,8 +133,13 @@ declare module 'ext:deno_web/00_url.js' {
 declare module 'ext:deno_web/01_console.js' {
   export function getDefaultInspectOptions(): unknown
   export function getStderrNoColor(): boolean
-  export function inspectArgs(args: unknown[], options: { colors: boolean }): string
+  export function inspectArgs(
+    args: readonly unknown[],
+    options: Readonly<{ colors: boolean }>,
+  ): string
   export function quoteString(value: string, options: unknown): string
+  export const Console: new (printFunc: (msg: string, level: number) => void) => Console
+  export const inspect: typeof Deno.inspect
 }
 
 declare module 'ext:deno_web/01_dom_exception.js' {
@@ -120,9 +156,9 @@ declare module 'ext:deno_web/02_event.js' {
   export const PromiseRejectionEvent: typeof globalThis.PromiseRejectionEvent
   export const ProgressEvent: typeof globalThis.ProgressEvent
   export function reportError(reason: unknown): void
-  export function reportException(error: unknown): void
-  export function saveGlobalThisReference(global: typeof globalThis): void
-  export function setEventTargetData(global: typeof globalThis): void
+  export function reportException(exception: unknown): void
+  export function saveGlobalThisReference(global: object): void
+  export function setEventTargetData(global: object): void
 }
 
 declare module 'ext:deno_web/02_timers.js' {
@@ -130,7 +166,7 @@ declare module 'ext:deno_web/02_timers.js' {
   export function unrefTimer(id: number): void
   export const clearInterval: typeof globalThis.clearInterval
   export const clearTimeout: typeof globalThis.clearTimeout
-  export function setImmediate(...args: unknown[]): unknown
+  export function setImmediate(...args: readonly unknown[]): unknown
   export const setInterval: typeof globalThis.setInterval
   export const setTimeout: typeof globalThis.setTimeout
 }
@@ -325,4 +361,45 @@ declare module 'ext:runtime/10_permissions.js' {
 declare module 'ext:runtime/40_tty.js' {
   export const isatty: typeof Deno.isatty
   export const consoleSize: typeof Deno.consoleSize
+}
+
+declare module 'ext:deno_kv/01_db.ts' {
+  export const openKv: typeof Deno.openKv
+  export const AtomicOperation: typeof Deno.AtomicOperation
+  export const KvU64: typeof Deno.KvU64
+  export const KvListIterator: typeof Deno.KvListIterator
+}
+
+declare module 'ext:deno_cron/01_cron.ts' {
+  export const cron: typeof Deno.cron
+}
+
+declare module 'ext:deno_io/12_io.js' {
+  export const SeekMode: typeof Deno.SeekMode
+  export const stdin: unknown
+  export const stdout: unknown
+  export const stderr: unknown
+}
+
+declare module 'ext:deno_webidl/00_webidl.js' {
+  export const brand: symbol
+}
+
+declare module 'ext:deno_node/internal/util/debuglog.ts' {
+  export function initializeDebugEnv(debugEnv: string): void
+}
+
+declare module 'ext:rari/http/cookies.ts' {}
+declare module 'ext:rari/http/headers.ts' {}
+declare module 'ext:rari/cache/use_cache.ts' {}
+declare module 'ext:rari/http/api_handler.ts' {}
+declare module 'ext:rari/react/component_loader.ts' {}
+declare module 'ext:rari/react/metadata_collector.ts' {}
+declare module 'ext:rari/rsc/rsc_modules.ts' {}
+declare module 'ext:rari/rsc/server_functions.ts' {}
+declare module 'ext:rari/rsc/client_registry.ts' {}
+
+declare module 'ext:rari/react/vendor_loaders.ts' {
+  export function loadFullReactVendors(): boolean
+  export function loadRscReactVendors(): boolean
 }

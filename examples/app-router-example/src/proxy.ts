@@ -19,15 +19,13 @@ export function proxy(request: RariRequest) {
   if (pathname.startsWith('/dashboard')) {
     const token = request.cookies.get('auth-token')
 
-    if (!token)
-      return RariResponse.redirect(new URL('/login', request.url))
+    if (!token) return RariResponse.redirect(new URL('/login', request.url))
   }
 
   if (pathname === '/') {
     const variant = request.cookies.get('ab-test-variant')
 
-    if (variant?.value === 'b')
-      return RariResponse.rewrite(new URL('/home-variant-b', request.url))
+    if (variant?.value === 'b') return RariResponse.rewrite(new URL('/home-variant-b', request.url))
   }
 
   if (pathname === '/set-cookie') {

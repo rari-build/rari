@@ -13,16 +13,13 @@ export function hashString(value: string, length = 8): string {
 }
 
 export function getProjectRelativePath(filePath: string, projectRoot = process.cwd()): string {
-  const absolutePath = path.isAbsolute(filePath)
-    ? filePath
-    : path.resolve(projectRoot, filePath)
+  const absolutePath = path.isAbsolute(filePath) ? filePath : path.resolve(projectRoot, filePath)
   const relativePath = path.relative(projectRoot, absolutePath)
 
-  // Always prefer a path relative to the project root — including `../…` for
+  // Always prefer a path relative to the project root -- including `../…` for
   // workspace packages outside the app. Absolute paths become
   // `dist/server/Users/...` and break runtime module resolution.
-  if (path.isAbsolute(relativePath))
-    return absolutePath.replace(BACKSLASH_REGEX, '/')
+  if (path.isAbsolute(relativePath)) return absolutePath.replace(BACKSLASH_REGEX, '/')
 
   return relativePath.replace(BACKSLASH_REGEX, '/')
 }

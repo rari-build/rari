@@ -1,5 +1,4 @@
 import type { Metadata } from 'rari'
-
 import { getCachedData } from './cached-helpers'
 
 export default async function UseCacheFilePage() {

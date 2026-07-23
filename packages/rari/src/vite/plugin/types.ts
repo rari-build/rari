@@ -12,10 +12,10 @@ export interface RariPlugin {
   enforce?: 'pre' | 'post'
 }
 
-export function toRariPlugins(plugins: VitePlugin[]): RariPlugin[] {
-  return plugins as RariPlugin[]
+export function toRariPlugins(plugins: readonly VitePlugin[]): RariPlugin[] {
+  return plugins.map((plugin): RariPlugin => plugin)
 }
 
 export function toRariPlugin(plugin: VitePlugin): RariPlugin {
-  return plugin as RariPlugin
+  return plugin
 }

@@ -5,12 +5,12 @@ import { useRef, useState, useTransition } from 'react'
 import { clearCompleted, deleteTodo, resetTodos, toggleTodo } from '@/actions/todo-actions'
 
 interface TodoListProps {
-  initialTodos: Todo[]
-  onUpdate?: (todos?: Todo[]) => void
+  readonly initialTodos: readonly Todo[]
+  readonly onUpdate?: (todos?: readonly Todo[]) => void
 }
 
 export default function TodoList({ initialTodos, onUpdate }: TodoListProps) {
-  const [todos, setTodos] = useState<Todo[]>(initialTodos)
+  const [todos, setTodos] = useState<readonly Todo[]>(initialTodos)
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
 
@@ -22,72 +22,68 @@ export default function TodoList({ initialTodos, onUpdate }: TodoListProps) {
     prevKeyRef.current = todosKey
   }
 
-  const handleToggle = async (id: string) => {
+  const handleToggle = (id: string) => {
     startTransition(async () => {
       const formData = new FormData()
       formData.append('id', id)
       const result = await toggleTodo(formData)
-      if (result.success && result.todos) {
+      if (result.success) {
         setError(null)
         setTodos(result.todos)
-        if (onUpdate)
-          onUpdate(result.todos)
-      }
-      else {
-        const errorMsg = ('error' in result && typeof result.error === 'string') ? result.error : 'Action failed'
+        if (onUpdate) onUpdate(result.todos)
+      } else {
+        const errorMsg =
+          'error' in result && typeof result.error === 'string' ? result.error : 'Action failed'
         setError(errorMsg)
         console.error('Toggle todo failed:', errorMsg)
       }
     })
   }
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = (id: string) => {
     startTransition(async () => {
       const formData = new FormData()
       formData.append('id', id)
       const result = await deleteTodo(formData)
-      if (result.success && result.todos) {
+      if (result.success) {
         setError(null)
         setTodos(result.todos)
-        if (onUpdate)
-          onUpdate(result.todos)
-      }
-      else {
-        const errorMsg = ('error' in result && typeof result.error === 'string') ? result.error : 'Action failed'
+        if (onUpdate) onUpdate(result.todos)
+      } else {
+        const errorMsg =
+          'error' in result && typeof result.error === 'string' ? result.error : 'Action failed'
         setError(errorMsg)
         console.error('Delete todo failed:', errorMsg)
       }
     })
   }
 
-  const handleClearCompleted = async () => {
+  const handleClearCompleted = () => {
     startTransition(async () => {
       const result = await clearCompleted()
-      if (result.success && result.todos) {
+      if (result.success) {
         setError(null)
         setTodos(result.todos)
-        if (onUpdate)
-          onUpdate(result.todos)
-      }
-      else {
-        const errorMsg = ('error' in result && typeof result.error === 'string') ? result.error : 'Action failed'
+        if (onUpdate) onUpdate(result.todos)
+      } else {
+        const errorMsg =
+          'error' in result && typeof result.error === 'string' ? result.error : 'Action failed'
         setError(errorMsg)
         console.error('Clear completed failed:', errorMsg)
       }
     })
   }
 
-  const handleReset = async () => {
+  const handleReset = () => {
     startTransition(async () => {
       const result = await resetTodos()
-      if (result.success && result.todos) {
+      if (result.success) {
         setError(null)
         setTodos(result.todos)
-        if (onUpdate)
-          onUpdate(result.todos)
-      }
-      else {
-        const errorMsg = ('error' in result && typeof result.error === 'string') ? result.error : 'Action failed'
+        if (onUpdate) onUpdate(result.todos)
+      } else {
+        const errorMsg =
+          'error' in result && typeof result.error === 'string' ? result.error : 'Action failed'
         setError(errorMsg)
         console.error('Reset todos failed:', errorMsg)
       }
@@ -98,12 +94,12 @@ export default function TodoList({ initialTodos, onUpdate }: TodoListProps) {
     <div data-testid="todo-list">
       <h2>Todo List</h2>
       <div data-testid="transition-state">{isPending ? 'pending' : 'idle'}</div>
-      {error && <div data-testid="error-message" role="alert">{error}</div>}
-      <div data-testid="todo-count">
-        Total:
-        {' '}
-        {todos.length}
-      </div>
+      {error != null && error !== '' && (
+        <div data-testid="error-message" role="alert">
+          {error}
+        </div>
+      )}
+      <div data-testid="todo-count">Total: {todos.length}</div>
       <ul>
         {todos.map(todo => (
           <li key={todo.id} data-testid={`todo-item-${todo.id}`}>
@@ -111,16 +107,35 @@ export default function TodoList({ initialTodos, onUpdate }: TodoListProps) {
             <span data-testid={`todo-status-${todo.id}`}>
               {todo.completed ? 'completed' : 'active'}
             </span>
-            <button type="button" onClick={() => handleToggle(todo.id)} data-testid={`toggle-button-${todo.id}`} disabled={isPending}>
+            <button
+              type="button"
+              onClick={() => {
+                handleToggle(todo.id)
+              }}
+              data-testid={`toggle-button-${todo.id}`}
+              disabled={isPending}
+            >
               Toggle
             </button>
-            <button type="button" onClick={() => handleDelete(todo.id)} data-testid={`delete-button-${todo.id}`} disabled={isPending}>
+            <button
+              type="button"
+              onClick={() => {
+                handleDelete(todo.id)
+              }}
+              data-testid={`delete-button-${todo.id}`}
+              disabled={isPending}
+            >
               Delete
             </button>
           </li>
         ))}
       </ul>
-      <button type="button" onClick={handleClearCompleted} data-testid="clear-completed-button" disabled={isPending}>
+      <button
+        type="button"
+        onClick={handleClearCompleted}
+        data-testid="clear-completed-button"
+        disabled={isPending}
+      >
         Clear Completed
       </button>
       <button type="button" onClick={handleReset} data-testid="reset-button" disabled={isPending}>

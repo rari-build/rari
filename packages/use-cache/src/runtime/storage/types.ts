@@ -1,14 +1,14 @@
 export interface CacheWriteOptions {
-  ttlMs: number
-  tags?: readonly string[]
+  readonly ttlMs: number
+  readonly tags?: readonly string[]
 }
 
 export interface CacheStorage {
-  read: (key: string) => Promise<CacheStorageEntry | null>
-  write: (key: string, value: unknown, options: CacheWriteOptions) => Promise<void>
-  delete?: (key: string) => Promise<void>
+  readonly read: (key: string) => Promise<CacheStorageEntry | null>
+  readonly write: (key: string, value: unknown, options: CacheWriteOptions) => Promise<void>
+  readonly delete?: (key: string) => Promise<void>
 }
 
 export interface CacheStorageEntry {
-  value: unknown
+  readonly value: unknown
 }

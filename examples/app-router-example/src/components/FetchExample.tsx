@@ -1,24 +1,46 @@
 /* eslint-disable react/purity */
+
+interface JsonPlaceholderPost {
+  id: number
+  title: string
+  body: string
+  userId: number
+}
+
 export default async function FetchExample() {
   const response = await fetch('https://jsonplaceholder.typicode.com/posts/1')
 
-  if (!response.ok)
-    throw new Error(`Failed to fetch: ${response.status}`)
+  if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`)
 
-  const post = await response.json()
+  const payload: unknown = await response.json()
+  if (
+    typeof payload !== 'object' ||
+    payload === null ||
+    !('title' in payload) ||
+    typeof payload.title !== 'string' ||
+    !('body' in payload) ||
+    typeof payload.body !== 'string' ||
+    !('userId' in payload) ||
+    typeof payload.userId !== 'number' ||
+    !('id' in payload) ||
+    typeof payload.id !== 'number'
+  ) {
+    throw new Error('Invalid JSONPlaceholder response')
+  }
+
+  const post: JsonPlaceholderPost = {
+    id: payload.id,
+    title: payload.title,
+    body: payload.body,
+    userId: payload.userId,
+  }
   const currentTime = new Date().toLocaleTimeString()
 
   return (
     <div className="p-5 bg-white border border-gray-200 rounded-lg shadow-sm mb-4">
-      <h1 className="text-2xl font-bold text-gray-900 mb-2">
-        Fetch Example (External API)
-      </h1>
+      <h1 className="text-2xl font-bold text-gray-900 mb-2">Fetch Example (External API)</h1>
 
-      <div className="mb-4 text-sm text-gray-500">
-        Server time:
-        {' '}
-        {currentTime}
-      </div>
+      <div className="mb-4 text-sm text-gray-500">Server time: {currentTime}</div>
 
       <div className="bg-gray-50 p-4 rounded-md border border-gray-200">
         <h2 className="text-lg font-semibold text-gray-800 mb-3">
@@ -27,34 +49,25 @@ export default async function FetchExample() {
 
         <div className="flex flex-col gap-2">
           <div>
-            <span className="font-medium text-gray-700">Title:</span>
-            {' '}
-            {post.title}
+            <span className="font-medium text-gray-700">Title:</span> {post.title}
           </div>
 
           <div>
-            <span className="font-medium text-gray-700">Body:</span>
-            {' '}
-            {post.body}
+            <span className="font-medium text-gray-700">Body:</span> {post.body}
           </div>
 
           <div>
-            <span className="font-medium text-gray-700">User ID:</span>
-            {' '}
-            {post.userId}
+            <span className="font-medium text-gray-700">User ID:</span> {post.userId}
           </div>
 
           <div>
-            <span className="font-medium text-gray-700">Post ID:</span>
-            {' '}
-            {post.id}
+            <span className="font-medium text-gray-700">Post ID:</span> {post.id}
           </div>
         </div>
       </div>
 
       <div className="mt-4 text-xs text-gray-400">
-        This component uses async/await and fetch() to load data from an
-        external API.
+        This component uses async/await and fetch() to load data from an external API.
       </div>
     </div>
   )

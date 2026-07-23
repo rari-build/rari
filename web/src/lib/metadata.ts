@@ -7,12 +7,12 @@ import {
 } from './regex-constants'
 
 export interface BlogMetadata {
-  title?: string
-  description?: string
-  date?: string
-  author?: string
-  authorUrl?: string
-  tags?: string[]
+  readonly title?: string
+  readonly description?: string
+  readonly date?: string
+  readonly author?: string
+  readonly authorUrl?: string
+  readonly tags?: readonly string[]
 }
 
 export function extractBlogMetadata(content: string): BlogMetadata {
@@ -20,8 +20,8 @@ export function extractBlogMetadata(content: string): BlogMetadata {
   const descriptionMatch = content.match(DESCRIPTION_EXPORT_REGEX)
   const dateMatch = content.match(DATE_EXPORT_REGEX)
   const authorMatch = content.match(AUTHOR_EXPORT_REGEX)
-  const authorUrlMatch = content.match(/^export\s+const\s+authorUrl\s*=\s*['"]([^'"]+)['"]/m)
-  const tagsMatch = content.match(/^export\s+const\s+tags\s*=\s*\[([^\]]*)\]/m)
+  const authorUrlMatch = /^export\s+const\s+authorUrl\s*=\s*['"]([^'"]+)['"]/m.exec(content)
+  const tagsMatch = /^export\s+const\s+tags\s*=\s*\[([^\]]*)\]/m.exec(content)
 
   const tags = tagsMatch
     ? tagsMatch[1]
@@ -40,7 +40,7 @@ export function extractBlogMetadata(content: string): BlogMetadata {
   }
 }
 
-export function extractBasicMetadata(content: string): { title?: string, description?: string } {
+export function extractBasicMetadata(content: string): { title?: string; description?: string } {
   const titleMatch = content.match(TITLE_EXPORT_REGEX)
   const descriptionMatch = content.match(DESCRIPTION_EXPORT_REGEX)
 
@@ -50,9 +50,10 @@ export function extractBasicMetadata(content: string): { title?: string, descrip
   }
 }
 
-export function extractMetadataWithFallback(
-  content: string,
-): { title?: string, description?: string } {
+export function extractMetadataWithFallback(content: string): {
+  title?: string
+  description?: string
+} {
   const titleMatch = content.match(TITLE_EXPORT_REGEX)
   const descriptionMatch = content.match(DESCRIPTION_EXPORT_REGEX)
 

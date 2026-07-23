@@ -1,17 +1,17 @@
 export interface CacheLifeProfile {
-  stale?: number
-  revalidate?: number
-  expire?: number
+  readonly stale?: number
+  readonly revalidate?: number
+  readonly expire?: number
 }
 
-export type CacheLifeProfileName
-  = | 'default'
-    | 'seconds'
-    | 'minutes'
-    | 'hours'
-    | 'days'
-    | 'weeks'
-    | 'max'
+export type CacheLifeProfileName =
+  | 'default'
+  | 'seconds'
+  | 'minutes'
+  | 'hours'
+  | 'days'
+  | 'weeks'
+  | 'max'
 
 const DEFAULT_PROFILE: Required<Pick<CacheLifeProfile, 'stale' | 'revalidate'>> & {
   expire?: number
@@ -33,11 +33,8 @@ export const CACHE_LIFE_PROFILES: Record<CacheLifeProfileName, CacheLifeProfile>
 
 const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000
 
-function resolveProfile(
-  profile: CacheLifeProfileName | CacheLifeProfile,
-): CacheLifeProfile {
-  if (typeof profile === 'string')
-    return { ...CACHE_LIFE_PROFILES[profile] }
+function resolveProfile(profile: CacheLifeProfileName | CacheLifeProfile): CacheLifeProfile {
+  if (typeof profile === 'string') return { ...CACHE_LIFE_PROFILES[profile] }
 
   return {
     stale: profile.stale ?? DEFAULT_PROFILE.stale,
@@ -47,19 +44,15 @@ function resolveProfile(
 }
 
 export function cacheLifeToTtlMs(profile: CacheLifeProfile | undefined): number {
-  if (!profile)
-    return DEFAULT_PROFILE.revalidate * 1000
+  if (!profile) return DEFAULT_PROFILE.revalidate * 1000
 
   const expire = profile.expire
-  if (expire !== undefined && expire > 0)
-    return expire * 1000
+  if (expire !== undefined && expire > 0) return expire * 1000
 
-  if (profile.revalidate !== undefined)
-    return profile.revalidate * 1000
+  if (profile.revalidate !== undefined) return profile.revalidate * 1000
 
   const revalidate = DEFAULT_PROFILE.revalidate
-  if (revalidate > 0)
-    return revalidate * 1000
+  if (revalidate > 0) return revalidate * 1000
 
   return ONE_YEAR_MS
 }
@@ -70,15 +63,13 @@ export function normalizeCacheLife(
   const resolved = resolveProfile(profile)
 
   if (
-    resolved.revalidate !== undefined
-    && resolved.expire !== undefined
-    && resolved.expire > 0
-    && resolved.revalidate > 0
-    && resolved.expire <= resolved.revalidate
+    resolved.revalidate !== undefined &&
+    resolved.expire !== undefined &&
+    resolved.expire > 0 &&
+    resolved.revalidate > 0 &&
+    resolved.expire <= resolved.revalidate
   ) {
-    throw new Error(
-      '[rari] cacheLife: expire must be longer than revalidate when both are set.',
-    )
+    throw new Error('[rari] cacheLife: expire must be longer than revalidate when both are set.')
   }
 
   return resolved

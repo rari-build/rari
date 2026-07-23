@@ -1,21 +1,21 @@
 /// <reference path="../core/types.d.ts" />
 
-(function () {
+;(function () {
   interface RariCookie {
     name: string
     value: string
   }
 
   interface RariCookieSetOptions {
-    expires?: Date | string
-    maxAge?: number
-    sameSite?: boolean | 'strict' | 'lax' | 'none'
-    domain?: string
-    path?: string
-    secure?: boolean
-    httpOnly?: boolean
-    partitioned?: boolean
-    priority?: 'low' | 'medium' | 'high'
+    readonly expires?: Date | string
+    readonly maxAge?: number
+    readonly sameSite?: boolean | 'strict' | 'lax' | 'none'
+    readonly domain?: string
+    readonly path?: string
+    readonly secure?: boolean
+    readonly httpOnly?: boolean
+    readonly partitioned?: boolean
+    readonly priority?: 'low' | 'medium' | 'high'
   }
 
   interface RariCookieStore {
@@ -24,37 +24,35 @@
     has: (name: string) => boolean
     set: {
       (name: string, value: string, options?: RariCookieSetOptions): void
-      (options: RariCookieSetOptions & { name: string, value: string }): void
+      (
+        options: RariCookieSetOptions & Readonly<{ readonly name: string; readonly value: string }>,
+      ): void
     }
     delete: (name: string) => void
     toString: () => string
   }
 
-  if (!g['~rari'])
-    g['~rari'] = {}
+  g['~rari'] ??= {}
 
   function parseCookieHeader(header: string): Map<string, string> {
     const result = new Map<string, string>()
-    if (!header)
-      return result
+    if (!header) return result
 
     for (const pair of header.split(';')) {
       const idx = pair.indexOf('=')
 
-      if (idx === -1)
-        continue
+      if (idx === -1) continue
 
       const name = pair.slice(0, idx).trim()
       const value = pair.slice(idx + 1).trim()
 
-      if (name)
-        result.set(name, value)
+      if (name) result.set(name, value)
     }
 
     return result
   }
 
-  function normalizeOptions(opts: RariCookieSetOptions & { name?: string, value?: string }): {
+  interface NormalizedCookieOptions {
     name?: string
     value?: string
     path?: string
@@ -66,16 +64,20 @@
     sameSite?: 'strict' | 'lax' | 'none'
     priority?: 'low' | 'medium' | 'high'
     partitioned?: boolean
-  } {
-    const normalized: any = { ...opts }
+  }
 
-    if (opts.expires instanceof Date)
-      normalized.expires = opts.expires.toUTCString()
+  function normalizeOptions(
+    opts: RariCookieSetOptions & Readonly<{ readonly name?: string; readonly value?: string }>,
+  ): NormalizedCookieOptions {
+    const { expires: _expires, sameSite: _sameSite, ...rest } = opts
+    const normalized: NormalizedCookieOptions = { ...rest }
+
+    if (opts.expires instanceof Date) normalized.expires = opts.expires.toUTCString()
+    else if (typeof opts.expires === 'string') normalized.expires = opts.expires
 
     if (typeof opts.sameSite === 'boolean') {
       normalized.sameSite = opts.sameSite ? 'strict' : undefined
-    }
-    else if (opts.sameSite) {
+    } else if (opts.sameSite) {
       normalized.sameSite = opts.sameSite
     }
 
@@ -98,14 +100,21 @@
       getAll: (name?: string): RariCookie[] => {
         const map = parseCookieHeader(Deno.core.ops.op_get_cookies(currentRequestId()))
         const all = Array.from(map.entries()).map(([n, v]) => ({ name: n, value: v }))
-        return name ? all.filter(c => c.name === name) : all
+        return name != null && name !== '' ? all.filter(c => c.name === name) : all
       },
 
       has: (name: string): boolean => {
         return parseCookieHeader(Deno.core.ops.op_get_cookies(currentRequestId())).has(name)
       },
 
-      set: ((nameOrOptions: string | (RariCookieSetOptions & { name: string, value: string }), value?: string, options?: RariCookieSetOptions): void => {
+      set: (
+        nameOrOptions:
+          | string
+          | (RariCookieSetOptions &
+              Readonly<Readonly<{ readonly name: string; readonly value: string }>>),
+        value?: string,
+        options?: RariCookieSetOptions,
+      ): void => {
         if (typeof nameOrOptions === 'string') {
           const opts = normalizeOptions({ ...options, name: nameOrOptions, value: value ?? '' })
           Deno.core.ops.op_set_cookie({
@@ -117,13 +126,12 @@
             maxAge: opts.maxAge,
             httpOnly: opts.httpOnly,
             secure: opts.secure,
-            sameSite: opts.sameSite as 'strict' | 'lax' | 'none' | undefined,
-            priority: opts.priority as 'low' | 'medium' | 'high' | undefined,
+            sameSite: opts.sameSite,
+            priority: opts.priority,
             partitioned: opts.partitioned,
             requestId: currentRequestId() || undefined,
           })
-        }
-        else {
+        } else {
           const opts = normalizeOptions(nameOrOptions)
           Deno.core.ops.op_set_cookie({
             name: opts.name!,
@@ -134,13 +142,13 @@
             maxAge: opts.maxAge,
             httpOnly: opts.httpOnly,
             secure: opts.secure,
-            sameSite: opts.sameSite as 'strict' | 'lax' | 'none' | undefined,
-            priority: opts.priority as 'low' | 'medium' | 'high' | undefined,
+            sameSite: opts.sameSite,
+            priority: opts.priority,
             partitioned: opts.partitioned,
             requestId: currentRequestId() || undefined,
           })
         }
-      }) as RariCookieStore['set'],
+      },
 
       delete: (name: string): void => {
         Deno.core.ops.op_delete_cookie(name, currentRequestId())

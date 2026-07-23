@@ -1,6 +1,6 @@
 import type { Metadata, PageProps } from 'rari'
 
-export default async function HomePage({ params, searchParams }: PageProps) {
+export default function HomePage({ params, searchParams }: PageProps) {
   return (
     <div className="space-y-8">
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 md:p-12">
@@ -12,9 +12,8 @@ export default async function HomePage({ params, searchParams }: PageProps) {
         </div>
 
         <p className="text-lg text-gray-600 mb-6 max-w-3xl leading-relaxed">
-          A demonstration of the Next.js-style app router implementation in
-          rari. Explore server-side rendering, React Server Components, and
-          modern routing patterns.
+          A demonstration of the Next.js-style app router implementation in rari. Explore
+          server-side rendering, React Server Components, and modern routing patterns.
         </p>
 
         <div className="flex flex-wrap gap-3">
@@ -35,78 +34,56 @@ export default async function HomePage({ params, searchParams }: PageProps) {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
             <div className="text-2xl mb-3">📁</div>
-            <h3 className="font-semibold text-gray-900 mb-2">
-              File-based Routing
-            </h3>
-            <p className="text-sm text-gray-600">
-              Automatic routing based on your file structure
-            </p>
+            <h3 className="font-semibold text-gray-900 mb-2">File-based Routing</h3>
+            <p className="text-sm text-gray-600">Automatic routing based on your file structure</p>
           </div>
 
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
             <div className="text-2xl mb-3">🎨</div>
             <h3 className="font-semibold text-gray-900 mb-2">Nested Layouts</h3>
-            <p className="text-sm text-gray-600">
-              Share UI across routes with layout composition
-            </p>
+            <p className="text-sm text-gray-600">Share UI across routes with layout composition</p>
           </div>
 
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
             <div className="text-2xl mb-3">⚡</div>
-            <h3 className="font-semibold text-gray-900 mb-2">
-              Server Rendering
-            </h3>
-            <p className="text-sm text-gray-600">
-              Fast initial page loads with SSR
-            </p>
+            <h3 className="font-semibold text-gray-900 mb-2">Server Rendering</h3>
+            <p className="text-sm text-gray-600">Fast initial page loads with SSR</p>
           </div>
 
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
             <div className="text-2xl mb-3">🔄</div>
             <h3 className="font-semibold text-gray-900 mb-2">Server Actions</h3>
-            <p className="text-sm text-gray-600">
-              Call server functions directly from components
-            </p>
+            <p className="text-sm text-gray-600">Call server functions directly from components</p>
           </div>
 
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
             <div className="text-2xl mb-3">🌐</div>
             <h3 className="font-semibold text-gray-900 mb-2">Dynamic Routes</h3>
-            <p className="text-sm text-gray-600">
-              Handle parameters and catch-all routes
-            </p>
+            <p className="text-sm text-gray-600">Handle parameters and catch-all routes</p>
           </div>
 
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
             <div className="text-2xl mb-3">📊</div>
             <h3 className="font-semibold text-gray-900 mb-2">Data Fetching</h3>
-            <p className="text-sm text-gray-600">
-              Server-side data loading with async components
-            </p>
+            <p className="text-sm text-gray-600">Server-side data loading with async components</p>
           </div>
 
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
             <div className="text-2xl mb-3">⏳</div>
             <h3 className="font-semibold text-gray-900 mb-2">Loading States</h3>
-            <p className="text-sm text-gray-600">
-              Built-in loading and error boundaries
-            </p>
+            <p className="text-sm text-gray-600">Built-in loading and error boundaries</p>
           </div>
 
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
             <div className="text-2xl mb-3">🔍</div>
             <h3 className="font-semibold text-gray-900 mb-2">SEO Optimized</h3>
-            <p className="text-sm text-gray-600">
-              Metadata generation for search engines
-            </p>
+            <p className="text-sm text-gray-600">Metadata generation for search engines</p>
           </div>
         </div>
       </div>
 
       <div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">
-          Try the Examples
-        </h2>
+        <h2 className="text-2xl font-bold text-gray-900 mb-4">Try the Examples</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <a
             href="/actions"
@@ -119,8 +96,7 @@ export default async function HomePage({ params, searchParams }: PageProps) {
               </h3>
             </div>
             <p className="text-sm text-gray-600 mb-3">
-              Interactive todo app demonstrating React Server Actions with
-              useActionState
+              Interactive todo app demonstrating React Server Actions with useActionState
             </p>
             <span className="text-sm font-medium text-indigo-600 group-hover:text-indigo-700">
               View demo →

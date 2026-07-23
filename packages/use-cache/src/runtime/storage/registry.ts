@@ -2,10 +2,7 @@ import type { CacheStorage } from './types'
 import { MemoryCacheStorage } from './memory'
 import { createRedbCacheStorage, hasRedbOps } from './redb'
 import { createRedisCacheStorage, hasRedisOps } from './redis'
-import {
-  getConfiguredRemoteHandler,
-  getPrivateCachePartitionKey,
-} from './remote-ops'
+import { getConfiguredRemoteHandler, getPrivateCachePartitionKey } from './remote-ops'
 import { getTestStorageBackend, TestCacheStorage } from './test'
 
 let memoryStorage: CacheStorage | undefined
@@ -32,24 +29,19 @@ const backends = {
 
 function remoteStorageFromConfiguredHandler(): CacheStorage | undefined {
   const handler = getConfiguredRemoteHandler()
-  if (handler === 'test')
-    return getTestStorageBackend() !== undefined ? backends.test() : undefined
-  if (handler === 'redb' && hasRedbOps())
-    return backends.redb()
-  if (handler === 'redis' && hasRedisOps())
-    return backends.redis()
+  if (handler === 'test') return getTestStorageBackend() !== undefined ? backends.test() : undefined
+  if (handler === 'redb' && hasRedbOps()) return backends.redb()
+  if (handler === 'redis' && hasRedisOps()) return backends.redis()
 
   return undefined
 }
 
 export function getStorage(kind: string): CacheStorage {
-  if (kind === 'private')
-    return backends.private()
+  if (kind === 'private') return backends.private()
 
   if (kind === 'remote') {
     const configured = remoteStorageFromConfiguredHandler()
-    if (configured)
-      return configured
+    if (configured) return configured
   }
 
   return backends.memory()
@@ -57,14 +49,10 @@ export function getStorage(kind: string): CacheStorage {
 
 export function getAllUseCacheStorages(): CacheStorage[] {
   const storages: CacheStorage[] = []
-  if (memoryStorage)
-    storages.push(memoryStorage)
-  if (redisStorage)
-    storages.push(redisStorage)
-  if (redbStorage)
-    storages.push(redbStorage)
-  for (const storage of privateStorageByPartition.values())
-    storages.push(storage)
+  if (memoryStorage) storages.push(memoryStorage)
+  if (redisStorage) storages.push(redisStorage)
+  if (redbStorage) storages.push(redbStorage)
+  for (const storage of privateStorageByPartition.values()) storages.push(storage)
 
   return storages
 }

@@ -14,10 +14,17 @@ import { inspect, types } from 'node:util'
 async function runProbes() {
   const cwd = process.cwd()
   const packageJson = await readFile(join(cwd, 'package.json'), 'utf8')
-  const pkg = JSON.parse(packageJson) as { name?: string }
+  const parsedPackage: unknown = JSON.parse(packageJson)
+  const pkgName =
+    typeof parsedPackage === 'object' &&
+    parsedPackage !== null &&
+    'name' in parsedPackage &&
+    typeof parsedPackage.name === 'string'
+      ? parsedPackage.name
+      : undefined
 
   const als = new AsyncLocalStorage<string>()
-  const alsValue = await als.run('e2e-store', async () => als.getStore())
+  const alsValue = als.run('e2e-store', () => als.getStore())
 
   const emitter = new EventEmitter()
   let emitted = false
@@ -29,10 +36,12 @@ async function runProbes() {
   const readableEnded = await new Promise<boolean>((resolve, reject) => {
     const stream = Readable.from(['rari'])
     let data = ''
-    stream.on('data', (chunk) => {
+    stream.on('data', chunk => {
       data += String(chunk)
     })
-    stream.on('end', () => resolve(data === 'rari'))
+    stream.on('end', () => {
+      resolve(data === 'rari')
+    })
     stream.on('error', reject)
   })
 
@@ -41,15 +50,15 @@ async function runProbes() {
   return {
     process: {
       cwd: typeof cwd === 'string' && cwd.length > 0,
-      envObject: typeof process.env === 'object' && process.env !== null,
+      envObject: typeof process.env === 'object',
       platform: typeof process.platform === 'string',
-      versionsNode: typeof process.versions?.node === 'string',
+      versionsNode: typeof process.versions.node === 'string',
     },
     path: {
       join: join('a', 'b') === 'a/b' || join('a', 'b') === 'a\\b',
     },
     fs: {
-      readPackageName: pkg.name === '@test/app',
+      readPackageName: pkgName === '@test/app',
     },
     buffer: {
       fromUtf8: Buffer.from('rari').toString('utf8') === 'rari',
@@ -61,7 +70,8 @@ async function runProbes() {
       asyncLocalStorage: alsValue === 'e2e-store',
     },
     url: {
-      fileURLToPath: fileURLToPath(pathToFileURL(join(cwd, 'package.json'))) === join(cwd, 'package.json'),
+      fileURLToPath:
+        fileURLToPath(pathToFileURL(join(cwd, 'package.json'))) === join(cwd, 'package.json'),
     },
     events: {
       emit: emitted,
@@ -88,7 +98,7 @@ export async function GET() {
     const probes = await runProbes()
     const flat = flatten(probes)
     const failed = Object.entries(flat)
-      .filter(([, value]) => value !== true)
+      .filter(([, value]) => !value)
       .map(([name]) => name)
 
     return Response.json({
@@ -96,8 +106,7 @@ export async function GET() {
       failed,
       probes,
     })
-  }
-  catch (error) {
+  } catch (error) {
     return Response.json(
       {
         ok: false,
@@ -109,13 +118,12 @@ export async function GET() {
   }
 }
 
-function flatten(
-  value: Record<string, Record<string, boolean>>,
-): Record<string, boolean> {
+function flatten(value: {
+  readonly [key: string]: { readonly [key: string]: boolean }
+}): Record<string, boolean> {
   const out: Record<string, boolean> = {}
   for (const [group, probes] of Object.entries(value)) {
-    for (const [name, ok] of Object.entries(probes))
-      out[`${group}.${name}`] = ok
+    for (const [name, ok] of Object.entries(probes)) out[`${group}.${name}`] = ok
   }
 
   return out

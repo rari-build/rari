@@ -1,3 +1,4 @@
+/* oxlint-disable typescript/prefer-readonly-parameter-types -- route builder mutates accumulator arrays in place */
 import type {
   ApiRouteEntry,
   AppRouteEntry,
@@ -8,7 +9,6 @@ import type {
   NotFoundEntry,
   OgImageEntry,
   RouteSegment,
-  RouteSegmentType,
   TemplateEntry,
 } from './types'
 import { promises as fs } from 'node:fs'
@@ -16,9 +16,9 @@ import path from 'node:path'
 import { BACKSLASH_REGEX, PATH_SEPARATOR_REGEX } from '@/shared/regex-constants'
 
 export interface AppRouteGeneratorOptions {
-  appDir: string
-  extensions?: string[]
-  verbose?: boolean
+  readonly appDir: string
+  readonly extensions?: readonly string[]
+  readonly verbose?: boolean
 }
 
 const SPECIAL_FILES = {
@@ -71,11 +71,7 @@ function isInGroup(filePath: string) {
     return false
   }
 
-  return filePath
-    .replace(BACKSLASH_REGEX, '/')
-    .split('/')
-    .filter(Boolean)
-    .some(isGroupSegment)
+  return filePath.replace(BACKSLASH_REGEX, '/').split('/').filter(Boolean).some(isGroupSegment)
 }
 
 function matchRouteSegment(segment: string) {
@@ -89,6 +85,8 @@ function matchRouteSegment(segment: string) {
       }
     }
   }
+
+  return undefined
 }
 
 function formatRouteSegment(segment: string) {
@@ -108,30 +106,30 @@ function parseRouteSegment(segment: string): RouteSegment {
   }
 
   return {
-    type: 'static' as RouteSegmentType,
+    type: 'static',
     value: segment,
   }
 }
 
-const SIZE_EXPORT_REGEX = /export\s+const\s+size\s*=\s*\{\s*width\s*:\s*(\d+)\s*,\s*height\s*:\s*(\d+)\s*[,}]/
+const SIZE_EXPORT_REGEX =
+  /export\s+const\s+size\s*=\s*\{\s*width\s*:\s*(\d+)\s*,\s*height\s*:\s*(\d+)\s*[,}]/
 const CONTENT_TYPE_EXPORT_REGEX = /export\s+const\s+contentType\s*=\s*['"]([^'"]+)['"]/
 
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'] as const
 
 class AppRouteGenerator {
-  private appDir: string
-  private extensions: string[]
-  private verbose: boolean
+  private readonly appDir: string
+  private readonly extensions: string[]
+  private readonly verbose: boolean
 
   constructor(options: AppRouteGeneratorOptions) {
     this.appDir = path.resolve(options.appDir)
-    this.extensions = options.extensions || ['.tsx', '.jsx', '.ts', '.js']
-    this.verbose = options.verbose || false
+    this.extensions = [...(options.extensions ?? ['.tsx', '.jsx', '.ts', '.js'])]
+    this.verbose = options.verbose ?? false
   }
 
   async generateManifest(): Promise<AppRouteManifest> {
-    if (this.verbose)
-      console.warn(`[rari] Router: Scanning app directory: ${this.appDir}`)
+    if (this.verbose) console.warn(`[rari] Router: Scanning app directory: ${this.appDir}`)
 
     const routes: AppRouteEntry[] = []
     const layouts: LayoutEntry[] = []
@@ -142,7 +140,17 @@ class AppRouteGenerator {
     const apiRoutes: ApiRouteEntry[] = []
     const ogImages: OgImageEntry[] = []
 
-    await this.scanDirectory('', routes, layouts, loading, errors, notFound, templates, apiRoutes, ogImages)
+    await this.scanDirectory(
+      '',
+      routes,
+      layouts,
+      loading,
+      errors,
+      notFound,
+      templates,
+      apiRoutes,
+      ogImages,
+    )
 
     for (const entries of [layouts, loading, errors, notFound, templates, ogImages]) {
       this.finalizeGroupEntries(routes, entries)
@@ -174,9 +182,9 @@ class AppRouteGenerator {
     }
   }
 
-  private finalizeGroupEntries<T extends { path: string, filePath: string, additionalPaths?: string[] }>(
+  private finalizeGroupEntries(
     pages: AppRouteEntry[],
-    entries: T[],
+    entries: Array<{ path: string; filePath: string; additionalPaths?: string[] }>,
   ): void {
     for (let i = entries.length - 1; i >= 0; i--) {
       const entry = entries[i]
@@ -186,7 +194,7 @@ class AppRouteGenerator {
       }
 
       const pagesInSubtree = pages
-        .filter((p) => {
+        .filter(p => {
           const pDir = path.dirname(p.filePath).replace(BACKSLASH_REGEX, '/')
 
           return pDir === fileDir || pDir.startsWith(`${fileDir}/`)
@@ -207,16 +215,15 @@ class AppRouteGenerator {
     }
   }
 
-  private assertNoDuplicateRoutes(routes: Array<{ path: string, filePath: string }>): void {
+  private assertNoDuplicateRoutes(routes: Array<{ path: string; filePath: string }>): void {
     const seen = new Map<string, string>()
     for (const route of routes) {
       const existing = seen.get(route.path)
-      if (existing) {
+      if (existing != null && existing !== '') {
         throw new Error(
           `[rari] Route conflict: path '${route.path}' is defined by both '${existing}' and '${route.filePath}'.`,
         )
-      }
-      else {
+      } else {
         seen.set(route.path, route.filePath)
       }
     }
@@ -238,8 +245,7 @@ class AppRouteGenerator {
     let entries: string[]
     try {
       entries = await fs.readdir(fullPath)
-    }
-    catch {
+    } catch {
       return
     }
 
@@ -251,11 +257,8 @@ class AppRouteGenerator {
       const stat = await fs.stat(entryPath)
 
       if (stat.isDirectory()) {
-        if (this.shouldScanDirectory(entry))
-          dirs.push(entry)
-      }
-      /* v8 ignore next 3 - edge case: symlinks or special files */
-      else if (stat.isFile()) {
+        if (this.shouldScanDirectory(entry)) dirs.push(entry)
+      } /* v8 ignore next 3 - edge case: symlinks or special files */ else if (stat.isFile()) {
         files.push(entry)
       }
     }
@@ -275,7 +278,17 @@ class AppRouteGenerator {
 
     for (const dir of dirs) {
       const subPath = relativePath ? path.join(relativePath, dir) : dir
-      await this.scanDirectory(subPath, routes, layouts, loading, errors, notFound, templates, apiRoutes, ogImages)
+      await this.scanDirectory(
+        subPath,
+        routes,
+        layouts,
+        loading,
+        errors,
+        notFound,
+        templates,
+        apiRoutes,
+        ogImages,
+      )
     }
   }
 
@@ -294,7 +307,7 @@ class AppRouteGenerator {
     const routePath = this.pathToRoute(relativePath)
 
     const pageFile = this.findFile(files, SPECIAL_FILES.PAGE)
-    if (pageFile) {
+    if (pageFile != null && pageFile !== '') {
       const segments = this.parseRouteSegments(relativePath)
       const params = this.extractParams(segments)
 
@@ -308,7 +321,7 @@ class AppRouteGenerator {
     }
 
     const layoutFile = this.findFile(files, SPECIAL_FILES.LAYOUT)
-    if (layoutFile) {
+    if (layoutFile != null && layoutFile !== '') {
       const parentPath = this.getParentPath(relativePath)
       layouts.push({
         path: routePath,
@@ -318,7 +331,7 @@ class AppRouteGenerator {
     }
 
     const loadingFile = this.findFile(files, SPECIAL_FILES.LOADING)
-    if (loadingFile) {
+    if (loadingFile != null && loadingFile !== '') {
       loading.push({
         path: routePath,
         filePath: path.join(relativePath, loadingFile).replace(BACKSLASH_REGEX, '/'),
@@ -326,7 +339,7 @@ class AppRouteGenerator {
     }
 
     const errorFile = this.findFile(files, SPECIAL_FILES.ERROR)
-    if (errorFile) {
+    if (errorFile != null && errorFile !== '') {
       errors.push({
         path: routePath,
         filePath: path.join(relativePath, errorFile).replace(BACKSLASH_REGEX, '/'),
@@ -334,7 +347,7 @@ class AppRouteGenerator {
     }
 
     const notFoundFile = this.findFile(files, SPECIAL_FILES.NOT_FOUND)
-    if (notFoundFile) {
+    if (notFoundFile != null && notFoundFile !== '') {
       notFound.push({
         path: routePath,
         filePath: path.join(relativePath, notFoundFile).replace(BACKSLASH_REGEX, '/'),
@@ -342,7 +355,7 @@ class AppRouteGenerator {
     }
 
     const templateFile = this.findFile(files, SPECIAL_FILES.TEMPLATE)
-    if (templateFile) {
+    if (templateFile != null && templateFile !== '') {
       const parentPath = this.getParentPath(relativePath)
       templates.push({
         path: routePath,
@@ -352,7 +365,7 @@ class AppRouteGenerator {
     }
 
     const ogImageFile = this.findFile(files, SPECIAL_FILES.OG_IMAGE)
-    if (ogImageFile) {
+    if (ogImageFile != null && ogImageFile !== '') {
       const filePath = path.join(relativePath, ogImageFile).replace(BACKSLASH_REGEX, '/')
       const fullFilePath = path.join(this.appDir, filePath)
 
@@ -363,17 +376,15 @@ class AppRouteGenerator {
       try {
         const content = await fs.readFile(fullFilePath, 'utf-8')
 
-        const sizeMatch = content.match(SIZE_EXPORT_REGEX)
+        const sizeMatch = SIZE_EXPORT_REGEX.exec(content)
         if (sizeMatch) {
           width = Number.parseInt(sizeMatch[1], 10)
           height = Number.parseInt(sizeMatch[2], 10)
         }
 
-        const contentTypeMatch = content.match(CONTENT_TYPE_EXPORT_REGEX)
-        if (contentTypeMatch)
-          contentType = contentTypeMatch[1]
-      }
-      catch {}
+        const contentTypeMatch = CONTENT_TYPE_EXPORT_REGEX.exec(content)
+        if (contentTypeMatch) contentType = contentTypeMatch[1]
+      } catch {}
 
       ogImages.push({
         path: routePath,
@@ -385,7 +396,7 @@ class AppRouteGenerator {
     }
 
     const routeFile = this.findFile(files, SPECIAL_FILES.ROUTE)
-    if (routeFile) {
+    if (routeFile != null && routeFile !== '') {
       const apiRoute = await this.processApiRouteFile(relativePath, routeFile)
       apiRoutes.push(apiRoute)
     }
@@ -394,16 +405,14 @@ class AppRouteGenerator {
   private findFile(files: string[], baseName: string): string | undefined {
     for (const ext of this.extensions) {
       const fileName = `${baseName}${ext}`
-      if (files.includes(fileName))
-        return fileName
+      if (files.includes(fileName)) return fileName
     }
 
     return undefined
   }
 
   private pathToRoute(filePath: string): string {
-    if (!filePath)
-      return '/'
+    if (!filePath) return '/'
 
     const normalized = filePath.replace(BACKSLASH_REGEX, '/')
 
@@ -416,29 +425,22 @@ class AppRouteGenerator {
   }
 
   private parseRouteSegments(filePath: string): RouteSegment[] {
-    if (!filePath)
-      return []
+    if (!filePath) return []
 
     const segments = filePath.split(PATH_SEPARATOR_REGEX).filter(Boolean)
-    return segments
-      .filter(segment => !isGroupSegment(segment))
-      .map(parseRouteSegment)
+    return segments.filter(segment => !isGroupSegment(segment)).map(parseRouteSegment)
   }
 
   private extractParams(segments: RouteSegment[]): string[] {
-    return segments
-      .filter(seg => seg.param !== undefined)
-      .map(seg => seg.param!)
+    return segments.filter(seg => seg.param !== undefined).map(seg => seg.param!)
   }
 
   private getParentPath(filePath: string): string | null {
-    if (!filePath)
-      return null
+    if (!filePath) return null
 
     const parts = filePath.split(PATH_SEPARATOR_REGEX).filter(Boolean)
     /* v8 ignore start - edge case: path with only separators */
-    if (parts.length === 0)
-      return null
+    if (parts.length === 0) return null
     /* v8 ignore stop */
 
     return parts.slice(0, -1).join('/')
@@ -462,16 +464,13 @@ class AppRouteGenerator {
   private sortRoutes(routes: AppRouteEntry[]): AppRouteEntry[] {
     return routes.sort((a, b) => {
       const getSpecificity = (route: AppRouteEntry): number => {
-        if (!route.isDynamic)
-          return 0
+        if (!route.isDynamic) return 0
 
         const hasCatchAll = route.segments.some(s => s.type === 'catch-all')
         const hasOptionalCatchAll = route.segments.some(s => s.type === 'optional-catch-all')
 
-        if (hasOptionalCatchAll)
-          return 3
-        if (hasCatchAll)
-          return 2
+        if (hasOptionalCatchAll) return 3
+        if (hasCatchAll) return 2
 
         return 1
       }
@@ -479,13 +478,11 @@ class AppRouteGenerator {
       const aSpec = getSpecificity(a)
       const bSpec = getSpecificity(b)
 
-      if (aSpec !== bSpec)
-        return aSpec - bSpec
+      if (aSpec !== bSpec) return aSpec - bSpec
 
       const aDepth = a.path.split('/').length
       const bDepth = b.path.split('/').length
-      if (aDepth !== bDepth)
-        return bDepth - aDepth
+      if (aDepth !== bDepth) return bDepth - aDepth
 
       return a.path.localeCompare(b.path)
     })
@@ -493,16 +490,13 @@ class AppRouteGenerator {
 
   private sortApiRoutes(routes: ApiRouteEntry[]): ApiRouteEntry[] {
     return routes.sort((a, b) => {
-      if (!a.isDynamic && b.isDynamic)
-        return -1
-      if (a.isDynamic && !b.isDynamic)
-        return 1
+      if (!a.isDynamic && b.isDynamic) return -1
+      if (a.isDynamic && !b.isDynamic) return 1
 
       const aDepth = a.path.split('/').length
       const bDepth = b.path.split('/').length
       /* v8 ignore start - depth comparison edge case */
-      if (aDepth !== bDepth)
-        return aDepth - bDepth
+      if (aDepth !== bDepth) return aDepth - bDepth
       /* v8 ignore stop */
 
       return a.path.localeCompare(b.path)
@@ -512,10 +506,8 @@ class AppRouteGenerator {
   private sortLayouts(layouts: LayoutEntry[]): LayoutEntry[] {
     return layouts.sort((a, b) => {
       /* v8 ignore start - root layout sorting comparisons */
-      if (a.path === '/' && b.path !== '/')
-        return -1
-      if (b.path === '/' && a.path !== '/')
-        return 1
+      if (a.path === '/' && b.path !== '/') return -1
+      if (b.path === '/' && a.path !== '/') return 1
       /* v8 ignore stop */
 
       const aDepth = a.path.split('/').length
@@ -527,10 +519,8 @@ class AppRouteGenerator {
   private sortTemplates(templates: TemplateEntry[]): TemplateEntry[] {
     return templates.sort((a, b) => {
       /* v8 ignore start - root template sorting comparisons */
-      if (a.path === '/' && b.path !== '/')
-        return -1
-      if (b.path === '/' && a.path !== '/')
-        return 1
+      if (a.path === '/' && b.path !== '/') return -1
+      if (b.path === '/' && a.path !== '/') return 1
       /* v8 ignore stop */
 
       const aDepth = a.path.split('/').length
@@ -545,15 +535,12 @@ class AppRouteGenerator {
     const methods: string[] = []
 
     for (const method of HTTP_METHODS) {
-      const functionExportRegex = new RegExp(
-        `export\\s+(?:async\\s+)?function\\s+${method}\\s*\\(`,
-      )
+      const functionExportRegex = new RegExp(`export\\s+(?:async\\s+)?function\\s+${method}\\s*\\(`)
       const constExportRegex = new RegExp(
         `export\\s+(?:async\\s+)?(?:const|let|var)\\s+${method}\\s*=`,
       )
 
-      if (functionExportRegex.test(content) || constExportRegex.test(content))
-        methods.push(method)
+      if (functionExportRegex.test(content) || constExportRegex.test(content)) methods.push(method)
     }
 
     return methods
@@ -582,7 +569,7 @@ class AppRouteGenerator {
 
 export async function generateAppRouteManifest(
   appDir: string,
-  options: Partial<AppRouteGeneratorOptions> = {},
+  options: Readonly<Partial<AppRouteGeneratorOptions>> = {},
 ): Promise<AppRouteManifest> {
   const generator = new AppRouteGenerator({
     appDir,

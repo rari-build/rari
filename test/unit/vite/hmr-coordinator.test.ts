@@ -1,22 +1,70 @@
-import type { ViteDevServer } from 'vite-plus'
+/* oxlint-disable typescript/no-unsafe-assignment -- vitest asymmetric matchers (expect.*) are typed as any */
+
+import type { ModuleAnalysis } from '@rari/vite/analysis/directives'
+import type { ComponentRebuildResult } from '@rari/vite/server/build'
+import type { ModuleNode, ViteDevServer } from 'vite-plus'
 import fs from 'node:fs'
 import { analyzeModuleSource } from '@rari/vite/analysis/directives'
 import { HMRCoordinator } from '@rari/vite/hmr/coordinator'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
+import { castMock } from '../../helpers/mock-cast'
 
 vi.mock('node:fs')
 vi.mock('@rari/shared/http', () => ({
   throwIfNotOk: vi.fn(),
 }))
 
+interface MockServerComponentBuilder {
+  rebuildComponent: (filePath: string) => Promise<ComponentRebuildResult>
+  getImportGraph: () => ReadonlyMap<string, ReadonlySet<string>>
+  invalidateBuildCacheFor: (filePath: string) => void
+  getModuleAnalysis: (filePath: string, source?: string) => ModuleAnalysis
+}
+
+interface MockFetchResponse {
+  ok: boolean
+  status?: number
+  json: () => Promise<unknown>
+  text: () => Promise<string>
+}
+
+interface HmrErrorEventPayload {
+  event: string
+  data: { count: number }
+}
+
+function isHmrErrorEventPayload(value: unknown): value is HmrErrorEventPayload {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'event' in value &&
+    typeof value.event === 'string' &&
+    'data' in value &&
+    typeof value.data === 'object' &&
+    value.data !== null &&
+    'count' in value.data &&
+    typeof value.data.count === 'number'
+  )
+}
+
 describe('HMRCoordinator', () => {
   const TEST_DEBOUNCE_MS = 300
-  const TEST_PORT = Number(process.env.PORT || 3000)
+  const TEST_PORT = Number(
+    process.env.PORT != null && process.env.PORT !== '' ? process.env.PORT : 3000,
+  )
 
   let coordinator: HMRCoordinator
-  let mockBuilder: any
+  let mockBuilder: MockServerComponentBuilder
   let mockServer: ViteDevServer
-  let mockFetch: any
+  // Kept as standalone typed mocks (rather than read back off `mockServer`) so
+  // assertions never take an unbound reference to a `ViteDevServer` method.
+  let getModuleByIdMock: ReturnType<typeof vi.fn<(id: string) => ModuleNode | undefined>>
+  let invalidateModuleMock: ReturnType<typeof vi.fn<(mod: ModuleNode) => void>>
+  let hotSendMock: ReturnType<typeof vi.fn<(event: string, payload?: unknown) => void>>
+  let wsSendMock: ReturnType<typeof vi.fn<(payload: unknown) => void>>
+  let mockFetch: ReturnType<
+    typeof vi.fn<(...args: readonly unknown[]) => Promise<MockFetchResponse>>
+  >
   let originalFetch: typeof globalThis.fetch
 
   beforeEach(() => {
@@ -25,31 +73,38 @@ describe('HMRCoordinator', () => {
 
     mockBuilder = {
       rebuildComponent: vi.fn(),
-      getImportGraph: vi.fn(() => new Map()),
-      invalidateBuildCacheFor: vi.fn(),
+      getImportGraph: vi.fn(() => new Map<string, Set<string>>()),
+      invalidateBuildCacheFor: vi.fn<(filePath: string) => void>(),
       getModuleAnalysis: vi.fn((filePath: string, source?: string) => {
         const code = source ?? fs.readFileSync(filePath, 'utf-8')
-        return analyzeModuleSource(String(code))
+        return analyzeModuleSource(code)
       }),
     }
 
-    mockServer = {
+    getModuleByIdMock = vi.fn()
+    invalidateModuleMock = vi.fn()
+    hotSendMock = vi.fn()
+    wsSendMock = vi.fn()
+
+    mockServer = castMock<ViteDevServer>({
       moduleGraph: {
-        getModuleById: vi.fn(),
-        invalidateModule: vi.fn(),
+        getModuleById: getModuleByIdMock,
+        invalidateModule: invalidateModuleMock,
       },
       hot: {
-        send: vi.fn(),
+        send: hotSendMock,
       },
       ws: {
-        send: vi.fn(),
+        send: wsSendMock,
       },
-    } as any
+    })
 
     originalFetch = globalThis.fetch
-    mockFetch = vi.fn()
+    mockFetch = vi.fn<(...args: readonly unknown[]) => Promise<MockFetchResponse>>()
+    // @ts-expect-error partial fetch mock for tests
     globalThis.fetch = mockFetch
 
+    // @ts-expect-error partial ServerComponentBuilder mock for tests
     coordinator = new HMRCoordinator(mockBuilder, TEST_PORT)
   })
 
@@ -63,32 +118,32 @@ describe('HMRCoordinator', () => {
   describe('handleClientComponentUpdate', () => {
     it('should invalidate module in module graph', async () => {
       const filePath = '/test/src/components/Button.tsx'
-      const mockModule = { id: filePath }
+      const mockModule = castMock<ModuleNode>({ id: filePath })
 
-      vi.mocked(mockServer.moduleGraph.getModuleById).mockReturnValue(mockModule as any)
+      getModuleByIdMock.mockReturnValue(mockModule)
 
       await coordinator.handleClientComponentUpdate(filePath, mockServer)
 
-      expect(mockServer.moduleGraph.getModuleById).toHaveBeenCalledWith(filePath)
-      expect(mockServer.moduleGraph.invalidateModule).toHaveBeenCalledWith(mockModule)
+      expect(getModuleByIdMock).toHaveBeenCalledWith(filePath)
+      expect(invalidateModuleMock).toHaveBeenCalledWith(mockModule)
     })
 
     it('should handle missing module gracefully', async () => {
       const filePath = '/test/src/components/Missing.tsx'
 
-      vi.mocked(mockServer.moduleGraph.getModuleById).mockReturnValue(undefined)
+      getModuleByIdMock.mockReturnValue(undefined)
 
       await coordinator.handleClientComponentUpdate(filePath, mockServer)
 
-      expect(mockServer.moduleGraph.invalidateModule).not.toHaveBeenCalled()
+      expect(invalidateModuleMock).not.toHaveBeenCalled()
     })
 
     it('should handle errors during module invalidation', async () => {
       const filePath = '/test/src/components/Error.tsx'
-      const mockModule = { id: filePath }
+      const mockModule = castMock<ModuleNode>({ id: filePath })
 
-      vi.mocked(mockServer.moduleGraph.getModuleById).mockReturnValue(mockModule as any)
-      vi.mocked(mockServer.moduleGraph.invalidateModule).mockImplementation(() => {
+      getModuleByIdMock.mockReturnValue(mockModule)
+      invalidateModuleMock.mockImplementation(() => {
         throw new Error('Invalidation failed')
       })
 
@@ -111,8 +166,8 @@ describe('HMRCoordinator', () => {
 
       mockFetch.mockResolvedValue({
         ok: true,
-        json: async () => ({ success: true }),
-        text: async () => JSON.stringify({ success: true }),
+        json: async () => Promise.resolve({ success: true }),
+        text: async () => Promise.resolve(JSON.stringify({ success: true })),
       })
 
       await coordinator.handleServerComponentUpdate(filePath1, mockServer)
@@ -136,8 +191,8 @@ describe('HMRCoordinator', () => {
 
       mockFetch.mockResolvedValue({
         ok: true,
-        json: async () => ({ success: true }),
-        text: async () => JSON.stringify({ success: true }),
+        json: async () => Promise.resolve({ success: true }),
+        text: async () => Promise.resolve(JSON.stringify({ success: true })),
       })
 
       await coordinator.handleServerComponentUpdate(filePath, mockServer)
@@ -170,15 +225,15 @@ describe('HMRCoordinator', () => {
 
       mockFetch.mockResolvedValue({
         ok: true,
-        json: async () => ({ success: true }),
-        text: async () => JSON.stringify({ success: true }),
+        json: async () => Promise.resolve({ success: true }),
+        text: async () => Promise.resolve(JSON.stringify({ success: true })),
       })
 
       await coordinator.handleServerComponentUpdate(filePath, mockServer)
 
       await vi.advanceTimersByTimeAsync(TEST_DEBOUNCE_MS)
 
-      expect(mockServer.hot.send).toHaveBeenCalledWith(
+      expect(hotSendMock).toHaveBeenCalledWith(
         'rari:server-component-updated',
         expect.objectContaining({
           id: componentId,
@@ -201,7 +256,7 @@ describe('HMRCoordinator', () => {
 
       await vi.advanceTimersByTimeAsync(TEST_DEBOUNCE_MS)
 
-      expect(mockServer.ws.send).toHaveBeenCalledWith(
+      expect(wsSendMock).toHaveBeenCalledWith(
         expect.objectContaining({
           type: 'custom',
           event: 'rari:hmr-error',
@@ -247,7 +302,7 @@ describe('HMRCoordinator', () => {
       await coordinator.handleServerComponentUpdate(filePath, mockServer)
       await vi.advanceTimersByTimeAsync(TEST_DEBOUNCE_MS)
 
-      expect(mockServer.ws.send).toHaveBeenCalledWith(
+      expect(wsSendMock).toHaveBeenCalledWith(
         expect.objectContaining({
           type: 'custom',
           event: 'rari:hmr-error',
@@ -257,7 +312,7 @@ describe('HMRCoordinator', () => {
         }),
       )
 
-      vi.mocked(mockServer.ws.send).mockClear()
+      wsSendMock.mockClear()
 
       vi.mocked(mockBuilder.rebuildComponent).mockResolvedValue({
         success: true,
@@ -267,14 +322,14 @@ describe('HMRCoordinator', () => {
 
       mockFetch.mockResolvedValue({
         ok: true,
-        json: async () => ({ success: true }),
-        text: async () => JSON.stringify({ success: true }),
+        json: async () => Promise.resolve({ success: true }),
+        text: async () => Promise.resolve(JSON.stringify({ success: true })),
       })
 
       await coordinator.handleServerComponentUpdate(filePath, mockServer)
       await vi.advanceTimersByTimeAsync(TEST_DEBOUNCE_MS)
 
-      expect(mockServer.ws.send).toHaveBeenCalledWith(
+      expect(wsSendMock).toHaveBeenCalledWith(
         expect.objectContaining({
           type: 'custom',
           event: 'rari:hmr-error-cleared',
@@ -412,8 +467,8 @@ export default function Component() {
 
       mockFetch.mockResolvedValue({
         ok: true,
-        json: async () => ({ success: true }),
-        text: async () => JSON.stringify({ success: true }),
+        json: async () => Promise.resolve({ success: true }),
+        text: async () => Promise.resolve(JSON.stringify({ success: true })),
       })
 
       await coordinator.handleServerComponentUpdate(filePath, mockServer)
@@ -424,7 +479,9 @@ export default function Component() {
 
       expect(mockBuilder.rebuildComponent).not.toHaveBeenCalled()
 
-      expect(() => coordinator.dispose()).not.toThrow()
+      expect(() => {
+        coordinator.dispose()
+      }).not.toThrow()
     })
 
     it('should flush pending logs', async () => {
@@ -435,9 +492,7 @@ export default function Component() {
       coordinator.dispose()
 
       expect(consoleSpy).toHaveBeenCalled()
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[rari] HMR:'),
-      )
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('[rari] HMR:'))
 
       consoleSpy.mockRestore()
     })
@@ -461,14 +516,15 @@ export default function Component() {
 
       expect(coordinator.getErrorCount()).toBe(3)
 
-      const errorCalls = (mockServer.ws.send as any).mock.calls.filter(
-        (call: any) => call[0]?.event === 'rari:hmr-error',
-      )
+      const errorCalls = wsSendMock.mock.calls
+        .map(call => call[0])
+        .filter(isHmrErrorEventPayload)
+        .filter(payload => payload.event === 'rari:hmr-error')
 
       expect(errorCalls.length).toBe(3)
 
       const lastErrorCall = errorCalls.at(-1)
-      expect(lastErrorCall[0].data.count).toBe(3)
+      expect(lastErrorCall?.data.count).toBe(3)
     })
 
     it('should handle invalid server response', async () => {
@@ -482,10 +538,8 @@ export default function Component() {
 
       mockFetch.mockResolvedValue({
         ok: true,
-        text: async () => 'invalid json',
-        json: async () => {
-          throw new Error('Invalid JSON')
-        },
+        text: async () => Promise.resolve('invalid json'),
+        json: async () => Promise.reject(new Error('Invalid JSON')),
       })
 
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -499,11 +553,7 @@ export default function Component() {
     })
 
     it('should handle concurrent updates for different files', async () => {
-      const files = [
-        '/test/src/A.tsx',
-        '/test/src/B.tsx',
-        '/test/src/C.tsx',
-      ]
+      const files = ['/test/src/A.tsx', '/test/src/B.tsx', '/test/src/C.tsx']
 
       vi.mocked(mockBuilder.rebuildComponent).mockResolvedValue({
         success: true,
@@ -513,12 +563,12 @@ export default function Component() {
 
       mockFetch.mockResolvedValue({
         ok: true,
-        json: async () => ({ success: true }),
-        text: async () => JSON.stringify({ success: true }),
+        json: async () => Promise.resolve({ success: true }),
+        text: async () => Promise.resolve(JSON.stringify({ success: true })),
       })
 
       await Promise.all(
-        files.map(file => coordinator.handleServerComponentUpdate(file, mockServer)),
+        files.map(async file => coordinator.handleServerComponentUpdate(file, mockServer)),
       )
 
       await vi.advanceTimersByTimeAsync(TEST_DEBOUNCE_MS)
@@ -537,8 +587,8 @@ export default function Component() {
 
       mockFetch.mockResolvedValue({
         ok: true,
-        json: async () => ({ success: true }),
-        text: async () => JSON.stringify({ success: true }),
+        json: async () => Promise.resolve({ success: true }),
+        text: async () => Promise.resolve(JSON.stringify({ success: true })),
       })
 
       await coordinator.handleServerComponentUpdate(filePath, mockServer)

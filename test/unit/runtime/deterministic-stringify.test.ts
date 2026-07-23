@@ -41,7 +41,7 @@ describe('deterministicStringify', () => {
   })
 
   it('stringifies functions by source', () => {
-    // eslint-disable-next-line prefer-arrow-callback
+    // oxlint-disable-next-line eslint/prefer-arrow-callback -- need named function source text
     const result = deterministicStringify(function keyFn() {})
     expect(result).toBe('Function("function keyFn() {}")')
   })
@@ -72,7 +72,12 @@ describe('deterministicStringify', () => {
   })
 
   it('stringifies maps with sorted entries', () => {
-    const result = deterministicStringify(new Map([['b', 2], ['a', 1]]))
+    const result = deterministicStringify(
+      new Map([
+        ['b', 2],
+        ['a', 1],
+      ]),
+    )
     expect(result).toBe('Map{"a":1,"b":2}')
   })
 
@@ -87,7 +92,10 @@ describe('deterministicStringify', () => {
   })
 
   it('stringifies nested arrays', () => {
-    const result = deterministicStringify([[1, 2], [3, 4]])
+    const result = deterministicStringify([
+      [1, 2],
+      [3, 4],
+    ])
     expect(result).toBe('[[1,2],[3,4]]')
   })
 
@@ -114,8 +122,18 @@ describe('deterministicStringify', () => {
   })
 
   it('produces same result for equivalent map insertion order', () => {
-    const a = deterministicStringify(new Map([['a', 1], ['b', 2]]))
-    const b = deterministicStringify(new Map([['b', 2], ['a', 1]]))
+    const a = deterministicStringify(
+      new Map([
+        ['a', 1],
+        ['b', 2],
+      ]),
+    )
+    const b = deterministicStringify(
+      new Map([
+        ['b', 2],
+        ['a', 1],
+      ]),
+    )
     expect(a).toBe(b)
   })
 
@@ -186,16 +204,17 @@ describe('deterministicStringify', () => {
   it('handles map with object keys', () => {
     const key1 = { id: 1 }
     const key2 = { id: 2 }
-    const map = new Map([[key1, 'first'], [key2, 'second']])
+    const map = new Map([
+      [key1, 'first'],
+      [key2, 'second'],
+    ])
     const result = deterministicStringify(map)
     expect(result).toBe('Map{{"id":1}:"first",{"id":2}:"second"}')
   })
 
   it('handles deeply nested mixed structures', () => {
     const obj = {
-      metrics: new Map([
-        ['revenue', { value: 100, tags: new Set(['finance', 'core']) }],
-      ]),
+      metrics: new Map([['revenue', { value: 100, tags: new Set(['finance', 'core']) }]]),
       config: {
         flags: [true, false, null],
         name: 'test',

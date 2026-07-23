@@ -20,7 +20,11 @@ interface PropertyDescriptorConfig {
 }
 
 const ObjectProperties = {
-  nonEnumerable: { writable: true, enumerable: false, configurable: true } as PropertyDescriptorConfig,
+  nonEnumerable: {
+    writable: true,
+    enumerable: false,
+    configurable: true,
+  } as PropertyDescriptorConfig,
   readOnly: { writable: false, enumerable: false, configurable: true } as PropertyDescriptorConfig,
   writeable: { writable: true, enumerable: true, configurable: true } as PropertyDescriptorConfig,
   getterOnly: { enumerable: true, configurable: true } as PropertyDescriptorConfig,
@@ -33,9 +37,15 @@ const ObjectProperties = {
   },
 }
 
-export const nonEnumerable = (value: unknown): PropertyDescriptor => ObjectProperties.apply(value, 'nonEnumerable')
-export const readOnly = (value: unknown): PropertyDescriptor => ObjectProperties.apply(value, 'readOnly')
-export const writeable = (value: unknown): PropertyDescriptor => ObjectProperties.apply(value, 'writeable')
+export function nonEnumerable(value: unknown): PropertyDescriptor {
+  return ObjectProperties.apply(value, 'nonEnumerable')
+}
+export function readOnly(value: unknown): PropertyDescriptor {
+  return ObjectProperties.apply(value, 'readOnly')
+}
+export function writeable(value: unknown): PropertyDescriptor {
+  return ObjectProperties.apply(value, 'writeable')
+}
 
 export function getterOnly(getter: () => unknown): PropertyDescriptor {
   return {
@@ -45,29 +55,31 @@ export function getterOnly(getter: () => unknown): PropertyDescriptor {
   }
 }
 
-export const applyToGlobal = (properties: PropertyDescriptorMap) => Object.defineProperties(globalThis, properties)
-export const applyToDeno = (properties: PropertyDescriptorMap) => Object.defineProperties(g.Deno, properties)
+export function applyToGlobal(properties: PropertyDescriptorMap) {
+  return Object.defineProperties(globalThis, properties)
+}
+export function applyToDeno(properties: PropertyDescriptorMap) {
+  return Object.defineProperties(g.Deno, properties)
+}
 
 const extScriptCache = new Map<string, unknown>()
 
-export function loadExtScriptOnce(specifier: string): unknown {
+// Loader factories intentionally parameterize only the return type.
+/* oxlint-disable typescript/no-unnecessary-type-parameters -- Deno ext loaders */
+export function loadExtScriptOnce<T>(specifier: string): T {
   let cached = extScriptCache.get(specifier)
   if (cached === undefined) {
     cached = core.loadExtScript(specifier)
     extScriptCache.set(specifier, cached)
   }
 
-  return cached
+  return cached as T // oxlint-disable-line typescript/no-unsafe-type-assertion -- Deno ext scripts are dynamically loaded
 }
 
-export function lazyExtScript<T>(
-  specifier: string,
-): () => T {
+export function lazyExtScript<T>(specifier: string): () => T {
   let mod: T | undefined
   return () => {
-    if (!mod)
-      mod = loadExtScriptOnce(specifier) as T
-
+    mod ??= loadExtScriptOnce<T>(specifier)
     return mod
   }
 }
@@ -75,14 +87,15 @@ export function lazyExtScript<T>(
 const extModuleLoaderCache = new Map<string, () => unknown>()
 
 export function lazyExtModule<T>(specifier: string): () => T {
-  let loader = extModuleLoaderCache.get(specifier) as (() => T) | undefined
-  if (!loader) {
+  let loader = extModuleLoaderCache.get(specifier)
+  if (loader == null) {
     loader = core.createLazyLoader<T>(specifier)
-    extModuleLoaderCache.set(specifier, loader as () => unknown)
+    extModuleLoaderCache.set(specifier, loader)
   }
 
-  return loader
+  return loader as () => T // oxlint-disable-line typescript/no-unsafe-type-assertion -- lazy loader cache stores dynamic ext modules
 }
+/* oxlint-enable typescript/no-unnecessary-type-parameters */
 
 export function nonEnumerableGetter(get: () => unknown): PropertyDescriptor {
   return {
@@ -92,6 +105,7 @@ export function nonEnumerableGetter(get: () => unknown): PropertyDescriptor {
   }
 }
 
+/* oxlint-disable typescript/no-unnecessary-type-parameters -- select return type is only expressed via V */
 export function propNonEnumerableLazyLoaded<T, V>(
   select: (mod: T) => V,
   load: () => T,
@@ -104,20 +118,21 @@ export function propWritableLazyLoaded<T, V>(
   load: () => T,
 ): PropertyDescriptor {
   return {
-    value(...args: unknown[]) {
-      const fn = select(load()) as (...args: unknown[]) => unknown
-      return fn(...args)
+    value(...args: readonly unknown[]) {
+      const fn = select(load())
+      if (typeof fn !== 'function')
+        throw new TypeError('Expected lazy-loaded ext export to be a function')
+
+      return Reflect.apply(fn, undefined, args) as unknown
     },
     writable: true,
     enumerable: true,
     configurable: true,
   }
 }
+/* oxlint-enable typescript/no-unnecessary-type-parameters */
 
-export function defineDenoLazyProps<T>(
-  load: () => T,
-  keys: (keyof T & string)[],
-): void {
+export function defineDenoLazyProps<T>(load: () => T, keys: ReadonlyArray<keyof T & string>): void {
   const descriptors: PropertyDescriptorMap = {}
 
   for (const key of keys) {

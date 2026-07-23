@@ -2,7 +2,7 @@
 
 import { core } from 'ext:core/mod.js'
 
-const io = core.loadExtScript('ext:deno_io/12_io.js')
+const io = core.loadExtScript<typeof import('ext:deno_io/12_io.js')>('ext:deno_io/12_io.js')
 
 g.Deno.SeekMode = io.SeekMode
 g.Deno.stdin = io.stdin

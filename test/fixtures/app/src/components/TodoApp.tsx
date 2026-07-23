@@ -7,13 +7,13 @@ import TodoForm from './TodoForm'
 import TodoList from './TodoList'
 
 interface TodoAppProps {
-  initialTodos: Todo[]
+  readonly initialTodos: readonly Todo[]
 }
 
 export default function TodoApp({ initialTodos }: TodoAppProps) {
-  const [todos, setTodos] = useState<Todo[]>(initialTodos)
+  const [todos, setTodos] = useState<readonly Todo[]>(initialTodos)
 
-  const refreshTodos = async (todos?: Todo[]) => {
+  const refreshTodos = async (todos?: readonly Todo[]) => {
     if (todos) {
       setTodos(todos)
       return
@@ -25,8 +25,17 @@ export default function TodoApp({ initialTodos }: TodoAppProps) {
 
   return (
     <>
-      <TodoForm onSuccess={refreshTodos} />
-      <TodoList initialTodos={todos} onUpdate={refreshTodos} />
+      <TodoForm
+        onSuccess={todos => {
+          void refreshTodos(todos)
+        }}
+      />
+      <TodoList
+        initialTodos={todos}
+        onUpdate={todos => {
+          void refreshTodos(todos)
+        }}
+      />
     </>
   )
 }

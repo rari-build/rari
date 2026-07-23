@@ -1,5 +1,4 @@
 import type { APIRequestContext } from '@playwright/test'
-
 import { expect, test } from '@playwright/test'
 
 const REVALIDATE_SECRET = 'e2e-test-secret'
@@ -9,8 +8,8 @@ async function revalidateTag(request: APIRequestContext, tag: string) {
     data: { type: 'tag', tag, secret: REVALIDATE_SECRET },
   })
   expect(response.status()).toBe(200)
-  const body = await response.json()
-  expect(body.revalidated).toBe(true)
+  const body: unknown = await response.json()
+  expect(body).toMatchObject({ revalidated: true })
 }
 
 test.describe('use cache tag revalidation', () => {

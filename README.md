@@ -63,25 +63,28 @@ rari delivers exceptional performance that significantly outperforms traditional
 > Benchmarks last updated: May 25, 2026 (rari v0.13.11)
 
 **Response Time (Single Request):**
-| Metric | rari | Next.js | Improvement |
-|--------|------|---------|-------------|
-| **Average** | **0.12ms** | 2.17ms | **18.1x faster** |
-| **P95** | 0.16ms | 2.37ms | **14.8x faster** |
-| **Bundle Size** | 285 KB | 634 KB | **55% smaller** |
+
+| Metric          | rari       | Next.js | Improvement      |
+| --------------- | ---------- | ------- | ---------------- |
+| **Average**     | **0.12ms** | 2.17ms  | **18.1x faster** |
+| **P95**         | 0.16ms     | 2.37ms  | **14.8x faster** |
+| **Bundle Size** | 285 KB     | 634 KB  | **55% smaller**  |
 
 **Throughput Under Load (50 concurrent connections, 30s):**
-| Metric | rari | Next.js | Improvement |
-|--------|------|---------|-------------|
-| **Requests/sec** | **97,826** | 1,452 | **67.4x higher** |
-| **Avg Latency** | **0.51ms** | 34.46ms | **67.6x faster** |
-| **P95 Latency** | **0.82ms** | 43.41ms | **52.9x faster** |
-| **Errors** | 0 | 0 | Stable |
+
+| Metric           | rari       | Next.js | Improvement      |
+| ---------------- | ---------- | ------- | ---------------- |
+| **Requests/sec** | **97,826** | 1,452   | **67.4x higher** |
+| **Avg Latency**  | **0.51ms** | 34.46ms | **67.6x faster** |
+| **P95 Latency**  | **0.82ms** | 43.41ms | **52.9x faster** |
+| **Errors**       | 0          | 0       | Stable           |
 
 **Build Performance:**
-| Metric | rari | Next.js | Improvement |
-|--------|------|---------|-------------|
-| **Build Time** | **1.75s** | 4.42s | **2.5x faster** |
-| **Bundle Size** | 285 KB | 634 KB | **55% smaller** |
+
+| Metric          | rari      | Next.js | Improvement     |
+| --------------- | --------- | ------- | --------------- |
+| **Build Time**  | **1.75s** | 4.42s   | **2.5x faster** |
+| **Bundle Size** | 285 KB    | 634 KB  | **55% smaller** |
 
 All benchmarks are reproducible. See [benchmarks/](https://github.com/rari-build/benchmarks) for methodology and tools.
 

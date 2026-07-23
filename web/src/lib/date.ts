@@ -1,6 +1,5 @@
 export function formatBlogDate(dateString: string): string {
-  if (!dateString)
-    return ''
+  if (!dateString) return ''
   const date = new Date(dateString)
   return date.toLocaleDateString('en-US', {
     weekday: 'long',
@@ -11,8 +10,7 @@ export function formatBlogDate(dateString: string): string {
 }
 
 export function formatDate(dateString: string): string {
-  if (!dateString)
-    return ''
+  if (!dateString) return ''
   const date = new Date(dateString)
   return date.toLocaleDateString('en-US', {
     year: 'numeric',

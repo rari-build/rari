@@ -1,8 +1,22 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { analyzeModuleSource, getDirectives, hasDefaultExport, hasTopLevelUseClientDirective, hasTopLevelUseServerDirective } from '@rari/vite/analysis/directives'
-import { collectClientComponentPaths, filterExternalDependencies, hasNodeImportsFromAnalysis, invalidateModuleCachePath, isNodeBuiltinModule, ModuleAnalysisCache, resolveModuleCachePath } from '@rari/vite/analysis/module-cache'
+import {
+  analyzeModuleSource,
+  getDirectives,
+  hasDefaultExport,
+  hasTopLevelUseClientDirective,
+  hasTopLevelUseServerDirective,
+} from '@rari/vite/analysis/directives'
+import {
+  collectClientComponentPaths,
+  filterExternalDependencies,
+  hasNodeImportsFromAnalysis,
+  invalidateModuleCachePath,
+  isNodeBuiltinModule,
+  ModuleAnalysisCache,
+  resolveModuleCachePath,
+} from '@rari/vite/analysis/module-cache'
 import { describe, expect, it, vi } from 'vite-plus/test'
 
 describe('analyzeModuleSource', () => {
@@ -137,8 +151,16 @@ describe('moduleAnalysisCache', () => {
     fs.writeFileSync(filePath, `export default function C() {}\n`)
 
     const targetLength = 80
-    const clientSource = `"use client";\nexport default function ComponentA() { return 1; }\n`.padEnd(targetLength, ' ')
-    const serverSource = `"use server";\nexport async function actionHandler() { return 1; }\n`.padEnd(targetLength, ' ')
+    const clientSource =
+      `"use client";\nexport default function ComponentA() { return 1; }\n`.padEnd(
+        targetLength,
+        ' ',
+      )
+    const serverSource =
+      `"use server";\nexport async function actionHandler() { return 1; }\n`.padEnd(
+        targetLength,
+        ' ',
+      )
     expect(clientSource.length).toBe(serverSource.length)
 
     const cache = new ModuleAnalysisCache()
@@ -247,7 +269,10 @@ describe('moduleAnalysisCache', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-analysis-'))
     const srcDir = path.join(dir, 'src')
     fs.mkdirSync(path.join(srcDir, 'app'), { recursive: true })
-    fs.writeFileSync(path.join(srcDir, 'app', 'template.tsx'), `"use client"\nexport default function T() {}\n`)
+    fs.writeFileSync(
+      path.join(srcDir, 'app', 'template.tsx'),
+      `"use client"\nexport default function T() {}\n`,
+    )
     fs.writeFileSync(path.join(srcDir, 'app', 'page.tsx'), `export default function P() {}\n`)
 
     const cache = new ModuleAnalysisCache()

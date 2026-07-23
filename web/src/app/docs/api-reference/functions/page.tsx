@@ -9,7 +9,10 @@ export default function FunctionsPage() {
     <div className={container.base}>
       <div className="prose max-w-none">
         <Breadcrumbs pathname="/docs/api-reference/functions" />
-        <PageHeader title="Functions" pagePath="web/src/app/docs/api-reference/functions/page.tsx" />
+        <PageHeader
+          title="Functions"
+          pagePath="web/src/app/docs/api-reference/functions/page.tsx"
+        />
         <p className="text-lg text-fg-muted leading-relaxed">
           Server and client utilities for data fetching, caching, and more.
         </p>
@@ -27,12 +30,16 @@ export default function FunctionsPage() {
                     <div>
                       <h2 className="relative text-xl font-semibold mb-2 font-mono">
                         <span className="text-fg">fetch</span>
-                        <span aria-hidden="true" className="absolute inset-0 bg-clip-text text-transparent bg-linear-to-r from-fg to-accent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                        <span
+                          aria-hidden="true"
+                          className="absolute inset-0 bg-clip-text text-transparent bg-linear-to-r from-fg to-accent opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                        >
                           fetch
                         </span>
                       </h2>
                       <p className="text-fg-muted leading-relaxed group-hover:text-fg-muted transition-colors duration-300">
-                        Enhanced fetch with automatic request deduplication and caching powered by Rust.
+                        Enhanced fetch with automatic request deduplication and caching powered by
+                        Rust.
                       </p>
                     </div>
                   </div>
@@ -41,12 +48,12 @@ export default function FunctionsPage() {
               <div
                 className="absolute z-0 aspect-2/1 w-16 animate-border-trail opacity-0 group-hover:opacity-100 transition-opacity duration-300"
                 style={{
-                  background: 'radial-gradient(ellipse at 100% 50%, #fd7e14 0%, #ff9a3c 40%, transparent 70%)',
+                  background:
+                    'radial-gradient(ellipse at 100% 50%, #fd7e14 0%, #ff9a3c 40%, transparent 70%)',
                   offsetAnchor: '100% 50%',
                   offsetPath: 'border-box',
                 }}
-              >
-              </div>
+              ></div>
             </a>
 
             <div className="mt-8 p-6 bg-canvas border border-edge rounded-lg">

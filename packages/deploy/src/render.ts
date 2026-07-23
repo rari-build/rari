@@ -2,7 +2,14 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
 import { styleText } from 'node:util'
-import { createOrBackupConfigFile, getRariVersion, logInfo, logSuccess, updateGitignoreForProvider, updatePackageJsonForProvider } from './utils'
+import {
+  createOrBackupConfigFile,
+  getRariVersion,
+  logInfo,
+  logSuccess,
+  updateGitignoreForProvider,
+  updatePackageJsonForProvider,
+} from './utils'
 
 export function createRenderDeployment() {
   const cwd = process.cwd()
@@ -101,8 +108,7 @@ Optional variables you can add in Render dashboard:
       writeFileSync(readmePath, readmeContent + renderReadmeSection)
       logSuccess('Updated README.md with Render deployment instructions')
     }
-  }
-  else {
+  } else {
     const defaultReadme = `# My rari App
 
 A high-performance React Server Components application powered by rari.
@@ -134,7 +140,7 @@ function printRenderSuccessMessage() {
   logInfo('Your rari app will automatically:')
   console.warn('  ✅ Detect Render environment')
   console.warn('  ✅ Bind to 0.0.0.0 (Render requirement)')
-  console.warn('  ✅ Use Render\'s PORT environment variable')
+  console.warn("  ✅ Use Render's PORT environment variable")
   console.warn('  ✅ Run in production mode')
   console.warn('  ✅ Download platform-specific rari binary')
   console.warn('')

@@ -3,29 +3,54 @@
 interface FlightServerActions {
   decodeAction: (
     body: FormData,
-    serverManifest: Record<string, { id: string, name?: string, chunks: string[] }>,
+    serverManifest: Readonly<{
+      readonly [key: string]: Readonly<{
+        readonly id: string
+        readonly name?: string
+        readonly chunks: readonly string[]
+      }>
+    }>,
   ) => Promise<(() => Promise<unknown>) | null>
   decodeFormState: (
     actionResult: unknown,
     body: FormData,
-    serverManifest: Record<string, { id: string, name?: string, chunks: string[] }>,
+    serverManifest: Readonly<{
+      readonly [key: string]: Readonly<{
+        readonly id: string
+        readonly name?: string
+        readonly chunks: readonly string[]
+      }>
+    }>,
   ) => Promise<unknown>
   decodeReply: (
     body: string | FormData,
-    serverManifest: Record<string, { id: string, name?: string, chunks: string[] }>,
+    serverManifest: Readonly<{
+      readonly [key: string]: Readonly<{
+        readonly id: string
+        readonly name?: string
+        readonly chunks: readonly string[]
+      }>
+    }>,
   ) => Promise<unknown>
 }
 
-(async () => {
+void (async () => {
   try {
-    if (typeof g['~rari']?.loadRscReactVendors === 'function')
-      g['~rari'].loadRscReactVendors()
+    if (typeof g['~rari']?.loadRscReactVendors === 'function') g['~rari'].loadRscReactVendors()
 
-    const flightServer = g['~reactServerRenderer'] as FlightServerActions | undefined
-    if (!flightServer?.decodeAction || !flightServer?.decodeReply || !flightServer?.decodeFormState)
+    const flightServer = g['~reactServerRenderer'] as FlightServerActions | undefined // oxlint-disable-line typescript/no-unsafe-type-assertion -- flight runtime global
+    if (
+      flightServer == null ||
+      typeof flightServer.decodeAction !== 'function' ||
+      typeof flightServer.decodeReply !== 'function' ||
+      typeof flightServer.decodeFormState !== 'function'
+    ) {
       throw new TypeError('Flight server action helpers not loaded')
+    }
 
-    const serverManifest = g['~rari']?.serverManifest || {}
+    type ServerManifest = Record<string, { id: string; name?: string; chunks: string[] }>
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- runtime manifest may be partial before routes register
+    const serverManifest = (g['~rari']?.serverManifest ?? {}) as ServerManifest
     const mode = __RARI_ACTION_MODE__
     const actionId = __RARI_ACTION_ID__
     const bodyText = __RARI_ACTION_BODY__
@@ -43,30 +68,30 @@ interface FlightServerActions {
           body: binary,
         })
         formData = await request.formData()
-      }
-      else {
+      } else {
         formData = new FormData()
-        for (const [key, value] of formEntries)
-          formData.append(key, value)
+        for (const [key, value] of formEntries) formData.append(key, value)
       }
 
       validateFormData(formData)
 
       const runFormAction = await flightServer.decodeAction(formData, serverManifest)
-      if (!runFormAction)
-        throw new TypeError('Failed to decode server action from form data')
+      if (!runFormAction) throw new TypeError('Failed to decode server action from form data')
 
       const actionResult = await runFormAction()
       const formState = await flightServer.decodeFormState(actionResult, formData, serverManifest)
 
       if (formState != null) {
-        if (!g['~rari'])
-          g['~rari'] = {}
+        g['~rari'] ??= {}
         g['~rari'].actionFormState = formState
 
-        if (actionResult && typeof actionResult === 'object' && !Array.isArray(actionResult)) {
+        if (
+          actionResult != null &&
+          typeof actionResult === 'object' &&
+          !Array.isArray(actionResult)
+        ) {
           return {
-            ...(actionResult as Record<string, unknown>),
+            ...Object.fromEntries(Object.entries(actionResult)),
             '~rariFormState': formState,
             '~rariSkipRefresh': true,
           }
@@ -92,8 +117,7 @@ interface FlightServerActions {
       })
       const formData = await request.formData()
       decoded = await flightServer.decodeReply(formData, serverManifest)
-    }
-    else {
+    } else {
       decoded = await flightServer.decodeReply(bodyText, serverManifest)
     }
 
@@ -102,8 +126,7 @@ interface FlightServerActions {
     const actionFn = resolveActionFn(actionId, serverManifest)
     const result = await actionFn(...sanitizedArgs)
     return stashRpcActionResult(result)
-  }
-  catch (error: unknown) {
+  } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error)
     throw new Error(`Server action error: ${errorMessage}`)
   }

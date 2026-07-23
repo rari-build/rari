@@ -12,7 +12,12 @@ describe('defineMdxComponents', () => {
 
     const resolve = defineMdxComponents([
       { name: 'CodeBlock', component: CodeBlock, id: 'src/components/CodeBlock.tsx', client: true },
-      { name: 'MermaidChart', component: MermaidChart, id: 'src/components/MermaidChart.tsx', client: true },
+      {
+        name: 'MermaidChart',
+        component: MermaidChart,
+        id: 'src/components/MermaidChart.tsx',
+        client: true,
+      },
     ])
 
     const components = resolve('<CodeBlock language="ts" />')

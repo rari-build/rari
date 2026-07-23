@@ -1,8 +1,6 @@
 import type { APIRequestContext } from '@playwright/test'
-
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { expect, test } from '@playwright/test'
-
 import { getRariLogPath } from './shared/helpers'
 
 test.describe.configure({ mode: 'serial' })
@@ -11,25 +9,34 @@ const LOG_FILE = getRariLogPath()
 const REVALIDATE_SECRET = 'e2e-test-secret'
 
 function readLog(): string {
-  if (!existsSync(LOG_FILE))
-    return ''
+  if (!existsSync(LOG_FILE)) return ''
 
   return readFileSync(LOG_FILE, 'utf8')
 }
 
+function stripAnsi(text: string): string {
+  // ANSI CSI color sequences (ESC [ ... m)
+  return text.replace(/\x1B\[[0-9;]*m/g, '') // oxlint-disable-line eslint/no-control-regex -- ANSI escape
+}
+
 function grepLog(pattern: RegExp): string[] {
-  const plain = readLog().replace(/\u001B\[[0-9;]*m/g, '')
+  const plain = stripAnsi(readLog())
   return plain.split('\n').filter(line => pattern.test(line))
 }
 
-async function expectAllLogged(patterns: RegExp[], timeoutMs = 5000) {
-  await expect.poll(() => {
-    const content = readLog().replace(/\u001B\[[0-9;]*m/g, '')
-    return patterns.filter(re => !re.test(content))
-  }, {
-    message: `all of ${patterns.map(r => r.toString()).join(', ')} in ${LOG_FILE}`,
-    timeout: timeoutMs,
-  }).toEqual([])
+async function expectAllLogged(patterns: readonly RegExp[], timeoutMs = 5000) {
+  await expect
+    .poll(
+      () => {
+        const content = stripAnsi(readLog())
+        return patterns.filter(re => !re.test(content))
+      },
+      {
+        message: `all of ${patterns.map(r => r.toString()).join(', ')} in ${LOG_FILE}`,
+        timeout: timeoutMs,
+      },
+    )
+    .toEqual([])
 }
 
 async function revalidatePath(request: APIRequestContext, path: string) {
@@ -37,14 +44,17 @@ async function revalidatePath(request: APIRequestContext, path: string) {
     data: { type: 'path', path, secret: REVALIDATE_SECRET },
   })
   expect(response.status()).toBe(200)
-  const body = await response.json()
-  expect(body.revalidated).toBe(true)
+  const body: unknown = await response.json()
+  expect(body).toMatchObject({ revalidated: true })
 }
 
 test.beforeAll(() => {
   test.setTimeout(120_000)
   if (!existsSync(LOG_FILE)) {
-    test.skip(true, `rari log not found at ${LOG_FILE}. Set RARI_LOG_FILE or run \`pnpm test:e2e\` which writes to ./target/rari-web.log.`)
+    test.skip(
+      true,
+      `rari log not found at ${LOG_FILE}. Set RARI_LOG_FILE or run \`pnpm test:e2e\` which writes to ./target/rari-web.log.`,
+    )
   }
 })
 
@@ -61,9 +71,11 @@ test('response cache: first GET is a miss, second GET is a hit', async ({ reques
   const r1 = await request.get('/')
   expect(r1.status()).toBe(200)
   expect(r1.headers()['x-cache']).toBe('MISS')
-  await expect.poll(() => grepLog(/memory cache miss/).length, {
-    message: 'memory cache miss after cold GET /',
-  }).toBeGreaterThan(missesBefore)
+  await expect
+    .poll(() => grepLog(/memory cache miss/).length, {
+      message: 'memory cache miss after cold GET /',
+    })
+    .toBeGreaterThan(missesBefore)
 
   const r2 = await request.get('/')
   expect(r2.status()).toBe(200)
@@ -82,9 +94,11 @@ test('response cache: invalidate_by_tag clears the entry', async ({ request }) =
   const r1 = await request.get('/about')
   expect(r1.status()).toBe(200)
   expect(r1.headers()['x-cache']).toBe('MISS')
-  await expect.poll(() => grepLog(/memory cache miss/).length, {
-    message: 'miss count after seeding /about',
-  }).toBeGreaterThan(missesBefore)
+  await expect
+    .poll(() => grepLog(/memory cache miss/).length, {
+      message: 'miss count after seeding /about',
+    })
+    .toBeGreaterThan(missesBefore)
 
   const r2 = await request.get('/about')
   expect(r2.status()).toBe(200)
@@ -97,17 +111,17 @@ test('response cache: invalidate_by_tag clears the entry', async ({ request }) =
   const r3 = await request.get('/about')
   expect(r3.status()).toBe(200)
   expect(r3.headers()['x-cache']).toBe('MISS')
-  await expect.poll(() => grepLog(/memory cache miss/).length, {
-    message: 'miss count after revalidate',
-  }).toBeGreaterThan(missesBeforeRevalidate)
+  await expect
+    .poll(() => grepLog(/memory cache miss/).length, {
+      message: 'miss count after revalidate',
+    })
+    .toBeGreaterThan(missesBeforeRevalidate)
 
   const r4 = await request.get('/about')
   expect(r4.status()).toBe(200)
   expect(r4.headers()['x-cache']).toBe('HIT')
 
-  await expectAllLogged([
-    /memory cache set_with_tags/,
-  ])
+  await expectAllLogged([/memory cache set_with_tags/])
 })
 
 // ---------------------------------------------------------------------------
@@ -148,7 +162,9 @@ test('og cache: hitting /_rari/og for a known route populates the cache', async 
 // 4) Layout HTML cache
 // ---------------------------------------------------------------------------
 
-test('layout cache: rendering a page that uses layout populates LayoutHtmlCache', async ({ request }) => {
+test('layout cache: rendering a page that uses layout populates LayoutHtmlCache', async ({
+  request,
+}) => {
   await request.get('/nested')
 
   const lines = grepLog(/\/nested/)
@@ -181,7 +197,7 @@ test('fetch cache: GET /fetch-test twice - first miss, second hit', async ({ pag
 
   const log = readLog()
 
-  const plain = log.replace(/\u001B\[[0-9;]*m/g, '')
+  const plain = stripAnsi(log)
   const fetchCachePopulated = /set_with_tags\s+key=(?:layout:)?\d{10,}/.test(plain)
 
   expect(fetchCachePopulated, 'expected fetch cache to populate for /fetch-test').toBe(true)
@@ -191,7 +207,9 @@ test('fetch cache: GET /fetch-test twice - first miss, second hit', async ({ pag
 // 7) Handler: distinct URLs trigger set_with_tags / hit / miss lines
 // ---------------------------------------------------------------------------
 
-test('handler: multiple GETs against distinct URLs eventually trigger set_with_tags / hit / miss lines', async ({ request }) => {
+test('handler: multiple GETs against distinct URLs eventually trigger set_with_tags / hit / miss lines', async ({
+  request,
+}) => {
   const urls = ['/', '/about', '/nested', '/nested/deep', '/blog', '/products']
 
   const missesBefore = grepLog(/memory cache miss/).length
@@ -200,18 +218,18 @@ test('handler: multiple GETs against distinct URLs eventually trigger set_with_t
     await revalidatePath(request, path)
     const r = await request.get(path)
     expect([200, 404]).toContain(r.status())
-    if (r.status() === 200)
-      expect(r.headers()['x-cache']).toBe('MISS')
+    if (r.status() === 200) expect(r.headers()['x-cache']).toBe('MISS')
   }
 
-  await expect.poll(() => grepLog(/memory cache miss/).length, {
-    message: 'memory cache misses after cold GETs',
-  }).toBeGreaterThan(missesBefore)
+  await expect
+    .poll(() => grepLog(/memory cache miss/).length, {
+      message: 'memory cache misses after cold GETs',
+    })
+    .toBeGreaterThan(missesBefore)
 
   for (const path of urls) {
     const r = await request.get(path)
-    if (r.status() === 200)
-      expect(r.headers()['x-cache']).toBe('HIT')
+    if (r.status() === 200) expect(r.headers()['x-cache']).toBe('HIT')
   }
 
   await expectAllLogged([/memory cache handler initialized/])
@@ -225,8 +243,5 @@ test('log file: contains both boot logs and request logs', async () => {
   const stat = statSync(LOG_FILE)
   expect(stat.size).toBeGreaterThan(0)
   expect(readLog()).toMatch(/memory cache handler initialized/)
-  await expectAllLogged([
-    /memory cache miss/,
-    /memory cache set_with_tags/,
-  ])
+  await expectAllLogged([/memory cache miss/, /memory cache set_with_tags/])
 })

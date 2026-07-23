@@ -1,31 +1,35 @@
 export interface ScrollPosition {
-  x: number
-  y: number
-  element: string
+  readonly x: number
+  readonly y: number
+  readonly element: string
 }
 
 export interface PreservedState {
-  scrollPositions: Map<string, ScrollPosition>
-  formData: Map<string, FormData>
-  focusedElement: string | null
+  readonly scrollPositions: Map<string, ScrollPosition>
+  readonly formData: Map<string, FormData>
+  readonly focusedElement: string | null
 }
 
 export interface StatePreserverConfig {
-  maxHistorySize?: number
-  scrollableSelector?: string
+  readonly maxHistorySize?: number
+  readonly scrollableSelector?: string
 }
 
 export class StatePreserver {
-  private stateHistory: Map<string, PreservedState>
+  private readonly stateHistory: Map<string, PreservedState>
   private routeAccessOrder: string[]
-  private maxHistorySize: number
-  private scrollableSelector: string
+  private readonly maxHistorySize: number
+  private readonly scrollableSelector: string
 
   constructor(config: StatePreserverConfig = {}) {
     this.stateHistory = new Map()
     this.routeAccessOrder = []
-    this.maxHistorySize = config.maxHistorySize || 50
-    this.scrollableSelector = config.scrollableSelector || '[data-scrollable], .scrollable, [style*="overflow"]'
+    this.maxHistorySize =
+      config.maxHistorySize != null && config.maxHistorySize !== 0 ? config.maxHistorySize : 50
+    this.scrollableSelector =
+      config.scrollableSelector != null && config.scrollableSelector !== ''
+        ? config.scrollableSelector
+        : '[data-scrollable], .scrollable, [style*="overflow"]'
   }
 
   public captureState(route: string): PreservedState {
@@ -56,7 +60,10 @@ export class StatePreserver {
         if (element instanceof HTMLElement) {
           const elementId = element.id || `scrollable-${index}`
 
-          if (element.scrollHeight > element.clientHeight || element.scrollWidth > element.clientWidth) {
+          if (
+            element.scrollHeight > element.clientHeight ||
+            element.scrollWidth > element.clientWidth
+          ) {
             positions.set(elementId, {
               x: element.scrollLeft,
               y: element.scrollTop,
@@ -65,8 +72,7 @@ export class StatePreserver {
           }
         }
       })
-    }
-    catch {}
+    } catch {}
 
     return positions
   }
@@ -82,11 +88,9 @@ export class StatePreserver {
 
         const formData = new FormData(form)
 
-        if (!formData.entries().next().done)
-          formDataMap.set(formId, formData)
+        if (!formData.entries().next().done) formDataMap.set(formId, formData)
       })
-    }
-    catch {}
+    } catch {}
 
     return formDataMap
   }
@@ -96,32 +100,30 @@ export class StatePreserver {
       const activeElement = document.activeElement
 
       if (activeElement && activeElement !== document.body) {
-        if (activeElement.id)
-          return `#${activeElement.id}`
+        if (activeElement.id) return `#${activeElement.id}`
 
-        if (activeElement instanceof HTMLInputElement || activeElement instanceof HTMLTextAreaElement) {
-          if (activeElement.name)
-            return `[name="${activeElement.name}"]`
+        if (
+          activeElement instanceof HTMLInputElement ||
+          activeElement instanceof HTMLTextAreaElement
+        ) {
+          if (activeElement.name) return `[name="${activeElement.name}"]`
         }
       }
-    }
-    catch {}
+    } catch {}
 
     return null
   }
 
   private storeState(route: string, state: PreservedState): void {
     const existingIndex = this.routeAccessOrder.indexOf(route)
-    if (existingIndex !== -1)
-      this.routeAccessOrder.splice(existingIndex, 1)
+    if (existingIndex !== -1) this.routeAccessOrder.splice(existingIndex, 1)
 
     this.routeAccessOrder.push(route)
     this.stateHistory.set(route, state)
 
     while (this.routeAccessOrder.length > this.maxHistorySize) {
       const oldestRoute = this.routeAccessOrder.shift()
-      if (oldestRoute)
-        this.stateHistory.delete(oldestRoute)
+      if (oldestRoute != null && oldestRoute !== '') this.stateHistory.delete(oldestRoute)
     }
   }
 
@@ -145,23 +147,19 @@ export class StatePreserver {
   public clearState(route: string): void {
     this.stateHistory.delete(route)
     const index = this.routeAccessOrder.indexOf(route)
-    if (index !== -1)
-      this.routeAccessOrder.splice(index, 1)
+    if (index !== -1) this.routeAccessOrder.splice(index, 1)
   }
 
   public restoreState(route: string): boolean {
     const state = this.stateHistory.get(route)
 
-    if (!state)
-      return false
+    if (!state) return false
 
     let success = true
 
-    if (!this.restoreScrollPositions(state.scrollPositions))
-      success = false
-    if (!this.restoreFormData(state.formData))
-      success = false
-    if (state.focusedElement)
+    if (!this.restoreScrollPositions(state.scrollPositions)) success = false
+    if (!this.restoreFormData(state.formData)) success = false
+    if (state.focusedElement != null && state.focusedElement !== '')
       this.restoreFocus(state.focusedElement)
 
     return success
@@ -175,25 +173,23 @@ export class StatePreserver {
         try {
           if (key === 'window') {
             window.scrollTo(position.x, position.y)
-          }
-          else {
-            const element = document.getElementById(key) || document.querySelector(`[data-scrollable-id="${key}"]`)
+          } else {
+            const element =
+              document.getElementById(key) ??
+              document.querySelector(`[data-scrollable-id="${key}"]`)
 
             if (element instanceof HTMLElement) {
               element.scrollLeft = position.x
               element.scrollTop = position.y
-            }
-            else {
+            } else {
               allSucceeded = false
             }
           }
-        }
-        catch {
+        } catch {
           allSucceeded = false
         }
       })
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[rari] Router: Failed to restore scroll positions:', error)
       allSucceeded = false
     }
@@ -207,9 +203,12 @@ export class StatePreserver {
     try {
       formDataMap.forEach((formData, formId) => {
         try {
-          const form = document.getElementById(formId) as HTMLFormElement
-            || document.querySelector(`form[name="${formId}"]`) as HTMLFormElement
-            || document.querySelectorAll('form')[Number.parseInt(formId.replace('form-', ''), 10)]
+          const formById = document.getElementById(formId)
+          const form =
+            formById instanceof HTMLFormElement
+              ? formById
+              : (document.querySelector(`form[name="${formId}"]`) ??
+                document.querySelectorAll('form')[Number.parseInt(formId.replace('form-', ''), 10)])
 
           if (form instanceof HTMLFormElement) {
             formData.forEach((value, key) => {
@@ -217,37 +216,37 @@ export class StatePreserver {
                 const elements = form.elements.namedItem(key)
 
                 if (elements instanceof RadioNodeList) {
-                  elements.forEach((element) => {
+                  elements.forEach(element => {
                     if (element instanceof HTMLInputElement) {
                       if (element.type === 'radio' || element.type === 'checkbox')
                         element.checked = element.value === value
-                      else
-                        element.value = value as string
+                      else if (typeof value === 'string') element.value = value
                     }
                   })
-                }
-                else if (elements instanceof HTMLInputElement || elements instanceof HTMLTextAreaElement || elements instanceof HTMLSelectElement) {
-                  if (elements instanceof HTMLInputElement && (elements.type === 'checkbox' || elements.type === 'radio'))
+                } else if (
+                  elements instanceof HTMLInputElement ||
+                  elements instanceof HTMLTextAreaElement ||
+                  elements instanceof HTMLSelectElement
+                ) {
+                  if (
+                    elements instanceof HTMLInputElement &&
+                    (elements.type === 'checkbox' || elements.type === 'radio')
+                  )
                     elements.checked = elements.value === value
-                  else
-                    elements.value = value as string
+                  else if (typeof value === 'string') elements.value = value
                 }
-              }
-              catch {
+              } catch {
                 allSucceeded = false
               }
             })
-          }
-          else {
+          } else {
             allSucceeded = false
           }
-        }
-        catch {
+        } catch {
           allSucceeded = false
         }
       })
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[rari] Router: Failed to restore form data:', error)
       allSucceeded = false
     }
@@ -263,11 +262,9 @@ export class StatePreserver {
         requestAnimationFrame(() => {
           try {
             element.focus()
-          }
-          catch {}
+          } catch {}
         })
       }
-    }
-    catch {}
+    } catch {}
   }
 }

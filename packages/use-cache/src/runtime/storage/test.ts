@@ -26,18 +26,17 @@ function backendOps(next: TestStorageBackend) {
 export class TestCacheStorage implements CacheStorage {
   private readonly storage: CacheStorage
   constructor() {
-    if (!backend)
-      throw new Error('TestCacheStorage: setTestStorageBackend() must be called first')
+    if (!backend) throw new Error('TestCacheStorage: setTestStorageBackend() must be called first')
     if (!hasRemoteOps(backendOps(backend)))
       throw new Error(`TestCacheStorage: requested backend '${backend}' ops are not available`)
     this.storage = backend === 'redis' ? createRedisCacheStorage() : createRedbCacheStorage()
   }
 
-  read(key: string) {
+  async read(key: string) {
     return this.storage.read(key)
   }
 
-  write(key: string, value: unknown, options: CacheWriteOptions) {
+  async write(key: string, value: unknown, options: CacheWriteOptions) {
     return this.storage.write(key, value, options)
   }
 

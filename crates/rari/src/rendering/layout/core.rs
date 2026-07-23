@@ -340,7 +340,7 @@ impl LayoutRenderer {
     }
 
     /// Prefer [`Self::check_page_not_found_on`] with a sticky runtime when the caller
-    /// already holds a pool slot lease — using the pool here would re-acquire it and deadlock.
+    /// already holds a pool slot lease -- using the pool here would re-acquire it and deadlock.
     pub async fn check_page_not_found_on(
         &self,
         route_match: &AppRouteMatch,
@@ -1513,7 +1513,7 @@ mod tests {
         let cache = LayoutHtmlCache::with_ttl(Arc::clone(&handler) as Arc<_>, 3600);
 
         // max-age=0: the entry would be born expired, so the write is skipped
-        // entirely — nothing stored, nothing served.
+        // entirely -- nothing stored, nothing served.
         cache.insert_with_tags(1, "short-lived".to_string(), &[], Some(0)).await.expect("insert");
         assert!(cache.get(1).await.is_none());
         assert!(handler.is_empty(), "max-age=0 must not store an entry");

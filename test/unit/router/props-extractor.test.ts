@@ -1,5 +1,9 @@
 import type { MetadataResult } from '@rari/router/build/props-extractor'
-import { clearPropsCache, clearPropsCacheForComponent, mergeMetadata } from '@rari/router/build/props-extractor'
+import {
+  clearPropsCache,
+  clearPropsCacheForComponent,
+  mergeMetadata,
+} from '@rari/router/build/props-extractor'
 import { describe, expect, it } from 'vite-plus/test'
 
 describe('mergeMetadata', () => {
@@ -52,14 +56,18 @@ describe('mergeMetadata', () => {
 
   describe('cache functions', () => {
     it('should clear all props cache', () => {
-      expect(() => clearPropsCache()).not.toThrow()
+      expect(() => {
+        clearPropsCache()
+      }).not.toThrow()
 
       clearPropsCache()
       clearPropsCache()
     })
 
     it('should clear props cache for specific component', () => {
-      expect(() => clearPropsCacheForComponent('/path/to/component')).not.toThrow()
+      expect(() => {
+        clearPropsCacheForComponent('/path/to/component')
+      }).not.toThrow()
 
       clearPropsCacheForComponent('/app/page')
       clearPropsCacheForComponent('/app/layout')

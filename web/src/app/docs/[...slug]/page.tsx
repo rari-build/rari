@@ -13,7 +13,7 @@ const DEFAULT_METADATA = {
 }
 
 export default function DocPage({ params }: PageProps) {
-  const slug = params?.slug
+  const slug = params.slug
 
   if (!isValidSlugArray(slug))
     return <div className={container.base}>Invalid documentation path.</div>
@@ -29,31 +29,31 @@ export default function DocPage({ params }: PageProps) {
 }
 
 export function getData({ params }: PageProps) {
-  const slug = params?.slug
+  const slug = params.slug
 
-  if (!isValidSlugArray(slug))
-    return { notFound: true }
+  if (!isValidSlugArray(slug)) return { notFound: true }
 
   try {
     accessSync(getDocsFilePath(slug))
     return { props: {} }
-  }
-  catch {
+  } catch {
     return { notFound: true }
   }
 }
 
 export function generateMetadata({ params }: PageProps) {
-  const slug = params?.slug
+  const slug = params.slug
 
-  if (!isValidSlugArray(slug))
-    return DEFAULT_METADATA
+  if (!isValidSlugArray(slug)) return DEFAULT_METADATA
 
   try {
     const content = readFileSync(getDocsFilePath(slug), 'utf-8')
     const metadata = extractMetadataWithFallback(content)
 
-    const pageTitle = metadata.title ? `${metadata.title} / rari Docs` : DEFAULT_METADATA.title
+    const pageTitle =
+      metadata.title != null && metadata.title !== ''
+        ? `${metadata.title} / rari Docs`
+        : DEFAULT_METADATA.title
     const pageDescription = metadata.description ?? DEFAULT_METADATA.description
 
     return {
@@ -64,8 +64,7 @@ export function generateMetadata({ params }: PageProps) {
         description: pageDescription,
       },
     }
-  }
-  catch {}
+  } catch {}
 
   return DEFAULT_METADATA
 }
@@ -74,7 +73,7 @@ export function generateStaticParams() {
   const contentDir = join(process.cwd(), 'public', 'content', 'docs')
   const params: Array<{ slug: string[] }> = []
 
-  function scanDir(dir: string, segments: string[]) {
+  function scanDir(dir: string, segments: readonly string[]) {
     try {
       const entries = readdirSync(dir)
       for (const entry of entries) {
@@ -83,14 +82,12 @@ export function generateStaticParams() {
 
         if (stat.isDirectory()) {
           scanDir(fullPath, [...segments, entry])
-        }
-        else if (entry.endsWith('.mdx')) {
+        } else if (entry.endsWith('.mdx')) {
           const name = entry.replace(/\.mdx?$/, '')
           params.push({ slug: [...segments, name] })
         }
       }
-    }
-    catch {}
+    } catch {}
   }
 
   scanDir(contentDir, [])

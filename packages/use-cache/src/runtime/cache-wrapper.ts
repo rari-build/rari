@@ -1,17 +1,23 @@
 import type { TestStorageBackend } from './storage/test'
 import { createHash } from 'node:crypto'
-import {
-  cacheLife,
-  cacheTag,
-  revalidatePath,
-  revalidateTag,
-  updateTag,
-} from './api/cache-api'
+import { cacheLife, cacheTag, revalidatePath, revalidateTag, updateTag } from './api/cache-api'
 import { connection } from './api/connection'
-import { isUseCacheDynamicContext, markUseCacheDynamicContext, resetUseCacheDynamicContextForTests } from './cache-dynamic-context'
-import { getCacheContext, registerPageCacheTags, runWithCacheContext } from './context/cache-context'
+import {
+  isUseCacheDynamicContext,
+  markUseCacheDynamicContext,
+  resetUseCacheDynamicContextForTests,
+} from './cache-dynamic-context'
+import {
+  getCacheContext,
+  registerPageCacheTags,
+  runWithCacheContext,
+} from './context/cache-context'
 import { cacheLifeToTtlMs } from './context/cache-life'
-import { getUseCacheBuildId, resetUseCacheBuildIdForTests, setUseCacheBuildId } from './encoding/build-id'
+import {
+  getUseCacheBuildId,
+  resetUseCacheBuildIdForTests,
+  setUseCacheBuildId,
+} from './encoding/build-id'
 import { encodeCacheKeyParts } from './encoding/rsc-encoding'
 import { registerUseCacheRuntimeGlobals } from './globals/use-cache-runtime-globals'
 import { nullCacheStorage } from './storage/null'
@@ -24,20 +30,14 @@ import { deterministicStringify } from './utils/deterministic-stringify'
 registerUseCacheRuntimeGlobals()
 
 export { getUseCacheBuildId, resetUseCacheBuildIdForTests, setUseCacheBuildId }
-export {
-  cacheLife,
-  cacheTag,
-  revalidatePath,
-  revalidateTag,
-  updateTag,
-}
+export { cacheLife, cacheTag, revalidatePath, revalidateTag, updateTag }
 export { markUseCacheDynamicContext, resetUseCacheDynamicContextForTests }
 export type { CacheLifeProfile, CacheLifeProfileName } from './context/cache-life'
 export { setTestStorageBackend }
 export type { TestStorageBackend }
 export { connection }
 
-type CacheableFunction<Args extends unknown[]> = (...args: Args) => unknown | Promise<unknown>
+type CacheableFunction<Args extends unknown[]> = (...args: Args) => unknown
 
 const pending = new Map<string, Promise<unknown>>()
 const keyComputeInflight = new Map<string, Promise<string>>()
@@ -49,13 +49,13 @@ async function cacheKey(
   args: readonly unknown[],
 ): Promise<string> {
   const parts: unknown[] = [buildId, kind, id, args]
-  if (kind === 'private')
-    parts.push(getPrivateCachePartitionKey())
+  if (kind === 'private') parts.push(getPrivateCachePartitionKey())
 
   const serialized = await encodeCacheKeyParts(parts)
   return createHash('sha256').update(serialized, 'utf8').digest('hex')
 }
 
+// oxlint-disable-next-line typescript/promise-function-async -- must return the same Promise instance stored in keyComputeInflight
 function getCacheKeyPromise(
   buildId: string,
   kind: string,
@@ -64,8 +64,7 @@ function getCacheKeyPromise(
 ): Promise<string> {
   const coalesceKey = `${buildId}\0${kind}\0${id}\0${deterministicStringify(args)}`
   const existing = keyComputeInflight.get(coalesceKey)
-  if (existing)
-    return existing
+  if (existing) return existing
 
   const promise = cacheKey(buildId, kind, id, args).finally(() => {
     keyComputeInflight.delete(coalesceKey)
@@ -84,22 +83,19 @@ export function $$cache__<Args extends unknown[]>(
   const buildId = getUseCacheBuildId()
   const keyArgs = buildCacheKeyArgs(args, argCount)
 
-  const promise = getCacheKeyPromise(buildId, kind, id, keyArgs).then(async (key) => {
+  const promise = getCacheKeyPromise(buildId, kind, id, keyArgs).then(async key => {
     const dynamic = isUseCacheDynamicContext()
     if (!dynamic) {
       const inflight = pending.get(key)
-      if (inflight)
-        return inflight
+      if (inflight) return inflight
     }
 
-    const storage = dynamic && (kind === 'default' || kind === 'remote')
-      ? nullCacheStorage
-      : getStorage(kind)
+    const storage =
+      dynamic && (kind === 'default' || kind === 'remote') ? nullCacheStorage : getStorage(kind)
 
     const entryPromise = runWithCacheContext(async () => {
       const cached = await storage.read(key)
-      if (cached !== null)
-        return cached.value
+      if (cached !== null) return cached.value
 
       const value = await fn(...args)
       const ctx = getCacheContext()
@@ -110,15 +106,14 @@ export function $$cache__<Args extends unknown[]>(
       registerPageCacheTags(...ctx.tags)
       return value
     }).finally(() => {
-      if (!dynamic)
-        pending.delete(key)
+      if (!dynamic) pending.delete(key)
     })
 
-    if (!dynamic)
-      pending.set(key, entryPromise)
+    if (!dynamic) pending.set(key, entryPromise)
 
     return entryPromise
   })
 
+  // oxlint-disable-next-line typescript/only-throw-error -- intentional Promise throw for use-cache suspend
   throw promise
 }

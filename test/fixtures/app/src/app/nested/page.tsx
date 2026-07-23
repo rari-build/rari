@@ -1,6 +1,6 @@
 import type { Metadata } from 'rari'
 
-export default async function NestedPage() {
+export default function NestedPage() {
   return (
     <div>
       <h1>Nested Page</h1>

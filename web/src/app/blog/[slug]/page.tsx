@@ -13,10 +13,9 @@ const DEFAULT_METADATA = {
 }
 
 export default function BlogPage({ params }: PageProps) {
-  const slug = params?.slug
+  const slug = params.slug
 
-  if (!isValidSlug(slug))
-    return <div className={container.base}>Invalid blog post path.</div>
+  if (!isValidSlug(slug)) return <div className={container.base}>Invalid blog post path.</div>
 
   return (
     <article className="max-w-4xl mx-auto px-4 lg:px-8 py-8 lg:py-12 pt-16 lg:pt-12 w-full">
@@ -26,31 +25,31 @@ export default function BlogPage({ params }: PageProps) {
 }
 
 export function getData({ params }: PageProps) {
-  const slug = params?.slug
+  const slug = params.slug
 
-  if (!isValidSlug(slug))
-    return { notFound: true }
+  if (!isValidSlug(slug)) return { notFound: true }
 
   try {
     accessSync(getBlogFilePath(slug))
     return { props: {} }
-  }
-  catch {
+  } catch {
     return { notFound: true }
   }
 }
 
 export function generateMetadata({ params }: PageProps) {
-  const slug = params?.slug
+  const slug = params.slug
 
-  if (!isValidSlug(slug))
-    return DEFAULT_METADATA
+  if (!isValidSlug(slug)) return DEFAULT_METADATA
 
   try {
     const content = readFileSync(getBlogFilePath(slug), 'utf-8')
     const metadata = extractBasicMetadata(content)
 
-    const title = metadata.title ? `${metadata.title} / rari Blog` : DEFAULT_METADATA.title
+    const title =
+      metadata.title != null && metadata.title !== ''
+        ? `${metadata.title} / rari Blog`
+        : DEFAULT_METADATA.title
     const description = metadata.description ?? DEFAULT_METADATA.description
 
     return {
@@ -61,8 +60,7 @@ export function generateMetadata({ params }: PageProps) {
         description,
       },
     }
-  }
-  catch {}
+  } catch {}
 
   return DEFAULT_METADATA
 }
@@ -75,8 +73,7 @@ export function generateStaticParams() {
     return entries
       .filter(entry => entry.endsWith('.mdx'))
       .map(entry => ({ slug: entry.replace(/\.mdx$/, '') }))
-  }
-  catch {
+  } catch {
     return []
   }
 }

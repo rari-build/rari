@@ -65,10 +65,13 @@ describe('source-file-walker', () => {
 describe('html-entry-imports', () => {
   it('parses html script imports under /src/', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-html-'))
-    fs.writeFileSync(path.join(dir, 'index.html'), `<!doctype html>
+    fs.writeFileSync(
+      path.join(dir, 'index.html'),
+      `<!doctype html>
 <script type="module">import "/src/main.tsx"</script>
 <script type="module">import("/src/app/page.tsx")</script>
-`)
+`,
+    )
 
     const imports = parseHtmlEntryImports(dir)
 
@@ -80,10 +83,13 @@ describe('html-entry-imports', () => {
 
   it('parses module script src attributes under /src/', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-html-'))
-    fs.writeFileSync(path.join(dir, 'index.html'), `<!doctype html>
+    fs.writeFileSync(
+      path.join(dir, 'index.html'),
+      `<!doctype html>
 <script type="module" src="/src/main.tsx"></script>
 <script src="/src/legacy.js"></script>
-`)
+`,
+    )
 
     const imports = parseHtmlEntryImports(dir)
 
@@ -101,9 +107,12 @@ describe('html-entry-imports', () => {
     fs.mkdirSync(realSrc, { recursive: true })
     fs.symlinkSync(realSrc, linkSrc)
     fs.writeFileSync(path.join(realSrc, 'main.tsx'), 'export default function Main() {}')
-    fs.writeFileSync(path.join(dir, 'index.html'), `<!doctype html>
+    fs.writeFileSync(
+      path.join(dir, 'index.html'),
+      `<!doctype html>
 <script type="module" src="/src/main.tsx"></script>
-`)
+`,
+    )
 
     const imports = parseHtmlEntryImports(dir)
     const symlinkPath = path.join(linkSrc, 'main.tsx')

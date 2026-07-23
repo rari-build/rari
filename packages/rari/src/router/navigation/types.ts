@@ -1,16 +1,16 @@
 import type { LayoutEntry, TemplateEntry } from '../build/types'
 
 export interface RouteInfo {
-  path: string
-  params: Record<string, string | string[]>
-  searchParams: URLSearchParams
-  layoutChain: LayoutEntry[]
-  templateChain: TemplateEntry[]
+  readonly path: string
+  readonly params: Record<string, string | string[]>
+  readonly searchParams: URLSearchParams
+  readonly layoutChain: readonly LayoutEntry[]
+  readonly templateChain: readonly TemplateEntry[]
 }
 
 export interface NavigationOptions {
-  replace?: boolean
-  scroll?: boolean
-  shallow?: boolean
-  historyKey?: string
+  readonly replace?: boolean
+  readonly scroll?: boolean
+  readonly shallow?: boolean
+  readonly historyKey?: string
 }

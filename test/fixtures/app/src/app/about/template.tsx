@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react'
 import { useRef } from 'react'
 
-export default function AboutTemplate({ children }: { children: ReactNode }) {
+export default function AboutTemplate({ children }: Readonly<{ children: ReactNode }>) {
   const mountCountRef = useRef(0)
   mountCountRef.current += 1
 

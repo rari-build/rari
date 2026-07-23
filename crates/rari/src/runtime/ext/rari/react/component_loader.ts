@@ -18,22 +18,22 @@ async function registerComponent(
   skipGlobalBinding = false,
 ): Promise<ComponentRegistrationResult> {
   try {
-    const moduleNamespace = await import(moduleSpecifier) as ModuleNamespace
+    // oxlint-disable-next-line typescript/no-unsafe-assignment -- dynamic import namespace
+    const moduleNamespace: ModuleNamespace = await import(moduleSpecifier)
 
     const isApiRoute = componentId.includes('/route') || componentId.startsWith('api/')
     const isServerAction = componentId.startsWith('actions/')
 
     if (!skipGlobalBinding) {
-      if (moduleNamespace.default && typeof moduleNamespace.default === 'function') {
+      if (moduleNamespace.default != null && typeof moduleNamespace.default === 'function') {
         if (componentId in g) {
           return {
             success: false,
             error: `Component ${componentId} would overwrite existing global`,
           }
         }
-        (g as Record<string, unknown>)[componentId] = moduleNamespace.default
-      }
-      else if (!isApiRoute && !isServerAction) {
+        ;(g as Record<string, unknown>)[componentId] = moduleNamespace.default
+      } else if (!isApiRoute && !isServerAction) {
         const exports = Object.values(moduleNamespace).filter(v => typeof v === 'function')
 
         if (exports.length > 0) {
@@ -43,9 +43,8 @@ async function registerComponent(
               error: `Component ${componentId} would overwrite existing global`,
             }
           }
-          (g as Record<string, unknown>)[componentId] = exports[0]
-        }
-        else {
+          ;(g as Record<string, unknown>)[componentId] = exports[0]
+        } else {
           return {
             success: false,
             error: `No default export or function exports found in component ${componentId}`,
@@ -54,18 +53,17 @@ async function registerComponent(
       }
     }
 
-    if (!g['~rari'])
-      g['~rari'] = {}
+    g['~rari'] ??= {}
 
-    const exportOwners = g['~rari'].exportOwners ||= Object.create(null)
+    g['~rari'].exportOwners ??= {}
+    const exportOwners = g['~rari'].exportOwners
 
     if (!skipGlobalBinding && !isApiRoute && !isServerAction) {
       const isDebugLogging = (() => {
         try {
-          const rustLog = g.Deno?.env?.get('RUST_LOG')
+          const rustLog = g.Deno.env.get('RUST_LOG')
           return rustLog === 'debug' || rustLog === 'trace'
-        }
-        catch {
+        } catch {
           return false
         }
       })()
@@ -73,23 +71,19 @@ async function registerComponent(
       for (const [key, value] of Object.entries(moduleNamespace)) {
         if (key !== 'default' && typeof value === 'function') {
           if (!(key in g)) {
-            (g as Record<string, unknown>)[key] = value
+            ;(g as Record<string, unknown>)[key] = value
             exportOwners[key] = componentId
-          }
-          else if (isDebugLogging) {
-            const existingOwner = Object.hasOwn(exportOwners, key)
-              ? exportOwners[key]
-              : null
-            if (existingOwner) {
+          } else if (isDebugLogging) {
+            const existingOwner = Object.hasOwn(exportOwners, key) ? exportOwners[key] : null
+            if (existingOwner != null && existingOwner !== '') {
               console.warn(
-                `Export name collision detected: "${key}" from component "${componentId}" `
-                + `already came from component "${existingOwner}". Keeping the first-registered value.`,
+                `Export name collision detected: "${key}" from component "${componentId}" ` +
+                  `already came from component "${existingOwner}". Keeping the first-registered value.`,
               )
-            }
-            else {
+            } else {
               console.warn(
-                `Export name collision detected: "${key}" from component "${componentId}" `
-                + `collides with existing g property. Export will not be registered.`,
+                `Export name collision detected: "${key}" from component "${componentId}" ` +
+                  `collides with existing g property. Export will not be registered.`,
               )
             }
           }
@@ -97,11 +91,8 @@ async function registerComponent(
       }
     }
 
-    if (!g['~rsc'])
-      g['~rsc'] = {}
-
-    if (!g['~rsc'].modules)
-      g['~rsc'].modules = {}
+    g['~rsc'] ??= {}
+    g['~rsc'].modules ??= {}
 
     g['~rsc'].modules[componentId] = moduleNamespace
 
@@ -109,21 +100,19 @@ async function registerComponent(
 
     return {
       success: true,
-      hasDefault: !!moduleNamespace.default,
+      hasDefault: moduleNamespace.default != null,
       exportCount: exportNames.length,
     }
-  }
-  catch (error) {
+  } catch (error) {
     console.error(`Failed to register component ${componentId}:`, error)
     return {
       success: false,
-      error: (error as Error).message,
+      error: error instanceof Error ? error.message : String(error),
     }
   }
 }
 
-if (!g['~rari'])
-  g['~rari'] = {}
+g['~rari'] ??= {}
 
 g['~rari'].componentLoader = {
   registerComponent,

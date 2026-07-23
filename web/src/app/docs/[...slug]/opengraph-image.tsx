@@ -5,7 +5,7 @@ import { extractBasicMetadata } from '@/lib/metadata'
 import { generateOGImage } from '@/lib/og-image'
 
 export default async function Image({ params }: PageProps) {
-  const slug = params?.slug
+  const slug = params.slug
   let title = 'rari Docs'
   let description = 'Complete documentation for rari framework.'
 
@@ -14,12 +14,10 @@ export default async function Image({ params }: PageProps) {
       const content = await readFile(getDocsFilePath(slug), 'utf-8')
       const metadata = extractBasicMetadata(content)
 
-      if (metadata.title)
-        title = metadata.title
-      if (metadata.description)
+      if (metadata.title != null && metadata.title !== '') title = metadata.title
+      if (metadata.description != null && metadata.description !== '')
         description = metadata.description
-    }
-    catch {}
+    } catch {}
   }
 
   return generateOGImage({

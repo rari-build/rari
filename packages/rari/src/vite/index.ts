@@ -1,3 +1,4 @@
+import type { ChildProcess } from 'node:child_process'
 import type { CSSModulesOptions, Plugin, UserConfig } from 'vite-plus'
 import type { ModuleAnalysis } from './analysis/directives'
 import type { MdxPluginOptions } from './mdx/registry'
@@ -11,10 +12,20 @@ import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
-import { DEFAULT_DEVICE_SIZES, DEFAULT_FORMATS, DEFAULT_IMAGE_SIZES, DEFAULT_MAX_CACHE_SIZE, DEFAULT_MINIMUM_CACHE_TTL, DEFAULT_QUALITY_LEVELS } from '@/image/constants'
+import {
+  DEFAULT_DEVICE_SIZES,
+  DEFAULT_FORMATS,
+  DEFAULT_IMAGE_SIZES,
+  DEFAULT_MAX_CACHE_SIZE,
+  DEFAULT_MINIMUM_CACHE_TTL,
+  DEFAULT_QUALITY_LEVELS,
+} from '@/image/constants'
 import { rariProxy } from '@/proxy/build/vite-plugin'
 import { rariRouter } from '@/router/build/vite-plugin'
-import { fixRolldownDoubleDollarProperties, patchBrowserClientForFormActions } from '@/shared/patch-flight-browser-client'
+import {
+  fixRolldownDoubleDollarProperties,
+  patchBrowserClientForFormActions,
+} from '@/shared/patch-flight-browser-client'
 import {
   BACKSLASH_REGEX,
   EXPORT_NAMED_DECLARATION_REGEX,
@@ -24,9 +35,22 @@ import {
   WINDOWS_PATH_REGEX,
 } from '@/shared/regex-constants'
 import { clearFileResolverCache, resolveImportToFilePath } from '@/shared/utils/file-resolver'
+import {
+  aliasEntriesFromRecord,
+  getErrnoCode,
+  isAliasArray,
+  isRecord,
+  parseJsonArrayRecord,
+  parseJsonRecord,
+} from '@/shared/utils/type-guards'
 import { getComponentId } from './analysis/component-ids'
 import { hasDefaultExport } from './analysis/directives'
-import { collectClientComponentPaths, invalidateModuleCachePath, ModuleAnalysisCache, resolveModuleCachePath } from './analysis/module-cache'
+import {
+  collectClientComponentPaths,
+  invalidateModuleCachePath,
+  ModuleAnalysisCache,
+  resolveModuleCachePath,
+} from './analysis/module-cache'
 import { normalizeScanDirs } from './analysis/source-walker'
 import { HMRCoordinator } from './hmr/coordinator'
 import {
@@ -35,7 +59,13 @@ import {
   resolveMdxRegistryEntries,
 } from './mdx/registry'
 import { toRariPlugins } from './plugin/types'
-import { createServerBuildPlugin, isServerComponentFromAnalysis, RARI_CSS_MODULES_PATTERN, scanDirectory, ServerComponentBuilder } from './server/build'
+import {
+  createServerBuildPlugin,
+  isServerComponentFromAnalysis,
+  RARI_CSS_MODULES_PATTERN,
+  scanDirectory,
+  ServerComponentBuilder,
+} from './server/build'
 import {
   buildNamespaceClientReferenceReplacement,
   NAMESPACE_IMPORT_LINE_REGEX,
@@ -44,10 +74,13 @@ import { parseHtmlEntryImports } from './transform/html-entry'
 import { transformDefineMdxComponents } from './transform/mdx-components'
 import { getUseCacheTransform } from './transform/use-cache'
 
-const DIST_NOT_BUILT_ERROR = '[rari] Runtime dist not built. Run `pnpm build` in the rari package first.'
+const DIST_NOT_BUILT_ERROR =
+  '[rari] Runtime dist not built. Run `pnpm build` in the rari package first.'
 
-const IMPORT_TYPE_SPECIFIER_REGEX = /import\s+type\s+(\{[^}]+\})\s+from\s+["']\.\.?\/([^"']+)["'];?/g
-const IMPORT_TYPE_NAMESPACE_REGEX = /import\s+type\s+(\*\s+as\s+\w+)\s+from\s+["']\.\.?\/([^"']+)["'];?/g
+const IMPORT_TYPE_SPECIFIER_REGEX =
+  /import\s+type\s+(\{[^}]+\})\s+from\s+["']\.\.?\/([^"']+)["'];?/g
+const IMPORT_TYPE_NAMESPACE_REGEX =
+  /import\s+type\s+(\*\s+as\s+\w+)\s+from\s+["']\.\.?\/([^"']+)["'];?/g
 const IMPORT_TYPE_DEFAULT_REGEX = /import\s+type\s+(\w+)\s+from\s+["']\.\.?\/([^"']+)["'];?/g
 const IMPORT_SPECIFIER_REGEX = /import\s+(\{[^}]+\})\s+from\s+["']\.\.?\/([^"']+)["'];?/g
 const IMPORT_NAMESPACE_REGEX = /import\s+(\*\s+as\s+\w+)\s+from\s+["']\.\.?\/([^"']+)["'];?/g
@@ -61,34 +94,38 @@ const EXPORT_DEFAULT_VALUE_REGEX = /export\s+default\s+([^;]+)/
 const EXPORT_DECLARATION_REGEX = /export\s+(?:async\s+)?(?:const|let|var|function|class)\s+(\w+)/g
 const USE_CLIENT_DIRECTIVE_REGEX = /^['"]use client['"];?\s*$/gm
 const IMPORT_REGEX = /import\s+["']([^"']+)["']/g
-const IMPORT_LINE_REGEX = /^\s*import\s+(?:(\w+)(?:\s*,\s*\{\s*(?:(\w+(?:\s*,\s*\w+)*)\s*)?\})?|\{\s*(\w+(?:\s*,\s*\w+)*)\s*\})\s+from\s+['"]([./@][^'"]+)['"].*$/
+const IMPORT_LINE_REGEX =
+  /^\s*import\s+(?:(\w+)(?:\s*,\s*\{\s*(?:(\w+(?:\s*,\s*\w+)*)\s*)?\})?|\{\s*(\w+(?:\s*,\s*\w+)*)\s*\})\s+from\s+['"]([./@][^'"]+)['"].*$/
 
 const REACT_IMPORT_REGEX = /import\s+\{[^}]*\}\s+from\s+['"]react['"]/
 const REACT_IMPORT_WITH_DEFAULT_REGEX = /import\s+[^,\s]+\s*,\s*\{[^}]*\}\s+from\s+['"]react['"]/
 const REACT_IMPORT_MATCH_REGEX = /import React(,\s*\{([^}]*)\})?\s+from\s+['"]react['"];?/
 const IMPORT_PATH_REGEX = /import\s+["']([^"']+)["']/g
-const RSC_CLIENT_IMPORT_REGEX = /from(\s*)(['"])(?:\.\/vendor\/react-flight-client\/index|rari\/runtime\/vendor\/react-flight-client\/index)\.mjs\2/g
+const RSC_CLIENT_IMPORT_REGEX =
+  /from(\s*)(['"])(?:\.\/vendor\/react-flight-client\/index|rari\/runtime\/vendor\/react-flight-client\/index)\.mjs\2/g
 const JSX_TEST_REGEX = /\bJSX\b/
 const IMPORT_SPECIFIERS_REGEX = /\{([^}]*)\}/
 const USE_CLIENT_DIRECTIVE_LINE_REGEX = /^['"]use client['"];?\s*\n/
 
 interface ClientReferenceSpecifier {
-  bindingName: string
-  exportName: string
+  readonly bindingName: string
+  readonly exportName: string
 }
 
-function parseClientImportSpecifiers(line: string, importedDefault?: string): ClientReferenceSpecifier[] {
+function parseClientImportSpecifiers(
+  line: string,
+  importedDefault?: string,
+): ClientReferenceSpecifier[] {
   const specifiers: ClientReferenceSpecifier[] = []
 
-  if (importedDefault)
+  if (importedDefault != null && importedDefault !== '')
     specifiers.push({ bindingName: importedDefault, exportName: 'default' })
 
-  const namedBlock = line.match(/\{([^}]+)\}/)?.[1]
-  if (namedBlock) {
+  const namedBlock = /\{([^}]+)\}/.exec(line)?.[1]
+  if (namedBlock != null && namedBlock !== '') {
     for (const part of namedBlock.split(',')) {
       const trimmed = part.trim()
-      if (!trimmed)
-        continue
+      if (!trimmed) continue
 
       const asParts = trimmed.split(/\s+as\s+/i)
       if (asParts.length === 2 && asParts[0] && asParts[1]) {
@@ -96,8 +133,7 @@ function parseClientImportSpecifiers(line: string, importedDefault?: string): Cl
           bindingName: asParts[1].trim(),
           exportName: asParts[0].trim(),
         })
-      }
-      else {
+      } else {
         specifiers.push({ bindingName: trimmed, exportName: trimmed })
       }
     }
@@ -107,69 +143,73 @@ function parseClientImportSpecifiers(line: string, importedDefault?: string): Cl
 }
 
 function buildClientReferenceReplacement(
-  specifiers: ClientReferenceSpecifier[],
+  specifiers: readonly ClientReferenceSpecifier[],
   resolvedImportPath: string,
 ): string {
   return `import { registerClientReference } from "react-server-dom-rari/server";
-${specifiers.map(({ bindingName, exportName }) => `const ${bindingName} = registerClientReference(
+${specifiers
+  .map(
+    ({ bindingName, exportName }) => `const ${bindingName} = registerClientReference(
   function() {
     throw new Error("Attempted to call ${bindingName} from the server but it's on the client. It can only be rendered as a Component or passed to props of a Client Component.");
   },
   ${JSON.stringify(resolvedImportPath)},
   ${JSON.stringify(exportName)}
-);`).join('\n')}`
+);`,
+  )
+  .join('\n')}`
 }
 
 export interface RouterPluginOptions {
-  appDir?: string
-  extensions?: string[]
+  readonly appDir?: string
+  readonly extensions?: readonly string[]
 }
 
 export interface RariOptions {
-  projectRoot?: string
-  serverBuild?: ServerBuildOptions
-  serverHandler?: boolean
-  proxy?: ProxyPluginOptions | false
-  router?: RouterPluginOptions | false
-  images?: {
-    remotePatterns?: Array<{
-      protocol?: 'http' | 'https'
-      hostname: string
-      port?: string
-      pathname?: string
-      search?: string
+  readonly projectRoot?: string
+  readonly serverBuild?: ServerBuildOptions
+  readonly serverHandler?: boolean
+  readonly proxy?: ProxyPluginOptions | false
+  readonly router?: RouterPluginOptions | false
+  readonly images?: {
+    readonly remotePatterns?: ReadonlyArray<{
+      readonly protocol?: 'http' | 'https'
+      readonly hostname: string
+      readonly port?: string
+      readonly pathname?: string
+      readonly search?: string
     }>
-    localPatterns?: Array<{
-      pathname: string
-      search?: string
+    readonly localPatterns?: ReadonlyArray<{
+      readonly pathname: string
+      readonly search?: string
     }>
-    deviceSizes?: number[]
-    imageSizes?: number[]
-    formats?: ('avif' | 'webp')[]
-    qualityAllowlist?: number[]
-    minimumCacheTTL?: number
-    maxCacheSize?: number
+    readonly deviceSizes?: readonly number[]
+    readonly imageSizes?: readonly number[]
+    readonly formats?: readonly ('avif' | 'webp')[]
+    readonly qualityAllowlist?: readonly number[]
+    readonly minimumCacheTTL?: number
+    readonly maxCacheSize?: number
   }
-  csp?: {
-    scriptSrc?: string[]
-    styleSrc?: string[]
-    imgSrc?: string[]
-    fontSrc?: string[]
-    connectSrc?: string[]
-    defaultSrc?: string[]
-    workerSrc?: string[]
+  readonly csp?: {
+    readonly scriptSrc?: readonly string[]
+    readonly styleSrc?: readonly string[]
+    readonly imgSrc?: readonly string[]
+    readonly fontSrc?: readonly string[]
+    readonly connectSrc?: readonly string[]
+    readonly defaultSrc?: readonly string[]
+    readonly workerSrc?: readonly string[]
   }
-  cacheControl?: {
-    routes: Record<string, string>
+  readonly cacheControl?: {
+    readonly routes: Readonly<Record<string, string>>
   }
-  jsPoolSize?: number
-  htmlLimitedBots?: string
-  cache?: ServerCacheConfig
-  experimental?: {
-    useCache?: boolean
-    useCacheRemote?: ServerCacheLayerConfig
+  readonly jsPoolSize?: number
+  readonly htmlLimitedBots?: string
+  readonly cache?: ServerCacheConfig
+  readonly experimental?: {
+    readonly useCache?: boolean
+    readonly useCacheRemote?: ServerCacheLayerConfig
   }
-  mdx?: MdxPluginOptions
+  readonly mdx?: MdxPluginOptions
 }
 
 const DEFAULT_IMAGE_CONFIG = {
@@ -187,8 +227,7 @@ const runtimeFileCache = new Map<string, string>()
 
 async function loadRuntimeFile(filename: string): Promise<string> {
   const cached = runtimeFileCache.get(filename)
-  if (cached)
-    return cached
+  if (cached != null && cached !== '') return cached
 
   const currentFileUrl = import.meta.url
   const currentFilePath = fileURLToPath(currentFileUrl)
@@ -242,9 +281,9 @@ async function loadRuntimeFile(filename: string): Promise<string> {
 
       runtimeFileCache.set(filename, content)
       return content
-    }
-    catch (err: any) {
-      if (err.code !== 'ENOENT' && err.code !== 'EISDIR') {
+    } catch (err) {
+      const code = getErrnoCode(err)
+      if (code !== 'ENOENT' && code !== 'EISDIR') {
         console.warn(`[rari] Unexpected error reading ${filePath}:`, err)
       }
     }
@@ -263,8 +302,7 @@ function resolveRuntimeDistFile(filename: string): string | null {
   ]
 
   for (const filePath of possiblePaths) {
-    if (fs.existsSync(filePath))
-      return filePath
+    if (fs.existsSync(filePath)) return filePath
   }
 
   return null
@@ -307,9 +345,7 @@ async function writeImageConfig(projectRoot: string, options: RariOptions): Prom
   }
 
   if (result.signal) {
-    throw new Error(
-      `Failed to scan for image usage: process terminated by signal ${result.signal}`,
-    )
+    throw new Error(`Failed to scan for image usage: process terminated by signal ${result.signal}`)
   }
 
   if (result.status !== 0) {
@@ -320,14 +356,14 @@ async function writeImageConfig(projectRoot: string, options: RariOptions): Prom
 
   let imageManifest: { images: Array<Record<string, unknown>> }
   try {
-    imageManifest = JSON.parse(result.stdout) as { images: Array<Record<string, unknown>> }
-  }
-  catch (error) {
-    const parseMessage = error instanceof SyntaxError
-      ? error.message
-      : error instanceof Error
+    imageManifest = { images: parseJsonArrayRecord(result.stdout, 'images') ?? [] }
+  } catch (error) {
+    const parseMessage =
+      error instanceof SyntaxError
         ? error.message
-        : String(error)
+        : error instanceof Error
+          ? error.message
+          : String(error)
     const outputPreview = (result.stdout || result.stderr || '(empty)').slice(0, 500)
     throw new Error(
       `Failed to parse image scanner output as JSON: ${parseMessage}. Scanner output: ${outputPreview}`,
@@ -343,8 +379,7 @@ async function writeImageConfig(projectRoot: string, options: RariOptions): Prom
 
   const distDir = path.join(projectRoot, 'dist')
   const serverDir = path.join(distDir, 'server')
-  if (!fs.existsSync(serverDir))
-    fs.mkdirSync(serverDir, { recursive: true })
+  if (!fs.existsSync(serverDir)) fs.mkdirSync(serverDir, { recursive: true })
 
   const configPath = path.join(serverDir, 'image.json')
   fs.writeFileSync(configPath, JSON.stringify(imageConfig))
@@ -358,9 +393,7 @@ export function rari(options: RariOptions = {}): RariPlugin[] {
   if (options.jsPoolSize != null) {
     const size = options.jsPoolSize
     if (!Number.isInteger(size) || size < 1 || !Number.isFinite(size)) {
-      throw new Error(
-        `jsPoolSize must be a finite positive integer; received ${String(size)}`,
-      )
+      throw new Error(`jsPoolSize must be a finite positive integer; received ${String(size)}`)
     }
   }
 
@@ -368,7 +401,7 @@ export function rari(options: RariOptions = {}): RariPlugin[] {
   const clientComponents = new Set<string>()
   const moduleAnalysisCache = new ModuleAnalysisCache()
   let devServerComponentBuilder: ServerComponentBuilder | null = null
-  let rustServerProcess: any = null
+  let rustServerProcess: ChildProcess | null = null
 
   let hmrCoordinator: HMRCoordinator | null = null
   const resolvedAlias: Record<string, string> = {}
@@ -379,10 +412,13 @@ export function rari(options: RariOptions = {}): RariPlugin[] {
   }
 
   function buildMdxRegistryModule(): string {
-    if (cachedMdxRegistryModule)
+    if (cachedMdxRegistryModule != null && cachedMdxRegistryModule !== '')
       return cachedMdxRegistryModule
 
-    const projectRoot = options.projectRoot || process.cwd()
+    const projectRoot =
+      options.projectRoot != null && options.projectRoot !== ''
+        ? options.projectRoot
+        : process.cwd()
     const entries = resolveMdxRegistryEntries({
       projectRoot,
       mdxOptions: options.mdx,
@@ -418,8 +454,7 @@ export function rari(options: RariOptions = {}): RariPlugin[] {
     clientComponents.delete(filePath)
     try {
       clientComponents.delete(fs.realpathSync(filePath))
-    }
-    catch {
+    } catch {
       clientComponents.delete(path.resolve(filePath))
     }
   }
@@ -435,19 +470,17 @@ export function rari(options: RariOptions = {}): RariPlugin[] {
     return paths
   }
 
-  function getModuleDirectives(id: string): { hasUseServer: boolean, hasUseClient: boolean } {
+  function getModuleDirectives(id: string): { hasUseServer: boolean; hasUseClient: boolean } {
     const result = { hasUseServer: false, hasUseClient: false }
 
     const normalizedId = id.replace(BACKSLASH_REGEX, '/')
-    if (!TSX_EXT_REGEX.test(normalizedId) || !normalizedId.includes('/src/'))
-      return result
+    if (!TSX_EXT_REGEX.test(normalizedId) || !normalizedId.includes('/src/')) return result
 
     try {
       const analysis = moduleAnalysisCache.get(id)
       result.hasUseServer = analysis.directives.hasUseServer
       result.hasUseClient = analysis.directives.hasUseClient
-    }
-    catch {}
+    } catch {}
 
     return result
   }
@@ -456,21 +489,20 @@ export function rari(options: RariOptions = {}): RariPlugin[] {
   let lastIndexHtmlMtime: number | null = null
 
   function getHtmlEntryImports(): ReadonlySet<string> {
-    if (devServerComponentBuilder)
-      return devServerComponentBuilder.getHtmlOnlyImports()
+    if (devServerComponentBuilder) return devServerComponentBuilder.getHtmlOnlyImports()
 
-    const projectRoot = options.projectRoot || process.cwd()
+    const projectRoot =
+      options.projectRoot != null && options.projectRoot !== ''
+        ? options.projectRoot
+        : process.cwd()
     const indexHtmlPath = path.join(projectRoot, 'index.html')
 
     try {
       const mtime = fs.statSync(indexHtmlPath).mtimeMs
-      if (htmlEntryImports !== null && mtime === lastIndexHtmlMtime)
-        return htmlEntryImports
+      if (htmlEntryImports !== null && mtime === lastIndexHtmlMtime) return htmlEntryImports
       lastIndexHtmlMtime = mtime
-    }
-    catch {
-      if (htmlEntryImports === null)
-        htmlEntryImports = new Set()
+    } catch {
+      htmlEntryImports ??= new Set()
 
       return htmlEntryImports
     }
@@ -480,8 +512,7 @@ export function rari(options: RariOptions = {}): RariPlugin[] {
   }
 
   function isServerComponent(filePath: string): boolean {
-    if (filePath.includes('node_modules') || isRariInternalFile(filePath))
-      return false
+    if (filePath.includes('node_modules') || isRariInternalFile(filePath)) return false
 
     const resolvedPath = resolveModuleCachePath(filePath)
 
@@ -493,8 +524,7 @@ export function rari(options: RariOptions = {}): RariPlugin[] {
         getHtmlEntryImports(),
         resolvedPath,
       )
-    }
-    catch {
+    } catch {
       return false
     }
   }
@@ -509,55 +539,49 @@ export function rari(options: RariOptions = {}): RariPlugin[] {
           const trimmed = exp.trim()
           const parts = trimmed.split(AS_SPLIT_REGEX)
           const exportedName = parts.at(-1)?.trim()
-          if (exportedName)
-            exportedNames.push(exportedName)
+          if (exportedName != null && exportedName !== '') exportedNames.push(exportedName)
         }
       }
 
-      if (EXPORT_DEFAULT_FUNCTION_OR_CLASS_REGEX.test(code))
-        exportedNames.push('default')
-      else if (analysis?.hasDefaultExport ?? hasDefaultExport(code))
-        exportedNames.push('default')
+      if (EXPORT_DEFAULT_FUNCTION_OR_CLASS_REGEX.test(code)) exportedNames.push('default')
+      else if (analysis?.hasDefaultExport ?? hasDefaultExport(code)) exportedNames.push('default')
 
       const declarationExports = code.matchAll(EXPORT_DECLARATION_REGEX)
       for (const match of declarationExports) {
-        if (match[1])
-          exportedNames.push(match[1])
+        if (match[1]) exportedNames.push(match[1])
       }
 
       return [...new Set(exportedNames)]
-    }
-    catch {
+    } catch {
       return []
     }
   }
 
   function transformServerModule(code: string, id: string, analysis: ModuleAnalysis): string {
-    if (!analysis.topLevelUseServer)
-      return code
+    if (!analysis.topLevelUseServer) return code
 
     const exportedNames = parseExportedNames(code, analysis)
-    if (exportedNames.length === 0)
-      return code
+    if (exportedNames.length === 0) return code
 
-    const projectRoot = options.projectRoot || process.cwd()
+    const projectRoot =
+      options.projectRoot != null && options.projectRoot !== ''
+        ? options.projectRoot
+        : process.cwd()
     const moduleId = getComponentId(id, projectRoot)
     const idJson = JSON.stringify(moduleId)
     let newCode = code
-    newCode
-      += '\n\nimport {registerServerReference} from "react-server-dom-rari/server";\n'
+    newCode += '\n\nimport {registerServerReference} from "react-server-dom-rari/server";\n'
 
     for (const name of exportedNames) {
       if (name === 'default') {
-        const functionDeclMatch = code.match(EXPORT_DEFAULT_FUNCTION_DECL_REGEX)
+        const functionDeclMatch = EXPORT_DEFAULT_FUNCTION_DECL_REGEX.exec(code)
 
         if (functionDeclMatch) {
           const functionName = functionDeclMatch[1]
           newCode += `\n// Register server reference for default export\n`
           newCode += `registerServerReference(${functionName}, ${idJson}, ${JSON.stringify(name)});\n`
-        }
-        else {
-          const match = code.match(EXPORT_DEFAULT_VALUE_REGEX)
+        } else {
+          const match = EXPORT_DEFAULT_VALUE_REGEX.exec(code)
           if (match) {
             const exportedValue = match[1].trim()
             const tempVarName = '__default_export__'
@@ -571,8 +595,7 @@ export function rari(options: RariOptions = {}): RariPlugin[] {
             newCode += `}\n`
           }
         }
-      }
-      else {
+      } else {
         newCode += `\n// Register server reference for ${name}\n`
         newCode += `if (typeof ${name} === "function") {\n`
         newCode += `  registerServerReference(${name}, ${idJson}, ${JSON.stringify(name)});\n`
@@ -591,13 +614,15 @@ if (import.meta.hot) {
   }
 
   function transformClientModule(code: string, id: string, analysis: ModuleAnalysis): string {
-    const projectRoot = options.projectRoot || process.cwd()
+    const projectRoot =
+      options.projectRoot != null && options.projectRoot !== ''
+        ? options.projectRoot
+        : process.cwd()
     const isServerComp = isServerComponent(id)
 
     if (analysis.topLevelUseServer) {
       const exportedNames = parseExportedNames(code, analysis)
-      if (exportedNames.length === 0)
-        return ''
+      if (exportedNames.length === 0) return ''
 
       const moduleId = getComponentId(id, projectRoot)
 
@@ -609,8 +634,7 @@ if (import.meta.hot) {
         const refIdJson = JSON.stringify(refId)
         if (name === 'default')
           newCode += `export default createServerReference(${refIdJson}, callServer);\n`
-        else
-          newCode += `export const ${name} = createServerReference(${refIdJson}, callServer);\n`
+        else newCode += `export const ${name} = createServerReference(${refIdJson}, callServer);\n`
       }
 
       return newCode
@@ -621,16 +645,13 @@ if (import.meta.hot) {
       return ''
     }
 
-    if (!analysis.topLevelUseClient)
-      return code
+    if (!analysis.topLevelUseClient) return code
 
     const exportedNames = parseExportedNames(code, analysis)
-    if (exportedNames.length === 0)
-      return ''
+    if (exportedNames.length === 0) return ''
 
     const idJson = JSON.stringify(id)
-    let newCode
-      = 'import {registerClientReference} from "react-server-dom-rari/server";\n'
+    let newCode = 'import {registerClientReference} from "react-server-dom-rari/server";\n'
 
     for (const name of exportedNames) {
       if (name === 'default') {
@@ -638,8 +659,7 @@ if (import.meta.hot) {
         newCode += 'export default '
         newCode += 'registerClientReference(function() {'
         newCode += `throw new Error(${JSON.stringify(errorMsg)});`
-      }
-      else {
+      } else {
         const errorMsg = `Attempted to call ${name}() from the server but ${name} is on the client. It's not possible to invoke a client function from the server, it can only be rendered as a Component or passed to props of a Client Component.`
         newCode += `export const ${name} = `
         newCode += 'registerClientReference(function() {'
@@ -653,13 +673,15 @@ if (import.meta.hot) {
     return newCode
   }
 
-  function transformClientModuleForClient(code: string, _id: string, analysis: ModuleAnalysis): string {
-    if (!analysis.topLevelUseClient)
-      return code
+  function transformClientModuleForClient(
+    code: string,
+    _id: string,
+    analysis: ModuleAnalysis,
+  ): string {
+    if (!analysis.topLevelUseClient) return code
 
     const exportedNames = parseExportedNames(code, analysis)
-    if (exportedNames.length === 0)
-      return code
+    if (exportedNames.length === 0) return code
 
     return code.replace(USE_CLIENT_DIRECTIVE_REGEX, '')
   }
@@ -667,9 +689,16 @@ if (import.meta.hot) {
   let rustServerReady = false
 
   async function checkRustServerHealth(): Promise<boolean> {
-    const serverPort = process.env.SERVER_PORT
-      ? Number(process.env.SERVER_PORT)
-      : Number(process.env.PORT || process.env.RSC_PORT || 3000)
+    const serverPort =
+      process.env.SERVER_PORT != null && process.env.SERVER_PORT !== ''
+        ? Number(process.env.SERVER_PORT)
+        : Number(
+            process.env.PORT != null && process.env.PORT !== ''
+              ? process.env.PORT
+              : process.env.RSC_PORT != null && process.env.RSC_PORT !== ''
+                ? process.env.RSC_PORT
+                : 3000,
+          )
     const baseUrl = `http://localhost:${serverPort}`
 
     try {
@@ -679,8 +708,7 @@ if (import.meta.hot) {
       const isHealthy = healthResponse.ok
       rustServerReady = isHealthy
       return isHealthy
-    }
-    catch {
+    } catch {
       rustServerReady = false
       return false
     }
@@ -690,25 +718,34 @@ if (import.meta.hot) {
     name: 'rari',
 
     config(config: UserConfig, { command }) {
-      config.define = config.define || {}
+      config.define ??= {}
 
-      if (command === 'serve' || process.env.RARI_SERVER_URL || process.env.RARI_HOST) {
-        const rariServerPort = process.env.SERVER_PORT
-          ? Number(process.env.SERVER_PORT)
-          : Number(process.env.PORT || process.env.RSC_PORT || 3000)
+      if (
+        command === 'serve' ||
+        (process.env.RARI_SERVER_URL != null && process.env.RARI_SERVER_URL !== '') ||
+        (process.env.RARI_HOST != null && process.env.RARI_HOST !== '')
+      ) {
+        const rariServerPort =
+          process.env.SERVER_PORT != null && process.env.SERVER_PORT !== ''
+            ? Number(process.env.SERVER_PORT)
+            : Number(
+                process.env.PORT != null && process.env.PORT !== ''
+                  ? process.env.PORT
+                  : process.env.RSC_PORT != null && process.env.RSC_PORT !== ''
+                    ? process.env.RSC_PORT
+                    : 3000,
+              )
 
         let serverUrl: string
-        if (process.env.RARI_SERVER_URL) {
+        if (process.env.RARI_SERVER_URL != null && process.env.RARI_SERVER_URL !== '') {
           serverUrl = process.env.RARI_SERVER_URL
-        }
-        else if (process.env.RARI_HOST) {
+        } else if (process.env.RARI_HOST != null && process.env.RARI_HOST !== '') {
           const host = process.env.RARI_HOST.startsWith('http')
             ? process.env.RARI_HOST
             : `http://${process.env.RARI_HOST}`
           const hostnamePart = host.replace(HTTP_PROTOCOL_REGEX, '')
           serverUrl = hostnamePart.includes(':') ? host : `${host}:${rariServerPort}`
-        }
-        else {
+        } else {
           serverUrl = `http://localhost:${rariServerPort}`
         }
 
@@ -718,18 +755,21 @@ if (import.meta.hot) {
       const existingCssModules = typeof config.css?.modules === 'object' ? config.css.modules : {}
       config.css = {
         ...config.css,
-        transformer: config.css?.transformer ?? 'lightningcss' as const,
+        transformer: config.css?.transformer ?? ('lightningcss' as const),
         modules: { ...existingCssModules, pattern: RARI_CSS_MODULES_PATTERN } as CSSModulesOptions,
       }
 
       if (command === 'build') {
-        const projectRoot = options.projectRoot || process.cwd()
+        const projectRoot =
+          options.projectRoot != null && options.projectRoot !== ''
+            ? options.projectRoot
+            : process.cwd()
         const indexHtmlPath = path.join(projectRoot, 'index.html')
 
         if (fs.existsSync(indexHtmlPath)) {
           try {
             const htmlContent = fs.readFileSync(indexHtmlPath, 'utf-8')
-            const htmlImports: Array<{ path: string, name: string }> = []
+            const htmlImports: Array<{ path: string; name: string }> = []
 
             for (const match of htmlContent.matchAll(IMPORT_REGEX)) {
               const importPath = match[1]
@@ -741,17 +781,15 @@ if (import.meta.hot) {
             }
 
             if (htmlImports.length > 0) {
-              config.build = config.build || {}
-              config.build.rolldownOptions = config.build.rolldownOptions || {}
+              config.build ??= {}
+              config.build.rolldownOptions ??= {}
 
-              const existingInput = config.build.rolldownOptions.input || { main: './index.html' }
+              const existingInput = config.build.rolldownOptions.input ?? { main: './index.html' }
               let inputObj: Record<string, string>
-              if (typeof existingInput === 'string')
-                inputObj = { main: existingInput }
+              if (typeof existingInput === 'string') inputObj = { main: existingInput }
               else if (Array.isArray(existingInput))
-                inputObj = { main: existingInput[0] || './index.html' }
-              else
-                inputObj = { ...existingInput }
+                inputObj = { main: existingInput[0] ?? './index.html' }
+              else inputObj = { ...existingInput }
 
               htmlImports.forEach(({ path: importPath, name }) => {
                 inputObj[name] = `./${importPath}`
@@ -759,33 +797,27 @@ if (import.meta.hot) {
 
               config.build.rolldownOptions.input = inputObj
             }
-          }
-          catch (error) {
+          } catch (error) {
             console.warn('[rari] Error parsing index.html for build inputs:', error)
           }
         }
       }
 
-      config.resolve = config.resolve || {}
-      const existingDedupe = Array.isArray((config.resolve as any).dedupe)
-        ? ((config.resolve as any).dedupe as string[])
-        : []
-      const toAdd = ['react', 'react-dom'];
-      (config.resolve as any).dedupe = [...new Set([...(existingDedupe || []), ...toAdd])]
+      config.resolve ??= {}
+      const resolveOptions = config.resolve
+      const existingDedupe = Array.isArray(resolveOptions.dedupe) ? resolveOptions.dedupe : []
+      const toAdd = ['react', 'react-dom']
+      resolveOptions.dedupe = [...new Set([...existingDedupe, ...toAdd])]
 
       let existingAlias: Array<{
         find: string | RegExp
         replacement: string
       }> = []
 
-      if (Array.isArray((config.resolve as any).alias)) {
-        existingAlias = (config.resolve as any).alias
-      }
-      else if ((config.resolve as any).alias && typeof (config.resolve as any).alias === 'object') {
-        existingAlias = Object.entries((config.resolve as any).alias).map(([key, value]) => ({
-          find: key,
-          replacement: value as string,
-        }))
+      if (isAliasArray(resolveOptions.alias)) {
+        existingAlias = resolveOptions.alias
+      } else if (isRecord(resolveOptions.alias)) {
+        existingAlias = aliasEntriesFromRecord(resolveOptions.alias)
       }
 
       const aliasFinds = new Set(existingAlias.map(a => String(a.find)))
@@ -793,8 +825,7 @@ if (import.meta.hot) {
         const reactPath = fileURLToPath(import.meta.resolve('react'))
         const reactDomClientPath = fileURLToPath(import.meta.resolve('react-dom/client'))
         const reactJsxRuntimePath = fileURLToPath(import.meta.resolve('react/jsx-runtime'))
-        const aliasesToAppend: Array<{ find: string, replacement: string }>
-          = []
+        const aliasesToAppend: Array<{ find: string; replacement: string }> = []
         if (!aliasFinds.has('react/jsx-runtime')) {
           aliasesToAppend.push({
             find: 'react/jsx-runtime',
@@ -802,18 +833,15 @@ if (import.meta.hot) {
           })
         }
         try {
-          const reactJsxDevRuntimePath = fileURLToPath(import.meta.resolve(
-            'react/jsx-dev-runtime',
-          ))
+          const reactJsxDevRuntimePath = fileURLToPath(import.meta.resolve('react/jsx-dev-runtime'))
           if (!aliasFinds.has('react/jsx-dev-runtime')) {
             aliasesToAppend.push({
               find: 'react/jsx-dev-runtime',
               replacement: reactJsxDevRuntimePath,
             })
           }
-        }
-        catch (err) {
-          if ((err as any)?.code !== 'ENOENT') {
+        } catch (err) {
+          if (getErrnoCode(err) !== 'ENOENT') {
             console.warn('[rari] Unexpected error resolving react/jsx-dev-runtime:', err)
           }
         }
@@ -826,19 +854,15 @@ if (import.meta.hot) {
           })
         }
         if (aliasesToAppend.length > 0) {
-          (config.resolve as any).alias = [
-            ...existingAlias,
-            ...aliasesToAppend,
-          ]
+          resolveOptions.alias = [...existingAlias, ...aliasesToAppend]
         }
-      }
-      catch (err) {
-        if ((err as any)?.code !== 'ENOENT') {
+      } catch (err) {
+        if (getErrnoCode(err) !== 'ENOENT') {
           console.warn('[rari] Unexpected error configuring React aliases:', err)
         }
       }
 
-      config.environments = config.environments || {}
+      config.environments ??= {}
 
       config.environments.rsc = {
         resolve: {
@@ -861,8 +885,8 @@ if (import.meta.hot) {
         ...config.environments.client,
       }
 
-      config.optimizeDeps = config.optimizeDeps || {}
-      config.optimizeDeps.include = config.optimizeDeps.include || []
+      config.optimizeDeps ??= {}
+      config.optimizeDeps.include ??= []
 
       const coreOptimizeDeps = [
         'react',
@@ -874,28 +898,32 @@ if (import.meta.hot) {
       ]
 
       for (const dep of coreOptimizeDeps) {
-        if (!config.optimizeDeps.include.includes(dep))
-          config.optimizeDeps.include.push(dep)
+        if (!config.optimizeDeps.include.includes(dep)) config.optimizeDeps.include.push(dep)
       }
 
-      config.optimizeDeps.exclude = config.optimizeDeps.exclude || []
-      if (!config.optimizeDeps.exclude.includes('rari'))
-        config.optimizeDeps.exclude.push('rari')
+      config.optimizeDeps.exclude ??= []
+      if (!config.optimizeDeps.exclude.includes('rari')) config.optimizeDeps.exclude.push('rari')
 
       if (command === 'build') {
         for (const envName of ['rsc', 'ssr', 'client']) {
           const env = config.environments[envName]
-          if (env && env.build)
-            env.build.rolldownOptions = env.build.rolldownOptions || {}
+          if (env.build != null) env.build.rolldownOptions ??= {}
         }
       }
 
-      config.server = config.server || {}
-      config.server.proxy = config.server.proxy || {}
+      config.server ??= {}
+      config.server.proxy ??= {}
 
-      const serverPort = process.env.SERVER_PORT
-        ? Number(process.env.SERVER_PORT)
-        : Number(process.env.PORT || process.env.RSC_PORT || 3000)
+      const serverPort =
+        process.env.SERVER_PORT != null && process.env.SERVER_PORT !== ''
+          ? Number(process.env.SERVER_PORT)
+          : Number(
+              process.env.PORT != null && process.env.PORT !== ''
+                ? process.env.PORT
+                : process.env.RSC_PORT != null && process.env.RSC_PORT !== ''
+                  ? process.env.RSC_PORT
+                  : 3000,
+            )
 
       config.server.proxy['/api'] = {
         target: `http://localhost:${serverPort}`,
@@ -912,16 +940,14 @@ if (import.meta.hot) {
       }
 
       if (command === 'build') {
-        config.build = config.build || {}
-        config.build.rolldownOptions = config.build.rolldownOptions || {}
+        config.build ??= {}
+        config.build.rolldownOptions ??= {}
 
-        if (!config.build.rolldownOptions.input) {
-          config.build.rolldownOptions.input = {
-            main: './index.html',
-          }
+        config.build.rolldownOptions.input ??= {
+          main: './index.html',
         }
 
-        config.build.rolldownOptions.output = config.build.rolldownOptions.output || {}
+        config.build.rolldownOptions.output ??= {}
 
         const outputs = Array.isArray(config.build.rolldownOptions.output)
           ? config.build.rolldownOptions.output
@@ -935,7 +961,7 @@ if (import.meta.hot) {
 
           // Only configure groups if codeSplitting is an object
           if (typeof output.codeSplitting === 'object') {
-            output.codeSplitting.groups = output.codeSplitting.groups || []
+            output.codeSplitting.groups ??= []
 
             const userGroups = output.codeSplitting.groups
 
@@ -943,15 +969,13 @@ if (import.meta.hot) {
               name(moduleId: string) {
                 if (moduleId.includes('node_modules')) {
                   for (const group of userGroups) {
-                    if (group.test) {
+                    if (group.test != null) {
                       let testResult = false
                       if (typeof group.test === 'function') {
                         testResult = Boolean(group.test(moduleId))
-                      }
-                      else if (group.test instanceof RegExp) {
+                      } else if (group.test instanceof RegExp) {
                         testResult = group.test.test(moduleId)
-                      }
-                      else if (typeof group.test === 'string') {
+                      } else if (typeof group.test === 'string') {
                         testResult = moduleId.includes(group.test)
                       }
 
@@ -961,10 +985,8 @@ if (import.meta.hot) {
                     }
                   }
 
-                  if (moduleId.includes('node_modules/react-dom'))
-                    return 'react-dom'
-                  if (moduleId.includes('node_modules/react'))
-                    return 'react'
+                  if (moduleId.includes('node_modules/react-dom')) return 'react-dom'
+                  if (moduleId.includes('node_modules/react')) return 'react'
 
                   return 'vendor'
                 }
@@ -974,89 +996,85 @@ if (import.meta.hot) {
             })
           }
 
-          if (!output.chunkFileNames) {
-            output.chunkFileNames = (chunkInfo) => {
-              const hasServerAction = chunkInfo.moduleIds?.some((id: string) => {
-                const directives = getModuleDirectives(id)
-                return directives.hasUseServer
-              })
+          output.chunkFileNames ??= chunkInfo => {
+            const hasServerAction = chunkInfo.moduleIds.some((id: string) => {
+              const directives = getModuleDirectives(id)
+              return directives.hasUseServer
+            })
 
-              if (hasServerAction)
-                return 'client/actions/[name]-[hash].js'
+            if (hasServerAction) return 'client/actions/[name]-[hash].js'
 
-              const isClientComponent = chunkInfo.moduleIds?.some((id: string) => {
-                const directives = getModuleDirectives(id)
-                return directives.hasUseClient
-              })
+            const isClientComponent = chunkInfo.moduleIds.some((id: string) => {
+              const directives = getModuleDirectives(id)
+              return directives.hasUseClient
+            })
 
-              if (isClientComponent)
-                return 'client/components/[name]-[hash].js'
+            if (isClientComponent) return 'client/components/[name]-[hash].js'
 
-              return 'assets/[name]-[hash].js'
-            }
+            return 'assets/[name]-[hash].js'
           }
         }
       }
 
-      if (config.environments && config.environments.client) {
-        if (!config.environments.client.build)
-          config.environments.client.build = {}
-        if (!config.environments.client.build.rolldownOptions)
-          config.environments.client.build.rolldownOptions = {}
-        if (!config.environments.client.build.rolldownOptions.input)
-          config.environments.client.build.rolldownOptions.input = {}
+      config.environments.client.build ??= {}
+      config.environments.client.build.rolldownOptions ??= {}
+      config.environments.client.build.rolldownOptions.input ??= {}
 
-        if (!config.environments.client.build.rolldownOptions.external)
-          config.environments.client.build.rolldownOptions.external = []
+      config.environments.client.build.rolldownOptions.external ??= []
 
-        const external = config.environments.client.build.rolldownOptions.external
-        if (Array.isArray(external)) {
-          const rsdwClientIndex = external.indexOf('react-server-dom-webpack/client')
-          if (rsdwClientIndex !== -1)
-            external.splice(rsdwClientIndex, 1)
-        }
+      const external = config.environments.client.build.rolldownOptions.external
+      if (Array.isArray(external)) {
+        const rsdwClientIndex = external.indexOf('react-server-dom-webpack/client')
+        if (rsdwClientIndex !== -1) external.splice(rsdwClientIndex, 1)
       }
 
       return config
     },
 
     configResolved(config) {
-      const excludeAliases = new Set(['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime', 'react-dom/client'])
+      const excludeAliases = new Set([
+        'react',
+        'react-dom',
+        'react/jsx-runtime',
+        'react/jsx-dev-runtime',
+        'react-dom/client',
+      ])
 
-      if (config.resolve?.alias) {
-        const aliasConfig = config.resolve.alias
-        if (Array.isArray(aliasConfig)) {
-          aliasConfig.forEach((entry) => {
-            if (typeof entry.find === 'string' && typeof entry.replacement === 'string' && !excludeAliases.has(entry.find))
-              resolvedAlias[entry.find] = entry.replacement
-          })
-        }
-        else if (typeof aliasConfig === 'object') {
-          Object.entries(aliasConfig).forEach(([key, value]) => {
-            if (typeof value === 'string' && !excludeAliases.has(key))
-              resolvedAlias[key] = value
-          })
-        }
+      const aliasConfig = config.resolve.alias
+      if (Array.isArray(aliasConfig)) {
+        aliasConfig.forEach(entry => {
+          if (
+            typeof entry.find === 'string' &&
+            typeof entry.replacement === 'string' &&
+            !excludeAliases.has(entry.find)
+          )
+            resolvedAlias[entry.find] = entry.replacement
+        })
+      } else if (typeof aliasConfig === 'object') {
+        Object.entries(aliasConfig).forEach(([key, value]) => {
+          if (typeof value === 'string' && !excludeAliases.has(key)) resolvedAlias[key] = value
+        })
       }
     },
 
     async transform(code, id) {
-      if (id.endsWith('.mdx'))
-        invalidateMdxRegistryModuleCache()
+      if (id.endsWith('.mdx')) invalidateMdxRegistryModuleCache()
 
       if (/\.(?:tsx?|jsx?|mts|mjs)$/.test(id) && code.includes('defineMdxComponents')) {
         const mdxTransformed = transformDefineMdxComponents({
           code,
           id,
-          projectRoot: options.projectRoot || process.cwd(),
+          projectRoot:
+            options.projectRoot != null && options.projectRoot !== ''
+              ? options.projectRoot
+              : process.cwd(),
           resolvedAlias,
         })
-        if (mdxTransformed)
+        if (mdxTransformed != null && mdxTransformed !== '')
           return { code: mdxTransformed, map: null }
       }
 
-      if (!TSX_EXT_REGEX.test(id))
-        return null
+      if (!TSX_EXT_REGEX.test(id)) return null
 
       const originalCode = code
       let wasUseCacheTransformed = false
@@ -1064,14 +1082,14 @@ if (import.meta.hot) {
         const transform = await getUseCacheTransform()
         if (transform) {
           const useCacheResult = transform(code, id)
-          if (useCacheResult) {
+          if (useCacheResult != null && useCacheResult !== '') {
             code = useCacheResult
             wasUseCacheTransformed = true
           }
         }
       }
 
-      const environment = (this as any).environment
+      const environment = this.environment
       const moduleAnalysis = moduleAnalysisCache.get(id, originalCode)
 
       if (moduleAnalysis.topLevelUseClient) {
@@ -1082,13 +1100,11 @@ if (import.meta.hot) {
 
         for (const line of lines) {
           const namespaceMatch = line.match(NAMESPACE_IMPORT_LINE_REGEX)
-          const importMatch = namespaceMatch ? null : line.match(IMPORT_LINE_REGEX)
-          if (!namespaceMatch && !importMatch)
-            continue
+          const importMatch = namespaceMatch ? null : IMPORT_LINE_REGEX.exec(line)
+          if (!namespaceMatch && !importMatch) continue
 
           const importPath = namespaceMatch?.[2] ?? importMatch![4]
-          if (!importPath)
-            continue
+          if (!importPath) continue
 
           const resolvedImportPath = resolveImportToFilePath(importPath, id, resolvedAlias)
 
@@ -1107,13 +1123,9 @@ if (import.meta.hot) {
       if (isServerComponent(id)) {
         setComponentType(id, 'server')
 
-        if (
-          environment
-          && (environment.name === 'rsc' || environment.name === 'ssr')
-        ) {
+        if (environment.name === 'rsc' || environment.name === 'ssr') {
           return transformServerModule(code, id, moduleAnalysis)
-        }
-        else {
+        } else {
           let clientTransformedCode = transformClientModule(code, id, moduleAnalysis)
 
           clientTransformedCode = `// HMR acceptance for server component
@@ -1135,31 +1147,22 @@ ${clientTransformedCode}`
       if (moduleAnalysis.topLevelUseServer) {
         setComponentType(id, 'server')
 
-        if (
-          environment
-          && (environment.name === 'rsc' || environment.name === 'ssr')
-        ) {
+        if (environment.name === 'rsc' || environment.name === 'ssr') {
           return transformServerModule(code, id, moduleAnalysis)
-        }
-        else {
+        } else {
           return transformClientModule(code, id, moduleAnalysis)
         }
       }
 
       const cachedType = getComponentType(id)
       if (cachedType === 'server') {
-        if (
-          environment
-          && (environment.name === 'rsc' || environment.name === 'ssr')
-        ) {
+        if (environment.name === 'rsc' || environment.name === 'ssr') {
           return transformServerModule(code, id, moduleAnalysis)
-        }
-        else {
+        } else {
           return transformClientModule(code, id, moduleAnalysis)
         }
       }
-      if (cachedType === 'client')
-        return transformClientModuleForClient(code, id, moduleAnalysis)
+      if (cachedType === 'client') return transformClientModuleForClient(code, id, moduleAnalysis)
 
       setComponentType(id, 'unknown')
 
@@ -1171,29 +1174,24 @@ ${clientTransformedCode}`
 
       for (const line of lines) {
         const namespaceMatch = line.match(NAMESPACE_IMPORT_LINE_REGEX)
-        const importMatch = namespaceMatch ? null : line.match(IMPORT_LINE_REGEX)
-        if (!namespaceMatch && !importMatch)
-          continue
+        const importMatch = namespaceMatch ? null : IMPORT_LINE_REGEX.exec(line)
+        if (!namespaceMatch && !importMatch) continue
 
         const importedDefault = importMatch?.[1]
         const importPath = namespaceMatch?.[2] ?? importMatch![4]
         const resolvedImportPath = resolveImportToFilePath(importPath, id, resolvedAlias)
 
-        const isClientComponent
-          = getComponentType(resolvedImportPath) === 'client'
-            || (fs.existsSync(resolvedImportPath)
-              && moduleAnalysisCache.get(resolvedImportPath).topLevelUseClient)
+        const isClientComponent =
+          getComponentType(resolvedImportPath) === 'client' ||
+          (fs.existsSync(resolvedImportPath) &&
+            moduleAnalysisCache.get(resolvedImportPath).topLevelUseClient)
 
         if (isClientComponent) {
           setComponentType(resolvedImportPath, 'client')
           addTrackedClientComponent(resolvedImportPath)
         }
 
-        if (
-          isClientComponent
-          && environment
-          && (environment.name === 'rsc' || environment.name === 'ssr')
-        ) {
+        if (isClientComponent && (environment.name === 'rsc' || environment.name === 'ssr')) {
           if (!importingFileIsClient) {
             const originalImport = line
 
@@ -1203,28 +1201,21 @@ ${clientTransformedCode}`
                 resolvedImportPath,
               )
 
-              modifiedCode = modifiedCode.replace(
-                originalImport,
-                clientRefReplacement,
-              )
+              modifiedCode = modifiedCode.replace(originalImport, clientRefReplacement)
               hasServerImports = true
               needsReactImport = true
               continue
             }
 
             const specifiers = parseClientImportSpecifiers(line, importedDefault)
-            if (specifiers.length === 0)
-              continue
+            if (specifiers.length === 0) continue
 
             const clientRefReplacement = buildClientReferenceReplacement(
               specifiers,
               resolvedImportPath,
             )
 
-            modifiedCode = modifiedCode.replace(
-              originalImport,
-              clientRefReplacement,
-            )
+            modifiedCode = modifiedCode.replace(originalImport, clientRefReplacement)
             hasServerImports = true
             needsReactImport = true
           }
@@ -1232,30 +1223,24 @@ ${clientTransformedCode}`
       }
 
       if (hasServerImports) {
-        const hasReactImport
-          = modifiedCode.includes('import React')
-            || modifiedCode.match(REACT_IMPORT_REGEX)
-            || modifiedCode.match(REACT_IMPORT_WITH_DEFAULT_REGEX)
+        const hasReactImport =
+          modifiedCode.includes('import React') ||
+          REACT_IMPORT_REGEX.test(modifiedCode) ||
+          REACT_IMPORT_WITH_DEFAULT_REGEX.test(modifiedCode)
 
         let importsToAdd = ''
 
-        if (needsReactImport && !hasReactImport)
-          importsToAdd += `import React from 'react';\n`
-        if (importsToAdd)
-          modifiedCode = importsToAdd + modifiedCode
+        if (needsReactImport && !hasReactImport) importsToAdd += `import React from 'react';\n`
+        if (importsToAdd) modifiedCode = importsToAdd + modifiedCode
         if (!modifiedCode.includes('Suspense')) {
-          const reactImportMatch = modifiedCode.match(REACT_IMPORT_MATCH_REGEX)
+          const reactImportMatch = REACT_IMPORT_MATCH_REGEX.exec(modifiedCode)
           if (reactImportMatch) {
-            if (
-              reactImportMatch[1]
-              && !reactImportMatch[2].includes('Suspense')
-            ) {
+            if (reactImportMatch[1] && !reactImportMatch[2].includes('Suspense')) {
               modifiedCode = modifiedCode.replace(
                 reactImportMatch[0],
                 reactImportMatch[0].replace(IMPORT_SPECIFIERS_REGEX, `{ Suspense, $1 }`),
               )
-            }
-            else if (!reactImportMatch[1]) {
+            } else if (!reactImportMatch[1]) {
               modifiedCode = modifiedCode.replace(
                 reactImportMatch[0],
                 `import React, { Suspense } from 'react';`,
@@ -1265,10 +1250,10 @@ ${clientTransformedCode}`
         }
 
         const isDevMode = process.env.NODE_ENV !== 'production'
-        const hasJsx
-          = modifiedCode.includes('</')
-            || modifiedCode.includes('/>')
-            || JSX_TEST_REGEX.test(modifiedCode)
+        const hasJsx =
+          modifiedCode.includes('</') ||
+          modifiedCode.includes('/>') ||
+          JSX_TEST_REGEX.test(modifiedCode)
 
         if (hasJsx) {
           if (isDevMode) {
@@ -1280,14 +1265,16 @@ ${clientTransformedCode}`
         return modifiedCode
       }
 
-      if (wasUseCacheTransformed)
-        return code
+      if (wasUseCacheTransformed) return code
 
       return null
     },
 
     async configureServer(server) {
-      const projectRoot = options.projectRoot || process.cwd()
+      const projectRoot =
+        options.projectRoot != null && options.projectRoot !== ''
+          ? options.projectRoot
+          : process.cwd()
       const srcDir = path.join(projectRoot, 'src')
       await writeImageConfig(projectRoot, options)
 
@@ -1311,9 +1298,16 @@ ${clientTransformedCode}`
           devServerComponentBuilder = builder
 
           if (!hmrCoordinator) {
-            const serverPort = process.env.SERVER_PORT
-              ? Number(process.env.SERVER_PORT)
-              : Number(process.env.PORT || process.env.RSC_PORT || 3000)
+            const serverPort =
+              process.env.SERVER_PORT != null && process.env.SERVER_PORT !== ''
+                ? Number(process.env.SERVER_PORT)
+                : Number(
+                    process.env.PORT != null && process.env.PORT !== ''
+                      ? process.env.PORT
+                      : process.env.RSC_PORT != null && process.env.RSC_PORT !== ''
+                        ? process.env.RSC_PORT
+                        : 3000,
+                  )
             hmrCoordinator = new HMRCoordinator(builder, serverPort)
           }
 
@@ -1329,53 +1323,50 @@ ${clientTransformedCode}`
             }
           }
 
-          const components
-            = await builder.getTransformedComponentsForDevelopment()
+          const components = await builder.getTransformedComponentsForDevelopment()
 
-          const serverPort = process.env.SERVER_PORT
-            ? Number(process.env.SERVER_PORT)
-            : Number(process.env.PORT || process.env.RSC_PORT || 3000)
+          const serverPort =
+            process.env.SERVER_PORT != null && process.env.SERVER_PORT !== ''
+              ? Number(process.env.SERVER_PORT)
+              : Number(
+                  process.env.PORT != null && process.env.PORT !== ''
+                    ? process.env.PORT
+                    : process.env.RSC_PORT != null && process.env.RSC_PORT !== ''
+                      ? process.env.RSC_PORT
+                      : 3000,
+                )
           const baseUrl = `http://localhost:${serverPort}`
 
           for (const component of components) {
             try {
               const isAppRouterComponent = component.id.startsWith('app/')
-              if (isAppRouterComponent)
-                continue
+              if (isAppRouterComponent) continue
 
-              if (component.isAction)
-                continue
+              if (component.isAction) continue
 
-              const registerResponse = await fetch(
-                `${baseUrl}/_rari/register`,
-                {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({
-                    component_id: component.id,
-                    component_code: component.code,
-                  }),
+              const registerResponse = await fetch(`${baseUrl}/_rari/register`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
                 },
-              )
+                body: JSON.stringify({
+                  component_id: component.id,
+                  component_code: component.code,
+                }),
+              })
 
               if (!registerResponse.ok) {
                 const errorText = await registerResponse.text()
-                throw new Error(
-                  `HTTP ${registerResponse.status}: ${errorText}`,
-                )
+                throw new Error(`HTTP ${registerResponse.status}: ${errorText}`)
               }
-            }
-            catch (error) {
+            } catch (error) {
               console.error(
                 `[rari] Runtime: Failed to register component ${component.id}:`,
                 error instanceof Error ? error.message : String(error),
               )
             }
           }
-        }
-        catch (error) {
+        } catch (error) {
           console.error(
             '[rari] Runtime: Component discovery failed:',
             error instanceof Error ? error.message : String(error),
@@ -1385,18 +1376,23 @@ ${clientTransformedCode}`
 
       const ensureClientComponentsRegistered = async () => {
         try {
-          const serverPort = process.env.SERVER_PORT
-            ? Number(process.env.SERVER_PORT)
-            : Number(process.env.PORT || process.env.RSC_PORT || 3000)
+          const serverPort =
+            process.env.SERVER_PORT != null && process.env.SERVER_PORT !== ''
+              ? Number(process.env.SERVER_PORT)
+              : Number(
+                  process.env.PORT != null && process.env.PORT !== ''
+                    ? process.env.PORT
+                    : process.env.RSC_PORT != null && process.env.RSC_PORT !== ''
+                      ? process.env.RSC_PORT
+                      : 3000,
+                )
           const baseUrl = `http://localhost:${serverPort}`
 
           const clientComponentFiles = getKnownClientComponentPaths()
 
           for (const componentPath of clientComponentFiles) {
             const relativePath = path.relative(process.cwd(), componentPath)
-            const componentName = path
-              .basename(componentPath)
-              .replace(EXTENSION_REGEX, '')
+            const componentName = path.basename(componentPath).replace(EXTENSION_REGEX, '')
 
             try {
               await fetch(`${baseUrl}/_rari/register-client`, {
@@ -1410,68 +1406,67 @@ ${clientTransformedCode}`
                   export_name: 'default',
                 }),
               })
-            }
-            catch (error) {
+            } catch (error) {
               console.error(
                 `[rari] Runtime: Failed to pre-register client component ${componentName}:`,
                 error,
               )
             }
           }
-        }
-        catch (error) {
+        } catch (error) {
           console.error('[rari] Runtime: Failed to pre-register client components:', error)
         }
       }
 
       const startRustServer = async () => {
-        if (rustServerProcess)
-          return
+        if (rustServerProcess) return
 
-        const { getBinaryPath, getInstallationInstructions } = await import(
-          '@/cli/platform',
-        )
+        const { getBinaryPath, getInstallationInstructions } = await import('@/cli/platform')
 
         let binaryPath: string
         try {
           binaryPath = getBinaryPath()
-        }
-        catch (error) {
+        } catch (error) {
           console.error('rari binary not found')
-          console.error(`   ${(error as Error).message}`)
+          console.error(`   ${error instanceof Error ? error.message : String(error)}`)
           console.error(getInstallationInstructions())
           return
         }
 
-        const serverPort = process.env.SERVER_PORT
-          ? Number(process.env.SERVER_PORT)
-          : Number(process.env.PORT || process.env.RSC_PORT || 3000)
-        const mode
-          = process.env.NODE_ENV === 'production' ? 'production' : 'development'
+        const serverPort =
+          process.env.SERVER_PORT != null && process.env.SERVER_PORT !== ''
+            ? Number(process.env.SERVER_PORT)
+            : Number(
+                process.env.PORT != null && process.env.PORT !== ''
+                  ? process.env.PORT
+                  : process.env.RSC_PORT != null && process.env.RSC_PORT !== ''
+                    ? process.env.RSC_PORT
+                    : 3000,
+              )
+        const mode = process.env.NODE_ENV === 'production' ? 'production' : 'development'
 
-        const vitePort = server.config.server.port || 5173
+        const vitePort = server.config.server.port
 
-        const args = [
-          '--mode',
-          mode,
-          '--port',
-          serverPort.toString(),
-          '--host',
-          '127.0.0.1',
-        ]
+        const args = ['--mode', mode, '--port', serverPort.toString(), '--host', '127.0.0.1']
 
         rustServerProcess = spawn(binaryPath, args, {
           stdio: ['ignore', 'pipe', 'pipe'],
           cwd: process.cwd(),
           env: {
             ...process.env,
-            RUST_LOG: process.env.RUST_LOG || 'error',
+            RUST_LOG:
+              process.env.RUST_LOG != null && process.env.RUST_LOG !== ''
+                ? process.env.RUST_LOG
+                : 'error',
             RARI_VITE_PORT: vitePort.toString(),
             // Dev starts the binary before config.json is written; pass pool size / bots via env.
-            ...(options.jsPoolSize != null && !process.env.RARI_JS_POOL_SIZE
+            ...(options.jsPoolSize != null &&
+            (process.env.RARI_JS_POOL_SIZE == null || process.env.RARI_JS_POOL_SIZE === '')
               ? { RARI_JS_POOL_SIZE: String(options.jsPoolSize) }
               : {}),
-            ...(options.htmlLimitedBots != null && !process.env.RARI_HTML_LIMITED_BOTS
+            ...(options.htmlLimitedBots != null &&
+            (process.env.RARI_HTML_LIMITED_BOTS == null ||
+              process.env.RARI_HTML_LIMITED_BOTS === '')
               ? { RARI_HTML_LIMITED_BOTS: options.htmlLimitedBots }
               : {}),
           },
@@ -1479,35 +1474,28 @@ ${clientTransformedCode}`
 
         rustServerProcess.stdout?.on('data', (data: Buffer) => {
           const output = data.toString().trim()
-          if (output)
-            console.error(`${output}`)
+          if (output) console.error(output)
         })
 
         rustServerProcess.stderr?.on('data', (data: Buffer) => {
           const output = data.toString().trim()
-          if (output && !output.includes('warning'))
-            console.error(`${output}`)
+          if (output && !output.includes('warning')) console.error(output)
         })
 
         rustServerProcess.on('error', (error: Error) => {
           rustServerReady = false
           console.error('Failed to start rari server:', error.message)
           if (error.message.includes('ENOENT')) {
-            console.error(
-              '   Binary not found. Please ensure rari is properly installed.',
-            )
+            console.error('   Binary not found. Please ensure rari is properly installed.')
           }
         })
 
         rustServerProcess.on('exit', (code: number, signal: string) => {
           rustServerProcess = null
           rustServerReady = false
-          if (signal)
-            console.error(`rari server stopped by signal ${signal}`)
-          else if (code === 0)
-            console.error('rari server stopped successfully')
-          else if (code)
-            console.error(`rari server exited with code ${code}`)
+          if (signal) console.error(`rari server stopped by signal ${signal}`)
+          else if (code === 0) console.error('rari server stopped successfully')
+          else if (code) console.error(`rari server exited with code ${code}`)
         })
 
         let serverReady = false
@@ -1516,69 +1504,65 @@ ${clientTransformedCode}`
           if (serverReady) {
             break
           }
-          await new Promise(resolve => setTimeout(resolve, 500))
+          await new Promise(resolve => {
+            setTimeout(resolve, 500)
+          })
         }
 
         if (serverReady) {
           await discoverAndRegisterComponents()
           await ensureClientComponentsRegistered()
-        }
-        else {
-          console.error(
-            'Server failed to become ready for component registration',
-          )
+        } else {
+          console.error('Server failed to become ready for component registration')
         }
       }
 
       const handleServerComponentHMR = async (filePath: string) => {
         try {
-          if (!isServerComponent(filePath))
-            return
+          if (!isServerComponent(filePath)) return
 
-          if (!devServerComponentBuilder) {
-            await discoverAndRegisterComponents()
-            if (!devServerComponentBuilder)
-              return
-          }
+          if (devServerComponentBuilder == null) await discoverAndRegisterComponents()
+
+          const builder = devServerComponentBuilder
+          if (builder == null) return
 
           const code = moduleAnalysisCache.getSource(filePath)
-          devServerComponentBuilder.addServerComponent(filePath, code)
+          builder.addServerComponent(filePath, code)
 
-          const components
-            = await devServerComponentBuilder.getTransformedComponentsForDevelopment()
+          const components = await builder.getTransformedComponentsForDevelopment()
 
-          if (components.length === 0)
-            return
+          if (components.length === 0) return
 
-          const serverPort = process.env.SERVER_PORT
-            ? Number(process.env.SERVER_PORT)
-            : Number(process.env.PORT || process.env.RSC_PORT || 3000)
+          const serverPort =
+            process.env.SERVER_PORT != null && process.env.SERVER_PORT !== ''
+              ? Number(process.env.SERVER_PORT)
+              : Number(
+                  process.env.PORT != null && process.env.PORT !== ''
+                    ? process.env.PORT
+                    : process.env.RSC_PORT != null && process.env.RSC_PORT !== ''
+                      ? process.env.RSC_PORT
+                      : 3000,
+                )
           const baseUrl = `http://localhost:${serverPort}`
 
           for (const component of components) {
             try {
-              const registerResponse = await fetch(
-                `${baseUrl}/_rari/register`,
-                {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({
-                    component_id: component.id,
-                    component_code: component.code,
-                  }),
+              const registerResponse = await fetch(`${baseUrl}/_rari/register`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
                 },
-              )
+                body: JSON.stringify({
+                  component_id: component.id,
+                  component_code: component.code,
+                }),
+              })
 
               if (!registerResponse.ok) {
                 const errorText = await registerResponse.text()
-                throw new Error(
-                  `HTTP ${registerResponse.status}: ${errorText}`,
-                )
+                throw new Error(`HTTP ${registerResponse.status}: ${errorText}`)
               }
-            }
-            catch (error) {
+            } catch (error) {
               console.error(
                 '[rari] Failed to register component',
                 `${component.id}:`,
@@ -1586,142 +1570,158 @@ ${clientTransformedCode}`
               )
             }
           }
-        }
-        catch (error) {
+        } catch (error) {
           console.error(
             '[rari] Targeted HMR failed for',
             `${filePath}:`,
             error instanceof Error ? error.message : String(error),
           )
-          setTimeout(discoverAndRegisterComponents, 1000)
+          setTimeout(() => {
+            void discoverAndRegisterComponents()
+          }, 1000)
         }
       }
 
-      startRustServer().catch((error) => {
+      startRustServer().catch((error: unknown) => {
         console.error('[rari] Failed to start Rust server:', error)
       })
 
-      server.middlewares.use(async (req, res, next) => {
-        const acceptHeader = req.headers.accept
-        const isRscRequest = acceptHeader && acceptHeader.includes('text/x-component')
+      server.middlewares.use((req, res, next) => {
+        void (async () => {
+          const acceptHeader = req.headers.accept
+          const isRscRequest =
+            acceptHeader != null && acceptHeader !== '' && acceptHeader.includes('text/x-component')
 
-        if (isRscRequest && req.url && !req.url.startsWith('/api') && !req.url.startsWith('/rsc') && !req.url.includes('.')) {
-          if (!rustServerReady) {
-            const isHealthy = await checkRustServerHealth()
-            if (!isHealthy) {
-              const maxWait = 10000
-              const startWait = Date.now()
-              const checkInterval = 100
+          if (
+            isRscRequest &&
+            req.url != null &&
+            req.url !== '' &&
+            !req.url.startsWith('/api') &&
+            !req.url.startsWith('/rsc') &&
+            !req.url.includes('.')
+          ) {
+            if (!rustServerReady) {
+              let ready = await checkRustServerHealth()
+              if (!ready) {
+                const maxWait = 10000
+                const startWait = Date.now()
+                const checkInterval = 100
 
-              while ((Date.now() - startWait) < maxWait) {
-                if (await checkRustServerHealth())
-                  break
+                while (Date.now() - startWait < maxWait) {
+                  ready = await checkRustServerHealth()
+                  if (ready) break
 
-                await new Promise(resolve => setTimeout(resolve, checkInterval))
-              }
-
-              if (!rustServerReady) {
-                console.error('[rari] Rust server not ready, cannot proxy RSC request')
-                if (!res.headersSent) {
-                  res.statusCode = 503
-                  res.end('Server not ready')
+                  await new Promise(resolve => {
+                    setTimeout(resolve, checkInterval)
+                  })
                 }
 
-                return
-              }
-            }
-          }
+                if (!ready) {
+                  console.error('[rari] Rust server not ready, cannot proxy RSC request')
+                  if (!res.headersSent) {
+                    res.statusCode = 503
+                    res.end('Server not ready')
+                  }
 
-          const serverPort = process.env.SERVER_PORT
-            ? Number(process.env.SERVER_PORT)
-            : Number(process.env.PORT || process.env.RSC_PORT || 3000)
-
-          const targetUrl = `http://localhost:${serverPort}${req.url}`
-
-          try {
-            const headers: Record<string, string> = {}
-            for (const [key, value] of Object.entries(req.headers)) {
-              if (typeof value === 'string')
-                headers[key] = value
-              else if (Array.isArray(value))
-                headers[key] = value.join(',')
-            }
-            headers.host = `localhost:${serverPort}`
-            headers['accept-encoding'] = 'identity'
-
-            const response = await fetch(targetUrl, {
-              method: req.method,
-              headers,
-            })
-
-            res.statusCode = response.status
-            response.headers.forEach((value, key) => {
-              if (key.toLowerCase() !== 'content-encoding')
-                res.setHeader(key, value)
-            })
-
-            if (response.body) {
-              const reader = response.body.getReader()
-
-              try {
-                while (true) {
-                  const { done, value } = await reader.read()
-                  if (done)
-                    break
-                  res.write(Buffer.from(value))
+                  return
                 }
-                res.end()
-              }
-              catch (streamError) {
-                console.error('[rari] Stream error:', streamError)
-                if (!res.headersSent)
-                  res.statusCode = 500
-                res.end()
               }
             }
-            else {
-              res.end()
+
+            const serverPort =
+              process.env.SERVER_PORT != null && process.env.SERVER_PORT !== ''
+                ? Number(process.env.SERVER_PORT)
+                : Number(
+                    process.env.PORT != null && process.env.PORT !== ''
+                      ? process.env.PORT
+                      : process.env.RSC_PORT != null && process.env.RSC_PORT !== ''
+                        ? process.env.RSC_PORT
+                        : 3000,
+                  )
+
+            const targetUrl = `http://localhost:${serverPort}${req.url}`
+
+            try {
+              const headers: Record<string, string> = {}
+              for (const [key, value] of Object.entries(req.headers)) {
+                if (typeof value === 'string') headers[key] = value
+                else if (Array.isArray(value)) headers[key] = value.join(',')
+              }
+              headers.host = `localhost:${serverPort}`
+              headers['accept-encoding'] = 'identity'
+
+              const response = await fetch(targetUrl, {
+                method: req.method,
+                headers,
+              })
+
+              res.statusCode = response.status
+              response.headers.forEach((value, key) => {
+                if (key.toLowerCase() !== 'content-encoding') res.setHeader(key, value)
+              })
+
+              if (response.body) {
+                const reader = response.body.getReader()
+
+                try {
+                  let streamDone = false
+                  while (!streamDone) {
+                    const { done, value } = await reader.read()
+                    streamDone = done
+                    if (!streamDone && value != null) res.write(Buffer.from(value))
+                  }
+                  res.end()
+                } catch (streamError) {
+                  console.error('[rari] Stream error:', streamError)
+                  if (!res.headersSent) res.statusCode = 500
+                  res.end()
+                }
+              } else {
+                res.end()
+              }
+
+              return
+            } catch (error) {
+              console.error('[rari] Failed to proxy RSC request:', error)
+              if (!res.headersSent) {
+                res.statusCode = 500
+                res.end('Internal Server Error')
+              }
+
+              return
             }
-
-            return
           }
-          catch (error) {
-            console.error('[rari] Failed to proxy RSC request:', error)
-            if (!res.headersSent) {
-              res.statusCode = 500
-              res.end('Internal Server Error')
-            }
 
-            return
-          }
-        }
-
-        next()
+          next()
+        })()
       })
 
-      server.watcher.on('change', async (filePath) => {
-        if (TSX_EXT_REGEX.test(filePath)) {
-          deleteComponentType(filePath)
-          removeTrackedClientComponent(filePath)
-          moduleAnalysisCache.invalidate(filePath)
-        }
+      server.watcher.on('change', filePath => {
+        void (async () => {
+          if (TSX_EXT_REGEX.test(filePath)) {
+            deleteComponentType(filePath)
+            removeTrackedClientComponent(filePath)
+            moduleAnalysisCache.invalidate(filePath)
+          }
 
-        if (TSX_EXT_REGEX.test(filePath) && filePath.includes(srcDir)) {
-          if (isServerComponent(filePath)) {
-            server.ws.send({
-              type: 'custom',
-              event: 'rari:register-server-component',
-              data: { filePath },
-            })
-            await handleServerComponentHMR(filePath)
+          if (TSX_EXT_REGEX.test(filePath) && filePath.includes(srcDir)) {
+            if (isServerComponent(filePath)) {
+              server.ws.send({
+                type: 'custom',
+                event: 'rari:register-server-component',
+                data: { filePath },
+              })
+              await handleServerComponentHMR(filePath)
+            } else {
+              setTimeout(() => {
+                void discoverAndRegisterComponents()
+              }, 1000)
+            }
           }
-          else {
-            setTimeout(discoverAndRegisterComponents, 1000)
-          }
-        }
+        })()
       })
 
-      server.middlewares.use('/api/vite/hmr-transform', async (req, res) => {
+      server.middlewares.use('/api/vite/hmr-transform', (req, res) => {
         if (req.method !== 'POST') {
           res.statusCode = 405
           res.end('Method Not Allowed')
@@ -1729,42 +1729,47 @@ ${clientTransformedCode}`
         }
 
         let body = ''
-        req.on('data', (chunk) => {
+        req.on('data', (chunk: Buffer) => {
           body += chunk.toString()
         })
 
-        req.on('end', async () => {
-          try {
-            const { filePath } = JSON.parse(body)
+        req.on('end', () => {
+          void (async () => {
+            try {
+              const bodyRecord = parseJsonRecord(body)
+              const filePath =
+                bodyRecord && typeof bodyRecord.filePath === 'string'
+                  ? bodyRecord.filePath
+                  : undefined
 
-            if (!filePath) {
-              res.statusCode = 400
-              res.end(JSON.stringify({ error: 'filePath is required' }))
-              return
+              if (filePath == null || filePath === '') {
+                res.statusCode = 400
+                res.end(JSON.stringify({ error: 'filePath is required' }))
+                return
+              }
+
+              await handleServerComponentHMR(filePath)
+
+              res.statusCode = 200
+              res.setHeader('Content-Type', 'application/json')
+              res.end(
+                JSON.stringify({
+                  success: true,
+                  filePath,
+                  message: 'Component transformation completed',
+                }),
+              )
+            } catch (error) {
+              res.statusCode = 500
+              res.setHeader('Content-Type', 'application/json')
+              res.end(
+                JSON.stringify({
+                  success: false,
+                  error: error instanceof Error ? error.message : String(error),
+                }),
+              )
             }
-
-            await handleServerComponentHMR(filePath)
-
-            res.statusCode = 200
-            res.setHeader('Content-Type', 'application/json')
-            res.end(
-              JSON.stringify({
-                success: true,
-                filePath,
-                message: 'Component transformation completed',
-              }),
-            )
-          }
-          catch (error) {
-            res.statusCode = 500
-            res.setHeader('Content-Type', 'application/json')
-            res.end(
-              JSON.stringify({
-                success: false,
-                error: error instanceof Error ? error.message : String(error),
-              }),
-            )
-          }
+          })()
         })
       })
 
@@ -1781,10 +1786,9 @@ ${clientTransformedCode}`
 
           let exited = false
           const forceKillTimer = setTimeout(() => {
-            if (!exited)
-              proc.kill('SIGKILL')
+            if (!exited) proc.kill('SIGKILL')
           }, 5000)
-          forceKillTimer.unref?.()
+          forceKillTimer.unref()
           proc.once('exit', () => {
             exited = true
             clearTimeout(forceKillTimer)
@@ -1808,26 +1812,36 @@ ${clientTransformedCode}`
         return 'virtual:app-router-provider.tsx'
       if (id === 'virtual:error-boundary-wrapper' || id === 'virtual:error-boundary-wrapper.tsx')
         return 'virtual:error-boundary-wrapper.tsx'
-      if (isMdxRegistryModuleId(id))
-        return 'virtual:rari-mdx-components.ts'
+      if (isMdxRegistryModuleId(id)) return 'virtual:rari-mdx-components.ts'
       if (id === 'virtual:rari-mdx-components' || id === 'virtual:rari-mdx-components.ts')
         return 'virtual:rari-mdx-components.ts'
 
-      if (id === 'react-server-dom-webpack/client' || id === 'react-server-dom-webpack/client.browser')
+      if (
+        id === 'react-server-dom-webpack/client' ||
+        id === 'react-server-dom-webpack/client.browser'
+      )
         return 'virtual:react-flight-client.ts'
 
       if (id === './LoadingErrorBoundary' || id === './LoadingErrorBoundary.tsx')
         return 'virtual:loading-error-boundary.tsx'
-      if (id === 'react-server-dom-rari/server')
-        return id
+      if (id === 'react-server-dom-rari/server') return id
 
-      if (importer && importer.startsWith('virtual:') && id.startsWith('./')) {
+      if (
+        importer != null &&
+        importer !== '' &&
+        importer.startsWith('virtual:') &&
+        id.startsWith('./')
+      ) {
         const runtimeFile = resolveRuntimeDistFile(path.basename(id))
-        if (runtimeFile)
-          return runtimeFile
+        if (runtimeFile != null && runtimeFile !== '') return runtimeFile
       }
 
-      if (importer && importer.startsWith('virtual:') && id.startsWith('../')) {
+      if (
+        importer != null &&
+        importer !== '' &&
+        importer.startsWith('virtual:') &&
+        id.startsWith('../')
+      ) {
         const currentFileUrl = import.meta.url
         const currentFilePath = fileURLToPath(currentFileUrl)
         const currentDir = path.dirname(currentFilePath)
@@ -1845,32 +1859,27 @@ ${clientTransformedCode}`
           }
         }
 
-        if (runtimeDir) {
+        if (runtimeDir != null && runtimeDir !== '') {
           const chunkPath = path.join(runtimeDir, id)
-          if (fs.existsSync(chunkPath))
-            return chunkPath
+          if (fs.existsSync(chunkPath)) return chunkPath
 
           const altChunkPath = path.join(runtimeDir, '../dist', path.basename(id))
-          if (fs.existsSync(altChunkPath))
-            return altChunkPath
-        }
-        else {
+          if (fs.existsSync(altChunkPath)) return altChunkPath
+        } else {
           console.warn(
-            `[rari] Runtime directory not found, attempting fallback resolution for virtual import.\n`
-            + `  Importer: ${importer}\n`
-            + `  ID: ${id}\n`
-            + `  Current Dir: ${currentDir}\n`
-            + `  Hint: Runtime lookup failed, trying currentDir as fallback`,
+            `[rari] Runtime directory not found, attempting fallback resolution for virtual import.\n` +
+              `  Importer: ${importer}\n` +
+              `  ID: ${id}\n` +
+              `  Current Dir: ${currentDir}\n` +
+              `  Hint: Runtime lookup failed, trying currentDir as fallback`,
           )
         }
 
         const chunkPath = path.join(currentDir, id)
-        if (fs.existsSync(chunkPath))
-          return chunkPath
+        if (fs.existsSync(chunkPath)) return chunkPath
 
         const altChunkPath = path.join(currentDir, '../dist', path.basename(id))
-        if (fs.existsSync(altChunkPath))
-          return altChunkPath
+        if (fs.existsSync(altChunkPath)) return altChunkPath
       }
 
       if (process.env.NODE_ENV === 'production') {
@@ -1878,9 +1887,8 @@ ${clientTransformedCode}`
           const resolvedPath = path.resolve(id)
           if (fs.existsSync(resolvedPath) && isServerComponent(resolvedPath))
             return { id, external: true }
-        }
-        catch (err) {
-          if ((err as any)?.code !== 'ENOENT') {
+        } catch (err) {
+          if (getErrnoCode(err) !== 'ENOENT') {
             console.warn('[rari] Unexpected error resolving server component:', id, err)
           }
         }
@@ -1891,25 +1899,26 @@ ${clientTransformedCode}`
 
     async load(id) {
       if (TSX_EXT_REGEX.test(id)) {
-        const environment = (this as any).environment
+        const environment = this.environment
 
-        if (environment && environment.name === 'client') {
+        if (environment.name === 'client') {
           try {
             const analysis = moduleAnalysisCache.get(id)
             if (analysis.topLevelUseServer)
               return transformClientModule(moduleAnalysisCache.getSource(id), id, analysis)
-          }
-          catch {
+          } catch {
             // File doesn't exist or can't be read
           }
         }
       }
 
-      if (id === 'virtual:rari-mdx-components.ts')
-        return buildMdxRegistryModule()
+      if (id === 'virtual:rari-mdx-components.ts') return buildMdxRegistryModule()
 
       if (id === 'virtual:rari-entry-client.ts') {
-        const projectRoot = options.projectRoot || process.cwd()
+        const projectRoot =
+          options.projectRoot != null && options.projectRoot !== ''
+            ? options.projectRoot
+            : process.cwd()
         const srcDir = path.join(projectRoot, 'src')
         const scannedClientComponents = collectClientComponentPaths(
           normalizeScanDirs(srcDir, Object.values(resolvedAlias)),
@@ -1926,52 +1935,62 @@ ${clientTransformedCode}`
           { path: 'virtual:error-boundary-wrapper.tsx', exports: ['ErrorBoundaryWrapper'] },
         ]
 
-        const clientComponentsArray = [...allClientComponents].filter((componentPath) => {
+        const clientComponentsArray = [...allClientComponents].filter(componentPath => {
           try {
             return moduleAnalysisCache.get(componentPath).topLevelUseClient
-          }
-          catch {
+          } catch {
             return false
           }
         })
 
-        const lazyLoaderRegistry = clientComponentsArray.map((componentPath) => {
-          const relativePath = path.relative(process.cwd(), componentPath).replace(BACKSLASH_REGEX, '/')
-          const componentId = relativePath.replace(TSX_EXT_REGEX, '')
-          const registrationPath = relativePath.startsWith('..') ? componentPath.replace(BACKSLASH_REGEX, '/') : relativePath
+        const lazyLoaderRegistry = clientComponentsArray
+          .map(componentPath => {
+            const relativePath = path
+              .relative(process.cwd(), componentPath)
+              .replace(BACKSLASH_REGEX, '/')
+            const componentId = relativePath.replace(TSX_EXT_REGEX, '')
+            const registrationPath = relativePath.startsWith('..')
+              ? componentPath.replace(BACKSLASH_REGEX, '/')
+              : relativePath
 
-          let hasNamedExport = false
-          let namedExportName = ''
-          try {
-            const analysis = moduleAnalysisCache.get(componentPath)
-            const hasDefault = analysis.hasDefaultExport
+            let hasNamedExport = false
+            let namedExportName = ''
+            try {
+              const analysis = moduleAnalysisCache.get(componentPath)
+              const hasDefault = analysis.hasDefaultExport
 
-            if (!hasDefault) {
-              const code = moduleAnalysisCache.getSource(componentPath)
-              const namedExportMatch = code.match(EXPORT_NAMED_DECLARATION_REGEX)
+              if (!hasDefault) {
+                const code = moduleAnalysisCache.getSource(componentPath)
+                const namedExportMatch = code.match(EXPORT_NAMED_DECLARATION_REGEX)
 
-              if (namedExportMatch) {
-                hasNamedExport = true
-                namedExportName = namedExportMatch[1]
+                if (namedExportMatch) {
+                  hasNamedExport = true
+                  namedExportName = namedExportMatch[1]
+                }
+              }
+            } catch (err) {
+              if (getErrnoCode(err) !== 'ENOENT') {
+                console.warn(
+                  '[rari] Unexpected error reading component for export detection:',
+                  componentPath,
+                  err,
+                )
               }
             }
-          }
-          catch (err) {
-            if ((err as any)?.code !== 'ENOENT') {
-              console.warn('[rari] Unexpected error reading component for export detection:', componentPath, err)
-            }
-          }
 
-          const exportName = hasNamedExport ? namedExportName : 'default'
-          const displayName = hasNamedExport ? namedExportName : path.basename(componentPath, path.extname(componentPath))
+            const exportName = hasNamedExport ? namedExportName : 'default'
+            const displayName = hasNamedExport
+              ? namedExportName
+              : path.basename(componentPath, path.extname(componentPath))
 
-          const normalizedPath = registrationPath.replace(BACKSLASH_REGEX, '/')
-          const importPath = normalizedPath.startsWith('/') || WINDOWS_PATH_REGEX.test(normalizedPath)
-            ? normalizedPath
-            : `/${normalizedPath}`
-          const importStatement = `import(${JSON.stringify(importPath)})`
+            const normalizedPath = registrationPath.replace(BACKSLASH_REGEX, '/')
+            const importPath =
+              normalizedPath.startsWith('/') || WINDOWS_PATH_REGEX.test(normalizedPath)
+                ? normalizedPath
+                : `/${normalizedPath}`
+            const importStatement = `import(${JSON.stringify(importPath)})`
 
-          return `  "${registrationPath}": {
+            return `  "${registrationPath}": {
     id: "${componentId}",
     path: "${registrationPath}",
     exportName: "${exportName}",
@@ -1982,16 +2001,20 @@ ${clientTransformedCode}`
     loading: false,
     registered: false
   }`
-        }).join(',\n')
+          })
+          .join(',\n')
 
-        const externalImports = externalClientComponents.map((ext, index) => {
-          return `import * as ExternalModule${index} from '${ext.path}';`
-        }).join('\n')
+        const externalImports = externalClientComponents
+          .map((ext, index) => {
+            return `import * as ExternalModule${index} from '${ext.path}';`
+          })
+          .join('\n')
 
-        const externalRegistrations = externalClientComponents.flatMap((ext, index) => {
-          return ext.exports.map((exportName) => {
-            const fullId = `${ext.path}#${exportName}`
-            return `
+        const externalRegistrations = externalClientComponents
+          .flatMap((ext, index) => {
+            return ext.exports.map(exportName => {
+              const fullId = `${ext.path}#${exportName}`
+              return `
 globalThis['~clientComponents'] = globalThis['~clientComponents'] || {};
 globalThis['~clientComponents']["${fullId}"] = {
   id: "${exportName}",
@@ -2004,8 +2027,9 @@ globalThis['~clientComponents']["${ext.path}"] = globalThis['~clientComponents']
 globalThis['~clientComponents']["${ext.path}"].component = ExternalModule${index};
 globalThis['~clientComponentPaths'] = globalThis['~clientComponentPaths'] || {};
 globalThis['~clientComponentPaths']["${ext.path}"] = "${exportName}";`
+            })
           })
-        }).join('\n')
+          .join('\n')
 
         const registrations = `
 const lazyComponentRegistry = {
@@ -2024,34 +2048,35 @@ for (const [path, config] of Object.entries(lazyComponentRegistry)) {
         const allImports = externalImports
         const allRegistrations = [registrations, externalRegistrations].filter(Boolean).join('\n')
 
-        return await loadEntryClient(allImports, allRegistrations)
+        return loadEntryClient(allImports, allRegistrations)
       }
 
-      if (id === 'react-server-dom-rari/server')
-        return await loadRscReferences()
+      if (id === 'react-server-dom-rari/server') return loadRscReferences()
 
       if (id === 'virtual:app-router-provider.tsx') {
         const runtimeFile = resolveRuntimeDistFile('AppRouterProvider.mjs')
-        if (runtimeFile)
-          return fs.readFileSync(runtimeFile, 'utf-8')
+        if (runtimeFile != null && runtimeFile !== '') return fs.readFileSync(runtimeFile, 'utf-8')
 
         throw new Error(DIST_NOT_BUILT_ERROR)
       }
 
       if (id === 'virtual:loading-error-boundary.tsx') {
         const runtimeFile = resolveRuntimeDistFile('LoadingErrorBoundary.mjs')
-        if (runtimeFile)
-          return fs.readFileSync(runtimeFile, 'utf-8')
+        if (runtimeFile != null && runtimeFile !== '') return fs.readFileSync(runtimeFile, 'utf-8')
 
         throw new Error(DIST_NOT_BUILT_ERROR)
       }
 
       if (id === 'virtual:error-boundary-wrapper.tsx') {
         const runtimeFile = resolveRuntimeDistFile('ErrorBoundaryWrapper.mjs')
-        if (runtimeFile) {
+        if (runtimeFile != null && runtimeFile !== '') {
           const content = fs.readFileSync(runtimeFile, 'utf-8')
-          if (!content.includes('import React') && !content.includes('from "react"') && !content.includes('from \'react\'')) {
-            const useClientMatch = content.match(USE_CLIENT_DIRECTIVE_LINE_REGEX)
+          if (
+            !content.includes('import React') &&
+            !content.includes('from "react"') &&
+            !content.includes("from 'react'")
+          ) {
+            const useClientMatch = USE_CLIENT_DIRECTIVE_LINE_REGEX.exec(content)
             if (useClientMatch) {
               const directive = useClientMatch[0]
               const rest = content.slice(directive.length)
@@ -2073,7 +2098,8 @@ import * as React from 'react';\n${content}`
         const code = await loadRscClientRuntime()
         return code.replace(
           RSC_CLIENT_IMPORT_REGEX,
-          (match, whitespace, quote) => `from${whitespace}${quote}virtual:react-flight-client.ts${quote}`,
+          (match, whitespace, quote) =>
+            `from${whitespace}${quote}virtual:react-flight-client.ts${quote}`,
         )
       }
 
@@ -2081,15 +2107,28 @@ import * as React from 'react';\n${content}`
         let browserClientPath: string
         let edgeClientPath: string
         try {
-          const packageDir = path.dirname(fileURLToPath(import.meta.resolve('react-server-dom-webpack/package.json')))
-          browserClientPath = path.join(packageDir, 'cjs/react-server-dom-webpack-client.browser.production.js')
-          edgeClientPath = path.join(packageDir, 'cjs/react-server-dom-webpack-client.edge.production.js')
-        }
-        catch {
+          const packageDir = path.dirname(
+            fileURLToPath(import.meta.resolve('react-server-dom-webpack/package.json')),
+          )
+          browserClientPath = path.join(
+            packageDir,
+            'cjs/react-server-dom-webpack-client.browser.production.js',
+          )
+          edgeClientPath = path.join(
+            packageDir,
+            'cjs/react-server-dom-webpack-client.edge.production.js',
+          )
+        } catch {
           const rariDir = path.dirname(fileURLToPath(import.meta.url))
           const nmDir = path.resolve(rariDir, '../../node_modules')
-          browserClientPath = path.join(nmDir, 'react-server-dom-webpack/cjs/react-server-dom-webpack-client.browser.production.js')
-          edgeClientPath = path.join(nmDir, 'react-server-dom-webpack/cjs/react-server-dom-webpack-client.edge.production.js')
+          browserClientPath = path.join(
+            nmDir,
+            'react-server-dom-webpack/cjs/react-server-dom-webpack-client.browser.production.js',
+          )
+          edgeClientPath = path.join(
+            nmDir,
+            'react-server-dom-webpack/cjs/react-server-dom-webpack-client.edge.production.js',
+          )
         }
 
         const browserSource = fs.readFileSync(browserClientPath, 'utf-8')
@@ -2129,67 +2168,78 @@ export const createTemporaryReferenceSet = module.exports.createTemporaryReferen
 
       if (id.endsWith('.mjs') && fs.existsSync(id)) {
         try {
-          const projectRoot = options.projectRoot || process.cwd()
+          const projectRoot =
+            options.projectRoot != null && options.projectRoot !== ''
+              ? options.projectRoot
+              : process.cwd()
           const realId = fs.realpathSync(id)
           const relativeToRoot = path.relative(projectRoot, realId)
 
-          const isInProjectRoot = !relativeToRoot.startsWith('..') && !path.isAbsolute(relativeToRoot)
+          const isInProjectRoot =
+            !relativeToRoot.startsWith('..') && !path.isAbsolute(relativeToRoot)
           const isInNodeModules = realId.includes(`${path.sep}node_modules${path.sep}`)
 
-          const isInRariPackage = realId.includes(`${path.sep}packages${path.sep}rari${path.sep}`)
-            || realId.includes(`${path.sep}node_modules${path.sep}rari${path.sep}`)
+          const isInRariPackage =
+            realId.includes(`${path.sep}packages${path.sep}rari${path.sep}`) ||
+            realId.includes(`${path.sep}node_modules${path.sep}rari${path.sep}`)
 
           if (isInProjectRoot || isInNodeModules || isInRariPackage)
             return fs.readFileSync(id, 'utf-8')
 
-          console.warn(`[rari] Refusing to load .mjs file outside project root and node_modules: ${id}`)
+          console.warn(
+            `[rari] Refusing to load .mjs file outside project root and node_modules: ${id}`,
+          )
           return null
-        }
-        catch (err) {
+        } catch (err) {
           console.warn(`[rari] Error validating .mjs file path: ${id}`, err)
           return null
         }
       }
+
+      return undefined
     },
 
     async handleHotUpdate({ file, server }) {
       clearFileResolverCache()
 
-      if (file.endsWith('.mdx'))
-        invalidateMdxRegistryModuleCache()
+      if (file.endsWith('.mdx')) invalidateMdxRegistryModuleCache()
 
       const isReactFile = TSX_EXT_REGEX.test(file)
 
-      if (!isReactFile)
-        return undefined
+      if (!isReactFile) return undefined
 
       deleteComponentType(file)
       removeTrackedClientComponent(file)
       moduleAnalysisCache.invalidate(file)
       invalidateMdxRegistryModuleCache()
 
-      if (file.includes('/dist/') || file.includes('\\dist\\'))
-        return []
+      if (file.includes('/dist/') || file.includes('\\dist\\')) return []
 
-      const componentType = hmrCoordinator?.detectComponentType(file) || 'unknown'
+      const componentType = hmrCoordinator?.detectComponentType(file) ?? 'unknown'
 
       const isAppRouterFile = file.includes('/app/') || file.includes('\\app\\')
       const hasExtension = (fileName: string, baseName: string) =>
-        fileName.endsWith(`${baseName}.tsx`) || fileName.endsWith(`${baseName}.jsx`)
-        || fileName.endsWith(`${baseName}.ts`) || fileName.endsWith(`${baseName}.js`)
+        fileName.endsWith(`${baseName}.tsx`) ||
+        fileName.endsWith(`${baseName}.jsx`) ||
+        fileName.endsWith(`${baseName}.ts`) ||
+        fileName.endsWith(`${baseName}.js`)
 
-      const SPECIAL_ROUTE_FILE_BASES = ['page', 'layout', 'template', 'loading', 'error', 'not-found'] as const
+      const SPECIAL_ROUTE_FILE_BASES = [
+        'page',
+        'layout',
+        'template',
+        'loading',
+        'error',
+        'not-found',
+      ] as const
       const isSpecialRouteFile = SPECIAL_ROUTE_FILE_BASES.some(base => hasExtension(file, base))
 
-      if (isAppRouterFile && isSpecialRouteFile)
-        return undefined
+      if (isAppRouterFile && isSpecialRouteFile) return undefined
 
-      if (componentType === 'client')
-        return
+      if (componentType === 'client') return undefined
 
       if (componentType === 'server') {
-        if (hmrCoordinator)
-          await hmrCoordinator.handleServerComponentUpdate(file, server)
+        if (hmrCoordinator) await hmrCoordinator.handleServerComponentUpdate(file, server)
 
         return []
       }
@@ -2204,8 +2254,7 @@ export const createTemporaryReferenceSet = module.exports.createTemporaryReferen
 
         for (const match of html.matchAll(IMPORT_PATH_REGEX)) {
           const importPath = match[1]
-          if (importPath.startsWith('/src/'))
-            imports.push(importPath)
+          if (importPath.startsWith('/src/')) imports.push(importPath)
         }
 
         const tags = []
@@ -2215,27 +2264,26 @@ export const createTemporaryReferenceSet = module.exports.createTemporaryReferen
           attrs: {
             type: 'module',
           },
-          children: 'import \'virtual:rari-entry-client\';',
+          children: "import 'virtual:rari-entry-client';",
           injectTo: 'head-prepend' as const,
         })
 
         if (imports.length > 0) {
-          tags.push(...imports.map(importPath => ({
-            tag: 'script',
-            attrs: {
-              type: 'module',
-              src: importPath,
-            },
-            injectTo: 'head-prepend' as const,
-          })))
+          tags.push(
+            ...imports.map(importPath => ({
+              tag: 'script',
+              attrs: {
+                type: 'module',
+                src: importPath,
+              },
+              injectTo: 'head-prepend' as const,
+            })),
+          )
         }
 
         let modifiedHtml = html
 
-        modifiedHtml = modifiedHtml.replace(
-          /^\s*import\s+["']\/src\/[^"']+["'];?\s*$/gm,
-          '',
-        )
+        modifiedHtml = modifiedHtml.replace(/^\s*import\s+["']\/src\/[^"']+["'];?\s*$/gm, '')
 
         modifiedHtml = modifiedHtml.replace(
           /^\s*import\s+["']virtual:rari-entry-client["'];?\s*$/gm,
@@ -2256,7 +2304,10 @@ export const createTemporaryReferenceSet = module.exports.createTemporaryReferen
     },
 
     async writeBundle() {
-      const projectRoot = options.projectRoot || process.cwd()
+      const projectRoot =
+        options.projectRoot != null && options.projectRoot !== ''
+          ? options.projectRoot
+          : process.cwd()
       await writeImageConfig(projectRoot, options)
     },
   }
@@ -2303,21 +2354,19 @@ export const createTemporaryReferenceSet = module.exports.createTemporaryReferen
 
   const plugins: Plugin[] = [mainPlugin, webpackRequirePatchPlugin, serverBuildPlugin]
 
-  if (options.proxy !== false)
-    plugins.push(rariProxy(options.proxy || {}))
+  if (options.proxy !== false) plugins.push(rariProxy(options.proxy ?? {}))
 
-  if (options.router !== false)
-    plugins.push(rariRouter(options.router || {}))
+  if (options.router !== false) plugins.push(rariRouter(options.router ?? {}))
 
   return toRariPlugins(plugins)
 }
 
 export function defineRariConfig(
-  config: UserConfig & { plugins?: RariPlugin[] },
+  config: UserConfig & { readonly plugins?: readonly RariPlugin[] },
 ): UserConfig {
   return {
     ...config,
-    plugins: [rari(), ...(config.plugins || [])],
+    plugins: [rari(), ...(config.plugins ?? [])],
   }
 }
 
@@ -2353,11 +2402,7 @@ export type {
   ResponseCookies,
 } from '@/proxy/http/types'
 
-export type {
-  ApiRouteHandlers,
-  RouteContext,
-  RouteHandler,
-} from '@/router/build/api-routes'
+export type { ApiRouteHandlers, RouteContext, RouteHandler } from '@/router/build/api-routes'
 
 export { ApiResponse } from '@/router/build/api-routes'
 
@@ -2377,9 +2422,7 @@ export type {
   StaticParamsResult,
 } from '@/router/build/props-extractor'
 
-export {
-  generateAppRouteManifest,
-} from '@/router/build/routes'
+export { generateAppRouteManifest } from '@/router/build/routes'
 
 export type {
   AppRouteEntry,
@@ -2403,4 +2446,11 @@ export type { Metadata } from '@/router/build/types'
 
 export { rariRouter } from '@/router/build/vite-plugin'
 
-export type { Robots, RobotsRule, Sitemap, SitemapEntry, SitemapImage, SitemapVideo } from '@/router/metadata/types'
+export type {
+  Robots,
+  RobotsRule,
+  Sitemap,
+  SitemapEntry,
+  SitemapImage,
+  SitemapVideo,
+} from '@/router/metadata/types'

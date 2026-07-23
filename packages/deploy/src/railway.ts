@@ -2,7 +2,14 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
 import { styleText } from 'node:util'
-import { createOrBackupConfigFile, getRariVersion, logInfo, logSuccess, updateGitignoreForProvider, updatePackageJsonForProvider } from './utils'
+import {
+  createOrBackupConfigFile,
+  getRariVersion,
+  logInfo,
+  logSuccess,
+  updateGitignoreForProvider,
+  updatePackageJsonForProvider,
+} from './utils'
 
 export function createRailwayDeployment() {
   const cwd = process.cwd()
@@ -95,8 +102,7 @@ Optional variables you can set:
       writeFileSync(readmePath, readmeContent + railwayReadmeSection)
       logSuccess('Updated README.md with Railway deployment instructions')
     }
-  }
-  else {
+  } else {
     const defaultReadme = `# My rari App
 
 A high-performance React Server Components application powered by rari.
@@ -128,7 +134,7 @@ function printRailwaySuccessMessage() {
   logInfo('Your rari app will automatically:')
   console.warn('  ✅ Detect Railway environment')
   console.warn('  ✅ Bind to 0.0.0.0 (Railway requirement)')
-  console.warn('  ✅ Use Railway\'s PORT environment variable')
+  console.warn("  ✅ Use Railway's PORT environment variable")
   console.warn('  ✅ Run in production mode')
   console.warn('  ✅ Download platform-specific rari binary')
   console.warn('')

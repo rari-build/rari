@@ -12,14 +12,18 @@ test.describe.serial('Server Actions', () => {
       await page.fill('[data-testid="todo-input"]', 'New test todo')
       await submitAndWaitForAction(page, '[data-testid="submit-button"]')
       await expect(page.locator('[data-testid="success-message"]')).toBeVisible({ timeout: 15_000 })
-      await expect(page.locator('[data-testid="todo-count"]')).toHaveText('Total: 3', { timeout: 15000 })
+      await expect(page.locator('[data-testid="todo-count"]')).toHaveText('Total: 3', {
+        timeout: 15000,
+      })
       await expect(page.locator('[data-testid="todo-list"]')).toContainText('New test todo')
     })
 
     test('should show error message for invalid input', async ({ page }) => {
       await expect(page.locator('[data-testid="todo-input"]')).toHaveValue('')
       await submitAndWaitForAction(page, '[data-testid="submit-button"]')
-      await expect(page.locator('[data-testid="todo-form"] [data-testid="error-message"]')).toBeVisible()
+      await expect(
+        page.locator('[data-testid="todo-form"] [data-testid="error-message"]'),
+      ).toBeVisible()
     })
 
     test('should reset form after successful submission', async ({ page }) => {
@@ -39,7 +43,9 @@ test.describe.serial('Server Actions', () => {
 
     test('should delete todo', async ({ page }) => {
       await submitAndWaitForAction(page, '[data-testid="delete-button-1"]')
-      await expect(page.locator('[data-testid="todo-count"]')).toHaveText('Total: 1', { timeout: 15000 })
+      await expect(page.locator('[data-testid="todo-count"]')).toHaveText('Total: 1', {
+        timeout: 15000,
+      })
       await expect(page.locator('[data-testid="todo-item-1"]')).not.toBeVisible()
     })
 

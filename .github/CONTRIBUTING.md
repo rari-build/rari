@@ -30,12 +30,14 @@ rari is a monorepo that consists of:
 ### Installation
 
 1. **Clone the repository:**
+
    ```bash
    git clone https://github.com/rari-build/rari.git
    cd rari
    ```
 
 2. **Run setup (recommended):**
+
    ```bash
    just setup
    ```
@@ -47,6 +49,7 @@ rari is a monorepo that consists of:
    - Build all packages
 
    **Or manually:**
+
    ```bash
    # Install dependencies
    pnpm install
@@ -97,6 +100,7 @@ We use **just** as a command runner to simplify common tasks. Run `just` to see 
 ### Building the Project
 
 **Using just (recommended):**
+
 ```bash
 # Build everything (Rust + Node.js)
 just build
@@ -114,6 +118,7 @@ just build-web
 ```
 
 **Or manually:**
+
 ```bash
 # Build all packages and crates
 pnpm run build
@@ -153,18 +158,21 @@ pnpm --filter @rari/web dev
 To test your changes:
 
 1. **Build the project:**
+
    ```bash
    just build
    # Or: pnpm run build
    ```
 
 2. **Run an example app:**
+
    ```bash
    cd examples/app-router-example
    pnpm run dev
    ```
 
 3. **Test the CLI tool:**
+
    ```bash
    cd /tmp
    pnpm create rari-app test-app
@@ -184,6 +192,7 @@ To test your changes:
 The Rust runtime is located in `crates/rari/`. Key commands:
 
 **Using just (recommended):**
+
 ```bash
 # Lint Rust code
 just lint-rust
@@ -205,6 +214,7 @@ just build-rust-release
 ```
 
 **Or manually:**
+
 ```bash
 # Format Rust code
 cargo fmt
@@ -224,6 +234,7 @@ cargo build --release
 TypeScript packages are in `packages/` and `web/`. Key commands:
 
 **Using just (recommended):**
+
 ```bash
 # Type check all packages
 just typecheck
@@ -239,6 +250,7 @@ just knip
 ```
 
 **Or manually:**
+
 ```bash
 # Type check all packages
 pnpm run typecheck
@@ -268,6 +280,7 @@ We use multiple tools to maintain code quality:
 Run these commands before submitting:
 
 **Using just (recommended):**
+
 ```bash
 # Lint all code (Rust + Node.js)
 just lint
@@ -286,6 +299,7 @@ just quick-check
 ```
 
 **Or manually:**
+
 ```bash
 # Lint all code
 pnpm run lint
@@ -318,6 +332,7 @@ pnpm run typecheck
 ### Running Tests
 
 **Using just (recommended):**
+
 ```bash
 # Run all tests (Rust + Node.js)
 just test
@@ -342,6 +357,7 @@ just test-coverage
 ```
 
 **Or manually:**
+
 ```bash
 # Run all tests
 pnpm test
@@ -407,6 +423,7 @@ chore(deps): update dependencies
 Releases are managed by maintainers using our automated release tools:
 
 **Using just (recommended):**
+
 ```bash
 # Dry run (preview changes)
 just release-dry
@@ -425,6 +442,7 @@ just changelog-preview
 ```
 
 **Or manually:**
+
 ```bash
 # Run release tool
 cargo run --release --manifest-path tools/release/Cargo.toml --bin release
@@ -434,6 +452,7 @@ cargo run --release --manifest-path tools/release/Cargo.toml --bin release -- --
 ```
 
 The release process:
+
 1. Bumps version numbers
 2. Generates changelog
 3. Creates git tags
@@ -529,6 +548,7 @@ For new features:
 The `justfile` provides convenient commands for all common tasks. Run `just` or `just --list` to see all available commands.
 
 Key commands:
+
 - `just setup` - One-time setup for new contributors
 - `just build` - Build everything
 - `just test` - Run all tests
@@ -561,6 +581,7 @@ Key commands:
 ## Recognition
 
 Contributors are recognized in:
+
 - **README.md** - Major contributors
 - **CHANGELOG.md** - Credit for specific changes
 - **GitHub releases** - Acknowledgment in release notes

@@ -16,7 +16,9 @@ export default function ErrorTestClient() {
       <button
         type="button"
         data-testid="trigger-error-button"
-        onClick={() => setShouldThrow(true)}
+        onClick={() => {
+          setShouldThrow(true)
+        }}
       >
         Trigger Error
       </button>

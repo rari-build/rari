@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs'
 import { generateAppRouteManifest, isGroupSegment } from '@rari/router/build/routes'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
+import { castMock } from '../../helpers/mock-cast'
 
 vi.mock('node:fs', () => ({
   promises: {
@@ -9,6 +10,24 @@ vi.mock('node:fs', () => ({
     readFile: vi.fn(),
   },
 }))
+
+const FILE_STAT = castMock<Awaited<ReturnType<typeof fs.stat>>>({
+  isDirectory: () => false,
+  isFile: () => true,
+})
+
+const DIR_STAT = castMock<Awaited<ReturnType<typeof fs.stat>>>({
+  isDirectory: () => true,
+  isFile: () => false,
+})
+
+function mockReaddir(names: readonly string[]): Awaited<ReturnType<typeof fs.readdir>> {
+  return castMock(names)
+}
+
+function mockFileContent(content: string): Awaited<ReturnType<typeof fs.readFile>> {
+  return castMock(content)
+}
 
 describe('generateAppRouteManifest', () => {
   beforeEach(() => {
@@ -21,8 +40,8 @@ describe('generateAppRouteManifest', () => {
 
   describe('basic route generation', () => {
     it('should generate manifest for simple page', async () => {
-      vi.mocked(fs.readdir).mockResolvedValueOnce(['page.tsx'] as any)
-      vi.mocked(fs.stat).mockResolvedValue({ isDirectory: () => false, isFile: () => true } as any)
+      vi.mocked(fs.readdir).mockResolvedValueOnce(mockReaddir(['page.tsx']))
+      vi.mocked(fs.stat).mockResolvedValue(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -37,12 +56,10 @@ describe('generateAppRouteManifest', () => {
 
     it('should generate manifest for nested page', async () => {
       vi.mocked(fs.readdir)
-        .mockResolvedValueOnce(['about'] as any)
-        .mockResolvedValueOnce(['page.tsx'] as any)
+        .mockResolvedValueOnce(mockReaddir(['about']))
+        .mockResolvedValueOnce(mockReaddir(['page.tsx']))
 
-      vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+      vi.mocked(fs.stat).mockResolvedValueOnce(DIR_STAT).mockResolvedValueOnce(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -55,8 +72,8 @@ describe('generateAppRouteManifest', () => {
     })
 
     it('should handle multiple extensions', async () => {
-      vi.mocked(fs.readdir).mockResolvedValueOnce(['page.jsx'] as any)
-      vi.mocked(fs.stat).mockResolvedValue({ isDirectory: () => false, isFile: () => true } as any)
+      vi.mocked(fs.readdir).mockResolvedValueOnce(mockReaddir(['page.jsx']))
+      vi.mocked(fs.stat).mockResolvedValue(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -68,12 +85,10 @@ describe('generateAppRouteManifest', () => {
   describe('dynamic routes', () => {
     it('should parse dynamic segment', async () => {
       vi.mocked(fs.readdir)
-        .mockResolvedValueOnce(['[id]'] as any)
-        .mockResolvedValueOnce(['page.tsx'] as any)
+        .mockResolvedValueOnce(mockReaddir(['[id]']))
+        .mockResolvedValueOnce(mockReaddir(['page.tsx']))
 
-      vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+      vi.mocked(fs.stat).mockResolvedValueOnce(DIR_STAT).mockResolvedValueOnce(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -93,12 +108,10 @@ describe('generateAppRouteManifest', () => {
 
     it('should parse catch-all segment', async () => {
       vi.mocked(fs.readdir)
-        .mockResolvedValueOnce(['[...slug]'] as any)
-        .mockResolvedValueOnce(['page.tsx'] as any)
+        .mockResolvedValueOnce(mockReaddir(['[...slug]']))
+        .mockResolvedValueOnce(mockReaddir(['page.tsx']))
 
-      vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+      vi.mocked(fs.stat).mockResolvedValueOnce(DIR_STAT).mockResolvedValueOnce(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -115,12 +128,10 @@ describe('generateAppRouteManifest', () => {
 
     it('should parse optional catch-all segment', async () => {
       vi.mocked(fs.readdir)
-        .mockResolvedValueOnce(['[[...slug]]'] as any)
-        .mockResolvedValueOnce(['page.tsx'] as any)
+        .mockResolvedValueOnce(mockReaddir(['[[...slug]]']))
+        .mockResolvedValueOnce(mockReaddir(['page.tsx']))
 
-      vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+      vi.mocked(fs.stat).mockResolvedValueOnce(DIR_STAT).mockResolvedValueOnce(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -138,8 +149,8 @@ describe('generateAppRouteManifest', () => {
 
   describe('layouts', () => {
     it('should detect layout file', async () => {
-      vi.mocked(fs.readdir).mockResolvedValueOnce(['layout.tsx', 'page.tsx'] as any)
-      vi.mocked(fs.stat).mockResolvedValue({ isDirectory: () => false, isFile: () => true } as any)
+      vi.mocked(fs.readdir).mockResolvedValueOnce(mockReaddir(['layout.tsx', 'page.tsx']))
+      vi.mocked(fs.stat).mockResolvedValue(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -153,14 +164,14 @@ describe('generateAppRouteManifest', () => {
 
     it('should detect nested layout with parent', async () => {
       vi.mocked(fs.readdir)
-        .mockResolvedValueOnce(['layout.tsx', 'dashboard'] as any)
-        .mockResolvedValueOnce(['layout.tsx', 'page.tsx'] as any)
+        .mockResolvedValueOnce(mockReaddir(['layout.tsx', 'dashboard']))
+        .mockResolvedValueOnce(mockReaddir(['layout.tsx', 'page.tsx']))
 
       vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce(FILE_STAT)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -174,14 +185,14 @@ describe('generateAppRouteManifest', () => {
 
     it('should sort layouts by depth', async () => {
       vi.mocked(fs.readdir)
-        .mockResolvedValueOnce(['a'] as any)
-        .mockResolvedValueOnce(['b'] as any)
-        .mockResolvedValueOnce(['layout.tsx'] as any)
+        .mockResolvedValueOnce(mockReaddir(['a']))
+        .mockResolvedValueOnce(mockReaddir(['b']))
+        .mockResolvedValueOnce(mockReaddir(['layout.tsx']))
 
       vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -191,8 +202,8 @@ describe('generateAppRouteManifest', () => {
 
   describe('special files', () => {
     it('should detect loading file', async () => {
-      vi.mocked(fs.readdir).mockResolvedValueOnce(['loading.tsx', 'page.tsx'] as any)
-      vi.mocked(fs.stat).mockResolvedValue({ isDirectory: () => false, isFile: () => true } as any)
+      vi.mocked(fs.readdir).mockResolvedValueOnce(mockReaddir(['loading.tsx', 'page.tsx']))
+      vi.mocked(fs.stat).mockResolvedValue(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -204,8 +215,8 @@ describe('generateAppRouteManifest', () => {
     })
 
     it('should detect error file', async () => {
-      vi.mocked(fs.readdir).mockResolvedValueOnce(['error.tsx', 'page.tsx'] as any)
-      vi.mocked(fs.stat).mockResolvedValue({ isDirectory: () => false, isFile: () => true } as any)
+      vi.mocked(fs.readdir).mockResolvedValueOnce(mockReaddir(['error.tsx', 'page.tsx']))
+      vi.mocked(fs.stat).mockResolvedValue(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -217,8 +228,8 @@ describe('generateAppRouteManifest', () => {
     })
 
     it('should detect not-found file', async () => {
-      vi.mocked(fs.readdir).mockResolvedValueOnce(['not-found.tsx', 'page.tsx'] as any)
-      vi.mocked(fs.stat).mockResolvedValue({ isDirectory: () => false, isFile: () => true } as any)
+      vi.mocked(fs.readdir).mockResolvedValueOnce(mockReaddir(['not-found.tsx', 'page.tsx']))
+      vi.mocked(fs.stat).mockResolvedValue(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -232,9 +243,9 @@ describe('generateAppRouteManifest', () => {
 
   describe('OG images', () => {
     it('should detect opengraph-image file', async () => {
-      vi.mocked(fs.readdir).mockResolvedValueOnce(['opengraph-image.tsx'] as any)
-      vi.mocked(fs.stat).mockResolvedValue({ isDirectory: () => false, isFile: () => true } as any)
-      vi.mocked(fs.readFile).mockResolvedValue('export default function() {}' as any)
+      vi.mocked(fs.readdir).mockResolvedValueOnce(mockReaddir(['opengraph-image.tsx']))
+      vi.mocked(fs.stat).mockResolvedValue(FILE_STAT)
+      vi.mocked(fs.readFile).mockResolvedValue(mockFileContent('export default function() {}'))
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -246,10 +257,10 @@ describe('generateAppRouteManifest', () => {
     })
 
     it('should parse size from OG image file', async () => {
-      vi.mocked(fs.readdir).mockResolvedValueOnce(['opengraph-image.tsx'] as any)
-      vi.mocked(fs.stat).mockResolvedValue({ isDirectory: () => false, isFile: () => true } as any)
+      vi.mocked(fs.readdir).mockResolvedValueOnce(mockReaddir(['opengraph-image.tsx']))
+      vi.mocked(fs.stat).mockResolvedValue(FILE_STAT)
       vi.mocked(fs.readFile).mockResolvedValue(
-        'export const size = { width: 1200, height: 630 }' as any,
+        mockFileContent('export const size = { width: 1200, height: 630 }'),
       )
 
       const manifest = await generateAppRouteManifest('/app')
@@ -261,10 +272,10 @@ describe('generateAppRouteManifest', () => {
     })
 
     it('should parse contentType from OG image file', async () => {
-      vi.mocked(fs.readdir).mockResolvedValueOnce(['opengraph-image.tsx'] as any)
-      vi.mocked(fs.stat).mockResolvedValue({ isDirectory: () => false, isFile: () => true } as any)
+      vi.mocked(fs.readdir).mockResolvedValueOnce(mockReaddir(['opengraph-image.tsx']))
+      vi.mocked(fs.stat).mockResolvedValue(FILE_STAT)
       vi.mocked(fs.readFile).mockResolvedValue(
-        'export const contentType = "image/png"' as any,
+        mockFileContent('export const contentType = "image/png"'),
       )
 
       const manifest = await generateAppRouteManifest('/app')
@@ -273,8 +284,8 @@ describe('generateAppRouteManifest', () => {
     })
 
     it('should handle OG image file read errors', async () => {
-      vi.mocked(fs.readdir).mockResolvedValueOnce(['opengraph-image.tsx'] as any)
-      vi.mocked(fs.stat).mockResolvedValue({ isDirectory: () => false, isFile: () => true } as any)
+      vi.mocked(fs.readdir).mockResolvedValueOnce(mockReaddir(['opengraph-image.tsx']))
+      vi.mocked(fs.stat).mockResolvedValue(FILE_STAT)
       vi.mocked(fs.readFile).mockRejectedValue(new Error('Read error'))
 
       const manifest = await generateAppRouteManifest('/app')
@@ -291,9 +302,9 @@ describe('generateAppRouteManifest', () => {
 
   describe('API routes', () => {
     it('should detect route file', async () => {
-      vi.mocked(fs.readdir).mockResolvedValueOnce(['route.ts'] as any)
-      vi.mocked(fs.stat).mockResolvedValue({ isDirectory: () => false, isFile: () => true } as any)
-      vi.mocked(fs.readFile).mockResolvedValue('export function GET() {}' as any)
+      vi.mocked(fs.readdir).mockResolvedValueOnce(mockReaddir(['route.ts']))
+      vi.mocked(fs.stat).mockResolvedValue(FILE_STAT)
+      vi.mocked(fs.readFile).mockResolvedValue(mockFileContent('export function GET() {}'))
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -307,10 +318,10 @@ describe('generateAppRouteManifest', () => {
     })
 
     it('should detect multiple HTTP methods', async () => {
-      vi.mocked(fs.readdir).mockResolvedValueOnce(['route.ts'] as any)
-      vi.mocked(fs.stat).mockResolvedValue({ isDirectory: () => false, isFile: () => true } as any)
+      vi.mocked(fs.readdir).mockResolvedValueOnce(mockReaddir(['route.ts']))
+      vi.mocked(fs.stat).mockResolvedValue(FILE_STAT)
       vi.mocked(fs.readFile).mockResolvedValue(
-        'export function GET() {}\nexport async function POST() {}' as any,
+        mockFileContent('export function GET() {}\nexport async function POST() {}'),
       )
 
       const manifest = await generateAppRouteManifest('/app')
@@ -319,11 +330,9 @@ describe('generateAppRouteManifest', () => {
     })
 
     it('should detect const exported methods', async () => {
-      vi.mocked(fs.readdir).mockResolvedValueOnce(['route.ts'] as any)
-      vi.mocked(fs.stat).mockResolvedValue({ isDirectory: () => false, isFile: () => true } as any)
-      vi.mocked(fs.readFile).mockResolvedValue(
-        'export const GET = async () => {}' as any,
-      )
+      vi.mocked(fs.readdir).mockResolvedValueOnce(mockReaddir(['route.ts']))
+      vi.mocked(fs.stat).mockResolvedValue(FILE_STAT)
+      vi.mocked(fs.readFile).mockResolvedValue(mockFileContent('export const GET = async () => {}'))
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -332,14 +341,12 @@ describe('generateAppRouteManifest', () => {
 
     it('should handle dynamic API routes', async () => {
       vi.mocked(fs.readdir)
-        .mockResolvedValueOnce(['[id]'] as any)
-        .mockResolvedValueOnce(['route.ts'] as any)
+        .mockResolvedValueOnce(mockReaddir(['[id]']))
+        .mockResolvedValueOnce(mockReaddir(['route.ts']))
 
-      vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+      vi.mocked(fs.stat).mockResolvedValueOnce(DIR_STAT).mockResolvedValueOnce(FILE_STAT)
 
-      vi.mocked(fs.readFile).mockResolvedValue('export function GET() {}' as any)
+      vi.mocked(fs.readFile).mockResolvedValue(mockFileContent('export function GET() {}'))
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -352,16 +359,16 @@ describe('generateAppRouteManifest', () => {
 
     it('supports API routes inside groups', async () => {
       vi.mocked(fs.readdir)
-        .mockResolvedValueOnce(['(api)'] as any)
-        .mockResolvedValueOnce(['hello'] as any)
-        .mockResolvedValueOnce(['route.ts'] as any)
+        .mockResolvedValueOnce(mockReaddir(['(api)']))
+        .mockResolvedValueOnce(mockReaddir(['hello']))
+        .mockResolvedValueOnce(mockReaddir(['route.ts']))
 
       vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
 
-      vi.mocked(fs.readFile).mockResolvedValue('export function GET() {}' as any)
+      vi.mocked(fs.readFile).mockResolvedValue(mockFileContent('export function GET() {}'))
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -374,15 +381,15 @@ describe('generateAppRouteManifest', () => {
   describe('route sorting', () => {
     it('should sort static routes before dynamic', async () => {
       vi.mocked(fs.readdir)
-        .mockResolvedValueOnce(['[id]', 'about'] as any)
-        .mockResolvedValueOnce(['page.tsx'] as any)
-        .mockResolvedValueOnce(['page.tsx'] as any)
+        .mockResolvedValueOnce(mockReaddir(['[id]', 'about']))
+        .mockResolvedValueOnce(mockReaddir(['page.tsx']))
+        .mockResolvedValueOnce(mockReaddir(['page.tsx']))
 
       vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -392,15 +399,15 @@ describe('generateAppRouteManifest', () => {
 
     it('should sort catch-all routes last', async () => {
       vi.mocked(fs.readdir)
-        .mockResolvedValueOnce(['[id]', '[...slug]'] as any)
-        .mockResolvedValueOnce(['page.tsx'] as any)
-        .mockResolvedValueOnce(['page.tsx'] as any)
+        .mockResolvedValueOnce(mockReaddir(['[id]', '[...slug]']))
+        .mockResolvedValueOnce(mockReaddir(['page.tsx']))
+        .mockResolvedValueOnce(mockReaddir(['page.tsx']))
 
       vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -410,15 +417,15 @@ describe('generateAppRouteManifest', () => {
 
     it('should sort optional catch-all routes last', async () => {
       vi.mocked(fs.readdir)
-        .mockResolvedValueOnce(['[...slug]', '[[...slug]]'] as any)
-        .mockResolvedValueOnce(['page.tsx'] as any)
-        .mockResolvedValueOnce(['page.tsx'] as any)
+        .mockResolvedValueOnce(mockReaddir(['[...slug]', '[[...slug]]']))
+        .mockResolvedValueOnce(mockReaddir(['page.tsx']))
+        .mockResolvedValueOnce(mockReaddir(['page.tsx']))
 
       vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -428,17 +435,17 @@ describe('generateAppRouteManifest', () => {
 
     it('should sort by depth when specificity is equal', async () => {
       vi.mocked(fs.readdir)
-        .mockResolvedValueOnce(['a', 'b'] as any)
-        .mockResolvedValueOnce(['c'] as any)
-        .mockResolvedValueOnce(['page.tsx'] as any)
-        .mockResolvedValueOnce(['page.tsx'] as any)
+        .mockResolvedValueOnce(mockReaddir(['a', 'b']))
+        .mockResolvedValueOnce(mockReaddir(['c']))
+        .mockResolvedValueOnce(mockReaddir(['page.tsx']))
+        .mockResolvedValueOnce(mockReaddir(['page.tsx']))
 
       vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -448,15 +455,15 @@ describe('generateAppRouteManifest', () => {
 
     it('should sort alphabetically when depth is equal', async () => {
       vi.mocked(fs.readdir)
-        .mockResolvedValueOnce(['zebra', 'apple'] as any)
-        .mockResolvedValueOnce(['page.tsx'] as any)
-        .mockResolvedValueOnce(['page.tsx'] as any)
+        .mockResolvedValueOnce(mockReaddir(['zebra', 'apple']))
+        .mockResolvedValueOnce(mockReaddir(['page.tsx']))
+        .mockResolvedValueOnce(mockReaddir(['page.tsx']))
 
       vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -468,17 +475,17 @@ describe('generateAppRouteManifest', () => {
   describe('API route sorting', () => {
     it('should sort static API routes before dynamic', async () => {
       vi.mocked(fs.readdir)
-        .mockResolvedValueOnce(['api', '[id]'] as any)
-        .mockResolvedValueOnce(['route.ts'] as any)
-        .mockResolvedValueOnce(['route.ts'] as any)
+        .mockResolvedValueOnce(mockReaddir(['api', '[id]']))
+        .mockResolvedValueOnce(mockReaddir(['route.ts']))
+        .mockResolvedValueOnce(mockReaddir(['route.ts']))
 
       vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
 
-      vi.mocked(fs.readFile).mockResolvedValue('export function GET() {}' as any)
+      vi.mocked(fs.readFile).mockResolvedValue(mockFileContent('export function GET() {}'))
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -488,17 +495,17 @@ describe('generateAppRouteManifest', () => {
 
     it('should sort dynamic API routes before static when reversed', async () => {
       vi.mocked(fs.readdir)
-        .mockResolvedValueOnce(['[id]', 'api'] as any)
-        .mockResolvedValueOnce(['route.ts'] as any)
-        .mockResolvedValueOnce(['route.ts'] as any)
+        .mockResolvedValueOnce(mockReaddir(['[id]', 'api']))
+        .mockResolvedValueOnce(mockReaddir(['route.ts']))
+        .mockResolvedValueOnce(mockReaddir(['route.ts']))
 
       vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
 
-      vi.mocked(fs.readFile).mockResolvedValue('export function GET() {}' as any)
+      vi.mocked(fs.readFile).mockResolvedValue(mockFileContent('export function GET() {}'))
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -508,17 +515,17 @@ describe('generateAppRouteManifest', () => {
 
     it('should sort API routes by depth', async () => {
       vi.mocked(fs.readdir)
-        .mockResolvedValueOnce(['api'] as any)
-        .mockResolvedValueOnce(['v1', 'route.ts'] as any)
-        .mockResolvedValueOnce(['route.ts'] as any)
+        .mockResolvedValueOnce(mockReaddir(['api']))
+        .mockResolvedValueOnce(mockReaddir(['v1', 'route.ts']))
+        .mockResolvedValueOnce(mockReaddir(['route.ts']))
 
       vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
 
-      vi.mocked(fs.readFile).mockResolvedValue('export function GET() {}' as any)
+      vi.mocked(fs.readFile).mockResolvedValue(mockFileContent('export function GET() {}'))
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -528,19 +535,19 @@ describe('generateAppRouteManifest', () => {
 
     it('should sort deeper API routes first when comparing depths', async () => {
       vi.mocked(fs.readdir)
-        .mockResolvedValueOnce(['shallow', 'deep'] as any)
-        .mockResolvedValueOnce(['route.ts'] as any)
-        .mockResolvedValueOnce(['nested'] as any)
-        .mockResolvedValueOnce(['route.ts'] as any)
+        .mockResolvedValueOnce(mockReaddir(['shallow', 'deep']))
+        .mockResolvedValueOnce(mockReaddir(['route.ts']))
+        .mockResolvedValueOnce(mockReaddir(['nested']))
+        .mockResolvedValueOnce(mockReaddir(['route.ts']))
 
       vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
 
-      vi.mocked(fs.readFile).mockResolvedValue('export function GET() {}' as any)
+      vi.mocked(fs.readFile).mockResolvedValue(mockFileContent('export function GET() {}'))
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -550,17 +557,17 @@ describe('generateAppRouteManifest', () => {
 
     it('should sort API routes alphabetically when depth is equal', async () => {
       vi.mocked(fs.readdir)
-        .mockResolvedValueOnce(['users', 'posts'] as any)
-        .mockResolvedValueOnce(['route.ts'] as any)
-        .mockResolvedValueOnce(['route.ts'] as any)
+        .mockResolvedValueOnce(mockReaddir(['users', 'posts']))
+        .mockResolvedValueOnce(mockReaddir(['route.ts']))
+        .mockResolvedValueOnce(mockReaddir(['route.ts']))
 
       vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
 
-      vi.mocked(fs.readFile).mockResolvedValue('export function GET() {}' as any)
+      vi.mocked(fs.readFile).mockResolvedValue(mockFileContent('export function GET() {}'))
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -571,10 +578,8 @@ describe('generateAppRouteManifest', () => {
 
   describe('directory filtering', () => {
     it('should skip node_modules', async () => {
-      vi.mocked(fs.readdir).mockResolvedValueOnce(['node_modules', 'page.tsx'] as any)
-      vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+      vi.mocked(fs.readdir).mockResolvedValueOnce(mockReaddir(['node_modules', 'page.tsx']))
+      vi.mocked(fs.stat).mockResolvedValueOnce(DIR_STAT).mockResolvedValueOnce(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -582,10 +587,8 @@ describe('generateAppRouteManifest', () => {
     })
 
     it('should skip hidden directories', async () => {
-      vi.mocked(fs.readdir).mockResolvedValueOnce(['.git', 'page.tsx'] as any)
-      vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+      vi.mocked(fs.readdir).mockResolvedValueOnce(mockReaddir(['.git', 'page.tsx']))
+      vi.mocked(fs.stat).mockResolvedValueOnce(DIR_STAT).mockResolvedValueOnce(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -593,10 +596,8 @@ describe('generateAppRouteManifest', () => {
     })
 
     it('should skip test directories', async () => {
-      vi.mocked(fs.readdir).mockResolvedValueOnce(['__tests__', 'page.tsx'] as any)
-      vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+      vi.mocked(fs.readdir).mockResolvedValueOnce(mockReaddir(['__tests__', 'page.tsx']))
+      vi.mocked(fs.stat).mockResolvedValueOnce(DIR_STAT).mockResolvedValueOnce(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -604,10 +605,8 @@ describe('generateAppRouteManifest', () => {
     })
 
     it('should skip symlinks and special files', async () => {
-      vi.mocked(fs.readdir).mockResolvedValueOnce(['symlink', 'page.tsx'] as any)
-      vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+      vi.mocked(fs.readdir).mockResolvedValueOnce(mockReaddir(['symlink', 'page.tsx']))
+      vi.mocked(fs.stat).mockResolvedValueOnce(FILE_STAT).mockResolvedValueOnce(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -617,10 +616,8 @@ describe('generateAppRouteManifest', () => {
 
   describe('private folders', () => {
     it('skips _components directory', async () => {
-      vi.mocked(fs.readdir).mockResolvedValueOnce(['_components', 'page.tsx'] as any)
-      vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+      vi.mocked(fs.readdir).mockResolvedValueOnce(mockReaddir(['_components', 'page.tsx']))
+      vi.mocked(fs.stat).mockResolvedValueOnce(DIR_STAT).mockResolvedValueOnce(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -629,10 +626,8 @@ describe('generateAppRouteManifest', () => {
     })
 
     it('does not recurse into _private subdirectories', async () => {
-      vi.mocked(fs.readdir).mockResolvedValueOnce(['_private', 'page.tsx'] as any)
-      vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+      vi.mocked(fs.readdir).mockResolvedValueOnce(mockReaddir(['_private', 'page.tsx']))
+      vi.mocked(fs.stat).mockResolvedValueOnce(DIR_STAT).mockResolvedValueOnce(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -642,11 +637,9 @@ describe('generateAppRouteManifest', () => {
 
     it('skips _private nested in groups', async () => {
       vi.mocked(fs.readdir)
-        .mockResolvedValueOnce(['(marketing)'] as any)
-        .mockResolvedValueOnce(['_private'] as any)
-      vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
+        .mockResolvedValueOnce(mockReaddir(['(marketing)']))
+        .mockResolvedValueOnce(mockReaddir(['_private']))
+      vi.mocked(fs.stat).mockResolvedValueOnce(DIR_STAT).mockResolvedValueOnce(DIR_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -658,11 +651,9 @@ describe('generateAppRouteManifest', () => {
   describe('route groups in URLs', () => {
     it('strips a single group segment from the URL', async () => {
       vi.mocked(fs.readdir)
-        .mockResolvedValueOnce(['(marketing)'] as any)
-        .mockResolvedValueOnce(['page.tsx'] as any)
-      vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce(mockReaddir(['(marketing)']))
+        .mockResolvedValueOnce(mockReaddir(['page.tsx']))
+      vi.mocked(fs.stat).mockResolvedValueOnce(DIR_STAT).mockResolvedValueOnce(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -674,14 +665,14 @@ describe('generateAppRouteManifest', () => {
 
     it('strips group from nested page URL', async () => {
       vi.mocked(fs.readdir)
-        .mockResolvedValueOnce(['(marketing)'] as any)
-        .mockResolvedValueOnce(['about', 'page.tsx'] as any)
-        .mockResolvedValueOnce(['page.tsx'] as any)
+        .mockResolvedValueOnce(mockReaddir(['(marketing)']))
+        .mockResolvedValueOnce(mockReaddir(['about', 'page.tsx']))
+        .mockResolvedValueOnce(mockReaddir(['page.tsx']))
       vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -692,13 +683,13 @@ describe('generateAppRouteManifest', () => {
 
     it('strips multiple nested groups from URL', async () => {
       vi.mocked(fs.readdir)
-        .mockResolvedValueOnce(['(a)'] as any)
-        .mockResolvedValueOnce(['(b)'] as any)
-        .mockResolvedValueOnce(['page.tsx'] as any)
+        .mockResolvedValueOnce(mockReaddir(['(a)']))
+        .mockResolvedValueOnce(mockReaddir(['(b)']))
+        .mockResolvedValueOnce(mockReaddir(['page.tsx']))
       vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -707,14 +698,14 @@ describe('generateAppRouteManifest', () => {
 
     it('keeps dynamic segments but strips groups', async () => {
       vi.mocked(fs.readdir)
-        .mockResolvedValueOnce(['(marketing)'] as any)
-        .mockResolvedValueOnce(['[slug]', 'page.tsx'] as any)
-        .mockResolvedValueOnce(['page.tsx'] as any)
+        .mockResolvedValueOnce(mockReaddir(['(marketing)']))
+        .mockResolvedValueOnce(mockReaddir(['[slug]', 'page.tsx']))
+        .mockResolvedValueOnce(mockReaddir(['page.tsx']))
       vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -728,17 +719,17 @@ describe('generateAppRouteManifest', () => {
   describe('layout in route group (initial Phase 1 shape)', () => {
     it('emits a layout entry per file in the group, with filePath including the group', async () => {
       vi.mocked(fs.readdir)
-        .mockResolvedValueOnce(['(marketing)'] as any)
-        .mockResolvedValueOnce(['layout.tsx', 'about', 'pricing'] as any)
-        .mockResolvedValueOnce(['page.tsx'] as any)
-        .mockResolvedValueOnce(['page.tsx'] as any)
+        .mockResolvedValueOnce(mockReaddir(['(marketing)']))
+        .mockResolvedValueOnce(mockReaddir(['layout.tsx', 'about', 'pricing']))
+        .mockResolvedValueOnce(mockReaddir(['page.tsx']))
+        .mockResolvedValueOnce(mockReaddir(['page.tsx']))
       vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -752,14 +743,14 @@ describe('generateAppRouteManifest', () => {
   describe('route groups - additionalPaths finalization', () => {
     it('does not emit empty additionalPaths for a single grouped page target', async () => {
       vi.mocked(fs.readdir)
-        .mockResolvedValueOnce(['(marketing)'] as any)
-        .mockResolvedValueOnce(['layout.tsx', 'about'] as any)
-        .mockResolvedValueOnce(['page.tsx'] as any)
+        .mockResolvedValueOnce(mockReaddir(['(marketing)']))
+        .mockResolvedValueOnce(mockReaddir(['layout.tsx', 'about']))
+        .mockResolvedValueOnce(mockReaddir(['page.tsx']))
       vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -771,17 +762,17 @@ describe('generateAppRouteManifest', () => {
 
     it('layout in a group applies to all pages in the subtree', async () => {
       vi.mocked(fs.readdir)
-        .mockResolvedValueOnce(['(marketing)'] as any)
-        .mockResolvedValueOnce(['layout.tsx', 'about', 'pricing'] as any)
-        .mockResolvedValueOnce(['page.tsx'] as any)
-        .mockResolvedValueOnce(['page.tsx'] as any)
+        .mockResolvedValueOnce(mockReaddir(['(marketing)']))
+        .mockResolvedValueOnce(mockReaddir(['layout.tsx', 'about', 'pricing']))
+        .mockResolvedValueOnce(mockReaddir(['page.tsx']))
+        .mockResolvedValueOnce(mockReaddir(['page.tsx']))
       vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -793,17 +784,17 @@ describe('generateAppRouteManifest', () => {
 
     it('sorts additionalPaths alphabetically', async () => {
       vi.mocked(fs.readdir)
-        .mockResolvedValueOnce(['(g)'] as any)
-        .mockResolvedValueOnce(['layout.tsx', 'zebra', 'apple'] as any)
-        .mockResolvedValueOnce(['page.tsx'] as any)
-        .mockResolvedValueOnce(['page.tsx'] as any)
+        .mockResolvedValueOnce(mockReaddir(['(g)']))
+        .mockResolvedValueOnce(mockReaddir(['layout.tsx', 'zebra', 'apple']))
+        .mockResolvedValueOnce(mockReaddir(['page.tsx']))
+        .mockResolvedValueOnce(mockReaddir(['page.tsx']))
       vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -814,35 +805,31 @@ describe('generateAppRouteManifest', () => {
 
     it('layout in nested groups applies to all pages in the deep subtree', async () => {
       vi.mocked(fs.readdir)
-        .mockResolvedValueOnce(['(a)'] as any)
-        .mockResolvedValueOnce(['(b)'] as any)
-        .mockResolvedValueOnce(['layout.tsx', 'page.tsx', 'sub'] as any)
-        .mockResolvedValueOnce(['page.tsx'] as any)
-        .mockResolvedValueOnce(['page.tsx'] as any)
+        .mockResolvedValueOnce(mockReaddir(['(a)']))
+        .mockResolvedValueOnce(mockReaddir(['(b)']))
+        .mockResolvedValueOnce(mockReaddir(['layout.tsx', 'page.tsx', 'sub']))
+        .mockResolvedValueOnce(mockReaddir(['page.tsx']))
+        .mockResolvedValueOnce(mockReaddir(['page.tsx']))
       vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
-      const layout = manifest.layouts.find(
-        l => l.filePath === '(a)/(b)/layout.tsx',
-      )
+      const layout = manifest.layouts.find(l => l.filePath === '(a)/(b)/layout.tsx')
       expect(layout).toBeDefined()
       expect(layout!.additionalPaths).toContain('/sub')
     })
 
     it('drops a layout in a group with no pages anywhere in the subtree', async () => {
       vi.mocked(fs.readdir)
-        .mockResolvedValueOnce(['(empty)'] as any)
-        .mockResolvedValueOnce(['layout.tsx'] as any)
-      vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce(mockReaddir(['(empty)']))
+        .mockResolvedValueOnce(mockReaddir(['layout.tsx']))
+      vi.mocked(fs.stat).mockResolvedValueOnce(DIR_STAT).mockResolvedValueOnce(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -851,19 +838,19 @@ describe('generateAppRouteManifest', () => {
 
     it('loading/error/not-found in groups also get additionalPaths', async () => {
       vi.mocked(fs.readdir)
-        .mockResolvedValueOnce(['(g)'] as any)
-        .mockResolvedValueOnce(['loading.tsx', 'error.tsx', 'not-found.tsx', 'a', 'b'] as any)
-        .mockResolvedValueOnce(['page.tsx'] as any)
-        .mockResolvedValueOnce(['page.tsx'] as any)
+        .mockResolvedValueOnce(mockReaddir(['(g)']))
+        .mockResolvedValueOnce(mockReaddir(['loading.tsx', 'error.tsx', 'not-found.tsx', 'a', 'b']))
+        .mockResolvedValueOnce(mockReaddir(['page.tsx']))
+        .mockResolvedValueOnce(mockReaddir(['page.tsx']))
       vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -881,10 +868,8 @@ describe('generateAppRouteManifest', () => {
     })
 
     it('layout not in a group has no additionalPaths', async () => {
-      vi.mocked(fs.readdir).mockResolvedValueOnce(['layout.tsx', 'page.tsx'] as any)
-      vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+      vi.mocked(fs.readdir).mockResolvedValueOnce(mockReaddir(['layout.tsx', 'page.tsx']))
+      vi.mocked(fs.stat).mockResolvedValueOnce(FILE_STAT).mockResolvedValueOnce(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -904,7 +889,7 @@ describe('generateAppRouteManifest', () => {
     })
 
     it('should include generated timestamp', async () => {
-      vi.mocked(fs.readdir).mockResolvedValueOnce([] as any)
+      vi.mocked(fs.readdir).mockResolvedValueOnce(mockReaddir([]))
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -913,8 +898,8 @@ describe('generateAppRouteManifest', () => {
     })
 
     it('should handle empty directory path', async () => {
-      vi.mocked(fs.readdir).mockResolvedValueOnce(['page.tsx'] as any)
-      vi.mocked(fs.stat).mockResolvedValue({ isDirectory: () => false, isFile: () => true } as any)
+      vi.mocked(fs.readdir).mockResolvedValueOnce(mockReaddir(['page.tsx']))
+      vi.mocked(fs.stat).mockResolvedValue(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -924,8 +909,8 @@ describe('generateAppRouteManifest', () => {
 
   describe('options', () => {
     it('should use custom extensions', async () => {
-      vi.mocked(fs.readdir).mockResolvedValueOnce(['page.mdx'] as any)
-      vi.mocked(fs.stat).mockResolvedValue({ isDirectory: () => false, isFile: () => true } as any)
+      vi.mocked(fs.readdir).mockResolvedValueOnce(mockReaddir(['page.mdx']))
+      vi.mocked(fs.stat).mockResolvedValue(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app', {
         extensions: ['.mdx'],
@@ -937,8 +922,8 @@ describe('generateAppRouteManifest', () => {
 
     it('should handle verbose option', async () => {
       const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-      vi.mocked(fs.readdir).mockResolvedValueOnce(['page.tsx'] as any)
-      vi.mocked(fs.stat).mockResolvedValue({ isDirectory: () => false, isFile: () => true } as any)
+      vi.mocked(fs.readdir).mockResolvedValueOnce(mockReaddir(['page.tsx']))
+      vi.mocked(fs.stat).mockResolvedValue(FILE_STAT)
 
       await generateAppRouteManifest('/app', { verbose: true })
 
@@ -950,59 +935,59 @@ describe('generateAppRouteManifest', () => {
   describe('duplicate route detection', () => {
     it('throws when two groups produce the same page route', async () => {
       vi.mocked(fs.readdir)
-        .mockResolvedValueOnce(['(a)', '(b)'] as any)
-        .mockResolvedValueOnce(['about'] as any)
-        .mockResolvedValueOnce(['page.tsx'] as any)
-        .mockResolvedValueOnce(['about'] as any)
-        .mockResolvedValueOnce(['page.tsx'] as any)
+        .mockResolvedValueOnce(mockReaddir(['(a)', '(b)']))
+        .mockResolvedValueOnce(mockReaddir(['about']))
+        .mockResolvedValueOnce(mockReaddir(['page.tsx']))
+        .mockResolvedValueOnce(mockReaddir(['about']))
+        .mockResolvedValueOnce(mockReaddir(['page.tsx']))
 
       vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
 
       await expect(generateAppRouteManifest('/app')).rejects.toThrow(/Route conflict.*\/about/)
     })
 
     it('throws when two groups produce the same API route', async () => {
       vi.mocked(fs.readdir)
-        .mockResolvedValueOnce(['(a)', '(b)'] as any)
-        .mockResolvedValueOnce(['users'] as any)
-        .mockResolvedValueOnce(['route.ts'] as any)
-        .mockResolvedValueOnce(['users'] as any)
-        .mockResolvedValueOnce(['route.ts'] as any)
+        .mockResolvedValueOnce(mockReaddir(['(a)', '(b)']))
+        .mockResolvedValueOnce(mockReaddir(['users']))
+        .mockResolvedValueOnce(mockReaddir(['route.ts']))
+        .mockResolvedValueOnce(mockReaddir(['users']))
+        .mockResolvedValueOnce(mockReaddir(['route.ts']))
 
       vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
 
-      vi.mocked(fs.readFile).mockResolvedValue('export function GET() {}' as any)
+      vi.mocked(fs.readFile).mockResolvedValue(mockFileContent('export function GET() {}'))
 
       await expect(generateAppRouteManifest('/app')).rejects.toThrow(/Route conflict.*\/users/)
     })
 
     it('does not throw when routes are unique', async () => {
       vi.mocked(fs.readdir)
-        .mockResolvedValueOnce(['(a)', '(b)'] as any)
-        .mockResolvedValueOnce(['about'] as any)
-        .mockResolvedValueOnce(['page.tsx'] as any)
-        .mockResolvedValueOnce(['pricing'] as any)
-        .mockResolvedValueOnce(['page.tsx'] as any)
+        .mockResolvedValueOnce(mockReaddir(['(a)', '(b)']))
+        .mockResolvedValueOnce(mockReaddir(['about']))
+        .mockResolvedValueOnce(mockReaddir(['page.tsx']))
+        .mockResolvedValueOnce(mockReaddir(['pricing']))
+        .mockResolvedValueOnce(mockReaddir(['page.tsx']))
 
       vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
 
       await expect(generateAppRouteManifest('/app')).resolves.toBeDefined()
     })
@@ -1010,9 +995,8 @@ describe('generateAppRouteManifest', () => {
 
   describe('template files', () => {
     it('should collect a root template', async () => {
-      vi.mocked(fs.readdir)
-        .mockResolvedValueOnce(['page.tsx', 'template.tsx'] as any)
-      vi.mocked(fs.stat).mockResolvedValue({ isDirectory: () => false, isFile: () => true } as any)
+      vi.mocked(fs.readdir).mockResolvedValueOnce(mockReaddir(['page.tsx', 'template.tsx']))
+      vi.mocked(fs.stat).mockResolvedValue(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -1026,12 +1010,12 @@ describe('generateAppRouteManifest', () => {
 
     it('should collect a nested template with parentPath', async () => {
       vi.mocked(fs.readdir)
-        .mockResolvedValueOnce(['about'] as any)
-        .mockResolvedValueOnce(['page.tsx', 'template.tsx'] as any)
+        .mockResolvedValueOnce(mockReaddir(['about']))
+        .mockResolvedValueOnce(mockReaddir(['page.tsx', 'template.tsx']))
       vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -1044,8 +1028,8 @@ describe('generateAppRouteManifest', () => {
     })
 
     it('should accept multiple file extensions', async () => {
-      vi.mocked(fs.readdir).mockResolvedValueOnce(['page.tsx', 'template.jsx'] as any)
-      vi.mocked(fs.stat).mockResolvedValue({ isDirectory: () => false, isFile: () => true } as any)
+      vi.mocked(fs.readdir).mockResolvedValueOnce(mockReaddir(['page.tsx', 'template.jsx']))
+      vi.mocked(fs.stat).mockResolvedValue(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -1054,8 +1038,8 @@ describe('generateAppRouteManifest', () => {
     })
 
     it('should return empty templates array when none exist', async () => {
-      vi.mocked(fs.readdir).mockResolvedValueOnce(['page.tsx', 'layout.tsx'] as any)
-      vi.mocked(fs.stat).mockResolvedValue({ isDirectory: () => false, isFile: () => true } as any)
+      vi.mocked(fs.readdir).mockResolvedValueOnce(mockReaddir(['page.tsx', 'layout.tsx']))
+      vi.mocked(fs.stat).mockResolvedValue(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -1064,14 +1048,14 @@ describe('generateAppRouteManifest', () => {
 
     it('should sort templates root first, then by depth', async () => {
       vi.mocked(fs.readdir)
-        .mockResolvedValueOnce(['about', 'page.tsx', 'template.tsx'] as any)
-        .mockResolvedValueOnce(['page.tsx', 'template.tsx'] as any)
+        .mockResolvedValueOnce(mockReaddir(['about', 'page.tsx', 'template.tsx']))
+        .mockResolvedValueOnce(mockReaddir(['page.tsx', 'template.tsx']))
       vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -1082,15 +1066,15 @@ describe('generateAppRouteManifest', () => {
 
     it('should sort non-root templates by depth', async () => {
       vi.mocked(fs.readdir)
-        .mockResolvedValueOnce(['about'] as any)
-        .mockResolvedValueOnce(['settings', 'template.tsx'] as any)
-        .mockResolvedValueOnce(['page.tsx', 'template.tsx'] as any)
+        .mockResolvedValueOnce(mockReaddir(['about']))
+        .mockResolvedValueOnce(mockReaddir(['settings', 'template.tsx']))
+        .mockResolvedValueOnce(mockReaddir(['page.tsx', 'template.tsx']))
       vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
@@ -1101,23 +1085,25 @@ describe('generateAppRouteManifest', () => {
 
     it('should populate additionalPaths for template in a route group', async () => {
       vi.mocked(fs.readdir)
-        .mockResolvedValueOnce(['(_public)'] as any)
-        .mockResolvedValueOnce(['contact', 'pricing', 'template.tsx'] as any)
-        .mockResolvedValueOnce(['page.tsx'] as any)
-        .mockResolvedValueOnce(['page.tsx'] as any)
+        .mockResolvedValueOnce(mockReaddir(['(_public)']))
+        .mockResolvedValueOnce(mockReaddir(['contact', 'pricing', 'template.tsx']))
+        .mockResolvedValueOnce(mockReaddir(['page.tsx']))
+        .mockResolvedValueOnce(mockReaddir(['page.tsx']))
       vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(DIR_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
+        .mockResolvedValueOnce(FILE_STAT)
 
       const manifest = await generateAppRouteManifest('/app')
 
       expect(manifest.templates).toHaveLength(1)
       const tpl = manifest.templates[0]
-      expect([tpl.path, ...(tpl.additionalPaths ?? [])].sort()).toEqual(['/contact', '/pricing'].sort())
+      expect([tpl.path, ...(tpl.additionalPaths ?? [])].sort()).toEqual(
+        ['/contact', '/pricing'].sort(),
+      )
     })
   })
 })

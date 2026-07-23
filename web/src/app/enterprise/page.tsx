@@ -44,10 +44,34 @@ export default function EnterprisePage() {
 
           <div className="flex flex-wrap items-center justify-center gap-3">
             {[
-              { id: 'prod-ready', label: 'Production-Ready', bg: 'bg-[#D34516]/10', text: 'text-[#D34516]', border: 'border-[#D34516]/20' },
-              { id: 'open-source', label: '100% Open Source', bg: 'bg-[#61dafb]/10', text: 'text-[#61dafb]', border: 'border-[#61dafb]/20' },
-              { id: 'enterprise', label: 'Enterprise Support', bg: 'bg-yellow-500/10', text: 'text-yellow-600', border: 'border-yellow-500/20' },
-              { id: 'mit', label: 'MIT Licensed', bg: 'bg-purple-500/10', text: 'text-purple-400', border: 'border-purple-500/20' },
+              {
+                id: 'prod-ready',
+                label: 'Production-Ready',
+                bg: 'bg-[#D34516]/10',
+                text: 'text-[#D34516]',
+                border: 'border-[#D34516]/20',
+              },
+              {
+                id: 'open-source',
+                label: '100% Open Source',
+                bg: 'bg-[#61dafb]/10',
+                text: 'text-[#61dafb]',
+                border: 'border-[#61dafb]/20',
+              },
+              {
+                id: 'enterprise',
+                label: 'Enterprise Support',
+                bg: 'bg-yellow-500/10',
+                text: 'text-yellow-600',
+                border: 'border-yellow-500/20',
+              },
+              {
+                id: 'mit',
+                label: 'MIT Licensed',
+                bg: 'bg-purple-500/10',
+                text: 'text-purple-400',
+                border: 'border-purple-500/20',
+              },
             ].map(feature => (
               <div
                 key={feature.id}
@@ -67,15 +91,21 @@ export default function EnterprisePage() {
             <div className="relative bg-linear-to-br from-surface to-canvas border border-edge rounded-2xl p-8 lg:p-12">
               <div className="grid md:grid-cols-3 gap-8">
                 <div className="text-center">
-                  <div className="text-4xl font-bold text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover mb-2">&lt;50ms</div>
+                  <div className="text-4xl font-bold text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover mb-2">
+                    &lt;50ms
+                  </div>
                   <div className="text-fg-muted">Average response time</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-4xl font-bold text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover mb-2">100%</div>
+                  <div className="text-4xl font-bold text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover mb-2">
+                    100%
+                  </div>
                   <div className="text-fg-muted">Open source, MIT licensed</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-4xl font-bold text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover mb-2">0</div>
+                  <div className="text-4xl font-bold text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover mb-2">
+                    0
+                  </div>
                   <div className="text-fg-muted">Config needed to start</div>
                 </div>
               </div>
@@ -88,9 +118,10 @@ export default function EnterprisePage() {
         <div className={container.marketing}>
           <div className="text-center mb-16">
             <h2 className="text-3xl lg:text-5xl font-bold text-fg mb-4">
-              Enterprise
-              {' '}
-              <span className="text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover">benefits</span>
+              Enterprise{' '}
+              <span className="text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover">
+                benefits
+              </span>
             </h2>
             <p className="text-xl text-fg-muted max-w-2xl mx-auto">
               Everything your team needs to build and ship with confidence on rari
@@ -102,35 +133,44 @@ export default function EnterprisePage() {
               {
                 id: 'performance',
                 title: 'Production-Ready Performance',
-                description: 'Rust-powered runtime delivers consistent sub-50ms response times. Built for scale from day one.',
+                description:
+                  'Rust-powered runtime delivers consistent sub-50ms response times. Built for scale from day one.',
               },
               {
                 id: 'support',
                 title: 'Enterprise Support',
-                description: 'Priority bug fixes, production issue support, and direct access to the core team. SLAs from 48hr to 24hr.',
+                description:
+                  'Priority bug fixes, production issue support, and direct access to the core team. SLAs from 48hr to 24hr.',
               },
               {
                 id: 'roadmap',
                 title: 'Roadmap Influence',
-                description: 'Vote on priorities, request features, and shape the framework to meet your business needs.',
+                description:
+                  'Vote on priorities, request features, and shape the framework to meet your business needs.',
               },
               {
                 id: 'migration',
                 title: 'Migration Consulting',
-                description: 'Get expert guidance moving from Next.js, Remix, or other frameworks. We help you ship faster.',
+                description:
+                  'Get expert guidance moving from Next.js, Remix, or other frameworks. We help you ship faster.',
               },
               {
                 id: 'custom-dev',
                 title: 'Custom Development',
-                description: 'Need a specific feature? Higher tiers include custom development hours aligned with the roadmap.',
+                description:
+                  'Need a specific feature? Higher tiers include custom development hours aligned with the roadmap.',
               },
               {
                 id: 'partnership',
                 title: 'Technology Partnership',
-                description: 'Co-marketing opportunities, case studies, and joint speaking engagements to showcase your success.',
+                description:
+                  'Co-marketing opportunities, case studies, and joint speaking engagements to showcase your success.',
               },
             ].map(feature => (
-              <div key={feature.id} className="relative group h-full overflow-hidden rounded-xl p-px">
+              <div
+                key={feature.id}
+                className="relative group h-full overflow-hidden rounded-xl p-px"
+              >
                 <div className="relative z-10 h-full bg-linear-to-br from-surface to-canvas border border-edge rounded-xl p-6 transition-all duration-300 group-hover:border-transparent">
                   <div className="absolute inset-0 bg-linear-to-br from-accent/10 via-accent-hover/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-xl" />
                   <div className="relative z-10">
@@ -148,12 +188,12 @@ export default function EnterprisePage() {
                 <div
                   className="absolute z-0 aspect-2/1 w-16 animate-border-trail opacity-0 group-hover:opacity-100 transition-opacity duration-300"
                   style={{
-                    background: 'radial-gradient(ellipse at 100% 50%, #fd7e14 0%, #ff9a3c 40%, transparent 70%)',
+                    background:
+                      'radial-gradient(ellipse at 100% 50%, #fd7e14 0%, #ff9a3c 40%, transparent 70%)',
                     offsetAnchor: '100% 50%',
                     offsetPath: 'border-box',
                   }}
-                >
-                </div>
+                ></div>
               </div>
             ))}
           </div>
@@ -164,10 +204,10 @@ export default function EnterprisePage() {
         <div className={container.marketing}>
           <div className="text-center mb-16">
             <h2 className="text-3xl lg:text-5xl font-bold text-fg mb-4">
-              Why
-              {' '}
-              <span className="text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover">rari</span>
-              {' '}
+              Why{' '}
+              <span className="text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover">
+                rari
+              </span>{' '}
               for enterprise?
             </h2>
           </div>
@@ -177,20 +217,23 @@ export default function EnterprisePage() {
               {
                 id: 'performance',
                 title: 'Performance at Scale',
-                body: 'Unlike JavaScript-based frameworks, rari\'s Rust runtime eliminates the overhead of Node.js. Your React Server Components execute in an embedded V8 engine managed by Rust, giving you predictable performance even under heavy load.',
+                body: "Unlike JavaScript-based frameworks, rari's Rust runtime eliminates the overhead of Node.js. Your React Server Components execute in an embedded V8 engine managed by Rust, giving you predictable performance even under heavy load.",
               },
               {
                 id: 'costs',
                 title: 'Lower Infrastructure Costs',
-                body: 'Rust\'s memory efficiency means you can handle more traffic with fewer servers. The runtime uses ~50% less memory than Node.js for equivalent workloads.',
+                body: "Rust's memory efficiency means you can handle more traffic with fewer servers. The runtime uses ~50% less memory than Node.js for equivalent workloads.",
               },
               {
                 id: 'dx',
                 title: 'Developer Experience',
-                body: 'Your team writes React. That\'s it. No new languages to learn, no complex build configs. Full TypeScript support, instant HMR, and detailed error overlays keep developers productive.',
+                body: "Your team writes React. That's it. No new languages to learn, no complex build configs. Full TypeScript support, instant HMR, and detailed error overlays keep developers productive.",
               },
             ].map(section => (
-              <div key={section.id} className="relative bg-linear-to-br from-surface to-canvas border border-edge rounded-xl p-8">
+              <div
+                key={section.id}
+                className="relative bg-linear-to-br from-surface to-canvas border border-edge rounded-xl p-8"
+              >
                 <h3 className="text-2xl font-bold text-fg mb-4">{section.title}</h3>
                 <p className="text-fg-muted leading-relaxed">{section.body}</p>
               </div>
@@ -208,7 +251,8 @@ export default function EnterprisePage() {
                 Ready to accelerate your development?
               </h2>
               <p className="text-xl text-fg-muted mb-8 max-w-2xl mx-auto text-balance">
-                Choose a sponsorship tier that fits your needs, or reach out to discuss custom partnerships.
+                Choose a sponsorship tier that fits your needs, or reach out to discuss custom
+                partnerships.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <a
@@ -236,5 +280,6 @@ export default function EnterprisePage() {
 
 export const metadata: Metadata = {
   title: 'Enterprise / rari',
-  description: 'Production-ready React Server Components on a Rust runtime. Get enterprise support, roadmap influence, and dedicated partnership opportunities.',
+  description:
+    'Production-ready React Server Components on a Rust runtime. Get enterprise support, roadmap influence, and dedicated partnership opportunities.',
 }

@@ -1,11 +1,11 @@
 export interface RouteContext<TParams extends Record<string, string> = Record<string, string>> {
-  params: TParams
+  readonly params: TParams
 }
 
 export type RouteHandler<TParams extends Record<string, string> = Record<string, string>> = (
   request: Request,
   context?: RouteContext<TParams>,
-) => Response | Promise<Response> | any | Promise<any>
+) => Response | Promise<Response>
 
 export interface ApiRouteHandlers<TParams extends Record<string, string> = Record<string, string>> {
   GET?: RouteHandler<TParams>
@@ -23,8 +23,7 @@ export class ApiResponse extends Response {
   }
 
   static redirect(url: string, status: number = 307): Response {
-    if (/^https?:\/\//i.test(url))
-      return Response.redirect(url, status)
+    if (/^https?:\/\//i.test(url)) return Response.redirect(url, status)
 
     return new Response(null, {
       status,

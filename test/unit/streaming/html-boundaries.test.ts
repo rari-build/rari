@@ -16,10 +16,12 @@ function loadTracker(): () => HtmlBoundaryTracker {
     path.dirname(fileURLToPath(import.meta.url)),
     '../../../crates/rari/src/rendering/layout/js/html_boundaries.ts',
   )
-  const source = fs.readFileSync(sourcePath, 'utf8')
-    .replace(/\(text: string\)/g, '(text)')
+  const source = fs.readFileSync(sourcePath, 'utf8').replace(/\(text: string\)/g, '(text)')
   const sandbox: { rariCreateHtmlBoundaryTracker?: () => HtmlBoundaryTracker } = {}
-  vm.runInNewContext(`${source}\nthis.rariCreateHtmlBoundaryTracker = rariCreateHtmlBoundaryTracker`, sandbox)
+  vm.runInNewContext(
+    `${source}\nthis.rariCreateHtmlBoundaryTracker = rariCreateHtmlBoundaryTracker`,
+    sandbox,
+  )
   const create = sandbox.rariCreateHtmlBoundaryTracker
   if (typeof create !== 'function')
     throw new Error('failed to load rariCreateHtmlBoundaryTracker from html_boundaries.ts')
@@ -29,9 +31,9 @@ function loadTracker(): () => HtmlBoundaryTracker {
 
 const createTracker = loadTracker()
 
-function feed(chunks: string[]) {
+function feed(chunks: readonly string[]) {
   const tracker = createTracker()
-  const states: Array<{ chunk: string, safe: boolean, state: string }> = []
+  const states: Array<{ chunk: string; safe: boolean; state: string }> = []
   for (const chunk of chunks) {
     const safe = tracker.trackHtmlBoundaries(chunk)
     states.push({ chunk, safe, state: tracker.getState() })
@@ -43,17 +45,14 @@ function feed(chunks: string[]) {
 function assertAllSplits(full: string) {
   for (let split = 1; split < full.length; split++) {
     const { tracker, states } = feed([full.slice(0, split), full.slice(split)])
-    expect(
-      tracker.getState(),
-      `split=${split} final state for ${JSON.stringify(full)}`,
-    ).toBe('outside')
-    expect(
-      tracker.safeToInjectFlight(),
-      `split=${split} should be safe after full input`,
-    ).toBe(true)
-    const first = states[0]!
-    if (first.state !== 'outside')
-      expect(first.safe).toBe(false)
+    expect(tracker.getState(), `split=${split} final state for ${JSON.stringify(full)}`).toBe(
+      'outside',
+    )
+    expect(tracker.safeToInjectFlight(), `split=${split} should be safe after full input`).toBe(
+      true,
+    )
+    const first = states[0]
+    if (first.state !== 'outside') expect(first.safe).toBe(false)
   }
 }
 

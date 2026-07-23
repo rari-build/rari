@@ -1,35 +1,35 @@
 export interface SimpleRequest {
-  url: string
-  method: string
-  headers: Record<string, string>
+  readonly url: string
+  readonly method: string
+  readonly headers: Readonly<Record<string, string>>
 }
 
 export interface SimpleProxyResult {
-  continue: boolean
-  redirect?: {
-    destination: string
-    permanent: boolean
+  readonly continue: boolean
+  readonly redirect?: {
+    readonly destination: string
+    readonly permanent: boolean
   }
-  rewrite?: string
-  requestHeaders?: Record<string, string | string[]>
-  responseHeaders?: Record<string, string | string[]>
-  response?: {
-    status: number
-    headers: Record<string, string | string[]>
-    body?: string
+  readonly rewrite?: string
+  readonly requestHeaders?: Readonly<Record<string, string | readonly string[]>>
+  readonly responseHeaders?: Readonly<Record<string, string | readonly string[]>>
+  readonly response?: {
+    readonly status: number
+    readonly headers: Readonly<Record<string, string | readonly string[]>>
+    readonly body?: string
   }
 }
 
 export interface ResponseLike {
-  status?: number
-  headers?: {
-    get?: (name: string) => string | null
-    getSetCookie?: () => string[]
-    forEach?: (callback: (value: string, key: string) => void) => void
+  readonly status?: number
+  readonly headers?: {
+    readonly get?: (name: string) => string | null
+    readonly getSetCookie?: () => string[]
+    readonly forEach?: (callback: (value: string, key: string) => void) => void
   }
-  cookies?: {
-    toSetCookieHeaders?: () => string[]
+  readonly cookies?: {
+    readonly toSetCookieHeaders?: () => string[]
   }
-  text?: () => Promise<string>
-  body?: any
+  readonly text?: () => Promise<string>
+  readonly body?: any
 }

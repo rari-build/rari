@@ -1,32 +1,42 @@
-import { clearServerInjectedErrors, hasFizzMarkers, hasServerRenderedDom } from '@rari/runtime/shared/hydration'
+import {
+  clearServerInjectedErrors,
+  hasFizzMarkers,
+  hasServerRenderedDom,
+} from '@rari/runtime/shared/hydration'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
+import { castMock } from '../../helpers/mock-cast'
 
-function mockRoot(options: {
-  comments?: string[]
-  reactRoot?: boolean
-  templateCount?: number
-}): HTMLElement {
+function mockRoot(
+  options: Readonly<{
+    readonly comments?: readonly string[]
+    readonly reactRoot?: boolean
+    readonly templateCount?: number
+  }>,
+): HTMLElement {
   const comments = options.comments ?? []
   let commentIndex = 0
 
-  vi.mocked(document.createTreeWalker).mockReturnValue({
-    currentNode: null as Node | null,
-    nextNode() {
-      if (commentIndex >= comments.length)
-        return null
-      const node = { data: comments[commentIndex++] } as Comment
-      ;(this as { currentNode: Node | null }).currentNode = node
-      return node
-    },
-  } as TreeWalker)
+  vi.spyOn(document, 'createTreeWalker').mockReturnValue(
+    castMock({
+      currentNode: null as Node | null,
+      // oxlint-disable-next-line typescript/prefer-readonly-parameter-types -- TreeWalker mock mutates currentNode
+      nextNode(this: { currentNode: Node | null }) {
+        if (commentIndex >= comments.length) return null
+        const node = castMock<Node>({ nodeType: 8, data: comments[commentIndex++] })
+        this.currentNode = node
+        return node
+      },
+    }),
+  )
 
-  return {
+  return castMock<HTMLElement>({
+    // oxlint-disable-next-line typescript/no-deprecated -- mock DOM surface exercised by hydration helpers
     querySelector(selector: string) {
-      if (selector === '[data-reactroot]' && options.reactRoot)
-        return {}
+      if (selector === '[data-reactroot]' && options.reactRoot) return {}
 
       return null
     },
+    // oxlint-disable-next-line typescript/no-deprecated -- mock DOM surface exercised by hydration helpers
     querySelectorAll(selector: string) {
       if (selector === 'template[data-rri]') {
         return Array.from({ length: options.templateCount ?? 0 }, () => ({}))
@@ -34,7 +44,7 @@ function mockRoot(options: {
 
       return []
     },
-  } as unknown as HTMLElement
+  })
 }
 
 describe('hasFizzMarkers', () => {
@@ -119,9 +129,9 @@ describe('hasServerRenderedDom', () => {
 describe('clearServerInjectedErrors', () => {
   it('removes server error nodes matched by the selector', () => {
     const serverError = { remove: vi.fn() }
-    const root = {
+    const root = castMock<Element>({
       querySelectorAll: vi.fn(() => [serverError]),
-    } as unknown as Element
+    })
 
     clearServerInjectedErrors(root)
 

@@ -1,3 +1,4 @@
+/* oxlint-disable typescript/prefer-readonly-parameter-types -- stream error buffers are mutated in place */
 /// <reference path="../../types.d.ts" />
 
 declare function rariCreateHtmlBoundaryTracker(): {
@@ -8,8 +9,7 @@ declare function rariCreateHtmlBoundaryTracker(): {
 }
 
 ;(() => {
-  if (typeof g['~rari']?.renderStreamingDocument === 'function')
-    return
+  if (typeof g['~rari']?.renderStreamingDocument === 'function') return
 
   const flightStreamPromises = new WeakMap<ReadableStream, Promise<unknown>>()
 
@@ -21,47 +21,43 @@ declare function rariCreateHtmlBoundaryTracker(): {
   }
 
   function rariStreamLog(phase: string, detail?: string) {
-  // Hot-path logging adds Deno-op cost under concurrent streams; keep off by default.
-    if (!(g as { RARI_STREAM_DEBUG?: boolean }).RARI_STREAM_DEBUG)
-      return
-    const message = detail ? `[streaming] ${phase}: ${detail}` : `[streaming] ${phase}`
+    // Hot-path logging adds Deno-op cost under concurrent streams; keep off by default.
+    if (!g.RARI_STREAM_DEBUG) return
+    const message =
+      detail != null && detail !== '' ? `[streaming] ${phase}: ${detail}` : `[streaming] ${phase}`
     try {
       Deno.core.ops.op_internal_log(message)
-    }
-    catch {
+    } catch {
       console.error(message)
     }
   }
 
-  const RARI_STREAMING_COMPLETE_SCRIPT
-    = '<script>if(!window[\'~rari\'])window[\'~rari\']={};window[\'~rari\'].streaming={complete:true}<\/script>'
+  const RARI_STREAMING_COMPLETE_SCRIPT =
+    "<script>if(!window['~rari'])window['~rari']={};window['~rari'].streaming={complete:true}<\/script>"
 
   function rariFormatFlightItem(
-    item: { type: 'line', line: string } | { type: 'binary', b64: string },
+    item: Readonly<{ type: 'line'; line: string } | { type: 'binary'; b64: string }>,
   ): string {
-    if (item.type === 'line')
-      return rariFormatFlightScriptPush(`${item.line}\n`)
+    if (item.type === 'line') return rariFormatFlightScriptPush(`${item.line}\n`)
 
     return rariFormatFlightBinaryPush(item.b64)
   }
 
   function rariStripLeadingDoctype(text: string): string {
     const match = /^\s*<!doctype[^>]*>/i.exec(text)
-    if (!match)
-      return text
+    if (!match) return text
 
     return text.slice(match[0].length)
   }
 
-  async function rariReadStream(stream: ReadableStream): Promise<string> {
+  async function rariReadStream(stream: ReadableStream<Uint8Array>): Promise<string> {
     const reader = stream.getReader()
     const decoder = new TextDecoder()
     let html = ''
 
-    while (true) {
+    for (;;) {
       const { done, value } = await reader.read()
-      if (done)
-        break
+      if (done) break
       html += decoder.decode(value, { stream: true })
     }
 
@@ -93,24 +89,20 @@ declare function rariCreateHtmlBoundaryTracker(): {
         return boundaries.trackHtmlBoundaries(text)
       },
       async pumpFizzChunk(text: string) {
-        if (!text || session.disconnected)
-          return false
+        if (!text || session.disconnected) return false
         try {
-        // Prefer sync try-send; only await the async op under channel backpressure.
+          // Prefer sync try-send; only await the async op under channel backpressure.
           const status = Deno.core.ops.op_fizz_chunk_try(session.streamId, text)
-          if (status === 0)
-            return true
+          if (status === 0) return true
           if (status === 2) {
             session.disconnected = true
             return false
           }
           await Deno.core.ops.op_fizz_chunk(session.streamId, text)
           return true
-        }
-        catch (e: unknown) {
-          const message = e && typeof e === 'object' && 'message' in e
-            ? String((e as { message: unknown }).message)
-            : String(e)
+        } catch (e: unknown) {
+          const message =
+            e != null && typeof e === 'object' && 'message' in e ? String(e.message) : String(e)
           if (message.includes('disconnected')) {
             session.disconnected = true
             return false
@@ -135,37 +127,31 @@ declare function rariCreateHtmlBoundaryTracker(): {
   function rariParseFlightRowId(line: string): number {
     const trimmed = line.trim()
     const colon = trimmed.indexOf(':')
-    if (colon === -1)
-      return Number.MAX_SAFE_INTEGER
+    if (colon === -1) return Number.MAX_SAFE_INTEGER
     const parsed = Number.parseInt(trimmed.slice(0, colon), 16)
     return Number.isNaN(parsed) ? Number.MAX_SAFE_INTEGER : parsed
   }
 
   function rariFlightBytesToB64(bytes: Uint8Array): string {
     let b64 = ''
-    for (let i = 0; i < bytes.length; i++)
-      b64 += String.fromCharCode(bytes[i]!)
+    for (let i = 0; i < bytes.length; i++) b64 += String.fromCharCode(bytes[i])
 
     return btoa(b64)
   }
 
-  function rariFlightEmbedLooksText(lines: string[]): boolean {
-    if (lines.length === 0)
-      return false
+  function rariFlightEmbedLooksText(lines: readonly string[]): boolean {
+    if (lines.length === 0) return false
 
     return lines.some(line => /^[0-9a-f]+:/i.test(line.trim()))
   }
 
   function rariEnsureFlightRow0(buffer: Map<number, string>) {
-    if (buffer.has(0))
-      return
+    if (buffer.has(0)) return
     let maxId = 0
     for (const id of buffer.keys()) {
-      if (id !== Number.MAX_SAFE_INTEGER && id > maxId)
-        maxId = id
+      if (id !== Number.MAX_SAFE_INTEGER && id > maxId) maxId = id
     }
-    if (maxId > 0)
-      buffer.set(0, `0:"$${maxId.toString(16)}"`)
+    if (maxId > 0) buffer.set(0, `0:"$${maxId.toString(16)}"`)
   }
 
   function rariCreateLiveFlightSource() {
@@ -182,8 +168,7 @@ declare function rariCreateHtmlBoundaryTracker(): {
 
     const notifyWaiters = () => {
       const pending = waiters.splice(0)
-      for (const resolve of pending)
-        resolve()
+      for (const resolve of pending) resolve()
     }
 
     const insertRow = (line: string) => {
@@ -199,7 +184,7 @@ declare function rariCreateHtmlBoundaryTracker(): {
         nextExpectedId++
         return { type: 'line' as const, line }
       }
-      if (binaryB64 && complete && buffer.size === 0) {
+      if (binaryB64 != null && complete && buffer.size === 0) {
         const b64 = binaryB64
         binaryB64 = null
         return { type: 'binary' as const, b64 }
@@ -214,11 +199,13 @@ declare function rariCreateHtmlBoundaryTracker(): {
     }
 
     const flushPendingText = () => {
-      const tailLines = pendingText.split('\n').map(line => line.trim()).filter(Boolean)
+      const tailLines = pendingText
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean)
       pendingText = ''
       if (tailLines.length > 0 && rariFlightEmbedLooksText(tailLines)) {
-        for (const line of tailLines)
-          insertRow(line)
+        for (const line of tailLines) insertRow(line)
 
         return
       }
@@ -243,22 +230,22 @@ declare function rariCreateHtmlBoundaryTracker(): {
         while (newline !== -1) {
           const line = pendingText.slice(0, newline)
           pendingText = pendingText.slice(newline + 1)
-          if (line.trim())
-            insertRow(line)
+          if (line.trim()) insertRow(line)
           newline = pendingText.indexOf('\n')
         }
       },
 
       markStreamEnd() {
-        if (complete)
-          return
+        if (complete) return
         pendingText += textDecoder.decode()
         flushPendingText()
         // Only synthesize row 0 if it was never received/pumped.
-        if (nextExpectedId === 0)
-          rariEnsureFlightRow0(buffer)
+        if (nextExpectedId === 0) rariEnsureFlightRow0(buffer)
         complete = true
-        rariStreamLog('liveFlight.end', `chunks=${chunksConsumed} rows=${nextExpectedId} binary=${binaryB64 != null}`)
+        rariStreamLog(
+          'liveFlight.end',
+          `chunks=${chunksConsumed} rows=${nextExpectedId} binary=${binaryB64 != null}`,
+        )
         notifyWaiters()
       },
 
@@ -267,22 +254,21 @@ declare function rariCreateHtmlBoundaryTracker(): {
       },
 
       async drainNext() {
-        while (true) {
+        for (;;) {
           const item = takeNextReady()
-          if (item)
-            return item
-          if (complete)
-            return null
-          await new Promise<void>(resolve => waiters.push(resolve))
+          if (item) return item
+          if (complete) return null
+          await new Promise<void>(resolve => {
+            waiters.push(resolve)
+          })
         }
       },
 
       async collectAllRemainingText(): Promise<string> {
         let buf = ''
-        while (true) {
+        for (;;) {
           const item = await this.drainNext()
-          if (!item)
-            break
+          if (!item) break
           buf += rariFormatFlightItem(item)
         }
 
@@ -291,7 +277,7 @@ declare function rariCreateHtmlBoundaryTracker(): {
     }
   }
 
-  function rariCreatePullFlightFanout(sourceStream: ReadableStream) {
+  function rariCreatePullFlightFanout(sourceStream: ReadableStream<Uint8Array>) {
     const sourceReader = sourceStream.getReader()
     const liveFlight = rariCreateLiveFlightSource()
     let pullCount = 0
@@ -315,7 +301,7 @@ declare function rariCreateHtmlBoundaryTracker(): {
       },
       cancel(reason) {
         rariStreamLog('fanout.cancel', String(reason))
-        sourceReader.cancel(reason)
+        void sourceReader.cancel(reason)
         if (!sourceDone) {
           sourceDone = true
           liveFlight.markStreamEnd()
@@ -324,9 +310,8 @@ declare function rariCreateHtmlBoundaryTracker(): {
     })
 
     async function ensureSourceComplete() {
-      if (sourceDone)
-        return
-      while (true) {
+      if (sourceDone) return
+      for (;;) {
         const { done, value } = await sourceReader.read()
         if (done) {
           sourceDone = true
@@ -350,10 +335,9 @@ declare function rariCreateHtmlBoundaryTracker(): {
     }
   }
 
-  function rariGetFlightStream(stream: ReadableStream): Promise<unknown> {
+  async function rariGetFlightStream(stream: ReadableStream): Promise<unknown> {
     const cached = flightStreamPromises.get(stream)
-    if (cached)
-      return cached
+    if (cached) return cached
 
     const FlightClient = g['~flightClient']
     if (!FlightClient?.createFromReadableStream)
@@ -361,8 +345,8 @@ declare function rariCreateHtmlBoundaryTracker(): {
 
     rariStreamLog('flight.createFromReadableStream.start')
     // createFromReadableStream returns a ReactPromise (custom thenable), not a
-    // native Promise — do not chain .then/.catch directly or .catch throws.
-    const ssrModules = g['~rari']?.ssrModules || {}
+    // native Promise -- do not chain .then/.catch directly or .catch throws.
+    const ssrModules = g['~rari']?.ssrModules ?? {}
     const flightPromise = FlightClient.createFromReadableStream(stream, {
       ssrManifest: {
         moduleMap: ssrModules,
@@ -372,7 +356,10 @@ declare function rariCreateHtmlBoundaryTracker(): {
 
     Promise.resolve(flightPromise).then(
       (result: unknown) => {
-        rariStreamLog('flight.createFromReadableStream.done', String(result == null ? 'null' : typeof result))
+        rariStreamLog(
+          'flight.createFromReadableStream.done',
+          result == null ? 'null' : typeof result,
+        )
       },
       (error: unknown) => {
         rariStreamLog('flight.createFromReadableStream.error', String(error))
@@ -385,7 +372,11 @@ declare function rariCreateHtmlBoundaryTracker(): {
 
   function rariCreateStreamingRoot(flightStream: ReadableStream): unknown {
     const react = g.React
-    if (!react?.createElement || !react.use)
+    if (
+      react == null ||
+      typeof react.createElement !== 'function' ||
+      typeof react.use !== 'function'
+    )
       throw new Error('[rari] React.use not available for streaming App')
 
     const { createElement, use } = react
@@ -398,26 +389,27 @@ declare function rariCreateHtmlBoundaryTracker(): {
     return createElement(RariStreamingApp, null)
   }
 
-  function rariFormatCaughtErrorHtml(caughtErrors: unknown[]): string {
-    if (caughtErrors.length === 0)
-      return ''
-    const displayError = caughtErrors.find((e) => {
-      if (!e || typeof e !== 'object' || !('message' in e))
-        return false
-      const message = String((e as { message: unknown }).message)
-      return message && !message.includes('omitted in production')
-    }) || caughtErrors[0]
+  function rariFormatCaughtErrorHtml(caughtErrors: readonly unknown[]): string {
+    if (caughtErrors.length === 0) return ''
+    const foundError = caughtErrors.find(e => {
+      if (e == null || typeof e !== 'object' || !('message' in e)) return false
+      const message = String(e.message)
+      return message !== '' && !message.includes('omitted in production')
+    })
+    const displayError = foundError ?? caughtErrors[0]
     const errMsg = String(
-      displayError && typeof displayError === 'object' && 'message' in displayError
-        ? (displayError as { message: unknown }).message
+      displayError != null && typeof displayError === 'object' && 'message' in displayError
+        ? displayError.message
         : 'Unknown error',
-    ).split('<').join('&lt;')
+    )
+      .split('<')
+      .join('&lt;')
     return `<div class=rari-error style=color:red;border:1px_solid_red;padding:10px;border-radius:4px;background-color:#fff5f5><strong>Error loading content: </strong>${errMsg}</div>`
   }
 
   async function rariPumpLiveMux(
     session: RariFizzSession,
-    fizzStream: ReadableStream & { allReady?: Promise<void> },
+    fizzStream: ReadableStream<Uint8Array> & { allReady?: Promise<void> },
     liveFlight: ReturnType<typeof rariCreateLiveFlightSource>,
     ensureSourceComplete?: () => Promise<void>,
     caughtErrors?: unknown[],
@@ -426,22 +418,19 @@ declare function rariCreateHtmlBoundaryTracker(): {
     const decoder = new TextDecoder()
     let htmlChunkCount = 0
     let flightPumpCount = 0
-    let htmlStreamFinished = false
     let flightBootstrapped = false
     let strippedDoctype = false
     let completeScriptSent = false
     let finalPackageSent = false
 
     const takeFlightBootstrap = (): string => {
-      if (flightBootstrapped)
-        return ''
+      if (flightBootstrapped) return ''
       flightBootstrapped = true
       return rariFormatFlightScriptPush(0)
     }
 
     const takeErrorHtml = (): string => {
-      if (!caughtErrors || caughtErrors.length === 0)
-        return ''
+      if (!caughtErrors || caughtErrors.length === 0) return ''
       const html = rariFormatCaughtErrorHtml(caughtErrors)
       caughtErrors.length = 0
       return html
@@ -451,8 +440,7 @@ declare function rariCreateHtmlBoundaryTracker(): {
       let out = ''
       while (session.safeToInjectFlight()) {
         const item = liveFlight.tryDrainNext()
-        if (!item)
-          break
+        if (!item) break
         flightPumpCount++
         out += rariFormatFlightItem(item)
       }
@@ -474,15 +462,13 @@ declare function rariCreateHtmlBoundaryTracker(): {
       const bootstrap = takeFlightBootstrap()
       const pending = collectPendingFlight()
       const combined = bootstrap + pending
-      if (!combined)
-        return true
+      if (!combined) return true
 
       return session.pumpFizzChunk(combined)
     }
 
     const takeCompleteScript = (): string => {
-      if (completeScriptSent)
-        return ''
+      if (completeScriptSent) return ''
       completeScriptSent = true
       return RARI_STREAMING_COMPLETE_SCRIPT
     }
@@ -491,28 +477,23 @@ declare function rariCreateHtmlBoundaryTracker(): {
       finalPackageSent = true
       // Drop the mpsc sender in this turn so HTTP endgame coalesce sees
       // disconnect instead of spinning the full 500µs wait.
-      if (session.disconnected)
-        return
+      if (session.disconnected) return
       try {
         Deno.core.ops.op_fizz_done(session.streamId)
-      }
-      catch {
+      } catch {
         // Outer script also calls op_fizz_done; ignore double-close.
       }
     }
 
     const pumpFizzText = async (text: string) => {
-      if (!text || session.disconnected)
-        return true
+      if (!text || session.disconnected) return true
 
       const chunk = prepareFizzChunk(text)
-      if (!chunk)
-        return true
+      if (!chunk) return true
 
       const bodyClose = chunk.indexOf('</body>')
       if (bodyClose === -1) {
-        if (!(await session.pumpFizzChunk(chunk)))
-          return false
+        if (!(await session.pumpFizzChunk(chunk))) return false
         session.trackHtmlBoundaries(chunk)
         return true
       }
@@ -520,15 +501,12 @@ declare function rariCreateHtmlBoundaryTracker(): {
       const before = chunk.slice(0, bodyClose)
       const after = chunk.slice(bodyClose)
       // Collect flight before pumping so we don't await between "before" and
-      // "tail" — that yield lets HTTP flush a penultimate chunk alone.
-      if (ensureSourceComplete)
-        await ensureSourceComplete()
-      const flight = takeFlightBootstrap() + await liveFlight.collectAllRemainingText()
-      if (before)
-        session.trackHtmlBoundaries(before)
+      // "tail" -- that yield lets HTTP flush a penultimate chunk alone.
+      if (ensureSourceComplete) await ensureSourceComplete()
+      const flight = takeFlightBootstrap() + (await liveFlight.collectAllRemainingText())
+      if (before) session.trackHtmlBoundaries(before)
       const combined = before + flight + takeErrorHtml() + takeCompleteScript() + after
-      if (!combined)
-        return true
+      if (!combined) return true
 
       // Sync try-send when possible so we don't microtask-yield before op_fizz_done.
       const status = Deno.core.ops.op_fizz_chunk_try(session.streamId, combined)
@@ -537,8 +515,7 @@ declare function rariCreateHtmlBoundaryTracker(): {
         return false
       }
       if (status === 1) {
-        if (!(await session.pumpFizzChunk(combined)))
-          return false
+        if (!(await session.pumpFizzChunk(combined))) return false
       }
       markFinalPackageSent()
       return true
@@ -546,17 +523,14 @@ declare function rariCreateHtmlBoundaryTracker(): {
 
     const pumpFizzLoop = async () => {
       rariStreamLog('mux.fizzLoop.start')
-      while (true) {
+      for (;;) {
         const { done, value } = await reader.read()
         if (done) {
-          htmlStreamFinished = true
           const tail = decoder.decode()
           if (tail) {
-            if (!(await pumpFizzText(tail)))
-              return
+            if (!(await pumpFizzText(tail))) return
             if (!finalPackageSent && session.safeToInjectFlight()) {
-              if (!(await pumpPendingFlight()))
-                return
+              if (!(await pumpPendingFlight())) return
             }
           }
           rariStreamLog('mux.fizzLoop.done', `htmlChunks=${htmlChunkCount}`)
@@ -565,20 +539,16 @@ declare function rariCreateHtmlBoundaryTracker(): {
         htmlChunkCount++
         const chunkText = decoder.decode(value, { stream: true })
         rariStreamLog('mux.htmlChunk', `n=${htmlChunkCount} bytes=${value.byteLength}`)
-        if (!(await pumpFizzText(chunkText)))
-          return
+        if (!(await pumpFizzText(chunkText))) return
         if (!finalPackageSent && session.safeToInjectFlight()) {
-          if (!(await pumpPendingFlight()))
-            return
+          if (!(await pumpPendingFlight())) return
         }
       }
-      if (htmlStreamFinished && !finalPackageSent) {
+      if (!finalPackageSent) {
         rariStreamLog('mux.drainRemaining.start')
-        if (!session.safeToInjectFlight())
-          session.resetHtmlState()
-        if (ensureSourceComplete)
-          await ensureSourceComplete()
-        const flight = takeFlightBootstrap() + await liveFlight.collectAllRemainingText()
+        if (!session.safeToInjectFlight()) session.resetHtmlState()
+        if (ensureSourceComplete) await ensureSourceComplete()
+        const flight = takeFlightBootstrap() + (await liveFlight.collectAllRemainingText())
         const complete = takeCompleteScript()
         const tail = takeErrorHtml() + flight + complete
         if (tail) {
@@ -587,8 +557,7 @@ declare function rariCreateHtmlBoundaryTracker(): {
             session.disconnected = true
             return
           }
-          if (status === 1 && !(await session.pumpFizzChunk(tail)))
-            return
+          if (status === 1 && !(await session.pumpFizzChunk(tail))) return
         }
         markFinalPackageSent()
         rariStreamLog('mux.drainRemaining.done')
@@ -602,21 +571,12 @@ declare function rariCreateHtmlBoundaryTracker(): {
     }
 
     await pumpFizzLoop()
-    if (finalPackageSent && !session.disconnected) {
-      try {
-        Deno.core.ops.op_fizz_done(session.streamId)
-      }
-      catch {
-        // Already closed after final package, or outer script closes.
-      }
-    }
     rariStreamLog('mux.complete', `htmlChunks=${htmlChunkCount} flightRows=${flightPumpCount}`)
   }
 
   async function injectStreamError(caughtErrors: unknown[], streamId: string) {
     const errorHtml = rariFormatCaughtErrorHtml(caughtErrors)
-    if (!errorHtml)
-      return
+    if (!errorHtml) return
     caughtErrors.length = 0
     const session = rariCreateFizzSession(streamId)
     await session.pumpFizzChunk(errorHtml)
@@ -637,8 +597,7 @@ declare function rariCreateHtmlBoundaryTracker(): {
 
   async function renderStreamingDocument(options: RenderStreamingDocumentOptions) {
     const { capturedElement, headContent, caughtErrors, streamId } = options
-    if (!streamId)
-      throw new Error('[rari] renderStreamingDocument requires streamId')
+    if (!streamId) throw new Error('[rari] renderStreamingDocument requires streamId')
 
     const session = rariCreateFizzSession(streamId)
 
@@ -648,15 +607,13 @@ declare function rariCreateHtmlBoundaryTracker(): {
 
     if (!ReactServerRenderer?.renderToReadableStream)
       throw new Error('[rari] RSC renderer not loaded')
-    if (!ReactDOMServer?.renderToReadableStream)
-      throw new Error('[rari] Fizz renderer not loaded')
-    if (!R?.createElement)
-      throw new Error('[rari] React not loaded')
+    if (!ReactDOMServer?.renderToReadableStream) throw new Error('[rari] Fizz renderer not loaded')
+    if (!R?.createElement) throw new Error('[rari] React not loaded')
 
     session.resetHtmlState()
     rariStreamLog('render.start')
 
-    const bundlerConfig = g['~rari']?.clientReferenceManifest || {}
+    const bundlerConfig = g['~rari']?.clientReferenceManifest ?? {}
 
     const rscStream = await ReactServerRenderer.renderToReadableStream(
       capturedElement,
@@ -668,7 +625,8 @@ declare function rariCreateHtmlBoundaryTracker(): {
     )
     rariStreamLog('rsc.stream.ready')
 
-    const { flightReadable, liveFlight, ensureSourceComplete } = rariCreatePullFlightFanout(rscStream)
+    const { flightReadable, liveFlight, ensureSourceComplete } =
+      rariCreatePullFlightFanout(rscStream)
 
     const fullDoc = R.createElement(
       'html',
@@ -682,12 +640,12 @@ declare function rariCreateHtmlBoundaryTracker(): {
     )
 
     rariStreamLog('fizz.render.start')
-    const fizzStream = await ReactDOMServer.renderToReadableStream(fullDoc, {
+    const fizzStream = (await ReactDOMServer.renderToReadableStream(fullDoc, {
       onError(error: unknown) {
         console.error('[rari] Fizz streaming error:', error)
         caughtErrors.push(error)
       },
-    }) as ReadableStream & { allReady?: Promise<void> }
+    })) as ReadableStream & { allReady?: Promise<void> }
     rariStreamLog('fizz.stream.ready')
 
     await rariPumpLiveMux(session, fizzStream, liveFlight, ensureSourceComplete, caughtErrors)
@@ -698,14 +656,11 @@ declare function rariCreateHtmlBoundaryTracker(): {
     liveFlight: ReturnType<typeof rariCreateLiveFlightSource>,
   ): Promise<string> {
     let scripts = rariFormatFlightScriptPush(0)
-    while (true) {
+    for (;;) {
       const item = await liveFlight.drainNext()
-      if (!item)
-        break
-      if (item.type === 'line')
-        scripts += rariFormatFlightScriptPush(`${item.line}\n`)
-      else if (item.type === 'binary')
-        scripts += rariFormatFlightBinaryPush(item.b64)
+      if (!item) break
+      if (item.type === 'line') scripts += rariFormatFlightScriptPush(`${item.line}\n`)
+      else scripts += rariFormatFlightBinaryPush(item.b64)
     }
 
     return scripts
@@ -713,8 +668,7 @@ declare function rariCreateHtmlBoundaryTracker(): {
 
   function rariInjectBeforeBodyClose(html: string, injection: string): string {
     const bodyClose = html.lastIndexOf('</body>')
-    if (bodyClose === -1)
-      return `${html}${injection}`
+    if (bodyClose === -1) return `${html}${injection}`
 
     return `${html.slice(0, bodyClose)}${injection}\n${html.slice(bodyClose)}`
   }
@@ -728,12 +682,10 @@ declare function rariCreateHtmlBoundaryTracker(): {
 
     if (!ReactServerRenderer?.renderToReadableStream)
       throw new Error('[rari] RSC renderer not loaded')
-    if (!ReactDOMServer?.renderToReadableStream)
-      throw new Error('[rari] Fizz renderer not loaded')
-    if (!R?.createElement)
-      throw new Error('[rari] React not loaded')
+    if (!ReactDOMServer?.renderToReadableStream) throw new Error('[rari] Fizz renderer not loaded')
+    if (!R?.createElement) throw new Error('[rari] React not loaded')
 
-    const bundlerConfig = g['~rari']?.clientReferenceManifest || {}
+    const bundlerConfig = g['~rari']?.clientReferenceManifest ?? {}
 
     const rscStream = await ReactServerRenderer.renderToReadableStream(
       capturedElement,
@@ -744,7 +696,8 @@ declare function rariCreateHtmlBoundaryTracker(): {
       }),
     )
 
-    const { flightReadable, liveFlight, ensureSourceComplete } = rariCreatePullFlightFanout(rscStream)
+    const { flightReadable, liveFlight, ensureSourceComplete } =
+      rariCreatePullFlightFanout(rscStream)
 
     const fullDoc = R.createElement(
       'html',
@@ -757,20 +710,19 @@ declare function rariCreateHtmlBoundaryTracker(): {
       ),
     )
 
-    const fizzStream = await ReactDOMServer.renderToReadableStream(fullDoc, {
+    const fizzStream = (await ReactDOMServer.renderToReadableStream(fullDoc, {
       onError(error: unknown) {
         console.error('[rari] Fizz static error:', error)
         caughtErrors.push(error)
       },
-    }) as ReadableStream & { allReady?: Promise<void> }
+    })) as ReadableStream & { allReady?: Promise<void> }
 
     await fizzStream.allReady
     await ensureSourceComplete()
 
     let html = await rariReadStream(fizzStream)
     html = rariStripLeadingDoctype(html)
-    if (!html.trimStart().toLowerCase().startsWith('<!doctype'))
-      html = `<!DOCTYPE html>\n${html}`
+    if (!html.trimStart().toLowerCase().startsWith('<!doctype')) html = `<!DOCTYPE html>\n${html}`
 
     const flightScripts = await rariCollectFlightEmbedScripts(liveFlight)
     const completionScript = RARI_STREAMING_COMPLETE_SCRIPT
@@ -784,11 +736,9 @@ declare function rariCreateHtmlBoundaryTracker(): {
   ): Promise<void> {
     let disconnected = false
     const wrappedPump = async (text: string) => {
-      if (disconnected)
-        return false
+      if (disconnected) return false
       const ok = await pumpChunk(text)
-      if (!ok)
-        disconnected = true
+      if (!ok) disconnected = true
 
       return ok
     }
@@ -797,7 +747,7 @@ declare function rariCreateHtmlBoundaryTracker(): {
     if (!ReactServerRenderer?.renderToReadableStream)
       throw new Error('[rari] RSC renderer not loaded')
 
-    const bundlerConfig = g['~rari']?.clientReferenceManifest || {}
+    const bundlerConfig = g['~rari']?.clientReferenceManifest ?? {}
     const stream = await ReactServerRenderer.renderToReadableStream(
       element,
       bundlerConfig,
@@ -809,26 +759,20 @@ declare function rariCreateHtmlBoundaryTracker(): {
     const reader = stream.getReader()
     const decoder = new TextDecoder()
     try {
-      while (true) {
+      for (;;) {
         const { done, value } = await reader.read()
-        if (done)
-          break
+        if (done) break
         const text = decoder.decode(value, { stream: true })
-        if (!(await wrappedPump(text)))
-          break
+        if (!(await wrappedPump(text))) break
       }
-      if (!disconnected) {
-        const tail = decoder.decode()
-        await wrappedPump(tail)
-      }
-    }
-    finally {
+      const tail = decoder.decode()
+      await wrappedPump(tail)
+    } finally {
       await reader.cancel().catch(() => {})
     }
   }
 
-  if (!g['~rari'])
-    g['~rari'] = {}
+  g['~rari'] ??= {}
   g['~rari'].renderStreamingDocument = renderStreamingDocument
   g['~rari'].renderStaticDocument = renderStaticDocument
   g['~rari'].injectStreamError = injectStreamError

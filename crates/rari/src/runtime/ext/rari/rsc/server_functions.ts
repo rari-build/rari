@@ -7,71 +7,64 @@ interface ResolveResult {
   functions: string[]
 }
 
-(function initializeServerFunctions() {
-  if (!g['~rari'])
-    g['~rari'] = {}
-
-  if (!g['~rari'].registeredServerFunctions)
-    g['~rari'].registeredServerFunctions = new Set()
+;(function initializeServerFunctions() {
+  g['~rari'] ??= {}
+  g['~rari'].registeredServerFunctions ??= new Set()
 
   g.resolveServerFunctionsForComponent = async function resolveServerFunctionsForComponent(
     componentId?: string,
   ): Promise<ResolveResult> {
-    const currentComponent
-      = componentId || g['~render']?.currentComponent
+    const currentComponent = componentId ?? g['~render']?.currentComponent
 
-    const manifest = g['~rari']!.serverManifest || {}
-    const functionNames = Object.keys(manifest).filter(key => key.includes('#') || key.includes(':'))
+    const manifest = g['~rari']!.serverManifest ?? {}
+    const functionNames = Object.keys(manifest).filter(
+      key => key.includes('#') || key.includes(':'),
+    )
 
     const registered = g['~rari']!.registeredServerFunctions!
     const newlyRegistered: string[] = []
 
     for (const functionName of functionNames) {
-      if (functionName.startsWith('~rari_'))
-        continue
+      if (functionName.startsWith('~rari_')) continue
 
-      const entry = manifest[functionName]
-      const exportName = entry?.name ?? functionName.split(/[#:]/).pop()
-      if (!exportName || exportName === 'default')
-        continue
+      const entry = manifest[functionName]!
+      const exportName = entry.name ?? functionName.split(/[#:]/).pop()
+      if (exportName == null || exportName === '' || exportName === 'default') continue
 
-      if (registered.has(functionName))
-        continue
+      if (registered.has(functionName)) continue
 
       registered.add(functionName)
       newlyRegistered.push(functionName)
     }
 
-    return {
+    return Promise.resolve({
       success: true,
       registered: newlyRegistered.length,
       component: currentComponent,
       functions: newlyRegistered,
-    }
+    })
   }
 
   g.executeServerFunction = async function executeServerFunction(
     functionName: string,
-    args: unknown[] = [],
+    args: readonly unknown[] = [],
   ): Promise<unknown> {
-    let serverFunction: ((...args: any[]) => any) | null = null
+    let serverFunction: ((...args: readonly unknown[]) => unknown) | null = null
 
     if (g.RscModuleManager?.getFunction)
       serverFunction = g.RscModuleManager.getFunction(functionName)
-    else if (g.getServerFunction)
-      serverFunction = g.getServerFunction(functionName)
+    else if (g.getServerFunction) serverFunction = g.getServerFunction(functionName)
 
-    if (!serverFunction)
-      throw new Error(`Server function '${functionName}' not found`)
+    if (!serverFunction) throw new Error(`Server function '${functionName}' not found`)
 
     const result = await serverFunction(...args)
 
     return result
   }
 
-  g.createEnhancedServerFunctionPromise = function createEnhancedServerFunctionPromise(
+  g.createEnhancedServerFunctionPromise = async function createEnhancedServerFunctionPromise(
     functionName: string,
-    args: unknown[] = [],
+    args: readonly unknown[] = [],
   ): Promise<unknown> {
     if (g.RscModuleManager?.createPromise)
       return g.RscModuleManager.createPromise(functionName, args)
@@ -82,7 +75,7 @@ interface ResolveResult {
   g.isServerFunctionRegistered = function isServerFunctionRegistered(
     functionName: string,
   ): boolean {
-    return g['~rari']!.registeredServerFunctions?.has(functionName) || false
+    return g['~rari']!.registeredServerFunctions?.has(functionName) ?? false
   }
 
   g.clearServerFunctionCache = function clearServerFunctionCache(): void {
@@ -101,6 +94,6 @@ interface ResolveResult {
     initialized: true,
     timestamp: Date.now(),
     extension: 'server_functions',
-    registeredCount: g['~rari'].registeredServerFunctions?.size || 0,
+    registeredCount: g['~rari'].registeredServerFunctions.size,
   }
 })()

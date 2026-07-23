@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from 'react'
 
 interface MermaidChartProps {
-  children: string
-  className?: string
+  readonly children: string
+  readonly className?: string
 }
 
 const THEME_VARIABLES = {
@@ -39,8 +39,7 @@ export default function MermaidChart({ children, className }: MermaidChartProps)
 
   useEffect(() => {
     const renderDiagram = async () => {
-      if (!containerRef.current)
-        return
+      if (!containerRef.current) return
 
       try {
         const mermaid = (await import('mermaid')).default
@@ -60,20 +59,18 @@ export default function MermaidChart({ children, className }: MermaidChartProps)
         const { svg: renderedSvg } = await mermaid.render(id, children.trim())
         setSvg(renderedSvg)
         setError('')
-      }
-      catch (err) {
+      } catch (err) {
         console.error('Mermaid rendering error:', err)
         setError(err instanceof Error ? err.message : 'Failed to render diagram')
       }
     }
 
-    renderDiagram()
+    void renderDiagram()
   }, [children])
 
   useEffect(() => {
     const container = containerRef.current
-    if (!container)
-      return
+    if (!container) return undefined
 
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault()
@@ -82,7 +79,9 @@ export default function MermaidChart({ children, className }: MermaidChartProps)
     }
 
     container.addEventListener('wheel', handleWheel, { passive: false })
-    return () => container.removeEventListener('wheel', handleWheel)
+    return () => {
+      container.removeEventListener('wheel', handleWheel)
+    }
   }, [])
 
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -91,15 +90,16 @@ export default function MermaidChart({ children, className }: MermaidChartProps)
   }
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging)
-      return
+    if (!isDragging) return
     setPosition({
       x: e.clientX - dragStartRef.current.x,
       y: e.clientY - dragStartRef.current.y,
     })
   }
 
-  const handleMouseUp = () => setIsDragging(false)
+  const handleMouseUp = () => {
+    setIsDragging(false)
+  }
 
   const handleReset = () => {
     setScale(1)
@@ -108,18 +108,16 @@ export default function MermaidChart({ children, className }: MermaidChartProps)
 
   if (error) {
     return (
-      <div className={`not-prose my-6 p-4 rounded-md border border-red-500/30 bg-red-950/20 ${className || ''}`}>
-        <p className="text-red-400 text-sm font-mono">
-          Failed to render diagram:
-          {' '}
-          {error}
-        </p>
+      <div
+        className={`not-prose my-6 p-4 rounded-md border border-red-500/30 bg-red-950/20 ${className != null && className !== '' ? className : ''}`}
+      >
+        <p className="text-red-400 text-sm font-mono">Failed to render diagram: {error}</p>
       </div>
     )
   }
 
   return (
-    <div className={`not-prose my-6 ${className || ''}`}>
+    <div className={`not-prose my-6 ${className != null && className !== '' ? className : ''}`}>
       <div className="flex items-center justify-between mb-2 px-2">
         <div className="text-xs text-fg-muted">Scroll to zoom • Drag to pan</div>
         <button

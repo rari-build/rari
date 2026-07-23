@@ -3,35 +3,40 @@ import process from 'node:process'
 import { afterEach, beforeEach, describe, expect, it } from 'vite-plus/test'
 
 function detectPackageManager(): string {
-  if (existsSync('pnpm-lock.yaml'))
-    return 'pnpm'
-  if (existsSync('yarn.lock'))
-    return 'yarn'
-  if (existsSync('bun.lockb'))
-    return 'bun'
+  if (existsSync('pnpm-lock.yaml')) return 'pnpm'
+  if (existsSync('yarn.lock')) return 'yarn'
+  if (existsSync('bun.lockb')) return 'bun'
 
   return 'npm'
 }
 
+function hasEnvValue(value: string | undefined): boolean {
+  return value != null && value !== ''
+}
+
 function isRailwayEnvironment(): boolean {
-  return !!(
-    process.env.RAILWAY_ENVIRONMENT
-    || process.env.RAILWAY_PROJECT_ID
-    || process.env.RAILWAY_SERVICE_ID
+  return (
+    hasEnvValue(process.env.RAILWAY_ENVIRONMENT) ||
+    hasEnvValue(process.env.RAILWAY_PROJECT_ID) ||
+    hasEnvValue(process.env.RAILWAY_SERVICE_ID)
   )
 }
 
 function isRenderEnvironment(): boolean {
-  return !!(
-    process.env.RENDER
-    || process.env.RENDER_SERVICE_ID
-    || process.env.RENDER_SERVICE_NAME
+  return (
+    hasEnvValue(process.env.RENDER) ||
+    hasEnvValue(process.env.RENDER_SERVICE_ID) ||
+    hasEnvValue(process.env.RENDER_SERVICE_NAME)
   )
 }
 
 function getDeploymentConfig() {
-  const port = process.env.PORT || process.env.RSC_PORT || '3000'
-  const mode = process.env.NODE_ENV || 'production'
+  const port = hasEnvValue(process.env.PORT)
+    ? process.env.PORT
+    : hasEnvValue(process.env.RSC_PORT)
+      ? process.env.RSC_PORT
+      : '3000'
+  const mode = hasEnvValue(process.env.NODE_ENV) ? process.env.NODE_ENV : 'production'
   const isPlatform = isRailwayEnvironment() || isRenderEnvironment()
   const host = isPlatform ? '0.0.0.0' : '127.0.0.1'
 

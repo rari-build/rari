@@ -1,10 +1,10 @@
 import { formatDate } from '@/lib/date'
 
 interface BlogPostCardProps {
-  slug: string
-  title: string
-  description: string
-  date: string
+  readonly slug: string
+  readonly title: string
+  readonly description: string
+  readonly date: string
 }
 
 export default function BlogPostCard({ slug, title, description, date }: BlogPostCardProps) {
@@ -20,9 +20,7 @@ export default function BlogPostCard({ slug, title, description, date }: BlogPos
       <h2 className="text-xl font-semibold text-fg mb-3 group-hover:text-link transition-colors">
         {title}
       </h2>
-      <p className="text-fg-muted leading-relaxed">
-        {description}
-      </p>
+      <p className="text-fg-muted leading-relaxed">{description}</p>
     </a>
   )
 }

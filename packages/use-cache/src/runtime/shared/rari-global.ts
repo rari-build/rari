@@ -1,6 +1,6 @@
 export interface InvalidateUseCacheInput {
-  tag?: string
-  path?: string
+  readonly tag?: string
+  readonly path?: string
 }
 
 export interface RariGlobalSlice {
@@ -19,12 +19,22 @@ export interface RariGlobal {
   '__rariGetActiveUseCacheTags'?: () => string[]
 }
 
-export function getRariGlobal(): RariGlobalSlice {
-  const target = globalThis as RariGlobal
-  target['~rari'] ??= {}
-  return target['~rari']
+function isRariGlobalSlice(value: unknown): value is RariGlobalSlice {
+  return typeof value === 'object' && value !== null
 }
 
-export function getRariGlobalRoot(): RariGlobal {
-  return globalThis as RariGlobal
+export function getRariGlobal(): RariGlobalSlice {
+  const existing: unknown = Reflect.get(globalThis, '~rari')
+  if (isRariGlobalSlice(existing)) return existing
+
+  const slice: RariGlobalSlice = {}
+  Reflect.set(globalThis, '~rari', slice)
+  return slice
+}
+
+export function setRariGlobalRootProperty<K extends keyof RariGlobal>(
+  key: K,
+  value: RariGlobal[K],
+): void {
+  Reflect.set(globalThis, key, value)
 }

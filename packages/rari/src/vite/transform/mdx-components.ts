@@ -10,26 +10,27 @@ const DEFAULT_AND_NAMED_IMPORT_REGEX = /import\s+(\w+)\s*,\s*\{([^}]+)\}\s+from\
 const DEFINE_MDX_CALL_REGEX = /defineMdxComponents\s*\(\s*\{([\s\S]*?)\}\s*\)/
 
 interface TransformDefineMdxComponentsOptions {
-  code: string
-  id: string
-  projectRoot: string
-  resolvedAlias: Record<string, string>
+  readonly code: string
+  readonly id: string
+  readonly projectRoot: string
+  readonly resolvedAlias: Readonly<Record<string, string>>
 }
 
-function parseNamedImportBindings(source: string, namedImports: string, bindings: Map<string, string>): void {
+function parseNamedImportBindings(
+  source: string,
+  namedImports: string,
+  bindings: Map<string, string>,
+): void {
   for (const part of namedImports.split(',')) {
     let trimmed = part.trim()
-    if (!trimmed)
-      continue
+    if (!trimmed) continue
 
     trimmed = trimmed.replace(/^type\s+/i, '').trim()
-    if (!trimmed)
-      continue
+    if (!trimmed) continue
 
     const asParts = trimmed.split(/\s+as\s+/i)
-    const localName = (asParts[1] ?? asParts[0])?.trim()
-    if (localName)
-      bindings.set(localName, source)
+    const localName = (asParts[1] ?? asParts[0]).trim()
+    if (localName) bindings.set(localName, source)
   }
 }
 
@@ -37,27 +38,27 @@ function parseImportBindings(code: string): Map<string, string> {
   const bindings = new Map<string, string>()
 
   for (const match of code.matchAll(DEFAULT_AND_NAMED_IMPORT_REGEX)) {
-    bindings.set(match[1]!, match[3]!)
-    parseNamedImportBindings(match[3]!, match[2]!, bindings)
+    bindings.set(match[1], match[3])
+    parseNamedImportBindings(match[3], match[2], bindings)
   }
 
-  for (const match of code.matchAll(DEFAULT_IMPORT_REGEX))
-    bindings.set(match[1]!, match[2]!)
+  for (const match of code.matchAll(DEFAULT_IMPORT_REGEX)) bindings.set(match[1], match[2])
 
   for (const match of code.matchAll(NAMED_IMPORT_REGEX)) {
-    parseNamedImportBindings(match[2]!, match[1]!, bindings)
+    parseNamedImportBindings(match[2], match[1], bindings)
   }
 
   return bindings
 }
 
-function parseDefineMdxComponentNames(objectBody: string): Array<{ name: string, binding: string }> {
-  const entries: Array<{ name: string, binding: string }> = []
+function parseDefineMdxComponentNames(
+  objectBody: string,
+): Array<{ name: string; binding: string }> {
+  const entries: Array<{ name: string; binding: string }> = []
 
   for (const part of objectBody.split(',')) {
     const trimmed = part.trim()
-    if (!trimmed)
-      continue
+    if (!trimmed) continue
 
     const colonIndex = trimmed.indexOf(':')
     if (colonIndex === -1) {
@@ -67,8 +68,7 @@ function parseDefineMdxComponentNames(objectBody: string): Array<{ name: string,
 
     const name = trimmed.slice(0, colonIndex).trim()
     const binding = trimmed.slice(colonIndex + 1).trim()
-    if (name && binding)
-      entries.push({ name, binding })
+    if (name && binding) entries.push({ name, binding })
   }
 
   return entries
@@ -78,33 +78,30 @@ function isClientComponent(filePath: string): boolean {
   try {
     const source = fs.readFileSync(filePath, 'utf-8')
     return analyzeModuleSource(source).topLevelUseClient
-  }
-  catch {
+  } catch {
     return false
   }
 }
 
-export function transformDefineMdxComponents(options: TransformDefineMdxComponentsOptions): string | null {
+export function transformDefineMdxComponents(
+  options: TransformDefineMdxComponentsOptions,
+): string | null {
   const { code, id, projectRoot, resolvedAlias } = options
 
-  if (!code.includes('defineMdxComponents'))
-    return null
+  if (!code.includes('defineMdxComponents')) return null
 
-  if (code.includes('__RARI_MDX_RESOLVED__'))
-    return null
+  if (code.includes('__RARI_MDX_RESOLVED__')) return null
 
-  const callMatch = code.match(DEFINE_MDX_CALL_REGEX)
-  if (!callMatch)
-    return null
+  const callMatch = DEFINE_MDX_CALL_REGEX.exec(code)
+  if (!callMatch) return null
 
   const importBindings = parseImportBindings(code)
-  const componentEntries = parseDefineMdxComponentNames(callMatch[1]!)
-  if (componentEntries.length === 0)
-    return null
+  const componentEntries = parseDefineMdxComponentNames(callMatch[1])
+  if (componentEntries.length === 0) return null
 
   const resolvedEntries = componentEntries.map(({ name, binding }) => {
     const importPath = importBindings.get(binding)
-    if (!importPath) {
+    if (importPath == null || importPath === '') {
       throw new Error(
         `[rari/mdx] Could not resolve import for MDX component "${name}" (binding "${binding}") in ${id}`,
       )

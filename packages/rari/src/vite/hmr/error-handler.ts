@@ -1,8 +1,8 @@
 import { clearTimer } from '@/shared/utils/timer'
 
 export interface HMRErrorHandlerOptions {
-  maxErrors?: number
-  resetTimeout?: number
+  readonly maxErrors?: number
+  readonly resetTimeout?: number
 }
 
 export class HMRErrorHandler {
@@ -27,8 +27,7 @@ export class HMRErrorHandler {
       this.reset()
     }, this.resetTimeout)
 
-    if (this.errorCount >= this.maxErrors)
-      this.handleMaxErrorsReached()
+    if (this.errorCount >= this.maxErrors) this.handleMaxErrorsReached()
   }
 
   reset(): void {
@@ -51,8 +50,8 @@ export class HMRErrorHandler {
 
   private handleMaxErrorsReached(): void {
     console.error(
-      `[rari] HMR: Maximum error count (${this.maxErrors}) reached. `
-      + 'Consider restarting the dev server if issues persist.',
+      `[rari] HMR: Maximum error count (${this.maxErrors}) reached. ` +
+        'Consider restarting the dev server if issues persist.',
     )
   }
 

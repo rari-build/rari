@@ -1,30 +1,27 @@
 export function hasFizzMarkers(root: Element): boolean {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_COMMENT)
   while (walker.nextNode()) {
-    const comment = walker.currentNode as Comment
-    if (comment.data === '$' || comment.data === '$?' || comment.data === '/$')
-      return true
+    const node = walker.currentNode
+    if (node.nodeType === 8 && 'data' in node) {
+      const data = node.data
+      if (data === '$' || data === '$?' || data === '/$') return true
+    }
   }
 
-  if (root.querySelector('[data-reactroot]'))
-    return true
+  if (root.querySelector('[data-reactroot]')) return true
 
-  if (root.querySelectorAll('template[data-rri]').length > 0)
-    return true
+  if (root.querySelectorAll('template[data-rri]').length > 0) return true
 
   return false
 }
 
 export function hasServerRenderedDom(root: Element): boolean {
-  if (hasFizzMarkers(root))
-    return true
+  if (hasFizzMarkers(root)) return true
 
   const first = root.firstElementChild
-  if (first === null)
-    return false
+  if (first === null) return false
 
-  if (first.tagName === 'SCRIPT')
-    return false
+  if (first.tagName === 'SCRIPT') return false
 
   return !first.classList.contains('rari-error')
 }
@@ -34,7 +31,7 @@ export function shouldHydrateServerDom(root: Element): boolean {
 }
 
 export function clearServerInjectedErrors(root: Element): void {
-  root.querySelectorAll('.rari-error:not([data-rari-hydration-failure])').forEach((element) => {
+  root.querySelectorAll('.rari-error:not([data-rari-hydration-failure])').forEach(element => {
     element.remove()
   })
 }

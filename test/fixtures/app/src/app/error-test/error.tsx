@@ -3,10 +3,10 @@
 export default function ErrorBoundary({
   error,
   reset,
-}: {
+}: Readonly<{
   error: Error
   reset: () => void
-}) {
+}>) {
   return (
     <div data-testid="error-boundary">
       <h2>Something went wrong!</h2>

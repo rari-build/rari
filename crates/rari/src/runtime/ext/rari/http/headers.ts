@@ -1,6 +1,6 @@
 /// <reference path="../core/types.d.ts" />
 
-(function () {
+;(function () {
   interface RariReadonlyHeaders {
     get: (name: string) => string | null
     has: (name: string) => boolean
@@ -10,8 +10,7 @@
     values: () => IterableIterator<string>
   }
 
-  if (!g['~rari'])
-    g['~rari'] = {}
+  g['~rari'] ??= {}
 
   function normalizeHeaderName(name: string): string {
     return name.toLowerCase()
@@ -24,14 +23,19 @@
 
   function parseRequestHeaders(): Map<string, string> {
     const raw = Deno.core.ops.op_get_request_headers(currentRequestId())
-    if (!raw)
-      return new Map()
+    if (!raw) return new Map()
 
     try {
-      const parsed = JSON.parse(raw) as Record<string, string>
-      return new Map(Object.entries(parsed))
-    }
-    catch {
+      const parsed: unknown = JSON.parse(raw)
+      if (parsed == null || typeof parsed !== 'object' || Array.isArray(parsed)) return new Map()
+
+      const entries: [string, string][] = []
+      for (const [key, value] of Object.entries(parsed)) {
+        if (typeof value === 'string') entries.push([key, value])
+      }
+
+      return new Map(entries)
+    } catch {
       return new Map()
     }
   }
@@ -53,8 +57,7 @@
       },
 
       forEach: (callback: (value: string, key: string) => void): void => {
-        for (const [key, value] of headers.entries())
-          callback(value, key)
+        for (const [key, value] of headers.entries()) callback(value, key)
       },
 
       keys: (): IterableIterator<string> => {

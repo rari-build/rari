@@ -12,14 +12,12 @@ let addon: NativeAddon | null = null
 let addonLoadAttempted = false
 
 function getAddon(): NativeAddon | null {
-  if (addonLoadAttempted)
-    return addon
+  if (addonLoadAttempted) return addon
 
   addonLoadAttempted = true
   addon = nativeAddon
 
-  if (!addon)
-    console.warn('[use-cache] Native addon not available — transforms will be skipped')
+  if (!addon) console.warn('[use-cache] Native addon not available -- transforms will be skipped')
 
   return addon
 }
@@ -33,18 +31,16 @@ function extractPrologueLines(code: string) {
       prologue.push(line)
       continue
     }
-    if (DIRECTIVE_PROLOGUE_REGEX.test(trimmed))
-      prologue.push(line)
-    else
-      break
+    if (DIRECTIVE_PROLOGUE_REGEX.test(trimmed)) prologue.push(line)
+    else break
   }
 
   return prologue
 }
 
 export interface UseCacheTransformOptions {
-  hashSalt?: string
-  cacheKinds?: string[]
+  readonly hashSalt?: string
+  readonly cacheKinds?: readonly string[]
 }
 
 export function transformUseCacheModule(
@@ -52,12 +48,10 @@ export function transformUseCacheModule(
   id: string,
   options: UseCacheTransformOptions = {},
 ): string | null {
-  if (!hasUseCacheFunction(code))
-    return null
+  if (!hasUseCacheFunction(code)) return null
 
   const native = getAddon()
-  if (!native)
-    return null
+  if (!native) return null
 
   try {
     const result = transformUseCache(code, {
@@ -66,12 +60,10 @@ export function transformUseCacheModule(
       cacheKinds: options.cacheKinds ?? ['default'],
     })
 
-    if (result.code === code)
-      return null
+    if (result.code === code) return null
 
     const imports = []
-    if (result.needsReactCache)
-      imports.push(`import { cache as $$reactCache__ } from 'react'`)
+    if (result.needsReactCache) imports.push(`import { cache as $$reactCache__ } from 'react'`)
 
     if (result.needsCacheWrapper)
       imports.push(`import { $$cache__ } from '@rari/use-cache/runtime/cache-wrapper'`)
@@ -89,8 +81,7 @@ export function transformUseCacheModule(
     }
 
     return `${importBlock}${result.code}`
-  }
-  catch (err) {
+  } catch (err) {
     throw new Error(
       `Failed to transform 'use cache' directive in ${id}: ${err instanceof Error ? err.message : String(err)}`,
       { cause: err },

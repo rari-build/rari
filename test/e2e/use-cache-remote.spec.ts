@@ -9,7 +9,9 @@ async function expectCachePage(page: Page) {
 }
 
 test.describe('use cache: remote (TestCacheStorage)', () => {
-  test('?backend=redis caches function results within and across requests', async ({ page }, testInfo) => {
+  test('?backend=redis caches function results within and across requests', async ({
+    page,
+  }, testInfo) => {
     const cacheCase = `cache-${testInfo.project.name.replace(/\W+/g, '-')}-${Date.now()}`
 
     await page.goto(`/use-cache-remote?backend=redis&case=${cacheCase}`)
@@ -18,10 +20,12 @@ test.describe('use cache: remote (TestCacheStorage)', () => {
 
     await page.goto(`/use-cache-remote?backend=redis&case=${cacheCase}`)
     await expectCachePage(page)
-    await expect(page.locator('[data-testid="totals"]')).toHaveText(totalsAfterFirst || '')
+    await expect(page.locator('[data-testid="totals"]')).toHaveText(totalsAfterFirst ?? '')
   })
 
-  test('?backend=redb caches function results within and across requests', async ({ page }, testInfo) => {
+  test('?backend=redb caches function results within and across requests', async ({
+    page,
+  }, testInfo) => {
     const cacheCase = `cache-${testInfo.project.name.replace(/\W+/g, '-')}-${Date.now()}`
 
     await page.goto(`/use-cache-remote?backend=redb&case=${cacheCase}`)
@@ -30,6 +34,6 @@ test.describe('use cache: remote (TestCacheStorage)', () => {
 
     await page.goto(`/use-cache-remote?backend=redb&case=${cacheCase}`)
     await expectCachePage(page)
-    await expect(page.locator('[data-testid="totals"]')).toHaveText(totalsAfterFirst || '')
+    await expect(page.locator('[data-testid="totals"]')).toHaveText(totalsAfterFirst ?? '')
   })
 })

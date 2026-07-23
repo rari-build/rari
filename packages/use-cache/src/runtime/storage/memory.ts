@@ -9,17 +9,20 @@ export class MemoryCacheStorage implements CacheStorage {
     this.cache = new LruCache<string, CacheStorageEntry>(maxEntries)
   }
 
-  async read(key: string) {
-    return this.cache.get(key) ?? null
+  async read(key: string): Promise<CacheStorageEntry | null> {
+    return Promise.resolve(this.cache.get(key) ?? null)
   }
 
-  async write(key: string, value: unknown, options: CacheWriteOptions) {
+  async write(key: string, value: unknown, options: CacheWriteOptions): Promise<void> {
     this.cache.set(key, { value }, options.ttlMs)
-    if (options.tags?.length)
+    if (options.tags != null && options.tags.length > 0)
       registerUseCacheEntryTags(key, options.tags)
+
+    return Promise.resolve()
   }
 
-  async delete(key: string) {
+  async delete(key: string): Promise<void> {
     this.cache.delete(key)
+    return Promise.resolve()
   }
 }

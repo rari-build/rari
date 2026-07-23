@@ -1,4 +1,3 @@
-/* eslint-disable react-refresh/only-export-components */
 'use client'
 
 import type { ReactNode } from 'react'
@@ -8,7 +7,9 @@ export type ThemePreference = 'light' | 'dark' | 'system'
 export type ResolvedTheme = 'light' | 'dark'
 
 const THEME_STORAGE_KEY = 'preferred-theme'
-const THEME_PREFERENCES: readonly ThemePreference[] = ['light', 'dark', 'system']
+function isThemePreference(value: string): value is ThemePreference {
+  return value === 'light' || value === 'dark' || value === 'system'
+}
 
 interface ThemeContextType {
   theme: ThemePreference
@@ -19,8 +20,7 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | null>(null)
 
 function getSystemTheme(): ResolvedTheme {
-  if (typeof window === 'undefined')
-    return 'dark'
+  if (typeof window === 'undefined') return 'dark'
 
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
@@ -36,24 +36,23 @@ function applyThemeClass(resolved: ResolvedTheme) {
 }
 
 function readStoredTheme(): ThemePreference {
-  if (typeof window === 'undefined')
-    return 'system'
+  if (typeof window === 'undefined') return 'system'
 
   try {
-    const stored = localStorage.getItem(THEME_STORAGE_KEY) as ThemePreference | null
-    if (stored && THEME_PREFERENCES.includes(stored))
-      return stored
-  }
-  catch {
+    const stored = localStorage.getItem(THEME_STORAGE_KEY)
+    if (stored !== null && isThemePreference(stored)) return stored
+  } catch {
     // localStorage access failed
   }
 
   return 'system'
 }
 
-export function ThemeProvider({ children }: { children: ReactNode }) {
+export function ThemeProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [theme, setTheme] = useState<ThemePreference>(readStoredTheme)
-  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() => resolveTheme(readStoredTheme()))
+  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() =>
+    resolveTheme(readStoredTheme()),
+  )
 
   const handleSetTheme = useCallback((next: ThemePreference) => {
     setTheme(next)
@@ -62,8 +61,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     applyThemeClass(resolved)
     try {
       localStorage.setItem(THEME_STORAGE_KEY, next)
-    }
-    catch {
+    } catch {
       // localStorage write failed
     }
   }, [])
@@ -73,8 +71,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [theme])
 
   useEffect(() => {
-    if (theme !== 'system')
-      return
+    if (theme !== 'system') return undefined
 
     const media = window.matchMedia('(prefers-color-scheme: dark)')
     const onChange = () => {
@@ -84,7 +81,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     }
 
     media.addEventListener('change', onChange)
-    return () => media.removeEventListener('change', onChange)
+    return () => {
+      media.removeEventListener('change', onChange)
+    }
   }, [theme])
 
   const value = useMemo(
@@ -92,18 +91,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     [theme, resolvedTheme, handleSetTheme],
   )
 
-  return (
-    <ThemeContext value={value}>
-      {children}
-    </ThemeContext>
-  )
+  return <ThemeContext value={value}>{children}</ThemeContext>
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useTheme() {
   const context = use(ThemeContext)
 
-  if (!context)
-    throw new Error('useTheme must be used within a ThemeProvider')
+  if (!context) throw new Error('useTheme must be used within a ThemeProvider')
 
   return context
 }

@@ -1,16 +1,46 @@
+import type { Plugin } from 'vite-plus'
 import fs from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { rari } from '@rari/vite'
 import { afterAll, beforeAll, describe, expect, it } from 'vite-plus/test'
+import { castMock } from '../helpers/mock-cast'
 
 const FIXTURE_DIR = path.join(process.cwd(), 'test/fixtures/use-cache')
 
-let useCacheAddon = null
+interface UseCacheTransformResult {
+  code: string
+  needsReactCache: boolean
+  needsCacheWrapper: boolean
+  needsRegisterRef: boolean
+}
+
+interface UseCacheAddon {
+  detectUseCache: (source: string) => boolean
+  transformUseCache: (
+    source: string,
+    opts: Readonly<{ filename: string; hashSalt: string }>,
+  ) => UseCacheTransformResult
+  flushLlvmProfile?: () => void
+}
+
+function isUseCacheAddon(value: unknown): value is UseCacheAddon {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'detectUseCache' in value &&
+    typeof value.detectUseCache === 'function' &&
+    'transformUseCache' in value &&
+    typeof value.transformUseCache === 'function'
+  )
+}
+
+let useCacheAddon: UseCacheAddon | null = null
 
 try {
   const repoRoot = process.cwd()
-  const ext = process.platform === 'win32' ? '.dll' : process.platform === 'darwin' ? '.dylib' : '.so'
+  const ext =
+    process.platform === 'win32' ? '.dll' : process.platform === 'darwin' ? '.dylib' : '.so'
   const platform = `${process.platform}-${process.arch}`
 
   const candidates = [
@@ -25,12 +55,14 @@ try {
   for (const addonPath of candidates) {
     if (fs.existsSync(addonPath)) {
       const nodeRequire = createRequire(import.meta.url)
-      useCacheAddon = nodeRequire(addonPath)
-      break
+      const loaded: unknown = nodeRequire(addonPath)
+      if (isUseCacheAddon(loaded)) {
+        useCacheAddon = loaded
+        break
+      }
     }
   }
-}
-catch {
+} catch {
   // addon not available
 }
 
@@ -61,35 +93,37 @@ function fixturePath(name: string): string {
 const addonDescribe = useCacheAddon ? describe : describe.skip
 
 addonDescribe('use-cache addon', () => {
+  const addon = useCacheAddon!
+
   describe('detectUseCache', () => {
     it('returns true for double-quoted use cache directive', () => {
-      expect(useCacheAddon.detectUseCache('"use cache";')).toBe(true)
+      expect(addon.detectUseCache('"use cache";')).toBe(true)
     })
 
     it('returns true for single-quoted use cache directive', () => {
-      expect(useCacheAddon.detectUseCache('\'use cache\';')).toBe(true)
+      expect(addon.detectUseCache("'use cache';")).toBe(true)
     })
 
     it('returns true for inline use cache directive', () => {
-      expect(useCacheAddon.detectUseCache('"use cache"')).toBe(true)
+      expect(addon.detectUseCache('"use cache"')).toBe(true)
     })
 
     it('returns false for plain code', () => {
-      expect(useCacheAddon.detectUseCache('const x = 1;')).toBe(false)
+      expect(addon.detectUseCache('const x = 1;')).toBe(false)
     })
 
     it('returns false for empty string', () => {
-      expect(useCacheAddon.detectUseCache('')).toBe(false)
+      expect(addon.detectUseCache('')).toBe(false)
     })
 
     it('returns false for similar-looking strings', () => {
-      expect(useCacheAddon.detectUseCache('"use cached"')).toBe(false)
-      expect(useCacheAddon.detectUseCache('"cache"')).toBe(false)
+      expect(addon.detectUseCache('"use cached"')).toBe(false)
+      expect(addon.detectUseCache('"cache"')).toBe(false)
     })
 
     it('detects backtick cache directives with custom kinds', () => {
-      expect(useCacheAddon.detectUseCache('`use cache: stale-while-revalidate`')).toBe(true)
-      expect(useCacheAddon.detectUseCache('`use cache:`')).toBe(false)
+      expect(addon.detectUseCache('`use cache: stale-while-revalidate`')).toBe(true)
+      expect(addon.detectUseCache('`use cache:`')).toBe(false)
     })
   })
 
@@ -106,7 +140,7 @@ async function getData(id) {
   return await db.query(id);
 }
 `
-      const result = useCacheAddon.transformUseCache(src, defaultOpts)
+      const result = addon.transformUseCache(src, defaultOpts)
 
       expect(result.code).not.toBe(src)
       expect(result.needsReactCache).toBe(false)
@@ -125,7 +159,7 @@ async function getData(id) {
 
     it('leaves code unchanged when no use cache directive found', () => {
       const src = 'const x = 1;\nexport function hello() { return 42; }'
-      const result = useCacheAddon.transformUseCache(src, defaultOpts)
+      const result = addon.transformUseCache(src, defaultOpts)
 
       expect(result.code).toBe(src)
       expect(result.needsReactCache).toBe(false)
@@ -144,7 +178,7 @@ async function fetchUser(name) {
   return await db.query(name);
 }
 `
-      const result = useCacheAddon.transformUseCache(src, defaultOpts)
+      const result = addon.transformUseCache(src, defaultOpts)
 
       expect(result.code).toContain('$$RSC_SERVER_CACHE_0_getData')
       expect(result.code).not.toContain('$$RSC_SERVER_CACHE_0_fetchUser')
@@ -158,7 +192,7 @@ function add(a, b) {
   return a + b;
 }
 `
-      const result = useCacheAddon.transformUseCache(src, defaultOpts)
+      const result = addon.transformUseCache(src, defaultOpts)
 
       expect(result.code).not.toContain('$$reactCache__')
       expect(result.code).not.toContain('$$cache__')
@@ -172,7 +206,7 @@ async function getData(id) {
   return await db.query(id);
 }
 `
-      const result = useCacheAddon.transformUseCache(src, defaultOpts)
+      const result = addon.transformUseCache(src, defaultOpts)
 
       expect(result.code).not.toContain('"use cache"')
       expect(result.code).toContain('"some other string"')
@@ -186,7 +220,7 @@ async function getData(id) {
   return id;
 }
 `
-      const result = useCacheAddon.transformUseCache(src, defaultOpts)
+      const result = addon.transformUseCache(src, defaultOpts)
 
       expect(result.code).not.toContain('"use cache"')
       expect(result.code).toContain('1;')
@@ -200,7 +234,7 @@ async function getData() {
   return await db.query();
 }
 `
-      const result = useCacheAddon.transformUseCache(src, defaultOpts)
+      const result = addon.transformUseCache(src, defaultOpts)
 
       expect(result.code).not.toContain('"use cache"')
       expect(result.code).not.toContain('"use server"')
@@ -213,7 +247,7 @@ async function getData() {
   return 42;
 }
 `
-      const result = useCacheAddon.transformUseCache(src, defaultOpts)
+      const result = addon.transformUseCache(src, defaultOpts)
 
       expect(result.code).toContain('$$cache__("stale-while-revalidate"')
       expect(result.code).not.toContain('"use cache: stale-while-revalidate"')
@@ -226,10 +260,12 @@ async function fn(a, b, c) {
   return a + b + c;
 }
 `
-      const result = useCacheAddon.transformUseCache(src, defaultOpts)
+      const result = addon.transformUseCache(src, defaultOpts)
 
       expect(result.code).toContain('$$cache__("default"')
-      expect(result.code).toContain(', 3, $$RSC_SERVER_CACHE_0_fn_INNER, Array.prototype.slice.call(arguments)')
+      expect(result.code).toContain(
+        ', 3, $$RSC_SERVER_CACHE_0_fn_INNER, Array.prototype.slice.call(arguments)',
+      )
       expect(result.code).not.toContain('Array.prototype.slice.call(arguments, 0, 3)')
     })
 
@@ -241,7 +277,7 @@ async function getData(id) {
   return await db.query(prefix + id);
 }
 `
-      const result = useCacheAddon.transformUseCache(src, defaultOpts)
+      const result = addon.transformUseCache(src, defaultOpts)
 
       expect(result.code).toContain(', 1, $$RSC_SERVER_CACHE_0_getData_INNER,')
     })
@@ -253,7 +289,7 @@ async function fn(a, ...rest) {
   return rest.length;
 }
 `
-      const result = useCacheAddon.transformUseCache(src, defaultOpts)
+      const result = addon.transformUseCache(src, defaultOpts)
 
       expect(result.code).toContain('Array.prototype.slice.call(arguments)')
       expect(result.code).not.toContain('Array.prototype.slice.call(arguments, 0, 1)')
@@ -266,7 +302,7 @@ async function fn(id = 1, { slug }, [...items]) {
   return id + slug + items.length;
 }
 `
-      const result = useCacheAddon.transformUseCache(src, defaultOpts)
+      const result = addon.transformUseCache(src, defaultOpts)
 
       expect(result.code).toContain('async function fn(id = 1, { slug }, [...items])')
     })
@@ -280,7 +316,7 @@ async function fn(input) {
   return id + items.length;
 }
 `
-      const result = useCacheAddon.transformUseCache(src, defaultOpts)
+      const result = addon.transformUseCache(src, defaultOpts)
 
       expect(result.code).toContain('const { id = 1 } = input')
       expect(result.code).toContain('const [...items] = input.items')
@@ -299,11 +335,15 @@ async function fetchData(id) {
   return id;
 }
 `
-      const resultA = useCacheAddon.transformUseCache(srcA, defaultOpts)
-      const resultB = useCacheAddon.transformUseCache(srcB, { ...defaultOpts, filename: 'test.js' })
+      const resultA = addon.transformUseCache(srcA, defaultOpts)
+      const resultB = addon.transformUseCache(srcB, { ...defaultOpts, filename: 'test.js' })
 
-      const idA = resultA.code.match(/registerServerReference\(\$\$RSC_SERVER_CACHE_0_getData, "([^"]+)"/)?.[1]
-      const idB = resultB.code.match(/registerServerReference\(\$\$RSC_SERVER_CACHE_0_fetchData, "([^"]+)"/)?.[1]
+      const idA = /registerServerReference\(\$\$RSC_SERVER_CACHE_0_getData, "([^"]+)"/.exec(
+        resultA.code,
+      )?.[1]
+      const idB = /registerServerReference\(\$\$RSC_SERVER_CACHE_0_fetchData, "([^"]+)"/.exec(
+        resultB.code,
+      )?.[1]
 
       expect(idA).toBeTruthy()
       expect(idB).toBeTruthy()
@@ -318,7 +358,7 @@ async function getData(id) {
   return await db.query(prefix + id);
 }
 `
-      const result = useCacheAddon.transformUseCache(src, defaultOpts)
+      const result = addon.transformUseCache(src, defaultOpts)
 
       expect(result.code).toMatch(/\(\[\s*"[\da-f]{66}",\s*prefix\s*\]\)/)
       expect(result.code).toContain('var getData = ((')
@@ -343,7 +383,7 @@ function syncHelper() {
   return 1;
 }
 `
-      const result = useCacheAddon.transformUseCache(src, defaultOpts)
+      const result = addon.transformUseCache(src, defaultOpts)
 
       expect(result.code).toContain('$$cache__("default"')
       expect(result.code).not.toContain('"use cache"')
@@ -361,7 +401,7 @@ async function getData() {
   return value;
 }
 `
-      const result = useCacheAddon.transformUseCache(src, defaultOpts)
+      const result = addon.transformUseCache(src, defaultOpts)
 
       expect(result.code).toContain('var getData = async function(...args)')
     })
@@ -373,7 +413,7 @@ async function getData(depth) {
   return depth > 0 ? getData(depth - 1) : 0;
 }
 `
-      const result = useCacheAddon.transformUseCache(src, defaultOpts)
+      const result = addon.transformUseCache(src, defaultOpts)
 
       expect(result.code).toContain('var getData = async function(...args)')
     })
@@ -389,7 +429,7 @@ async function getData() {
   return helper();
 }
 `
-      const result = useCacheAddon.transformUseCache(src, defaultOpts)
+      const result = addon.transformUseCache(src, defaultOpts)
 
       expect(result.code).toContain('function helper()')
       expect(result.code).toContain('var getData = async function(...args)')
@@ -404,7 +444,7 @@ async function getData() {
   return new Model();
 }
 `
-      const result = useCacheAddon.transformUseCache(src, defaultOpts)
+      const result = addon.transformUseCache(src, defaultOpts)
 
       expect(result.code).toContain('class Model')
       expect(result.code).toContain('var getData = async function(...args)')
@@ -419,7 +459,7 @@ export default async function getData(id) {
 
 export const getDataRef = getData;
 `
-      const result = useCacheAddon.transformUseCache(src, defaultOpts)
+      const result = addon.transformUseCache(src, defaultOpts)
 
       expect(result.code).toContain('var getData = async function(...args)')
       expect(result.code).toContain('export default getData')
@@ -434,14 +474,16 @@ export default async function(id) {
   return id;
 }
 `
-      const result = useCacheAddon.transformUseCache(src, defaultOpts)
+      const result = addon.transformUseCache(src, defaultOpts)
 
       expect(result.code).not.toBe(src)
       expect(result.needsCacheWrapper).toBe(true)
       expect(result.needsRegisterRef).toBe(true)
       expect(result.code).not.toContain('"use cache"')
       expect(result.code).toContain('$$RSC_SERVER_CACHE_0_default_INNER')
-      expect(result.code).toContain('var $$RSC_SERVER_CACHE_DEFAULT_EXPORT = async function(...args)')
+      expect(result.code).toContain(
+        'var $$RSC_SERVER_CACHE_DEFAULT_EXPORT = async function(...args)',
+      )
       expect(result.code).toContain('export default $$RSC_SERVER_CACHE_DEFAULT_EXPORT')
     })
 
@@ -453,7 +495,7 @@ async function getData() {
   return 42;
 }
 `
-      const result = useCacheAddon.transformUseCache(src, defaultOpts)
+      const result = addon.transformUseCache(src, defaultOpts)
 
       expect(result.code).toBe(src)
       expect(result.needsCacheWrapper).toBe(false)
@@ -467,7 +509,7 @@ async function getData() {
   return 42;
 }
 `
-      const result = useCacheAddon.transformUseCache(src, defaultOpts)
+      const result = addon.transformUseCache(src, defaultOpts)
 
       expect(result.code).not.toBe(src)
       expect(result.code).toContain('$$cache__')
@@ -488,10 +530,19 @@ async function getData({ id, nested: { slug }, ...props }, [head], ...tail) {
   });
 }
 `
-      const result = useCacheAddon.transformUseCache(src, defaultOpts)
+      const result = addon.transformUseCache(src, defaultOpts)
 
       expect(result.code).toMatch(/\(\[\s*"[\da-f]{66}",/)
-      for (const name of ['React', 'reactCache', 'model', 'token', 'alias', 'others', 'first', 'second']) {
+      for (const name of [
+        'React',
+        'reactCache',
+        'model',
+        'token',
+        'alias',
+        'others',
+        'first',
+        'second',
+      ]) {
         expect(result.code).toContain(name)
       }
       expect(result.code).toContain('$$ACTION_BOUND_ARGS')
@@ -527,7 +578,7 @@ async function getData(input) {
   }
 }
 `
-      const result = useCacheAddon.transformUseCache(src, defaultOpts)
+      const result = addon.transformUseCache(src, defaultOpts)
 
       expect(result.code).toContain('var getData = async function(...args)')
     })
@@ -539,7 +590,26 @@ async function getData(input) {
 const pluginDescribe = useCacheAddon ? describe : describe.skip
 
 pluginDescribe('use-cache Vite plugin integration', () => {
-  let mainPlugin: any
+  let mainPlugin: Plugin
+
+  type TransformHook = (
+    this: Readonly<{ readonly environment: { readonly name: string } }>,
+    code: string,
+    id: string,
+  ) => Promise<{ code?: string } | null | undefined> | { code?: string } | null | undefined
+
+  function getTransform(plugin: Plugin): TransformHook {
+    const hook = plugin.transform
+    if (typeof hook === 'function') {
+      return async (code, id) =>
+        castMock(await hook.call(castMock({ environment: { name: 'ssr' } }), code, id))
+    }
+    if (hook && typeof hook === 'object' && typeof hook.handler === 'function') {
+      return async (code, id) =>
+        castMock(await hook.handler.call(castMock({ environment: { name: 'ssr' } }), code, id))
+    }
+    throw new Error('expected transform hook on use-cache plugin')
+  }
 
   beforeAll(() => {
     cleanFixtures()
@@ -560,17 +630,18 @@ async function getData(id) {
 `
     const filePath = fixturePath('basic.tsx')
     writeFixture(path.basename(filePath), source)
-    const p = mainPlugin.transform as any
-    const result = await p.call(
+    const result = await getTransform(mainPlugin).call(
       { environment: { name: 'rsc' } },
       source,
       filePath,
     )
 
     expect(result).not.toBeNull()
-    expect(result).not.toContain('import { cache as $$reactCache__ } from \'react\'')
-    expect(result).toContain('import { $$cache__ } from \'@rari/use-cache/runtime/cache-wrapper\'')
-    expect(result).toContain('import { registerServerReference } from \'react-server-dom-rari/server\'')
+    expect(result).not.toContain("import { cache as $$reactCache__ } from 'react'")
+    expect(result).toContain("import { $$cache__ } from '@rari/use-cache/runtime/cache-wrapper'")
+    expect(result).toContain(
+      "import { registerServerReference } from 'react-server-dom-rari/server'",
+    )
     expect(result).not.toContain('$$reactCache__')
     expect(result).toContain('$$cache__')
     expect(result).toContain('registerServerReference')
@@ -581,8 +652,7 @@ async function getData(id) {
     const source = 'const x = 1;\nexport function hello() { return 42; }'
     const filePath = fixturePath('no-cache.tsx')
     writeFixture(path.basename(filePath), source)
-    const p = mainPlugin.transform as any
-    const result = await p.call(
+    const result = await getTransform(mainPlugin).call(
       { environment: { name: 'rsc' } },
       source,
       filePath,
@@ -607,18 +677,16 @@ async function getData() {
     const filePath = path.join(dir, 'test.tsx')
     fs.writeFileSync(filePath, source, 'utf-8')
 
-    const p = mainPlugin.transform as any
     let result
     try {
-      result = await p.call(
+      result = await getTransform(mainPlugin).call(
         { environment: { name: 'rsc' } },
         source,
         filePath,
       )
       expect(result).not.toBeNull()
       expect(result).not.toContain('$$reactCache__')
-    }
-    finally {
+    } finally {
       fs.rmSync(dir, { recursive: true, force: true })
     }
   })
@@ -638,8 +706,7 @@ export async function action() {
 `
     const filePath = fixturePath('mixed.tsx')
     writeFixture(path.basename(filePath), source)
-    const p = mainPlugin.transform as any
-    const result = await p.call(
+    const result = await getTransform(mainPlugin).call(
       { environment: { name: 'rsc' } },
       source,
       filePath,
@@ -664,8 +731,7 @@ async function fetchUser(name) {
 `
     const filePath = fixturePath('multiple.tsx')
     writeFixture(path.basename(filePath), source)
-    const p = mainPlugin.transform as any
-    const result = await p.call(
+    const result = await getTransform(mainPlugin).call(
       { environment: { name: 'rsc' } },
       source,
       filePath,
@@ -690,15 +756,14 @@ export default getData;
     const filePath = fixturePath('client-file.tsx')
     writeFixture(path.basename(filePath), source)
 
-    const p = mainPlugin.transform as any
-    const result = await p.call(
+    const result = await getTransform(mainPlugin).call(
       { environment: { name: 'client' } },
       source,
       filePath,
     )
 
     expect(result).not.toBeNull()
-    // Client modules are not transformed — use-cache is a server-side feature
+    // Client modules are not transformed -- use-cache is a server-side feature
     expect(result).not.toContain('$$reactCache__')
     expect(result).not.toContain('"use client"')
     expect(result).toContain('export default getData')
@@ -711,8 +776,7 @@ async function getData() {
   return 42;
 }
 `
-    const p = mainPlugin.transform as any
-    const result = await p.call(
+    const result = await getTransform(mainPlugin).call(
       { environment: { name: 'rsc' } },
       source,
       '/test/plain.css',
@@ -730,8 +794,7 @@ async function getData(id) {
 `
     const filePath = fixturePath('remote.tsx')
     writeFixture(path.basename(filePath), source)
-    const p = mainPlugin.transform as any
-    const result = await p.call(
+    const result = await getTransform(mainPlugin).call(
       { environment: { name: 'rsc' } },
       source,
       filePath,
@@ -752,8 +815,7 @@ async function getData() {
 `
     const filePath = fixturePath('remote-single-quote.tsx')
     writeFixture(path.basename(filePath), source)
-    const p = mainPlugin.transform as any
-    const result = await p.call(
+    const result = await getTransform(mainPlugin).call(
       { environment: { name: 'rsc' } },
       source,
       filePath,
@@ -776,8 +838,7 @@ async function remoteCached() {
 `
     const filePath = fixturePath('mixed-default-and-remote.tsx')
     writeFixture(path.basename(filePath), source)
-    const p = mainPlugin.transform as any
-    const result = await p.call(
+    const result = await getTransform(mainPlugin).call(
       { environment: { name: 'rsc' } },
       source,
       filePath,

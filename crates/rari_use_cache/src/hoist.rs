@@ -440,7 +440,7 @@ pub fn create_bound_replacement(
     let inner_body = build_inner_body(cache_name, has_bound_args);
 
     let final_init: Box<Expr> = if has_bound_args {
-        // Closure captures present — wrap in an arrow that pre-binds the
+        // Closure captures present -- wrap in an arrow that pre-binds the
         // encoded closure args, then returns an async function for the user args.
         //
         // ($$ba => async (...args) => { try { return cacheName.apply(null, [$$ba, ...args]); }
@@ -499,7 +499,7 @@ pub fn create_bound_replacement(
             type_args: None,
         }))
     } else {
-        // No closure captures — simple async function.
+        // No closure captures -- simple async function.
         Box::new(Expr::Fn(FnExpr {
             ident: None,
             function: Box::new(Function {

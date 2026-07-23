@@ -2,37 +2,39 @@
 <html lang="en">
   <head>
     <script>
-      (function () {
+      ;(function () {
         try {
-          var stored = localStorage.getItem('preferred-theme');
-          var preference = stored === 'light' || stored === 'dark' || stored === 'system'
-            ? stored
-            : 'system';
-          var resolved = preference === 'system'
-            ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-            : preference;
-          document.documentElement.classList.toggle('light', resolved === 'light');
-          document.documentElement.classList.toggle('dark', resolved === 'dark');
+          var stored = localStorage.getItem('preferred-theme')
+          var preference =
+            stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'system'
+          var resolved =
+            preference === 'system'
+              ? window.matchMedia('(prefers-color-scheme: dark)').matches
+                ? 'dark'
+                : 'light'
+              : preference
+          document.documentElement.classList.toggle('light', resolved === 'light')
+          document.documentElement.classList.toggle('dark', resolved === 'dark')
         } catch (e) {
-          document.documentElement.classList.add('dark');
+          document.documentElement.classList.add('dark')
         }
-      })();
+      })()
     </script>
     <script type="module">
-      import "/src/app/globals.css";
+      import '/src/app/globals.css'
 
       if (import.meta.env.VITE_SENTRY_DSN) {
         const loadSentry = () => {
-          import("/src/lib/sentry-init.ts");
-          document.removeEventListener('click', loadSentry);
-          document.removeEventListener('scroll', loadSentry);
-          document.removeEventListener('keydown', loadSentry);
-        };
+          import('/src/lib/sentry-init.ts')
+          document.removeEventListener('click', loadSentry)
+          document.removeEventListener('scroll', loadSentry)
+          document.removeEventListener('keydown', loadSentry)
+        }
 
-        document.addEventListener('click', loadSentry, { once: true, passive: true });
-        document.addEventListener('scroll', loadSentry, { once: true, passive: true });
-        document.addEventListener('keydown', loadSentry, { once: true, passive: true });
-        setTimeout(loadSentry, 5000);
+        document.addEventListener('click', loadSentry, { once: true, passive: true })
+        document.addEventListener('scroll', loadSentry, { once: true, passive: true })
+        document.addEventListener('keydown', loadSentry, { once: true, passive: true })
+        setTimeout(loadSentry, 5000)
       }
     </script>
   </head>

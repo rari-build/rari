@@ -5,74 +5,71 @@ interface SuspenseError {
   promise: Promise<unknown>
 }
 
-(async function () {
+void (async function () {
   const REACT_SUSPENSE_PENDING = Symbol.for('react.suspense.pending')
 
   let Component: (props: unknown) => unknown
   let componentSource = 'not found'
 
   if (typeof g['{component_id}'] === 'function') {
-    Component = g['{component_id}'] as (props: unknown) => unknown
+    Component = g['{component_id}'] as (props: unknown) => unknown // oxlint-disable-line typescript/no-unsafe-type-assertion -- generated component id
     componentSource = 'global.{component_id}'
-  }
-  else if (
-    g['~rsc']?.modules
-    && g['~rsc'].modules['{component_id}']
-  ) {
-    Component
-      = (g['~rsc'].modules['{component_id}'].default
-        || Object.values(g['~rsc'].modules['{component_id}'])[0]) as (props: unknown) => unknown
+  } else if (g['~rsc']?.modules?.['{component_id}'] != null) {
+    const moduleExports = g['~rsc'].modules['{component_id}']
+    const resolved = moduleExports.default ?? Object.values(moduleExports)[0]
+    if (typeof resolved !== 'function')
+      throw new Error('Component {component_id} export is not a function')
+    Component = resolved as (props: unknown) => unknown // oxlint-disable-line typescript/no-unsafe-type-assertion -- RSC module default export
     componentSource = '~rsc.modules.{component_id}'
-  }
-  else {
+  } else {
     throw new Error('Component {component_id} not found in global scope')
   }
 
   const sanitizeComponentOutput = (html: unknown, componentId: string): unknown => {
-    if (typeof html !== 'string')
-      return html
+    if (typeof html !== 'string') return html
 
     return Deno.core.ops.op_sanitize_html(html, componentId)
   }
 
   const isSuspensePending = (error: unknown): error is SuspenseError => {
-    return !!error
-      && typeof error === 'object'
-      && (error as SuspenseError).$$typeof === REACT_SUSPENSE_PENDING
+    return (
+      error != null &&
+      typeof error === 'object' &&
+      '$$typeof' in error &&
+      error.$$typeof === REACT_SUSPENSE_PENDING
+    )
   }
 
   const elementToHtml = async (element: unknown, componentId: string): Promise<string | null> => {
     try {
-      if (!g.renderToHtmlFizz)
-        return null
+      if (!g.renderToHtmlFizz) return null
 
       const htmlResult = await g.renderToHtmlFizz(element)
       const sanitized = sanitizeComponentOutput(htmlResult, componentId)
-      if (typeof sanitized !== 'string' || sanitized.length === 0)
-        return null
+      if (typeof sanitized !== 'string' || sanitized.length === 0) return null
 
       return sanitized
-    }
-    catch (htmlError) {
-      if (isSuspensePending(htmlError))
-        throw htmlError
+    } catch (htmlError) {
+      if (isSuspensePending(htmlError)) throw htmlError
 
       console.warn('HTML generation failed:', htmlError)
       return null
     }
   }
 
-  const storeResult = (result: Record<string, unknown>) => {
-    if (!g['~render'])
-      g['~render'] = {}
+  const storeResult = (result: Readonly<Record<string, unknown>>) => {
+    g['~render'] ??= {}
     g['~render'].lastResult = result
     return result
   }
 
-  const renderOutputs = async (element: unknown, options?: { resolvedFromSuspense?: boolean }) => {
+  const renderOutputs = async (
+    element: unknown,
+    options?: Readonly<{ resolvedFromSuspense?: boolean }>,
+  ) => {
     const htmlResult = await elementToHtml(element, '{component_id}')
 
-    if (!htmlResult) {
+    if (htmlResult == null) {
       return storeResult({
         html: '',
         hasSuspense: false,
@@ -96,7 +93,7 @@ interface SuspenseError {
     })
   }
 
-  const props = {props_json}
+  const props = { props_json }
 
   const isAsyncComponent = Component.constructor.name === 'AsyncFunction'
 
@@ -105,8 +102,7 @@ interface SuspenseError {
     try {
       const result = await Component(props)
       element = result
-    }
-    catch (asyncError: unknown) {
+    } catch (asyncError: unknown) {
       const errorMessage = asyncError instanceof Error ? asyncError.message : String(asyncError)
       console.error(`[rari] Error rendering ${componentSource}:`, asyncError)
       return storeResult({
@@ -119,25 +115,22 @@ interface SuspenseError {
         },
       })
     }
-  }
-  else {
+  } else {
     element = Component(props)
   }
 
   try {
     return await renderOutputs(element)
-  }
-  catch (error: unknown) {
-    const suspenseError = error as SuspenseError
-    if (suspenseError && suspenseError.$$typeof === REACT_SUSPENSE_PENDING) {
-      if (suspenseError.promise && typeof suspenseError.promise.then === 'function') {
+  } catch (error: unknown) {
+    if (isSuspensePending(error)) {
+      if (typeof error.promise.then === 'function') {
         try {
-          await suspenseError.promise
+          await error.promise
           const newElement = isAsyncComponent ? await Component(props) : Component(props)
           return await renderOutputs(newElement, { resolvedFromSuspense: true })
-        }
-        catch (resolveError: unknown) {
-          const errorMessage = resolveError instanceof Error ? resolveError.message : String(resolveError)
+        } catch (resolveError: unknown) {
+          const errorMessage =
+            resolveError instanceof Error ? resolveError.message : String(resolveError)
           console.error(`[rari] Error rendering ${componentSource} after suspense:`, resolveError)
           return storeResult({
             html: '',

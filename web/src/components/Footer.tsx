@@ -13,7 +13,9 @@ export default async function Footer() {
 
   return (
     <footer className="w-full bg-canvas rounded-t-md">
-      <div className={`${container.marketing} py-8 lg:py-4 lg:flex lg:items-center lg:justify-between lg:gap-x-3`}>
+      <div
+        className={`${container.marketing} py-8 lg:py-4 lg:flex lg:items-center lg:justify-between lg:gap-x-3`}
+      >
         <div className="flex items-center justify-center lg:justify-start lg:flex-1 gap-x-1.5 mt-3 lg:mt-0 lg:order-1">
           <p className="text-fg-muted text-sm">
             <a
@@ -23,14 +25,9 @@ export default async function Footer() {
               className="hover:underline hover:text-fg-secondary transition-colors"
             >
               MIT License
-            </a>
-            {' '}
-            ©
-            {' '}
-            {currentYear}
-            {' '}
-            Ryan Skinner
-            {commitHash && (
+            </a>{' '}
+            © {currentYear} Ryan Skinner
+            {commitHash != null && commitHash !== '' && (
               <>
                 {' '}
                 (
@@ -59,7 +56,9 @@ export default async function Footer() {
             <span className="absolute inset-0 bg-linear-to-r from-accent/10 to-accent-hover/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
             <Github className="w-5 h-5 relative z-10" />
             {stars !== null && (
-              <span className="text-xs text-fg-muted relative z-10">{formatCompactNumber(stars)}</span>
+              <span className="text-xs text-fg-muted relative z-10">
+                {formatCompactNumber(stars)}
+              </span>
             )}
             <span className="sr-only">rari on GitHub</span>
           </a>

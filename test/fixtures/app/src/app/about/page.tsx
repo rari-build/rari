@@ -1,6 +1,6 @@
 import type { Metadata } from 'rari'
 
-export default async function AboutPage() {
+export default function AboutPage() {
   return (
     <div>
       <h1>About Page</h1>
@@ -10,10 +10,8 @@ export default async function AboutPage() {
       <div className="space-y-4 mt-8">
         {Array.from({ length: 50 }, (_, i) => (
           <p key={i} className="text-gray-600">
-            This is paragraph
-            {' '}
-            {i + 1}
-            . Adding content to make the page scrollable for testing scroll position restoration.
+            This is paragraph {i + 1}. Adding content to make the page scrollable for testing scroll
+            position restoration.
           </p>
         ))}
       </div>

@@ -4,26 +4,17 @@ import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { styleText } from 'node:util'
-import {
-  cancel,
-  confirm,
-  intro,
-  isCancel,
-  outro,
-  select,
-  spinner,
-  text,
-} from '@clack/prompts'
+import { cancel, confirm, intro, isCancel, outro, select, spinner, text } from '@clack/prompts'
 
 const TEMPLATE_PLACEHOLDER_REGEX = /\{\{PROJECT_NAME\}\}/g
 const PACKAGE_MANAGER_PLACEHOLDER_REGEX = /\{\{PACKAGE_MANAGER\}\}/g
 const PROJECT_NAME_REGEX = /^[@\w/-]+$/
 
 interface ProjectOptions {
-  name: string
-  template: string
-  packageManager: string
-  installDeps: boolean
+  readonly name: string
+  readonly template: string
+  readonly packageManager: string
+  readonly installDeps: boolean
 }
 
 const templates = {
@@ -52,21 +43,25 @@ async function main() {
       process.exit(1)
     }
     if (!PROJECT_NAME_REGEX.test(projectName)) {
-      console.error(styleText('red', 'Error: Project name can only contain letters, numbers, hyphens, underscores, slashes, and @ symbol.'))
+      console.error(
+        styleText(
+          'red',
+          'Error: Project name can only contain letters, numbers, hyphens, underscores, slashes, and @ symbol.',
+        ),
+      )
       process.exit(1)
     }
-  }
-  else {
+  } else {
     const promptedName = await text({
       message: 'What is your project named?',
       placeholder: 'my-rari-app',
-      validate: (value) => {
-        if (!value)
-          return 'Please enter a project name.'
-        if (value.includes(' '))
-          return 'Project name cannot contain spaces.'
+      validate: value => {
+        if (value == null || value === '') return 'Please enter a project name.'
+        if (value.includes(' ')) return 'Project name cannot contain spaces.'
         if (!PROJECT_NAME_REGEX.test(value))
           return 'Project name can only contain letters, numbers, hyphens, underscores, slashes, and @ symbol.'
+
+        return undefined
       },
     })
 
@@ -117,9 +112,9 @@ async function main() {
 
   const options: ProjectOptions = {
     name: projectName,
-    template: template as string,
-    packageManager: packageManager as string,
-    installDeps: installDeps as boolean,
+    template,
+    packageManager,
+    installDeps,
   }
 
   await createProject(options)
@@ -130,8 +125,7 @@ async function main() {
   console.warn(styleText('cyan', 'Next steps:'))
   console.warn(styleText('gray', `  cd ${options.name}`))
 
-  if (!options.installDeps)
-    console.warn(styleText('gray', `  ${options.packageManager} install`))
+  if (!options.installDeps) console.warn(styleText('gray', `  ${options.packageManager} install`))
 
   console.warn(styleText('gray', `  ${options.packageManager} run dev`))
   console.warn()
@@ -159,18 +153,13 @@ async function createProject(options: ProjectOptions) {
       await installDependencies(projectPath, options.packageManager)
       s.stop('Dependencies installed.')
     }
-  }
-  catch (error) {
+  } catch (error) {
     s.stop('Error occurred.')
     throw error
   }
 }
 
-async function copyTemplate(
-  templatePath: string,
-  projectPath: string,
-  options: ProjectOptions,
-) {
+async function copyTemplate(templatePath: string, projectPath: string, options: ProjectOptions) {
   const templateFiles = [
     'package.json',
     'vite.config.ts',
@@ -205,17 +194,13 @@ async function copyTemplate(
 
       await mkdir(dirname(destPath), { recursive: true })
       await writeFile(destPath, content)
-    }
-    catch (error) {
+    } catch (error) {
       console.warn(`Warning: Could not copy ${file}:`, error)
     }
   }
 }
 
-async function installDependencies(
-  projectPath: string,
-  packageManager: string,
-): Promise<void> {
+async function installDependencies(projectPath: string, packageManager: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(packageManager, ['install'], {
       cwd: projectPath,
@@ -223,17 +208,15 @@ async function installDependencies(
     })
 
     child.on('close', (code: number | null) => {
-      if (code === 0)
-        resolve()
-      else
-        reject(new Error(`${packageManager} install failed with code ${code}`))
+      if (code === 0) resolve()
+      else reject(new Error(`${packageManager} install failed with code ${code}`))
     })
 
     child.on('error', reject)
   })
 }
 
-main().catch((error) => {
-  console.error(styleText('red', 'Error:'), error.message)
+main().catch((error: unknown) => {
+  console.error(styleText('red', 'Error:'), error instanceof Error ? error.message : String(error))
   process.exit(1)
 })

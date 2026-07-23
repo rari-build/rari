@@ -1,17 +1,21 @@
+/* oxlint-disable typescript/no-unsafe-assignment -- vitest asymmetric matchers (expect.*) are typed as any */
+
 import { callServer } from '@rari/runtime/actions/call-server'
 import { scheduleActionFlightRefresh } from '@rari/runtime/actions/flight-refresh'
 import { serializeRouterState } from '@rari/runtime/flight/serialize-router-state'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 
 const flightClientMocks = vi.hoisted(() => ({
-  encodeReply: vi.fn<(value: unknown) => Promise<FormData | string>>(
-    async (args: unknown) => JSON.stringify(args),
+  encodeReply: vi.fn<(value: unknown) => Promise<FormData | string>>(async (args: unknown) =>
+    Promise.resolve(JSON.stringify(args)),
   ),
   createTemporaryReferenceSet: vi.fn(() => new Map()),
-  createFromFetch: vi.fn(async () => ({
-    a: Promise.resolve({ ok: true }),
-    f: Promise.resolve({ type: 'refresh' }),
-  })),
+  createFromFetch: vi.fn(async () =>
+    Promise.resolve({
+      a: Promise.resolve({ ok: true }),
+      f: Promise.resolve({ type: 'refresh' }),
+    }),
+  ),
 }))
 
 vi.mock('virtual:react-flight-client', () => flightClientMocks)
@@ -27,13 +31,15 @@ describe('callServer', () => {
       location: { pathname: '/actions', search: '', href: 'http://localhost/actions' },
     })
     vi.stubGlobal('dispatchEvent', vi.fn())
-    flightClientMocks.encodeReply.mockImplementation(
-      async (args: unknown) => JSON.stringify(args),
+    flightClientMocks.encodeReply.mockImplementation(async (args: unknown) =>
+      Promise.resolve(JSON.stringify(args)),
     )
-    flightClientMocks.createFromFetch.mockImplementation(async () => ({
-      a: Promise.resolve({ ok: true }),
-      f: Promise.resolve({ type: 'refresh' }),
-    }))
+    flightClientMocks.createFromFetch.mockImplementation(async () =>
+      Promise.resolve({
+        a: Promise.resolve({ ok: true }),
+        f: Promise.resolve({ type: 'refresh' }),
+      }),
+    )
   })
 
   afterEach(() => {
@@ -43,23 +49,28 @@ describe('callServer', () => {
 
   it('posts encodeReply payload with router state and Flight accept header', async () => {
     const fetchMock = vi.mocked(globalThis.fetch)
-    fetchMock.mockResolvedValueOnce(new Response('0:{}', {
-      status: 200,
-      headers: { 'content-type': 'text/x-component' },
-    }))
+    fetchMock.mockResolvedValueOnce(
+      new Response('0:{}', {
+        status: 200,
+        headers: { 'content-type': 'text/x-component' },
+      }),
+    )
 
     const result = await callServer('actions/todo-actions_abcd1234#addTodo', [{ text: 'test' }])
 
     expect(result).toEqual({ ok: true })
-    expect(fetchMock).toHaveBeenCalledWith('/actions', expect.objectContaining({
-      method: 'POST',
-      headers: expect.objectContaining({
-        'rsc-action-id': 'actions/todo-actions_abcd1234#addTodo',
-        'Accept': 'text/x-component',
-        'rari-router-state': serializeRouterState(),
-        'Content-Type': 'text/plain;charset=UTF-8',
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/actions',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          'rsc-action-id': 'actions/todo-actions_abcd1234#addTodo',
+          'Accept': 'text/x-component',
+          'rari-router-state': serializeRouterState(),
+          'Content-Type': 'text/plain;charset=UTF-8',
+        }),
       }),
-    }))
+    )
     expect(flightClientMocks.createFromFetch).toHaveBeenCalled()
     expect(scheduleActionFlightRefresh).toHaveBeenCalledWith(
       expect.any(Response),
@@ -75,35 +86,45 @@ describe('callServer', () => {
 
     flightClientMocks.encodeReply.mockResolvedValueOnce(formData)
 
-    fetchMock.mockResolvedValueOnce(new Response('0:{}', {
-      status: 200,
-      headers: { 'content-type': 'text/x-component' },
-    }))
+    fetchMock.mockResolvedValueOnce(
+      new Response('0:{}', {
+        status: 200,
+        headers: { 'content-type': 'text/x-component' },
+      }),
+    )
 
     await callServer('actions/todo-actions_abcd1234#addTodo', [null, formData])
 
-    expect(fetchMock).toHaveBeenCalledWith('/actions', expect.objectContaining({
-      method: 'POST',
-      body: formData,
-      headers: expect.objectContaining({
-        'rsc-action-id': 'actions/todo-actions_abcd1234#addTodo',
-        'Accept': 'text/x-component',
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/actions',
+      expect.objectContaining({
+        method: 'POST',
+        body: formData,
+        headers: expect.objectContaining({
+          'rsc-action-id': 'actions/todo-actions_abcd1234#addTodo',
+          'Accept': 'text/x-component',
+        }),
       }),
-    }))
+    )
 
-    const requestInit = fetchMock.mock.calls[0]![1] as RequestInit
-    const headers = requestInit.headers as Record<string, string>
-    expect(headers['Content-Type']).toBeUndefined()
+    const firstCall = fetchMock.mock.calls[0]
+    expect(firstCall).toBeDefined()
+    const requestInit = firstCall[1]!
+    const headers = requestInit.headers
+    if (headers != null && !(headers instanceof Headers) && !Array.isArray(headers))
+      expect(headers['Content-Type']).toBeUndefined()
   })
 
   it('follows x-action-redirect without decoding Flight', async () => {
-    vi.mocked(globalThis.fetch).mockResolvedValueOnce(new Response('', {
-      status: 200,
-      headers: {
-        'content-type': 'text/plain',
-        'x-action-redirect': '/actions;push',
-      },
-    }))
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
+      new Response('', {
+        status: 200,
+        headers: {
+          'content-type': 'text/plain',
+          'x-action-redirect': '/actions;push',
+        },
+      }),
+    )
 
     const result = await callServer('actions/todo-actions_abcd1234#addTodo', [])
 
@@ -113,10 +134,12 @@ describe('callServer', () => {
   })
 
   it('throws when the server returns a plain text error', async () => {
-    vi.mocked(globalThis.fetch).mockResolvedValueOnce(new Response('boom', {
-      status: 400,
-      headers: { 'content-type': 'text/plain;charset=UTF-8' },
-    }))
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
+      new Response('boom', {
+        status: 400,
+        headers: { 'content-type': 'text/plain;charset=UTF-8' },
+      }),
+    )
 
     await expect(callServer('actions/todo-actions_abcd1234#addTodo', [])).rejects.toThrow('boom')
   })
@@ -125,13 +148,15 @@ describe('callServer', () => {
     const location = { pathname: '/actions', search: '', href: 'http://localhost/actions' }
     vi.stubGlobal('window', { location })
 
-    vi.mocked(globalThis.fetch).mockResolvedValueOnce(new Response('', {
-      status: 200,
-      headers: {
-        'content-type': 'text/plain',
-        'x-action-redirect': '/dashboard;push',
-      },
-    }))
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
+      new Response('', {
+        status: 200,
+        headers: {
+          'content-type': 'text/plain',
+          'x-action-redirect': '/dashboard;push',
+        },
+      }),
+    )
 
     const result = await callServer('actions/todo-actions_abcd1234#addTodo', [])
 
@@ -143,13 +168,15 @@ describe('callServer', () => {
     const location = { pathname: '/actions', search: '', href: 'http://localhost/actions' }
     vi.stubGlobal('window', { location })
 
-    vi.mocked(globalThis.fetch).mockResolvedValueOnce(new Response('', {
-      status: 200,
-      headers: {
-        'content-type': 'text/plain',
-        'x-action-redirect': 'javascript:alert(1);push',
-      },
-    }))
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
+      new Response('', {
+        status: 200,
+        headers: {
+          'content-type': 'text/plain',
+          'x-action-redirect': 'javascript:alert(1);push',
+        },
+      }),
+    )
 
     const result = await callServer('actions/todo-actions_abcd1234#addTodo', [])
 
@@ -158,10 +185,12 @@ describe('callServer', () => {
   })
 
   it('strips internal metadata from the return value but preserves it for refresh scheduling', async () => {
-    vi.mocked(globalThis.fetch).mockResolvedValueOnce(new Response('0:{}', {
-      status: 200,
-      headers: { 'content-type': 'text/x-component' },
-    }))
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
+      new Response('0:{}', {
+        status: 200,
+        headers: { 'content-type': 'text/x-component' },
+      }),
+    )
     flightClientMocks.createFromFetch.mockResolvedValueOnce({
       a: Promise.resolve({ 'ok': true, '~rariSkipRefresh': true }),
       f: Promise.resolve({ type: 'refresh' }),
@@ -178,14 +207,16 @@ describe('callServer', () => {
   })
 
   it('throws when the server returns a non-flight 500 error', async () => {
-    vi.mocked(globalThis.fetch).mockResolvedValueOnce(new Response('', {
-      status: 500,
-      statusText: 'Internal Server Error',
-      headers: { 'content-type': 'text/html' },
-    }))
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
+      new Response('', {
+        status: 500,
+        statusText: 'Internal Server Error',
+        headers: { 'content-type': 'text/html' },
+      }),
+    )
 
-    await expect(callServer('actions/todo-actions_abcd1234#addTodo', []))
-      .rejects
-      .toThrow('Server action "actions/todo-actions_abcd1234#addTodo" failed with status 500: Internal Server Error')
+    await expect(callServer('actions/todo-actions_abcd1234#addTodo', [])).rejects.toThrow(
+      'Server action "actions/todo-actions_abcd1234#addTodo" failed with status 500: Internal Server Error',
+    )
   })
 })

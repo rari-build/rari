@@ -1,5 +1,6 @@
 export const title = 'Database'
-export const description = "Connect to databases in rari using Server Components and Server Actions. Learn how to use Neon Postgres and other databases with rari's high-performance Rust runtime."
+export const description =
+  "Connect to databases in rari using Server Components and Server Actions. Learn how to use Neon Postgres and other databases with rari's high-performance Rust runtime."
 
 <PageHeader title="Database" />
 
@@ -33,7 +34,10 @@ rari's Rust runtime delivers exceptional performance for database-heavy applicat
 2. Create a new project and copy your connection string
 3. Add it to your `.env` file:
 
-<CodeBlock filename=".env" language="bash">{`DATABASE_URL="postgresql://user:password@ep-cool-darkness-123456.us-east-2.aws.neon.tech/dbname?sslmode=require"
+<CodeBlock
+  filename=".env"
+  language="bash"
+>{`DATABASE_URL="postgresql://user:password@ep-cool-darkness-123456.us-east-2.aws.neon.tech/dbname?sslmode=require"
 `}</CodeBlock>
 
 ## Database Clients
@@ -47,7 +51,7 @@ Any Node.js-compatible database client works here. Here are the most popular opt
     pnpm: 'pnpm add @neondatabase/serverless',
     npm: 'npm install @neondatabase/serverless',
     yarn: 'yarn add @neondatabase/serverless',
-    bun: 'bun add @neondatabase/serverless'
+    bun: 'bun add @neondatabase/serverless',
   }}
 />
 
@@ -56,7 +60,7 @@ Any Node.js-compatible database client works here. Here are the most popular opt
     pnpm: 'pnpm add postgres',
     npm: 'npm install postgres',
     yarn: 'yarn add postgres',
-    bun: 'bun add postgres'
+    bun: 'bun add postgres',
   }}
 />
 
@@ -65,7 +69,7 @@ Any Node.js-compatible database client works here. Here are the most popular opt
     pnpm: 'pnpm add pg && pnpm add -D @types/pg',
     npm: 'npm install pg && npm install -D @types/pg',
     yarn: 'yarn add pg && yarn add -D @types/pg',
-    bun: 'bun add pg && bun add -D @types/pg'
+    bun: 'bun add pg && bun add -D @types/pg',
   }}
 />
 
@@ -78,7 +82,7 @@ Note: The Neon serverless driver uses HTTP-based connections (not TCP), which wo
     pnpm: 'pnpm add drizzle-orm && pnpm add -D drizzle-kit',
     npm: 'npm install drizzle-orm && npm install -D drizzle-kit',
     yarn: 'yarn add drizzle-orm && yarn add -D drizzle-kit',
-    bun: 'bun add drizzle-orm && bun add -D drizzle-kit'
+    bun: 'bun add drizzle-orm && bun add -D drizzle-kit',
   }}
 />
 
@@ -87,7 +91,7 @@ Note: The Neon serverless driver uses HTTP-based connections (not TCP), which wo
     pnpm: 'pnpm add @prisma/client && pnpm add -D prisma',
     npm: 'npm install @prisma/client && npm install -D prisma',
     yarn: 'yarn add @prisma/client && yarn add -D prisma',
-    bun: 'bun add @prisma/client && bun add -D prisma'
+    bun: 'bun add @prisma/client && bun add -D prisma',
   }}
 />
 
@@ -96,7 +100,7 @@ Note: The Neon serverless driver uses HTTP-based connections (not TCP), which wo
     pnpm: 'pnpm add kysely',
     npm: 'npm install kysely',
     yarn: 'yarn add kysely',
-    bun: 'bun add kysely'
+    bun: 'bun add kysely',
   }}
 />
 
@@ -120,20 +124,21 @@ export default async function PostsPage() {
     LIMIT 10
   \`
 
-  return (
-    <div>
-      <h1>Recent Posts</h1>
-      <ul>
-        {posts.map((post) => (
-          <li key={post.id}>
-            <h2>{post.title}</h2>
-            <p>{post.content}</p>
-            <time>{new Date(post.created_at).toLocaleDateString()}</time>
-          </li>
-        ))}
-      </ul>
-    </div>
-  )
+return (
+
+<div>
+<h1>Recent Posts</h1>
+<ul>
+{posts.map((post) => (
+<li key={post.id}>
+<h2>{post.title}</h2>
+<p>{post.content}</p>
+<time>{new Date(post.created_at).toLocaleDateString()}</time>
+</li>
+))}
+</ul>
+</div>
+)
 }
 `}</CodeBlock>
 
@@ -159,18 +164,19 @@ export default async function UsersPage() {
     'SELECT id, name, email FROM users ORDER BY created_at DESC'
   )
 
-  return (
-    <div>
-      <h1>Users</h1>
-      <ul>
-        {result.rows.map((user) => (
-          <li key={user.id}>
-            {user.name} ({user.email})
-          </li>
-        ))}
-      </ul>
-    </div>
-  )
+return (
+
+<div>
+<h1>Users</h1>
+<ul>
+{result.rows.map((user) => (
+<li key={user.id}>
+{user.name} ({user.email})
+</li>
+))}
+</ul>
+</div>
+)
 }
 `}</CodeBlock>
 
@@ -194,18 +200,19 @@ export default async function UsersPage() {
     ORDER BY created_at DESC
   \`
 
-  return (
-    <div>
-      <h1>Users</h1>
-      <ul>
-        {users.map((user) => (
-          <li key={user.id}>
-            {user.name} ({user.email})
-          </li>
-        ))}
-      </ul>
-    </div>
-  )
+return (
+
+<div>
+<h1>Users</h1>
+<ul>
+{users.map((user) => (
+<li key={user.id}>
+{user.name} ({user.email})
+</li>
+))}
+</ul>
+</div>
+)
 }
 `}</CodeBlock>
 
@@ -239,22 +246,22 @@ export default async function PostsPage() {
     .orderBy(desc(posts.createdAt))
     .limit(10)
 
-  return (
-    <div>
-      <h1>Recent Posts</h1>
-      <ul>
-        {allPosts.map((post) => (
-          <li key={post.id}>
-            <h2>{post.title}</h2>
-            <p>{post.content}</p>
-          </li>
-        ))}
-      </ul>
-    </div>
-  )
+return (
+
+<div>
+<h1>Recent Posts</h1>
+<ul>
+{allPosts.map((post) => (
+<li key={post.id}>
+<h2>{post.title}</h2>
+<p>{post.content}</p>
+</li>
+))}
+</ul>
+</div>
+)
 }
 `}</CodeBlock>
-
 
 ## Mutations with Server Actions
 
@@ -270,21 +277,21 @@ const sql = neon(process.env.DATABASE_URL!)
 
 // Example: Get current user from session/auth
 async function getCurrentUserId() {
-  // Replace with your actual auth implementation
-  // e.g., from cookies, session, or auth library
-  return 1 // Placeholder
+// Replace with your actual auth implementation
+// e.g., from cookies, session, or auth library
+return 1 // Placeholder
 }
 
 export async function createPost(formData: FormData) {
   const title = formData.get('title') as string
   const content = formData.get('content') as string
 
-  if (!title || !content) {
-    return { success: false, error: 'Title and content are required' }
-  }
+if (!title || !content) {
+return { success: false, error: 'Title and content are required' }
+}
 
-  try {
-    const userId = await getCurrentUserId()
+try {
+const userId = await getCurrentUserId()
 
     await sql\`
       INSERT INTO posts (title, content, user_id)
@@ -292,10 +299,11 @@ export async function createPost(formData: FormData) {
     \`
 
     return { success: true }
-  } catch (error) {
-    console.error('Failed to create post:', error)
-    return { success: false, error: 'Failed to create post' }
-  }
+
+} catch (error) {
+console.error('Failed to create post:', error)
+return { success: false, error: 'Failed to create post' }
+}
 }
 
 export async function deletePost(postId: number) {
@@ -313,10 +321,11 @@ export async function deletePost(postId: number) {
     }
 
     return { success: true }
-  } catch (error) {
-    console.error('Failed to delete post:', error)
-    return { success: false, error: 'Failed to delete post' }
-  }
+
+} catch (error) {
+console.error('Failed to delete post:', error)
+return { success: false, error: 'Failed to delete post' }
+}
 }
 `}</CodeBlock>
 
@@ -330,38 +339,40 @@ import { useState } from 'react'
 export default function CreatePostForm() {
   const [pending, setPending] = useState(false)
 
-  async function handleSubmit(formData: FormData) {
-    setPending(true)
-    const result = await createPost(formData)
-    setPending(false)
+async function handleSubmit(formData: FormData) {
+setPending(true)
+const result = await createPost(formData)
+setPending(false)
 
     if (result.success) {
       // Reset form or show success message
     } else {
       alert(result.error)
     }
-  }
 
-  return (
-    <form action={handleSubmit}>
-      <input
+}
+
+return (
+
+<form action={handleSubmit}>
+<input
         type="text"
         name="title"
         placeholder="Post title"
         required
         disabled={pending}
       />
-      <textarea
+<textarea
         name="content"
         placeholder="Post content"
         required
         disabled={pending}
       />
-      <button type="submit" disabled={pending}>
-        {pending ? 'Creating...' : 'Create Post'}
-      </button>
-    </form>
-  )
+<button type="submit" disabled={pending}>
+{pending ? 'Creating...' : 'Create Post'}
+</button>
+</form>
+)
 }
 `}</CodeBlock>
 
@@ -376,9 +387,9 @@ const sql = neon(process.env.DATABASE_URL!)
 
 // Example: Get current user from session/auth
 async function getCurrentUserId() {
-  // Replace with your actual auth implementation
-  // e.g., from cookies, session, or auth library
-  return 1 // Placeholder
+// Replace with your actual auth implementation
+// e.g., from cookies, session, or auth library
+return 1 // Placeholder
 }
 
 export async function GET(request: Request) {
@@ -398,13 +409,14 @@ export async function GET(request: Request) {
     \`
 
     return ApiResponse.json({ posts })
-  } catch (error) {
-    console.error('Database error - failed to fetch posts')
-    return ApiResponse.json(
-      { error: 'Failed to fetch posts' },
-      { status: 500 }
-    )
-  }
+
+} catch (error) {
+console.error('Database error - failed to fetch posts')
+return ApiResponse.json(
+{ error: 'Failed to fetch posts' },
+{ status: 500 }
+)
+}
 }
 
 export async function POST(request: Request) {
@@ -434,13 +446,14 @@ export async function POST(request: Request) {
     \`
 
     return ApiResponse.json({ post: result[0] }, { status: 201 })
-  } catch (error) {
-    console.error('Database error - failed to create post')
-    return ApiResponse.json(
-      { error: 'Failed to create post' },
-      { status: 500 }
-    )
-  }
+
+} catch (error) {
+console.error('Database error - failed to create post')
+return ApiResponse.json(
+{ error: 'Failed to create post' },
+{ status: 500 }
+)
+}
 }
 `}</CodeBlock>
 
@@ -465,7 +478,6 @@ export const getUser = cache(async (userId: number) => {
 
 Now multiple components can call `getUser(1)` and only one database query will execute per request.
 
-
 ## Streaming with Suspense
 
 Stream database results progressively using Suspense boundaries. This lets you show a loading state while data is being fetched:
@@ -476,27 +488,28 @@ import { neon } from '@neondatabase/serverless'
 const sql = neon(process.env.DATABASE_URL!)
 
 async function RecentPosts() {
-  const posts = await sql\`
-    SELECT id, title FROM posts
-    ORDER BY created_at DESC
-    LIMIT 5
-  \`
+const posts = await sql\`
+SELECT id, title FROM posts
+ORDER BY created_at DESC
+LIMIT 5
+\`
 
-  return (
-    <ul>
-      {posts.map((post) => (
-        <li key={post.id}>{post.title}</li>
-      ))}
-    </ul>
-  )
+return (
+
+<ul>
+{posts.map((post) => (
+<li key={post.id}>{post.title}</li>
+))}
+</ul>
+)
 }
 
 async function UserStats() {
-  const stats = await sql\`
-    SELECT COUNT(*) as count FROM users
-  \`
+const stats = await sql\`
+SELECT COUNT(\*) as count FROM users
+\`
 
-  return <p>Total users: {stats[0].count}</p>
+return <p>Total users: {stats[0].count}</p>
 }
 
 export default function DashboardPage() {
@@ -512,7 +525,8 @@ export default function DashboardPage() {
         <UserStats />
       </Suspense>
     </div>
-  )
+
+)
 }
 `}</CodeBlock>
 
@@ -524,18 +538,18 @@ For traditional Postgres clients like `pg`, use connection pooling to manage dat
 
 // Create a single pool instance
 export const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_ALLOW_INSECURE_SSL === 'true'
-    ? { rejectUnauthorized: false }
-    : true,
-  max: 20, // Maximum number of clients in the pool
-  idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
-  connectionTimeoutMillis: 2000, // Return error after 2 seconds if no connection available
+connectionString: process.env.DATABASE_URL,
+ssl: process.env.DATABASE_ALLOW_INSECURE_SSL === 'true'
+? { rejectUnauthorized: false }
+: true,
+max: 20, // Maximum number of clients in the pool
+idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
+connectionTimeoutMillis: 2000, // Return error after 2 seconds if no connection available
 })
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {
-  await pool.end()
+await pool.end()
 })
 `}</CodeBlock>
 
@@ -551,6 +565,7 @@ Store database credentials in environment variables, never in your code:
 DATABASE_URL="postgresql://user:password@ep-cool-darkness-123456.us-east-2.aws.neon.tech/dbname?sslmode=require"
 
 # Alternative: separate connection details
+
 DB_HOST="ep-cool-darkness-123456.us-east-2.aws.neon.tech"
 DB_PORT="5432"
 DB_NAME="dbname"
@@ -570,6 +585,7 @@ Use your ORM's migration tool or a standalone migration runner:
 npx drizzle-kit generate
 
 # Apply migrations
+
 npx drizzle-kit migrate
 `}</CodeBlock>
 
@@ -579,6 +595,7 @@ npx drizzle-kit migrate
 npx prisma migrate dev --name init
 
 # Apply migrations in production
+
 npx prisma migrate deploy
 `}</CodeBlock>
 
@@ -589,7 +606,7 @@ npx prisma migrate deploy
     pnpm: 'pnpm add node-pg-migrate',
     npm: 'npm install node-pg-migrate',
     yarn: 'yarn add node-pg-migrate',
-    bun: 'bun add node-pg-migrate'
+    bun: 'bun add node-pg-migrate',
   }}
 />
 
@@ -597,9 +614,9 @@ npx prisma migrate deploy
 npx node-pg-migrate create initial-schema
 
 # Run migrations
+
 npx node-pg-migrate up
 `}</CodeBlock>
-
 
 ## Best Practices
 
@@ -615,8 +632,8 @@ export default async function PostsPage() {
 
 // Avoid: Unnecessary API route
 export default async function PostsPage() {
-  const posts = await fetch('/api/posts').then(r => r.json())
-  return <PostsList posts={posts} />
+const posts = await fetch('/api/posts').then(r => r.json())
+return <PostsList posts={posts} />
 }
 `}</CodeBlock>
 
@@ -633,7 +650,7 @@ export async function createPost(data: FormData) {
 // Avoid: Client-side database access
 'use client'
 export async function createPost() {
-  await db.insert(posts).values({ ... }) // Database credentials exposed!
+await db.insert(posts).values({ ... }) // Database credentials exposed!
 }
 `}</CodeBlock>
 
@@ -660,7 +677,7 @@ Prevent SQL injection by using parameterized queries. Tagged template literals a
 await sql\`SELECT * FROM users WHERE id = \${userId}\`
 
 // Dangerous: Manual string concatenation bypasses escaping
-const query = "SELECT * FROM users WHERE id = '" + userId + "'"
+const query = "SELECT \* FROM users WHERE id = '" + userId + "'"
 await sql(query) // SQL injection risk!
 `}</CodeBlock>
 
@@ -684,7 +701,7 @@ const result = await db.select().from(posts)
 const duration = Date.now() - start
 
 if (duration > 100) {
-  console.warn(\`Slow query: \${duration}ms\`)
+console.warn(\`Slow query: \${duration}ms\`)
 }
 `}</CodeBlock>
 
@@ -699,17 +716,17 @@ Any database with a Node.js client will work:
     pnpm: 'pnpm add mysql2',
     npm: 'npm install mysql2',
     yarn: 'yarn add mysql2',
-    bun: 'bun add mysql2'
+    bun: 'bun add mysql2',
   }}
 />
 
 <CodeBlock language="typescript">{`import mysql from 'mysql2/promise'
 
 const pool = mysql.createPool({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
+host: process.env.DB_HOST,
+user: process.env.DB_USER,
+password: process.env.DB_PASSWORD,
+database: process.env.DB_NAME,
 })
 
 export default async function UsersPage() {
@@ -725,7 +742,7 @@ export default async function UsersPage() {
     pnpm: 'pnpm add mongodb',
     npm: 'npm install mongodb',
     yarn: 'yarn add mongodb',
-    bun: 'bun add mongodb'
+    bun: 'bun add mongodb',
   }}
 />
 
@@ -749,7 +766,7 @@ Note: In production, use a singleton pattern to reuse the `MongoClient` connecti
     pnpm: 'pnpm add better-sqlite3 && pnpm add -D @types/better-sqlite3',
     npm: 'npm install better-sqlite3 && npm install -D @types/better-sqlite3',
     yarn: 'yarn add better-sqlite3 && yarn add -D @types/better-sqlite3',
-    bun: 'bun add better-sqlite3 && bun add -D @types/better-sqlite3'
+    bun: 'bun add better-sqlite3 && bun add -D @types/better-sqlite3',
   }}
 />
 

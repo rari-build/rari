@@ -74,13 +74,11 @@ async function getAllMdxFiles(dir: string, baseDir = dir): Promise<MdxFileResult
           partial = true
           firstError = firstError ?? sub.error
         }
-      }
-      else if (entry.name.endsWith('.mdx')) {
+      } else if (entry.name.endsWith('.mdx')) {
         files.push(relative(baseDir, fullPath).split(sep).join('/'))
       }
     }
-  }
-  catch (error) {
+  } catch (error) {
     partial = true
     firstError = error instanceof Error ? error : new Error(String(error))
   }
@@ -88,7 +86,11 @@ async function getAllMdxFiles(dir: string, baseDir = dir): Promise<MdxFileResult
   return { files, partial, error: firstError }
 }
 
-function extractContent(mdxContent: string): { title: string, content: string, originalContent: string } {
+function extractContent(mdxContent: string): {
+  title: string
+  content: string
+  originalContent: string
+} {
   const titleMatch = mdxContent.match(TITLE_EXPORT_REGEX)
   const title = titleMatch ? titleMatch[2] : ''
 
@@ -155,22 +157,21 @@ function extractExcerpt(content: string, query: string, maxLength = 150): string
   const lowerQuery = query.toLowerCase()
   const index = lowerContent.indexOf(lowerQuery)
 
-  if (index === -1)
-    return content.slice(0, maxLength)
+  if (index === -1) return content.slice(0, maxLength)
 
   const start = Math.max(0, index - 50)
   const end = Math.min(content.length, index + query.length + 100)
   let excerpt = content.slice(start, end)
 
-  if (start > 0)
-    excerpt = `...${excerpt}`
-  if (end < content.length)
-    excerpt = `${excerpt}...`
+  if (start > 0) excerpt = `...${excerpt}`
+  if (end < content.length) excerpt = `${excerpt}...`
 
   return excerpt
 }
 
-async function buildSearchIndex(contentDir: string): Promise<{ index: SearchIndexEntry[], complete: boolean }> {
+async function buildSearchIndex(
+  contentDir: string,
+): Promise<{ index: SearchIndexEntry[]; complete: boolean }> {
   const { files: mdxFiles, partial, error } = await getAllMdxFiles(contentDir)
   let complete = !partial
 
@@ -184,7 +185,7 @@ async function buildSearchIndex(contentDir: string): Promise<{ index: SearchInde
 
   const index: SearchIndexEntry[] = []
 
-  const fileReadPromises = mdxFiles.map(async (file) => {
+  const fileReadPromises = mdxFiles.map(async file => {
     const fullPath = join(contentDir, file)
     const fileContent = await readFile(fullPath, 'utf-8')
     return { file, fileContent }
@@ -215,8 +216,7 @@ async function buildSearchIndex(contentDir: string): Promise<{ index: SearchInde
         href,
         category,
       })
-    }
-    catch (extractError) {
+    } catch (extractError) {
       complete = false
       console.warn(`Failed to extract content from ${file}:`, extractError)
     }
@@ -228,8 +228,7 @@ async function buildSearchIndex(contentDir: string): Promise<{ index: SearchInde
 async function getSearchIndex(contentDir: string): Promise<SearchIndexEntry[]> {
   const now = Date.now()
 
-  if (searchCache && (now - searchCache.timestamp) < CACHE_TTL_MS)
-    return searchCache.index
+  if (searchCache && now - searchCache.timestamp < CACHE_TTL_MS) return searchCache.index
 
   const { index, complete } = await buildSearchIndex(contentDir)
 
@@ -240,7 +239,7 @@ async function getSearchIndex(contentDir: string): Promise<SearchIndexEntry[]> {
     }
   }
 
-  return complete ? index : searchCache?.index ?? index
+  return complete ? index : searchCache.index
 }
 
 export async function searchDocumentation(query: string): Promise<SearchResult[]> {
@@ -252,8 +251,7 @@ export async function searchDocumentation(query: string): Promise<SearchResult[]
     .replace(angleBracketRegex, ' ')
     .replace(WHITESPACE_REGEX, ' ')
     .trim()
-  if (!normalizedQuery)
-    return []
+  if (!normalizedQuery) return []
 
   const contentDir = join(process.cwd(), 'public', 'content', 'docs')
 
@@ -267,21 +265,15 @@ export async function searchDocumentation(query: string): Promise<SearchResult[]
   for (const entry of index) {
     let score = 0
 
-    if (entry.lowerTitle === lowerQuery)
-      score += 100
-    else if (entry.lowerTitle.startsWith(lowerQuery))
-      score += 50
-    else if (entry.lowerTitle.includes(lowerQuery))
-      score += 25
+    if (entry.lowerTitle === lowerQuery) score += 100
+    else if (entry.lowerTitle.startsWith(lowerQuery)) score += 50
+    else if (entry.lowerTitle.includes(lowerQuery)) score += 25
 
-    if (entry.content.includes(lowerQuery))
-      score += 15
+    if (entry.content.includes(lowerQuery)) score += 15
 
     for (const word of words) {
-      if (entry.lowerTitle.includes(word))
-        score += 10
-      if (entry.content.includes(word))
-        score += 3
+      if (entry.lowerTitle.includes(word)) score += 10
+      if (entry.content.includes(word)) score += 3
     }
 
     if (score > 0) {

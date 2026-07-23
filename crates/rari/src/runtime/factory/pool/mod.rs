@@ -262,7 +262,7 @@ impl JsRuntimePool {
         if quarantine_elapsed {
             return true;
         }
-        // Never leave the pool with zero healthy slots waiting on the heal delay —
+        // Never leave the pool with zero healthy slots waiting on the heal delay --
         // allow one immediate attempt per outage, then enforce quarantine.
         if self.healthy_count() == 0 {
             let attempted = self.heal_attempted.get(idx).is_some_and(|f| f.load(Ordering::Acquire));

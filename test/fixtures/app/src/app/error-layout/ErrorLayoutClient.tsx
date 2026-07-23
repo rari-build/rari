@@ -5,9 +5,9 @@ import { useState } from 'react'
 
 export default function ErrorLayoutClient({
   children,
-}: {
+}: Readonly<{
   children: ReactNode
-}) {
+}>) {
   const [shouldThrow, setShouldThrow] = useState(false)
 
   if (shouldThrow) {
@@ -21,7 +21,9 @@ export default function ErrorLayoutClient({
         <button
           type="button"
           data-testid="trigger-layout-error-button"
-          onClick={() => setShouldThrow(true)}
+          onClick={() => {
+            setShouldThrow(true)
+          }}
         >
           Trigger Layout Error
         </button>

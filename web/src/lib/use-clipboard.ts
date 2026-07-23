@@ -8,8 +8,7 @@ export function useClipboard(timeout = 2000) {
       await navigator.clipboard.writeText(text)
       setCopied(true)
       setTimeout(setCopied, timeout, false)
-    }
-    catch (err) {
+    } catch (err) {
       console.error('Failed to copy:', err)
     }
   }

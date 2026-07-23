@@ -1,5 +1,6 @@
 export const title = 'Metadata'
-export const description = 'Learn how to configure page metadata, SEO tags, Open Graph images, and social media cards in your rari application.'
+export const description =
+  'Learn how to configure page metadata, SEO tags, Open Graph images, and social media cards in your rari application.'
 
 <PageHeader title="Metadata" />
 
@@ -34,11 +35,11 @@ Use the `generateMetadata` function to create metadata based on route parameters
 export async function generateMetadata({ params }: PageProps<{ slug: string }>): Promise<Metadata> {
   const post = await fetchPost(params.slug)
 
-  return {
-    title: \`\${post.title} | Blog\`,
-    description: post.excerpt,
-    keywords: post.tags,
-  }
+return {
+title: \`\${post.title} | Blog\`,
+description: post.excerpt,
+keywords: post.tags,
+}
 }
 
 export default async function BlogPost({ params }: PageProps<{ slug: string }>) {
@@ -217,44 +218,41 @@ import { ImageResponse } from 'rari/og'
 export default async function Image({ params }: PageProps<{ slug: string }>) {
   const post = await fetchPost(params.slug)
 
-  return new ImageResponse(
-    <div
-      style={{
+return new ImageResponse(
+
+<div
+style={{
         display: 'flex',
         width: '100%',
         height: '100%',
         background: 'linear-gradient(to bottom right, #1e3a8a, #3b82f6)',
         padding: '80px',
-      }}
-    >
-      <div
-        style={{
+      }} >
+<div
+style={{
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'center',
-        }}
-      >
-        <h1
-          style={{
+        }} >
+<h1
+style={{
             fontSize: 72,
             fontWeight: 'bold',
             color: 'white',
             marginBottom: 20,
-          }}
-        >
-          {post.title}
-        </h1>
-        <p
-          style={{
+          }} >
+{post.title}
+</h1>
+<p
+style={{
             fontSize: 32,
             color: '#e0e7ff',
-          }}
-        >
-          {post.author} • {post.date}
-        </p>
-      </div>
-    </div>,
-  )
+          }} >
+{post.author} • {post.date}
+</p>
+</div>
+</div>,
+)
 }
 `}</CodeBlock>
 
@@ -407,52 +405,53 @@ Here's a comprehensive example combining multiple metadata features:
 export async function generateMetadata({ params }: PageProps<{ id: string }>): Promise<Metadata> {
   const product = await fetchProduct(params.id)
 
-  return {
-    title: \`\${product.name} | Products\`,
-    description: product.description,
-    keywords: product.tags,
-    openGraph: {
-      title: product.name,
-      description: product.description,
-      url: \`https://example.com/products/\${params.id}\`,
-      siteName: 'My Store',
-      type: 'website',
-      images: [
-        {
-          url: product.imageUrl,
-          width: 1200,
-          height: 630,
-          alt: product.name,
-        },
-      ],
-    },
-    twitter: {
-      card: 'summary_large_image',
-      title: product.name,
-      description: product.description,
-      images: [product.imageUrl],
-      site: '@mystore',
-      creator: '@mystore',
-    },
-    robots: {
-      index: true,
-      follow: true,
-    },
-    canonical: \`https://example.com/products/\${params.id}\`,
-  }
+return {
+title: \`\${product.name} | Products\`,
+description: product.description,
+keywords: product.tags,
+openGraph: {
+title: product.name,
+description: product.description,
+url: \`https://example.com/products/\${params.id}\`,
+siteName: 'My Store',
+type: 'website',
+images: [
+{
+url: product.imageUrl,
+width: 1200,
+height: 630,
+alt: product.name,
+},
+],
+},
+twitter: {
+card: 'summary_large_image',
+title: product.name,
+description: product.description,
+images: [product.imageUrl],
+site: '@mystore',
+creator: '@mystore',
+},
+robots: {
+index: true,
+follow: true,
+},
+canonical: \`https://example.com/products/\${params.id}\`,
+}
 }
 
 export default async function ProductPage({ params }: PageProps<{ id: string }>) {
   const product = await fetchProduct(params.id)
 
-  return (
-    <div>
-      <h1>{product.name}</h1>
-      <img src={product.imageUrl} alt={product.name} />
-      <p>{product.description}</p>
-      <p>\${product.price}</p>
-    </div>
-  )
+return (
+
+<div>
+<h1>{product.name}</h1>
+<img src={product.imageUrl} alt={product.name} />
+<p>{product.description}</p>
+<p>\${product.price}</p>
+</div>
+)
 }
 `}</CodeBlock>
 
@@ -488,11 +487,11 @@ export const metadata: Metadata = {
 export async function generateMetadata({ params }): Promise<Metadata> {
   const post = await fetchPost(params.slug)
 
-  return {
-    title: post.title, // Becomes "Post Title | My App"
-    description: post.excerpt, // Overrides parent description
-    // openGraph.siteName and openGraph.type are inherited
-  }
+return {
+title: post.title, // Becomes "Post Title | My App"
+description: post.excerpt, // Overrides parent description
+// openGraph.siteName and openGraph.type are inherited
+}
 }
 `}</CodeBlock>
 
@@ -506,13 +505,13 @@ Every page should have a unique, descriptive title and description:
 
 // Good
 export const metadata: Metadata = {
-  title: 'Contact Us | Acme Corp',
-  description: 'Get in touch with our team. We respond within 24 hours.',
+title: 'Contact Us | Acme Corp',
+description: 'Get in touch with our team. We respond within 24 hours.',
 }
 
 // Bad
 export const metadata: Metadata = {
-  title: 'Page',
+title: 'Page',
 }
 `}</CodeBlock>
 
@@ -561,16 +560,16 @@ For pages with dynamic content, always use `generateMetadata`:
 
 // Good - Dynamic metadata
 export async function generateMetadata({ params }): Promise<Metadata> {
-  const data = await fetchData(params.id)
-  return {
-    title: data.title,
-    description: data.description,
-  }
+const data = await fetchData(params.id)
+return {
+title: data.title,
+description: data.description,
+}
 }
 
 // Bad - Static metadata for dynamic route
 export const metadata: Metadata = {
-  title: 'Item Page',
+title: 'Item Page',
 }
 `}</CodeBlock>
 
@@ -582,12 +581,12 @@ Meta descriptions should be 150-160 characters for optimal display in search res
 
 // Good - Concise and descriptive
 export const metadata: Metadata = {
-  description: 'Learn React Server Components with rari. Fast, modern, and built on Rust for maximum performance.',
+description: 'Learn React Server Components with rari. Fast, modern, and built on Rust for maximum performance.',
 }
 
 // Bad - Too long, will be truncated
 export const metadata: Metadata = {
-  description: 'This is a very long description that goes on and on about various features and benefits without getting to the point quickly enough for search engines to display it properly in search results.',
+description: 'This is a very long description that goes on and on about various features and benefits without getting to the point quickly enough for search engines to display it properly in search results.',
 }
 `}</CodeBlock>
 

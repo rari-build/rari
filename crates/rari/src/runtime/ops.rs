@@ -437,7 +437,7 @@ pub async fn op_fizz_chunk(
         Some(sender) => {
             let bytes = html.into_bytes();
             // Prefer try_send so the common path doesn't await the channel. Fall back to
-            // async send only under backpressure — never blocking_send (panics in Tokio).
+            // async send only under backpressure -- never blocking_send (panics in Tokio).
             match sender.try_send(Ok(bytes)) {
                 Ok(()) => Ok(()),
                 Err(mpsc::error::TrySendError::Full(msg)) => {
@@ -573,7 +573,7 @@ pub async fn op_fetch_with_cache(
     } else {
         match perform_simple_fetch(&url, &options).await {
             Ok((status, body, headers)) => Ok(serde_json::json!({
-                // Any completed HTTP exchange is ok — a 404/500 response is
+                // Any completed HTTP exchange is ok -- a 404/500 response is
                 // data for the caller, not a fetch failure. Gating ok on 2xx
                 // made the JS wrapper throw bare "Fetch failed" for every
                 // non-2xx and re-fetch the same URL through the fallback path.

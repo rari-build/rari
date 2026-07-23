@@ -25,13 +25,12 @@ export default function SearchBar() {
   const router = useRouter()
   const debounceRef = useRef<NodeJS.Timeout | undefined>(undefined)
 
-  const results = useMemo(() => query.trim() ? rawResults : [], [query, rawResults])
+  const results = useMemo(() => (query.trim() ? rawResults : []), [query, rawResults])
 
   const queryRef = useRef(query)
   if (queryRef.current !== query) {
     queryRef.current = query
-    if (selectedIndex !== 0)
-      setSelectedIndex(0)
+    if (selectedIndex !== 0) setSelectedIndex(0)
   }
 
   useEffect(() => {
@@ -51,11 +50,9 @@ export default function SearchBar() {
   }
 
   useEffect(() => {
-    if (!query.trim())
-      return
+    if (!query.trim()) return undefined
 
-    if (debounceRef.current)
-      clearTimeout(debounceRef.current)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
 
     debounceRef.current = setTimeout(() => {
       startTransition(async () => {
@@ -65,8 +62,7 @@ export default function SearchBar() {
     }, 150)
 
     return () => {
-      if (debounceRef.current)
-        clearTimeout(debounceRef.current)
+      if (debounceRef.current) clearTimeout(debounceRef.current)
     }
   }, [query])
 
@@ -91,25 +87,24 @@ export default function SearchBar() {
         if (e.key === 'Enter') {
           e.preventDefault()
           const selected = results[selectedIndex]
-          if (selected) {
-            router.push(selected.href)
-            handleClose()
-          }
+          void router.push(selected.href)
+          handleClose()
         }
       }
     }
 
     document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+    }
   }, [isOpen, results, selectedIndex, router])
 
   useEffect(() => {
-    if (isOpen && inputRef.current)
-      inputRef.current.focus()
+    if (isOpen && inputRef.current) inputRef.current.focus()
   }, [isOpen])
 
   const handleResultClick = (href: string) => {
-    router.push(href)
+    void router.push(href)
     handleClose()
   }
 
@@ -117,7 +112,9 @@ export default function SearchBar() {
     <>
       <button
         type="button"
-        onClick={() => setIsOpen(true)}
+        onClick={() => {
+          setIsOpen(true)
+        }}
         className="w-full flex items-center gap-2 pl-3 pr-3 py-1.5 bg-surface border border-edge rounded-md text-sm text-fg-muted hover:border-accent/50 hover:text-fg-muted transition-all group"
         aria-label="Open search"
       >
@@ -128,101 +125,111 @@ export default function SearchBar() {
         </kbd>
       </button>
 
-      {isOpen && createPortal(
-        <div className="fixed inset-0 z-100 flex items-start justify-center" onClick={handleClose}>
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+      {isOpen &&
+        createPortal(
           <div
-            className="relative flex flex-col gap-4 my-16 mx-auto p-3 bg-surface border border-edge rounded-lg shadow-2xl"
-            style={{
-              width: 'min(calc(100vw - 60px), 900px)',
-              height: 'min-content',
-              maxHeight: 'min(calc(100vh - 128px), 900px)',
-            }}
-            onClick={e => e.stopPropagation()}
+            className="fixed inset-0 z-100 flex items-start justify-center"
+            onClick={handleClose}
           >
-            <div className="flex items-center gap-3 px-3 py-3 border-b border-edge bg-surface rounded-t-lg">
-              <Search className="w-5 h-5 text-fg-muted" />
-              <input
-                ref={inputRef}
-                type="text"
-                value={query}
-                onChange={e => setQuery(e.target.value)}
-                placeholder="Search documentation..."
-                className="flex-1 bg-transparent text-fg-secondary placeholder-fg-muted outline-hidden text-base"
-              />
-              {isPending && (
-                <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-              )}
-              <button
-                type="button"
-                onClick={handleClose}
-                className="p-1 text-fg-muted hover:text-fg-secondary transition-colors"
-                aria-label="Close search"
-              >
-                <Close className="w-5 h-5" />
-              </button>
-            </div>
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+            <div
+              className="relative flex flex-col gap-4 my-16 mx-auto p-3 bg-surface border border-edge rounded-lg shadow-2xl"
+              style={{
+                width: 'min(calc(100vw - 60px), 900px)',
+                height: 'min-content',
+                maxHeight: 'min(calc(100vh - 128px), 900px)',
+              }}
+              onClick={e => {
+                e.stopPropagation()
+              }}
+            >
+              <div className="flex items-center gap-3 px-3 py-3 border-b border-edge bg-surface rounded-t-lg">
+                <Search className="w-5 h-5 text-fg-muted" />
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={query}
+                  onChange={e => {
+                    setQuery(e.target.value)
+                  }}
+                  placeholder="Search documentation..."
+                  className="flex-1 bg-transparent text-fg-secondary placeholder-fg-muted outline-hidden text-base"
+                />
+                {isPending && (
+                  <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                )}
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  className="p-1 text-fg-muted hover:text-fg-secondary transition-colors"
+                  aria-label="Close search"
+                >
+                  <Close className="w-5 h-5" />
+                </button>
+              </div>
 
-            <div className="flex-1 overflow-y-auto min-h-0">
-              {query
-                ? (
-                    results.length > 0
-                      ? (
-                          <div className="p-2">
-                            {results.map((result, index) => (
-                              <SearchResultItem
-                                key={result.href}
-                                itemRef={(el: HTMLButtonElement | null) => (resultItemRef.current[index] = el)}
-                                category={result.category}
-                                title={result.title}
-                                excerpt={result.excerpt}
-                                isSelected={index === selectedIndex}
-                                onClick={() => handleResultClick(result.href)}
-                                query={query}
-                              />
-                            ))}
-                          </div>
-                        )
-                      : isPending
-                        ? (
-                            <div className="p-8 text-center text-fg-muted text-sm">
-                              Searching...
-                            </div>
-                          )
-                        : (
-                            <div className="p-8 text-center text-fg-muted text-sm">
-                              No results found for "
-                              {query}
-                              "
-                            </div>
-                          )
-                  )
-                : (
-                    <div className="p-8 text-center text-fg-muted text-sm">
-                      Start typing to search documentation...
+              <div className="flex-1 overflow-y-auto min-h-0">
+                {query ? (
+                  results.length > 0 ? (
+                    <div className="p-2">
+                      {results.map((result, index) => (
+                        <SearchResultItem
+                          key={result.href}
+                          itemRef={(el: HTMLButtonElement | null) => {
+                            resultItemRef.current[index] = el
+                          }}
+                          category={result.category}
+                          title={result.title}
+                          excerpt={result.excerpt}
+                          isSelected={index === selectedIndex}
+                          onClick={() => {
+                            handleResultClick(result.href)
+                          }}
+                          query={query}
+                        />
+                      ))}
                     </div>
-                  )}
-            </div>
+                  ) : isPending ? (
+                    <div className="p-8 text-center text-fg-muted text-sm">Searching...</div>
+                  ) : (
+                    <div className="p-8 text-center text-fg-muted text-sm">
+                      No results found for "{query}"
+                    </div>
+                  )
+                ) : (
+                  <div className="p-8 text-center text-fg-muted text-sm">
+                    Start typing to search documentation...
+                  </div>
+                )}
+              </div>
 
-            <div className="flex items-center gap-4 px-3 py-2 border-t border-edge bg-canvas text-xs text-fg-muted rounded-b-lg">
-              <span className="flex items-center gap-1">
-                <kbd className="px-1.5 py-0.5 bg-surface border border-edge rounded font-mono">↑</kbd>
-                <kbd className="px-1.5 py-0.5 bg-surface border border-edge rounded font-mono">↓</kbd>
-                to navigate
-              </span>
-              <span className="flex items-center gap-1">
-                <kbd className="px-1.5 py-0.5 bg-surface border border-edge rounded font-mono">↵</kbd>
-                to select
-              </span>
-              <span className="flex items-center gap-1">
-                <kbd className="px-1.5 py-0.5 bg-surface border border-edge rounded font-mono">esc</kbd>
-                to close
-              </span>
+              <div className="flex items-center gap-4 px-3 py-2 border-t border-edge bg-canvas text-xs text-fg-muted rounded-b-lg">
+                <span className="flex items-center gap-1">
+                  <kbd className="px-1.5 py-0.5 bg-surface border border-edge rounded font-mono">
+                    ↑
+                  </kbd>
+                  <kbd className="px-1.5 py-0.5 bg-surface border border-edge rounded font-mono">
+                    ↓
+                  </kbd>
+                  to navigate
+                </span>
+                <span className="flex items-center gap-1">
+                  <kbd className="px-1.5 py-0.5 bg-surface border border-edge rounded font-mono">
+                    ↵
+                  </kbd>
+                  to select
+                </span>
+                <span className="flex items-center gap-1">
+                  <kbd className="px-1.5 py-0.5 bg-surface border border-edge rounded font-mono">
+                    esc
+                  </kbd>
+                  to close
+                </span>
+              </div>
             </div>
-          </div>
-        </div>,
-        document.body,
-      )}
+          </div>,
+          document.body,
+        )}
     </>
   )
 }
@@ -235,18 +242,17 @@ function SearchResultItem({
   isSelected,
   onClick,
   query,
-}: {
-  itemRef: (el: HTMLButtonElement | null) => void
-  category: string
-  title: string
-  excerpt?: string
-  isSelected: boolean
-  onClick: () => void
-  query: string
-}) {
+}: Readonly<{
+  readonly itemRef: (el: HTMLButtonElement | null) => void
+  readonly category: string
+  readonly title: string
+  readonly excerpt?: string
+  readonly isSelected: boolean
+  readonly onClick: () => void
+  readonly query: string
+}>) {
   const highlightText = (text: string, highlight: string) => {
-    if (!highlight.trim())
-      return text
+    if (!highlight.trim()) return text
 
     const escapedHighlight = escapeRegex(highlight)
     const parts = text.split(new RegExp(`(${escapedHighlight})`, 'gi'))
@@ -254,19 +260,17 @@ function SearchResultItem({
 
     return (
       <>
-        {parts.filter(Boolean).map((part) => {
+        {parts.filter(Boolean).map(part => {
           const key = `${charPosition}-${part.slice(0, 10)}`
           charPosition += part.length
 
-          return part.toLowerCase() === highlight.toLowerCase()
-            ? (
-                <mark key={key} className="bg-accent/30 text-fg">
-                  {part}
-                </mark>
-              )
-            : (
-                <span key={key}>{part}</span>
-              )
+          return part.toLowerCase() === highlight.toLowerCase() ? (
+            <mark key={key} className="bg-accent/30 text-fg">
+              {part}
+            </mark>
+          ) : (
+            <span key={key}>{part}</span>
+          )
         })}
       </>
     )
@@ -278,26 +282,20 @@ function SearchResultItem({
       type="button"
       onClick={onClick}
       className={`w-full flex flex-col gap-1 px-3 py-2 rounded-md transition-colors group text-left ${
-        isSelected
-          ? 'bg-hover ring-1 ring-accent/50'
-          : 'hover:bg-hover'
+        isSelected ? 'bg-hover ring-1 ring-accent/50' : 'hover:bg-hover'
       }`}
     >
       <div className="flex items-center gap-2 text-sm">
         <span className="text-fg-muted">
-          <span className="text-link">#</span>
-          {' '}
-          {category}
+          <span className="text-link">#</span> {category}
         </span>
         <span className="text-fg-muted">›</span>
-        <span className={`${isSelected ? 'text-fg' : 'text-fg-secondary group-hover:text-fg'}`}>
+        <span className={isSelected ? 'text-fg' : 'text-fg-secondary group-hover:text-fg'}>
           {highlightText(title, query)}
         </span>
       </div>
-      {excerpt && (
-        <p className="text-xs text-fg-muted line-clamp-2">
-          {highlightText(excerpt, query)}
-        </p>
+      {excerpt != null && excerpt !== '' && (
+        <p className="text-xs text-fg-muted line-clamp-2">{highlightText(excerpt, query)}</p>
       )}
     </button>
   )

@@ -4,6 +4,7 @@ import type * as React from 'react'
 import type { NavigationError } from './error-handler'
 import type { NavigationOptions } from './types'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { isHistoryState, isRecord, parseJsonRecord } from '@/shared/utils/type-guards'
 import { debounce } from './debounce'
 import { NavigationErrorHandler } from './error-handler'
 import { extractPathname, isExternalUrl, normalizePath } from './match'
@@ -12,66 +13,63 @@ import { routeInfoCache } from './route-info'
 import { StatePreserver } from './state-preserver'
 
 interface PageMetadata {
-  title?: string
-  description?: string
-  keywords?: string[]
-  viewport?: string
-  canonical?: string
-  openGraph?: {
-    title?: string
-    description?: string
-    url?: string
-    siteName?: string
-    images?: string[]
-    type?: string
+  readonly title?: string
+  readonly description?: string
+  readonly keywords?: readonly string[]
+  readonly viewport?: string
+  readonly canonical?: string
+  readonly openGraph?: {
+    readonly title?: string
+    readonly description?: string
+    readonly url?: string
+    readonly siteName?: string
+    readonly images?: readonly string[]
+    readonly type?: string
   }
-  twitter?: {
-    card?: string
-    site?: string
-    creator?: string
-    title?: string
-    description?: string
-    images?: string[]
+  readonly twitter?: {
+    readonly card?: string
+    readonly site?: string
+    readonly creator?: string
+    readonly title?: string
+    readonly description?: string
+    readonly images?: readonly string[]
   }
-  robots?: {
-    index?: boolean
-    follow?: boolean
-    nocache?: boolean
+  readonly robots?: {
+    readonly index?: boolean
+    readonly follow?: boolean
+    readonly nocache?: boolean
   }
 }
 
-function updateOrCreateMetaTag(selector: string, attributes: Record<string, string>) {
-  let element = document.querySelector(selector) as HTMLMetaElement | null
+function updateOrCreateMetaTag(
+  selector: string,
+  attributes: Readonly<{ readonly [key: string]: string }>,
+) {
+  let element = document.querySelector(selector)
   if (!element) {
     element = document.createElement('meta')
-    for (const [key, value] of Object.entries(attributes))
-      element.setAttribute(key, value)
+    for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, value)
 
     document.head.appendChild(element)
-  }
-  else {
-    if (attributes.content)
-      element.setAttribute('content', attributes.content)
+  } else {
+    if (attributes.content) element.setAttribute('content', attributes.content)
   }
 }
 
 function removeMetaTag(selector: string) {
   const element = document.querySelector(selector)
-  if (element)
-    element.remove()
+  if (element) element.remove()
 }
 
 function updateBasicMetadata(metadata: PageMetadata): void {
-  if (metadata.title)
-    document.title = metadata.title
+  if (metadata.title != null && metadata.title !== '') document.title = metadata.title
 
-  if (metadata.description) {
+  if (metadata.description != null && metadata.description !== '') {
     updateOrCreateMetaTag('meta[name="description"]', {
       name: 'description',
       content: metadata.description,
     })
-  }
-  else {
+  } else {
     removeMetaTag('meta[name="description"]')
   }
 
@@ -80,12 +78,11 @@ function updateBasicMetadata(metadata: PageMetadata): void {
       name: 'keywords',
       content: metadata.keywords.join(', '),
     })
-  }
-  else {
+  } else {
     removeMetaTag('meta[name="keywords"]')
   }
 
-  if (metadata.viewport) {
+  if (metadata.viewport != null && metadata.viewport !== '') {
     updateOrCreateMetaTag('meta[name="viewport"]', {
       name: 'viewport',
       content: metadata.viewport,
@@ -94,11 +91,10 @@ function updateBasicMetadata(metadata: PageMetadata): void {
 }
 
 function updateCanonicalLink(canonical: string | undefined): void {
-  const canonicalEl = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null
+  const canonicalEl = document.querySelector('link[rel="canonical"]')
 
   if (canonical === undefined) {
-    if (canonicalEl)
-      canonicalEl.remove()
+    if (canonicalEl) canonicalEl.remove()
 
     return
   }
@@ -108,8 +104,7 @@ function updateCanonicalLink(canonical: string | undefined): void {
     newCanonicalEl.setAttribute('rel', 'canonical')
     newCanonicalEl.setAttribute('href', canonical)
     document.head.appendChild(newCanonicalEl)
-  }
-  else {
+  } else {
     canonicalEl.setAttribute('href', canonical)
   }
 }
@@ -121,20 +116,16 @@ function updateRobotsMetadata(robots: PageMetadata['robots']): void {
   }
 
   const robotsContent: string[] = []
-  if (robots.index !== undefined)
-    robotsContent.push(robots.index ? 'index' : 'noindex')
-  if (robots.follow !== undefined)
-    robotsContent.push(robots.follow ? 'follow' : 'nofollow')
-  if (robots.nocache)
-    robotsContent.push('nocache')
+  if (robots.index !== undefined) robotsContent.push(robots.index ? 'index' : 'noindex')
+  if (robots.follow !== undefined) robotsContent.push(robots.follow ? 'follow' : 'nofollow')
+  if (robots.nocache) robotsContent.push('nocache')
 
   if (robotsContent.length > 0) {
     updateOrCreateMetaTag('meta[name="robots"]', {
       name: 'robots',
       content: robotsContent.join(', '),
     })
-  }
-  else {
+  } else {
     removeMetaTag('meta[name="robots"]')
   }
 }
@@ -146,71 +137,71 @@ function updateOpenGraphMetadata(og: PageMetadata['openGraph']): void {
     removeMetaTag('meta[property="og:url"]')
     removeMetaTag('meta[property="og:site_name"]')
     removeMetaTag('meta[property="og:type"]')
-    document.querySelectorAll('meta[property="og:image"]').forEach(el => el.remove())
+    document.querySelectorAll('meta[property="og:image"]').forEach(el => {
+      el.remove()
+    })
     return
   }
 
-  if (og.title) {
+  if (og.title != null && og.title !== '') {
     updateOrCreateMetaTag('meta[property="og:title"]', {
       property: 'og:title',
       content: og.title,
     })
-  }
-  else {
+  } else {
     removeMetaTag('meta[property="og:title"]')
   }
 
-  if (og.description) {
+  if (og.description != null && og.description !== '') {
     updateOrCreateMetaTag('meta[property="og:description"]', {
       property: 'og:description',
       content: og.description,
     })
-  }
-  else {
+  } else {
     removeMetaTag('meta[property="og:description"]')
   }
 
-  if (og.url) {
+  if (og.url != null && og.url !== '') {
     updateOrCreateMetaTag('meta[property="og:url"]', {
       property: 'og:url',
       content: og.url,
     })
-  }
-  else {
+  } else {
     removeMetaTag('meta[property="og:url"]')
   }
 
-  if (og.siteName) {
+  if (og.siteName != null && og.siteName !== '') {
     updateOrCreateMetaTag('meta[property="og:site_name"]', {
       property: 'og:site_name',
       content: og.siteName,
     })
-  }
-  else {
+  } else {
     removeMetaTag('meta[property="og:site_name"]')
   }
 
-  if (og.type) {
+  if (og.type != null && og.type !== '') {
     updateOrCreateMetaTag('meta[property="og:type"]', {
       property: 'og:type',
       content: og.type,
     })
-  }
-  else {
+  } else {
     removeMetaTag('meta[property="og:type"]')
   }
 
   if (og.images && og.images.length > 0) {
-    document.querySelectorAll('meta[property="og:image"]').forEach(el => el.remove())
+    document.querySelectorAll('meta[property="og:image"]').forEach(el => {
+      el.remove()
+    })
     for (const image of og.images) {
       const meta = document.createElement('meta')
       meta.setAttribute('property', 'og:image')
       meta.setAttribute('content', image)
       document.head.appendChild(meta)
     }
-  }
-  else {
-    document.querySelectorAll('meta[property="og:image"]').forEach(el => el.remove())
+  } else {
+    document.querySelectorAll('meta[property="og:image"]').forEach(el => {
+      el.remove()
+    })
   }
 }
 
@@ -221,71 +212,71 @@ function updateTwitterMetadata(twitter: PageMetadata['twitter']): void {
     removeMetaTag('meta[name="twitter:creator"]')
     removeMetaTag('meta[name="twitter:title"]')
     removeMetaTag('meta[name="twitter:description"]')
-    document.querySelectorAll('meta[name="twitter:image"]').forEach(el => el.remove())
+    document.querySelectorAll('meta[name="twitter:image"]').forEach(el => {
+      el.remove()
+    })
     return
   }
 
-  if (twitter.card) {
+  if (twitter.card != null && twitter.card !== '') {
     updateOrCreateMetaTag('meta[name="twitter:card"]', {
       name: 'twitter:card',
       content: twitter.card,
     })
-  }
-  else {
+  } else {
     removeMetaTag('meta[name="twitter:card"]')
   }
 
-  if (twitter.site) {
+  if (twitter.site != null && twitter.site !== '') {
     updateOrCreateMetaTag('meta[name="twitter:site"]', {
       name: 'twitter:site',
       content: twitter.site,
     })
-  }
-  else {
+  } else {
     removeMetaTag('meta[name="twitter:site"]')
   }
 
-  if (twitter.creator) {
+  if (twitter.creator != null && twitter.creator !== '') {
     updateOrCreateMetaTag('meta[name="twitter:creator"]', {
       name: 'twitter:creator',
       content: twitter.creator,
     })
-  }
-  else {
+  } else {
     removeMetaTag('meta[name="twitter:creator"]')
   }
 
-  if (twitter.title) {
+  if (twitter.title != null && twitter.title !== '') {
     updateOrCreateMetaTag('meta[name="twitter:title"]', {
       name: 'twitter:title',
       content: twitter.title,
     })
-  }
-  else {
+  } else {
     removeMetaTag('meta[name="twitter:title"]')
   }
 
-  if (twitter.description) {
+  if (twitter.description != null && twitter.description !== '') {
     updateOrCreateMetaTag('meta[name="twitter:description"]', {
       name: 'twitter:description',
       content: twitter.description,
     })
-  }
-  else {
+  } else {
     removeMetaTag('meta[name="twitter:description"]')
   }
 
   if (twitter.images && twitter.images.length > 0) {
-    document.querySelectorAll('meta[name="twitter:image"]').forEach(el => el.remove())
+    document.querySelectorAll('meta[name="twitter:image"]').forEach(el => {
+      el.remove()
+    })
     for (const image of twitter.images) {
       const meta = document.createElement('meta')
       meta.setAttribute('name', 'twitter:image')
       meta.setAttribute('content', image)
       document.head.appendChild(meta)
     }
-  }
-  else {
-    document.querySelectorAll('meta[name="twitter:image"]').forEach(el => el.remove())
+  } else {
+    document.querySelectorAll('meta[name="twitter:image"]').forEach(el => {
+      el.remove()
+    })
   }
 }
 
@@ -298,9 +289,9 @@ function updateDocumentMetadata(metadata: PageMetadata): void {
 }
 
 export interface ClientRouterProps {
-  children: React.ReactNode
-  initialRoute: string
-  staleWindowMs?: number
+  readonly children: React.ReactNode
+  readonly initialRoute: string
+  readonly staleWindowMs?: number
 }
 
 interface NavigationState {
@@ -319,12 +310,20 @@ interface PendingNavigation {
 interface HistoryState {
   route: string
   navigationId: number
-  scrollPosition?: { x: number, y: number }
+  scrollPosition?: { x: number; y: number }
   timestamp: number
   key: string
 }
 
-export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }: ClientRouterProps) {
+function isPageMetadata(value: unknown): value is PageMetadata {
+  return isRecord(value)
+}
+
+export function ClientRouter({
+  children,
+  initialRoute,
+  staleWindowMs = 30_000,
+}: ClientRouterProps): React.ReactNode {
   const [navigationState, setNavigationState] = useState<NavigationState>(() => ({
     currentRoute: normalizePath(initialRoute),
     navigationId: 0,
@@ -340,7 +339,7 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
     new NavigationErrorHandler({
       timeout: 10000,
       maxRetries: 3,
-      onError: (error) => {
+      onError: error => {
         console.error('[rari] Router: Navigation error:', error)
       },
       onRetry: () => {},
@@ -348,11 +347,13 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
   )
 
   const pendingNavigationsRef = useRef<Map<string, PendingNavigation>>(new Map())
-  const navigationQueueRef = useRef<Array<{ path: string, options: NavigationOptions }>>([])
+  const navigationQueueRef = useRef<Array<{ path: string; options: NavigationOptions }>>([])
 
-  const statePreserverRef = useRef<StatePreserver>(new StatePreserver({
-    maxHistorySize: 50,
-  }))
+  const statePreserverRef = useRef<StatePreserver>(
+    new StatePreserver({
+      maxHistorySize: 50,
+    }),
+  )
 
   const lastHiddenAtRef = useRef<number | null>(null)
   const staleWindowMsRef = useRef<number>(staleWindowMs)
@@ -391,8 +392,7 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
   const processNavigationQueueRef = useRef<(() => Promise<void>) | null>(null)
 
   const handleSameRouteNavigation = (targetPath: string, hash: string) => {
-    if (!hash)
-      return
+    if (!hash) return
 
     const element = document.getElementById(hash)
     if (element) {
@@ -404,13 +404,12 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
   const processMetadata = (response: Response) => {
     try {
       const metadataHeader = response.headers.get('x-rari-metadata')
-      if (metadataHeader) {
+      if (metadataHeader != null && metadataHeader !== '') {
         const decodedMetadata = decodeURIComponent(metadataHeader)
-        const metadata = JSON.parse(decodedMetadata) as PageMetadata
-        updateDocumentMetadata(metadata)
+        const metadataRecord = parseJsonRecord(decodedMetadata)
+        if (metadataRecord && isPageMetadata(metadataRecord)) updateDocumentMetadata(metadataRecord)
       }
-    }
-    catch (error) {
+    } catch (error) {
       console.warn('[rari] Router: Failed to parse x-rari-metadata header:', error)
     }
   }
@@ -423,19 +422,20 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
     options: NavigationOptions,
     abortController: AbortController,
   ) => {
-    if (navigationIdCounterRef.current !== navigationId)
-      return
+    if (navigationIdCounterRef.current !== navigationId) return
 
-    window.dispatchEvent(new CustomEvent('rari:navigate', {
-      detail: {
-        from: fromRoute,
-        to: actualTargetPath,
-        navigationId,
-        options,
-        abortSignal: abortController.signal,
-        rscResponsePromise: responsePromise,
-      },
-    }))
+    window.dispatchEvent(
+      new CustomEvent('rari:navigate', {
+        detail: {
+          from: fromRoute,
+          to: actualTargetPath,
+          navigationId,
+          options,
+          abortSignal: abortController.signal,
+          rscResponsePromise: responsePromise,
+        },
+      }),
+    )
   }
 
   const handleScrollAfterNavigation = (
@@ -443,19 +443,16 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
     hash: string,
     options: NavigationOptions,
   ) => {
-    if (options.historyKey) {
+    if (options.historyKey != null && options.historyKey !== '') {
       requestAnimationFrame(() => {
         statePreserverRef.current.restoreState(actualTargetPath)
       })
-    }
-    else if (hash) {
+    } else if (hash) {
       requestAnimationFrame(() => {
         const scrollToHash = (attempts = 0) => {
           const element = document.getElementById(hash)
-          if (element)
-            element.scrollIntoView({ behavior: 'smooth', block: 'start' })
-          else if (attempts < 10)
-            setTimeout(scrollToHash, 50, attempts + 1)
+          if (element) element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          else if (attempts < 10) setTimeout(scrollToHash, 50, attempts + 1)
         }
         scrollToHash()
       })
@@ -468,8 +465,9 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
     options: NavigationOptions,
     navigationId: number,
   ) => {
-    if (!isMountedRef.current)
-      return
+    if (!isMountedRef.current) return
+
+    if (navigationIdCounterRef.current !== navigationId) return
 
     currentRouteRef.current = actualTargetPath
 
@@ -502,30 +500,27 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
         ...prev,
         error: navError,
       }))
-      window.history.replaceState(
-        window.history.state,
-        '',
-        fromRoute,
-      )
+      window.history.replaceState(window.history.state, '', fromRoute)
     }
 
     pendingNavigationsRef.current.delete(targetPath)
 
-    window.dispatchEvent(new CustomEvent('rari:navigate-error', {
-      detail: {
-        from: fromRoute,
-        to: targetPath,
-        error: navError,
-        navigationId,
-      },
-    }))
+    window.dispatchEvent(
+      new CustomEvent('rari:navigate-error', {
+        detail: {
+          from: fromRoute,
+          to: targetPath,
+          error: navError,
+          navigationId,
+        },
+      }),
+    )
 
-    processNavigationQueueRef.current?.()
+    void processNavigationQueueRef.current?.()
   }
 
   const navigate = async (href: string, options: NavigationOptions = {}) => {
-    if (!href || typeof href !== 'string')
-      return
+    if (!href || typeof href !== 'string') return
 
     const [pathWithoutHash, hash] = href.includes('#') ? href.split('#') : [href, '']
     const targetPath = normalizePath(pathWithoutHash)
@@ -536,8 +531,7 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
     }
 
     const existingPending = pendingNavigationsRef.current.get(targetPath)
-    if (existingPending)
-      return existingPending.promise
+    if (existingPending) return existingPending.promise
 
     cancelAllPendingNavigations()
     cancelNavigation()
@@ -548,17 +542,22 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
     navigationIdCounterRef.current += 1
     const navigationId = navigationIdCounterRef.current
 
-    window.dispatchEvent(new CustomEvent('rari:navigation-start', {
-      detail: { navigationId, targetPath },
-    }))
+    window.dispatchEvent(
+      new CustomEvent('rari:navigation-start', {
+        detail: { navigationId, targetPath },
+      }),
+    )
 
     const navigationPromise = (async () => {
       const fromRoute = currentRouteRef.current
       try {
-        if (!options.historyKey)
+        if (options.historyKey == null || options.historyKey === '')
           statePreserverRef.current.captureState(fromRoute)
 
-        const historyKey = options.historyKey || generateHistoryKey()
+        const historyKey =
+          options.historyKey != null && options.historyKey !== ''
+            ? options.historyKey
+            : generateHistoryKey()
 
         const fetchUrl = window.location.origin + targetPath
 
@@ -571,10 +570,8 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
           key: historyKey,
         }
 
-        if (options.replace)
-          window.history.replaceState(historyState, '', urlWithHash)
-        else
-          window.history.pushState(historyState, '', urlWithHash)
+        if (options.replace) window.history.replaceState(historyState, '', urlWithHash)
+        else window.history.pushState(historyState, '', urlWithHash)
 
         const fetchPromise = fetch(fetchUrl, {
           headers: {
@@ -584,7 +581,7 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
           signal: abortController.signal,
         })
 
-        const rscFetchPromise = fetchPromise.then((response) => {
+        const rscFetchPromise = fetchPromise.then(response => {
           if (!response.ok && response.status !== 404)
             throw new Error(`Failed to fetch: ${response.status}`)
 
@@ -601,18 +598,9 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
         const finalUrl = new URL(response.url)
         const actualTargetPath = finalUrl.pathname
 
-        if (abortController.signal.aborted) {
-          cleanupAbortedNavigation(targetPath, navigationId)
-          return
-        }
-
         if (actualTargetPath !== targetPath) {
           const redirectUrl = hash ? `${actualTargetPath}#${hash}` : actualTargetPath
-          window.history.replaceState(
-            { ...historyState, route: actualTargetPath },
-            '',
-            redirectUrl,
-          )
+          window.history.replaceState({ ...historyState, route: actualTargetPath }, '', redirectUrl)
         }
 
         handleNonStreamingResponse(
@@ -626,17 +614,11 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
 
         processMetadata(response)
 
-        if (abortController.signal.aborted) {
-          cleanupAbortedNavigation(targetPath, navigationId)
-          return
-        }
-
         completeNavigation(actualTargetPath, hash, options, navigationId)
 
         pendingNavigationsRef.current.delete(targetPath)
-        processNavigationQueueRef.current?.()
-      }
-      catch (error) {
+        void processNavigationQueueRef.current?.()
+      } catch (error) {
         handleNavigationError(error, targetPath, navigationId, fromRoute)
       }
     })()
@@ -652,12 +634,10 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
   }
 
   const processNavigationQueue = async () => {
-    if (navigationQueueRef.current.length === 0)
-      return
+    if (navigationQueueRef.current.length === 0) return
 
     const lastNavigation = navigationQueueRef.current.at(-1)
-    if (!lastNavigation)
-      return
+    if (!lastNavigation) return
 
     navigationQueueRef.current = []
 
@@ -678,48 +658,38 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
 
   const debouncedNavigateRef = useRef<ReturnType<typeof debounce> | null>(null)
 
-  if (!debouncedNavigateRef.current) {
-    debouncedNavigateRef.current = debounce(
-      (pathname: string, options: NavigationOptions) => {
-        navigateRef.current?.(pathname, options)
-      },
-      NAVIGATION_DEBOUNCE_MS,
-      {
-        leading: true,
-        trailing: true,
-        maxWait: NAVIGATION_MAX_WAIT_MS,
-      },
-    )
-  }
+  debouncedNavigateRef.current ??= debounce(
+    (pathname: string, options: NavigationOptions) => {
+      void navigateRef.current?.(pathname, options)
+    },
+    NAVIGATION_DEBOUNCE_MS,
+    {
+      leading: true,
+      trailing: true,
+      maxWait: NAVIGATION_MAX_WAIT_MS,
+    },
+  )
 
   const handleLinkClick = (event: MouseEvent) => {
-    if (event.button !== 0)
-      return
+    if (event.button !== 0) return
 
-    if (event.ctrlKey || event.shiftKey || event.altKey || event.metaKey)
-      return
+    if (event.ctrlKey || event.shiftKey || event.altKey || event.metaKey) return
 
-    let target = event.target as HTMLElement | null
-    while (target && target.tagName !== 'A')
-      target = target.parentElement
+    let target: Element | null = event.target instanceof Element ? event.target : null
+    while (target && !(target instanceof HTMLAnchorElement)) target = target.parentElement
 
-    if (!target || target.tagName !== 'A')
-      return
+    if (!(target instanceof HTMLAnchorElement)) return
 
-    const anchor = target as HTMLAnchorElement
+    const anchor = target
 
-    if (anchor.target && anchor.target !== '_self')
-      return
+    if (anchor.target && anchor.target !== '_self') return
 
-    if (anchor.hasAttribute('download'))
-      return
+    if (anchor.hasAttribute('download')) return
 
     const href = anchor.getAttribute('href')
-    if (!href)
-      return
+    if (href == null || href === '') return
 
-    if (isExternalUrl(href))
-      return
+    if (isExternalUrl(href)) return
 
     if (href.startsWith('#')) {
       event.preventDefault()
@@ -737,16 +707,15 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
 
     const pathname = extractPathname(href)
 
-    if (debouncedNavigateRef.current)
-      debouncedNavigateRef.current(pathname, { replace: false })
+    if (debouncedNavigateRef.current) debouncedNavigateRef.current(pathname, { replace: false })
   }
 
   const handlePopState = (event: PopStateEvent) => {
     const pathname = window.location.pathname
-    const historyState = event.state as HistoryState | null
+    const historyState = isHistoryState(event.state) ? event.state : null
 
     if (navigateRef.current) {
-      navigateRef.current(pathname, {
+      void navigateRef.current(pathname, {
         replace: true,
         scroll: false,
         historyKey: historyState?.key,
@@ -755,9 +724,9 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
   }
 
   useEffect(() => {
-    const currentHistoryState = window.history.state as HistoryState | null
+    const currentHistoryState = isHistoryState(window.history.state) ? window.history.state : null
 
-    if (!currentHistoryState || !currentHistoryState.key) {
+    if (currentHistoryState?.key == null || currentHistoryState.key === '') {
       const initialHistoryState: HistoryState = {
         route: normalizePath(initialRoute),
         navigationId: 0,
@@ -784,7 +753,7 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
   const handlePageShow = (event: PageTransitionEvent) => {
     if (event.persisted) {
       const currentPath = window.location.pathname
-      const historyState = window.history.state as HistoryState | null
+      const historyState = isHistoryState(window.history.state) ? window.history.state : null
 
       requestAnimationFrame(() => {
         statePreserverRef.current.restoreState(currentPath)
@@ -815,8 +784,7 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
     const handleVisibilityChange = () => {
       if (document.hidden) {
         lastHiddenAtRef.current = Date.now()
-      }
-      else {
+      } else {
         if (lastHiddenAtRef.current !== null) {
           const hiddenDuration = Date.now() - lastHiddenAtRef.current
           if (hiddenDuration > staleWindowMsRef.current) {
@@ -836,7 +804,7 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
   useEffect(() => {
     isMountedRef.current = true
 
-    registerNavigate((href, options) => {
+    registerNavigate(async (href, options) => {
       return navigateRef.current?.(href, options) ?? Promise.resolve()
     })
 
@@ -847,8 +815,7 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
       cancelNavigation()
       cancelAllPendingNavigations()
 
-      if (debouncedNavigateRef.current?.cancel)
-        debouncedNavigateRef.current.cancel()
+      if (debouncedNavigateRef.current?.cancel) debouncedNavigateRef.current.cancel()
     }
   }, [])
 

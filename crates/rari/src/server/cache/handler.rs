@@ -2,7 +2,7 @@
 //!
 //! Handlers are byte-agnostic: the trait operates on `Vec<u8>`. Typed
 //! wrappers (e.g. `ResponseCache`) serialize their domain value to
-//! bytes before calling the handler. Tags are first-class — handlers
+//! bytes before calling the handler. Tags are first-class -- handlers
 //! that don't support tags can no-op `set_with_tags` /
 //! `invalidate_by_tag`.
 //!

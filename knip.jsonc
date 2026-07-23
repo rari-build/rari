@@ -2,75 +2,56 @@
   "$schema": "https://unpkg.com/knip@latest/schema.json",
   "workspaces": {
     ".": {
-      "entry": [
-        "test/**/*.test.ts"
-      ],
-      "project": [
-        "test/**/*.ts"
-      ]
+      "entry": ["test/**/*.test.ts"],
+      "project": ["test/**/*.ts"]
     },
     "packages/rari": {
-      "entry": [
-        "src/**/*.ts",
-        "src/runtime/**/*.tsx"
-      ],
-      "project": [
-        "src/**/*.{ts,tsx,js,jsx}"
-      ],
+      "entry": ["src/**/*.ts", "src/runtime/**/*.tsx"],
+      "project": ["src/**/*.{ts,tsx,js,jsx}"],
       "ignoreBinaries": [
         "npx.cmd" // Windows-specific npx command used in cross-platform spawn logic
       ]
     },
     "packages/create-rari-app": {
-      "entry": [
-        "src/**/*.ts"
-      ],
-      "project": [
-        "src/**/*.ts"
-      ]
+      "entry": ["src/**/*.ts"],
+      "project": ["src/**/*.ts"]
     },
     "packages/logger": {
-      "entry": [
-        "src/**/*.ts"
-      ],
-      "project": [
-        "src/**/*.ts"
-      ]
+      "entry": ["src/**/*.ts"],
+      "project": ["src/**/*.ts"]
     },
     "packages/deploy": {
-      "entry": [
-        "src/**/*.ts"
-      ],
-      "project": [
-        "src/**/*.ts"
-      ]
+      "entry": ["src/**/*.ts"],
+      "project": ["src/**/*.ts"]
     },
     "packages/use-cache": {
-      "entry": [
-        "src/**/*.ts"
-      ],
-      "project": [
-        "src/**/*.ts"
+      "entry": ["src/**/*.ts"],
+      "project": ["src/**/*.ts"]
+    },
+    "packages/lint": {
+      "entry": ["src/**/*.ts"],
+      "project": ["src/**/*.ts"],
+      "ignoreDependencies": [
+        "@e18e/eslint-plugin",
+        "@eslint-community/eslint-plugin-eslint-comments",
+        "eslint-plugin-antfu",
+        "eslint-plugin-command",
+        "eslint-plugin-de-morgan",
+        "eslint-plugin-perfectionist",
+        "eslint-plugin-regexp",
+        "eslint-plugin-unused-imports"
       ]
     },
     "examples/app-router-example": {
-      "entry": [
-        "src/app/**/*.{ts,tsx}"
-      ],
-      "project": [
-        "src/**/*.{ts,tsx}"
-      ],
+      "entry": ["src/app/**/*.{ts,tsx}"],
+      "project": ["src/**/*.{ts,tsx}"],
       "ignore": [
         "src/proxy.ts" // Proxy configuration file is used via Vite plugin
       ]
     },
     "web": {
-      "entry": [
-        "src/app/**/*.{ts,tsx}"
-      ],
-      "project": [
-        "src/**/*.{ts,tsx}"
-      ],
+      "entry": ["src/app/**/*.{ts,tsx}"],
+      "project": ["src/**/*.{ts,tsx}"],
       "ignore": [
         "src/proxy.ts", // Proxy configuration file is used via Vite plugin
         "src/components/CodeBlock.tsx", // MDX client component
@@ -84,10 +65,7 @@
       ]
     },
     "tools/bundle-react-esm": {
-      "ignoreDependencies": [
-        "react-dom",
-        "react-server-dom-webpack"
-      ]
+      "ignoreDependencies": ["react-dom", "react-server-dom-webpack"]
     },
     "test/fixtures/app": {
       "ignore": [

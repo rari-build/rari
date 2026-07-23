@@ -3,7 +3,7 @@ import { NODE_BUILTIN_MODULES } from '../../../lib/node-builtins'
 export async function GET(request: Request) {
   const name = new URL(request.url).searchParams.get('name')
 
-  if (!name) {
+  if (name == null || name === '') {
     return Response.json({
       modules: [...NODE_BUILTIN_MODULES],
       total: NODE_BUILTIN_MODULES.length,
@@ -17,8 +17,7 @@ export async function GET(request: Request) {
   try {
     await import(`node:${name}`)
     return Response.json({ name, ok: true })
-  }
-  catch (error) {
+  } catch (error) {
     return Response.json({
       name,
       ok: false,

@@ -1,7 +1,14 @@
+/* oxlint-disable typescript/prefer-readonly-parameter-types -- SSR build mutates manifest and css module buffers */
 import type { Plugin } from 'vite-plus'
 import type { ModuleAnalysis } from '../analysis/directives'
 import type { MdxPluginOptions } from '../mdx/registry'
-import type { ServerCacheConfig, ServerCacheControlConfig, ServerCacheLayerConfig, ServerConfig, ServerCSPConfig } from './config'
+import type {
+  ServerCacheConfig,
+  ServerCacheControlConfig,
+  ServerCacheLayerConfig,
+  ServerConfig,
+  ServerCSPConfig,
+} from './config'
 import fs from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
@@ -17,14 +24,29 @@ import {
   TSX_EXT_REGEX,
 } from '@/shared/regex-constants'
 import { resolveAlias } from '@/shared/utils/alias-resolver'
-import { resolveIndexFile, resolveWithExtensions, resolveWithExtensionsAndIndex } from '@/shared/utils/file-resolver'
-import { getReadableComponentId, getComponentId as getSharedComponentId, getProjectRelativePath as getSharedProjectRelativePath, hashString as sharedHashString } from '../analysis/component-ids'
-import { analyzeModuleSource } from '../analysis/directives'
-import { filterExternalDependencies, filterRelativeImportSources, hasNodeImportsFromAnalysis, isNodeBuiltinModule, ModuleAnalysisCache, resolveModuleCachePath } from '../analysis/module-cache'
-import { collectSourceFilePaths, normalizeScanDirs } from '../analysis/source-walker'
 import {
-  resolveMdxRegistryEntries,
-} from '../mdx/registry'
+  resolveIndexFile,
+  resolveWithExtensions,
+  resolveWithExtensionsAndIndex,
+} from '@/shared/utils/file-resolver'
+import { getErrnoCode, isRecord, parseJsonRecord } from '@/shared/utils/type-guards'
+import {
+  getReadableComponentId,
+  getComponentId as getSharedComponentId,
+  getProjectRelativePath as getSharedProjectRelativePath,
+  hashString as sharedHashString,
+} from '../analysis/component-ids'
+import { analyzeModuleSource } from '../analysis/directives'
+import {
+  filterExternalDependencies,
+  filterRelativeImportSources,
+  hasNodeImportsFromAnalysis,
+  isNodeBuiltinModule,
+  ModuleAnalysisCache,
+  resolveModuleCachePath,
+} from '../analysis/module-cache'
+import { collectSourceFilePaths, normalizeScanDirs } from '../analysis/source-walker'
+import { resolveMdxRegistryEntries } from '../mdx/registry'
 import { parseHtmlEntryImports } from '../transform/html-entry'
 import { getUseCacheTransform } from '../transform/use-cache'
 
@@ -50,21 +72,19 @@ function barePackageName(source: string): string {
 
 /**
  * True when BYONM/Node would find the package by walking `node_modules` from
- * the app root. Avoid createRequire here — pnpm bin shims set NODE_PATH, which
+ * the app root. Avoid createRequire here -- pnpm bin shims set NODE_PATH, which
  * is baked into Module.globalPaths and makes transitive workspace deps look
  * like app installs (then incorrectly get externalized).
  */
 function isInstalledFromAppRoot(projectRoot: string, source: string): boolean {
   const packageName = barePackageName(source)
   let dir = projectRoot
-  while (true) {
+  for (;;) {
     const candidate = path.join(dir, 'node_modules', ...packageName.split('/'))
-    if (fs.existsSync(path.join(candidate, 'package.json')))
-      return true
+    if (fs.existsSync(path.join(candidate, 'package.json'))) return true
 
     const parent = path.dirname(dir)
-    if (parent === dir)
-      return false
+    if (parent === dir) return false
     dir = parent
   }
 }
@@ -90,37 +110,40 @@ function isRariInternalPath(filePath: string): boolean {
 }
 
 function aliasRootForPath(filePath: string, projectRoot: string): string {
-  if (isRariInternalPath(filePath))
-    return path.join(RARI_PACKAGE_ROOT, 'src')
+  if (isRariInternalPath(filePath)) return path.join(RARI_PACKAGE_ROOT, 'src')
 
   return path.join(projectRoot, 'src')
 }
 
 function resolveErrorBoundarySourcePath(): string | null {
-  const devSource = path.join(RARI_PACKAGE_ROOT, 'src', 'runtime', 'boundaries', 'error-boundary-wrapper.tsx')
-  if (fs.existsSync(devSource))
-    return devSource
+  const devSource = path.join(
+    RARI_PACKAGE_ROOT,
+    'src',
+    'runtime',
+    'boundaries',
+    'error-boundary-wrapper.tsx',
+  )
+  if (fs.existsSync(devSource)) return devSource
 
   try {
     const publishedPath = fileURLToPath(import.meta.resolve('rari/runtime/ErrorBoundaryWrapper'))
-    if (fs.existsSync(publishedPath))
-      return publishedPath
-  }
-  catch {}
+    if (fs.existsSync(publishedPath)) return publishedPath
+  } catch {}
 
   return null
 }
 
 function isErrorBoundaryWrapperPath(filePath: string): boolean {
   const normalized = filePath.replace(BACKSLASH_REGEX, '/')
-  return normalized.includes('ErrorBoundaryWrapper')
-    || normalized.includes('/boundaries/error-boundary-wrapper')
-    || normalized.endsWith('/error-boundary-wrapper.tsx')
+  return (
+    normalized.includes('ErrorBoundaryWrapper') ||
+    normalized.includes('/boundaries/error-boundary-wrapper') ||
+    normalized.endsWith('/error-boundary-wrapper.tsx')
+  )
 }
 
 function ssrClientComponentId(filePath: string, projectRoot: string): string {
-  if (isErrorBoundaryWrapperPath(filePath))
-    return 'virtual:error-boundary-wrapper.tsx'
+  if (isErrorBoundaryWrapperPath(filePath)) return 'virtual:error-boundary-wrapper.tsx'
 
   const relativePath = path.relative(projectRoot, filePath).replace(BACKSLASH_REGEX, '/')
   if (relativePath.startsWith('..') || path.isAbsolute(relativePath))
@@ -168,7 +191,7 @@ interface ServerComponentManifest {
       moduleSpecifier: string
       dependencies: string[]
       hasNodeImports: boolean
-      css?: string[]
+      css?: readonly string[]
     }
   >
   mdxRegistry?: Array<{
@@ -180,41 +203,29 @@ interface ServerComponentManifest {
   useCacheBuildId?: string
 }
 
-interface RouteManifestEntry {
-  filePath?: string
-  css?: string[]
-  componentId?: string
-}
-
-interface RouteManifest {
-  routes?: RouteManifestEntry[]
-  layouts?: RouteManifestEntry[]
-  loading?: RouteManifestEntry[]
-  errors?: RouteManifestEntry[]
-  notFound?: RouteManifestEntry[]
-  templates?: RouteManifestEntry[]
-  apiRoutes?: RouteManifestEntry[]
+function isServerComponentManifestRecord(value: unknown): value is ServerComponentManifest {
+  return isRecord(value) && isRecord(value.components)
 }
 
 export interface ServerBuildOptions {
-  outDir?: string
-  rscDir?: string
-  manifestPath?: string
-  serverConfigPath?: string
-  minify?: boolean
-  alias?: Record<string, string>
-  define?: Record<string, string>
-  csp?: ServerCSPConfig
-  cacheControl?: ServerCacheControlConfig
-  cache?: ServerCacheConfig
-  jsPoolSize?: number
-  htmlLimitedBots?: string
-  moduleAnalysisCache?: ModuleAnalysisCache
-  experimental?: {
-    useCache?: boolean
-    useCacheRemote?: ServerCacheLayerConfig
+  readonly outDir?: string
+  readonly rscDir?: string
+  readonly manifestPath?: string
+  readonly serverConfigPath?: string
+  readonly minify?: boolean
+  readonly alias?: Readonly<Record<string, string>>
+  readonly define?: Readonly<Record<string, string>>
+  readonly csp?: ServerCSPConfig
+  readonly cacheControl?: ServerCacheControlConfig
+  readonly cache?: ServerCacheConfig
+  readonly jsPoolSize?: number
+  readonly htmlLimitedBots?: string
+  readonly moduleAnalysisCache?: ModuleAnalysisCache
+  readonly experimental?: {
+    readonly useCache?: boolean
+    readonly useCacheRemote?: ServerCacheLayerConfig
   }
-  mdx?: MdxPluginOptions
+  readonly mdx?: MdxPluginOptions
 }
 
 export interface ComponentRebuildResult {
@@ -224,7 +235,21 @@ export interface ComponentRebuildResult {
   error?: string
 }
 
-type ResolvedServerBuildOptions = Required<Omit<ServerBuildOptions, 'csp' | 'cacheControl' | 'cache' | 'jsPoolSize' | 'htmlLimitedBots' | 'define' | 'serverConfigPath' | 'experimental' | 'moduleAnalysisCache' | 'mdx'>> & {
+type ResolvedServerBuildOptions = Required<
+  Omit<
+    ServerBuildOptions,
+    | 'csp'
+    | 'cacheControl'
+    | 'cache'
+    | 'jsPoolSize'
+    | 'htmlLimitedBots'
+    | 'define'
+    | 'serverConfigPath'
+    | 'experimental'
+    | 'moduleAnalysisCache'
+    | 'mdx'
+  >
+> & {
   serverConfigPath: string
   csp?: ServerBuildOptions['csp']
   cacheControl?: ServerBuildOptions['cacheControl']
@@ -243,17 +268,15 @@ export function isServerComponentFromAnalysis(
   htmlOnlyImports: ReadonlySet<string>,
   cacheKey?: string,
 ): boolean {
-  if (filePath.includes('node_modules'))
-    return false
+  if (filePath.includes('node_modules')) return false
 
-  if (htmlOnlyImports.has(cacheKey ?? resolveModuleCachePath(filePath)))
-    return false
+  if (htmlOnlyImports.has(cacheKey ?? resolveModuleCachePath(filePath))) return false
 
   return !analysis.directives.hasUseClient && !analysis.directives.hasUseServer
 }
 
 export class ServerComponentBuilder {
-  private serverComponents = new Map<
+  private readonly serverComponents = new Map<
     string,
     {
       filePath: string
@@ -263,7 +286,7 @@ export class ServerComponentBuilder {
     }
   >()
 
-  private serverActions = new Map<
+  private readonly serverActions = new Map<
     string,
     {
       filePath: string
@@ -273,30 +296,33 @@ export class ServerComponentBuilder {
     }
   >()
 
-  private options: ResolvedServerBuildOptions
-  private projectRoot: string
+  private readonly options: ResolvedServerBuildOptions
+  private readonly projectRoot: string
 
-  private buildCache = new Map<string, {
-    code: string
-    css: string[]
-    timestamp: number
-    sourceDependencies: string[]
-    bundledDependencies: string[]
-  }>()
+  private readonly buildCache = new Map<
+    string,
+    {
+      code: string
+      css: string[]
+      timestamp: number
+      sourceDependencies: string[]
+      bundledDependencies: string[]
+    }
+  >()
 
   private useCacheBuildId: string | null = null
 
-  private htmlOnlyImports = new Set<string>()
-  private fileImporters = new Map<string, Set<string>>()
-  private moduleAnalysisCache: ModuleAnalysisCache
-  private discoveredExternalClientComponents = new Set<string>()
-  private clientComponentFiles = new Map<string, string>()
+  private readonly htmlOnlyImports = new Set<string>()
+  private readonly fileImporters = new Map<string, Set<string>>()
+  private readonly moduleAnalysisCache: ModuleAnalysisCache
+  private readonly discoveredExternalClientComponents = new Set<string>()
+  private readonly clientComponentFiles = new Map<string, string>()
 
   recordClientComponent(filePath: string, code: string): void {
     this.clientComponentFiles.set(filePath, code)
   }
 
-  getClientComponentFiles(): Array<{ filePath: string, code: string }> {
+  getClientComponentFiles(): Array<{ filePath: string; code: string }> {
     return [...this.clientComponentFiles.entries()].map(([filePath, code]) => ({
       filePath,
       code,
@@ -342,9 +368,11 @@ export class ServerComponentBuilder {
     return new Set(this.htmlOnlyImports)
   }
 
-  private async writeComponentCssAsset(componentId: string, cssModules: string[]): Promise<string[]> {
-    if (cssModules.length === 0)
-      return []
+  private async writeComponentCssAsset(
+    componentId: string,
+    cssModules: string[],
+  ): Promise<string[]> {
+    if (cssModules.length === 0) return []
 
     const assetsDir = path.join(this.options.outDir, 'assets', 'server')
     await fs.promises.mkdir(assetsDir, { recursive: true })
@@ -367,63 +395,76 @@ export class ServerComponentBuilder {
 
   private async writeRouteCssEntries(manifest: ServerComponentManifest): Promise<void> {
     const routesPath = path.join(this.options.outDir, this.options.rscDir, 'routes.json')
-    if (!fs.existsSync(routesPath))
-      return
+    if (!fs.existsSync(routesPath)) return
 
     const content = await fs.promises.readFile(routesPath, 'utf-8')
-    const routeManifest = JSON.parse(content) as RouteManifest
+    const parsed: unknown = JSON.parse(content)
+    if (!isRecord(parsed)) return
+    const routeManifestRecord = parsed
 
-    const applyCss = (entries?: RouteManifestEntry[]) => {
-      if (!entries)
-        return
+    const applyCss = (entries: unknown) => {
+      if (!Array.isArray(entries)) return
 
       for (const entry of entries) {
-        if (!entry.filePath) {
-          continue
-        }
+        if (!isRecord(entry)) continue
 
-        const componentId = this.getComponentIdFromRouteManifestPath(entry.filePath)
+        const filePath = entry.filePath
+        if (typeof filePath !== 'string' || filePath === '') continue
+
+        const componentId = this.getComponentIdFromRouteManifestPath(filePath)
         entry.componentId = componentId
 
         const css = manifest.components[componentId]?.css ?? []
         if (css.length) {
           entry.css = css
-        }
-        else {
+        } else {
           delete entry.css
         }
       }
     }
 
-    applyCss(routeManifest.routes)
-    applyCss(routeManifest.layouts)
-    applyCss(routeManifest.loading)
-    applyCss(routeManifest.errors)
-    applyCss(routeManifest.notFound)
-    applyCss(routeManifest.templates)
+    applyCss(routeManifestRecord.routes)
+    applyCss(routeManifestRecord.layouts)
+    applyCss(routeManifestRecord.loading)
+    applyCss(routeManifestRecord.errors)
+    applyCss(routeManifestRecord.notFound)
+    applyCss(routeManifestRecord.templates)
 
-    if (routeManifest.apiRoutes) {
-      for (const entry of routeManifest.apiRoutes) {
-        if (entry.filePath) {
-          entry.componentId = this.getComponentIdFromRouteManifestPath(entry.filePath)
+    const apiRoutes = routeManifestRecord.apiRoutes
+    if (Array.isArray(apiRoutes)) {
+      for (const entry of apiRoutes) {
+        if (!isRecord(entry)) continue
+
+        const filePath = entry.filePath
+        if (typeof filePath === 'string' && filePath !== '') {
+          entry.componentId = this.getComponentIdFromRouteManifestPath(filePath)
         }
       }
     }
 
-    await fs.promises.writeFile(routesPath, JSON.stringify(routeManifest), 'utf-8')
+    await fs.promises.writeFile(routesPath, JSON.stringify(routeManifestRecord), 'utf-8')
   }
 
   constructor(projectRoot: string, options: ServerBuildOptions = {}) {
     this.projectRoot = projectRoot
     this.moduleAnalysisCache = options.moduleAnalysisCache ?? new ModuleAnalysisCache()
-    const rscDir = options.rscDir || 'server'
+    const rscDir = options.rscDir != null && options.rscDir !== '' ? options.rscDir : 'server'
     this.options = {
-      outDir: options.outDir || path.join(projectRoot, 'dist'),
+      outDir:
+        options.outDir != null && options.outDir !== ''
+          ? options.outDir
+          : path.join(projectRoot, 'dist'),
       rscDir,
-      manifestPath: options.manifestPath || path.join(rscDir, 'manifest.json'),
-      serverConfigPath: options.serverConfigPath || path.join(rscDir, 'config.json'),
+      manifestPath:
+        options.manifestPath != null && options.manifestPath !== ''
+          ? options.manifestPath
+          : path.join(rscDir, 'manifest.json'),
+      serverConfigPath:
+        options.serverConfigPath != null && options.serverConfigPath !== ''
+          ? options.serverConfigPath
+          : path.join(rscDir, 'config.json'),
       minify: options.minify ?? process.env.NODE_ENV === 'production',
-      alias: options.alias || {},
+      alias: options.alias ?? {},
       define: options.define,
       csp: options.csp,
       cacheControl: options.cacheControl,
@@ -450,8 +491,7 @@ export class ServerComponentBuilder {
     try {
       const analysis = this.moduleAnalysisCache.get(filePath, source)
       return isServerComponentFromAnalysis(filePath, analysis, this.htmlOnlyImports)
-    }
-    catch {
+    } catch {
       return false
     }
   }
@@ -459,8 +499,7 @@ export class ServerComponentBuilder {
   private isClientComponent(filePath: string, source?: string): boolean {
     try {
       return this.moduleAnalysisCache.get(filePath, source).directives.hasUseClient
-    }
-    catch {
+    } catch {
       return false
     }
   }
@@ -471,34 +510,30 @@ export class ServerComponentBuilder {
     if (importPath.startsWith('./') || importPath.startsWith('../')) {
       const importerDir = path.dirname(importerPath)
       resolvedPath = path.resolve(importerDir, importPath)
-    }
-    else {
+    } else {
       resolvedPath = resolveAlias(importPath, this.options.alias, this.projectRoot)
-      if (!resolvedPath && importPath.startsWith('@/')) {
+      if ((resolvedPath == null || resolvedPath === '') && importPath.startsWith('@/')) {
         const relativePath = importPath.slice(2)
         resolvedPath = path.join(this.projectRoot, 'src', relativePath)
       }
     }
 
-    if (!resolvedPath)
-      return null
+    if (resolvedPath == null || resolvedPath === '') return null
 
     return resolveWithExtensionsAndIndex(resolvedPath, ['', '.ts', '.tsx', '.js', '.jsx'])
   }
 
   populateImportGraphFromFiles(
-    files: ReadonlyArray<{ filePath: string, analysis: ModuleAnalysis }>,
+    files: ReadonlyArray<{ readonly filePath: string; readonly analysis: ModuleAnalysis }>,
   ): void {
     this.fileImporters.clear()
 
     for (const { filePath, analysis } of files) {
       for (const importPath of filterRelativeImportSources(analysis.importSources)) {
         const foundPath = this.resolveImportedFilePath(filePath, importPath)
-        if (!foundPath)
-          continue
+        if (foundPath == null || foundPath === '') continue
 
-        if (!this.fileImporters.has(foundPath))
-          this.fileImporters.set(foundPath, new Set())
+        if (!this.fileImporters.has(foundPath)) this.fileImporters.set(foundPath, new Set())
 
         this.fileImporters.get(foundPath)!.add(filePath)
       }
@@ -513,15 +548,12 @@ export class ServerComponentBuilder {
   isOnlyImportedByClientComponents(filePath: string): boolean {
     const importers = this.fileImporters.get(filePath)
 
-    if (!importers || importers.size === 0)
-      return false
+    if (!importers || importers.size === 0) return false
 
     for (const importer of importers) {
-      if (this.isClientComponent(importer))
-        continue
+      if (this.isClientComponent(importer)) continue
 
-      if (!this.isOnlyImportedByClientComponents(importer))
-        return false
+      if (!this.isOnlyImportedByClientComponents(importer)) return false
     }
 
     return true
@@ -543,8 +575,7 @@ export class ServerComponentBuilder {
       return
     }
 
-    if (!isServerComponentFromAnalysis(filePath, moduleAnalysis, this.htmlOnlyImports))
-      return
+    if (!isServerComponentFromAnalysis(filePath, moduleAnalysis, this.htmlOnlyImports)) return
 
     this.serverComponents.set(filePath, {
       filePath,
@@ -555,30 +586,34 @@ export class ServerComponentBuilder {
   }
 
   private isServerAction(code: string, filePath?: string): boolean {
-    if (filePath)
+    if (filePath != null && filePath !== '')
       return this.moduleAnalysisCache.get(filePath, code).directives.hasUseServer
 
     return analyzeModuleSource(code).directives.hasUseServer
   }
 
   private extractDependencies(code: string, filePath?: string): string[] {
-    const analysis = filePath
-      ? this.moduleAnalysisCache.get(filePath, code)
-      : analyzeModuleSource(code)
+    const analysis =
+      filePath != null && filePath !== ''
+        ? this.moduleAnalysisCache.get(filePath, code)
+        : analyzeModuleSource(code)
 
     return filterExternalDependencies(analysis.importSources)
   }
 
   private hasNodeImports(code: string, filePath?: string): boolean {
-    const analysis = filePath
-      ? this.moduleAnalysisCache.get(filePath, code)
-      : analyzeModuleSource(code)
+    const analysis =
+      filePath != null && filePath !== ''
+        ? this.moduleAnalysisCache.get(filePath, code)
+        : analyzeModuleSource(code)
 
     return hasNodeImportsFromAnalysis(analysis)
   }
 
-  async getTransformedComponentsForDevelopment(): Promise<Array<{ id: string, code: string, isAction: boolean }>> {
-    const components: Array<{ id: string, code: string, isAction: boolean }> = []
+  async getTransformedComponentsForDevelopment(): Promise<
+    Array<{ id: string; code: string; isAction: boolean }>
+  > {
+    const components: Array<{ id: string; code: string; isAction: boolean }> = []
 
     for (const [filePath] of this.serverComponents) {
       const relativePath = path.relative(this.projectRoot, filePath)
@@ -610,19 +645,24 @@ export class ServerComponentBuilder {
   }
 
   private transformComponentImportsToGlobal(code: string): string {
-    const replacements: Array<{ original: string, replacement: string }> = []
+    const replacements: Array<{ original: string; replacement: string }> = []
 
     for (const match of code.matchAll(COMPONENT_IMPORT_REGEX)) {
       const [fullMatch, importName, importPath] = match
 
-      if (!importPath.startsWith('.') && !importPath.startsWith('@') && !importPath.startsWith('~') && !importPath.startsWith('#'))
+      if (
+        !importPath.startsWith('.') &&
+        !importPath.startsWith('@') &&
+        !importPath.startsWith('~') &&
+        !importPath.startsWith('#')
+      )
         continue
 
       let resolvedPath: string | null = null
 
       if (importPath.startsWith('.')) {
         if (importPath.includes('/components/')) {
-          const componentMatch = importPath.match(COMPONENTS_PATH_REGEX)
+          const componentMatch = COMPONENTS_PATH_REGEX.exec(importPath)
           if (componentMatch) {
             const componentName = componentMatch[1]
 
@@ -641,8 +681,7 @@ export class ServerComponentBuilder {
               }
             }
 
-            if (!isClient)
-              continue
+            if (!isClient) continue
 
             const replacement = `// Component reference: ${componentName}
 const ${importName} = (props) => {
@@ -669,7 +708,7 @@ const ${importName} = (props) => {
         continue
       }
 
-      const aliases = this.options.alias || {}
+      const aliases = this.options.alias
       for (const [alias, replacement] of Object.entries(aliases)) {
         if (importPath.startsWith(`${alias}/`) || importPath === alias) {
           const relativePath = importPath.slice(alias.length).replace(/^\/+/, '')
@@ -678,8 +717,8 @@ const ${importName} = (props) => {
         }
       }
 
-      if (resolvedPath) {
-        const componentMatch = resolvedPath.match(COMPONENTS_PATH_ALT_REGEX)
+      if (resolvedPath != null && resolvedPath !== '') {
+        const componentMatch = COMPONENTS_PATH_ALT_REGEX.exec(resolvedPath)
         if (componentMatch) {
           const componentName = componentMatch[1]
 
@@ -700,14 +739,12 @@ const ${importName} = (props) => {
           for (const possiblePath of possiblePaths) {
             if (fs.existsSync(possiblePath)) {
               actualPath = possiblePath
-              if (this.isClientComponent(possiblePath))
-                isClient = true
+              if (this.isClientComponent(possiblePath)) isClient = true
               break
             }
           }
 
-          if (!isClient)
-            continue
+          if (!isClient) continue
 
           const componentId = this.getComponentReferenceId(actualPath)
 
@@ -753,27 +790,34 @@ const ${importName} = (props) => {
       name: 'rari-rolldown-module-info',
       moduleParsed(moduleInfo) {
         for (const id of moduleInfo.importedIds) {
-          if (!id.startsWith('.') && !id.startsWith('/') && !id.startsWith('node:') && !isNodeBuiltinModule(id))
+          if (
+            !id.startsWith('.') &&
+            !id.startsWith('/') &&
+            !id.startsWith('node:') &&
+            !isNodeBuiltinModule(id)
+          )
             externalDeps.add(id)
         }
 
         for (const id of moduleInfo.dynamicallyImportedIds) {
-          if (!id.startsWith('.') && !id.startsWith('/') && !id.startsWith('node:') && !isNodeBuiltinModule(id))
+          if (
+            !id.startsWith('.') &&
+            !id.startsWith('/') &&
+            !id.startsWith('node:') &&
+            !isNodeBuiltinModule(id)
+          )
             externalDeps.add(id)
         }
       },
       buildEnd: () => {
-        if (externalDeps.size === 0)
-          return
+        if (externalDeps.size === 0) return
 
         const dependencies = [...externalDeps].sort()
-        const component = this.serverComponents.get(filePath) || this.serverActions.get(filePath)
-        if (component)
-          component.dependencies = dependencies
+        const component = this.serverComponents.get(filePath) ?? this.serverActions.get(filePath)
+        if (component) component.dependencies = dependencies
 
         const cached = this.buildCache.get(filePath)
-        if (cached)
-          cached.bundledDependencies = dependencies
+        if (cached) cached.bundledDependencies = dependencies
       },
     }
   }
@@ -790,14 +834,13 @@ const ${importName} = (props) => {
     const isProxyFile = PROXY_FILE_REGEX.test(path.basename(inputPath))
 
     const clientComponentRefs = new Map<string, string>()
-    const serverActionRefs = new Map<string, { actionId: string, hasDefaultExport: boolean }>()
+    const serverActionRefs = new Map<string, { actionId: string; hasDefaultExport: boolean }>()
 
     return [
       {
         name: 'virtual-module',
         resolveId(id: string, importer: string | undefined) {
-          if (id === virtualModuleId)
-            return id
+          if (id === virtualModuleId) return id
 
           if (importer === virtualModuleId && (id.startsWith('./') || id.startsWith('../'))) {
             if (id.endsWith('.module.css')) {
@@ -813,8 +856,7 @@ const ${importName} = (props) => {
             }
             for (const ext of ['.ts', '.tsx', '.js', '.jsx']) {
               const indexPath = path.join(resolved, `index${ext}`)
-              if (fs.existsSync(indexPath))
-                return indexPath
+              if (fs.existsSync(indexPath)) return indexPath
             }
 
             return resolved
@@ -837,41 +879,50 @@ const ${importName} = (props) => {
         name: 'resolve-client-server-boundaries',
         enforce: 'pre' as const,
         resolveId: (source: string, importer: string | undefined) => {
-          if (!importer || importer.includes('node_modules') || isRariInternalPath(importer))
+          if (
+            importer == null ||
+            importer === '' ||
+            importer.includes('node_modules') ||
+            isRariInternalPath(importer)
+          )
             return null
 
           if (
-            source.startsWith('node:')
-            || isNodeBuiltinModule(source)
-            || source === 'react'
-            || source === 'react-dom'
-            || source === 'react/jsx-runtime'
-            || source === 'react/jsx-dev-runtime'
+            source.startsWith('node:') ||
+            isNodeBuiltinModule(source) ||
+            source === 'react' ||
+            source === 'react-dom' ||
+            source === 'react/jsx-runtime' ||
+            source === 'react/jsx-dev-runtime'
           ) {
             return null
           }
 
           let resolvedPath: string | null = null
-          const aliases = this.options.alias || {}
+          const aliases = this.options.alias
 
           resolvedPath = resolveAlias(source, aliases, this.projectRoot)
 
-          if (!resolvedPath && (source.startsWith('./') || source.startsWith('../'))) {
+          if (
+            (resolvedPath == null || resolvedPath === '') &&
+            (source.startsWith('./') || source.startsWith('../'))
+          ) {
             const importerDir = importer === virtualModuleId ? resolveDir : path.dirname(importer)
             resolvedPath = path.resolve(importerDir, source)
           }
 
-          if (!resolvedPath && path.isAbsolute(source))
-            resolvedPath = source
+          if (resolvedPath == null || resolvedPath === '') resolvedPath = source
 
-          if (resolvedPath) {
+          if (resolvedPath !== '') {
             const extensions = ['', '.ts', '.tsx', '.js', '.jsx']
             for (const ext of extensions) {
               const pathWithExt = resolvedPath + ext
               if (fs.existsSync(pathWithExt) && fs.statSync(pathWithExt).isFile()) {
                 if (this.isClientComponent(pathWithExt)) {
                   const relativePath = path.relative(this.projectRoot, pathWithExt)
-                  const componentId = (relativePath.startsWith('..') ? pathWithExt : relativePath).replace(BACKSLASH_REGEX, '/')
+                  const componentId = (
+                    relativePath.startsWith('..') ? pathWithExt : relativePath
+                  ).replace(BACKSLASH_REGEX, '/')
                   clientComponentRefs.set(pathWithExt, componentId)
 
                   if (relativePath.startsWith('..'))
@@ -890,9 +941,11 @@ const ${importName} = (props) => {
                     })
                     return { id: `\0server-action:${pathWithExt}` }
                   }
-                }
-                catch (error) {
-                  console.error(`[rari] Failed to read file for server action detection: ${pathWithExt}`, error)
+                } catch (error) {
+                  console.error(
+                    `[rari] Failed to read file for server action detection: ${pathWithExt}`,
+                    error,
+                  )
                 }
                 break
               }
@@ -905,7 +958,10 @@ const ${importName} = (props) => {
           if (id.startsWith('\0client-ref:')) {
             const filePath = id.slice('\0client-ref:'.length)
             const relativePath = path.relative(this.projectRoot, filePath)
-            const componentId = (clientComponentRefs.get(filePath) || (relativePath.startsWith('..') ? filePath : relativePath)).replace(BACKSLASH_REGEX, '/')
+            const componentId = (
+              clientComponentRefs.get(filePath) ??
+              (relativePath.startsWith('..') ? filePath : relativePath)
+            ).replace(BACKSLASH_REGEX, '/')
 
             return {
               code: `import { registerClientReference } from ${JSON.stringify(RSC_REFERENCES_IMPORT)};
@@ -917,7 +973,8 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
 
           if (id.startsWith('\0server-action:')) {
             const filePath = id.slice('\0server-action:'.length)
-            const actionId = serverActionRefs.get(filePath)?.actionId ?? this.getComponentId(filePath)
+            const actionId =
+              serverActionRefs.get(filePath)?.actionId ?? this.getComponentId(filePath)
 
             return {
               code: this.generateServerActionRuntimeModule(filePath, actionId),
@@ -931,51 +988,54 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
       {
         name: 'use-transformed-server-components',
         resolveId: (source: string, importer: string | undefined) => {
-          if (!isPage)
-            return null
+          if (!isPage) return null
 
           if (source.startsWith('file://')) {
             const filePath = source.replace(FILE_PROTOCOL_REGEX, '')
-            if (fs.existsSync(filePath))
-              return { id: `\0transformed:${filePath}` }
+            if (fs.existsSync(filePath)) return { id: `\0transformed:${filePath}` }
 
             return null
           }
 
           let resolvedPath: string | null = null
-          const aliases = this.options.alias || {}
+          const aliases = this.options.alias
 
           resolvedPath = resolveAlias(source, aliases, this.projectRoot)
 
-          const importerDir = importer?.startsWith('\0') ? resolveDir : (importer ? path.dirname(importer) : resolveDir)
-          if (!resolvedPath && (source.startsWith('./') || source.startsWith('../')))
+          const importerDir = importer?.startsWith('\0')
+            ? resolveDir
+            : importer != null && importer !== ''
+              ? path.dirname(importer)
+              : resolveDir
+          if (
+            (resolvedPath == null || resolvedPath === '') &&
+            (source.startsWith('./') || source.startsWith('../'))
+          )
             resolvedPath = path.resolve(importerDir, source)
 
-          if (!resolvedPath)
-            return null
+          if (resolvedPath == null || resolvedPath === '') return null
 
-          if (importerDir.includes('node_modules'))
-            return null
+          if (importerDir.includes('node_modules')) return null
 
           const extensions = ['', '.ts', '.tsx', '.js', '.jsx']
           for (const ext of extensions) {
             const pathWithExt = resolvedPath + ext
             if (fs.existsSync(pathWithExt) && fs.statSync(pathWithExt).isFile()) {
-              if (this.isClientComponent(pathWithExt))
-                return null
+              if (this.isClientComponent(pathWithExt)) return null
 
-              if (this.isServerActionFile(pathWithExt))
-                return null
+              if (this.isServerActionFile(pathWithExt)) return null
 
               const srcDir = path.join(this.projectRoot, 'src')
-              if (!pathWithExt.startsWith(srcDir))
-                return null
+              if (!pathWithExt.startsWith(srcDir)) return null
 
               const componentId = this.getComponentId(pathWithExt)
-              const distPath = path.join(this.options.outDir, this.options.rscDir, `${componentId}.js`)
+              const distPath = path.join(
+                this.options.outDir,
+                this.options.rscDir,
+                `${componentId}.js`,
+              )
 
-              if (fs.existsSync(distPath))
-                return { id: `\0transformed:${distPath}` }
+              if (fs.existsSync(distPath)) return { id: `\0transformed:${distPath}` }
 
               break
             }
@@ -999,12 +1059,10 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
       {
         name: 'resolve-aliases',
         resolveId: (source: string) => {
-          if (source.startsWith('\0'))
-            return null
+          if (source.startsWith('\0')) return null
 
-          const resolved = resolveAlias(source, this.options.alias || {}, this.projectRoot)
-          if (!resolved)
-            return null
+          const resolved = resolveAlias(source, this.options.alias, this.projectRoot)
+          if (resolved == null || resolved === '') return null
 
           const extensions = ['', '.ts', '.tsx', '.js', '.jsx']
           for (const ext of extensions) {
@@ -1047,12 +1105,10 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
         resolveId: (source: string) => {
           if (isProxyFile && source === 'rari') {
             const rariResponsePath = path.join(RARI_DIST_DIR, 'proxy/RariResponse.mjs')
-            if (fs.existsSync(rariResponsePath))
-              return rariResponsePath
+            if (fs.existsSync(rariResponsePath)) return rariResponsePath
 
             const rariResponseSrcPath = path.join(RARI_PACKAGE_ROOT, 'src/proxy/http/response.ts')
-            if (fs.existsSync(rariResponseSrcPath))
-              return rariResponseSrcPath
+            if (fs.existsSync(rariResponseSrcPath)) return rariResponseSrcPath
           }
 
           return null
@@ -1062,7 +1118,10 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
         name: 'css-modules',
         resolveId: (source: string, importer: string | undefined) => {
           if (source.endsWith('.module.css')) {
-            const importerDir = !importer?.startsWith('\0') && importer ? path.dirname(importer) : resolveDir
+            const importerDir =
+              importer != null && importer !== '' && !importer.startsWith('\0')
+                ? path.dirname(importer)
+                : resolveDir
             const resolved = path.resolve(importerDir, source)
 
             if (fs.existsSync(resolved)) {
@@ -1089,8 +1148,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
               cssModules: { pattern: RARI_CSS_MODULES_PATTERN },
             })
 
-            if (cssModules)
-              cssModules.push(new TextDecoder().decode(result.code))
+            if (cssModules) cssModules.push(new TextDecoder().decode(result.code))
 
             const classes: Record<string, string> = {}
             if (result.exports) {
@@ -1100,17 +1158,17 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
             }
 
             return { code: `export default ${JSON.stringify(classes)}`, moduleType: 'js' }
-          }
-          catch (e) {
-            throw new Error(`[rari] Failed to process CSS module ${id}: ${e instanceof Error ? e.message : String(e)}`)
+          } catch (e) {
+            throw new Error(
+              `[rari] Failed to process CSS module ${id}: ${e instanceof Error ? e.message : String(e)}`,
+            )
           }
         },
       } satisfies Plugin,
       {
         name: 'externalize-deps',
         resolveId: (source: string, importer: string | undefined) => {
-          if (source.startsWith('\0'))
-            return null
+          if (source.startsWith('\0')) return null
 
           if (source.startsWith('node:') || isNodeBuiltinModule(source))
             return { id: source, external: true }
@@ -1123,8 +1181,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
             'rari/image',
           ]
 
-          if (externalPackages.includes(source))
-            return { id: source, external: true }
+          if (externalPackages.includes(source)) return { id: source, external: true }
 
           const externalPackageMappings: Record<string, string | null> = {
             'rari/runtime/cache-wrapper': 'node_modules/rari/dist/runtime/cache-wrapper.mjs',
@@ -1135,35 +1192,31 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
             return { id: source, external: true }
           }
 
-          if (source === 'rari')
-            return null
+          if (source === 'rari') return null
 
-          if (resolveAlias(source, this.options.alias || {}, this.projectRoot))
-            return null
+          if (resolveAlias(source, this.options.alias, this.projectRoot) != null) return null
 
           if (!source.startsWith('.') && !source.startsWith('/')) {
             // App-visible installs stay external for runtime BYONM. Deps that only
             // exist under a workspace package (e.g. markdown-it in shared/) must be
-            // force-resolved and bundled — Rolldown's platform:'node' otherwise
+            // force-resolved and bundled -- Rolldown's platform:'node' otherwise
             // leaves them as unresolved externals.
             if (isInstalledFromAppRoot(this.projectRoot, source))
               return { id: source, external: true }
 
             const resolveFrom = [
-              importer && !importer.startsWith('\0') ? importer : null,
+              importer != null && importer !== '' && !importer.startsWith('\0') ? importer : null,
               inputPath,
             ].filter((value): value is string => Boolean(value))
 
             for (const from of resolveFrom) {
               try {
                 return { id: createRequire(from).resolve(source) }
-              }
-              catch {
+              } catch {
                 try {
                   const resolved = import.meta.resolve(source, pathToFileURL(from).href)
                   return { id: fileURLToPath(resolved) }
-                }
-                catch {
+                } catch {
                   // try next candidate
                 }
               }
@@ -1195,14 +1248,9 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     ]
   }
 
-  private async buildComponentCodeOnly(
-    inputPath: string,
-  ): Promise<string> {
+  private async buildComponentCodeOnly(inputPath: string): Promise<string> {
     const originalCode = await fs.promises.readFile(inputPath, 'utf-8')
-    const clientTransformedCode = this.transformClientImports(
-      originalCode,
-      inputPath,
-    )
+    const clientTransformedCode = this.transformClientImports(originalCode, inputPath)
     const isPage = this.isPageComponent(inputPath)
     const transformedCode = isPage
       ? this.transformComponentImportsToGlobal(clientTransformedCode)
@@ -1210,14 +1258,10 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
 
     const ext = path.extname(inputPath)
     let loader: 'tsx' | 'jsx' | 'ts' | 'js'
-    if (ext === '.tsx')
-      loader = 'tsx'
-    else if (ext === '.ts')
-      loader = 'ts'
-    else if (ext === '.jsx')
-      loader = 'jsx'
-    else
-      loader = 'js'
+    if (ext === '.tsx') loader = 'tsx'
+    else if (ext === '.ts') loader = 'ts'
+    else if (ext === '.jsx') loader = 'jsx'
+    else loader = 'js'
 
     const virtualModuleId = `\0virtual:${inputPath}`
 
@@ -1248,19 +1292,28 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
         jsx: 'react',
         define: {
           'global': 'globalThis',
-          'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'production'),
+          'process.env.NODE_ENV': JSON.stringify(
+            process.env.NODE_ENV != null && process.env.NODE_ENV !== ''
+              ? process.env.NODE_ENV
+              : 'production',
+          ),
           ...this.options.define,
         },
       },
-      plugins: this.createBuildPlugins(virtualModuleId, transformedCode, loader, inputPath, isPage, []),
+      plugins: this.createBuildPlugins(
+        virtualModuleId,
+        transformedCode,
+        loader,
+        inputPath,
+        isPage,
+        [],
+      ),
     })
 
-    if (!result.output || result.output.length === 0)
-      throw new Error('No output generated from Rolldown')
+    if (result.output.length === 0) throw new Error('No output generated from Rolldown')
 
     const entryChunk = result.output.find(chunk => chunk.type === 'chunk' && chunk.isEntry)
-    if (!entryChunk || entryChunk.type !== 'chunk')
-      throw new Error('No entry chunk found in Rolldown output')
+    if (entryChunk?.type !== 'chunk') throw new Error('No entry chunk found in Rolldown output')
 
     let code = entryChunk.code
 
@@ -1271,7 +1324,16 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
   }
 
   private async buildComponentBatch(
-    entries: Array<[string, { filePath: string, dependencies: string[], hasNodeImports: boolean }]>,
+    entries: ReadonlyArray<
+      readonly [
+        string,
+        {
+          readonly filePath: string
+          readonly dependencies: readonly string[]
+          readonly hasNodeImports: boolean
+        },
+      ]
+    >,
     manifest: ServerComponentManifest,
     concurrency: number,
   ): Promise<void> {
@@ -1279,7 +1341,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     let index = 0
     const errors: Error[] = []
 
-    await new Promise<void>((resolve) => {
+    await new Promise<void>(resolve => {
       const next = () => {
         while (active < concurrency && index < entries.length) {
           const [filePath, component] = entries[index++]
@@ -1289,7 +1351,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
           const fullBundlePath = path.join(this.options.outDir, bundlePath)
 
           active++
-          ;(async () => {
+          void (async () => {
             try {
               const bundleDir = path.dirname(fullBundlePath)
               await fs.promises.mkdir(bundleDir, { recursive: true })
@@ -1297,7 +1359,9 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
               const built = await this.buildSingleComponent(filePath, fullBundlePath)
               const css = await this.writeComponentCssAsset(componentId, built.css)
 
-              const moduleSpecifier = pathToFileURL(path.resolve(this.projectRoot, fullBundlePath)).href
+              const moduleSpecifier = pathToFileURL(
+                path.resolve(this.projectRoot, fullBundlePath),
+              ).href
 
               manifest.components[componentId] = {
                 id: componentId,
@@ -1305,35 +1369,30 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
                 relativePath,
                 bundlePath,
                 moduleSpecifier,
-                dependencies: component.dependencies,
+                dependencies: [...component.dependencies],
                 hasNodeImports: component.hasNodeImports,
                 css,
               }
-            }
-            catch (error) {
+            } catch (error) {
               errors.push(error instanceof Error ? error : new Error(String(error)))
-            }
-            finally {
+            } finally {
               active--
               if (index >= entries.length && active === 0) {
                 resolve()
-              }
-              else {
+              } else {
                 next()
               }
             }
           })()
         }
 
-        if (entries.length === 0)
-          resolve()
+        if (entries.length === 0) resolve()
       }
 
       next()
     })
 
-    if (errors.length > 0)
-      throw errors[0]
+    if (errors.length > 0) throw errors[0]
   }
 
   async buildServerComponents(): Promise<ServerComponentManifest> {
@@ -1346,14 +1405,18 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
       buildTime: new Date().toISOString(),
     }
 
-    const useCacheEnabled = this.options.experimental?.useCache || this.options.experimental?.useCacheRemote
+    const useCacheEnabled =
+      this.options.experimental?.useCache === true ||
+      this.options.experimental?.useCacheRemote != null
 
     const concurrency = Math.min(8, Math.max(1, (await import('node:os')).cpus().length))
 
-    const nonPageComponents = [...this.serverComponents.entries()]
-      .filter(([filePath]) => !this.isPageComponent(filePath))
-    const pageComponents = [...this.serverComponents.entries()]
-      .filter(([filePath]) => this.isPageComponent(filePath))
+    const nonPageComponents = [...this.serverComponents.entries()].filter(
+      ([filePath]) => !this.isPageComponent(filePath),
+    )
+    const pageComponents = [...this.serverComponents.entries()].filter(([filePath]) =>
+      this.isPageComponent(filePath),
+    )
     const actions = [...this.serverActions.entries()]
 
     await Promise.all([
@@ -1368,63 +1431,47 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
       manifest.useCacheBuildId = this.useCacheBuildId
     }
 
-    const manifestPath = path.join(
-      this.options.outDir,
-      this.options.manifestPath,
-    )
-    await fs.promises.writeFile(
-      manifestPath,
-      JSON.stringify(manifest),
-      'utf-8',
-    )
+    const manifestPath = path.join(this.options.outDir, this.options.manifestPath)
+    await fs.promises.writeFile(manifestPath, JSON.stringify(manifest), 'utf-8')
     await this.writeRouteCssEntries(manifest)
 
     const serverConfig: ServerConfig = {}
-    if (this.options.csp)
-      serverConfig.csp = this.options.csp
-    if (this.options.cacheControl)
-      serverConfig.cacheControl = this.options.cacheControl
-    if (this.options.cache)
-      serverConfig.cache = this.options.cache
-    if (this.options.jsPoolSize != null)
-      serverConfig.jsPoolSize = this.options.jsPoolSize
+    if (this.options.csp) serverConfig.csp = this.options.csp
+    if (this.options.cacheControl) serverConfig.cacheControl = this.options.cacheControl
+    if (this.options.cache) serverConfig.cache = this.options.cache
+    if (this.options.jsPoolSize != null) serverConfig.jsPoolSize = this.options.jsPoolSize
     if (this.options.htmlLimitedBots != null)
       serverConfig.htmlLimitedBots = this.options.htmlLimitedBots
-    if (this.options.experimental?.useCacheRemote || this.useCacheBuildId) {
+    if (
+      this.options.experimental?.useCacheRemote != null ||
+      (this.useCacheBuildId != null && this.useCacheBuildId !== '')
+    ) {
       serverConfig.useCache = {
         ...(this.options.experimental?.useCacheRemote
           ? { remote: this.options.experimental.useCacheRemote }
           : {}),
-        ...(this.useCacheBuildId ? { buildId: this.useCacheBuildId } : {}),
+        ...(this.useCacheBuildId != null && this.useCacheBuildId !== ''
+          ? { buildId: this.useCacheBuildId }
+          : {}),
       }
       if (!this.options.experimental?.useCache && this.options.experimental?.useCacheRemote) {
         console.warn(
-          '[server-build] experimental.useCacheRemote is set without experimental.useCache; the \'use cache\' transform will still run because useCacheRemote is configured.',
+          "[server-build] experimental.useCacheRemote is set without experimental.useCache; the 'use cache' transform will still run because useCacheRemote is configured.",
         )
       }
     }
 
-    const serverConfigPath = path.join(
-      this.options.outDir,
-      this.options.serverConfigPath,
-    )
+    const serverConfigPath = path.join(this.options.outDir, this.options.serverConfigPath)
 
     if (Object.keys(serverConfig).length === 0) {
       try {
         await fs.promises.unlink(serverConfigPath)
-      }
-      catch (error: unknown) {
-        const e = error as NodeJS.ErrnoException
-        if (e.code !== 'ENOENT')
+      } catch (error: unknown) {
+        if (getErrnoCode(error) !== 'ENOENT')
           console.warn(`Failed to remove server config file:`, error)
       }
-    }
-    else {
-      await fs.promises.writeFile(
-        serverConfigPath,
-        JSON.stringify(serverConfig),
-        'utf-8',
-      )
+    } else {
+      await fs.promises.writeFile(serverConfigPath, JSON.stringify(serverConfig), 'utf-8')
     }
 
     return manifest
@@ -1434,7 +1481,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     const entries = resolveMdxRegistryEntries({
       projectRoot: this.projectRoot,
       mdxOptions,
-      alias: this.options.alias || {},
+      alias: this.options.alias,
       cache: this.moduleAnalysisCache,
     })
 
@@ -1443,9 +1490,15 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
 
     if (fs.existsSync(manifestPath)) {
       const content = await fs.promises.readFile(manifestPath, 'utf-8')
-      manifest = JSON.parse(content) as ServerComponentManifest
-    }
-    else {
+      const parsed = parseJsonRecord(content)
+      manifest =
+        parsed && isServerComponentManifestRecord(parsed)
+          ? parsed
+          : {
+              components: {},
+              buildTime: new Date().toISOString(),
+            }
+    } else {
       manifest = {
         components: {},
         buildTime: new Date().toISOString(),
@@ -1458,42 +1511,38 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
       client: entry.client,
     }))
 
-    await fs.promises.writeFile(
-      manifestPath,
-      JSON.stringify(manifest),
-      'utf-8',
-    )
+    await fs.promises.writeFile(manifestPath, JSON.stringify(manifest), 'utf-8')
   }
 
   async buildSSRClientComponents(): Promise<void> {
     const ssrOutDir = path.join(this.options.outDir, 'ssr')
     await fs.promises.mkdir(ssrOutDir, { recursive: true })
 
-    const clientFiles: Array<{ filePath: string, code: string }> = [
+    const clientFiles: Array<{ filePath: string; code: string }> = [
       ...this.getClientComponentFiles(),
     ]
 
     for (const extPath of this.discoveredExternalClientComponents) {
-      if (clientFiles.some(f => f.filePath === extPath))
-        continue
+      if (clientFiles.some(f => f.filePath === extPath)) continue
       try {
         const code = fs.readFileSync(extPath, 'utf-8')
         clientFiles.push({ filePath: extPath, code })
-      }
-      catch {}
+      } catch {}
     }
 
     try {
       const errorBoundarySource = resolveErrorBoundarySourcePath()
-      if (errorBoundarySource) {
+      if (errorBoundarySource != null && errorBoundarySource !== '') {
         const code = fs.readFileSync(errorBoundarySource, 'utf-8')
         clientFiles.push({ filePath: errorBoundarySource, code })
       }
-    }
-    catch {}
+    } catch {}
 
     if (clientFiles.length === 0) {
-      const manifest: Record<string, { id: string, filePath: string, bundlePath: string, exports: string[] }> = {}
+      const manifest: Record<
+        string,
+        { id: string; filePath: string; bundlePath: string; exports: string[] }
+      > = {}
       await this.buildExternalClientComponents(manifest, new Map())
       await this.writeClientReferenceManifest(ssrOutDir, manifest)
       return
@@ -1502,18 +1551,18 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     const clientModuleSpecifiers = new Map<string, string>()
     for (const { filePath } of clientFiles) {
       const bundleName = ssrClientBundleName(filePath, this.projectRoot)
-      clientModuleSpecifiers.set(
-        path.resolve(filePath),
-        `file:///ssr/${bundleName}.js`,
-      )
+      clientModuleSpecifiers.set(path.resolve(filePath), `file:///ssr/${bundleName}.js`)
     }
 
-    const manifest: Record<string, { id: string, filePath: string, bundlePath: string, exports: string[] }> = {}
+    const manifest: Record<
+      string,
+      { id: string; filePath: string; bundlePath: string; exports: string[] }
+    > = {}
     const concurrency = Math.min(8, Math.max(1, (await import('node:os')).cpus().length))
     let active = 0
     let index = 0
 
-    await new Promise<void>((resolve) => {
+    await new Promise<void>(resolve => {
       const next = () => {
         while (active < concurrency && index < clientFiles.length) {
           const { filePath, code } = clientFiles[index++]
@@ -1523,7 +1572,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
           const fullBundlePath = path.join(this.options.outDir, bundlePath)
 
           active++
-          ;(async () => {
+          void (async () => {
             try {
               const bundleDir = path.dirname(fullBundlePath)
               await fs.promises.mkdir(bundleDir, { recursive: true })
@@ -1537,22 +1586,20 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
                 bundlePath,
                 exports,
               }
-            }
-            catch (error) {
-              console.warn(`[rari] SSR build failed for ${componentId}:`, error instanceof Error ? error.message : error)
-            }
-            finally {
+            } catch (error) {
+              console.warn(
+                `[rari] SSR build failed for ${componentId}:`,
+                error instanceof Error ? error.message : error,
+              )
+            } finally {
               active--
-              if (index >= clientFiles.length && active === 0)
-                resolve()
-              else
-                next()
+              if (index >= clientFiles.length && active === 0) resolve()
+              else next()
             }
           })()
         }
 
-        if (clientFiles.length === 0)
-          resolve()
+        if (clientFiles.length === 0) resolve()
       }
 
       next()
@@ -1565,12 +1612,14 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
 
   private async writeClientReferenceManifest(
     ssrOutDir: string,
-    manifest: Record<string, { id: string, filePath: string, bundlePath: string, exports: string[] }>,
+    manifest: {
+      [key: string]: { id: string; filePath: string; bundlePath: string; exports: string[] }
+    },
   ): Promise<void> {
     const manifestPath = path.join(ssrOutDir, 'manifest.json')
     await fs.promises.writeFile(manifestPath, JSON.stringify(manifest), 'utf-8')
 
-    const clientReferenceManifest: Record<string, { id: string, chunks: string, name: string }> = {}
+    const clientReferenceManifest: Record<string, { id: string; chunks: string; name: string }> = {}
     for (const [componentId, entry] of Object.entries(manifest)) {
       for (const exportName of entry.exports) {
         const fullId = `${componentId}#${exportName}`
@@ -1585,35 +1634,42 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     const serverOutDir = path.join(this.options.outDir, 'server')
     await fs.promises.mkdir(serverOutDir, { recursive: true })
     const clientRefManifestPath = path.join(serverOutDir, 'client-reference-manifest.json')
-    await fs.promises.writeFile(clientRefManifestPath, JSON.stringify(clientReferenceManifest), 'utf-8')
+    await fs.promises.writeFile(
+      clientRefManifestPath,
+      JSON.stringify(clientReferenceManifest),
+      'utf-8',
+    )
   }
 
   private resolveExternalClientSourcePath(
-    devSourceSegments: string[],
+    devSourceSegments: readonly string[],
     publishedExport: string,
   ): string | null {
     const devPath = path.join(RARI_PACKAGE_ROOT, ...devSourceSegments)
-    if (fs.existsSync(devPath))
-      return devPath
+    if (fs.existsSync(devPath)) return devPath
 
     try {
       const publishedPath = fileURLToPath(import.meta.resolve(publishedExport))
-      if (fs.existsSync(publishedPath))
-        return publishedPath
-    }
-    catch {}
+      if (fs.existsSync(publishedPath)) return publishedPath
+    } catch {}
 
     return null
   }
 
   private async buildExternalClientComponents(
-    manifest: Record<string, { id: string, filePath: string, bundlePath: string, exports: string[] }>,
+    manifest: {
+      [key: string]: { id: string; filePath: string; bundlePath: string; exports: string[] }
+    },
     clientModuleSpecifiers: Map<string, string>,
   ): Promise<void> {
-    for (const { componentId, devSourceSegments, publishedExport, exports } of EXTERNAL_CLIENT_COMPONENT_MANIFESTS) {
+    for (const {
+      componentId,
+      devSourceSegments,
+      publishedExport,
+      exports,
+    } of EXTERNAL_CLIENT_COMPONENT_MANIFESTS) {
       const sourcePath = this.resolveExternalClientSourcePath(devSourceSegments, publishedExport)
-      if (!sourcePath)
-        continue
+      if (sourcePath == null || sourcePath === '') continue
 
       try {
         const bundleName = `external_${sharedHashString(componentId)}`
@@ -1628,8 +1684,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
           bundlePath,
           exports: [...exports],
         }
-      }
-      catch (error) {
+      } catch (error) {
         console.warn(
           `[rari] SSR build failed for ${componentId}:`,
           error instanceof Error ? error.message : error,
@@ -1640,8 +1695,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
 
   private extractExportNames(code: string): string[] {
     const exports: string[] = []
-    if (/export\s+default\b/.test(code))
-      exports.push('default')
+    if (/export\s+default\b/.test(code)) exports.push('default')
     const namedExportRegex = /export\s+(?:async\s+)?(?:function|const|let|var|class)\s+(\w+)/g
     for (const m of code.matchAll(namedExportRegex)) {
       exports.push(m[1])
@@ -1654,8 +1708,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     try {
       const code = fs.readFileSync(filePath, 'utf-8')
       return this.isServerAction(code, filePath)
-    }
-    catch {
+    } catch {
       return false
     }
   }
@@ -1669,10 +1722,8 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     ]
 
     for (const name of exports) {
-      if (name === 'default')
-        lines.push('export default __rariActionMod.default;')
-      else
-        lines.push(`export const ${name} = __rariActionMod.${name};`)
+      if (name === 'default') lines.push('export default __rariActionMod.default;')
+      else lines.push(`export const ${name} = __rariActionMod.${name};`)
     }
 
     return `${lines.join('\n')}\n`
@@ -1706,19 +1757,17 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
 
     const ext = path.extname(inputPath)
     let loader: 'tsx' | 'jsx' | 'ts' | 'js'
-    if (ext === '.tsx')
-      loader = 'tsx'
-    else if (ext === '.ts')
-      loader = 'ts'
-    else if (ext === '.jsx')
-      loader = 'jsx'
-    else
-      loader = 'js'
+    if (ext === '.tsx') loader = 'tsx'
+    else if (ext === '.ts') loader = 'ts'
+    else if (ext === '.jsx') loader = 'jsx'
+    else loader = 'js'
 
     const virtualModuleId = `\0ssr-virtual:${inputPath}`
     const projectRoot = this.projectRoot
     const aliasRoot = aliasRootForPath(inputPath, projectRoot)
-    const buildContext = this
+    const generateServerActionReferenceModule = (filePath: string) =>
+      this.generateServerActionReferenceModule(filePath)
+    const isServerActionFile = (filePath: string) => this.isServerActionFile(filePath)
 
     const result = await build({
       input: virtualModuleId,
@@ -1749,26 +1798,28 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
         jsx: 'react-jsx',
         define: {
           'global': 'globalThis',
-          'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'production'),
+          'process.env.NODE_ENV': JSON.stringify(
+            process.env.NODE_ENV != null && process.env.NODE_ENV !== ''
+              ? process.env.NODE_ENV
+              : 'production',
+          ),
         },
       },
       plugins: [
         {
           name: 'ssr-client-virtual',
           resolveId(id) {
-            if (id === virtualModuleId)
-              return id
+            if (id === virtualModuleId) return id
 
             return null
           },
           load(id) {
-            if (id === virtualModuleId)
-              return { code: strippedCode, moduleType: loader }
+            if (id === virtualModuleId) return { code: strippedCode, moduleType: loader }
 
             if (id.startsWith('\0server-action-ref:')) {
               const filePath = id.slice('\0server-action-ref:'.length)
               return {
-                code: buildContext.generateServerActionReferenceModule(filePath),
+                code: generateServerActionReferenceModule(filePath),
                 moduleType: 'js',
               }
             }
@@ -1779,42 +1830,51 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
         {
           name: 'ssr-client-resolve',
           resolveId(id, importer) {
-            if (id.startsWith('\0server-action-ref:'))
-              return id
+            if (id.startsWith('\0server-action-ref:')) return id
 
             if (id.startsWith('.') || id.startsWith('/') || id.startsWith('@/')) {
               let resolved = id
               if (id.startsWith('@/')) {
                 resolved = path.join(aliasRoot, id.slice(2))
-              }
-              else if (importer === virtualModuleId) {
+              } else if (importer === virtualModuleId) {
                 resolved = path.resolve(path.dirname(inputPath), id)
-              }
-              else if (importer) {
+              } else if (importer != null && importer !== '') {
                 resolved = path.resolve(
                   path.dirname(
-                    importer
-                      .replace('\0ssr-virtual:', '')
-                      .replace('\0server-action-ref:', ''),
+                    importer.replace('\0ssr-virtual:', '').replace('\0server-action-ref:', ''),
                   ),
                   id,
                 )
               }
 
-              const found = resolveWithExtensions(resolved, ['.mjs', '.mts', '.ts', '.tsx', '.js', '.jsx'])
-                || resolveIndexFile(resolved, ['.mjs', '.mts', '.ts', '.tsx', '.js', '.jsx'])
+              const foundByExt = resolveWithExtensions(resolved, [
+                '.mjs',
+                '.mts',
+                '.ts',
+                '.tsx',
+                '.js',
+                '.jsx',
+              ])
+              const found =
+                foundByExt != null && foundByExt !== ''
+                  ? foundByExt
+                  : resolveIndexFile(resolved, ['.mjs', '.mts', '.ts', '.tsx', '.js', '.jsx'])
 
-              if (found && buildContext.isServerActionFile(found))
+              if (found != null && found !== '' && isServerActionFile(found))
                 return `\0server-action-ref:${path.resolve(found)}`
 
-              if (found && clientModuleSpecifiers) {
+              if (found != null && found !== '' && clientModuleSpecifiers != null) {
                 const resolvedAbs = path.resolve(found)
                 const specifier = clientModuleSpecifiers.get(resolvedAbs)
-                if (specifier && resolvedAbs !== path.resolve(inputPath))
+                if (
+                  specifier != null &&
+                  specifier !== '' &&
+                  resolvedAbs !== path.resolve(inputPath)
+                )
                   return { id: specifier, external: true }
               }
 
-              return found || null
+              return found != null && found !== '' ? found : null
             }
 
             return null
@@ -1835,10 +1895,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     outputPath: string,
   ): Promise<BuiltComponent> {
     const originalCode = await fs.promises.readFile(inputPath, 'utf-8')
-    const clientTransformedCode = this.transformClientImports(
-      originalCode,
-      inputPath,
-    )
+    const clientTransformedCode = this.transformClientImports(originalCode, inputPath)
     const isPage = this.isPageComponent(inputPath)
     const transformedCode = isPage
       ? this.transformComponentImportsToGlobal(clientTransformedCode)
@@ -1846,14 +1903,10 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
 
     const ext = path.extname(inputPath)
     let loader: 'tsx' | 'jsx' | 'ts' | 'js'
-    if (ext === '.tsx')
-      loader = 'tsx'
-    else if (ext === '.ts')
-      loader = 'ts'
-    else if (ext === '.jsx')
-      loader = 'jsx'
-    else
-      loader = 'js'
+    if (ext === '.tsx') loader = 'tsx'
+    else if (ext === '.ts') loader = 'ts'
+    else if (ext === '.jsx') loader = 'jsx'
+    else loader = 'js'
 
     const virtualModuleId = `\0virtual:${inputPath}`
     const cssModules: string[] = []
@@ -1885,7 +1938,11 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
         jsx: 'react',
         define: {
           'global': 'globalThis',
-          'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'production'),
+          'process.env.NODE_ENV': JSON.stringify(
+            process.env.NODE_ENV != null && process.env.NODE_ENV !== ''
+              ? process.env.NODE_ENV
+              : 'production',
+          ),
           ...this.options.define,
         },
       },
@@ -1899,12 +1956,10 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
       ),
     })
 
-    if (!result.output || result.output.length === 0)
-      throw new Error('No output generated from Rolldown')
+    if (result.output.length === 0) throw new Error('No output generated from Rolldown')
 
     const entryChunk = result.output.find(chunk => chunk.type === 'chunk' && chunk.isEntry)
-    if (!entryChunk || entryChunk.type !== 'chunk')
-      throw new Error('No entry chunk found in Rolldown output')
+    if (entryChunk?.type !== 'chunk') throw new Error('No entry chunk found in Rolldown output')
 
     let code = entryChunk.code
 
@@ -1925,16 +1980,17 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
 
     let match
 
-    const replacements: Array<{ original: string, replacement: string }> = []
+    const replacements: Array<{ original: string; replacement: string }> = []
     let hasClientComponents = false
 
-    const externalClientComponents = EXTERNAL_CLIENT_COMPONENT_MANIFESTS.map(entry => entry.componentId)
+    const externalClientComponents = EXTERNAL_CLIENT_COMPONENT_MANIFESTS.map(
+      entry => entry.componentId,
+    )
 
     CLIENT_IMPORT_REGEX.lastIndex = 0
-    while (true) {
+    for (;;) {
       match = CLIENT_IMPORT_REGEX.exec(code)
-      if (match === null)
-        break
+      if (match === null) break
 
       const [fullMatch, defaultImport, namedImports, importPath] = match
 
@@ -1943,8 +1999,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
 
       if (externalClientComponents.includes(importPath)) {
         isClientComponent = true
-      }
-      else {
+      } else {
         const resolvedPath = this.resolveImportPath(importPath, inputPath)
         if (this.isClientComponent(resolvedPath)) {
           isClientComponent = true
@@ -1963,20 +2018,21 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
   ${JSON.stringify(componentId)},
   "default"
 );`
-        }
-        else if (namedImports) {
+        } else if (namedImports) {
           const imports = namedImports.split(',').map(imp => imp.trim())
-          const registrations = imports.map((imp) => {
-            const [importName, alias] = imp.includes(' as ')
-              ? imp.split(' as ').map(s => s.trim())
-              : [imp, imp]
+          const registrations = imports
+            .map(imp => {
+              const [importName, alias] = imp.includes(' as ')
+                ? imp.split(' as ').map(s => s.trim())
+                : [imp, imp]
 
-            return `const ${alias} = registerClientReference(
+              return `const ${alias} = registerClientReference(
   null,
   ${JSON.stringify(componentId)},
   ${JSON.stringify(importName)}
 );`
-          }).join('\n')
+            })
+            .join('\n')
 
           replacement = registrations
         }
@@ -1997,7 +2053,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
 
   private resolveImportPath(importPath: string, importerPath: string): string {
     let resolvedPath = importPath
-    const aliases = this.options.alias || {}
+    const aliases = this.options.alias
 
     for (const [alias, replacement] of Object.entries(aliases)) {
       if (importPath.startsWith(`${alias}/`) || importPath === alias) {
@@ -2012,12 +2068,10 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
 
     const extensions = ['.tsx', '.jsx', '.ts', '.js']
     const withExt = resolveWithExtensions(resolvedPath, extensions)
-    if (withExt)
-      return withExt
+    if (withExt != null && withExt !== '') return withExt
 
     const indexFile = resolveIndexFile(resolvedPath, extensions)
-    if (indexFile)
-      return indexFile
+    if (indexFile != null && indexFile !== '') return indexFile
 
     return `${resolvedPath}.tsx`
   }
@@ -2051,16 +2105,12 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     if (this.isServerAction(code, filePath)) {
       this.serverActions.set(filePath, componentData)
       this.serverComponents.delete(filePath)
-    }
-    else {
+    } else {
       this.serverComponents.set(filePath, componentData)
       this.serverActions.delete(filePath)
     }
 
-    const relativeBundlePath = path.join(
-      this.options.rscDir,
-      `${componentId}.js`,
-    )
+    const relativeBundlePath = path.join(this.options.rscDir, `${componentId}.js`)
     const fullBundlePath = path.join(this.options.outDir, relativeBundlePath)
 
     const cached = this.buildCache.get(filePath)
@@ -2068,11 +2118,12 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     const fileTimestamp = fileStats.mtimeMs
 
     if (
-      cached
-      && cached.timestamp >= fileTimestamp
-      && JSON.stringify(cached.sourceDependencies) === JSON.stringify(sourceDependencies)
+      cached &&
+      cached.timestamp >= fileTimestamp &&
+      JSON.stringify(cached.sourceDependencies) === JSON.stringify(sourceDependencies)
     ) {
-      const storedComponent = this.serverActions.get(filePath) || this.serverComponents.get(filePath)
+      const storedComponent =
+        this.serverActions.get(filePath) ?? this.serverComponents.get(filePath)
       if (storedComponent && cached.bundledDependencies.length > 0)
         storedComponent.dependencies = cached.bundledDependencies
 
@@ -2088,13 +2139,10 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     const bundleDir = path.dirname(fullBundlePath)
     await fs.promises.mkdir(bundleDir, { recursive: true })
 
-    const built = await this.buildSingleComponent(
-      filePath,
-      fullBundlePath,
-    )
+    const built = await this.buildSingleComponent(filePath, fullBundlePath)
     const css = await this.writeComponentCssAsset(componentId, built.css)
 
-    const storedComponent = this.serverActions.get(filePath) || this.serverComponents.get(filePath)
+    const storedComponent = this.serverActions.get(filePath) ?? this.serverComponents.get(filePath)
     this.buildCache.set(filePath, {
       code: built.code,
       css,
@@ -2118,24 +2166,28 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     componentId: string,
     filePath: string,
     bundlePath: string,
-    css: string[] = [],
+    css: readonly string[] = [],
   ): Promise<void> {
-    const manifestPath = path.join(
-      this.options.outDir,
-      this.options.manifestPath,
-    )
+    const manifestPath = path.join(this.options.outDir, this.options.manifestPath)
 
     let manifest: ServerComponentManifest
 
     if (this.manifestCache) {
       manifest = this.manifestCache
-    }
-    else if (fs.existsSync(manifestPath)) {
+    } else if (fs.existsSync(manifestPath)) {
       const content = await fs.promises.readFile(manifestPath, 'utf-8')
-      manifest = JSON.parse(content)
-      this.manifestCache = manifest
-    }
-    else {
+      const parsed = parseJsonRecord(content)
+      if (parsed && isServerComponentManifestRecord(parsed)) {
+        manifest = parsed
+        this.manifestCache = manifest
+      } else {
+        manifest = {
+          components: {},
+          buildTime: new Date().toISOString(),
+        }
+        this.manifestCache = manifest
+      }
+    } else {
       manifest = {
         components: {},
         buildTime: new Date().toISOString(),
@@ -2143,7 +2195,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
       this.manifestCache = manifest
     }
 
-    const componentData = this.serverComponents.get(filePath) || this.serverActions.get(filePath)
+    const componentData = this.serverComponents.get(filePath) ?? this.serverActions.get(filePath)
     const fullBundlePath = path.join(this.options.outDir, bundlePath)
     const moduleSpecifier = pathToFileURL(path.resolve(this.projectRoot, fullBundlePath)).href
 
@@ -2159,15 +2211,14 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
         hasNodeImports: this.hasNodeImports(code, filePath),
         css,
       }
-    }
-    else {
+    } else {
       manifest.components[componentId] = {
         id: componentId,
         filePath,
         relativePath: path.relative(this.projectRoot, filePath),
         bundlePath,
         moduleSpecifier,
-        dependencies: componentData.dependencies,
+        dependencies: [...componentData.dependencies],
         hasNodeImports: componentData.hasNodeImports,
         css,
       }
@@ -2175,11 +2226,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
 
     manifest.buildTime = new Date().toISOString()
 
-    await fs.promises.writeFile(
-      manifestPath,
-      JSON.stringify(manifest),
-      'utf-8',
-    )
+    await fs.promises.writeFile(manifestPath, JSON.stringify(manifest), 'utf-8')
     await this.writeRouteCssEntries(manifest)
 
     this.manifestCache = manifest
@@ -2195,7 +2242,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
   }
 
   async getTransformedComponentCode(filePath: string): Promise<string> {
-    return await this.buildComponentCodeOnly(filePath)
+    return this.buildComponentCodeOnly(filePath)
   }
 }
 
@@ -2213,7 +2260,7 @@ interface ScannedFile {
 
 function collectScannedFiles(
   builder: ServerComponentBuilder,
-  dirs: string[],
+  dirs: readonly string[],
 ): ScannedFile[] {
   const files: ScannedFile[] = []
 
@@ -2223,8 +2270,7 @@ function collectScannedFiles(
       const code = fs.readFileSync(fullPath, 'utf-8')
       const analysis = builder.getModuleAnalysis(fullPath, code)
       files.push({ filePath: fullPath, cacheKey, code, analysis })
-    }
-    catch (error) {
+    } catch (error) {
       console.warn(
         `[server-build] Error reading ${fullPath}:`,
         error instanceof Error ? error.message : error,
@@ -2237,10 +2283,12 @@ function collectScannedFiles(
 
 export function hasComponentExport(code: string, analysis?: ModuleAnalysis): boolean {
   const moduleAnalysis = analysis ?? analyzeModuleSource(code)
-  return moduleAnalysis.hasComponentExport
-    || EXPORTED_FUNCTION_REGEX.test(code)
-    || EXPORTED_DEFAULT_ARROW_REGEX.test(code)
-    || EXPORTED_CONST_FUNCTION_REGEX.test(code)
+  return (
+    moduleAnalysis.hasComponentExport ||
+    EXPORTED_FUNCTION_REGEX.test(code) ||
+    EXPORTED_DEFAULT_ARROW_REGEX.test(code) ||
+    EXPORTED_CONST_FUNCTION_REGEX.test(code)
+  )
 }
 
 export function isEligibleServerComponent(
@@ -2251,28 +2299,30 @@ export function isEligibleServerComponent(
   cacheKey?: string,
 ): boolean {
   const fileName = path.basename(filePath)
-  if (SPECIAL_FILE_REGEX.test(fileName) || fileName.endsWith('.d.ts'))
-    return false
+  if (SPECIAL_FILE_REGEX.test(fileName) || fileName.endsWith('.d.ts')) return false
 
   const moduleAnalysis = analysis ?? builder.getModuleAnalysis(filePath, code)
 
-  if (moduleAnalysis.directives.hasUseClient)
-    return false
+  if (moduleAnalysis.directives.hasUseClient) return false
 
-  if (moduleAnalysis.directives.hasUseServer)
-    return true
+  if (moduleAnalysis.directives.hasUseServer) return true
 
-  if (builder.isOnlyImportedByClientComponents(filePath))
-    return false
+  if (builder.isOnlyImportedByClientComponents(filePath)) return false
 
-  return isServerComponentFromAnalysis(filePath, moduleAnalysis, builder.getHtmlOnlyImports(), cacheKey)
-    && hasComponentExport(code, moduleAnalysis)
+  return (
+    isServerComponentFromAnalysis(
+      filePath,
+      moduleAnalysis,
+      builder.getHtmlOnlyImports(),
+      cacheKey,
+    ) && hasComponentExport(code, moduleAnalysis)
+  )
 }
 
 export function scanDirectory(
   dir: string,
   builder: ServerComponentBuilder,
-  additionalDirs: string[] = [],
+  additionalDirs: readonly string[] = [],
 ): DirectoryScanResult {
   const dirs = normalizeScanDirs(dir, additionalDirs)
 
@@ -2298,9 +2348,7 @@ export function scanDirectory(
   return { serverComponentPaths, clientComponentPaths }
 }
 
-export function createServerBuildPlugin(
-  options: ServerBuildOptions = {},
-): Plugin {
+export function createServerBuildPlugin(options: ServerBuildOptions = {}): Plugin {
   let builder: ServerComponentBuilder | null = null
   let projectRoot: string
   let isDev = false
@@ -2313,23 +2361,29 @@ export function createServerBuildPlugin(
       projectRoot = config.root
       isDev = config.command === 'serve'
 
-      const excludeAliases = new Set(['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime', 'react-dom/client'])
+      const excludeAliases = new Set([
+        'react',
+        'react-dom',
+        'react/jsx-runtime',
+        'react/jsx-dev-runtime',
+        'react-dom/client',
+      ])
 
       const alias: Record<string, string> = {}
-      if (config.resolve?.alias) {
-        const aliasConfig = config.resolve.alias
-        if (Array.isArray(aliasConfig)) {
-          aliasConfig.forEach((entry) => {
-            if (typeof entry.find === 'string' && typeof entry.replacement === 'string' && !excludeAliases.has(entry.find))
-              alias[entry.find] = entry.replacement
-          })
-        }
-        else if (typeof aliasConfig === 'object') {
-          Object.entries(aliasConfig).forEach(([key, value]) => {
-            if (typeof value === 'string' && !excludeAliases.has(key))
-              alias[key] = value
-          })
-        }
+      const aliasConfig = config.resolve.alias
+      if (Array.isArray(aliasConfig)) {
+        aliasConfig.forEach(entry => {
+          if (
+            typeof entry.find === 'string' &&
+            typeof entry.replacement === 'string' &&
+            !excludeAliases.has(entry.find)
+          )
+            alias[entry.find] = entry.replacement
+        })
+      } else if (typeof aliasConfig === 'object') {
+        Object.entries(aliasConfig).forEach(([key, value]) => {
+          if (typeof value === 'string' && !excludeAliases.has(key)) alias[key] = value
+        })
       }
 
       resolvedAliases = alias
@@ -2337,8 +2391,7 @@ export function createServerBuildPlugin(
     },
 
     buildStart() {
-      if (!builder)
-        return
+      if (!builder) return
 
       const isProduction = process.env.NODE_ENV === 'production'
       const cacheDirs = [
@@ -2346,22 +2399,18 @@ export function createServerBuildPlugin(
         path.join(projectRoot, 'dist', 'cache', 'images'),
       ]
 
-      if (isProduction)
-        cacheDirs.push('/tmp/rari-og-cache', '/tmp/rari-image-cache')
+      if (isProduction) cacheDirs.push('/tmp/rari-og-cache', '/tmp/rari-image-cache')
 
       for (const dir of cacheDirs) {
         try {
-          if (fs.existsSync(dir))
-            fs.rmSync(dir, { recursive: true, force: true })
-        }
-        catch (error) {
+          if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true })
+        } catch (error) {
           console.warn(`[rari] Failed to clear cache ${dir}:`, error)
         }
       }
 
       const srcDir = path.join(projectRoot, 'src')
-      if (fs.existsSync(srcDir))
-        scanDirectory(srcDir, builder, Object.values(resolvedAliases))
+      if (fs.existsSync(srcDir)) scanDirectory(srcDir, builder, Object.values(resolvedAliases))
     },
 
     async closeBundle() {
@@ -2371,8 +2420,7 @@ export function createServerBuildPlugin(
 
         try {
           await builder.buildMdxRegistry(options.mdx)
-        }
-        catch (error) {
+        } catch (error) {
           console.warn('[rari] Failed to build MDX component registry:', error)
         }
 
@@ -2382,8 +2430,7 @@ export function createServerBuildPlugin(
             appDir: path.join(projectRoot, 'src', 'app'),
             outDir: path.join(projectRoot, 'dist'),
           })
-        }
-        catch (error) {
+        } catch (error) {
           console.warn('[rari] Failed to generate robots.txt:', error)
         }
 
@@ -2394,8 +2441,7 @@ export function createServerBuildPlugin(
             outDir: path.join(projectRoot, 'dist'),
             aliases: resolvedAliases,
           })
-        }
-        catch (error) {
+        } catch (error) {
           console.warn('[rari] Failed to generate sitemap:', error)
         }
 
@@ -2406,20 +2452,17 @@ export function createServerBuildPlugin(
             outDir: path.join(projectRoot, 'dist'),
             aliases: resolvedAliases,
           })
-        }
-        catch (error) {
+        } catch (error) {
           console.warn('[rari] Failed to generate feed:', error)
         }
       }
     },
 
     async handleHotUpdate({ file }) {
-      if (!builder || !isDev)
-        return
+      if (!builder || !isDev) return
 
       const relativePath = path.relative(projectRoot, file).replace(BACKSLASH_REGEX, '/')
-      if (!relativePath.startsWith('src/') || !TSX_EXT_REGEX.test(relativePath))
-        return
+      if (!relativePath.startsWith('src/') || !TSX_EXT_REGEX.test(relativePath)) return
 
       try {
         const content = await fs.promises.readFile(file, 'utf-8')
@@ -2428,18 +2471,15 @@ export function createServerBuildPlugin(
         const eligible = isEligibleServerComponent(file, content, builder, analysis)
 
         if (!eligible) {
-          if (isTracked)
-            builder.removeComponent(file)
+          if (isTracked) builder.removeComponent(file)
 
           return
         }
 
-        if (!isTracked)
-          builder.addServerComponent(file, content, analysis)
+        if (!isTracked) builder.addServerComponent(file, content, analysis)
 
         await builder.rebuildComponent(file)
-      }
-      catch (error) {
+      } catch (error) {
         console.error(`[rari] Build: Error rebuilding ${relativePath}:`, error)
       }
     },

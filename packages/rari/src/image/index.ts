@@ -12,7 +12,10 @@ export {
 export type { ImageProps, StaticImageData } from './image'
 
 const isServer = typeof window === 'undefined'
-const Image: any = ImageComponent
+const Image = ImageComponent as typeof ImageComponent & {
+  $$typeof?: symbol
+  $$id?: string
+}
 
 if (isServer) {
   Image.$$typeof = Symbol.for('react.client.reference')

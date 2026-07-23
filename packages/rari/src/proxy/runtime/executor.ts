@@ -1,7 +1,15 @@
 import type { RariResponse } from '../http/response'
-import type { ProxyConfig, ProxyFunction, ProxyModule, ProxyResult } from '../http/types'
+import type { ProxyConfig, ProxyFunction, ProxyResult } from '@/proxy/http/types'
 import { RariRequest } from '../http/request'
 import { shouldRunProxy } from './matcher'
+import {
+  getProxyConfig,
+  getProxyFunction,
+  getResponseCookies,
+  hasGetSetCookie,
+  loadProxyModule,
+  mergeHeaderValue,
+} from './module-utils'
 
 export class ProxyExecutor {
   private proxyFn: ProxyFunction | null = null
@@ -18,26 +26,24 @@ export class ProxyExecutor {
 
     try {
       await this.initializationPromise
-    }
-    finally {
+    } finally {
       this.initializationPromise = null
     }
   }
 
   private async doLoadProxy(proxyModulePath: string): Promise<void> {
     try {
-      const module = await import(proxyModulePath) as ProxyModule
+      const module = await loadProxyModule(proxyModulePath)
 
-      this.proxyFn = module.proxy || module.default || null
+      this.proxyFn = getProxyFunction(module)
 
       if (!this.proxyFn)
         throw new Error('Proxy module must export a "proxy" function or default export')
 
-      this.config = module.config || null
+      this.config = getProxyConfig(module)
 
       this.initialized = true
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[rari] Proxy: Failed to load proxy:', error)
       throw error
     }
@@ -51,23 +57,24 @@ export class ProxyExecutor {
     return this.proxyFn
   }
 
-  async execute(request: Request, options?: {
-    ip?: string
-    geo?: {
-      city?: string
-      country?: string
-      region?: string
-      latitude?: string
-      longitude?: string
-    }
-  }): Promise<ProxyResult> {
-    if (!this.proxyFn)
-      return { continue: true }
+  async execute(
+    request: Request,
+    options?: Readonly<{
+      readonly ip?: string
+      readonly geo?: {
+        readonly city?: string
+        readonly country?: string
+        readonly region?: string
+        readonly latitude?: string
+        readonly longitude?: string
+      }
+    }>,
+  ): Promise<ProxyResult> {
+    if (!this.proxyFn) return { continue: true }
 
     const rariRequest = RariRequest.fromRequest(request, options)
 
-    if (!shouldRunProxy(rariRequest, this.config || undefined))
-      return { continue: true }
+    if (!shouldRunProxy(rariRequest, this.config ?? undefined)) return { continue: true }
 
     try {
       const waitUntilPromises: Promise<unknown>[] = []
@@ -80,29 +87,25 @@ export class ProxyExecutor {
       const result = await this.proxyFn(rariRequest, event)
 
       if (waitUntilPromises.length > 0) {
-        Promise.allSettled(waitUntilPromises).catch((error) => {
+        Promise.allSettled(waitUntilPromises).catch((error: unknown) => {
           console.error('[rari] Proxy: waitUntil promise failed:', error)
         })
       }
 
-      if (!result)
-        return { continue: true }
+      if (!result) return { continue: true }
 
       return this.convertResponse(result)
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[rari] Proxy: Proxy execution failed:', error)
       return { continue: true }
     }
   }
 
-  private convertResponse(
-    response: Response | RariResponse,
-  ): ProxyResult {
+  private convertResponse(response: Response | RariResponse): ProxyResult {
     const continueHeader = response.headers.get('x-rari-proxy-continue')
     const rewriteHeader = response.headers.get('x-rari-proxy-rewrite')
 
-    if (rewriteHeader) {
+    if (rewriteHeader != null && rewriteHeader !== '') {
       return {
         continue: false,
         rewrite: rewriteHeader,
@@ -110,7 +113,7 @@ export class ProxyExecutor {
     }
 
     const location = response.headers.get('location')
-    if (location && response.status >= 300 && response.status < 400) {
+    if (location != null && location !== '' && response.status >= 300 && response.status < 400) {
       return {
         continue: false,
         redirect: {
@@ -124,49 +127,30 @@ export class ProxyExecutor {
       const requestHeaders: Record<string, string | string[]> = {}
       const responseHeaders: Record<string, string | string[]> = {}
 
-      const merge = (
-        target: Record<string, string | string[]>,
-        key: string,
-        value: string,
-      ) => {
-        const existing = target[key]
-        if (existing === undefined)
-          target[key] = value
-        else if (Array.isArray(existing))
-          existing.push(value)
-        else
-          target[key] = [existing, value]
-      }
-
       const setCookiesFromForEach: string[] = []
-      const hasGetSetCookie = typeof response.headers.getSetCookie === 'function'
+      const hasSetCookie = hasGetSetCookie(response.headers)
 
       response.headers.forEach((value, key) => {
         if (key.toLowerCase() === 'set-cookie') {
-          if (!hasGetSetCookie)
-            setCookiesFromForEach.push(value)
+          if (!hasSetCookie) setCookiesFromForEach.push(value)
 
           return
         }
         if (key.startsWith('x-rari-proxy-request-')) {
           const headerName = key.replace('x-rari-proxy-request-', '')
-          merge(requestHeaders, headerName, value)
-        }
-        else if (!key.startsWith('x-rari-proxy-')) {
-          merge(responseHeaders, key, value)
+          mergeHeaderValue(requestHeaders, headerName, value)
+        } else if (!key.startsWith('x-rari-proxy-')) {
+          mergeHeaderValue(responseHeaders, key, value)
         }
       })
 
-      const setCookies = hasGetSetCookie
-        ? response.headers.getSetCookie()
-        : setCookiesFromForEach
-      for (const value of setCookies)
-        merge(responseHeaders, 'set-cookie', value)
+      const setCookies = hasSetCookie ? response.headers.getSetCookie() : setCookiesFromForEach
+      for (const value of setCookies) mergeHeaderValue(responseHeaders, 'set-cookie', value)
 
-      const cookies = 'cookies' in response ? response.cookies : undefined
-      if (cookies && typeof cookies.toSetCookieHeaders === 'function') {
+      const cookies = getResponseCookies(response)
+      if (cookies) {
         for (const value of cookies.toSetCookieHeaders())
-          merge(responseHeaders, 'set-cookie', value)
+          mergeHeaderValue(responseHeaders, 'set-cookie', value)
       }
 
       return {
@@ -188,8 +172,14 @@ export class ProxyExecutor {
     this.initialized = false
     this.initializationPromise = null
 
-    if (typeof require !== 'undefined' && require.cache)
-      delete require.cache[require.resolve(proxyModulePath)]
+    if (typeof require !== 'undefined') {
+      const nodeRequire = require as {
+        cache?: Record<string, unknown>
+        resolve: (id: string) => string
+      }
+      const cache = nodeRequire.cache
+      if (cache != null) delete cache[nodeRequire.resolve(proxyModulePath)]
+    }
 
     await this.loadProxy(proxyModulePath)
   }
@@ -198,8 +188,7 @@ export class ProxyExecutor {
 let globalExecutor: ProxyExecutor | null = null
 
 export function getProxyExecutor(): ProxyExecutor {
-  if (!globalExecutor)
-    globalExecutor = new ProxyExecutor()
+  globalExecutor ??= new ProxyExecutor()
 
   return globalExecutor
 }

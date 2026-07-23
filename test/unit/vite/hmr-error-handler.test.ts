@@ -29,8 +29,7 @@ describe('HMRErrorHandler', () => {
     it('should accept custom maxErrors', () => {
       const customHandler = new HMRErrorHandler({ maxErrors: 10 })
 
-      for (let i = 0; i < 9; i++)
-        customHandler.recordError(new Error(`Error ${i}`))
+      for (let i = 0; i < 9; i++) customHandler.recordError(new Error(`Error ${i}`))
 
       expect(customHandler.hasReachedMaxErrors()).toBe(false)
 
@@ -95,19 +94,15 @@ describe('HMRErrorHandler', () => {
     it('should log when max errors reached', () => {
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
-      for (let i = 0; i < 5; i++)
-        handler.recordError(new Error(`Error ${i}`))
+      for (let i = 0; i < 5; i++) handler.recordError(new Error(`Error ${i}`))
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Maximum error count'),
-      )
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Maximum error count'))
 
       consoleErrorSpy.mockRestore()
     })
 
     it('should handle multiple errors in sequence', () => {
-      for (let i = 0; i < 3; i++)
-        handler.recordError(new Error(`Error ${i}`))
+      for (let i = 0; i < 3; i++) handler.recordError(new Error(`Error ${i}`))
 
       expect(handler.getErrorCount()).toBe(3)
       expect(handler.hasReachedMaxErrors()).toBe(false)
@@ -196,15 +191,13 @@ describe('HMRErrorHandler', () => {
     })
 
     it('should return true when max errors reached', () => {
-      for (let i = 0; i < 5; i++)
-        handler.recordError(new Error(`Error ${i}`))
+      for (let i = 0; i < 5; i++) handler.recordError(new Error(`Error ${i}`))
 
       expect(handler.hasReachedMaxErrors()).toBe(true)
     })
 
     it('should return false after reset', () => {
-      for (let i = 0; i < 5; i++)
-        handler.recordError(new Error(`Error ${i}`))
+      for (let i = 0; i < 5; i++) handler.recordError(new Error(`Error ${i}`))
 
       handler.reset()
 
@@ -330,8 +323,7 @@ describe('HMRErrorHandler', () => {
     it('should handle very large maxErrors', () => {
       const largeHandler = new HMRErrorHandler({ maxErrors: 1000000 })
 
-      for (let i = 0; i < 100; i++)
-        largeHandler.recordError(new Error(`Error ${i}`))
+      for (let i = 0; i < 100; i++) largeHandler.recordError(new Error(`Error ${i}`))
 
       expect(largeHandler.hasReachedMaxErrors()).toBe(false)
       expect(largeHandler.getErrorCount()).toBe(100)

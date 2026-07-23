@@ -1,4 +1,5 @@
 import type { LayoutProps, Metadata } from 'rari'
+import type { CSSProperties } from 'react'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { cwd } from 'node:process'
@@ -9,12 +10,16 @@ import Sidebar from '@/components/Sidebar'
 function getRariVersion(): string {
   try {
     const pkgPath = join(cwd(), 'node_modules', 'rari', 'package.json')
-    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'))
-    return pkg.version || '0.0.0'
-  }
-  catch {
+    const parsed: unknown = JSON.parse(readFileSync(pkgPath, 'utf-8'))
+    if (typeof parsed === 'object' && parsed !== null) {
+      const version: unknown = Reflect.get(parsed, 'version')
+      if (typeof version === 'string' && version !== '') return version
+    }
+  } catch {
     return '0.0.0'
   }
+
+  return '0.0.0'
 }
 
 const RARI_VERSION = getRariVersion()
@@ -22,7 +27,11 @@ const RARI_VERSION = getRariVersion()
 export default function RootLayout({ children, pathname }: LayoutProps) {
   return (
     <Providers pathname={pathname}>
-      <div className="min-h-screen bg-chrome text-fg-body font-sans overflow-x-hidden" style={{ '--sidebar-width': 'calc(8rem)' } as React.CSSProperties}>
+      <div
+        className="min-h-screen bg-chrome text-fg-body font-sans overflow-x-hidden"
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- CSS custom property
+        style={{ '--sidebar-width': 'calc(8rem)' } as CSSProperties}
+      >
         <div className="flex min-h-screen">
           <Sidebar version={RARI_VERSION} />
           <div className="flex-1 flex flex-col min-h-screen min-w-0 gap-0.5 md:pl-0.5 md:pr-0.5">
@@ -46,9 +55,7 @@ export const metadata: Metadata = {
       { url: '/favicon.svg', type: 'image/svg+xml', sizes: 'any' },
       { url: '/favicon.ico', sizes: '32x32' },
     ],
-    apple: [
-      { url: '/apple-touch-icon.png', sizes: '180x180' },
-    ],
+    apple: [{ url: '/apple-touch-icon.png', sizes: '180x180' }],
   },
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#e8ecf1' },

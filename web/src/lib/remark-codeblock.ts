@@ -7,8 +7,14 @@ const ESCAPED_DOLLAR_REGEX = /\\\$/g
 const PRE_STYLE_REGEX = /<pre([^>]*) style="[^"]*"/g
 
 interface Position {
-  start: { offset: number, line: number, column: number }
-  end: { offset: number, line: number, column: number }
+  start: { offset: number; line: number; column: number }
+  end: { offset: number; line: number; column: number }
+}
+
+interface ASTAttribute {
+  type: string
+  name: string
+  value?: string
 }
 
 interface ASTNode {
@@ -16,55 +22,57 @@ interface ASTNode {
   name?: string
   value?: string
   children?: ASTNode[]
-  attributes?: any[]
+  attributes?: ASTAttribute[]
   position?: Position
-  data?: any
+  data?: unknown
 }
 
 interface VFile {
-  value: string | Uint8Array
+  readonly value: string | Uint8Array
 }
 
 interface Highlighter {
-  codeToHtml: (
+  readonly codeToHtml: (
     code: string,
-    options: {
-      lang: string
-      themes: { light: string, dark: string }
-      defaultColor: false
-    },
+    options: Readonly<{
+      readonly lang: string
+      readonly themes: { readonly light: string; readonly dark: string }
+      readonly defaultColor: false
+    }>,
   ) => string
 }
 
-export function remarkCodeBlock(options: {
-  highlighter: Highlighter
-  themes: { light: string, dark: string }
-}) {
+export function remarkCodeBlock(
+  options: Readonly<{
+    readonly highlighter: Highlighter
+    readonly themes: { readonly light: string; readonly dark: string }
+  }>,
+) {
   const { highlighter, themes } = options
 
+  // oxlint-disable-next-line typescript/prefer-readonly-parameter-types -- tree is mutated in place (attributes are pushed onto matched nodes)
   return (tree: ASTNode, file: VFile) => {
+    // oxlint-disable-next-line typescript/prefer-readonly-parameter-types -- node is mutated in place
     visit(tree, (node: ASTNode) => {
-      if (node.type !== 'mdxJsxFlowElement' && node.type !== 'mdxJsxTextElement')
-        return
-      if (node.name !== 'CodeBlock')
-        return
+      if (node.type !== 'mdxJsxFlowElement' && node.type !== 'mdxJsxTextElement') return
+      if (node.name !== 'CodeBlock') return
 
       let code = ''
 
-      function extractText(children: ASTNode[]): string {
+      // oxlint-disable-next-line typescript/prefer-readonly-parameter-types -- ASTNode is a mutable AST type
+      function extractText(children: readonly ASTNode[]): string {
         let text = ''
         for (const child of children) {
           if (child.type === 'text') {
             text += child.value
-          }
-          else if (child.type === 'mdxFlowExpression' || child.type === 'mdxTextExpression') {
-            if (child.value && child.position && file.value) {
+          } else if (child.type === 'mdxFlowExpression' || child.type === 'mdxTextExpression') {
+            if (child.value != null && child.value !== '' && child.position != null) {
               const sourceText = String(file.value)
               const start = child.position.start.offset
               const end = child.position.end.offset
               const originalText = sourceText.substring(start, end)
 
-              const match = originalText.match(BACKTICK_REGEX)
+              const match = BACKTICK_REGEX.exec(originalText)
               if (match) {
                 let extracted = match[1]
 
@@ -75,8 +83,7 @@ export function remarkCodeBlock(options: {
                 text += extracted
               }
             }
-          }
-          else if (child.children) {
+          } else if (child.children) {
             text += extractText(child.children)
           }
         }
@@ -84,15 +91,14 @@ export function remarkCodeBlock(options: {
         return text
       }
 
-      if (node.children && node.children.length > 0)
-        code = extractText(node.children)
-      if (!code.trim())
-        return
+      if (node.children && node.children.length > 0) code = extractText(node.children)
+      if (!code.trim()) return
 
       const languageProp = node.attributes?.find(
-        (attr: { type: string, name: string, value?: string }) => attr.type === 'mdxJsxAttribute' && attr.name === 'language',
+        attr => attr.type === 'mdxJsxAttribute' && attr.name === 'language',
       )
-      const language = languageProp?.value || 'typescript'
+      const language =
+        languageProp?.value != null && languageProp.value !== '' ? languageProp.value : 'typescript'
 
       try {
         let highlightedHtml = highlighter.codeToHtml(code.trim(), {
@@ -101,15 +107,13 @@ export function remarkCodeBlock(options: {
           defaultColor: false,
         })
         highlightedHtml = highlightedHtml.replace(PRE_STYLE_REGEX, '<pre$1')
-        if (!node.attributes)
-          node.attributes = []
+        node.attributes ??= []
         node.attributes.push({
           type: 'mdxJsxAttribute',
           name: 'highlightedHtml',
           value: highlightedHtml,
         })
-      }
-      catch (err) {
+      } catch (err) {
         console.error('Failed to highlight code in CodeBlock:', err)
       }
     })

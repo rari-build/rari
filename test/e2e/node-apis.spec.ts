@@ -5,13 +5,16 @@ test.describe('Node APIs', () => {
     const response = await request.get('/api/node-apis')
     expect(response.status()).toBe(200)
 
-    const data = await response.json()
-    expect(data.ok, `failed probes: ${JSON.stringify(data.failed)}`).toBe(true)
-    expect(data.failed).toEqual([])
-
-    expect(data.probes.process.cwd).toBe(true)
-    expect(data.probes.fs.readPackageName).toBe(true)
-    expect(data.probes.crypto.sha256).toBe(true)
-    expect(data.probes.asyncHooks.asyncLocalStorage).toBe(true)
+    const data: unknown = await response.json()
+    expect(data).toMatchObject({
+      ok: true,
+      failed: [],
+      probes: {
+        process: { cwd: true },
+        fs: { readPackageName: true },
+        crypto: { sha256: true },
+        asyncHooks: { asyncLocalStorage: true },
+      },
+    })
   })
 })

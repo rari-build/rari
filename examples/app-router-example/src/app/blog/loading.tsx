@@ -8,7 +8,10 @@ export default function BlogLoading() {
 
       <div className="space-y-4">
         {[1, 2, 3, 4].map(i => (
-          <div key={i} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+          <div
+            key={i}
+            className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow"
+          >
             <div className="flex items-start gap-4">
               <div className="shrink-0 w-24 h-24 bg-gray-200 rounded-lg animate-pulse" />
               <div className="flex-1 space-y-3">

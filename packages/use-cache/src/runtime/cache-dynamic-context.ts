@@ -18,7 +18,7 @@ export function resetUseCacheDynamicContextForTests(): void {
   rari.useCacheDynamicDepth = 0
 }
 
-export function runWithUseCacheDynamicContext<T>(fn: () => T | Promise<T>): Promise<T> {
+export async function runWithUseCacheDynamicContext<T>(fn: () => T | Promise<T>): Promise<T> {
   markUseCacheDynamicContext()
   return Promise.resolve(fn())
 }

@@ -1,6 +1,16 @@
 import type { AppRouteManifest, RouteSegment, TemplateEntry } from '@rari/router/build/types'
-import { createRouteInfo, extractPathname, findLayoutChain, findTemplateChain, isExternalUrl, matchRouteParams, normalizePath, parseRoutePath } from '@rari/router/navigation/match'
+import {
+  createRouteInfo,
+  extractPathname,
+  findLayoutChain,
+  findTemplateChain,
+  isExternalUrl,
+  matchRouteParams,
+  normalizePath,
+  parseRoutePath,
+} from '@rari/router/navigation/match'
 import { afterEach, beforeEach, describe, expect, it } from 'vite-plus/test'
+import { castMock } from '../../helpers/mock-cast'
 
 describe('parseRoutePath', () => {
   it('should parse a simple path', () => {
@@ -57,17 +67,13 @@ describe('normalizePath', () => {
 
 describe('matchRouteParams', () => {
   it('should match static routes', () => {
-    const segments: RouteSegment[] = [
-      { type: 'static', value: 'about' },
-    ]
+    const segments: RouteSegment[] = [{ type: 'static', value: 'about' }]
     const params = matchRouteParams('/about', segments, '/about')
     expect(params).toEqual({})
   })
 
   it('should return null for non-matching static routes', () => {
-    const segments: RouteSegment[] = [
-      { type: 'static', value: 'about' },
-    ]
+    const segments: RouteSegment[] = [{ type: 'static', value: 'about' }]
     const params = matchRouteParams('/about', segments, '/contact')
     expect(params).toBeNull()
   })
@@ -155,28 +161,26 @@ describe('matchRouteParams', () => {
   })
 
   it('should return null when path is too long', () => {
-    const segments: RouteSegment[] = [
-      { type: 'static', value: 'about' },
-    ]
+    const segments: RouteSegment[] = [{ type: 'static', value: 'about' }]
     const params = matchRouteParams('/about', segments, '/about/extra')
     expect(params).toBeNull()
   })
 })
 
 describe('isExternalUrl', () => {
-  let originalWindow: any
+  let originalWindow: (Window & typeof globalThis) | undefined
 
   beforeEach(() => {
     originalWindow = globalThis.window
-    globalThis.window = {
+    globalThis.window = castMock<Window & typeof globalThis>({
       location: {
         origin: 'https://mysite.com',
       },
-    } as any
+    })
   })
 
   afterEach(() => {
-    globalThis.window = originalWindow
+    globalThis.window = originalWindow!
   })
 
   it('should identify external URLs', () => {
@@ -206,7 +210,7 @@ describe('isExternalUrl', () => {
   })
 
   it('should handle error when window is not available', () => {
-    delete (globalThis as any).window
+    delete (globalThis as { window?: unknown }).window
 
     expect(isExternalUrl('https://example.com')).toBe(false)
   })
@@ -216,9 +220,7 @@ describe('findLayoutChain', () => {
   it('should find layouts for root path', () => {
     const manifest: AppRouteManifest = {
       routes: [],
-      layouts: [
-        { path: '/', filePath: '/app/layout.tsx' },
-      ],
+      layouts: [{ path: '/', filePath: '/app/layout.tsx' }],
       loading: [],
       errors: [],
       notFound: [],
@@ -321,9 +323,7 @@ describe('findLayoutChain', () => {
   it('should invalidate cache when manifest changes', () => {
     const manifest1: AppRouteManifest = {
       routes: [],
-      layouts: [
-        { path: '/', filePath: '/app/layout.tsx' },
-      ],
+      layouts: [{ path: '/', filePath: '/app/layout.tsx' }],
       loading: [],
       errors: [],
       notFound: [],
@@ -369,9 +369,7 @@ describe('createRouteInfo', () => {
           isDynamic: false,
         },
       ],
-      layouts: [
-        { path: '/', filePath: '/app/layout.tsx' },
-      ],
+      layouts: [{ path: '/', filePath: '/app/layout.tsx' }],
       loading: [],
       errors: [],
       notFound: [],
@@ -403,9 +401,7 @@ describe('createRouteInfo', () => {
           isDynamic: true,
         },
       ],
-      layouts: [
-        { path: '/', filePath: '/app/layout.tsx' },
-      ],
+      layouts: [{ path: '/', filePath: '/app/layout.tsx' }],
       loading: [],
       errors: [],
       notFound: [],
@@ -555,19 +551,19 @@ describe('createRouteInfo', () => {
 })
 
 describe('extractPathname', () => {
-  let originalWindow: any
+  let originalWindow: (Window & typeof globalThis) | undefined
 
   beforeEach(() => {
     originalWindow = globalThis.window
-    globalThis.window = {
+    globalThis.window = castMock<Window & typeof globalThis>({
       location: {
         origin: 'https://example.com',
       },
-    } as any
+    })
   })
 
   afterEach(() => {
-    globalThis.window = originalWindow
+    globalThis.window = originalWindow!
   })
 
   it('should extract pathname from full URL', () => {
@@ -596,7 +592,7 @@ describe('extractPathname', () => {
   })
 
   it('should handle error when window.location throws', () => {
-    delete (globalThis as any).window
+    delete (globalThis as { window?: unknown }).window
 
     const result = extractPathname('https://example.com/test')
     expect(result).toBe('https://example.com/test')
@@ -719,6 +715,7 @@ describe('findLayoutChain with additionalPaths', () => {
   })
 })
 
+// oxlint-disable-next-line typescript/prefer-readonly-parameter-types -- test helper spreads into a fresh mutable manifest
 function manifestWithTemplates(overrides: Partial<AppRouteManifest> = {}): AppRouteManifest {
   return {
     routes: [],
@@ -799,10 +796,7 @@ describe('findTemplateChain', () => {
     const chain = findTemplateChain('/pricing', m)
 
     expect(chain).toHaveLength(2)
-    expect(chain.map(t => t.filePath)).toEqual([
-      'pricing/template.tsx',
-      '(_public)/template.tsx',
-    ])
+    expect(chain.map(t => t.filePath)).toEqual(['pricing/template.tsx', '(_public)/template.tsx'])
   })
 
   it('caches results per manifest', () => {

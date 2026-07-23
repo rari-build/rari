@@ -15,9 +15,9 @@ import { remarkCodeBlock } from '@/lib/remark-codeblock'
 import { getHighlighter, SHIKI_THEMES } from '@/lib/shiki'
 
 interface MdxRendererProps {
-  filePath: string
-  className?: string
-  pathname?: string
+  readonly filePath: string
+  readonly className?: string
+  readonly pathname?: string
 }
 
 function findContentFile(filePath: string): string | null {
@@ -29,20 +29,26 @@ function findContentFile(filePath: string): string | null {
   for (const path of searchPaths) {
     try {
       return readFileSync(path, 'utf-8')
-    }
-    catch {}
+    } catch {}
   }
 
   return null
 }
 
-function PageHeaderWithFilePath({ filePath, blogMetadata, ...props }: ComponentProps<typeof PageHeader> & { filePath: string, blogMetadata?: BlogMetadata }) {
+function PageHeaderWithFilePath({
+  filePath,
+  blogMetadata,
+  ...props
+}: ComponentProps<typeof PageHeader> &
+  Readonly<Readonly<{ readonly filePath: string; readonly blogMetadata?: BlogMetadata }>>) {
   return <PageHeader {...blogMetadata} {...props} filePath={filePath} />
 }
 
 function createMdxComponents(filePath: string, blogMetadata?: BlogMetadata) {
   return {
-    PageHeader: (props: any) => <PageHeaderWithFilePath {...props} filePath={filePath} blogMetadata={blogMetadata} />, // oxlint-disable-line react/component-hook-factories
+    PageHeader: (props: any) => (
+      <PageHeaderWithFilePath {...props} filePath={filePath} blogMetadata={blogMetadata} />
+    ), // oxlint-disable-line react/component-hook-factories
     h2: (props: any) => <Heading level={2} {...props} />,
     h3: (props: any) => <Heading level={3} {...props} />,
     h4: (props: any) => <Heading level={4} {...props} />,
@@ -57,18 +63,14 @@ export default async function MdxRenderer({
   pathname,
 }: MdxRendererProps) {
   const content = findContentFile(filePath)
-  if (!content)
-    return <NotFoundPage />
+  if (content == null || content === '') return <NotFoundPage />
 
   // eslint-disable-next-line react/error-boundaries
   try {
     const highlighter = await getHighlighter()
     const remarkPlugins: any[] = [
       remarkGfm,
-      [
-        remarkCodeBlock,
-        { highlighter, themes: SHIKI_THEMES },
-      ],
+      [remarkCodeBlock, { highlighter, themes: SHIKI_THEMES }],
     ]
 
     const isBlogPost = filePath.startsWith('blog/')
@@ -90,12 +92,11 @@ export default async function MdxRenderer({
           overflowWrap: 'break-word',
         }}
       >
-        {pathname && <Breadcrumbs pathname={pathname} />}
+        {pathname != null && pathname !== '' && <Breadcrumbs pathname={pathname} />}
         <MDXContent />
       </div>
     )
-  }
-  catch (error) {
+  } catch (error) {
     console.error('Error rendering MDX:', error)
     throw error
   }

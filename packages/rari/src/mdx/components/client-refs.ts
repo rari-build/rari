@@ -3,21 +3,22 @@ import { getClientComponents } from '@/runtime/shared/rari-global'
 import { EXTENSION_REGEX } from '@/shared/regex-constants'
 
 interface MDXClientComponentConfig {
-  component: any
-  id: string
-  exportName?: string
+  readonly component: unknown
+  readonly id: string
+  readonly exportName?: string
 }
 
 export function createMDXClientReference(
-  component: any,
+  component: unknown,
   id: string,
   exportName: string = 'default',
-): any {
+) {
   const key = `${id}#${exportName}`
 
   if (typeof globalThis !== 'undefined') {
     const clientComponents = getClientComponents()
-    const componentId = id.replace(EXTENSION_REGEX, '').split('/').pop() || exportName
+    const pathSegment = id.replace(EXTENSION_REGEX, '').split('/').pop()
+    const componentId = pathSegment != null && pathSegment !== '' ? pathSegment : exportName
 
     const componentEntry = {
       id: exportName === 'default' ? componentId : exportName,
@@ -34,8 +35,8 @@ export function createMDXClientReference(
 
   function clientProxy(): never {
     throw new Error(
-      `Attempted to call ${exportName}() from the server but ${exportName} is on the client. `
-      + `It's not possible to invoke a client function from the server, it can only be rendered as a Component or passed to props of a Client Component.`,
+      `Attempted to call ${exportName}() from the server but ${exportName} is on the client. ` +
+        `It's not possible to invoke a client function from the server, it can only be rendered as a Component or passed to props of a Client Component.`,
     )
   }
 
@@ -43,7 +44,7 @@ export function createMDXClientReference(
 }
 
 export function createMDXClientReferences(
-  components: Record<string, MDXClientComponentConfig>,
+  components: Readonly<{ readonly [key: string]: MDXClientComponentConfig }>,
 ): Record<string, any> {
   const references: Record<string, any> = {}
 

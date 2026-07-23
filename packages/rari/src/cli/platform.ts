@@ -19,6 +19,10 @@ const SUPPORTED_PLATFORMS = {
   'win32-x64': 'rari-win32-x64',
 } as const
 
+function isSupportedPlatformKey(key: string): key is keyof typeof SUPPORTED_PLATFORMS {
+  return Object.hasOwn(SUPPORTED_PLATFORMS, key)
+}
+
 function getPlatformInfo(): PlatformInfo {
   const platform = process.platform
   const arch = process.arch
@@ -34,10 +38,21 @@ function getPlatformInfo(): PlatformInfo {
     case 'win32':
       normalizedPlatform = 'win32'
       break
-    default:
+    case 'aix':
+    case 'android':
+    case 'cygwin':
+    case 'freebsd':
+    case 'haiku':
+    case 'openbsd':
+    case 'sunos':
+    case 'netbsd':
+      throw new Error(`Unsupported platform: ${platform}. rari supports Linux, macOS, and Windows.`)
+    default: {
+      const _exhaustive: never = platform
       throw new Error(
-        `Unsupported platform: ${platform}. rari supports Linux, macOS, and Windows.`,
+        `Unsupported platform: ${String(_exhaustive)}. rari supports Linux, macOS, and Windows.`,
       )
+    }
   }
 
   let normalizedArch: string
@@ -48,24 +63,32 @@ function getPlatformInfo(): PlatformInfo {
     case 'arm64':
       normalizedArch = 'arm64'
       break
-    default:
+    case 'arm':
+    case 'ia32':
+    case 'loong64':
+    case 'mips':
+    case 'mipsel':
+    case 'ppc64':
+    case 'riscv64':
+    case 's390x':
+      throw new Error(`Unsupported architecture: ${arch}. rari supports x64 and ARM64.`)
+    default: {
+      const _exhaustive: never = arch
       throw new Error(
-        `Unsupported architecture: ${arch}. rari supports x64 and ARM64.`,
+        `Unsupported architecture: ${String(_exhaustive)}. rari supports x64 and ARM64.`,
       )
+    }
   }
 
-  const platformKey
-    = `${normalizedPlatform}-${normalizedArch}` as keyof typeof SUPPORTED_PLATFORMS
-  const packageName = SUPPORTED_PLATFORMS[platformKey]
-
-  /* v8 ignore start - defensive check, all valid combinations are in SUPPORTED_PLATFORMS */
-  if (!packageName) {
+  const platformKey = `${normalizedPlatform}-${normalizedArch}`
+  if (!isSupportedPlatformKey(platformKey)) {
     throw new Error(
-      `Unsupported platform combination: ${normalizedPlatform}-${normalizedArch}. `
-      + `Supported platforms: ${Object.keys(SUPPORTED_PLATFORMS).join(', ')}`,
+      `Unsupported platform combination: ${normalizedPlatform}-${normalizedArch}. ` +
+        `Supported platforms: ${Object.keys(SUPPORTED_PLATFORMS).join(', ')}`,
     )
   }
-  /* v8 ignore stop */
+
+  const packageName = SUPPORTED_PLATFORMS[platformKey]
 
   const binaryName = normalizedPlatform === 'win32' ? 'rari.exe' : 'rari'
 
@@ -84,17 +107,13 @@ function resolveBinaryPath(): string {
 
   const selfDir = dirname(fileURLToPath(import.meta.url))
   let searchDir = selfDir
-  while (true) {
+  while (searchDir !== dirname(searchDir)) {
     if (existsSync(join(searchDir, 'pnpm-workspace.yaml'))) {
       const localBinary = join(searchDir, 'packages', packageName, 'bin', binaryName)
-      if (existsSync(localBinary))
-        return localBinary
+      if (existsSync(localBinary)) return localBinary
       break
     }
-    const parent = dirname(searchDir)
-    if (parent === searchDir)
-      break
-    searchDir = parent
+    searchDir = dirname(searchDir)
   }
 
   try {
@@ -102,22 +121,19 @@ function resolveBinaryPath(): string {
     const packageDir = fileURLToPath(new URL('.', packagePath))
     const binaryPath = join(packageDir, 'bin', binaryName)
 
-    if (existsSync(binaryPath))
-      return binaryPath
+    if (existsSync(binaryPath)) return binaryPath
 
     throw new Error(`Binary not found at ${binaryPath}`)
-  }
-  catch {
+  } catch {
     throw new Error(
-      `Failed to locate rari binary for ${packageName}. `
-      + `Please ensure the platform package is installed: npm install ${packageName}`,
+      `Failed to locate rari binary for ${packageName}. ` +
+        `Please ensure the platform package is installed: npm install ${packageName}`,
     )
   }
 }
 
 export function getBinaryPath(): string {
-  if (cachedBinaryPath)
-    return cachedBinaryPath
+  if (cachedBinaryPath != null && cachedBinaryPath !== '') return cachedBinaryPath
 
   cachedBinaryPath = resolveBinaryPath()
   return cachedBinaryPath

@@ -1,15 +1,21 @@
-import type { ComponentInfo, GlobalWithRari, WindowWithRari } from './types'
+import type { ComponentInfo, GlobalWithRari, RariGlobalBag, WindowWithRari } from './types'
 
-export type RariGlobalBag = GlobalWithRari['~rari']
+export type { RariGlobalBag }
 
 export function getRariGlobalRoot(): GlobalWithRari {
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- runtime global bag lives on globalThis
   return globalThis as unknown as GlobalWithRari
 }
 
 export function getRariGlobal(): RariGlobalBag {
   const root = getRariGlobalRoot()
-  root['~rari'] ??= {} as RariGlobalBag
-  return root['~rari']
+  let bag = root['~rari']
+  if (bag == null) {
+    bag = {}
+    root['~rari'] = bag
+  }
+
+  return bag
 }
 
 export function getClientComponents(): Record<string, ComponentInfo> {
@@ -31,16 +37,14 @@ export function getClientComponentNames(): Record<string, string> {
 }
 
 export function getRariWindow(): WindowWithRari | null {
-  if (typeof window === 'undefined')
-    return null
+  if (typeof window === 'undefined') return null
 
-  return window as unknown as WindowWithRari
+  return window
 }
 
 export function getRariWindowBag(): RariGlobalBag | null {
   const win = getRariWindow()
-  if (!win)
-    return null
+  if (!win) return null
   win['~rari'] ??= getRariGlobal()
   return win['~rari']
 }

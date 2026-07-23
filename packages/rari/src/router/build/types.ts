@@ -1,10 +1,6 @@
 import type { ReactNode } from 'react'
 
-export type RouteSegmentType
-  = | 'static'
-    | 'dynamic'
-    | 'catch-all'
-    | 'optional-catch-all'
+export type RouteSegmentType = 'static' | 'dynamic' | 'catch-all' | 'optional-catch-all'
 
 export interface RouteSegment {
   type: RouteSegmentType
@@ -97,13 +93,13 @@ export interface AppRouteManifest {
 }
 
 export interface RouteMetadata {
-  title?: string | { default?: string, template?: string, absolute?: string }
+  title?: string | { default?: string; template?: string; absolute?: string }
   description?: string
   keywords?: string | string[]
   openGraph?: {
     title?: string
     description?: string
-    images?: string[] | Array<{ url: string, width?: number, height?: number, alt?: string }>
+    images?: string[] | Array<{ url: string; width?: number; height?: number; alt?: string }>
     url?: string
     siteName?: string
     locale?: string
@@ -113,33 +109,37 @@ export interface RouteMetadata {
     card?: 'summary' | 'summary_large_image' | 'app' | 'player'
     title?: string
     description?: string
-    images?: string[] | Array<{ url: string, alt?: string }>
+    images?: string[] | Array<{ url: string; alt?: string }>
     site?: string
     creator?: string
   }
-  robots?: {
-    index?: boolean
-    follow?: boolean
-    noarchive?: boolean
-    nosnippet?: boolean
-    noimageindex?: boolean
-    nocache?: boolean
-  } | string
+  robots?:
+    | {
+        index?: boolean
+        follow?: boolean
+        noarchive?: boolean
+        nosnippet?: boolean
+        noimageindex?: boolean
+        nocache?: boolean
+      }
+    | string
   icons?: {
-    icon?: string | Array<{ url: string, type?: string, sizes?: string }>
+    icon?: string | Array<{ url: string; type?: string; sizes?: string }>
     shortcut?: string
-    apple?: string | Array<{ url: string, sizes?: string, type?: string }>
+    apple?: string | Array<{ url: string; sizes?: string; type?: string }>
   }
   manifest?: string
-  themeColor?: string | Array<{ media?: string, color: string }>
-  viewport?: string | {
-    width?: string | number
-    height?: string | number
-    initialScale?: number
-    minimumScale?: number
-    maximumScale?: number
-    userScalable?: boolean
-  }
+  themeColor?: string | Array<{ media?: string; color: string }>
+  viewport?:
+    | string
+    | {
+        width?: string | number
+        height?: string | number
+        initialScale?: number
+        minimumScale?: number
+        maximumScale?: number
+        userScalable?: boolean
+      }
   appleWebApp?: {
     capable?: boolean
     title?: string
@@ -155,46 +155,52 @@ export interface RouteMetadata {
 
 export type Metadata = RouteMetadata
 
-export type RouteParams = Record<string, string | string[]>
-export type SearchParams = Record<string, string | string[] | undefined>
-
-export interface PageProps<
-  TParams extends RouteParams = RouteParams,
-  TSearchParams extends SearchParams = SearchParams,
-> {
-  params: TParams
-  searchParams: TSearchParams
+export interface RouteParams {
+  readonly [key: string]: string | readonly string[]
+}
+export interface SearchParams {
+  readonly [key: string]: string | readonly string[] | undefined
 }
 
-export interface LayoutProps<TParams extends RouteParams = RouteParams> {
+export type PageProps<
+  TParams extends RouteParams = RouteParams,
+  TSearchParams extends SearchParams = SearchParams,
+> = Readonly<{
+  params: TParams
+  searchParams: TSearchParams
+}>
+
+export type LayoutProps<TParams extends RouteParams = RouteParams> = Readonly<{
   children: ReactNode
   params?: TParams
   pathname?: string
-}
+}>
 
 export interface ErrorProps {
-  error: Error
-  reset: () => void
+  readonly error: Error
+  readonly reset: () => void
 }
 
 export interface AppRouteMatch {
-  route: AppRouteEntry
-  params: RouteParams
-  searchParams: SearchParams
-  layouts: LayoutEntry[]
-  loading?: LoadingEntry
-  error?: ErrorEntry
-  templates: TemplateEntry[]
-  pathname: string
+  readonly route: AppRouteEntry
+  readonly params: RouteParams
+  readonly searchParams: SearchParams
+  readonly layouts: readonly LayoutEntry[]
+  readonly loading?: LoadingEntry
+  readonly error?: ErrorEntry
+  readonly templates: readonly TemplateEntry[]
+  readonly pathname: string
 }
 
 export type GenerateMetadata<
   TParams extends RouteParams = RouteParams,
   TSearchParams extends SearchParams = SearchParams,
-> = (props: {
-  params: TParams
-  searchParams: TSearchParams
-}) => RouteMetadata | Promise<RouteMetadata>
+> = (
+  props: Readonly<{
+    params: TParams
+    searchParams: TSearchParams
+  }>,
+) => RouteMetadata | Promise<RouteMetadata>
 
 export type GenerateStaticParams<TParams extends RouteParams = RouteParams> = () =>
   | TParams[]

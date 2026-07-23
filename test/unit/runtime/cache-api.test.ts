@@ -9,6 +9,7 @@ import { resetUseCacheTagRegistryForTests } from '@rari/use-cache/runtime/invali
 import { resetPrivateStorageForTests } from '@rari/use-cache/runtime/storage/registry'
 import { resetTestStorageBackend } from '@rari/use-cache/runtime/storage/test'
 import { afterEach, beforeEach, describe, expect, it } from 'vite-plus/test'
+import { isThenable } from '../../helpers/is-thenable'
 
 async function callCache<Args extends unknown[]>(
   kind: string,
@@ -20,12 +21,23 @@ async function callCache<Args extends unknown[]>(
   const { $$cache__ } = await import('@rari/use-cache/runtime/cache-wrapper')
   try {
     return $$cache__(kind, id, argCount, fn, args)
-  }
-  catch (e) {
-    if (e instanceof Promise)
-      return await e
+  } catch (e) {
+    if (isThenable(e)) return e
     throw e
   }
+}
+
+function setDenoCookie(value: string): void {
+  const deno: unknown = Reflect.get(globalThis, 'Deno')
+  if (typeof deno !== 'object' || deno === null || !('core' in deno)) return
+
+  const core: unknown = deno.core
+  if (typeof core !== 'object' || core === null || !('ops' in core)) return
+
+  const ops: unknown = core.ops
+  if (typeof ops !== 'object' || ops === null) return
+
+  Reflect.set(ops, 'op_get_cookies', () => value)
 }
 
 describe('cache API', () => {
@@ -41,8 +53,7 @@ describe('cache API', () => {
     setUseCacheBuildId('development')
     resetUseCacheTagRegistryForTests()
     resetPrivateStorageForTests()
-    const target = globalThis as { Deno?: unknown }
-    delete target.Deno
+    Reflect.deleteProperty(globalThis, 'Deno')
   })
 
   it('cacheLife controls ttl via expire', async () => {
@@ -95,28 +106,26 @@ describe('cache API', () => {
       return 'private-value'
     }
 
-    const target = globalThis as {
-      Deno?: { core?: { ops?: Record<string, (...args: unknown[]) => unknown> } }
-    }
+    const target = globalThis
 
-    target.Deno = {
+    Reflect.set(target, 'Deno', {
       core: {
         ops: {
           op_get_cookies: () => 'session=a',
         },
       },
-    }
+    })
 
     await callCache('private', 'private-partition', 0, fn, [])
-    target.Deno.core!.ops!.op_get_cookies = () => 'session=b'
+    setDenoCookie('session=b')
     await callCache('private', 'private-partition', 0, fn, [])
     expect(calls).toBe(2)
 
-    target.Deno.core!.ops!.op_get_cookies = () => 'session=a'
+    setDenoCookie('session=a')
     const cached = await callCache('private', 'private-partition', 0, fn, [])
     expect(cached).toBe('private-value')
     expect(calls).toBe(2)
 
-    delete target.Deno
+    Reflect.deleteProperty(target, 'Deno')
   })
 })

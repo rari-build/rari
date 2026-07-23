@@ -1,7 +1,7 @@
-export async function GET(request: Request) {
+export function GET(request: Request) {
   const url = new URL(request.url)
-  const page = url.searchParams.get('page') || '1'
-  const limit = url.searchParams.get('limit') || '10'
+  const page = url.searchParams.get('page') ?? '1'
+  const limit = url.searchParams.get('limit') ?? '10'
 
   return new Response(
     JSON.stringify({
@@ -21,7 +21,7 @@ export async function GET(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  const body = await request.json()
+  const body: unknown = await request.json()
   return new Response(
     JSON.stringify({
       message: 'PUT method test',
@@ -35,7 +35,7 @@ export async function PUT(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const body = await request.json()
+  const body: unknown = await request.json()
   return new Response(
     JSON.stringify({
       message: 'PATCH method test',

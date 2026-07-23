@@ -1,6 +1,6 @@
-export async function GET(
+export function GET(
   request: Request,
-  { params }: { params: { slug?: string } },
+  { params }: Readonly<{ readonly params: { readonly slug?: string } }>,
 ) {
   const url = new URL(request.url)
   const format = url.searchParams.get('format')
@@ -8,10 +8,10 @@ export async function GET(
   return new Response(
     JSON.stringify({
       message: 'Optional catch-all API route',
-      slug: params.slug || null,
-      segments: params.slug ? params.slug.split('/') : [],
-      isRoot: !params.slug,
-      format: format || 'default',
+      slug: params.slug != null && params.slug !== '' ? params.slug : null,
+      segments: params.slug != null && params.slug !== '' ? params.slug.split('/') : [],
+      isRoot: params.slug == null || params.slug === '',
+      format: format != null && format !== '' ? format : 'default',
     }),
     {
       status: 200,

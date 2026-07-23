@@ -14,23 +14,48 @@ declare global {
   const __RARI_ACTION_FORM_ENTRIES__: Array<[string, string]>
 
   interface ActionValidationConfig {
-    maxDepth: number
-    maxStringLength: number
-    maxArrayLength: number
-    maxObjectKeys: number
-    maxTotalElements: number
+    readonly maxDepth: number
+    readonly maxStringLength: number
+    readonly maxArrayLength: number
+    readonly maxObjectKeys: number
+    readonly maxTotalElements: number
+  }
+
+  interface ActionArgsValidationApi {
+    productionValidationConfig: () => ActionValidationConfig
+    developmentValidationConfig: () => ActionValidationConfig
+    validateActionArgsWithConfig: (
+      args: readonly unknown[],
+      config: ActionValidationConfig,
+    ) => unknown[]
+    validateFormDataWithConfig: (formData: FormData, config: ActionValidationConfig) => void
+    isDangerousActionProperty: (key: string) => boolean
+  }
+
+  interface GlobalThis {
+    __RARI_ACTION_ARGS_VALIDATION__?: ActionArgsValidationApi
   }
 
   function productionValidationConfig(): ActionValidationConfig
   function developmentValidationConfig(): ActionValidationConfig
-  function validateActionArgsWithConfig(args: unknown[], config: ActionValidationConfig): unknown[]
+  function validateActionArgsWithConfig(
+    args: readonly unknown[],
+    config: ActionValidationConfig,
+  ): unknown[]
   function validateFormDataWithConfig(formData: FormData, config: ActionValidationConfig): void
-  function validateActionArgs(args: unknown[]): unknown[]
+  function validateActionArgs(args: readonly unknown[]): unknown[]
   function validateFormData(formData: FormData): void
   function resolveActionFn(
     id: string,
-    manifest: Record<string, { id: string, chunks: string[], name?: string }>,
-  ): (...args: unknown[]) => unknown
+    manifest: Readonly<{
+      readonly [key: string]: Readonly<{
+        readonly id: string
+        readonly chunks: readonly string[]
+        readonly name?: string
+      }>
+    }>,
+  ): (...args: readonly unknown[]) => unknown
+  function stashRpcActionResult(result: unknown): Record<string, unknown>
 
   const composition_script: Promise<{
     rsc_data: string

@@ -8,15 +8,13 @@ export class LruCache<K, V> {
   private readonly maxSize: number
 
   constructor(maxSize: number) {
-    if (!(maxSize > 0))
-      throw new TypeError('`maxSize` must be a number greater than 0')
+    if (!(maxSize > 0)) throw new TypeError('`maxSize` must be a number greater than 0')
     this.maxSize = maxSize
   }
 
   get(key: K): V | undefined {
     const entry = this.map.get(key)
-    if (!entry)
-      return undefined
+    if (!entry) return undefined
 
     if (entry.expiry !== undefined && entry.expiry <= Date.now()) {
       this.map.delete(key)
@@ -29,19 +27,16 @@ export class LruCache<K, V> {
   }
 
   set(key: K, value: V, maxAge?: number): void {
-    if (this.map.has(key))
-      this.map.delete(key)
+    if (this.map.has(key)) this.map.delete(key)
 
     const entry: LruEntry<V> = { value }
-    if (typeof maxAge === 'number' && Number.isFinite(maxAge))
-      entry.expiry = Date.now() + maxAge
+    if (typeof maxAge === 'number' && Number.isFinite(maxAge)) entry.expiry = Date.now() + maxAge
 
     this.map.set(key, entry)
 
     if (this.map.size > this.maxSize) {
       const oldest = this.map.keys().next().value
-      if (oldest !== undefined)
-        this.map.delete(oldest)
+      if (oldest !== undefined) this.map.delete(oldest)
     }
   }
 

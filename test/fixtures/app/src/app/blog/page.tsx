@@ -1,6 +1,6 @@
 import type { Metadata } from 'rari'
 
-export default async function BlogPage() {
+export default function BlogPage() {
   return (
     <div>
       <h1>Blog</h1>

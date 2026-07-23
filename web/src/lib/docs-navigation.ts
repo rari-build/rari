@@ -1,8 +1,8 @@
 export interface NavItem {
-  label: string
-  href?: string
-  items?: NavItem[]
-  collapsible?: boolean
+  readonly label: string
+  readonly href?: string
+  readonly items?: readonly NavItem[]
+  readonly collapsible?: boolean
 }
 
 export const docsNavigation: NavItem[] = [
@@ -33,40 +33,43 @@ export const docsNavigation: NavItem[] = [
       {
         label: 'Functions',
         href: '/docs/api-reference/functions',
-        items: [
-          { label: 'fetch', href: '/docs/api-reference/functions/fetch' },
-        ],
+        items: [{ label: 'fetch', href: '/docs/api-reference/functions/fetch' }],
       },
     ],
   },
 ]
 
-export function getBreadcrumbs(path: string): Array<{ label: string, href?: string }> {
-  const breadcrumbs: Array<{ label: string, href?: string }> = [
+export function getBreadcrumbs(path: string): Array<{ label: string; href?: string }> {
+  const breadcrumbs: Array<{ label: string; href?: string }> = [
     { label: 'Docs', href: '/docs/getting-started' },
   ]
 
-  function pushCrumb(crumb: { label: string, href?: string }) {
-    if (crumb.href && breadcrumbs.some(existing => existing.href === crumb.href))
+  function pushCrumb(crumb: Readonly<{ label: string; href?: string }>) {
+    if (
+      crumb.href != null &&
+      crumb.href !== '' &&
+      breadcrumbs.some(existing => existing.href === crumb.href)
+    )
       return
 
     breadcrumbs.push(crumb)
   }
 
-  function findPath(items: NavItem[], currentPath: Array<{ label: string, href?: string }>): boolean {
+  function findPath(
+    items: readonly NavItem[],
+    currentPath: ReadonlyArray<{ readonly label: string; readonly href?: string }>,
+  ): boolean {
     for (const item of items) {
       const newPath = [...currentPath, { label: item.label, href: item.href }]
 
       if (item.href === path) {
-        for (const crumb of currentPath.slice(1))
-          pushCrumb(crumb)
+        for (const crumb of currentPath.slice(1)) pushCrumb(crumb)
 
         pushCrumb({ label: item.label })
         return true
       }
 
-      if (item.items && findPath(item.items, newPath))
-        return true
+      if (item.items && findPath(item.items, newPath)) return true
     }
 
     return false

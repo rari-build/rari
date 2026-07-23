@@ -1,10 +1,13 @@
 import type { Metadata, PageProps } from 'rari'
 
-function normalizeCategories(categories: string | string[] | undefined): string[] {
-  return categories ? (Array.isArray(categories) ? categories : [categories]) : []
+function normalizeCategories(categories: string | readonly string[] | undefined): string[] {
+  if (categories == null) return []
+  if (typeof categories === 'string') return [categories]
+
+  return [...categories]
 }
 
-export default async function ShopPage({ params }: PageProps) {
+export default function ShopPage({ params }: PageProps) {
   const { categories } = params
   const categoriesArray = normalizeCategories(categories)
   const hasCategories = categoriesArray.length > 0
@@ -16,23 +19,23 @@ export default async function ShopPage({ params }: PageProps) {
         {hasCategories ? `: ${categoriesArray.join(' > ')}` : ''}
       </h1>
       <p>This is an optional catch-all route.</p>
-      {hasCategories
-        ? (
-            <div data-testid="categories" data-categories={JSON.stringify(categoriesArray)}>
-              {categoriesArray.map((category, i) => (
-                <span key={category} data-testid={`category-${i}`}>{category}</span>
-              ))}
-            </div>
-          )
-        : (
-            <div data-testid="no-categories">All Products</div>
-          )}
+      {hasCategories ? (
+        <div data-testid="categories" data-categories={JSON.stringify(categoriesArray)}>
+          {categoriesArray.map((category, i) => (
+            <span key={category} data-testid={`category-${i}`}>
+              {category}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <div data-testid="no-categories">All Products</div>
+      )}
       <div data-testid="categories-length">{String(categoriesArray.length)}</div>
     </div>
   )
 }
 
-export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+export function generateMetadata({ params }: PageProps): Metadata {
   const { categories } = params
   const categoriesArray = normalizeCategories(categories)
   const title = categoriesArray.length > 0 ? `Shop: ${categoriesArray.join(' > ')}` : 'Shop'

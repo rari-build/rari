@@ -13,19 +13,25 @@ export default function Counter() {
       <p className="text-5xl my-4 font-bold text-gray-900">{count}</p>
       <div className="flex gap-4 justify-center">
         <button
-          onClick={() => setCount(count - 1)}
+          onClick={() => {
+            setCount(count - 1)
+          }}
           className="px-6 py-3 text-base bg-indigo-600 text-white border-none rounded cursor-pointer hover:bg-indigo-700 transition-colors"
         >
           Decrement
         </button>
         <button
-          onClick={() => setCount(0)}
+          onClick={() => {
+            setCount(0)
+          }}
           className="px-6 py-3 text-base bg-gray-600 text-white border-none rounded cursor-pointer hover:bg-gray-700 transition-colors"
         >
           Reset
         </button>
         <button
-          onClick={() => setCount(count + 1)}
+          onClick={() => {
+            setCount(count + 1)
+          }}
           className="px-6 py-3 text-base bg-indigo-600 text-white border-none rounded cursor-pointer hover:bg-indigo-700 transition-colors"
         >
           Increment

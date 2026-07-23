@@ -2,22 +2,15 @@
 
 import type { Todo } from '@/actions/todo-actions'
 import { useRef, useState, useTransition } from 'react'
-import {
-  clearCompleted,
-  deleteTodo,
-  toggleTodo,
-} from '@/actions/todo-actions'
+import { clearCompleted, deleteTodo, toggleTodo } from '@/actions/todo-actions'
 
 interface TodoListProps {
-  initialTodos: Todo[]
-  onUpdate?: () => void
+  readonly initialTodos: readonly Todo[]
+  readonly onUpdate?: () => void
 }
 
-export default function TodoListWithActions({
-  initialTodos,
-  onUpdate,
-}: TodoListProps) {
-  const [todos, setTodos] = useState<Todo[]>(initialTodos)
+export default function TodoListWithActions({ initialTodos, onUpdate }: TodoListProps) {
+  const [todos, setTodos] = useState<readonly Todo[]>(initialTodos)
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
 
@@ -32,72 +25,59 @@ export default function TodoListWithActions({
   const completedCount = todos.filter(todo => todo.completed).length
   const activeCount = todos.length - completedCount
 
-  const handleToggle = async (id: string) => {
+  const handleToggle = (id: string) => {
     setError(null)
     startTransition(async () => {
       try {
         const formData = new FormData()
         formData.append('id', id)
         const result = await toggleTodo(formData)
-        if (result.success && result.todos) {
+        if (result.success) {
           setTodos(result.todos)
-          if (onUpdate)
-            onUpdate()
-        }
-        else if (result.error) {
+          if (onUpdate) onUpdate()
+        } else if (result.error != null && result.error !== '') {
           setError(result.error)
         }
-      }
-      catch (error) {
-        const errorMsg
-          = error instanceof Error ? error.message : 'Failed to toggle todo'
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Failed to toggle todo'
         console.error('[TodoList] Toggle error:', error)
         setError(errorMsg)
       }
     })
   }
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = (id: string) => {
     setError(null)
     startTransition(async () => {
       try {
         const formData = new FormData()
         formData.append('id', id)
         const result = await deleteTodo(formData)
-        if (result.success && result.todos) {
+        if (result.success) {
           setTodos(result.todos)
-          if (onUpdate)
-            onUpdate()
-        }
-        else if (result.error) {
+          if (onUpdate) onUpdate()
+        } else if (result.error != null && result.error !== '') {
           setError(result.error)
         }
-      }
-      catch (error) {
-        const errorMsg
-          = error instanceof Error ? error.message : 'Failed to delete todo'
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Failed to delete todo'
         console.error('[TodoList] Delete error:', error)
         setError(errorMsg)
       }
     })
   }
 
-  const handleClearCompleted = async () => {
+  const handleClearCompleted = () => {
     setError(null)
     startTransition(async () => {
       try {
         const result = await clearCompleted()
-        if (result.success && result.todos) {
+        if (result.success) {
           setTodos(result.todos)
-          if (onUpdate)
-            onUpdate()
+          if (onUpdate) onUpdate()
         }
-      }
-      catch (error) {
-        const errorMsg
-          = error instanceof Error
-            ? error.message
-            : 'Failed to clear completed todos'
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Failed to clear completed todos'
         console.error('[TodoList] Clear completed error:', error)
         setError(errorMsg)
       }
@@ -113,13 +93,9 @@ export default function TodoListWithActions({
         </span>
       </div>
 
-      {error && (
+      {error != null && error !== '' && (
         <div className="flex items-start gap-2 text-sm text-red-700 p-3 bg-red-50 border border-red-200 rounded-lg mb-4">
-          <svg
-            className="w-5 h-5 shrink-0 mt-0.5"
-            fill="currentColor"
-            viewBox="0 0 20 20"
-          >
+          <svg className="w-5 h-5 shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
             <path
               fillRule="evenodd"
               d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
@@ -127,9 +103,7 @@ export default function TodoListWithActions({
             />
           </svg>
           <div>
-            <strong className="font-semibold">Error:</strong>
-            {' '}
-            {error}
+            <strong className="font-semibold">Error:</strong> {error}
           </div>
         </div>
       )}
@@ -137,27 +111,20 @@ export default function TodoListWithActions({
       <div className="flex justify-between items-center mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
         <div className="flex gap-6 text-sm">
           <span className="text-gray-600">
-            <strong className="font-semibold text-gray-900">
-              {activeCount}
-            </strong>
-            {' '}
-            active
+            <strong className="font-semibold text-gray-900">{activeCount}</strong> active
           </span>
           <span className="text-gray-600">
-            <strong className="font-semibold text-gray-900">
-              {completedCount}
-            </strong>
-            {' '}
-            completed
+            <strong className="font-semibold text-gray-900">{completedCount}</strong> completed
           </span>
         </div>
         {completedCount > 0 && (
           <button
             onClick={handleClearCompleted}
             disabled={isPending}
-            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${isPending
-              ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-              : 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200'
+            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
+              isPending
+                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                : 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200'
             }`}
           >
             Clear Completed
@@ -169,46 +136,48 @@ export default function TodoListWithActions({
         {todos.map(todo => (
           <li
             key={todo.id}
-            className={`flex items-center gap-3 p-4 rounded-lg border transition-all ${todo.completed
-              ? 'bg-gray-50 border-gray-200'
-              : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-sm'
+            className={`flex items-center gap-3 p-4 rounded-lg border transition-all ${
+              todo.completed
+                ? 'bg-gray-50 border-gray-200'
+                : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-sm'
             } ${isPending ? 'opacity-60' : ''}`}
           >
             <button
-              onClick={() => handleToggle(todo.id)}
+              onClick={() => {
+                handleToggle(todo.id)
+              }}
               disabled={isPending}
-              className={`shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${todo.completed
-                ? 'bg-indigo-600 border-indigo-600'
-                : 'border-gray-300 hover:border-indigo-500'
+              className={`shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                todo.completed
+                  ? 'bg-indigo-600 border-indigo-600'
+                  : 'border-gray-300 hover:border-indigo-500'
               } ${isPending ? 'cursor-not-allowed' : 'cursor-pointer'}`}
-              aria-label={
-                todo.completed ? 'Mark as incomplete' : 'Mark as complete'
-              }
+              aria-label={todo.completed ? 'Mark as incomplete' : 'Mark as complete'}
             >
               {todo.completed && (
-                <svg
-                  className="w-3 h-3 text-white"
-                  fill="currentColor"
-                  viewBox="0 0 12 12"
-                >
+                <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 12 12">
                   <path d="M10.28 2.28L3.989 8.575 1.695 6.28A1 1 0 00.28 7.695l3 3a1 1 0 001.414 0l7-7A1 1 0 0010.28 2.28z" />
                 </svg>
               )}
             </button>
 
             <span
-              className={`flex-1 text-sm transition-all ${todo.completed ? 'line-through text-gray-400' : 'text-gray-900'
+              className={`flex-1 text-sm transition-all ${
+                todo.completed ? 'line-through text-gray-400' : 'text-gray-900'
               }`}
             >
               {todo.text}
             </span>
 
             <button
-              onClick={() => handleDelete(todo.id)}
+              onClick={() => {
+                handleDelete(todo.id)
+              }}
               disabled={isPending}
-              className={`shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-all ${isPending
-                ? 'text-gray-300 cursor-not-allowed'
-                : 'text-gray-400 hover:text-red-600 hover:bg-red-50'
+              className={`shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-all ${
+                isPending
+                  ? 'text-gray-300 cursor-not-allowed'
+                  : 'text-gray-400 hover:text-red-600 hover:bg-red-50'
               }`}
               aria-label="Delete todo"
             >

@@ -1134,7 +1134,7 @@ impl ModuleLoader for RariModuleLoader {
             }
         }
 
-        // Bare package names / subpaths — Deno NodeResolver / BYONM.
+        // Bare package names / subpaths -- Deno NodeResolver / BYONM.
         // Scheme URLs (`ext:`, `file:`, `data:`, …) must NOT go through Node:
         // that produces ERR_UNSUPPORTED_ESM_URL_SCHEME and breaks snapshot bootstrap.
         if !specifier.contains(':') && !specifier.starts_with('.') && !specifier.starts_with('/') {

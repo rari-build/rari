@@ -1,7 +1,6 @@
 'use cache'
 
 declare global {
-  // eslint-disable-next-line vars-on-top
   var __rariUseCacheFileCounter: { total: number } | undefined
 }
 
@@ -11,6 +10,7 @@ function bumpCallCount(): number {
   return globalThis.__rariUseCacheFileCounter.total
 }
 
+// oxlint-disable-next-line typescript/require-await -- async is required for the file-level 'use cache' transform
 export async function getCachedData(label: string) {
   const count = bumpCallCount()
   return `${label}:${count}`

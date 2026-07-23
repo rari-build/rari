@@ -10,10 +10,15 @@ describe('validateActionArgs', () => {
   const config = productionValidationConfig()
 
   it('removes dangerous prototype keys', () => {
-    const sanitized = validateActionArgs([{
-      __proto__: { isAdmin: true },
-      username: 'test',
-    }], config)
+    const sanitized = validateActionArgs(
+      [
+        {
+          __proto__: { isAdmin: true },
+          username: 'test',
+        },
+      ],
+      config,
+    )
 
     expect(sanitized[0]).toEqual({ username: 'test' })
   })
@@ -23,8 +28,7 @@ describe('validateActionArgs', () => {
     expect(() => validateActionArgs(valid, { ...config, maxDepth: 3 })).not.toThrow()
 
     const invalid = [{ level1: { level2: { level3: { level4: 'too deep' } } } }]
-    expect(() => validateActionArgs(invalid, { ...config, maxDepth: 3 }))
-      .toThrow(/nesting depth/)
+    expect(() => validateActionArgs(invalid, { ...config, maxDepth: 3 })).toThrow(/nesting depth/)
   })
 
   it('rejects wide nested array DoS payloads', () => {
@@ -36,8 +40,9 @@ describe('validateActionArgs', () => {
     }
 
     const outerArray = Array.from({ length: 20 }, () => Array.from({ length: 600 }).fill(1))
-    expect(() => validateActionArgs([{ data: outerArray }], config))
-      .toThrow(/Maximum array nesting exceeded|12000 > 10000/)
+    expect(() => validateActionArgs([{ data: outerArray }], config)).toThrow(
+      /Maximum array nesting exceeded|12000 > 10000/,
+    )
   })
 
   it('detects forked array trees', () => {
@@ -48,13 +53,16 @@ describe('validateActionArgs', () => {
       maxArrayLength: 500,
     }
 
-    expect(() => validateActionArgs([{ data: [Array.from({ length: 500 }).fill(1)] }], config))
-      .not
-      .toThrow()
+    expect(() =>
+      validateActionArgs([{ data: [Array.from({ length: 500 }).fill(1)] }], config),
+    ).not.toThrow()
 
-    expect(() => validateActionArgs([
-      { data: [Array.from({ length: 500 }).fill(1), Array.from({ length: 500 }).fill(2)] },
-    ], config)).toThrow(/Maximum array nesting exceeded/)
+    expect(() =>
+      validateActionArgs(
+        [{ data: [Array.from({ length: 500 }).fill(1), Array.from({ length: 500 }).fill(2)] }],
+        config,
+      ),
+    ).toThrow(/Maximum array nesting exceeded/)
   })
 
   it('preserves FormData arguments', () => {
@@ -85,9 +93,13 @@ describe('validateFormData', () => {
     formData.set('$ACTION_REF_1', 'x'.repeat(20_000))
     formData.set('text', 'ok')
 
-    expect(() => validateFormData(formData, config)).not.toThrow()
+    expect(() => {
+      validateFormData(formData, config)
+    }).not.toThrow()
 
     formData.set('text', 'x'.repeat(config.maxStringLength + 1))
-    expect(() => validateFormData(formData, config)).toThrow(/Form field "text" too long/)
+    expect(() => {
+      validateFormData(formData, config)
+    }).toThrow(/Form field "text" too long/)
   })
 })

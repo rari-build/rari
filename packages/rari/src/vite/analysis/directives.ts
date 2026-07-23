@@ -17,7 +17,7 @@ const CH_CR = 13
 const CH_LF = 10
 const CH_LINE_SEP = 0x2028
 const CH_PARA_SEP = 0x2029
-const CH_BOM = 0xFEFF
+const CH_BOM = 65279 // U+FEFF
 const CH_SLASH = 47
 const CH_STAR = 42
 const CH_BACKSLASH = 92
@@ -57,7 +57,15 @@ const CH_0 = 48
 const CH_9 = 57
 
 function isWhitespaceCode(ch: number): boolean {
-  return ch === CH_SPACE || ch === CH_TAB || ch === CH_CR || ch === CH_LF || ch === CH_LINE_SEP || ch === CH_PARA_SEP || ch === CH_BOM
+  return (
+    ch === CH_SPACE ||
+    ch === CH_TAB ||
+    ch === CH_CR ||
+    ch === CH_LF ||
+    ch === CH_LINE_SEP ||
+    ch === CH_PARA_SEP ||
+    ch === CH_BOM
+  )
 }
 
 function isLineTerminatorCode(ch: number): boolean {
@@ -65,18 +73,22 @@ function isLineTerminatorCode(ch: number): boolean {
 }
 
 function isIdentifierPartCode(ch: number): boolean {
-  return (ch >= CH_LOWER_A && ch <= CH_LOWER_Z)
-    || (ch >= CH_UPPER_A && ch <= CH_UPPER_Z)
-    || (ch >= CH_0 && ch <= CH_9)
-    || ch === CH_UNDERSCORE
-    || ch === CH_DOLLAR
+  return (
+    (ch >= CH_LOWER_A && ch <= CH_LOWER_Z) ||
+    (ch >= CH_UPPER_A && ch <= CH_UPPER_Z) ||
+    (ch >= CH_0 && ch <= CH_9) ||
+    ch === CH_UNDERSCORE ||
+    ch === CH_DOLLAR
+  )
 }
 
 function isIdentifierStartCode(ch: number): boolean {
-  return (ch >= CH_LOWER_A && ch <= CH_LOWER_Z)
-    || (ch >= CH_UPPER_A && ch <= CH_UPPER_Z)
-    || ch === CH_UNDERSCORE
-    || ch === CH_DOLLAR
+  return (
+    (ch >= CH_LOWER_A && ch <= CH_LOWER_Z) ||
+    (ch >= CH_UPPER_A && ch <= CH_UPPER_Z) ||
+    ch === CH_UNDERSCORE ||
+    ch === CH_DOLLAR
+  )
 }
 
 function skipWhitespace(source: string, i: number, len: number): number {
@@ -119,7 +131,10 @@ function skipSingleLineComment(source: string, i: number, len: number): number {
 
 function skipMultiLineComment(source: string, i: number, len: number): number {
   i += 2
-  while (i < len - 1 && (source.charCodeAt(i) !== CH_STAR || source.charCodeAt(i + 1) !== CH_SLASH)) {
+  while (
+    i < len - 1 &&
+    (source.charCodeAt(i) !== CH_STAR || source.charCodeAt(i + 1) !== CH_SLASH)
+  ) {
     i++
   }
 
@@ -155,8 +170,7 @@ function skipJSX(source: string, i: number, len: number): number {
     const ch = source.charCodeAt(i)
     if (isIdentifierPartCode(ch) || ch === CH_DOT || ch === CH_MINUS) {
       i++
-    }
-    else {
+    } else {
       break
     }
   }
@@ -179,10 +193,8 @@ function skipJSX(source: string, i: number, len: number): number {
           i = skipString(source, i, len, bch)
           continue
         }
-        if (bch === CH_OPEN_BRACE)
-          braceDepth++
-        if (bch === CH_CLOSE_BRACE)
-          braceDepth--
+        if (bch === CH_OPEN_BRACE) braceDepth++
+        if (bch === CH_CLOSE_BRACE) braceDepth--
         i++
       }
       continue
@@ -204,12 +216,16 @@ function skipJSX(source: string, i: number, len: number): number {
 
     if (ch === CH_LT) {
       const nextCh = source.charCodeAt(i + 1)
-      if (nextCh === CH_SLASH || nextCh === CH_DOT || nextCh === CH_GT || isIdentifierStartCode(nextCh)) {
+      if (
+        nextCh === CH_SLASH ||
+        nextCh === CH_DOT ||
+        nextCh === CH_GT ||
+        isIdentifierStartCode(nextCh)
+      ) {
         if (nextCh === CH_SLASH) {
           depth--
           i++
-        }
-        else if (nextCh !== CH_EXCL) {
+        } else if (nextCh !== CH_EXCL) {
           depth++
         }
         i++
@@ -217,8 +233,7 @@ function skipJSX(source: string, i: number, len: number): number {
           const tch = source.charCodeAt(i)
           if (isIdentifierPartCode(tch) || tch === CH_DOT || tch === CH_MINUS) {
             i++
-          }
-          else {
+          } else {
             break
           }
         }
@@ -236,50 +251,47 @@ function skipJSX(source: string, i: number, len: number): number {
 
 function regionEquals(source: string, offset: number, target: string): boolean {
   for (let k = 0; k < target.length; k++) {
-    if (source.charCodeAt(offset + k) !== target.charCodeAt(k))
-      return false
+    if (source.charCodeAt(offset + k) !== target.charCodeAt(k)) return false
   }
 
   return true
 }
 
 export interface DirectiveResult {
-  hasUseClient: boolean
-  hasUseServer: boolean
+  readonly hasUseClient: boolean
+  readonly hasUseServer: boolean
 }
 
 function isKeywordAt(source: string, i: number, keyword: string): boolean {
-  if (i + keyword.length > source.length)
-    return false
+  if (i + keyword.length > source.length) return false
 
   for (let k = 0; k < keyword.length; k++) {
-    if (source.charCodeAt(i + k) !== keyword.charCodeAt(k))
-      return false
+    if (source.charCodeAt(i + k) !== keyword.charCodeAt(k)) return false
   }
 
   const before = i > 0 ? source.charCodeAt(i - 1) : -1
-  const after = source.charCodeAt(i + keyword.length)
-  if (before !== -1 && isIdentifierPartCode(before))
-    return false
-  if (after !== undefined && isIdentifierPartCode(after))
-    return false
+  const afterIndex = i + keyword.length
+  const after = afterIndex < source.length ? source.charCodeAt(afterIndex) : -1
+  if (before !== -1 && isIdentifierPartCode(before)) return false
+  if (after !== -1 && isIdentifierPartCode(after)) return false
 
   return true
 }
 
-function readImportModuleSpecifier(source: string, i: number, len: number): { source: string, end: number } | null {
+function readImportModuleSpecifier(
+  source: string,
+  i: number,
+  len: number,
+): { source: string; end: number } | null {
   const pos = skipTrivia(source, i, len)
-  if (pos >= len)
-    return null
+  if (pos >= len) return null
 
   const ch = source.charCodeAt(pos)
-  if (ch !== CH_SINGLE_QUOTE && ch !== CH_DOUBLE_QUOTE)
-    return null
+  if (ch !== CH_SINGLE_QUOTE && ch !== CH_DOUBLE_QUOTE) return null
 
   const strStart = pos + 1
   const strEnd = skipString(source, pos, len, ch)
-  if (strEnd <= strStart)
-    return null
+  if (strEnd <= strStart) return null
 
   return {
     source: source.slice(strStart, strEnd - 1),
@@ -287,25 +299,25 @@ function readImportModuleSpecifier(source: string, i: number, len: number): { so
   }
 }
 
-function collectImportSourcesAt(source: string, i: number, len: number): { sources: string[], end: number } {
-  if (!isKeywordAt(source, i, 'import'))
-    return { sources: [], end: i + 6 }
+function collectImportSourcesAt(
+  source: string,
+  i: number,
+  len: number,
+): { sources: string[]; end: number } {
+  if (!isKeywordAt(source, i, 'import')) return { sources: [], end: i + 6 }
 
   let pos = i + 6
   pos = skipTrivia(source, pos, len)
 
-  if (isKeywordAt(source, pos, 'type'))
-    pos = skipTrivia(source, pos + 4, len)
+  if (isKeywordAt(source, pos, 'type')) pos = skipTrivia(source, pos + 4, len)
 
   if (source.charCodeAt(pos) === CH_DOT) {
     pos++
-    while (pos < len && isIdentifierPartCode(source.charCodeAt(pos)))
-      pos++
+    while (pos < len && isIdentifierPartCode(source.charCodeAt(pos))) pos++
 
     while (pos < len && source.charCodeAt(pos) === CH_DOT) {
       pos++
-      while (pos < len && isIdentifierPartCode(source.charCodeAt(pos)))
-        pos++
+      while (pos < len && isIdentifierPartCode(source.charCodeAt(pos))) pos++
     }
 
     return { sources: [], end: pos }
@@ -314,28 +326,24 @@ function collectImportSourcesAt(source: string, i: number, len: number): { sourc
   if (source.charCodeAt(pos) === CH_OPEN_PAREN) {
     pos++
     const specifier = readImportModuleSpecifier(source, pos, len)
-    if (specifier)
-      return { sources: [specifier.source], end: specifier.end }
+    if (specifier) return { sources: [specifier.source], end: specifier.end }
 
     return { sources: [], end: pos }
   }
 
   const sideEffect = readImportModuleSpecifier(source, pos, len)
-  if (sideEffect)
-    return { sources: [sideEffect.source], end: sideEffect.end }
+  if (sideEffect) return { sources: [sideEffect.source], end: sideEffect.end }
 
   let depth = 0
   while (pos < len) {
     pos = skipTrivia(source, pos, len)
-    if (pos >= len)
-      break
+    if (pos >= len) break
 
     const ch = source.charCodeAt(pos)
 
     if (depth === 0 && isKeywordAt(source, pos, 'from')) {
       const specifier = readImportModuleSpecifier(source, pos + 4, len)
-      if (specifier)
-        return { sources: [specifier.source], end: specifier.end }
+      if (specifier) return { sources: [specifier.source], end: specifier.end }
 
       break
     }
@@ -345,8 +353,7 @@ function collectImportSourcesAt(source: string, i: number, len: number): { sourc
       continue
     }
 
-    if (ch === CH_OPEN_BRACE || ch === CH_OPEN_PAREN || ch === CH_OPEN_BRACKET)
-      depth++
+    if (ch === CH_OPEN_BRACE || ch === CH_OPEN_PAREN || ch === CH_OPEN_BRACKET) depth++
     else if (ch === CH_CLOSE_BRACE || ch === CH_CLOSE_PAREN || ch === CH_CLOSE_BRACKET)
       depth = Math.max(0, depth - 1)
 
@@ -375,35 +382,39 @@ const AS_A = 97
 const AS_S = 115
 
 function isExportAt(source: string, i: number): boolean {
-  return source.charCodeAt(i) === EXPORT_E
-    && source.charCodeAt(i + 1) === EXPORT_X
-    && source.charCodeAt(i + 2) === EXPORT_P
-    && source.charCodeAt(i + 3) === EXPORT_O
-    && source.charCodeAt(i + 4) === EXPORT_R
-    && source.charCodeAt(i + 5) === EXPORT_T
+  return (
+    source.charCodeAt(i) === EXPORT_E &&
+    source.charCodeAt(i + 1) === EXPORT_X &&
+    source.charCodeAt(i + 2) === EXPORT_P &&
+    source.charCodeAt(i + 3) === EXPORT_O &&
+    source.charCodeAt(i + 4) === EXPORT_R &&
+    source.charCodeAt(i + 5) === EXPORT_T
+  )
 }
 
 function isDefaultAt(source: string, i: number): boolean {
-  return source.charCodeAt(i) === DEFAULT_D
-    && source.charCodeAt(i + 1) === DEFAULT_E2
-    && source.charCodeAt(i + 2) === DEFAULT_F
-    && source.charCodeAt(i + 3) === DEFAULT_A
-    && source.charCodeAt(i + 4) === DEFAULT_U
-    && source.charCodeAt(i + 5) === DEFAULT_L
-    && source.charCodeAt(i + 6) === DEFAULT_T2
+  return (
+    source.charCodeAt(i) === DEFAULT_D &&
+    source.charCodeAt(i + 1) === DEFAULT_E2 &&
+    source.charCodeAt(i + 2) === DEFAULT_F &&
+    source.charCodeAt(i + 3) === DEFAULT_A &&
+    source.charCodeAt(i + 4) === DEFAULT_U &&
+    source.charCodeAt(i + 5) === DEFAULT_L &&
+    source.charCodeAt(i + 6) === DEFAULT_T2
+  )
 }
 
 export interface ModuleAnalysis {
-  directives: DirectiveResult
-  topLevelUseClient: boolean
-  topLevelUseServer: boolean
-  hasDefaultExport: boolean
-  hasComponentExport: boolean
-  importSources: string[]
+  readonly directives: DirectiveResult
+  readonly topLevelUseClient: boolean
+  readonly topLevelUseServer: boolean
+  readonly hasDefaultExport: boolean
+  readonly hasComponentExport: boolean
+  readonly importSources: readonly string[]
 }
 
 export function analyzeModuleSource(source: string): ModuleAnalysis {
-  const directives: DirectiveResult = { hasUseClient: false, hasUseServer: false }
+  const directives = { hasUseClient: false, hasUseServer: false }
   let topLevelUseClient = false
   let topLevelUseServer = false
   let hasDefaultExportResult = false
@@ -452,10 +463,8 @@ export function analyzeModuleSource(source: string): ModuleAnalysis {
         topLevelUseServer = isUseServer
       }
 
-      if (isUseClient)
-        directives.hasUseClient = true
-      if (isUseServer)
-        directives.hasUseServer = true
+      if (isUseClient) directives.hasUseClient = true
+      if (isUseServer) directives.hasUseServer = true
 
       let j = stringEnd
       let stillDirective = false
@@ -485,8 +494,7 @@ export function analyzeModuleSource(source: string): ModuleAnalysis {
       }
 
       if (!stillDirective) {
-        if (j >= len)
-          directivesPhase = false
+        if (j >= len) directivesPhase = false
         i = directivesPhase ? stringEnd : j
         continue
       }
@@ -501,7 +509,11 @@ export function analyzeModuleSource(source: string): ModuleAnalysis {
       continue
     }
 
-    if (ch === CH_SLASH && source.charCodeAt(i + 1) !== CH_SLASH && source.charCodeAt(i + 1) !== CH_STAR) {
+    if (
+      ch === CH_SLASH &&
+      source.charCodeAt(i + 1) !== CH_SLASH &&
+      source.charCodeAt(i + 1) !== CH_STAR
+    ) {
       if (canPrecedeRegexWithKeywords(source, i)) {
         i = skipRegex(source, i, len)
         continue
@@ -510,7 +522,12 @@ export function analyzeModuleSource(source: string): ModuleAnalysis {
 
     if (ch === CH_LT) {
       const nextCh = source.charCodeAt(i + 1)
-      if (nextCh === CH_SLASH || nextCh === CH_DOT || nextCh === CH_GT || isIdentifierStartCode(nextCh)) {
+      if (
+        nextCh === CH_SLASH ||
+        nextCh === CH_DOT ||
+        nextCh === CH_GT ||
+        isIdentifierStartCode(nextCh)
+      ) {
         i = skipJSX(source, i, len)
         continue
       }
@@ -520,8 +537,7 @@ export function analyzeModuleSource(source: string): ModuleAnalysis {
 
     if (isKeywordAt(source, i, 'import')) {
       const collected = collectImportSourcesAt(source, i, len)
-      for (const importSource of collected.sources)
-        importSources.push(importSource)
+      for (const importSource of collected.sources) importSources.push(importSource)
       i = collected.end
       continue
     }
@@ -531,9 +547,11 @@ export function analyzeModuleSource(source: string): ModuleAnalysis {
       if (afterExport < len) {
         const afterCh = source.charCodeAt(afterExport)
         if (
-          isWhitespaceCode(afterCh)
-          || afterCh === CH_OPEN_BRACE
-          || (afterCh === CH_SLASH && (source.charCodeAt(afterExport + 1) === CH_SLASH || source.charCodeAt(afterExport + 1) === CH_STAR))
+          isWhitespaceCode(afterCh) ||
+          afterCh === CH_OPEN_BRACE ||
+          (afterCh === CH_SLASH &&
+            (source.charCodeAt(afterExport + 1) === CH_SLASH ||
+              source.charCodeAt(afterExport + 1) === CH_STAR))
         ) {
           const j = skipTrivia(source, afterExport, len)
 
@@ -552,16 +570,13 @@ export function analyzeModuleSource(source: string): ModuleAnalysis {
             while (k < len) {
               k = skipTrivia(source, k, len)
 
-              if (source.charCodeAt(k) === CH_CLOSE_BRACE)
-                break
+              if (source.charCodeAt(k) === CH_CLOSE_BRACE) break
 
               const identStart = k
-              while (k < len && isIdentifierPartCode(source.charCodeAt(k)))
-                k++
+              while (k < len && isIdentifierPartCode(source.charCodeAt(k))) k++
               const identLen = k - identStart
 
-              if (identLen === 0)
-                break
+              if (identLen === 0) break
 
               k = skipTrivia(source, k, len)
 
@@ -572,8 +587,7 @@ export function analyzeModuleSource(source: string): ModuleAnalysis {
                 if (afterAs < len && !isIdentifierPartCode(source.charCodeAt(afterAs))) {
                   k = skipTrivia(source, afterAs, len)
                   const aliasStart = k
-                  while (k < len && isIdentifierPartCode(source.charCodeAt(k)))
-                    k++
+                  while (k < len && isIdentifierPartCode(source.charCodeAt(k))) k++
                   if (k - aliasStart === 7 && isDefaultAt(source, aliasStart)) {
                     hasDefaultExportResult = true
                     hasComponentExportResult = true
@@ -591,16 +605,14 @@ export function analyzeModuleSource(source: string): ModuleAnalysis {
                 continue
               }
 
-              if (source.charCodeAt(k) === CH_CLOSE_BRACE)
-                break
+              if (source.charCodeAt(k) === CH_CLOSE_BRACE) break
 
               k++
             }
-          }
-          else if (
-            isKeywordAt(source, j, 'async')
-            || isKeywordAt(source, j, 'function')
-            || isKeywordAt(source, j, 'class')
+          } else if (
+            isKeywordAt(source, j, 'async') ||
+            isKeywordAt(source, j, 'function') ||
+            isKeywordAt(source, j, 'class')
           ) {
             hasComponentExportResult = true
           }
@@ -638,10 +650,27 @@ export function hasDefaultExport(source: string): boolean {
 }
 
 function canPrecedeRegexCode(ch: number): boolean {
-  return ch === CH_OPEN_PAREN || ch === CH_OPEN_BRACKET || ch === CH_OPEN_BRACE || ch === CH_COMMA
-    || ch === CH_SEMICOLON || ch === CH_EQUALS || ch === CH_COLON || ch === CH_QUESTION || ch === CH_EXCL
-    || ch === CH_PLUS || ch === CH_MINUS || ch === CH_STAR || ch === CH_PERCENT || ch === CH_AMP
-    || ch === CH_PIPE || ch === CH_CARET || ch === CH_TILDE || ch === CH_LT || ch === CH_GT
+  return (
+    ch === CH_OPEN_PAREN ||
+    ch === CH_OPEN_BRACKET ||
+    ch === CH_OPEN_BRACE ||
+    ch === CH_COMMA ||
+    ch === CH_SEMICOLON ||
+    ch === CH_EQUALS ||
+    ch === CH_COLON ||
+    ch === CH_QUESTION ||
+    ch === CH_EXCL ||
+    ch === CH_PLUS ||
+    ch === CH_MINUS ||
+    ch === CH_STAR ||
+    ch === CH_PERCENT ||
+    ch === CH_AMP ||
+    ch === CH_PIPE ||
+    ch === CH_CARET ||
+    ch === CH_TILDE ||
+    ch === CH_LT ||
+    ch === CH_GT
+  )
 }
 
 function getPreviousToken(source: string, pos: number): string | undefined {
@@ -663,8 +692,7 @@ function getPreviousToken(source: string, pos: number): string | undefined {
         }
         i--
       }
-      if (i < 0)
-        return undefined
+      if (i < 0) return undefined
       continue
     }
 
@@ -674,14 +702,25 @@ function getPreviousToken(source: string, pos: number): string | undefined {
     }
 
     let checkPos = i
-    while (checkPos >= 0 && source.charCodeAt(checkPos) !== CH_LF && source.charCodeAt(checkPos) !== CH_CR) {
+    while (
+      checkPos >= 0 &&
+      source.charCodeAt(checkPos) !== CH_LF &&
+      source.charCodeAt(checkPos) !== CH_CR
+    ) {
       checkPos--
     }
     let afterNewline = checkPos + 1
-    while (afterNewline < i && (source.charCodeAt(afterNewline) === CH_SPACE || source.charCodeAt(afterNewline) === CH_TAB)) {
+    while (
+      afterNewline < i &&
+      (source.charCodeAt(afterNewline) === CH_SPACE || source.charCodeAt(afterNewline) === CH_TAB)
+    ) {
       afterNewline++
     }
-    if (afterNewline < i && source.charCodeAt(afterNewline) === CH_SLASH && source.charCodeAt(afterNewline + 1) === CH_SLASH) {
+    if (
+      afterNewline < i &&
+      source.charCodeAt(afterNewline) === CH_SLASH &&
+      source.charCodeAt(afterNewline + 1) === CH_SLASH
+    ) {
       i = afterNewline - 1
       continue
     }
@@ -689,10 +728,8 @@ function getPreviousToken(source: string, pos: number): string | undefined {
     break
   }
 
-  if (i < 0)
-    return undefined
-  if (!isIdentifierPartCode(source.charCodeAt(i)))
-    return undefined
+  if (i < 0) return undefined
+  if (!isIdentifierPartCode(source.charCodeAt(i))) return undefined
 
   const end = i
   while (i >= 0 && isIdentifierPartCode(source.charCodeAt(i))) {
@@ -720,8 +757,7 @@ function getPreviousNonTriviaCharCode(source: string, pos: number): number {
         }
         i--
       }
-      if (i < 0)
-        return -1
+      if (i < 0) return -1
       continue
     }
 
@@ -731,14 +767,25 @@ function getPreviousNonTriviaCharCode(source: string, pos: number): number {
     }
 
     let checkPos = i
-    while (checkPos >= 0 && source.charCodeAt(checkPos) !== CH_LF && source.charCodeAt(checkPos) !== CH_CR) {
+    while (
+      checkPos >= 0 &&
+      source.charCodeAt(checkPos) !== CH_LF &&
+      source.charCodeAt(checkPos) !== CH_CR
+    ) {
       checkPos--
     }
     let afterNewline = checkPos + 1
-    while (afterNewline < i && (source.charCodeAt(afterNewline) === CH_SPACE || source.charCodeAt(afterNewline) === CH_TAB)) {
+    while (
+      afterNewline < i &&
+      (source.charCodeAt(afterNewline) === CH_SPACE || source.charCodeAt(afterNewline) === CH_TAB)
+    ) {
       afterNewline++
     }
-    if (afterNewline < i && source.charCodeAt(afterNewline) === CH_SLASH && source.charCodeAt(afterNewline + 1) === CH_SLASH) {
+    if (
+      afterNewline < i &&
+      source.charCodeAt(afterNewline) === CH_SLASH &&
+      source.charCodeAt(afterNewline + 1) === CH_SLASH
+    ) {
       i = afterNewline - 1
       continue
     }
@@ -757,7 +804,7 @@ function canPrecedeRegexWithKeywords(source: string, pos: number): boolean {
   }
 
   const prevToken = getPreviousToken(source, pos)
-  if (prevToken) {
+  if (prevToken != null && prevToken !== '') {
     return REGEX_KEYWORDS.has(prevToken)
   }
 

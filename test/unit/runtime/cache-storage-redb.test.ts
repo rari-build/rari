@@ -4,10 +4,7 @@ import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { patchDenoBackend, restoreDeno } from './deno-mock'
 
 function installRedbOpsMock(backend: MockBackend) {
-  patchDenoBackend(
-    { get: 'op_redb_cache_get', set: 'op_redb_cache_set' },
-    backend,
-  )
+  patchDenoBackend({ get: 'op_redb_cache_get', set: 'op_redb_cache_set' }, backend)
 }
 
 function uninstallRedbOpsMock(): void {
@@ -97,9 +94,13 @@ describe('redbCacheStorage', () => {
       },
     }
     installRedbOpsMock(backend)
-    await redbCacheStorage.write('k', () => {
-      throw new Error('not json')
-    }, { ttlMs: 1000 })
+    await redbCacheStorage.write(
+      'k',
+      () => {
+        throw new Error('not json')
+      },
+      { ttlMs: 1000 },
+    )
     expect(written).toBe(false)
   })
 })

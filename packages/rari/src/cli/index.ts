@@ -6,6 +6,11 @@ import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { parseArgs, styleText } from 'node:util'
 import { logError, logInfo, logSuccess, logWarn } from '@rari/logger'
+import {
+  parseJsonRecord,
+  readPackageManagerFieldFromRecord,
+  readViteBinFromPackageRecord,
+} from '@/shared/utils/type-guards'
 import { getBinaryPath, getInstallationInstructions } from './platform'
 
 type PackageManager = 'pnpm' | 'yarn' | 'bun' | 'npm'
@@ -21,14 +26,10 @@ let cachedProjectContext: ProjectContext | null = null
 function detectPackageManagerFromDir(dir: string): PackageManager | null {
   const entries = existsSync(dir) ? new Set(readDirNames(dir)) : new Set<string>()
 
-  if (entries.has('pnpm-lock.yaml'))
-    return 'pnpm'
-  if (entries.has('yarn.lock'))
-    return 'yarn'
-  if (entries.has('bun.lockb') || entries.has('bun.lock'))
-    return 'bun'
-  if (entries.has('package-lock.json'))
-    return 'npm'
+  if (entries.has('pnpm-lock.yaml')) return 'pnpm'
+  if (entries.has('yarn.lock')) return 'yarn'
+  if (entries.has('bun.lockb') || entries.has('bun.lock')) return 'bun'
+  if (entries.has('package-lock.json')) return 'npm'
 
   return readPackageManagerField(dir)
 }
@@ -36,8 +37,7 @@ function detectPackageManagerFromDir(dir: string): PackageManager | null {
 function readDirNames(dir: string): string[] {
   try {
     return readdirSync(dir)
-  }
-  catch {
+  } catch {
     return []
   }
 }
@@ -45,20 +45,13 @@ function readDirNames(dir: string): string[] {
 function readPackageManagerField(dir: string): PackageManager | null {
   try {
     const pkgPath = resolve(dir, 'package.json')
-    if (!existsSync(pkgPath))
-      return null
+    if (!existsSync(pkgPath)) return null
 
-    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as { packageManager?: string }
-    if (pkg.packageManager?.startsWith('pnpm'))
-      return 'pnpm'
-    if (pkg.packageManager?.startsWith('yarn'))
-      return 'yarn'
-    if (pkg.packageManager?.startsWith('bun'))
-      return 'bun'
-    if (pkg.packageManager?.startsWith('npm'))
-      return 'npm'
-  }
-  catch {}
+    const pkg = parseJsonRecord(readFileSync(pkgPath, 'utf-8'))
+    if (!pkg) return null
+
+    return readPackageManagerFieldFromRecord(pkg)
+  } catch {}
 
   return null
 }
@@ -66,20 +59,13 @@ function readPackageManagerField(dir: string): PackageManager | null {
 function detectViteBinFromDir(dir: string): 'vp' | 'vite' | null {
   try {
     const pkgPath = resolve(dir, 'package.json')
-    if (!existsSync(pkgPath))
-      return null
+    if (!existsSync(pkgPath)) return null
 
-    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as {
-      dependencies?: Record<string, string>
-      devDependencies?: Record<string, string>
-    }
-    const deps = { ...pkg.dependencies, ...pkg.devDependencies }
-    if (deps['vite-plus'])
-      return 'vp'
-    if (deps.vite)
-      return 'vite'
-  }
-  catch {}
+    const pkg = parseJsonRecord(readFileSync(pkgPath, 'utf-8'))
+    if (!pkg) return null
+
+    return readViteBinFromPackageRecord(pkg)
+  } catch {}
 
   return null
 }
@@ -89,21 +75,13 @@ function discoverProjectContext(cwd: string): ProjectContext {
   let packageManager: PackageManager | null = null
   let viteBin: 'vp' | 'vite' | null = null
 
-  while (true) {
-    if (!packageManager)
-      packageManager = detectPackageManagerFromDir(currentDir)
+  while (currentDir !== resolve(currentDir, '..')) {
+    packageManager ??= detectPackageManagerFromDir(currentDir)
+    viteBin ??= detectViteBinFromDir(currentDir)
 
-    if (!viteBin)
-      viteBin = detectViteBinFromDir(currentDir)
+    if (packageManager && viteBin) break
 
-    if (packageManager && viteBin)
-      break
-
-    const parentDir = resolve(currentDir, '..')
-    if (parentDir === currentDir)
-      break
-
-    currentDir = parentDir
+    currentDir = resolve(currentDir, '..')
   }
 
   return {
@@ -115,8 +93,7 @@ function discoverProjectContext(cwd: string): ProjectContext {
 
 function getProjectContext(): ProjectContext {
   const cwd = process.cwd()
-  if (cachedProjectContext?.cwd === cwd)
-    return cachedProjectContext
+  if (cachedProjectContext?.cwd === cwd) return cachedProjectContext
 
   cachedProjectContext = discoverProjectContext(cwd)
   return cachedProjectContext
@@ -137,6 +114,8 @@ function getPackageExecutor(): string {
       return isWindows ? 'pnpm.cmd' : 'pnpm'
     case 'yarn':
       return isWindows ? 'yarn.cmd' : 'yarn'
+    case 'npm':
+      return isWindows ? 'npx.cmd' : 'npx'
     default:
       return isWindows ? 'npx.cmd' : 'npx'
   }
@@ -146,7 +125,7 @@ function resolveLocalBin(binName: string, startDir = process.cwd()): string | nu
   const isWindows = process.platform === 'win32'
   let currentDir = startDir
 
-  while (true) {
+  while (currentDir !== resolve(currentDir, '..')) {
     const binDir = resolve(currentDir, 'node_modules', '.bin')
     const candidates = isWindows
       ? [
@@ -157,21 +136,16 @@ function resolveLocalBin(binName: string, startDir = process.cwd()): string | nu
       : [resolve(binDir, binName)]
 
     for (const candidate of candidates) {
-      if (existsSync(candidate))
-        return candidate
+      if (existsSync(candidate)) return candidate
     }
 
-    const parentDir = resolve(currentDir, '..')
-    if (parentDir === currentDir)
-      break
-
-    currentDir = parentDir
+    currentDir = resolve(currentDir, '..')
   }
 
   return null
 }
 
-function crossPlatformSpawn(command: string, args: string[], options: SpawnOptions = {}) {
+function crossPlatformSpawn(command: string, args: readonly string[], options: SpawnOptions = {}) {
   const isWindows = process.platform === 'win32'
 
   if (command === 'npx') {
@@ -184,22 +158,19 @@ function crossPlatformSpawn(command: string, args: string[], options: SpawnOptio
       return spawn(executor, ['exec', ...args], { ...options, shell: isWindows })
     if (executor.includes('yarn')) {
       const [bin, ...rest] = args
-      const yarnArgs = bin === 'vp'
-        ? ['dlx', '-p', 'vite-plus', 'vp', ...rest]
-        : ['dlx', ...args]
+      const yarnArgs = bin === 'vp' ? ['dlx', '-p', 'vite-plus', 'vp', ...rest] : ['dlx', ...args]
       return spawn(executor, yarnArgs, { ...options, shell: isWindows })
     }
   }
 
-  if (isWindows && command === 'npx')
-    return spawn('npx.cmd', args, { ...options, shell: true })
+  if (isWindows && command === 'npx') return spawn('npx.cmd', args, { ...options, shell: true })
 
   return spawn(command, args, options)
 }
 
-function spawnTool(binName: string, args: string[], options: SpawnOptions = {}) {
+function spawnTool(binName: string, args: readonly string[], options: SpawnOptions = {}) {
   const localBin = resolveLocalBin(binName)
-  if (localBin) {
+  if (localBin != null && localBin !== '') {
     const needsShell = process.platform === 'win32' && localBin.endsWith('.cmd')
     return spawn(localBin, args, needsShell ? { ...options, shell: true } : options)
   }
@@ -209,18 +180,17 @@ function spawnTool(binName: string, args: string[], options: SpawnOptions = {}) 
 
 async function waitForProcess(
   child: ChildProcess,
-  options: { tolerateErrors?: boolean } = {},
+  options: Readonly<{ tolerateErrors?: boolean }> = {},
 ): Promise<number | null> {
   return new Promise((resolve, reject) => {
-    child.on('exit', (code) => {
+    child.on('exit', code => {
       resolve(code)
     })
-    child.on('error', (error) => {
+    child.on('error', error => {
       if (options.tolerateErrors) {
         logWarn(normalizeError(error))
         resolve(1)
-      }
-      else {
+      } else {
         reject(error)
       }
     })
@@ -228,25 +198,21 @@ async function waitForProcess(
 }
 
 function normalizeError(error: unknown): string {
-  if (error instanceof Error)
-    return error.message
-  if (typeof error === 'string')
-    return error
+  if (error instanceof Error) return error.message
+  if (typeof error === 'string') return error
   try {
     return JSON.stringify(error)
-  }
-  catch {
+  } catch {
     return String(error)
   }
 }
 
 function loadProjectEnv() {
   const envPath = resolve(process.cwd(), '.env')
-  if (existsSync(envPath))
-    process.loadEnvFile(envPath)
+  if (existsSync(envPath)) process.loadEnvFile(envPath)
 }
 
-function parseCliArgv(argv: string[]) {
+function parseCliArgv(argv: readonly string[]): { command: string | undefined; args: string[] } {
   const { values, positionals } = parseArgs({
     args: argv,
     options: {
@@ -256,26 +222,25 @@ function parseCliArgv(argv: string[]) {
     strict: false,
   })
 
-  if (values.help)
-    return { command: 'help', args: [] as string[] }
+  if (values.help === true) return { command: 'help', args: [] as string[] }
 
-  const [command, ...args] = positionals
+  const [command = 'help', ...args] = positionals
   return { command, args }
 }
 
 function isRailwayEnvironment(): boolean {
-  return !!(
-    process.env.RAILWAY_ENVIRONMENT
-    || process.env.RAILWAY_PROJECT_ID
-    || process.env.RAILWAY_SERVICE_ID
+  return (
+    (process.env.RAILWAY_ENVIRONMENT != null && process.env.RAILWAY_ENVIRONMENT !== '') ||
+    (process.env.RAILWAY_PROJECT_ID != null && process.env.RAILWAY_PROJECT_ID !== '') ||
+    (process.env.RAILWAY_SERVICE_ID != null && process.env.RAILWAY_SERVICE_ID !== '')
   )
 }
 
 function isRenderEnvironment(): boolean {
-  return !!(
-    process.env.RENDER
-    || process.env.RENDER_SERVICE_ID
-    || process.env.RENDER_SERVICE_NAME
+  return (
+    (process.env.RENDER != null && process.env.RENDER !== '') ||
+    (process.env.RENDER_SERVICE_ID != null && process.env.RENDER_SERVICE_ID !== '') ||
+    (process.env.RENDER_SERVICE_NAME != null && process.env.RENDER_SERVICE_NAME !== '')
   )
 }
 
@@ -284,24 +249,30 @@ function isPlatformEnvironment(): boolean {
 }
 
 function getPlatformName(): string {
-  if (isRailwayEnvironment())
-    return 'Railway'
-  if (isRenderEnvironment())
-    return 'Render'
+  if (isRailwayEnvironment()) return 'Railway'
+  if (isRenderEnvironment()) return 'Render'
 
   return 'local'
 }
 
 function getDeploymentConfig() {
-  const port = process.env.PORT || process.env.RSC_PORT || '3000'
-  const mode = process.env.NODE_ENV || 'production'
+  const port =
+    process.env.PORT != null && process.env.PORT !== ''
+      ? process.env.PORT
+      : process.env.RSC_PORT != null && process.env.RSC_PORT !== ''
+        ? process.env.RSC_PORT
+        : '3000'
+  const mode =
+    process.env.NODE_ENV != null && process.env.NODE_ENV !== ''
+      ? process.env.NODE_ENV
+      : 'production'
   const host = isPlatformEnvironment() ? '0.0.0.0' : '127.0.0.1'
 
   return { port, mode, host }
 }
 
 async function runViteBuild() {
-  await cleanDistFolder()
+  cleanDistFolder()
   const viteBin = getProjectContext().viteBin
 
   logInfo('Type checking...')
@@ -313,8 +284,7 @@ async function runViteBuild() {
   const typecheckCode = await waitForProcess(typecheckProcess)
   if (typecheckCode === 0) {
     logSuccess('Type check passed')
-  }
-  else {
+  } else {
     logError(`Type check failed with code ${typecheckCode}`)
     throw new Error(`Type check failed with code ${typecheckCode}`)
   }
@@ -328,8 +298,7 @@ async function runViteBuild() {
   const buildCode = await waitForProcess(buildProcess)
   if (buildCode === 0) {
     logSuccess('Build complete')
-  }
-  else {
+  } else {
     logError(`Build failed with code ${buildCode}`)
     throw new Error(`Build failed with code ${buildCode}`)
   }
@@ -340,13 +309,11 @@ async function runViteBuild() {
 async function preOptimizeImages() {
   const imageConfigPath = resolve(process.cwd(), 'dist', 'server', 'image.json')
 
-  if (!existsSync(imageConfigPath))
-    return
+  if (!existsSync(imageConfigPath)) return
 
   const publicPath = resolve(process.cwd(), 'public')
 
-  if (!existsSync(publicPath))
-    return
+  if (!existsSync(publicPath)) return
 
   try {
     const binaryPath = getBinaryPath()
@@ -357,10 +324,8 @@ async function preOptimizeImages() {
     })
 
     const code = await waitForProcess(optimizeProcess, { tolerateErrors: true })
-    if (code !== 0)
-      logWarn(`Image pre-optimization exited with code ${code}`)
-  }
-  catch (error) {
+    if (code !== 0) logWarn(`Image pre-optimization exited with code ${code}`)
+  } catch (error) {
     logWarn(`Could not pre-optimize images: ${normalizeError(error)}`)
   }
 }
@@ -380,8 +345,7 @@ async function runViteDev() {
     const buildCode = await waitForProcess(buildProcess)
     if (buildCode === 0) {
       logSuccess('Initial build complete')
-    }
-    else {
+    } else {
       logError(`Build failed with code ${buildCode}`)
       throw new Error(`Build failed with code ${buildCode}`)
     }
@@ -421,8 +385,7 @@ async function startRustServer(): Promise<void> {
 
   try {
     binaryPath = getBinaryPath()
-  }
-  catch {
+  } catch {
     logError('Failed to obtain rari binary')
     logError(getInstallationInstructions())
     process.exit(1)
@@ -443,7 +406,7 @@ async function startRustServer(): Promise<void> {
   // Detach only for interactive terminals so Ctrl+C hits Node first (then we
   // SIGTERM the Rust server). Under Playwright/CI (no TTY), staying in the
   // process group prevents orphaned rari processes after webServer teardown.
-  const detachRustServer = process.platform !== 'win32' && Boolean(process.stdin.isTTY)
+  const detachRustServer = process.platform !== 'win32' && process.stdin.isTTY
 
   const rustServer = spawn(binaryPath, args, {
     stdio: 'inherit',
@@ -451,7 +414,10 @@ async function startRustServer(): Promise<void> {
     detached: detachRustServer,
     env: {
       ...process.env,
-      RUST_LOG: process.env.RUST_LOG || 'error',
+      RUST_LOG:
+        process.env.RUST_LOG != null && process.env.RUST_LOG !== ''
+          ? process.env.RUST_LOG
+          : 'error',
     },
   })
 
@@ -459,8 +425,7 @@ async function startRustServer(): Promise<void> {
   let forceKillTimer: NodeJS.Timeout | undefined
 
   const shutdown = () => {
-    if (shuttingDown)
-      return
+    if (shuttingDown) return
     shuttingDown = true
     logInfo('shutting down...')
     rustServer.kill('SIGTERM')
@@ -468,7 +433,7 @@ async function startRustServer(): Promise<void> {
       rustServer.kill('SIGKILL')
       process.exit(1)
     }, 5000)
-    forceKillTimer.unref?.()
+    forceKillTimer.unref()
   }
 
   process.on('SIGINT', shutdown)
@@ -476,8 +441,7 @@ async function startRustServer(): Promise<void> {
   process.on('exit', () => {
     try {
       rustServer.kill('SIGKILL')
-    }
-    catch {
+    } catch {
       // already dead
     }
   })
@@ -490,24 +454,21 @@ async function startRustServer(): Promise<void> {
   })
 
   rustServer.on('exit', (code: number | null, signal: string | null) => {
-    if (forceKillTimer)
-      clearTimeout(forceKillTimer)
+    if (forceKillTimer) clearTimeout(forceKillTimer)
 
-    if (signal) {
+    if (signal != null && signal !== '') {
       if (shuttingDown) {
         logInfo(`server stopped by signal ${signal}`)
         process.exit(0)
       }
       logError(`server stopped unexpectedly by signal ${signal}`)
       process.exit(1)
-    }
-    else if (code === 0) {
+    } else if (code === 0) {
       logSuccess('server stopped successfully')
       process.exit(0)
-    }
-    else {
+    } else {
       logError(`server exited with code ${code}`)
-      process.exit(code || 1)
+      process.exit(code != null && code !== 0 ? code : 1)
     }
   })
 
@@ -523,7 +484,7 @@ async function deployToRailway() {
   }
 
   const { createRailwayDeployment } = await import('@rari/deploy/railway')
-  await createRailwayDeployment()
+  createRailwayDeployment()
 }
 
 async function deployToRender() {
@@ -535,18 +496,17 @@ async function deployToRender() {
   }
 
   const { createRenderDeployment } = await import('@rari/deploy/render')
-  await createRenderDeployment()
+  createRenderDeployment()
 }
 
-async function cleanDistFolder() {
+function cleanDistFolder() {
   const distPath = resolve(process.cwd(), 'dist')
 
   if (existsSync(distPath)) {
     logInfo('Cleaning dist folder...')
     rmSync(distPath, { recursive: true, force: true })
     logSuccess('Cleaned dist folder')
-  }
-  else {
+  } else {
     logInfo('No dist folder to clean')
   }
 }
@@ -627,12 +587,12 @@ async function main() {
 
   const { command, args } = parseCliArgv(process.argv.slice(2))
 
-  switch (command) {
-    case undefined:
-    case 'help':
-      printHelp()
-      break
+  if (command == null || command === 'help') {
+    printHelp()
+    return
+  }
 
+  switch (command) {
     case 'dev':
       await runViteDev()
       break
@@ -646,17 +606,15 @@ async function main() {
       break
 
     case 'clean':
-      await cleanDistFolder()
+      cleanDistFolder()
       break
 
     case 'deploy':
       if (args[0] === 'railway') {
         await deployToRailway()
-      }
-      else if (args[0] === 'render') {
+      } else if (args[0] === 'render') {
         await deployToRender()
-      }
-      else {
+      } else {
         logError('Unknown deployment target. Available: railway, render')
         process.exit(1)
       }
@@ -676,7 +634,7 @@ function isCliMainModule(): boolean {
 }
 
 if (isCliMainModule()) {
-  main().catch((error) => {
+  main().catch((error: unknown) => {
     logError(`CLI Error: ${normalizeError(error)}`)
     console.error(error)
     process.exit(1)

@@ -2,29 +2,37 @@ import type { NavigationOptions } from './types'
 
 let navigateFunction: ((href: string, options?: NavigationOptions) => Promise<void>) | null = null
 
-export function getNavigate(): ((href: string, options?: NavigationOptions) => Promise<void>) | null {
+export function getNavigate():
+  | ((href: string, options?: NavigationOptions) => Promise<void>)
+  | null {
   return navigateFunction
 }
 
-export function registerNavigate(fn: (href: string, options?: NavigationOptions) => Promise<void>): void {
+export function registerNavigate(
+  fn: (href: string, options?: NavigationOptions) => Promise<void>,
+): void {
   if (typeof window === 'undefined') {
     console.warn('[rari] Router cannot register navigate in non-browser environment')
     return
   }
 
-  // eslint-disable-next-line node/prefer-global/process
-  if (navigateFunction && (typeof process !== 'undefined' && process.env.NODE_ENV !== 'production')) {
-    console.warn('[rari] Router: registerNavigate called multiple times, overwriting existing navigate function', {
-      previous: navigateFunction,
-      new: fn,
-    })
+  if (navigateFunction && typeof process !== 'undefined' && process.env.NODE_ENV !== 'production') {
+    console.warn(
+      '[rari] Router: registerNavigate called multiple times, overwriting existing navigate function',
+      {
+        previous: navigateFunction,
+        new: fn,
+      },
+    )
   }
 
   navigateFunction = fn
 
-  window.dispatchEvent(new CustomEvent('rari:register-navigate', {
-    detail: { navigate: fn },
-  }))
+  window.dispatchEvent(
+    new CustomEvent('rari:register-navigate', {
+      detail: { navigate: fn },
+    }),
+  )
 }
 
 export function deregisterNavigate(): void {
@@ -47,10 +55,8 @@ export async function navigate(href: string, options?: NavigationOptions): Promi
   if (!navigateFunction) {
     console.warn('[rari] Router not initialized, falling back to window.location')
 
-    if (options?.replace)
-      window.location.replace(href)
-    else
-      window.location.href = href
+    if (options?.replace) window.location.replace(href)
+    else window.location.href = href
 
     return
   }

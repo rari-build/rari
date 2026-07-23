@@ -15,7 +15,7 @@ export async function POST(request: Request) {
       )
     }
 
-    const parsed = JSON.parse(body)
+    const parsed: unknown = JSON.parse(body)
     return new Response(
       JSON.stringify({
         message: 'Body received',
@@ -26,8 +26,7 @@ export async function POST(request: Request) {
         headers: { 'Content-Type': 'application/json' },
       },
     )
-  }
-  catch (error) {
+  } catch (error) {
     return new Response(
       JSON.stringify({
         error: 'Invalid JSON',

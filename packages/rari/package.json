@@ -163,6 +163,7 @@
   "devDependencies": {
     "@mdx-js/mdx": "catalog:mdx",
     "@rari/deploy": "workspace:*",
+    "@rari/lint": "workspace:*",
     "@rari/logger": "workspace:*",
     "@types/node": "catalog:typescript",
     "@types/react": "catalog:react",
