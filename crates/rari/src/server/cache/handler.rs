@@ -393,6 +393,7 @@ impl CacheHandler for MemoryCacheHandler {
     }
 
     async fn invalidate(&self, key: &str) -> Result<bool, CacheError> {
+        let _mutate = self.mutate.lock();
         if self.remove_entry(key).is_none() {
             tracing::debug!(key = %key, "memory cache invalidate (no-op, not present)");
             return Ok(false);
@@ -404,11 +405,12 @@ impl CacheHandler for MemoryCacheHandler {
     }
 
     async fn invalidate_by_tag(&self, tag: &str) -> Result<(), CacheError> {
+        let _mutate = self.mutate.lock();
         let keys: Vec<String> =
             self.tag_index.get(tag).map(|e| e.value().clone()).unwrap_or_default();
         tracing::debug!(tag = %tag, key_count = keys.len(), "memory cache invalidate_by_tag");
         for key in keys {
-            self.invalidate(&key).await?;
+            let _ = self.remove_entry(&key);
         }
         let empty = self.tag_index.get(tag).map(|e| e.value().is_empty()).unwrap_or(true);
         if empty {
