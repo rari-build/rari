@@ -174,3 +174,11 @@ export function isStaticParamsArray(
     return Object.values(entry).every(item => typeof item === 'string' || isStringArray(item))
   })
 }
+
+export function warnInvalidStaticParams(source: string): void {
+  console.warn(
+    `[rari] generateStaticParams() in ${source} returned invalid params. ` +
+      `Expected Array<Record<string, string | string[]>> (e.g. [{ slug: "post" }]). ` +
+      `Static routes for this page will not be generated.`,
+  )
+}

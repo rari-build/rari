@@ -1,4 +1,4 @@
-import { isRecord, isStaticParamsArray } from '@/shared/utils/type-guards'
+import { isRecord, isStaticParamsArray, warnInvalidStaticParams } from '@/shared/utils/type-guards'
 
 export interface ServerSidePropsResult {
   props: Record<string, any>
@@ -325,6 +325,7 @@ export async function extractStaticParams(componentPath: string): Promise<Static
     if (typeof module.generateStaticParams === 'function') {
       const params = await module.generateStaticParams()
       if (isStaticParamsArray(params)) return params
+      warnInvalidStaticParams(componentPath)
     }
 
     return []

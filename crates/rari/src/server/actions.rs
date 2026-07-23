@@ -1636,8 +1636,9 @@ mod tests {
     #[test]
     fn test_action_handler_script_has_isolate_safe_validation() {
         assert!(ACTION_HANDLER_SCRIPT.contains("rari-action-handler-v3"));
-        assert!(ACTION_HANDLER_SCRIPT.contains("globalScope.__RARI_ACTION_ARGS_VALIDATION__"));
+        assert!(ACTION_HANDLER_SCRIPT.contains("g.__RARI_ACTION_ARGS_VALIDATION__"));
         assert!(ACTION_HANDLER_SCRIPT.contains("getActionArgsValidationApi"));
+        assert!(ACTION_HANDLER_SCRIPT.contains("initActionArgsValidationCore"));
     }
 
     #[test]

@@ -5,7 +5,12 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { BACKSLASH_REGEX, QUOTE_REGEX, TSX_EXT_REGEX } from '@/shared/regex-constants'
-import { isRecord, isStaticParamsArray, parseJsonRecord } from '@/shared/utils/type-guards'
+import {
+  isRecord,
+  isStaticParamsArray,
+  parseJsonRecord,
+  warnInvalidStaticParams,
+} from '@/shared/utils/type-guards'
 import { toRariPlugin } from '@/vite/plugin/types'
 import { generateAppRouteManifest } from './routes'
 
@@ -489,16 +494,27 @@ export function rariRouter(options: RariRouterPluginOptions = {}): RariPlugin {
               // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- dynamically imported route module
               const generateStaticParams = module.generateStaticParams as () => unknown
               const params = await generateStaticParams()
-              if (isStaticParamsArray(params) && params.length > 0) {
-                route.staticParams = params
-                updated = true
+              if (isStaticParamsArray(params)) {
+                if (params.length > 0) {
+                  route.staticParams = params
+                  updated = true
+                }
+              } else {
+                warnInvalidStaticParams(componentId)
               }
             }
-          } catch {}
+          } catch (error) {
+            console.warn(
+              `[rari] Failed to evaluate generateStaticParams for ${componentId}:`,
+              error,
+            )
+          }
         }
 
         if (updated) await fs.writeFile(routesPath, JSON.stringify(manifest), 'utf-8')
-      } catch {}
+      } catch (error) {
+        console.warn('[rari] Failed to enrich routes manifest with static params:', error)
+      }
     },
   } satisfies Plugin
 
