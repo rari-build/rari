@@ -1,5 +1,4 @@
 use std::{
-    env,
     future::Future,
     pin::Pin,
     sync::{
@@ -1423,27 +1422,10 @@ async fn invalidate_component_all_error_uses_executed_not_total() {
 }
 
 #[test]
-fn timeout_ms_from_env_parses_overrides_and_rejects_invalid() {
-    let prev = env::var("RARI_JS_POOL_TIMEOUT_MS").ok();
-    // SAFETY: test-only env mutation; restored below. Keep cases in one test so
-    // parallel suite workers cannot race on this process-global var.
-    unsafe { env::remove_var("RARI_JS_POOL_TIMEOUT_MS") };
-    assert_eq!(timeout_ms_from_env(), DEFAULT_TIMEOUT_MS);
-
-    unsafe { env::set_var("RARI_JS_POOL_TIMEOUT_MS", "45000") };
-    assert_eq!(timeout_ms_from_env(), 45_000);
-
-    unsafe { env::set_var("RARI_JS_POOL_TIMEOUT_MS", " 60000\n") };
-    assert_eq!(timeout_ms_from_env(), 60_000);
-
-    unsafe { env::set_var("RARI_JS_POOL_TIMEOUT_MS", "0") };
-    assert_eq!(timeout_ms_from_env(), DEFAULT_TIMEOUT_MS);
-
-    unsafe { env::set_var("RARI_JS_POOL_TIMEOUT_MS", "nope") };
-    assert_eq!(timeout_ms_from_env(), DEFAULT_TIMEOUT_MS);
-
-    match prev {
-        Some(v) => unsafe { env::set_var("RARI_JS_POOL_TIMEOUT_MS", v) },
-        None => unsafe { env::remove_var("RARI_JS_POOL_TIMEOUT_MS") },
-    }
+fn parse_timeout_ms_value_parses_overrides_and_rejects_invalid() {
+    assert_eq!(parse_timeout_ms_value(None), DEFAULT_TIMEOUT_MS);
+    assert_eq!(parse_timeout_ms_value(Some("45000")), 45_000);
+    assert_eq!(parse_timeout_ms_value(Some(" 60000\n")), 60_000);
+    assert_eq!(parse_timeout_ms_value(Some("0")), DEFAULT_TIMEOUT_MS);
+    assert_eq!(parse_timeout_ms_value(Some("nope")), DEFAULT_TIMEOUT_MS);
 }

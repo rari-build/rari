@@ -62,17 +62,33 @@ pub const HEAL_DISABLED: u64 = u64::MAX;
 /// timed out"). Invalid or zero values fall back to [`DEFAULT_TIMEOUT_MS`].
 pub fn timeout_ms_from_env() -> u64 {
     match env::var("RARI_JS_POOL_TIMEOUT_MS") {
-        Ok(v) => match v.trim().parse() {
-            Ok(ms) if ms > 0 => ms,
-            _ => {
-                tracing::warn!(
-                    value = %v,
-                    "invalid RARI_JS_POOL_TIMEOUT_MS; using default {DEFAULT_TIMEOUT_MS}"
-                );
-                DEFAULT_TIMEOUT_MS
-            }
-        },
-        Err(_) => DEFAULT_TIMEOUT_MS,
+        Ok(v) => parse_timeout_ms_value(Some(&v)),
+        Err(env::VarError::NotPresent) => DEFAULT_TIMEOUT_MS,
+        Err(env::VarError::NotUnicode(raw)) => {
+            tracing::warn!(
+                value = %raw.to_string_lossy(),
+                "invalid RARI_JS_POOL_TIMEOUT_MS; using default {DEFAULT_TIMEOUT_MS}"
+            );
+            DEFAULT_TIMEOUT_MS
+        }
+    }
+}
+
+/// Parse an optional timeout string (trimmed). `None` / empty invalid / zero → default.
+pub(crate) fn parse_timeout_ms_value(value: Option<&str>) -> u64 {
+    let Some(v) = value else {
+        return DEFAULT_TIMEOUT_MS;
+    };
+
+    match v.trim().parse() {
+        Ok(ms) if ms > 0 => ms,
+        _ => {
+            tracing::warn!(
+                value = %v,
+                "invalid RARI_JS_POOL_TIMEOUT_MS; using default {DEFAULT_TIMEOUT_MS}"
+            );
+            DEFAULT_TIMEOUT_MS
+        }
     }
 }
 
