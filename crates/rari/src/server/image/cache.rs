@@ -41,7 +41,7 @@ impl ImageCache {
         let handler = MemoryCacheHandler::with_config(&MemoryConfig {
             max_entries: capacity.get(),
             default_ttl: 0,
-            ..Default::default()
+            max_bytes: max_memory_size,
         });
         Self::with_handler(Arc::new(handler), max_memory_size, project_path)
     }

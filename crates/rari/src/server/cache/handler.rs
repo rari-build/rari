@@ -142,6 +142,7 @@ pub struct MemoryCacheHandler {
     cache: DashMap<String, MemEntry>,
     lru: Mutex<LruCache<String, ()>>,
     tag_index: DashMap<String, Vec<String>>,
+    mutate: Mutex<()>,
     max_entries: usize,
     max_bytes: usize,
     total_bytes: AtomicUsize,
@@ -160,6 +161,7 @@ impl MemoryCacheHandler {
             cache: DashMap::new(),
             lru: Mutex::new(LruCache::new(max_entries)),
             tag_index: DashMap::new(),
+            mutate: Mutex::new(()),
             max_entries: max_entries.get(),
             max_bytes: config.max_bytes,
             total_bytes: AtomicUsize::new(0),
@@ -324,6 +326,7 @@ impl CacheHandler for MemoryCacheHandler {
             tag_count = tags.len(),
             "memory cache set_with_tags"
         );
+        let _mutate = self.mutate.lock();
         let old_bytes = self.remove_entry(key).map(|e| e.bytes.len());
         let replaced = old_bytes.is_some();
         let mut evicted = 0usize;
@@ -371,6 +374,8 @@ impl CacheHandler for MemoryCacheHandler {
         if let Some(old_entry) = self.cache.insert(key.to_string(), entry) {
             let overwritten = old_entry.bytes.len();
             self.sub_stored_bytes(overwritten);
+            self.remove_from_tag_index(key, &old_entry.tags);
+            lru.pop(key);
             evicted += 1;
             evicted_bytes = evicted_bytes.saturating_add(overwritten);
         }
@@ -413,6 +418,7 @@ impl CacheHandler for MemoryCacheHandler {
     }
 
     async fn clear(&self) -> Result<(), CacheError> {
+        let _mutate = self.mutate.lock();
         let n = self.cache.len();
         // Subtract exactly what was removed instead of store(0): a concurrent
         // set landing around the reset would leave its inserted bytes
@@ -424,13 +430,13 @@ impl CacheHandler for MemoryCacheHandler {
         });
         self.tag_index.clear();
         self.sub_stored_bytes(removed_bytes);
-        let mut lru = self.lru.lock();
-        lru.clear();
+        self.lru.lock().clear();
         tracing::debug!(cleared_entries = n, "memory cache clear");
         Ok(())
     }
 
     async fn clear_prefix(&self, prefix: &str) -> Result<usize, CacheError> {
+        let _mutate = self.mutate.lock();
         let prefix = prefix.to_owned();
         let mut removed_entries: Vec<(String, Vec<String>)> = Vec::new();
         let mut removed_bytes = 0usize;
