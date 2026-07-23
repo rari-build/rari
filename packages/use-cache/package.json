@@ -63,12 +63,12 @@
     "react-server-dom-webpack": "catalog:react"
   },
   "optionalDependencies": {
-    "@rari/use-cache-darwin-arm64": "0.15.4",
-    "@rari/use-cache-darwin-x64": "0.15.4",
-    "@rari/use-cache-linux-arm64": "0.15.4",
-    "@rari/use-cache-linux-x64": "0.15.4",
-    "@rari/use-cache-win32-arm64": "0.15.4",
-    "@rari/use-cache-win32-x64": "0.15.4"
+    "@rari/use-cache-darwin-arm64": "0.15.5",
+    "@rari/use-cache-darwin-x64": "0.15.5",
+    "@rari/use-cache-linux-arm64": "0.15.5",
+    "@rari/use-cache-linux-x64": "0.15.5",
+    "@rari/use-cache-win32-arm64": "0.15.5",
+    "@rari/use-cache-win32-x64": "0.15.5"
   },
   "devDependencies": {
     "@rari/lint": "workspace:*",
