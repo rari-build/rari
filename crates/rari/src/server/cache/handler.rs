@@ -14,7 +14,10 @@ use std::{
     fmt,
     io::Error,
     num::NonZeroUsize,
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
     time::{Duration, Instant},
 };
 
@@ -86,6 +89,14 @@ pub trait CacheHandler: Send + Sync + fmt::Debug {
     fn prefix_bytes(&self, _prefix: &str) -> Option<usize> {
         None
     }
+
+    /// Entry count and optional payload bytes under `prefix` in one pass.
+    /// Default walks keys then asks `prefix_bytes`; backends that can should
+    /// override with a single scan.
+    fn prefix_stats(&self, prefix: &str) -> (usize, Option<usize>) {
+        let count = self.get_all_keys().iter().filter(|k| k.starts_with(prefix)).count();
+        (count, self.prefix_bytes(prefix))
+    }
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -133,7 +144,7 @@ pub struct MemoryCacheHandler {
     tag_index: DashMap<String, Vec<String>>,
     max_entries: usize,
     max_bytes: usize,
-    total_bytes: std::sync::atomic::AtomicUsize,
+    total_bytes: AtomicUsize,
 }
 
 impl MemoryCacheHandler {
@@ -151,7 +162,7 @@ impl MemoryCacheHandler {
             tag_index: DashMap::new(),
             max_entries: max_entries.get(),
             max_bytes: config.max_bytes,
-            total_bytes: std::sync::atomic::AtomicUsize::new(0),
+            total_bytes: AtomicUsize::new(0),
         }
     }
 
@@ -168,18 +179,16 @@ impl MemoryCacheHandler {
     }
 
     fn stored_bytes(&self) -> usize {
-        self.total_bytes.load(std::sync::atomic::Ordering::Relaxed)
+        self.total_bytes.load(Ordering::Relaxed)
     }
 
     /// Saturating subtraction: a raw `fetch_sub` wraps on underflow, and a
     /// wrapped counter makes the byte-budget check pass forever. Any
     /// accounting drift saturates at 0 instead of disabling the budget.
     fn sub_stored_bytes(&self, n: usize) {
-        let _ = self.total_bytes.try_update(
-            std::sync::atomic::Ordering::Relaxed,
-            std::sync::atomic::Ordering::Relaxed,
-            |current| Some(current.saturating_sub(n)),
-        );
+        let _ = self.total_bytes.try_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
+            Some(current.saturating_sub(n))
+        });
     }
 
     fn expires_at(ttl_secs: u64) -> Option<Instant> {
@@ -353,14 +362,17 @@ impl CacheHandler for MemoryCacheHandler {
             lru = self.lru.lock();
         }
 
-        self.total_bytes.fetch_add(value.len(), std::sync::atomic::Ordering::Relaxed);
+        self.total_bytes.fetch_add(value.len(), Ordering::Relaxed);
         let entry =
             MemEntry { bytes: value, expires_at: Self::expires_at(ttl_secs), tags: tags.to_vec() };
         // A concurrent set of the same key can land between the remove_entry
         // above and this insert; the overwritten entry's bytes must come off
         // the counter or they leak until the byte budget is exhausted.
         if let Some(old_entry) = self.cache.insert(key.to_string(), entry) {
-            self.sub_stored_bytes(old_entry.bytes.len());
+            let overwritten = old_entry.bytes.len();
+            self.sub_stored_bytes(overwritten);
+            evicted += 1;
+            evicted_bytes = evicted_bytes.saturating_add(overwritten);
         }
         self.insert_tag_index(key, tags);
 
@@ -464,6 +476,18 @@ impl CacheHandler for MemoryCacheHandler {
                 .map(|e| e.value().bytes.len())
                 .sum(),
         )
+    }
+
+    fn prefix_stats(&self, prefix: &str) -> (usize, Option<usize>) {
+        let mut count = 0usize;
+        let mut bytes = 0usize;
+        for entry in &self.cache {
+            if entry.key().starts_with(prefix) {
+                count += 1;
+                bytes = bytes.saturating_add(entry.value().bytes.len());
+            }
+        }
+        (count, Some(bytes))
     }
 }
 

@@ -1415,15 +1415,25 @@ mod tests {
             url: None,
             max_entries: 500,
             default_ttl_secs: 60,
-            ..Default::default()
+            max_bytes: 1_048_576,
         };
         let json = serde_json::to_value(&layer).unwrap();
         assert_eq!(json["handler"], "memory");
         assert_eq!(json["maxEntries"], 500);
         assert_eq!(json["defaultTtlSecs"], 60);
+        assert_eq!(json["maxBytes"], 1_048_576);
 
         let round_trip: CacheLayerConfig = serde_json::from_value(json).unwrap();
         assert_eq!(round_trip.max_entries, 500);
         assert_eq!(round_trip.default_ttl_secs, 60);
+        assert_eq!(round_trip.max_bytes, 1_048_576);
+
+        let omitted: CacheLayerConfig = serde_json::from_value(serde_json::json!({
+            "handler": "memory",
+            "maxEntries": 10,
+            "defaultTtlSecs": 30
+        }))
+        .unwrap();
+        assert_eq!(omitted.max_bytes, 0);
     }
 }
