@@ -1,6 +1,7 @@
 #![expect(clippy::missing_errors_doc)]
 
 use std::{
+    env,
     fmt::{self, Formatter, Result as FmtResult},
     future::Future,
     pin::Pin,
@@ -39,7 +40,13 @@ pub use strategy::{PickStrategy, RoundRobinStrategy};
 use super::interface::JsRuntimeInterface;
 use crate::server::middleware::request_context::RequestContext;
 
-/// Matches [`crate::runtime::JsExecutionRuntime`] default script timeout.
+/// Default wall-clock timeout for pool-wrapped JS ops (`execute_script`,
+/// `broadcast_script`, request-context helpers, etc.).
+///
+/// Overridable via `RARI_JS_POOL_TIMEOUT_MS`. Distinct from:
+/// - `RARI_SCRIPT_EXECUTION_TIMEOUT_MS` — RSC `ResourceLimits` interrupt budget
+/// - `RARI_STREAMING_SCRIPT_TIMEOUT_MS` — streaming promise wait
+/// - `RARI_PROMISE_RESOLUTION_TIMEOUT_MS` — non-streaming promise resolution
 pub const DEFAULT_TIMEOUT_MS: u64 = 30_000;
 
 /// After this many ms, `pick` may re-admit slots marked unhealthy.
@@ -47,6 +54,27 @@ pub const DEFAULT_HEAL_AFTER_MS: u64 = 30_000;
 
 /// Disable automatic healing (tests / explicit recovery only).
 pub const HEAL_DISABLED: u64 = u64::MAX;
+
+/// Resolve the pool script timeout from `RARI_JS_POOL_TIMEOUT_MS`.
+///
+/// Startup bundle loads and per-request script work share this budget; under
+/// deploy CPU contention the 30s default can be too short ("Script execution
+/// timed out"). Invalid or zero values fall back to [`DEFAULT_TIMEOUT_MS`].
+pub fn timeout_ms_from_env() -> u64 {
+    match env::var("RARI_JS_POOL_TIMEOUT_MS") {
+        Ok(v) => match v.trim().parse() {
+            Ok(ms) if ms > 0 => ms,
+            _ => {
+                tracing::warn!(
+                    value = %v,
+                    "invalid RARI_JS_POOL_TIMEOUT_MS; using default {DEFAULT_TIMEOUT_MS}"
+                );
+                DEFAULT_TIMEOUT_MS
+            }
+        },
+        Err(_) => DEFAULT_TIMEOUT_MS,
+    }
+}
 
 /// Creates a fresh isolate when heal rebuilds a quarantined slot.
 pub type RuntimeFactory = Arc<dyn Fn() -> Arc<dyn JsRuntimeInterface> + Send + Sync>;
@@ -136,7 +164,7 @@ impl JsRuntimePool {
             pool_size,
             env_vars,
             strategy,
-            DEFAULT_TIMEOUT_MS,
+            timeout_ms_from_env(),
             DEFAULT_HEAL_AFTER_MS,
         )
     }
