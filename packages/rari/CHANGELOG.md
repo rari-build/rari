@@ -1,3 +1,89 @@
+## [rari@0.15.5] - 2026-07-23
+
+### 🚀 Features
+
+- add dormant JS runtime pool and shared component load ops by @skiniks
+- wire JS pool into streaming and cut Suspense stream latency by @skiniks
+- implement request runtime leasing for improved script execution by @skiniks
+- enhance action refresh handling and error management by @skiniks
+- *(cache)* add get and contains_key methods to StaticFastCache for enhanced access by @skiniks
+- *(router)* add static params validation and warning mechanism by @skiniks
+- *(cache)* byte budget for the memory cache handler by @adambenhassen
+
+### 🐛 Bug Fixes
+
+- harden JS runtime pool heal/HMR with probe rebuild and atomic swap by @skiniks
+- harden pool request leasing and post-swap HMR promote by @skiniks
+- harden pool slot leasing and contaminated-slot heal by @skiniks
+- make pool slot admission atomic under lease by @skiniks
+- retry pool admission across slots and bound request-context setup by @skiniks
+- bound batch forwarding timeout and share load admission path by @skiniks
+- ensure correct handling of script execution in runtime pool by @skiniks
+- enhance error handling in event loop execution by @skiniks
+- update type references and enhance error handling in node bootstrap by @skiniks
+- correct comment formatting for Deno async_hooks type error by @skiniks
+- *(rendering)* treat injected app HTML as literal in root-div injection by @adambenhassen
+- *(fetch)* exclude 5xx responses from the shared fetch cache by @adambenhassen
+- *(http)* preserve multiple Set-Cookie headers on API and proxy responses by @skiniks
+- *(proxy)* improve Set-Cookie handling in API and proxy responses by @skiniks
+- *(proxy)* enhance response header management to replace Content-Type and append Set-Cookie by @skiniks
+- *(proxy)* improve response header processing for case sensitivity and Set-Cookie concatenation by @skiniks
+- refactor react vendor loading after dep bump by @skiniks
+- *(react)* update module name normalization in reexport shim source by @skiniks
+- *(cache)* cap static_fast_cache to stop unbounded RSS growth by @skiniks
+- *(fetch)* treat non-2xx responses as completed fetches in simple path by @adambenhassen
+- *(server)* avoid cloning fallback HTML and cover cache-hit status by @skiniks
+- *(server)* unify fallback HTML responses and test cache-hit 404 by @skiniks
+- *(server)* ignore stale fallback HTML fills after cache clear by @skiniks
+- *(server)* keep fallback HTML cache across path revalidation by @skiniks
+- *(cache)* cap layout HTML cache TTL at the route's Cache-Control max-age by @adambenhassen
+- *(cache)* prefer s-maxage over max-age for the shared-cache TTL by @adambenhassen
+- *(cache)* skip layout cache writes for max-age=0 routes by @adambenhassen
+- *(runtime)* make JS pool script timeout configurable via env by @skiniks
+- *(runtime)* harden JS pool timeout env parsing by @skiniks
+- *(cache)* saturate byte accounting, reduce MemoryConfig call-site churn by @adambenhassen
+- *(cache)* scope response-cache byte metric to its key prefix by @adambenhassen
+- *(cache)* decrement byte counter for entries overwritten by racing inserts by @adambenhassen
+- *(cache)* subtract exact removed bytes in clear instead of zeroing counter by @adambenhassen
+- *(cache)* report replaced-entry bytes and admission in SetOutcome by @adambenhassen
+- *(image)* track serialized bytes in memory accounting by @adambenhassen
+- *(cache)* apply max_bytes to the live response memory handler by @skiniks
+- *(cache)* honor per-layer maxBytes for all memory handlers by @skiniks
+- *(cache)* tighten SetOutcome handling and drop dead image byte mirror by @skiniks
+- *(cache)* serialize memory mutations and wire image max_bytes by @skiniks
+- *(cache)* guard invalidate paths with the shared mutate mutex by @skiniks
+
+### 🚜 Refactor
+
+- consolidate error handling for event loop failures by @skiniks
+- enhance page not found handling and cleanup of global state by @skiniks
+- improve request context management and enhance streaming error handling by @skiniks
+- *(cache)* implement StaticFastCache for improved cache management by @skiniks
+
+### ⚡ Performance
+
+- *(server)* avoid redundant full-page HTML copy in render path by @adambenhassen
+
+### 🎨 Styling
+
+- *(cache)* rustfmt layout insert_with_tags call site by @skiniks
+- *(cache)* rustfmt response and core imports by @skiniks
+
+### 🧪 Testing
+
+- implement Node APIs and builtins with corresponding tests by @skiniks
+- *(cache)* add unit test for StaticFastCache to verify entry replacement without count change by @skiniks
+
+### ⚙️ Miscellaneous Tasks
+
+- *(dependencies)* update various package versions by @skiniks
+- rename deprecated Atomic::fetch_update to try_update by @adambenhassen
+- *(image)* drop unused max_memory_size field by @adambenhassen
+- *(rari)* bump version to 0.15.5 in Cargo.toml by @skiniks
+- *(rari)* update optional dependencies to version 0.15.5 in package.json and pnpm-lock.yaml by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.15.4...rari@0.15.5
 ## [rari@0.15.4] - 2026-07-15
 
 ### 🐛 Bug Fixes
