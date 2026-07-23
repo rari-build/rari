@@ -911,7 +911,8 @@ const ${importName} = (props) => {
             resolvedPath = path.resolve(importerDir, source)
           }
 
-          if (resolvedPath == null || resolvedPath === '') resolvedPath = source
+          if ((resolvedPath == null || resolvedPath === '') && path.isAbsolute(source))
+            resolvedPath = source
 
           if (resolvedPath !== '') {
             const extensions = ['', '.ts', '.tsx', '.js', '.jsx']
