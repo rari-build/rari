@@ -14,7 +14,10 @@ use http::HeaderValue;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 
-use crate::server::{image::ImageConfig, rendering::html_bots::compile_html_limited_bots_pattern};
+use crate::server::{
+    cache::handler::MemoryConfig, image::ImageConfig,
+    rendering::html_bots::compile_html_limited_bots_pattern,
+};
 
 pub static GLOBAL_CONFIG: OnceLock<Config> = OnceLock::new();
 
@@ -106,6 +109,16 @@ impl Default for CacheLayerConfig {
             max_entries: 1000,
             default_ttl_secs: 60,
             max_bytes: 0,
+        }
+    }
+}
+
+impl CacheLayerConfig {
+    pub fn memory_config(&self) -> MemoryConfig {
+        MemoryConfig {
+            max_entries: self.max_entries.max(1),
+            default_ttl: self.default_ttl_secs,
+            max_bytes: self.max_bytes,
         }
     }
 }
@@ -1309,6 +1322,11 @@ mod tests {
         assert_eq!(layer.handler, "memory");
         assert_eq!(layer.max_entries, 1000);
         assert_eq!(layer.default_ttl_secs, 60);
+        assert_eq!(layer.max_bytes, 0);
+        let memory = layer.memory_config();
+        assert_eq!(memory.max_entries, 1000);
+        assert_eq!(memory.default_ttl, 60);
+        assert_eq!(memory.max_bytes, 0);
     }
 
     #[test]

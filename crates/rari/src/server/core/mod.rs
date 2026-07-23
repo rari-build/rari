@@ -39,7 +39,7 @@ use crate::{
     server::{
         actions::{handle_page_server_action, handle_server_action},
         cache::{
-            handler::{CacheHandler, CacheHandlerRegistry, MemoryCacheHandler},
+            handler::CacheHandlerRegistry,
             loader::CacheLoader,
             response,
             revalidate::revalidate_by_path,
@@ -194,19 +194,18 @@ impl Server {
         let response_layer = config.cache.layer(CACHE_LAYER_RESPONSE);
         let cache_config =
             response::CacheConfig::from_layer(&response_layer, config.is_production());
-        let response_handler: Arc<dyn CacheHandler> = if response_layer.handler == "memory" {
-            Arc::new(MemoryCacheHandler::with_config(&cache_config.memory_config()))
-        } else {
-            cache_registry.resolve(&response_layer.handler)
-        };
+        let response_handler = cache_registry
+            .resolve_configured(&response_layer.handler, &cache_config.memory_config());
         let response_cache =
             Arc::new(response::ResponseCache::new_with_handler(cache_config, response_handler));
 
         let image_layer = config.cache.layer(CACHE_LAYER_IMAGE);
-        let image_handler = cache_registry.resolve(&image_layer.handler);
+        let image_handler =
+            cache_registry.resolve_configured(&image_layer.handler, &image_layer.memory_config());
 
         let og_layer = config.cache.layer(CACHE_LAYER_OG);
-        let og_handler = cache_registry.resolve(&og_layer.handler);
+        let og_handler =
+            cache_registry.resolve_configured(&og_layer.handler, &og_layer.memory_config());
 
         let og_generator = {
             let runtime = Arc::clone(&js_runtime);

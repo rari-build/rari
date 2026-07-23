@@ -566,6 +566,23 @@ impl CacheHandlerRegistry {
             Arc::clone(&entry)
         })
     }
+
+    pub fn resolve_configured(
+        &self,
+        configured_name: &str,
+        memory: &MemoryConfig,
+    ) -> Arc<dyn CacheHandler> {
+        if configured_name == "memory" {
+            return Arc::new(MemoryCacheHandler::with_config(memory));
+        }
+        self.get(configured_name).unwrap_or_else(|| {
+            tracing::warn!(
+                configured = %configured_name,
+                "configured cache handler not registered; falling back to memory"
+            );
+            Arc::new(MemoryCacheHandler::with_config(memory))
+        })
+    }
 }
 
 #[cfg(test)]
@@ -783,6 +800,23 @@ mod tests {
         let handler = registry.resolve("no-such-handler");
         handler.set("k", b"v".to_vec(), 60).await.unwrap();
         assert_eq!(handler.get("k").await.unwrap(), Some(b"v".to_vec()));
+    }
+
+    #[tokio::test]
+    async fn test_resolve_configured_applies_byte_budget() {
+        let registry = CacheHandlerRegistry::default_with_memory();
+        let memory = MemoryConfig { max_entries: 8, default_ttl: 60, max_bytes: 9 };
+        let handler = registry.resolve_configured("memory", &memory);
+        let first =
+            handler.set("a", b"12345".to_vec(), 60).await.expect("first set should succeed");
+        assert!(first.stored);
+        let second =
+            handler.set("b", b"67890".to_vec(), 60).await.expect("second set should succeed");
+        assert!(second.stored);
+        assert_eq!(second.evicted, 1);
+        assert_eq!(handler.total_bytes(), Some(5));
+        assert_eq!(handler.get("a").await.unwrap(), None);
+        assert_eq!(handler.get("b").await.unwrap(), Some(b"67890".to_vec()));
     }
 
     #[tokio::test]
