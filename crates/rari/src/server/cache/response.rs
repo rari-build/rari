@@ -246,6 +246,14 @@ impl CacheConfig {
                 .unwrap_or(layer.max_bytes),
         }
     }
+
+    pub fn memory_config(&self) -> MemoryConfig {
+        MemoryConfig {
+            max_entries: self.max_entries.max(1),
+            default_ttl: self.default_ttl,
+            max_bytes: self.max_bytes,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -346,11 +354,7 @@ impl ResponseCache {
     }
 
     pub fn new(config: CacheConfig) -> Self {
-        let handler = MemoryCacheHandler::with_config(&MemoryConfig {
-            max_entries: config.max_entries,
-            default_ttl: config.default_ttl,
-            max_bytes: config.max_bytes,
-        });
+        let handler = MemoryCacheHandler::with_config(&config.memory_config());
         Self::new_with_handler(config, Arc::new(handler))
     }
 
@@ -992,6 +996,20 @@ mod tests {
 
         let config = CacheConfig::from_env(false);
         assert!(!config.enabled);
+    }
+
+    #[test]
+    fn test_memory_config_carries_byte_budget() {
+        let config = CacheConfig {
+            max_entries: 50,
+            default_ttl: 120,
+            enabled: true,
+            max_bytes: 1_048_576,
+        };
+        let memory = config.memory_config();
+        assert_eq!(memory.max_entries, 50);
+        assert_eq!(memory.default_ttl, 120);
+        assert_eq!(memory.max_bytes, 1_048_576);
     }
 
     #[test]

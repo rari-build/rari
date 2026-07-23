@@ -39,8 +39,11 @@ use crate::{
     server::{
         actions::{handle_page_server_action, handle_server_action},
         cache::{
-            handler::CacheHandlerRegistry, loader::CacheLoader, response,
-            revalidate::revalidate_by_path, warmup,
+            handler::{CacheHandler, CacheHandlerRegistry, MemoryCacheHandler},
+            loader::CacheLoader,
+            response,
+            revalidate::revalidate_by_path,
+            warmup,
         },
         config::{
             CACHE_LAYER_IMAGE, CACHE_LAYER_LAYOUT, CACHE_LAYER_OG, CACHE_LAYER_RESPONSE, Config,
@@ -189,8 +192,13 @@ impl Server {
         let cache_registry = Arc::new(CacheHandlerRegistry::from_env());
 
         let response_layer = config.cache.layer(CACHE_LAYER_RESPONSE);
-        let response_handler = cache_registry.resolve(&response_layer.handler);
-        let cache_config = response::CacheConfig::from_env(config.is_production());
+        let cache_config =
+            response::CacheConfig::from_layer(&response_layer, config.is_production());
+        let response_handler: Arc<dyn CacheHandler> = if response_layer.handler == "memory" {
+            Arc::new(MemoryCacheHandler::with_config(&cache_config.memory_config()))
+        } else {
+            cache_registry.resolve(&response_layer.handler)
+        };
         let response_cache =
             Arc::new(response::ResponseCache::new_with_handler(cache_config, response_handler));
 
