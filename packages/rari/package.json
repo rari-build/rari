@@ -38,8 +38,8 @@
   ],
   "exports": {
     ".": {
-      "node": "./dist/index.mjs",
       "types": "./dist/index.d.mts",
+      "node": "./dist/index.mjs",
       "default": "./dist/index.mjs"
     },
     "./image": {

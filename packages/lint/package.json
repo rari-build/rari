@@ -20,11 +20,16 @@
     "eslint-plugin-antfu": "catalog:eslint",
     "eslint-plugin-command": "catalog:eslint",
     "eslint-plugin-de-morgan": "catalog:eslint",
+    "eslint-plugin-jsonc": "catalog:eslint",
     "eslint-plugin-oxlint": "catalog:eslint",
     "eslint-plugin-perfectionist": "catalog:eslint",
+    "eslint-plugin-pnpm": "catalog:eslint",
     "eslint-plugin-react-refresh": "catalog:eslint",
     "eslint-plugin-regexp": "catalog:eslint",
-    "eslint-plugin-unused-imports": "catalog:eslint"
+    "eslint-plugin-unused-imports": "catalog:eslint",
+    "eslint-plugin-yml": "catalog:eslint",
+    "jsonc-eslint-parser": "catalog:eslint",
+    "yaml-eslint-parser": "catalog:eslint"
   },
   "devDependencies": {
     "@types/node": "catalog:typescript",
