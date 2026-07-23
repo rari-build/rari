@@ -7,7 +7,7 @@
     },
     "packages/rari": {
       "entry": ["src/**/*.ts", "src/runtime/**/*.tsx"],
-      "project": ["src/**/*.{ts,tsx,js,jsx}"],
+      "project": ["src/**/*.{ts,tsx,js,jsx,mdx}"],
       "ignoreBinaries": [
         "npx.cmd" // Windows-specific npx command used in cross-platform spawn logic
       ]
@@ -44,14 +44,14 @@
     },
     "examples/app-router-example": {
       "entry": ["src/app/**/*.{ts,tsx}"],
-      "project": ["src/**/*.{ts,tsx}"],
+      "project": ["src/**/*.{ts,tsx,css}"],
       "ignore": [
         "src/proxy.ts" // Proxy configuration file is used via Vite plugin
       ]
     },
     "web": {
       "entry": ["src/app/**/*.{ts,tsx}"],
-      "project": ["src/**/*.{ts,tsx}"],
+      "project": ["src/**/*.{ts,tsx,css,mdx}"],
       "ignore": [
         "src/proxy.ts", // Proxy configuration file is used via Vite plugin
         "src/components/CodeBlock.tsx", // MDX client component

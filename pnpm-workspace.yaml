@@ -35,7 +35,7 @@ catalogs:
     eslint-plugin-react-refresh: ^0.5.3
     eslint-plugin-regexp: ^3.1.1
     eslint-plugin-unused-imports: ^4.4.1
-    knip: ^6.27.0
+    knip: ^6.29.0
   mdx:
     '@mdx-js/mdx': ^3.1.1
     '@shikijs/core': ^4.3.1
