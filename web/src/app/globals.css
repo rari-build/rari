@@ -96,15 +96,13 @@ body {
 }
 
 code {
-  font-family:
-    'SF Mono', Monaco, Inconsolata, 'Roboto Mono', Consolas, 'Courier New', monospace;
+  font-family: 'SF Mono', Monaco, Inconsolata, 'Roboto Mono', Consolas, 'Courier New', monospace;
   font-weight: 500;
   letter-spacing: -0.01em;
 }
 
 .prose pre {
-  font-family:
-    'SF Mono', Monaco, Inconsolata, 'Roboto Mono', Consolas, 'Courier New', monospace;
+  font-family: 'SF Mono', Monaco, Inconsolata, 'Roboto Mono', Consolas, 'Courier New', monospace;
   background: var(--canvas);
   border: 1px solid var(--edge);
   border-radius: 6px;
@@ -250,8 +248,7 @@ button:focus-visible {
 .prose :not(pre) > code {
   padding: 0.125rem 0.375rem;
   font-size: 0.875rem;
-  font-family:
-    'SF Mono', Monaco, Inconsolata, 'Roboto Mono', Consolas, 'Courier New', monospace;
+  font-family: 'SF Mono', Monaco, Inconsolata, 'Roboto Mono', Consolas, 'Courier New', monospace;
   font-weight: 500;
   border-radius: 0.375rem;
   display: inline-block;
@@ -326,8 +323,7 @@ button:focus-visible {
   padding: 1rem;
   background: var(--code-bg);
   border-radius: 0;
-  font-family:
-    'SF Mono', Monaco, Inconsolata, 'Roboto Mono', Consolas, 'Courier New', monospace;
+  font-family: 'SF Mono', Monaco, Inconsolata, 'Roboto Mono', Consolas, 'Courier New', monospace;
   font-size: 0.875rem;
   line-height: 1.5;
   overflow-x: auto;
