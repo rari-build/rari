@@ -8,7 +8,6 @@
   --accent-fg: #1f2328;
   --link: var(--rust-orange);
   --link-hover: var(--rust-orange-dark);
-
   --canvas: #0d1117;
   --surface: #161b22;
   --chrome: #30363d;
@@ -20,15 +19,13 @@
   --fg-muted: #8b949e;
   --fg-secondary: #b1bac4;
   --code-bg: #24292e;
-  --table-stripe: rgba(22, 27, 34, 0.5);
+  --table-stripe: rgb(22 27 34 / 50%);
   --scrollbar-hover: #484f58;
-  --overlay: rgba(0, 0, 0, 0.3);
-
+  --overlay: rgb(0 0 0 / 30%);
   --cmd-bin: #79c0ff;
   --cmd-verb: #d2a8ff;
   --cmd-flag: #ffa657;
   --cmd-pkg: #a5d6ff;
-
   --github-dark-bg: var(--canvas);
   --github-dark-card: var(--surface);
   --github-dark-border: var(--edge);
@@ -40,7 +37,7 @@ html.light {
   color-scheme: light;
 
   --canvas: #e8ecf1;
-  --surface: #ffffff;
+  --surface: #fff;
   --chrome: #dde3ea;
   --hover: #dce2e9;
   --muted: #e4e9ef;
@@ -49,14 +46,12 @@ html.light {
   --fg-body: #424a53;
   --fg-muted: #4d5560;
   --fg-secondary: #424a53;
-  --code-bg: #ffffff;
-  --table-stripe: rgba(220, 226, 233, 0.9);
+  --code-bg: #fff;
+  --table-stripe: rgb(220 226 233 / 90%);
   --scrollbar-hover: #8c959f;
-  --overlay: rgba(31, 35, 40, 0.25);
-
+  --overlay: rgb(31 35 40 / 25%);
   --link: #9a4b00;
   --link-hover: #7a3a00;
-
   --cmd-bin: #0550ae;
   --cmd-verb: #8250df;
   --cmd-flag: #953800;
@@ -102,14 +97,14 @@ body {
 
 code {
   font-family:
-    'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Consolas', 'Courier New', monospace;
+    'SF Mono', Monaco, Inconsolata, 'Roboto Mono', Consolas, 'Courier New', monospace;
   font-weight: 500;
   letter-spacing: -0.01em;
 }
 
 .prose pre {
   font-family:
-    'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Consolas', 'Courier New', monospace;
+    'SF Mono', Monaco, Inconsolata, 'Roboto Mono', Consolas, 'Courier New', monospace;
   background: var(--canvas);
   border: 1px solid var(--edge);
   border-radius: 6px;
@@ -128,7 +123,7 @@ code {
   line-height: 1.75;
 }
 
-@media (max-width: 768px) {
+@media (width <= 768px) {
   .prose {
     font-size: 0.9rem;
     line-height: 1.5;
@@ -172,18 +167,6 @@ code {
   font-weight: 600;
 }
 
-.prose h2 {
-  border-bottom: 1px solid var(--edge);
-  padding-bottom: 0.5rem;
-}
-
-.prose .page-header + * h1,
-.prose .page-header h1 {
-  border-bottom: none;
-  padding-bottom: 0;
-  margin-top: 0;
-}
-
 .prose h1 {
   font-size: 2rem;
   margin-top: 2.5rem;
@@ -194,12 +177,21 @@ code {
   font-size: 1.5rem;
   margin-top: 2.5rem;
   margin-bottom: 1rem;
+  border-bottom: 1px solid var(--edge);
+  padding-bottom: 0.5rem;
 }
 
 .prose h3 {
   font-size: 1.25rem;
   margin-top: 2rem;
   margin-bottom: 0.75rem;
+}
+
+.prose .page-header + * h1,
+.prose .page-header h1 {
+  border-bottom: none;
+  padding-bottom: 0;
+  margin-top: 0;
 }
 
 .prose p {
@@ -233,6 +225,12 @@ code {
   line-height: 1.6;
 }
 
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--rust-orange);
+  outline-offset: 2px;
+}
+
 .prose a {
   color: var(--link);
   text-decoration: none;
@@ -253,7 +251,7 @@ code {
   padding: 0.125rem 0.375rem;
   font-size: 0.875rem;
   font-family:
-    'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Consolas', 'Courier New', monospace;
+    'SF Mono', Monaco, Inconsolata, 'Roboto Mono', Consolas, 'Courier New', monospace;
   font-weight: 500;
   border-radius: 0.375rem;
   display: inline-block;
@@ -269,7 +267,7 @@ code {
 
 .prose a:hover code {
   border-color: var(--link-hover);
-  background-color: rgba(253, 126, 20, 0.1);
+  background-color: rgb(253 126 20 / 10%);
 }
 
 .prose blockquote {
@@ -329,7 +327,7 @@ code {
   background: var(--code-bg);
   border-radius: 0;
   font-family:
-    'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Consolas', 'Courier New', monospace;
+    'SF Mono', Monaco, Inconsolata, 'Roboto Mono', Consolas, 'Courier New', monospace;
   font-size: 0.875rem;
   line-height: 1.5;
   overflow-x: auto;
@@ -347,12 +345,6 @@ code {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--scrollbar-hover);
-}
-
-a:focus-visible,
-button:focus-visible {
-  outline: 2px solid var(--rust-orange);
-  outline-offset: 2px;
 }
 
 ::selection {
