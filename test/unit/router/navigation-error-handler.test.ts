@@ -1,5 +1,14 @@
-import { createNavigationError, NavigationErrorHandler } from '@rari/router/navigation/error-handler'
+import {
+  createNavigationError,
+  NavigationErrorHandler,
+} from '@rari/router/navigation/error-handler'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
+
+function httpError(message: string, status: number): Error {
+  const error = new Error(message)
+  Object.assign(error, { status })
+  return error
+}
 
 describe('createNavigationError', () => {
   beforeEach(() => {
@@ -58,8 +67,7 @@ describe('createNavigationError', () => {
 
   describe('HTTP status errors', () => {
     it('should create not-found error for 404', () => {
-      const error = new Error('Not found') as Error & { status: number }
-      error.status = 404
+      const error = httpError('Not found', 404)
 
       const result = createNavigationError(error, 'https://example.com/page')
 
@@ -75,8 +83,7 @@ describe('createNavigationError', () => {
     })
 
     it('should create server-error for 500', () => {
-      const error = new Error('Server error') as Error & { status: number }
-      error.status = 500
+      const error = httpError('Server error', 500)
 
       const result = createNavigationError(error, 'https://example.com')
 
@@ -92,8 +99,7 @@ describe('createNavigationError', () => {
     })
 
     it('should create server-error for 503', () => {
-      const error = new Error('Service unavailable') as Error & { status: number }
-      error.status = 503
+      const error = httpError('Service unavailable', 503)
 
       const result = createNavigationError(error, 'https://example.com')
 
@@ -103,8 +109,7 @@ describe('createNavigationError', () => {
     })
 
     it('should create fetch-error for 400', () => {
-      const error = new Error('Bad request') as Error & { status: number }
-      error.status = 400
+      const error = httpError('Bad request', 400)
 
       const result = createNavigationError(error, 'https://example.com')
 
@@ -120,8 +125,7 @@ describe('createNavigationError', () => {
     })
 
     it('should create fetch-error for 403', () => {
-      const error = new Error('Forbidden') as Error & { status: number }
-      error.status = 403
+      const error = httpError('Forbidden', 403)
 
       const result = createNavigationError(error, 'https://example.com')
 
@@ -235,23 +239,22 @@ describe('NavigationErrorHandler', () => {
   let handler: NavigationErrorHandler
   let onErrorSpy: ReturnType<typeof vi.fn<(error: any) => void>>
   let onRetrySpy: ReturnType<typeof vi.fn<(attempt: number, error: any) => void>>
-  let originalWindow: any
+  let originalWindow: (Window & typeof globalThis) | undefined
 
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2024-01-15T10:00:00Z'))
     onErrorSpy = vi.fn<(error: any) => void>()
     onRetrySpy = vi.fn<(attempt: number, error: any) => void>()
-    originalWindow = (globalThis as any).window
+    originalWindow = globalThis.window
   })
 
   afterEach(() => {
     vi.useRealTimers()
     if (originalWindow === undefined) {
-      delete (globalThis as any).window
-    }
-    else {
-      (globalThis as any).window = originalWindow
+      delete (globalThis as { window?: unknown }).window
+    } else {
+      globalThis.window = originalWindow
     }
   })
 

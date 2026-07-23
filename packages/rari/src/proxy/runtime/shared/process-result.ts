@@ -2,12 +2,11 @@ import type { ResponseLike, SimpleProxyResult } from './types'
 import { applyResponseCookies, collectAllHeaders, extractProxyHeaders } from './headers'
 
 export function checkForRewrite(result: ResponseLike | null): SimpleProxyResult | null {
-  if (!result)
-    return null
+  if (!result) return null
 
   const rewriteHeader = result.headers?.get?.('x-rari-proxy-rewrite')
 
-  if (rewriteHeader) {
+  if (rewriteHeader != null && rewriteHeader !== '') {
     return {
       continue: false,
       rewrite: rewriteHeader,
@@ -18,12 +17,11 @@ export function checkForRewrite(result: ResponseLike | null): SimpleProxyResult 
 }
 
 export function checkForRedirect(result: ResponseLike | null): SimpleProxyResult | null {
-  if (!result || result.status == null)
-    return null
+  if (result?.status == null) return null
 
   const location = result.headers?.get?.('location')
 
-  if (location && result.status >= 300 && result.status < 400) {
+  if (location != null && location !== '' && result.status >= 300 && result.status < 400) {
     return {
       continue: false,
       redirect: {
@@ -54,15 +52,12 @@ export async function handleDirectResponse(result: ResponseLike): Promise<Simple
   try {
     if (result.text && typeof result.text === 'function') {
       body = await result.text()
-    }
-    else if (result.body != null && typeof result.body === 'string') {
+    } else if (result.body != null && typeof result.body === 'string') {
       body = result.body
-    }
-    else if (result.body != null) {
+    } else if (result.body != null) {
       console.warn('[rari] Proxy: Response body is not extractable as text')
     }
-  }
-  catch (error) {
+  } catch (error) {
     console.error('[rari] Proxy: Failed to extract response body:', error)
   }
 
@@ -77,26 +72,21 @@ export async function handleDirectResponse(result: ResponseLike): Promise<Simple
 }
 
 export async function processProxyResult(result: ResponseLike | null): Promise<SimpleProxyResult> {
-  if (!result)
-    return { continue: true }
+  if (!result) return { continue: true }
 
   const rewriteResult = checkForRewrite(result)
 
-  if (rewriteResult)
-    return rewriteResult
+  if (rewriteResult) return rewriteResult
 
   const redirectResult = checkForRedirect(result)
 
-  if (redirectResult)
-    return redirectResult
+  if (redirectResult) return redirectResult
 
   const continueHeader = result.headers?.get?.('x-rari-proxy-continue')
 
-  if (continueHeader === 'true')
-    return handleContinueWithHeaders(result)
+  if (continueHeader === 'true') return handleContinueWithHeaders(result)
 
-  if (result.status != null)
-    return await handleDirectResponse(result)
+  if (result.status != null) return handleDirectResponse(result)
 
   return { continue: true }
 }

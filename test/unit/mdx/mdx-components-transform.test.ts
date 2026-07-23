@@ -14,13 +14,16 @@ describe('transformDefineMdxComponents', () => {
     fs.writeFileSync(componentPath, `'use client'\nexport default function CodeBlock() {}\n`)
 
     const registryPath = path.join(projectRoot, 'src', 'mdx-components.ts')
-    fs.writeFileSync(registryPath, `import { defineMdxComponents } from 'rari/mdx'
+    fs.writeFileSync(
+      registryPath,
+      `import { defineMdxComponents } from 'rari/mdx'
 import CodeBlock from './components/CodeBlock'
 
 export const getMDXComponents = defineMdxComponents({
   CodeBlock,
 })
-`)
+`,
+    )
 
     const transformed = transformDefineMdxComponents({
       code: fs.readFileSync(registryPath, 'utf-8'),
@@ -43,20 +46,26 @@ export const getMDXComponents = defineMdxComponents({
     fs.mkdirSync(srcDir, { recursive: true })
 
     const componentsPath = path.join(srcDir, 'CodeBlock.tsx')
-    fs.writeFileSync(componentsPath, `'use client'
+    fs.writeFileSync(
+      componentsPath,
+      `'use client'
 export default function CodeBlock() {}
 export function MermaidChart() {}
-`)
+`,
+    )
 
     const registryPath = path.join(projectRoot, 'src', 'mdx-components.ts')
-    fs.writeFileSync(registryPath, `import { defineMdxComponents } from 'rari/mdx'
+    fs.writeFileSync(
+      registryPath,
+      `import { defineMdxComponents } from 'rari/mdx'
 import CodeBlock, { MermaidChart } from './components/CodeBlock'
 
 export const getMDXComponents = defineMdxComponents({
   CodeBlock,
   MermaidChart,
 })
-`)
+`,
+    )
 
     const transformed = transformDefineMdxComponents({
       code: fs.readFileSync(registryPath, 'utf-8'),
@@ -78,19 +87,25 @@ export const getMDXComponents = defineMdxComponents({
     fs.mkdirSync(srcDir, { recursive: true })
 
     const componentsPath = path.join(srcDir, 'CodeBlock.tsx')
-    fs.writeFileSync(componentsPath, `'use client'
+    fs.writeFileSync(
+      componentsPath,
+      `'use client'
 export default function CodeBlock() {}
 export type CodeBlockProps = { language?: string }
-`)
+`,
+    )
 
     const registryPath = path.join(projectRoot, 'src', 'mdx-components.ts')
-    fs.writeFileSync(registryPath, `import { defineMdxComponents } from 'rari/mdx'
+    fs.writeFileSync(
+      registryPath,
+      `import { defineMdxComponents } from 'rari/mdx'
 import CodeBlock, { type CodeBlockProps } from './components/CodeBlock'
 
 export const getMDXComponents = defineMdxComponents({
   CodeBlock,
 })
-`)
+`,
+    )
 
     const transformed = transformDefineMdxComponents({
       code: fs.readFileSync(registryPath, 'utf-8'),

@@ -1,14 +1,31 @@
 import type { Response } from '@playwright/test'
 import { expect, test } from '@playwright/test'
 import { URL_PATTERNS } from './shared/constants'
-import { hasClientRouter, hasRariRuntime, hasRouteCache, waitForRariRuntime } from './shared/helpers'
-import { assertProgressiveTimestamps, getServerTimestamps, gotoWithRetry } from './shared/streaming-helpers'
+import {
+  hasClientRouter,
+  hasRariRuntime,
+  hasRouteCache,
+  waitForRariRuntime,
+} from './shared/helpers'
+import {
+  assertProgressiveTimestamps,
+  getServerTimestamps,
+  gotoWithRetry,
+} from './shared/streaming-helpers'
+
+interface StreamingTestWindow extends Window {
+  __longTasks?: number[]
+  __longtaskUnsupported?: boolean
+  __navigateEventFired?: boolean
+  __rariNavigateRegistered?: boolean
+  __pageReloaded?: boolean
+}
 
 test.describe('RSC Streaming Infrastructure Tests', () => {
   test('should load pages without RSC parsing errors', async ({ page }) => {
     const consoleErrors: string[] = []
 
-    page.on('console', (msg) => {
+    page.on('console', msg => {
       if (msg.type() === 'error') {
         consoleErrors.push(msg.text())
       }
@@ -20,8 +37,12 @@ test.describe('RSC Streaming Infrastructure Tests', () => {
     await page.goto('/about')
     await page.waitForLoadState('networkidle')
 
-    const rscErrors = consoleErrors.filter(err =>
-      err.includes('RSC') || err.includes('Flight protocol') || err.includes('streaming') || err.includes('parse'),
+    const rscErrors = consoleErrors.filter(
+      err =>
+        err.includes('RSC') ||
+        err.includes('Flight protocol') ||
+        err.includes('streaming') ||
+        err.includes('parse'),
     )
 
     expect(rscErrors.length).toBe(0)
@@ -31,7 +52,7 @@ test.describe('RSC Streaming Infrastructure Tests', () => {
   test('should handle page navigation without errors', async ({ page }) => {
     const consoleErrors: string[] = []
 
-    page.on('console', (msg) => {
+    page.on('console', msg => {
       if (msg.type() === 'error') {
         consoleErrors.push(msg.text())
       }
@@ -46,8 +67,8 @@ test.describe('RSC Streaming Infrastructure Tests', () => {
     await page.goto('/nested')
     await page.waitForLoadState('networkidle')
 
-    const criticalErrors = consoleErrors.filter(err =>
-      !err.includes('favicon') && !err.includes('404') && !err.includes('net::ERR'),
+    const criticalErrors = consoleErrors.filter(
+      err => !err.includes('favicon') && !err.includes('404') && !err.includes('net::ERR'),
     )
 
     expect(criticalErrors.length).toBe(0)
@@ -122,8 +143,8 @@ test.describe('RSC Streaming Infrastructure Tests', () => {
     const client = await page.context().newCDPSession(page)
     await client.send('Network.emulateNetworkConditions', {
       offline: false,
-      downloadThroughput: 500 * 1024 / 8,
-      uploadThroughput: 500 * 1024 / 8,
+      downloadThroughput: (500 * 1024) / 8,
+      uploadThroughput: (500 * 1024) / 8,
       latency: 400,
     })
 
@@ -141,12 +162,7 @@ test.describe('RSC Streaming Infrastructure Tests', () => {
   })
 
   test('should handle multiple page navigations', async ({ page }) => {
-    const pages = [
-      '/',
-      '/about',
-      '/nested',
-      '/nested/deep',
-    ]
+    const pages = ['/', '/about', '/nested', '/nested/deep']
 
     for (const pagePath of pages) {
       await page.goto(pagePath)
@@ -188,32 +204,35 @@ test.describe('RSC Protocol Tests', () => {
 
   test('should not block main thread', async ({ page }) => {
     await page.addInitScript(() => {
-      if (typeof PerformanceObserver !== 'undefined'
-        && PerformanceObserver.supportedEntryTypes
-        && PerformanceObserver.supportedEntryTypes.includes('longtask')) {
-        const observer = new PerformanceObserver((list) => {
+      if (
+        typeof PerformanceObserver !== 'undefined' &&
+        PerformanceObserver.supportedEntryTypes.includes('longtask')
+      ) {
+        const observer = new PerformanceObserver(list => {
           for (const entry of list.getEntries()) {
-            (window as any).__longTasks = (window as any).__longTasks || [];
-            (window as any).__longTasks.push(entry.duration)
+            const win = window as StreamingTestWindow
+            win.__longTasks = win.__longTasks ?? []
+            win.__longTasks.push(entry.duration)
           }
         })
         observer.observe({ entryTypes: ['longtask'] })
-      }
-      else {
-        (window as any).__longtaskUnsupported = true
+      } else {
+        ;(window as StreamingTestWindow).__longtaskUnsupported = true
       }
     })
 
     await page.goto('/about')
     await page.waitForLoadState('networkidle')
 
-    const unsupported = await page.evaluate(() => (window as any).__longtaskUnsupported)
+    const unsupported = await page.evaluate(
+      () => (window as StreamingTestWindow).__longtaskUnsupported ?? false,
+    )
 
     test.skip(unsupported, 'Long Task API not supported, skipping blocking task check')
 
-    const tasks = await page.evaluate(() => (window as any).__longTasks || [])
+    const tasks = await page.evaluate(() => (window as StreamingTestWindow).__longTasks ?? [])
 
-    const blockingTasks = tasks.filter((d: number) => d > 100)
+    const blockingTasks = tasks.filter(d => d > 100)
 
     expect(blockingTasks.length).toBe(0)
   })
@@ -221,7 +240,7 @@ test.describe('RSC Protocol Tests', () => {
   test('should handle content rendering without errors', async ({ page }) => {
     const consoleErrors: string[] = []
 
-    page.on('console', (msg) => {
+    page.on('console', msg => {
       if (msg.type() === 'error') {
         consoleErrors.push(msg.text())
       }
@@ -233,8 +252,12 @@ test.describe('RSC Protocol Tests', () => {
     await page.goto('/about')
     await page.waitForLoadState('networkidle')
 
-    const parsingErrors = consoleErrors.filter(err =>
-      err.includes('parse') || err.includes('JSON') || err.includes('Flight') || err.includes('flight'),
+    const parsingErrors = consoleErrors.filter(
+      err =>
+        err.includes('parse') ||
+        err.includes('JSON') ||
+        err.includes('Flight') ||
+        err.includes('flight'),
     )
 
     expect(parsingErrors.length).toBe(0)
@@ -281,9 +304,15 @@ test.describe.serial('Suspense Streaming Tests', () => {
     await gotoWithRetry(page, '/suspense-streaming')
 
     const [renderA, renderB, renderC] = await Promise.all([
-      page.waitForSelector('[data-testid="component-a"]', { timeout: 15000 }).then(() => Date.now()),
-      page.waitForSelector('[data-testid="component-b"]', { timeout: 15000 }).then(() => Date.now()),
-      page.waitForSelector('[data-testid="component-c"]', { timeout: 15000 }).then(() => Date.now()),
+      page
+        .waitForSelector('[data-testid="component-a"]', { timeout: 15000 })
+        .then(() => Date.now()),
+      page
+        .waitForSelector('[data-testid="component-b"]', { timeout: 15000 })
+        .then(() => Date.now()),
+      page
+        .waitForSelector('[data-testid="component-c"]', { timeout: 15000 })
+        .then(() => Date.now()),
     ])
 
     expect(renderA).toBeLessThanOrEqual(renderB)
@@ -331,9 +360,9 @@ test.describe('Client-Side Navigation Tests', () => {
 
     await waitForRariRuntime(page)
 
-    const requests: Array<{ url: string, accept: string }> = []
+    const requests: Array<{ url: string; accept: string }> = []
 
-    page.on('request', (request) => {
+    page.on('request', request => {
       const accept = request.headers().accept || ''
       const url = request.url()
 
@@ -362,9 +391,9 @@ test.describe('Client-Side Navigation Tests', () => {
 
     const rscResponses: Response[] = []
 
-    page.on('response', (response) => {
+    page.on('response', response => {
       const contentType = response.headers()['content-type']
-      if (contentType?.includes('text/x-component')) {
+      if (contentType.includes('text/x-component')) {
         rscResponses.push(response)
       }
     })
@@ -385,14 +414,17 @@ test.describe('Client-Side Navigation Tests', () => {
     await page.waitForLoadState('networkidle')
 
     await page.evaluate(() => {
-      (window as any).__navigateEventFired = false;
-      (window as any).__rariNavigateRegistered = true
+      const win = window as StreamingTestWindow
+      win.__navigateEventFired = false
+      win.__rariNavigateRegistered = true
       window.addEventListener('rari:navigate', () => {
-        (window as any).__navigateEventFired = true
+        win.__navigateEventFired = true
       })
     })
 
-    await page.waitForFunction(() => (window as any).__rariNavigateRegistered === true)
+    await page.waitForFunction(
+      () => (window as StreamingTestWindow).__rariNavigateRegistered === true,
+    )
 
     const link = page.locator('a[href="/about"]').first()
     expect(await link.count()).toBeGreaterThan(0)
@@ -441,9 +473,10 @@ test.describe('Client-Side Navigation Tests', () => {
     await waitForRariRuntime(page)
 
     await page.evaluate(() => {
-      (window as any).__pageReloaded = false
+      const win = window as StreamingTestWindow
+      win.__pageReloaded = false
       window.addEventListener('beforeunload', () => {
-        (window as any).__pageReloaded = true
+        win.__pageReloaded = true
       })
     })
 
@@ -454,7 +487,7 @@ test.describe('Client-Side Navigation Tests', () => {
     await page.waitForLoadState('networkidle')
 
     const pageReloaded = await page.evaluate(() => {
-      return !!(window as any).__pageReloaded
+      return !!(window as StreamingTestWindow).__pageReloaded
     })
 
     expect(pageReloaded).toBe(false)

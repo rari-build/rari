@@ -34,7 +34,9 @@ describe('generateFeedXml', () => {
       const result = generateFeedXml(feed)
 
       expect(result).toContain('xmlns:atom="http://www.w3.org/2005/Atom"')
-      expect(result).toContain('<atom:link href="https://example.com/feed.xml" rel="self" type="application/rss+xml" />')
+      expect(result).toContain(
+        '<atom:link href="https://example.com/feed.xml" rel="self" type="application/rss+xml" />',
+      )
     })
 
     it('should handle trailing slash in feed link for atom:link', () => {
@@ -208,7 +210,11 @@ describe('generateFeedXml', () => {
           {
             title: 'Test',
             url: 'https://example.com/test',
-            author: { name: 'Jane Doe', email: 'jane@example.com', url: 'https://jane.example.com' },
+            author: {
+              name: 'Jane Doe',
+              email: 'jane@example.com',
+              url: 'https://jane.example.com',
+            },
           },
         ],
       }
@@ -257,7 +263,9 @@ describe('generateFeedXml', () => {
       const result = generateFeedXml(feed)
 
       expect(result).toContain('xmlns:content="http://purl.org/rss/1.0/modules/content/"')
-      expect(result).toContain('<content:encoded><![CDATA[<p>Hello <strong>world</strong></p>]]></content:encoded>')
+      expect(result).toContain(
+        '<content:encoded><![CDATA[<p>Hello <strong>world</strong></p>]]></content:encoded>',
+      )
     })
 
     it('should handle enclosure', () => {
@@ -280,7 +288,9 @@ describe('generateFeedXml', () => {
 
       const result = generateFeedXml(feed)
 
-      expect(result).toContain('<enclosure url="https://example.com/audio/ep1.mp3" length="12345678" type="audio/mpeg" />')
+      expect(result).toContain(
+        '<enclosure url="https://example.com/audio/ep1.mp3" length="12345678" type="audio/mpeg" />',
+      )
     })
 
     it('should generate multiple items', () => {
@@ -385,7 +395,13 @@ describe('generateFeedXml', () => {
         title: 'Test',
         description: 'Test',
         link: 'https://example.com',
-        items: [{ title: 'With author', url: 'https://example.com/1', author: { name: 'John', email: 'john@example.com' } }],
+        items: [
+          {
+            title: 'With author',
+            url: 'https://example.com/1',
+            author: { name: 'John', email: 'john@example.com' },
+          },
+        ],
       }
 
       expect(generateFeedXml(feedWithoutAuthor)).not.toContain('xmlns:dc')

@@ -20,10 +20,7 @@ describe('proxy response Set-Cookie serialization', () => {
     const collected = collectAllHeaders(headers)
 
     expect(collected['content-type']).toBe('application/json')
-    expect(collected['set-cookie']).toEqual([
-      'foo=bar; Path=/',
-      'hello=world; Path=/',
-    ])
+    expect(collected['set-cookie']).toEqual(['foo=bar; Path=/', 'hello=world; Path=/'])
   })
 
   it('applies RariResponse.cookies into response headers', () => {
@@ -34,10 +31,7 @@ describe('proxy response Set-Cookie serialization', () => {
     const headers: Record<string, string | string[]> = {}
     applyResponseCookies(response, headers)
 
-    expect(headers['set-cookie']).toEqual([
-      'foo=bar; Path=/',
-      'hello=world; Path=/',
-    ])
+    expect(headers['set-cookie']).toEqual(['foo=bar; Path=/', 'hello=world; Path=/'])
   })
 
   it('flushes cookies on continue responses', () => {
@@ -84,8 +78,7 @@ describe('proxy response Set-Cookie serialization', () => {
     const headers = {
       forEach(callback: (value: string, key: string) => void) {
         callback('application/json', 'content-type')
-        for (const value of setCookieValues)
-          callback(value, 'set-cookie')
+        for (const value of setCookieValues) callback(value, 'set-cookie')
       },
     }
 

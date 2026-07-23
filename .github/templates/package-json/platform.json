@@ -5,12 +5,8 @@
   "description": "Runtime Accelerated Rendering Infrastructure ({DESCRIPTION})",
   "author": "Ryan Skinner",
   "license": "MIT",
-  "os": [
-    "{OS}"
-  ],
-  "cpu": [
-    "{CPU}"
-  ],
+  "os": ["{OS}"],
+  "cpu": ["{CPU}"],
   "homepage": "https://github.com/rari-build/rari#readme",
   "repository": {
     "directory": "packages/{NAME}",
@@ -20,21 +16,11 @@
   "bugs": {
     "url": "https://github.com/rari-build/rari/issues"
   },
-  "keywords": [
-    "rari",
-    "binary",
-    "rust",
-    "react",
-    "server-components"
-  ],
+  "keywords": ["rari", "binary", "rust", "react", "server-components"],
   "bin": {
     "rari": "{BIN_PATH}"
   },
-  "files": [
-    "LICENSE",
-    "README.md",
-    "{BIN_FILE}"
-  ],
+  "files": ["LICENSE", "README.md", "{BIN_FILE}"],
   "engines": {
     "node": ">=22.18.0"
   }

@@ -2,16 +2,10 @@
 rustflags = ["-C", "link-arg=-fuse-ld=mold"]
 
 [target.x86_64-apple-darwin]
-rustflags = [
-  "-C",
-  "link-arg=-fuse-ld=/opt/homebrew/bin/ld64.lld"
-]
+rustflags = ["-C", "link-arg=-fuse-ld=/opt/homebrew/bin/ld64.lld"]
 
 [target.aarch64-apple-darwin]
-rustflags = [
-  "-C",
-  "link-arg=-fuse-ld=/opt/homebrew/bin/ld64.lld"
-]
+rustflags = ["-C", "link-arg=-fuse-ld=/opt/homebrew/bin/ld64.lld"]
 
 [build]
 pipelining = true

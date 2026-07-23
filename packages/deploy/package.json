@@ -28,6 +28,7 @@
     "typecheck": "tsc"
   },
   "devDependencies": {
+    "@rari/lint": "workspace:*",
     "@rari/logger": "workspace:*",
     "@types/node": "catalog:typescript",
     "typescript": "catalog:typescript",

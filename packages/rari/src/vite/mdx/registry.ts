@@ -7,52 +7,47 @@ import { getProjectRelativePath } from '../analysis/component-ids'
 import { collectClientComponentPaths } from '../analysis/module-cache'
 import { normalizeScanDirs } from '../analysis/source-walker'
 
-const MDX_FILE_REGEX = /\.mdx$/
-
 export function isMdxRegistryModuleId(id: string): boolean {
   const normalized = id.replace(BACKSLASH_REGEX, '/')
 
-  if (normalized === 'rari/mdx/registry' || normalized.startsWith('rari/mdx/registry?'))
-    return true
+  if (normalized === 'rari/mdx/registry' || normalized.startsWith('rari/mdx/registry?')) return true
 
-  const isRegistrySuffix = normalized.endsWith('/mdx/registry.ts')
-    || normalized.endsWith('/mdx/registry.mts')
-    || normalized.endsWith('/mdx/registry.mjs')
-    || normalized.endsWith('/mdx/registry.js')
-    || normalized.endsWith('/mdx/registry')
+  const isRegistrySuffix =
+    normalized.endsWith('/mdx/registry.ts') ||
+    normalized.endsWith('/mdx/registry.mts') ||
+    normalized.endsWith('/mdx/registry.mjs') ||
+    normalized.endsWith('/mdx/registry.js') ||
+    normalized.endsWith('/mdx/registry')
 
-  if (!isRegistrySuffix)
-    return false
+  if (!isRegistrySuffix) return false
 
-  return normalized.includes('/node_modules/rari/')
-    || normalized.includes('/packages/rari/')
+  return normalized.includes('/node_modules/rari/') || normalized.includes('/packages/rari/')
 }
 
 export interface MdxPluginOptions {
-  componentsDir?: string
-  contentDirs?: string[]
+  readonly componentsDir?: string
+  readonly contentDirs?: readonly string[]
 }
 
 export interface MdxRegistryEntry {
-  name: string
-  binding: string
-  importPath: string
-  moduleId: string
-  client: boolean
+  readonly name: string
+  readonly binding: string
+  readonly importPath: string
+  readonly moduleId: string
+  readonly client: boolean
 }
 
 interface DiscoverMdxRegistryOptions {
-  projectRoot: string
-  componentsDir: string
-  contentDirs: string[]
-  cache: ModuleAnalysisCache
-  componentScanDirs: readonly string[]
+  readonly projectRoot: string
+  readonly componentsDir: string
+  readonly contentDirs: readonly string[]
+  readonly cache: ModuleAnalysisCache
+  readonly componentScanDirs: readonly string[]
 }
 
 function walkMdxFiles(contentDirs: readonly string[], visit: (filePath: string) => void): void {
   const walk = (currentDir: string) => {
-    if (!fs.existsSync(currentDir))
-      return
+    if (!fs.existsSync(currentDir)) return
 
     for (const entry of fs.readdirSync(currentDir, { withFileTypes: true })) {
       const fullPath = path.join(currentDir, entry.name)
@@ -61,29 +56,25 @@ function walkMdxFiles(contentDirs: readonly string[], visit: (filePath: string) 
         if (entry.name === 'node_modules' || entry.name === '.git' || entry.name === 'dist')
           continue
         walk(fullPath)
-      }
-      else if (entry.isFile() && MDX_FILE_REGEX.test(entry.name)) {
+      } else if (entry.isFile() && entry.name.endsWith('.mdx')) {
         visit(fullPath)
       }
     }
   }
 
   for (const dir of contentDirs) {
-    if (dir && fs.existsSync(dir))
-      walk(dir)
+    if (dir && fs.existsSync(dir)) walk(dir)
   }
 }
 
 function scanMdxUsedComponentNames(contentDirs: readonly string[]): Set<string> {
   const names = new Set<string>()
 
-  walkMdxFiles(contentDirs, (filePath) => {
+  walkMdxFiles(contentDirs, filePath => {
     try {
       const content = fs.readFileSync(filePath, 'utf-8')
-      for (const name of scanMdxComponentNames(content))
-        names.add(name)
-    }
-    catch {}
+      for (const name of scanMdxComponentNames(content)) names.add(name)
+    } catch {}
   })
 
   return names
@@ -92,26 +83,24 @@ function scanMdxUsedComponentNames(contentDirs: readonly string[]): Set<string> 
 function getComponentName(componentPath: string, cache: ModuleAnalysisCache): string | null {
   try {
     const analysis = cache.get(componentPath)
-    if (analysis.hasDefaultExport)
-      return path.basename(componentPath, path.extname(componentPath))
+    if (analysis.hasDefaultExport) return path.basename(componentPath, path.extname(componentPath))
 
     const source = cache.getSource(componentPath)
     const namedExportMatch = source.match(EXPORT_NAMED_DECLARATION_REGEX)
-    if (namedExportMatch?.[1])
-      return namedExportMatch[1]
-  }
-  catch {}
+    if (namedExportMatch?.[1] != null && namedExportMatch[1] !== '') return namedExportMatch[1]
+  } catch {}
 
   return path.basename(componentPath, path.extname(componentPath))
 }
 
-export function discoverMdxRegistryEntries(options: DiscoverMdxRegistryOptions): MdxRegistryEntry[] {
+export function discoverMdxRegistryEntries(
+  options: DiscoverMdxRegistryOptions,
+): MdxRegistryEntry[] {
   const usedNames = scanMdxUsedComponentNames(
     options.contentDirs.map(dir => path.join(options.projectRoot, dir)),
   )
 
-  if (usedNames.size === 0)
-    return []
+  if (usedNames.size === 0) return []
 
   const clientComponentPaths = collectClientComponentPaths(options.componentScanDirs, options.cache)
   const entries: MdxRegistryEntry[] = []
@@ -119,15 +108,16 @@ export function discoverMdxRegistryEntries(options: DiscoverMdxRegistryOptions):
 
   for (const componentPath of clientComponentPaths) {
     const name = getComponentName(componentPath, options.cache)
-    if (!name || !usedNames.has(name))
-      continue
+    if (name == null || name === '' || !usedNames.has(name)) continue
 
-    const moduleId = getProjectRelativePath(componentPath, options.projectRoot).replace(BACKSLASH_REGEX, '/')
+    const moduleId = getProjectRelativePath(componentPath, options.projectRoot).replace(
+      BACKSLASH_REGEX,
+      '/',
+    )
     const importPath = moduleId.startsWith('/') ? moduleId : `/${moduleId}`
 
     let binding = name.replace(/[^\w$]/g, '_')
-    if (usedBindings.has(binding))
-      binding = `${binding}_${entries.length}`
+    if (usedBindings.has(binding)) binding = `${binding}_${entries.length}`
     usedBindings.add(binding)
 
     entries.push({
@@ -142,13 +132,15 @@ export function discoverMdxRegistryEntries(options: DiscoverMdxRegistryOptions):
   return entries.sort((a, b) => a.name.localeCompare(b.name))
 }
 
-export function resolveMdxRegistryEntries(options: {
-  projectRoot: string
-  mdxOptions?: MdxPluginOptions
-  alias?: Record<string, string>
-  cache: ModuleAnalysisCache
-  srcDir?: string
-}): MdxRegistryEntry[] {
+export function resolveMdxRegistryEntries(
+  options: Readonly<{
+    readonly projectRoot: string
+    readonly mdxOptions?: MdxPluginOptions
+    readonly alias?: { readonly [key: string]: string }
+    readonly cache: ModuleAnalysisCache
+    readonly srcDir?: string
+  }>,
+): MdxRegistryEntry[] {
   const mdxOpts = resolveMdxPluginOptions(options.projectRoot, options.mdxOptions)
   const srcDir = options.srcDir ?? path.join(options.projectRoot, 'src')
   const componentScanDirs = collectMdxComponentScanDirs(
@@ -167,8 +159,11 @@ export function resolveMdxRegistryEntries(options: {
 }
 
 export function generateMdxRegistryModule(
-  entries: MdxRegistryEntry[],
-  options: { importStyle?: 'root-absolute' | 'project-relative', mode?: 'vite' | 'production' } = {},
+  entries: readonly MdxRegistryEntry[],
+  options: Readonly<{
+    importStyle?: 'root-absolute' | 'project-relative'
+    mode?: 'vite' | 'production'
+  }> = {},
 ): string {
   const importStyle = options.importStyle ?? 'root-absolute'
   const mode = options.mode ?? 'vite'
@@ -182,7 +177,10 @@ export const getMDXComponents = defineMdxComponents([])
 
   if (mode === 'production') {
     const registry = entries
-      .map(entry => `  { name: ${JSON.stringify(entry.name)}, component: null, id: ${JSON.stringify(entry.moduleId)}, client: ${entry.client} }`)
+      .map(
+        entry =>
+          `  { name: ${JSON.stringify(entry.name)}, component: null, id: ${JSON.stringify(entry.moduleId)}, client: ${entry.client} }`,
+      )
       .join(',\n')
 
     return `import { defineMdxComponents } from 'rari/mdx/define'
@@ -194,16 +192,18 @@ ${registry},
   }
 
   const imports = entries
-    .map((entry) => {
-      const importPath = importStyle === 'project-relative'
-        ? `./${entry.moduleId}`
-        : entry.importPath
+    .map(entry => {
+      const importPath =
+        importStyle === 'project-relative' ? `./${entry.moduleId}` : entry.importPath
       return `import ${entry.binding} from ${JSON.stringify(importPath)}`
     })
     .join('\n')
 
   const registry = entries
-    .map(entry => `  { name: ${JSON.stringify(entry.name)}, component: ${entry.binding}, id: ${JSON.stringify(entry.moduleId)}, client: ${entry.client} }`)
+    .map(
+      entry =>
+        `  { name: ${JSON.stringify(entry.name)}, component: ${entry.binding}, id: ${JSON.stringify(entry.moduleId)}, client: ${entry.client} }`,
+    )
     .join(',\n')
 
   return `import { defineMdxComponents } from 'rari/mdx/define'
@@ -225,10 +225,11 @@ export function resolveMdxPluginOptions(
   }
 }
 
-export function collectMdxContentDirs(projectRoot: string, contentDirs: readonly string[]): string[] {
-  return contentDirs
-    .map(dir => path.join(projectRoot, dir))
-    .filter(dir => fs.existsSync(dir))
+export function collectMdxContentDirs(
+  projectRoot: string,
+  contentDirs: readonly string[],
+): string[] {
+  return contentDirs.map(dir => path.join(projectRoot, dir)).filter(dir => fs.existsSync(dir))
 }
 
 export function collectMdxComponentScanDirs(
@@ -239,8 +240,7 @@ export function collectMdxComponentScanDirs(
   const configuredDir = path.join(projectRoot, componentsDir)
   const dirs = new Set(componentScanDirs)
 
-  if (fs.existsSync(configuredDir))
-    dirs.add(configuredDir)
+  if (fs.existsSync(configuredDir)) dirs.add(configuredDir)
 
   return [...dirs]
 }

@@ -1,15 +1,29 @@
 import path from 'node:path'
+import { fmt, lint } from '@rari/lint/vite'
 import tailwindcss from '@tailwindcss/vite'
 import { rari } from 'rari/vite'
 import { defineConfig } from 'vite-plus'
 
 export default defineConfig({
+  fmt,
+  lint,
   plugins: [
     rari({
       csp: {
-        scriptSrc: ['\'self\'', '\'unsafe-inline\'', 'https://t.rari.build', 'https://js.sentry-cdn.com'],
-        connectSrc: ['\'self\'', 'ws:', 'wss:', 'https://t.rari.build', 'https://*.ingest.us.sentry.io'],
-        workerSrc: ['\'self\'', 'blob:'],
+        scriptSrc: [
+          "'self'",
+          "'unsafe-inline'",
+          'https://t.rari.build',
+          'https://js.sentry-cdn.com',
+        ],
+        connectSrc: [
+          "'self'",
+          'ws:',
+          'wss:',
+          'https://t.rari.build',
+          'https://*.ingest.us.sentry.io',
+        ],
+        workerSrc: ["'self'", 'blob:'],
       },
       cacheControl: {
         routes: {
@@ -33,14 +47,11 @@ export default defineConfig({
           minShareCount: 10,
           groups: [
             {
-              name: (moduleId) => {
+              name: moduleId => {
                 if (moduleId.includes('node_modules')) {
-                  if (moduleId.includes('posthog'))
-                    return 'posthog'
-                  if (moduleId.includes('@sentry'))
-                    return 'sentry'
-                  if (moduleId.includes('react-dom'))
-                    return 'react-dom'
+                  if (moduleId.includes('posthog')) return 'posthog'
+                  if (moduleId.includes('@sentry')) return 'sentry'
+                  if (moduleId.includes('react-dom')) return 'react-dom'
                 }
 
                 return null

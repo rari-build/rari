@@ -7,42 +7,42 @@ interface ImportMetaEnv {
 
 declare module 'virtual:react-flight-client' {
   export interface Thenable<T> extends Promise<T> {
-    status?: 'pending' | 'fulfilled' | 'rejected'
-    value?: T
-    reason?: unknown
+    readonly status?: 'pending' | 'fulfilled' | 'rejected'
+    readonly value?: T
+    readonly reason?: unknown
   }
 
-  export function createServerReference<T, A extends unknown[] = unknown[], R = unknown>(
+  export function createServerReference<A extends unknown[] = unknown[], R = unknown>(
     id: string,
     callServer: (id: string, args: A) => Promise<R>,
     encodeFormAction?: (args: A) => Promise<FormData | string>,
-  ): T
+  ): unknown
 
   export function createFromReadableStream<T>(
     stream: ReadableStream<Uint8Array>,
-    options?: {
-      callServer?: (id: string, args: unknown[]) => Promise<unknown>
-      moduleMap?: unknown
-      moduleLoading?: unknown
-    },
+    options?: Readonly<{
+      readonly callServer?: (id: string, args: readonly unknown[]) => Promise<unknown>
+      readonly moduleMap?: unknown
+      readonly moduleLoading?: unknown
+    }>,
   ): Thenable<T>
 
   export function createFromFetch<T>(
     promiseForResponse: Promise<Response>,
-    options?: {
-      callServer?: (id: string, args: unknown[]) => Promise<unknown>
-      temporaryReferences?: Map<string, unknown>
-    },
+    options?: Readonly<{
+      readonly callServer?: (id: string, args: readonly unknown[]) => Promise<unknown>
+      readonly temporaryReferences?: Map<string, unknown>
+    }>,
   ): Promise<T>
 
   export function createTemporaryReferenceSet(): Map<string, unknown>
 
   export function encodeReply(
     value: unknown,
-    options?: {
-      temporaryReferences?: Map<string, unknown>
-      signal?: AbortSignal
-    },
+    options?: Readonly<{
+      readonly temporaryReferences?: Map<string, unknown>
+      readonly signal?: AbortSignal
+    }>,
   ): Promise<FormData | string>
 }
 
@@ -56,13 +56,9 @@ declare module 'react-server-dom-webpack/client' {
 }
 
 declare module 'react-server-dom-webpack/server' {
-  export function registerClientReference<T>(
-    clientReference: T,
-    id: string,
-    exportName: string,
-  ): T
+  export function registerClientReference<T>(clientReference: T, id: string, exportName: string): T
 
-  export function createClientModuleProxy<T>(moduleId: string): T
+  export function createClientModuleProxy(moduleId: string): unknown
 
   export function registerServerReference<T>(
     serverReference: T,
@@ -78,5 +74,29 @@ declare global {
       tags?: string[]
       timeout?: number
     }
+  }
+
+  interface GlobalThis {
+    '~rariExecuteProxy'?: (
+      request: Readonly<{
+        readonly url: string
+        readonly method: string
+        readonly headers: { readonly [key: string]: string }
+      }>,
+    ) => Promise<{
+      continue: boolean
+      redirect?: {
+        destination: string
+        permanent: boolean
+      }
+      rewrite?: string
+      requestHeaders?: Record<string, string | string[]>
+      responseHeaders?: Record<string, string | string[]>
+      response?: {
+        status: number
+        headers: Record<string, string | string[]>
+        body?: string
+      }
+    }>
   }
 }

@@ -1,6 +1,36 @@
 import type { ComponentInfo, GlobalWithRari } from '@rari/runtime/shared/types'
-import { installRscChunkLoader, pathsMatch, requireClientComponent } from '@rari/runtime/shared/get-client-component'
+import {
+  installRscChunkLoader,
+  pathsMatch,
+  requireClientComponent,
+} from '@rari/runtime/shared/get-client-component'
 import { describe, expect, it, vi } from 'vite-plus/test'
+import { isThenable } from '../../helpers/is-thenable'
+import { castMock } from '../../helpers/mock-cast'
+
+interface RequiredClientModule {
+  default: (props?: Readonly<Record<string, unknown>>) => unknown
+}
+
+type GlobalWithChunkLoader = typeof globalThis & {
+  __rari_chunk_load__?: (chunkId: string) => Promise<unknown>
+}
+
+/* oxlint-disable typescript/prefer-readonly-parameter-types -- ComponentInfo is a mutable client-component registry entry */
+function setClientComponents(
+  components: Readonly<NonNullable<GlobalWithRari['~clientComponents']>>,
+) {
+  Reflect.set(globalThis, '~clientComponents', components)
+}
+/* oxlint-enable typescript/prefer-readonly-parameter-types */
+
+function requireModule(id: string): RequiredClientModule {
+  const module: unknown = requireClientComponent(id)
+  if (typeof module !== 'object' || module === null || !('default' in module))
+    throw new Error('expected client module')
+
+  return castMock<RequiredClientModule>(module)
+}
 
 describe('pathsMatch', () => {
   it('matches identical normalized paths', () => {
@@ -36,26 +66,25 @@ describe('requireClientComponent path resolution', () => {
       path: 'src/a/Button.tsx',
       type: 'client',
       registered: false,
-      loader: () => Promise.resolve({ default: () => null }),
+      loader: async () => Promise.resolve({ default: () => null }),
     }
     const componentB: ComponentInfo = {
       id: 'btn-b',
       path: 'src/b/Button.tsx',
       type: 'client',
       registered: false,
-      loader: () => Promise.resolve({ default: () => null }),
+      loader: async () => Promise.resolve({ default: () => null }),
     }
 
-    ;(globalThis as unknown as GlobalWithRari)['~clientComponents'] = {
+    setClientComponents({
       'btn-a': componentA,
       'btn-b': componentB,
-    }
+    })
 
     try {
       expect(requireClientComponent('Button.tsx')).toEqual({})
-    }
-    finally {
-      ;(globalThis as unknown as GlobalWithRari)['~clientComponents'] = {}
+    } finally {
+      setClientComponents({})
     }
   })
 
@@ -65,19 +94,18 @@ describe('requireClientComponent path resolution', () => {
       path: 'src/a/Button.tsx',
       type: 'client',
       registered: false,
-      loader: () => Promise.resolve({ default: () => null }),
+      loader: async () => Promise.resolve({ default: () => null }),
     }
 
-    ;(globalThis as unknown as GlobalWithRari)['~clientComponents'] = {
+    setClientComponents({
       'btn-a': componentInfo,
-    }
+    })
 
     try {
-      const module = requireClientComponent('a/Button.tsx')
+      const module = requireModule('a/Button.tsx')
       expect(module.default).toBeTypeOf('function')
-    }
-    finally {
-      ;(globalThis as unknown as GlobalWithRari)['~clientComponents'] = {}
+    } finally {
+      setClientComponents({})
     }
   })
 })
@@ -90,16 +118,16 @@ describe('requireClientComponent lazy load errors', () => {
       path: 'src/components/BrokenWidget.tsx',
       type: 'client',
       registered: false,
-      loader: () => Promise.reject(loadError),
+      loader: async () => Promise.reject(loadError),
     }
 
-    ;(globalThis as unknown as GlobalWithRari)['~clientComponents'] = {
+    setClientComponents({
       BrokenWidget: componentInfo,
-    }
+    })
 
     vi.spyOn(console, 'error').mockImplementation(() => {})
 
-    const suspenseModule = requireClientComponent('BrokenWidget')
+    const suspenseModule = requireModule('BrokenWidget')
     const loadPromise = componentInfo.loadPromise!
     await expect(loadPromise).rejects.toBe(loadError)
     expect(componentInfo.loadError).toBe(loadError)
@@ -107,16 +135,16 @@ describe('requireClientComponent lazy load errors', () => {
     const Suspended = suspenseModule.default
     expect(() => Suspended({})).toThrow(loadError)
 
-    const moduleAfterFailure = requireClientComponent('BrokenWidget')
+    const moduleAfterFailure = requireModule('BrokenWidget')
     expect(() => moduleAfterFailure.default({})).toThrow(loadError)
 
     vi.restoreAllMocks()
-    ;(globalThis as unknown as GlobalWithRari)['~clientComponents'] = {}
+    setClientComponents({})
   })
 
   it('throws the pending load promise while the chunk is loading', () => {
-    let resolveLoad!: (value: { default: () => null }) => void
-    const pendingLoad = new Promise<{ default: () => null }>((resolve) => {
+    let resolveLoad!: (value: Readonly<{ default: () => null }>) => void
+    const pendingLoad = new Promise<{ default: () => null }>(resolve => {
       resolveLoad = resolve
     })
 
@@ -125,18 +153,30 @@ describe('requireClientComponent lazy load errors', () => {
       path: 'src/components/PendingWidget.tsx',
       type: 'client',
       registered: false,
-      loader: () => pendingLoad,
+      loader: async () => pendingLoad,
     }
 
-    ;(globalThis as unknown as GlobalWithRari)['~clientComponents'] = {
+    setClientComponents({
       PendingWidget: componentInfo,
+    })
+
+    const suspenseModule = requireModule('PendingWidget')
+    let thrown: unknown
+    try {
+      suspenseModule.default({})
+    } catch (error) {
+      thrown = error
     }
 
-    const suspenseModule = requireClientComponent('PendingWidget')
-    expect(() => suspenseModule.default({})).toThrow(componentInfo.loadPromise)
+    expect(thrown).toBeInstanceOf(Error)
+    expect(thrown).toMatchObject({
+      message: '[rari] Lazy component "PendingWidget" is loading',
+    })
+    expect(isThenable(thrown)).toBe(true)
+    expect(componentInfo.loadPromise).toBeDefined()
 
     resolveLoad({ default: () => null })
-    ;(globalThis as unknown as GlobalWithRari)['~clientComponents'] = {}
+    setClientComponents({})
   })
 
   it('rejects cached chunk load failures from __rari_chunk_load__', async () => {
@@ -149,21 +189,22 @@ describe('requireClientComponent lazy load errors', () => {
       type: 'client',
       registered: false,
       loadError,
-      loader: () => Promise.reject(loadError),
+      loader: async () => Promise.reject(loadError),
     }
 
-    ;(globalThis as unknown as GlobalWithRari)['~clientComponents'] = {
+    setClientComponents({
       BrokenChunk: componentInfo,
-    }
+    })
 
     try {
       installRscChunkLoader()
 
-      await expect((globalThis as any).__rari_chunk_load__('BrokenChunk')).rejects.toBe(loadError)
-    }
-    finally {
+      await expect(
+        (globalThis as GlobalWithChunkLoader).__rari_chunk_load__?.('BrokenChunk'),
+      ).rejects.toBe(loadError)
+    } finally {
       vi.unstubAllGlobals()
-      ;(globalThis as unknown as GlobalWithRari)['~clientComponents'] = {}
+      setClientComponents({})
     }
   })
 })

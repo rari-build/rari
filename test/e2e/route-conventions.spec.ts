@@ -20,7 +20,7 @@ test.describe('Route Groups (folder)', () => {
   })
 
   test('nested groups compose layouts from both levels', async ({ page }) => {
-    // /forgot lives in (auth)/(flow) — both (auth) and (flow) layouts apply
+    // /forgot lives in (auth)/(flow) -- both (auth) and (flow) layouts apply
     await page.goto('/forgot')
     await expect(page.locator('[data-testid="auth-group-banner"]')).toBeVisible()
     await expect(page.locator('[data-testid="flow-group-banner"]')).toBeVisible()
@@ -28,7 +28,7 @@ test.describe('Route Groups (folder)', () => {
   })
 
   test('nested groups do not affect sibling pages outside the nested group', async ({ page }) => {
-    // /login is in (auth) but not in (flow) — only the (auth) layout applies
+    // /login is in (auth) but not in (flow) -- only the (auth) layout applies
     await page.goto('/login')
     await expect(page.locator('[data-testid="auth-group-banner"]')).toBeVisible()
     await expect(page.locator('[data-testid="flow-group-banner"]')).toHaveCount(0)

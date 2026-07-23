@@ -1,6 +1,9 @@
 import type { CacheLifeProfile, CacheLifeProfileName } from '@/runtime/context/cache-life'
 import { addCacheTags, setCacheLife } from '@/runtime/context/cache-context'
-import { invalidateUseCacheByTag, invalidateUseCacheEntries } from '@/runtime/invalidation/cache-invalidation'
+import {
+  invalidateUseCacheByTag,
+  invalidateUseCacheEntries,
+} from '@/runtime/invalidation/cache-invalidation'
 
 export type { CacheLifeProfile, CacheLifeProfileName } from '@/runtime/context/cache-life'
 
@@ -8,7 +11,7 @@ export function cacheLife(profile: CacheLifeProfileName | CacheLifeProfile): voi
   setCacheLife(profile)
 }
 
-export function cacheTag(...tags: string[]): void {
+export function cacheTag(...tags: readonly string[]): void {
   addCacheTags(...tags)
 }
 

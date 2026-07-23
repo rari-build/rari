@@ -1,3 +1,4 @@
+import type { Buffer } from 'node:buffer'
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -6,8 +7,11 @@ import { describe, expect, it } from 'vite-plus/test'
 
 const CLI_PATH = resolve(process.cwd(), 'packages/rari/dist/cli.mjs')
 
-function runCLI(args: string[], env: Record<string, string> = {}): Promise<{ code: number, stdout: string, stderr: string }> {
-  return new Promise((resolve) => {
+async function runCLI(
+  args: readonly string[],
+  env: Readonly<Record<string, string>> = {},
+): Promise<{ code: number; stdout: string; stderr: string }> {
+  return new Promise(resolve => {
     const child = spawn('node', [CLI_PATH, ...args], {
       env: { ...process.env, ...env },
       cwd: process.cwd(),
@@ -18,24 +22,23 @@ function runCLI(args: string[], env: Record<string, string> = {}): Promise<{ cod
     let resolved = false
     let timeoutId: NodeJS.Timeout
 
-    const cleanup = (result: { code: number, stdout: string, stderr: string }) => {
-      if (resolved)
-        return
+    const cleanup = (result: Readonly<{ code: number; stdout: string; stderr: string }>) => {
+      if (resolved) return
       resolved = true
       clearTimeout(timeoutId)
       resolve(result)
     }
 
-    child.stdout?.on('data', (data) => {
+    child.stdout.on('data', (data: Buffer) => {
       stdout += data.toString()
     })
 
-    child.stderr?.on('data', (data) => {
+    child.stderr.on('data', (data: Buffer) => {
       stderr += data.toString()
     })
 
-    child.on('close', (code) => {
-      cleanup({ code: code || 0, stdout, stderr })
+    child.on('close', code => {
+      cleanup({ code: code ?? 0, stdout, stderr })
     })
 
     child.on('error', () => {
@@ -87,7 +90,7 @@ describe('cli commands', () => {
   describe('command availability', () => {
     const commands = ['dev', 'build', 'start', 'deploy', 'help']
 
-    commands.forEach((cmd) => {
+    commands.forEach(cmd => {
       it(`should recognize ${cmd} command in help`, async () => {
         const { stderr } = await runCLI(['help'])
         expect(stderr).toContain(cmd)

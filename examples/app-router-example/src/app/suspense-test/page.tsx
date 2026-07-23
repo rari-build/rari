@@ -1,7 +1,9 @@
 import { Suspense } from 'react'
 
 async function SlowComponent() {
-  await new Promise(resolve => setTimeout(resolve, 2000))
+  await new Promise<void>(resolve => {
+    setTimeout(resolve, 2000)
+  })
   return <div>Slow data loaded!</div>
 }
 

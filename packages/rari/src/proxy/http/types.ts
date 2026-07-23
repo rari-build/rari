@@ -1,122 +1,132 @@
+import type { RariResponse } from './response'
+
 export interface RariRequest {
-  url: string
-  method: string
-  headers: Headers
-  cookies: RequestCookies
-  rariUrl: RariURL
-  ip?: string
-  geo?: {
+  readonly url: string
+  readonly method: string
+  readonly headers: Headers
+  readonly cookies: RequestCookies
+  readonly rariUrl: RariURL
+  readonly ip?: string
+  readonly geo?: Readonly<{
     city?: string
     country?: string
     region?: string
     latitude?: string
     longitude?: string
-  }
+  }>
 }
 
 export interface RariURL {
-  href: string
-  origin: string
-  protocol: string
-  hostname: string
-  port: string
-  pathname: string
-  search: string
-  searchParams: URLSearchParams
-  hash: string
+  readonly href: string
+  readonly origin: string
+  readonly protocol: string
+  readonly hostname: string
+  readonly port: string
+  readonly pathname: string
+  readonly search: string
+  readonly searchParams: URLSearchParams
+  readonly hash: string
 }
 
 export interface RequestCookies {
-  get: (name: string) => { name: string, value: string, path?: string } | undefined
-  getAll: () => Array<{ name: string, value: string, path?: string }>
-  has: (name: string) => boolean
-  delete: (name: string) => void
-  set: ((name: string, value: string, options?: CookieOptions) => void) & ((options: { name: string, value: string } & CookieOptions) => void)
+  readonly get: (
+    name: string,
+  ) => Readonly<{ name: string; value: string; path?: string }> | undefined
+  readonly getAll: () => ReadonlyArray<Readonly<{ name: string; value: string; path?: string }>>
+  readonly has: (name: string) => boolean
+  readonly delete: (name: string) => void
+  readonly set: ((name: string, value: string, options?: Readonly<CookieOptions>) => void) &
+    ((options: Readonly<{ name: string; value: string } & CookieOptions>) => void)
 }
 
 export interface ResponseCookies {
-  get: (name: string) => { name: string, value: string, path?: string } | undefined
-  getAll: () => Array<{ name: string, value: string, path?: string }>
-  set: ((name: string, value: string, options?: CookieOptions) => void) & ((options: { name: string, value: string } & CookieOptions) => void)
-  delete: (name: string) => void
-  toSetCookieHeaders: () => string[]
+  readonly get: (
+    name: string,
+  ) => Readonly<{ name: string; value: string; path?: string }> | undefined
+  readonly getAll: () => ReadonlyArray<Readonly<{ name: string; value: string; path?: string }>>
+  readonly set: ((name: string, value: string, options?: Readonly<CookieOptions>) => void) &
+    ((options: Readonly<{ name: string; value: string } & CookieOptions>) => void)
+  readonly delete: (name: string) => void
+  readonly toSetCookieHeaders: () => string[]
 }
 
 export interface CookieOptions {
-  path?: string
-  domain?: string
-  maxAge?: number
-  expires?: Date
-  httpOnly?: boolean
-  secure?: boolean
-  sameSite?: 'strict' | 'lax' | 'none'
+  readonly path?: string
+  readonly domain?: string
+  readonly maxAge?: number
+  readonly expires?: Date
+  readonly httpOnly?: boolean
+  readonly secure?: boolean
+  readonly sameSite?: 'strict' | 'lax' | 'none'
 }
 
 export interface RariFetchEvent {
-  waitUntil: (promise: Promise<unknown>) => void
+  readonly waitUntil: (promise: Promise<unknown>) => void
 }
+
+export type ProxyFunctionResult = Response | RariResponse | null | undefined
 
 export type ProxyFunction = (
-  request: any,
+  request: RariRequest,
   event?: RariFetchEvent,
-) => Promise<any> | any
+) => Promise<ProxyFunctionResult> | ProxyFunctionResult
 
 export interface ProxyCondition {
-  type: 'header' | 'query' | 'cookie'
-  key: string
-  value?: string
+  readonly type: 'header' | 'query' | 'cookie'
+  readonly key: string
+  readonly value?: string
 }
 
-export type ProxyRuleCondition
-  = | ProxyCondition
-    | { type: 'host', key: string, value?: string }
+export type ProxyRuleCondition =
+  | ProxyCondition
+  | { readonly type: 'host'; readonly key: string; readonly value?: string }
 
 export interface ProxyMatcher {
-  source: string
-  locale?: boolean
-  has?: Array<ProxyRuleCondition>
-  missing?: Array<ProxyRuleCondition>
+  readonly source: string
+  readonly locale?: boolean
+  readonly has?: ReadonlyArray<ProxyRuleCondition>
+  readonly missing?: ReadonlyArray<ProxyRuleCondition>
 }
 
 export interface ProxyConfig {
-  matcher?: string | string[] | ProxyMatcher | ProxyMatcher[]
+  readonly matcher?: string | readonly string[] | ProxyMatcher | readonly ProxyMatcher[]
 }
 
 export interface ProxyModule {
-  proxy?: ProxyFunction
-  default?: ProxyFunction
-  config?: ProxyConfig
+  readonly proxy?: ProxyFunction
+  readonly default?: ProxyFunction
+  readonly config?: ProxyConfig
 }
 
 export interface ProxyResult {
-  continue: boolean
-  response?: Response
-  requestHeaders?: Record<string, string | string[]>
-  responseHeaders?: Record<string, string | string[]>
-  rewrite?: string
-  redirect?: {
-    destination: string
-    permanent: boolean
+  readonly continue: boolean
+  readonly response?: Response
+  readonly requestHeaders?: Readonly<Record<string, string | readonly string[]>>
+  readonly responseHeaders?: Readonly<Record<string, string | readonly string[]>>
+  readonly rewrite?: string
+  readonly redirect?: {
+    readonly destination: string
+    readonly permanent: boolean
   }
 }
 
 export interface ProxyRule {
-  source: string
-  type: 'redirect' | 'rewrite' | 'header' | 'block'
-  destination?: string
-  permanent?: boolean
-  headers?: Record<string, string>
-  conditions?: {
-    has?: Array<ProxyRuleCondition>
-    missing?: Array<ProxyRuleCondition>
+  readonly source: string
+  readonly type: 'redirect' | 'rewrite' | 'header' | 'block'
+  readonly destination?: string
+  readonly permanent?: boolean
+  readonly headers?: Readonly<Record<string, string>>
+  readonly conditions?: {
+    readonly has?: ReadonlyArray<ProxyRuleCondition>
+    readonly missing?: ReadonlyArray<ProxyRuleCondition>
   }
 }
 
 export interface ProxyManifest {
-  proxyFile: string
-  enabled: boolean
-  generated: string
-  rules?: ProxyRule[]
-  matcher?: ProxyConfig['matcher']
-  requiresRuntime?: boolean
+  readonly proxyFile: string
+  readonly enabled: boolean
+  readonly generated: string
+  readonly rules?: readonly ProxyRule[]
+  readonly matcher?: ProxyConfig['matcher']
+  readonly requiresRuntime?: boolean
 }

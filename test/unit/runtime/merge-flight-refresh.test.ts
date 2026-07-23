@@ -1,22 +1,30 @@
 import { mergeFlightRefresh } from '@rari/runtime/flight/merge-refresh'
 import * as React from 'react'
 import { describe, expect, it } from 'vite-plus/test'
+import { castMock } from '../../helpers/mock-cast'
 
 const CLIENT_REFERENCE = Symbol.for('react.client.reference')
 
 function clientRef(id: string): React.ElementType {
-  return {
+  return castMock({
     $$typeof: CLIENT_REFERENCE,
     $$id: id,
     $$async: false,
-  } as unknown as React.ElementType
+  })
 }
 
 function expectElement(node: React.ReactNode): React.ReactElement<{ children?: React.ReactNode }> {
-  if (!React.isValidElement(node))
+  if (!React.isValidElement<{ children?: React.ReactNode }>(node))
     throw new Error('Expected React element')
 
-  return node as React.ReactElement<{ children?: React.ReactNode }>
+  return node
+}
+
+function clientReferenceId(type: unknown): string | undefined {
+  if (typeof type !== 'function' && (typeof type !== 'object' || type == null)) return undefined
+
+  const id: unknown = Reflect.get(type, '$$id')
+  return typeof id === 'string' ? id : undefined
 }
 
 describe('mergeFlightRefresh', () => {
@@ -42,12 +50,17 @@ describe('mergeFlightRefresh', () => {
 
     expect(merged.type).toBe('section')
     const children = merged.props.children
-    const childList = Array.isArray(children) ? children : children != null ? [children] : []
+    const childList: React.ReactNode[] = Array.isArray(children)
+      ? // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- React children array is widened
+        (children as React.ReactNode[])
+      : children != null
+        ? [children]
+        : []
     expect(childList).toHaveLength(1)
 
     const mergedChild = expectElement(childList[0])
 
-    expect((mergedChild.type as { $$id?: string }).$$id).toBe('src/app/TodoApp.tsx')
+    expect(clientReferenceId(mergedChild.type)).toBe('src/app/TodoApp.tsx')
     expect(String(mergedChild.key)).toContain('/actions')
     expect(mergedChild.props.children).toBe('fresh')
   })

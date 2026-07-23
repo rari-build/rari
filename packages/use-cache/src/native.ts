@@ -9,66 +9,85 @@ const PLATFORM_PACKAGES: Record<string, string> = {
   'win32-x64': '@rari/use-cache-win32-x64',
 }
 
-const key = `${process.platform}-${process.arch}` as keyof typeof PLATFORM_PACKAGES
+const key = `${process.platform}-${process.arch}`
 const platformPkg = PLATFORM_PACKAGES[key]
 
-async function loadAddon() {
+async function loadAddon(): Promise<NativeAddon | null> {
   if (!platformPkg) {
     console.warn(
-      `[use-cache] Unsupported platform ${key}. `
-      + `Supported: ${Object.keys(PLATFORM_PACKAGES).join(', ')}. `
-      + `Native transforms will not be available.`,
+      `[use-cache] Unsupported platform ${key}. ` +
+        `Supported: ${Object.keys(PLATFORM_PACKAGES).join(', ')}. ` +
+        `Native transforms will not be available.`,
     )
     return null
   }
 
   try {
-    const platformModule = await import(platformPkg)
+    const platformModule: unknown = await import(platformPkg)
+    if (!isNativeAddonModule(platformModule)) return null
+
     return platformModule.default
-  }
-  catch (err) {
-    if (err && typeof err === 'object' && 'code' in err && err.code === 'ERR_MODULE_NOT_FOUND')
+  } catch (err) {
+    if (
+      err != null &&
+      typeof err === 'object' &&
+      'code' in err &&
+      err.code === 'ERR_MODULE_NOT_FOUND'
+    )
       return null
     console.error(`[use-cache] Failed to load native addon from ${platformPkg}:`, err)
     throw err
   }
 }
 
-// eslint-disable-next-line antfu/no-top-level-await
+// oxlint-disable-next-line antfu/no-top-level-await
 const nativeBinding = await loadAddon()
 
 export interface TransformOptions {
-  filename: string
-  hashSalt?: string
-  cacheKinds?: string[]
+  readonly filename: string
+  readonly hashSalt?: string
+  readonly cacheKinds?: readonly string[]
 }
 
 export interface TransformResult {
-  code: string
-  needsReactCache: boolean
-  needsCacheWrapper: boolean
-  needsRegisterRef: boolean
+  readonly code: string
+  readonly needsReactCache: boolean
+  readonly needsCacheWrapper: boolean
+  readonly needsRegisterRef: boolean
 }
 
 export interface NativeAddon {
-  detectUseCache: (source: string) => boolean
-  transformUseCache: (
-    source: string,
-    options: TransformOptions,
-  ) => TransformResult
+  readonly detectUseCache: (source: string) => boolean
+  readonly transformUseCache: (source: string, options: TransformOptions) => TransformResult
+}
+
+function isNativeAddon(value: unknown): value is NativeAddon {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'detectUseCache' in value &&
+    typeof Reflect.get(value, 'detectUseCache') === 'function' &&
+    'transformUseCache' in value &&
+    typeof Reflect.get(value, 'transformUseCache') === 'function'
+  )
+}
+
+function isNativeAddonModule(value: unknown): value is { default: NativeAddon } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'default' in value &&
+    isNativeAddon(Reflect.get(value, 'default'))
+  )
 }
 
 export function detectUseCache(source: string): boolean {
-  if (!nativeBinding)
-    return false
+  if (!nativeBinding) return false
 
   return nativeBinding.detectUseCache(source)
 }
 
-export function transformUseCache(
-  source: string,
-  options: TransformOptions,
-): TransformResult {
+export function transformUseCache(source: string, options: TransformOptions): TransformResult {
   if (!nativeBinding) {
     return {
       code: source,

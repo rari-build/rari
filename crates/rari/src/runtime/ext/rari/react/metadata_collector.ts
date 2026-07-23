@@ -1,8 +1,8 @@
 /// <reference path="../core/types.d.ts" />
 
 interface MetadataParams {
-  params: Record<string, string>
-  searchParams: Record<string, string>
+  readonly params: Readonly<Record<string, string>>
+  readonly searchParams: Readonly<Record<string, string>>
 }
 
 interface PageMetadata {
@@ -22,61 +22,53 @@ const FILE_URL_REGEX = /^file:\/\/.*\/app\//
 const JS_EXTENSION_REGEX = /\.js$/
 
 async function collect(
-  layoutPaths: string[],
+  layoutPaths: readonly string[],
   pagePath: string,
-  params: Record<string, string>,
-  searchParams: Record<string, string>,
+  params: Readonly<Record<string, string>>,
+  searchParams: Readonly<Record<string, string>>,
 ): Promise<PageMetadata[]> {
   const metadataList: PageMetadata[] = []
 
   async function extractMetadata(
     modulePath: string,
-    params: Record<string, string>,
-    searchParams: Record<string, string>,
+    params: Readonly<Record<string, string>>,
+    searchParams: Readonly<Record<string, string>>,
   ): Promise<PageMetadata> {
     try {
-      if (g['~rsc'] && g['~rsc'].modules !== undefined) {
-        const moduleKey = modulePath
-          .replace(FILE_URL_REGEX, 'app/')
-          .replace(JS_EXTENSION_REGEX, '')
+      if (g['~rsc']?.modules !== undefined) {
+        const moduleKey = modulePath.replace(FILE_URL_REGEX, 'app/').replace(JS_EXTENSION_REGEX, '')
 
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- RSC module table is dynamically populated
         const module = g['~rsc'].modules[moduleKey] as ModuleWithMetadata | undefined
 
         if (module) {
           if (typeof module.generateMetadata === 'function') {
             const result = await module.generateMetadata({ params, searchParams })
-
-            if (result && typeof result === 'object')
-              return result
+            return result
           }
 
-          if (module.metadata && typeof module.metadata === 'object')
-            return module.metadata
+          if (module.metadata != null && typeof module.metadata === 'object') return module.metadata
         }
       }
 
-      const module = await import(modulePath) as ModuleWithMetadata
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- route modules are loaded dynamically at runtime
+      const module = (await import(modulePath)) as ModuleWithMetadata
 
       if (typeof module.generateMetadata === 'function') {
         const result = await module.generateMetadata({ params, searchParams })
-
-        if (result && typeof result === 'object')
-          return result
+        return result
       }
 
-      if (module.metadata && typeof module.metadata === 'object')
-        return module.metadata
+      if (module.metadata != null && typeof module.metadata === 'object') return module.metadata
 
       return {}
-    }
-    catch (error) {
+    } catch (error) {
       console.error(`Failed to extract metadata from ${modulePath}:`, error)
       return {}
     }
   }
 
-  const validLayoutPaths = Array.isArray(layoutPaths) ? layoutPaths : []
-  for (const layoutPath of validLayoutPaths) {
+  for (const layoutPath of layoutPaths) {
     const layoutMetadata = await extractMetadata(layoutPath, params, searchParams)
     metadataList.push(layoutMetadata)
   }
@@ -87,8 +79,7 @@ async function collect(
   return metadataList
 }
 
-if (!g['~rari'])
-  g['~rari'] = {}
+g['~rari'] ??= {}
 
 g['~rari'].metadataCollector = {
   collect,

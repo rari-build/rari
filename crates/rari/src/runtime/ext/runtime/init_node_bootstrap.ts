@@ -1,7 +1,7 @@
+/// <reference types="node" />
 /// <reference path="../types.d.ts" />
 /// <reference path="../rari/core/types.d.ts" />
 
-// @ts-expect-error TS2307 - Deno runtime has no ambient types for node:async_hooks
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { core, internals } from 'ext:core/mod.js'
 
@@ -22,19 +22,15 @@ internals.__nodeBootstrapArgs = {
 }
 
 // Per-request async context for concurrent streams on one isolate.
-if (!g['~rari'])
-  g['~rari'] = {}
-if (!g['~rari'].requestStorage) {
-  g['~rari'].requestStorage = new AsyncLocalStorage<{
-    requestId: string
-    streamId?: string
-    capturedElement?: unknown
-  }>()
-}
+g['~rari'] ??= {}
+g['~rari'].requestStorage ??= new AsyncLocalStorage<{
+  requestId: string
+  streamId?: string
+  capturedElement?: unknown
+}>()
 g['~rari'].currentRequestId = () => {
   const store = g['~rari']?.requestStorage?.getStore?.()
-  if (store && typeof store === 'object' && store.requestId != null)
-    return String(store.requestId)
+  if (store && typeof store === 'object' && store.requestId != null) return store.requestId
 
   return ''
 }

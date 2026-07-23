@@ -1,5 +1,6 @@
 export const title = 'Links and Navigation'
-export const description = 'Learn how navigation works in rari using standard HTML anchor tags with automatic client-side routing, plus programmatic navigation via the navigate function and useRouter hook.'
+export const description =
+  'Learn how navigation works in rari using standard HTML anchor tags with automatic client-side routing, plus programmatic navigation via the navigate function and useRouter hook.'
 
 <PageHeader title="Links and Navigation" />
 
@@ -47,22 +48,23 @@ import type { LayoutProps } from 'rari'
 export default function DashboardLayout({ children }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true)
 
-  return (
-    <div>
-      <aside>
-        {/* This sidebar state persists across page navigation */}
-        <button onClick={() => setSidebarOpen(!sidebarOpen)}>
-          Toggle
-        </button>
-        <nav>
-          <a href="/dashboard">Overview</a>
-          <a href="/dashboard/analytics">Analytics</a>
-          <a href="/dashboard/settings">Settings</a>
-        </nav>
-      </aside>
-      <main>{children}</main>
-    </div>
-  )
+return (
+
+<div>
+<aside>
+{/* This sidebar state persists across page navigation */}
+<button onClick={() => setSidebarOpen(!sidebarOpen)}>
+Toggle
+</button>
+<nav>
+<a href="/dashboard">Overview</a>
+<a href="/dashboard/analytics">Analytics</a>
+<a href="/dashboard/settings">Settings</a>
+</nav>
+</aside>
+<main>{children}</main>
+</div>
+)
 }
 `}</CodeBlock>
 
@@ -75,6 +77,7 @@ Only the changed content is fetched and streamed. If you navigate from `/blog` t
 ### Optimized Performance
 
 The router includes built-in optimizations:
+
 - Debounced navigation to prevent rapid-fire requests
 - Automatic request cancellation when navigating away
 - Route info caching to avoid redundant fetches
@@ -84,7 +87,10 @@ The router includes built-in optimizations:
 
 Since links are just `<a>` tags, style them however you want. CSS, Tailwind, CSS modules, styled-components, anything:
 
-<CodeBlock filename="src/app/components/Navigation.tsx" language="tsx">{`export default function Navigation() {
+<CodeBlock
+  filename="src/app/components/Navigation.tsx"
+  language="tsx"
+>{`export default function Navigation() {
   return (
     <nav className="flex gap-4">
       <a
@@ -113,25 +119,24 @@ Use the `pathname` prop available in layouts and pages to style active links:
 export default function RootLayout({ children, pathname }: LayoutProps) {
   const isActive = (path: string) => pathname === path
 
-  return (
-    <div>
-      <nav>
-        <a
-          href="/"
-          className={isActive('/') ? 'text-indigo-600 font-semibold' : 'text-gray-700'}
-        >
-          Home
-        </a>
-        <a
-          href="/about"
-          className={isActive('/about') ? 'text-indigo-600 font-semibold' : 'text-gray-700'}
-        >
-          About
-        </a>
-      </nav>
-      <main>{children}</main>
-    </div>
-  )
+return (
+
+<div>
+<nav>
+<a
+href="/"
+className={isActive('/') ? 'text-indigo-600 font-semibold' : 'text-gray-700'} >
+Home
+</a>
+<a
+href="/about"
+className={isActive('/about') ? 'text-indigo-600 font-semibold' : 'text-gray-700'} >
+About
+</a>
+</nav>
+<main>{children}</main>
+</div>
+)
 }
 `}</CodeBlock>
 
@@ -228,12 +233,13 @@ export default function SearchForm() {
     await navigate(\`/search?q=\${encodeURIComponent(query)}\`)
   }
 
-  return (
-    <form onSubmit={handleSubmit}>
-      <input name="q" placeholder="Search..." />
-      <button type="submit">Search</button>
-    </form>
-  )
+return (
+
+<form onSubmit={handleSubmit}>
+<input name="q" placeholder="Search..." />
+<button type="submit">Search</button>
+</form>
+)
 }
 `}</CodeBlock>
 
@@ -256,35 +262,35 @@ import { useRouter } from 'rari/router'
 export default function LogoutButton() {
   const router = useRouter()
 
-  async function handleLogout() {
-    await fetch('/api/logout', { method: 'POST' })
-    await router.push('/login')
-  }
+async function handleLogout() {
+await fetch('/api/logout', { method: 'POST' })
+await router.push('/login')
+}
 
-  return <button onClick={handleLogout}>Log out</button>
+return <button onClick={handleLogout}>Log out</button>
 }
 `}</CodeBlock>
 
 The hook returns:
 
-| Method / Property | Description |
-|---|---|
-| `push(href, options?)` | Navigate to a new URL (adds history entry) |
-| `replace(href, options?)` | Navigate without adding a history entry |
-| `back()` | Go back (equivalent to browser back button) |
-| `forward()` | Go forward |
-| `refresh()` | Re-render the current route |
-| `prefetch(href)` | Prefetch a route for faster future navigation |
-| `pathname` | Current pathname (reactive) |
-| `params` | Current route parameters (reactive) |
-| `searchParams` | Current URL search params (reactive) |
+| Method / Property         | Description                                   |
+| ------------------------- | --------------------------------------------- |
+| `push(href, options?)`    | Navigate to a new URL (adds history entry)    |
+| `replace(href, options?)` | Navigate without adding a history entry       |
+| `back()`                  | Go back (equivalent to browser back button)   |
+| `forward()`               | Go forward                                    |
+| `refresh()`               | Re-render the current route                   |
+| `prefetch(href)`          | Prefetch a route for faster future navigation |
+| `pathname`                | Current pathname (reactive)                   |
+| `params`                  | Current route parameters (reactive)           |
+| `searchParams`            | Current URL search params (reactive)          |
 
 ### Navigation Options
 
 Both `navigate` and `router.push`/`router.replace` accept the same options:
 
-| Option | Type | Default | Description |
-|---|---|---|---|
+| Option    | Type      | Default | Description                                          |
+| --------- | --------- | ------- | ---------------------------------------------------- |
 | `replace` | `boolean` | `false` | Replace the current history entry instead of pushing |
 
 ### Convenience Hooks
@@ -296,19 +302,19 @@ If you only need a specific piece of route state, use the focused hooks to avoid
 import { usePathname, useParams, useSearchParams } from 'rari/router'
 
 function Breadcrumb() {
-  const pathname = usePathname()
-  // ...
+const pathname = usePathname()
+// ...
 }
 
 function ProductPage() {
-  const params = useParams() // { slug: 'my-product' }
-  // ...
+const params = useParams() // { slug: 'my-product' }
+// ...
 }
 
 function FilteredList() {
-  const searchParams = useSearchParams() // URLSearchParams
-  const sort = searchParams.get('sort')
-  // ...
+const searchParams = useSearchParams() // URLSearchParams
+const sort = searchParams.get('sort')
+// ...
 }
 `}</CodeBlock>
 
@@ -316,7 +322,7 @@ function FilteredList() {
 
 - **`<a>` tags**: the default. Use for all standard navigation.
 - **`navigate()`**: for navigation outside React components, or when you don't need reactive route state.
-- **`useRouter()`**: for components that need to navigate *and* read route state.
+- **`useRouter()`**: for components that need to navigate _and_ read route state.
 
 ## Prefetching
 
@@ -329,11 +335,12 @@ import { useRouter } from 'rari/router'
 export default function ProductCard({ href }: { href: string }) {
   const router = useRouter()
 
-  return (
-    <div onMouseEnter={() => router.prefetch(href)}>
-      <a href={href}>View Product</a>
-    </div>
-  )
+return (
+
+<div onMouseEnter={() => router.prefetch(href)}>
+<a href={href}>View Product</a>
+</div>
+)
 }
 `}</CodeBlock>
 

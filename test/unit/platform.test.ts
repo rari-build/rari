@@ -3,14 +3,17 @@ import process from 'node:process'
 import { getBinaryPath, getInstallationInstructions } from '@rari/cli/platform'
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 
-const UNSUPPORTED_PLATFORM_REGEX = /Unsupported platform: sunos.*rari supports Linux, macOS, and Windows/
+const UNSUPPORTED_PLATFORM_REGEX =
+  /Unsupported platform: sunos.*rari supports Linux, macOS, and Windows/
 const UNSUPPORTED_ARCH_REGEX = /Unsupported architecture: s390x.*rari supports x64 and ARM64/
 const SUPPORTED_PLATFORMS_REGEX = /Linux, macOS, and Windows/
 const SUPPORTED_ARCHS_REGEX = /x64 and ARM64/
 
 describe('platform', () => {
-  const mockPlatform = (platform: NodeJS.Platform, arch: NodeJS.Architecture) => {
+  const mockPlatform = (platform: string, arch: string) => {
+    // @ts-expect-error testing unsupported platform values
     vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+    // @ts-expect-error testing unsupported architecture values
     vi.spyOn(process, 'arch', 'get').mockReturnValue(arch)
   }
 
@@ -72,19 +75,15 @@ describe('platform', () => {
     })
 
     it('should throw error for unsupported platform', () => {
-      mockPlatform('freebsd' as any, 'x64')
+      mockPlatform('freebsd', 'x64')
 
-      expect(() => getInstallationInstructions()).toThrow(
-        'Unsupported platform: freebsd',
-      )
+      expect(() => getInstallationInstructions()).toThrow('Unsupported platform: freebsd')
     })
 
     it('should throw error for unsupported architecture', () => {
-      mockPlatform('darwin', 'ia32' as any)
+      mockPlatform('darwin', 'ia32')
 
-      expect(() => getInstallationInstructions()).toThrow(
-        'Unsupported architecture: ia32',
-      )
+      expect(() => getInstallationInstructions()).toThrow('Unsupported architecture: ia32')
     })
   })
 
@@ -97,7 +96,7 @@ describe('platform', () => {
       { platform: 'win32', arch: 'arm64', expected: 'rari-win32-arm64' },
       { platform: 'win32', arch: 'x64', expected: 'rari-win32-x64' },
     ])('should handle $platform-$arch', ({ platform, arch, expected }) => {
-      mockPlatform(platform as any, arch as any)
+      mockPlatform(platform, arch)
 
       const instructions = getInstallationInstructions()
       expect(instructions).toContain(expected)
@@ -106,25 +105,25 @@ describe('platform', () => {
 
   describe('error messages', () => {
     it('should provide helpful error message for unsupported platform', () => {
-      mockPlatform('sunos' as any, 'x64')
+      mockPlatform('sunos', 'x64')
 
       expect(() => getInstallationInstructions()).toThrow(UNSUPPORTED_PLATFORM_REGEX)
     })
 
     it('should provide helpful error message for unsupported architecture', () => {
-      mockPlatform('linux', 's390x' as any)
+      mockPlatform('linux', 's390x')
 
       expect(() => getInstallationInstructions()).toThrow(UNSUPPORTED_ARCH_REGEX)
     })
 
     it('should mention supported platforms in error', () => {
-      mockPlatform('aix' as any, 'x64')
+      mockPlatform('aix', 'x64')
 
       expect(() => getInstallationInstructions()).toThrow(SUPPORTED_PLATFORMS_REGEX)
     })
 
     it('should mention supported architectures in error', () => {
-      mockPlatform('darwin', 'ppc64' as any)
+      mockPlatform('darwin', 'ppc64')
 
       expect(() => getInstallationInstructions()).toThrow(SUPPORTED_ARCHS_REGEX)
     })

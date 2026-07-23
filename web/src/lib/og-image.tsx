@@ -2,13 +2,18 @@ import { ImageResponse } from 'rari/og'
 import Rari from '@/components/icons/Rari'
 
 interface OGImageOptions {
-  title: string
-  description?: string
-  section?: string
-  logoSize?: 'small' | 'large'
+  readonly title: string
+  readonly description?: string
+  readonly section?: string
+  readonly logoSize?: 'small' | 'large'
 }
 
-export function generateOGImage({ title, description, section, logoSize = 'small' }: OGImageOptions) {
+export function generateOGImage({
+  title,
+  description,
+  section,
+  logoSize = 'small',
+}: OGImageOptions) {
   const isLarge = logoSize === 'large'
 
   if (isLarge) {
@@ -33,11 +38,7 @@ export function generateOGImage({ title, description, section, logoSize = 'small
             padding: '80px',
           }}
         >
-          <Rari
-            width={360}
-            height={120}
-            style={{ marginBottom: '60px' }}
-          />
+          <Rari width={360} height={120} style={{ marginBottom: '60px' }} />
 
           <div
             style={{
@@ -93,21 +94,15 @@ export function generateOGImage({ title, description, section, logoSize = 'small
             marginBottom: '40px',
           }}
         >
-          <Rari
-            width={120}
-            height={40}
-            style={{ marginRight: '20px' }}
-          />
-          {section && (
+          <Rari width={120} height={40} style={{ marginRight: '20px' }} />
+          {section != null && section !== '' && (
             <div
               style={{
                 fontSize: 36,
                 color: '#8b949e',
               }}
             >
-              /
-              {' '}
-              {section}
+              / {section}
             </div>
           )}
         </div>
@@ -125,14 +120,14 @@ export function generateOGImage({ title, description, section, logoSize = 'small
               fontSize: 56,
               fontWeight: 'bold',
               color: '#f0f6fc',
-              marginBottom: description ? '30px' : '0',
+              marginBottom: description != null && description !== '' ? '30px' : '0',
               lineHeight: 1.2,
             }}
           >
             {title}
           </div>
 
-          {description && (
+          {description != null && description !== '' && (
             <div
               style={{
                 fontSize: 32,

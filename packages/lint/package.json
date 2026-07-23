@@ -1,0 +1,35 @@
+{
+  "name": "@rari/lint",
+  "type": "module",
+  "version": "0.0.0",
+  "private": true,
+  "exports": {
+    "./vite": "./src/vite.ts",
+    "./eslint": "./src/eslint.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc"
+  },
+  "dependencies": {
+    "@e18e/eslint-plugin": "catalog:eslint",
+    "@eslint-community/eslint-plugin-eslint-comments": "catalog:eslint",
+    "@eslint-react/eslint-plugin": "catalog:eslint",
+    "@typescript-eslint/parser": "catalog:eslint",
+    "eslint": "catalog:eslint",
+    "eslint-config-flat-gitignore": "catalog:eslint",
+    "eslint-plugin-antfu": "catalog:eslint",
+    "eslint-plugin-command": "catalog:eslint",
+    "eslint-plugin-de-morgan": "catalog:eslint",
+    "eslint-plugin-oxlint": "catalog:eslint",
+    "eslint-plugin-perfectionist": "catalog:eslint",
+    "eslint-plugin-react-refresh": "catalog:eslint",
+    "eslint-plugin-regexp": "catalog:eslint",
+    "eslint-plugin-unused-imports": "catalog:eslint"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:typescript",
+    "typescript": "catalog:typescript",
+    "typescript-7": "catalog:typescript",
+    "vite-plus": "catalog:build"
+  }
+}

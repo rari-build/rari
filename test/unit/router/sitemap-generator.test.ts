@@ -14,12 +14,12 @@ describe('generateSitemapXml', () => {
       const result = generateSitemapXml(sitemap)
 
       expect(result).toBe(
-        '<?xml version="1.0" encoding="UTF-8"?>\n'
-        + '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
-        + '  <url>\n'
-        + '    <loc>https://example.com/</loc>\n'
-        + '  </url>\n'
-        + '</urlset>',
+        '<?xml version="1.0" encoding="UTF-8"?>\n' +
+          '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
+          '  <url>\n' +
+          '    <loc>https://example.com/</loc>\n' +
+          '  </url>\n' +
+          '</urlset>',
       )
     })
 
@@ -38,9 +38,7 @@ describe('generateSitemapXml', () => {
     })
 
     it('should escape XML special characters in URLs', () => {
-      const sitemap: Sitemap = [
-        { url: 'https://example.com/page?foo=bar&baz=qux' },
-      ]
+      const sitemap: Sitemap = [{ url: 'https://example.com/page?foo=bar&baz=qux' }]
 
       const result = generateSitemapXml(sitemap)
 
@@ -91,15 +89,9 @@ describe('generateSitemapXml', () => {
     })
 
     it('should handle all changeFrequency values', () => {
-      const frequencies: Array<'always' | 'hourly' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'never'> = [
-        'always',
-        'hourly',
-        'daily',
-        'weekly',
-        'monthly',
-        'yearly',
-        'never',
-      ]
+      const frequencies: Array<
+        'always' | 'hourly' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'never'
+      > = ['always', 'hourly', 'daily', 'weekly', 'monthly', 'yearly', 'never']
 
       for (const freq of frequencies) {
         const sitemap: Sitemap = [{ url: 'https://example.com/', changeFrequency: freq }]
@@ -168,9 +160,15 @@ describe('generateSitemapXml', () => {
       const result = generateSitemapXml(sitemap)
 
       expect(result).toContain('xmlns:xhtml="http://www.w3.org/1999/xhtml"')
-      expect(result).toContain('<xhtml:link rel="alternate" hreflang="en" href="https://example.com/en" />')
-      expect(result).toContain('<xhtml:link rel="alternate" hreflang="es" href="https://example.com/es" />')
-      expect(result).toContain('<xhtml:link rel="alternate" hreflang="fr" href="https://example.com/fr" />')
+      expect(result).toContain(
+        '<xhtml:link rel="alternate" hreflang="en" href="https://example.com/en" />',
+      )
+      expect(result).toContain(
+        '<xhtml:link rel="alternate" hreflang="es" href="https://example.com/es" />',
+      )
+      expect(result).toContain(
+        '<xhtml:link rel="alternate" hreflang="fr" href="https://example.com/fr" />',
+      )
     })
 
     it('should escape XML in alternate URLs', () => {
@@ -248,7 +246,9 @@ describe('generateSitemapXml', () => {
 
       const result = generateSitemapXml(sitemap)
 
-      expect(result).toContain('<image:title>Title with &lt;special&gt; &amp; &quot;characters&quot;</image:title>')
+      expect(result).toContain(
+        '<image:title>Title with &lt;special&gt; &amp; &quot;characters&quot;</image:title>',
+      )
     })
 
     it('should handle mixed string and object images', () => {
@@ -314,7 +314,9 @@ describe('generateSitemapXml', () => {
       expect(result).toContain('xmlns:video="http://www.google.com/schemas/sitemap-video/1.1"')
       expect(result).toContain('<video:video>')
       expect(result).toContain('<video:title>Video Title</video:title>')
-      expect(result).toContain('<video:thumbnail_loc>https://example.com/thumb.jpg</video:thumbnail_loc>')
+      expect(result).toContain(
+        '<video:thumbnail_loc>https://example.com/thumb.jpg</video:thumbnail_loc>',
+      )
       expect(result).toContain('<video:description>Video Description</video:description>')
     })
 
@@ -351,7 +353,9 @@ describe('generateSitemapXml', () => {
       const sitemap: Sitemap = [{ url: 'https://example.com/', videos: [video] }]
       const result = generateSitemapXml(sitemap)
 
-      expect(result).toContain('<video:content_loc>https://example.com/video.mp4</video:content_loc>')
+      expect(result).toContain(
+        '<video:content_loc>https://example.com/video.mp4</video:content_loc>',
+      )
       expect(result).toContain('<video:player_loc>https://example.com/player</video:player_loc>')
       expect(result).toContain('<video:duration>600</video:duration>')
       expect(result).toContain('<video:expiration_date>2025-12-31</video:expiration_date>')
@@ -362,7 +366,9 @@ describe('generateSitemapXml', () => {
       expect(result).toContain('<video:restriction relationship="allow">US CA</video:restriction>')
       expect(result).toContain('<video:platform relationship="deny">mobile</video:platform>')
       expect(result).toContain('<video:requires_subscription>no</video:requires_subscription>')
-      expect(result).toContain('<video:uploader info="https://example.com/uploader">John Doe</video:uploader>')
+      expect(result).toContain(
+        '<video:uploader info="https://example.com/uploader">John Doe</video:uploader>',
+      )
       expect(result).toContain('<video:live>no</video:live>')
       expect(result).toContain('<video:tag>tag1</video:tag>')
       expect(result).toContain('<video:tag>tag2</video:tag>')
@@ -432,8 +438,12 @@ describe('generateSitemapXml', () => {
 
       const result = generateSitemapXml(sitemap)
 
-      expect(result).toContain('<video:title>Title with &lt;special&gt; &amp; &quot;characters&quot;</video:title>')
-      expect(result).toContain('<video:description>Description with &lt;tags&gt;</video:description>')
+      expect(result).toContain(
+        '<video:title>Title with &lt;special&gt; &amp; &quot;characters&quot;</video:title>',
+      )
+      expect(result).toContain(
+        '<video:description>Description with &lt;tags&gt;</video:description>',
+      )
     })
   })
 
@@ -490,9 +500,9 @@ describe('generateSitemapXml', () => {
       const result = generateSitemapXml(sitemap)
 
       expect(result).toBe(
-        '<?xml version="1.0" encoding="UTF-8"?>\n'
-        + '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
-        + '</urlset>',
+        '<?xml version="1.0" encoding="UTF-8"?>\n' +
+          '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
+          '</urlset>',
       )
     })
 

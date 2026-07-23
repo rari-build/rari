@@ -124,7 +124,7 @@ describe('RariRequest', () => {
     it('should allow modifying pathname', () => {
       const req = new RariRequest('https://example.com/old')
 
-      req.rariUrl.pathname = '/new'
+      ;(req.rariUrl as { pathname: string }).pathname = '/new'
 
       expect(req.rariUrl.pathname).toBe('/new')
       expect(req.rariUrl.href).toBe('https://example.com/new')
@@ -133,7 +133,7 @@ describe('RariRequest', () => {
     it('should allow modifying search', () => {
       const req = new RariRequest('https://example.com/path')
 
-      req.rariUrl.search = '?foo=bar'
+      ;(req.rariUrl as { search: string }).search = '?foo=bar'
 
       expect(req.rariUrl.search).toBe('?foo=bar')
       expect(req.rariUrl.href).toBe('https://example.com/path?foo=bar')
@@ -142,7 +142,7 @@ describe('RariRequest', () => {
     it('should allow modifying hash', () => {
       const req = new RariRequest('https://example.com/path')
 
-      req.rariUrl.hash = '#section'
+      ;(req.rariUrl as { hash: string }).hash = '#section'
 
       expect(req.rariUrl.hash).toBe('#section')
       expect(req.rariUrl.href).toBe('https://example.com/path#section')
@@ -158,7 +158,7 @@ describe('RariRequest', () => {
     it('should convert to string', () => {
       const req = new RariRequest('https://example.com/path')
 
-      expect(req.rariUrl.toString()).toBe('https://example.com/path')
+      expect(req.rariUrl.href).toBe('https://example.com/path')
     })
   })
 

@@ -1,6 +1,6 @@
-export async function GET(
+export function GET(
   _request: Request,
-  { params }: { params: { id: string } },
+  { params }: Readonly<{ readonly params: { readonly id: string } }>,
 ) {
   return new Response(
     JSON.stringify({
@@ -19,9 +19,16 @@ export async function GET(
 
 export async function PUT(
   request: Request,
-  { params }: { params: { id: string } },
+  { params }: Readonly<{ readonly params: { readonly id: string } }>,
 ) {
-  const body = await request.json()
+  const body: unknown = await request.json()
+  if (typeof body !== 'object' || body === null) {
+    return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
   return new Response(
     JSON.stringify({
       id: params.id,
@@ -37,9 +44,9 @@ export async function PUT(
   )
 }
 
-export async function DELETE(
+export function DELETE(
   _request: Request,
-  { params }: { params: { id: string } },
+  { params }: Readonly<{ readonly params: { readonly id: string } }>,
 ) {
   return new Response(
     JSON.stringify({

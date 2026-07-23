@@ -1,6 +1,6 @@
-export async function GET(
+export function GET(
   _request: Request,
-  { params }: { params: { id: string } },
+  { params }: Readonly<{ readonly params: { readonly id: string } }>,
 ) {
   return new Response(
     JSON.stringify({
@@ -17,9 +17,9 @@ export async function GET(
   )
 }
 
-export async function DELETE(
+export function DELETE(
   _request: Request,
-  { params }: { params: { id: string } },
+  { params }: Readonly<{ readonly params: { readonly id: string } }>,
 ) {
   return new Response(
     JSON.stringify({

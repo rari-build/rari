@@ -15,19 +15,19 @@ export default function ParallelSuspensePage() {
 }
 
 interface SlowProps {
-  name: string
-  delay: number
+  readonly name: string
+  readonly delay: number
 }
 
 async function SlowComponent({ name, delay }: SlowProps) {
-  await new Promise(resolve => setTimeout(resolve, delay))
+  await new Promise<void>(resolve => {
+    setTimeout(resolve, delay)
+  })
   // eslint-disable-next-line react/purity
   const timestamp = new Date().toISOString()
   return (
     <div data-testid={`component-${name.toLowerCase()}`}>
-      {name}
-      :
-      {timestamp}
+      {name}:{timestamp}
     </div>
   )
 }

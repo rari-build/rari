@@ -25,13 +25,11 @@ function hexWithAlpha(hex: string, alpha: string): string {
     r = Number.parseInt(normalizedHex[0] + normalizedHex[0], 16)
     g = Number.parseInt(normalizedHex[1] + normalizedHex[1], 16)
     b = Number.parseInt(normalizedHex[2] + normalizedHex[2], 16)
-  }
-  else if (normalizedHex.length === 6) {
+  } else if (normalizedHex.length === 6) {
     r = Number.parseInt(normalizedHex.substring(0, 2), 16)
     g = Number.parseInt(normalizedHex.substring(2, 4), 16)
     b = Number.parseInt(normalizedHex.substring(4, 6), 16)
-  }
-  else {
+  } else {
     r = 0
     g = 0
     b = 0
@@ -51,23 +49,24 @@ const neonPartner = {
 }
 
 interface Benefit {
-  text: string
-  isStatement?: boolean
+  readonly text: string
+  readonly isStatement?: boolean
 }
 
 interface Tier {
-  name: string
-  price: number
-  description: string
-  benefits: Benefit[]
-  highlight?: boolean
+  readonly name: string
+  readonly price: number
+  readonly description: string
+  readonly benefits: readonly Benefit[]
+  readonly highlight?: boolean
 }
 
 const recurringTiers: Tier[] = [
   {
     name: 'Supporter',
     price: 5,
-    description: 'Support rari\'s development. Every contribution helps keep the framework fast, open, and free for everyone.',
+    description:
+      "Support rari's development. Every contribution helps keep the framework fast, open, and free for everyone.",
     benefits: [
       { text: 'Supporter badge in Discord' },
       { text: 'Monthly progress updates via email' },
@@ -77,7 +76,8 @@ const recurringTiers: Tier[] = [
   {
     name: 'Silver',
     price: 25,
-    description: 'For developers and teams evaluating rari. Get visibility for your support and help shape the roadmap.',
+    description:
+      'For developers and teams evaluating rari. Get visibility for your support and help shape the roadmap.',
     benefits: [
       { text: 'Everything in Supporter tier' },
       { text: 'Your name on rari.build/sponsors (Silver tier)' },
@@ -88,7 +88,8 @@ const recurringTiers: Tier[] = [
   {
     name: 'Gold',
     price: 100,
-    description: 'Running rari in production or planning to? Get direct support to ensure your deployments stay fast and stable.',
+    description:
+      'Running rari in production or planning to? Get direct support to ensure your deployments stay fast and stable.',
     benefits: [
       { text: 'Everything in Silver tier' },
       { text: 'Your logo on rari.build/sponsors (Gold tier)' },
@@ -101,7 +102,8 @@ const recurringTiers: Tier[] = [
   {
     name: 'Platinum',
     price: 500,
-    description: 'For companies betting on rari. Get dedicated support, roadmap influence, and co-marketing opportunities.',
+    description:
+      'For companies betting on rari. Get dedicated support, roadmap influence, and co-marketing opportunities.',
     benefits: [
       { text: 'Everything in Gold tier' },
       { text: 'Premium logo placement (Platinum tier - top of page + README)' },
@@ -114,7 +116,8 @@ const recurringTiers: Tier[] = [
   {
     name: 'Diamond',
     price: 2500,
-    description: 'For companies that need dedicated partnership, custom development, or want to significantly accelerate rari\'s growth.',
+    description:
+      "For companies that need dedicated partnership, custom development, or want to significantly accelerate rari's growth.",
     benefits: [
       { text: 'Everything in Platinum tier' },
       { text: 'Diamond tier placement (largest logos, top billing)' },
@@ -124,7 +127,7 @@ const recurringTiers: Tier[] = [
       { text: 'Official "Technology Partner" designation' },
       { text: 'Joint conference speaking opportunities' },
       { text: 'First access to any commercial offerings' },
-      { text: 'Let\'s build something together.', isStatement: true },
+      { text: "Let's build something together.", isStatement: true },
     ],
   },
 ]
@@ -202,7 +205,7 @@ const infrastructurePartners: InfrastructurePartner[] = [
   },
 ]
 
-function TierCard({ tier }: { tier: Tier }) {
+function TierCard({ tier }: Readonly<{ readonly tier: Tier }>) {
   return (
     <a
       href={SPONSOR_URL}
@@ -213,29 +216,37 @@ function TierCard({ tier }: { tier: Tier }) {
       {tier.highlight && (
         <div className="absolute -inset-0.5 bg-linear-to-r from-accent to-accent-hover rounded-xl blur opacity-30 group-hover:opacity-40 transition-opacity" />
       )}
-      <div className={`relative z-10 h-full bg-linear-to-br from-surface to-canvas border ${tier.highlight ? 'border-accent' : 'border-edge'} rounded-xl p-6 flex flex-col transition-all duration-300 group-hover:border-transparent`}>
+      <div
+        className={`relative z-10 h-full bg-linear-to-br from-surface to-canvas border ${tier.highlight ? 'border-accent' : 'border-edge'} rounded-xl p-6 flex flex-col transition-all duration-300 group-hover:border-transparent`}
+      >
         <div className="absolute inset-0 bg-linear-to-br from-accent/10 via-accent-hover/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-xl" />
         <div className="relative z-10 flex flex-col h-full">
           <div className="mb-4">
             <h3 className="text-2xl font-bold text-fg mb-2">{tier.name}</h3>
             <div className="flex items-baseline gap-1 mb-3">
               <span className="text-4xl font-bold text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover">
-                $
-                {tier.price.toLocaleString()}
+                ${tier.price.toLocaleString()}
               </span>
               <span className="text-fg-muted">/month</span>
             </div>
-            <p className="text-fg-muted text-sm leading-relaxed group-hover:text-fg-muted transition-colors duration-300">{tier.description}</p>
+            <p className="text-fg-muted text-sm leading-relaxed group-hover:text-fg-muted transition-colors duration-300">
+              {tier.description}
+            </p>
           </div>
 
           <div className="flex-1">
             <div className="space-y-3">
               {tier.benefits.map(benefit => (
-                <div key={benefit.text} className={`flex items-start gap-2 ${benefit.isStatement ? 'mt-4 pt-4 border-t border-edge' : ''}`}>
-                  {!benefit.isStatement && (
-                    <Check className="w-5 h-5 text-link shrink-0 mt-0.5" />
-                  )}
-                  <span className={`text-fg-muted text-sm ${benefit.isStatement ? 'italic text-center w-full' : ''}`}>{benefit.text}</span>
+                <div
+                  key={benefit.text}
+                  className={`flex items-start gap-2 ${benefit.isStatement ? 'mt-4 pt-4 border-t border-edge' : ''}`}
+                >
+                  {!benefit.isStatement && <Check className="w-5 h-5 text-link shrink-0 mt-0.5" />}
+                  <span
+                    className={`text-fg-muted text-sm ${benefit.isStatement ? 'italic text-center w-full' : ''}`}
+                  >
+                    {benefit.text}
+                  </span>
                 </div>
               ))}
             </div>
@@ -246,7 +257,7 @@ function TierCard({ tier }: { tier: Tier }) {
   )
 }
 
-function OneTimeTierCard({ tier }: { tier: Tier }) {
+function OneTimeTierCard({ tier }: Readonly<{ readonly tier: Tier }>) {
   return (
     <a
       href={SPONSOR_URL}
@@ -259,7 +270,9 @@ function OneTimeTierCard({ tier }: { tier: Tier }) {
         <div className="relative z-10 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div className="flex-1">
             <h3 className="text-xl font-bold text-fg mb-2">{tier.name}</h3>
-            <p className="text-fg-muted text-sm mb-3 group-hover:text-fg-muted transition-colors duration-300">{tier.description}</p>
+            <p className="text-fg-muted text-sm mb-3 group-hover:text-fg-muted transition-colors duration-300">
+              {tier.description}
+            </p>
             <div className="space-y-2">
               {tier.benefits.map(benefit => (
                 <div key={benefit.text} className="flex items-start gap-2">
@@ -271,8 +284,7 @@ function OneTimeTierCard({ tier }: { tier: Tier }) {
           </div>
           <div className="shrink-0">
             <span className="text-3xl font-bold text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover">
-              $
-              {tier.price.toLocaleString()}
+              ${tier.price.toLocaleString()}
             </span>
           </div>
         </div>
@@ -291,16 +303,15 @@ export default function SponsorsPage() {
         <div className={`relative ${container.marketing} py-20 w-full`}>
           <div className="text-center">
             <h1 className="text-4xl lg:text-6xl font-bold text-fg mb-6 max-w-3xl mx-auto leading-tight">
-              Partner with
-              {' '}
+              Partner with{' '}
               <span className="text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover">
                 rari
               </span>
             </h1>
 
             <p className="text-lg lg:text-xl text-fg-muted mb-12 max-w-3xl mx-auto leading-relaxed text-balance">
-              Support rari's development while getting the tools and support your team needs.
-              From individual developers to enterprise teams, we have a tier that fits.
+              Support rari's development while getting the tools and support your team needs. From
+              individual developers to enterprise teams, we have a tier that fits.
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -329,9 +340,10 @@ export default function SponsorsPage() {
         <div className={container.marketing}>
           <div className="text-center mb-16">
             <h2 className="text-3xl lg:text-5xl font-bold text-fg mb-4">
-              Monthly
-              {' '}
-              <span className="text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover">sponsorship</span>
+              Monthly{' '}
+              <span className="text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover">
+                sponsorship
+              </span>
             </h2>
             <p className="text-xl text-fg-muted max-w-2xl mx-auto">
               Ongoing support with increasing benefits at every tier
@@ -356,9 +368,10 @@ export default function SponsorsPage() {
         <div className={container.marketing}>
           <div className="text-center mb-16">
             <h2 className="text-3xl lg:text-5xl font-bold text-fg mb-4">
-              One-time
-              {' '}
-              <span className="text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover">contributions</span>
+              One-time{' '}
+              <span className="text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover">
+                contributions
+              </span>
             </h2>
             <p className="text-xl text-fg-muted max-w-2xl mx-auto">
               A quick way to show your support
@@ -377,9 +390,10 @@ export default function SponsorsPage() {
         <div className={container.marketing}>
           <div className="text-center mb-16">
             <h2 className="text-3xl lg:text-5xl font-bold text-fg mb-4">
-              Infrastructure
-              {' '}
-              <span className="text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover">partners</span>
+              Infrastructure{' '}
+              <span className="text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover">
+                partners
+              </span>
             </h2>
             <p className="text-xl text-fg-muted max-w-2xl mx-auto text-balance">
               These companies provide infrastructure and services that power rari's development
@@ -387,7 +401,7 @@ export default function SponsorsPage() {
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {infrastructurePartners.map((partner) => {
+            {infrastructurePartners.map(partner => {
               const { href, label, Icon, color, secondaryColor, description } = partner
               return (
                 <a
@@ -402,17 +416,21 @@ export default function SponsorsPage() {
                     <div
                       className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-xl"
                       style={{
-                        background: secondaryColor
-                          ? `linear-gradient(to bottom right, ${hexWithAlpha(color, '1a')}, ${hexWithAlpha(secondaryColor, '0d')}, transparent)`
-                          : `linear-gradient(to bottom right, ${hexWithAlpha(color, '1a')}, ${hexWithAlpha(color, '0d')}, transparent)`,
+                        background:
+                          secondaryColor != null && secondaryColor !== ''
+                            ? `linear-gradient(to bottom right, ${hexWithAlpha(color, '1a')}, ${hexWithAlpha(secondaryColor, '0d')}, transparent)`
+                            : `linear-gradient(to bottom right, ${hexWithAlpha(color, '1a')}, ${hexWithAlpha(color, '0d')}, transparent)`,
                       }}
-                    >
-                    </div>
-                    <div className="relative z-10 flex flex-col items-center justify-center text-center gap-4 min-h-[120px]">
+                    ></div>
+                    <div className="relative z-10 flex flex-col items-center justify-center text-center gap-4 min-h-30">
                       <div className="transform group-hover:scale-105 transition-transform duration-300 flex items-center justify-center">
-                        <Icon className={`text-fg ${label.includes('Sanity') ? 'h-8 w-auto' : 'h-10 w-auto'}`} />
+                        <Icon
+                          className={`text-fg ${label.includes('Sanity') ? 'h-8 w-auto' : 'h-10 w-auto'}`}
+                        />
                       </div>
-                      <p className="text-sm text-fg-muted group-hover:text-fg-muted transition-colors duration-300">{description}</p>
+                      <p className="text-sm text-fg-muted group-hover:text-fg-muted transition-colors duration-300">
+                        {description}
+                      </p>
                     </div>
                   </div>
                 </a>
@@ -427,5 +445,6 @@ export default function SponsorsPage() {
 
 export const metadata: Metadata = {
   title: 'Sponsorship Tiers / rari Enterprise',
-  description: 'Partner with rari. Choose from monthly sponsorship tiers or make a one-time contribution. Get priority support, roadmap influence, and dedicated partnership opportunities.',
+  description:
+    'Partner with rari. Choose from monthly sponsorship tiers or make a one-time contribution. Get priority support, roadmap influence, and dedicated partnership opportunities.',
 }

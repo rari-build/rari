@@ -195,7 +195,7 @@ describe('ApiResponse', () => {
     it('should always use 204 status even if init has different status', () => {
       const response = ApiResponse.noContent({
         status: 200,
-      } as any)
+      })
 
       expect(response.status).toBe(204)
     })

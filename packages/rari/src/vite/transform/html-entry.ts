@@ -5,19 +5,20 @@ import { resolveModuleCachePath } from '../analysis/module-cache'
 const HTML_IMPORT_REGEX = /import\s*\(\s*["']([^"']+)["']\s*\)|import\s+["']([^"']+)["']/g
 const HTML_MODULE_SCRIPT_REGEX = /<script\b[^>]*>/gi
 
-function addHtmlEntryPath(htmlOnlyImports: Set<string>, projectRoot: string, importPath: string | null | undefined): void {
+function addHtmlEntryPath(
+  htmlOnlyImports: Set<string>,
+  projectRoot: string,
+  importPath: string | null | undefined,
+): void {
   if (importPath?.startsWith('/src/')) {
-    htmlOnlyImports.add(
-      resolveModuleCachePath(path.join(projectRoot, importPath.slice(1))),
-    )
+    htmlOnlyImports.add(resolveModuleCachePath(path.join(projectRoot, importPath.slice(1))))
   }
 }
 
 function extractModuleScriptSrc(tag: string): string | null {
-  if (!/\btype\s*=\s*["']module["']/i.test(tag))
-    return null
+  if (!/\btype\s*=\s*["']module["']/i.test(tag)) return null
 
-  const srcMatch = tag.match(/\bsrc\s*=\s*["']([^"']+)["']/i)
+  const srcMatch = /\bsrc\s*=\s*["']([^"']+)["']/i.exec(tag)
   return srcMatch?.[1] ?? null
 }
 
@@ -25,8 +26,7 @@ export function parseHtmlEntryImports(projectRoot: string): Set<string> {
   const htmlOnlyImports = new Set<string>()
   const indexHtmlPath = path.join(projectRoot, 'index.html')
 
-  if (!fs.existsSync(indexHtmlPath))
-    return htmlOnlyImports
+  if (!fs.existsSync(indexHtmlPath)) return htmlOnlyImports
 
   try {
     const htmlContent = fs.readFileSync(indexHtmlPath, 'utf-8')
@@ -37,8 +37,7 @@ export function parseHtmlEntryImports(projectRoot: string): Set<string> {
     for (const match of htmlContent.matchAll(HTML_MODULE_SCRIPT_REGEX)) {
       addHtmlEntryPath(htmlOnlyImports, projectRoot, extractModuleScriptSrc(match[0]))
     }
-  }
-  catch {}
+  } catch {}
 
   return htmlOnlyImports
 }

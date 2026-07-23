@@ -1,0 +1,4 @@
+{
+  "extends": "./.config/typescript/package.json",
+  "include": ["playwright.config.ts", "vite.config.ts", "eslint.config.ts"]
+}

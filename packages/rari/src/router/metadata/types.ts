@@ -1,99 +1,108 @@
 export interface RobotsRule {
-  userAgent?: string | string[]
-  allow?: string | string[]
-  disallow?: string | string[]
-  crawlDelay?: number
+  readonly userAgent?: string | readonly string[]
+  readonly allow?: string | readonly string[]
+  readonly disallow?: string | readonly string[]
+  readonly crawlDelay?: number
 }
 
 export interface Robots {
-  rules: RobotsRule | RobotsRule[]
-  sitemap?: string | string[]
-  host?: string
+  readonly rules: RobotsRule | readonly RobotsRule[]
+  readonly sitemap?: string | readonly string[]
+  readonly host?: string
 }
 
 export interface SitemapImage {
-  loc: string
-  title?: string
-  caption?: string
-  geoLocation?: string
-  license?: string
+  readonly loc: string
+  readonly title?: string
+  readonly caption?: string
+  readonly geoLocation?: string
+  readonly license?: string
 }
 
 export interface SitemapVideo {
-  title: string
-  thumbnail_loc: string
-  description: string
-  content_loc?: string
-  player_loc?: string
-  duration?: number
-  expiration_date?: string
-  rating?: number
-  view_count?: number
-  publication_date?: string
-  family_friendly?: boolean
-  restriction?: {
-    relationship: 'allow' | 'deny'
-    content: string
+  readonly title: string
+  readonly thumbnail_loc: string
+  readonly description: string
+  readonly content_loc?: string
+  readonly player_loc?: string
+  readonly duration?: number
+  readonly expiration_date?: string
+  readonly rating?: number
+  readonly view_count?: number
+  readonly publication_date?: string
+  readonly family_friendly?: boolean
+  readonly restriction?: {
+    readonly relationship: 'allow' | 'deny'
+    readonly content: string
   }
-  platform?: {
-    relationship: 'allow' | 'deny'
-    content: string
+  readonly platform?: {
+    readonly relationship: 'allow' | 'deny'
+    readonly content: string
   }
-  requires_subscription?: boolean
-  uploader?: {
-    name: string
-    info?: string
+  readonly requires_subscription?: boolean
+  readonly uploader?: {
+    readonly name: string
+    readonly info?: string
   }
-  live?: boolean
-  tag?: string[]
+  readonly live?: boolean
+  readonly tag?: readonly string[]
 }
 
 export interface SitemapEntry {
-  url: string
-  lastModified?: string | Date
-  changeFrequency?: 'always' | 'hourly' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'never'
-  priority?: number
-  alternates?: {
-    languages?: Record<string, string>
+  readonly url: string
+  readonly lastModified?: string | Date
+  readonly changeFrequency?:
+    | 'always'
+    | 'hourly'
+    | 'daily'
+    | 'weekly'
+    | 'monthly'
+    | 'yearly'
+    | 'never'
+  readonly priority?: number
+  readonly alternates?: {
+    readonly languages?: { readonly [key: string]: string }
   }
-  images?: (string | SitemapImage)[]
-  videos?: SitemapVideo[]
+  readonly images?: readonly (string | SitemapImage)[]
+  readonly videos?: readonly SitemapVideo[]
 }
 
-export type Sitemap = SitemapEntry[]
+export type Sitemap = readonly SitemapEntry[]
 
 export interface FeedEntry {
-  title: string
-  url: string
-  description?: string
-  content?: string
-  author?: string | { name: string, email?: string, url?: string }
-  pubDate?: string | Date
-  guid?: string
-  categories?: string[]
-  enclosure?: {
-    url: string
-    length?: number
-    type?: string
+  readonly title: string
+  readonly url: string
+  readonly description?: string
+  readonly content?: string
+  readonly author?:
+    | string
+    | { readonly name: string; readonly email?: string; readonly url?: string }
+  readonly pubDate?: string | Date
+  readonly guid?: string
+  readonly categories?: readonly string[]
+  readonly enclosure?: {
+    readonly url: string
+    readonly length?: number
+    readonly type?: string
   }
 }
 
 export interface Feed {
-  title: string
-  description: string
-  link: string
-  language?: string
-  copyright?: string
-  lastBuildDate?: string | Date
-  ttl?: number
-  image?: {
-    url: string
-    title: string
-    link: string
-    width?: number
-    height?: number
+  readonly title: string
+  readonly description: string
+  readonly link: string
+  readonly language?: string
+  readonly copyright?: string
+  readonly lastBuildDate?: string | Date
+  readonly ttl?: number
+  readonly image?: {
+    readonly url: string
+    readonly title: string
+    readonly link: string
+    readonly width?: number
+    readonly height?: number
   }
-  items: FeedEntry[]
+  readonly items: readonly FeedEntry[]
 }
 
 export type { Robots as MetadataRoute }

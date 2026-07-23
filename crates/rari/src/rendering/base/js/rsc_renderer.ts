@@ -3,32 +3,30 @@
 async function renderToRsc(element: unknown): Promise<string> {
   const ReactServerRenderer = g['~reactServerRenderer']
 
-  if (!ReactServerRenderer || !ReactServerRenderer.renderToReadableStream)
+  if (
+    ReactServerRenderer == null ||
+    typeof ReactServerRenderer.renderToReadableStream !== 'function'
+  )
     throw new Error('[rari] React Server renderer not loaded')
 
-  const bundlerConfig = g['~rari']?.clientReferenceManifest || {}
+  const bundlerConfig = g['~rari']?.clientReferenceManifest ?? {}
   const formState = g['~rari']?.actionFormState ?? undefined
 
-  const stream = await ReactServerRenderer.renderToReadableStream(
-    element,
-    bundlerConfig,
-    {
-      formState,
-      onError(error: unknown) {
-        console.error('[rari] RSC render error:', error)
-      },
+  const stream = await ReactServerRenderer.renderToReadableStream(element, bundlerConfig, {
+    formState,
+    onError(error: unknown) {
+      console.error('[rari] RSC render error:', error)
     },
-  )
+  })
 
   const reader = stream.getReader()
   const chunks: Uint8Array[] = []
   let totalLength = 0
 
-  while (true) {
+  for (;;) {
     const { done, value } = await reader.read()
 
-    if (done)
-      break
+    if (done) break
 
     chunks.push(value)
     totalLength += value.byteLength
@@ -44,8 +42,7 @@ async function renderToRsc(element: unknown): Promise<string> {
 
   // Store raw Flight bytes for RSC navigation responses. Text decoding is lossy
   // when the payload contains T rows (newlines inside row content).
-  if (!g['~rari'])
-    g['~rari'] = {}
+  g['~rari'] ??= {}
   g['~rari'].lastRscBinary = fullBuffer
 
   // Text fallback for composition metadata when binary is unavailable.

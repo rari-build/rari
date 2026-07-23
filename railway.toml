@@ -6,7 +6,7 @@ watchPatterns = [
   "packages/rari/**",
   "pnpm-workspace.yaml",
   "railway.toml",
-  "railpack.json"
+  "railpack.json",
 ]
 
 [deploy]

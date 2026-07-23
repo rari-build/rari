@@ -34,6 +34,7 @@
     "remark-gfm": "catalog:mdx"
   },
   "devDependencies": {
+    "@rari/lint": "workspace:*",
     "@tailwindcss/vite": "catalog:tailwind",
     "@types/node": "catalog:typescript",
     "@types/react": "catalog:react",

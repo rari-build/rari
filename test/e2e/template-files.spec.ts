@@ -44,11 +44,7 @@ async function navigateByLink(page: Page, url: string) {
   await page.waitForURL(url)
 }
 
-async function expectTemplateRemountAfterNavigation(
-  page: Page,
-  template: Locator,
-  url: string,
-) {
+async function expectTemplateRemountAfterNavigation(page: Page, template: Locator, url: string) {
   await markNode(template)
   await navigateByLink(page, url)
   await expectNodeRemounted(template)

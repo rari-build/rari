@@ -1,5 +1,6 @@
 export const title = 'Image Component'
-export const description = 'Optimize and serve images with automatic format conversion, responsive sizing, and lazy loading using the rari Image component.'
+export const description =
+  'Optimize and serve images with automatic format conversion, responsive sizing, and lazy loading using the rari Image component.'
 
 <PageHeader title="Image Component" />
 
@@ -53,6 +54,7 @@ export default defineConfig({
 The `remotePatterns` array defines which external domains are allowed to serve images. This is a security feature that prevents your application from being used as an open proxy for arbitrary images.
 
 Each pattern can include:
+
 - `protocol` - Optional: `'http'` or `'https'`
 - `hostname` - Required: The domain name (e.g., `'images.unsplash.com'`)
 - `port` - Optional: Specific port number
@@ -104,6 +106,7 @@ The image source. Can be a URL string or a static image import.
 
 // Static import
 import heroImage from './hero.jpg'
+
 <Image src={heroImage} alt="Hero" />
 `}</CodeBlock>
 
@@ -191,12 +194,13 @@ The quality of the optimized image, between 1 and 100. Higher values mean better
 />
 
 // Invalid - 90 is NOT in the default allowlist
+
 <Image
   src="/photo.jpg"
   alt="Photo"
   width={800}
   height={600}
-  quality={90}  // ❌ This will fail!
+  quality={90} // ❌ This will fail!
 />
 
 // To use quality={90}, add it to your vite.config.ts:
@@ -258,6 +262,7 @@ The loading behavior of the image. Use `'eager'` for above-the-fold images and `
 />
 
 // Below the fold - lazy load
+
 <Image
   src="/gallery-1.jpg"
   alt="Gallery image"
@@ -300,6 +305,7 @@ Hint to the browser on how to decode the image. When `preload` is true, decoding
 />
 
 // Sync decoding - blocks rendering until decoded
+
 <Image
   src="/hero.jpg"
   alt="Hero"
@@ -502,9 +508,9 @@ export default function ResponsiveImage() {
 <CodeBlock filename="src/components/Gallery.tsx" language="tsx">{`import { Image } from 'rari/image'
 
 const images = [
-  { src: '/gallery-1.jpg', alt: 'Gallery image 1' },
-  { src: '/gallery-2.jpg', alt: 'Gallery image 2' },
-  { src: '/gallery-3.jpg', alt: 'Gallery image 3' },
+{ src: '/gallery-1.jpg', alt: 'Gallery image 1' },
+{ src: '/gallery-2.jpg', alt: 'Gallery image 2' },
+{ src: '/gallery-3.jpg', alt: 'Gallery image 3' },
 ]
 
 export default function Gallery() {
@@ -591,8 +597,8 @@ export default function HomePage() {
 <CodeBlock filename="src/components/CDNImage.tsx" language="tsx">{`import { Image } from 'rari/image'
 
 const cloudinaryLoader = ({ src, width, quality }) => {
-  const params = ['f_auto', 'c_limit', \`w_\${width}\`, \`q_\${quality || 'auto'}\`]
-  return \`https://res.cloudinary.com/demo/image/upload/\${params.join(',')}/\${src}\`
+const params = ['f_auto', 'c_limit', \`w_\${width}\`, \`q_\${quality || 'auto'}\`]
+return \`https://res.cloudinary.com/demo/image/upload/\${params.join(',')}/\${src}\`
 }
 
 export default function CDNImage() {
@@ -661,6 +667,7 @@ This prevents layout shift and improves Core Web Vitals (CLS score):
 <Image src="/photo.jpg" alt="Photo" width={800} height={600} />
 
 // Bad - causes layout shift
+
 <Image src="/photo.jpg" alt="Photo" />
 `}</CodeBlock>
 
@@ -673,6 +680,7 @@ This prevents layout shift and improves Core Web Vitals (CLS score):
 <Image src="/hero.jpg" alt="Hero" width={1920} height={1080} loading="eager" />
 
 // Gallery images - lazy load
+
 <Image src="/gallery-1.jpg" alt="Gallery" width={400} height={300} loading="lazy" />
 `}</CodeBlock>
 
@@ -707,6 +715,7 @@ Alt text is crucial for accessibility and SEO:
 <Image src="/product.jpg" alt="Blue cotton t-shirt with round neck" width={400} height={400} />
 
 // Bad
+
 <Image src="/product.jpg" alt="image" width={400} height={400} />
 `}</CodeBlock>
 
@@ -737,6 +746,7 @@ Remote images are blocked by default for security. You must explicitly allow eac
 ### Image Not Loading
 
 Check that:
+
 - The image path is correct and accessible
 - The image file exists in the `public` directory or is a valid URL
 - For remote images, the domain is listed in `remotePatterns` in your `vite.config.ts`
@@ -751,6 +761,7 @@ Always provide `width` and `height` props, or use `fill` with a sized parent con
 <Image src="/photo.jpg" alt="Photo" width={800} height={600} />
 
 // Option 2: Fill parent
+
 <div style={{ position: 'relative', width: '100%', height: '400px' }}>
   <Image src="/photo.jpg" alt="Photo" fill />
 </div>
@@ -768,6 +779,7 @@ Always provide `width` and `height` props, or use `fill` with a sized parent con
 ### CORS Errors with Remote Images
 
 Remote images are proxied through your rari server to avoid CORS issues. If you see CORS errors:
+
 - Verify the domain is in `remotePatterns`
 - Check that the remote server allows your domain
 - Ensure you're not using `unoptimized` with remote images (which bypasses the proxy)

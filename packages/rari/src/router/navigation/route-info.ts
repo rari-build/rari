@@ -1,18 +1,17 @@
-import type { RouteInfoError, RouteInfoRequest, RouteInfoResponse } from './route-info-types'
+import type { RouteInfoRequest, RouteInfoResponse } from './route-info-types'
 import { getRariWindowBag } from '@/runtime/shared/rari-global'
+import { isRecord, parseJsonRecord } from '@/shared/utils/type-guards'
 
 class RouteInfoCache {
-  private cache = new Map<string, RouteInfoResponse>()
-  private pendingRequests = new Map<string, Promise<RouteInfoResponse>>()
+  private readonly cache = new Map<string, RouteInfoResponse>()
+  private readonly pendingRequests = new Map<string, Promise<RouteInfoResponse>>()
 
   async get(path: string): Promise<RouteInfoResponse> {
     const cached = this.cache.get(path)
-    if (cached)
-      return cached
+    if (cached) return cached
 
     const pending = this.pendingRequests.get(path)
-    if (pending)
-      return pending
+    if (pending) return pending
 
     const promise = this.fetchRouteInfo(path)
     this.pendingRequests.set(path, promise)
@@ -21,10 +20,27 @@ class RouteInfoCache {
       const result = await promise
       this.cache.set(path, result)
       return result
-    }
-    finally {
+    } finally {
       this.pendingRequests.delete(path)
     }
+  }
+
+  private parseRouteInfoResponse(text: string): RouteInfoResponse {
+    const parsed = parseJsonRecord(text)
+    if (!parsed || !this.isRouteInfoResponse(parsed))
+      throw new Error('Failed to parse route info response')
+
+    return parsed
+  }
+
+  private isRouteInfoResponse(value: unknown): value is RouteInfoResponse {
+    return (
+      isRecord(value) &&
+      typeof value.exists === 'boolean' &&
+      Array.isArray(value.layouts) &&
+      (value.loading === null || typeof value.loading === 'string') &&
+      typeof value.isDynamic === 'boolean'
+    )
   }
 
   private async fetchRouteInfo(path: string): Promise<RouteInfoResponse> {
@@ -39,14 +55,15 @@ class RouteInfoCache {
     })
 
     if (!response.ok) {
-      let error: RouteInfoError | null = null
+      let errorMessage: string | undefined
       try {
-        error = await response.json()
-      }
-      catch {}
+        const text = await response.text()
+        const parsed = parseJsonRecord(text)
+        if (parsed && typeof parsed.error === 'string' && parsed.error !== '')
+          errorMessage = parsed.error
+      } catch {}
 
-      if (error?.error)
-        throw new Error(error.error)
+      if (errorMessage != null && errorMessage !== '') throw new Error(errorMessage)
 
       throw new Error(`Failed to fetch route info: ${response.status} ${response.statusText}`)
     }
@@ -54,14 +71,13 @@ class RouteInfoCache {
     const clonedResponse = response.clone()
 
     try {
-      return await response.json()
-    }
-    catch (error) {
+      const text = await response.text()
+      return this.parseRouteInfoResponse(text)
+    } catch (error) {
       try {
         const text = await clonedResponse.text()
-        return JSON.parse(text)
-      }
-      catch (parseError) {
+        return this.parseRouteInfoResponse(text)
+      } catch (parseError) {
         console.error('[RouteInfo] Failed to parse response:', { error, parseError, path })
         throw new Error('Failed to parse route info response')
       }

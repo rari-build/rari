@@ -946,7 +946,7 @@ pub async fn render_streaming_with_layout(
     );
 
     // Keep metadata_rx for HTTP injection / static wrap. Do not pass it into
-    // Fizz setup — try_recv there would drop a still-pending receiver.
+    // Fizz setup -- try_recv there would drop a still-pending receiver.
     let render_result = match layout_renderer
         .render_route_with_streaming(&route_match, &context, Some(request_context), false, None)
         .await
@@ -1833,7 +1833,7 @@ pub async fn handle_app_route(
             insert_response_cache_vary_header(&mut response_headers, cookie_header, true);
 
             // One refcounted buffer serves the response cache, the fast
-            // cache, and the response body — the page was previously cloned
+            // cache, and the response body -- the page was previously cloned
             // in full for the cache and again for the body.
             let final_html = Bytes::from(final_html);
 

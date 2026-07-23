@@ -1,6 +1,6 @@
 import type { Metadata } from 'rari'
 
-export default async function DeepPage() {
+export default function DeepPage() {
   return (
     <div>
       <h1>Deep Nested Page</h1>

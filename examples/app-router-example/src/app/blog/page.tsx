@@ -1,7 +1,7 @@
 import type { Metadata } from 'rari'
 import { getAllBlogPosts } from '@/data/blog-posts'
 
-export default async function BlogPage() {
+export default function BlogPage() {
   const posts = getAllBlogPosts()
 
   return (
@@ -15,9 +15,7 @@ export default async function BlogPage() {
             href={`/blog/${post.slug}`}
             className="block p-6 bg-gray-50 rounded-lg border border-gray-200 no-underline hover:border-gray-300 hover:shadow-md transition-all"
           >
-            <h2 className="text-2xl text-gray-900 mb-2 font-semibold">
-              {post.title}
-            </h2>
+            <h2 className="text-2xl text-gray-900 mb-2 font-semibold">{post.title}</h2>
             <p className="text-gray-600 text-sm">
               Published on
               {post.date}

@@ -1,7 +1,7 @@
 import type { CookieOptions, ResponseCookies } from './types'
 
 class ResponseCookiesImpl implements ResponseCookies {
-  private cookies: Map<string, { name: string, value: string, options?: CookieOptions }>
+  private readonly cookies: Map<string, { name: string; value: string; options?: CookieOptions }>
 
   constructor() {
     this.cookies = new Map()
@@ -9,8 +9,7 @@ class ResponseCookiesImpl implements ResponseCookies {
 
   get(name: string) {
     const cookie = this.cookies.get(name)
-    if (!cookie)
-      return undefined
+    if (!cookie) return undefined
 
     return { name: cookie.name, value: cookie.value, path: cookie.options?.path }
   }
@@ -23,15 +22,18 @@ class ResponseCookiesImpl implements ResponseCookies {
     }))
   }
 
-  set(nameOrOptions: string | ({ name: string, value: string } & CookieOptions), value?: string, options?: CookieOptions): void {
+  set(
+    nameOrOptions: string | Readonly<{ name: string; value: string } & CookieOptions>,
+    value?: string,
+    options?: Readonly<CookieOptions>,
+  ): void {
     if (typeof nameOrOptions === 'string') {
       this.cookies.set(nameOrOptions, {
         name: nameOrOptions,
         value: value!,
         options,
       })
-    }
-    else {
+    } else {
       const { name, value: val, ...opts } = nameOrOptions
       this.cookies.set(name, {
         name,
@@ -46,24 +48,19 @@ class ResponseCookiesImpl implements ResponseCookies {
   }
 
   toSetCookieHeaders(): string[] {
-    return Array.from(this.cookies.values(), (cookie) => {
+    return Array.from(this.cookies.values(), cookie => {
       let header = `${cookie.name}=${cookie.value}`
 
       if (cookie.options) {
-        if (cookie.options.path)
+        if (cookie.options.path != null && cookie.options.path !== '')
           header += `; Path=${cookie.options.path}`
-        if (cookie.options.domain)
+        if (cookie.options.domain != null && cookie.options.domain !== '')
           header += `; Domain=${cookie.options.domain}`
-        if (cookie.options.maxAge)
-          header += `; Max-Age=${cookie.options.maxAge}`
-        if (cookie.options.expires)
-          header += `; Expires=${cookie.options.expires.toUTCString()}`
-        if (cookie.options.httpOnly)
-          header += '; HttpOnly'
-        if (cookie.options.secure)
-          header += '; Secure'
-        if (cookie.options.sameSite)
-          header += `; SameSite=${cookie.options.sameSite}`
+        if (cookie.options.maxAge != null) header += `; Max-Age=${cookie.options.maxAge}`
+        if (cookie.options.expires) header += `; Expires=${cookie.options.expires.toUTCString()}`
+        if (cookie.options.httpOnly) header += '; HttpOnly'
+        if (cookie.options.secure) header += '; Secure'
+        if (cookie.options.sameSite) header += `; SameSite=${cookie.options.sameSite}`
       }
 
       return header
@@ -72,18 +69,20 @@ class ResponseCookiesImpl implements ResponseCookies {
 }
 
 export class RariResponse extends Response {
-  cookies: ResponseCookies
+  readonly cookies: ResponseCookies
 
   constructor(body?: BodyInit | null, init?: ResponseInit) {
     super(body, init)
     this.cookies = new ResponseCookiesImpl()
   }
 
-  static next(init?: {
-    request?: {
-      headers?: Headers | Record<string, string>
-    }
-  }): RariResponse {
+  static next(
+    init?: Readonly<{
+      readonly request?: {
+        readonly headers?: Headers | { readonly [key: string]: string }
+      }
+    }>,
+  ): RariResponse {
     const response = new RariResponse(null, {
       status: 200,
       headers: {
@@ -92,9 +91,10 @@ export class RariResponse extends Response {
     })
 
     if (init?.request?.headers) {
-      const headers = init.request.headers instanceof Headers
-        ? init.request.headers
-        : new Headers(init.request.headers)
+      const headers =
+        init.request.headers instanceof Headers
+          ? init.request.headers
+          : new Headers(init.request.headers)
 
       headers.forEach((value, key) => {
         response.headers.set(`x-rari-proxy-request-${key}`, value)
@@ -105,7 +105,7 @@ export class RariResponse extends Response {
   }
 
   static redirect(url: string | URL, status?: number): RariResponse {
-    const statusCode = status || 307
+    const statusCode = status != null && status !== 0 ? status : 307
     return new RariResponse(null, {
       status: statusCode,
       headers: {
@@ -126,12 +126,11 @@ export class RariResponse extends Response {
 
   static json(data: unknown, init?: ResponseInit): RariResponse {
     const body = JSON.stringify(data)
+    const headers = new Headers(init?.headers)
+    headers.set('Content-Type', 'application/json')
     return new RariResponse(body, {
       ...init,
-      headers: {
-        'Content-Type': 'application/json',
-        ...init?.headers,
-      },
+      headers,
     })
   }
 }

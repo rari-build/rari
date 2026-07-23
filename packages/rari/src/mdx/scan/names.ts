@@ -4,8 +4,7 @@ export function scanMdxComponentNames(content: string): string[] {
   const names = new Set<string>()
   const pattern = new RegExp(MDX_COMPONENT_USAGE_REGEX.source, 'g')
 
-  for (const match of content.matchAll(pattern))
-    names.add(match[1]!)
+  for (const match of content.matchAll(pattern)) names.add(match[1])
 
   return [...names]
 }

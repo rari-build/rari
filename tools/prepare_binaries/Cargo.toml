@@ -10,11 +10,7 @@ anyhow = { workspace = true }
 clap = { workspace = true }
 colored = { workspace = true }
 cow-utils = { workspace = true }
-tokio = { workspace = true, features = [
-  "macros",
-  "process",
-  "rt-multi-thread"
-] }
+tokio = { workspace = true, features = ["macros", "process", "rt-multi-thread"] }
 
 [lints]
 workspace = true

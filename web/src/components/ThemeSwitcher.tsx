@@ -26,11 +26,11 @@ export default function ThemeSwitcher() {
           <button
             key={value}
             type="button"
-            onClick={() => setTheme(value)}
+            onClick={() => {
+              setTheme(value)
+            }}
             className={`p-1.5 rounded transition-colors duration-200 ${
-              isActive
-                ? 'bg-hover text-fg'
-                : 'text-fg-muted hover:text-fg hover:bg-hover/60'
+              isActive ? 'bg-hover text-fg' : 'text-fg-muted hover:text-fg hover:bg-hover/60'
             }`}
             aria-label={`${label} theme`}
             aria-pressed={isActive}

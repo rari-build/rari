@@ -5,10 +5,9 @@ async function readStreamToLastRscBinary(stream: ReadableStream<Uint8Array>): Pr
   const chunks: Uint8Array[] = []
   let totalLength = 0
 
-  while (true) {
+  for (;;) {
     const { done, value } = await reader.read()
-    if (done)
-      break
+    if (done) break
     chunks.push(value)
     totalLength += value.byteLength
   }
@@ -20,32 +19,35 @@ async function readStreamToLastRscBinary(stream: ReadableStream<Uint8Array>): Pr
     offset += chunk.byteLength
   }
 
-  if (!g['~rari'])
-    g['~rari'] = {}
+  g['~rari'] ??= {}
   g['~rari'].lastRscBinary = fullBuffer
 }
 
-// eslint-disable-next-line unused-imports/no-unused-vars
 async function encodeActionFlightResponse(
   actionResult: unknown,
   refreshElement?: unknown,
   renderedSearch?: string,
 ): Promise<void> {
-  const flightServer = g['~reactServerRenderer'] as {
-    renderToReadableStream?: (
-      element: unknown,
-      bundlerConfig: unknown,
-      options?: { onError?: (error: unknown) => void },
-    ) => Promise<ReadableStream<Uint8Array>>
-  } | undefined
+  const flightServer = g['~reactServerRenderer'] as
+    | {
+        renderToReadableStream?: (
+          element: unknown,
+          bundlerConfig: unknown,
+          options?: Readonly<{ onError?: (error: unknown) => void }>,
+        ) => Promise<ReadableStream<Uint8Array>>
+      }
+    | undefined
 
   if (!flightServer?.renderToReadableStream)
     throw new TypeError('Flight server renderer not loaded')
 
-  const bundlerConfig = g['~rari']?.clientReferenceManifest || {}
-  const refreshPayload = refreshElement != null && refreshElement !== ''
-    ? (refreshElement instanceof Promise ? refreshElement : Promise.resolve(refreshElement))
-    : ''
+  const bundlerConfig = g['~rari']?.clientReferenceManifest ?? {}
+  const refreshPayload =
+    refreshElement != null && refreshElement !== ''
+      ? refreshElement instanceof Promise
+        ? refreshElement
+        : Promise.resolve(refreshElement)
+      : ''
   const payload = {
     a: actionResult instanceof Promise ? actionResult : Promise.resolve(actionResult),
     f: refreshPayload,
@@ -63,27 +65,22 @@ async function encodeActionFlightResponse(
 }
 
 function withSkipRefreshMarker(result: unknown): unknown {
-  if (!result || typeof result !== 'object' || Array.isArray(result))
-    return result
+  if (result == null || typeof result !== 'object' || Array.isArray(result)) return result
 
   return {
-    ...(result as Record<string, unknown>),
+    ...Object.fromEntries(Object.entries(result)),
     '~rariSkipRefresh': true,
   }
 }
 
-// eslint-disable-next-line unused-imports/no-unused-vars
 function stashRpcActionResult(result: unknown): Record<string, unknown> {
-  if (!g['~rari'])
-    g['~rari'] = {}
+  g['~rari'] ??= {}
 
   g['~rari'].pendingActionResult = withSkipRefreshMarker(result)
 
   const metadata: Record<string, unknown> = { '~actionFlightPending': true }
-  if (result && typeof result === 'object') {
-    const record = result as Record<string, unknown>
-    if ('redirect' in record)
-      metadata.redirect = record.redirect
+  if (result != null && typeof result === 'object') {
+    if ('redirect' in result) metadata.redirect = (result as { redirect?: unknown }).redirect
   }
 
   return metadata

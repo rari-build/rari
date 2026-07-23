@@ -22,29 +22,34 @@ function resolveReactCjs(pkg: string, cjsFile: string): string {
 }
 
 function patchBrowserClientForFormActionsFromDisk(browserSource: string): string {
-  const edgePath = resolveReactCjs('react-server-dom-webpack', 'react-server-dom-webpack-client.edge')
+  const edgePath = resolveReactCjs(
+    'react-server-dom-webpack',
+    'react-server-dom-webpack-client.edge',
+  )
   const edgeSource = fs.readFileSync(edgePath, 'utf-8')
   return patchBrowserClientForFormActions(browserSource, edgeSource)
 }
 
 interface BundleEntry {
-  name: string
-  cjsFile?: string
-  source?: string
-  namedExports?: string[]
-  banner?: string
-  externals?: Record<string, string>
-  shimDescription?: string
-  patchCjsSource?: (source: string) => string
+  readonly name: string
+  readonly cjsFile?: string
+  readonly source?: string
+  readonly namedExports?: readonly string[]
+  readonly banner?: string
+  readonly externals?: Readonly<Record<string, string>>
+  readonly shimDescription?: string
+  readonly patchCjsSource?: (source: string) => string
 }
 
 /** Client-only react-dom exports stubbed for SSR module evaluation. */
 const REACT_DOM_CLIENT_STUBS = ['createPortal'] as const
 
 function createReactDomShimSource(): string {
-  const stubExports = REACT_DOM_CLIENT_STUBS.map(name => `export function ${name}() {
+  const stubExports = REACT_DOM_CLIENT_STUBS.map(
+    name => `export function ${name}() {
   return null
-}`).join('\n\n')
+}`,
+  ).join('\n\n')
 
   const defaultFields = [
     ...REACT_DOM_CLIENT_STUBS,
@@ -170,7 +175,13 @@ const entries: BundleEntry[] = [
   {
     name: 'react-dom-server',
     cjsFile: resolveReactCjs('react-dom', 'react-dom-server.browser'),
-    namedExports: ['renderToReadableStream', 'renderToString', 'renderToStaticMarkup', 'resume', 'version'],
+    namedExports: [
+      'renderToReadableStream',
+      'renderToString',
+      'renderToStaticMarkup',
+      'resume',
+      'version',
+    ],
     // Share one React + react-dom Internals instance with Flight client / SSR
     // client components so Fizz can install Hint dispatchers on Internals.d
     // that processFullBinaryRow (H rows) will call.
@@ -188,7 +199,13 @@ const entries: BundleEntry[] = [
     name: 'react-server-dom-webpack-client',
     cjsFile: resolveReactCjs('react-server-dom-webpack', 'react-server-dom-webpack-client.browser'),
     patchCjsSource: patchBrowserClientForFormActionsFromDisk,
-    namedExports: ['createFromFetch', 'createFromReadableStream', 'createServerReference', 'createTemporaryReferenceSet', 'encodeReply'],
+    namedExports: [
+      'createFromFetch',
+      'createFromReadableStream',
+      'createServerReference',
+      'createTemporaryReferenceSet',
+      'encodeReply',
+    ],
     // Stub out webpack-specific module loading since we're bundling to a single ESM file
     banner: `
 // Stub webpack's module loading system (not needed in our bundled ESM context)
@@ -237,8 +254,8 @@ globalThis.__rari_rsc_require__ = function(id) {
   },
 ]
 
-function createEntrySource(entry: BundleEntry): { source: string, tempPath?: string } {
-  if (!entry.cjsFile)
+function createEntrySource(entry: BundleEntry): { source: string; tempPath?: string } {
+  if (entry.cjsFile == null || entry.cjsFile === '')
     throw new Error(`Entry ${entry.name} is missing cjsFile`)
 
   const lines: string[] = []
@@ -265,8 +282,7 @@ function createEntrySource(entry: BundleEntry): { source: string, tempPath?: str
     const names = entry.namedExports.join(', ')
     lines.push(`const { ${names} } = __mod;`)
     lines.push(`export { ${names} };`)
-  }
-  else {
+  } else {
     lines.push(`export * from '${importPath}';`)
   }
 
@@ -276,9 +292,10 @@ function createEntrySource(entry: BundleEntry): { source: string, tempPath?: str
 }
 
 function createVendorHeader(entry: BundleEntry): string {
-  const kind = entry.source
-    ? (entry.shimDescription ?? 'ESM shim')
-    : `Auto-generated ESM bundle of React ${entry.name} (production)`
+  const kind =
+    entry.source != null && entry.source !== ''
+      ? (entry.shimDescription ?? 'ESM shim')
+      : `Auto-generated ESM bundle of React ${entry.name} (production)`
 
   return [
     `/* eslint-disable eslint-comments/no-unlimited-disable */`,
@@ -299,15 +316,15 @@ function createVendorHeader(entry: BundleEntry): string {
 function writeVendorBundle(entry: BundleEntry, body: string): void {
   const outPath = path.join(OUT_DIR, `${entry.name}.js`)
   const header = createVendorHeader(entry)
-  const finalCode = entry.banner ? `${entry.banner}\n${body}` : body
+  const finalCode = entry.banner != null && entry.banner !== '' ? `${entry.banner}\n${body}` : body
 
   fs.writeFileSync(outPath, header + finalCode, 'utf-8')
   const sizeKb = (Buffer.byteLength(finalCode) / 1024).toFixed(1)
   console.log(`  ${entry.name}.js (${sizeKb} KB)`)
 }
 
-async function bundleShimEntry(entry: BundleEntry): Promise<void> {
-  if (!entry.source)
+function bundleShimEntry(entry: BundleEntry): void {
+  if (entry.source == null || entry.source === '')
     throw new Error(`Entry ${entry.name} is missing source`)
 
   writeVendorBundle(entry, entry.source)
@@ -345,8 +362,7 @@ async function bundleCjsEntry(entry: BundleEntry): Promise<void> {
         {
           name: 'virtual-entry',
           resolveId(source) {
-            if (source === virtualId)
-              return source
+            if (source === virtualId) return source
             for (const [pkg, target] of Object.entries(resolveOverrides)) {
               if (source === pkg || source.startsWith(`${pkg}/`))
                 return { id: target, external: true }
@@ -355,8 +371,7 @@ async function bundleCjsEntry(entry: BundleEntry): Promise<void> {
             return null
           },
           load(id) {
-            if (id === virtualId)
-              return entrySource
+            if (id === virtualId) return entrySource
 
             return null
           },
@@ -365,9 +380,6 @@ async function bundleCjsEntry(entry: BundleEntry): Promise<void> {
     })
 
     const output = result.output[0]
-    if (!output)
-      throw new Error(`No output generated for ${entry.name}`)
-
     // Rolldown emits external CJS deps as `__require("pkg")` calls, which throw
     // in deno_core's V8 (no `require`). Rewrite them into a static ESM import of
     // the shared vendor module so the whole runtime resolves to ONE React
@@ -384,8 +396,7 @@ async function bundleCjsEntry(entry: BundleEntry): Promise<void> {
           code = code.replace(new RegExp(requirePattern, 'g'), ident)
         }
       }
-      if (importLines.length > 0)
-        code = `${importLines.join('\n')}\n${code}`
+      if (importLines.length > 0) code = `${importLines.join('\n')}\n${code}`
     }
 
     if (code.includes('__webpack_chunk_load__'))
@@ -404,18 +415,18 @@ async function bundleCjsEntry(entry: BundleEntry): Promise<void> {
     }
 
     writeVendorBundle(entry, code)
-  }
-  finally {
-    if (tempPath)
-      fs.rmSync(tempPath, { force: true })
+  } finally {
+    if (tempPath != null && tempPath !== '') fs.rmSync(tempPath, { force: true })
   }
 }
 
 async function bundleEntry(entry: BundleEntry): Promise<void> {
-  if (entry.source)
-    return bundleShimEntry(entry)
+  if (entry.source != null && entry.source !== '') {
+    bundleShimEntry(entry)
+    return
+  }
 
-  return bundleCjsEntry(entry)
+  await bundleCjsEntry(entry)
 }
 
 async function main(): Promise<void> {
@@ -425,8 +436,7 @@ async function main(): Promise<void> {
 
   fs.mkdirSync(OUT_DIR, { recursive: true })
 
-  for (const entry of entries)
-    await bundleEntry(entry)
+  for (const entry of entries) await bundleEntry(entry)
 
   const indexLines = [
     `/* eslint-disable eslint-comments/no-unlimited-disable */`,
@@ -449,7 +459,7 @@ async function main(): Promise<void> {
   console.log('Done.')
 }
 
-main().catch((err) => {
+main().catch((err: unknown) => {
   console.error('Bundle failed:', err)
   process.exit(1)
 })

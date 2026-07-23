@@ -12,7 +12,7 @@ export class LoadingErrorBoundary extends React.Component<LoadingErrorBoundaryPr
     console.error('[rari] Loading: Error info:', errorInfo)
   }
 
-  render() {
+  render(): React.ReactNode {
     return this.props.children
   }
 }

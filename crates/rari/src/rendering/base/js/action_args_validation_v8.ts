@@ -1,18 +1,9 @@
 /// <reference path="../../types.d.ts" />
-/* eslint-disable unused-imports/no-unused-vars -- concatenated into action_handler.ts */
 
-function getActionArgsValidationApi() {
-  const api = (globalThis as typeof globalThis & {
-    __RARI_ACTION_ARGS_VALIDATION__?: {
-      productionValidationConfig: () => unknown
-      developmentValidationConfig: () => unknown
-      validateActionArgsWithConfig: (args: unknown[], config: unknown) => unknown[]
-      validateFormDataWithConfig: (formData: FormData, config: unknown) => void
-    }
-  }).__RARI_ACTION_ARGS_VALIDATION__
+function getActionArgsValidationApi(): ActionArgsValidationApi {
+  const api = g.__RARI_ACTION_ARGS_VALIDATION__
 
-  if (!api)
-    throw new TypeError('Action args validation API not initialized')
+  if (!api) throw new TypeError('Action args validation API not initialized')
 
   return api
 }
@@ -24,7 +15,7 @@ function actionValidationConfig() {
     : api.productionValidationConfig()
 }
 
-function validateActionArgs(args: unknown[]): unknown[] {
+function validateActionArgs(args: readonly unknown[]): unknown[] {
   return getActionArgsValidationApi().validateActionArgsWithConfig(args, actionValidationConfig())
 }
 

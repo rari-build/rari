@@ -1,6 +1,7 @@
 import type { Metadata } from 'rari'
 import { cacheTag } from '@rari/use-cache/runtime/cache-wrapper'
 
+// oxlint-disable-next-line typescript/require-await -- async is required for the 'use cache' transform
 async function getTaggedCachedValue() {
   'use cache'
   cacheTag('use-cache-revalidate-e2e')

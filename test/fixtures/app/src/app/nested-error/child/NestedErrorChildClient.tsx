@@ -15,7 +15,9 @@ export default function NestedErrorChildClient() {
       <button
         type="button"
         data-testid="trigger-nested-error-button"
-        onClick={() => setShouldThrow(true)}
+        onClick={() => {
+          setShouldThrow(true)
+        }}
       >
         Trigger Nested Error
       </button>

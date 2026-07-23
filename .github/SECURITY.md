@@ -5,6 +5,7 @@
 Found a security issue? We take security seriously and appreciate your help keeping rari safe.
 
 **Report privately:**
+
 - [Submit through GitHub Security](https://github.com/rari-build/rari/security/advisories/new) (preferred)
 - Email **security@rari.build** if GitHub isn't an option
 

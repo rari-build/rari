@@ -1,6 +1,6 @@
 import type { Metadata } from 'rari'
 
-export default async function ProductsPage() {
+export default function ProductsPage() {
   return (
     <div>
       <h1>Products</h1>

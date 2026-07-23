@@ -1,3 +1,4 @@
+import type { Buffer } from 'node:buffer'
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -7,7 +8,13 @@ import { describe, expect, it } from 'vite-plus/test'
 const CLI_PATH = resolve(process.cwd(), 'packages/rari/dist/cli.mjs')
 const TIMEOUT = 10000
 
-function runCLI(args: string[], options: { timeout?: number, env?: Record<string, string> } = {}): Promise<{
+async function runCLI(
+  args: readonly string[],
+  options: Readonly<{
+    readonly timeout?: number
+    readonly env?: { readonly [key: string]: string }
+  }> = {},
+): Promise<{
   code: number | null
   stdout: string
   stderr: string
@@ -21,25 +28,25 @@ function runCLI(args: string[], options: { timeout?: number, env?: Record<string
     let stdout = ''
     let stderr = ''
 
-    child.stdout?.on('data', (data) => {
+    child.stdout.on('data', (data: Buffer) => {
       stdout += data.toString()
     })
 
-    child.stderr?.on('data', (data) => {
+    child.stderr.on('data', (data: Buffer) => {
       stderr += data.toString()
     })
 
     const timeout = setTimeout(() => {
       child.kill('SIGTERM')
-      reject(new Error(`CLI command timed out after ${options.timeout || TIMEOUT}ms`))
-    }, options.timeout || TIMEOUT)
+      reject(new Error(`CLI command timed out after ${options.timeout ?? TIMEOUT}ms`))
+    }, options.timeout ?? TIMEOUT)
 
-    child.on('exit', (code) => {
+    child.on('exit', code => {
       clearTimeout(timeout)
       resolve({ code, stdout, stderr })
     })
 
-    child.on('error', (error) => {
+    child.on('error', error => {
       clearTimeout(timeout)
       reject(error)
     })
@@ -52,184 +59,260 @@ describe('CLI Integration Tests', () => {
   })
 
   describe('help command', () => {
-    it('should display help with no arguments', async () => {
-      const { code, stderr } = await runCLI([])
+    it(
+      'should display help with no arguments',
+      async () => {
+        const { code, stderr } = await runCLI([])
 
-      expect(code).toBe(0)
-      expect(stderr).toContain('rari CLI')
-      expect(stderr).toContain('Usage:')
-      expect(stderr).toContain('rari dev')
-      expect(stderr).toContain('rari build')
-      expect(stderr).toContain('rari start')
-      expect(stderr).toContain('rari deploy')
-    }, TIMEOUT)
+        expect(code).toBe(0)
+        expect(stderr).toContain('rari CLI')
+        expect(stderr).toContain('Usage:')
+        expect(stderr).toContain('rari dev')
+        expect(stderr).toContain('rari build')
+        expect(stderr).toContain('rari start')
+        expect(stderr).toContain('rari deploy')
+      },
+      TIMEOUT,
+    )
 
-    it('should display help with help command', async () => {
-      const { code, stderr } = await runCLI(['help'])
+    it(
+      'should display help with help command',
+      async () => {
+        const { code, stderr } = await runCLI(['help'])
 
-      expect(code).toBe(0)
-      expect(stderr).toContain('rari CLI')
-      expect(stderr).toContain('Usage:')
-    }, TIMEOUT)
+        expect(code).toBe(0)
+        expect(stderr).toContain('rari CLI')
+        expect(stderr).toContain('Usage:')
+      },
+      TIMEOUT,
+    )
 
-    it('should display help with --help flag', async () => {
-      const { code, stderr } = await runCLI(['--help'])
+    it(
+      'should display help with --help flag',
+      async () => {
+        const { code, stderr } = await runCLI(['--help'])
 
-      expect(code).toBe(0)
-      expect(stderr).toContain('rari CLI')
-    }, TIMEOUT)
+        expect(code).toBe(0)
+        expect(stderr).toContain('rari CLI')
+      },
+      TIMEOUT,
+    )
 
-    it('should display help with -h flag', async () => {
-      const { code, stderr } = await runCLI(['-h'])
+    it(
+      'should display help with -h flag',
+      async () => {
+        const { code, stderr } = await runCLI(['-h'])
 
-      expect(code).toBe(0)
-      expect(stderr).toContain('rari CLI')
-    }, TIMEOUT)
+        expect(code).toBe(0)
+        expect(stderr).toContain('rari CLI')
+      },
+      TIMEOUT,
+    )
 
-    it('should show environment variables section', async () => {
-      const { stderr } = await runCLI(['help'])
+    it(
+      'should show environment variables section',
+      async () => {
+        const { stderr } = await runCLI(['help'])
 
-      expect(stderr).toContain('Environment Variables:')
-      expect(stderr).toContain('PORT')
-      expect(stderr).toContain('NODE_ENV')
-    }, TIMEOUT)
+        expect(stderr).toContain('Environment Variables:')
+        expect(stderr).toContain('PORT')
+        expect(stderr).toContain('NODE_ENV')
+      },
+      TIMEOUT,
+    )
 
-    it('should show vite-plus commands in examples', async () => {
-      const { stderr } = await runCLI(['help'])
+    it(
+      'should show vite-plus commands in examples',
+      async () => {
+        const { stderr } = await runCLI(['help'])
 
-      expect(stderr).toContain('Examples:')
-      expect(stderr).toContain('development server')
-    }, TIMEOUT)
+        expect(stderr).toContain('Examples:')
+        expect(stderr).toContain('development server')
+      },
+      TIMEOUT,
+    )
 
-    it('should show deployment options', async () => {
-      const { stderr } = await runCLI(['help'])
+    it(
+      'should show deployment options',
+      async () => {
+        const { stderr } = await runCLI(['help'])
 
-      expect(stderr).toContain('Deployment:')
-      expect(stderr).toContain('railway')
-      expect(stderr).toContain('render')
-    }, TIMEOUT)
+        expect(stderr).toContain('Deployment:')
+        expect(stderr).toContain('railway')
+        expect(stderr).toContain('render')
+      },
+      TIMEOUT,
+    )
   })
 
   describe('unknown command', () => {
-    it('should error on unknown command', async () => {
-      const { code, stderr } = await runCLI(['unknown-command'])
+    it(
+      'should error on unknown command',
+      async () => {
+        const { code, stderr } = await runCLI(['unknown-command'])
 
-      expect(code).toBe(1)
-      expect(stderr).toContain('Unknown command')
-      expect(stderr).toContain('rari help')
-    }, TIMEOUT)
+        expect(code).toBe(1)
+        expect(stderr).toContain('Unknown command')
+        expect(stderr).toContain('rari help')
+      },
+      TIMEOUT,
+    )
 
-    it('should suggest help command', async () => {
-      const { stderr } = await runCLI(['invalid'])
+    it(
+      'should suggest help command',
+      async () => {
+        const { stderr } = await runCLI(['invalid'])
 
-      expect(stderr).toContain('rari help')
-    }, TIMEOUT)
+        expect(stderr).toContain('rari help')
+      },
+      TIMEOUT,
+    )
   })
 
   describe('deploy command', () => {
-    it('should error on deploy without target', async () => {
-      const { code, stderr } = await runCLI(['deploy'])
+    it(
+      'should error on deploy without target',
+      async () => {
+        const { code, stderr } = await runCLI(['deploy'])
 
-      expect(code).toBe(1)
-      expect(stderr).toContain('Unknown deployment target')
-      expect(stderr).toContain('railway')
-      expect(stderr).toContain('render')
-    }, TIMEOUT)
+        expect(code).toBe(1)
+        expect(stderr).toContain('Unknown deployment target')
+        expect(stderr).toContain('railway')
+        expect(stderr).toContain('render')
+      },
+      TIMEOUT,
+    )
 
-    it('should error on unknown deployment target', async () => {
-      const { code, stderr } = await runCLI(['deploy', 'unknown'])
+    it(
+      'should error on unknown deployment target',
+      async () => {
+        const { code, stderr } = await runCLI(['deploy', 'unknown'])
 
-      expect(code).toBe(1)
-      expect(stderr).toContain('Unknown deployment target')
-    }, TIMEOUT)
+        expect(code).toBe(1)
+        expect(stderr).toContain('Unknown deployment target')
+      },
+      TIMEOUT,
+    )
   })
 
   describe('environment variable handling', () => {
-    it('should work with custom PORT', async () => {
-      const { code, stderr } = await runCLI(['help'], {
-        env: { PORT: '8080' },
-      })
+    it(
+      'should work with custom PORT',
+      async () => {
+        const { code, stderr } = await runCLI(['help'], {
+          env: { PORT: '8080' },
+        })
 
-      expect(code).toBe(0)
-      expect(stderr).toContain('rari CLI')
-      expect(stderr).toContain('PORT')
-      expect(stderr).toContain('Server port')
-    }, TIMEOUT)
+        expect(code).toBe(0)
+        expect(stderr).toContain('rari CLI')
+        expect(stderr).toContain('PORT')
+        expect(stderr).toContain('Server port')
+      },
+      TIMEOUT,
+    )
 
-    it('should work with NODE_ENV', async () => {
-      const { code, stderr } = await runCLI(['help'], {
-        env: { NODE_ENV: 'development' },
-      })
+    it(
+      'should work with NODE_ENV',
+      async () => {
+        const { code, stderr } = await runCLI(['help'], {
+          env: { NODE_ENV: 'development' },
+        })
 
-      expect(code).toBe(0)
-      expect(stderr).toContain('rari CLI')
-      expect(stderr).toContain('NODE_ENV')
-      expect(stderr).toContain('Environment')
-    }, TIMEOUT)
+        expect(code).toBe(0)
+        expect(stderr).toContain('rari CLI')
+        expect(stderr).toContain('NODE_ENV')
+        expect(stderr).toContain('Environment')
+      },
+      TIMEOUT,
+    )
   })
 
   describe('platform detection', () => {
-    it('should work without platform variables', async () => {
-      const env = Object.fromEntries(
-        Object.entries(process.env).filter(([key]) =>
-          key !== 'RAILWAY_ENVIRONMENT' && key !== 'RENDER',
-        ),
-      ) as Record<string, string>
+    it(
+      'should work without platform variables',
+      async () => {
+        const env: Record<string, string> = {}
+        for (const [key, value] of Object.entries(process.env)) {
+          if (key !== 'RAILWAY_ENVIRONMENT' && key !== 'RENDER' && value !== undefined)
+            env[key] = value
+        }
 
-      const { code, stderr } = await runCLI(['help'], { env })
+        const { code, stderr } = await runCLI(['help'], { env })
 
-      expect(code).toBe(0)
-      expect(stderr).toContain('rari CLI')
-      expect(stderr).toContain('Platform deployment')
-    }, TIMEOUT)
+        expect(code).toBe(0)
+        expect(stderr).toContain('rari CLI')
+        expect(stderr).toContain('Platform deployment')
+      },
+      TIMEOUT,
+    )
 
-    it('should work with Railway environment', async () => {
-      const { code, stderr } = await runCLI(['help'], {
-        env: { RAILWAY_ENVIRONMENT: 'production' },
-      })
+    it(
+      'should work with Railway environment',
+      async () => {
+        const { code, stderr } = await runCLI(['help'], {
+          env: { RAILWAY_ENVIRONMENT: 'production' },
+        })
 
-      expect(code).toBe(0)
-      expect(stderr).toContain('rari CLI')
-      expect(stderr).toContain('railway')
-    }, TIMEOUT)
+        expect(code).toBe(0)
+        expect(stderr).toContain('rari CLI')
+        expect(stderr).toContain('railway')
+      },
+      TIMEOUT,
+    )
 
-    it('should work with Render environment', async () => {
-      const { code, stderr } = await runCLI(['help'], {
-        env: { RENDER: 'true' },
-      })
+    it(
+      'should work with Render environment',
+      async () => {
+        const { code, stderr } = await runCLI(['help'], {
+          env: { RENDER: 'true' },
+        })
 
-      expect(code).toBe(0)
-      expect(stderr).toContain('rari CLI')
-      expect(stderr).toContain('render')
-    }, TIMEOUT)
+        expect(code).toBe(0)
+        expect(stderr).toContain('rari CLI')
+        expect(stderr).toContain('render')
+      },
+      TIMEOUT,
+    )
   })
 
   describe('vite-plus migration verification', () => {
-    it('should recognize dev command (vite-plus)', async () => {
-      const { stderr } = await runCLI(['help'])
+    it(
+      'should recognize dev command (vite-plus)',
+      async () => {
+        const { stderr } = await runCLI(['help'])
 
-      expect(stderr).toContain('rari dev')
-      expect(stderr).toContain('Vite')
-      expect(stderr).toContain('development server')
-    }, TIMEOUT)
+        expect(stderr).toContain('rari dev')
+        expect(stderr).toContain('Vite')
+        expect(stderr).toContain('development server')
+      },
+      TIMEOUT,
+    )
 
-    it('should recognize build command (vite-plus)', async () => {
-      const { stderr } = await runCLI(['help'])
+    it(
+      'should recognize build command (vite-plus)',
+      async () => {
+        const { stderr } = await runCLI(['help'])
 
-      expect(stderr).toContain('rari build')
-      expect(stderr).toContain('production')
-      expect(stderr).toContain('Build for production')
-    }, TIMEOUT)
+        expect(stderr).toContain('rari build')
+        expect(stderr).toContain('production')
+        expect(stderr).toContain('Build for production')
+      },
+      TIMEOUT,
+    )
 
-    it('should show correct command structure', async () => {
-      const { stderr } = await runCLI(['help'])
+    it(
+      'should show correct command structure',
+      async () => {
+        const { stderr } = await runCLI(['help'])
 
-      expect(stderr).toContain('rari dev')
-      expect(stderr).toContain('rari build')
-      expect(stderr).toContain('rari start')
-      expect(stderr).toContain('rari deploy')
-      expect(stderr).toContain('Vite')
-      expect(stderr).toContain('production')
-    }, TIMEOUT)
+        expect(stderr).toContain('rari dev')
+        expect(stderr).toContain('rari build')
+        expect(stderr).toContain('rari start')
+        expect(stderr).toContain('rari deploy')
+        expect(stderr).toContain('Vite')
+        expect(stderr).toContain('production')
+      },
+      TIMEOUT,
+    )
   })
 })

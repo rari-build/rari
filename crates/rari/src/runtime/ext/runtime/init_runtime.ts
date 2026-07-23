@@ -12,11 +12,11 @@ import {
 } from 'ext:init_utilities/utilities.ts'
 import * as scopeWindow from 'ext:runtime/98_global_scope_window.js'
 
-const os = loadExtScriptOnce('ext:deno_os/30_os.js') as DenoOsModule
-const _console = loadExtScriptOnce('ext:deno_web/01_console.js') as ConsoleModule
-const errors = loadExtScriptOnce('ext:runtime/01_errors.js') as DenoRuntimeErrorsModule
-const version = loadExtScriptOnce('ext:runtime/01_version.ts') as DenoRuntimeVersionModule
-const permissions = loadExtScriptOnce('ext:runtime/10_permissions.js') as DenoRuntimePermissionsModule
+const os = loadExtScriptOnce<DenoOsModule>('ext:deno_os/30_os.js')
+const _console = loadExtScriptOnce<ConsoleModule>('ext:deno_web/01_console.js')
+const errors = loadExtScriptOnce<DenoRuntimeErrorsModule>('ext:runtime/01_errors.js')
+const version = loadExtScriptOnce<DenoRuntimeVersionModule>('ext:runtime/01_version.ts')
+const permissions = loadExtScriptOnce<DenoRuntimePermissionsModule>('ext:runtime/10_permissions.js')
 
 interface ConsoleModule {
   setNoColorFns: (get: () => boolean, set: () => boolean) => void

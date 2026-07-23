@@ -32,8 +32,7 @@ export default function Socket(props: SVGProps<SVGSVGElement>) {
         fillRule="nonzero"
         d="M0 30.721C0 47.001 10.39 60.852 24.926 66c7.249-2.56 13.494-7.315 17.911-13.448a37.1 37.1 0 0 0 7.052-21.831V9.003L24.935 0 .009 9.003v21.718zm20.603-16.748h11.572L28.63 26.042h6.302L17.705 52.018l4.089-18.859h-6.846z"
         transform="matrix(13.9389 0 0 13.9394 106.58 40)"
-      >
-      </path>
+      ></path>
     </svg>
   )
 }

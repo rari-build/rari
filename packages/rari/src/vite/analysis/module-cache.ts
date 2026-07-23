@@ -13,8 +13,7 @@ export function isNodeBuiltinModule(moduleName: string): boolean {
 
 export function hasNodeImportsFromAnalysis(analysis: ModuleAnalysis): boolean {
   for (const importPath of analysis.importSources) {
-    if (importPath.startsWith('node:') || isNodeBuiltinModule(importPath))
-      return true
+    if (importPath.startsWith('node:') || isNodeBuiltinModule(importPath)) return true
   }
 
   return false
@@ -28,11 +27,11 @@ export function filterExternalDependencies(
 
   for (const importPath of importSources) {
     if (
-      !importPath.startsWith('.')
-      && !importPath.startsWith('/')
-      && !importPath.startsWith('@/')
-      && !importPath.startsWith('node:')
-      && !nodeBuiltins.has(importPath)
+      !importPath.startsWith('.') &&
+      !importPath.startsWith('/') &&
+      !importPath.startsWith('@/') &&
+      !importPath.startsWith('node:') &&
+      !nodeBuiltins.has(importPath)
     ) {
       dependencies.push(importPath)
     }
@@ -61,21 +60,16 @@ interface CacheEntry {
 export function resolveModuleCachePath(filePath: string): string {
   try {
     return fs.realpathSync(filePath)
-  }
-  catch {
+  } catch {
     return path.resolve(filePath)
   }
 }
 
-export function invalidateModuleCachePath(
-  cache: Map<string, unknown>,
-  filePath: string,
-): void {
+export function invalidateModuleCachePath(cache: Map<string, unknown>, filePath: string): void {
   cache.delete(filePath)
   try {
     cache.delete(fs.realpathSync(filePath))
-  }
-  catch {
+  } catch {
     cache.delete(path.resolve(filePath))
   }
 }
@@ -88,34 +82,28 @@ export function collectClientComponentPaths(
 
   for (const filePath of collectSourceFilePaths(dirs)) {
     try {
-      if (cache.get(filePath).directives.hasUseClient)
-        paths.push(filePath)
-    }
-    catch {}
+      if (cache.get(filePath).directives.hasUseClient) paths.push(filePath)
+    } catch {}
   }
 
   return paths
 }
 
 export class ModuleAnalysisCache {
-  private cache = new Map<string, CacheEntry>()
+  private readonly cache = new Map<string, CacheEntry>()
 
   get(filePath: string, source?: string): ModuleAnalysis {
     const cacheKey = resolveModuleCachePath(filePath)
     const cached = this.cache.get(cacheKey)
 
     if (source !== undefined) {
-      if (cached && cached.source === source)
-        return cached.analysis
-    }
-    else if (cached) {
+      if (cached?.source === source) return cached.analysis
+    } else if (cached) {
       const mtimeMs = this.readMtimeMs(cacheKey)
-      if (mtimeMs >= 0 && cached.mtimeMs === mtimeMs)
-        return cached.analysis
+      if (mtimeMs >= 0 && cached.mtimeMs === mtimeMs) return cached.analysis
     }
 
-    if (source === undefined)
-      source = fs.readFileSync(cacheKey, 'utf-8')
+    source ??= fs.readFileSync(cacheKey, 'utf-8')
 
     const mtimeMs = this.readMtimeMs(cacheKey)
     const analysis = analyzeModuleSource(source)
@@ -143,8 +131,7 @@ export class ModuleAnalysisCache {
   private readMtimeMs(filePath: string): number {
     try {
       return fs.statSync(filePath).mtimeMs
-    }
-    catch {
+    } catch {
       return -1
     }
   }

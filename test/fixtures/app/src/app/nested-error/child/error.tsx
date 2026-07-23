@@ -3,10 +3,10 @@
 export default function NestedErrorBoundary({
   error,
   reset,
-}: {
+}: Readonly<{
   error: Error
   reset: () => void
-}) {
+}>) {
   return (
     <div data-testid="nested-error-boundary">
       <h2>Nested Error Caught!</h2>

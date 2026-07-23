@@ -1,6 +1,6 @@
-export async function GET(
+export function GET(
   _request: Request,
-  { params }: { params: { category: string, id: string } },
+  { params }: Readonly<{ readonly params: { readonly category: string; readonly id: string } }>,
 ) {
   return new Response(
     JSON.stringify({

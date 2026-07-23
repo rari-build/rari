@@ -1,24 +1,33 @@
 import type { ComponentType } from 'react'
+import { isRecord } from '@/shared/utils/type-guards'
 import { scanMdxComponentNames } from '../scan/names'
 import { createMDXClientReferences } from './client-refs'
 
 export interface MdxComponentEntry {
-  name: string
-  component: ComponentType<any>
-  id: string
-  client?: boolean
-  exportName?: string
+  readonly name: string
+  readonly component: ComponentType<any>
+  readonly id: string
+  readonly client?: boolean
+  readonly exportName?: string
 }
 
-type MdxComponentsInput = Record<string, ComponentType<any> | MdxComponentEntry>
+type MdxComponentsInput = Readonly<Record<string, ComponentType<any> | MdxComponentEntry>>
 
-function isResolvedEntry(value: ComponentType<any> | MdxComponentEntry): value is MdxComponentEntry {
-  return typeof value === 'object' && value !== null && 'component' in value && 'id' in value
+function isResolvedEntry(value: unknown): value is MdxComponentEntry {
+  return isRecord(value) && typeof value.id === 'string' && 'component' in value
 }
 
-function normalizeRegistry(input: MdxComponentEntry[] | MdxComponentsInput): MdxComponentEntry[] {
-  if (Array.isArray(input))
-    return input
+/* oxlint-disable typescript/prefer-readonly-parameter-types -- union with react's ComponentType loses its allow-listed alias and expands to mutable ComponentClass/FunctionComponent members */
+function isEntryArray(
+  input: readonly MdxComponentEntry[] | MdxComponentsInput,
+): input is readonly MdxComponentEntry[] {
+  return Array.isArray(input)
+}
+
+function normalizeRegistry(
+  input: readonly MdxComponentEntry[] | MdxComponentsInput,
+): MdxComponentEntry[] {
+  if (isEntryArray(input)) return [...input]
 
   return Object.entries(input).map(([name, value]) => {
     if (isResolvedEntry(value)) {
@@ -32,25 +41,27 @@ function normalizeRegistry(input: MdxComponentEntry[] | MdxComponentsInput): Mdx
     }
 
     throw new Error(
-      `[rari/mdx] Component "${name}" is missing module metadata. `
-      + 'Pass components to defineMdxComponents({ ... }) in a file processed by the rari vite plugin.',
+      `[rari/mdx] Component "${name}" is missing module metadata. ` +
+        'Pass components to defineMdxComponents({ ... }) in a file processed by the rari vite plugin.',
     )
   })
 }
 
+/* oxlint-enable typescript/prefer-readonly-parameter-types */
+
 export function defineMdxComponents(
-  input: MdxComponentEntry[] | MdxComponentsInput,
+  // oxlint-disable-next-line typescript/prefer-readonly-parameter-types -- union with react's ComponentType loses its allow-listed alias and expands to mutable ComponentClass/FunctionComponent members
+  input: readonly MdxComponentEntry[] | MdxComponentsInput,
 ): (content: string) => Record<string, any> {
   const registry = normalizeRegistry(input)
 
   return (content: string) => {
     const result: Record<string, any> = {}
-    const clientComponents: Record<string, { component: any, id: string, exportName?: string }> = {}
+    const clientComponents: Record<string, { component: any; id: string; exportName?: string }> = {}
     const usedComponentNames = new Set(scanMdxComponentNames(content))
 
     for (const entry of registry) {
-      if (!usedComponentNames.has(entry.name))
-        continue
+      if (!usedComponentNames.has(entry.name)) continue
 
       if (entry.client === false) {
         result[entry.name] = entry.component

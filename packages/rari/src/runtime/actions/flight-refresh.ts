@@ -1,8 +1,6 @@
 import type { ActionRevalidationKind } from './revalidation-kind'
-import {
-  ActionDidNotRevalidate,
-  parseActionRevalidationKind,
-} from './revalidation-kind'
+import { isRecord } from '@/shared/utils/type-guards'
+import { ActionDidNotRevalidate, parseActionRevalidationKind } from './revalidation-kind'
 
 export interface ActionFlightRefreshDetail {
   element: unknown
@@ -10,42 +8,44 @@ export interface ActionFlightRefreshDetail {
   revalidatedPath?: string
 }
 
-/** Flight action response: `a` is the action result, `f` is the optional refresh tree. */
 export interface ActionFlightResponseShape {
-  a?: unknown
-  f?: unknown
+  readonly a?: unknown
+  readonly f?: unknown
 }
 
 const SKIP_REFRESH_MARKER = '~rariSkipRefresh'
 
 function shouldSkipRefreshForActionResult(result: unknown): boolean {
-  if (result == null || typeof result !== 'object' || Array.isArray(result))
-    return false
+  if (!isRecord(result)) return false
 
-  const record = result as Record<string, unknown>
-  if ('redirect' in record)
-    return true
+  if ('redirect' in result) return true
 
-  return SKIP_REFRESH_MARKER in record || '~rariFormState' in record
+  return SKIP_REFRESH_MARKER in result || '~rariFormState' in result
 }
 
 function isLikelyReactElement(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object'
-    && value !== null
-    && '$$typeof' in value
+  return typeof value === 'object' && value !== null && '$$typeof' in value
 }
 
-async function resolveRefreshElement(
-  refreshFlight: ActionFlightResponseShape['f'],
-): Promise<unknown> {
-  if (refreshFlight == null || refreshFlight === '')
-    return null
+function isFlightThenable(value: unknown): value is PromiseLike<unknown> {
+  return isRecord(value) && typeof value.then === 'function'
+}
 
-  const resolved = refreshFlight instanceof Promise ? await refreshFlight : refreshFlight
-  if (resolved == null || resolved === '')
-    return null
+function isActionRefreshRoot(value: unknown): boolean {
+  return isLikelyReactElement(value) || isFlightThenable(value)
+}
 
-  return resolved
+function resolveRefreshElement(refreshFlight: ActionFlightResponseShape['f']): unknown {
+  if (refreshFlight == null || refreshFlight === '') return null
+
+  if (refreshFlight instanceof Promise) {
+    return refreshFlight.then((resolved: unknown) => {
+      if (resolved == null || resolved === '') return null
+      return resolved
+    })
+  }
+
+  return refreshFlight
 }
 
 export function scheduleActionFlightRefresh(
@@ -53,37 +53,35 @@ export function scheduleActionFlightRefresh(
   flightResponse: ActionFlightResponseShape,
   actionResult: unknown,
 ): void {
-  if (typeof globalThis.dispatchEvent !== 'function')
-    return
+  if (typeof globalThis.dispatchEvent !== 'function') return
 
-  if (shouldSkipRefreshForActionResult(actionResult))
-    return
+  if (shouldSkipRefreshForActionResult(actionResult)) return
 
   void (async () => {
-    const refreshElement = await resolveRefreshElement(flightResponse.f)
-    if (refreshElement == null)
-      return
+    const pending = resolveRefreshElement(flightResponse.f)
+    const refreshElement: unknown = pending instanceof Promise ? await pending : pending
+    if (refreshElement == null) return
 
-    if (!isLikelyReactElement(refreshElement))
-      return
+    if (!isActionRefreshRoot(refreshElement)) return
 
     const revalidationKind = parseActionRevalidationKind(
       response.headers.get('x-action-revalidated'),
     )
 
-    if (revalidationKind === ActionDidNotRevalidate)
-      return
+    if (revalidationKind === ActionDidNotRevalidate) return
 
     const revalidatedPath = response.headers.get('x-action-revalidated-path') ?? undefined
 
     const applyRefresh = () => {
-      globalThis.dispatchEvent(new CustomEvent('rari:action-flight-refresh', {
-        detail: {
-          element: refreshElement,
-          revalidationKind,
-          revalidatedPath,
-        } satisfies ActionFlightRefreshDetail,
-      }))
+      globalThis.dispatchEvent(
+        new CustomEvent('rari:action-flight-refresh', {
+          detail: {
+            element: refreshElement,
+            revalidationKind,
+            revalidatedPath,
+          } satisfies ActionFlightRefreshDetail,
+        }),
+      )
     }
 
     if (typeof requestAnimationFrame === 'function') {
@@ -103,8 +101,7 @@ export function scheduleActionFlightRefresh(
 }
 
 export function refreshRouter(): void {
-  if (typeof globalThis.dispatchEvent !== 'function')
-    return
+  if (typeof globalThis.dispatchEvent !== 'function') return
 
   globalThis.dispatchEvent(new CustomEvent('rari:app-router-rerender'))
 }

@@ -8,8 +8,8 @@ import Copy from './icons/Copy'
 import Terminal2 from './icons/Terminal2'
 
 interface TerminalBlockProps {
-  command: string
-  showHeader?: boolean
+  readonly command: string
+  readonly showHeader?: boolean
 }
 
 export default function TerminalBlock({ command, showHeader = true }: TerminalBlockProps) {
@@ -29,18 +29,14 @@ export default function TerminalBlock({ command, showHeader = true }: TerminalBl
           bash
         </span>
         <button
-          onClick={() => copyToClipboard(command)}
+          onClick={() => {
+            void copyToClipboard(command)
+          }}
           className={`${code.copyButton} top-2`}
           type="button"
           aria-label="Copy code to clipboard"
         >
-          {copied
-            ? (
-                <Check className="w-4 h-4 text-green-600" />
-              )
-            : (
-                <Copy className="w-4 h-4" />
-              )}
+          {copied ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
         </button>
 
         <pre className="font-mono text-sm px-4 py-3 pr-12 m-0 overflow-x-auto max-w-full">

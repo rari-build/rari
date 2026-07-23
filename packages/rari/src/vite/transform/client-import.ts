@@ -1,5 +1,5 @@
-export const NAMESPACE_IMPORT_LINE_REGEX
-  = /^\s*import\s+\*\s+as\s+(\w+)\s+from\s+['"]([./@][^'"]+)['"].*$/
+export const NAMESPACE_IMPORT_LINE_REGEX =
+  /^\s*import\s+\*\s+as\s+(\w+)\s+from\s+['"]([./@][^'"]+)['"].*$/
 
 export function buildNamespaceClientReferenceReplacement(
   bindingName: string,

@@ -3,9 +3,7 @@
 import { useState } from 'react'
 
 export default function TodoList() {
-  const [todos, setTodos] = useState<
-    Array<{ id: number, text: string, done: boolean }>
-  >([
+  const [todos, setTodos] = useState<Array<{ id: number; text: string; done: boolean }>>([
     { id: 1, text: 'Test RSC Flight protocol', done: true },
     { id: 2, text: 'Add client components', done: true },
     { id: 3, text: 'Verify streaming works', done: false },
@@ -20,11 +18,7 @@ export default function TodoList() {
   }
 
   const toggleTodo = (id: number) => {
-    setTodos(
-      todos.map(todo =>
-        todo.id === id ? { ...todo, done: !todo.done } : todo,
-      ),
-    )
+    setTodos(todos.map(todo => (todo.id === id ? { ...todo, done: !todo.done } : todo)))
   }
 
   const deleteTodo = (id: number) => {
@@ -41,8 +35,14 @@ export default function TodoList() {
         <input
           type="text"
           value={newTodo}
-          onChange={e => setNewTodo(e.target.value)}
-          onKeyPress={e => e.key === 'Enter' && addTodo()}
+          onChange={e => {
+            setNewTodo(e.target.value)
+          }}
+          onKeyDown={e => {
+            if (e.key === 'Enter') {
+              addTodo()
+            }
+          }}
           placeholder="Add a new todo..."
           className="flex-1 px-3 py-3 text-base border-2 border-gray-200 rounded"
         />
@@ -56,14 +56,13 @@ export default function TodoList() {
 
       <ul className="list-none p-0">
         {todos.map(todo => (
-          <li
-            key={todo.id}
-            className="flex items-center gap-4 p-4 bg-gray-50 rounded mb-2"
-          >
+          <li key={todo.id} className="flex items-center gap-4 p-4 bg-gray-50 rounded mb-2">
             <input
               type="checkbox"
               checked={todo.done}
-              onChange={() => toggleTodo(todo.id)}
+              onChange={() => {
+                toggleTodo(todo.id)
+              }}
               className="w-5 h-5 cursor-pointer"
             />
             <span
@@ -72,7 +71,9 @@ export default function TodoList() {
               {todo.text}
             </span>
             <button
-              onClick={() => deleteTodo(todo.id)}
+              onClick={() => {
+                deleteTodo(todo.id)
+              }}
               className="px-4 py-2 bg-red-500 text-white border-none rounded cursor-pointer hover:bg-red-600 transition-colors"
             >
               Delete
@@ -82,12 +83,8 @@ export default function TodoList() {
       </ul>
 
       <p className="mt-4 text-gray-600 text-sm">
-        {todos.filter(t => !t.done).length}
-        {' '}
-        of
-        {todos.length}
-        {' '}
-        todos remaining
+        {todos.filter(t => !t.done).length} of
+        {todos.length} todos remaining
       </p>
     </div>
   )

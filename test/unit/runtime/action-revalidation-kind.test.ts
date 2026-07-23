@@ -12,12 +12,9 @@ describe('parseActionRevalidationKind', () => {
     expect(parseActionRevalidationKind('1')).toBe(ActionDidRevalidateStaticAndDynamic)
   })
 
-  it('treats legacy pathname headers as dynamic-only refresh', () => {
-    expect(parseActionRevalidationKind('/actions')).toBe(ActionDidRevalidateDynamicOnly)
-  })
-
   it('returns not-revalidated for missing or unknown values', () => {
     expect(parseActionRevalidationKind(null)).toBe(ActionDidNotRevalidate)
     expect(parseActionRevalidationKind('unknown')).toBe(ActionDidNotRevalidate)
+    expect(parseActionRevalidationKind('/actions')).toBe(ActionDidNotRevalidate)
   })
 })

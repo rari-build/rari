@@ -1,3 +1,4 @@
+/* oxlint-disable typescript/prefer-readonly-parameter-types -- CacheNode is a mutable tree mutated in place by the cache implementation */
 import type { ReactNode } from 'react'
 import type { SegmentPath } from './router-state'
 import {
@@ -26,13 +27,11 @@ function createCacheNode(rsc: ReactNode = null): CacheNode {
 }
 
 function ensureChildSlot(parent: CacheNode, slotName: string): CacheNode {
-  if (!parent.slots)
-    parent.slots = {}
+  parent.slots ??= {}
 
-  if (!parent.slots[slotName])
-    parent.slots[slotName] = createCacheNode()
+  parent.slots[slotName] ??= createCacheNode()
 
-  return parent.slots[slotName]!
+  return parent.slots[slotName]
 }
 
 function getNodeAtSegmentPath(root: CacheNode, segmentPath: SegmentPath): CacheNode {
@@ -54,22 +53,19 @@ function invalidateFromSegmentPath(root: CacheNode, segmentPath: SegmentPath): v
 
   let current = root
   for (let index = 0; index < segmentPath.length - 1; index += 1) {
-    const segment = segmentPath[index]!
-    if (!current.slots?.[segment])
-      return
+    const segment = segmentPath[index]
+    if (!current.slots?.[segment]) return
     current = current.slots[segment]!
   }
 
-  const leafSegment = segmentPath[segmentPath.length - 1]!
-  if (!current.slots?.[leafSegment])
-    return
+  const leafSegment = segmentPath[segmentPath.length - 1]
+  if (!current.slots?.[leafSegment]) return
 
-  const leaf = current.slots[leafSegment]!
+  const leaf = current.slots[leafSegment]
   leaf.rsc = null
   leaf.slots = null
   delete current.slots[leafSegment]
-  if (Object.keys(current.slots).length === 0)
-    current.slots = null
+  if (Object.keys(current.slots).length === 0) current.slots = null
 }
 
 export class FlightRouteCache {
@@ -79,8 +75,7 @@ export class FlightRouteCache {
   get(pathname: string, search: string): FlightRouteCacheEntry | undefined {
     const segmentPath = segmentPathFromPathname(pathname)
     const node = getNodeAtSegmentPath(this.root, segmentPath)
-    if (node.rsc == null)
-      return undefined
+    if (node.rsc == null) return undefined
 
     return {
       pathname,
@@ -126,9 +121,8 @@ export class FlightRouteCache {
 
 export const flightRouteCache = new FlightRouteCache()
 
-export function currentRouteLocation(): { pathname: string, search: string } {
-  if (typeof window === 'undefined')
-    return { pathname: '/', search: '' }
+export function currentRouteLocation(): { pathname: string; search: string } {
+  if (typeof window === 'undefined') return { pathname: '/', search: '' }
 
   return {
     pathname: window.location.pathname,

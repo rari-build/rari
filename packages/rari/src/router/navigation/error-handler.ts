@@ -1,31 +1,31 @@
 import { throwIfNotOk } from '@/shared/utils/http'
 
-export type NavigationErrorType
-  = | 'fetch-error'
-    | 'timeout'
-    | 'abort'
-    | 'parse-error'
-    | 'network-error'
-    | 'not-found'
-    | 'server-error'
+export type NavigationErrorType =
+  | 'fetch-error'
+  | 'timeout'
+  | 'abort'
+  | 'parse-error'
+  | 'network-error'
+  | 'not-found'
+  | 'server-error'
 
 export interface NavigationError {
-  type: NavigationErrorType
-  message: string
-  originalError?: Error
-  statusCode?: number
-  url?: string
-  timestamp: number
-  retryable: boolean
+  readonly type: NavigationErrorType
+  readonly message: string
+  readonly originalError?: Error
+  readonly statusCode?: number
+  readonly url?: string
+  readonly timestamp: number
+  readonly retryable: boolean
 }
 
 const NETWORK_ERROR_REGEX = /fetch|networkerror|load failed/i
 
 export interface NavigationErrorHandlerOptions {
-  timeout?: number
-  maxRetries?: number
-  onError?: (error: NavigationError) => void
-  onRetry?: (attempt: number, error: NavigationError) => void
+  readonly timeout?: number
+  readonly maxRetries?: number
+  readonly onError?: (error: Readonly<NavigationError>) => void
+  readonly onRetry?: (attempt: number, error: Readonly<NavigationError>) => void
 }
 
 const DEFAULT_TIMEOUT = 10000
@@ -125,28 +125,23 @@ function handleUnknownError(error: unknown, url?: string): NavigationError {
   }
 }
 
-export function createNavigationError(
-  error: unknown,
-  url?: string,
-): NavigationError {
-  if (error instanceof Error && error.name === 'AbortError')
-    return handleAbortError(error, url)
+export function createNavigationError(error: unknown, url?: string): NavigationError {
+  if (error instanceof Error && error.name === 'AbortError') return handleAbortError(error, url)
 
-  if (error instanceof Error && (error.name === 'TimeoutError' || error.message.includes('timeout')))
+  if (
+    error instanceof Error &&
+    (error.name === 'TimeoutError' || error.message.includes('timeout'))
+  )
     return handleTimeoutError(error, url)
 
   if (error instanceof Error && 'status' in error) {
-    const status = (error as any).status
-    if (typeof status !== 'number')
-      return handleUnknownError(error, url)
+    const status = (error as Error & { status?: unknown }).status
+    if (typeof status !== 'number') return handleUnknownError(error, url)
 
     return handleHttpError(error, status, url)
   }
 
-  if (
-    error instanceof TypeError
-    && NETWORK_ERROR_REGEX.test(error.message)
-  ) {
+  if (error instanceof TypeError && NETWORK_ERROR_REGEX.test(error.message)) {
     return handleNetworkError(error, url)
   }
 
@@ -164,9 +159,7 @@ export async function fetchWithTimeout(
   const timeout = options.timeout ?? DEFAULT_TIMEOUT
   const { timeout: _timeout, signal: userSignal, ...fetchOptions } = options
   const timeoutSignal = AbortSignal.timeout(timeout)
-  const signal = userSignal
-    ? AbortSignal.any([userSignal, timeoutSignal])
-    : timeoutSignal
+  const signal = userSignal ? AbortSignal.any([userSignal, timeoutSignal]) : timeoutSignal
 
   try {
     const response = await fetch(url, {
@@ -176,8 +169,7 @@ export async function fetchWithTimeout(
 
     await throwIfNotOk(response)
     return response
-  }
-  catch (error) {
+  } catch (error) {
     if (error instanceof DOMException && error.name === 'TimeoutError') {
       const timeoutError = new Error(`Request timeout after ${timeout}ms`)
       timeoutError.name = 'TimeoutError'
@@ -190,8 +182,8 @@ export async function fetchWithTimeout(
 /* v8 ignore stop */
 
 export class NavigationErrorHandler {
-  private options: Required<NavigationErrorHandlerOptions>
-  private retryCount: Map<string, number>
+  private readonly options: Required<NavigationErrorHandlerOptions>
+  private readonly retryCount: Map<string, number>
 
   constructor(options: NavigationErrorHandlerOptions = {}) {
     this.options = {
@@ -219,8 +211,7 @@ export class NavigationErrorHandler {
   }
 
   canRetry(error: NavigationError, url: string): boolean {
-    if (!error.retryable)
-      return false
+    if (!error.retryable) return false
 
     const currentRetries = this.retryCount.get(url) ?? 0
     return currentRetries < this.options.maxRetries

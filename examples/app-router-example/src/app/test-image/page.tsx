@@ -6,15 +6,13 @@ export default function TestImagePage() {
     <div className="space-y-8">
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 md:p-12">
         <div className="flex items-center gap-3 mb-4">
-          <h1 className="text-4xl md:text-5xl font-bold text-gray-900">
-            Image Optimization
-          </h1>
+          <h1 className="text-4xl md:text-5xl font-bold text-gray-900">Image Optimization</h1>
           <span className="text-3xl">🖼️</span>
         </div>
 
         <p className="text-lg text-gray-600 mb-6 max-w-3xl leading-relaxed">
-          High-performance image optimization powered by Rust. Automatic format
-          conversion, responsive sizing, and lazy loading out of the box.
+          High-performance image optimization powered by Rust. Automatic format conversion,
+          responsive sizing, and lazy loading out of the box.
         </p>
 
         <div className="flex flex-wrap gap-3">
@@ -182,7 +180,9 @@ export default function TestImagePage() {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-gray-700">Low Quality</span>
-              <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-1 rounded">25%</span>
+              <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                25%
+              </span>
             </div>
             <div className="rounded-lg overflow-hidden border border-gray-200">
               <Image
@@ -199,7 +199,9 @@ export default function TestImagePage() {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-gray-700">Standard Quality</span>
-              <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2 py-1 rounded">75%</span>
+              <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2 py-1 rounded">
+                75%
+              </span>
             </div>
             <div className="rounded-lg overflow-hidden border-2 border-indigo-200">
               <Image
@@ -216,7 +218,9 @@ export default function TestImagePage() {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-gray-700">High Quality</span>
-              <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-1 rounded">100%</span>
+              <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                100%
+              </span>
             </div>
             <div className="rounded-lg overflow-hidden border border-gray-200">
               <Image

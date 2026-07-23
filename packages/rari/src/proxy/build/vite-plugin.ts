@@ -6,11 +6,11 @@ import process from 'node:process'
 import { toRariPlugin } from '@/vite/plugin/types'
 
 export interface ProxyPluginOptions {
-  root?: string
-  srcDir?: string
-  proxyFileName?: string
-  extensions?: string[]
-  verbose?: boolean
+  readonly root?: string
+  readonly srcDir?: string
+  readonly proxyFileName?: string
+  readonly extensions?: readonly string[]
+  readonly verbose?: boolean
 }
 
 interface ProxyFileInfo {
@@ -31,8 +31,7 @@ export function rariProxy(options: ProxyPluginOptions = {}): RariPlugin {
   let proxyFile: ProxyFileInfo | null = null
 
   const log = (message: string) => {
-    if (verbose)
-      console.warn(`[rari] Proxy: ${message}`)
+    if (verbose) console.warn(`[rari] Proxy: ${message}`)
   }
 
   async function findProxyFile(): Promise<ProxyFileInfo | null> {
@@ -48,8 +47,7 @@ export function rariProxy(options: ProxyPluginOptions = {}): RariPlugin {
           exists: true,
           relativePath: fileName,
         }
-      }
-      catch {}
+      } catch {}
     }
 
     const srcPath = path.join(root, srcDir)
@@ -68,11 +66,9 @@ export function rariProxy(options: ProxyPluginOptions = {}): RariPlugin {
             exists: true,
             relativePath: path.join(srcDir, fileName),
           }
-        }
-        catch {}
+        } catch {}
       }
-    }
-    catch {}
+    } catch {}
 
     return null
   }
@@ -83,19 +79,16 @@ export function rariProxy(options: ProxyPluginOptions = {}): RariPlugin {
     async buildStart() {
       proxyFile = await findProxyFile()
 
-      if (proxyFile)
-        log(`Proxy enabled: ${proxyFile.relativePath}`)
-      else
-        log('No proxy file found')
+      if (proxyFile) log(`Proxy enabled: ${proxyFile.relativePath}`)
+      else log('No proxy file found')
     },
 
     configureServer(server) {
-      if (!proxyFile)
-        return
+      if (!proxyFile) return
 
       server.watcher.add(proxyFile.filePath)
 
-      server.watcher.on('change', (file) => {
+      server.watcher.on('change', file => {
         if (file === proxyFile?.filePath) {
           log('Proxy file changed, reloading...')
           server.ws.send({
@@ -106,8 +99,8 @@ export function rariProxy(options: ProxyPluginOptions = {}): RariPlugin {
       })
     },
 
-    async handleHotUpdate({ file, server }) {
-      if (proxyFile && file === proxyFile.filePath) {
+    handleHotUpdate({ file, server }) {
+      if (file === proxyFile?.filePath) {
         log('Hot reloading proxy...')
 
         server.ws.send({
@@ -120,6 +113,8 @@ export function rariProxy(options: ProxyPluginOptions = {}): RariPlugin {
 
         return []
       }
+
+      return undefined
     },
   } satisfies Plugin
 
@@ -138,8 +133,7 @@ export async function hasProxyFile(
     try {
       await fs.access(filePath)
       return true
-    }
-    catch {}
+    } catch {}
   }
 
   for (const ext of extensions) {
@@ -147,8 +141,7 @@ export async function hasProxyFile(
     try {
       await fs.access(filePath)
       return true
-    }
-    catch {}
+    } catch {}
   }
 
   return false

@@ -2,16 +2,16 @@
 
 import { core, internals, primordials } from 'ext:core/mod.js'
 import { op_set_format_exception_callback } from 'ext:core/ops'
-
-import { ensureEventTargetReady, lazyConsole, lazyDomException, lazyEvent } from './shared_loaders.ts'
+import {
+  ensureEventTargetReady,
+  lazyConsole,
+  lazyDomException,
+  lazyEvent,
+} from './shared_loaders.ts'
 
 const { BadResource, Interrupted, NotCapable } = core
 
-const {
-  Error,
-  ErrorPrototype,
-  ObjectPrototypeIsPrototypeOf,
-} = primordials
+const { Error, ErrorPrototype, ObjectPrototypeIsPrototypeOf } = primordials
 
 class NotFound extends Error {
   declare name: string
@@ -217,11 +217,15 @@ function domException(name: string, msg?: string): DOMException {
 }
 
 core.registerErrorBuilder('DOMExceptionOperationError', msg => domException('OperationError', msg))
-core.registerErrorBuilder('DOMExceptionQuotaExceededError', msg => domException('QuotaExceededError', msg))
+core.registerErrorBuilder('DOMExceptionQuotaExceededError', msg =>
+  domException('QuotaExceededError', msg),
+)
 core.registerErrorBuilder('DOMExceptionNotSupportedError', msg => domException('NotSupported', msg))
 core.registerErrorBuilder('DOMExceptionNetworkError', msg => domException('NetworkError', msg))
 core.registerErrorBuilder('DOMExceptionAbortError', msg => domException('AbortError', msg))
-core.registerErrorBuilder('DOMExceptionInvalidCharacterError', msg => domException('InvalidCharacterError', msg))
+core.registerErrorBuilder('DOMExceptionInvalidCharacterError', msg =>
+  domException('InvalidCharacterError', msg),
+)
 core.registerErrorBuilder('DOMExceptionDataError', msg => domException('DataError', msg))
 
 // Notification that the core received an unhandled promise rejection that is about to
@@ -230,10 +234,11 @@ core.setUnhandledPromiseRejectionHandler(processUnhandledPromiseRejection)
 function processUnhandledPromiseRejection(promise: Promise<unknown>, reason: unknown): boolean {
   ensureEventTargetReady()
   const event = lazyEvent()
-  const rejectionEvent = new event.PromiseRejectionEvent(
-    'unhandledrejection',
-    { cancelable: true, promise, reason },
-  )
+  const rejectionEvent = new event.PromiseRejectionEvent('unhandledrejection', {
+    cancelable: true,
+    promise,
+    reason,
+  })
 
   // Note that the handler may throw, causing a recursive "error" event
   globalThis.dispatchEvent(rejectionEvent)
@@ -241,8 +246,8 @@ function processUnhandledPromiseRejection(promise: Promise<unknown>, reason: unk
   // If event was not yet prevented, try handing it off to Node compat layer
   // (if it was initialized)
   if (
-    !rejectionEvent.defaultPrevented
-    && typeof internals.nodeProcessUnhandledRejectionCallback !== 'undefined'
+    !rejectionEvent.defaultPrevented &&
+    typeof internals.nodeProcessUnhandledRejectionCallback !== 'undefined'
   ) {
     internals.nodeProcessUnhandledRejectionCallback(rejectionEvent)
   }
@@ -256,10 +261,10 @@ core.setHandledPromiseRejectionHandler(processRejectionHandled)
 function processRejectionHandled(promise: Promise<unknown>, reason: unknown): void {
   ensureEventTargetReady()
   const event = lazyEvent()
-  const rejectionHandledEvent = new event.PromiseRejectionEvent(
-    'rejectionhandled',
-    { promise, reason },
-  )
+  const rejectionHandledEvent = new event.PromiseRejectionEvent('rejectionhandled', {
+    promise,
+    reason,
+  })
 
   // Note that the handler may throw, causing a recursive "error" event
   globalThis.dispatchEvent(rejectionHandledEvent)
@@ -268,39 +273,49 @@ function processRejectionHandled(promise: Promise<unknown>, reason: unknown): vo
     internals.nodeProcessRejectionHandledCallback(rejectionHandledEvent)
 }
 
-core.setReportExceptionCallback((error) => {
+core.setReportExceptionCallback(error => {
   ensureEventTargetReady()
   lazyEvent().reportException(error)
 })
 op_set_format_exception_callback(formatException)
 function formatException(errorParam: unknown): string | null {
-  const {
-    getDefaultInspectOptions,
-    getStderrNoColor,
-    inspectArgs,
-    quoteString,
-  } = lazyConsole()
+  const { getDefaultInspectOptions, getStderrNoColor, inspectArgs, quoteString } = lazyConsole()
 
   if (core.isNativeError(errorParam) || ObjectPrototypeIsPrototypeOf(ErrorPrototype, errorParam)) {
     return null
-  }
-  else if (typeof errorParam == 'string') {
-    const e = inspectArgs([quoteString(errorParam, getDefaultInspectOptions())], { colors: !getStderrNoColor() })
+  } else if (typeof errorParam == 'string') {
+    const e = inspectArgs([quoteString(errorParam, getDefaultInspectOptions())], {
+      colors: !getStderrNoColor(),
+    })
     return `Uncaught ${e}`
-  }
-  else if (typeof errorParam === 'object' && errorParam !== null && ObjectPrototypeIsPrototypeOf(ErrorEvent.prototype, errorParam)) {
+  } else if (
+    typeof errorParam === 'object' &&
+    errorParam !== null &&
+    ObjectPrototypeIsPrototypeOf(ErrorEvent.prototype, errorParam)
+  ) {
     /*
     Need to process ErrorEvent here into an exception string
     */
-    const errorEvent = errorParam as ErrorEvent
-    const filename = errorEvent.filename.length ? errorEvent.filename : undefined
-    const lineno = errorEvent.filename.length ? errorEvent.lineno : undefined
-    const errorObj = new Error(errorEvent.message, filename, lineno)
+    const filenameValue: unknown = Reflect.get(errorParam, 'filename')
+    const messageValue: unknown = Reflect.get(errorParam, 'message')
+    const linenoValue: unknown = Reflect.get(errorParam, 'lineno')
+    const filename =
+      typeof filenameValue === 'string' && filenameValue.length > 0 ? filenameValue : undefined
+    const lineno =
+      typeof filenameValue === 'string' &&
+      filenameValue.length > 0 &&
+      typeof linenoValue === 'number'
+        ? linenoValue
+        : undefined
+    const errorObj = new Error(
+      typeof messageValue === 'string' ? messageValue : String(messageValue),
+      filename,
+      lineno,
+    )
 
     // This is a bit of a hack, but we need to set the stack to the error event's error
     throw errorObj
-  }
-  else {
+  } else {
     return `Uncaught ${inspectArgs([errorParam], { colors: !getStderrNoColor() })}`
   }
 }

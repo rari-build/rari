@@ -12,12 +12,8 @@
       "default": "./index.js"
     }
   },
-  "os": [
-    "{OS}"
-  ],
-  "cpu": [
-    "{CPU}"
-  ],
+  "os": ["{OS}"],
+  "cpu": ["{CPU}"],
   "homepage": "https://github.com/rari-build/rari#readme",
   "repository": {
     "directory": "packages/use-cache-{PLATFORM}",
@@ -27,20 +23,8 @@
   "bugs": {
     "url": "https://github.com/rari-build/rari/issues"
   },
-  "keywords": [
-    "rari",
-    "use-cache",
-    "napi",
-    "rust",
-    "react",
-    "server-components"
-  ],
-  "files": [
-    "LICENSE",
-    "README.md",
-    "index.js",
-    "rari_use_cache.node"
-  ],
+  "keywords": ["rari", "use-cache", "napi", "rust", "react", "server-components"],
+  "files": ["LICENSE", "README.md", "index.js", "rari_use_cache.node"],
   "engines": {
     "node": ">=22.18.0"
   }

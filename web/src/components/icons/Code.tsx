@@ -1,15 +1,16 @@
 import type { SVGProps } from 'react'
 
 interface CodeProps extends SVGProps<SVGSVGElement> {
-  gradientColors?: {
-    start: string
-    middle?: string
-    end: string
+  readonly gradientColors?: {
+    readonly start: string
+    readonly middle?: string
+    readonly end: string
   }
 }
 
+// oxlint-disable-next-line typescript/prefer-readonly-parameter-types -- extends SVGProps; local fields are readonly
 export default function Code({ gradientColors, ...props }: CodeProps) {
-  const colors = gradientColors || {
+  const colors = gradientColors ?? {
     start: '#fd7e14',
     middle: '#fd7e14',
     end: '#e8590c',
@@ -21,11 +22,20 @@ export default function Code({ gradientColors, ...props }: CodeProps) {
       <defs>
         <linearGradient id="code-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stopColor={colors.start} stopOpacity="1" />
-          {colors.middle && <stop offset="50%" stopColor={colors.middle} stopOpacity="1" />}
+          {colors.middle != null && colors.middle !== '' && (
+            <stop offset="50%" stopColor={colors.middle} stopOpacity="1" />
+          )}
           <stop offset="100%" stopColor={colors.end} stopOpacity="1" />
         </linearGradient>
       </defs>
-      <path fill="none" stroke="url(#code-gradient)" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m7 8l-4 4l4 4m10-8l4 4l-4 4M14 4l-4 16" />
+      <path
+        fill="none"
+        stroke="url(#code-gradient)"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+        d="m7 8l-4 4l4 4m10-8l4 4l-4 4M14 4l-4 16"
+      />
     </svg>
   )
 }

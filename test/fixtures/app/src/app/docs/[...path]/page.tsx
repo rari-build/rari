@@ -1,21 +1,25 @@
 import type { Metadata, PageProps } from 'rari'
 
-export default async function DocsPage({ params }: PageProps) {
-  const { path } = params
-  const pathArray = Array.isArray(path) ? path : [path]
+function normalizePathSegments(path: string | readonly string[] | undefined): string[] {
+  if (path == null) return []
+  if (typeof path === 'string') return [path]
+
+  return [...path]
+}
+
+export default function DocsPage({ params }: PageProps) {
+  const pathArray = normalizePathSegments(params.path)
   const pathString = pathArray.join('/')
 
   return (
     <div>
-      <h1>
-        Docs:
-        {' '}
-        {pathString}
-      </h1>
+      <h1>Docs: {pathString}</h1>
       <p>This is a catch-all route.</p>
       <div data-testid="path-segments" data-segments={JSON.stringify(pathArray)}>
         {pathArray.map((segment, i) => (
-          <span key={segment} data-testid={`segment-${i}`}>{segment}</span>
+          <span key={segment} data-testid={`segment-${i}`}>
+            {segment}
+          </span>
         ))}
       </div>
       <div data-testid="path-length">{String(pathArray.length)}</div>
@@ -23,9 +27,8 @@ export default async function DocsPage({ params }: PageProps) {
   )
 }
 
-export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const { path } = params
-  const pathArray = Array.isArray(path) ? path : [path]
+export function generateMetadata({ params }: PageProps): Metadata {
+  const pathArray = normalizePathSegments(params.path)
   const pathString = pathArray.join('/')
 
   return {

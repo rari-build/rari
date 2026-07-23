@@ -80,8 +80,7 @@ describe('generateRobotsTxt', () => {
       const result = generateRobotsTxt(robots)
 
       expect(result).toBe(
-        'User-Agent: Googlebot\nDisallow: /admin\n\n'
-        + 'User-Agent: Bingbot\nDisallow: /admin\n',
+        'User-Agent: Googlebot\nDisallow: /admin\n\n' + 'User-Agent: Bingbot\nDisallow: /admin\n',
       )
     })
   })
@@ -97,10 +96,7 @@ describe('generateRobotsTxt', () => {
       const result = generateRobotsTxt(robots)
 
       expect(result).toBe(
-        'User-Agent: *\n'
-        + 'Allow: /public\n'
-        + 'Allow: /assets\n'
-        + 'Allow: /images\n',
+        'User-Agent: *\n' + 'Allow: /public\n' + 'Allow: /assets\n' + 'Allow: /images\n',
       )
     })
 
@@ -114,10 +110,7 @@ describe('generateRobotsTxt', () => {
       const result = generateRobotsTxt(robots)
 
       expect(result).toBe(
-        'User-Agent: *\n'
-        + 'Disallow: /admin\n'
-        + 'Disallow: /private\n'
-        + 'Disallow: /secret\n',
+        'User-Agent: *\n' + 'Disallow: /admin\n' + 'Disallow: /private\n' + 'Disallow: /secret\n',
       )
     })
 
@@ -132,11 +125,11 @@ describe('generateRobotsTxt', () => {
       const result = generateRobotsTxt(robots)
 
       expect(result).toBe(
-        'User-Agent: *\n'
-        + 'Allow: /public\n'
-        + 'Allow: /assets\n'
-        + 'Disallow: /admin\n'
-        + 'Disallow: /private\n',
+        'User-Agent: *\n' +
+          'Allow: /public\n' +
+          'Allow: /assets\n' +
+          'Disallow: /admin\n' +
+          'Disallow: /private\n',
       )
     })
   })
@@ -159,8 +152,7 @@ describe('generateRobotsTxt', () => {
       const result = generateRobotsTxt(robots)
 
       expect(result).toBe(
-        'User-Agent: Googlebot\nAllow: /\n\n'
-        + 'User-Agent: Bingbot\nDisallow: /admin\n',
+        'User-Agent: Googlebot\nAllow: /\n\n' + 'User-Agent: Bingbot\nDisallow: /admin\n',
       )
     })
 
@@ -182,12 +174,12 @@ describe('generateRobotsTxt', () => {
       const result = generateRobotsTxt(robots)
 
       expect(result).toBe(
-        'User-Agent: *\n'
-        + 'Disallow: /admin\n'
-        + 'Disallow: /private\n\n'
-        + 'User-Agent: Googlebot\n'
-        + 'Allow: /\n'
-        + 'Crawl-delay: 5\n',
+        'User-Agent: *\n' +
+          'Disallow: /admin\n' +
+          'Disallow: /private\n\n' +
+          'User-Agent: Googlebot\n' +
+          'Allow: /\n' +
+          'Crawl-delay: 5\n',
       )
     })
   })
@@ -204,8 +196,7 @@ describe('generateRobotsTxt', () => {
       const result = generateRobotsTxt(robots)
 
       expect(result).toBe(
-        'User-Agent: *\nDisallow: /admin\n\n'
-        + 'Sitemap: https://example.com/sitemap.xml',
+        'User-Agent: *\nDisallow: /admin\n\n' + 'Sitemap: https://example.com/sitemap.xml',
       )
     })
 
@@ -214,18 +205,15 @@ describe('generateRobotsTxt', () => {
         rules: {
           disallow: '/admin',
         },
-        sitemap: [
-          'https://example.com/sitemap.xml',
-          'https://example.com/sitemap-2.xml',
-        ],
+        sitemap: ['https://example.com/sitemap.xml', 'https://example.com/sitemap-2.xml'],
       }
 
       const result = generateRobotsTxt(robots)
 
       expect(result).toBe(
-        'User-Agent: *\nDisallow: /admin\n\n'
-        + 'Sitemap: https://example.com/sitemap.xml\n'
-        + 'Sitemap: https://example.com/sitemap-2.xml',
+        'User-Agent: *\nDisallow: /admin\n\n' +
+          'Sitemap: https://example.com/sitemap.xml\n' +
+          'Sitemap: https://example.com/sitemap-2.xml',
       )
     })
   })
@@ -241,10 +229,7 @@ describe('generateRobotsTxt', () => {
 
       const result = generateRobotsTxt(robots)
 
-      expect(result).toBe(
-        'User-Agent: *\nDisallow: /admin\n\n'
-        + 'Host: https://example.com\n',
-      )
+      expect(result).toBe('User-Agent: *\nDisallow: /admin\n\n' + 'Host: https://example.com\n')
     })
 
     it('should generate robots.txt with host and sitemap', () => {
@@ -259,9 +244,9 @@ describe('generateRobotsTxt', () => {
       const result = generateRobotsTxt(robots)
 
       expect(result).toBe(
-        'User-Agent: *\nDisallow: /admin\n\n'
-        + 'Host: https://example.com\n\n'
-        + 'Sitemap: https://example.com/sitemap.xml',
+        'User-Agent: *\nDisallow: /admin\n\n' +
+          'Host: https://example.com\n\n' +
+          'Sitemap: https://example.com/sitemap.xml',
       )
     })
   })
@@ -282,28 +267,25 @@ describe('generateRobotsTxt', () => {
           },
         ],
         host: 'https://example.com',
-        sitemap: [
-          'https://example.com/sitemap.xml',
-          'https://example.com/sitemap-images.xml',
-        ],
+        sitemap: ['https://example.com/sitemap.xml', 'https://example.com/sitemap-images.xml'],
       }
 
       const result = generateRobotsTxt(robots)
 
       expect(result).toBe(
-        'User-Agent: *\n'
-        + 'Allow: /public\n'
-        + 'Disallow: /admin\n'
-        + 'Disallow: /private\n\n'
-        + 'User-Agent: Googlebot\n'
-        + 'Allow: /\n'
-        + 'Crawl-delay: 10\n\n'
-        + 'User-Agent: Bingbot\n'
-        + 'Allow: /\n'
-        + 'Crawl-delay: 10\n\n'
-        + 'Host: https://example.com\n\n'
-        + 'Sitemap: https://example.com/sitemap.xml\n'
-        + 'Sitemap: https://example.com/sitemap-images.xml',
+        'User-Agent: *\n' +
+          'Allow: /public\n' +
+          'Disallow: /admin\n' +
+          'Disallow: /private\n\n' +
+          'User-Agent: Googlebot\n' +
+          'Allow: /\n' +
+          'Crawl-delay: 10\n\n' +
+          'User-Agent: Bingbot\n' +
+          'Allow: /\n' +
+          'Crawl-delay: 10\n\n' +
+          'Host: https://example.com\n\n' +
+          'Sitemap: https://example.com/sitemap.xml\n' +
+          'Sitemap: https://example.com/sitemap-images.xml',
       )
     })
 

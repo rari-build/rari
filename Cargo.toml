@@ -1,36 +1,24 @@
 [workspace]
-members = [
-  "crates/*",
-  "tools/*",
-]
-exclude = [ "tools/bundle-react-esm" ]
+members = ["crates/*", "tools/*"]
+exclude = ["tools/bundle-react-esm"]
 resolver = "2"
 
 [workspace.package]
 edition = "2024"
-authors = [ "Ryan Skinner" ]
+authors = ["Ryan Skinner"]
 license = "MIT"
 description = "rari: Runtime Accelerated Rendering Infrastructure - A high-performance React Server Components framework powered by Rust"
 homepage = "https://github.com/rari-build/rari"
 repository = "https://github.com/rari-build/rari"
 documentation = "https://github.com/rari-build/rari/tree/main/web"
 readme = "README.md"
-keywords = [
-  "react",
-  "server-components",
-  "rsc",
-  "ssr",
-  "framework"
-]
-categories = [
-  "web-programming",
-  "web-programming::http-server"
-]
+keywords = ["react", "server-components", "rsc", "ssr", "framework"]
+categories = ["web-programming", "web-programming::http-server"]
 
 [workspace.dependencies]
 anyhow = "1.0.104"
 base64 = "0.22.1"
-clap = { version = "4.6.4", features = [ "derive" ] }
+clap = { version = "4.6.4", features = ["derive"] }
 colored = "3.1.1"
 cow-utils = "0.1.3"
 hex = "0.4.3"
@@ -39,7 +27,7 @@ rari = { path = "crates/rari" }
 rari_error = { path = "crates/rari_error" }
 regex = "1.13.1"
 rustc-hash = "2.1.3"
-serde = { version = "1.0.229", features = [ "derive" ] }
+serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 sha2 = "0.11.0"
 smallvec = "1.15.2"
@@ -47,7 +35,7 @@ thiserror = "2.0.19"
 tokio = "1.53.1"
 tracing = "0.1.44"
 url = "2.5.8"
-uuid = { version = "1.24.0", features = [ "v4" ] }
+uuid = { version = "1.24.0", features = ["v4"] }
 
 # Deno ecosystem — exact pins; bump as a coordinated set with Deno releases
 deno_ast = "=0.53.3"

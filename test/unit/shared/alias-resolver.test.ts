@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { resolveAlias } from '@rari/shared/utils/alias-resolver'
 import { describe, expect, it } from 'vite-plus/test'
+import { castMock } from '../../helpers/mock-cast'
 
 describe('alias-resolver', () => {
   describe('resolveAlias', () => {
@@ -172,9 +173,15 @@ describe('alias-resolver', () => {
       }
       const projectRoot = '/project'
 
-      expect(path.normalize(resolveAlias('@components/Button', aliases, projectRoot)!)).toBe(path.normalize('/src/components/Button'))
-      expect(path.normalize(resolveAlias('@utils/helper', aliases, projectRoot)!)).toBe(path.normalize('/src/utils/helper'))
-      expect(path.normalize(resolveAlias('@lib/api', aliases, projectRoot)!)).toBe(path.normalize('/src/lib/api'))
+      expect(path.normalize(resolveAlias('@components/Button', aliases, projectRoot)!)).toBe(
+        path.normalize('/src/components/Button'),
+      )
+      expect(path.normalize(resolveAlias('@utils/helper', aliases, projectRoot)!)).toBe(
+        path.normalize('/src/utils/helper'),
+      )
+      expect(path.normalize(resolveAlias('@lib/api', aliases, projectRoot)!)).toBe(
+        path.normalize('/src/lib/api'),
+      )
     })
 
     it('should handle alias with special characters', () => {
@@ -279,76 +286,80 @@ describe('alias-resolver', () => {
     })
 
     it('should handle null source gracefully', () => {
-      const source = null as any
       const aliases = {
         '@components': '/src/components',
       }
       const projectRoot = '/project'
 
-      expect(() => resolveAlias(source, aliases, projectRoot)).toThrow(TypeError)
+      // @ts-expect-error testing invalid source
+      expect(() => resolveAlias(null, aliases, projectRoot)).toThrow(TypeError)
     })
 
     it('should handle undefined source gracefully', () => {
-      const source = undefined as any
       const aliases = {
         '@components': '/src/components',
       }
       const projectRoot = '/project'
 
-      expect(() => resolveAlias(source, aliases, projectRoot)).toThrow(TypeError)
+      // @ts-expect-error testing invalid source
+      expect(() => resolveAlias(undefined, aliases, projectRoot)).toThrow(TypeError)
     })
 
     it('should handle number as source', () => {
-      const source = 123 as any
       const aliases = {
         '@components': '/src/components',
       }
       const projectRoot = '/project'
 
-      expect(() => resolveAlias(source, aliases, projectRoot)).toThrow(TypeError)
+      // @ts-expect-error testing invalid source
+      expect(() => resolveAlias(123, aliases, projectRoot)).toThrow(TypeError)
     })
 
     it('should handle object as source', () => {
-      const source = { path: '@components' } as any
       const aliases = {
         '@components': '/src/components',
       }
       const projectRoot = '/project'
 
-      expect(() => resolveAlias(source, aliases, projectRoot)).toThrow(TypeError)
+      // @ts-expect-error testing invalid source
+      expect(() => resolveAlias({ path: '@components' }, aliases, projectRoot)).toThrow(TypeError)
     })
 
     it('should handle null aliases gracefully', () => {
       const source = '@components/Button'
-      const aliases = null as any
       const projectRoot = '/project'
 
-      expect(() => resolveAlias(source, aliases, projectRoot)).toThrow(TypeError)
+      // @ts-expect-error testing invalid aliases
+      expect(() => resolveAlias(source, null, projectRoot)).toThrow(TypeError)
     })
 
     it('should handle undefined aliases gracefully', () => {
       const source = '@components/Button'
-      const aliases = undefined as any
       const projectRoot = '/project'
 
-      expect(() => resolveAlias(source, aliases, projectRoot)).toThrow(TypeError)
+      // @ts-expect-error testing invalid aliases
+      expect(() => resolveAlias(source, undefined, projectRoot)).toThrow(TypeError)
     })
 
     it('should handle array as aliases', () => {
       const source = '@components/Button'
-      const aliases = ['@components', '/src/components'] as any
       const projectRoot = '/project'
 
-      expect(() => resolveAlias(source, aliases, projectRoot)).toThrow(TypeError)
+      expect(() =>
+        resolveAlias(source, castMock(['@components', '/src/components']), projectRoot),
+      ).toThrow(TypeError)
     })
 
     it('should handle non-plain object with custom prototype as aliases', () => {
       const source = '@components/Button'
-      const aliases = Object.create({ customProp: 'value' })
-      aliases['@components'] = '/src/components'
+      const aliases = castMock<Record<string, string>>(
+        Object.assign(Object.create({ customProp: 'value' }), {
+          '@components': '/src/components',
+        }),
+      )
       const projectRoot = '/project'
 
-      expect(() => resolveAlias(source, aliases, projectRoot)).toThrow(TypeError)
+      expect(() => resolveAlias(source, castMock(aliases), projectRoot)).toThrow(TypeError)
     })
 
     it('should handle class instance as aliases', () => {
@@ -356,10 +367,10 @@ describe('alias-resolver', () => {
       class CustomAliases {
         '@components' = '/src/components'
       }
-      const aliases = new CustomAliases() as any
       const projectRoot = '/project'
 
-      expect(() => resolveAlias(source, aliases, projectRoot)).toThrow(TypeError)
+      // @ts-expect-error testing class instance aliases
+      expect(() => resolveAlias(source, new CustomAliases(), projectRoot)).toThrow(TypeError)
     })
 
     it('should handle null projectRoot gracefully', () => {
@@ -367,9 +378,9 @@ describe('alias-resolver', () => {
       const aliases = {
         '@components': 'src/components',
       }
-      const projectRoot = null as any
 
-      expect(() => resolveAlias(source, aliases, projectRoot)).toThrow(TypeError)
+      // @ts-expect-error testing invalid projectRoot
+      expect(() => resolveAlias(source, aliases, null)).toThrow(TypeError)
     })
 
     it('should handle undefined projectRoot gracefully', () => {
@@ -377,9 +388,9 @@ describe('alias-resolver', () => {
       const aliases = {
         '@components': 'src/components',
       }
-      const projectRoot = undefined as any
 
-      expect(() => resolveAlias(source, aliases, projectRoot)).toThrow(TypeError)
+      // @ts-expect-error testing invalid projectRoot
+      expect(() => resolveAlias(source, aliases, undefined)).toThrow(TypeError)
     })
 
     it('should handle number as projectRoot', () => {
@@ -387,9 +398,9 @@ describe('alias-resolver', () => {
       const aliases = {
         '@components': 'src/components',
       }
-      const projectRoot = 123 as any
 
-      expect(() => resolveAlias(source, aliases, projectRoot)).toThrow(TypeError)
+      // @ts-expect-error testing invalid projectRoot
+      expect(() => resolveAlias(source, aliases, 123)).toThrow(TypeError)
     })
 
     it('should handle object as projectRoot', () => {
@@ -397,9 +408,9 @@ describe('alias-resolver', () => {
       const aliases = {
         '@components': 'src/components',
       }
-      const projectRoot = { path: '/project' } as any
 
-      expect(() => resolveAlias(source, aliases, projectRoot)).toThrow(TypeError)
+      // @ts-expect-error testing invalid projectRoot
+      expect(() => resolveAlias(source, aliases, { path: '/project' })).toThrow(TypeError)
     })
 
     it('should handle array as projectRoot', () => {
@@ -407,9 +418,9 @@ describe('alias-resolver', () => {
       const aliases = {
         '@components': 'src/components',
       }
-      const projectRoot = ['/project'] as any
 
-      expect(() => resolveAlias(source, aliases, projectRoot)).toThrow(TypeError)
+      // @ts-expect-error testing invalid projectRoot
+      expect(() => resolveAlias(source, aliases, ['/project'])).toThrow(TypeError)
     })
 
     it('should handle empty string as projectRoot', () => {

@@ -20,7 +20,10 @@ const WILDCARD_REGEX = /^(\d+)\.(?:x|\*)/i
 const MAJOR_ONLY_REGEX = /^(?:>=?|[=~^])\s*(\d+)(?:\s|$)/
 const NUMBER_ONLY_REGEX = /^(\d+)$/
 
-export function isNodeVersionSufficient(versionRange: string, minMajor: number = MIN_SUPPORTED_NODE_MAJOR): boolean {
+export function isNodeVersionSufficient(
+  versionRange: string,
+  minMajor: number = MIN_SUPPORTED_NODE_MAJOR,
+): boolean {
   const cleaned = versionRange.trim()
 
   if (cleaned.includes('||')) {
@@ -28,12 +31,11 @@ export function isNodeVersionSufficient(versionRange: string, minMajor: number =
     return orParts.some(part => isNodeVersionSufficient(part, minMajor))
   }
 
-  const andParts = cleaned.split(AND_SPLIT_REGEX).filter(part => part && part !== '&&')
+  const andParts = cleaned.split(AND_SPLIT_REGEX).filter(part => part !== '' && part !== '&&')
   if (andParts.length > 1) {
     for (const part of andParts) {
       const lowerBound = extractLowerBound(part)
-      if (lowerBound !== null && lowerBound >= minMajor)
-        return true
+      if (lowerBound !== null && lowerBound >= minMajor) return true
     }
 
     return andParts.every(part => couldIncludeVersion(part, minMajor))
@@ -43,9 +45,8 @@ export function isNodeVersionSufficient(versionRange: string, minMajor: number =
 }
 
 function extractLowerBound(range: string): number | null {
-  const match = range.match(LOWER_BOUND_REGEX)
-  if (match)
-    return Number.parseInt(match[1], 10)
+  const match = LOWER_BOUND_REGEX.exec(range)
+  if (match) return Number.parseInt(match[1], 10)
 
   return null
 }
@@ -53,7 +54,7 @@ function extractLowerBound(range: string): number | null {
 function couldIncludeVersion(range: string, targetMajor: number): boolean {
   let match: RegExpMatchArray | null = null
 
-  match = range.match(UPPER_BOUND_REGEX)
+  match = UPPER_BOUND_REGEX.exec(range)
   if (match) {
     const upperMajor = Number.parseInt(match[1], 10)
     return targetMajor <= upperMajor
@@ -65,52 +66,51 @@ function couldIncludeVersion(range: string, targetMajor: number): boolean {
 function extractMajorAndCompare(versionRange: string, minMajor: number): boolean {
   let match: RegExpMatchArray | null = null
 
-  if (UPPER_BOUND_ONLY_REGEX.test(versionRange))
-    return false
+  if (UPPER_BOUND_ONLY_REGEX.test(versionRange)) return false
 
-  match = versionRange.match(SEMVER_RANGE_REGEX)
+  match = SEMVER_RANGE_REGEX.exec(versionRange)
   if (match) {
     const majorNum = Number.parseInt(match[1], 10)
     return majorNum >= minMajor
   }
 
-  match = versionRange.match(EXACT_SEMVER_REGEX)
+  match = EXACT_SEMVER_REGEX.exec(versionRange)
   if (match) {
     const majorNum = Number.parseInt(match[1], 10)
     return majorNum >= minMajor
   }
 
-  match = versionRange.match(CARET_RANGE_REGEX)
+  match = CARET_RANGE_REGEX.exec(versionRange)
   if (match) {
     const majorNum = Number.parseInt(match[1], 10)
     return majorNum >= minMajor
   }
 
-  match = versionRange.match(TILDE_RANGE_REGEX)
+  match = TILDE_RANGE_REGEX.exec(versionRange)
   if (match) {
     const majorNum = Number.parseInt(match[1], 10)
     return majorNum >= minMajor
   }
 
-  match = versionRange.match(MAJOR_MINOR_REGEX)
+  match = MAJOR_MINOR_REGEX.exec(versionRange)
   if (match) {
     const majorNum = Number.parseInt(match[1], 10)
     return majorNum >= minMajor
   }
 
-  match = versionRange.match(WILDCARD_REGEX)
+  match = WILDCARD_REGEX.exec(versionRange)
   if (match) {
     const majorNum = Number.parseInt(match[1], 10)
     return majorNum >= minMajor
   }
 
-  match = versionRange.match(MAJOR_ONLY_REGEX)
+  match = MAJOR_ONLY_REGEX.exec(versionRange)
   if (match) {
     const majorNum = Number.parseInt(match[1], 10)
     return majorNum >= minMajor
   }
 
-  match = versionRange.match(NUMBER_ONLY_REGEX)
+  match = NUMBER_ONLY_REGEX.exec(versionRange)
   if (match) {
     const majorNum = Number.parseInt(match[1], 10)
     return majorNum >= minMajor
@@ -121,36 +121,62 @@ function extractMajorAndCompare(versionRange: string, minMajor: number): boolean
 
 export const MIN_NODE_VERSION = '>=22.18.0'
 
-export function ensureMinimumNodeEngine(packageJson: any, minVersion: string = MIN_NODE_VERSION): boolean {
-  packageJson.engines = packageJson.engines || {}
+export interface PackageJsonLike {
+  version?: string
+  engines?: Record<string, string>
+  scripts?: Record<string, string>
+  dependencies?: Record<string, string>
+  [key: string]: unknown
+}
+
+function isPackageJsonLike(value: unknown): value is PackageJsonLike {
+  return typeof value === 'object' && value !== null
+}
+
+function parsePackageJsonLike(raw: string): PackageJsonLike {
+  const parsed: unknown = JSON.parse(raw)
+  if (!isPackageJsonLike(parsed)) throw new Error('Invalid package.json')
+
+  return parsed
+}
+
+/* oxlint-disable typescript/prefer-readonly-parameter-types -- intentionally mutates packageJson.engines in place */
+export function ensureMinimumNodeEngine(
+  packageJson: PackageJsonLike,
+  minVersion: string = MIN_NODE_VERSION,
+): boolean {
+  packageJson.engines = packageJson.engines ?? {}
 
   if (packageJson.engines.node) {
     if (!satisfiesMinimumVersion(packageJson.engines.node, minVersion)) {
-      logWarn(`Current engines.node value "${packageJson.engines.node}" may not meet the required minimum of ${minVersion}`)
+      logWarn(
+        `Current engines.node value "${packageJson.engines.node}" may not meet the required minimum of ${minVersion}`,
+      )
       logWarn(`Updating to ${minVersion} for deployment compatibility`)
       packageJson.engines.node = minVersion
       return true
     }
-  }
-  else {
+  } else {
     packageJson.engines.node = minVersion
     return true
   }
 
   return false
 }
+/* oxlint-enable typescript/prefer-readonly-parameter-types */
 
 function satisfiesMinimumVersion(existingRange: string, requiredRange: string): boolean {
   const existingMin = extractMinimumVersion(existingRange)
   const requiredMin = extractMinimumVersion(requiredRange)
 
-  if (!existingMin || !requiredMin)
-    return false
+  if (!existingMin || !requiredMin) return false
 
   return compareVersions(existingMin, requiredMin) >= 0
 }
 
-function extractMinimumVersion(range: string): { major: number, minor: number, patch: number } | null {
+function extractMinimumVersion(
+  range: string,
+): { major: number; minor: number; patch: number } | null {
   const cleaned = range.trim()
 
   const isNonNull = <T>(v: T | null): v is NonNullable<T> => v !== null
@@ -158,28 +184,26 @@ function extractMinimumVersion(range: string): { major: number, minor: number, p
   if (cleaned.includes('||')) {
     const orParts = cleaned.split('||').map(part => part.trim())
     const versions = orParts.map(part => extractMinimumVersion(part)).filter(isNonNull)
-    if (versions.length === 0)
-      return null
+    if (versions.length === 0) return null
 
-    return versions.reduce((min, curr) => compareVersions(curr, min) < 0 ? curr : min)
+    return versions.reduce((min, curr) => (compareVersions(curr, min) < 0 ? curr : min))
   }
 
-  const andParts = cleaned.split(AND_SPLIT_REGEX).filter(part => part && part !== '&&')
+  const andParts = cleaned.split(AND_SPLIT_REGEX).filter(part => part !== '' && part !== '&&')
   if (andParts.length > 1) {
     const lowerBounds = andParts
       .filter(part => LOWER_BOUND_REGEX.test(part))
       .map(part => extractMinimumVersion(part))
       .filter(isNonNull)
 
-    if (lowerBounds.length === 0)
-      return null
+    if (lowerBounds.length === 0) return null
 
-    return lowerBounds.reduce((max, curr) => compareVersions(curr, max) > 0 ? curr : max)
+    return lowerBounds.reduce((max, curr) => (compareVersions(curr, max) > 0 ? curr : max))
   }
 
   let match: RegExpMatchArray | null = null
 
-  match = cleaned.match(SEMVER_RANGE_REGEX)
+  match = SEMVER_RANGE_REGEX.exec(cleaned)
   if (match) {
     return {
       major: Number.parseInt(match[1], 10),
@@ -188,7 +212,7 @@ function extractMinimumVersion(range: string): { major: number, minor: number, p
     }
   }
 
-  match = cleaned.match(EXACT_SEMVER_REGEX)
+  match = EXACT_SEMVER_REGEX.exec(cleaned)
   if (match) {
     return {
       major: Number.parseInt(match[1], 10),
@@ -197,7 +221,7 @@ function extractMinimumVersion(range: string): { major: number, minor: number, p
     }
   }
 
-  match = cleaned.match(CARET_RANGE_REGEX)
+  match = CARET_RANGE_REGEX.exec(cleaned)
   if (match) {
     return {
       major: Number.parseInt(match[1], 10),
@@ -206,7 +230,7 @@ function extractMinimumVersion(range: string): { major: number, minor: number, p
     }
   }
 
-  match = cleaned.match(TILDE_RANGE_REGEX)
+  match = TILDE_RANGE_REGEX.exec(cleaned)
   if (match) {
     return {
       major: Number.parseInt(match[1], 10),
@@ -215,7 +239,7 @@ function extractMinimumVersion(range: string): { major: number, minor: number, p
     }
   }
 
-  match = cleaned.match(MAJOR_MINOR_REGEX)
+  match = MAJOR_MINOR_REGEX.exec(cleaned)
   if (match) {
     return {
       major: Number.parseInt(match[1], 10),
@@ -224,7 +248,7 @@ function extractMinimumVersion(range: string): { major: number, minor: number, p
     }
   }
 
-  match = cleaned.match(WILDCARD_REGEX)
+  match = WILDCARD_REGEX.exec(cleaned)
   if (match) {
     return {
       major: Number.parseInt(match[1], 10),
@@ -233,7 +257,7 @@ function extractMinimumVersion(range: string): { major: number, minor: number, p
     }
   }
 
-  match = cleaned.match(MAJOR_ONLY_REGEX)
+  match = MAJOR_ONLY_REGEX.exec(cleaned)
   if (match) {
     return {
       major: Number.parseInt(match[1], 10),
@@ -242,7 +266,7 @@ function extractMinimumVersion(range: string): { major: number, minor: number, p
     }
   }
 
-  match = cleaned.match(NUMBER_ONLY_REGEX)
+  match = NUMBER_ONLY_REGEX.exec(cleaned)
   if (match) {
     return {
       major: Number.parseInt(match[1], 10),
@@ -254,11 +278,12 @@ function extractMinimumVersion(range: string): { major: number, minor: number, p
   return null
 }
 
-function compareVersions(a: { major: number, minor: number, patch: number }, b: { major: number, minor: number, patch: number }): number {
-  if (a.major !== b.major)
-    return a.major - b.major
-  if (a.minor !== b.minor)
-    return a.minor - b.minor
+function compareVersions(
+  a: Readonly<{ major: number; minor: number; patch: number }>,
+  b: Readonly<{ major: number; minor: number; patch: number }>,
+): number {
+  if (a.major !== b.major) return a.major - b.major
+  if (a.minor !== b.minor) return a.minor - b.minor
 
   return a.patch - b.patch
 }
@@ -269,28 +294,32 @@ export function getRariVersion(cwd: string = process.cwd()): string {
   if (!existsSync(rariPackageJsonPath)) {
     logError('rari is not installed. Please run "npm install rari" first.')
     process.exit(1)
+    return ''
   }
 
   try {
-    const packageJson = JSON.parse(readFileSync(rariPackageJsonPath, 'utf-8'))
-    if (packageJson.version) {
+    const packageJson = parsePackageJsonLike(readFileSync(rariPackageJsonPath, 'utf-8'))
+    if (packageJson.version != null && packageJson.version !== '') {
       return `^${packageJson.version}`
     }
 
     logError('Could not determine rari version from package.json')
     process.exit(1)
-  }
-  catch (error) {
-    logError(`Failed to read rari package.json: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    return ''
+  } catch (error) {
+    logError(
+      `Failed to read rari package.json: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    )
     process.exit(1)
+    return ''
   }
 }
 
 interface ProviderConfig {
-  providerName: string
-  deployScript: string
-  startScript?: string
-  dependency?: string
+  readonly providerName: string
+  readonly deployScript: string
+  readonly startScript?: string
+  readonly dependency?: string
 }
 
 export type { ProviderConfig }
@@ -303,12 +332,16 @@ export function updatePackageJsonForProvider(cwd: string, config: ProviderConfig
   }
 
   try {
-    const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'))
+    const packageJson = parsePackageJsonLike(readFileSync(packageJsonPath, 'utf-8'))
 
-    packageJson.scripts = packageJson.scripts || {}
+    packageJson.scripts = packageJson.scripts ?? {}
 
-    const newStart = config.startScript || 'rari start'
-    if (packageJson.scripts.start && packageJson.scripts.start !== newStart && !packageJson.scripts['start:original']) {
+    const newStart = config.startScript ?? 'rari start'
+    if (
+      packageJson.scripts.start &&
+      packageJson.scripts.start !== newStart &&
+      !packageJson.scripts['start:original']
+    ) {
       logWarn(`Existing start script found: "${packageJson.scripts.start}"`)
       logWarn(`Backing up to start:original and replacing with "${newStart}"`)
       packageJson.scripts['start:original'] = packageJson.scripts.start
@@ -320,29 +353,29 @@ export function updatePackageJsonForProvider(cwd: string, config: ProviderConfig
 
     ensureMinimumNodeEngine(packageJson)
 
-    if (!packageJson.dependencies || !packageJson.dependencies.rari) {
+    if (packageJson.dependencies?.rari == null || packageJson.dependencies.rari === '') {
       logInfo('Adding rari dependency...')
-      packageJson.dependencies = packageJson.dependencies || {}
-      packageJson.dependencies.rari = config.dependency || getRariVersion(cwd)
+      packageJson.dependencies = packageJson.dependencies ?? {}
+      packageJson.dependencies.rari = config.dependency ?? getRariVersion(cwd)
     }
 
     writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`)
     logSuccess(`Updated package.json for ${config.providerName} deployment`)
-  }
-  catch (error) {
-    logError(`Failed to update package.json: ${error instanceof Error ? error.message : 'Unknown error'}`)
+  } catch (error) {
+    logError(
+      `Failed to update package.json: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    )
     process.exit(1)
   }
 }
 
-export function updateGitignoreForProvider(cwd: string, providerName: string, providerFolder: string) {
+export function updateGitignoreForProvider(
+  cwd: string,
+  providerName: string,
+  providerFolder: string,
+) {
   const gitignorePath = join(cwd, '.gitignore')
-  const providerGitignoreEntries = [
-    '',
-    `# ${providerName}`,
-    `${providerFolder}/`,
-    '',
-  ].join('\n')
+  const providerGitignoreEntries = ['', `# ${providerName}`, `${providerFolder}/`, ''].join('\n')
 
   if (existsSync(gitignorePath)) {
     const gitignoreContent = readFileSync(gitignorePath, 'utf-8')
@@ -353,8 +386,7 @@ export function updateGitignoreForProvider(cwd: string, providerName: string, pr
       writeFileSync(gitignorePath, gitignoreContent + providerGitignoreEntries)
       logSuccess(`Updated .gitignore with ${providerName} entries`)
     }
-  }
-  else {
+  } else {
     const defaultGitignore = `# Dependencies
 node_modules
 .pnpm-store
@@ -417,9 +449,10 @@ export function createOrBackupConfigFile(cwd: string, filename: string, content:
 
     writeFileSync(configPath, content)
     logSuccess(`Created ${filename} configuration`)
-  }
-  catch (error) {
-    logError(`Failed to create or backup ${filename}: ${error instanceof Error ? error.message : 'Unknown error'}`)
+  } catch (error) {
+    logError(
+      `Failed to create or backup ${filename}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    )
     process.exit(1)
   }
 }

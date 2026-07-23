@@ -1,5 +1,6 @@
 export const title = 'Building rari with rari: Dogfooding to 67x Faster Performance'
-export const description = "I built rari.build using rari itself. The result: 0.12ms server-side processing, sub-500MB memory, and a server that handled the Hacker News front page without scaling up."
+export const description =
+  'I built rari.build using rari itself. The result: 0.12ms server-side processing, sub-500MB memory, and a server that handled the Hacker News front page without scaling up.'
 export const date = '2026-06-02T00:00:00-05:00'
 export const author = 'Ryan Skinner'
 export const authorUrl = 'https://ryanskinner.com'
@@ -27,16 +28,23 @@ curl -H "Accept-Encoding: zstd, br, gzip" -w "\\nTime: %{time_total}s\\nSize: %{
 # Best: 0.119s | 6.2 KB
 
 # Blog listing
+
 curl -H "Accept-Encoding: zstd, br, gzip" -w "\\nTime: %{time_total}s\\nSize: %{size_download} bytes\\n" -o /dev/null https://rari.build/blog
+
 # Best: 0.122s | 3.9 KB
 
 # Documentation page
+
 curl -H "Accept-Encoding: zstd, br, gzip" -w "\\nTime: %{time_total}s\\nSize: %{size_download} bytes\\n" -o /dev/null https://rari.build/docs/getting-started
+
 # Best: 0.164s | 12.0 KB
 
 # Enterprise page
+
 curl -H "Accept-Encoding: zstd, br, gzip" -w "\\nTime: %{time_total}s\\nSize: %{size_download} bytes\\n" -o /dev/null https://rari.build/enterprise
+
 # Best: 0.122s | 6.6 KB
+
 `}</CodeBlock>
 
 Average across all routes: ~153ms response time. These are production numbers, not synthetic benchmarks. The internet-facing timings include network latency, TLS, and transfer time.
@@ -48,10 +56,12 @@ All pages use the pre-compressed response cache: after the first request, rari s
 The heaviest page is the Getting Started docs, which includes syntax highlighting, PostHog analytics, and Sentry error tracking with session replay. Like all pages on rari.build, it uses the pre-compressed response cache: the first request renders and caches, every subsequent request serves pre-compressed bytes from memory.
 
 **Total Page Weight (First Load):**
+
 - **345 KB transferred** (compressed via zstd/brotli/gzip)
 - **1.0 MB uncompressed** (28 requests)
 
 **Breakdown (compressed transfer sizes):**
+
 - Initial HTML (server-rendered): 13.5 KB
 - Critical JavaScript: ~124 KB
   - React + main bundle: ~90 KB
@@ -250,6 +260,7 @@ graph TB
     style Build fill:#1f2937,stroke:#10b981,stroke-width:2px
     style React fill:#1f2937,stroke:#8b5cf6,stroke-width:2px
     style Client fill:#1f2937,stroke:#f97316,stroke-width:2px
+
 `}</MermaidChart>
 
 ### The CLI and build toolchain
@@ -282,11 +293,48 @@ Streaming cache support and better cold-render performance are the biggest gaps 
 
 <div className="not-prose mt-12 pt-8 border-t border-edge">
   <p className="text-sm text-fg-muted mb-6">
-    Previously: <a href="https://ryanskinner.com/posts/how-i-built-a-full-stack-react-framework-4x-faster-than-nextjs-with-4x-more-throughput" target="_blank" rel="noopener noreferrer" className="text-link hover:text-link-hover hover:underline">How I Built a Full-Stack React Framework 4x Faster Than Next.js</a> and <a href="https://ryanskinner.com/posts/the-rari-ssr-breakthrough-12x-faster-10x-higher-throughput-than-nextjs" target="_blank" rel="noopener noreferrer" className="text-link hover:text-link-hover hover:underline">The rari SSR Breakthrough: 12x Faster, 10x Higher Throughput</a>.
+    Previously:{' '}
+    <a
+      href="https://ryanskinner.com/posts/how-i-built-a-full-stack-react-framework-4x-faster-than-nextjs-with-4x-more-throughput"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-link hover:text-link-hover hover:underline"
+    >
+      How I Built a Full-Stack React Framework 4x Faster Than Next.js
+    </a>{' '}
+    and{' '}
+    <a
+      href="https://ryanskinner.com/posts/the-rari-ssr-breakthrough-12x-faster-10x-higher-throughput-than-nextjs"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-link hover:text-link-hover hover:underline"
+    >
+      The rari SSR Breakthrough: 12x Faster, 10x Higher Throughput
+    </a>
+    .
   </p>
   <div className="flex flex-wrap items-center gap-3">
-    <a href="/docs/getting-started" className="inline-flex items-center px-4 py-2 bg-accent !text-accent-fg text-sm font-medium rounded-md hover:bg-accent-hover transition-colors">Get Started</a>
-    <a href="https://github.com/rari-build/rari" target="_blank" rel="noopener noreferrer" className="inline-flex items-center px-4 py-2 bg-surface border border-edge !text-fg-muted text-sm font-medium rounded-md hover:border-accent hover:!text-fg transition-colors">GitHub</a>
-    <a href="https://discord.gg/GSh2Ak3b8Q" target="_blank" rel="noopener noreferrer" className="inline-flex items-center px-4 py-2 bg-surface border border-edge !text-fg-muted text-sm font-medium rounded-md hover:border-accent hover:!text-fg transition-colors">Discord</a>
+    <a
+      href="/docs/getting-started"
+      className="inline-flex items-center px-4 py-2 bg-accent !text-accent-fg text-sm font-medium rounded-md hover:bg-accent-hover transition-colors"
+    >
+      Get Started
+    </a>
+    <a
+      href="https://github.com/rari-build/rari"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center px-4 py-2 bg-surface border border-edge !text-fg-muted text-sm font-medium rounded-md hover:border-accent hover:!text-fg transition-colors"
+    >
+      GitHub
+    </a>
+    <a
+      href="https://discord.gg/GSh2Ak3b8Q"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center px-4 py-2 bg-surface border border-edge !text-fg-muted text-sm font-medium rounded-md hover:border-accent hover:!text-fg transition-colors"
+    >
+      Discord
+    </a>
   </div>
 </div>

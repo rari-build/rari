@@ -12,12 +12,7 @@ const lazyTls = lazyExtScript<TlsModule>('ext:deno_net/02_tls.js')
 let listenDatagramFn: typeof Deno.listenDatagram | undefined
 
 function getListenDatagram(): typeof Deno.listenDatagram {
-  if (!listenDatagramFn) {
-    listenDatagramFn = lazyNet().createListenDatagram(
-      op_net_listen_udp,
-      op_net_listen_unixpacket,
-    )
-  }
+  listenDatagramFn ??= lazyNet().createListenDatagram(op_net_listen_udp, op_net_listen_unixpacket)
 
   return listenDatagramFn
 }

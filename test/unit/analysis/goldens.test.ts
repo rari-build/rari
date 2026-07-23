@@ -36,6 +36,7 @@ interface DirectiveCase {
 
 describe('analysis goldens (shared with Rust)', () => {
   it('matches component ID fixtures', () => {
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- golden fixture JSON
     const fixture = JSON.parse(
       fs.readFileSync(path.join(fixturesDir, 'component-ids.json'), 'utf8'),
     ) as { cases: ComponentIdCase[] }
@@ -44,13 +45,12 @@ describe('analysis goldens (shared with Rust)', () => {
     for (const testCase of fixture.cases) {
       expect(getReadableComponentId(testCase.input)).toBe(testCase.readable)
       expect(hashString(testCase.input)).toBe(testCase.id.split('_').pop())
-      expect(getComponentId(path.join(projectRoot, testCase.input), projectRoot)).toBe(
-        testCase.id,
-      )
+      expect(getComponentId(path.join(projectRoot, testCase.input), projectRoot)).toBe(testCase.id)
     }
   })
 
   it('matches directive fixtures', () => {
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- golden fixture JSON
     const fixture = JSON.parse(
       fs.readFileSync(path.join(fixturesDir, 'directives.json'), 'utf8'),
     ) as { cases: DirectiveCase[] }

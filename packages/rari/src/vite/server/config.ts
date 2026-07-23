@@ -1,31 +1,31 @@
 export interface ServerCSPConfig {
-  scriptSrc?: string[]
-  styleSrc?: string[]
-  imgSrc?: string[]
-  fontSrc?: string[]
-  connectSrc?: string[]
-  defaultSrc?: string[]
-  workerSrc?: string[]
+  readonly scriptSrc?: readonly string[]
+  readonly styleSrc?: readonly string[]
+  readonly imgSrc?: readonly string[]
+  readonly fontSrc?: readonly string[]
+  readonly connectSrc?: readonly string[]
+  readonly defaultSrc?: readonly string[]
+  readonly workerSrc?: readonly string[]
 }
 
 export interface ServerCacheControlConfig {
-  routes: Record<string, string>
+  readonly routes: Readonly<Record<string, string>>
 }
 
 export interface ServerCacheLayerConfig {
-  handler?: string
-  url?: string
-  maxEntries?: number
-  defaultTtlSecs?: number
+  readonly handler?: string
+  readonly url?: string
+  readonly maxEntries?: number
+  readonly defaultTtlSecs?: number
 }
 
 export interface ServerCacheConfig {
-  layers?: Record<string, ServerCacheLayerConfig>
+  readonly layers?: Readonly<Record<string, ServerCacheLayerConfig>>
 }
 
 export interface ServerUseCacheConfig {
-  remote?: ServerCacheLayerConfig
-  buildId?: string
+  readonly remote?: ServerCacheLayerConfig
+  readonly buildId?: string
 }
 
 export interface ServerConfig {

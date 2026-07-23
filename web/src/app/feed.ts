@@ -8,7 +8,8 @@ export default function feed(): Feed {
 
   return {
     title: 'rari Blog',
-    description: 'Latest news, updates, and insights from the rari team. The performance-first React framework powered by Rust.',
+    description:
+      'Latest news, updates, and insights from the rari team. The performance-first React framework powered by Rust.',
     link: baseUrl,
     language: 'en',
     copyright: `© ${new Date().getFullYear()} rari. All rights reserved.`,

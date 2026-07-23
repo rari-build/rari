@@ -30,8 +30,8 @@ use crate::{
 
 /// Single-entry cache for the production fallback index.html body.
 ///
-/// The served body is the index.html file content — identical for every
-/// request path — so a per-path map only accumulates copies of the same page,
+/// The served body is the index.html file content -- identical for every
+/// request path -- so a per-path map only accumulates copies of the same page,
 /// growing without bound under path-diverse traffic (e.g. a crawler walking
 /// unknown URLs). One shared `Bytes` serves every path; `clear` forces a
 /// re-read from disk on the next request.

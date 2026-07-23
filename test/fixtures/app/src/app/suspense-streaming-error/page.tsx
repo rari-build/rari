@@ -13,7 +13,7 @@ export default function ErrorSuspensePage() {
   )
 }
 
-async function ThrowingComponent({ delay }: { delay: number }): Promise<ReactNode> {
+async function ThrowingComponent({ delay }: Readonly<{ delay: number }>): Promise<ReactNode> {
   await sleep(delay)
   throw new Error('Simulated component error')
 }

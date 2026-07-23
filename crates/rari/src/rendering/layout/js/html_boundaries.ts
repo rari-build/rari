@@ -1,4 +1,3 @@
-// eslint-disable-next-line unused-imports/no-unused-vars
 function rariCreateHtmlBoundaryTracker() {
   let htmlState = 'outside'
   let pendingTagText = ''
@@ -21,10 +20,9 @@ function rariCreateHtmlBoundaryTracker() {
     if (htmlState === 'in_tag' && pendingTagText) {
       work = pendingTagText + text
       pendingTagText = ''
-    }
-    else if (
-      (htmlState === 'in_inline_script' || htmlState === 'in_raw_text')
-      && pendingClosePrefix
+    } else if (
+      (htmlState === 'in_inline_script' || htmlState === 'in_raw_text') &&
+      pendingClosePrefix
     ) {
       work = pendingClosePrefix + text
       pendingClosePrefix = ''
@@ -37,8 +35,7 @@ function rariCreateHtmlBoundaryTracker() {
       switch (htmlState) {
         case 'outside': {
           const openAt = lower.indexOf('<', i)
-          if (openAt === -1)
-            return true
+          if (openAt === -1) return true
           htmlState = 'in_tag'
           i = openAt
           break
@@ -55,8 +52,7 @@ function rariCreateHtmlBoundaryTracker() {
           if (rawTextTag) {
             htmlState = 'in_raw_text'
             pendingRawTextClose = `</${rawTextTag[1].toLowerCase()}>`
-          }
-          else {
+          } else {
             const isInlineScript = /^<script/i.test(openTag) && !/\bsrc\s*=/.test(openTag)
             htmlState = isInlineScript ? 'in_inline_script' : 'outside'
           }

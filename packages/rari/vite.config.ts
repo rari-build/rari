@@ -1,7 +1,10 @@
 import path from 'node:path'
+import { fmt, lint } from '@rari/lint/vite'
 import { defineConfig } from 'vite-plus'
 
 export default defineConfig({
+  fmt,
+  lint,
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, 'src'),

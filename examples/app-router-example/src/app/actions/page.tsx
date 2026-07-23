@@ -9,21 +9,17 @@ export default async function ActionsPage() {
     <div className="space-y-8">
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 md:p-12">
         <div className="flex items-center gap-3 mb-4">
-          <h1 className="text-4xl font-bold text-gray-900">
-            React Server Actions Demo
-          </h1>
+          <h1 className="text-4xl font-bold text-gray-900">React Server Actions Demo</h1>
           <span className="text-3xl">⚡</span>
         </div>
         <p className="text-lg text-gray-600 max-w-3xl leading-relaxed">
-          This page demonstrates React Server Actions working with rari. All
-          patterns follow React's official server function specifications.
+          This page demonstrates React Server Actions working with rari. All patterns follow React's
+          official server function specifications.
         </p>
       </div>
 
       <div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">
-          Interactive Todo Application
-        </h2>
+        <h2 className="text-2xl font-bold text-gray-900 mb-4">Interactive Todo Application</h2>
         <TodoAppWithActions initialTodos={initialTodos} />
       </div>
 
@@ -35,9 +31,7 @@ export default async function ActionsPage() {
           <div className="p-5 bg-green-50 rounded-lg border border-green-200">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-green-600 text-xl">✓</span>
-              <h3 className="text-green-900 font-semibold">
-                useActionState Hook
-              </h3>
+              <h3 className="text-green-900 font-semibold">useActionState Hook</h3>
             </div>
             <p className="text-sm text-gray-700 leading-relaxed">
               Manage server action state with pending states and error handling.
@@ -47,9 +41,7 @@ export default async function ActionsPage() {
           <div className="p-5 bg-green-50 rounded-lg border border-green-200">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-green-600 text-xl">✓</span>
-              <h3 className="text-green-900 font-semibold">
-                useTransition Hook
-              </h3>
+              <h3 className="text-green-900 font-semibold">useTransition Hook</h3>
             </div>
             <p className="text-sm text-gray-700 leading-relaxed">
               Track pending states across multiple actions for better UX.
@@ -69,9 +61,7 @@ export default async function ActionsPage() {
           <div className="p-5 bg-green-50 rounded-lg border border-green-200">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-green-600 text-xl">✓</span>
-              <h3 className="text-green-900 font-semibold">
-                Optimistic Updates
-              </h3>
+              <h3 className="text-green-900 font-semibold">Optimistic Updates</h3>
             </div>
             <p className="text-sm text-gray-700 leading-relaxed">
               Instant UI feedback with server-side validation and rollback.
@@ -101,9 +91,7 @@ export default async function ActionsPage() {
       </div>
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
-        <h2 className="text-2xl font-bold text-gray-900 mb-6">
-          Technical Implementation
-        </h2>
+        <h2 className="text-2xl font-bold text-gray-900 mb-6">Technical Implementation</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="p-5 bg-gray-50 rounded-lg border border-gray-200">
             <div className="flex items-center gap-2 mb-3">
@@ -113,14 +101,12 @@ export default async function ActionsPage() {
               <h4 className="text-gray-900 font-semibold">Server Functions</h4>
             </div>
             <p className="text-sm text-gray-600 leading-relaxed">
-              Functions marked with
-              {' '}
+              Functions marked with{' '}
               <code className="bg-gray-200 px-1.5 py-0.5 rounded font-mono text-xs">
                 'use server'
-              </code>
-              {' '}
-              are automatically transformed into callable references that can be
-              invoked from client components.
+              </code>{' '}
+              are automatically transformed into callable references that can be invoked from client
+              components.
             </p>
           </div>
 
@@ -132,12 +118,10 @@ export default async function ActionsPage() {
               <h4 className="text-gray-900 font-semibold">HTTP Endpoints</h4>
             </div>
             <p className="text-sm text-gray-600 leading-relaxed">
-              Server actions are called via
-              {' '}
+              Server actions are called via{' '}
               <code className="bg-gray-200 px-1.5 py-0.5 rounded font-mono text-xs">
                 POST /_rari/action
-              </code>
-              {' '}
+              </code>{' '}
               with JSON payloads containing serialized arguments.
             </p>
           </div>
@@ -150,14 +134,11 @@ export default async function ActionsPage() {
               <h4 className="text-gray-900 font-semibold">State Management</h4>
             </div>
             <p className="text-sm text-gray-600 leading-relaxed">
-              Server actions integrate seamlessly with React hooks like
-              {' '}
+              Server actions integrate seamlessly with React hooks like{' '}
               <code className="bg-gray-200 px-1.5 py-0.5 rounded font-mono text-xs">
                 useActionState
-              </code>
-              {' '}
-              and
-              {' '}
+              </code>{' '}
+              and{' '}
               <code className="bg-gray-200 px-1.5 py-0.5 rounded font-mono text-xs">
                 useTransition
               </code>
@@ -173,8 +154,8 @@ export default async function ActionsPage() {
               <h4 className="text-gray-900 font-semibold">Flight Protocol</h4>
             </div>
             <p className="text-sm text-gray-600 leading-relaxed">
-              Actions return JSON responses that can include redirects, error
-              states, and updated data for optimistic UI updates.
+              Actions return JSON responses that can include redirects, error states, and updated
+              data for optimistic UI updates.
             </p>
           </div>
         </div>

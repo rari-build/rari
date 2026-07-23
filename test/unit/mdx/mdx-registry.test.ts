@@ -2,7 +2,11 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { ModuleAnalysisCache } from '@rari/vite/analysis/module-cache'
-import { discoverMdxRegistryEntries, generateMdxRegistryModule, isMdxRegistryModuleId } from '@rari/vite/mdx/registry'
+import {
+  discoverMdxRegistryEntries,
+  generateMdxRegistryModule,
+  isMdxRegistryModuleId,
+} from '@rari/vite/mdx/registry'
 import { describe, expect, it } from 'vite-plus/test'
 
 describe('mdx registry', () => {
@@ -13,9 +17,18 @@ describe('mdx registry', () => {
     fs.mkdirSync(componentsDir, { recursive: true })
     fs.mkdirSync(contentDir, { recursive: true })
 
-    fs.writeFileSync(path.join(componentsDir, 'CodeBlock.tsx'), `'use client'\nexport default function CodeBlock() {}\n`)
-    fs.writeFileSync(path.join(componentsDir, 'SearchBar.tsx'), `'use client'\nexport default function SearchBar() {}\n`)
-    fs.writeFileSync(path.join(contentDir, 'page.mdx'), '<PageHeader />\n<CodeBlock language="ts" />\n')
+    fs.writeFileSync(
+      path.join(componentsDir, 'CodeBlock.tsx'),
+      `'use client'\nexport default function CodeBlock() {}\n`,
+    )
+    fs.writeFileSync(
+      path.join(componentsDir, 'SearchBar.tsx'),
+      `'use client'\nexport default function SearchBar() {}\n`,
+    )
+    fs.writeFileSync(
+      path.join(contentDir, 'page.mdx'),
+      '<PageHeader />\n<CodeBlock language="ts" />\n',
+    )
 
     const cache = new ModuleAnalysisCache()
     const entries = discoverMdxRegistryEntries({
@@ -37,13 +50,15 @@ describe('mdx registry', () => {
   })
 
   it('stores production registry metadata without component imports', () => {
-    const entries = [{
-      name: 'CodeBlock',
-      binding: 'CodeBlock',
-      importPath: '/src/components/CodeBlock.tsx',
-      moduleId: 'src/components/CodeBlock.tsx',
-      client: true,
-    }]
+    const entries = [
+      {
+        name: 'CodeBlock',
+        binding: 'CodeBlock',
+        importPath: '/src/components/CodeBlock.tsx',
+        moduleId: 'src/components/CodeBlock.tsx',
+        client: true,
+      },
+    ]
 
     const moduleSource = generateMdxRegistryModule(entries, { mode: 'production' })
     expect(moduleSource).toContain(`component: null`)

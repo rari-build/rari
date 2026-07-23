@@ -1,8 +1,5 @@
-import type { ProxyConfig, ProxyMatcher, ProxyRuleCondition, RariRequest } from '../http/types'
-import {
-  MULTIPLE_SLASHES_REGEX,
-  PATH_TRAILING_SLASH_REGEX,
-} from '@/shared/regex-constants'
+import type { ProxyConfig, ProxyMatcher, ProxyRuleCondition, RariRequest } from '@/proxy/http/types'
+import { MULTIPLE_SLASHES_REGEX, PATH_TRAILING_SLASH_REGEX } from '@/shared/regex-constants'
 
 const ESCAPE_CHARS_REGEX = /[.+?^${}()|[\]\\]/g
 const ASTERISK_REGEX = /\*/g
@@ -45,32 +42,20 @@ function pathToRegex(pattern: string): RegExp {
 }
 
 /* v8 ignore start - requires complex RariRequest mocking */
-function checkHeaderCondition(
-  request: RariRequest,
-  key: string,
-): string | null {
+function checkHeaderCondition(request: RariRequest, key: string): string | null {
   return request.headers.get(key)
 }
 
-function checkQueryCondition(
-  request: RariRequest,
-  key: string,
-): string | null {
+function checkQueryCondition(request: RariRequest, key: string): string | null {
   return request.rariUrl.searchParams.get(key)
 }
 
-function checkCookieCondition(
-  request: RariRequest,
-  key: string,
-): string | null {
+function checkCookieCondition(request: RariRequest, key: string): string | null {
   const cookie = request.cookies.get(key)
   return cookie ? cookie.value : null
 }
 
-function checkHostCondition(
-  request: RariRequest,
-  key: string,
-): string | null {
+function checkHostCondition(request: RariRequest, key: string): string | null {
   return request.rariUrl.hostname === key ? request.rariUrl.hostname : null
 }
 
@@ -88,53 +73,38 @@ function getConditionActualValue(
     case 'host':
       return checkHostCondition(request, condition.key)
     default:
-      throw new Error(`Unknown condition type: ${(condition as any).type}`)
+      throw new Error(`Unknown condition type: ${(condition as { type: string }).type}`)
   }
 }
 
-function matchesHasCondition(
-  request: RariRequest,
-  condition: ProxyRuleCondition,
-): boolean {
+function matchesHasCondition(request: RariRequest, condition: ProxyRuleCondition): boolean {
   const actualValue = getConditionActualValue(request, condition)
 
-  if (actualValue === null)
-    return false
-  if (condition.value !== undefined && actualValue !== condition.value)
-    return false
+  if (actualValue === null) return false
+  if (condition.value !== undefined && actualValue !== condition.value) return false
 
   return true
 }
 
-function matchesMissingCondition(
-  request: RariRequest,
-  condition: ProxyRuleCondition,
-): boolean {
+function matchesMissingCondition(request: RariRequest, condition: ProxyRuleCondition): boolean {
   const actualValue = getConditionActualValue(request, condition)
 
-  if (actualValue === null)
-    return true
-  if (condition.value === undefined)
-    return false
+  if (actualValue === null) return true
+  if (condition.value === undefined) return false
 
   return actualValue !== condition.value
 }
 
-function matchesConditions(
-  request: RariRequest,
-  matcher: ProxyMatcher,
-): boolean {
+function matchesConditions(request: RariRequest, matcher: ProxyMatcher): boolean {
   if (matcher.has) {
     for (const condition of matcher.has) {
-      if (!matchesHasCondition(request, condition))
-        return false
+      if (!matchesHasCondition(request, condition)) return false
     }
   }
 
   if (matcher.missing) {
     for (const condition of matcher.missing) {
-      if (!matchesMissingCondition(request, condition))
-        return false
+      if (!matchesMissingCondition(request, condition)) return false
     }
   }
 
@@ -155,60 +125,67 @@ function matchesSingleMatcher(
   pathname: string,
   matcher: string | ProxyMatcher,
 ): boolean {
-  if (typeof matcher === 'string')
-    return matchesPattern(pathname, matcher)
+  if (typeof matcher === 'string') return matchesPattern(pathname, matcher)
 
-  if (!matchesPattern(pathname, matcher.source))
-    return false
+  if (!matchesPattern(pathname, matcher.source)) return false
 
   return matchesConditions(request, matcher)
 }
 
-export function shouldRunProxy(
-  request: RariRequest,
-  config?: ProxyConfig,
-): boolean {
-  if (!config?.matcher)
+export function shouldRunProxy(request: RariRequest, config?: ProxyConfig): boolean {
+  const matcher = config?.matcher
+  if (matcher == null || matcher === '' || (Array.isArray(matcher) && matcher.length === 0))
     return true
 
   const pathname = request.rariUrl.pathname
-  const matchers = Array.isArray(config.matcher) ? config.matcher : [config.matcher]
+  const matchers: ReadonlyArray<string | ProxyMatcher> = Array.isArray(matcher)
+    ? matcher
+    : [matcher]
 
-  return matchers.some(matcher => matchesSingleMatcher(request, pathname, matcher))
+  return matchers.some(m => matchesSingleMatcher(request, pathname, m))
 }
 /* v8 ignore stop */
 
-export function extractParams(
-  pathname: string,
-  pattern: string,
-): Record<string, string> | null {
+export function extractParams(pathname: string, pattern: string): Record<string, string> | null {
   const params: Record<string, string> = {}
 
   const normalizedPath = normalizePath(pathname)
   const normalizedPattern = normalizePath(pattern)
 
-  const paramInfo: Array<{ name: string, pos: number }> = []
+  const paramInfo: Array<{ name: string; pos: number }> = []
   let regexPattern = normalizedPattern
 
   /* v8 ignore start - advanced parameter patterns not commonly used */
-  regexPattern = regexPattern.replace(PARAM_ASTERISK_REGEX, (_match, name, offset) => {
-    paramInfo.push({ name, pos: offset })
-    return '___PARAM_DOTSTAR___'
-  })
-  regexPattern = regexPattern.replace(PARAM_PLUS_REGEX, (_match, name, offset) => {
-    paramInfo.push({ name, pos: offset })
-    return '___PARAM_DOTPLUS___'
-  })
-  regexPattern = regexPattern.replace(PARAM_QUESTION_REGEX, (_match, name, offset) => {
-    paramInfo.push({ name, pos: offset })
-    return '___PARAM_OPT___'
-  })
+  regexPattern = regexPattern.replace(
+    PARAM_ASTERISK_REGEX,
+    (_match: string, name: string, offset: number) => {
+      paramInfo.push({ name, pos: offset })
+      return '___PARAM_DOTSTAR___'
+    },
+  )
+  regexPattern = regexPattern.replace(
+    PARAM_PLUS_REGEX,
+    (_match: string, name: string, offset: number) => {
+      paramInfo.push({ name, pos: offset })
+      return '___PARAM_DOTPLUS___'
+    },
+  )
+  regexPattern = regexPattern.replace(
+    PARAM_QUESTION_REGEX,
+    (_match: string, name: string, offset: number) => {
+      paramInfo.push({ name, pos: offset })
+      return '___PARAM_OPT___'
+    },
+  )
   /* v8 ignore stop */
 
-  regexPattern = regexPattern.replace(PARAM_REGEX, (_match, name, offset) => {
-    paramInfo.push({ name, pos: offset })
-    return '___PARAM_SEG___'
-  })
+  regexPattern = regexPattern.replace(
+    PARAM_REGEX,
+    (_match: string, name: string, offset: number) => {
+      paramInfo.push({ name, pos: offset })
+      return '___PARAM_SEG___'
+    },
+  )
 
   const paramNames = paramInfo.sort((a, b) => a.pos - b.pos).map(p => p.name)
 
@@ -227,11 +204,9 @@ export function extractParams(
   const regex = new RegExp(regexPattern)
   const match = normalizedPath.match(regex)
 
-  if (!match)
-    return null
+  if (!match) return null
 
-  for (let i = 0; i < paramNames.length; i++)
-    params[paramNames[i]] = match[i + 1]
+  for (let i = 0; i < paramNames.length; i++) params[paramNames[i]] = match[i + 1]
 
   return params
 }

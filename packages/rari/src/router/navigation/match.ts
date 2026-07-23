@@ -1,3 +1,4 @@
+/* oxlint-disable typescript/prefer-readonly-parameter-types -- match helpers write into params records */
 import type { AppRouteManifest, LayoutEntry, RouteSegment, TemplateEntry } from '../build/types'
 import type { RouteInfo } from './types'
 
@@ -11,8 +12,7 @@ export function parseRoutePath(path: string): string[] {
 function safeDecodeURIComponent(value: string): string | null {
   try {
     return decodeURIComponent(value)
-  }
-  catch {
+  } catch {
     return null
   }
 }
@@ -21,8 +21,7 @@ function matchStaticSegment(actualSegment: string, segmentValue: string): boolea
   const decodedActual = safeDecodeURIComponent(actualSegment)
   const decodedValue = safeDecodeURIComponent(segmentValue)
 
-  if (decodedActual === null || decodedValue === null)
-    return false
+  if (decodedActual === null || decodedValue === null) return false
 
   return decodedActual === decodedValue
 }
@@ -30,33 +29,29 @@ function matchStaticSegment(actualSegment: string, segmentValue: string): boolea
 function matchDynamicSegment(
   actualSegment: string,
   segmentParam: string | undefined,
-  params: Record<string, string | string[]>,
+  params: { [key: string]: string | string[] },
 ): boolean {
-  if (!segmentParam)
-    return false
+  if (segmentParam == null || segmentParam === '') return false
 
   const decoded = safeDecodeURIComponent(actualSegment)
-  if (decoded === null)
-    return false
+  if (decoded === null) return false
 
   params[segmentParam] = decoded
   return true
 }
 
 function matchCatchAllSegment(
-  actualSegments: string[],
+  actualSegments: readonly string[],
   actualIndex: number,
   segmentParam: string | undefined,
-  params: Record<string, string | string[]>,
-): { success: boolean, newIndex: number } {
-  if (!segmentParam)
-    return { success: false, newIndex: actualIndex }
+  params: { [key: string]: string | string[] },
+): { success: boolean; newIndex: number } {
+  if (segmentParam == null || segmentParam === '') return { success: false, newIndex: actualIndex }
 
   const decodedSegments: string[] = []
   for (const seg of actualSegments.slice(actualIndex)) {
     const decoded = safeDecodeURIComponent(seg)
-    if (decoded === null)
-      return { success: false, newIndex: actualIndex }
+    if (decoded === null) return { success: false, newIndex: actualIndex }
     decodedSegments.push(decoded)
   }
 
@@ -68,22 +63,22 @@ function handleOptionalCatchAll(
   actualIndex: number,
   actualSegmentsLength: number,
   segmentParam: string | undefined,
-  params: Record<string, string | string[]>,
+  params: { [key: string]: string | string[] },
 ): void {
-  if (actualIndex >= actualSegmentsLength && segmentParam) {
+  if (actualIndex >= actualSegmentsLength && segmentParam != null && segmentParam !== '') {
     params[segmentParam] = []
   }
 }
 
 function processSegment(
   segment: RouteSegment,
-  actualSegments: string[],
+  actualSegments: readonly string[],
   actualIndex: number,
-  params: Record<string, string | string[]>,
-): { success: boolean, newIndex: number } {
+  params: { [key: string]: string | string[] },
+): { success: boolean; newIndex: number } {
   if (actualIndex >= actualSegments.length) {
     if (segment.type === 'optional-catch-all') {
-      if (!segment.param)
+      if (segment.param == null || segment.param === '')
         return { success: false, newIndex: actualIndex }
 
       handleOptionalCatchAll(actualIndex, actualSegments.length, segment.param, params)
@@ -117,7 +112,7 @@ function processSegment(
 
 export function matchRouteParams(
   _routePath: string,
-  routeSegments: RouteSegment[],
+  routeSegments: readonly RouteSegment[],
   actualPath: string,
 ): Record<string, string | string[]> | null {
   const actualSegments = parseRoutePath(actualPath)
@@ -127,13 +122,11 @@ export function matchRouteParams(
 
   for (const segment of routeSegments) {
     const result = processSegment(segment, actualSegments, actualIndex, params)
-    if (!result.success)
-      return null
+    if (!result.success) return null
     actualIndex = result.newIndex
   }
 
-  if (actualIndex !== actualSegments.length)
-    return null
+  if (actualIndex !== actualSegments.length) return null
 
   return params
 }
@@ -141,10 +134,7 @@ export function matchRouteParams(
 const layoutChainCache = new WeakMap<AppRouteManifest, Map<string, LayoutEntry[]>>()
 const templateChainCache = new WeakMap<AppRouteManifest, Map<string, TemplateEntry[]>>()
 
-export function findLayoutChain(
-  routePath: string,
-  manifest: AppRouteManifest,
-): LayoutEntry[] {
+export function findLayoutChain(routePath: string, manifest: AppRouteManifest): LayoutEntry[] {
   let manifestCache = layoutChainCache.get(manifest)
   if (!manifestCache) {
     manifestCache = new Map()
@@ -152,8 +142,7 @@ export function findLayoutChain(
   }
 
   const cached = manifestCache.get(routePath)
-  if (cached)
-    return cached
+  if (cached) return cached
 
   const chain: LayoutEntry[] = []
   const segments = parseRoutePath(routePath)
@@ -161,13 +150,13 @@ export function findLayoutChain(
   for (let i = 0; i <= segments.length; i++) {
     const currentPath = i === 0 ? '/' : `/${segments.slice(0, i).join('/')}`
     const exactLayouts = manifest.layouts.filter(l => l.path === currentPath)
-    const layouts = exactLayouts.length > 0
-      ? exactLayouts
-      : manifest.layouts.filter(l => l.additionalPaths?.includes(currentPath))
+    const layouts =
+      exactLayouts.length > 0
+        ? exactLayouts
+        : manifest.layouts.filter(l => l.additionalPaths?.includes(currentPath))
 
     for (const layout of layouts) {
-      if (!chain.some(existing => existing.filePath === layout.filePath))
-        chain.push(layout)
+      if (!chain.some(existing => existing.filePath === layout.filePath)) chain.push(layout)
     }
   }
 
@@ -176,10 +165,7 @@ export function findLayoutChain(
   return chain
 }
 
-export function findTemplateChain(
-  routePath: string,
-  manifest: AppRouteManifest,
-): TemplateEntry[] {
+export function findTemplateChain(routePath: string, manifest: AppRouteManifest): TemplateEntry[] {
   let manifestCache = templateChainCache.get(manifest)
   if (!manifestCache) {
     manifestCache = new Map()
@@ -187,8 +173,7 @@ export function findTemplateChain(
   }
 
   const cached = manifestCache.get(routePath)
-  if (cached)
-    return cached
+  if (cached) return cached
 
   const chain: TemplateEntry[] = []
   const segments = parseRoutePath(routePath)
@@ -204,8 +189,7 @@ export function findTemplateChain(
     const templates = [...matched.values()]
 
     for (const template of templates) {
-      if (!chain.some(existing => existing.filePath === template.filePath))
-        chain.push(template)
+      if (!chain.some(existing => existing.filePath === template.filePath)) chain.push(template)
     }
   }
 
@@ -215,15 +199,12 @@ export function findTemplateChain(
 }
 
 export function normalizePath(path: string): string {
-  if (!path || path === '/')
-    return '/'
+  if (!path || path === '/') return '/'
 
   let normalized = path
-  while (normalized.endsWith('/') && normalized.length > 1)
-    normalized = normalized.slice(0, -1)
+  while (normalized.endsWith('/') && normalized.length > 1) normalized = normalized.slice(0, -1)
 
-  if (!normalized.startsWith('/'))
-    normalized = `/${normalized}`
+  if (!normalized.startsWith('/')) normalized = `/${normalized}`
 
   return normalized
 }
@@ -236,7 +217,7 @@ export function createRouteInfo(
   const normalizedPath = normalizePath(path)
   const layoutChain = findLayoutChain(normalizedPath, manifest)
 
-  const route = manifest.routes.find((r) => {
+  const route = manifest.routes.find(r => {
     const params = matchRouteParams(r.path, r.segments, normalizedPath)
     return params !== null
   })
@@ -245,15 +226,14 @@ export function createRouteInfo(
   if (route) {
     const matchedParams = matchRouteParams(route.path, route.segments, normalizedPath)
     /* v8 ignore start - defensive check, matchedParams should always be non-null if route was found */
-    if (matchedParams)
-      Object.assign(params, matchedParams)
+    if (matchedParams) Object.assign(params, matchedParams)
     /* v8 ignore stop */
   }
 
   return {
     path: normalizedPath,
     params,
-    searchParams: searchParams || new URLSearchParams(),
+    searchParams: searchParams ?? new URLSearchParams(),
     layoutChain,
     templateChain: findTemplateChain(route?.path ?? normalizedPath, manifest),
   }
@@ -261,10 +241,15 @@ export function createRouteInfo(
 
 export function isExternalUrl(url: string, currentOrigin?: string): boolean {
   try {
-    const urlObj = new URL(url, currentOrigin || window.location.origin)
-    return urlObj.origin !== (currentOrigin || window.location.origin)
-  }
-  catch {
+    const urlObj = new URL(
+      url,
+      currentOrigin != null && currentOrigin !== '' ? currentOrigin : window.location.origin,
+    )
+    return (
+      urlObj.origin !==
+      (currentOrigin != null && currentOrigin !== '' ? currentOrigin : window.location.origin)
+    )
+  } catch {
     return false
   }
 }
@@ -273,8 +258,7 @@ export function extractPathname(url: string): string {
   try {
     const urlObj = new URL(url, window.location.origin)
     return urlObj.pathname + urlObj.hash
-  }
-  catch {
+  } catch {
     return url
   }
 }

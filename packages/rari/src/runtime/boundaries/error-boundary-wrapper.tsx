@@ -5,16 +5,30 @@ import * as React from 'react'
 import { Component } from 'react'
 import { getClientComponents } from '@/runtime/shared/rari-global'
 import { clearTimer } from '@/shared/utils/timer'
+import { isComponentType, isRecord } from '@/shared/utils/type-guards'
 
 interface ErrorBoundaryWrapperProps {
-  errorComponentId: string
-  children: ReactNode
+  readonly errorComponentId: string
+  readonly children: ReactNode
 }
 
 interface ErrorBoundaryWrapperState {
   hasError: boolean
   error: Error | null
-  ErrorComponent: React.ComponentType<{ error: Error, reset: () => void }> | null
+  ErrorComponent: React.ComponentType<{ error: Error; reset: () => void }> | null
+}
+
+function resolveErrorComponent(
+  module: unknown,
+): React.ComponentType<{ error: Error; reset: () => void }> | null {
+  if (isComponentType(module)) return module
+
+  if (isRecord(module)) {
+    const candidate = module.default ?? module
+    return isComponentType(candidate) ? candidate : null
+  }
+
+  return null
 }
 
 export class ErrorBoundaryWrapper extends Component<
@@ -47,26 +61,28 @@ export class ErrorBoundaryWrapper extends Component<
 
     const errorComponentId = this.props.errorComponentId
 
-    if (errorComponentId && typeof window !== 'undefined') {
-      const componentInfo = getClientComponents()[errorComponentId]
+    if (errorComponentId !== '') {
+      const clientComponents = getClientComponents()
+      if (errorComponentId in clientComponents) {
+        const componentInfo = clientComponents[errorComponentId]
+        const existingComponent = resolveErrorComponent(componentInfo.component)
 
-      if (componentInfo) {
-        const hasComponent = componentInfo.component && typeof componentInfo.component === 'function'
-
-        if (hasComponent) {
-          this.setState({ ErrorComponent: componentInfo.component })
-        }
-        else if (componentInfo.loader && !componentInfo.loading) {
+        if (existingComponent) {
+          this.setState({ ErrorComponent: existingComponent })
+        } else if (componentInfo.loader && !componentInfo.loading) {
           componentInfo.loading = true
-          componentInfo.loader()
-            .then((module: any) => {
-              const component = module.default || module
-              componentInfo.component = component
-              componentInfo.registered = true
+          componentInfo
+            .loader()
+            .then((loadedModule: unknown) => {
+              const component = resolveErrorComponent(loadedModule)
+              if (component) {
+                componentInfo.component = component
+                componentInfo.registered = true
+                this.setState({ ErrorComponent: component })
+              }
               componentInfo.loading = false
-              this.setState({ ErrorComponent: component })
             })
-            .catch((loadError: Error) => {
+            .catch((loadError: unknown) => {
               componentInfo.loading = false
               console.error(`[rari] Failed to load error component ${errorComponentId}:`, loadError)
             })

@@ -40,62 +40,29 @@ applyToGlobal({
     s => s.ByteLengthQueuingStrategy,
     lazyStreams,
   ),
-  CompressionStream: propNonEnumerableLazyLoaded(
-    c => c.CompressionStream,
-    lazyCompression,
-  ),
-  CountQueuingStrategy: propNonEnumerableLazyLoaded(
-    s => s.CountQueuingStrategy,
-    lazyStreams,
-  ),
-  DecompressionStream: propNonEnumerableLazyLoaded(
-    c => c.DecompressionStream,
-    lazyCompression,
-  ),
+  CompressionStream: propNonEnumerableLazyLoaded(c => c.CompressionStream, lazyCompression),
+  CountQueuingStrategy: propNonEnumerableLazyLoaded(s => s.CountQueuingStrategy, lazyStreams),
+  DecompressionStream: propNonEnumerableLazyLoaded(c => c.DecompressionStream, lazyCompression),
   DOMException: propNonEnumerableLazyLoaded(m => m.DOMException, lazyDomException),
   File: propNonEnumerableLazyLoaded(m => m.File, lazyFile),
-  FileReader: propNonEnumerableLazyLoaded(
-    m => m.FileReader,
-    lazyFileReader,
-  ),
+  FileReader: propNonEnumerableLazyLoaded(m => m.FileReader, lazyFileReader),
   Performance: propNonEnumerableLazyLoaded(m => m.Performance, lazyPerformance),
   PerformanceEntry: propNonEnumerableLazyLoaded(m => m.PerformanceEntry, lazyPerformance),
   PerformanceMark: propNonEnumerableLazyLoaded(m => m.PerformanceMark, lazyPerformance),
   PerformanceMeasure: propNonEnumerableLazyLoaded(m => m.PerformanceMeasure, lazyPerformance),
-  ReadableStream: propNonEnumerableLazyLoaded(
-    s => s.ReadableStream,
-    lazyStreams,
-  ),
+  ReadableStream: propNonEnumerableLazyLoaded(s => s.ReadableStream, lazyStreams),
   ReadableStreamDefaultReader: propNonEnumerableLazyLoaded(
     s => s.ReadableStreamDefaultReader,
     lazyStreams,
   ),
-  TextDecoder: propNonEnumerableLazyLoaded(
-    m => m.TextDecoder,
-    lazyEncoding,
-  ),
-  TextEncoder: propNonEnumerableLazyLoaded(
-    m => m.TextEncoder,
-    lazyEncoding,
-  ),
-  TextDecoderStream: propNonEnumerableLazyLoaded(
-    m => m.TextDecoderStream,
-    lazyEncoding,
-  ),
-  TextEncoderStream: propNonEnumerableLazyLoaded(
-    m => m.TextEncoderStream,
-    lazyEncoding,
-  ),
-  TransformStream: propNonEnumerableLazyLoaded(
-    s => s.TransformStream,
-    lazyStreams,
-  ),
+  TextDecoder: propNonEnumerableLazyLoaded(m => m.TextDecoder, lazyEncoding),
+  TextEncoder: propNonEnumerableLazyLoaded(m => m.TextEncoder, lazyEncoding),
+  TextDecoderStream: propNonEnumerableLazyLoaded(m => m.TextDecoderStream, lazyEncoding),
+  TextEncoderStream: propNonEnumerableLazyLoaded(m => m.TextEncoderStream, lazyEncoding),
+  TransformStream: propNonEnumerableLazyLoaded(s => s.TransformStream, lazyStreams),
   MessageChannel: propNonEnumerableLazyLoaded(m => m.MessageChannel, lazyMessagePort),
   MessagePort: propNonEnumerableLazyLoaded(m => m.MessagePort, lazyMessagePort),
-  WritableStream: propNonEnumerableLazyLoaded(
-    s => s.WritableStream,
-    lazyStreams,
-  ),
+  WritableStream: propNonEnumerableLazyLoaded(s => s.WritableStream, lazyStreams),
   WritableStreamDefaultWriter: propNonEnumerableLazyLoaded(
     s => s.WritableStreamDefaultWriter,
     lazyStreams,
@@ -142,10 +109,7 @@ applyToGlobal({
   setTimeout: propWritableLazyLoaded(t => t.setTimeout, lazyTimers),
   unrefTimer: propWritableLazyLoaded(t => t.unrefTimer, lazyTimers),
   structuredClone: propWritableLazyLoaded(m => m.structuredClone, lazyMessagePort),
-  ImageData: propNonEnumerableLazyLoaded(
-    m => m.ImageData,
-    lazyImageData,
-  ),
+  ImageData: propNonEnumerableLazyLoaded(m => m.ImageData, lazyImageData),
   URL: propNonEnumerableLazyLoaded(m => m.URL, lazyUrl),
   URLSearchParams: propNonEnumerableLazyLoaded(m => m.URLSearchParams, lazyUrl),
 })

@@ -1,4 +1,3 @@
-/* eslint-disable react-refresh/only-export-components */
 'use client'
 
 import type { ReactNode } from 'react'
@@ -6,7 +5,9 @@ import { createContext, use, useCallback, useState } from 'react'
 
 export type PackageManager = 'pnpm' | 'npm' | 'yarn' | 'bun'
 
-const PACKAGE_MANAGERS: readonly PackageManager[] = ['pnpm', 'npm', 'yarn', 'bun']
+function isPackageManager(value: string): value is PackageManager {
+  return value === 'pnpm' || value === 'npm' || value === 'yarn' || value === 'bun'
+}
 
 interface PackageManagerContextType {
   packageManager: PackageManager
@@ -15,15 +16,13 @@ interface PackageManagerContextType {
 
 const PackageManagerContext = createContext<PackageManagerContextType | null>(null)
 
-export function PackageManagerProvider({ children }: { children: ReactNode }) {
+export function PackageManagerProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [packageManager, setPackageManager] = useState<PackageManager>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const stored = localStorage.getItem('preferred-package-manager') as PackageManager | null
-        if (stored && PACKAGE_MANAGERS.includes(stored))
-          return stored
-      }
-      catch {
+        const stored = localStorage.getItem('preferred-package-manager')
+        if (stored !== null && isPackageManager(stored)) return stored
+      } catch {
         // localStorage access failed, fall back to default
       }
     }
@@ -35,8 +34,7 @@ export function PackageManagerProvider({ children }: { children: ReactNode }) {
     setPackageManager(pm)
     try {
       localStorage.setItem('preferred-package-manager', pm)
-    }
-    catch {
+    } catch {
       // localStorage write failed, but state is still updated
     }
   }, [])
@@ -48,6 +46,7 @@ export function PackageManagerProvider({ children }: { children: ReactNode }) {
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function usePackageManager() {
   const context = use(PackageManagerContext)
 

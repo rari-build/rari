@@ -318,7 +318,7 @@ describe('RariResponse', () => {
       expect(res.status).toBe(200)
       expect(res.headers.get('Content-Type')).toBe('application/json')
 
-      const body = await res.json()
+      const body: unknown = await res.json()
       expect(body).toEqual(data)
     })
 
@@ -329,7 +329,7 @@ describe('RariResponse', () => {
       expect(res.status).toBe(404)
       expect(res.headers.get('Content-Type')).toBe('application/json')
 
-      const body = await res.json()
+      const body: unknown = await res.json()
       expect(body).toEqual(data)
     })
 
@@ -344,7 +344,7 @@ describe('RariResponse', () => {
       expect(res.headers.get('Content-Type')).toBe('application/json')
       expect(res.headers.get('X-Custom')).toBe('value')
 
-      const body = await res.json()
+      const body: unknown = await res.json()
       expect(body).toEqual(data)
     })
 
@@ -352,14 +352,14 @@ describe('RariResponse', () => {
       const data = [1, 2, 3, 4, 5]
       const res = RariResponse.json(data)
 
-      const body = await res.json()
+      const body: unknown = await res.json()
       expect(body).toEqual(data)
     })
 
     it('should handle null data', async () => {
       const res = RariResponse.json(null)
 
-      const body = await res.json()
+      const body: unknown = await res.json()
       expect(body).toBeNull()
     })
   })

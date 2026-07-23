@@ -178,7 +178,7 @@ fn find_closing_tag(html: &str, from: usize, tag_name: &str) -> Option<usize> {
         if bytes[i] == b'<' && bytes[i + 1] == b'/' {
             let name_start = i + 2;
             let name_end = name_start + name_bytes.len();
-            // Compare on bytes — str slicing here can panic if name_end falls
+            // Compare on bytes -- str slicing here can panic if name_end falls
             // inside a multi-byte UTF-8 character (e.g. `</` + `€a日…`).
             if name_end <= bytes.len()
                 && bytes[name_start..name_end].eq_ignore_ascii_case(name_bytes)
@@ -202,7 +202,7 @@ mod tests {
     fn pretty_prints_nested_elements() {
         let input = "<!DOCTYPE html><html><head><title>t</title></head><body><div id=\"root\"><p>Hi</p></div></body></html>";
         let out = pretty_print_html(input);
-        // DOCTYPE is a sibling of <html>, not a parent — both at indent 0.
+        // DOCTYPE is a sibling of <html>, not a parent -- both at indent 0.
         assert!(out.contains("<!DOCTYPE html>\n<html>\n"));
         assert!(out.contains("  <head>\n"));
         assert!(out.contains("    <title>\n"));

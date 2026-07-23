@@ -2,7 +2,7 @@
 
 import { core } from 'ext:core/mod.js'
 
-const init = core.loadExtScript('ext:deno_kv/01_db.ts')
+const init = core.loadExtScript<typeof import('ext:deno_kv/01_db.ts')>('ext:deno_kv/01_db.ts')
 
 g.Deno.openKv = init.openKv
 g.Deno.AtomicOperation = init.AtomicOperation

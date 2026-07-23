@@ -3,10 +3,10 @@
 export default function LayoutErrorBoundary({
   error,
   reset,
-}: {
+}: Readonly<{
   error: Error
   reset: () => void
-}) {
+}>) {
   return (
     <div data-testid="layout-error-boundary">
       <h2>Layout Error Caught!</h2>

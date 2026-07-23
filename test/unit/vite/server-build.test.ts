@@ -1,11 +1,51 @@
+import type { Dirent, PathLike, Stats } from 'node:fs'
 import fsSync from 'node:fs'
 import path from 'node:path'
 import { resolveModuleCachePath } from '@rari/vite/analysis/module-cache'
 import { hasComponentExport, ServerComponentBuilder } from '@rari/vite/server/build'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
+import { castMock } from '../../helpers/mock-cast'
 
 vi.mock('node:fs')
 vi.mock('rolldown')
+
+const FILE_STAT = castMock<Stats>({
+  isFile: () => true,
+  isDirectory: () => false,
+})
+
+function mockStat(mtimeMs: number): Stats {
+  return castMock({ mtimeMs })
+}
+
+function mockDirent(name: string, isFile: boolean): Dirent {
+  return castMock({
+    name,
+    isFile: () => isFile,
+    isDirectory: () => !isFile,
+  })
+}
+
+/** `readdirSync` overloads resolve to `Dirent<NonSharedBuffer>[]` under `vi.mocked`; cast past that. */
+function mockDirents(
+  entries: ReadonlyArray<{
+    readonly name: string
+    readonly isFile: boolean
+  }>,
+): ReturnType<typeof fsSync.readdirSync> {
+  return castMock(entries.map(({ name, isFile }) => mockDirent(name, isFile)))
+}
+
+type ReadFilePath = Parameters<typeof fsSync.promises.readFile>[0]
+
+function mockReadFile(handler: (target: string) => string) {
+  // oxlint-disable-next-line typescript/prefer-readonly-parameter-types -- ReadFilePath aliases Node's fs.readFile path union
+  return async (target: ReadFilePath): Promise<string> => {
+    if (typeof target !== 'string') throw new TypeError('mock readFile only supports string paths')
+
+    return Promise.resolve(handler(target))
+  }
+}
 
 function mockRoutesManifest() {
   return JSON.stringify({
@@ -40,10 +80,7 @@ describe('ServerComponentBuilder', () => {
 
     vi.mocked(fsSync.readdirSync).mockReturnValue([])
 
-    vi.mocked(fsSync.statSync).mockReturnValue({
-      isFile: () => true,
-      isDirectory: () => false,
-    } as any)
+    vi.mocked(fsSync.statSync).mockReturnValue(FILE_STAT)
 
     const manifestJson = JSON.stringify({
       components: {},
@@ -56,17 +93,15 @@ describe('ServerComponentBuilder', () => {
       value: {
         mkdir: vi.fn().mockResolvedValue(undefined),
         writeFile: vi.fn().mockResolvedValue(undefined),
-        readFile: vi.fn().mockImplementation(async (path: any) => {
-          if (typeof path === 'string' && path.includes('manifest.json')) {
-            return manifestJson
-          }
+        readFile: vi.fn().mockImplementation(
+          mockReadFile(target => {
+            if (target.includes('manifest.json')) return manifestJson
 
-          if (typeof path === 'string' && path.includes('routes.json')) {
-            return mockRoutesManifest()
-          }
+            if (target.includes('routes.json')) return mockRoutesManifest()
 
-          return 'export default function Component() { return null }'
-        }),
+            return 'export default function Component() { return null }'
+          }),
+        ),
         stat: vi.fn().mockResolvedValue({
           mtimeMs: Date.now(),
         }),
@@ -271,21 +306,22 @@ export default function WithDeps() {
       vi.mocked(fsSync.existsSync).mockReturnValue(true)
       vi.mocked(fsSync.readFileSync).mockReturnValue(code)
 
-      vi.mocked(fsSync.promises.readFile).mockImplementation(async (path: any) => {
-        if (path.includes('manifest.json')) {
-          return JSON.stringify({
-            components: {},
-            actions: {},
-            importMap: { imports: {} },
-            buildTime: new Date().toISOString(),
-          })
-        }
+      vi.mocked(fsSync.promises.readFile).mockImplementation(
+        mockReadFile(target => {
+          if (target.includes('manifest.json')) {
+            return JSON.stringify({
+              components: {},
+              actions: {},
+              importMap: { imports: {} },
+              buildTime: new Date().toISOString(),
+            })
+          }
 
-        if (path.includes('routes.json'))
-          return mockRoutesManifest()
+          if (target.includes('routes.json')) return mockRoutesManifest()
 
-        return code
-      })
+          return code
+        }),
+      )
 
       builder.addServerComponent(filePath)
 
@@ -310,21 +346,22 @@ export default function NodeImports() {
       vi.mocked(fsSync.existsSync).mockReturnValue(true)
       vi.mocked(fsSync.readFileSync).mockReturnValue(code)
 
-      vi.mocked(fsSync.promises.readFile).mockImplementation(async (path: any) => {
-        if (path.includes('manifest.json')) {
-          return JSON.stringify({
-            components: {},
-            actions: {},
-            importMap: { imports: {} },
-            buildTime: new Date().toISOString(),
-          })
-        }
+      vi.mocked(fsSync.promises.readFile).mockImplementation(
+        mockReadFile(target => {
+          if (target.includes('manifest.json')) {
+            return JSON.stringify({
+              components: {},
+              actions: {},
+              importMap: { imports: {} },
+              buildTime: new Date().toISOString(),
+            })
+          }
 
-        if (path.includes('routes.json'))
-          return mockRoutesManifest()
+          if (target.includes('routes.json')) return mockRoutesManifest()
 
-        return code
-      })
+          return code
+        }),
+      )
 
       builder.addServerComponent(filePath)
 
@@ -342,21 +379,22 @@ export default function NodeImports() {
     it('should build import relationships', () => {
       const srcDir = '/test/project/src'
 
-      vi.mocked(fsSync.existsSync).mockImplementation((path: any) => {
-        return path === srcDir || path.toString().endsWith('B.tsx')
+      vi.mocked(fsSync.existsSync).mockImplementation((target: PathLike) => {
+        return target === srcDir || target.toString().endsWith('B.tsx')
       })
 
-      vi.mocked(fsSync.statSync).mockImplementation((path: any) => {
-        if (path.toString().endsWith('B.tsx')) {
-          return { isFile: () => true, isDirectory: () => false } as any
-        }
+      vi.mocked(fsSync.statSync).mockImplementation((target: PathLike) => {
+        if (target.toString().endsWith('B.tsx')) return FILE_STAT
+
         throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
       })
 
-      vi.mocked(fsSync.readdirSync).mockReturnValue([
-        { name: 'A.tsx', isFile: () => true, isDirectory: () => false } as any,
-        { name: 'B.tsx', isFile: () => true, isDirectory: () => false } as any,
-      ])
+      vi.mocked(fsSync.readdirSync).mockReturnValue(
+        mockDirents([
+          { name: 'A.tsx', isFile: true },
+          { name: 'B.tsx', isFile: true },
+        ]),
+      )
 
       vi.mocked(fsSync.readFileSync)
         .mockReturnValueOnce(`import B from './B'
@@ -377,10 +415,12 @@ export default function A() { return <B /> }`)
       const srcDir = '/test/project/src'
 
       vi.mocked(fsSync.existsSync).mockReturnValue(true)
-      vi.mocked(fsSync.readdirSync).mockReturnValue([
-        { name: 'node_modules', isFile: () => false, isDirectory: () => true } as any,
-        { name: 'Component.tsx', isFile: () => true, isDirectory: () => false } as any,
-      ])
+      vi.mocked(fsSync.readdirSync).mockReturnValue(
+        mockDirents([
+          { name: 'node_modules', isFile: false },
+          { name: 'Component.tsx', isFile: true },
+        ]),
+      )
 
       builder.buildImportGraph(srcDir)
 
@@ -410,14 +450,16 @@ export default function A() { return <B /> }`)
       const utilPath = path.join(srcDir, 'utils.ts')
 
       vi.mocked(fsSync.existsSync).mockReturnValue(true)
-      vi.mocked(fsSync.readdirSync).mockReturnValue([
-        { name: 'utils.ts', isFile: () => true, isDirectory: () => false } as any,
-        { name: 'Client.tsx', isFile: () => true, isDirectory: () => false } as any,
-      ])
+      vi.mocked(fsSync.readdirSync).mockReturnValue(
+        mockDirents([
+          { name: 'utils.ts', isFile: true },
+          { name: 'Client.tsx', isFile: true },
+        ]),
+      )
 
-      vi.mocked(fsSync.readFileSync)
-        .mockReturnValueOnce(`export function util() { return 'test' }`)
-        .mockReturnValueOnce(`'use client'
+      const readFileSync = vi.mocked(fsSync.readFileSync)
+      readFileSync.mockReturnValueOnce(`export function util() { return 'test' }`)
+      readFileSync.mockReturnValueOnce(`'use client'
 import { util } from './utils'
 export default function Client() { return <div>{util()}</div> }`)
 
@@ -435,7 +477,8 @@ export default function Client() { return <div>{util()}</div> }`)
       const actionPath = '/test/project/src/action.ts'
 
       vi.mocked(fsSync.existsSync).mockReturnValue(true)
-      vi.mocked(fsSync.readFileSync)
+      vi
+        .mocked(fsSync.readFileSync)
         .mockReturnValueOnce(`export default function Server() { return <div>Server</div> }`)
         .mockReturnValueOnce(`'use server'
 export async function action() { return {} }`)
@@ -454,27 +497,27 @@ export async function action() { return {} }`)
 
       vi.mocked(fsSync.existsSync).mockReturnValue(true)
 
-      vi.mocked(fsSync.promises.readFile).mockImplementation(async (path: any) => {
-        if (path.includes('manifest.json')) {
-          return JSON.stringify({
-            components: {},
-            actions: {},
-            importMap: { imports: {} },
-            buildTime: new Date().toISOString(),
-          })
-        }
+      vi.mocked(fsSync.promises.readFile).mockImplementation(
+        mockReadFile(target => {
+          if (target.includes('manifest.json')) {
+            return JSON.stringify({
+              components: {},
+              actions: {},
+              importMap: { imports: {} },
+              buildTime: new Date().toISOString(),
+            })
+          }
 
-        if (path.includes('routes.json'))
-          return mockRoutesManifest()
+          if (target.includes('routes.json')) return mockRoutesManifest()
 
-        return code
-      })
+          return code
+        }),
+      )
 
-      vi.mocked(fsSync.promises.stat).mockResolvedValue({
-        mtimeMs: 1000,
-      } as any)
+      vi.mocked(fsSync.promises.stat).mockResolvedValue(mockStat(1000))
 
-      const buildSpy = vi.spyOn(builder as any, 'buildSingleComponent')
+      // @ts-expect-error spying on internal build method
+      const buildSpy = vi.spyOn(builder, 'buildSingleComponent')
 
       await builder.rebuildComponent(filePath)
       expect(buildSpy).toHaveBeenCalledTimes(1)
@@ -497,21 +540,22 @@ export async function action() { return {} }`)
       vi.mocked(fsSync.existsSync).mockReturnValue(true)
       vi.mocked(fsSync.readFileSync).mockReturnValue(code)
 
-      vi.mocked(fsSync.promises.readFile).mockImplementation(async (path: any) => {
-        if (path.includes('manifest.json')) {
-          return JSON.stringify({
-            components: {},
-            actions: {},
-            importMap: { imports: {} },
-            buildTime: new Date().toISOString(),
-          })
-        }
+      vi.mocked(fsSync.promises.readFile).mockImplementation(
+        mockReadFile(target => {
+          if (target.includes('manifest.json')) {
+            return JSON.stringify({
+              components: {},
+              actions: {},
+              importMap: { imports: {} },
+              buildTime: new Date().toISOString(),
+            })
+          }
 
-        if (path.includes('routes.json'))
-          return mockRoutesManifest()
+          if (target.includes('routes.json')) return mockRoutesManifest()
 
-        return code
-      })
+          return code
+        }),
+      )
 
       builder.addServerComponent(filePath)
 
@@ -536,25 +580,24 @@ export async function action() { return {} }`)
 
       vi.mocked(fsSync.existsSync).mockReturnValue(true)
 
-      vi.mocked(fsSync.promises.readFile).mockImplementation(async (path: any) => {
-        if (path.includes('manifest.json')) {
-          return JSON.stringify({
-            components: {},
-            actions: {},
-            importMap: { imports: {} },
-            buildTime: new Date().toISOString(),
-          })
-        }
+      vi.mocked(fsSync.promises.readFile).mockImplementation(
+        mockReadFile(target => {
+          if (target.includes('manifest.json')) {
+            return JSON.stringify({
+              components: {},
+              actions: {},
+              importMap: { imports: {} },
+              buildTime: new Date().toISOString(),
+            })
+          }
 
-        if (path.includes('routes.json'))
-          return mockRoutesManifest()
+          if (target.includes('routes.json')) return mockRoutesManifest()
 
-        return code
-      })
+          return code
+        }),
+      )
 
-      vi.mocked(fsSync.promises.stat).mockResolvedValue({
-        mtimeMs: Date.now(),
-      } as any)
+      vi.mocked(fsSync.promises.stat).mockResolvedValue(mockStat(Date.now()))
 
       const result = await builder.rebuildComponent(filePath)
 
@@ -569,35 +612,33 @@ export async function action() { return {} }`)
 
       vi.mocked(fsSync.existsSync).mockReturnValue(true)
 
-      vi.mocked(fsSync.promises.readFile).mockImplementation(async (path: any) => {
-        if (path.includes('manifest.json')) {
-          return JSON.stringify({
-            components: {},
-            actions: {},
-            importMap: { imports: {} },
-            buildTime: new Date().toISOString(),
-          })
-        }
+      vi.mocked(fsSync.promises.readFile).mockImplementation(
+        mockReadFile(target => {
+          if (target.includes('manifest.json')) {
+            return JSON.stringify({
+              components: {},
+              actions: {},
+              importMap: { imports: {} },
+              buildTime: new Date().toISOString(),
+            })
+          }
 
-        if (path.includes('routes.json'))
-          return mockRoutesManifest()
+          if (target.includes('routes.json')) return mockRoutesManifest()
 
-        return code
-      })
+          return code
+        }),
+      )
 
-      vi.mocked(fsSync.promises.stat).mockResolvedValue({
-        mtimeMs: 1000,
-      } as any)
+      vi.mocked(fsSync.promises.stat).mockResolvedValue(mockStat(1000))
 
-      const buildSpy = vi.spyOn(builder as any, 'buildSingleComponent')
+      // @ts-expect-error spying on internal build method
+      const buildSpy = vi.spyOn(builder, 'buildSingleComponent')
 
       await builder.rebuildComponent(filePath)
 
       expect(buildSpy).toHaveBeenCalledTimes(1)
 
-      vi.mocked(fsSync.promises.stat).mockResolvedValue({
-        mtimeMs: 1000,
-      } as any)
+      vi.mocked(fsSync.promises.stat).mockResolvedValue(mockStat(1000))
 
       const result = await builder.rebuildComponent(filePath)
 
@@ -616,21 +657,22 @@ export async function action() { return {} }`)
       vi.mocked(fsSync.existsSync).mockReturnValue(true)
       vi.mocked(fsSync.readFileSync).mockReturnValue(code)
 
-      vi.mocked(fsSync.promises.readFile).mockImplementation(async (path: any) => {
-        if (path.includes('manifest.json')) {
-          return JSON.stringify({
-            components: {},
-            actions: {},
-            importMap: { imports: {} },
-            buildTime: new Date().toISOString(),
-          })
-        }
+      vi.mocked(fsSync.promises.readFile).mockImplementation(
+        mockReadFile(target => {
+          if (target.includes('manifest.json')) {
+            return JSON.stringify({
+              components: {},
+              actions: {},
+              importMap: { imports: {} },
+              buildTime: new Date().toISOString(),
+            })
+          }
 
-        if (path.includes('routes.json'))
-          return mockRoutesManifest()
+          if (target.includes('routes.json')) return mockRoutesManifest()
 
-        return code
-      })
+          return code
+        }),
+      )
 
       builder.addServerComponent(filePath)
 
@@ -681,21 +723,22 @@ export async function action() { return {} }`)
       vi.mocked(fsSync.existsSync).mockReturnValue(true)
       vi.mocked(fsSync.readFileSync).mockReturnValue(code)
 
-      vi.mocked(fsSync.promises.readFile).mockImplementation(async (path: any) => {
-        if (path.includes('manifest.json')) {
-          return JSON.stringify({
-            components: {},
-            actions: {},
-            importMap: { imports: {} },
-            buildTime: new Date().toISOString(),
-          })
-        }
+      vi.mocked(fsSync.promises.readFile).mockImplementation(
+        mockReadFile(target => {
+          if (target.includes('manifest.json')) {
+            return JSON.stringify({
+              components: {},
+              actions: {},
+              importMap: { imports: {} },
+              buildTime: new Date().toISOString(),
+            })
+          }
 
-        if (path.includes('routes.json'))
-          return 'not valid json'
+          if (target.includes('routes.json')) return 'not valid json'
 
-        return code
-      })
+          return code
+        }),
+      )
 
       builder.addServerComponent(filePath)
 
@@ -718,7 +761,9 @@ export const C = { key: "value" }`
     })
 
     it('rejects object const exports', () => {
-      expect(hasComponentExport('export const config = { port: 3000, host: "localhost" }')).toBe(false)
+      expect(hasComponentExport('export const config = { port: 3000, host: "localhost" }')).toBe(
+        false,
+      )
     })
 
     it('rejects array const exports', () => {
@@ -752,7 +797,9 @@ export const C = { key: "value" }`
     })
 
     it('detects async function export', () => {
-      expect(hasComponentExport('export async function fetchData() { return await fetch("/") }')).toBe(true)
+      expect(
+        hasComponentExport('export async function fetchData() { return await fetch("/") }'),
+      ).toBe(true)
     })
 
     it('detects arrow function const export', () => {

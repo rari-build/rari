@@ -8,6 +8,7 @@ declare global {
   interface GlobalThis {
     [K: string]: unknown
     Deno: typeof Deno
+    RARI_STREAM_DEBUG?: boolean
     process?: {
       env: Record<string, string | undefined>
       cwd: () => string
@@ -31,7 +32,7 @@ declare global {
     }
   }
 
-  const g: GlobalThis
+  var g: GlobalThis
 
   namespace Deno {
     const build: {
@@ -53,7 +54,7 @@ declare global {
     function openKv(path?: string): Promise<Kv>
 
     class AtomicOperation {
-      check(...checks: KvCheck[]): this
+      check(...checks: readonly KvCheck[]): this
       commit(): Promise<KvCommitResult>
       delete(key: KvKey): this
       set(key: KvKey, value: unknown): this
@@ -73,7 +74,7 @@ declare global {
     }
 
     interface Kv {
-      get: (key: KvKey) => Promise<KvEntryMaybe<unknown>>
+      get: (key: KvKey) => Promise<KvEntryMaybe>
       set: (key: KvKey, value: unknown) => Promise<void>
       delete: (key: KvKey) => Promise<void>
       list: (selector: KvListSelector) => KvListIterator
@@ -82,13 +83,23 @@ declare global {
     }
 
     type KvKey = readonly (string | number | bigint | boolean | Uint8Array)[]
-    interface KvCheck { key: KvKey, versionstamp: string | null }
-    type KvCommitResult = { ok: true, versionstamp: string } | { ok: false }
-    interface KvEntry<T = unknown> { key: KvKey, value: T, versionstamp: string }
-    type KvEntryMaybe<T = unknown> = KvEntry<T> | { key: KvKey, value: null, versionstamp: null }
-    type KvListSelector = { prefix: KvKey } | { start: KvKey, end: KvKey }
+    interface KvCheck {
+      key: KvKey
+      versionstamp: string | null
+    }
+    type KvCommitResult = { ok: true; versionstamp: string } | { ok: false }
+    interface KvEntry<T = unknown> {
+      key: KvKey
+      value: T
+      versionstamp: string
+    }
+    type KvEntryMaybe<T = unknown> = KvEntry<T> | { key: KvKey; value: null; versionstamp: null }
+    type KvListSelector = { prefix: KvKey } | { start: KvKey; end: KvKey }
 
-    function serve(handler: (request: Request) => Response | Promise<Response>, options?: ServeOptions): Server
+    function serve(
+      handler: (request: Request) => Response | Promise<Response>,
+      options?: ServeOptions,
+    ): Server
     function serveHttp(conn: any): HttpConn
     function upgradeWebSocket(request: Request, options?: UpgradeWebSocketOptions): WebSocketUpgrade
 
@@ -123,7 +134,10 @@ declare global {
       socket: WebSocket
     }
 
-    function dlopen(path: string, symbols: Record<string, ForeignFunction>): DynamicLibrary
+    function dlopen(
+      path: string,
+      symbols: Readonly<{ readonly [key: string]: ForeignFunction }>,
+    ): DynamicLibrary
 
     interface DynamicLibrary {
       symbols: Record<string, any>
@@ -136,10 +150,27 @@ declare global {
       nonblocking?: boolean
     }
 
-    type NativeType = 'void' | 'bool' | 'u8' | 'i8' | 'u16' | 'i16' | 'u32' | 'i32' | 'u64' | 'i64' | 'usize' | 'isize' | 'f32' | 'f64' | 'pointer' | 'buffer' | 'function'
+    type NativeType =
+      | 'void'
+      | 'bool'
+      | 'u8'
+      | 'i8'
+      | 'u16'
+      | 'i16'
+      | 'u32'
+      | 'i32'
+      | 'u64'
+      | 'i64'
+      | 'usize'
+      | 'isize'
+      | 'f32'
+      | 'f64'
+      | 'pointer'
+      | 'buffer'
+      | 'function'
 
     class UnsafeCallback {
-      constructor(definition: UnsafeCallbackDefinition, callback: (...args: any[]) => any)
+      constructor(definition: UnsafeCallbackDefinition, callback: (...args: readonly any[]) => any)
       ref: () => void
       unref: () => void
       close: () => void
@@ -172,13 +203,21 @@ declare global {
 
     class UnsafeFnPointer {
       constructor(pointer: bigint, definition: ForeignFunction)
-      call: (...args: any[]) => any
+      call: (...args: readonly any[]) => any
     }
 
     function writeFileSync(path: string | URL, data: Uint8Array, options?: WriteFileOptions): void
-    function writeFile(path: string | URL, data: Uint8Array, options?: WriteFileOptions): Promise<void>
+    function writeFile(
+      path: string | URL,
+      data: Uint8Array,
+      options?: WriteFileOptions,
+    ): Promise<void>
     function writeTextFileSync(path: string | URL, data: string, options?: WriteFileOptions): void
-    function writeTextFile(path: string | URL, data: string, options?: WriteFileOptions): Promise<void>
+    function writeTextFile(
+      path: string | URL,
+      data: string,
+      options?: WriteFileOptions,
+    ): Promise<void>
     function readTextFile(path: string | URL, options?: ReadFileOptions): Promise<string>
     function readTextFileSync(path: string | URL, options?: ReadFileOptions): string
     function readFile(path: string | URL, options?: ReadFileOptions): Promise<Uint8Array>
@@ -217,8 +256,16 @@ declare global {
     function openSync(path: string | URL, options?: OpenOptions): FsFile
     function create(path: string | URL): Promise<FsFile>
     function createSync(path: string | URL): FsFile
-    function symlink(oldpath: string | URL, newpath: string | URL, options?: SymlinkOptions): Promise<void>
-    function symlinkSync(oldpath: string | URL, newpath: string | URL, options?: SymlinkOptions): void
+    function symlink(
+      oldpath: string | URL,
+      newpath: string | URL,
+      options?: SymlinkOptions,
+    ): Promise<void>
+    function symlinkSync(
+      oldpath: string | URL,
+      newpath: string | URL,
+      options?: SymlinkOptions,
+    ): void
     function link(oldpath: string | URL, newpath: string | URL): Promise<void>
     function linkSync(oldpath: string | URL, newpath: string | URL): void
     function utime(path: string | URL, atime: number | Date, mtime: number | Date): Promise<void>
@@ -361,7 +408,7 @@ declare global {
     }
 
     class Permissions {
-      query(permission: { name: string }): Promise<PermissionStatus>
+      query(permission: Readonly<{ name: string }>): Promise<PermissionStatus>
     }
 
     const permissions: Permissions
@@ -370,7 +417,7 @@ declare global {
 
     class ChildProcess {}
     class Command {
-      constructor(command: string, argsOrOptions?: string[] | CommandOptions)
+      constructor(command: string, argsOrOptions?: readonly string[] | CommandOptions)
     }
     interface CommandOptions {
       args?: string[]
@@ -381,7 +428,7 @@ declare global {
       stderr?: 'inherit' | 'piped' | 'null' | number
     }
     class Process {}
-    function run(...args: any[]): any
+    function run(...args: readonly any[]): any
     function kill(pid: number, signal?: string): void
 
     function addSignalListener(
@@ -394,12 +441,16 @@ declare global {
     ): void
 
     function isatty(rid: number): boolean
-    function consoleSize(): { columns: number, rows: number } | null
+    function consoleSize(): { columns: number; rows: number } | null
 
     function connect(options: ConnectOptions): Promise<Conn>
     function listen(options: ListenOptions): Listener
     function listenDatagram(options: ListenDatagramOptions): DatagramConn
-    function resolveDns(query: string, recordType: string, options?: ResolveDnsOptions): Promise<string[]>
+    function resolveDns(
+      query: string,
+      recordType: string,
+      options?: ResolveDnsOptions,
+    ): Promise<string[]>
     function connectTls(options: ConnectTlsOptions): Promise<TlsConn>
     function listenTls(options: ListenTlsOptions): TlsListener
     function startTls(conn: Conn, options?: StartTlsOptions): Promise<TlsConn>
@@ -516,7 +567,11 @@ declare global {
 
     namespace core {
       namespace ops {
-        function op_fetch_with_cache(url: string, options: string, requestId?: string): Promise<{
+        function op_fetch_with_cache(
+          url: string,
+          options: string,
+          requestId?: string,
+        ): Promise<{
           ok: boolean
           error?: string
           body?: string

@@ -4,8 +4,7 @@ const tagToKeys = new Map<string, Set<string>>()
 const keyToTags = new Map<string, Set<string>>()
 
 function addKeyTags(key: string, tags: readonly string[]): void {
-  if (tags.length === 0)
-    return
+  if (tags.length === 0) return
 
   const normalized = [...new Set(tags)]
   keyToTags.set(key, new Set(normalized))
@@ -22,14 +21,12 @@ function addKeyTags(key: string, tags: readonly string[]): void {
 
 function removeKeyTags(key: string): void {
   const tags = keyToTags.get(key)
-  if (!tags)
-    return
+  if (!tags) return
 
   for (const tag of tags) {
     const keys = tagToKeys.get(tag)
     keys?.delete(key)
-    if (keys && keys.size === 0)
-      tagToKeys.delete(tag)
+    if (keys?.size === 0) tagToKeys.delete(tag)
   }
 
   keyToTags.delete(key)
@@ -45,8 +42,7 @@ export async function invalidateUseCacheTag(
   deleteKey: (key: string) => Promise<void>,
 ): Promise<number> {
   const keys = tagToKeys.get(tag)
-  if (!keys || keys.size === 0)
-    return 0
+  if (!keys || keys.size === 0) return 0
 
   const snapshot = [...keys]
   let invalidated = 0
@@ -55,14 +51,12 @@ export async function invalidateUseCacheTag(
       await deleteKey(key)
       removeKeyTags(key)
       invalidated += 1
-    }
-    catch (error) {
+    } catch (error) {
       console.error(`[rari] failed to invalidate use cache key "${key}" for tag "${tag}":`, error)
     }
   }
 
-  if (!tagToKeys.get(tag)?.size)
-    tagToKeys.delete(tag)
+  if ((tagToKeys.get(tag)?.size ?? 0) === 0) tagToKeys.delete(tag)
 
   return invalidated
 }
@@ -93,13 +87,12 @@ export function getUseCacheTagRegistryStorage(): {
 
 export type UseCacheDeleteKey = (key: string) => Promise<void>
 
-export function createRegistryBackedDelete(
-  storages: readonly CacheStorage[],
-): UseCacheDeleteKey {
+export function createRegistryBackedDelete(storages: readonly CacheStorage[]): UseCacheDeleteKey {
   return async (key: string) => {
-    await Promise.all(storages.map(async (storage) => {
-      if ('delete' in storage && typeof storage.delete === 'function')
-        await storage.delete(key)
-    }))
+    await Promise.all(
+      storages.map(async storage => {
+        if ('delete' in storage && typeof storage.delete === 'function') await storage.delete(key)
+      }),
+    )
   }
 }

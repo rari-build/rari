@@ -36,14 +36,15 @@ test.describe('Streaming load validation', () => {
     const staticRenderMode = staticResponse.headers()['x-render-mode']
     if (staticRenderMode) {
       expect(['static', 'synchronous']).toContain(staticRenderMode)
-    }
-    else {
+    } else {
       const staticBody = await staticResponse.text()
       expect(staticBody).toContain('<html')
     }
   })
 
-  test('streaming HTML should interleave __rari_f hydration before </body>', async ({ request }) => {
+  test('streaming HTML should interleave __rari_f hydration before </body>', async ({
+    request,
+  }) => {
     const { body } = await expectStreamingResponse(request, '/suspense-streaming')
 
     const bodyCloseIdx = body.lastIndexOf('</body>')
@@ -61,8 +62,7 @@ test.describe('Streaming load validation', () => {
     const pushPattern = /__rari_f[^<]*\.push\("([0-9a-fA-F]+):/g
     for (const match of body.matchAll(pushPattern)) {
       const rowId = Number.parseInt(match[1], 16)
-      if (!Number.isNaN(rowId))
-        flightRowIds.push(rowId)
+      if (!Number.isNaN(rowId)) flightRowIds.push(rowId)
     }
 
     expect(flightRowIds.length).toBeGreaterThan(0)
@@ -76,8 +76,9 @@ test.describe('Streaming load validation', () => {
     const path = '/suspense-streaming'
 
     const results = await Promise.all(
-      Array.from({ length: concurrency }, (_, index) =>
-        expectStreamingResponse(request, `${path}?run=${index}`)),
+      Array.from({ length: concurrency }, async (_, index) =>
+        expectStreamingResponse(request, `${path}?run=${index}`),
+      ),
     )
 
     expect(results).toHaveLength(concurrency)
@@ -90,10 +91,10 @@ test.describe('Streaming load validation', () => {
       expect(body).toContain(`data-testid="run-id">${index}`)
       expect(body.indexOf('</body>')).toBeGreaterThan(body.indexOf('__rari_f'))
 
-      const match = body.match(/data-testid="component-c"[^>]*>[\s\S]*?(\d{4}-\d{2}-\d{2}T[\d:.]+Z)/)
+      const match = /data-testid="component-c"[^>]*>[\s\S]*?(\d{4}-\d{2}-\d{2}T[\d:.]+Z)/.exec(body)
       expect(match, `response ${index} should include a component-c timestamp`).toBeTruthy()
 
-      const runId = body.match(/data-testid="run-id">(\d+)/)?.[1]
+      const runId = /data-testid="run-id">(\d+)/.exec(body)?.[1]
       expect(runId, `response ${index} should include a run-id`).toBe(String(index))
       return runId
     })
@@ -105,9 +106,15 @@ test.describe('Streaming load validation', () => {
   test('should recover after a mid-stream client abort', async ({ page, request }) => {
     const path = '/suspense-streaming'
 
-    const navigation = page.goto(path, { waitUntil: 'commit', timeout: 30000 }).catch(() => undefined)
+    const navigation = page
+      .goto(path, { waitUntil: 'commit', timeout: 30000 })
+      .catch(() => undefined)
     await page.waitForTimeout(150)
-    await page.evaluate(() => window.stop()).catch(() => undefined)
+    await page
+      .evaluate(() => {
+        window.stop()
+      })
+      .catch(() => undefined)
     await navigation
 
     const recovery = await expectStreamingResponse(request, path)
@@ -118,7 +125,7 @@ test.describe('Streaming load validation', () => {
     const path = '/suspense-streaming'
     let intercepted = false
 
-    await page.route(`**${path}`, async (route) => {
+    await page.route(`**${path}`, async route => {
       intercepted = true
       await route.abort('connectionfailed')
     })
@@ -159,14 +166,17 @@ test.describe('Streaming load validation', () => {
     expect(Math.max(...durations)).toBeLessThan(60000)
   })
 
-  test('streaming page should render progressively under throttled network', async ({ page, browserName }) => {
+  test('streaming page should render progressively under throttled network', async ({
+    page,
+    browserName,
+  }) => {
     test.skip(browserName !== 'chromium', 'CDP network emulation is Chromium-only')
 
     const client = await page.context().newCDPSession(page)
     await client.send('Network.emulateNetworkConditions', {
       offline: false,
-      downloadThroughput: 256 * 1024 / 8,
-      uploadThroughput: 256 * 1024 / 8,
+      downloadThroughput: (256 * 1024) / 8,
+      uploadThroughput: (256 * 1024) / 8,
       latency: 300,
     })
 
@@ -195,9 +205,9 @@ test.describe('RSC soft navigation', () => {
   test('should stream RSC flight on client navigation to a loading route', async ({ page }) => {
     await gotoWithRetry(page, '/')
 
-    const rscResponses: Array<{ status: number, renderMode?: string, chunked?: string }> = []
+    const rscResponses: Array<{ status: number; renderMode?: string; chunked?: string }> = []
 
-    page.on('response', (response) => {
+    page.on('response', response => {
       const contentType = response.headers()['content-type'] || ''
       if (!contentType.includes('text/x-component')) {
         return

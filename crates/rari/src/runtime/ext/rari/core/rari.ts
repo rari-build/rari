@@ -1,4 +1,5 @@
-// @ts-nocheck
+/// <reference path="./types.d.ts" />
+
 import { loadFullReactVendors, loadRscReactVendors } from 'ext:rari/react/vendor_loaders.ts'
 import 'ext:rari/http/cookies.ts'
 import 'ext:rari/http/headers.ts'
@@ -10,8 +11,7 @@ import 'ext:rari/rsc/rsc_modules.ts'
 import 'ext:rari/rsc/server_functions.ts'
 import 'ext:rari/rsc/client_registry.ts'
 
-if (!g['~rari'])
-  g['~rari'] = {}
+g['~rari'] ??= {}
 
 g['~rari'].loadFullReactVendors = loadFullReactVendors
 g['~rari'].loadRscReactVendors = loadRscReactVendors

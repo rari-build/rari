@@ -1,34 +1,49 @@
-import type { Robots } from './types'
+import type { Robots, RobotsRule } from './types'
 import { Buffer } from 'node:buffer'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
+import { getErrnoCode, isRecord } from '@/shared/utils/type-guards'
 
-export interface RobotsGeneratorOptions {
-  appDir: string
-  outDir: string
-  extensions?: string[]
+function isRobots(value: unknown): value is Robots {
+  return isRecord(value) && value.rules != null
 }
 
-function normalizeUserAgents(userAgent: string | string[] | undefined): string[] {
-  if (Array.isArray(userAgent))
-    return userAgent
-  if (userAgent)
-    return [userAgent]
+async function resolveRobotsExport(defaultExport: unknown): Promise<Robots> {
+  if (typeof defaultExport === 'function') {
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- dynamic robots module default export
+    const robotsExport = defaultExport as () => Robots | Promise<Robots>
+    const robotsResult = robotsExport()
+    const resolved = robotsResult instanceof Promise ? await robotsResult : robotsResult
+    if (!isRobots(resolved))
+      throw new Error('Robots default export must resolve to a robots object')
+
+    return resolved
+  }
+
+  if (!isRobots(defaultExport)) throw new Error('Robots default export must be a robots object')
+
+  return defaultExport
+}
+
+export interface RobotsGeneratorOptions {
+  readonly appDir: string
+  readonly outDir: string
+  readonly extensions?: readonly string[]
+}
+
+function normalizeUserAgents(userAgent: string | readonly string[] | undefined): string[] {
+  if (typeof userAgent === 'string') return userAgent !== '' ? [userAgent] : ['*']
+  if (userAgent != null) return [...userAgent]
 
   return ['*']
 }
 
-function normalizeArray<T>(value: T | T[] | undefined): T[] {
-  if (value === undefined)
-    return []
+function normalizeArray(value: string | readonly string[] | undefined): string[] {
+  if (value === undefined) return []
+  if (typeof value === 'string') return value !== '' ? [value] : []
 
-  const arr = Array.isArray(value) ? value : [value]
-  return arr.filter(v => v !== '')
+  return [...value].filter(v => v !== '')
 }
-
-type RobotsRule = Robots extends { rules: infer R }
-  ? R extends (infer T)[] ? T : R
-  : never
 
 function generateRuleLines(rule: RobotsRule): string[] {
   const lines: string[] = []
@@ -38,15 +53,12 @@ function generateRuleLines(rule: RobotsRule): string[] {
     lines.push(`User-Agent: ${userAgent}`)
 
     const allows = normalizeArray(rule.allow)
-    for (const allow of allows)
-      lines.push(`Allow: ${allow}`)
+    for (const allow of allows) lines.push(`Allow: ${allow}`)
 
     const disallows = normalizeArray(rule.disallow)
-    for (const disallow of disallows)
-      lines.push(`Disallow: ${disallow}`)
+    for (const disallow of disallows) lines.push(`Disallow: ${disallow}`)
 
-    if (rule.crawlDelay !== undefined)
-      lines.push(`Crawl-delay: ${rule.crawlDelay}`)
+    if (rule.crawlDelay !== undefined) lines.push(`Crawl-delay: ${rule.crawlDelay}`)
 
     lines.push('')
   }
@@ -55,20 +67,19 @@ function generateRuleLines(rule: RobotsRule): string[] {
 }
 
 function generateHostLines(host: string | undefined): string[] {
-  if (!host)
-    return []
+  if (host == null || host === '') return []
 
   return [`Host: ${host}`, '']
 }
 
-function generateSitemapLines(sitemap: string | string[] | undefined): string[] {
+function generateSitemapLines(sitemap: string | readonly string[] | undefined): string[] {
   const sitemaps = normalizeArray(sitemap)
   return sitemaps.map(s => `Sitemap: ${s}`)
 }
 
 export function generateRobotsTxt(robots: Robots): string {
   const lines: string[] = []
-  const rules = Array.isArray(robots.rules) ? robots.rules : [robots.rules]
+  const rules: readonly RobotsRule[] = Array.isArray(robots.rules) ? robots.rules : [robots.rules]
 
   for (const rule of rules) {
     lines.push(...generateRuleLines(rule))
@@ -83,16 +94,14 @@ export function generateRobotsTxt(robots: Robots): string {
 /* v8 ignore start - file system operations, better tested in integration/e2e */
 export async function findRobotsFile(
   appDir: string,
-  extensions: string[] = ['.ts', '.tsx', '.js', '.jsx', '.mjs'],
-): Promise<{ type: 'static' | 'dynamic', path: string } | null> {
+  extensions: readonly string[] = ['.ts', '.tsx', '.js', '.jsx', '.mjs'],
+): Promise<{ type: 'static' | 'dynamic'; path: string } | null> {
   const staticPath = path.join(appDir, 'robots.txt')
   try {
     await fs.access(staticPath)
     return { type: 'static', path: staticPath }
-  }
-  catch (err: any) {
-    if (err?.code !== 'ENOENT')
-      throw err
+  } catch (err: unknown) {
+    if (getErrnoCode(err) !== 'ENOENT') throw err
     // File doesn't exist, continue to check dynamic files
   }
 
@@ -101,10 +110,8 @@ export async function findRobotsFile(
     try {
       await fs.access(dynamicPath)
       return { type: 'dynamic', path: dynamicPath }
-    }
-    catch (err: any) {
-      if (err?.code !== 'ENOENT')
-        throw err
+    } catch (err: unknown) {
+      if (getErrnoCode(err) !== 'ENOENT') throw err
       // File doesn't exist, try next extension
     }
   }
@@ -118,8 +125,7 @@ export async function generateRobotsFile(options: RobotsGeneratorOptions): Promi
   const { appDir, outDir, extensions } = options
   const robotsFile = await findRobotsFile(appDir, extensions)
 
-  if (!robotsFile)
-    return false
+  if (!robotsFile) return false
 
   const outputPath = path.join(outDir, 'robots.txt')
 
@@ -144,78 +150,87 @@ export async function generateRobotsFile(options: RobotsGeneratorOptions): Promi
         format: 'esm',
         codeSplitting: false,
       },
-      plugins: [{
-        name: 'virtual-robots',
-        resolveId(resolveId) {
-          if (resolveId === virtualModuleId)
-            return resolveId
-          if (resolveId.startsWith('.'))
-            return path.resolve(path.dirname(robotsFile.path), resolveId)
+      plugins: [
+        {
+          name: 'virtual-robots',
+          resolveId(resolveId) {
+            if (resolveId === virtualModuleId) return resolveId
+            if (resolveId.startsWith('.'))
+              return path.resolve(path.dirname(robotsFile.path), resolveId)
 
-          return null
-        },
-        load(loadId) {
-          if (loadId === virtualModuleId) {
-            const ext = path.extname(robotsFile.path).slice(1)
-            let moduleType: 'js' | 'jsx' | 'ts' | 'tsx' | 'json' | 'text' | 'base64' | 'dataurl' | 'binary' | 'empty'
+            return null
+          },
+          load(loadId) {
+            if (loadId === virtualModuleId) {
+              const ext = path.extname(robotsFile.path).slice(1)
+              let moduleType:
+                | 'js'
+                | 'jsx'
+                | 'ts'
+                | 'tsx'
+                | 'json'
+                | 'text'
+                | 'base64'
+                | 'dataurl'
+                | 'binary'
+                | 'empty'
 
-            switch (ext) {
-              case 'ts':
-                moduleType = 'ts'
-                break
-              case 'tsx':
-                moduleType = 'tsx'
-                break
-              case 'js':
-              case 'mjs':
-                moduleType = 'js'
-                break
-              case 'jsx':
-                moduleType = 'jsx'
-                break
-              default:
-                throw new Error(`Unsupported robots file extension: .${ext}. Supported extensions are: .ts, .tsx, .js, .jsx, .mjs`)
+              switch (ext) {
+                case 'ts':
+                  moduleType = 'ts'
+                  break
+                case 'tsx':
+                  moduleType = 'tsx'
+                  break
+                case 'js':
+                case 'mjs':
+                  moduleType = 'js'
+                  break
+                case 'jsx':
+                  moduleType = 'jsx'
+                  break
+                default:
+                  throw new Error(
+                    `Unsupported robots file extension: .${ext}. Supported extensions are: .ts, .tsx, .js, .jsx, .mjs`,
+                  )
+              }
+
+              return { code: sourceCode, moduleType }
             }
 
-            return { code: sourceCode, moduleType }
-          }
-
-          return null
+            return null
+          },
         },
-      }],
+      ],
     })
 
-    if (!result.output || result.output.length === 0)
-      throw new Error('Failed to build robots module')
+    if (result.output.length === 0) throw new Error('Failed to build robots module')
 
-    const entryChunk = result.output.find(item => item.type === 'chunk' && item.isEntry)
-      || result.output.find(item => item.type === 'chunk')
+    const entryChunk =
+      result.output.find(item => item.type === 'chunk' && item.isEntry) ??
+      result.output.find(item => item.type === 'chunk')
 
-    if (!entryChunk || entryChunk.type !== 'chunk')
+    if (entryChunk?.type !== 'chunk')
       throw new Error('No chunk output found in robots build result')
 
     const code = entryChunk.code
     const dataUrl = `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`
-    const module = await import(dataUrl)
-
-    if (!module || module.default == null) {
+    const module: unknown = await import(dataUrl)
+    if (!isRecord(module)) {
       throw new Error('Robots file must export a default export (either an object or a function)')
     }
 
-    let robotsData: Robots
-    if (typeof module.default === 'function') {
-      const robotsResult = module.default()
-      robotsData = robotsResult instanceof Promise ? await robotsResult : robotsResult
+    const defaultExport = module.default
+    if (defaultExport == null) {
+      throw new Error('Robots file must export a default export (either an object or a function)')
     }
-    else {
-      robotsData = module.default
-    }
+
+    const robotsData = await resolveRobotsExport(defaultExport)
 
     const content = generateRobotsTxt(robotsData)
     await fs.writeFile(outputPath, content)
     return true
-  }
-  catch (error) {
+  } catch (error) {
     console.error('[rari] Failed to build/execute robots file:', error)
     return false
   }

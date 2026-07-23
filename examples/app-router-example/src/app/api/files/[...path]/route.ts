@@ -1,6 +1,6 @@
-export async function GET(
+export function GET(
   request: Request,
-  { params }: { params: { path: string } },
+  { params }: Readonly<{ readonly params: { readonly path: string } }>,
 ) {
   return new Response(
     JSON.stringify({

@@ -13,8 +13,7 @@ describe('cli project context', () => {
     try {
       process.chdir(dir)
       expect(detectPackageManager()).toBe('bun')
-    }
-    finally {
+    } finally {
       process.chdir(originalCwd)
       fs.rmSync(dir, { recursive: true, force: true })
     }

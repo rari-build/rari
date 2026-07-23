@@ -24,7 +24,10 @@ export default function ApiReferencePage() {
                 <div className="relative z-10">
                   <h2 className="text-xl font-semibold mb-2">
                     <span className="text-fg">Components</span>
-                    <span aria-hidden="true" className="absolute inset-0 bg-clip-text text-transparent bg-linear-to-r from-fg to-accent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                    <span
+                      aria-hidden="true"
+                      className="absolute inset-0 bg-clip-text text-transparent bg-linear-to-r from-fg to-accent opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                    >
                       Components
                     </span>
                   </h2>
@@ -36,12 +39,12 @@ export default function ApiReferencePage() {
               <div
                 className="absolute z-0 aspect-2/1 w-16 animate-border-trail opacity-0 group-hover:opacity-100 transition-opacity duration-300"
                 style={{
-                  background: 'radial-gradient(ellipse at 100% 50%, #fd7e14 0%, #ff9a3c 40%, transparent 70%)',
+                  background:
+                    'radial-gradient(ellipse at 100% 50%, #fd7e14 0%, #ff9a3c 40%, transparent 70%)',
                   offsetAnchor: '100% 50%',
                   offsetPath: 'border-box',
                 }}
-              >
-              </div>
+              ></div>
             </a>
 
             <a
@@ -53,7 +56,10 @@ export default function ApiReferencePage() {
                 <div className="relative z-10">
                   <h2 className="text-xl font-semibold mb-2">
                     <span className="text-fg">Functions</span>
-                    <span aria-hidden="true" className="absolute inset-0 bg-clip-text text-transparent bg-linear-to-r from-fg to-accent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                    <span
+                      aria-hidden="true"
+                      className="absolute inset-0 bg-clip-text text-transparent bg-linear-to-r from-fg to-accent opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                    >
                       Functions
                     </span>
                   </h2>
@@ -65,31 +71,23 @@ export default function ApiReferencePage() {
               <div
                 className="absolute z-0 aspect-2/1 w-16 animate-border-trail opacity-0 group-hover:opacity-100 transition-opacity duration-300"
                 style={{
-                  background: 'radial-gradient(ellipse at 100% 50%, #fd7e14 0%, #ff9a3c 40%, transparent 70%)',
+                  background:
+                    'radial-gradient(ellipse at 100% 50%, #fd7e14 0%, #ff9a3c 40%, transparent 70%)',
                   offsetAnchor: '100% 50%',
                   offsetPath: 'border-box',
                 }}
-              >
-              </div>
+              ></div>
             </a>
 
             <div className="block p-6 bg-surface border border-edge rounded-lg opacity-50">
-              <h2 className="text-xl font-semibold text-fg mb-2">
-                Configuration
-              </h2>
-              <p className="text-fg-muted">
-                Vite plugin options and runtime configuration.
-              </p>
+              <h2 className="text-xl font-semibold text-fg mb-2">Configuration</h2>
+              <p className="text-fg-muted">Vite plugin options and runtime configuration.</p>
               <span className="text-xs text-fg-muted mt-2 inline-block">Coming soon</span>
             </div>
 
             <div className="block p-6 bg-surface border border-edge rounded-lg opacity-50">
-              <h2 className="text-xl font-semibold text-fg mb-2">
-                Types
-              </h2>
-              <p className="text-fg-muted">
-                TypeScript type definitions and interfaces.
-              </p>
+              <h2 className="text-xl font-semibold text-fg mb-2">Types</h2>
+              <p className="text-fg-muted">TypeScript type definitions and interfaces.</p>
               <span className="text-xs text-fg-muted mt-2 inline-block">Coming soon</span>
             </div>
           </div>
@@ -101,5 +99,6 @@ export default function ApiReferencePage() {
 
 export const metadata: Metadata = {
   title: 'API Reference / rari Docs',
-  description: 'Complete API documentation for rari framework components, functions, and utilities.',
+  description:
+    'Complete API documentation for rari framework components, functions, and utilities.',
 }

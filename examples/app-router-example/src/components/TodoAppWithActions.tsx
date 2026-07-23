@@ -7,11 +7,11 @@ import TodoFormWithActions from './TodoFormWithActions'
 import TodoListWithActions from './TodoListWithActions'
 
 interface TodoAppProps {
-  initialTodos: Todo[]
+  readonly initialTodos: readonly Todo[]
 }
 
 export default function TodoAppWithActions({ initialTodos }: TodoAppProps) {
-  const [todos, setTodos] = useState<Todo[]>(initialTodos)
+  const [todos, setTodos] = useState<readonly Todo[]>(initialTodos)
 
   const refreshTodos = async () => {
     const updatedTodos = await getTodos()
@@ -20,8 +20,17 @@ export default function TodoAppWithActions({ initialTodos }: TodoAppProps) {
 
   return (
     <>
-      <TodoFormWithActions onSuccess={refreshTodos} />
-      <TodoListWithActions initialTodos={todos} onUpdate={refreshTodos} />
+      <TodoFormWithActions
+        onSuccess={() => {
+          void refreshTodos()
+        }}
+      />
+      <TodoListWithActions
+        initialTodos={todos}
+        onUpdate={() => {
+          void refreshTodos()
+        }}
+      />
     </>
   )
 }

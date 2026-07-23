@@ -1,25 +1,25 @@
 /// <reference path="../core/types.d.ts" />
 
 interface RequestData {
-  url: string
-  method: string
-  headers?: Record<string, string>
-  body?: string
-  params?: Record<string, string>
+  readonly url: string
+  readonly method: string
+  readonly headers?: Readonly<Record<string, string>>
+  readonly body?: string
+  readonly params?: Readonly<Record<string, string>>
 }
 
 interface ApiResponse {
   status: number
   statusText: string
-  headers: Record<string, string | string[]>
+  headers: Record<string, string | readonly string[]>
   body: string
 }
 
 interface ApiContext {
-  params: Record<string, string>
+  readonly params: Readonly<Record<string, string>>
 }
 
-type ApiHandler = (request: Request, context: ApiContext) => Promise<Response | unknown>
+type ApiHandler = (request: Request, context: ApiContext) => Promise<unknown>
 
 interface ResponseCookiesLike {
   toSetCookieHeaders?: () => string[]
@@ -27,7 +27,7 @@ interface ResponseCookiesLike {
 
 function serializeResponseHeaders(
   headers: Headers,
-  extraSetCookies: string[] = [],
+  extraSetCookies: readonly string[] = [],
 ): Record<string, string | string[]> {
   const out: Record<string, string | string[]> = {}
   const setCookiesFromForEach: string[] = []
@@ -35,35 +35,29 @@ function serializeResponseHeaders(
 
   headers.forEach((value, key) => {
     if (key.toLowerCase() === 'set-cookie') {
-      if (!hasGetSetCookie)
-        setCookiesFromForEach.push(value)
+      if (!hasGetSetCookie) setCookiesFromForEach.push(value)
 
       return
     }
     const existing = out[key]
-    if (existing === undefined)
-      out[key] = value
-    else if (Array.isArray(existing))
-      existing.push(value)
-    else
-      out[key] = [existing, value]
+    if (!(key in out)) out[key] = value
+    else if (Array.isArray(existing)) existing.push(value)
+    else out[key] = [existing, value]
   })
 
   const setCookies = [
     ...(hasGetSetCookie ? headers.getSetCookie() : setCookiesFromForEach),
     ...extraSetCookies,
   ]
-  if (setCookies.length === 1)
-    out['set-cookie'] = setCookies[0]!
-  else if (setCookies.length > 1)
-    out['set-cookie'] = setCookies
+  if (setCookies.length === 1) out['set-cookie'] = setCookies[0]!
+  else if (setCookies.length > 1) out['set-cookie'] = setCookies
 
   return out
 }
 
 function cookiesFromResponse(result: Response): string[] {
   const cookies = (result as Response & { cookies?: ResponseCookiesLike }).cookies
-  if (cookies && typeof cookies.toSetCookieHeaders === 'function')
+  if (cookies != null && typeof cookies.toSetCookieHeaders === 'function')
     return cookies.toSetCookieHeaders()
 
   return []
@@ -76,9 +70,9 @@ async function callHandler(
 ): Promise<ApiResponse> {
   try {
     const url = new URL(requestData.url, 'http://localhost')
-    const headers = new Headers(requestData.headers || {})
+    const headers = new Headers(requestData.headers ?? {})
     const method = requestData.method.toUpperCase()
-    const body = (method === 'GET' || method === 'HEAD') ? undefined : (requestData.body || undefined)
+    const body = method === 'GET' || method === 'HEAD' ? undefined : (requestData.body ?? undefined)
 
     const request = new Request(url.toString(), {
       method: requestData.method,
@@ -87,17 +81,15 @@ async function callHandler(
     })
 
     const context: ApiContext = {
-      params: requestData.params || {},
+      params: requestData.params ?? {},
     }
 
-    const moduleNamespace = await import(moduleSpecifier)
-    const handler = moduleNamespace[methodName] as ApiHandler
+    const moduleNamespace = (await import(moduleSpecifier)) as Record<string, unknown> // oxlint-disable-line typescript/no-unsafe-type-assertion -- dynamic API route module
+    const handler = moduleNamespace[methodName] as ApiHandler // oxlint-disable-line typescript/no-unsafe-type-assertion -- named export lookup
 
     if (typeof handler !== 'function') {
       const available = Object.keys(moduleNamespace).join(', ')
-      throw new Error(
-        `Handler '${methodName}' is not a function. Available exports: ${available}`,
-      )
+      throw new Error(`Handler '${methodName}' is not a function. Available exports: ${available}`)
     }
 
     const result = await handler(request, context)
@@ -110,8 +102,7 @@ async function callHandler(
         headers: serializeResponseHeaders(result.headers, cookiesFromResponse(result)),
         body,
       }
-    }
-    else {
+    } else {
       try {
         return {
           status: 200,
@@ -119,42 +110,47 @@ async function callHandler(
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify(result),
         }
-      }
-      catch (serializationError) {
+      } catch (serializationError) {
         console.error('Failed to serialize API response:', serializationError)
 
         const isDevelopment = g['~rari']?.isDevelopment === true
+        const serializationMessage =
+          serializationError instanceof Error
+            ? serializationError.message
+            : 'Response contains circular references or non-serializable values'
         return {
           status: 500,
           statusText: 'Internal Server Error',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
             error: 'Failed to serialize response',
-            message: (serializationError as Error)?.message || 'Response contains circular references or non-serializable values',
-            stack: isDevelopment ? (serializationError as Error)?.stack : undefined,
+            message: serializationMessage,
+            stack:
+              isDevelopment && serializationError instanceof Error
+                ? serializationError.stack
+                : undefined,
           }),
         }
       }
     }
-  }
-  catch (error) {
+  } catch (error) {
     console.error('API route handler error:', error)
     const isDevelopment = g['~rari']?.isDevelopment === true
+    const errorMessage = error instanceof Error ? error.message : String(error)
     return {
       status: 500,
       statusText: 'Internal Server Error',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         error: 'Internal Server Error',
-        message: (error as Error)?.message || String(error),
-        stack: isDevelopment ? (error as Error)?.stack : undefined,
+        message: errorMessage,
+        stack: isDevelopment && error instanceof Error ? error.stack : undefined,
       }),
     }
   }
 }
 
-if (!g['~rari'])
-  g['~rari'] = {}
+g['~rari'] ??= {}
 
 g['~rari'].apiHandler = {
   callHandler,

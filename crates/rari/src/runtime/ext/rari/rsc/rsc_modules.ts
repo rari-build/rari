@@ -9,31 +9,19 @@ interface RegisterResult {
   exportCount: number
 }
 
-(function initializeRscModules() {
+;(function initializeRscModules() {
   const EXPORT_FUNCTION_REGEX = /^export\s+(?:async\s+)?function\s+(\w+)/gm
 
-  if (!g['~rsc'])
-    g['~rsc'] = {}
-
-  if (!g['~rsc'].modules)
-    g['~rsc'].modules = {}
-
-  if (!g['~rari'])
-    g['~rari'] = {}
-
-  if (!g['~rari'].serverManifest)
-    g['~rari'].serverManifest = {}
-
-  if (!g['~rari'].ssrModules)
-    g['~rari'].ssrModules = {}
+  g['~rsc'] ??= {}
+  g['~rsc'].modules ??= {}
+  g['~rari'] ??= {}
+  g['~rari'].serverManifest ??= {}
+  g['~rari'].ssrModules ??= {}
 
   function ensureRariManifestStores() {
-    if (!g['~rari'])
-      g['~rari'] = {}
-    if (!g['~rari'].serverManifest)
-      g['~rari'].serverManifest = {}
-    if (!g['~rari'].ssrModules)
-      g['~rari'].ssrModules = {}
+    g['~rari'] ??= {}
+    g['~rari'].serverManifest ??= {}
+    g['~rari'].ssrModules ??= {}
   }
 
   function clearManifestEntriesForModule(moduleKey: string) {
@@ -52,7 +40,11 @@ interface RegisterResult {
     }
   }
 
-  function registerManifestExport(moduleKey: string, module: RscModule, exportName: string) {
+  function registerManifestExport(
+    moduleKey: string,
+    module: Readonly<RscModule>,
+    exportName: string,
+  ) {
     ensureRariManifestStores()
     const hashId = `${moduleKey}#${exportName}`
 
@@ -64,7 +56,9 @@ interface RegisterResult {
     g['~rari']!.ssrModules![hashId] = module
   }
 
-  function resolveServerFunctionExport(name: string): ((...args: any[]) => any) | null {
+  function resolveServerFunctionExport(
+    name: string,
+  ): ((...args: readonly unknown[]) => unknown) | null {
     ensureRariManifestStores()
     const manifest = g['~rari']!.serverManifest!
     const ssrModules = g['~rari']!.ssrModules!
@@ -73,42 +67,31 @@ interface RegisterResult {
     const colonIdx = name.lastIndexOf(':')
 
     if (hashIdx !== -1 || colonIdx !== -1) {
-      const moduleId = hashIdx !== -1
-        ? name.slice(0, hashIdx)
-        : name.slice(0, colonIdx)
-      const exportName = hashIdx !== -1
-        ? name.slice(hashIdx + 1)
-        : name.slice(colonIdx + 1)
+      const moduleId = hashIdx !== -1 ? name.slice(0, hashIdx) : name.slice(0, colonIdx)
+      const exportName = hashIdx !== -1 ? name.slice(hashIdx + 1) : name.slice(colonIdx + 1)
       const entry = manifest[name] ?? manifest[moduleId]
-      const moduleNs = ssrModules[name] ?? ssrModules[entry?.id ?? moduleId]
-      if (!moduleNs)
-        return null
+      const moduleNs =
+        ssrModules[name] ?? (entry ? ssrModules[entry.id] : undefined) ?? ssrModules[moduleId]
+      if (moduleNs == null) return null
 
       const fnName = entry?.name ?? exportName
-      const fn = fnName === 'default'
-        ? (moduleNs.default ?? moduleNs[fnName])
-        : moduleNs[fnName]
-      return typeof fn === 'function' ? fn as (...args: any[]) => any : null
+      const fn = fnName === 'default' ? (moduleNs.default ?? moduleNs[fnName]) : moduleNs[fnName]
+      return typeof fn === 'function' ? (fn as (...args: readonly unknown[]) => unknown) : null // oxlint-disable-line typescript/no-unsafe-type-assertion -- manifest export lookup
     }
 
     let foundKey: string | null = null
-    let foundFunction: ((...args: any[]) => any) | null = null
+    let foundFunction: ((...args: readonly unknown[]) => unknown) | null = null
 
     for (const key of Object.keys(manifest)) {
-      if (!key.endsWith(`#${name}`) && !key.endsWith(`:${name}`))
-        continue
+      if (!key.endsWith(`#${name}`) && !key.endsWith(`:${name}`)) continue
 
       const entry = manifest[key]
-      const moduleNs = ssrModules[key] ?? ssrModules[entry?.id ?? '']
-      if (!moduleNs)
-        continue
+      const moduleNs = ssrModules[key] ?? (entry ? ssrModules[entry.id] : undefined)
+      if (moduleNs == null) continue
 
       const fnName = entry?.name ?? name
-      const fn = fnName === 'default'
-        ? (moduleNs.default ?? moduleNs[fnName])
-        : moduleNs[fnName]
-      if (typeof fn !== 'function')
-        continue
+      const fn = fnName === 'default' ? (moduleNs.default ?? moduleNs[fnName]) : moduleNs[fnName]
+      if (typeof fn !== 'function') continue
 
       if (foundKey !== null) {
         throw new Error(
@@ -117,37 +100,42 @@ interface RegisterResult {
       }
 
       foundKey = key
-      foundFunction = fn as (...args: any[]) => any
+      foundFunction = fn as (...args: readonly unknown[]) => unknown // oxlint-disable-line typescript/no-unsafe-type-assertion -- manifest export lookup
     }
 
     return foundFunction
   }
 
   g.registerModule = function registerModule(
-    moduleKeyOrModule: string | RscModule,
-    moduleNameOrMainExport: string | unknown,
-    exportedFunctions?: Record<string, (...args: any[]) => any>,
+    moduleKeyOrModule: string | Readonly<RscModule>,
+    moduleNameOrMainExport: unknown,
+    exportedFunctions?: Readonly<{ readonly [key: string]: (...args: readonly any[]) => any }>,
   ): RegisterResult {
     let module: RscModule
     let moduleKey: string
 
     if (arguments.length === 2 && typeof moduleKeyOrModule === 'object') {
-      module = moduleKeyOrModule
-      moduleKey = moduleNameOrMainExport as string
-    }
-    else if (arguments.length === 3) {
-      moduleKey = moduleKeyOrModule as string
+      module = { ...moduleKeyOrModule }
+      if (typeof moduleNameOrMainExport !== 'string')
+        throw new TypeError('registerModule requires a string module key')
+      moduleKey = moduleNameOrMainExport
+    } else if (arguments.length === 3) {
+      if (typeof moduleKeyOrModule !== 'string')
+        throw new TypeError('registerModule requires a string module key')
+      moduleKey = moduleKeyOrModule
       const mainExport = moduleNameOrMainExport
 
       module = { ...exportedFunctions }
-      if (mainExport) {
+      if (mainExport != null) {
         module.default = mainExport
         module[moduleKey] = mainExport
       }
-    }
-    else {
-      module = (moduleKeyOrModule as RscModule) || {}
-      moduleKey = (moduleNameOrMainExport as string) || 'unknown'
+    } else {
+      module = typeof moduleKeyOrModule === 'object' ? { ...moduleKeyOrModule } : {}
+      moduleKey =
+        typeof moduleNameOrMainExport === 'string' && moduleNameOrMainExport !== ''
+          ? moduleNameOrMainExport
+          : 'unknown'
     }
 
     g['~rsc']!.modules![moduleKey] = module
@@ -178,20 +166,21 @@ interface RegisterResult {
     const matches = code.matchAll(exportRegex)
 
     for (const match of matches) {
-      if (match[1])
-        exports.push(match[1])
+      if (match[1]) exports.push(match[1])
     }
 
     return exports
   }
 
-  g.getServerFunction = function getServerFunction(name: string): ((...args: any[]) => any) | null {
+  g.getServerFunction = function getServerFunction(
+    name: string,
+  ): ((...args: readonly any[]) => any) | null {
     return resolveServerFunctionExport(name)
   }
 
-  g.createServerFunctionPromise = function createServerFunctionPromise(
+  g.createServerFunctionPromise = async function createServerFunctionPromise(
     functionName: string,
-    args: unknown[] = [],
+    args: readonly unknown[] = [],
   ): Promise<unknown> {
     let argsJson = 'unknown'
     let promise: Promise<unknown> & { toString?: () => string }
@@ -202,24 +191,17 @@ interface RegisterResult {
       if (!serverFunction) {
         const error = new Error(`Server function '${functionName}' not found`)
         promise = Promise.reject(error)
-        promise.toString = () =>
-          `ServerFunctionPromise(${functionName}(${argsJson}))`
-        return promise
+        promise.toString = () => `ServerFunctionPromise(${functionName}(${argsJson}))`
+        return await promise
       }
 
       const result = serverFunction(...args)
-
-      if (result && typeof result.then === 'function')
-        promise = result as Promise<unknown>
-      else
-        promise = Promise.resolve(result)
-    }
-    catch (error) {
-      promise = Promise.reject(error)
+      promise = Promise.resolve(result)
+    } catch (error) {
+      promise = Promise.reject(error instanceof Error ? error : new Error(String(error)))
     }
 
-    promise.toString = () =>
-      `ServerFunctionPromise(${functionName}(${argsJson}))`
+    promise.toString = () => `ServerFunctionPromise(${functionName}(${argsJson}))`
 
     return promise
   }

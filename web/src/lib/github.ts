@@ -24,10 +24,42 @@ function getGitHubHeaders(): HeadersInit {
   return {
     'Accept': 'application/vnd.github.v3+json',
     'User-Agent': 'rari-build/rari',
-    ...(process.env.GITHUB_TOKEN && {
-      Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
-    }),
+    ...(process.env.GITHUB_TOKEN != null &&
+      process.env.GITHUB_TOKEN !== '' && {
+        Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+      }),
   }
+}
+
+function isGitHubCommit(value: unknown): value is GitHubCommit {
+  if (typeof value !== 'object' || value === null) return false
+
+  const sha: unknown = Reflect.get(value, 'sha')
+  if (typeof sha !== 'string') return false
+
+  const commit: unknown = Reflect.get(value, 'commit')
+  if (typeof commit !== 'object' || commit === null) return false
+
+  const author: unknown = Reflect.get(commit, 'author')
+  if (typeof author !== 'object' || author === null) return false
+
+  return typeof Reflect.get(author, 'date') === 'string'
+}
+
+function isGitHubCommitArray(value: unknown): value is GitHubCommit[] {
+  return Array.isArray(value) && value.every(isGitHubCommit)
+}
+
+function isGitHubRepo(value: unknown): value is GitHubRepo {
+  if (typeof value !== 'object' || value === null) return false
+
+  return (
+    typeof Reflect.get(value, 'stargazers_count') === 'number' &&
+    typeof Reflect.get(value, 'forks_count') === 'number' &&
+    typeof Reflect.get(value, 'watchers_count') === 'number' &&
+    typeof Reflect.get(value, 'open_issues_count') === 'number' &&
+    typeof Reflect.get(value, 'updated_at') === 'string'
+  )
 }
 
 export async function getLastCommitDate(filePath: string): Promise<string | null> {
@@ -44,14 +76,12 @@ export async function getLastCommitDate(filePath: string): Promise<string | null
       return null
     }
 
-    const commits: GitHubCommit[] = await response.json()
+    const commits: unknown = await response.json()
 
-    if (commits.length === 0)
-      return null
+    if (!isGitHubCommitArray(commits) || commits.length === 0) return null
 
     return commits[0].commit.author.date
-  }
-  catch (error) {
+  } catch (error) {
     console.error(`Error fetching commit date for ${filePath}:`, error)
     return null
   }
@@ -71,10 +101,11 @@ async function getRepoInfo(): Promise<GitHubRepo | null> {
       return null
     }
 
-    const data: GitHubRepo = await response.json()
+    const data: unknown = await response.json()
+    if (!isGitHubRepo(data)) return null
+
     return data
-  }
-  catch (error) {
+  } catch (error) {
     console.error('Error fetching repo info:', error)
     return null
   }
@@ -98,14 +129,12 @@ export async function getLatestCommitHash(): Promise<string | null> {
       return null
     }
 
-    const commits: GitHubCommit[] = await response.json()
+    const commits: unknown = await response.json()
 
-    if (commits.length === 0)
-      return null
+    if (!isGitHubCommitArray(commits) || commits.length === 0) return null
 
-    return commits[0].sha?.substring(0, 8) ?? null
-  }
-  catch (error) {
+    return commits[0].sha.substring(0, 8)
+  } catch (error) {
     console.error('Error fetching latest commit:', error)
     return null
   }

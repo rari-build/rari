@@ -3,9 +3,9 @@ declare module 'react-server-dom-webpack/client' {
 
   export function encodeReply(
     value: unknown,
-    options?: {
+    options?: Readonly<{
       temporaryReferences?: Map<string, unknown>
       signal?: AbortSignal
-    },
+    }>,
   ): Promise<FormData | string>
 }

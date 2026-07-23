@@ -30,7 +30,7 @@ const blogPosts: Record<string, BlogPost> = {
 }
 
 export function getBlogPost(slug: string): BlogPost | null {
-  return blogPosts[slug] || null
+  return slug in blogPosts ? blogPosts[slug] : null
 }
 
 export function getAllBlogPosts(): BlogPost[] {
