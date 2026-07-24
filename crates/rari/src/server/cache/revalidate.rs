@@ -16,12 +16,12 @@ use crate::{
 fn constant_time_eq(a: &str, b: &str) -> bool {
     let a = a.as_bytes();
     let b = b.as_bytes();
-    if a.len() != b.len() {
-        return false;
+    let mut diff = a.len() ^ b.len();
+    for i in 0..a.len() {
+        diff |= usize::from(a[i] ^ b[i % b.len().max(1)]);
     }
-    let mut diff = 0u8;
-    for (x, y) in a.iter().zip(b.iter()) {
-        diff |= x ^ y;
+    for i in 0..b.len() {
+        diff |= usize::from(a[i % a.len().max(1)] ^ b[i]);
     }
     diff == 0
 }
