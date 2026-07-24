@@ -21,6 +21,7 @@ export interface ServerCacheLayerConfig {
   readonly url?: string
   readonly maxEntries?: number
   readonly defaultTtlSecs?: number
+  readonly maxBytes?: number
 }
 
 export interface ServerCacheConfig {
@@ -32,11 +33,16 @@ export interface ServerUseCacheConfig {
   readonly buildId?: string
 }
 
+export interface ServerActionConfig {
+  readonly allowedOrigins?: readonly string[]
+}
+
 export interface ServerConfig {
   csp?: ServerCSPConfig
   cacheControl?: ServerCacheControlConfig
   cache?: ServerCacheConfig
   useCache?: ServerUseCacheConfig
+  action?: ServerActionConfig
   jsPoolSize?: number
   htmlLimitedBots?: string
 }

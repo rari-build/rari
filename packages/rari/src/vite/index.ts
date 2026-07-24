@@ -206,6 +206,9 @@ export interface RariOptions {
   readonly cacheControl?: {
     readonly routes: Readonly<Record<string, string>>
   }
+  readonly action?: {
+    readonly allowedOrigins?: readonly string[]
+  }
   readonly jsPoolSize?: number
   readonly htmlLimitedBots?: string
   readonly cache?: ServerCacheConfig
@@ -1293,6 +1296,7 @@ ${clientTransformedCode}`
             csp: options.csp,
             cacheControl: options.cacheControl,
             cache: options.cache,
+            action: options.action,
             jsPoolSize: options.jsPoolSize,
             htmlLimitedBots: options.htmlLimitedBots,
             experimental: options.experimental,
@@ -2321,6 +2325,7 @@ export const createTemporaryReferenceSet = module.exports.createTemporaryReferen
     csp: options.csp,
     cacheControl: options.cacheControl,
     cache: options.cache,
+    action: options.action,
     jsPoolSize: options.jsPoolSize,
     htmlLimitedBots: options.htmlLimitedBots,
     experimental: options.experimental,
@@ -2380,6 +2385,7 @@ export type Request = globalThis.Request
 export type Response = globalThis.Response
 
 export type {
+  ServerActionConfig,
   ServerCacheConfig,
   ServerCacheControlConfig,
   ServerCacheLayerConfig,

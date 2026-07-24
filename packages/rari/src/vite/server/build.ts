@@ -3,6 +3,7 @@ import type { Plugin } from 'vite-plus'
 import type { ModuleAnalysis } from '../analysis/directives'
 import type { MdxPluginOptions } from '../mdx/registry'
 import type {
+  ServerActionConfig,
   ServerCacheConfig,
   ServerCacheControlConfig,
   ServerCacheLayerConfig,
@@ -218,6 +219,7 @@ export interface ServerBuildOptions {
   readonly csp?: ServerCSPConfig
   readonly cacheControl?: ServerCacheControlConfig
   readonly cache?: ServerCacheConfig
+  readonly action?: ServerActionConfig
   readonly jsPoolSize?: number
   readonly htmlLimitedBots?: string
   readonly moduleAnalysisCache?: ModuleAnalysisCache
@@ -241,6 +243,7 @@ type ResolvedServerBuildOptions = Required<
     | 'csp'
     | 'cacheControl'
     | 'cache'
+    | 'action'
     | 'jsPoolSize'
     | 'htmlLimitedBots'
     | 'define'
@@ -254,6 +257,7 @@ type ResolvedServerBuildOptions = Required<
   csp?: ServerBuildOptions['csp']
   cacheControl?: ServerBuildOptions['cacheControl']
   cache?: ServerBuildOptions['cache']
+  action?: ServerBuildOptions['action']
   jsPoolSize?: ServerBuildOptions['jsPoolSize']
   htmlLimitedBots?: ServerBuildOptions['htmlLimitedBots']
   define?: ServerBuildOptions['define']
@@ -469,6 +473,7 @@ export class ServerComponentBuilder {
       csp: options.csp,
       cacheControl: options.cacheControl,
       cache: options.cache,
+      action: options.action,
       jsPoolSize: options.jsPoolSize,
       htmlLimitedBots: options.htmlLimitedBots,
       experimental: options.experimental,
@@ -1440,6 +1445,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     if (this.options.csp) serverConfig.csp = this.options.csp
     if (this.options.cacheControl) serverConfig.cacheControl = this.options.cacheControl
     if (this.options.cache) serverConfig.cache = this.options.cache
+    if (this.options.action) serverConfig.action = this.options.action
     if (this.options.jsPoolSize != null) serverConfig.jsPoolSize = this.options.jsPoolSize
     if (this.options.htmlLimitedBots != null)
       serverConfig.htmlLimitedBots = this.options.htmlLimitedBots
