@@ -82,6 +82,8 @@ fn generate_nonce() -> String {
 }
 
 pub async fn security_headers_middleware(mut request: Request<Body>, next: Next) -> Response<Body> {
+    request.headers_mut().remove(X_RARI_CSP_NONCE);
+
     let use_nonces = Config::get().is_some_and(|c| c.csp.use_nonces);
     let nonce = if use_nonces {
         let n = generate_nonce();
