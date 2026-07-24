@@ -24,13 +24,13 @@ packages:
   - web
 catalogs:
   analytics:
-    posthog-js: ^1.406.2
+    posthog-js: ^1.407.2
   build:
     '@napi-rs/cli': ^3.7.4
     lightningcss: ^1.33.0
     rolldown: ^1.2.0
     vite: ^8.1.5
-    vite-plus: ^0.2.5
+    vite-plus: ^0.2.6
   cli:
     '@clack/prompts': ^1.7.0
   default:
@@ -38,7 +38,7 @@ catalogs:
   eslint:
     '@e18e/eslint-plugin': ^0.5.1
     '@eslint-community/eslint-plugin-eslint-comments': ^4.7.2
-    '@eslint-react/eslint-plugin': ^5.17.3
+    '@eslint-react/eslint-plugin': ^5.18.0
     '@typescript-eslint/parser': ^8.65.0
     eslint: ^10.7.0
     eslint-config-flat-gitignore: ^2.3.0
