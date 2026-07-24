@@ -17,7 +17,10 @@ use serde_json::Value;
 use tokio::sync::Mutex as TokioMutex;
 use uuid::Uuid;
 
-use crate::server::core::utils::{client::get_http_client, http};
+use crate::server::{
+    core::utils::{client::get_http_client, http},
+    middleware::request::X_RARI_CSP_NONCE,
+};
 
 #[derive(Clone, Debug)]
 #[non_exhaustive]
@@ -129,6 +132,7 @@ pub struct RequestContext {
     pub pending_cookies: Arc<DashMap<PendingCookieKey, PendingCookie>>,
     pub function_cache: Arc<DashMap<String, Value>>,
     pub action_form_state: Option<Value>,
+    pub csp_nonce: Option<String>,
 }
 
 impl RequestContext {
@@ -145,6 +149,7 @@ impl RequestContext {
             pending_cookies: Arc::new(DashMap::new()),
             function_cache: Arc::new(DashMap::new()),
             action_form_state: None,
+            csp_nonce: None,
         }
     }
 
@@ -155,8 +160,9 @@ impl RequestContext {
     }
 
     #[must_use]
-    pub fn with_http_headers(mut self, headers: FxHashMap<String, String>) -> Self {
+    pub fn with_http_headers(mut self, mut headers: FxHashMap<String, String>) -> Self {
         self.cookie_header = headers.get("cookie").cloned();
+        self.csp_nonce = headers.remove(X_RARI_CSP_NONCE);
         self.request_headers = http::filter_headers_for_components(headers);
         self
     }
@@ -170,6 +176,12 @@ impl RequestContext {
     #[must_use]
     pub fn with_action_form_state(mut self, form_state: Option<Value>) -> Self {
         self.action_form_state = form_state;
+        self
+    }
+
+    #[must_use]
+    pub fn with_csp_nonce(mut self, nonce: Option<String>) -> Self {
+        self.csp_nonce = nonce;
         self
     }
 

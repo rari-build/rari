@@ -13,6 +13,7 @@ use cow_utils::CowUtils;
 use http::HeaderValue;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::server::{
     cache::handler::MemoryConfig, image::ImageConfig,
@@ -192,6 +193,26 @@ pub struct CspConfig {
     pub connect_src: Vec<String>,
     pub default_src: Vec<String>,
     pub worker_src: Vec<String>,
+    #[serde(default = "csp_default_frame_ancestors")]
+    pub frame_ancestors: Vec<String>,
+    #[serde(default = "csp_default_base_uri")]
+    pub base_uri: Vec<String>,
+    #[serde(default = "csp_default_form_action")]
+    pub form_action: Vec<String>,
+    #[serde(default)]
+    pub use_nonces: bool,
+}
+
+fn csp_default_frame_ancestors() -> Vec<String> {
+    vec!["'self'".to_string()]
+}
+
+fn csp_default_base_uri() -> Vec<String> {
+    vec!["'self'".to_string()]
+}
+
+fn csp_default_form_action() -> Vec<String> {
+    vec!["'self'".to_string()]
 }
 
 impl Default for CspConfig {
@@ -204,6 +225,10 @@ impl Default for CspConfig {
             font_src: vec!["'self'".to_string(), "data:".to_string()],
             connect_src: vec!["'self'".to_string(), "ws:".to_string(), "wss:".to_string()],
             worker_src: vec!["'self'".to_string()],
+            frame_ancestors: csp_default_frame_ancestors(),
+            base_uri: csp_default_base_uri(),
+            form_action: csp_default_form_action(),
+            use_nonces: false,
         }
     }
 }
@@ -623,6 +648,30 @@ impl Config {
                             .filter_map(|v| v.as_str().map(ToString::to_string))
                             .collect();
                     }
+                    if let Some(frame_ancestors) =
+                        csp_data.get("frameAncestors").and_then(|v| v.as_array())
+                    {
+                        config.csp.frame_ancestors = frame_ancestors
+                            .iter()
+                            .filter_map(|v| v.as_str().map(ToString::to_string))
+                            .collect();
+                    }
+                    if let Some(base_uri) = csp_data.get("baseUri").and_then(|v| v.as_array()) {
+                        config.csp.base_uri = base_uri
+                            .iter()
+                            .filter_map(|v| v.as_str().map(ToString::to_string))
+                            .collect();
+                    }
+                    if let Some(form_action) = csp_data.get("formAction").and_then(|v| v.as_array())
+                    {
+                        config.csp.form_action = form_action
+                            .iter()
+                            .filter_map(|v| v.as_str().map(ToString::to_string))
+                            .collect();
+                    }
+                    if let Some(use_nonces) = csp_data.get("useNonces").and_then(Value::as_bool) {
+                        config.csp.use_nonces = use_nonces;
+                    }
                 }
 
                 if let Some(action_data) = config_data.get("action")
@@ -940,7 +989,13 @@ impl Config {
     pub fn csp_config(&self) -> CspConfig {
         let mut config = self.csp.clone();
 
-        if !config.script_src.contains(&"'unsafe-inline'".to_string()) {
+        if config.use_nonces {
+            config.script_src.retain(|s| s != "'unsafe-inline'");
+            config.script_src.push("'nonce-{{NONCE}}'".to_string());
+            if !config.script_src.contains(&"'strict-dynamic'".to_string()) {
+                config.script_src.push("'strict-dynamic'".to_string());
+            }
+        } else if !config.script_src.contains(&"'unsafe-inline'".to_string()) {
             config.script_src.push("'unsafe-inline'".to_string());
         }
 
@@ -985,6 +1040,18 @@ impl Config {
 
         if !config.worker_src.is_empty() {
             directives.push(format!("worker-src {}", config.worker_src.join(" ")));
+        }
+
+        if !config.frame_ancestors.is_empty() {
+            directives.push(format!("frame-ancestors {}", config.frame_ancestors.join(" ")));
+        }
+
+        if !config.base_uri.is_empty() {
+            directives.push(format!("base-uri {}", config.base_uri.join(" ")));
+        }
+
+        if !config.form_action.is_empty() {
+            directives.push(format!("form-action {}", config.form_action.join(" ")));
         }
 
         directives.join("; ")

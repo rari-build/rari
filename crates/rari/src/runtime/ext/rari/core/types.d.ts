@@ -254,6 +254,7 @@ declare global {
       namespace ops {
         function op_get_cookies(requestId?: string): string
         function op_get_request_headers(requestId?: string): string
+        function op_get_csp_nonce(requestId: string): string
         function op_set_cookie(
           options: Readonly<{
             name: string

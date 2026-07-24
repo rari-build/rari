@@ -398,6 +398,7 @@ pub fn get_streaming_ops() -> Vec<OpDecl> {
         op_sanitize_html(),
         op_get_cookies(),
         op_get_request_headers(),
+        op_get_csp_nonce(),
         op_set_cookie(),
         op_delete_cookie(),
     ]
@@ -697,6 +698,18 @@ pub fn op_get_request_headers(state: Rc<RefCell<OpState>>, #[string] request_id:
     };
 
     serde_json::to_string(&ctx.request_headers).unwrap_or_else(|_| "{}".to_string())
+}
+
+#[allow(clippy::allow_attributes, clippy::needless_pass_by_value)]
+#[op2]
+#[string]
+pub fn op_get_csp_nonce(state: Rc<RefCell<OpState>>, #[string] request_id: String) -> String {
+    let op_state_ref = state.borrow();
+    let Some(ctx) = resolve_request_context(&op_state_ref, Some(request_id.as_str())) else {
+        return String::new();
+    };
+
+    ctx.csp_nonce.as_deref().unwrap_or("").to_string()
 }
 
 #[derive(serde::Deserialize)]

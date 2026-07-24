@@ -36,7 +36,8 @@ pub fn extract_headers(headers: &HeaderMap) -> FxHashMap<String, String> {
 pub fn filter_headers_for_components(
     headers: FxHashMap<String, String>,
 ) -> FxHashMap<String, String> {
-    const SENSITIVE_HEADERS: &[&str] = &["authorization", "cookie", "proxy-authorization"];
+    const SENSITIVE_HEADERS: &[&str] =
+        &["authorization", "cookie", "proxy-authorization", "x-rari-csp-nonce"];
 
     headers.into_iter().filter(|(name, _)| !SENSITIVE_HEADERS.contains(&name.as_str())).collect()
 }

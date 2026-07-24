@@ -3,8 +3,13 @@ use axum::{
     http::{HeaderMap, HeaderValue, Request, Response, StatusCode, header::CACHE_CONTROL},
     middleware::Next,
 };
+use cow_utils::CowUtils;
 
 use crate::server::config::Config;
+
+#[derive(Clone, Debug)]
+#[non_exhaustive]
+pub struct CspNonce(pub String);
 
 const ACCESS_CONTROL_ALLOW_ORIGIN: &str = "Access-Control-Allow-Origin";
 const ACCESS_CONTROL_ALLOW_METHODS: &str = "Access-Control-Allow-Methods";
@@ -70,23 +75,45 @@ fn add_cors_headers(headers: &mut HeaderMap) {
     }
 }
 
-pub async fn security_headers_middleware(request: Request<Body>, next: Next) -> Response<Body> {
+pub const X_RARI_CSP_NONCE: &str = "x-rari-csp-nonce";
+
+fn generate_nonce() -> String {
+    uuid::Uuid::new_v4().simple().to_string()
+}
+
+pub async fn security_headers_middleware(mut request: Request<Body>, next: Next) -> Response<Body> {
+    let use_nonces = Config::get().is_some_and(|c| c.csp.use_nonces);
+    let nonce = if use_nonces {
+        let n = generate_nonce();
+        if let Ok(v) = HeaderValue::from_str(&n) {
+            request.headers_mut().insert(X_RARI_CSP_NONCE, v);
+        }
+        Some(n)
+    } else {
+        None
+    };
+
     let mut response = next.run(request).await;
 
     let status = response.status();
     let headers = response.headers_mut();
 
-    add_security_headers(headers);
+    add_security_headers(headers, nonce.as_deref());
     apply_error_cache_control(headers, status);
 
     response
 }
 
-fn add_security_headers(headers: &mut HeaderMap) {
+fn add_security_headers(headers: &mut HeaderMap, nonce: Option<&str>) {
     let csp_policy = if let Some(config) = Config::get() {
         config.build_csp_policy()
     } else {
-        "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' ws: wss:".to_string()
+        "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' ws: wss:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'".to_string()
+    };
+
+    let csp_policy = match nonce {
+        Some(n) => csp_policy.cow_replace("{{NONCE}}", n).into_owned(),
+        None => csp_policy,
     };
 
     let security_headers = [

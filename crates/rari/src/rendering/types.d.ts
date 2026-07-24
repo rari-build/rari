@@ -78,6 +78,7 @@ declare global {
         function op_fizz_done(streamId: string): void
         function op_stream_promise_settled(streamId: string, ok: boolean, error: string): void
         function op_internal_log(message: string): void
+        function op_get_csp_nonce(requestId: string): string
       }
     }
   }
