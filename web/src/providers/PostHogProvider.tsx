@@ -25,7 +25,7 @@ export function PostHogProvider({
         capture_pageview: false,
         capture_pageleave: true,
         defaults: '2026-01-30',
-        __preview_disable_beacon: true,
+        disable_beacon: true,
       })
       setClient(posthog)
     }

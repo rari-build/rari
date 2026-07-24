@@ -47,10 +47,10 @@ export default function MermaidChart({ children, className }: MermaidChartProps)
         mermaid.initialize({
           startOnLoad: false,
           theme: 'dark',
+          htmlLabels: true,
           themeVariables: THEME_VARIABLES,
           flowchart: {
             useMaxWidth: true,
-            htmlLabels: true,
             subGraphTitleMargin: { top: 10, bottom: 10 },
           },
         })
