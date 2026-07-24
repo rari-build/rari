@@ -32,15 +32,31 @@ declare function rariCreateHtmlBoundaryTracker(): {
     }
   }
 
-  const RARI_STREAMING_COMPLETE_SCRIPT =
-    "<script>if(!window['~rari'])window['~rari']={};window['~rari'].streaming={complete:true}<\/script>"
+  function rariGetCurrentNonce(): string {
+    try {
+      const requestId = g['~rari']?.currentRequestId?.() ?? ''
+      if (!requestId) return ''
+      return Deno.core.ops.op_get_csp_nonce(requestId)
+    } catch {
+      return ''
+    }
+  }
+
+  function rariScriptOpen(nonce: string): string {
+    return nonce ? `<script nonce="${nonce}">` : '<script>'
+  }
+
+  function rariStreamingCompleteScript(nonce: string): string {
+    return `${rariScriptOpen(nonce)}if(!window['~rari'])window['~rari']={};window['~rari'].streaming={complete:true}<\/script>`
+  }
 
   function rariFormatFlightItem(
     item: Readonly<{ type: 'line'; line: string } | { type: 'binary'; b64: string }>,
+    nonce: string,
   ): string {
-    if (item.type === 'line') return rariFormatFlightScriptPush(`${item.line}\n`)
+    if (item.type === 'line') return rariFormatFlightScriptPush(`${item.line}\n`, nonce)
 
-    return rariFormatFlightBinaryPush(item.b64)
+    return rariFormatFlightBinaryPush(item.b64, nonce)
   }
 
   function rariStripLeadingDoctype(text: string): string {
@@ -114,14 +130,14 @@ declare function rariCreateHtmlBoundaryTracker(): {
     return session
   }
 
-  function rariFormatFlightScriptPush(payload: string | number): string {
+  function rariFormatFlightScriptPush(payload: string | number, nonce = ''): string {
     const escaped = JSON.stringify(payload).split('</').join('<\\/')
-    return `<script>(self.__rari_f=self.__rari_f||[]).push(${escaped})<\/script>`
+    return `${rariScriptOpen(nonce)}(self.__rari_f=self.__rari_f||[]).push(${escaped})<\/script>`
   }
 
-  function rariFormatFlightBinaryPush(b64: string): string {
+  function rariFormatFlightBinaryPush(b64: string, nonce = ''): string {
     const payload = JSON.stringify([2, b64]).split('</').join('<\\/')
-    return `<script>(self.__rari_f=self.__rari_f||[]).push(${payload})<\/script>`
+    return `${rariScriptOpen(nonce)}(self.__rari_f=self.__rari_f||[]).push(${payload})<\/script>`
   }
 
   function rariParseFlightRowId(line: string): number {
@@ -264,12 +280,12 @@ declare function rariCreateHtmlBoundaryTracker(): {
         }
       },
 
-      async collectAllRemainingText(): Promise<string> {
+      async collectAllRemainingText(nonce = ''): Promise<string> {
         let buf = ''
         for (;;) {
           const item = await this.drainNext()
           if (!item) break
-          buf += rariFormatFlightItem(item)
+          buf += rariFormatFlightItem(item, nonce)
         }
 
         return buf
@@ -413,6 +429,7 @@ declare function rariCreateHtmlBoundaryTracker(): {
     liveFlight: ReturnType<typeof rariCreateLiveFlightSource>,
     ensureSourceComplete?: () => Promise<void>,
     caughtErrors?: unknown[],
+    nonce = '',
   ) {
     const reader = fizzStream.getReader()
     const decoder = new TextDecoder()
@@ -426,7 +443,7 @@ declare function rariCreateHtmlBoundaryTracker(): {
     const takeFlightBootstrap = (): string => {
       if (flightBootstrapped) return ''
       flightBootstrapped = true
-      return rariFormatFlightScriptPush(0)
+      return rariFormatFlightScriptPush(0, nonce)
     }
 
     const takeErrorHtml = (): string => {
@@ -442,7 +459,7 @@ declare function rariCreateHtmlBoundaryTracker(): {
         const item = liveFlight.tryDrainNext()
         if (!item) break
         flightPumpCount++
-        out += rariFormatFlightItem(item)
+        out += rariFormatFlightItem(item, nonce)
       }
 
       return out
@@ -470,7 +487,7 @@ declare function rariCreateHtmlBoundaryTracker(): {
     const takeCompleteScript = (): string => {
       if (completeScriptSent) return ''
       completeScriptSent = true
-      return RARI_STREAMING_COMPLETE_SCRIPT
+      return rariStreamingCompleteScript(nonce)
     }
 
     const markFinalPackageSent = () => {
@@ -503,7 +520,7 @@ declare function rariCreateHtmlBoundaryTracker(): {
       // Collect flight before pumping so we don't await between "before" and
       // "tail" -- that yield lets HTTP flush a penultimate chunk alone.
       if (ensureSourceComplete) await ensureSourceComplete()
-      const flight = takeFlightBootstrap() + (await liveFlight.collectAllRemainingText())
+      const flight = takeFlightBootstrap() + (await liveFlight.collectAllRemainingText(nonce))
       if (before) session.trackHtmlBoundaries(before)
       const combined = before + flight + takeErrorHtml() + takeCompleteScript() + after
       if (!combined) return true
@@ -548,7 +565,7 @@ declare function rariCreateHtmlBoundaryTracker(): {
         rariStreamLog('mux.drainRemaining.start')
         if (!session.safeToInjectFlight()) session.resetHtmlState()
         if (ensureSourceComplete) await ensureSourceComplete()
-        const flight = takeFlightBootstrap() + (await liveFlight.collectAllRemainingText())
+        const flight = takeFlightBootstrap() + (await liveFlight.collectAllRemainingText(nonce))
         const complete = takeCompleteScript()
         const tail = takeErrorHtml() + flight + complete
         if (tail) {
@@ -599,6 +616,7 @@ declare function rariCreateHtmlBoundaryTracker(): {
     const { capturedElement, headContent, caughtErrors, streamId } = options
     if (!streamId) throw new Error('[rari] renderStreamingDocument requires streamId')
 
+    const nonce = rariGetCurrentNonce()
     const session = rariCreateFizzSession(streamId)
 
     const ReactServerRenderer = g['~reactServerRenderer']
@@ -648,19 +666,27 @@ declare function rariCreateHtmlBoundaryTracker(): {
     })) as ReadableStream & { allReady?: Promise<void> }
     rariStreamLog('fizz.stream.ready')
 
-    await rariPumpLiveMux(session, fizzStream, liveFlight, ensureSourceComplete, caughtErrors)
+    await rariPumpLiveMux(
+      session,
+      fizzStream,
+      liveFlight,
+      ensureSourceComplete,
+      caughtErrors,
+      nonce,
+    )
     rariStreamLog('render.done')
   }
 
   async function rariCollectFlightEmbedScripts(
     liveFlight: ReturnType<typeof rariCreateLiveFlightSource>,
+    nonce = '',
   ): Promise<string> {
-    let scripts = rariFormatFlightScriptPush(0)
+    let scripts = rariFormatFlightScriptPush(0, nonce)
     for (;;) {
       const item = await liveFlight.drainNext()
       if (!item) break
-      if (item.type === 'line') scripts += rariFormatFlightScriptPush(`${item.line}\n`)
-      else scripts += rariFormatFlightBinaryPush(item.b64)
+      if (item.type === 'line') scripts += rariFormatFlightScriptPush(`${item.line}\n`, nonce)
+      else scripts += rariFormatFlightBinaryPush(item.b64, nonce)
     }
 
     return scripts
@@ -676,6 +702,7 @@ declare function rariCreateHtmlBoundaryTracker(): {
   async function renderStaticDocument(options: RenderStaticDocumentOptions): Promise<string> {
     const { capturedElement, headContent, caughtErrors } = options
 
+    const nonce = rariGetCurrentNonce()
     const ReactServerRenderer = g['~reactServerRenderer']
     const ReactDOMServer = g['~reactServer']
     const R = g.React
@@ -724,8 +751,8 @@ declare function rariCreateHtmlBoundaryTracker(): {
     html = rariStripLeadingDoctype(html)
     if (!html.trimStart().toLowerCase().startsWith('<!doctype')) html = `<!DOCTYPE html>\n${html}`
 
-    const flightScripts = await rariCollectFlightEmbedScripts(liveFlight)
-    const completionScript = RARI_STREAMING_COMPLETE_SCRIPT
+    const flightScripts = await rariCollectFlightEmbedScripts(liveFlight, nonce)
+    const completionScript = rariStreamingCompleteScript(nonce)
 
     return rariInjectBeforeBodyClose(html, `${flightScripts}\n${completionScript}`)
   }

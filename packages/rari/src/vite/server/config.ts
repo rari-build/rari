@@ -6,6 +6,10 @@ export interface ServerCSPConfig {
   readonly connectSrc?: readonly string[]
   readonly defaultSrc?: readonly string[]
   readonly workerSrc?: readonly string[]
+  readonly frameAncestors?: readonly string[]
+  readonly baseUri?: readonly string[]
+  readonly formAction?: readonly string[]
+  readonly useNonces?: boolean
 }
 
 export interface ServerCacheControlConfig {

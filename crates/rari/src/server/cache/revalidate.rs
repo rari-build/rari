@@ -13,6 +13,19 @@ use crate::{
     server::{ServerState, cache::response},
 };
 
+fn constant_time_eq(a: &str, b: &str) -> bool {
+    let a = a.as_bytes();
+    let b = b.as_bytes();
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff = 0u8;
+    for (x, y) in a.iter().zip(b.iter()) {
+        diff |= x ^ y;
+    }
+    diff == 0
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 #[non_exhaustive]
@@ -154,7 +167,7 @@ pub async fn revalidate_by_path(
     match &request {
         RevalidateRequest::Path { path, secret } => {
             match secret {
-                Some(provided_secret) if provided_secret == &expected_secret => {}
+                Some(provided_secret) if constant_time_eq(provided_secret, &expected_secret) => {}
                 _ => {
                     return Ok(Json(RevalidateResponse {
                         revalidated: false,
@@ -183,7 +196,7 @@ pub async fn revalidate_by_path(
         }
         RevalidateRequest::Tag { tag, secret } => {
             match secret {
-                Some(provided_secret) if provided_secret == &expected_secret => {}
+                Some(provided_secret) if constant_time_eq(provided_secret, &expected_secret) => {}
                 _ => {
                     return Ok(Json(RevalidateResponse {
                         revalidated: false,
