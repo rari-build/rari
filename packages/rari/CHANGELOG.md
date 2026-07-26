@@ -1,3 +1,25 @@
+## [rari@0.15.6] - 2026-07-26
+
+### 🚀 Features
+
+- *(rari)* add nonce-based CSP, timing-safe revalidation, and security hardening by @skiniks
+- *(rari)* add action configuration to server options by @skiniks
+
+### 🐛 Bug Fixes
+
+- *(rari)* ensure constant-time string comparison handles empty inputs correctly by @skiniks
+
+### 🚜 Refactor
+
+- *(rari)* improve constant-time string comparison and clean up nonce handling by @skiniks
+
+### ⚙️ Miscellaneous Tasks
+
+- *(rari)* bump version to 0.15.6 by @skiniks
+- *(dependencies)* update @rari/use-cache and related packages to version 0.15.6 by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.15.5...rari@0.15.6
 ## [rari@0.15.5] - 2026-07-23
 
 ### 🚀 Features
