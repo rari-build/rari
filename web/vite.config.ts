@@ -40,7 +40,6 @@ export default defineConfig({
           response: {
             handler: 'memory',
             maxEntries: 1000,
-            // @ts-expect-error maxBytes missing from ServerCacheLayerConfig -- add in next release
             maxBytes: 128 * 1024 * 1024,
           },
         },
