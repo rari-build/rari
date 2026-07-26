@@ -92,6 +92,11 @@ jobs:
           toolchain: nightly-2026-07-23
           targets: ${{ matrix.target }}
 
+      # TODO: Remove once nightly issue is fixed.
+      # nightly-2026-07-24+ ICEs on tokio with opt-level=3 + linker-plugin-lto + codegen-units=1
+      - name: Pin rust-toolchain.toml to nightly-2026-07-23
+        run: sed -i 's/channel = "nightly"/channel = "nightly-2026-07-23"/' rust-toolchain.toml
+
       - uses: ./.github/actions/setup-rust-build-deps
         with:
           vcpkg-triplet: ${{ matrix.vcpkg_triplet }}
