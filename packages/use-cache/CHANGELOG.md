@@ -1,3 +1,11 @@
+## [@rari/use-cache@0.15.6] - 2026-07-26
+
+### ⚙️ Miscellaneous Tasks
+
+- *(dependencies)* update @rari/use-cache packages to version 0.15.6 by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/@rari/use-cache@0.15.5...@rari/use-cache@0.15.6
 ## [@rari/use-cache@0.15.5] - 2026-07-23
 
 ### 🚀 Features
