@@ -1,4 +1,5 @@
 import { isRecord, isStaticParamsArray, warnInvalidStaticParams } from '@/shared/utils/type-guards'
+import { evaluateGenerateStaticParams } from './evaluate-static-params'
 
 export interface ServerSidePropsResult {
   props: Record<string, any>
@@ -320,14 +321,10 @@ export function mergeMetadata(
 /* v8 ignore start - requires dynamic imports, better tested in integration/e2e */
 export async function extractStaticParams(componentPath: string): Promise<StaticParamsResult> {
   try {
-    const module = await loadComponentModule(componentPath)
-
-    if (typeof module.generateStaticParams === 'function') {
-      const params = await module.generateStaticParams()
-      if (isStaticParamsArray(params)) return params
-      warnInvalidStaticParams(componentPath)
-    }
-
+    const params = await evaluateGenerateStaticParams(componentPath)
+    if (params == null) return []
+    if (isStaticParamsArray(params)) return params
+    warnInvalidStaticParams(componentPath)
     return []
   } catch (error) {
     console.error(`[rari] Router: Failed to extract static params from ${componentPath}:`, error)

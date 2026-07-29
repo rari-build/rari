@@ -12,6 +12,7 @@ import {
   warnInvalidStaticParams,
 } from '@/shared/utils/type-guards'
 import { toRariPlugin } from '@/vite/plugin/types'
+import { evaluateGenerateStaticParams } from './evaluate-static-params'
 import { generateAppRouteManifest } from './routes'
 
 const METADATA_EXPORT_REGEX = /export\s+const\s+metadata\s*(?::\s*\w+\s*)?=\s*(\{[\s\S]*?\n\})/
@@ -489,19 +490,15 @@ export function rariRouter(options: RariRouterPluginOptions = {}): RariPlugin {
           const compiledPath = path.join(serverDir, `${componentId}.js`)
 
           try {
-            const module: unknown = await import(/* @vite-ignore */ compiledPath)
-            if (isRecord(module) && typeof module.generateStaticParams === 'function') {
-              // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- dynamically imported route module
-              const generateStaticParams = module.generateStaticParams as () => unknown
-              const params = await generateStaticParams()
-              if (isStaticParamsArray(params)) {
-                if (params.length > 0) {
-                  route.staticParams = params
-                  updated = true
-                }
-              } else {
-                warnInvalidStaticParams(componentId)
+            const params = await evaluateGenerateStaticParams(compiledPath)
+            if (params == null) continue
+            if (isStaticParamsArray(params)) {
+              if (params.length > 0) {
+                route.staticParams = params
+                updated = true
               }
+            } else {
+              warnInvalidStaticParams(componentId)
             }
           } catch (error) {
             console.warn(
