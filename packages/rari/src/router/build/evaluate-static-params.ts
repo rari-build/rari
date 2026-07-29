@@ -22,8 +22,9 @@ const result =
   typeof mod.generateStaticParams !== "function"
     ? null
     : ((await mod.generateStaticParams()) ?? null);
-process.send(result);
-process.disconnect();
+process.send(result, () => {
+  process.disconnect();
+});
 `
 
   return new Promise((resolve, reject) => {
