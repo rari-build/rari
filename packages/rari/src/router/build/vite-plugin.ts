@@ -479,36 +479,57 @@ export function rariRouter(options: RariRouterPluginOptions = {}): RariPlugin {
         if (!manifestRecord || !isAppRouteManifest(manifestRecord)) return
 
         const manifest = manifestRecord
-        let updated = false
 
-        for (const route of manifest.routes) {
-          if (!route.isDynamic) continue
-
+        const dynamicRoutes = manifest.routes.flatMap(route => {
+          if (!route.isDynamic) return []
           const componentId = route.componentId
-          if (componentId == null || componentId === '') continue
+          if (componentId == null || componentId === '') return []
+          return [{ route, componentId }]
+        })
 
-          const compiledPath = path.join(serverDir, `${componentId}.js`)
+        const concurrency = Math.min(8, Math.max(1, dynamicRoutes.length))
+        const results = dynamicRoutes.map(() => false)
+        let index = 0
+        let active = 0
 
-          try {
-            const params = await evaluateGenerateStaticParams(compiledPath)
-            if (params == null) continue
-            if (isStaticParamsArray(params)) {
-              if (params.length > 0) {
-                route.staticParams = params
-                updated = true
-              }
-            } else {
-              warnInvalidStaticParams(componentId)
+        await new Promise<void>(resolveAll => {
+          const next = () => {
+            while (active < concurrency && index < dynamicRoutes.length) {
+              const taskIndex = index++
+              const { route, componentId } = dynamicRoutes[taskIndex]
+              const compiledPath = path.join(serverDir, `${componentId}.js`)
+
+              active++
+              void (async () => {
+                try {
+                  const params = await evaluateGenerateStaticParams(compiledPath)
+                  if (params == null) return
+                  if (isStaticParamsArray(params)) {
+                    route.staticParams = params
+                    results[taskIndex] = true
+                  } else {
+                    warnInvalidStaticParams(componentId)
+                  }
+                } catch (error) {
+                  console.warn(
+                    `[rari] Failed to evaluate generateStaticParams for ${componentId}:`,
+                    error,
+                  )
+                } finally {
+                  active--
+                  if (index >= dynamicRoutes.length && active === 0) resolveAll()
+                  else next()
+                }
+              })()
             }
-          } catch (error) {
-            console.warn(
-              `[rari] Failed to evaluate generateStaticParams for ${componentId}:`,
-              error,
-            )
-          }
-        }
 
-        if (updated) await fs.writeFile(routesPath, JSON.stringify(manifest), 'utf-8')
+            if (dynamicRoutes.length === 0) resolveAll()
+          }
+
+          next()
+        })
+
+        if (results.some(Boolean)) await fs.writeFile(routesPath, JSON.stringify(manifest), 'utf-8')
       } catch (error) {
         console.warn('[rari] Failed to enrich routes manifest with static params:', error)
       }
