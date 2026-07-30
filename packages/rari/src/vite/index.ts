@@ -35,6 +35,7 @@ import {
   WINDOWS_PATH_REGEX,
 } from '@/shared/regex-constants'
 import { clearFileResolverCache, resolveImportToFilePath } from '@/shared/utils/file-resolver'
+import { getRariServerPort } from '@/shared/utils/server-port'
 import {
   aliasEntriesFromRecord,
   getErrnoCode,
@@ -696,17 +697,7 @@ if (import.meta.hot) {
   let rustServerReady = false
 
   async function checkRustServerHealth(): Promise<boolean> {
-    const serverPort =
-      process.env.SERVER_PORT != null && process.env.SERVER_PORT !== ''
-        ? Number(process.env.SERVER_PORT)
-        : Number(
-            process.env.PORT != null && process.env.PORT !== ''
-              ? process.env.PORT
-              : process.env.RSC_PORT != null && process.env.RSC_PORT !== ''
-                ? process.env.RSC_PORT
-                : 3000,
-          )
-    const baseUrl = `http://localhost:${serverPort}`
+    const baseUrl = `http://localhost:${getRariServerPort()}`
 
     try {
       const healthResponse = await fetch(`${baseUrl}/_rari/health`, {
@@ -721,6 +712,33 @@ if (import.meta.hot) {
     }
   }
 
+  let rustServerReadyWait: Promise<boolean> | null = null
+
+  async function waitForRustServerReady(timeoutMs: number): Promise<boolean> {
+    if (await checkRustServerHealth()) return true
+
+    rustServerReadyWait ??= (async () => {
+      try {
+        const deadline = Date.now() + timeoutMs
+        let interval = 50
+
+        while (Date.now() < deadline) {
+          await new Promise(resolve => {
+            setTimeout(resolve, Math.min(interval, deadline - Date.now()))
+          })
+          if (await checkRustServerHealth()) return true
+          interval = Math.min(interval * 2, 500)
+        }
+
+        return false
+      } finally {
+        rustServerReadyWait = null
+      }
+    })()
+
+    return rustServerReadyWait
+  }
+
   const mainPlugin: Plugin = {
     name: 'rari',
 
@@ -732,16 +750,7 @@ if (import.meta.hot) {
         (process.env.RARI_SERVER_URL != null && process.env.RARI_SERVER_URL !== '') ||
         (process.env.RARI_HOST != null && process.env.RARI_HOST !== '')
       ) {
-        const rariServerPort =
-          process.env.SERVER_PORT != null && process.env.SERVER_PORT !== ''
-            ? Number(process.env.SERVER_PORT)
-            : Number(
-                process.env.PORT != null && process.env.PORT !== ''
-                  ? process.env.PORT
-                  : process.env.RSC_PORT != null && process.env.RSC_PORT !== ''
-                    ? process.env.RSC_PORT
-                    : 3000,
-              )
+        const rariServerPort = getRariServerPort()
 
         let serverUrl: string
         if (process.env.RARI_SERVER_URL != null && process.env.RARI_SERVER_URL !== '') {
@@ -921,16 +930,7 @@ if (import.meta.hot) {
       config.server ??= {}
       config.server.proxy ??= {}
 
-      const serverPort =
-        process.env.SERVER_PORT != null && process.env.SERVER_PORT !== ''
-          ? Number(process.env.SERVER_PORT)
-          : Number(
-              process.env.PORT != null && process.env.PORT !== ''
-                ? process.env.PORT
-                : process.env.RSC_PORT != null && process.env.RSC_PORT !== ''
-                  ? process.env.RSC_PORT
-                  : 3000,
-            )
+      const serverPort = getRariServerPort()
 
       config.server.proxy['/api'] = {
         target: `http://localhost:${serverPort}`,
@@ -1305,19 +1305,7 @@ ${clientTransformedCode}`
 
           devServerComponentBuilder = builder
 
-          if (!hmrCoordinator) {
-            const serverPort =
-              process.env.SERVER_PORT != null && process.env.SERVER_PORT !== ''
-                ? Number(process.env.SERVER_PORT)
-                : Number(
-                    process.env.PORT != null && process.env.PORT !== ''
-                      ? process.env.PORT
-                      : process.env.RSC_PORT != null && process.env.RSC_PORT !== ''
-                        ? process.env.RSC_PORT
-                        : 3000,
-                  )
-            hmrCoordinator = new HMRCoordinator(builder, serverPort)
-          }
+          hmrCoordinator ??= new HMRCoordinator(builder, getRariServerPort())
 
           if (fs.existsSync(srcDir)) {
             const scanResult = scanDirectory(srcDir, builder, Object.values(resolvedAlias))
@@ -1333,47 +1321,39 @@ ${clientTransformedCode}`
 
           const components = await builder.getTransformedComponentsForDevelopment()
 
-          const serverPort =
-            process.env.SERVER_PORT != null && process.env.SERVER_PORT !== ''
-              ? Number(process.env.SERVER_PORT)
-              : Number(
-                  process.env.PORT != null && process.env.PORT !== ''
-                    ? process.env.PORT
-                    : process.env.RSC_PORT != null && process.env.RSC_PORT !== ''
-                      ? process.env.RSC_PORT
-                      : 3000,
+          const baseUrl = `http://localhost:${getRariServerPort()}`
+
+          await Promise.all(
+            components.map(async component => {
+              try {
+                const isAppRouterComponent = component.id.startsWith('app/')
+                if (isAppRouterComponent) return
+
+                if (component.isAction) return
+
+                const registerResponse = await fetch(`${baseUrl}/_rari/register`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    component_id: component.id,
+                    component_code: component.code,
+                  }),
+                })
+
+                if (!registerResponse.ok) {
+                  const errorText = await registerResponse.text()
+                  throw new Error(`HTTP ${registerResponse.status}: ${errorText}`)
+                }
+              } catch (error) {
+                console.error(
+                  `[rari] Runtime: Failed to register component ${component.id}:`,
+                  error instanceof Error ? error.message : String(error),
                 )
-          const baseUrl = `http://localhost:${serverPort}`
-
-          for (const component of components) {
-            try {
-              const isAppRouterComponent = component.id.startsWith('app/')
-              if (isAppRouterComponent) continue
-
-              if (component.isAction) continue
-
-              const registerResponse = await fetch(`${baseUrl}/_rari/register`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  component_id: component.id,
-                  component_code: component.code,
-                }),
-              })
-
-              if (!registerResponse.ok) {
-                const errorText = await registerResponse.text()
-                throw new Error(`HTTP ${registerResponse.status}: ${errorText}`)
               }
-            } catch (error) {
-              console.error(
-                `[rari] Runtime: Failed to register component ${component.id}:`,
-                error instanceof Error ? error.message : String(error),
-              )
-            }
-          }
+            }),
+          )
         } catch (error) {
           console.error(
             '[rari] Runtime: Component discovery failed:',
@@ -1384,43 +1364,35 @@ ${clientTransformedCode}`
 
       const ensureClientComponentsRegistered = async () => {
         try {
-          const serverPort =
-            process.env.SERVER_PORT != null && process.env.SERVER_PORT !== ''
-              ? Number(process.env.SERVER_PORT)
-              : Number(
-                  process.env.PORT != null && process.env.PORT !== ''
-                    ? process.env.PORT
-                    : process.env.RSC_PORT != null && process.env.RSC_PORT !== ''
-                      ? process.env.RSC_PORT
-                      : 3000,
-                )
-          const baseUrl = `http://localhost:${serverPort}`
+          const baseUrl = `http://localhost:${getRariServerPort()}`
 
           const clientComponentFiles = getKnownClientComponentPaths()
 
-          for (const componentPath of clientComponentFiles) {
-            const relativePath = path.relative(process.cwd(), componentPath)
-            const componentName = path.basename(componentPath).replace(EXTENSION_REGEX, '')
+          await Promise.all(
+            [...clientComponentFiles].map(async componentPath => {
+              const relativePath = path.relative(process.cwd(), componentPath)
+              const componentName = path.basename(componentPath).replace(EXTENSION_REGEX, '')
 
-            try {
-              await fetch(`${baseUrl}/_rari/register-client`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  component_id: componentName,
-                  file_path: relativePath,
-                  export_name: 'default',
-                }),
-              })
-            } catch (error) {
-              console.error(
-                `[rari] Runtime: Failed to pre-register client component ${componentName}:`,
-                error,
-              )
-            }
-          }
+              try {
+                await fetch(`${baseUrl}/_rari/register-client`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    component_id: componentName,
+                    file_path: relativePath,
+                    export_name: 'default',
+                  }),
+                })
+              } catch (error) {
+                console.error(
+                  `[rari] Runtime: Failed to pre-register client component ${componentName}:`,
+                  error,
+                )
+              }
+            }),
+          )
         } catch (error) {
           console.error('[rari] Runtime: Failed to pre-register client components:', error)
         }
@@ -1441,16 +1413,7 @@ ${clientTransformedCode}`
           return
         }
 
-        const serverPort =
-          process.env.SERVER_PORT != null && process.env.SERVER_PORT !== ''
-            ? Number(process.env.SERVER_PORT)
-            : Number(
-                process.env.PORT != null && process.env.PORT !== ''
-                  ? process.env.PORT
-                  : process.env.RSC_PORT != null && process.env.RSC_PORT !== ''
-                    ? process.env.RSC_PORT
-                    : 3000,
-              )
+        const serverPort = getRariServerPort()
         const mode = process.env.NODE_ENV === 'production' ? 'production' : 'development'
 
         const vitePort = server.config.server.port
@@ -1506,16 +1469,7 @@ ${clientTransformedCode}`
           else if (code) console.error(`rari server exited with code ${code}`)
         })
 
-        let serverReady = false
-        for (let i = 0; i < 20; i++) {
-          serverReady = await checkRustServerHealth()
-          if (serverReady) {
-            break
-          }
-          await new Promise(resolve => {
-            setTimeout(resolve, 500)
-          })
-        }
+        const serverReady = await waitForRustServerReady(10000)
 
         if (serverReady) {
           await discoverAndRegisterComponents()
@@ -1523,6 +1477,30 @@ ${clientTransformedCode}`
         } else {
           console.error('Server failed to become ready for component registration')
         }
+      }
+
+      const collectAffectedComponentFiles = (
+        importGraph: ReadonlyMap<string, ReadonlySet<string>>,
+        changedFile: string,
+      ): Set<string> => {
+        const affected = new Set<string>([changedFile])
+        const queue = [changedFile]
+
+        while (queue.length > 0) {
+          const current = queue.pop()
+          if (current == null) break
+
+          const importers = importGraph.get(current)
+          if (!importers) continue
+
+          for (const importer of importers) {
+            if (affected.has(importer)) continue
+            affected.add(importer)
+            queue.push(importer)
+          }
+        }
+
+        return affected
       }
 
       const handleServerComponentHMR = async (filePath: string) => {
@@ -1537,56 +1515,48 @@ ${clientTransformedCode}`
           const code = moduleAnalysisCache.getSource(filePath)
           builder.addServerComponent(filePath, code)
 
-          const components = await builder.getTransformedComponentsForDevelopment()
+          const affectedFiles = collectAffectedComponentFiles(builder.getImportGraph(), filePath)
+          const components = await builder.getTransformedComponentsForDevelopment(file =>
+            affectedFiles.has(file),
+          )
 
           if (components.length === 0) return
 
-          const serverPort =
-            process.env.SERVER_PORT != null && process.env.SERVER_PORT !== ''
-              ? Number(process.env.SERVER_PORT)
-              : Number(
-                  process.env.PORT != null && process.env.PORT !== ''
-                    ? process.env.PORT
-                    : process.env.RSC_PORT != null && process.env.RSC_PORT !== ''
-                      ? process.env.RSC_PORT
-                      : 3000,
+          const baseUrl = `http://localhost:${getRariServerPort()}`
+
+          await Promise.all(
+            components.map(async component => {
+              try {
+                const registerResponse = await fetch(`${baseUrl}/_rari/register`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    component_id: component.id,
+                    component_code: component.code,
+                  }),
+                })
+
+                if (!registerResponse.ok) {
+                  const errorText = await registerResponse.text()
+                  throw new Error(`HTTP ${registerResponse.status}: ${errorText}`)
+                }
+              } catch (error) {
+                console.error(
+                  '[rari] Failed to register component',
+                  `${component.id}:`,
+                  error instanceof Error ? error.message : String(error),
                 )
-          const baseUrl = `http://localhost:${serverPort}`
-
-          for (const component of components) {
-            try {
-              const registerResponse = await fetch(`${baseUrl}/_rari/register`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  component_id: component.id,
-                  component_code: component.code,
-                }),
-              })
-
-              if (!registerResponse.ok) {
-                const errorText = await registerResponse.text()
-                throw new Error(`HTTP ${registerResponse.status}: ${errorText}`)
               }
-            } catch (error) {
-              console.error(
-                '[rari] Failed to register component',
-                `${component.id}:`,
-                error instanceof Error ? error.message : String(error),
-              )
-            }
-          }
+            }),
+          )
         } catch (error) {
           console.error(
             '[rari] Targeted HMR failed for',
             `${filePath}:`,
             error instanceof Error ? error.message : String(error),
           )
-          setTimeout(() => {
-            void discoverAndRegisterComponents()
-          }, 1000)
         }
       }
 
@@ -1609,43 +1579,20 @@ ${clientTransformedCode}`
             !req.url.includes('.')
           ) {
             if (!rustServerReady) {
-              let ready = await checkRustServerHealth()
+              const ready = await waitForRustServerReady(10000)
+
               if (!ready) {
-                const maxWait = 10000
-                const startWait = Date.now()
-                const checkInterval = 100
-
-                while (Date.now() - startWait < maxWait) {
-                  ready = await checkRustServerHealth()
-                  if (ready) break
-
-                  await new Promise(resolve => {
-                    setTimeout(resolve, checkInterval)
-                  })
+                console.error('[rari] Rust server not ready, cannot proxy RSC request')
+                if (!res.headersSent) {
+                  res.statusCode = 503
+                  res.end('Server not ready')
                 }
 
-                if (!ready) {
-                  console.error('[rari] Rust server not ready, cannot proxy RSC request')
-                  if (!res.headersSent) {
-                    res.statusCode = 503
-                    res.end('Server not ready')
-                  }
-
-                  return
-                }
+                return
               }
             }
 
-            const serverPort =
-              process.env.SERVER_PORT != null && process.env.SERVER_PORT !== ''
-                ? Number(process.env.SERVER_PORT)
-                : Number(
-                    process.env.PORT != null && process.env.PORT !== ''
-                      ? process.env.PORT
-                      : process.env.RSC_PORT != null && process.env.RSC_PORT !== ''
-                        ? process.env.RSC_PORT
-                        : 3000,
-                  )
+            const serverPort = getRariServerPort()
 
             const targetUrl = `http://localhost:${serverPort}${req.url}`
 
@@ -1712,19 +1659,17 @@ ${clientTransformedCode}`
             moduleAnalysisCache.invalidate(filePath)
           }
 
-          if (TSX_EXT_REGEX.test(filePath) && filePath.includes(srcDir)) {
-            if (isServerComponent(filePath)) {
-              server.ws.send({
-                type: 'custom',
-                event: 'rari:register-server-component',
-                data: { filePath },
-              })
-              await handleServerComponentHMR(filePath)
-            } else {
-              setTimeout(() => {
-                void discoverAndRegisterComponents()
-              }, 1000)
-            }
+          if (
+            TSX_EXT_REGEX.test(filePath) &&
+            filePath.includes(srcDir) &&
+            isServerComponent(filePath)
+          ) {
+            server.ws.send({
+              type: 'custom',
+              event: 'rari:register-server-component',
+              data: { filePath },
+            })
+            await handleServerComponentHMR(filePath)
           }
         })()
       })

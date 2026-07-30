@@ -5,6 +5,7 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { BACKSLASH_REGEX, QUOTE_REGEX, TSX_EXT_REGEX } from '@/shared/regex-constants'
+import { getRariServerUrl } from '@/shared/utils/server-port'
 import {
   isRecord,
   isStaticParamsArray,
@@ -183,7 +184,7 @@ function isAppRouteManifest(value: unknown): value is AppRouteManifest {
 
 async function notifyApiRouteInvalidation(filePath: string): Promise<void> {
   try {
-    const response = await fetch('http://localhost:3000/_rari/hmr', {
+    const response = await fetch(`${getRariServerUrl()}/_rari/hmr`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
