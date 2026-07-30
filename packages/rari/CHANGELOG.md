@@ -1,3 +1,23 @@
+## [rari@0.15.7] - 2026-07-30
+
+### 🐛 Bug Fixes
+
+- evaluate generateStaticParams under react-server condition by @skiniks
+- improve IPC handling in static params evaluation by ensuring process disconnect occurs after message is sent by @skiniks
+
+### 🚜 Refactor
+
+- improve static params evaluation and error handling in Vite plugin by @skiniks
+- enhance IPC handling and timeout management in static params evaluation by @skiniks
+
+### ⚙️ Miscellaneous Tasks
+
+- *(dependencies)* update various packages including async-compression, http, napi, and eslint-related packages by @skiniks
+- *(dependencies)* update rari to version 0.15.7 by @skiniks
+- *(dependencies)* update rari and related packages to version 0.15.7 by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.15.6...rari@0.15.7
 ## [rari@0.15.6] - 2026-07-26
 
 ### 🚀 Features
