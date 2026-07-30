@@ -3,7 +3,8 @@ import type { ServerComponentBuilder } from '../server/build'
 import path from 'node:path'
 import process from 'node:process'
 import { throwIfNotOk } from '@/shared/utils/http'
-import { isRecord, parseJsonRecord } from '@/shared/utils/type-guards'
+import { getRariServerPort } from '@/shared/utils/server-port'
+import { isRecord } from '@/shared/utils/type-guards'
 import { HMRErrorHandler } from './error-handler'
 
 export interface ComponentRebuildResult {
@@ -68,7 +69,7 @@ export class HMRCoordinator {
   constructor(
     // oxlint-disable-next-line typescript/prefer-readonly-parameter-types -- ServerComponentBuilder is a stateful builder with internal mutable caches
     builder: ServerComponentBuilder,
-    serverPort: number = 3000,
+    serverPort: number = getRariServerPort(),
   ) {
     this.serverComponentBuilder = builder
     this.rustServerUrl = `http://localhost:${serverPort}`
@@ -264,20 +265,19 @@ export class HMRCoordinator {
         )
       }
 
-      const result = parseJsonRecord(responseText)
-      if (!result) {
+      if (!isRecord(parsed)) {
         throw new Error(
           `Invalid server response (status ${response.status}): expected object, got ${typeof parsed}. ` +
             `Response body: ${responseText.substring(0, 200)}${responseText.length > 200 ? '...' : ''}`,
         )
       }
 
-      if (result.success !== true) {
+      if (parsed.success !== true) {
         const message =
-          typeof result.message === 'string' && result.message !== ''
-            ? result.message
-            : typeof result.error === 'string' && result.error !== ''
-              ? result.error
+          typeof parsed.message === 'string' && parsed.message !== ''
+            ? parsed.message
+            : typeof parsed.error === 'string' && parsed.error !== ''
+              ? parsed.error
               : 'Component reload failed'
         throw new Error(message)
       }

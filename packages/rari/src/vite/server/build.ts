@@ -615,12 +615,14 @@ export class ServerComponentBuilder {
     return hasNodeImportsFromAnalysis(analysis)
   }
 
-  async getTransformedComponentsForDevelopment(): Promise<
-    Array<{ id: string; code: string; isAction: boolean }>
-  > {
+  async getTransformedComponentsForDevelopment(
+    filter?: (filePath: string) => boolean,
+  ): Promise<Array<{ id: string; code: string; isAction: boolean }>> {
     const components: Array<{ id: string; code: string; isAction: boolean }> = []
 
     for (const [filePath] of this.serverComponents) {
+      if (filter && !filter(filePath)) continue
+
       const relativePath = path.relative(this.projectRoot, filePath)
       const componentId = this.getComponentId(relativePath)
 
@@ -634,6 +636,8 @@ export class ServerComponentBuilder {
     }
 
     for (const [filePath] of this.serverActions) {
+      if (filter && !filter(filePath)) continue
+
       const relativePath = path.relative(this.projectRoot, filePath)
       const actionId = this.getComponentId(relativePath)
 
