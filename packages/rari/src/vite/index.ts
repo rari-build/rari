@@ -74,7 +74,10 @@ import {
 } from './server/build'
 import { buildClientReferenceReplacementFromImport } from './transform/client-import'
 import { parseHtmlEntryImports } from './transform/html-entry'
-import { transformInlineServerActions } from './transform/inline-server-action'
+import {
+  hasRegisterServerReferenceImport,
+  transformInlineServerActions,
+} from './transform/inline-server-action'
 import { transformDefineMdxComponents } from './transform/mdx-components'
 import { getUseCacheTransform } from './transform/use-cache'
 
@@ -97,7 +100,7 @@ const EXPORT_DEFAULT_FUNCTION_DECL_REGEX = /export\s+default\s+(?:async\s+)?func
 const EXPORT_DECLARATION_REGEX = /export\s+(?:async\s+)?(?:const|let|var|function|class)\s+(\w+)/g
 const USE_CLIENT_DIRECTIVE_REGEX = /^['"]use client['"];?\s*$/gm
 const IMPORT_REGEX = /import\s+["']([^"']+)["']/g
-const LOCAL_IMPORT_SOURCE_REGEX = /^[./@]/
+const LOCAL_IMPORT_SOURCE_REGEX = /^[./@~#]/
 
 const REACT_IMPORT_REGEX = /import\s+\{[^}]*\}\s+from\s+['"]react['"]/
 const REACT_IMPORT_WITH_DEFAULT_REGEX = /import\s+[^,\s]+\s*,\s*\{[^}]*\}\s+from\s+['"]react['"]/
@@ -538,7 +541,7 @@ if (import.meta.hot) {
     if (exportedNames.length === 0 && inlineTransformed == null) return code
 
     const idJson = JSON.stringify(moduleId)
-    if (!newCode.includes('registerServerReference')) {
+    if (!hasRegisterServerReferenceImport(newCode)) {
       newCode += '\n\nimport {registerServerReference} from "react-server-dom-rari/server";\n'
     } else {
       newCode += '\n'
@@ -546,7 +549,7 @@ if (import.meta.hot) {
 
     for (const name of exportedNames) {
       if (name === 'default') {
-        const functionDeclMatch = EXPORT_DEFAULT_FUNCTION_DECL_REGEX.exec(code)
+        const functionDeclMatch = EXPORT_DEFAULT_FUNCTION_DECL_REGEX.exec(newCode)
 
         if (functionDeclMatch) {
           const functionName = functionDeclMatch[1]

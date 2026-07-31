@@ -114,4 +114,21 @@ export default function Page() {
     expect(result!.code).toContain('const action = $$ACTION_0_anonymous_server_function')
     expect(result!.code).toContain('async function $$ACTION_0_anonymous_server_function(formData)')
   })
+
+  it('ignores string literals and comments when collecting free vars', () => {
+    const input = `import { db } from './db'
+export default async function Page() {
+  async function save(formData) {
+    'use server'
+    // mentions leakedVar in a comment
+    await db.write(formData, "alsoLeaked")
+  }
+  return save
+}
+`
+
+    const result = transformInlineServerActions(input, 'page')
+    expect(result!.code).toContain('async function $$ACTION_0_save(formData)')
+    expect(result!.code).not.toContain('.bind(null,')
+  })
 })

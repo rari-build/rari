@@ -1,5 +1,15 @@
+import { skipNonCodeToken } from '../analysis/directives'
+
 const USE_SERVER = 'use server'
 const REGISTER_IMPORT = 'react-server-dom-rari/server'
+
+/** True when `code` already imports `registerServerReference` as a named binding. */
+export const REGISTER_SERVER_REFERENCE_IMPORT_RE =
+  /(?:^|[\n\r;])\s*import\s*\{[^}]*\bregisterServerReference\b[^}]*\}\s*from\s*["'][^"'\n]+["']/
+
+export function hasRegisterServerReferenceImport(code: string): boolean {
+  return REGISTER_SERVER_REFERENCE_IMPORT_RE.test(code)
+}
 
 const KNOWN_GLOBALS = new Set([
   'undefined',
@@ -140,7 +150,7 @@ function skipWhitespaceAndComments(source: string, i: number): number {
   const len = source.length
   while (i < len) {
     const ch = source.charCodeAt(i)
-    if (ch === 32 || ch === 9 || ch === 10 || ch === 13 || ch === 0xFEFF) {
+    if (ch === 32 || ch === 9 || ch === 10 || ch === 13 || ch === 65279) {
       i++
       continue
     }
@@ -358,15 +368,90 @@ function collectFreeVars(
   ])
 
   const used = new Set<string>()
-  for (const m of body.matchAll(/\b([a-z_$][\w$]*)\b/gi)) {
-    const name = m[1]
-    if (bound.has(name)) continue
-    const idx = m.index
-    if (idx > 0 && body[idx - 1] === '.') continue
-    used.add(name)
+  let i = 0
+  const len = body.length
+
+  while (i < len) {
+    const skipped = skipNonCodeToken(body, i, len)
+    if (skipped !== -1) {
+      i = skipped
+      continue
+    }
+
+    if (!isIdentStart(body.charCodeAt(i))) {
+      i++
+      continue
+    }
+
+    const ident = readIdent(body, i)
+    if (ident == null) {
+      i++
+      continue
+    }
+
+    // Member access: skip `obj.prop` / `obj?.prop` property names.
+    if (i > 0 && body.charCodeAt(i - 1) === 46) {
+      i = ident.end
+      continue
+    }
+
+    // Object-literal keys in `key: value` pairs (not ternary / labels alone).
+    if (isObjectLiteralKey(body, i, ident.end)) {
+      i = ident.end
+      continue
+    }
+
+    if (!bound.has(ident.name)) used.add(ident.name)
+    i = ident.end
   }
 
   return [...used]
+}
+
+function skipWsBack(source: string, i: number): number {
+  while (i > 0) {
+    const ch = source.charCodeAt(i - 1)
+    if (ch === 32 || ch === 9 || ch === 10 || ch === 13 || ch === 65279) i--
+    else break
+  }
+  return i
+}
+
+function keywordEndsAt(source: string, end: number, keyword: string): number | null {
+  const start = end - keyword.length
+  if (start < 0) return null
+  if (!isKeywordAt(source, start, keyword)) return null
+  return start
+}
+
+/** Object key when prev significant is `{` or `,` and next significant is `:`. */
+function isObjectLiteralKey(body: string, identStart: number, identEnd: number): boolean {
+  const after = skipWhitespaceAndComments(body, identEnd)
+  if (body.charCodeAt(after) !== 58) return false
+
+  const before = skipWsBack(body, identStart)
+  if (before === 0) return false
+  const prev = body.charCodeAt(before - 1)
+  return prev === 123 || prev === 44
+}
+
+function resolveActionReplaceRange(
+  source: string,
+  actionStart: number,
+): { start: number; exportKind: 'default' | 'named' | null } {
+  let cursor = skipWsBack(source, actionStart)
+
+  const defaultStart = keywordEndsAt(source, cursor, 'default')
+  if (defaultStart != null) {
+    cursor = skipWsBack(source, defaultStart)
+    const exportStart = keywordEndsAt(source, cursor, 'export')
+    if (exportStart != null) return { start: exportStart, exportKind: 'default' }
+  }
+
+  const exportStart = keywordEndsAt(source, cursor, 'export')
+  if (exportStart != null) return { start: exportStart, exportKind: 'named' }
+
+  return { start: actionStart, exportKind: null }
 }
 
 function locateInlineUseServerActions(source: string): LocatedAction[] {
@@ -536,12 +621,20 @@ export function transformInlineServerActions(
     const bindExpr =
       freeVars.length > 0 ? `${hoistedName}.bind(null, ${freeVars.join(', ')})` : hoistedName
 
+    const { start: replaceStart, exportKind } = resolveActionReplaceRange(result, action.start)
+
     let replacement = bindExpr
     if (action.kind === 'declaration' && action.name != null) {
-      replacement = `const ${action.name} = ${bindExpr}`
+      if (exportKind === 'default') {
+        replacement = bindExpr
+      } else if (exportKind === 'named') {
+        replacement = `export const ${action.name} = ${bindExpr}`
+      } else {
+        replacement = `const ${action.name} = ${bindExpr}`
+      }
     }
 
-    result = result.slice(0, action.start) + replacement + result.slice(action.end)
+    result = result.slice(0, replaceStart) + replacement + result.slice(action.end)
   }
 
   const registerImport = needsRegisterImport
@@ -549,11 +642,7 @@ export function transformInlineServerActions(
     : ''
 
   const prefix =
-    needsRegisterImport && !result.includes('registerServerReference')
-      ? registerImport
-      : needsRegisterImport && !/import\s*\{[^}]*registerServerReference/.test(result)
-        ? registerImport
-        : ''
+    needsRegisterImport && !hasRegisterServerReferenceImport(result) ? registerImport : ''
 
   return {
     code: `${prefix}${result}\n\n${hoisted.join('\n')}\n`,

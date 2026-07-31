@@ -1066,7 +1066,7 @@ function skipRegex(source: string, i: number, len: number): number {
  * If `source[i]` starts whitespace, a comment, string, regex literal, or JSX,
  * return the offset past that token. Returns -1 when the position is code.
  */
-function skipNonCodeToken(source: string, i: number, len: number): number {
+export function skipNonCodeToken(source: string, i: number, len: number): number {
   if (i >= len) return -1
 
   const ch = source.charCodeAt(i)
