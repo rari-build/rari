@@ -45,7 +45,11 @@ import {
   parseJsonRecord,
 } from '@/shared/utils/type-guards'
 import { getComponentId } from './analysis/component-ids'
-import { hasDefaultExport } from './analysis/directives'
+import {
+  hasDefaultExport,
+  rewriteExportDefaultAsBinding,
+  scanImportStatements,
+} from './analysis/directives'
 import {
   collectClientComponentPaths,
   invalidateModuleCachePath,
@@ -68,10 +72,7 @@ import {
   scanDirectory,
   ServerComponentBuilder,
 } from './server/build'
-import {
-  buildNamespaceClientReferenceReplacement,
-  NAMESPACE_IMPORT_LINE_REGEX,
-} from './transform/client-import'
+import { buildClientReferenceReplacementFromImport } from './transform/client-import'
 import { parseHtmlEntryImports } from './transform/html-entry'
 import { transformDefineMdxComponents } from './transform/mdx-components'
 import { getUseCacheTransform } from './transform/use-cache'
@@ -92,12 +93,10 @@ const NAMED_EXPORT_REGEX = /export\s*\{([^}]+)\}/g
 const AS_SPLIT_REGEX = /\s+as\s+/
 const EXPORT_DEFAULT_FUNCTION_OR_CLASS_REGEX = /export\s+default\s+(?:function|class)\s+\w+/
 const EXPORT_DEFAULT_FUNCTION_DECL_REGEX = /export\s+default\s+(?:async\s+)?function\s+(\w+)/
-const EXPORT_DEFAULT_VALUE_REGEX = /export\s+default\s+([^;]+)/
 const EXPORT_DECLARATION_REGEX = /export\s+(?:async\s+)?(?:const|let|var|function|class)\s+(\w+)/g
 const USE_CLIENT_DIRECTIVE_REGEX = /^['"]use client['"];?\s*$/gm
 const IMPORT_REGEX = /import\s+["']([^"']+)["']/g
-const IMPORT_LINE_REGEX =
-  /^\s*import\s+(?:(\w+)(?:\s*,\s*\{\s*(?:(\w+(?:\s*,\s*\w+)*)\s*)?\})?|\{\s*(\w+(?:\s*,\s*\w+)*)\s*\})\s+from\s+['"]([./@][^'"]+)['"].*$/
+const LOCAL_IMPORT_SOURCE_REGEX = /^[./@]/
 
 const REACT_IMPORT_REGEX = /import\s+\{[^}]*\}\s+from\s+['"]react['"]/
 const REACT_IMPORT_WITH_DEFAULT_REGEX = /import\s+[^,\s]+\s*,\s*\{[^}]*\}\s+from\s+['"]react['"]/
@@ -108,59 +107,6 @@ const RSC_CLIENT_IMPORT_REGEX =
 const JSX_TEST_REGEX = /\bJSX\b/
 const IMPORT_SPECIFIERS_REGEX = /\{([^}]*)\}/
 const USE_CLIENT_DIRECTIVE_LINE_REGEX = /^['"]use client['"];?\s*\n/
-
-interface ClientReferenceSpecifier {
-  readonly bindingName: string
-  readonly exportName: string
-}
-
-function parseClientImportSpecifiers(
-  line: string,
-  importedDefault?: string,
-): ClientReferenceSpecifier[] {
-  const specifiers: ClientReferenceSpecifier[] = []
-
-  if (importedDefault != null && importedDefault !== '')
-    specifiers.push({ bindingName: importedDefault, exportName: 'default' })
-
-  const namedBlock = /\{([^}]+)\}/.exec(line)?.[1]
-  if (namedBlock != null && namedBlock !== '') {
-    for (const part of namedBlock.split(',')) {
-      const trimmed = part.trim()
-      if (!trimmed) continue
-
-      const asParts = trimmed.split(/\s+as\s+/i)
-      if (asParts.length === 2 && asParts[0] && asParts[1]) {
-        specifiers.push({
-          bindingName: asParts[1].trim(),
-          exportName: asParts[0].trim(),
-        })
-      } else {
-        specifiers.push({ bindingName: trimmed, exportName: trimmed })
-      }
-    }
-  }
-
-  return specifiers
-}
-
-function buildClientReferenceReplacement(
-  specifiers: readonly ClientReferenceSpecifier[],
-  resolvedImportPath: string,
-): string {
-  return `import { registerClientReference } from "react-server-dom-rari/server";
-${specifiers
-  .map(
-    ({ bindingName, exportName }) => `const ${bindingName} = registerClientReference(
-  function() {
-    throw new Error("Attempted to call ${bindingName} from the server but it's on the client. It can only be rendered as a Component or passed to props of a Client Component.");
-  },
-  ${JSON.stringify(resolvedImportPath)},
-  ${JSON.stringify(exportName)}
-);`,
-  )
-  .join('\n')}`
-}
 
 export interface RouterPluginOptions {
   readonly appDir?: string
@@ -590,14 +536,10 @@ export function rari(options: RariOptions = {}): RariPlugin[] {
           newCode += `\n// Register server reference for default export\n`
           newCode += `registerServerReference(${functionName}, ${idJson}, ${JSON.stringify(name)});\n`
         } else {
-          const match = EXPORT_DEFAULT_VALUE_REGEX.exec(code)
-          if (match) {
-            const exportedValue = match[1].trim()
-            const tempVarName = '__default_export__'
-            newCode = newCode.replace(
-              EXPORT_DEFAULT_VALUE_REGEX,
-              `const ${tempVarName} = ${exportedValue};\nexport default ${tempVarName}`,
-            )
+          const tempVarName = '__default_export__'
+          const rewritten = rewriteExportDefaultAsBinding(newCode, tempVarName)
+          if (rewritten != null) {
+            newCode = rewritten
             newCode += `\n// Register server reference for default export\n`
             newCode += `if (typeof ${tempVarName} === "function") {\n`
             newCode += `  registerServerReference(${tempVarName}, ${idJson}, ${JSON.stringify(name)});\n`
@@ -1104,15 +1046,8 @@ if (import.meta.hot) {
         setComponentType(id, 'client')
         addTrackedClientComponent(id)
 
-        const lines = code.split('\n')
-
-        for (const line of lines) {
-          const namespaceMatch = line.match(NAMESPACE_IMPORT_LINE_REGEX)
-          const importMatch = namespaceMatch ? null : IMPORT_LINE_REGEX.exec(line)
-          if (!namespaceMatch && !importMatch) continue
-
-          const importPath = namespaceMatch?.[2] ?? importMatch![4]
-          if (!importPath) continue
+        for (const importPath of moduleAnalysis.importSources) {
+          if (!LOCAL_IMPORT_SOURCE_REGEX.test(importPath)) continue
 
           const resolvedImportPath = resolveImportToFilePath(importPath, id, resolvedAlias)
 
@@ -1174,20 +1109,17 @@ ${clientTransformedCode}`
 
       setComponentType(id, 'unknown')
 
-      const lines = code.split('\n')
       let modifiedCode = code
       let hasServerImports = false
       let needsReactImport = false
       const importingFileIsClient = id.includes('entry-client')
+      const replacements: Array<{ start: number; end: number; replacement: string }> = []
 
-      for (const line of lines) {
-        const namespaceMatch = line.match(NAMESPACE_IMPORT_LINE_REGEX)
-        const importMatch = namespaceMatch ? null : IMPORT_LINE_REGEX.exec(line)
-        if (!namespaceMatch && !importMatch) continue
+      for (const imp of scanImportStatements(code)) {
+        if (imp.typeOnly || imp.sideEffectOnly) continue
+        if (!LOCAL_IMPORT_SOURCE_REGEX.test(imp.source)) continue
 
-        const importedDefault = importMatch?.[1]
-        const importPath = namespaceMatch?.[2] ?? importMatch![4]
-        const resolvedImportPath = resolveImportToFilePath(importPath, id, resolvedAlias)
+        const resolvedImportPath = resolveImportToFilePath(imp.source, id, resolvedAlias)
 
         const isClientComponent =
           getComponentType(resolvedImportPath) === 'client' ||
@@ -1199,36 +1131,31 @@ ${clientTransformedCode}`
           addTrackedClientComponent(resolvedImportPath)
         }
 
-        if (isClientComponent && (environment.name === 'rsc' || environment.name === 'ssr')) {
-          if (!importingFileIsClient) {
-            const originalImport = line
-
-            if (namespaceMatch) {
-              const clientRefReplacement = buildNamespaceClientReferenceReplacement(
-                namespaceMatch[1],
-                resolvedImportPath,
-              )
-
-              modifiedCode = modifiedCode.replace(originalImport, clientRefReplacement)
-              hasServerImports = true
-              needsReactImport = true
-              continue
-            }
-
-            const specifiers = parseClientImportSpecifiers(line, importedDefault)
-            if (specifiers.length === 0) continue
-
-            const clientRefReplacement = buildClientReferenceReplacement(
-              specifiers,
-              resolvedImportPath,
-            )
-
-            modifiedCode = modifiedCode.replace(originalImport, clientRefReplacement)
-            hasServerImports = true
-            needsReactImport = true
-          }
+        if (
+          !isClientComponent ||
+          importingFileIsClient ||
+          (environment.name !== 'rsc' && environment.name !== 'ssr')
+        ) {
+          continue
         }
+
+        const clientRefReplacement = buildClientReferenceReplacementFromImport(
+          imp,
+          resolvedImportPath,
+        )
+        if (clientRefReplacement === '') continue
+
+        replacements.push({
+          start: imp.start,
+          end: imp.end,
+          replacement: clientRefReplacement,
+        })
+        hasServerImports = true
+        needsReactImport = true
       }
+
+      for (const { start, end, replacement } of [...replacements].sort((a, b) => b.start - a.start))
+        modifiedCode = modifiedCode.slice(0, start) + replacement + modifiedCode.slice(end)
 
       if (hasServerImports) {
         const hasReactImport =

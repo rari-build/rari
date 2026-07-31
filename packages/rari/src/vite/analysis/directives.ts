@@ -633,6 +633,293 @@ export function analyzeModuleSource(source: string): ModuleAnalysis {
   }
 }
 
+export interface ScannedImportSpecifier {
+  readonly imported: string
+  readonly local: string
+  readonly typeOnly: boolean
+}
+
+export interface ScannedImport {
+  /** Offset of the `import` keyword. */
+  readonly start: number
+  /** Offset past the statement (includes a trailing semicolon when present). */
+  readonly end: number
+  readonly source: string
+  readonly typeOnly: boolean
+  readonly sideEffectOnly: boolean
+  readonly defaultBinding: string | null
+  readonly namespaceBinding: string | null
+  readonly named: readonly ScannedImportSpecifier[]
+}
+
+function readIdentifier(
+  source: string,
+  i: number,
+  len: number,
+): { name: string; end: number } | null {
+  if (i >= len || !isIdentifierStartCode(source.charCodeAt(i))) return null
+
+  let j = i + 1
+  while (j < len && isIdentifierPartCode(source.charCodeAt(j))) j++
+
+  return { name: source.slice(i, j), end: j }
+}
+
+function consumeTrailingSemicolon(source: string, end: number, len: number): number {
+  let pos = end
+  while (pos < len) {
+    const ch = source.charCodeAt(pos)
+    if (ch === CH_SPACE || ch === CH_TAB) {
+      pos++
+      continue
+    }
+    if (ch === CH_SEMICOLON) return pos + 1
+    break
+  }
+
+  return end
+}
+
+interface NamedSpecifierParse {
+  readonly named: ScannedImportSpecifier[]
+  readonly end: number
+}
+
+function parseNamedImportSpecifiers(
+  source: string,
+  openBrace: number,
+  len: number,
+): NamedSpecifierParse | null {
+  const named: ScannedImportSpecifier[] = []
+  let pos = openBrace + 1
+
+  for (;;) {
+    pos = skipTrivia(source, pos, len)
+    if (pos >= len) return null
+
+    if (source.charCodeAt(pos) === CH_CLOSE_BRACE) return { named, end: pos + 1 }
+
+    // Inline type specifier: `type` followed by another specifier name is a
+    // modifier. A binding literally named `type` still parses as a name below.
+    let specTypeOnly = false
+    if (isKeywordAt(source, pos, 'type')) {
+      const after = skipTrivia(source, pos + 4, len)
+      const afterCh = source.charCodeAt(after)
+      const startsSpecifier =
+        afterCh === CH_SINGLE_QUOTE ||
+        afterCh === CH_DOUBLE_QUOTE ||
+        readIdentifier(source, after, len) !== null
+      if (startsSpecifier && !isKeywordAt(source, after, 'as')) {
+        specTypeOnly = true
+        pos = after
+      }
+    }
+
+    let imported: string
+    const importedCh = source.charCodeAt(pos)
+    if (importedCh === CH_SINGLE_QUOTE || importedCh === CH_DOUBLE_QUOTE) {
+      const strEnd = skipString(source, pos, len, importedCh)
+      imported = source.slice(pos + 1, strEnd - 1)
+      pos = strEnd
+    } else {
+      const ident = readIdentifier(source, pos, len)
+      if (!ident) return null
+      imported = ident.name
+      pos = ident.end
+    }
+
+    pos = skipTrivia(source, pos, len)
+
+    let local = imported
+    if (isKeywordAt(source, pos, 'as')) {
+      pos = skipTrivia(source, pos + 2, len)
+      const alias = readIdentifier(source, pos, len)
+      if (!alias) return null
+      local = alias.name
+      pos = skipTrivia(source, alias.end, len)
+    }
+
+    named.push({ imported, local, typeOnly: specTypeOnly })
+
+    const ch = source.charCodeAt(pos)
+    if (ch === CH_COMMA) {
+      pos++
+      continue
+    }
+    if (ch === CH_CLOSE_BRACE) return { named, end: pos + 1 }
+
+    return null
+  }
+}
+
+function parseImportStatementAt(source: string, start: number, len: number): ScannedImport | null {
+  let pos = skipTrivia(source, start + 6, len)
+  if (pos >= len) return null
+
+  const ch = source.charCodeAt(pos)
+  // Dynamic import or import.meta — not a static statement.
+  if (ch === CH_OPEN_PAREN || ch === CH_DOT) return null
+
+  if (ch === CH_SINGLE_QUOTE || ch === CH_DOUBLE_QUOTE) {
+    const spec = readImportModuleSpecifier(source, pos, len)
+    if (!spec) return null
+
+    return {
+      start,
+      end: consumeTrailingSemicolon(source, spec.end, len),
+      source: spec.source,
+      typeOnly: false,
+      sideEffectOnly: true,
+      defaultBinding: null,
+      namespaceBinding: null,
+      named: [],
+    }
+  }
+
+  let typeOnly = false
+  // `import type ...` is type-only unless `type` is itself the default
+  // binding (`import type from './x'` or `import type, { x } from './x'`).
+  if (isKeywordAt(source, pos, 'type')) {
+    const after = skipTrivia(source, pos + 4, len)
+    if (!isKeywordAt(source, after, 'from') && source.charCodeAt(after) !== CH_COMMA) {
+      typeOnly = true
+      pos = after
+    }
+  }
+
+  let defaultBinding: string | null = null
+  let namespaceBinding: string | null = null
+  let named: ScannedImportSpecifier[] = []
+
+  let clauseCh = source.charCodeAt(pos)
+
+  if (clauseCh !== CH_OPEN_BRACE && clauseCh !== CH_STAR) {
+    const ident = readIdentifier(source, pos, len)
+    if (!ident) return null
+
+    defaultBinding = ident.name
+    pos = skipTrivia(source, ident.end, len)
+
+    if (source.charCodeAt(pos) === CH_COMMA) {
+      pos = skipTrivia(source, pos + 1, len)
+      clauseCh = source.charCodeAt(pos)
+    } else {
+      clauseCh = -1
+    }
+  }
+
+  if (clauseCh === CH_STAR) {
+    pos = skipTrivia(source, pos + 1, len)
+    if (!isKeywordAt(source, pos, 'as')) return null
+
+    pos = skipTrivia(source, pos + 2, len)
+    const ns = readIdentifier(source, pos, len)
+    if (!ns) return null
+
+    namespaceBinding = ns.name
+    pos = ns.end
+  } else if (clauseCh === CH_OPEN_BRACE) {
+    const parsed = parseNamedImportSpecifiers(source, pos, len)
+    if (!parsed) return null
+
+    named = parsed.named
+    pos = parsed.end
+  }
+
+  pos = skipTrivia(source, pos, len)
+  if (!isKeywordAt(source, pos, 'from')) return null
+
+  const spec = readImportModuleSpecifier(source, pos + 4, len)
+  if (!spec) return null
+
+  return {
+    start,
+    end: consumeTrailingSemicolon(source, spec.end, len),
+    source: spec.source,
+    typeOnly,
+    sideEffectOnly: false,
+    defaultBinding,
+    namespaceBinding,
+    named,
+  }
+}
+
+/**
+ * Scan static import statements with byte spans and full specifier structure
+ * (default, namespace, named with aliases, type-only, side-effect, multi-line).
+ * Same lexer discipline as analyzeModuleSource: comments, strings, regex
+ * literals, and JSX are skipped, so imports inside them never match.
+ */
+export function scanImportStatements(source: string): ScannedImport[] {
+  const imports: ScannedImport[] = []
+  let i = 0
+  const len = source.length
+
+  while (i < len) {
+    const ch = source.charCodeAt(i)
+
+    if (isWhitespaceCode(ch)) {
+      i++
+      continue
+    }
+
+    if (ch === CH_SLASH && source.charCodeAt(i + 1) === CH_SLASH) {
+      i = skipSingleLineComment(source, i, len)
+      continue
+    }
+
+    if (ch === CH_SLASH && source.charCodeAt(i + 1) === CH_STAR) {
+      i = skipMultiLineComment(source, i, len)
+      continue
+    }
+
+    if (ch === CH_SINGLE_QUOTE || ch === CH_DOUBLE_QUOTE || ch === CH_BACKTICK) {
+      i = skipString(source, i, len, ch)
+      continue
+    }
+
+    if (
+      ch === CH_SLASH &&
+      source.charCodeAt(i + 1) !== CH_SLASH &&
+      source.charCodeAt(i + 1) !== CH_STAR &&
+      canPrecedeRegexWithKeywords(source, i)
+    ) {
+      i = skipRegex(source, i, len)
+      continue
+    }
+
+    if (ch === CH_LT) {
+      const nextCh = source.charCodeAt(i + 1)
+      if (
+        nextCh === CH_SLASH ||
+        nextCh === CH_DOT ||
+        nextCh === CH_GT ||
+        isIdentifierStartCode(nextCh)
+      ) {
+        i = skipJSX(source, i, len)
+        continue
+      }
+      i++
+      continue
+    }
+
+    if (isKeywordAt(source, i, 'import')) {
+      const parsed = parseImportStatementAt(source, i, len)
+      if (parsed) {
+        imports.push(parsed)
+        i = parsed.end
+        continue
+      }
+      i += 6
+      continue
+    }
+
+    i++
+  }
+
+  return imports
+}
+
 export function getDirectives(source: string): DirectiveResult {
   return analyzeModuleSource(source).directives
 }
@@ -853,4 +1140,233 @@ function skipRegex(source: string, i: number, len: number): number {
   }
 
   return i
+}
+
+export interface ExportDefaultValueLocation {
+  /** Start of the `export` keyword. */
+  readonly exportStart: number
+  /** Start of the exported value / declaration after `default`. */
+  readonly valueStart: number
+  /** End of the exported value (before an optional trailing semicolon). */
+  readonly valueEnd: number
+  /** End of the statement including a trailing semicolon when present. */
+  readonly statementEnd: number
+  /**
+   * Local binding name when the export is a named function/class declaration;
+   * null for expression exports that need a temporary binding.
+   */
+  readonly bindingName: string | null
+}
+
+/**
+ * Locate the first `export default …` statement with a correctly spanned
+ * expression body (brace/paren/bracket depth, strings, comments, JSX, regex).
+ * Avoids the classic `[^;]+` trap that truncates arrow-function bodies.
+ */
+export function locateExportDefaultValue(source: string): ExportDefaultValueLocation | null {
+  const len = source.length
+  let i = 0
+
+  while (i < len) {
+    const ch = source.charCodeAt(i)
+
+    if (isWhitespaceCode(ch)) {
+      i++
+      continue
+    }
+
+    if (ch === CH_SLASH && source.charCodeAt(i + 1) === CH_SLASH) {
+      i = skipSingleLineComment(source, i, len)
+      continue
+    }
+
+    if (ch === CH_SLASH && source.charCodeAt(i + 1) === CH_STAR) {
+      i = skipMultiLineComment(source, i, len)
+      continue
+    }
+
+    if (ch === CH_SINGLE_QUOTE || ch === CH_DOUBLE_QUOTE || ch === CH_BACKTICK) {
+      i = skipString(source, i, len, ch)
+      continue
+    }
+
+    if (
+      ch === CH_SLASH &&
+      source.charCodeAt(i + 1) !== CH_SLASH &&
+      source.charCodeAt(i + 1) !== CH_STAR &&
+      canPrecedeRegexWithKeywords(source, i)
+    ) {
+      i = skipRegex(source, i, len)
+      continue
+    }
+
+    if (ch === CH_LT) {
+      const nextCh = source.charCodeAt(i + 1)
+      if (
+        nextCh === CH_SLASH ||
+        nextCh === CH_DOT ||
+        nextCh === CH_GT ||
+        isIdentifierStartCode(nextCh)
+      ) {
+        i = skipJSX(source, i, len)
+        continue
+      }
+      i++
+      continue
+    }
+
+    if (isKeywordAt(source, i, 'export')) {
+      const afterExport = skipTrivia(source, i + 6, len)
+      if (!isKeywordAt(source, afterExport, 'default')) {
+        i++
+        continue
+      }
+
+      const valueStart = skipTrivia(source, afterExport + 7, len)
+      let pos = valueStart
+      let bindingName: string | null = null
+
+      if (isKeywordAt(source, pos, 'async')) {
+        const afterAsync = skipTrivia(source, pos + 5, len)
+        if (isKeywordAt(source, afterAsync, 'function')) pos = afterAsync
+      }
+
+      if (isKeywordAt(source, pos, 'function') || isKeywordAt(source, pos, 'class')) {
+        const keywordLen = isKeywordAt(source, pos, 'function') ? 8 : 5
+        let afterKeyword = skipTrivia(source, pos + keywordLen, len)
+        if (source.charCodeAt(afterKeyword) === CH_STAR) {
+          afterKeyword = skipTrivia(source, afterKeyword + 1, len)
+        }
+        const name = readIdentifier(source, afterKeyword, len)
+        if (name) bindingName = name.name
+      }
+
+      const valueEnd = scanExportDefaultValueEnd(source, valueStart, len)
+      const statementEnd = consumeTrailingSemicolon(source, valueEnd, len)
+
+      return {
+        exportStart: i,
+        valueStart,
+        valueEnd,
+        statementEnd,
+        bindingName,
+      }
+    }
+
+    i++
+  }
+
+  return null
+}
+
+function scanExportDefaultValueEnd(source: string, start: number, len: number): number {
+  let i = start
+  let paren = 0
+  let brace = 0
+  let bracket = 0
+
+  while (i < len) {
+    const ch = source.charCodeAt(i)
+
+    if (ch === CH_SINGLE_QUOTE || ch === CH_DOUBLE_QUOTE || ch === CH_BACKTICK) {
+      i = skipString(source, i, len, ch)
+      continue
+    }
+
+    if (ch === CH_SLASH && source.charCodeAt(i + 1) === CH_SLASH) {
+      i = skipSingleLineComment(source, i, len)
+      continue
+    }
+
+    if (ch === CH_SLASH && source.charCodeAt(i + 1) === CH_STAR) {
+      i = skipMultiLineComment(source, i, len)
+      continue
+    }
+
+    if (
+      ch === CH_SLASH &&
+      source.charCodeAt(i + 1) !== CH_SLASH &&
+      source.charCodeAt(i + 1) !== CH_STAR &&
+      canPrecedeRegexWithKeywords(source, i)
+    ) {
+      i = skipRegex(source, i, len)
+      continue
+    }
+
+    if (ch === CH_LT && paren === 0 && brace === 0 && bracket === 0) {
+      const nextCh = source.charCodeAt(i + 1)
+      if (
+        nextCh === CH_SLASH ||
+        nextCh === CH_DOT ||
+        nextCh === CH_GT ||
+        isIdentifierStartCode(nextCh)
+      ) {
+        i = skipJSX(source, i, len)
+        continue
+      }
+    }
+
+    if (ch === CH_OPEN_PAREN) {
+      paren++
+      i++
+      continue
+    }
+    if (ch === CH_CLOSE_PAREN) {
+      paren = Math.max(0, paren - 1)
+      i++
+      continue
+    }
+    if (ch === CH_OPEN_BRACE) {
+      brace++
+      i++
+      continue
+    }
+    if (ch === CH_CLOSE_BRACE) {
+      brace = Math.max(0, brace - 1)
+      i++
+      // Declaration bodies (`function () {}`, `class {}`) end when the outer
+      // brace closes at depth 0.
+      if (paren === 0 && brace === 0 && bracket === 0) return i
+      continue
+    }
+    if (ch === CH_OPEN_BRACKET) {
+      bracket++
+      i++
+      continue
+    }
+    if (ch === CH_CLOSE_BRACKET) {
+      bracket = Math.max(0, bracket - 1)
+      i++
+      continue
+    }
+
+    if (paren === 0 && brace === 0 && bracket === 0) {
+      if (ch === CH_SEMICOLON) return i
+      if (isLineTerminatorCode(ch)) {
+        // ASI: end the statement unless the next non-trivia token continues
+        // the expression (rare for `export default`; treat newline as end).
+        return i
+      }
+    }
+
+    i++
+  }
+
+  return i
+}
+
+/**
+ * Rewrite `export default <expr>` to
+ * `const <tempVar> = <expr>;\nexport default <tempVar>` so the binding can be
+ * passed to registerServerReference. Named function/class defaults are left
+ * alone (caller should register the declaration name directly).
+ */
+export function rewriteExportDefaultAsBinding(source: string, tempVarName: string): string | null {
+  const located = locateExportDefaultValue(source)
+  if (located == null || located.bindingName != null) return null
+
+  const value = source.slice(located.valueStart, located.valueEnd).trimEnd()
+  const rewritten = `const ${tempVarName} = ${value};\nexport default ${tempVarName}${source.slice(located.statementEnd)}`
+
+  return source.slice(0, located.exportStart) + rewritten
 }
