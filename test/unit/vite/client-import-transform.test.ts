@@ -80,6 +80,13 @@ describe('ensureNamedImportFromModule', () => {
       `import helpers, { registerServerReference, registerClientReference } from ${JSON.stringify(mod)};\n`,
     )
   })
+
+  it('preserves type-only specifiers by emitting helpers separately', () => {
+    const code = `import { type Props, registerServerReference } from ${JSON.stringify(mod)};\n`
+    const result = ensureNamedImportFromModule(code, mod, ['registerClientReference'])
+
+    expect(result).toBe(`import { registerClientReference } from ${JSON.stringify(mod)};\n${code}`)
+  })
 })
 
 describe('rewriteExportDefaultAsBinding', () => {
