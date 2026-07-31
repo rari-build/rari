@@ -71,6 +71,15 @@ describe('ensureNamedImportFromModule', () => {
     )
     expect(result.match(/from "react-server-dom-rari\/server"/g)).toHaveLength(1)
   })
+
+  it('preserves a default binding when merging named imports', () => {
+    const code = `import helpers, { registerServerReference } from ${JSON.stringify(mod)};\n`
+    const result = ensureNamedImportFromModule(code, mod, ['registerClientReference'])
+
+    expect(result).toBe(
+      `import helpers, { registerServerReference, registerClientReference } from ${JSON.stringify(mod)};\n`,
+    )
+  })
 })
 
 describe('rewriteExportDefaultAsBinding', () => {

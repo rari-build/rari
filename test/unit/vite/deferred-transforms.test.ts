@@ -33,6 +33,17 @@ export function Real() {}
 `),
     ).toEqual(['Real'])
   })
+
+  it('collects export * as namespace names', () => {
+    expect(collectExportNames(`export * as ns from './mod'\nexport function Real() {}\n`)).toEqual([
+      'ns',
+      'Real',
+    ])
+  })
+
+  it('ignores bare export * re-exports', () => {
+    expect(collectExportNames(`export * from './mod'\n`)).toEqual([])
+  })
 })
 
 describe('buildClientReferenceStubModule', () => {
@@ -154,10 +165,13 @@ export default async function save(formData) {
     const result = transformInlineServerActions(input, 'page')
     expect(result).not.toBeNull()
     expect(result!.actionNames[0]).toMatch(/^\$\$ACTION_0_save$/)
-    expect(result!.code).toContain('export default $$ACTION_0_save')
+    expect(result!.rewrittenExportNames).toEqual(['default'])
+    expect(result!.code).toContain(
+      'export default registerServerReference($$ACTION_0_save, "page", "default")',
+    )
     expect(result!.code).toContain('async function $$ACTION_0_save(formData)')
     expect(result!.code).not.toContain('const save =')
-    expect(result!.code).toContain(
+    expect(result!.code).not.toContain(
       'registerServerReference($$ACTION_0_save, "page", "$$ACTION_0_save")',
     )
   })

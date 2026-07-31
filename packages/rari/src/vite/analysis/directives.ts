@@ -865,7 +865,15 @@ export function collectExportNames(source: string): string[] {
     }
 
     if (source.charCodeAt(pos) === CH_STAR) {
-      i = pos + 1
+      let afterStar = skipTrivia(source, pos + 1, len)
+      if (isKeywordAt(source, afterStar, 'as')) {
+        afterStar = skipTrivia(source, afterStar + 2, len)
+        const ns = readIdentifier(source, afterStar, len)
+        if (ns) exports.add(ns.name)
+        i = ns?.end ?? afterStar + 1
+      } else {
+        i = pos + 1
+      }
       continue
     }
 
@@ -918,7 +926,7 @@ export function collectExportNames(source: string): string[] {
     i++
   }
 
-  return exports.size > 0 ? [...exports] : ['default']
+  return [...exports]
 }
 
 function skipBalancedBraceList(source: string, start: number, len: number): number {

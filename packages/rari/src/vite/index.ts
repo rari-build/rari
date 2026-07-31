@@ -46,6 +46,7 @@ import {
 } from '@/shared/utils/type-guards'
 import { getComponentId } from './analysis/component-ids'
 import {
+  collectExportNames,
   hasDefaultExport,
   rewriteExportDefaultAsBinding,
   scanImportStatements,
@@ -96,11 +97,7 @@ const IMPORT_SPECIFIER_REGEX = /import\s+(\{[^}]+\})\s+from\s+["']\.\.?\/([^"']+
 const IMPORT_NAMESPACE_REGEX = /import\s+(\*\s+as\s+\w+)\s+from\s+["']\.\.?\/([^"']+)["'];?/g
 const IMPORT_DEFAULT_REGEX = /import\s+(\w+)\s+from\s+["']\.\.?\/([^"']+)["'];?/g
 const IMPORT_SIDE_EFFECT_REGEX = /import\s+["']\.\.?\/([^"']+)["'];?/g
-const NAMED_EXPORT_REGEX = /export\s*\{([^}]+)\}/g
-const AS_SPLIT_REGEX = /\s+as\s+/
-const EXPORT_DEFAULT_FUNCTION_OR_CLASS_REGEX = /export\s+default\s+(?:function|class)\s+\w+/
 const EXPORT_DEFAULT_FUNCTION_DECL_REGEX = /export\s+default\s+(?:async\s+)?function\s+(\w+)/
-const EXPORT_DECLARATION_REGEX = /export\s+(?:async\s+)?(?:const|let|var|function|class)\s+(\w+)/g
 const USE_CLIENT_DIRECTIVE_REGEX = /^['"]use client['"];?\s*$/gm
 const IMPORT_REGEX = /import\s+["']([^"']+)["']/g
 const LOCAL_IMPORT_SOURCE_REGEX = /^[./@~#]/
@@ -500,27 +497,9 @@ export function rari(options: RariOptions = {}): RariPlugin[] {
 
   function parseExportedNames(code: string, analysis?: ModuleAnalysis): string[] {
     try {
-      const exportedNames: string[] = []
-      const namedExportMatch = code.matchAll(NAMED_EXPORT_REGEX)
-      for (const match of namedExportMatch) {
-        const exports = match[1].split(',')
-        for (const exp of exports) {
-          const trimmed = exp.trim()
-          const parts = trimmed.split(AS_SPLIT_REGEX)
-          const exportedName = parts.at(-1)?.trim()
-          if (exportedName != null && exportedName !== '') exportedNames.push(exportedName)
-        }
-      }
-
-      if (EXPORT_DEFAULT_FUNCTION_OR_CLASS_REGEX.test(code)) exportedNames.push('default')
-      else if (analysis?.hasDefaultExport ?? hasDefaultExport(code)) exportedNames.push('default')
-
-      const declarationExports = code.matchAll(EXPORT_DECLARATION_REGEX)
-      for (const match of declarationExports) {
-        if (match[1]) exportedNames.push(match[1])
-      }
-
-      return [...new Set(exportedNames)]
+      const exportedNames = new Set(collectExportNames(code))
+      if (analysis?.hasDefaultExport ?? hasDefaultExport(code)) exportedNames.add('default')
+      return [...exportedNames]
     } catch {
       return []
     }
@@ -576,8 +555,8 @@ if (import.meta.hot) {
             newCode += `}\n`
           }
         }
-      } else if (inlineTransformed?.actionNames.includes(name)) {
-        // Already registered by the inline-action hoist.
+      } else if (inlineTransformed?.rewrittenExportNames.includes(name)) {
+        // Already registered by the inline-action hoist under this export name.
         continue
       } else {
         newCode += `\n// Register server reference for ${name}\n`
