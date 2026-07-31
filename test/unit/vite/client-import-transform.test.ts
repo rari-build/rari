@@ -11,12 +11,11 @@ describe('buildClientReferenceReplacementFromImport', () => {
     const [imp] = scanImportStatements(`import Button, { Card as TheCard } from './ui'\n`)
     const replacement = buildClientReferenceReplacementFromImport(imp, 'src/ui.tsx')
 
-    expect(replacement).toContain(
-      'import { registerClientReference } from "react-server-dom-rari/server";',
-    )
-    expect(replacement).toContain('"default"')
-    expect(replacement).toContain('"Card"')
-    expect(replacement).toContain('const TheCard = registerClientReference')
+    expect(replacement.helpers).toEqual(['registerClientReference'])
+    expect(replacement.code).toContain('"default"')
+    expect(replacement.code).toContain('"Card"')
+    expect(replacement.code).toContain('const TheCard = registerClientReference')
+    expect(replacement.code).not.toContain('import {')
   })
 
   it('builds createClientModuleProxy for namespace imports', () => {
@@ -26,19 +25,27 @@ describe('buildClientReferenceReplacementFromImport', () => {
       'src/components/ClientButton.tsx',
     )
 
-    expect(replacement).toBe(
-      `import { createClientModuleProxy } from "react-server-dom-rari/server";\nconst ClientUI = createClientModuleProxy("src/components/ClientButton.tsx");`,
-    )
+    expect(replacement).toEqual({
+      helpers: ['createClientModuleProxy'],
+      code: `const ClientUI = createClientModuleProxy("src/components/ClientButton.tsx");`,
+    })
   })
 
   it('emits both helpers when default and namespace are combined', () => {
     const [imp] = scanImportStatements(`import React, * as ReactNS from 'react'\n`)
     const replacement = buildClientReferenceReplacementFromImport(imp, 'react')
 
-    expect(replacement).toContain('registerClientReference')
-    expect(replacement).toContain('createClientModuleProxy')
-    expect(replacement).toContain('const React = registerClientReference')
-    expect(replacement).toContain('const ReactNS = createClientModuleProxy')
+    expect(replacement.helpers).toContain('registerClientReference')
+    expect(replacement.helpers).toContain('createClientModuleProxy')
+    expect(replacement.code).toContain('const React = registerClientReference')
+    expect(replacement.code).toContain('const ReactNS = createClientModuleProxy')
+  })
+
+  it('returns empty code for imports with only inline type-only specifiers', () => {
+    const [imp] = scanImportStatements(`import { type Props } from './types'\n`)
+    const replacement = buildClientReferenceReplacementFromImport(imp, 'src/types.ts')
+
+    expect(replacement).toEqual({ code: '', helpers: [] })
   })
 })
 
@@ -66,5 +73,24 @@ describe('rewriteExportDefaultAsBinding', () => {
     expect(rewritten).toBe(
       `'use server'\nasync function save() {}\nconst __default_export__ = save;\nexport default __default_export__\n`,
     )
+  })
+
+  it('keeps scanning for next-line arrow bodies', () => {
+    const code = `'use server'\nexport default () =>\n  value\n`
+    const located = locateExportDefaultValue(code)
+    const rewritten = rewriteExportDefaultAsBinding(code, '__default_export__')
+
+    expect(code.slice(located!.valueStart, located!.valueEnd).trim()).toBe('() =>\n  value')
+    expect(rewritten).toContain('const __default_export__ = () =>\n  value')
+    expect(rewritten).toContain('export default __default_export__')
+  })
+
+  it('keeps scanning for operator-continued default exports', () => {
+    const code = `'use server'\nexport default a\n  + b\n`
+    const located = locateExportDefaultValue(code)
+    const rewritten = rewriteExportDefaultAsBinding(code, '__default_export__')
+
+    expect(code.slice(located!.valueStart, located!.valueEnd).trim()).toBe('a\n  + b')
+    expect(rewritten).toContain('const __default_export__ = a\n  + b')
   })
 })

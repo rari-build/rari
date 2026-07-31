@@ -429,21 +429,6 @@ export function analyzeModuleSource(source: string): ModuleAnalysis {
   while (i < len) {
     const ch = source.charCodeAt(i)
 
-    if (isWhitespaceCode(ch)) {
-      i++
-      continue
-    }
-
-    if (ch === CH_SLASH && source.charCodeAt(i + 1) === CH_SLASH) {
-      i = skipSingleLineComment(source, i, len)
-      continue
-    }
-
-    if (ch === CH_SLASH && source.charCodeAt(i + 1) === CH_STAR) {
-      i = skipMultiLineComment(source, i, len)
-      continue
-    }
-
     if (directivesPhase && (ch === CH_SINGLE_QUOTE || ch === CH_DOUBLE_QUOTE)) {
       const stringStart = i + 1
       const stringEnd = skipString(source, i, len, ch)
@@ -502,38 +487,14 @@ export function analyzeModuleSource(source: string): ModuleAnalysis {
       continue
     }
 
+    const skipped = skipNonCodeToken(source, i, len)
+    if (skipped !== -1) {
+      if (directivesPhase && !isTriviaOrCommentStart(source, i)) directivesPhase = false
+      i = skipped
+      continue
+    }
+
     directivesPhase = false
-
-    if (ch === CH_SINGLE_QUOTE || ch === CH_DOUBLE_QUOTE || ch === CH_BACKTICK) {
-      i = skipString(source, i, len, ch)
-      continue
-    }
-
-    if (
-      ch === CH_SLASH &&
-      source.charCodeAt(i + 1) !== CH_SLASH &&
-      source.charCodeAt(i + 1) !== CH_STAR
-    ) {
-      if (canPrecedeRegexWithKeywords(source, i)) {
-        i = skipRegex(source, i, len)
-        continue
-      }
-    }
-
-    if (ch === CH_LT) {
-      const nextCh = source.charCodeAt(i + 1)
-      if (
-        nextCh === CH_SLASH ||
-        nextCh === CH_DOT ||
-        nextCh === CH_GT ||
-        isIdentifierStartCode(nextCh)
-      ) {
-        i = skipJSX(source, i, len)
-        continue
-      }
-      i++
-      continue
-    }
 
     if (isKeywordAt(source, i, 'import')) {
       const collected = collectImportSourcesAt(source, i, len)
@@ -856,50 +817,9 @@ export function scanImportStatements(source: string): ScannedImport[] {
   const len = source.length
 
   while (i < len) {
-    const ch = source.charCodeAt(i)
-
-    if (isWhitespaceCode(ch)) {
-      i++
-      continue
-    }
-
-    if (ch === CH_SLASH && source.charCodeAt(i + 1) === CH_SLASH) {
-      i = skipSingleLineComment(source, i, len)
-      continue
-    }
-
-    if (ch === CH_SLASH && source.charCodeAt(i + 1) === CH_STAR) {
-      i = skipMultiLineComment(source, i, len)
-      continue
-    }
-
-    if (ch === CH_SINGLE_QUOTE || ch === CH_DOUBLE_QUOTE || ch === CH_BACKTICK) {
-      i = skipString(source, i, len, ch)
-      continue
-    }
-
-    if (
-      ch === CH_SLASH &&
-      source.charCodeAt(i + 1) !== CH_SLASH &&
-      source.charCodeAt(i + 1) !== CH_STAR &&
-      canPrecedeRegexWithKeywords(source, i)
-    ) {
-      i = skipRegex(source, i, len)
-      continue
-    }
-
-    if (ch === CH_LT) {
-      const nextCh = source.charCodeAt(i + 1)
-      if (
-        nextCh === CH_SLASH ||
-        nextCh === CH_DOT ||
-        nextCh === CH_GT ||
-        isIdentifierStartCode(nextCh)
-      ) {
-        i = skipJSX(source, i, len)
-        continue
-      }
-      i++
+    const skipped = skipNonCodeToken(source, i, len)
+    if (skipped !== -1) {
+      i = skipped
       continue
     }
 
@@ -1142,6 +1062,59 @@ function skipRegex(source: string, i: number, len: number): number {
   return i
 }
 
+/**
+ * If `source[i]` starts whitespace, a comment, string, regex literal, or JSX,
+ * return the offset past that token. Returns -1 when the position is code.
+ */
+function skipNonCodeToken(source: string, i: number, len: number): number {
+  if (i >= len) return -1
+
+  const ch = source.charCodeAt(i)
+
+  if (isWhitespaceCode(ch)) return i + 1
+
+  if (ch === CH_SLASH && source.charCodeAt(i + 1) === CH_SLASH)
+    return skipSingleLineComment(source, i, len)
+
+  if (ch === CH_SLASH && source.charCodeAt(i + 1) === CH_STAR)
+    return skipMultiLineComment(source, i, len)
+
+  if (ch === CH_SINGLE_QUOTE || ch === CH_DOUBLE_QUOTE || ch === CH_BACKTICK)
+    return skipString(source, i, len, ch)
+
+  if (
+    ch === CH_SLASH &&
+    source.charCodeAt(i + 1) !== CH_SLASH &&
+    source.charCodeAt(i + 1) !== CH_STAR &&
+    canPrecedeRegexWithKeywords(source, i)
+  ) {
+    return skipRegex(source, i, len)
+  }
+
+  if (ch === CH_LT) {
+    const nextCh = source.charCodeAt(i + 1)
+    if (
+      nextCh === CH_SLASH ||
+      nextCh === CH_DOT ||
+      nextCh === CH_GT ||
+      isIdentifierStartCode(nextCh)
+    ) {
+      return skipJSX(source, i, len)
+    }
+  }
+
+  return -1
+}
+
+function isTriviaOrCommentStart(source: string, i: number): boolean {
+  const ch = source.charCodeAt(i)
+  if (isWhitespaceCode(ch)) return true
+  return (
+    ch === CH_SLASH &&
+    (source.charCodeAt(i + 1) === CH_SLASH || source.charCodeAt(i + 1) === CH_STAR)
+  )
+}
+
 export interface ExportDefaultValueLocation {
   /** Start of the `export` keyword. */
   readonly exportStart: number
@@ -1168,50 +1141,9 @@ export function locateExportDefaultValue(source: string): ExportDefaultValueLoca
   let i = 0
 
   while (i < len) {
-    const ch = source.charCodeAt(i)
-
-    if (isWhitespaceCode(ch)) {
-      i++
-      continue
-    }
-
-    if (ch === CH_SLASH && source.charCodeAt(i + 1) === CH_SLASH) {
-      i = skipSingleLineComment(source, i, len)
-      continue
-    }
-
-    if (ch === CH_SLASH && source.charCodeAt(i + 1) === CH_STAR) {
-      i = skipMultiLineComment(source, i, len)
-      continue
-    }
-
-    if (ch === CH_SINGLE_QUOTE || ch === CH_DOUBLE_QUOTE || ch === CH_BACKTICK) {
-      i = skipString(source, i, len, ch)
-      continue
-    }
-
-    if (
-      ch === CH_SLASH &&
-      source.charCodeAt(i + 1) !== CH_SLASH &&
-      source.charCodeAt(i + 1) !== CH_STAR &&
-      canPrecedeRegexWithKeywords(source, i)
-    ) {
-      i = skipRegex(source, i, len)
-      continue
-    }
-
-    if (ch === CH_LT) {
-      const nextCh = source.charCodeAt(i + 1)
-      if (
-        nextCh === CH_SLASH ||
-        nextCh === CH_DOT ||
-        nextCh === CH_GT ||
-        isIdentifierStartCode(nextCh)
-      ) {
-        i = skipJSX(source, i, len)
-        continue
-      }
-      i++
+    const skipped = skipNonCodeToken(source, i, len)
+    if (skipped !== -1) {
+      i = skipped
       continue
     }
 
@@ -1259,17 +1191,61 @@ export function locateExportDefaultValue(source: string): ExportDefaultValueLoca
   return null
 }
 
+function isExpressionContinuationAt(source: string, i: number, len: number): boolean {
+  if (i >= len) return false
+
+  const ch = source.charCodeAt(i)
+  const next = i + 1 < len ? source.charCodeAt(i + 1) : -1
+
+  if (ch === CH_DOT) return true
+  if (ch === CH_QUESTION && next === CH_DOT) return true
+  if (ch === CH_OPEN_PAREN || ch === CH_OPEN_BRACKET || ch === CH_BACKTICK) return true
+  if (ch === CH_EQUALS && next === CH_GT) return true
+
+  if (
+    ch === CH_PLUS ||
+    ch === CH_MINUS ||
+    ch === CH_STAR ||
+    ch === CH_SLASH ||
+    ch === CH_PERCENT ||
+    ch === CH_AMP ||
+    ch === CH_PIPE ||
+    ch === CH_CARET ||
+    ch === CH_LT ||
+    ch === CH_GT ||
+    ch === CH_EQUALS ||
+    ch === CH_EXCL ||
+    ch === CH_QUESTION ||
+    ch === CH_COLON ||
+    ch === CH_COMMA ||
+    ch === CH_TILDE
+  ) {
+    return true
+  }
+
+  return (
+    isKeywordAt(source, i, 'instanceof') ||
+    isKeywordAt(source, i, 'in') ||
+    isKeywordAt(source, i, 'of') ||
+    isKeywordAt(source, i, 'as')
+  )
+}
+
+const NON_TERMINATING_EXPR_KEYWORDS = new Set(['typeof', 'void', 'delete', 'await', 'yield', 'new'])
+
 function scanExportDefaultValueEnd(source: string, start: number, len: number): number {
   let i = start
   let paren = 0
   let brace = 0
   let bracket = 0
+  let lastCanTerminate = false
 
   while (i < len) {
     const ch = source.charCodeAt(i)
 
     if (ch === CH_SINGLE_QUOTE || ch === CH_DOUBLE_QUOTE || ch === CH_BACKTICK) {
       i = skipString(source, i, len, ch)
+      lastCanTerminate = true
       continue
     }
 
@@ -1290,6 +1266,7 @@ function scanExportDefaultValueEnd(source: string, start: number, len: number): 
       canPrecedeRegexWithKeywords(source, i)
     ) {
       i = skipRegex(source, i, len)
+      lastCanTerminate = true
       continue
     }
 
@@ -1302,27 +1279,32 @@ function scanExportDefaultValueEnd(source: string, start: number, len: number): 
         isIdentifierStartCode(nextCh)
       ) {
         i = skipJSX(source, i, len)
+        lastCanTerminate = true
         continue
       }
     }
 
     if (ch === CH_OPEN_PAREN) {
       paren++
+      lastCanTerminate = false
       i++
       continue
     }
     if (ch === CH_CLOSE_PAREN) {
       paren = Math.max(0, paren - 1)
+      lastCanTerminate = true
       i++
       continue
     }
     if (ch === CH_OPEN_BRACE) {
       brace++
+      lastCanTerminate = false
       i++
       continue
     }
     if (ch === CH_CLOSE_BRACE) {
       brace = Math.max(0, brace - 1)
+      lastCanTerminate = true
       i++
       // Declaration bodies (`function () {}`, `class {}`) end when the outer
       // brace closes at depth 0.
@@ -1331,22 +1313,87 @@ function scanExportDefaultValueEnd(source: string, start: number, len: number): 
     }
     if (ch === CH_OPEN_BRACKET) {
       bracket++
+      lastCanTerminate = false
       i++
       continue
     }
     if (ch === CH_CLOSE_BRACKET) {
       bracket = Math.max(0, bracket - 1)
+      lastCanTerminate = true
       i++
       continue
     }
 
     if (paren === 0 && brace === 0 && bracket === 0) {
       if (ch === CH_SEMICOLON) return i
+
       if (isLineTerminatorCode(ch)) {
-        // ASI: end the statement unless the next non-trivia token continues
-        // the expression (rare for `export default`; treat newline as end).
+        const afterNl = skipTrivia(source, i + 1, len)
+        if (!lastCanTerminate || isExpressionContinuationAt(source, afterNl, len)) {
+          i++
+          continue
+        }
         return i
       }
+    }
+
+    if (isIdentifierStartCode(ch)) {
+      const id = readIdentifier(source, i, len)
+      if (id) {
+        lastCanTerminate = !NON_TERMINATING_EXPR_KEYWORDS.has(id.name)
+        i = id.end
+        continue
+      }
+    }
+
+    if (ch >= CH_0 && ch <= CH_9) {
+      lastCanTerminate = true
+      i++
+      while (i < len) {
+        const d = source.charCodeAt(i)
+        if (
+          (d >= CH_0 && d <= CH_9) ||
+          d === CH_DOT ||
+          d === 110 /* n */ ||
+          d === 101 /* e */ ||
+          d === 69 /* E */
+        ) {
+          i++
+          continue
+        }
+        break
+      }
+      continue
+    }
+
+    if (ch === CH_EQUALS && source.charCodeAt(i + 1) === CH_GT) {
+      lastCanTerminate = false
+      i += 2
+      continue
+    }
+
+    if (
+      ch === CH_DOT ||
+      ch === CH_COMMA ||
+      ch === CH_COLON ||
+      ch === CH_QUESTION ||
+      ch === CH_EQUALS ||
+      ch === CH_PLUS ||
+      ch === CH_MINUS ||
+      ch === CH_STAR ||
+      ch === CH_SLASH ||
+      ch === CH_PERCENT ||
+      ch === CH_AMP ||
+      ch === CH_PIPE ||
+      ch === CH_CARET ||
+      ch === CH_EXCL ||
+      ch === CH_TILDE ||
+      ch === CH_LT ||
+      ch === CH_GT
+    ) {
+      lastCanTerminate = false
+      i++
+      continue
     }
 
     i++
