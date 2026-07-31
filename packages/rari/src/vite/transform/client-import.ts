@@ -33,7 +33,7 @@ export function ensureNamedImportFromModule(
     imported === local ? imported : `${imported} as ${local}`,
   )
 
-  if (existing?.namespaceBinding != null) {
+  if (existing?.namespaceBinding != null || existing?.named.some(spec => spec.typeOnly)) {
     const missing = names.filter(
       name => !existing.named.some(spec => !spec.typeOnly && spec.imported === name),
     )

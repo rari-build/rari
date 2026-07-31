@@ -433,20 +433,47 @@ function isObjectLiteralKey(body: string, identStart: number, identEnd: number):
 function resolveActionReplaceRange(
   source: string,
   actionStart: number,
-): { start: number; exportKind: 'default' | 'named' | null } {
+): {
+  start: number
+  exportKind: 'default' | 'named' | null
+  bindingName: string | null
+} {
   let cursor = skipWsBack(source, actionStart)
 
   const defaultStart = keywordEndsAt(source, cursor, 'default')
   if (defaultStart != null) {
     cursor = skipWsBack(source, defaultStart)
     const exportStart = keywordEndsAt(source, cursor, 'export')
-    if (exportStart != null) return { start: exportStart, exportKind: 'default' }
+    if (exportStart != null) return { start: exportStart, exportKind: 'default', bindingName: null }
+  }
+
+  if (cursor > 0 && source.charCodeAt(cursor - 1) === 61 /* = */) {
+    const beforeEq = skipWsBack(source, cursor - 1)
+    const nameEnd = beforeEq
+    let nameStart = nameEnd
+    while (nameStart > 0 && isIdentPart(source.charCodeAt(nameStart - 1))) nameStart--
+    if (nameStart < nameEnd && isIdentStart(source.charCodeAt(nameStart))) {
+      const bindingName = source.slice(nameStart, nameEnd)
+      const beforeName = skipWsBack(source, nameStart)
+      const declStart =
+        keywordEndsAt(source, beforeName, 'const') ??
+        keywordEndsAt(source, beforeName, 'let') ??
+        keywordEndsAt(source, beforeName, 'var')
+      if (declStart != null) {
+        const beforeDecl = skipWsBack(source, declStart)
+        const exportStart = keywordEndsAt(source, beforeDecl, 'export')
+        if (exportStart != null) {
+          return { start: actionStart, exportKind: 'named', bindingName }
+        }
+        return { start: actionStart, exportKind: null, bindingName }
+      }
+    }
   }
 
   const exportStart = keywordEndsAt(source, cursor, 'export')
-  if (exportStart != null) return { start: exportStart, exportKind: 'named' }
+  if (exportStart != null) return { start: exportStart, exportKind: 'named', bindingName: null }
 
-  return { start: actionStart, exportKind: null }
+  return { start: actionStart, exportKind: null, bindingName: null }
 }
 
 function locateInlineUseServerActions(source: string): LocatedAction[] {
@@ -611,22 +638,32 @@ export function transformInlineServerActions(
     const bindExpr =
       freeVars.length > 0 ? `${hoistedName}.bind(null, ${freeVars.join(', ')})` : hoistedName
 
-    const { start: replaceStart, exportKind } = resolveActionReplaceRange(result, action.start)
+    const {
+      start: replaceStart,
+      exportKind,
+      bindingName,
+    } = resolveActionReplaceRange(result, action.start)
 
     let replacement = bindExpr
     let rewrittenExport: string | null = null
 
     if (exportKind === 'default') {
+      // Cover declaration and arrow/default forms; register under "default" once.
       rewrittenExport = 'default'
       replacement = `export default registerServerReference(${bindExpr}, ${JSON.stringify(moduleId)}, "default")`
+    } else if (exportKind === 'named' && action.name != null) {
+      // export async function name() { 'use server' ... }
+      rewrittenExport = action.name
+      replacement = `export const ${action.name} = registerServerReference(${bindExpr}, ${JSON.stringify(moduleId)}, ${JSON.stringify(action.name)})`
+    } else if (exportKind === 'named' && bindingName != null) {
+      // export const bindingName = async () => { 'use server' ... }
+      // Preserve surrounding binding; register under the exported name once.
+      rewrittenExport = bindingName
+      replacement = `registerServerReference(${bindExpr}, ${JSON.stringify(moduleId)}, ${JSON.stringify(bindingName)})`
     } else if (action.kind === 'declaration' && action.name != null) {
-      if (exportKind === 'named') {
-        rewrittenExport = action.name
-        replacement = `export const ${action.name} = registerServerReference(${bindExpr}, ${JSON.stringify(moduleId)}, ${JSON.stringify(action.name)})`
-      } else {
-        replacement = `const ${action.name} = ${bindExpr}`
-      }
+      replacement = `const ${action.name} = ${bindExpr}`
     }
+    // else: non-exported arrow/expression — preserve surrounding binding (replacement = bindExpr)
 
     if (rewrittenExport == null) {
       hoisted.unshift(

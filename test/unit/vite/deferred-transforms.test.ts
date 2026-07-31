@@ -175,4 +175,23 @@ export default async function save(formData) {
       'registerServerReference($$ACTION_0_save, "page", "$$ACTION_0_save")',
     )
   })
+
+  it('preserves surrounding binding for exported arrow actions and registers once', () => {
+    const input = `import { db } from './db'
+export const save = async (formData) => {
+  'use server'
+  await db.write(formData)
+}
+`
+
+    const result = transformInlineServerActions(input, 'page')
+    expect(result!.rewrittenExportNames).toEqual(['save'])
+    expect(result!.code).toContain(
+      'export const save = registerServerReference($$ACTION_0_anonymous_server_function, "page", "save")',
+    )
+    expect(result!.code).toContain('async function $$ACTION_0_anonymous_server_function(formData)')
+    expect(result!.code).not.toContain(
+      'registerServerReference($$ACTION_0_anonymous_server_function, "page", "$$ACTION_0_anonymous_server_function")',
+    )
+  })
 })
