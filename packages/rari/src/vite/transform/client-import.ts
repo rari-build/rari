@@ -32,7 +32,18 @@ export function ensureNamedImportFromModule(
   const namedList = [...bindings.entries()].map(([imported, local]) =>
     imported === local ? imported : `${imported} as ${local}`,
   )
-  const stmt = `import { ${namedList.join(', ')} } from ${JSON.stringify(moduleSource)};`
+
+  if (existing?.namespaceBinding != null) {
+    const missing = names.filter(
+      name => !existing.named.some(spec => !spec.typeOnly && spec.imported === name),
+    )
+    if (missing.length === 0) return code
+    const namedStmt = `import { ${[...new Set(missing)].join(', ')} } from ${JSON.stringify(moduleSource)};`
+    return `${namedStmt}\n${code}`
+  }
+
+  const defaultPart = existing?.defaultBinding != null ? `${existing.defaultBinding}, ` : ''
+  const stmt = `import ${defaultPart}{ ${namedList.join(', ')} } from ${JSON.stringify(moduleSource)};`
 
   if (existing == null) return `${stmt}\n\n${code}`
   return code.slice(0, existing.start) + stmt + code.slice(existing.end)

@@ -125,6 +125,8 @@ const JS_KEYWORDS = new Set([
 export interface InlineServerActionTransformResult {
   readonly code: string
   readonly actionNames: readonly string[]
+  /** Export names already registered by the inline-action rewrite (skip in transformServerModule). */
+  readonly rewrittenExportNames: readonly string[]
 }
 
 interface LocatedAction {
@@ -190,19 +192,12 @@ function skipBalanced(source: string, start: number, open: number, close: number
   let depth = 0
   const len = source.length
   while (i < len) {
+    const skipped = skipNonCodeToken(source, i, len)
+    if (skipped !== -1) {
+      i = skipped
+      continue
+    }
     const ch = source.charCodeAt(i)
-    if (ch === 39 || ch === 34 || ch === 96) {
-      i = skipString(source, i, ch)
-      continue
-    }
-    if (ch === 47 && source.charCodeAt(i + 1) === 47) {
-      i = skipWhitespaceAndComments(source, i)
-      continue
-    }
-    if (ch === 47 && source.charCodeAt(i + 1) === 42) {
-      i = skipWhitespaceAndComments(source, i)
-      continue
-    }
     if (ch === open) depth++
     else if (ch === close) {
       depth--
@@ -594,6 +589,7 @@ export function transformInlineServerActions(
 
   const moduleBindings = collectModuleBindings(code)
   const actionNames: string[] = []
+  const rewrittenExportNames: string[] = []
   let result = code
   const hoisted: string[] = []
   let needsRegisterImport = false
@@ -612,27 +608,36 @@ export function transformInlineServerActions(
     const params = [...freeVars, action.paramsRaw.trim()].filter(p => p !== '').join(', ')
     const asyncKw = action.isAsync ? 'async ' : ''
 
-    hoisted.unshift(
-      `${asyncKw}function ${hoistedName}(${params}) {\n${body}\n}`,
-      `registerServerReference(${hoistedName}, ${JSON.stringify(moduleId)}, ${JSON.stringify(hoistedName)});`,
-    )
-    needsRegisterImport = true
-
     const bindExpr =
       freeVars.length > 0 ? `${hoistedName}.bind(null, ${freeVars.join(', ')})` : hoistedName
 
     const { start: replaceStart, exportKind } = resolveActionReplaceRange(result, action.start)
 
     let replacement = bindExpr
+    let rewrittenExport: string | null = null
+
     if (exportKind === 'default') {
-      replacement = `export default ${bindExpr}`
+      rewrittenExport = 'default'
+      replacement = `export default registerServerReference(${bindExpr}, ${JSON.stringify(moduleId)}, "default")`
     } else if (action.kind === 'declaration' && action.name != null) {
       if (exportKind === 'named') {
-        replacement = `export const ${action.name} = ${bindExpr}`
+        rewrittenExport = action.name
+        replacement = `export const ${action.name} = registerServerReference(${bindExpr}, ${JSON.stringify(moduleId)}, ${JSON.stringify(action.name)})`
       } else {
         replacement = `const ${action.name} = ${bindExpr}`
       }
     }
+
+    if (rewrittenExport == null) {
+      hoisted.unshift(
+        `${asyncKw}function ${hoistedName}(${params}) {\n${body}\n}`,
+        `registerServerReference(${hoistedName}, ${JSON.stringify(moduleId)}, ${JSON.stringify(hoistedName)});`,
+      )
+    } else {
+      hoisted.unshift(`${asyncKw}function ${hoistedName}(${params}) {\n${body}\n}`)
+      rewrittenExportNames.unshift(rewrittenExport)
+    }
+    needsRegisterImport = true
 
     result = result.slice(0, replaceStart) + replacement + result.slice(action.end)
   }
@@ -647,5 +652,6 @@ export function transformInlineServerActions(
   return {
     code: `${prefix}${result}\n\n${hoisted.join('\n')}\n`,
     actionNames,
+    rewrittenExportNames,
   }
 }

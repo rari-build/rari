@@ -2011,7 +2011,12 @@ export class ServerComponentBuilder {
 
       if (externalClientComponents.includes(imp.source)) {
         isClientComponent = true
-      } else if (LOCAL_IMPORT_SOURCE_REGEX.test(imp.source)) {
+      } else if (
+        LOCAL_IMPORT_SOURCE_REGEX.test(imp.source) ||
+        Object.keys(this.options.alias).some(
+          alias => imp.source === alias || imp.source.startsWith(`${alias}/`),
+        )
+      ) {
         const resolvedPath = this.resolveImportPath(imp.source, inputPath)
         if (this.isClientComponent(resolvedPath)) {
           isClientComponent = true
