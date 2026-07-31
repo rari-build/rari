@@ -486,6 +486,9 @@ jobs:
         with:
           platform: linux-x64
 
+      - name: Bundle React ESM vendor files
+        run: just bundle-react-esm
+
       - name: Lint and test
         run: just ci-lint-test
 

@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
+import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { isRecord } from '@rari/shared/utils/type-guards'
 import { describe, expect, it } from 'vite-plus/test'
@@ -21,10 +22,18 @@ function readInstalledVersion(pkg: string): string {
   return parsed.version
 }
 
+const IS_CI = process.env.CI != null && process.env.CI !== '' && process.env.CI !== 'false'
+
 describe('react vendor bundles', () => {
-  it.skipIf(!fs.existsSync(MANIFEST_PATH))(
+  it.skipIf(!IS_CI && !fs.existsSync(MANIFEST_PATH))(
     'generated vendors match the installed React package versions',
     () => {
+      if (!fs.existsSync(MANIFEST_PATH)) {
+        throw new Error(
+          `Vendor manifest missing at ${MANIFEST_PATH}. Run \`just bundle-react-esm\` before testing.`,
+        )
+      }
+
       const manifest: unknown = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf-8'))
       if (!isRecord(manifest)) throw new Error('versions.json is not an object')
 

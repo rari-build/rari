@@ -17,7 +17,7 @@ function replaceAnchoredBlock(
         `update the anchors in patch-flight-browser-client.ts.`,
     )
   }
-  if (source.includes(anchor, first + anchor.length)) {
+  if (source.includes(anchor, first + 1)) {
     throw new Error(
       `Failed to patch flight browser client: anchor for ${context} matched more than once. ` +
         `Update the anchors in patch-flight-browser-client.ts to be unambiguous.`,

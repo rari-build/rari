@@ -73,6 +73,25 @@ describe('patchBrowserClientForFormActions', () => {
       /edge \$\$FORM_ACTION return block not found/,
     )
   })
+
+  it('throws when the edge form-action return block matches more than once', () => {
+    const returnBlock = `return {
+    name: referenceClosure,
+    method: "POST",
+    encType: "multipart/form-data",
+    data: data
+  };`
+    const fakeEdgeSource = [
+      'var boundCache = new WeakMap();',
+      returnBlock,
+      returnBlock,
+      'function createBoundServerReference() {}',
+    ].join('\n')
+
+    expect(() => patchBrowserClientForFormActions('irrelevant', fakeEdgeSource)).toThrow(
+      /edge \$\$FORM_ACTION return block matched more than once/,
+    )
+  })
 })
 
 describe('fixRolldownDoubleDollarProperties', () => {
