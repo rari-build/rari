@@ -65,7 +65,7 @@ const COMPONENTS_PATH_REGEX = /\/components\/(\w+)(?:\.tsx?|\.jsx?)?$/
 const COMPONENTS_PATH_ALT_REGEX = /[/\\]components[/\\]\w+(?:\.tsx?|\.jsx?)?$/
 const SPECIAL_FILE_REGEX = /^(?:robots|sitemap|feed)\.(?:tsx?|jsx?)$/
 const RSC_REFERENCES_IMPORT = 'react-server-dom-rari/server'
-const LOCAL_IMPORT_SOURCE_REGEX = /^[./@]/
+const LOCAL_IMPORT_SOURCE_REGEX = /^[./@~#]/
 const NODE_PROTOCOL_REGEX = /^node:/
 export const RARI_CSS_MODULES_PATTERN = '[hash]_[local]'
 
