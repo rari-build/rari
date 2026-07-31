@@ -74,6 +74,7 @@ import {
 } from './server/build'
 import { buildClientReferenceReplacementFromImport } from './transform/client-import'
 import { parseHtmlEntryImports } from './transform/html-entry'
+import { transformInlineServerActions } from './transform/inline-server-action'
 import { transformDefineMdxComponents } from './transform/mdx-components'
 import { getUseCacheTransform } from './transform/use-cache'
 
@@ -513,19 +514,35 @@ export function rari(options: RariOptions = {}): RariPlugin[] {
   }
 
   function transformServerModule(code: string, id: string, analysis: ModuleAnalysis): string {
-    if (!analysis.topLevelUseServer) return code
-
-    const exportedNames = parseExportedNames(code, analysis)
-    if (exportedNames.length === 0) return code
-
     const projectRoot =
       options.projectRoot != null && options.projectRoot !== ''
         ? options.projectRoot
         : process.cwd()
     const moduleId = getComponentId(id, projectRoot)
+
+    const inlineTransformed = transformInlineServerActions(code, moduleId)
+    let newCode = inlineTransformed?.code ?? code
+
+    if (!analysis.topLevelUseServer) {
+      if (inlineTransformed == null) return code
+      newCode += `
+
+if (import.meta.hot) {
+  import.meta.hot.accept(() => {
+  });
+}`
+      return newCode
+    }
+
+    const exportedNames = parseExportedNames(newCode, analysis)
+    if (exportedNames.length === 0 && inlineTransformed == null) return code
+
     const idJson = JSON.stringify(moduleId)
-    let newCode = code
-    newCode += '\n\nimport {registerServerReference} from "react-server-dom-rari/server";\n'
+    if (!newCode.includes('registerServerReference')) {
+      newCode += '\n\nimport {registerServerReference} from "react-server-dom-rari/server";\n'
+    } else {
+      newCode += '\n'
+    }
 
     for (const name of exportedNames) {
       if (name === 'default') {
@@ -546,6 +563,9 @@ export function rari(options: RariOptions = {}): RariPlugin[] {
             newCode += `}\n`
           }
         }
+      } else if (inlineTransformed?.actionNames.includes(name)) {
+        // Already registered by the inline-action hoist.
+        continue
       } else {
         newCode += `\n// Register server reference for ${name}\n`
         newCode += `if (typeof ${name} === "function") {\n`
@@ -1114,6 +1134,7 @@ ${clientTransformedCode}`
       let needsReactImport = false
       const importingFileIsClient = id.includes('entry-client')
       const replacements: Array<{ start: number; end: number; replacement: string }> = []
+      const clientRefHelpers = new Set<string>()
 
       for (const imp of scanImportStatements(code)) {
         if (imp.typeOnly || imp.sideEffectOnly) continue
@@ -1143,12 +1164,14 @@ ${clientTransformedCode}`
           imp,
           resolvedImportPath,
         )
-        if (clientRefReplacement === '') continue
+        if (clientRefReplacement.code === '') continue
+
+        for (const helper of clientRefReplacement.helpers) clientRefHelpers.add(helper)
 
         replacements.push({
           start: imp.start,
           end: imp.end,
-          replacement: clientRefReplacement,
+          replacement: clientRefReplacement.code,
         })
         hasServerImports = true
         needsReactImport = true
@@ -1156,6 +1179,11 @@ ${clientTransformedCode}`
 
       for (const { start, end, replacement } of [...replacements].sort((a, b) => b.start - a.start))
         modifiedCode = modifiedCode.slice(0, start) + replacement + modifiedCode.slice(end)
+
+      if (clientRefHelpers.size > 0) {
+        const helperList = [...clientRefHelpers].join(', ')
+        modifiedCode = `import { ${helperList} } from "react-server-dom-rari/server";\n${modifiedCode}`
+      }
 
       if (hasServerImports) {
         const hasReactImport =

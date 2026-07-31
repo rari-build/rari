@@ -48,15 +48,24 @@ import {
 } from '../analysis/module-cache'
 import { collectSourceFilePaths, normalizeScanDirs } from '../analysis/source-walker'
 import { resolveMdxRegistryEntries } from '../mdx/registry'
+import {
+  buildClientReferenceStubModule,
+  collectExportNames,
+} from '../transform/client-reference-stub'
+import {
+  buildGlobalClientComponentWrapper,
+  buildGlobalClientNamespaceWrapper,
+} from '../transform/component-global'
 import { parseHtmlEntryImports } from '../transform/html-entry'
+import { transformInlineServerActions } from '../transform/inline-server-action'
 import { getUseCacheTransform } from '../transform/use-cache'
 
-const COMPONENT_IMPORT_REGEX = /import\s+(\w+)\s+from\s+['"]([^'"]+)['"]/g
 const PROXY_FILE_REGEX = /^proxy\.(?:tsx?|jsx?|mts|mjs)$/
 const COMPONENTS_PATH_REGEX = /\/components\/(\w+)(?:\.tsx?|\.jsx?)?$/
-const COMPONENTS_PATH_ALT_REGEX = /[/\\]components[/\\](\w+)(?:\.tsx?|\.jsx?)?$/
+const COMPONENTS_PATH_ALT_REGEX = /[/\\]components[/\\]\w+(?:\.tsx?|\.jsx?)?$/
 const SPECIAL_FILE_REGEX = /^(?:robots|sitemap|feed)\.(?:tsx?|jsx?)$/
 const RSC_REFERENCES_IMPORT = 'react-server-dom-rari/server'
+const LOCAL_IMPORT_SOURCE_REGEX = /^[./@]/
 const NODE_PROTOCOL_REGEX = /^node:/
 export const RARI_CSS_MODULES_PATTERN = '[hash]_[local]'
 
@@ -652,137 +661,128 @@ export class ServerComponentBuilder {
     return components
   }
 
-  private transformComponentImportsToGlobal(code: string): string {
-    const replacements: Array<{ original: string; replacement: string }> = []
+  /**
+   * Resolve a page import to a client component under src/components when
+   * present. Returns the registry key used by ~clientComponents.
+   */
+  private resolveComponentsDirClientImport(
+    importPath: string,
+  ): { registryKey: string; absolutePath: string } | null {
+    if (
+      !importPath.startsWith('.') &&
+      !importPath.startsWith('@') &&
+      !importPath.startsWith('~') &&
+      !importPath.startsWith('#')
+    ) {
+      return null
+    }
 
-    for (const match of code.matchAll(COMPONENT_IMPORT_REGEX)) {
-      const [fullMatch, importName, importPath] = match
+    if (importPath.startsWith('.')) {
+      if (!importPath.includes('/components/')) return null
 
-      if (
-        !importPath.startsWith('.') &&
-        !importPath.startsWith('@') &&
-        !importPath.startsWith('~') &&
-        !importPath.startsWith('#')
-      )
-        continue
+      const componentMatch = COMPONENTS_PATH_REGEX.exec(importPath)
+      if (!componentMatch) return null
 
-      let resolvedPath: string | null = null
+      const componentName = componentMatch[1]
+      const possiblePaths = [
+        path.resolve(this.projectRoot, 'src', 'components', `${componentName}.tsx`),
+        path.resolve(this.projectRoot, 'src', 'components', `${componentName}.ts`),
+        path.resolve(this.projectRoot, 'src', 'components', `${componentName}.jsx`),
+        path.resolve(this.projectRoot, 'src', 'components', `${componentName}.js`),
+      ]
 
-      if (importPath.startsWith('.')) {
-        if (importPath.includes('/components/')) {
-          const componentMatch = COMPONENTS_PATH_REGEX.exec(importPath)
-          if (componentMatch) {
-            const componentName = componentMatch[1]
-
-            const possiblePaths = [
-              path.resolve(this.projectRoot, 'src', 'components', `${componentName}.tsx`),
-              path.resolve(this.projectRoot, 'src', 'components', `${componentName}.ts`),
-              path.resolve(this.projectRoot, 'src', 'components', `${componentName}.jsx`),
-              path.resolve(this.projectRoot, 'src', 'components', `${componentName}.js`),
-            ]
-
-            let isClient = false
-            for (const possiblePath of possiblePaths) {
-              if (fs.existsSync(possiblePath) && this.isClientComponent(possiblePath)) {
-                isClient = true
-                break
-              }
-            }
-
-            if (!isClient) continue
-
-            const replacement = `// Component reference: ${componentName}
-const ${importName} = (props) => {
-  let Component = globalThis['~clientComponents']?.['components/${componentName}']?.component
-    || globalThis['components/${componentName}'];
-
-  if (Component && typeof Component === 'object' && Component.default) {
-    Component = Component.default;
-  }
-
-  if (!Component) {
-    throw new Error('Component components/${componentName} not loaded');
-  }
-
-  if (typeof Component !== 'function') {
-    throw new Error('Component components/${componentName} is not a function, got: ' + typeof Component);
-  }
-
-  return Component(props);
-}`
-            replacements.push({ original: fullMatch, replacement })
+      for (const possiblePath of possiblePaths) {
+        if (fs.existsSync(possiblePath) && this.isClientComponent(possiblePath)) {
+          return {
+            registryKey: `components/${componentName}`,
+            absolutePath: possiblePath,
           }
-        }
-        continue
-      }
-
-      const aliases = this.options.alias
-      for (const [alias, replacement] of Object.entries(aliases)) {
-        if (importPath.startsWith(`${alias}/`) || importPath === alias) {
-          const relativePath = importPath.slice(alias.length).replace(/^\/+/, '')
-          resolvedPath = path.join(replacement, relativePath)
-          break
         }
       }
 
-      if (resolvedPath != null && resolvedPath !== '') {
-        const componentMatch = COMPONENTS_PATH_ALT_REGEX.exec(resolvedPath)
-        if (componentMatch) {
-          const componentName = componentMatch[1]
+      return null
+    }
 
-          const absolutePath = path.isAbsolute(resolvedPath)
-            ? resolvedPath
-            : path.resolve(this.projectRoot, resolvedPath)
+    let resolvedPath: string | null = null
+    for (const [alias, replacement] of Object.entries(this.options.alias)) {
+      if (importPath.startsWith(`${alias}/`) || importPath === alias) {
+        const relativePath = importPath.slice(alias.length).replace(/^\/+/, '')
+        resolvedPath = path.join(replacement, relativePath)
+        break
+      }
+    }
 
-          const possiblePaths = [
-            absolutePath,
-            `${absolutePath}.tsx`,
-            `${absolutePath}.ts`,
-            `${absolutePath}.jsx`,
-            `${absolutePath}.js`,
-          ]
+    if (resolvedPath == null || resolvedPath === '') return null
 
-          let isClient = false
-          let actualPath = absolutePath
-          for (const possiblePath of possiblePaths) {
-            if (fs.existsSync(possiblePath)) {
-              actualPath = possiblePath
-              if (this.isClientComponent(possiblePath)) isClient = true
-              break
-            }
-          }
+    const componentMatch = COMPONENTS_PATH_ALT_REGEX.exec(resolvedPath)
+    if (!componentMatch) return null
 
-          if (!isClient) continue
+    const absolutePath = path.isAbsolute(resolvedPath)
+      ? resolvedPath
+      : path.resolve(this.projectRoot, resolvedPath)
 
-          const componentId = this.getComponentReferenceId(actualPath)
+    const possiblePaths = [
+      absolutePath,
+      `${absolutePath}.tsx`,
+      `${absolutePath}.ts`,
+      `${absolutePath}.jsx`,
+      `${absolutePath}.js`,
+    ]
 
-          const replacement = `// Component reference: ${componentName}
-const ${importName} = (props) => {
-  let Component = globalThis['~clientComponents']?.['${componentId}']?.component
-    || globalThis['${componentId}'];
-
-  if (Component && typeof Component === 'object' && Component.default) {
-    Component = Component.default;
-  }
-
-  if (!Component) {
-    throw new Error('Component ${componentId} not loaded');
-  }
-
-  if (typeof Component !== 'function') {
-    throw new Error('Component ${componentId} is not a function, got: ' + typeof Component);
-  }
-
-  return Component(props);
-}`
-          replacements.push({ original: fullMatch, replacement })
+    for (const possiblePath of possiblePaths) {
+      if (fs.existsSync(possiblePath) && this.isClientComponent(possiblePath)) {
+        return {
+          registryKey: this.getComponentReferenceId(possiblePath),
+          absolutePath: possiblePath,
         }
       }
     }
 
+    return null
+  }
+
+  private transformComponentImportsToGlobal(code: string): string {
+    const replacements: Array<{ start: number; end: number; replacement: string }> = []
+
+    for (const imp of scanImportStatements(code)) {
+      if (imp.typeOnly || imp.sideEffectOnly) continue
+
+      const resolved = this.resolveComponentsDirClientImport(imp.source)
+      if (resolved == null) continue
+
+      const parts: string[] = []
+
+      if (imp.namespaceBinding != null) {
+        parts.push(buildGlobalClientNamespaceWrapper(imp.namespaceBinding, resolved.registryKey))
+      }
+
+      if (imp.defaultBinding != null) {
+        parts.push(
+          buildGlobalClientComponentWrapper(imp.defaultBinding, resolved.registryKey, 'default'),
+        )
+      }
+
+      for (const spec of imp.named) {
+        if (spec.typeOnly) continue
+        parts.push(
+          buildGlobalClientComponentWrapper(spec.local, resolved.registryKey, spec.imported),
+        )
+      }
+
+      if (parts.length === 0) continue
+
+      replacements.push({
+        start: imp.start,
+        end: imp.end,
+        replacement: parts.join('\n'),
+      })
+    }
+
+    if (replacements.length === 0) return code
+
     let transformedCode = code
-    for (const { original, replacement } of replacements)
-      transformedCode = transformedCode.replace(original, replacement)
+    for (const { start, end, replacement } of [...replacements].sort((a, b) => b.start - a.start))
+      transformedCode = transformedCode.slice(0, start) + replacement + transformedCode.slice(end)
 
     return transformedCode
   }
@@ -973,9 +973,7 @@ const ${importName} = (props) => {
             ).replace(BACKSLASH_REGEX, '/')
 
             return {
-              code: `import { registerClientReference } from ${JSON.stringify(RSC_REFERENCES_IMPORT)};
-export default registerClientReference(null, ${JSON.stringify(componentId)}, "default");
-`,
+              code: this.generateClientReferenceStub(filePath, componentId),
               moduleType: 'js',
             }
           }
@@ -1259,7 +1257,10 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
 
   private async buildComponentCodeOnly(inputPath: string): Promise<string> {
     const originalCode = await fs.promises.readFile(inputPath, 'utf-8')
-    const clientTransformedCode = this.transformClientImports(originalCode, inputPath)
+    const withInlineActions =
+      transformInlineServerActions(originalCode, this.getComponentId(inputPath))?.code ??
+      originalCode
+    const clientTransformedCode = this.transformClientImports(withInlineActions, inputPath)
     const isPage = this.isPageComponent(inputPath)
     const transformedCode = isPage
       ? this.transformComponentImportsToGlobal(clientTransformedCode)
@@ -1704,14 +1705,18 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
   }
 
   private extractExportNames(code: string): string[] {
-    const exports: string[] = []
-    if (/export\s+default\b/.test(code)) exports.push('default')
-    const namedExportRegex = /export\s+(?:async\s+)?(?:function|const|let|var|class)\s+(\w+)/g
-    for (const m of code.matchAll(namedExportRegex)) {
-      exports.push(m[1])
+    return collectExportNames(code)
+  }
+
+  private generateClientReferenceStub(filePath: string, componentId: string): string {
+    let exports = ['default']
+    try {
+      exports = collectExportNames(fs.readFileSync(filePath, 'utf-8'))
+    } catch {
+      // Fall back to default-only when the source is unreadable.
     }
 
-    return exports.length > 0 ? exports : ['default']
+    return buildClientReferenceStubModule(componentId, exports)
   }
 
   private isServerActionFile(filePath: string): boolean {
@@ -1905,7 +1910,10 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     outputPath: string,
   ): Promise<BuiltComponent> {
     const originalCode = await fs.promises.readFile(inputPath, 'utf-8')
-    const clientTransformedCode = this.transformClientImports(originalCode, inputPath)
+    const withInlineActions =
+      transformInlineServerActions(originalCode, this.getComponentId(inputPath))?.code ??
+      originalCode
+    const clientTransformedCode = this.transformClientImports(withInlineActions, inputPath)
     const isPage = this.isPageComponent(inputPath)
     const transformedCode = isPage
       ? this.transformComponentImportsToGlobal(clientTransformedCode)
@@ -2002,7 +2010,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
 
       if (externalClientComponents.includes(imp.source)) {
         isClientComponent = true
-      } else {
+      } else if (LOCAL_IMPORT_SOURCE_REGEX.test(imp.source)) {
         const resolvedPath = this.resolveImportPath(imp.source, inputPath)
         if (this.isClientComponent(resolvedPath)) {
           isClientComponent = true

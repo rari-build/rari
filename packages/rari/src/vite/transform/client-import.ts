@@ -1,5 +1,12 @@
 import type { ScannedImport } from '../analysis/directives'
 
+export interface ClientReferenceReplacement {
+  /** Binding statements only (no helper import). Empty when there are no runtime bindings. */
+  readonly code: string
+  /** Helper names required by `code` (`registerClientReference` / `createClientModuleProxy`). */
+  readonly helpers: readonly string[]
+}
+
 function buildNamespaceClientReferenceBinding(
   bindingName: string,
   resolvedImportPath: string,
@@ -24,7 +31,7 @@ function buildRegisterClientReferenceBinding(
 export function buildClientReferenceReplacementFromImport(
   imp: ScannedImport,
   resolvedImportPath: string,
-): string {
+): ClientReferenceReplacement {
   const parts: string[] = []
   const helpers = new Set<string>()
 
@@ -46,8 +53,7 @@ export function buildClientReferenceReplacementFromImport(
     parts.push(buildRegisterClientReferenceBinding(spec.local, resolvedImportPath, spec.imported))
   }
 
-  if (parts.length === 0) return ''
+  if (parts.length === 0) return { code: '', helpers: [] }
 
-  const helperList = [...helpers].join(', ')
-  return `import { ${helperList} } from "react-server-dom-rari/server";\n${parts.join('\n')}`
+  return { code: parts.join('\n'), helpers: [...helpers] }
 }
