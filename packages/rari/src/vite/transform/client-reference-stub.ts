@@ -1,3 +1,7 @@
+import { collectExportNames } from '../analysis/directives'
+
+export { collectExportNames }
+
 const RSC_REFERENCES_IMPORT = 'react-server-dom-rari/server'
 
 /**
@@ -27,34 +31,4 @@ export function buildClientReferenceStubModule(
   }
 
   return `${lines.join('\n')}\n`
-}
-
-/**
- * Collect export names from source for client-ref stubs and server-action
- * proxies. Covers declarations and `export { a as b }` lists.
- */
-export function collectExportNames(code: string): string[] {
-  const exports = new Set<string>()
-
-  if (/export\s+default\b/.test(code)) exports.add('default')
-
-  for (const m of code.matchAll(
-    /export\s+(?:async\s+)?(?:function|const|let|var|class)\s+(\w+)/g,
-  )) {
-    exports.add(m[1])
-  }
-
-  for (const m of code.matchAll(/export\s*\{([^}]+)\}/g)) {
-    for (const part of m[1].split(',')) {
-      const trimmed = part.trim()
-      if (!trimmed || trimmed.startsWith('type ')) continue
-
-      const asParts = trimmed.split(/\s+as\s+/)
-      const exportedName = (asParts.at(-1) ?? '').trim()
-      if (exportedName === '') continue
-      exports.add(exportedName)
-    }
-  }
-
-  return exports.size > 0 ? [...exports] : ['default']
 }

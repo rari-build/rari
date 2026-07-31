@@ -22,6 +22,17 @@ describe('collectExportNames', () => {
       'b',
     ])
   })
+
+  it('ignores export-like text in comments and strings', () => {
+    expect(
+      collectExportNames(`
+// export function Fake() {}
+/* export default function AlsoFake() {} */
+const msg = "export function Nope() {}"
+export function Real() {}
+`),
+    ).toEqual(['Real'])
+  })
 })
 
 describe('buildClientReferenceStubModule', () => {
@@ -130,5 +141,24 @@ export default async function Page() {
     const result = transformInlineServerActions(input, 'page')
     expect(result!.code).toContain('async function $$ACTION_0_save(formData)')
     expect(result!.code).not.toContain('.bind(null,')
+  })
+
+  it('emits export default for a directly default-exported inline action', () => {
+    const input = `import { db } from './db'
+export default async function save(formData) {
+  'use server'
+  await db.write(formData)
+}
+`
+
+    const result = transformInlineServerActions(input, 'page')
+    expect(result).not.toBeNull()
+    expect(result!.actionNames[0]).toMatch(/^\$\$ACTION_0_save$/)
+    expect(result!.code).toContain('export default $$ACTION_0_save')
+    expect(result!.code).toContain('async function $$ACTION_0_save(formData)')
+    expect(result!.code).not.toContain('const save =')
+    expect(result!.code).toContain(
+      'registerServerReference($$ACTION_0_save, "page", "$$ACTION_0_save")',
+    )
   })
 })
