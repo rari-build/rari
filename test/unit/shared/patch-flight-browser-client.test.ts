@@ -35,6 +35,44 @@ describe('patchBrowserClientForFormActions', () => {
     expect(patched).toContain('$$FORM_ACTION')
     expect(patched).not.toContain('function registerBoundServerReference(reference, id, bound) {')
   })
+
+  it('throws when the browser anchor is missing instead of silently no-oping', () => {
+    const edgeSource = fs.readFileSync(
+      resolveReactCjs('react-server-dom-webpack', 'react-server-dom-webpack-client.edge'),
+      'utf-8',
+    )
+
+    expect(() => patchBrowserClientForFormActions('const unrelated = 1;', edgeSource)).toThrow(
+      /browser registerBoundServerReference not found/,
+    )
+  })
+
+  it('throws when the browser anchor matches more than once', () => {
+    const browserSource = fs.readFileSync(
+      resolveReactCjs('react-server-dom-webpack', 'react-server-dom-webpack-client.browser'),
+      'utf-8',
+    )
+    const edgeSource = fs.readFileSync(
+      resolveReactCjs('react-server-dom-webpack', 'react-server-dom-webpack-client.edge'),
+      'utf-8',
+    )
+
+    expect(() =>
+      patchBrowserClientForFormActions(browserSource + browserSource, edgeSource),
+    ).toThrow(/browser registerBoundServerReference matched more than once/)
+  })
+
+  it('throws when the edge form-action return block is missing', () => {
+    const fakeEdgeSource = [
+      'var boundCache = new WeakMap();',
+      'var somethingElse = 1;',
+      'function createBoundServerReference() {}',
+    ].join('\n')
+
+    expect(() => patchBrowserClientForFormActions('irrelevant', fakeEdgeSource)).toThrow(
+      /edge \$\$FORM_ACTION return block not found/,
+    )
+  })
 })
 
 describe('fixRolldownDoubleDollarProperties', () => {
