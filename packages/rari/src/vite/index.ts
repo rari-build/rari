@@ -54,6 +54,7 @@ import {
 } from './analysis/module-cache'
 import { normalizeScanDirs } from './analysis/source-walker'
 import { HMRCoordinator } from './hmr/coordinator'
+import { walkImporters } from './hmr/import-graph'
 import {
   generateMdxRegistryModule,
   isMdxRegistryModuleId,
@@ -1479,30 +1480,6 @@ ${clientTransformedCode}`
         }
       }
 
-      const collectAffectedComponentFiles = (
-        importGraph: ReadonlyMap<string, ReadonlySet<string>>,
-        changedFile: string,
-      ): Set<string> => {
-        const affected = new Set<string>([changedFile])
-        const queue = [changedFile]
-
-        while (queue.length > 0) {
-          const current = queue.pop()
-          if (current == null) break
-
-          const importers = importGraph.get(current)
-          if (!importers) continue
-
-          for (const importer of importers) {
-            if (affected.has(importer)) continue
-            affected.add(importer)
-            queue.push(importer)
-          }
-        }
-
-        return affected
-      }
-
       const handleServerComponentHMR = async (filePath: string) => {
         try {
           if (!isServerComponent(filePath)) return
@@ -1515,7 +1492,8 @@ ${clientTransformedCode}`
           const code = moduleAnalysisCache.getSource(filePath)
           builder.addServerComponent(filePath, code)
 
-          const affectedFiles = collectAffectedComponentFiles(builder.getImportGraph(), filePath)
+          const affectedFiles = walkImporters(builder.getImportGraph(), [filePath])
+          affectedFiles.add(filePath)
           const components = await builder.getTransformedComponentsForDevelopment(file =>
             affectedFiles.has(file),
           )

@@ -6,6 +6,7 @@ import { throwIfNotOk } from '@/shared/utils/http'
 import { getRariServerPort } from '@/shared/utils/server-port'
 import { isRecord } from '@/shared/utils/type-guards'
 import { HMRErrorHandler } from './error-handler'
+import { walkImporters } from './import-graph'
 
 export interface ComponentRebuildResult {
   componentId: string
@@ -288,27 +289,11 @@ export class HMRCoordinator {
   }
 
   private collectDependentPageComponents(changedFiles: readonly string[]): string[] {
-    const importGraph = this.serverComponentBuilder.getImportGraph()
-    const dependentPages = new Set<string>()
-    const visited = new Set<string>()
-
-    const findPageImporters = (filePath: string) => {
-      if (visited.has(filePath)) return
-      visited.add(filePath)
-
-      const importers = importGraph.get(filePath)
-      if (!importers) return
-
-      for (const importer of importers) {
-        const isAppFile = importer.includes('/app/') || importer.includes('\\app\\')
-        if (isAppFile && !changedFiles.includes(importer)) {
-          dependentPages.add(importer)
-        }
-        findPageImporters(importer)
-      }
-    }
-
-    for (const file of changedFiles) findPageImporters(file)
+    const dependentPages = walkImporters(
+      this.serverComponentBuilder.getImportGraph(),
+      changedFiles,
+      importer => importer.includes('/app/') || importer.includes('\\app\\'),
+    )
 
     return [...dependentPages]
   }
