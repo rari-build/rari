@@ -72,7 +72,10 @@ import {
   scanDirectory,
   ServerComponentBuilder,
 } from './server/build'
-import { buildClientReferenceReplacementFromImport } from './transform/client-import'
+import {
+  buildClientReferenceReplacementFromImport,
+  ensureNamedImportFromModule,
+} from './transform/client-import'
 import { parseHtmlEntryImports } from './transform/html-entry'
 import {
   hasRegisterServerReferenceImport,
@@ -101,6 +104,13 @@ const EXPORT_DECLARATION_REGEX = /export\s+(?:async\s+)?(?:const|let|var|functio
 const USE_CLIENT_DIRECTIVE_REGEX = /^['"]use client['"];?\s*$/gm
 const IMPORT_REGEX = /import\s+["']([^"']+)["']/g
 const LOCAL_IMPORT_SOURCE_REGEX = /^[./@~#]/
+
+function matchesAliasImport(source: string, aliases: Readonly<Record<string, string>>): boolean {
+  for (const alias of Object.keys(aliases)) {
+    if (source === alias || source.startsWith(`${alias}/`)) return true
+  }
+  return false
+}
 
 const REACT_IMPORT_REGEX = /import\s+\{[^}]*\}\s+from\s+['"]react['"]/
 const REACT_IMPORT_WITH_DEFAULT_REGEX = /import\s+[^,\s]+\s*,\s*\{[^}]*\}\s+from\s+['"]react['"]/
@@ -1070,7 +1080,12 @@ if (import.meta.hot) {
         addTrackedClientComponent(id)
 
         for (const importPath of moduleAnalysis.importSources) {
-          if (!LOCAL_IMPORT_SOURCE_REGEX.test(importPath)) continue
+          if (
+            !LOCAL_IMPORT_SOURCE_REGEX.test(importPath) &&
+            !matchesAliasImport(importPath, resolvedAlias)
+          ) {
+            continue
+          }
 
           const resolvedImportPath = resolveImportToFilePath(importPath, id, resolvedAlias)
 
@@ -1141,7 +1156,12 @@ ${clientTransformedCode}`
 
       for (const imp of scanImportStatements(code)) {
         if (imp.typeOnly || imp.sideEffectOnly) continue
-        if (!LOCAL_IMPORT_SOURCE_REGEX.test(imp.source)) continue
+        if (
+          !LOCAL_IMPORT_SOURCE_REGEX.test(imp.source) &&
+          !matchesAliasImport(imp.source, resolvedAlias)
+        ) {
+          continue
+        }
 
         const resolvedImportPath = resolveImportToFilePath(imp.source, id, resolvedAlias)
 
@@ -1184,8 +1204,9 @@ ${clientTransformedCode}`
         modifiedCode = modifiedCode.slice(0, start) + replacement + modifiedCode.slice(end)
 
       if (clientRefHelpers.size > 0) {
-        const helperList = [...clientRefHelpers].join(', ')
-        modifiedCode = `import { ${helperList} } from "react-server-dom-rari/server";\n${modifiedCode}`
+        modifiedCode = ensureNamedImportFromModule(modifiedCode, 'react-server-dom-rari/server', [
+          ...clientRefHelpers,
+        ])
       }
 
       if (hasServerImports) {

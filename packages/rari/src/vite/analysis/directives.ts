@@ -840,6 +840,120 @@ export function scanImportStatements(source: string): ScannedImport[] {
   return imports
 }
 
+export function collectExportNames(source: string): string[] {
+  const exports = new Set<string>()
+  let i = 0
+  const len = source.length
+
+  while (i < len) {
+    const skipped = skipNonCodeToken(source, i, len)
+    if (skipped !== -1) {
+      i = skipped
+      continue
+    }
+
+    if (!isKeywordAt(source, i, 'export')) {
+      i++
+      continue
+    }
+
+    let pos = skipTrivia(source, i + 6, len)
+
+    if (isKeywordAt(source, pos, 'type') || isKeywordAt(source, pos, 'interface')) {
+      i = pos + 1
+      continue
+    }
+
+    if (source.charCodeAt(pos) === CH_STAR) {
+      i = pos + 1
+      continue
+    }
+
+    if (isKeywordAt(source, pos, 'default')) {
+      exports.add('default')
+      i = pos + 7
+      continue
+    }
+
+    if (source.charCodeAt(pos) === CH_OPEN_BRACE) {
+      const close = skipBalancedBraceList(source, pos, len)
+      const list = source.slice(pos + 1, close - 1)
+      for (const part of list.split(',')) {
+        const trimmed = part.trim()
+        if (!trimmed || trimmed.startsWith('type ') || trimmed.startsWith('typeof ')) continue
+        const asParts = trimmed.split(/\s+as\s+/)
+        const exportedName = (asParts.at(-1) ?? '').trim()
+        if (exportedName !== '' && exportedName !== 'type') exports.add(exportedName)
+      }
+      i = close
+      continue
+    }
+
+    if (isKeywordAt(source, pos, 'async')) {
+      pos = skipTrivia(source, pos + 5, len)
+    }
+
+    if (
+      isKeywordAt(source, pos, 'function') ||
+      isKeywordAt(source, pos, 'class') ||
+      isKeywordAt(source, pos, 'const') ||
+      isKeywordAt(source, pos, 'let') ||
+      isKeywordAt(source, pos, 'var')
+    ) {
+      const keywordLen = isKeywordAt(source, pos, 'function')
+        ? 8
+        : isKeywordAt(source, pos, 'class')
+          ? 5
+          : isKeywordAt(source, pos, 'const')
+            ? 5
+            : 3
+      let after = skipTrivia(source, pos + keywordLen, len)
+      if (source.charCodeAt(after) === CH_STAR) after = skipTrivia(source, after + 1, len)
+      const name = readIdentifier(source, after, len)
+      if (name) exports.add(name.name)
+      i = name?.end ?? after + 1
+      continue
+    }
+
+    i++
+  }
+
+  return exports.size > 0 ? [...exports] : ['default']
+}
+
+function skipBalancedBraceList(source: string, start: number, len: number): number {
+  let i = start
+  let depth = 0
+  while (i < len) {
+    const ch = source.charCodeAt(i)
+    if (ch === CH_SINGLE_QUOTE || ch === CH_DOUBLE_QUOTE || ch === CH_BACKTICK) {
+      i = skipString(source, i, len, ch)
+      continue
+    }
+    if (ch === CH_SLASH && source.charCodeAt(i + 1) === CH_SLASH) {
+      i = skipSingleLineComment(source, i, len)
+      continue
+    }
+    if (ch === CH_SLASH && source.charCodeAt(i + 1) === CH_STAR) {
+      i = skipMultiLineComment(source, i, len)
+      continue
+    }
+    if (ch === CH_OPEN_BRACE) {
+      depth++
+      i++
+      continue
+    }
+    if (ch === CH_CLOSE_BRACE) {
+      depth--
+      i++
+      if (depth === 0) return i
+      continue
+    }
+    i++
+  }
+  return i
+}
+
 export function getDirectives(source: string): DirectiveResult {
   return analyzeModuleSource(source).directives
 }
@@ -1018,6 +1132,64 @@ function canPrecedeRegexWithKeywords(source: string, pos: number): boolean {
   return false
 }
 
+const JSX_PRECEDE_KEYWORDS = new Set([
+  'return',
+  'throw',
+  'case',
+  'default',
+  'else',
+  'do',
+  'typeof',
+  'void',
+  'yield',
+  'await',
+  'delete',
+])
+
+function canPrecedeJSX(source: string, pos: number): boolean {
+  const prevCharCode = getPreviousNonTriviaCharCode(source, pos)
+  if (prevCharCode === -1) return true
+
+  if (isIdentifierPartCode(prevCharCode) || (prevCharCode >= CH_0 && prevCharCode <= CH_9)) {
+    const prevToken = getPreviousToken(source, pos)
+    return prevToken != null && prevToken !== '' && JSX_PRECEDE_KEYWORDS.has(prevToken)
+  }
+
+  if (
+    prevCharCode === CH_CLOSE_PAREN ||
+    prevCharCode === CH_CLOSE_BRACKET ||
+    prevCharCode === CH_CLOSE_BRACE
+  ) {
+    return false
+  }
+
+  return true
+}
+
+/**
+ * Try to skip a JSX tag/element at `i`. Returns the offset past a completed
+ * tag (ending in `>`), or -1 when `<` is not JSX (comparison, generics, etc.).
+ */
+function trySkipJSX(source: string, i: number, len: number): number {
+  if (!canPrecedeJSX(source, i)) return -1
+
+  const nextCh = source.charCodeAt(i + 1)
+  if (
+    nextCh !== CH_SLASH &&
+    nextCh !== CH_DOT &&
+    nextCh !== CH_GT &&
+    !isIdentifierStartCode(nextCh)
+  ) {
+    return -1
+  }
+
+  let end = skipJSX(source, i, len)
+  // skipJSX may stop after a closing tag name before consuming `>`.
+  if (end < len && source.charCodeAt(end) === CH_GT) end++
+  if (end > i && source.charCodeAt(end - 1) === CH_GT) return end
+  return -1
+}
+
 function skipRegex(source: string, i: number, len: number): number {
   i++
   let inCharClass = false
@@ -1092,15 +1264,8 @@ export function skipNonCodeToken(source: string, i: number, len: number): number
   }
 
   if (ch === CH_LT) {
-    const nextCh = source.charCodeAt(i + 1)
-    if (
-      nextCh === CH_SLASH ||
-      nextCh === CH_DOT ||
-      nextCh === CH_GT ||
-      isIdentifierStartCode(nextCh)
-    ) {
-      return skipJSX(source, i, len)
-    }
+    const jsxEnd = trySkipJSX(source, i, len)
+    if (jsxEnd !== -1) return jsxEnd
   }
 
   return -1
@@ -1271,14 +1436,9 @@ function scanExportDefaultValueEnd(source: string, start: number, len: number): 
     }
 
     if (ch === CH_LT && paren === 0 && brace === 0 && bracket === 0) {
-      const nextCh = source.charCodeAt(i + 1)
-      if (
-        nextCh === CH_SLASH ||
-        nextCh === CH_DOT ||
-        nextCh === CH_GT ||
-        isIdentifierStartCode(nextCh)
-      ) {
-        i = skipJSX(source, i, len)
+      const jsxEnd = trySkipJSX(source, i, len)
+      if (jsxEnd !== -1) {
+        i = jsxEnd
         lastCanTerminate = true
         continue
       }

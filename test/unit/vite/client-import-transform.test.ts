@@ -3,7 +3,10 @@ import {
   rewriteExportDefaultAsBinding,
   scanImportStatements,
 } from '@rari/vite/analysis/directives'
-import { buildClientReferenceReplacementFromImport } from '@rari/vite/transform/client-import'
+import {
+  buildClientReferenceReplacementFromImport,
+  ensureNamedImportFromModule,
+} from '@rari/vite/transform/client-import'
 import { describe, expect, it } from 'vite-plus/test'
 
 describe('buildClientReferenceReplacementFromImport', () => {
@@ -46,6 +49,27 @@ describe('buildClientReferenceReplacementFromImport', () => {
     const replacement = buildClientReferenceReplacementFromImport(imp, 'src/types.ts')
 
     expect(replacement).toEqual({ code: '', helpers: [] })
+  })
+})
+
+describe('ensureNamedImportFromModule', () => {
+  const mod = 'react-server-dom-rari/server'
+
+  it('prepends a new import when none exists', () => {
+    const code = `export default function Page() {}\n`
+    expect(ensureNamedImportFromModule(code, mod, ['registerClientReference'])).toBe(
+      `import { registerClientReference } from ${JSON.stringify(mod)};\n\n${code}`,
+    )
+  })
+
+  it('merges into an existing import from the same module', () => {
+    const code = `import { registerServerReference } from ${JSON.stringify(mod)};\nexport default function Page() {}\n`
+    const result = ensureNamedImportFromModule(code, mod, ['registerClientReference'])
+
+    expect(result).toBe(
+      `import { registerServerReference, registerClientReference } from ${JSON.stringify(mod)};\nexport default function Page() {}\n`,
+    )
+    expect(result.match(/from "react-server-dom-rari\/server"/g)).toHaveLength(1)
   })
 })
 
@@ -92,5 +116,24 @@ describe('rewriteExportDefaultAsBinding', () => {
 
     expect(code.slice(located!.valueStart, located!.valueEnd).trim()).toBe('a\n  + b')
     expect(rewritten).toContain('const __default_export__ = a\n  + b')
+  })
+
+  it('does not treat comparison a<b as JSX when locating export default', () => {
+    const code = `export default a<b;\n`
+    const located = locateExportDefaultValue(code)
+
+    expect(located).not.toBeNull()
+    expect(code.slice(located!.valueStart, located!.valueEnd).trim()).toBe('a<b')
+  })
+
+  it('does not treat generic arrow <T,> as JSX when locating export default', () => {
+    const code = `export default <T,>(value: T) => value\n`
+    const located = locateExportDefaultValue(code)
+    const rewritten = rewriteExportDefaultAsBinding(code, '__default_export__')
+
+    expect(code.slice(located!.valueStart, located!.valueEnd).trim()).toBe(
+      '<T,>(value: T) => value',
+    )
+    expect(rewritten).toContain('const __default_export__ = <T,>(value: T) => value')
   })
 })

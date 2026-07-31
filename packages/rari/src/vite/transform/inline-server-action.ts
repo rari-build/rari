@@ -624,10 +624,10 @@ export function transformInlineServerActions(
     const { start: replaceStart, exportKind } = resolveActionReplaceRange(result, action.start)
 
     let replacement = bindExpr
-    if (action.kind === 'declaration' && action.name != null) {
-      if (exportKind === 'default') {
-        replacement = bindExpr
-      } else if (exportKind === 'named') {
+    if (exportKind === 'default') {
+      replacement = `export default ${bindExpr}`
+    } else if (action.kind === 'declaration' && action.name != null) {
+      if (exportKind === 'named') {
         replacement = `export const ${action.name} = ${bindExpr}`
       } else {
         replacement = `const ${action.name} = ${bindExpr}`

@@ -48,6 +48,7 @@ import {
 } from '../analysis/module-cache'
 import { collectSourceFilePaths, normalizeScanDirs } from '../analysis/source-walker'
 import { resolveMdxRegistryEntries } from '../mdx/registry'
+import { ensureNamedImportFromModule } from '../transform/client-import'
 import {
   buildClientReferenceStubModule,
   collectExportNames,
@@ -2064,7 +2065,7 @@ export class ServerComponentBuilder {
       ...(needsProxyImport ? ['createClientModuleProxy'] : []),
     ]
 
-    return `import { ${referenceImports.join(', ')} } from ${JSON.stringify(RSC_REFERENCES_IMPORT)};\n\n${transformedCode}`
+    return ensureNamedImportFromModule(transformedCode, RSC_REFERENCES_IMPORT, referenceImports)
   }
 
   private resolveImportPath(importPath: string, importerPath: string): string {
