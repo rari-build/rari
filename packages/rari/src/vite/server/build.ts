@@ -37,7 +37,7 @@ import {
   getProjectRelativePath as getSharedProjectRelativePath,
   hashString as sharedHashString,
 } from '../analysis/component-ids'
-import { analyzeModuleSource } from '../analysis/directives'
+import { analyzeModuleSource, scanImportStatements } from '../analysis/directives'
 import {
   filterExternalDependencies,
   filterRelativeImportSources,
@@ -52,7 +52,6 @@ import { parseHtmlEntryImports } from '../transform/html-entry'
 import { getUseCacheTransform } from '../transform/use-cache'
 
 const COMPONENT_IMPORT_REGEX = /import\s+(\w+)\s+from\s+['"]([^'"]+)['"]/g
-const CLIENT_IMPORT_REGEX = /import\s+(?:(\w+)|\{([^}]+)\})\s+from\s+['"]([^'"]+)['"];?\s*$/gm
 const PROXY_FILE_REGEX = /^proxy\.(?:tsx?|jsx?|mts|mjs)$/
 const COMPONENTS_PATH_REGEX = /\/components\/(\w+)(?:\.tsx?|\.jsx?)?$/
 const COMPONENTS_PATH_ALT_REGEX = /[/\\]components[/\\](\w+)(?:\.tsx?|\.jsx?)?$/
@@ -1987,79 +1986,77 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
   }
 
   private transformClientImports(code: string, inputPath: string): string {
-    let transformedCode = code
-
-    let match
-
-    const replacements: Array<{ original: string; replacement: string }> = []
-    let hasClientComponents = false
-
     const externalClientComponents = EXTERNAL_CLIENT_COMPONENT_MANIFESTS.map(
       entry => entry.componentId,
     )
 
-    CLIENT_IMPORT_REGEX.lastIndex = 0
-    for (;;) {
-      match = CLIENT_IMPORT_REGEX.exec(code)
-      if (match === null) break
+    const replacements: Array<{ start: number; end: number; replacement: string }> = []
+    let needsRegisterImport = false
+    let needsProxyImport = false
 
-      const [fullMatch, defaultImport, namedImports, importPath] = match
+    for (const imp of scanImportStatements(code)) {
+      if (imp.typeOnly || imp.sideEffectOnly) continue
 
       let isClientComponent = false
-      let componentId = importPath
+      let componentId = imp.source
 
-      if (externalClientComponents.includes(importPath)) {
+      if (externalClientComponents.includes(imp.source)) {
         isClientComponent = true
       } else {
-        const resolvedPath = this.resolveImportPath(importPath, inputPath)
+        const resolvedPath = this.resolveImportPath(imp.source, inputPath)
         if (this.isClientComponent(resolvedPath)) {
           isClientComponent = true
           componentId = path.relative(this.projectRoot, resolvedPath).replace(BACKSLASH_REGEX, '/')
         }
       }
 
-      if (isClientComponent) {
-        hasClientComponents = true
+      if (!isClientComponent) continue
 
-        let replacement = ''
+      const parts: string[] = []
 
-        if (defaultImport) {
-          replacement = `const ${defaultImport} = registerClientReference(
+      if (imp.namespaceBinding != null) {
+        needsProxyImport = true
+        parts.push(
+          `const ${imp.namespaceBinding} = createClientModuleProxy(${JSON.stringify(componentId)});`,
+        )
+      }
+
+      if (imp.defaultBinding != null) {
+        needsRegisterImport = true
+        parts.push(`const ${imp.defaultBinding} = registerClientReference(
   null,
   ${JSON.stringify(componentId)},
   "default"
-);`
-        } else if (namedImports) {
-          const imports = namedImports.split(',').map(imp => imp.trim())
-          const registrations = imports
-            .map(imp => {
-              const [importName, alias] = imp.includes(' as ')
-                ? imp.split(' as ').map(s => s.trim())
-                : [imp, imp]
+);`)
+      }
 
-              return `const ${alias} = registerClientReference(
+      for (const spec of imp.named) {
+        if (spec.typeOnly) continue
+        needsRegisterImport = true
+        parts.push(`const ${spec.local} = registerClientReference(
   null,
   ${JSON.stringify(componentId)},
-  ${JSON.stringify(importName)}
-);`
-            })
-            .join('\n')
-
-          replacement = registrations
-        }
-
-        replacements.push({ original: fullMatch, replacement })
+  ${JSON.stringify(spec.imported)}
+);`)
       }
+
+      if (parts.length === 0) continue
+
+      replacements.push({ start: imp.start, end: imp.end, replacement: parts.join('\n') })
     }
 
-    if (hasClientComponents) {
-      transformedCode = `import { registerClientReference } from ${JSON.stringify(RSC_REFERENCES_IMPORT)};\n\n${transformedCode}`
-    }
+    if (replacements.length === 0) return code
 
-    for (const { original, replacement } of replacements)
-      transformedCode = transformedCode.replace(original, replacement)
+    let transformedCode = code
+    for (const { start, end, replacement } of [...replacements].sort((a, b) => b.start - a.start))
+      transformedCode = transformedCode.slice(0, start) + replacement + transformedCode.slice(end)
 
-    return transformedCode
+    const referenceImports = [
+      ...(needsRegisterImport ? ['registerClientReference'] : []),
+      ...(needsProxyImport ? ['createClientModuleProxy'] : []),
+    ]
+
+    return `import { ${referenceImports.join(', ')} } from ${JSON.stringify(RSC_REFERENCES_IMPORT)};\n\n${transformedCode}`
   }
 
   private resolveImportPath(importPath: string, importerPath: string): string {
