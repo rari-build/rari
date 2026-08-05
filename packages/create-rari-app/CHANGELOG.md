@@ -1,3 +1,13 @@
+## [create-rari-app@0.5.20] - 2026-08-05
+
+### ⚙️ Miscellaneous Tasks
+
+- *(dependencies)* update various packages including async-compression, http, napi, and eslint-related packages by @skiniks
+- *(dependencies)* update various package versions by @skiniks
+- *(dependencies)* update rari to version 0.15.8 by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/create-rari-app@0.5.19...create-rari-app@0.5.20
 ## [create-rari-app@0.5.19] - 2026-07-26
 
 ### ⚙️ Miscellaneous Tasks
