@@ -121,7 +121,7 @@ image = { version = "0.25.10", default-features = false, features = [
   "webp",
 ] }
 parley = "0.11.0"
-resvg = "0.47.0"
+resvg = "0.48.1"
 swash = "0.2.10"
 taffy = "0.12.2"
 webp = "0.3.1"
@@ -130,7 +130,7 @@ zeno = "0.3.3"
 
 # === Serialization ===
 base64 = { workspace = true }
-rkyv = "0.8.17"
+rkyv = "0.8.18"
 serde = { workspace = true }
 serde_json = { workspace = true }
 
@@ -156,9 +156,9 @@ sha2 = { workspace = true }
 bytes = { version = "1.12.1", features = ["serde"] }
 cow-utils = { workspace = true }
 dashmap = "6.2.1"
-lru = "0.18.1"
+lru = "0.18.2"
 parking_lot = { workspace = true }
-redis = { version = "1.4.1", default-features = false, features = ["tokio-comp"] }
+redis = { version = "1.5.0", default-features = false, features = ["tokio-comp"] }
 redb = "4.1.0"
 regex = { workspace = true }
 rustc-hash = { workspace = true }
