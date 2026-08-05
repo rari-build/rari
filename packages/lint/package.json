@@ -1,21 +1,54 @@
 {
   "name": "@rari/lint",
   "type": "module",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
+  "description": "Lint and format configs for the rari framework",
+  "author": "Ryan Skinner",
+  "license": "MIT",
+  "homepage": "https://github.com/rari-build/rari#readme",
+  "repository": {
+    "directory": "packages/lint",
+    "type": "git",
+    "url": "git+https://github.com/rari-build/rari.git"
+  },
+  "bugs": {
+    "url": "https://github.com/rari-build/rari/issues"
+  },
   "exports": {
-    "./vite": "./src/vite.ts",
-    "./eslint": "./src/eslint.ts"
+    "./vite": {
+      "types": "./dist/vite.d.mts",
+      "import": "./dist/vite.mjs",
+      "default": "./dist/vite.mjs"
+    },
+    "./eslint": {
+      "types": "./dist/eslint.d.mts",
+      "import": "./dist/eslint.mjs",
+      "default": "./dist/eslint.mjs"
+    }
+  },
+  "files": [
+    "LICENSE",
+    "README.md",
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22.18.0"
   },
   "scripts": {
+    "build": "pnpm typecheck && vp pack",
+    "clean": "node --eval \"import('node:fs').then(fs => fs.rmSync('dist', { recursive: true, force: true }))\"",
+    "lint": "vp lint",
+    "lint:fix": "vp lint --fix",
     "typecheck": "tsc"
+  },
+  "peerDependencies": {
+    "eslint": "catalog:eslint"
   },
   "dependencies": {
     "@e18e/eslint-plugin": "catalog:eslint",
     "@eslint-community/eslint-plugin-eslint-comments": "catalog:eslint",
     "@eslint-react/eslint-plugin": "catalog:eslint",
     "@typescript-eslint/parser": "catalog:eslint",
-    "eslint": "catalog:eslint",
     "eslint-config-flat-gitignore": "catalog:eslint",
     "eslint-plugin-antfu": "catalog:eslint",
     "eslint-plugin-command": "catalog:eslint",
@@ -33,6 +66,7 @@
   },
   "devDependencies": {
     "@types/node": "catalog:typescript",
+    "eslint": "catalog:eslint",
     "typescript": "catalog:typescript",
     "typescript-7": "catalog:typescript",
     "vite-plus": "catalog:build"

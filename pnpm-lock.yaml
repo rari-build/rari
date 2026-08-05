@@ -239,9 +239,6 @@ importers:
         specifier: catalog:cli
         version: 1.7.0
     devDependencies:
-      '@rari/lint':
-        specifier: workspace:*
-        version: link:../lint
       '@types/node':
         specifier: catalog:typescript
         version: 26.1.2
@@ -257,9 +254,6 @@ importers:
 
   packages/deploy:
     devDependencies:
-      '@rari/lint':
-        specifier: workspace:*
-        version: link:../lint
       '@rari/logger':
         specifier: workspace:*
         version: link:../logger
@@ -290,9 +284,6 @@ importers:
       '@typescript-eslint/parser':
         specifier: catalog:eslint
         version: 8.66.0(@typescript/typescript6@6.0.2)(eslint@10.8.0(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)
-      eslint:
-        specifier: catalog:eslint
-        version: 10.8.0(jiti@2.7.0)(supports-color@8.1.1)
       eslint-config-flat-gitignore:
         specifier: catalog:eslint
         version: 2.3.0(eslint@10.8.0(jiti@2.7.0)(supports-color@8.1.1))
@@ -339,6 +330,9 @@ importers:
       '@types/node':
         specifier: catalog:typescript
         version: 26.1.2
+      eslint:
+        specifier: catalog:eslint
+        version: 10.8.0(jiti@2.7.0)(supports-color@8.1.1)
       typescript:
         specifier: catalog:typescript
         version: '@typescript/typescript6@6.0.2'
@@ -351,9 +345,6 @@ importers:
 
   packages/logger:
     devDependencies:
-      '@rari/lint':
-        specifier: workspace:*
-        version: link:../lint
       '@types/node':
         specifier: catalog:typescript
         version: 26.1.2
@@ -391,9 +382,6 @@ importers:
       '@rari/deploy':
         specifier: workspace:*
         version: link:../deploy
-      '@rari/lint':
-        specifier: workspace:*
-        version: link:../lint
       '@rari/logger':
         specifier: workspace:*
         version: link:../logger
@@ -444,9 +432,6 @@ importers:
         specifier: catalog:react
         version: 19.2.8(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(webpack@5.107.2(lightningcss@1.33.0)(postcss@8.5.25))
     devDependencies:
-      '@rari/lint':
-        specifier: workspace:*
-        version: link:../lint
       '@types/node':
         specifier: catalog:typescript
         version: 26.1.2
@@ -576,9 +561,6 @@ importers:
         specifier: catalog:mdx
         version: 4.0.1(supports-color@8.1.1)
     devDependencies:
-      '@rari/lint':
-        specifier: workspace:*
-        version: link:../packages/lint
       '@tailwindcss/vite':
         specifier: catalog:tailwind
         version: 4.3.3(vite@8.2.0(@types/node@26.1.2)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))

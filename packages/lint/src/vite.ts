@@ -1,2 +1,3 @@
-export { fmt } from './fmt.ts'
-export { lint } from './oxlint.ts'
+export { fmt } from './fmt'
+export { ignorePatterns } from './ignores'
+export { lint } from './oxlint'

@@ -4,10 +4,10 @@ import * as tsParser from '@typescript-eslint/parser'
 import gitignore from 'eslint-config-flat-gitignore'
 import oxlint from 'eslint-plugin-oxlint'
 import reactRefresh from 'eslint-plugin-react-refresh'
-import { ignorePatterns } from './ignores.ts'
-import { lint as oxlintConfig } from './oxlint.ts'
-import { pnpmConfigs } from './pnpm.ts'
-import { packageJsonSortConfigs } from './sort.ts'
+import { ignorePatterns } from './ignores'
+import { lint as oxlintConfig } from './oxlint'
+import { pnpmConfigs } from './pnpm'
+import { packageJsonSortConfigs } from './sort'
 
 // oxlint-disable-next-line typescript/prefer-readonly-parameter-types
 function withReactPrefix(config: Linter.Config): Linter.Config {
@@ -53,10 +53,10 @@ const oxlintBridge = oxlint
 
 const recommendedTypescript = withReactPrefix(react.configs['recommended-typescript'])
 
-export default [
+const configs: Linter.Config[] = [
   gitignore(),
   {
-    ignores: [...ignorePatterns, '**/packages/create-rari-app/templates/**'],
+    ignores: [...ignorePatterns],
   },
   {
     files: ['**/*.{ts,tsx}'],
@@ -73,18 +73,6 @@ export default [
     ...recommendedTypescript,
     files: ['**/*.{ts,tsx}'],
   },
-  {
-    files: ['crates/rari/src/runtime/ext/**/*.ts'],
-    rules: {
-      'react/no-unnecessary-use-prefix': 'off',
-    },
-  },
-  {
-    files: ['tools/bundle-react-esm/*.ts'],
-    rules: {
-      'no-console': 'off',
-    },
-  },
   ...oxlintBridge,
   // After the oxlint bridge so HMR export checks stay enabled (oxlint owns react/only-export-components).
   {
@@ -92,11 +80,13 @@ export default [
     files: ['**/*.{ts,tsx}'],
   },
   {
-    files: ['examples/**/src/app/**', 'test/fixtures/**/src/app/**', 'web/src/app/**'],
+    files: ['**/src/app/**'],
     rules: {
       'react-refresh/only-export-components': 'off',
     },
   },
   ...pnpmConfigs,
   ...packageJsonSortConfigs,
-] satisfies Linter.Config[]
+]
+
+export default configs

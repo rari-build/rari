@@ -84,6 +84,7 @@ impl App {
             ReleaseUnit::Virtual(binary_group),
             ReleaseUnit::Single(use_cache_pkg),
             ReleaseUnit::Virtual(use_cache_binary_group),
+            ReleaseUnit::Single(Package::load("@rari/lint", "packages/lint").await?),
         ];
 
         if let Some(only_list) = only {
@@ -290,8 +291,10 @@ impl App {
                 }
                 PublishStep::GeneratingChangelog => {
                     let unit_name = unit.name();
-                    let generates_changelog =
-                        matches!(unit_name, "rari" | "create-rari-app" | "@rari/use-cache");
+                    let generates_changelog = matches!(
+                        unit_name,
+                        "rari" | "create-rari-app" | "@rari/use-cache" | "@rari/lint"
+                    );
                     let tag = release_tag(unit_name, version);
                     let notes_override = self.notes_file.as_deref();
                     let manual_notes =
@@ -372,7 +375,7 @@ impl App {
 
                             let generates_changelog = matches!(
                                 unit.name(),
-                                "rari" | "create-rari-app" | "@rari/use-cache"
+                                "rari" | "create-rari-app" | "@rari/use-cache" | "@rari/lint"
                             );
                             let mut files_to_add = Vec::new();
                             if generates_changelog {

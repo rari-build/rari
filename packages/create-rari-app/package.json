@@ -51,7 +51,6 @@
     "@clack/prompts": "catalog:cli"
   },
   "devDependencies": {
-    "@rari/lint": "workspace:*",
     "@types/node": "catalog:typescript",
     "typescript": "catalog:typescript",
     "typescript-7": "catalog:typescript",

@@ -157,6 +157,7 @@ async fn run_non_interactive(
         ReleaseUnit::Virtual(binary_group),
         ReleaseUnit::Single(use_cache_pkg),
         ReleaseUnit::Virtual(use_cache_binary_group),
+        ReleaseUnit::Single(Package::load("@rari/lint", "packages/lint").await?),
     ];
 
     if let Some(only_list) = &only {
@@ -234,7 +235,7 @@ async fn run_non_interactive(
         }
 
         let generates_changelog =
-            matches!(unit_name, "rari" | "create-rari-app" | "@rari/use-cache");
+            matches!(unit_name, "rari" | "create-rari-app" | "@rari/use-cache" | "@rari/lint");
         let tag = release_tag(unit_name, &new_version);
         let notes_override = notes_file.as_deref();
         let manual_notes = changelog::load_manual_notes(&tag, &new_version, notes_override).await?;
@@ -297,7 +298,7 @@ async fn run_non_interactive(
             }
 
             let generates_changelog =
-                matches!(unit_name, "rari" | "create-rari-app" | "@rari/use-cache");
+                matches!(unit_name, "rari" | "create-rari-app" | "@rari/use-cache" | "@rari/lint");
             let mut files_to_add = Vec::new();
             if generates_changelog && let Some(first_path) = unit.paths().first() {
                 let changelog_path = first_path.join("CHANGELOG.md");
