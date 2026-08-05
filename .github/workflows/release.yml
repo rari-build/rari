@@ -7,6 +7,7 @@ on:
       - 'rari@*'
       - 'create-rari-app@*'
       - '@rari/use-cache@*'
+      - '@rari/lint@*'
       - 'use-cache-binaries@*'
   workflow_dispatch:
 
@@ -372,6 +373,7 @@ jobs:
       - name: Build workspace dependencies
         if: steps.pkg.outputs.name == 'rari'
         run: |
+          pnpm --filter @rari/lint build
           pnpm --filter @rari/logger build
           pnpm --filter @rari/deploy build
 
@@ -672,6 +674,62 @@ jobs:
       - name: Publish to npm
         run: |
           cd "packages/use-cache"
+
+          VERSION="${{ steps.pkg.outputs.version }}"
+          TARBALL=$(pnpm pack | tail -1)
+          echo "Packed: ${TARBALL}"
+
+          if [[ "${VERSION}" == *"-"* ]]; then
+            echo "Publishing with tag 'next'..."
+            npm publish "${TARBALL}" --access public --tag next
+          else
+            echo "Publishing with tag 'latest'..."
+            npm publish "${TARBALL}" --access public
+          fi
+
+  npm-release-lint:
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/@rari/lint@')
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Determine package version
+        id: pkg
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          VERSION="${TAG#@rari/lint@}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "📦 Publishing @rari/lint@${VERSION}"
+
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.ref }}
+
+      - uses: ./.github/actions/setup-pnpm
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'true'
+          install: 'false'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          npm_config_trust_lockfile: 'true'
+
+      - name: Upgrade npm
+        run: npm install -g npm@11
+
+      - name: Build package
+        run: pnpm --filter "@rari/lint" build
+
+      - name: Copy LICENSE
+        run: cp LICENSE packages/lint/LICENSE
+
+      - name: Publish to npm
+        run: |
+          cd "packages/lint"
 
           VERSION="${{ steps.pkg.outputs.version }}"
           TARBALL=$(pnpm pack | tail -1)

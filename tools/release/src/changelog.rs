@@ -68,6 +68,10 @@ fn push_package_cliff_args(args: &mut Vec<String>, package_name: &str, package_p
             args.push("--tag-pattern".to_string());
             args.push("^@rari/use-cache@".to_string());
         }
+        "@rari/lint" => {
+            args.push("--tag-pattern".to_string());
+            args.push("^@rari/lint@".to_string());
+        }
         _ => {}
     }
 }
@@ -273,6 +277,11 @@ async fn generate_auto_release_notes(
             args.push("crates/rari_use_cache/**".to_string());
             args.push("--tag-pattern".to_string());
             args.push("^@rari/use-cache@".to_string());
+        } else if package_name == "@rari/lint" {
+            args.push("--include-path".to_string());
+            args.push("packages/lint/**".to_string());
+            args.push("--tag-pattern".to_string());
+            args.push("^@rari/lint@".to_string());
         } else if package_name == "@rari/use-cache-binaries" {
             args.push("--include-path".to_string());
             args.push("crates/rari_use_cache/**".to_string());

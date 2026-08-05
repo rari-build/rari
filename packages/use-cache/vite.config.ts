@@ -1,10 +1,10 @@
 import path from 'node:path'
-import { fmt, lint } from '@rari/lint/vite'
 import { defineConfig } from 'vite-plus'
+import { monorepoFmt, monorepoLint } from '../../.config/lint/monorepo'
 
 export default defineConfig({
-  fmt,
-  lint,
+  fmt: monorepoFmt,
+  lint: monorepoLint,
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, 'src'),

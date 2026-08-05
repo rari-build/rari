@@ -23,11 +23,11 @@ rari is a monorepo that consists of:
 
 Keep Rust and JS names aligned in meaning, but follow each ecosystem’s casing:
 
-| Layer | Convention | Examples |
-| --- | --- | --- |
-| **Rust crates / modules / paths** | `snake_case` | `rari_use_cache`, `rari_error`, `tools/prepare_binaries` |
-| **JS/TS packages / npm names / directories under `packages/`** | `kebab-case` | `@rari/use-cache`, `create-rari-app`, `use-cache-darwin-arm64` |
-| **Paired crate ↔ package** | Same words, different separator | crate `rari_use_cache` ↔ package `@rari/use-cache` |
+| Layer                                                          | Convention                      | Examples                                                       |
+| -------------------------------------------------------------- | ------------------------------- | -------------------------------------------------------------- |
+| **Rust crates / modules / paths**                              | `snake_case`                    | `rari_use_cache`, `rari_error`, `tools/prepare_binaries`       |
+| **JS/TS packages / npm names / directories under `packages/`** | `kebab-case`                    | `@rari/use-cache`, `create-rari-app`, `use-cache-darwin-arm64` |
+| **Paired crate ↔ package**                                     | Same words, different separator | crate `rari_use_cache` ↔ package `@rari/use-cache`             |
 
 When adding a new feature that spans both sides, name the crate with underscores and the published package with dashes. Do not invent a third spelling.
 

@@ -138,11 +138,13 @@ machete:
 
 # Lint Node.js code
 lint-node: _ensure-node-deps
+    pnpm --filter=@rari/lint run build
     pnpm lint
     pnpm knip
 
 # Check for unused dependencies and exports with knip
 knip: _ensure-node-deps
+    pnpm --filter=@rari/lint run build
     pnpm knip
 
 # --- Fix commands ---
@@ -157,6 +159,7 @@ fix-rust:
 
 # Fix Node.js linting issues
 fix-node: _ensure-node-deps
+    pnpm --filter=@rari/lint run build
     pnpm lint:fix
 
 # --- Clean commands ---
@@ -194,6 +197,7 @@ test-watch:
 # Usage: just changelog
 #        just changelog create-rari-app
 #        just changelog use-cache
+#        just changelog lint
 changelog package="rari":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -210,8 +214,12 @@ changelog package="rari":
         git-cliff --unreleased --tag-pattern '^@rari/use-cache@' \
           --include-path 'packages/use-cache/**' --include-path 'crates/rari_use_cache/**'
         ;;
+      lint|"@rari/lint")
+        git-cliff --unreleased --tag-pattern '^@rari/lint@' \
+          --include-path 'packages/lint/**'
+        ;;
       *)
-        echo "Unknown package: {{package}} (expected rari | create-rari-app | use-cache)" >&2
+        echo "Unknown package: {{package}} (expected rari | create-rari-app | use-cache | lint)" >&2
         exit 1
         ;;
     esac
@@ -237,8 +245,12 @@ changelog-latest package="rari":
         git-cliff --latest --tag-pattern '^@rari/use-cache@' \
           --include-path 'packages/use-cache/**' --include-path 'crates/rari_use_cache/**'
         ;;
+      lint|"@rari/lint")
+        git-cliff --latest --tag-pattern '^@rari/lint@' \
+          --include-path 'packages/lint/**'
+        ;;
       *)
-        echo "Unknown package: {{package}} (expected rari | create-rari-app | use-cache)" >&2
+        echo "Unknown package: {{package}} (expected rari | create-rari-app | use-cache | lint)" >&2
         exit 1
         ;;
     esac
@@ -384,6 +396,7 @@ ci-prepare-use-cache-addon:
 ci-build-packages:
     #!/usr/bin/env bash
     set -euo pipefail
+    pnpm --filter=@rari/lint run build
     pnpm --filter=@rari/use-cache run build
     pnpm --filter=@rari/logger run build
     pnpm --filter=@rari/deploy run build
@@ -392,6 +405,7 @@ ci-build-packages:
 
 ci-typecheck-packages:
     # @rari/logger and @rari/deploy have no typecheck script (build-only via vp pack)
+    pnpm --filter=@rari/lint run typecheck
     pnpm --filter=rari run typecheck
     pnpm --filter=create-rari-app run typecheck
 
@@ -402,6 +416,7 @@ ci-lint-test: ci-build-packages
 ci-verify-dist:
     #!/usr/bin/env bash
     set -euo pipefail
+    test -d packages/lint/dist
     test -d packages/use-cache/dist
     test -d packages/logger/dist
     test -d packages/deploy/dist

@@ -71,7 +71,6 @@
     "@rari/use-cache-win32-x64": "0.15.8"
   },
   "devDependencies": {
-    "@rari/lint": "workspace:*",
     "@types/node": "catalog:typescript",
     "typescript": "catalog:typescript",
     "typescript-7": "catalog:typescript",

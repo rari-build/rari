@@ -2,10 +2,6 @@ export const ignorePatterns: string[] = [
   '**/target',
   '**/dist',
   '**/node_modules',
-  'packages/*/bin',
-  'packages/rari-*/',
-  'packages/use-cache-*/',
-  'packages/create-rari-app/templates/**',
   '**/.pnpm-store/',
   '**/.build',
   '**/.cache',
@@ -17,5 +13,4 @@ export const ignorePatterns: string[] = [
   '**/pnpm-lock.yaml',
   '**/CHANGELOG*.md',
   '**/LICENSE*',
-  'templates/**',
 ]

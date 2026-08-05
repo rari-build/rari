@@ -1,5 +1,5 @@
 import type { OxfmtConfig } from 'vite-plus/fmt'
-import { ignorePatterns } from './ignores.ts'
+import { ignorePatterns } from './ignores'
 
 export const fmt: OxfmtConfig = {
   semi: false,

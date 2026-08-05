@@ -2,8 +2,8 @@ import { existsSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
-import { fmt, lint } from '@rari/lint/vite'
 import { defineConfig } from 'vite-plus'
+import { monorepoFmt, monorepoLint } from './.config/lint/monorepo'
 
 const rootDir = process.cwd()
 const rariSrc = path.join(rootDir, 'packages/rari/src')
@@ -77,6 +77,6 @@ export default defineConfig({
       exclude: ['node_modules', 'test', '**/*.config.ts', '**/dist'],
     },
   },
-  fmt,
-  lint,
+  fmt: monorepoFmt,
+  lint: monorepoLint,
 })
