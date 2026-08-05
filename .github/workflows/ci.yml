@@ -222,8 +222,9 @@ jobs:
             rust
             pnpm
             apt
-          rust: 'true'
-          pnpm: 'true'
+          windows-cache: |
+            rust
+            pnpm
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
@@ -309,9 +310,6 @@ jobs:
             rust
             pnpm
             apt
-          rust: 'true'
-          rust-workspaces: crates/rari_use_cache
-          pnpm: 'true'
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
@@ -358,9 +356,9 @@ jobs:
 
       - uses: ./.github/actions/setup-platform-cache
         with:
-          rust: 'true'
-          rust-workspaces: crates/rari_use_cache
-          pnpm: 'true'
+          windows-cache: |
+            rust
+            pnpm
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
@@ -536,8 +534,9 @@ jobs:
             playwright
             pnpm
             apt
-          playwright: 'true'
-          pnpm: 'true'
+          windows-cache: |
+            playwright
+            pnpm
           node-version: ${{ matrix.node }}
 
       - name: Restore dist cache
