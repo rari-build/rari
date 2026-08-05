@@ -12,20 +12,33 @@ Please read and follow our [Code of Conduct](./CODE_OF_CONDUCT.md) to ensure a w
 
 rari is a monorepo that consists of:
 
-- **Rust Core** (`crates/`) - The high-performance runtime engine
-- **TypeScript/JavaScript Packages** (`packages/`) - Framework tooling and APIs
-- **Examples** (`examples/`) - Sample applications and demonstrations
-- **Web** (`web/`) - Documentation website and landing page
-- **Tools** (`tools/`) - Build and release automation tools
+- **Rust crates** (`crates/`) - runtime engine and native addons (`rari`, `rari_error`, `rari_use_cache`)
+- **TypeScript/JavaScript packages** (`packages/`) - framework, CLI, lint, deploy, use-cache, platform binaries
+- **Tests** (`test/`) - Vitest unit/integration fixtures and Playwright e2e
+- **Examples** (`examples/`) - sample applications
+- **Web** (`web/`) - documentation site and landing page
+- **Tools** (`tools/`) - build, snapshot, release, and binary packaging
+
+## Naming conventions
+
+Keep Rust and JS names aligned in meaning, but follow each ecosystem’s casing:
+
+| Layer | Convention | Examples |
+| --- | --- | --- |
+| **Rust crates / modules / paths** | `snake_case` | `rari_use_cache`, `rari_error`, `tools/prepare_binaries` |
+| **JS/TS packages / npm names / directories under `packages/`** | `kebab-case` | `@rari/use-cache`, `create-rari-app`, `use-cache-darwin-arm64` |
+| **Paired crate ↔ package** | Same words, different separator | crate `rari_use_cache` ↔ package `@rari/use-cache` |
+
+When adding a new feature that spans both sides, name the crate with underscores and the published package with dashes. Do not invent a third spelling.
 
 ## Development Setup
 
 ### Prerequisites
 
-- **Node.js** 18+ (we recommend using the latest LTS version)
-- **Rust** (latest stable version)
-- **pnpm** (package manager - required for monorepo workspace management)
-- **just** (command runner - optional but recommended for easier development)
+- **Node.js** `>=22.18.0` (see `engines` in `packages/rari/package.json`)
+- **Rust nightly** via `rust-toolchain.toml` (rustup will install it automatically)
+- **pnpm** via Corepack (`packageManager` is pinned in the root `package.json`)
+- **just** (command runner, optional but recommended)
 
 ### Installation
 
@@ -45,17 +58,20 @@ rari is a monorepo that consists of:
    This will:
    - Check prerequisites
    - Install Rust tools (cargo-nextest, cargo-machete, cargo-insta)
-   - Enable corepack and install pnpm dependencies
-   - Build all packages
+   - Enable Corepack and install pnpm dependencies
+
+   Then build once:
+
+   ```bash
+   just build
+   ```
 
    **Or manually:**
 
    ```bash
-   # Install dependencies
+   corepack enable
    pnpm install
-
-   # Build the project
-   pnpm run build
+   just build   # or: pnpm run build after snapshot/binaries are present
    ```
 
 3. **Verify installation:**
@@ -70,24 +86,33 @@ rari is a monorepo that consists of:
 
 ```
 rari/
-├── .github/              # GitHub workflows and templates
-├── crates/               # Rust crates
-│   └── rari/             # Main Rust runtime
-├── examples/             # Example applications
-│   └── app-router-example/
-├── packages/             # TypeScript/JavaScript packages
-│   ├── create-rari-app/  # CLI tool for creating new apps
-│   ├── rari/             # Main framework package
-│   └── rari-{platform}/  # Platform-specific binary packages
-├── tools/                # Build and release automation
-│   ├── prepare-binaries/ # Binary preparation tool
-│   └── release/          # Release automation tool
-├── web/                  # Documentation website
-├── justfile              # Command runner recipes
-├── Cargo.toml            # Rust workspace configuration
-├── pnpm-workspace.yaml   # pnpm workspace configuration
-└── package.json          # Root package.json
+├── .github/                 # Workflows, actions, PR/release templates
+├── crates/                  # Rust crates
+│   ├── rari/                # Main runtime
+│   ├── rari_error/          # Shared error types
+│   └── rari_use_cache/      # Native 'use cache' transform addon
+├── packages/                # JS/TS packages
+│   ├── rari/                # Main framework package
+│   ├── create-rari-app/     # App scaffolding CLI
+│   ├── use-cache/           # '@rari/use-cache' (pairs with rari_use_cache)
+│   ├── use-cache-*/         # Platform-specific use-cache natives
+│   ├── rari-*/              # Platform-specific rari binaries
+│   ├── lint/, deploy/, logger/
+├── test/                    # Unit, integration, e2e, fixtures
+├── examples/                # Example applications
+├── tools/                   # Build/release helpers
+│   ├── prepare_binaries/    # Rust - package native binaries
+│   ├── release/             # Rust - release automation
+│   ├── snapshot/            # Rust - V8 snapshot generation
+│   └── bundle-react-esm/    # JS - vendor React ESM for Flight
+├── web/                     # Documentation website
+├── justfile
+├── Cargo.toml               # Rust workspace
+├── pnpm-workspace.yaml      # pnpm workspace + dependency catalogs
+└── package.json
 ```
+
+`just build` runs React ESM bundling, V8 snapshot generation, then Rust and Node builds - order matters.
 
 ## Development Workflow
 
@@ -120,13 +145,13 @@ just build-web
 **Or manually:**
 
 ```bash
-# Build all packages and crates
+# Build all packages and crates (prefer just build - includes snapshot + React ESM)
 pnpm run build
 
 # Build only TypeScript packages
 pnpm -r run build
 
-# Build only Rust crates
+# Build only Rust crates (requires a current V8 snapshot under crates/rari/snapshots/)
 cargo build --release
 ```
 
@@ -271,11 +296,11 @@ pnpm knip
 
 We use multiple tools to maintain code quality:
 
-- **ESLint** + **oxlint** for JavaScript/TypeScript linting & code formatting
-- **Clippy** for Rust linting
-- **rustfmt** for Rust code formatting
-- **cargo-machete** for detecting unused Rust dependencies
-- **knip** for detecting unused TypeScript dependencies and exports
+- **vite-plus (`vp fmt` / `vp lint`)** + **ESLint** + **oxlint** for JS/TS and shared repo lint
+- **Clippy** + **rustfmt** for Rust
+- **cargo-machete** for unused Rust dependencies
+- **knip** for unused TypeScript dependencies and exports
+- Shared JS dependency versions live in **pnpm catalogs** (`pnpm-workspace.yaml`) - prefer `catalog:` / `catalog:<name>` over hardcoding versions in package manifests
 
 Run these commands before submitting:
 
@@ -314,18 +339,20 @@ pnpm run typecheck
 ### Rust-specific Guidelines
 
 - Follow the [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/)
-- Use `cargo fmt` to format code
-- Run `cargo clippy` and fix all warnings
+- Crate and module names use `snake_case`
+- Use `cargo fmt`; run `cargo clippy` and fix warnings
 - Add tests for new functionality
 - Document public APIs with doc comments
+- Deno-related crates are pinned as a set in the workspace `Cargo.toml` - bump them together, not via ad-hoc `cargo update` on a single Deno crate
 
 ### TypeScript Guidelines
 
-- Use TypeScript strict mode
-- Prefer type safety over any
-- Follow the existing code style
+- Package names and `packages/*` directories use `kebab-case`
+- Use TypeScript strict mode; prefer type safety over `any`
+- Follow the existing code style (`vp fmt` / ESLint)
 - Add JSDoc comments for public APIs
-- Write tests for new features
+- Write tests for new features under `test/`
+- When a package wraps a Rust crate, keep the npm name the dashed form of the crate name (`rari_use_cache` → `@rari/use-cache`)
 
 ## Testing
 
@@ -371,10 +398,11 @@ pnpm -r run test
 
 ### Writing Tests
 
-- **Rust tests** should be in `tests/` directories or inline with `#[cfg(test)]`
-- **TypeScript tests** should use the same testing framework as existing code
-- Add integration tests for new features
-- Test edge cases and error conditions
+- **Rust:** unit tests inline with `#[cfg(test)]`, or under crate `tests/` when integration-style
+- **TypeScript unit/integration:** Vitest via `vp test` - live under `test/unit/`, `test/integration/`, with helpers in `test/helpers/` and fixtures in `test/fixtures/`
+- **E2E:** Playwright under `test/e2e/` (`pnpm test:e2e` / `just` recipes that call it)
+- Prefer colocating coverage with the subsystem you change (e.g. Vite transform bugs → `test/unit/vite/`)
+- Cover edge cases and failure modes, not only the happy path
 
 ## Commit Guidelines
 
@@ -403,19 +431,23 @@ We follow the [Conventional Commits](https://www.conventionalcommits.org/) speci
 
 ### Scopes
 
-- **core**: Rust runtime changes
-- **cli**: CLI tool changes
-- **vite**: Vite plugin changes
-- **docs**: Documentation changes
-- **examples**: Example app changes
+Prefer a concrete subsystem over a vague umbrella:
+
+- **rari** / **rsc** / **cache** - runtime, Flight/Fizz, `'use cache'`
+- **vite** - Vite plugin / RSC transforms / HMR
+- **cli** - `rari` CLI or `create-rari-app`
+- **ci** / **release** / **release-notes** / **dependencies**
+- **docs** / **examples** / **web**
+
+Use the package or crate name when it helps (`use-cache`, `rari_error`), still matching that ecosystem’s casing in prose if you mention paths.
 
 ### Examples
 
 ```bash
-feat(core): add streaming support for RSC
-fix(cli): resolve path resolution issue on Windows
-docs: update installation instructions
-chore(deps): update dependencies
+feat(vite): register inline use-server actions for export default
+fix(rsc): fail loudly on flight client patch drift
+docs: document crate vs package naming
+chore(dependencies): bump react vendor pins
 ```
 
 ## Release Process
@@ -475,7 +507,7 @@ Manual notes are prepended to the GitHub release body (above the auto-generated 
 
 The release tool **prepends** only the new version section into each package `CHANGELOG.md`, so older curated Highlights / Breaking Changes are kept. It also passes a package `--tag-pattern` (e.g. `^rari@`) so binary `v*` tags and other packages are not mixed into the same changelog.
 
-`just changelog` / `just changelog-preview` only print unreleased commits to stdout — they do not rewrite `CHANGELOG.md`.
+`just changelog` / `just changelog-preview` only print unreleased commits to stdout - they do not rewrite `CHANGELOG.md`.
 
 ## Pull Request Guidelines
 
@@ -563,11 +595,11 @@ Key commands:
 
 ### Working with Rust and TypeScript
 
-- **Build order matters** - Rust crates need to be built before TypeScript packages
-- **Use development mode** - The project automatically uses `cargo run` in development
-- **Binary management** - Pre-built binaries are used in production
-- **Cross-platform testing** - Test on different operating systems when possible
-- **Use just commands** - They handle dependencies and build order automatically
+- **Build order matters** - `just build` runs React ESM bundling + V8 snapshot before Rust/Node; prefer it over ad-hoc partial builds when unsure
+- **Naming** - underscores in Rust, dashes in JS (see [Naming conventions](#naming-conventions))
+- **Development mode** - local tooling often uses `cargo run`; published installs use platform binary packages
+- **Cross-platform** - CI covers Linux and Windows Namespace runners; test Windows-sensitive paths when you touch them
+- **Use just** - recipes encode dependencies and build order
 
 ### Performance Considerations
 
