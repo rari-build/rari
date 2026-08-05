@@ -1,3 +1,23 @@
+## [@rari/use-cache@0.15.8] - 2026-08-05
+
+## Highlights
+
+- **More reliable Vite RSC transforms:** client-import rewrites no longer depend on fragile regex. Both the Vite plugin and server component builder use lexer/import spans, so multi-line, aliased, combined, and namespace `'use client'` imports are rewritten correctly instead of silently bundling client code into the server graph.
+- **Inline `'use server'` actions:** registration covers export-default and arrow forms, preserves type-only imports, and collects export names accurately (including `export * as` / multi-export client stubs) so actions register once and stay wired through Flight.
+- **Faster HMR for server components:** re-registration is scoped to the changed component and its transitive importers instead of rebundling the full graph on every edit. Shared exponential-backoff health checks replace fixed-interval polling.
+- **Flight client patch safety:** React browser Flight vendor patches fail loudly on anchor drift (no silent no-ops after React bumps). Vendor bundles stamp exact package versions plus a `versions.json` manifest; CI runs the React ESM bundling step so patch and version agreement stay enforced.
+
+## Breaking Changes
+
+- None.
+
+### ⚙️ Miscellaneous Tasks
+
+- *(dependencies)* update various package versions by @skiniks
+- *(dependencies)* update @rari/use-cache packages to version 0.15.8 by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/@rari/use-cache@0.15.7...@rari/use-cache@0.15.8
 ## [@rari/use-cache@0.15.7] - 2026-07-29
 
 ### ⚙️ Miscellaneous Tasks
