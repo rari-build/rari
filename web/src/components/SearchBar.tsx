@@ -124,9 +124,6 @@ export default function SearchBar() {
           <div
             className="fixed inset-0 z-100 flex items-start justify-center"
             onClick={handleClose}
-            onKeyDown={event => {
-              if (event.key === 'Escape') handleClose()
-            }}
             role="presentation"
           >
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
@@ -138,9 +135,6 @@ export default function SearchBar() {
                 maxHeight: 'min(calc(100vh - 128px), 900px)',
               }}
               onClick={e => {
-                e.stopPropagation()
-              }}
-              onKeyDown={e => {
                 e.stopPropagation()
               }}
               role="presentation"
