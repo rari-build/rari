@@ -142,8 +142,8 @@ pub fn detect_use_cache(source: &str) -> bool {
 }
 
 #[cfg(test)]
+#[expect(clippy::default_trait_access)]
 mod tests {
-    #![expect(clippy::default_trait_access)]
     use super::*;
 
     #[test]

@@ -254,63 +254,6 @@ pub async fn op_send_chunk_to_rust(
     Ok(())
 }
 
-#[cfg(test)]
-pub fn create_module_operation(
-    row_id: &str,
-    module_id: &str,
-    chunks: &[&str],
-    name: &str,
-) -> String {
-    serde_json::json!({
-        "type": "module",
-        "row_id": row_id,
-        "module_id": module_id,
-        "chunks": chunks,
-        "name": name,
-        "async_module": false
-    })
-    .to_string()
-}
-
-#[cfg(test)]
-pub fn create_element_operation(row_id: &str, element: &serde_json::Value) -> String {
-    serde_json::json!({
-        "type": "element",
-        "row_id": row_id,
-        "element": element
-    })
-    .to_string()
-}
-
-#[cfg(test)]
-pub fn create_symbol_operation(row_id: &str, symbol_ref: &str) -> String {
-    serde_json::json!({
-        "type": "symbol",
-        "row_id": row_id,
-        "symbol_ref": symbol_ref
-    })
-    .to_string()
-}
-
-#[cfg(test)]
-pub fn create_error_operation(
-    row_id: &str,
-    message: &str,
-    stack: Option<&str>,
-    phase: Option<&str>,
-    digest: Option<&str>,
-) -> String {
-    serde_json::json!({
-        "type": "error",
-        "row_id": row_id,
-        "message": message,
-        "stack": stack,
-        "phase": phase,
-        "digest": digest
-    })
-    .to_string()
-}
-
 #[op2(fast)]
 pub fn op_rari_has_node_modules_dir(state: &OpState) -> bool {
     state.try_borrow::<BootstrapOptions>().is_some_and(|options| options.has_node_modules_dir)
@@ -888,6 +831,59 @@ mod tests {
     use tokio::sync::mpsc;
 
     use super::*;
+
+    fn create_module_operation(
+        row_id: &str,
+        module_id: &str,
+        chunks: &[&str],
+        name: &str,
+    ) -> String {
+        serde_json::json!({
+            "type": "module",
+            "row_id": row_id,
+            "module_id": module_id,
+            "chunks": chunks,
+            "name": name,
+            "async_module": false
+        })
+        .to_string()
+    }
+
+    fn create_element_operation(row_id: &str, element: &serde_json::Value) -> String {
+        serde_json::json!({
+            "type": "element",
+            "row_id": row_id,
+            "element": element
+        })
+        .to_string()
+    }
+
+    fn create_symbol_operation(row_id: &str, symbol_ref: &str) -> String {
+        serde_json::json!({
+            "type": "symbol",
+            "row_id": row_id,
+            "symbol_ref": symbol_ref
+        })
+        .to_string()
+    }
+
+    fn create_error_operation(
+        row_id: &str,
+        message: &str,
+        stack: Option<&str>,
+        phase: Option<&str>,
+        digest: Option<&str>,
+    ) -> String {
+        serde_json::json!({
+            "type": "error",
+            "row_id": row_id,
+            "message": message,
+            "stack": stack,
+            "phase": phase,
+            "digest": digest
+        })
+        .to_string()
+    }
 
     #[test]
     fn test_stream_op_state_operations() {

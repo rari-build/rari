@@ -419,12 +419,6 @@ impl OgImageGenerator {
         Ok(webp.to_vec())
     }
 
-    #[cfg(test)]
-    #[expect(clippy::expect_used)]
-    pub async fn clear_cache(&self) {
-        self.cache.clear().await.expect("clear");
-    }
-
     #[expect(clippy::missing_errors_doc)]
     pub async fn invalidate(&self, route_path: &str) -> Result<(), CacheError> {
         self.cache.remove(route_path).await.map(|_| ())

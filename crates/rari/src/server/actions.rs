@@ -1091,7 +1091,7 @@ pub fn build_set_cookie_header(cookie: &PendingCookie) -> Result<String, RariErr
 }
 
 #[cfg(test)]
-#[expect(clippy::unwrap_used, clippy::expect_used)]
+#[expect(clippy::expect_used, clippy::unwrap_used)]
 mod tests {
     use super::*;
     use crate::server::{config::RedirectConfig, middleware::request_context::PendingCookie};

@@ -333,8 +333,8 @@ fn collect_pat_idents(pattern: &Pat, idents: &mut FxHashSet<Id>) {
 }
 
 #[cfg(test)]
+#[expect(clippy::expect_used, clippy::default_trait_access)]
 mod tests {
-    #![expect(clippy::default_trait_access, clippy::expect_used)]
     use deno_ast::swc::{
         ast::{
             AssignPatProp, BindingIdent, Class, ClassDecl, ClassExpr, Decl, DefaultDecl,
