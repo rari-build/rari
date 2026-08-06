@@ -47,7 +47,7 @@ declare function rariCreateHtmlBoundaryTracker(): {
   }
 
   function rariStreamingCompleteScript(nonce: string): string {
-    return `${rariScriptOpen(nonce)}if(!window['~rari'])window['~rari']={};window['~rari'].streaming={complete:true}<\/script>`
+    return `${rariScriptOpen(nonce)}if(!window['~rari'])window['~rari']={};window['~rari'].streaming={complete:true}</script>`
   }
 
   function rariFormatFlightItem(
@@ -132,12 +132,12 @@ declare function rariCreateHtmlBoundaryTracker(): {
 
   function rariFormatFlightScriptPush(payload: string | number, nonce = ''): string {
     const escaped = JSON.stringify(payload).split('</').join('<\\/')
-    return `${rariScriptOpen(nonce)}(self.__rari_f=self.__rari_f||[]).push(${escaped})<\/script>`
+    return `${rariScriptOpen(nonce)}(self.__rari_f=self.__rari_f||[]).push(${escaped})</script>`
   }
 
   function rariFormatFlightBinaryPush(b64: string, nonce = ''): string {
     const payload = JSON.stringify([2, b64]).split('</').join('<\\/')
-    return `${rariScriptOpen(nonce)}(self.__rari_f=self.__rari_f||[]).push(${payload})<\/script>`
+    return `${rariScriptOpen(nonce)}(self.__rari_f=self.__rari_f||[]).push(${payload})</script>`
   }
 
   function rariParseFlightRowId(line: string): number {

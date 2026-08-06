@@ -2274,6 +2274,7 @@ export type {
   ServerCSPConfig,
   ServerUseCacheConfig,
 } from './server/config'
+// oxlint-disable-next-line typescript/no-useless-empty-export -- side-effect import of ambient declarations
 export type {} from '@/ambient'
 
 export { rariProxy } from '@/proxy/build/vite-plugin'

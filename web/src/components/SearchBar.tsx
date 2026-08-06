@@ -27,12 +27,6 @@ export default function SearchBar() {
 
   const results = useMemo(() => (query.trim() ? rawResults : []), [query, rawResults])
 
-  const [prevQuery, setPrevQuery] = useState(query)
-  if (query !== prevQuery) {
-    setPrevQuery(query)
-    if (selectedIndex !== 0) setSelectedIndex(0)
-  }
-
   useEffect(() => {
     if (resultItemRef.current[selectedIndex]) {
       resultItemRef.current[selectedIndex]?.scrollIntoView({
@@ -130,6 +124,10 @@ export default function SearchBar() {
           <div
             className="fixed inset-0 z-100 flex items-start justify-center"
             onClick={handleClose}
+            onKeyDown={event => {
+              if (event.key === 'Escape') handleClose()
+            }}
+            role="presentation"
           >
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
             <div
@@ -142,6 +140,10 @@ export default function SearchBar() {
               onClick={e => {
                 e.stopPropagation()
               }}
+              onKeyDown={e => {
+                e.stopPropagation()
+              }}
+              role="presentation"
             >
               <div className="flex items-center gap-3 px-3 py-3 border-b border-edge bg-surface rounded-t-lg">
                 <Search className="w-5 h-5 text-fg-muted" />
@@ -151,6 +153,7 @@ export default function SearchBar() {
                   value={query}
                   onChange={e => {
                     setQuery(e.target.value)
+                    setSelectedIndex(0)
                   }}
                   placeholder="Search documentation..."
                   className="flex-1 bg-transparent text-fg-secondary placeholder-fg-muted outline-hidden text-base"

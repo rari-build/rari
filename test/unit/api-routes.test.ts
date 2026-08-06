@@ -1,7 +1,7 @@
 import { ApiResponse } from '@rari/router/build/api-routes'
 import { describe, expect, it } from 'vite-plus/test'
 
-describe('ApiResponse', () => {
+describe('api response', () => {
   describe('json', () => {
     it('should create a JSON response with data', () => {
       const data = { message: 'Hello, World!', status: 'success' }

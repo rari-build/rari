@@ -493,7 +493,7 @@ export function rariRouter(options: RariRouterPluginOptions = {}): RariPlugin {
         let index = 0
         let active = 0
 
-        await new Promise<void>(resolveAll => {
+        await new Promise<void>(resolve => {
           const next = () => {
             while (active < concurrency && index < dynamicRoutes.length) {
               const taskIndex = index++
@@ -518,13 +518,13 @@ export function rariRouter(options: RariRouterPluginOptions = {}): RariPlugin {
                   )
                 } finally {
                   active--
-                  if (index >= dynamicRoutes.length && active === 0) resolveAll()
+                  if (index >= dynamicRoutes.length && active === 0) resolve()
                   else next()
                 }
               })()
             }
 
-            if (dynamicRoutes.length === 0) resolveAll()
+            if (dynamicRoutes.length === 0) resolve()
           }
 
           next()

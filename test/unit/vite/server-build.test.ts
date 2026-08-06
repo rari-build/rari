@@ -59,7 +59,7 @@ function mockRoutesManifest() {
   })
 }
 
-describe('ServerComponentBuilder', () => {
+describe('server component builder', () => {
   let builder: ServerComponentBuilder
   const mockProjectRoot = '/test/project'
   const mockOptions = {

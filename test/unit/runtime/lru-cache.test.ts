@@ -1,7 +1,7 @@
 import { LruCache } from '@rari/use-cache/runtime/storage/lru'
 import { describe, expect, it } from 'vite-plus/test'
 
-describe('LruCache', () => {
+describe('lru cache', () => {
   it('throws TypeError when maxSize is zero or below', () => {
     expect(() => new LruCache<string, number>(0)).toThrow(TypeError)
     expect(() => new LruCache<string, number>(-1)).toThrow(TypeError)
