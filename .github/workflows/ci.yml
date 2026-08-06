@@ -59,7 +59,8 @@ jobs:
               - 'package.json'
               - 'vite.config.ts'
               - 'playwright.config.ts'
-              - 'eslint.config.js'
+              - 'eslint.config.ts'
+              - '.config/lint/monorepo.ts'
               - '.github/workflows/ci.yml'
             rust:
               - '.github/workflows/ci.yml'
@@ -212,6 +213,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: runner.os == 'Windows'
+        with:
+          persist-credentials: false
 
       - uses: namespacelabs/nscloud-checkout-action@445c25d7009680597d73eb03c4e1cd5be522ed73 # v9.0.0
         if: runner.os != 'Windows'
@@ -353,6 +356,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - uses: ./.github/actions/setup-platform-cache
         with:
@@ -525,6 +530,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: runner.os == 'Windows'
+        with:
+          persist-credentials: false
 
       - uses: namespacelabs/nscloud-checkout-action@445c25d7009680597d73eb03c4e1cd5be522ed73 # v9.0.0
         if: runner.os != 'Windows'
