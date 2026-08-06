@@ -15,6 +15,12 @@ declare global {
   var __rariUseCacheRemoteCounts: Map<string, number> | undefined
 }
 
+function resetRemoteCallCounts(): Map<string, number> {
+  const counts = new Map<string, number>()
+  globalThis.__rariUseCacheRemoteCounts = counts
+  return counts
+}
+
 function bumpRemoteCallCount(scope: string, label: string): number {
   const key = `${scope}:${label}`
   globalThis.__rariUseCacheRemoteCounts ??= new Map()
@@ -37,14 +43,14 @@ export default async function UseCacheRemotePage({
 }>) {
   setTestStorageBackend(normalizeBackend(searchParams?.backend))
   const cacheScope = searchParams?.case ?? 'default'
-  globalThis.__rariUseCacheRemoteCounts = new Map()
+  const remoteCounts = resetRemoteCallCounts()
 
   const result1 = await getCachedData('first', cacheScope)
   const result2 = await getCachedData('first', cacheScope)
   const result3 = await getCachedData('second', cacheScope)
 
   const uniqueLabels = new Set(
-    [...globalThis.__rariUseCacheRemoteCounts.keys()]
+    [...remoteCounts.keys()]
       .filter(key => key.startsWith(`${cacheScope}:`))
       .map(key => key.slice(cacheScope.length + 1)),
   )

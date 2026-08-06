@@ -1,7 +1,7 @@
 'use client'
 
 import type { Todo } from '@/actions/todo-actions'
-import { useRef, useState, useTransition } from 'react'
+import { useState, useTransition } from 'react'
 import { clearCompleted, deleteTodo, resetTodos, toggleTodo } from '@/actions/todo-actions'
 
 interface TodoListProps {
@@ -15,11 +15,11 @@ export default function TodoList({ initialTodos, onUpdate }: TodoListProps) {
   const [error, setError] = useState<string | null>(null)
 
   const todosKey = initialTodos.map(t => `${t.id}:${t.completed}:${t.text}`).join('|')
-  const prevKeyRef = useRef(todosKey)
+  const [prevTodosKey, setPrevTodosKey] = useState(todosKey)
 
-  if (prevKeyRef.current !== todosKey) {
+  if (todosKey !== prevTodosKey) {
+    setPrevTodosKey(todosKey)
     setTodos(initialTodos)
-    prevKeyRef.current = todosKey
   }
 
   const handleToggle = (id: string) => {

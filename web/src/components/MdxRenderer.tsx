@@ -1,4 +1,4 @@
-import type { ComponentProps } from 'react'
+import type { ComponentProps, ComponentType } from 'react'
 import type { BlogMetadata } from '@/lib/metadata'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -65,7 +65,9 @@ export default async function MdxRenderer({
   const content = findContentFile(filePath)
   if (content == null || content === '') return <NotFoundPage />
 
-  // eslint-disable-next-line react/error-boundaries
+  let MDXContent: ComponentType
+  let blogMetadata: BlogMetadata | undefined
+
   try {
     const highlighter = await getHighlighter()
     const remarkPlugins: any[] = [
@@ -74,30 +76,31 @@ export default async function MdxRenderer({
     ]
 
     const isBlogPost = filePath.startsWith('blog/')
-    const blogMetadata = isBlogPost ? extractBlogMetadata(content) : undefined
+    blogMetadata = isBlogPost ? extractBlogMetadata(content) : undefined
 
-    const { default: MDXContent } = await evaluate(content, {
+    const evaluated = await evaluate(content, {
       ...runtime,
       baseUrl: import.meta.url,
       development: false,
       remarkPlugins,
       components: createMdxComponents(filePath, blogMetadata),
     })
-
-    return (
-      <div
-        className={`prose max-w-none overflow-hidden ${className}`}
-        style={{
-          wordWrap: 'break-word',
-          overflowWrap: 'break-word',
-        }}
-      >
-        {pathname != null && pathname !== '' && <Breadcrumbs pathname={pathname} />}
-        <MDXContent />
-      </div>
-    )
+    MDXContent = evaluated.default
   } catch (error) {
     console.error('Error rendering MDX:', error)
     throw error
   }
+
+  return (
+    <div
+      className={`prose max-w-none overflow-hidden ${className}`}
+      style={{
+        wordWrap: 'break-word',
+        overflowWrap: 'break-word',
+      }}
+    >
+      {pathname != null && pathname !== '' && <Breadcrumbs pathname={pathname} />}
+      <MDXContent />
+    </div>
+  )
 }

@@ -458,11 +458,11 @@ function useResetOnPathnameChange<T>(
   initialValue: T,
   pathname: string,
 ): [T, Dispatch<SetStateAction<T>>] {
-  const lastPathnameRef = useRef(pathname)
+  const [prevPathname, setPrevPathname] = useState(pathname)
   const [value, setValue] = useState(initialValue)
 
-  if (pathname !== lastPathnameRef.current) {
-    lastPathnameRef.current = pathname
+  if (pathname !== prevPathname) {
+    setPrevPathname(pathname)
     setValue(initialValue)
     return [initialValue, setValue]
   }

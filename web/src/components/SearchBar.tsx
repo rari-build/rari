@@ -27,9 +27,9 @@ export default function SearchBar() {
 
   const results = useMemo(() => (query.trim() ? rawResults : []), [query, rawResults])
 
-  const queryRef = useRef(query)
-  if (queryRef.current !== query) {
-    queryRef.current = query
+  const [prevQuery, setPrevQuery] = useState(query)
+  if (query !== prevQuery) {
+    setPrevQuery(query)
     if (selectedIndex !== 0) setSelectedIndex(0)
   }
 
