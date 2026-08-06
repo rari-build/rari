@@ -57,14 +57,19 @@ describe('analysis goldens (shared with Rust)', () => {
 
     for (const testCase of fixture.cases) {
       const directives = getDirectives(testCase.source)
-      expect(directives.hasUseClient, testCase.id).toBe(testCase.hasUseClient)
-      expect(directives.hasUseServer, testCase.id).toBe(testCase.hasUseServer)
-      expect(hasTopLevelUseClientDirective(testCase.source), testCase.id).toBe(
-        testCase.topLevelUseClient,
-      )
-      expect(hasTopLevelUseServerDirective(testCase.source), testCase.id).toBe(
-        testCase.topLevelUseServer,
-      )
+      expect({
+        id: testCase.id,
+        hasUseClient: directives.hasUseClient,
+        hasUseServer: directives.hasUseServer,
+        topLevelUseClient: hasTopLevelUseClientDirective(testCase.source),
+        topLevelUseServer: hasTopLevelUseServerDirective(testCase.source),
+      }).toEqual({
+        id: testCase.id,
+        hasUseClient: testCase.hasUseClient,
+        hasUseServer: testCase.hasUseServer,
+        topLevelUseClient: testCase.topLevelUseClient,
+        topLevelUseServer: testCase.topLevelUseServer,
+      })
     }
   })
 })

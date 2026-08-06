@@ -1,7 +1,7 @@
 import { RariRequest } from '@rari/proxy/http/request'
 import { describe, expect, it } from 'vite-plus/test'
 
-describe('RariRequest', () => {
+describe('rari request', () => {
   describe('constructor', () => {
     it('should create request from string URL', () => {
       const req = new RariRequest('https://example.com/path')

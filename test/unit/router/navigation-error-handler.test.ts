@@ -65,7 +65,7 @@ describe('createNavigationError', () => {
     })
   })
 
-  describe('HTTP status errors', () => {
+  describe('http status errors', () => {
     it('should create not-found error for 404', () => {
       const error = httpError('Not found', 404)
 
@@ -235,7 +235,7 @@ describe('createNavigationError', () => {
   })
 })
 
-describe('NavigationErrorHandler', () => {
+describe('navigation error handler', () => {
   let handler: NavigationErrorHandler
   let onErrorSpy: ReturnType<typeof vi.fn<(error: any) => void>>
   let onRetrySpy: ReturnType<typeof vi.fn<(attempt: number, error: any) => void>>

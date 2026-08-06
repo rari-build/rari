@@ -24,6 +24,16 @@ import './shared/types'
 // @ts-expect-error - virtual module resolved by Vite
 import 'virtual:rsc-integration.ts'
 
+function createElementWithChildren<P extends { readonly children?: React.ReactNode }>(
+  // oxlint-disable-next-line typescript/prefer-readonly-parameter-types -- React.ComponentType is not a readonly object type
+  type: React.ComponentType<P>,
+  props: Readonly<Omit<P, 'children'>>,
+  children: React.ReactNode,
+): React.ReactElement {
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Omit children from props; pass via createElement children arg
+  return React.createElement(type, props as P, children)
+}
+
 function showHydrationFailureMessage(container: Element, message: string): void {
   if (container.querySelector('.rari-error[data-rari-hydration-failure]')) return
 
@@ -258,15 +268,15 @@ export async function renderApp(): Promise<void> {
         let hydrationContent: React.ReactNode = React.createElement(AppRouterProvider, {
           initialPayload: { element },
         })
-        hydrationContent = React.createElement(
+        hydrationContent = createElementWithChildren(
           ClientRouter,
-          // eslint-disable-next-line react/jsx-no-children-prop
-          { initialRoute: window.location.pathname, children: hydrationContent },
+          { initialRoute: window.location.pathname },
+          hydrationContent,
         )
-        hydrationContent = React.createElement(
+        hydrationContent = createElementWithChildren(
           RouterProvider,
-          // eslint-disable-next-line react/jsx-no-children-prop
-          { initialPathname: window.location.pathname, children: hydrationContent },
+          { initialPathname: window.location.pathname },
+          hydrationContent,
         )
 
         mountApp(rootElement, hydrationContent)
@@ -363,15 +373,15 @@ export async function renderApp(): Promise<void> {
     let content: React.ReactNode = React.createElement(AppRouterProvider, {
       initialPayload: { element },
     })
-    content = React.createElement(
+    content = createElementWithChildren(
       ClientRouter,
-      // eslint-disable-next-line react/jsx-no-children-prop
-      { initialRoute: window.location.pathname, children: content },
+      { initialRoute: window.location.pathname },
+      content,
     )
-    content = React.createElement(
+    content = createElementWithChildren(
       RouterProvider,
-      // eslint-disable-next-line react/jsx-no-children-prop
-      { initialPathname: window.location.pathname, children: content },
+      { initialPathname: window.location.pathname },
+      content,
     )
 
     mountApp(rootElement, content)

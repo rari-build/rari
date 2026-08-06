@@ -241,7 +241,7 @@ describe('generateAppRouteManifest', () => {
     })
   })
 
-  describe('OG images', () => {
+  describe('og images', () => {
     it('should detect opengraph-image file', async () => {
       vi.mocked(fs.readdir).mockResolvedValueOnce(mockReaddir(['opengraph-image.tsx']))
       vi.mocked(fs.stat).mockResolvedValue(FILE_STAT)
@@ -300,7 +300,7 @@ describe('generateAppRouteManifest', () => {
     })
   })
 
-  describe('API routes', () => {
+  describe('api routes', () => {
     it('should detect route file', async () => {
       vi.mocked(fs.readdir).mockResolvedValueOnce(mockReaddir(['route.ts']))
       vi.mocked(fs.stat).mockResolvedValue(FILE_STAT)
@@ -472,7 +472,7 @@ describe('generateAppRouteManifest', () => {
     })
   })
 
-  describe('API route sorting', () => {
+  describe('api route sorting', () => {
     it('should sort static API routes before dynamic', async () => {
       vi.mocked(fs.readdir)
         .mockResolvedValueOnce(mockReaddir(['api', '[id]']))

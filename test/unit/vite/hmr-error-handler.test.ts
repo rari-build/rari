@@ -1,7 +1,7 @@
 import { HMRErrorHandler } from '@rari/vite/hmr/error-handler'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 
-describe('HMRErrorHandler', () => {
+describe('hmr error handler', () => {
   let handler: HMRErrorHandler
 
   beforeEach(() => {

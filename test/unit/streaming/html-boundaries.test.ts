@@ -52,7 +52,7 @@ function assertAllSplits(full: string) {
       true,
     )
     const first = states[0]
-    if (first.state !== 'outside') expect(first.safe).toBe(false)
+    expect(first.state === 'outside' || !first.safe).toBe(true)
   }
 }
 

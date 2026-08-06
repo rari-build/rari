@@ -176,6 +176,6 @@ export async function clearCompleted() {
 
 export async function resetTodos() {
   const id = await getSessionId()
-  const todos = updateSessionTodos(id, () => DEFAULT_TODOS.map(t => ({ ...t })))
+  const todos = updateSessionTodos(id, () => DEFAULT_TODOS.map(t => Object.assign({}, t)))
   return { success: true, todos }
 }

@@ -532,6 +532,7 @@ export default function Sidebar({ version }: SidebarProps) {
       <label
         htmlFor="mobile-menu-toggle"
         className="peer-checked:fixed peer-checked:inset-0 peer-checked:bg-overlay peer-checked:z-20 hidden peer-checked:block lg:hidden"
+        aria-label="Close navigation menu"
       />
 
       <label

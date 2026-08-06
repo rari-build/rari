@@ -1,7 +1,7 @@
 import { RariResponse } from '@rari/proxy/http/response'
 import { describe, expect, it } from 'vite-plus/test'
 
-describe('RariResponse', () => {
+describe('rari response', () => {
   describe('constructor', () => {
     it('should create response with no body', () => {
       const res = new RariResponse()

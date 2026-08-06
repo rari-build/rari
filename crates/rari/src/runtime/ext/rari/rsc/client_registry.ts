@@ -188,11 +188,11 @@ function extractComponentNameFromPath(componentPath: string): string | null {
 }
 
 function listClientComponents(): Record<string, ComponentInfo> {
-  return { ...(g['~clientComponents'] ?? {}) }
+  return { ...g['~clientComponents'] }
 }
 
 function listClientComponentNames(): Record<string, string> {
-  return { ...(g['~clientComponentNames'] ?? {}) }
+  return { ...g['~clientComponentNames'] }
 }
 
 function clearClientComponents(): void {

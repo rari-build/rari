@@ -228,6 +228,7 @@ function toLoadError(error: unknown): Error {
 
 function createSuspenseThrowable(promise: Promise<any>, id: string): Error {
   return Object.assign(new Error(`[rari] Lazy component "${id}" is loading`), {
+    // oxlint-disable-next-line unicorn/no-thenable -- React Suspense requires a thenable Error
     then: promise.then.bind(promise),
   })
 }

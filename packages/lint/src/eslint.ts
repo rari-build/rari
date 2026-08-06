@@ -36,7 +36,7 @@ const oxlintBridge = oxlint
   .map(config => {
     if (!config.rules) return config
 
-    const rules = { ...config.rules }
+    const rules = Object.assign({}, config.rules)
     for (const [name, value] of Object.entries(config.rules)) {
       if (name.startsWith('@typescript-eslint/'))
         rules[`ts/${name.slice('@typescript-eslint/'.length)}`] = value
@@ -45,10 +45,7 @@ const oxlintBridge = oxlint
         rules[`react/${name.slice('@eslint-react/'.length)}`] = value
     }
 
-    return {
-      ...config,
-      rules,
-    }
+    return Object.assign({}, config, { rules })
   })
 
 const recommendedTypescript = withReactPrefix(react.configs['recommended-typescript'])

@@ -88,6 +88,7 @@ export default function Image({ params }: PageProps<{ readonly slug: string }>) 
         }}
       >
         <img
+          alt=""
           src="https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=400&h=500&fit=crop"
           style={{
             width: '100%',

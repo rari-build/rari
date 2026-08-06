@@ -53,7 +53,7 @@ async function runCLI(
   })
 }
 
-describe('CLI Integration Tests', () => {
+describe('cli integration tests', () => {
   it('should have CLI built', () => {
     expect(existsSync(CLI_PATH)).toBe(true)
   })

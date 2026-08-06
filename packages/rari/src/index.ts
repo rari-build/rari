@@ -1,3 +1,4 @@
+// oxlint-disable-next-line typescript/no-useless-empty-export -- side-effect import of ambient declarations
 export type {} from './ambient'
 
 export { RariRequest } from './proxy/http/request'

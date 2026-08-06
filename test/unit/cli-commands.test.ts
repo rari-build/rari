@@ -1,11 +1,11 @@
 import type { Buffer } from 'node:buffer'
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { resolve as resolvePath } from 'node:path'
 import process from 'node:process'
 import { describe, expect, it } from 'vite-plus/test'
 
-const CLI_PATH = resolve(process.cwd(), 'packages/rari/dist/cli.mjs')
+const CLI_PATH = resolvePath(process.cwd(), 'packages/rari/dist/cli.mjs')
 
 async function runCLI(
   args: readonly string[],
@@ -26,6 +26,7 @@ async function runCLI(
       if (resolved) return
       resolved = true
       clearTimeout(timeoutId)
+      // oxlint-disable-next-line promise/no-multiple-resolved -- guarded above; close/error/timeout may race
       resolve(result)
     }
 

@@ -47,7 +47,7 @@ function isHmrErrorEventPayload(value: unknown): value is HmrErrorEventPayload {
   )
 }
 
-describe('HMRCoordinator', () => {
+describe('hmr coordinator', () => {
   const TEST_DEBOUNCE_MS = 300
   const TEST_PORT = Number(
     process.env.PORT != null && process.env.PORT !== '' ? process.env.PORT : 3000,

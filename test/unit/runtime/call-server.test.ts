@@ -111,8 +111,11 @@ describe('callServer', () => {
     expect(firstCall).toBeDefined()
     const requestInit = firstCall[1]!
     const headers = requestInit.headers
-    if (headers != null && !(headers instanceof Headers) && !Array.isArray(headers))
-      expect(headers['Content-Type']).toBeUndefined()
+    const contentType =
+      headers != null && !(headers instanceof Headers) && !Array.isArray(headers)
+        ? headers['Content-Type']
+        : undefined
+    expect(contentType).toBeUndefined()
   })
 
   it('follows x-action-redirect without decoding Flight', async () => {
