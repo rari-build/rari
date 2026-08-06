@@ -1,7 +1,7 @@
 {
   "name": "@rari/lint",
   "type": "module",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Lint and format configs for the rari framework",
   "author": "Ryan Skinner",
   "license": "MIT",
