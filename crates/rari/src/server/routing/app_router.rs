@@ -6,8 +6,6 @@ use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 
-#[cfg(test)]
-use crate::server::routing::types::RouteSegmentType;
 use crate::server::routing::types::{ParamValue, RouteSegment};
 
 fn parse_decoded_path_segments(path: &str) -> Vec<String> {
@@ -661,6 +659,7 @@ impl AppRouter {
 #[expect(clippy::unwrap_used)]
 mod tests {
     use super::*;
+    use crate::server::routing::types::RouteSegmentType;
 
     fn build_minimal_manifest() -> AppRouteManifest {
         AppRouteManifest {

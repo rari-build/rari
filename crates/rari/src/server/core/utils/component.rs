@@ -240,8 +240,8 @@ pub fn get_dist_path_for_component(file_path: &str) -> Result<PathBuf, RariError
 }
 
 #[cfg(test)]
-#[expect(clippy::unwrap_used, clippy::expect_used)]
-mod analysis_golden_tests {
+#[expect(clippy::expect_used, clippy::unwrap_used)]
+mod tests {
     use std::{fs, path::PathBuf};
 
     use serde::Deserialize;

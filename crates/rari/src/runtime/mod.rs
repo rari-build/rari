@@ -282,7 +282,7 @@ impl JsExecutionRuntime {
 
 #[cfg(test)]
 #[expect(clippy::expect_used)]
-mod overlapping_stream_tests {
+mod tests {
     use std::{
         sync::Arc,
         time::{Duration, Instant},

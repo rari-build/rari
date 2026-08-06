@@ -104,11 +104,6 @@ impl ApiRouteHandler {
         &self.runtime
     }
 
-    #[cfg(test)]
-    pub fn clear_cache(&self) {
-        self.handler_cache.clear();
-    }
-
     pub fn invalidate_handler(&self, file_path: &str) {
         self.handler_cache.remove(&create_component_id(file_path));
     }

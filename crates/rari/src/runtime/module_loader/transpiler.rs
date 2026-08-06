@@ -11,11 +11,6 @@ pub fn needs_jsx_transpilation(specifier: &str) -> bool {
     specifier.ends_with(JSX_EXTENSION)
 }
 
-#[cfg(test)]
-pub fn needs_transpilation(specifier: &str) -> bool {
-    needs_typescript_transpilation(specifier) || needs_jsx_transpilation(specifier)
-}
-
 pub fn get_module_type(_specifier: &str) -> &'static str {
     "module"
 }
@@ -23,6 +18,10 @@ pub fn get_module_type(_specifier: &str) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn needs_transpilation(specifier: &str) -> bool {
+        needs_typescript_transpilation(specifier) || needs_jsx_transpilation(specifier)
+    }
 
     #[test]
     fn test_typescript_detection() {
