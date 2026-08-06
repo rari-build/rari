@@ -52,6 +52,7 @@ interface HMRFailure {
   readonly type: 'fetch' | 'parse' | 'stale' | 'network'
   readonly details: string
   readonly filePath?: string
+  readonly consecutiveFailures: number
 }
 
 function isFlightThenable(value: unknown): value is Thenable<React.ReactNode> {
@@ -106,8 +107,7 @@ export function AppRouterProvider({
 }: AppRouterProviderProps) {
   const [rscPayload, setRscPayload] = useState(initialPayload)
   const rscPayloadRef = useRef(initialPayload)
-  // eslint-disable-next-line react/use-state
-  const setRenderKey = useState(0)[1]
+  const [_renderKey, setRenderKey] = useState(0)
   const scrollPositionRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
   const formDataRef = useRef<Map<string, FormData>>(new Map())
   const preloadedModuleIdsRef = useRef<Set<string>>(new Set())
@@ -189,16 +189,18 @@ export function AppRouterProvider({
     details: string,
     filePath?: string,
   ) => {
+    consecutiveFailuresRef.current += 1
+
     const failure: HMRFailure = {
       timestamp: Date.now(),
       error,
       type,
       details,
       filePath,
+      consecutiveFailures: consecutiveFailuresRef.current,
     }
 
     failureHistoryRef.current.push(failure)
-    consecutiveFailuresRef.current += 1
 
     if (failureHistoryRef.current.length > 10) failureHistoryRef.current.shift()
 
@@ -678,7 +680,7 @@ export function AppRouterProvider({
       window.removeEventListener('rari:rsc-invalidate', onRscInvalidate)
       window.removeEventListener('rari:app-router-manifest-updated', onManifestUpdated)
     }
-  }, []) // eslint-disable-line react/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -724,7 +726,7 @@ export function AppRouterProvider({
           typeof item === 'boolean',
       )
     )
-      contentToRender = React.createElement(React.Fragment, null, ...items)
+      contentToRender = <>{items}</>
   }
 
   return (
@@ -766,7 +768,7 @@ export function AppRouterProvider({
             {hmrError.details}
           </div>
           <div style={{ marginBottom: '12px', fontSize: '12px', opacity: 0.7 }}>
-            Consecutive failures: {consecutiveFailuresRef.current} / {MAX_RETRIES}
+            Consecutive failures: {hmrError.consecutiveFailures} / {MAX_RETRIES}
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
             <button

@@ -4,6 +4,10 @@ declare global {
   var __rariUseCacheTestCounter: { total: number } | undefined
 }
 
+function resetCallCount(): void {
+  globalThis.__rariUseCacheTestCounter = { total: 0 }
+}
+
 function bumpCallCount(): number {
   globalThis.__rariUseCacheTestCounter ??= { total: 0 }
   globalThis.__rariUseCacheTestCounter.total += 1
@@ -18,7 +22,7 @@ async function getCachedData(label: string) {
 }
 
 export default async function UseCachePage() {
-  globalThis.__rariUseCacheTestCounter = { total: 0 }
+  resetCallCount()
 
   const result1 = await getCachedData('first')
   const result2 = await getCachedData('first')

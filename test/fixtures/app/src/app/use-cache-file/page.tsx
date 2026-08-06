@@ -1,8 +1,12 @@
 import type { Metadata } from 'rari'
 import { getCachedData } from './cached-helpers'
 
-export default async function UseCacheFilePage() {
+function resetCallCount(): void {
   globalThis.__rariUseCacheFileCounter = { total: 0 }
+}
+
+export default async function UseCacheFilePage() {
+  resetCallCount()
 
   const result1 = await getCachedData('first')
   const result2 = await getCachedData('first')

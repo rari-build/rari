@@ -633,6 +633,7 @@ export const lint: OxlintConfig = {
         'react/no-array-index-key': 'warn',
         'react/no-clone-element': 'warn',
         'react/no-direct-mutation-state': 'error',
+        'react/react-compiler': 'error',
         'react/rules-of-hooks': 'error',
         'react/jsx-no-comment-textnodes': 'warn',
         'react/only-export-components': [
