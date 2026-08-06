@@ -1,7 +1,7 @@
 import type { Linter } from 'eslint'
 import type { OxfmtConfig } from 'vite-plus/fmt'
 import type { OxlintConfig } from 'vite-plus/lint'
-import { fmt as rariFmt, lint as rariLint } from '@rari/lint/vite'
+import { fmt as rariFmt, lint as rariLint } from '../../packages/lint/src/vite'
 
 export const monorepoIgnorePatterns: string[] = [
   'packages/*/bin',
