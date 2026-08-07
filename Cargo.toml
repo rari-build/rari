@@ -168,3 +168,8 @@ strip = "symbols"
 [profile.release-debug]
 debug = true
 inherits = "release"
+
+# crates.io zune-jpeg 0.5.14/0.5.15 omit `;` after warn! in an if/else (breaks nightly).
+# Upstream fixed this; drop the patch once >=0.5.16 is on crates.io.
+[patch.crates-io]
+zune-jpeg = { git = "https://github.com/etemesi254/zune-image", rev = "0346b875169ed528e206441c97899d99002e17ca" }
