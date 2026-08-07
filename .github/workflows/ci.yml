@@ -45,7 +45,7 @@ jobs:
         with:
           fetch-depth: '0'
 
-      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
         with:
           filters: |
@@ -209,7 +209,8 @@ jobs:
       matrix:
         os: [namespace-profile-rari-linux-amd64, namespace-profile-rari-windows-amd64]
         exclude:
-          - os: ${{ github.event_name == 'merge_group' && 'namespace-profile-rari-windows-amd64' || '' }}
+          - os: ${{ github.event_name == 'merge_group' &&
+              'namespace-profile-rari-windows-amd64' || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: runner.os == 'Windows'
@@ -298,7 +299,8 @@ jobs:
   build-use-cache-addon-linux:
     name: Build rari_use_cache.node (linux-x64)
     needs: [changes]
-    if: needs.changes.outputs.use_cache_crate == 'true' || needs.changes.outputs.src == 'true'
+    if: needs.changes.outputs.use_cache_crate == 'true' || needs.changes.outputs.src
+      == 'true'
     runs-on: namespace-profile-rari-linux-amd64
     timeout-minutes: 20
     permissions:
@@ -348,7 +350,8 @@ jobs:
   build-use-cache-addon-windows:
     name: Build rari_use_cache.node (win32-x64)
     needs: [changes]
-    if: (needs.changes.outputs.use_cache_crate == 'true' || needs.changes.outputs.src == 'true') && github.event_name != 'merge_group'
+    if: (needs.changes.outputs.use_cache_crate == 'true' ||
+      needs.changes.outputs.src == 'true') && github.event_name != 'merge_group'
     runs-on: namespace-profile-rari-windows-amd64
     timeout-minutes: 20
     permissions:
@@ -525,7 +528,8 @@ jobs:
         os: [namespace-profile-rari-linux-amd64, namespace-profile-rari-windows-amd64]
         node: [22.18.0]
         exclude:
-          - os: ${{ github.event_name == 'merge_group' && 'namespace-profile-rari-windows-amd64' || '' }}
+          - os: ${{ github.event_name == 'merge_group' &&
+              'namespace-profile-rari-windows-amd64' || '' }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -554,12 +558,14 @@ jobs:
           path: packages
 
       - uses: ./.github/actions/restore-use-cache-addon
-        if: runner.os == 'Linux' && needs.build-use-cache-addon-linux.result == 'success'
+        if: runner.os == 'Linux' && needs.build-use-cache-addon-linux.result ==
+          'success'
         with:
           platform: linux-x64
 
       - uses: ./.github/actions/restore-use-cache-addon
-        if: runner.os == 'Windows' && needs.build-use-cache-addon-windows.result == 'success'
+        if: runner.os == 'Windows' && needs.build-use-cache-addon-windows.result ==
+          'success'
         with:
           platform: win32-x64
 
