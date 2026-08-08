@@ -1,3 +1,21 @@
+## [rari@0.15.9] - 2026-08-08
+
+### 🚜 Refactor
+
+- replace useRef with useState for tracking previous values in various components by @skiniks
+- improve component state management and enhance accessibility in SearchBar and Sidebar components by @skiniks
+
+### 🧪 Testing
+
+- *(rust)* standardize unit tests under mod tests by @skiniks
+
+### ⚙️ Miscellaneous Tasks
+
+- *(rari)* bump version to 0.15.9 by @skiniks
+- *(dependencies)* update @rari/use-cache and related packages to version 0.15.9 by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.15.8...rari@0.15.9
 ## [rari@0.15.8] - 2026-08-05
 
 ## Highlights
