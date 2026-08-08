@@ -1,3 +1,15 @@
+## [@rari/use-cache@0.15.9] - 2026-08-08
+
+### 🧪 Testing
+
+- *(rust)* standardize unit tests under mod tests by @skiniks
+
+### ⚙️ Miscellaneous Tasks
+
+- *(dependencies)* update @rari/use-cache packages to version 0.15.9 by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/@rari/use-cache@0.15.8...@rari/use-cache@0.15.9
 ## [@rari/use-cache@0.15.8] - 2026-08-05
 
 ## Highlights
