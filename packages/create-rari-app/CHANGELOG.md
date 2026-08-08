@@ -1,3 +1,12 @@
+## [create-rari-app@0.5.21] - 2026-08-08
+
+### ⚙️ Miscellaneous Tasks
+
+- *(dependencies)* update various package versions and improve CI configuration by @skiniks
+- *(dependencies)* update rari to version 0.15.9 by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/create-rari-app@0.5.20...create-rari-app@0.5.21
 ## [create-rari-app@0.5.20] - 2026-08-05
 
 ### ⚙️ Miscellaneous Tasks
