@@ -60,31 +60,43 @@ rari delivers exceptional performance that significantly outperforms traditional
 
 ### Head-to-Head Comparison vs Next.js
 
-> Benchmarks last updated: May 25, 2026 (rari v0.13.11)
+> Benchmarks last updated: August 10, 2026 (rari v0.15.9)
 
 **Response Time (Single Request):**
 
 | Metric          | rari       | Next.js | Improvement      |
 | --------------- | ---------- | ------- | ---------------- |
-| **Average**     | **0.12ms** | 2.17ms  | **18.1x faster** |
-| **P95**         | 0.16ms     | 2.37ms  | **14.8x faster** |
-| **Bundle Size** | 285 KB     | 634 KB  | **55% smaller**  |
+| **Average**     | **0.12ms** | 1.74ms  | **14.5x faster** |
+| **P95**         | **0.12ms** | 2.44ms  | **20.3x faster** |
+| **Bundle Size** | 287 KB     | 573 KB  | **50% smaller**  |
 
 **Throughput Under Load (50 concurrent connections, 30s):**
 
 | Metric           | rari       | Next.js | Improvement      |
 | ---------------- | ---------- | ------- | ---------------- |
-| **Requests/sec** | **97,826** | 1,452   | **67.4x higher** |
-| **Avg Latency**  | **0.51ms** | 34.46ms | **67.6x faster** |
-| **P95 Latency**  | **0.82ms** | 43.41ms | **52.9x faster** |
+| **Requests/sec** | **89,371** | 1,683   | **53.1x higher** |
+| **Avg Latency**  | **0.56ms** | 29.73ms | **53.1x faster** |
+| **P95 Latency**  | **0.90ms** | 36.70ms | **40.8x faster** |
 | **Errors**       | 0          | 0       | Stable           |
 
 **Build Performance:**
 
 | Metric          | rari      | Next.js | Improvement     |
 | --------------- | --------- | ------- | --------------- |
-| **Build Time**  | **1.75s** | 4.42s   | **2.5x faster** |
-| **Bundle Size** | 285 KB    | 634 KB  | **55% smaller** |
+| **Build Time**  | **1.12s** | 3.88s   | **3.5x faster** |
+| **Bundle Size** | 287 KB    | 573 KB  | **50% smaller** |
+
+**Streaming (`/stream`, Suspense):**
+
+| Metric             | rari    | Next.js | Improvement      |
+| ------------------ | ------- | ------- | ---------------- |
+| **TTFB**           | **1ms** | 12ms    | **11.1x faster** |
+| **First content**  | 107ms   | 108ms   | Comparable       |
+| **Last byte**      | 1007ms  | 1009ms  | Comparable\*     |
+| **Resolved cards** | 10/10   | 10/10   | —                |
+| **Throughput**     | 24.99/s | 24.99/s | 1.0x             |
+
+\*Last-byte time is dominated by intentional ~1000ms card delays, not framework overhead.
 
 All benchmarks are reproducible. See [benchmarks/](https://github.com/rari-build/benchmarks) for methodology and tools.
 
