@@ -523,7 +523,10 @@ impl Config {
         }
 
         if let Ok(origin) = env::var("RARI_ORIGIN") {
-            config.server.origin = Some(origin);
+            let origin = origin.trim().trim_end_matches('/');
+            if !origin.is_empty() {
+                config.server.origin = Some(origin.to_string());
+            }
         }
 
         if let Ok(vite_host) = env::var("RARI_VITE_HOST") {
@@ -687,7 +690,7 @@ impl Config {
                 if config.server.origin.is_none()
                     && let Some(origin) = config_data.get("origin").and_then(Value::as_str)
                 {
-                    let origin = origin.trim();
+                    let origin = origin.trim().trim_end_matches('/');
                     if !origin.is_empty() {
                         config.server.origin = Some(origin.to_string());
                     }
@@ -1265,12 +1268,16 @@ mod tests {
         // test so parallel suite workers cannot race on this process-global var.
         unsafe { env::remove_var("RARI_ORIGIN") };
 
-        fs::write(dist_server_dir.join("config.json"), r#"{"origin":"https://rari.build"}"#)
+        fs::write(dist_server_dir.join("config.json"), r#"{"origin":"https://rari.build/"}"#)
             .unwrap();
         let from_json = Config::from_env_with_base(Some(&temp_dir)).unwrap();
         assert_eq!(from_json.server.origin.as_deref(), Some("https://rari.build"));
 
-        unsafe { env::set_var("RARI_ORIGIN", "https://preview.example") };
+        unsafe { env::set_var("RARI_ORIGIN", "   ") };
+        let blank_env = Config::from_env_with_base(Some(&temp_dir)).unwrap();
+        assert_eq!(blank_env.server.origin.as_deref(), Some("https://rari.build"));
+
+        unsafe { env::set_var("RARI_ORIGIN", "https://preview.example/") };
         let from_env = Config::from_env_with_base(Some(&temp_dir)).unwrap();
         assert_eq!(from_env.server.origin.as_deref(), Some("https://preview.example"));
 
