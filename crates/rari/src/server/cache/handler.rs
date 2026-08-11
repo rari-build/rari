@@ -770,7 +770,7 @@ mod tests {
     async fn test_noop_get_all_keys() {
         let handler = NoOpCacheHandler;
         handler.set("k", b"v".to_vec(), 60).await.unwrap();
-        assert!(handler.get_all_keys().is_empty());
+        assert_eq!(handler.get_all_keys(), Vec::<String>::new());
     }
 
     #[tokio::test]

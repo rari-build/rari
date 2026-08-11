@@ -272,7 +272,7 @@ mod tests {
             chunks.push(chunk.unwrap());
         }
 
-        assert!(!chunks.is_empty());
+        assert_ne!(chunks, Vec::<Bytes>::new());
         assert!(chunks.iter().all(|c| !c.is_empty()));
     }
 
@@ -288,7 +288,7 @@ mod tests {
             chunks.push(chunk.unwrap());
         }
 
-        assert!(!chunks.is_empty());
+        assert_ne!(chunks, Vec::<Bytes>::new());
     }
 
     #[tokio::test]
@@ -303,7 +303,7 @@ mod tests {
             chunks.push(chunk.unwrap());
         }
 
-        assert!(!chunks.is_empty());
+        assert_ne!(chunks, Vec::<Bytes>::new());
         assert!(chunks.iter().all(|c| !c.is_empty()));
     }
 
