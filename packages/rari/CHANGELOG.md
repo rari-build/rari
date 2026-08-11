@@ -1,3 +1,26 @@
+## [rari@0.15.10] - 2026-08-11
+
+### 🚀 Features
+
+- *(config)* add support for server origin configuration and enhance base URL handling by @skiniks
+
+### 🐛 Bug Fixes
+
+- *(cache)* add #[expect] attribute to suppress clippy warning for async_trait methods by @skiniks
+- *(vite)* enhance origin handling by introducing env variable support and improving whitespace trimming by @skiniks
+- *(tests)* update assertions to use `assert_eq!` and `assert_ne!` for better clarity in cache and request context tests by @skiniks
+
+### 🚜 Refactor
+
+- *(config)* improve origin handling by trimming whitespace and updating tests for base URL resolution by @skiniks
+
+### ⚙️ Miscellaneous Tasks
+
+- *(dependencies)* bump rari to version 0.15.10 by @skiniks
+- *(dependencies)* update optional dependencies to version 0.15.10 by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.15.9...rari@0.15.10
 ## [rari@0.15.9] - 2026-08-08
 
 ### 🚜 Refactor
