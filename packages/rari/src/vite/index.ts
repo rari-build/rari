@@ -1379,6 +1379,7 @@ ${clientTransformedCode}`
 
         const vitePort = server.config.server.port
         const origin = options.origin?.trim().replace(/\/+$/, '')
+        const envOrigin = process.env.RARI_ORIGIN?.trim().replace(/\/+$/, '')
 
         const args = ['--mode', mode, '--port', serverPort.toString(), '--host', '127.0.0.1']
 
@@ -1397,9 +1398,7 @@ ${clientTransformedCode}`
             (process.env.RARI_JS_POOL_SIZE == null || process.env.RARI_JS_POOL_SIZE === '')
               ? { RARI_JS_POOL_SIZE: String(options.jsPoolSize) }
               : {}),
-            ...(origin != null &&
-            origin !== '' &&
-            (process.env.RARI_ORIGIN == null || process.env.RARI_ORIGIN === '')
+            ...(origin != null && origin !== '' && (envOrigin == null || envOrigin === '')
               ? { RARI_ORIGIN: origin }
               : {}),
             ...(options.htmlLimitedBots != null &&
