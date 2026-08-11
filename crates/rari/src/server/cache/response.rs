@@ -993,7 +993,7 @@ mod tests {
         let policy = RouteCachePolicy::default();
         assert_eq!(policy.ttl, 60);
         assert!(policy.enabled);
-        assert!(policy.tags.is_empty());
+        assert_eq!(policy.tags, Vec::<String>::new());
     }
 
     #[test]

@@ -382,7 +382,7 @@ mod tests {
         let ctx = RequestContext::new("/test".to_string());
 
         assert_eq!(ctx.route_path(), "/test");
-        assert!(!ctx.request_id().is_empty());
+        assert_ne!(ctx.request_id(), "");
         assert!(ctx.elapsed().as_millis() < 100);
     }
 
