@@ -44,5 +44,6 @@ export interface ServerConfig {
   useCache?: ServerUseCacheConfig
   action?: ServerActionConfig
   jsPoolSize?: number
+  origin?: string
   htmlLimitedBots?: string
 }

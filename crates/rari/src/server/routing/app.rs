@@ -303,7 +303,9 @@ async fn inject_og_image_into_metadata(
     metadata: &mut PageMetadata,
     context: &LayoutRenderContext,
 ) {
-    let base_url = get_base_url_from_context(context, &state.config);
+    let Some(base_url) = get_base_url_from_context(context, &state.config) else {
+        return;
+    };
     let current_url = format!("{base_url}{route_path}");
 
     if let Some(ref mut og) = metadata.open_graph {
@@ -367,21 +369,20 @@ async fn inject_og_image_into_metadata(
     }
 }
 
-fn get_base_url_from_context(context: &LayoutRenderContext, config: &Config) -> String {
-    if let Some(host) = context.headers.get("host") {
-        let protocol = context
-            .headers
-            .get("x-forwarded-proto")
-            .or_else(|| context.headers.get("x-forwarded-protocol"))
-            .map(String::as_str)
-            .unwrap_or_else(|| if config.is_production() { "https" } else { "http" });
-
-        format!("{protocol}://{host}")
-    } else if config.is_production() {
-        "https://localhost".to_string()
-    } else {
-        format!("http://localhost:{}", config.server.port)
+fn get_base_url_from_context(context: &LayoutRenderContext, config: &Config) -> Option<String> {
+    if let Some(origin) = config.server.origin.as_deref().map(str::trim).filter(|o| !o.is_empty()) {
+        return Some(origin.trim_end_matches('/').to_string());
     }
+
+    let host = context.headers.get("host")?;
+    let protocol = context
+        .headers
+        .get("x-forwarded-proto")
+        .or_else(|| context.headers.get("x-forwarded-protocol"))
+        .map(String::as_str)
+        .unwrap_or_else(|| if config.is_production() { "https" } else { "http" });
+
+    Some(format!("{protocol}://{host}"))
 }
 
 pub async fn render_with_fallback(
@@ -2005,5 +2006,49 @@ mod tests {
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
 
         let _ = fs::remove_dir_all(public_dir);
+    }
+
+    fn empty_layout_context() -> LayoutRenderContext {
+        LayoutRenderContext {
+            params: FxHashMap::default(),
+            search_params: FxHashMap::default(),
+            headers: FxHashMap::default(),
+            pathname: "/".to_string(),
+            template_navigation_id: None,
+            metadata: None,
+            streaming_head_extra: None,
+        }
+    }
+
+    #[test]
+    fn test_og_base_url_prefers_configured_origin() {
+        let mut config = Config::new(Mode::Production);
+        config.server.origin = Some("https://rari.build/".to_string());
+
+        let mut context = empty_layout_context();
+        context.headers.insert("host".to_string(), "localhost".to_string());
+
+        assert_eq!(
+            get_base_url_from_context(&context, &config).as_deref(),
+            Some("https://rari.build")
+        );
+    }
+
+    #[test]
+    fn test_og_base_url_uses_host_when_origin_unset() {
+        let config = Config::new(Mode::Production);
+        let mut context = empty_layout_context();
+        context.headers.insert("host".to_string(), "rari.build".to_string());
+
+        assert_eq!(
+            get_base_url_from_context(&context, &config).as_deref(),
+            Some("https://rari.build")
+        );
+    }
+
+    #[test]
+    fn test_og_base_url_none_without_host_or_origin() {
+        let config = Config::new(Mode::Production);
+        assert_eq!(get_base_url_from_context(&empty_layout_context(), &config), None);
     }
 }

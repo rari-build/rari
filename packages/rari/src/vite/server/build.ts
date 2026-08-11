@@ -230,6 +230,7 @@ export interface ServerBuildOptions {
   readonly cache?: ServerCacheConfig
   readonly action?: ServerActionConfig
   readonly jsPoolSize?: number
+  readonly origin?: string
   readonly htmlLimitedBots?: string
   readonly moduleAnalysisCache?: ModuleAnalysisCache
   readonly experimental?: {
@@ -254,6 +255,7 @@ type ResolvedServerBuildOptions = Required<
     | 'cache'
     | 'action'
     | 'jsPoolSize'
+    | 'origin'
     | 'htmlLimitedBots'
     | 'define'
     | 'serverConfigPath'
@@ -268,6 +270,7 @@ type ResolvedServerBuildOptions = Required<
   cache?: ServerBuildOptions['cache']
   action?: ServerBuildOptions['action']
   jsPoolSize?: ServerBuildOptions['jsPoolSize']
+  origin?: ServerBuildOptions['origin']
   htmlLimitedBots?: ServerBuildOptions['htmlLimitedBots']
   define?: ServerBuildOptions['define']
   experimental?: ServerBuildOptions['experimental']
@@ -484,6 +487,7 @@ export class ServerComponentBuilder {
       cache: options.cache,
       action: options.action,
       jsPoolSize: options.jsPoolSize,
+      origin: options.origin,
       htmlLimitedBots: options.htmlLimitedBots,
       experimental: options.experimental,
       mdx: options.mdx,
@@ -1452,6 +1456,8 @@ export class ServerComponentBuilder {
     if (this.options.cache) serverConfig.cache = this.options.cache
     if (this.options.action) serverConfig.action = this.options.action
     if (this.options.jsPoolSize != null) serverConfig.jsPoolSize = this.options.jsPoolSize
+    if (this.options.origin != null && this.options.origin !== '')
+      serverConfig.origin = this.options.origin
     if (this.options.htmlLimitedBots != null)
       serverConfig.htmlLimitedBots = this.options.htmlLimitedBots
     if (

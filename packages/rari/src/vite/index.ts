@@ -169,6 +169,7 @@ export interface RariOptions {
     readonly allowedOrigins?: readonly string[]
   }
   readonly jsPoolSize?: number
+  readonly origin?: string
   readonly htmlLimitedBots?: string
   readonly cache?: ServerCacheConfig
   readonly experimental?: {
@@ -1257,6 +1258,7 @@ ${clientTransformedCode}`
             cache: options.cache,
             action: options.action,
             jsPoolSize: options.jsPoolSize,
+            origin: options.origin,
             htmlLimitedBots: options.htmlLimitedBots,
             experimental: options.experimental,
             moduleAnalysisCache,
@@ -1389,10 +1391,15 @@ ${clientTransformedCode}`
                 ? process.env.RUST_LOG
                 : 'error',
             RARI_VITE_PORT: vitePort.toString(),
-            // Dev starts the binary before config.json is written; pass pool size / bots via env.
+            // Dev starts the binary before config.json is written; pass pool size / origin / bots via env.
             ...(options.jsPoolSize != null &&
             (process.env.RARI_JS_POOL_SIZE == null || process.env.RARI_JS_POOL_SIZE === '')
               ? { RARI_JS_POOL_SIZE: String(options.jsPoolSize) }
+              : {}),
+            ...(options.origin != null &&
+            options.origin !== '' &&
+            (process.env.RARI_ORIGIN == null || process.env.RARI_ORIGIN === '')
+              ? { RARI_ORIGIN: options.origin }
               : {}),
             ...(options.htmlLimitedBots != null &&
             (process.env.RARI_HTML_LIMITED_BOTS == null ||
@@ -2208,6 +2215,7 @@ export const createTemporaryReferenceSet = module.exports.createTemporaryReferen
     cache: options.cache,
     action: options.action,
     jsPoolSize: options.jsPoolSize,
+    origin: options.origin,
     htmlLimitedBots: options.htmlLimitedBots,
     experimental: options.experimental,
     moduleAnalysisCache,
