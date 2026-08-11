@@ -1,0 +1,91 @@
+export const title = "rari's Streaming TTFB is Now 11x Faster Than Next.js. First Content Still Ties."
+export const description =
+  'I ran the /stream bench after official Fizz and an immediate HTML shell flush. The result: 1ms TTFB versus Next.js at 12ms, with first content and throughput still tied.'
+export const date = '2026-08-11T12:00:00-04:00'
+export const author = 'Ryan Skinner'
+export const authorUrl = 'https://ryanskinner.com'
+
+<PageHeader title="rari's Streaming TTFB is Now 11x Faster Than Next.js. First Content Still Ties." />
+
+In June I wrote about streaming as a custom Rust pipeline. A `StreamingRenderer` ran composition in V8, produced a partial tree plus fallbacks, converted that tree to HTML in Rust, and patched holes with the `$RC` swap React uses internally. It ran rari.build but Fizz wasn't writing the HTML.
+
+The first chunk waited on V8 composition and a hand-rolled HTML converter. One isolate owned every stream. HTML came from rari's serializer, so the document and the Flight tree could drift. Actions used a custom RPC and a separate `/_rari/form-action` endpoint. I described that stack in [Building rari with rari](/blog/building-rari-with-rari). The cached homepage path was already fast. Streaming used a second renderer that looked like React's but wasn't React's.
+
+[rari 0.15](/blog/rari-0-15-react-flight-fizz) put official Flight and official Fizz on the Rust + V8 host. After that I stopped holding the first byte until V8 finished an HTML string. Then I ran the shared `/stream` bench.
+
+## How I measured this
+
+The suite in <a href="https://github.com/rari-build/benchmarks" target="_blank" rel="noopener noreferrer">rari-build/benchmarks</a> hits identical `/stream` routes in the rari and Next.js apps. Each page renders ten Suspense cards on timers: five at 100ms, three at 500ms, two at 1000ms. The profiler does five runs and records TTFB, first content, last byte, resolved cards, and HTTP frames. Then `oha` runs 15 seconds at 25 connections for throughput.
+
+The homepage bench has no `loading.tsx`, so rari serves the pre-compressed response cache after the first render. `/stream` has to do real Fizz work on every request.
+
+| Metric | rari | Next.js |
+| --- | --- | --- |
+| **TTFB** | **1ms** | 12ms |
+| **First content** | 107ms | 108ms |
+| **Last byte** | 1007ms | 1009ms |
+| **Resolved cards** | 10/10 | 10/10 |
+| **HTTP frames** | 12 | 10 |
+| **Throughput (15s, 25 conn)** | 24.99 req/s | 24.99 req/s |
+
+TTFB is 11.1x faster. First content is a wash. Last byte and throughput match because both runtimes wait on the same promises. Each request is held open for ~1s by the card delays, so 25 connections top out at ~25 req/s. 24.99 on both sides is that ceiling.
+
+## Official Flight and Fizz didn't break the host
+
+0.15 put React's own stack in the isolate. Flight serializes the RSC tree. Fizz turns that tree into HTML, including the document and Suspense holes. Rust writes the TTFB `<!DOCTYPE html>` shell. Server actions moved onto the Flight `{ a, f, q, i }` path.
+
+The swap didn't blow up. The host was already driving compose to bytes. Official Flight and Fizz dropped into that slot. Document HTML and the client tree finally came from the same renderer. First byte still waited on the first HTML string.
+
+## The HTTP shell
+
+Axum flushes the shell before Fizz has HTML. The chunked response yields `<!DOCTYPE html>` before composition finishes, and streaming HTML goes out as identity encoding so compressor setup doesn't stall the shell. RSC navigation (`text/x-component`) still compresses. Metadata flushes when it's ready. After large late chunks, the writer waits about 500µs to coalesce the Flight/complete tail.
+
+TTFB is 1ms because the shell leaves before V8 finishes the first HTML string. The cards still wait ~1000ms; that's the fixture.
+
+<MermaidChart>{`
+sequenceDiagram
+    participant Browser
+    participant Axum
+    box V8 isolate
+        participant V8
+        participant Flight
+        participant Fizz
+    end
+
+    Browser->>Axum: GET /stream
+    Axum->>V8: queue streaming script
+    Axum-->>Browser: chunked 200 + DOCTYPE (~1ms)
+    Note over V8: compose RSC tree
+    V8->>Flight: renderToReadableStream
+    V8->>Fizz: renderToReadableStream
+    Fizz-->>Axum: HTML / Suspense holes
+    Axum-->>Browser: fallbacks
+    Fizz-->>Axum: first resolved card
+    Axum-->>Browser: first content (~107ms)
+    Fizz-->>Axum: remaining cards + Flight tail
+    Axum-->>Browser: last byte (~1007ms)
+`}</MermaidChart>
+
+## What's left
+
+Rust↔JS hops are still there, and this path has no CDN in front of the process. Cache-hit SSR on static routes is a different story: 0.12ms / ~89k RPS. Streaming cache support and better cold-render performance are the next things I want to spend time on.
+
+You can reproduce the run:
+
+<CodeBlock language="bash">{`# https://github.com/rari-build/benchmarks
+just benchmark-all
+# or just streamtest
+`}</CodeBlock>
+
+Same apps, same `/stream` route, same 15s streaming throughput run. Methodology lives in that repo.
+
+<div className="not-prose mt-12 pt-8 border-t border-edge">
+  <p className="text-sm text-fg-muted mb-6">
+    Previously: <a href="/blog/rari-0-15-react-flight-fizz" className="text-link hover:text-link-hover hover:underline">rari 0.15: React Flight and Fizz on Rust + V8</a> and <a href="/blog/building-rari-with-rari" className="text-link hover:text-link-hover hover:underline">Building rari with rari</a>.
+  </p>
+  <div className="flex flex-wrap items-center gap-3">
+    <a href="/docs/getting-started" className="inline-flex items-center px-4 py-2 bg-accent text-accent-fg! text-sm font-medium rounded-md hover:bg-accent-hover transition-colors">Get Started</a>
+    <a href="https://github.com/rari-build/benchmarks" target="_blank" rel="noopener noreferrer" className="inline-flex items-center px-4 py-2 bg-surface border border-edge text-fg-muted! text-sm font-medium rounded-md hover:border-accent hover:text-fg! transition-colors">Benchmarks</a>
+    <a href="https://github.com/rari-build/rari" target="_blank" rel="noopener noreferrer" className="inline-flex items-center px-4 py-2 bg-surface border border-edge text-fg-muted! text-sm font-medium rounded-md hover:border-accent hover:text-fg! transition-colors">GitHub</a>
+  </div>
+</div>
