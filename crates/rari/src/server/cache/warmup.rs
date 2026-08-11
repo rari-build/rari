@@ -158,7 +158,9 @@ async fn warm_route(
     let html_cache_key = response::ResponseCache::generate_cache_key(path, None);
     let cache_control = state.config.get_cache_control_for_route(path);
     let cache_policy = response::RouteCachePolicy::from_cache_control(cache_control, path);
-    let for_response_cache = cache_policy.enabled && state.response_cache.config.enabled;
+    let for_response_cache = cache_policy.enabled
+        && state.response_cache.config.enabled
+        && state.config.server.origin.is_some();
 
     let html = wrap_html_with_metadata(html, context.metadata.as_ref(), state);
     let etag = response::ResponseCache::generate_etag(html.as_bytes());
