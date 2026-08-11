@@ -1456,8 +1456,8 @@ export class ServerComponentBuilder {
     if (this.options.cache) serverConfig.cache = this.options.cache
     if (this.options.action) serverConfig.action = this.options.action
     if (this.options.jsPoolSize != null) serverConfig.jsPoolSize = this.options.jsPoolSize
-    if (this.options.origin != null && this.options.origin !== '')
-      serverConfig.origin = this.options.origin
+    const origin = this.options.origin?.trim().replace(/\/+$/, '')
+    if (origin != null && origin !== '') serverConfig.origin = origin
     if (this.options.htmlLimitedBots != null)
       serverConfig.htmlLimitedBots = this.options.htmlLimitedBots
     if (

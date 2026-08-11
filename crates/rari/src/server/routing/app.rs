@@ -375,12 +375,21 @@ fn get_base_url_from_context(context: &LayoutRenderContext, config: &Config) -> 
     }
 
     let host = context.headers.get("host")?;
-    let protocol = context
+    let forwarded = context
         .headers
         .get("x-forwarded-proto")
         .or_else(|| context.headers.get("x-forwarded-protocol"))
         .map(String::as_str)
-        .unwrap_or_else(|| if config.is_production() { "https" } else { "http" });
+        .unwrap_or("");
+    let protocol = if forwarded.eq_ignore_ascii_case("https") {
+        "https"
+    } else if forwarded.eq_ignore_ascii_case("http") {
+        "http"
+    } else if config.is_production() {
+        "https"
+    } else {
+        "http"
+    };
 
     Some(format!("{protocol}://{host}"))
 }
@@ -2050,5 +2059,18 @@ mod tests {
     fn test_og_base_url_none_without_host_or_origin() {
         let config = Config::new(Mode::Production);
         assert_eq!(get_base_url_from_context(&empty_layout_context(), &config), None);
+    }
+
+    #[test]
+    fn test_og_base_url_ignores_non_http_forwarded_proto() {
+        let config = Config::new(Mode::Production);
+        let mut context = empty_layout_context();
+        context.headers.insert("host".to_string(), "rari.build".to_string());
+        context.headers.insert("x-forwarded-proto".to_string(), "javascript".to_string());
+
+        assert_eq!(
+            get_base_url_from_context(&context, &config).as_deref(),
+            Some("https://rari.build")
+        );
     }
 }
