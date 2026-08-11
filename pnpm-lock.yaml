@@ -446,23 +446,23 @@ importers:
         version: 0.2.8(@opentelemetry/api@1.9.0)(@types/node@26.1.2)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@4.1.10)(jiti@2.7.0)(terser@5.48.0)(vite@8.2.1(@types/node@26.1.2)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))(yaml@2.9.0)
     optionalDependencies:
       '@rari/use-cache-darwin-arm64':
-        specifier: 0.15.9
-        version: 0.15.9
+        specifier: 0.15.10
+        version: 0.15.10
       '@rari/use-cache-darwin-x64':
-        specifier: 0.15.9
-        version: 0.15.9
+        specifier: 0.15.10
+        version: 0.15.10
       '@rari/use-cache-linux-arm64':
-        specifier: 0.15.9
-        version: 0.15.9
+        specifier: 0.15.10
+        version: 0.15.10
       '@rari/use-cache-linux-x64':
-        specifier: 0.15.9
-        version: 0.15.9
+        specifier: 0.15.10
+        version: 0.15.10
       '@rari/use-cache-win32-arm64':
-        specifier: 0.15.9
-        version: 0.15.9
+        specifier: 0.15.10
+        version: 0.15.10
       '@rari/use-cache-win32-x64':
-        specifier: 0.15.9
-        version: 0.15.9
+        specifier: 0.15.10
+        version: 0.15.10
 
   packages/use-cache-darwin-arm64: {}
 
@@ -2033,10 +2033,22 @@ packages:
   '@posthog/types@1.402.2':
     resolution: {integrity: sha512-ZZTiS4dLwF4/D0YTzS3gGSLFnhuNOY5yu4d9VGS9trGe5GW6FjIXo20p18K5BPW2RZSYSld8sdnSAY3AUXleUQ==}
 
+  '@rari/use-cache-darwin-arm64@0.15.10':
+    resolution: {integrity: sha512-16EuM0PQB8ejMErIv4pIoDsFGGm69AZ18cPBuCBbFDj6NwPL6qraQ0xM9Ub3rx2cx2Ey4jniJJUWCysOufhZag==}
+    engines: {node: '>=22.18.0'}
+    cpu: [arm64]
+    os: [darwin]
+
   '@rari/use-cache-darwin-arm64@0.15.9':
     resolution: {integrity: sha512-JI2yRkA+skLmUz/h1KnG/T8T/OC1a7x3gfZtuNlzW4CzhbOAynohEP1nBIozig+U0H5HScioigWvSGHV40Yjmw==}
     engines: {node: '>=22.18.0'}
     cpu: [arm64]
+    os: [darwin]
+
+  '@rari/use-cache-darwin-x64@0.15.10':
+    resolution: {integrity: sha512-623Y+5APewcgS2QLqS2EpFo6vooceUL5XkDHSRVUTa0n6btF5Rb70WdLRrm36znw1eShBkdXE8byZlbHnrHLfQ==}
+    engines: {node: '>=22.18.0'}
+    cpu: [x64]
     os: [darwin]
 
   '@rari/use-cache-darwin-x64@0.15.9':
@@ -2045,10 +2057,22 @@ packages:
     cpu: [x64]
     os: [darwin]
 
+  '@rari/use-cache-linux-arm64@0.15.10':
+    resolution: {integrity: sha512-DVm7fG1ljiq83j04c+l+Fi14YU3o926singe3oTY+HjjjA6p1c5PUkwAfErpHaD0eKEiJP+qcimy+RFqd2tGzA==}
+    engines: {node: '>=22.18.0'}
+    cpu: [arm64]
+    os: [linux]
+
   '@rari/use-cache-linux-arm64@0.15.9':
     resolution: {integrity: sha512-xtRKT28j1IfzyubjuCuhmfnRg9E6gxTewvO8vRf3S2UEyhY51LXn/7GBmfbwuNEd3ouMRqC1if3Rs6cYJA9cBQ==}
     engines: {node: '>=22.18.0'}
     cpu: [arm64]
+    os: [linux]
+
+  '@rari/use-cache-linux-x64@0.15.10':
+    resolution: {integrity: sha512-cfSnV8tUflbZuartl0UW5DH/Yfz5rGoq/Ysqch0w0UPEUZthmI3keE+gLBuuhR/iHHvrvhqE1WMEFh+g3XFgHg==}
+    engines: {node: '>=22.18.0'}
+    cpu: [x64]
     os: [linux]
 
   '@rari/use-cache-linux-x64@0.15.9':
@@ -2057,10 +2081,22 @@ packages:
     cpu: [x64]
     os: [linux]
 
+  '@rari/use-cache-win32-arm64@0.15.10':
+    resolution: {integrity: sha512-vIXk0G+QC+PoRmaWe5v5mHaNkynrOGWySvTvuudbtJj2SmgWKaKQT06JDmR/VgngFBCndBqUdrreuC/7ILl+Aw==}
+    engines: {node: '>=22.18.0'}
+    cpu: [arm64]
+    os: [win32]
+
   '@rari/use-cache-win32-arm64@0.15.9':
     resolution: {integrity: sha512-zzWLww/nZhO7j157VWSayBFHVvYI8blDwj/1ixvveDUtPjFeuncS+U+VLlKfmSgfaGixW1KLkfEifTk2FH+pgw==}
     engines: {node: '>=22.18.0'}
     cpu: [arm64]
+    os: [win32]
+
+  '@rari/use-cache-win32-x64@0.15.10':
+    resolution: {integrity: sha512-xKBaypF6y706OT6L+/84B5OYQ67+w9jFCCjVuRVAQ9tF8QMYmgtkrvNSdOkqZ+7FY6sNeS744OwLLxDMcHE7Dw==}
+    engines: {node: '>=22.18.0'}
+    cpu: [x64]
     os: [win32]
 
   '@rari/use-cache-win32-x64@0.15.9':
@@ -6180,19 +6216,37 @@ snapshots:
 
   '@posthog/types@1.402.2': {}
 
+  '@rari/use-cache-darwin-arm64@0.15.10':
+    optional: true
+
   '@rari/use-cache-darwin-arm64@0.15.9':
+    optional: true
+
+  '@rari/use-cache-darwin-x64@0.15.10':
     optional: true
 
   '@rari/use-cache-darwin-x64@0.15.9':
     optional: true
 
+  '@rari/use-cache-linux-arm64@0.15.10':
+    optional: true
+
   '@rari/use-cache-linux-arm64@0.15.9':
+    optional: true
+
+  '@rari/use-cache-linux-x64@0.15.10':
     optional: true
 
   '@rari/use-cache-linux-x64@0.15.9':
     optional: true
 
+  '@rari/use-cache-win32-arm64@0.15.10':
+    optional: true
+
   '@rari/use-cache-win32-arm64@0.15.9':
+    optional: true
+
+  '@rari/use-cache-win32-x64@0.15.10':
     optional: true
 
   '@rari/use-cache-win32-x64@0.15.9':
