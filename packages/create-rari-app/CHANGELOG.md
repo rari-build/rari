@@ -1,3 +1,11 @@
+## [create-rari-app@0.5.23] - 2026-08-12
+
+### ⚙️ Miscellaneous Tasks
+
+- *(dependencies)* bump rari to version 0.15.11 by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/create-rari-app@0.5.22...create-rari-app@0.5.23
 ## [create-rari-app@0.5.22] - 2026-08-11
 
 ### ⚙️ Miscellaneous Tasks
