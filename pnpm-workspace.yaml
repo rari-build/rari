@@ -1,19 +1,19 @@
 catalogMode: prefer
 minimumReleaseAgeExclude:
-  - '@rari/use-cache-darwin-arm64@0.15.10 || 0.15.11'
-  - '@rari/use-cache-darwin-x64@0.15.10 || 0.15.11'
-  - '@rari/use-cache-linux-arm64@0.15.10 || 0.15.11'
-  - '@rari/use-cache-linux-x64@0.15.10 || 0.15.11'
-  - '@rari/use-cache-win32-arm64@0.15.10 || 0.15.11'
-  - '@rari/use-cache-win32-x64@0.15.10 || 0.15.11'
-  - '@rari/use-cache@0.15.10 || 0.15.11'
-  - rari-darwin-arm64@0.15.10 || 0.15.11
-  - rari-darwin-x64@0.15.10 || 0.15.11
-  - rari-linux-arm64@0.15.10 || 0.15.11
-  - rari-linux-x64@0.15.10 || 0.15.11
-  - rari-win32-arm64@0.15.10 || 0.15.11
-  - rari-win32-x64@0.15.10 || 0.15.11
-  - rari@0.15.10
+  - '@rari/use-cache-darwin-arm64@0.15.11'
+  - '@rari/use-cache-darwin-x64@0.15.11'
+  - '@rari/use-cache-linux-arm64@0.15.11'
+  - '@rari/use-cache-linux-x64@0.15.11'
+  - '@rari/use-cache-win32-arm64@0.15.11'
+  - '@rari/use-cache-win32-x64@0.15.11'
+  - '@rari/use-cache@0.15.11'
+  - rari-darwin-arm64@0.15.11
+  - rari-darwin-x64@0.15.11
+  - rari-linux-arm64@0.15.11
+  - rari-linux-x64@0.15.11
+  - rari-win32-arm64@0.15.11
+  - rari-win32-x64@0.15.11
+  - rari@0.15.11
 shellEmulator: true
 trustPolicy: no-downgrade
 packages:
@@ -34,7 +34,7 @@ catalogs:
   cli:
     '@clack/prompts': ^1.7.0
   default:
-    rari: ^0.15.10
+    rari: ^0.15.11
   eslint:
     '@e18e/eslint-plugin': ^0.5.1
     '@eslint-community/eslint-plugin-eslint-comments': ^4.7.2
