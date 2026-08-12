@@ -38,7 +38,7 @@ export function generateOGImage({
             padding: '80px',
           }}
         >
-          <Rari width={360} height={120} style={{ marginBottom: '60px' }} />
+          <Rari width={360} height={120} style={{ marginBottom: '60px', color: '#f0f6fc' }} />
 
           <div
             style={{
@@ -94,7 +94,7 @@ export function generateOGImage({
             marginBottom: '40px',
           }}
         >
-          <Rari width={120} height={40} style={{ marginRight: '20px' }} />
+          <Rari width={120} height={40} style={{ marginRight: '20px', color: '#f0f6fc' }} />
           {section != null && section !== '' && (
             <div
               style={{

@@ -133,29 +133,119 @@ fn jsx_to_svg_string(element: &JsxElement) -> String {
     buf
 }
 
+fn json_attr_value(value: &serde_json::Value) -> Option<String> {
+    match value {
+        serde_json::Value::String(s) => Some(s.clone()),
+        serde_json::Value::Number(n) => Some(n.to_string()),
+        serde_json::Value::Bool(b) => Some(b.to_string()),
+        _ => None,
+    }
+}
+
+fn is_layout_only_style(key: &str) -> bool {
+    matches!(
+        key,
+        "display"
+            | "flex"
+            | "flexDirection"
+            | "flexGrow"
+            | "flexShrink"
+            | "flexBasis"
+            | "flexWrap"
+            | "alignItems"
+            | "alignContent"
+            | "alignSelf"
+            | "justifyContent"
+            | "justifyItems"
+            | "justifySelf"
+            | "gap"
+            | "rowGap"
+            | "columnGap"
+            | "margin"
+            | "marginTop"
+            | "marginRight"
+            | "marginBottom"
+            | "marginLeft"
+            | "padding"
+            | "paddingTop"
+            | "paddingRight"
+            | "paddingBottom"
+            | "paddingLeft"
+            | "width"
+            | "height"
+            | "minWidth"
+            | "minHeight"
+            | "maxWidth"
+            | "maxHeight"
+            | "position"
+            | "top"
+            | "right"
+            | "bottom"
+            | "left"
+            | "inset"
+            | "overflow"
+            | "overflowX"
+            | "overflowY"
+            | "border"
+            | "borderWidth"
+            | "borderStyle"
+            | "borderColor"
+            | "borderRadius"
+            | "borderTop"
+            | "borderRight"
+            | "borderBottom"
+            | "borderLeft"
+            | "background"
+            | "backgroundColor"
+            | "backgroundImage"
+            | "lineHeight"
+            | "textAlign"
+            | "objectFit"
+            | "objectPosition"
+            | "boxSizing"
+            | "zIndex"
+    )
+}
+
 fn write_element(element: &JsxElement, buf: &mut String) {
     let tag = &element.element_type;
     buf.push('<');
     buf.push_str(tag);
 
+    let mut attrs: Vec<(String, String)> = Vec::new();
+
     if let Some(obj) = element.props.as_object() {
         for (key, value) in obj {
-            if matches!(key.as_str(), "children" | "key" | "ref") {
+            if matches!(key.as_str(), "children" | "key" | "ref" | "style") {
                 continue;
             }
-            let attr_name = camel_to_kebab(key);
-            let attr_val = match value {
-                serde_json::Value::String(s) => s.clone(),
-                serde_json::Value::Number(n) => n.to_string(),
-                serde_json::Value::Bool(b) => b.to_string(),
-                _ => continue,
-            };
-            buf.push(' ');
-            buf.push_str(&attr_name);
-            buf.push_str("=\"");
-            buf.push_str(&escape_xml(&attr_val));
-            buf.push('"');
+            if let Some(attr_val) = json_attr_value(value) {
+                attrs.push((camel_to_kebab(key), attr_val));
+            }
         }
+
+        if let Some(style) = obj.get("style").and_then(serde_json::Value::as_object) {
+            for (key, value) in style {
+                if is_layout_only_style(key) {
+                    continue;
+                }
+                let attr_name = camel_to_kebab(key);
+                if attrs.iter().any(|(name, _)| name == &attr_name) {
+                    continue;
+                }
+                if let Some(attr_val) = json_attr_value(value) {
+                    attrs.push((attr_name, attr_val));
+                }
+            }
+        }
+    }
+
+    for (name, val) in attrs {
+        buf.push(' ');
+        buf.push_str(&name);
+        buf.push_str("=\"");
+        buf.push_str(&escape_xml(&val));
+        buf.push('"');
     }
 
     if element.children.is_empty() {
@@ -331,6 +421,61 @@ mod tests {
         assert_eq!(escape_xml("<tag>"), "&lt;tag&gt;");
         assert_eq!(escape_xml("say \"hi\""), "say &quot;hi&quot;");
         assert_eq!(escape_xml("normal"), "normal");
+    }
+
+    #[test]
+    fn test_jsx_to_svg_style_color_for_current_color() {
+        let element = JsxElement {
+            element_type: "svg".to_string(),
+            props: serde_json::json!({
+                "xmlns": "http://www.w3.org/2000/svg",
+                "viewBox": "0 0 10 10",
+                "style": {
+                    "color": "#f0f6fc",
+                    "marginRight": "20px",
+                    "display": "flex"
+                }
+            }),
+            children: vec![JsxChild::Element(Box::new(JsxElement {
+                element_type: "g".to_string(),
+                props: serde_json::json!({ "fill": "currentColor" }),
+                children: vec![JsxChild::Element(Box::new(JsxElement {
+                    element_type: "path".to_string(),
+                    props: serde_json::json!({ "d": "M0 0h10v10H0z" }),
+                    children: vec![],
+                }))],
+            }))],
+        };
+
+        let svg = jsx_to_svg_string(&element);
+        assert!(
+            svg.contains("color=\"#f0f6fc\""),
+            "style.color should become an SVG attribute: {svg}"
+        );
+        assert!(!svg.contains("margin"), "layout-only styles must not become SVG attrs: {svg}");
+        assert!(!svg.contains("display"), "layout-only styles must not become SVG attrs: {svg}");
+        assert!(svg.contains("fill=\"currentColor\""));
+
+        let options = Options::default();
+        let result = Tree::from_str(&svg, &options);
+        assert!(result.is_ok(), "usvg failed to parse currentColor SVG: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_jsx_to_svg_prop_fill_wins_over_style() {
+        let element = JsxElement {
+            element_type: "path".to_string(),
+            props: serde_json::json!({
+                "d": "M0 0h10v10H0z",
+                "fill": "#fff",
+                "style": { "fill": "#000", "strokeWidth": 2 }
+            }),
+            children: vec![],
+        };
+        let svg = jsx_to_svg_string(&element);
+        assert!(svg.contains("fill=\"#fff\""));
+        assert!(!svg.contains("fill=\"#000\""));
+        assert!(svg.contains("stroke-width=\"2\""));
     }
 
     #[test]
