@@ -1,3 +1,20 @@
+## [rari@0.15.11] - 2026-08-12
+
+### 🚀 Features
+
+- *(svg)* enhance JSX to SVG conversion by adding style serialization and layout-only style filtering by @skiniks
+
+### 🚜 Refactor
+
+- *(svg)* rename layout style function to reflect SVG presentation styles and update filtering logic by @skiniks
+
+### ⚙️ Miscellaneous Tasks
+
+- *(dependencies)* bump rari to version 0.15.11 by @skiniks
+- *(dependencies)* update rari and related packages to version 0.15.11 by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.15.10...rari@0.15.11
 ## [rari@0.15.10] - 2026-08-11
 
 ### 🚀 Features
