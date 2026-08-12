@@ -142,68 +142,47 @@ fn json_attr_value(value: &serde_json::Value) -> Option<String> {
     }
 }
 
-fn is_layout_only_style(key: &str) -> bool {
+fn is_svg_presentation_style(key: &str) -> bool {
+    if key.starts_with("--") || key.starts_with('-') {
+        return false;
+    }
+
     matches!(
         key,
-        "display"
-            | "flex"
-            | "flexDirection"
-            | "flexGrow"
-            | "flexShrink"
-            | "flexBasis"
-            | "flexWrap"
-            | "alignItems"
-            | "alignContent"
-            | "alignSelf"
-            | "justifyContent"
-            | "justifyItems"
-            | "justifySelf"
-            | "gap"
-            | "rowGap"
-            | "columnGap"
-            | "margin"
-            | "marginTop"
-            | "marginRight"
-            | "marginBottom"
-            | "marginLeft"
-            | "padding"
-            | "paddingTop"
-            | "paddingRight"
-            | "paddingBottom"
-            | "paddingLeft"
-            | "width"
-            | "height"
-            | "minWidth"
-            | "minHeight"
-            | "maxWidth"
-            | "maxHeight"
-            | "position"
-            | "top"
-            | "right"
-            | "bottom"
-            | "left"
-            | "inset"
-            | "overflow"
-            | "overflowX"
-            | "overflowY"
-            | "border"
-            | "borderWidth"
-            | "borderStyle"
-            | "borderColor"
-            | "borderRadius"
-            | "borderTop"
-            | "borderRight"
-            | "borderBottom"
-            | "borderLeft"
-            | "background"
-            | "backgroundColor"
-            | "backgroundImage"
-            | "lineHeight"
-            | "textAlign"
-            | "objectFit"
-            | "objectPosition"
-            | "boxSizing"
-            | "zIndex"
+        "color"
+            | "fill"
+            | "stroke"
+            | "opacity"
+            | "fillOpacity"
+            | "strokeOpacity"
+            | "strokeWidth"
+            | "strokeLinecap"
+            | "strokeLinejoin"
+            | "strokeDasharray"
+            | "strokeDashoffset"
+            | "strokeMiterlimit"
+            | "fillRule"
+            | "clipPath"
+            | "clipRule"
+            | "fontFamily"
+            | "fontSize"
+            | "fontWeight"
+            | "fontStyle"
+            | "fontVariant"
+            | "letterSpacing"
+            | "wordSpacing"
+            | "textAnchor"
+            | "textDecoration"
+            | "stopColor"
+            | "stopOpacity"
+            | "floodColor"
+            | "floodOpacity"
+            | "transform"
+            | "filter"
+            | "mask"
+            | "vectorEffect"
+            | "paintOrder"
+            | "dominantBaseline"
     )
 }
 
@@ -226,7 +205,7 @@ fn write_element(element: &JsxElement, buf: &mut String) {
 
         if let Some(style) = obj.get("style").and_then(serde_json::Value::as_object) {
             for (key, value) in style {
-                if is_layout_only_style(key) {
+                if !is_svg_presentation_style(key) {
                     continue;
                 }
                 let attr_name = camel_to_kebab(key);
@@ -459,6 +438,28 @@ mod tests {
         let options = Options::default();
         let result = Tree::from_str(&svg, &options);
         assert!(result.is_ok(), "usvg failed to parse currentColor SVG: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_jsx_to_svg_rejects_custom_properties_and_vendor_prefixes() {
+        let element = JsxElement {
+            element_type: "svg".to_string(),
+            props: serde_json::json!({
+                "xmlns": "http://www.w3.org/2000/svg",
+                "viewBox": "0 0 10 10",
+                "style": {
+                    "--accent": "#fff",
+                    "-webkit-text-stroke": "1px red",
+                    "color": "#f0f6fc"
+                }
+            }),
+            children: vec![],
+        };
+
+        let svg = jsx_to_svg_string(&element);
+        assert!(svg.contains("color=\"#f0f6fc\""));
+        assert!(!svg.contains("--accent"), "custom properties must not become SVG attrs: {svg}");
+        assert!(!svg.contains("webkit"), "vendor-prefixed styles must not become SVG attrs: {svg}");
     }
 
     #[test]
