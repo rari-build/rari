@@ -149,15 +149,35 @@ export class ImageResponse {
     for (const [key, value] of Object.entries(props)) {
       if (key === 'children') continue
 
-      if (
-        value == null ||
-        typeof value === 'string' ||
-        typeof value === 'number' ||
-        typeof value === 'boolean'
-      )
-        result[key] = value
+      const serialized = this.serializePropValue(value)
+      if (serialized !== undefined) result[key] = serialized
     }
 
     return result
+  }
+
+  private serializePropValue(value: unknown): unknown {
+    if (
+      value == null ||
+      typeof value === 'string' ||
+      typeof value === 'number' ||
+      typeof value === 'boolean'
+    )
+      return value
+
+    if (Array.isArray(value)) {
+      return value.map(item => this.serializePropValue(item)).filter(item => item !== undefined)
+    }
+
+    if (isRecord(value)) {
+      const result: Record<string, unknown> = {}
+      for (const [key, nested] of Object.entries(value)) {
+        const serialized = this.serializePropValue(nested)
+        if (serialized !== undefined) result[key] = serialized
+      }
+      return result
+    }
+
+    return undefined
   }
 }
