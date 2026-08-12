@@ -156,7 +156,7 @@ export class ImageResponse {
     return result
   }
 
-  private serializePropValue(value: unknown): unknown {
+  private serializePropValue(value: unknown, seen: Set<object> = new Set()): unknown {
     if (
       value == null ||
       typeof value === 'string' ||
@@ -166,16 +166,30 @@ export class ImageResponse {
       return value
 
     if (Array.isArray(value)) {
-      return value.map(item => this.serializePropValue(item)).filter(item => item !== undefined)
+      if (seen.has(value)) return undefined
+      seen.add(value)
+      try {
+        return value
+          .map(item => this.serializePropValue(item, seen))
+          .filter(item => item !== undefined)
+      } finally {
+        seen.delete(value)
+      }
     }
 
     if (isRecord(value)) {
-      const result: Record<string, unknown> = {}
-      for (const [key, nested] of Object.entries(value)) {
-        const serialized = this.serializePropValue(nested)
-        if (serialized !== undefined) result[key] = serialized
+      if (seen.has(value)) return undefined
+      seen.add(value)
+      try {
+        const result: Record<string, unknown> = {}
+        for (const [key, nested] of Object.entries(value)) {
+          const serialized = this.serializePropValue(nested, seen)
+          if (serialized !== undefined) result[key] = serialized
+        }
+        return result
+      } finally {
+        seen.delete(value)
       }
-      return result
     }
 
     return undefined
