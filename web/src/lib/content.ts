@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
+import { parseDate } from '@/lib/date'
 import { extractBlogMetadata } from '@/lib/metadata'
 
 export function isValidSlug(slug: unknown): slug is string {
@@ -53,7 +54,7 @@ export function getAllBlogPosts(): BlogPost[] {
       }
     })
 
-    return posts.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    return posts.sort((a, b) => parseDate(b.date).getTime() - parseDate(a.date).getTime())
   } catch {
     return []
   }

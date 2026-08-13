@@ -1,4 +1,4 @@
-import { formatDate } from '@/lib/date'
+import { formatDate, toDateOnly } from '@/lib/date'
 
 interface BlogPostCardProps {
   readonly slug: string
@@ -15,7 +15,7 @@ export default function BlogPostCard({ slug, title, description, date }: BlogPos
       className="group block p-6 bg-surface border border-edge rounded-lg hover:border-accent hover:shadow-lg hover:shadow-accent/10 transition-all duration-200"
     >
       <div className="flex items-center gap-2 text-sm text-fg-muted mb-3">
-        <time>{formatDate(date)}</time>
+        <time dateTime={toDateOnly(date)}>{formatDate(date)}</time>
       </div>
       <h2 className="text-xl font-semibold text-fg mb-3 group-hover:text-link transition-colors">
         {title}

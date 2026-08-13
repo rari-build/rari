@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { formatBlogDate, formatDate } from '@/lib/date'
+import { formatBlogDate, formatDate, toDateOnly } from '@/lib/date'
 import LastUpdated from './LastUpdated'
 
 interface PageHeaderProps {
@@ -30,7 +30,10 @@ export default function PageHeader({
     return (
       <header className="page-header mb-8 pb-8 border-b border-edge">
         {date != null && date !== '' && (
-          <time dateTime={date} className="block text-sm font-medium text-fg-muted mb-4">
+          <time
+            dateTime={toDateOnly(date)}
+            className="block text-sm font-medium text-fg-muted mb-4"
+          >
             {formatBlogDate(date)}
           </time>
         )}
@@ -82,7 +85,9 @@ export default function PageHeader({
           {author != null && author !== '' && date != null && date !== '' && (
             <span className="text-fg-muted">·</span>
           )}
-          {date != null && date !== '' && <time dateTime={date}>{formatDate(date)}</time>}
+          {date != null && date !== '' && (
+            <time dateTime={toDateOnly(date)}>{formatDate(date)}</time>
+          )}
         </div>
       )}
       {tags && tags.length > 0 && (

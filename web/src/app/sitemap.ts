@@ -3,6 +3,7 @@ import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import process from 'node:process'
 import { getBlogPostsMinimal } from '@/lib/content'
+import { parseDate } from '@/lib/date'
 
 const baseUrl = 'https://rari.build'
 
@@ -76,7 +77,7 @@ export default async function sitemap(): Promise<Sitemap> {
     },
     ...blogPosts.map(post => ({
       url: `${baseUrl}/blog/${post.slug}`,
-      lastModified: new Date(post.date),
+      lastModified: parseDate(post.date),
       changeFrequency: 'monthly' as const,
       priority: 0.7,
     })),
