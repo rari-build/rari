@@ -13,8 +13,9 @@ export default async function ActionsPage() {
           <span className="text-3xl">⚡</span>
         </div>
         <p className="text-lg text-gray-600 max-w-3xl leading-relaxed">
-          This page demonstrates React Server Actions working with rari. All patterns follow React's
-          official server function specifications.
+          This page demonstrates React Server Actions working with rari. Mutations live in a{' '}
+          <code className="bg-gray-100 px-1.5 py-0.5 rounded font-mono text-sm">'use server'</code>{' '}
+          module and are called from client components through Flight.
         </p>
       </div>
 
@@ -34,7 +35,7 @@ export default async function ActionsPage() {
               <h3 className="text-green-900 font-semibold">useActionState Hook</h3>
             </div>
             <p className="text-sm text-gray-700 leading-relaxed">
-              Manage server action state with pending states and error handling.
+              Bind a server action directly to a form with pending state and inline errors.
             </p>
           </div>
 
@@ -44,7 +45,7 @@ export default async function ActionsPage() {
               <h3 className="text-green-900 font-semibold">useTransition Hook</h3>
             </div>
             <p className="text-sm text-gray-700 leading-relaxed">
-              Track pending states across multiple actions for better UX.
+              Call server actions from buttons while tracking a shared pending state.
             </p>
           </div>
 
@@ -54,17 +55,17 @@ export default async function ActionsPage() {
               <h3 className="text-green-900 font-semibold">Form Actions</h3>
             </div>
             <p className="text-sm text-gray-700 leading-relaxed">
-              Server functions that work with HTML forms and FormData.
+              Server functions that accept previous state plus FormData from HTML forms.
             </p>
           </div>
 
           <div className="p-5 bg-green-50 rounded-lg border border-green-200">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-green-600 text-xl">✓</span>
-              <h3 className="text-green-900 font-semibold">Optimistic Updates</h3>
+              <h3 className="text-green-900 font-semibold">Direct Calls</h3>
             </div>
             <p className="text-sm text-gray-700 leading-relaxed">
-              Instant UI feedback with server-side validation and rollback.
+              Invoke typed server functions with normal arguments outside of forms.
             </p>
           </div>
 
@@ -74,17 +75,17 @@ export default async function ActionsPage() {
               <h3 className="text-green-900 font-semibold">Error Handling</h3>
             </div>
             <p className="text-sm text-gray-700 leading-relaxed">
-              Proper error states and user feedback for failed actions.
+              Return structured error states and surface them to the user.
             </p>
           </div>
 
           <div className="p-5 bg-green-50 rounded-lg border border-green-200">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-green-600 text-xl">✓</span>
-              <h3 className="text-green-900 font-semibold">Redirects</h3>
+              <h3 className="text-green-900 font-semibold">Result Sync</h3>
             </div>
             <p className="text-sm text-gray-700 leading-relaxed">
-              Server actions can redirect after successful completion.
+              Update client UI from the data returned by each successful action.
             </p>
           </div>
         </div>
@@ -105,8 +106,7 @@ export default async function ActionsPage() {
               <code className="bg-gray-200 px-1.5 py-0.5 rounded font-mono text-xs">
                 'use server'
               </code>{' '}
-              are automatically transformed into callable references that can be invoked from client
-              components.
+              are transformed into callable references that client components can invoke.
             </p>
           </div>
 
@@ -122,7 +122,7 @@ export default async function ActionsPage() {
               <code className="bg-gray-200 px-1.5 py-0.5 rounded font-mono text-xs">
                 POST /_rari/action
               </code>{' '}
-              with JSON payloads containing serialized arguments.
+              with serialized arguments.
             </p>
           </div>
 
@@ -134,7 +134,7 @@ export default async function ActionsPage() {
               <h4 className="text-gray-900 font-semibold">State Management</h4>
             </div>
             <p className="text-sm text-gray-600 leading-relaxed">
-              Server actions integrate seamlessly with React hooks like{' '}
+              Server actions integrate with React hooks like{' '}
               <code className="bg-gray-200 px-1.5 py-0.5 rounded font-mono text-xs">
                 useActionState
               </code>{' '}
@@ -154,8 +154,8 @@ export default async function ActionsPage() {
               <h4 className="text-gray-900 font-semibold">Flight Protocol</h4>
             </div>
             <p className="text-sm text-gray-600 leading-relaxed">
-              Actions return JSON responses that can include redirects, error states, and updated
-              data for optimistic UI updates.
+              Arguments and return values travel over React Flight so client components can call
+              server functions as if they were local async functions.
             </p>
           </div>
         </div>

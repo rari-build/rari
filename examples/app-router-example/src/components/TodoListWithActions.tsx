@@ -6,7 +6,7 @@ import { clearCompleted, deleteTodo, toggleTodo } from '@/actions/todo-actions'
 
 interface TodoListProps {
   readonly initialTodos: readonly Todo[]
-  readonly onUpdate?: () => void
+  readonly onUpdate?: (todos: readonly Todo[]) => void
 }
 
 export default function TodoListWithActions({ initialTodos, onUpdate }: TodoListProps) {
@@ -29,12 +29,11 @@ export default function TodoListWithActions({ initialTodos, onUpdate }: TodoList
     setError(null)
     startTransition(async () => {
       try {
-        const formData = new FormData()
-        formData.append('id', id)
-        const result = await toggleTodo(formData)
+        const result = await toggleTodo(id)
         if (result.success) {
-          setTodos(result.todos)
-          if (onUpdate) onUpdate()
+          const next = result.todos ?? []
+          setTodos(next)
+          onUpdate?.(next)
         } else if (result.error != null && result.error !== '') {
           setError(result.error)
         }
@@ -50,12 +49,11 @@ export default function TodoListWithActions({ initialTodos, onUpdate }: TodoList
     setError(null)
     startTransition(async () => {
       try {
-        const formData = new FormData()
-        formData.append('id', id)
-        const result = await deleteTodo(formData)
+        const result = await deleteTodo(id)
         if (result.success) {
-          setTodos(result.todos)
-          if (onUpdate) onUpdate()
+          const next = result.todos ?? []
+          setTodos(next)
+          onUpdate?.(next)
         } else if (result.error != null && result.error !== '') {
           setError(result.error)
         }
@@ -73,8 +71,9 @@ export default function TodoListWithActions({ initialTodos, onUpdate }: TodoList
       try {
         const result = await clearCompleted()
         if (result.success) {
-          setTodos(result.todos)
-          if (onUpdate) onUpdate()
+          const next = result.todos ?? []
+          setTodos(next)
+          onUpdate?.(next)
         }
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'Failed to clear completed todos'
@@ -227,7 +226,7 @@ export default function TodoListWithActions({ initialTodos, onUpdate }: TodoList
             </li>
             <li className="flex items-start gap-2">
               <span className="text-indigo-600 mt-0.5">•</span>
-              <span>Optimistic UI updates with state management</span>
+              <span>Updates local state from the action result</span>
             </li>
             <li className="flex items-start gap-2">
               <span className="text-indigo-600 mt-0.5">•</span>

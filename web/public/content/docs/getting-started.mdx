@@ -337,9 +337,22 @@ export default function ClientComponent() {
 
 <CodeBlock filename="src/actions/user-actions.ts" language="tsx">{`'use server'
 
-export async function createUser(formData: FormData) {
-  const name = formData.get('name') as string
-  const email = formData.get('email') as string
+type CreateUserState = {
+  success: boolean
+  error?: string
+  user?: { name: string; email: string }
+}
+
+export async function createUser(
+  _prevState: CreateUserState | null,
+  formData: FormData,
+): Promise<CreateUserState> {
+  const name = formData.get('name')
+  const email = formData.get('email')
+
+  if (typeof name !== 'string' || typeof email !== 'string') {
+    return { success: false, error: 'Name and email are required' }
+  }
 
   const user = await database.users.create({ name, email })
   return { success: true, user }
@@ -368,6 +381,7 @@ export default function UserForm() {
       <button type="submit" disabled={isPending}>
         {isPending ? 'Creating...' : 'Create User'}
       </button>
+      {state?.error && <p>{state.error}</p>}
       {state?.success && <p>User created successfully!</p>}
     </form>
   )

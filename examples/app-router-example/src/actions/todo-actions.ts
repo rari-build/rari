@@ -10,9 +10,11 @@ export interface Todo {
   readonly createdAt: string
 }
 
-type TodoActionResult =
-  | { success: boolean; error: string; todos: Todo[] }
-  | { error?: undefined; success: boolean; todos: Todo[] }
+export interface TodoActionState {
+  readonly success: boolean
+  readonly error?: string
+  readonly todos?: readonly Todo[]
+}
 
 let todos: Todo[] = [
   {
@@ -34,47 +36,41 @@ export async function getTodos() {
   return [...todos]
 }
 
-export async function addTodo(formData: FormData): Promise<TodoActionResult> {
+export async function addTodo(
+  _prevState: TodoActionState,
+  formData: FormData,
+): Promise<TodoActionState> {
   const text = formData.get('text')
   if (typeof text !== 'string' || text.trim() === '')
     return { success: false, error: 'Todo text is required', todos }
 
-  const newTodo = {
+  const newTodo: Todo = {
     id: crypto.randomUUID(),
     text: text.trim(),
     completed: false,
     createdAt: new Date().toISOString(),
   }
 
-  todos.push(newTodo)
-
+  todos = [...todos, newTodo]
   return { success: true, todos: [...todos] }
 }
 
-export async function toggleTodo(formData: FormData): Promise<TodoActionResult> {
-  const id = formData.get('id')
-  if (typeof id !== 'string') return { success: false, error: 'Todo not found', todos }
+export async function toggleTodo(id: string): Promise<TodoActionState> {
+  if (!todos.some(t => t.id === id)) return { success: false, error: 'Todo not found', todos }
 
-  const exists = todos.some(t => t.id === id)
-
-  if (!exists) return { success: false, error: 'Todo not found', todos }
   todos = todos.map(t => (t.id === id ? { ...t, completed: !t.completed } : t))
-  return { success: true, todos }
+  return { success: true, todos: [...todos] }
 }
 
-export async function deleteTodo(formData: FormData): Promise<TodoActionResult> {
-  const id = formData.get('id')
-  if (typeof id !== 'string') return { success: false, error: 'Todo not found', todos }
+export async function deleteTodo(id: string): Promise<TodoActionState> {
+  const next = todos.filter(t => t.id !== id)
+  if (next.length === todos.length) return { success: false, error: 'Todo not found', todos }
 
-  const initialLength = todos.length
-  todos = todos.filter(t => t.id !== id)
-
-  if (todos.length === initialLength) return { success: false, error: 'Todo not found', todos }
-
-  return { success: true, todos }
+  todos = next
+  return { success: true, todos: [...todos] }
 }
 
-export async function clearCompleted(): Promise<TodoActionResult> {
+export async function clearCompleted(): Promise<TodoActionState> {
   todos = todos.filter(t => !t.completed)
-  return { success: true, todos }
+  return { success: true, todos: [...todos] }
 }

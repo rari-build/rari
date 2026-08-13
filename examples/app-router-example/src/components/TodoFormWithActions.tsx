@@ -1,37 +1,29 @@
 'use client'
 
-import type { Todo } from '@/actions/todo-actions'
-import { useActionState, useId, useState } from 'react'
+import type { Todo, TodoActionState } from '@/actions/todo-actions'
+import { useActionState, useEffect, useId, useRef } from 'react'
 import { addTodo } from '@/actions/todo-actions'
 
 interface TodoFormProps {
-  readonly onSuccess?: () => void
+  readonly onSuccess?: (todos: readonly Todo[]) => void
 }
 
-interface FormState {
-  success: boolean
-  error?: string
-  todos?: Todo[]
-}
+const initialState: TodoActionState = { success: false, todos: [] }
 
 export default function TodoFormWithActions({ onSuccess }: TodoFormProps) {
   const formId = useId()
-  const [resetKey, setResetKey] = useState(0)
+  const [state, formAction, isPending] = useActionState(addTodo, initialState)
+  const handledSuccessKeyRef = useRef<string | null>(null)
+  const formKey = state.todos?.map(todo => todo.id).join(',') ?? 'empty'
 
-  const [state, formAction, isPending] = useActionState<FormState, FormData>(
-    async (_prevState, formData) => {
-      const result = await addTodo(formData)
-      if (result.success) {
-        queueMicrotask(() => {
-          setResetKey(prev => prev + 1)
-          if (onSuccess) onSuccess()
-        })
-      }
+  useEffect(() => {
+    if (!state.success || state.todos == null) return
 
-      return result
-    },
-    { success: false, todos: [] },
-  )
+    if (handledSuccessKeyRef.current === formKey) return
+    handledSuccessKeyRef.current = formKey
+
+    onSuccess?.(state.todos)
+  }, [state.success, state.todos, formKey, onSuccess])
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -42,7 +34,7 @@ export default function TodoFormWithActions({ onSuccess }: TodoFormProps) {
         </span>
       </div>
 
-      <form action={formAction} key={resetKey} className="space-y-4">
+      <form action={formAction} key={formKey} className="space-y-4">
         <div className="flex gap-3">
           <input
             type="text"
@@ -124,7 +116,10 @@ export default function TodoFormWithActions({ onSuccess }: TodoFormProps) {
           <ul className="mt-3 ml-4 space-y-2 text-xs leading-relaxed">
             <li className="flex items-start gap-2">
               <span className="text-indigo-600 mt-0.5">•</span>
-              <span>Uses React Server Actions for server-side logic</span>
+              <span>
+                Passes the server action directly to{' '}
+                <code className="bg-gray-100 px-1 rounded">useActionState</code>
+              </span>
             </li>
             <li className="flex items-start gap-2">
               <span className="text-indigo-600 mt-0.5">•</span>
