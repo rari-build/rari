@@ -190,6 +190,12 @@ impl LinearGradient {
                         let g = u8::from_str_radix(&hex[1..2], 16).ok()? * 17;
                         let b = u8::from_str_radix(&hex[2..3], 16).ok()? * 17;
                         [r, g, b, 255]
+                    } else if hex.len() == 4 {
+                        let r = u8::from_str_radix(&hex[0..1], 16).ok()? * 17;
+                        let g = u8::from_str_radix(&hex[1..2], 16).ok()? * 17;
+                        let b = u8::from_str_radix(&hex[2..3], 16).ok()? * 17;
+                        let a = u8::from_str_radix(&hex[3..4], 16).ok()? * 17;
+                        [r, g, b, a]
                     } else if hex.len() == 8 {
                         let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
                         let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
@@ -392,6 +398,17 @@ mod tests {
         let grad = LinearGradient::parse("linear-gradient(#ff0000, #0000ff)").unwrap();
         assert_eq!(grad.stops[0].color, Rgba([255, 0, 0, 255]));
         assert_eq!(grad.stops[1].color, Rgba([0, 0, 255, 255]));
+    }
+
+    #[test]
+    fn test_parse_shorthand_hex_colors() {
+        let grad = LinearGradient::parse("linear-gradient(#f00, #0ff)").unwrap();
+        assert_eq!(grad.stops[0].color, Rgba([255, 0, 0, 255]));
+        assert_eq!(grad.stops[1].color, Rgba([0, 255, 255, 255]));
+
+        let grad = LinearGradient::parse("linear-gradient(#fff0, #0008)").unwrap();
+        assert_eq!(grad.stops[0].color, Rgba([255, 255, 255, 0]));
+        assert_eq!(grad.stops[1].color, Rgba([0, 0, 0, 136]));
     }
 
     #[test]
