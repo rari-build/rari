@@ -116,13 +116,34 @@ impl ImageRenderer {
             "blue" => Rgba([0, 0, 255, 255]),
             _ if color_str.starts_with('#') => {
                 let hex = color_str.trim_start_matches('#');
-                if hex.len() == 6 {
-                    let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(0);
-                    let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(0);
-                    let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(0);
-                    Rgba([r, g, b, 255])
-                } else {
-                    Rgba([0, 0, 0, 255])
+                match hex.len() {
+                    3 => {
+                        let r = u8::from_str_radix(&hex[0..1], 16).unwrap_or(0) * 17;
+                        let g = u8::from_str_radix(&hex[1..2], 16).unwrap_or(0) * 17;
+                        let b = u8::from_str_radix(&hex[2..3], 16).unwrap_or(0) * 17;
+                        Rgba([r, g, b, 255])
+                    }
+                    4 => {
+                        let r = u8::from_str_radix(&hex[0..1], 16).unwrap_or(0) * 17;
+                        let g = u8::from_str_radix(&hex[1..2], 16).unwrap_or(0) * 17;
+                        let b = u8::from_str_radix(&hex[2..3], 16).unwrap_or(0) * 17;
+                        let a = u8::from_str_radix(&hex[3..4], 16).unwrap_or(0) * 17;
+                        Rgba([r, g, b, a])
+                    }
+                    6 => {
+                        let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(0);
+                        let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(0);
+                        let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(0);
+                        Rgba([r, g, b, 255])
+                    }
+                    8 => {
+                        let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(0);
+                        let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(0);
+                        let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(0);
+                        let a = u8::from_str_radix(&hex[6..8], 16).unwrap_or(0);
+                        Rgba([r, g, b, a])
+                    }
+                    _ => Rgba([0, 0, 0, 255]),
                 }
             }
             _ if color_str.starts_with("rgb(") => {
@@ -139,5 +160,32 @@ impl ImageRenderer {
             }
             _ => Rgba([0, 0, 0, 255]),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use image::Rgba;
+
+    use super::ImageRenderer;
+
+    #[test]
+    fn parse_color_accepts_shorthand_hex() {
+        assert_eq!(ImageRenderer::parse_color("#fff"), Rgba([255, 255, 255, 255]));
+        assert_eq!(ImageRenderer::parse_color("#000"), Rgba([0, 0, 0, 255]));
+        assert_eq!(ImageRenderer::parse_color("#f0f"), Rgba([255, 0, 255, 255]));
+        assert_eq!(ImageRenderer::parse_color("#abc"), Rgba([170, 187, 204, 255]));
+    }
+
+    #[test]
+    fn parse_color_accepts_shorthand_hex_with_alpha() {
+        assert_eq!(ImageRenderer::parse_color("#fff0"), Rgba([255, 255, 255, 0]));
+        assert_eq!(ImageRenderer::parse_color("#f008"), Rgba([255, 0, 0, 136]));
+    }
+
+    #[test]
+    fn parse_color_accepts_six_and_eight_digit_hex() {
+        assert_eq!(ImageRenderer::parse_color("#f0f6fc"), Rgba([240, 246, 252, 255]));
+        assert_eq!(ImageRenderer::parse_color("#ff000080"), Rgba([255, 0, 0, 128]));
     }
 }
