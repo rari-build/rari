@@ -1,3 +1,12 @@
+## [@rari/use-cache@0.15.12] - 2026-08-13
+
+### ⚙️ Miscellaneous Tasks
+
+- *(dependencies)* update async-trait to 0.1.92, thiserror to 2.0.20, and various other package versions by @skiniks
+- *(dependencies)* update optional dependencies to version 0.15.12 for all platforms by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/@rari/use-cache@0.15.11...@rari/use-cache@0.15.12
 ## [@rari/use-cache@0.15.11] - 2026-08-12
 
 ### ⚙️ Miscellaneous Tasks
