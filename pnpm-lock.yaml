@@ -31,8 +31,8 @@ catalogs:
       version: 1.7.0
   default:
     rari:
-      specifier: ^0.15.11
-      version: 0.15.11
+      specifier: ^0.15.12
+      version: 0.15.12
   eslint:
     '@e18e/eslint-plugin':
       specifier: ^0.5.1
@@ -550,7 +550,7 @@ importers:
         version: 1.416.0
       rari:
         specifier: 'catalog:'
-        version: 0.15.11(@mdx-js/mdx@3.1.1(supports-color@8.1.1))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(webpack@5.107.2(lightningcss@1.33.0)(postcss@8.5.26))
+        version: 0.15.12(@mdx-js/mdx@3.1.1(supports-color@8.1.1))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(webpack@5.107.2(lightningcss@1.33.0)(postcss@8.5.26))
       react:
         specifier: catalog:react
         version: 19.2.8
@@ -2037,22 +2037,10 @@ packages:
   '@posthog/types@1.403.0':
     resolution: {integrity: sha512-QbkO0epmdq38xhxwP214YRi0vgpZiXqhamaTjKT6kVGJYTtsE5qZ1GTgLp12IYehg/rd+whYYErH3/DeX8pj3Q==}
 
-  '@rari/use-cache-darwin-arm64@0.15.11':
-    resolution: {integrity: sha512-n70N8mgpqpNIwqZLh4QTzpWerxJlrDlnSuxevDPala1UXNE9Ye66GX8QrvDL3cOUGWjOnYClNDjugp2tI+XRFQ==}
-    engines: {node: '>=22.18.0'}
-    cpu: [arm64]
-    os: [darwin]
-
   '@rari/use-cache-darwin-arm64@0.15.12':
     resolution: {integrity: sha512-jPO8Xlg2cnItuYNDYeBTG8Vds5osF4tgNjcQAJ0rotY4xddqM5OetjuFBd86RzC4+xWjWkk6cqVNEZs0Utv8jQ==}
     engines: {node: '>=22.18.0'}
     cpu: [arm64]
-    os: [darwin]
-
-  '@rari/use-cache-darwin-x64@0.15.11':
-    resolution: {integrity: sha512-GpHybPaJTllce8JgAnqJMGyociNsD52lwSXF3ntQSLhNTh+PFVepQt/T6mLlZYNbI+zBQ4xGVAKLfdvMRQU1+g==}
-    engines: {node: '>=22.18.0'}
-    cpu: [x64]
     os: [darwin]
 
   '@rari/use-cache-darwin-x64@0.15.12':
@@ -2061,22 +2049,10 @@ packages:
     cpu: [x64]
     os: [darwin]
 
-  '@rari/use-cache-linux-arm64@0.15.11':
-    resolution: {integrity: sha512-NlrQzM/fmIHzT+FYIaXdJ72OhTH4lAEk+LzcfcvnZHrggFPqg+auOIfFcfkfIQ0Qob5+1484D+YOpPG68hpLHQ==}
-    engines: {node: '>=22.18.0'}
-    cpu: [arm64]
-    os: [linux]
-
   '@rari/use-cache-linux-arm64@0.15.12':
     resolution: {integrity: sha512-6d2utMVcGwVJqNQXHFTPJfTDVEahTYiN0TNzwa8B8zsXUutgC5hGGHgDQ6gepbcL46yV7jeJlyrIxeI0AxxeCw==}
     engines: {node: '>=22.18.0'}
     cpu: [arm64]
-    os: [linux]
-
-  '@rari/use-cache-linux-x64@0.15.11':
-    resolution: {integrity: sha512-/qhhtQBODZJRjw9ZTatPnFDI8rK05bvETCkkuw8nNGkpkMoikTxqYTiZ/IlGgv20665O8cZ7grCwGmLoXPb0Ew==}
-    engines: {node: '>=22.18.0'}
-    cpu: [x64]
     os: [linux]
 
   '@rari/use-cache-linux-x64@0.15.12':
@@ -2085,22 +2061,10 @@ packages:
     cpu: [x64]
     os: [linux]
 
-  '@rari/use-cache-win32-arm64@0.15.11':
-    resolution: {integrity: sha512-nsmJc61mRCdBvkDv5PGdoYpqr3o9Uf75xshOfW+ZpmdKgKD0x1UIauV14cZ8opv773NSvD2UKAEWTgSnw1yyqQ==}
-    engines: {node: '>=22.18.0'}
-    cpu: [arm64]
-    os: [win32]
-
   '@rari/use-cache-win32-arm64@0.15.12':
     resolution: {integrity: sha512-Gd3Bkx753JDGLdNb4yfmUdo3glw27y/8r3bFtpFKTP5CBlaadSX1UHGAJ7vnCmkXgicU3jHfY72vppL/V7IMxg==}
     engines: {node: '>=22.18.0'}
     cpu: [arm64]
-    os: [win32]
-
-  '@rari/use-cache-win32-x64@0.15.11':
-    resolution: {integrity: sha512-bDmug6nsZhjgU33ROynd0g7pZlYgZ9e87YNYprJ++EQ6lDaGVGzjNHonczzECAW2jFHOrSkNPWSnpuujA7aNnw==}
-    engines: {node: '>=22.18.0'}
-    cpu: [x64]
     os: [win32]
 
   '@rari/use-cache-win32-x64@0.15.12':
@@ -2109,23 +2073,11 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@rari/use-cache@0.15.11':
-    resolution: {integrity: sha512-eRRAqkbyAY3h+0fPlBaYsVP4FHiEuOQHq6BeCRVsRpKcsGV3lqLHcM2xKMG/X2Ba5DyUD4GGoer4na2l6XTDQg==}
-    engines: {node: '>=22.18.0'}
-    peerDependencies:
-      react-server-dom-webpack: ^19.2.8
-
   '@rari/use-cache@0.15.12':
     resolution: {integrity: sha512-p/k97FqVAFqyOQXMfyfadmk2GePUtZBl6UzI7HmlD3znhrt0dXjeDZQCdNGzIQ+4UJoWwDGN6DLotw8UmvhH/A==}
     engines: {node: '>=22.18.0'}
     peerDependencies:
       react-server-dom-webpack: ^19.2.8
-
-  '@rolldown/binding-android-arm64@1.2.3':
-    resolution: {integrity: sha512-zrJtHDcaZJ1Fp7xf4hNl+7seH9Cn/N5TwLYkhgXREtBwAd/jaqW3uqeHxpDugJLVICWg4eW44kOQEGJ1r6jCGw==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [arm64]
-    os: [android]
 
   '@rolldown/binding-android-arm64@1.2.4':
     resolution: {integrity: sha512-jHC2cnyKz5xU2fhECtFl8OZ83cYNt13GZQD+0uMJ/X3o+ijmd56okHhTUwxVSHPx1IRVIJEZ1/1pPzeLCU6XKA==}
@@ -2133,22 +2085,10 @@ packages:
     cpu: [arm64]
     os: [android]
 
-  '@rolldown/binding-darwin-arm64@1.2.3':
-    resolution: {integrity: sha512-ieIiibVCp0tX7TLu2cafoNPv8wJyYi01ekXpbf8q2j7F4rGAhhXb/eQh7ge9DRBY78GwmRQtvjZDux7EDbA8kA==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [arm64]
-    os: [darwin]
-
   '@rolldown/binding-darwin-arm64@1.2.4':
     resolution: {integrity: sha512-Dc5mPD8F5F/FS8i01syd7FTF6yB2fVthH/TRkjwJkzUK6EpoxHtqvZQP5Zwq80/5z19TWYHIg1KOHboCgVx/aQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm64]
-    os: [darwin]
-
-  '@rolldown/binding-darwin-x64@1.2.3':
-    resolution: {integrity: sha512-Zh9tCon19eDXJoihx0rqKhMUlMYqzwj3aPsSuHmI4RWZh62dWUL+DJN4C5YQya5TcQBJU/Fe8+rY0jhXTQITqA==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [x64]
     os: [darwin]
 
   '@rolldown/binding-darwin-x64@1.2.4':
@@ -2157,36 +2097,17 @@ packages:
     cpu: [x64]
     os: [darwin]
 
-  '@rolldown/binding-freebsd-x64@1.2.3':
-    resolution: {integrity: sha512-nGbJWewA1wrXXZiQhjAT5rhibGfns5ZNkDVqxsO6zJ3f3YvpoDNNmGMSbbhLuXKjNScaBJVOAboztAWVespQMg==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [x64]
-    os: [freebsd]
-
   '@rolldown/binding-freebsd-x64@1.2.4':
     resolution: {integrity: sha512-rSJoreDE/HoIzoaib6MTp5jQtCTdMHKIvItAKT/ImS6Y6Ww76oUaeMyp4Vc/fAgd/ehji068IxetHXAnqUwN9A==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [x64]
     os: [freebsd]
 
-  '@rolldown/binding-linux-arm-gnueabihf@1.2.3':
-    resolution: {integrity: sha512-QNniJr5Kml0kDEB98jiDOJjXNroxIIi0IXIbdYzY26Xt1pVbeP62+KnoIZLwirOymX/0jDk/2gI/bNUv7A7OIw==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [arm]
-    os: [linux]
-
   '@rolldown/binding-linux-arm-gnueabihf@1.2.4':
     resolution: {integrity: sha512-/jm8OGHgn7oGaJu3i/qZI9spUGcJ+y/lk43ttQ/iO1tOd9NissG6o97bighBCiL+BKRngmcDuR6ikfwYdJmVuQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm]
     os: [linux]
-
-  '@rolldown/binding-linux-arm64-gnu@1.2.3':
-    resolution: {integrity: sha512-TkqEAcmmvH3I/q4114NB4RVt6241Dao48pF45uLcFGrwAaIn0iITgTAKP/dLjbN0R4buJjGb91+UHSoFmpgIWw==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [arm64]
-    os: [linux]
-    libc: [glibc]
 
   '@rolldown/binding-linux-arm64-gnu@1.2.4':
     resolution: {integrity: sha512-tIP06BeD9EqvECBrPZ+sqdPlYrT+aYaAiu1wYziVx5elRK/ftm33JxVDy2bXGbr6J0CrtirCkR87/X5a2euEng==}
@@ -2195,13 +2116,6 @@ packages:
     os: [linux]
     libc: [glibc]
 
-  '@rolldown/binding-linux-arm64-musl@1.2.3':
-    resolution: {integrity: sha512-NHqjnxpsndf4MPymxteFAWHHfkTL8HjWh1KB7z23ofZ6QO2euONuxDXjat69dKZRALnGypg8k8SsK8vZJoXv1Q==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [arm64]
-    os: [linux]
-    libc: [musl]
-
   '@rolldown/binding-linux-arm64-musl@1.2.4':
     resolution: {integrity: sha512-Ql1Q0EQqVThvn9VAVlwNzsUvbSFtCMGjLpRRi4pk5i7NZZ4n5ISiLMjHYtus4VQ2PvkSw24zyaCVsiS+sXPj1w==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -2209,24 +2123,10 @@ packages:
     os: [linux]
     libc: [musl]
 
-  '@rolldown/binding-linux-ppc64-gnu@1.2.3':
-    resolution: {integrity: sha512-6tbrbwfz5GB9DQ4Jwo6hy9v+vR31xZlvzZ6n5Xut6Hhx5PvrA9q/HsK8KMaYQp063iqZGXwNvZtYNLD7EM/x0w==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [ppc64]
-    os: [linux]
-    libc: [glibc]
-
   '@rolldown/binding-linux-ppc64-gnu@1.2.4':
     resolution: {integrity: sha512-GjbjXD4XXfN19D0LZNbmiCBUoDiRACsYHr0yaIbbn8aFsXjHZifcYqu/W5Er5X2X990WjHXFrxarn5chzItorQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [ppc64]
-    os: [linux]
-    libc: [glibc]
-
-  '@rolldown/binding-linux-s390x-gnu@1.2.3':
-    resolution: {integrity: sha512-oyuXxXmoZHjXC917IAPFAAv4wWAa0cM9afk8nx1+9/jNNOX1uPf8yDA6p7G0RypOfw/X0PQt5IfoquY1um+zSg==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [s390x]
     os: [linux]
     libc: [glibc]
 
@@ -2237,26 +2137,12 @@ packages:
     os: [linux]
     libc: [glibc]
 
-  '@rolldown/binding-linux-x64-gnu@1.2.3':
-    resolution: {integrity: sha512-TytMwF2KVGqP2tgd0I1OY0PAv78dZRAYcF5ssDzjM34SUXCED3uXvSd5+lHoC0bTD6eEdFz7LdQNCO1y0oVk9w==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [x64]
-    os: [linux]
-    libc: [glibc]
-
   '@rolldown/binding-linux-x64-gnu@1.2.4':
     resolution: {integrity: sha512-4/GyVjmhR+Tc6HLJvwc1sOhPqAZtySiSMesOZyX6JQ5XBxoTDEMKQzvo07NIK6nTon/SivlZqvhzvuVBNQhObQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
-
-  '@rolldown/binding-linux-x64-musl@1.2.3':
-    resolution: {integrity: sha512-/E9m3qstrJFVPoULV25mVQblSNExY2+kBsYe4sy0Tn0yOOgJ8wZbZt3KnRbF/XeU2Gl1STKUQnDNTqhIE5MD4A==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [x64]
-    os: [linux]
-    libc: [musl]
 
   '@rolldown/binding-linux-x64-musl@1.2.4':
     resolution: {integrity: sha512-l9eeLsCNvPpmSXUej0etw/J1eqV0Jj1D5G/xG6YTijmE6dkv6E2QezgWbTfQk63v952DPqrjOCoiqxq7Bw0YUQ==}
@@ -2265,34 +2151,16 @@ packages:
     os: [linux]
     libc: [musl]
 
-  '@rolldown/binding-openharmony-arm64@1.2.3':
-    resolution: {integrity: sha512-Kr0OcsoQI816i6HOl3vFHpd1K0eZyh76zgfj4c1nTyaTsd5r2Mj1lwM4R90y/qaCfmTn9eHy0SKwi98eitRxug==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [arm64]
-    os: [openharmony]
-
   '@rolldown/binding-openharmony-arm64@1.2.4':
     resolution: {integrity: sha512-e0F355MSTMm3+UOqtV3L24gFUp2N5m1f8L/7d56deik6va+AXdrt9F8LbzGpeWGWRbZEDq4m8NVnJDeBtf9DZg==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm64]
     os: [openharmony]
 
-  '@rolldown/binding-win32-arm64-msvc@1.2.3':
-    resolution: {integrity: sha512-hOtMwTqnME+/gJcH/PCZ0wn0zPUjiWOgkHpxbSJpfGKMezHltx1S7/k1SitzVa7Ww2cqrDDaFbZEhcJZO8o+Jw==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [arm64]
-    os: [win32]
-
   '@rolldown/binding-win32-arm64-msvc@1.2.4':
     resolution: {integrity: sha512-AWLi0uBRYh6QlE7OKhiz+phZC0qwtij2QZmhmOdsLdFn64m7oMpooE9ICE3lhm9xMb4SpDo2WbHcxX1iFLFtqw==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm64]
-    os: [win32]
-
-  '@rolldown/binding-win32-x64-msvc@1.2.3':
-    resolution: {integrity: sha512-ekcqMMkI2PlhYnfzQnB/cEdYUVVJViWvoUyLrbzgDoi3Snfc1mVBwdnc306ufA5ejy8JSPjT2RlW1nQSjW7efg==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [x64]
     os: [win32]
 
   '@rolldown/binding-win32-x64-msvc@1.2.4':
@@ -4646,24 +4514,10 @@ packages:
   query-selector-shadow-dom@1.0.1:
     resolution: {integrity: sha512-lT5yCqEBgfoMYpf3F2xQRK7zEr1rhIIZuceDK6+xRkJQ4NMbHTwXqk4NkwDwQMNqXgG9r9fyHnzwNVs6zV5KRw==}
 
-  rari-darwin-arm64@0.15.11:
-    resolution: {integrity: sha512-C3rW1AmlC+WVK1apAfmxUCQEuoD3ZD4B50jE12j8kvRmHTNs21PTOLGV+uIO7Q+Jl0p+dThNGOM250ckidzC3g==}
-    engines: {node: '>=22.18.0'}
-    cpu: [arm64]
-    os: [darwin]
-    hasBin: true
-
   rari-darwin-arm64@0.15.12:
     resolution: {integrity: sha512-RJp0JFcJgAYtcwBockHveAz0fCfdViORN5LaBs8P/1PWkc75Ya5sjKiGdKrS5NTftfoHp2SeXa7NtL1PhvfNEw==}
     engines: {node: '>=22.18.0'}
     cpu: [arm64]
-    os: [darwin]
-    hasBin: true
-
-  rari-darwin-x64@0.15.11:
-    resolution: {integrity: sha512-kC252yhPEyBsucnQU4FKCo7TrjK1AsQX9ACNIM3BCiG/6poDtfsPKpVzLQVuZAt6TrLQ2Y7XLeffmBuIt/dG0w==}
-    engines: {node: '>=22.18.0'}
-    cpu: [x64]
     os: [darwin]
     hasBin: true
 
@@ -4674,24 +4528,10 @@ packages:
     os: [darwin]
     hasBin: true
 
-  rari-linux-arm64@0.15.11:
-    resolution: {integrity: sha512-H1/XZcCyoJGoNTTZyG3vmEOlAhi/3aaxY3/QH/Prc0mHgmRl3AQ4h1sR1gOCE32/AXNW91X8aEEH00mTprk4VQ==}
-    engines: {node: '>=22.18.0'}
-    cpu: [arm64]
-    os: [linux]
-    hasBin: true
-
   rari-linux-arm64@0.15.12:
     resolution: {integrity: sha512-Owxf6ivKMDBhU7P0xVU1ZNma6xJo9qiliiWFJV3I0+L9KIR1C5QeGNX9qXoelLssMnYC5r8QHQzfTEUUzsAbwA==}
     engines: {node: '>=22.18.0'}
     cpu: [arm64]
-    os: [linux]
-    hasBin: true
-
-  rari-linux-x64@0.15.11:
-    resolution: {integrity: sha512-8+RvVUYL/ryC4a7PvVfiwRsGXn+oKzcVzzR7CiY9+qkUmcijbS64K+ge2XXAGINt+Q4KShQrjr6V6qqBCJp7bQ==}
-    engines: {node: '>=22.18.0'}
-    cpu: [x64]
     os: [linux]
     hasBin: true
 
@@ -4702,24 +4542,10 @@ packages:
     os: [linux]
     hasBin: true
 
-  rari-win32-arm64@0.15.11:
-    resolution: {integrity: sha512-teh7hyBspbl2RFUFFG44Y7yXHUhIxj2jQ9Xv6ZwEf2q4Bzx2Z+5dP4CEwa4ujK1Y2uGKfah1/4WgZiorpjN4YA==}
-    engines: {node: '>=22.18.0'}
-    cpu: [arm64]
-    os: [win32]
-    hasBin: true
-
   rari-win32-arm64@0.15.12:
     resolution: {integrity: sha512-ftMmH1NyYYSRUD6DDeuMD7bVZCi+CaJ5pyFU5Nw2ur9hBc/s0ChM7dZ6i04QVUgSMBDPm7bUemIO61uaA4/fIA==}
     engines: {node: '>=22.18.0'}
     cpu: [arm64]
-    os: [win32]
-    hasBin: true
-
-  rari-win32-x64@0.15.11:
-    resolution: {integrity: sha512-iTH6qS6/us7FT5rh4o/1l3GX1TFRwu4hMJOd73TFJTZKBMkXYwWMqlWDqHNiGS52ZsA/WOkEXdv680ky5nY/Kg==}
-    engines: {node: '>=22.18.0'}
-    cpu: [x64]
     os: [win32]
     hasBin: true
 
@@ -4730,8 +4556,8 @@ packages:
     os: [win32]
     hasBin: true
 
-  rari@0.15.11:
-    resolution: {integrity: sha512-faGFZciHBC4CYuj5o02hX6zOo6sV33p749p9WbcWGB6ZqOpMyu8iw4nghxfAEIv7NmozU0cObxEYHkUFaOR3oQ==}
+  rari@0.15.12:
+    resolution: {integrity: sha512-eRg6XAT7m4ZLHYrq30JyDCGrKc760yQou3HeGnkDnjFq3crAkzY/MWdkXXqOkcFM9nmcQDf1GhhOH1eGpJkxKQ==}
     engines: {node: '>=22.18.0'}
     hasBin: true
     peerDependencies:
@@ -4811,11 +4637,6 @@ packages:
 
   robust-predicates@3.0.3:
     resolution: {integrity: sha512-NS3levdsRIUOmiJ8FZWCP7LG3QpJyrs/TE0Zpf1yvZu8cAJJ6QMW92H1c7kWpdIHo8RvmLxN/o2JXTKHp74lUA==}
-
-  rolldown@1.2.3:
-    resolution: {integrity: sha512-rn9wpmxplLf7NLNyCk9FyWh3FM43DbY8jOzCdEPzH7uflhTftRbCEpqi6Ly2osgoU8OwObtmavMbWLaWy4LX7A==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    hasBin: true
 
   rolldown@1.2.4:
     resolution: {integrity: sha512-rSr7irW0K7QRWzjdJXqZowkcRdDtjRduh43rBltnVKd0VFq839l1lJoDvGJb6gl7+4rTTCrPWu+YfujUL8Ug7w==}
@@ -6374,52 +6195,22 @@ snapshots:
 
   '@posthog/types@1.403.0': {}
 
-  '@rari/use-cache-darwin-arm64@0.15.11':
-    optional: true
-
   '@rari/use-cache-darwin-arm64@0.15.12':
-    optional: true
-
-  '@rari/use-cache-darwin-x64@0.15.11':
     optional: true
 
   '@rari/use-cache-darwin-x64@0.15.12':
     optional: true
 
-  '@rari/use-cache-linux-arm64@0.15.11':
-    optional: true
-
   '@rari/use-cache-linux-arm64@0.15.12':
-    optional: true
-
-  '@rari/use-cache-linux-x64@0.15.11':
     optional: true
 
   '@rari/use-cache-linux-x64@0.15.12':
     optional: true
 
-  '@rari/use-cache-win32-arm64@0.15.11':
-    optional: true
-
   '@rari/use-cache-win32-arm64@0.15.12':
     optional: true
 
-  '@rari/use-cache-win32-x64@0.15.11':
-    optional: true
-
   '@rari/use-cache-win32-x64@0.15.12':
-    optional: true
-
-  '@rari/use-cache@0.15.11(react-server-dom-webpack@19.2.8(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(webpack@5.107.2(lightningcss@1.33.0)(postcss@8.5.26)))':
-    dependencies:
-      react-server-dom-webpack: 19.2.8(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(webpack@5.107.2(lightningcss@1.33.0)(postcss@8.5.26))
-    optionalDependencies:
-      '@rari/use-cache-darwin-arm64': 0.15.11
-      '@rari/use-cache-darwin-x64': 0.15.11
-      '@rari/use-cache-linux-arm64': 0.15.11
-      '@rari/use-cache-linux-x64': 0.15.11
-      '@rari/use-cache-win32-arm64': 0.15.11
-      '@rari/use-cache-win32-x64': 0.15.11
     optional: true
 
   '@rari/use-cache@0.15.12(react-server-dom-webpack@19.2.8(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(webpack@5.107.2(lightningcss@1.33.0)(postcss@8.5.26)))':
@@ -6434,85 +6225,43 @@ snapshots:
       '@rari/use-cache-win32-x64': 0.15.12
     optional: true
 
-  '@rolldown/binding-android-arm64@1.2.3':
-    optional: true
-
   '@rolldown/binding-android-arm64@1.2.4':
-    optional: true
-
-  '@rolldown/binding-darwin-arm64@1.2.3':
     optional: true
 
   '@rolldown/binding-darwin-arm64@1.2.4':
     optional: true
 
-  '@rolldown/binding-darwin-x64@1.2.3':
-    optional: true
-
   '@rolldown/binding-darwin-x64@1.2.4':
-    optional: true
-
-  '@rolldown/binding-freebsd-x64@1.2.3':
     optional: true
 
   '@rolldown/binding-freebsd-x64@1.2.4':
     optional: true
 
-  '@rolldown/binding-linux-arm-gnueabihf@1.2.3':
-    optional: true
-
   '@rolldown/binding-linux-arm-gnueabihf@1.2.4':
-    optional: true
-
-  '@rolldown/binding-linux-arm64-gnu@1.2.3':
     optional: true
 
   '@rolldown/binding-linux-arm64-gnu@1.2.4':
     optional: true
 
-  '@rolldown/binding-linux-arm64-musl@1.2.3':
-    optional: true
-
   '@rolldown/binding-linux-arm64-musl@1.2.4':
-    optional: true
-
-  '@rolldown/binding-linux-ppc64-gnu@1.2.3':
     optional: true
 
   '@rolldown/binding-linux-ppc64-gnu@1.2.4':
     optional: true
 
-  '@rolldown/binding-linux-s390x-gnu@1.2.3':
-    optional: true
-
   '@rolldown/binding-linux-s390x-gnu@1.2.4':
-    optional: true
-
-  '@rolldown/binding-linux-x64-gnu@1.2.3':
     optional: true
 
   '@rolldown/binding-linux-x64-gnu@1.2.4':
     optional: true
 
-  '@rolldown/binding-linux-x64-musl@1.2.3':
-    optional: true
-
   '@rolldown/binding-linux-x64-musl@1.2.4':
-    optional: true
-
-  '@rolldown/binding-openharmony-arm64@1.2.3':
     optional: true
 
   '@rolldown/binding-openharmony-arm64@1.2.4':
     optional: true
 
-  '@rolldown/binding-win32-arm64-msvc@1.2.3':
-    optional: true
-
   '@rolldown/binding-win32-arm64-msvc@1.2.4':
-    optional: true
-
-  '@rolldown/binding-win32-x64-msvc@1.2.3':
     optional: true
 
   '@rolldown/binding-win32-x64-msvc@1.2.4':
@@ -9317,58 +9066,40 @@ snapshots:
 
   query-selector-shadow-dom@1.0.1: {}
 
-  rari-darwin-arm64@0.15.11:
-    optional: true
-
   rari-darwin-arm64@0.15.12:
-    optional: true
-
-  rari-darwin-x64@0.15.11:
     optional: true
 
   rari-darwin-x64@0.15.12:
     optional: true
 
-  rari-linux-arm64@0.15.11:
-    optional: true
-
   rari-linux-arm64@0.15.12:
-    optional: true
-
-  rari-linux-x64@0.15.11:
     optional: true
 
   rari-linux-x64@0.15.12:
     optional: true
 
-  rari-win32-arm64@0.15.11:
-    optional: true
-
   rari-win32-arm64@0.15.12:
-    optional: true
-
-  rari-win32-x64@0.15.11:
     optional: true
 
   rari-win32-x64@0.15.12:
     optional: true
 
-  rari@0.15.11(@mdx-js/mdx@3.1.1(supports-color@8.1.1))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(webpack@5.107.2(lightningcss@1.33.0)(postcss@8.5.26)):
+  rari@0.15.12(@mdx-js/mdx@3.1.1(supports-color@8.1.1))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(webpack@5.107.2(lightningcss@1.33.0)(postcss@8.5.26)):
     dependencies:
       lightningcss: 1.33.0
       react: 19.2.8
       react-dom: 19.2.8(react@19.2.8)
       react-server-dom-webpack: 19.2.8(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(webpack@5.107.2(lightningcss@1.33.0)(postcss@8.5.26))
-      rolldown: 1.2.3
+      rolldown: 1.2.4
     optionalDependencies:
       '@mdx-js/mdx': 3.1.1(supports-color@8.1.1)
-      '@rari/use-cache': 0.15.11(react-server-dom-webpack@19.2.8(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(webpack@5.107.2(lightningcss@1.33.0)(postcss@8.5.26)))
-      rari-darwin-arm64: 0.15.11
-      rari-darwin-x64: 0.15.11
-      rari-linux-arm64: 0.15.11
-      rari-linux-x64: 0.15.11
-      rari-win32-arm64: 0.15.11
-      rari-win32-x64: 0.15.11
+      '@rari/use-cache': 0.15.12(react-server-dom-webpack@19.2.8(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(webpack@5.107.2(lightningcss@1.33.0)(postcss@8.5.26)))
+      rari-darwin-arm64: 0.15.12
+      rari-darwin-x64: 0.15.12
+      rari-linux-arm64: 0.15.12
+      rari-linux-x64: 0.15.12
+      rari-win32-arm64: 0.15.12
+      rari-win32-x64: 0.15.12
     transitivePeerDependencies:
       - webpack
 
@@ -9482,26 +9213,6 @@ snapshots:
   resolve-pkg-maps@1.0.0: {}
 
   robust-predicates@3.0.3: {}
-
-  rolldown@1.2.3:
-    dependencies:
-      '@oxc-project/types': 0.143.0
-      '@rolldown/pluginutils': 1.0.0
-    optionalDependencies:
-      '@rolldown/binding-android-arm64': 1.2.3
-      '@rolldown/binding-darwin-arm64': 1.2.3
-      '@rolldown/binding-darwin-x64': 1.2.3
-      '@rolldown/binding-freebsd-x64': 1.2.3
-      '@rolldown/binding-linux-arm-gnueabihf': 1.2.3
-      '@rolldown/binding-linux-arm64-gnu': 1.2.3
-      '@rolldown/binding-linux-arm64-musl': 1.2.3
-      '@rolldown/binding-linux-ppc64-gnu': 1.2.3
-      '@rolldown/binding-linux-s390x-gnu': 1.2.3
-      '@rolldown/binding-linux-x64-gnu': 1.2.3
-      '@rolldown/binding-linux-x64-musl': 1.2.3
-      '@rolldown/binding-openharmony-arm64': 1.2.3
-      '@rolldown/binding-win32-arm64-msvc': 1.2.3
-      '@rolldown/binding-win32-x64-msvc': 1.2.3
 
   rolldown@1.2.4:
     dependencies:
