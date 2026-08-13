@@ -115,7 +115,9 @@ impl ImageRenderer {
             "green" => Rgba([0, 255, 0, 255]),
             "blue" => Rgba([0, 0, 255, 255]),
             _ if color_str.starts_with('#') => {
-                let hex = color_str.trim_start_matches('#');
+                let Some(hex) = color_str.strip_prefix('#') else {
+                    return Rgba([0, 0, 0, 255]);
+                };
                 if !hex.chars().all(|c| c.is_ascii_hexdigit()) {
                     return Rgba([0, 0, 0, 255]);
                 }
@@ -199,5 +201,12 @@ mod tests {
         assert_eq!(ImageRenderer::parse_color("#xyzxyz"), Rgba([0, 0, 0, 255]));
         // Multi-byte input must not panic on byte slicing.
         assert_eq!(ImageRenderer::parse_color("#ffß"), Rgba([0, 0, 0, 255]));
+    }
+
+    #[test]
+    fn parse_color_rejects_repeated_hash_prefix() {
+        assert_eq!(ImageRenderer::parse_color("##fff"), Rgba([0, 0, 0, 255]));
+        assert_eq!(ImageRenderer::parse_color("###000"), Rgba([0, 0, 0, 255]));
+        assert_eq!(ImageRenderer::parse_color("##ff0000"), Rgba([0, 0, 0, 255]));
     }
 }

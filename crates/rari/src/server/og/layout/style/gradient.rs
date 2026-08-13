@@ -179,7 +179,7 @@ impl LinearGradient {
             "silver" => [192, 192, 192, 255],
             _ => {
                 if color_str.starts_with('#') {
-                    let hex = color_str.trim_start_matches('#');
+                    let hex = color_str.strip_prefix('#')?;
                     if !hex.chars().all(|c| c.is_ascii_hexdigit()) {
                         return None;
                     }
@@ -420,6 +420,15 @@ mod tests {
         assert!(LinearGradient::parse("linear-gradient(#ffß, #00ß)").is_none());
 
         let grad = LinearGradient::parse("linear-gradient(#ggg, blue)").unwrap();
+        assert_eq!(grad.stops.len(), 1);
+        assert_eq!(grad.stops[0].color, Rgba([0, 0, 255, 255]));
+    }
+
+    #[test]
+    fn test_parse_rejects_repeated_hash_prefix() {
+        assert!(LinearGradient::parse("linear-gradient(##fff, ##000)").is_none());
+
+        let grad = LinearGradient::parse("linear-gradient(##ff0000, blue)").unwrap();
         assert_eq!(grad.stops.len(), 1);
         assert_eq!(grad.stops[0].color, Rgba([0, 0, 255, 255]));
     }
