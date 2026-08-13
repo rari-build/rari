@@ -73,9 +73,9 @@ deno_semver = { workspace = true }
 # === Async & Concurrency ===
 async-compression = { version = "0.4.43", features = ["brotli", "gzip", "tokio", "zstd"] }
 async-stream = "0.3.6"
-async-trait = "0.1.91"
-futures = "0.3.33"
-futures-util = "0.3.33"
+async-trait = "0.1.92"
+futures = "0.3.34"
+futures-util = "0.3.34"
 tokio = { workspace = true, features = [
   "fs",
   "io-util",
@@ -123,7 +123,7 @@ image = { version = "0.25.10", default-features = false, features = [
 parley = "0.11.0"
 resvg = "0.48.1"
 swash = "0.2.10"
-taffy = "0.12.2"
+taffy = "0.13.0"
 webp = "0.3.1"
 wuff = "0.2.8"
 zeno = "0.3.3"

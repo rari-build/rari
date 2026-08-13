@@ -12,13 +12,13 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 deno_ast = { workspace = true, features = ["codegen", "transforms", "visit"] }
 hex = { workspace = true }
-napi = { version = "3.12.0", features = ["napi6", "serde-json"] }
-napi-derive = "3.6.2"
+napi = { version = "3.12.1", features = ["napi6", "serde-json"] }
+napi-derive = "3.6.3"
 rustc-hash = { workspace = true }
 sha2 = { workspace = true }
 
 [build-dependencies]
-napi-build = "2.4.0"
+napi-build = "2.4.1"
 
 [dev-dependencies]
 divan = { package = "codspeed-divan-compat", version = "5.0.1" }
