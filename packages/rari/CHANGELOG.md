@@ -1,3 +1,24 @@
+## [rari@0.15.12] - 2026-08-13
+
+### 🚀 Features
+
+- *(gradient)* enhance hex color parsing to support shorthand formats and add corresponding tests by @skiniks
+- *(renderer, gradient)* add validation for hex color strings and implement tests for invalid inputs by @skiniks
+- *(renderer, gradient)* improve hex color parsing by rejecting repeated hash prefixes and add tests for validation by @skiniks
+
+### 🚜 Refactor
+
+- *(patch-flight-browser-client)* remove fixRolldownDoubleDollarProperties function, update imports and enable minification by @skiniks
+- *(cache)* remove unnecessary #[expect] attribute from CacheHandler trait by @skiniks
+
+### ⚙️ Miscellaneous Tasks
+
+- *(dependencies)* update async-trait to 0.1.92, thiserror to 2.0.20, and various other package versions by @skiniks
+- *(dependencies)* bump rari package version to 0.15.12 by @skiniks
+- *(dependencies)* update optional dependencies to version 0.15.12 across all platforms by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.15.11...rari@0.15.12
 ## [rari@0.15.11] - 2026-08-12
 
 ### 🚀 Features
