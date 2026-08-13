@@ -5,10 +5,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { build } from 'rolldown'
-import {
-  fixRolldownDoubleDollarProperties,
-  patchBrowserClientForFormActions,
-} from '../../packages/rari/src/shared/patch-flight-browser-client.ts'
+import { patchBrowserClientForFormActions } from '../../packages/rari/src/shared/patch-flight-browser-client.ts'
 import { isRecord } from '../../packages/rari/src/shared/utils/type-guards.ts'
 
 const require = createRequire(import.meta.url)
@@ -349,6 +346,63 @@ function bundleShimEntry(entry: BundleEntry): void {
   writeVendorBundle(entry, entry.source)
 }
 
+function packageStillRequired(code: string, pkg: string): boolean {
+  const escaped = pkg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`(?:__require|\\b[A-Za-z_$][\\w$]*)\\(([\`"'])${escaped}\\1\\)`).test(code)
+}
+
+function rewriteExternalRequires(
+  code: string,
+  externals: Readonly<Record<string, string>>,
+): string {
+  const importLines: string[] = []
+  let result = code
+
+  // Unminified Rolldown emits `__require("pkg")`. Minified output uses a short
+  // CJS interop helper shaped like `l=(e=>typeof require...` with calls `l(\`pkg\`)`.
+  const minifiedHelper = /([A-Za-z_$][\w$]*)=\(e=>typeof require/.exec(result)?.[1]
+
+  for (const [pkg, target] of Object.entries(externals)) {
+    const ident = `__ext_${pkg.replace(/\W/g, '_')}`
+    const escaped = pkg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const patterns = [new RegExp(`__require\\((["'])${escaped}\\1\\)`, 'g')]
+
+    if (minifiedHelper != null && minifiedHelper !== '') {
+      const helper = minifiedHelper.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      patterns.push(new RegExp(`\\b${helper}\\(([\`"'])${escaped}\\1\\)`, 'g'))
+    }
+
+    let matched = false
+    for (const pattern of patterns) {
+      const next = result.replace(pattern, ident)
+      if (next !== result) {
+        result = next
+        matched = true
+      }
+    }
+
+    if (matched) importLines.push(`import * as ${ident} from '${target}';`)
+  }
+
+  if (importLines.length > 0) result = `${importLines.join('\n')}\n${result}`
+  return result
+}
+
+function assertExternalsRewritten(
+  entryName: string,
+  code: string,
+  externals: Readonly<Record<string, string>>,
+): void {
+  for (const pkg of Object.keys(externals)) {
+    if (packageStillRequired(code, pkg)) {
+      throw new Error(
+        `Failed to rewrite external require for "${pkg}" in ${entryName}. ` +
+          `Minified Rolldown output may have changed shape; update rewriteExternalRequires.`,
+      )
+    }
+  }
+}
+
 async function bundleCjsEntry(entry: BundleEntry): Promise<void> {
   const virtualId = `\0virtual:${entry.name}`
   const { source: entrySource, tempPath } = createEntrySource(entry)
@@ -371,7 +425,7 @@ async function bundleCjsEntry(entry: BundleEntry): Promise<void> {
       external: externalPatterns,
       output: {
         format: 'esm',
-        minify: false,
+        minify: true,
         exports: 'named',
       },
       resolve: {
@@ -399,23 +453,14 @@ async function bundleCjsEntry(entry: BundleEntry): Promise<void> {
     })
 
     const output = result.output[0]
-    // Rolldown emits external CJS deps as `__require("pkg")` calls, which throw
-    // in deno_core's V8 (no `require`). Rewrite them into a static ESM import of
-    // the shared vendor module so the whole runtime resolves to ONE React
-    // instance (file:///react_vendor/react.js).
+    // Rolldown emits external CJS deps as `__require("pkg")` (unminified) or a
+    // short helper call (minified), which throw in deno_core's V8 (no `require`).
+    // Rewrite them into a static ESM import of the shared vendor module so the
+    // whole runtime resolves to ONE React instance (file:///react_vendor/react.js).
     let code = output.code
     if (entry.externals) {
-      const importLines: string[] = []
-      for (const [pkg, target] of Object.entries(entry.externals)) {
-        const ident = `__ext_${pkg.replace(/\W/g, '_')}`
-        const escaped = pkg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-        const requirePattern = `__require\\((["'])${escaped}\\1\\)`
-        if (new RegExp(requirePattern).test(code)) {
-          importLines.push(`import * as ${ident} from '${target}';`)
-          code = code.replace(new RegExp(requirePattern, 'g'), ident)
-        }
-      }
-      if (importLines.length > 0) code = `${importLines.join('\n')}\n${code}`
+      code = rewriteExternalRequires(code, entry.externals)
+      assertExternalsRewritten(entry.name, code, entry.externals)
     }
 
     if (code.includes('__webpack_chunk_load__'))
@@ -425,12 +470,6 @@ async function bundleCjsEntry(entry: BundleEntry): Promise<void> {
       if (code.includes('__webpack_require__.u'))
         code = code.replaceAll('__webpack_require__.u', '({}).u')
       code = code.replaceAll('__webpack_require__', '__rari_rsc_require__')
-    }
-
-    // Rolldown collapses React's $$FORM_ACTION / $$IS_SIGNATURE_EQUAL property
-    // names to a single $ prefix. react-dom-server checks the double-$ names.
-    if (entry.name === 'react-server-dom-webpack-client') {
-      code = fixRolldownDoubleDollarProperties(code)
     }
 
     writeVendorBundle(entry, code)

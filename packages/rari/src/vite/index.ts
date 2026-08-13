@@ -22,10 +22,7 @@ import {
 } from '@/image/constants'
 import { rariProxy } from '@/proxy/build/vite-plugin'
 import { rariRouter } from '@/router/build/vite-plugin'
-import {
-  fixRolldownDoubleDollarProperties,
-  patchBrowserClientForFormActions,
-} from '@/shared/patch-flight-browser-client'
+import { patchBrowserClientForFormActions } from '@/shared/patch-flight-browser-client'
 import {
   BACKSLASH_REGEX,
   EXPORT_NAMED_DECLARATION_REGEX,
@@ -2029,9 +2026,7 @@ import * as React from 'react';\n${content}`
 
         const browserSource = fs.readFileSync(browserClientPath, 'utf-8')
         const edgeSource = fs.readFileSync(edgeClientPath, 'utf-8')
-        const cjsSource = fixRolldownDoubleDollarProperties(
-          patchBrowserClientForFormActions(browserSource, edgeSource),
-        )
+        const cjsSource = patchBrowserClientForFormActions(browserSource, edgeSource)
 
         return {
           code: `

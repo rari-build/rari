@@ -1,10 +1,7 @@
 import fs from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
-import {
-  fixRolldownDoubleDollarProperties,
-  patchBrowserClientForFormActions,
-} from '@rari/shared/patch-flight-browser-client'
+import { patchBrowserClientForFormActions } from '@rari/shared/patch-flight-browser-client'
 import { describe, expect, it } from 'vite-plus/test'
 
 const require = createRequire(import.meta.url)
@@ -26,13 +23,12 @@ describe('patchBrowserClientForFormActions', () => {
       'utf-8',
     )
 
-    const patched = fixRolldownDoubleDollarProperties(
-      patchBrowserClientForFormActions(browserSource, edgeSource),
-    )
+    const patched = patchBrowserClientForFormActions(browserSource, edgeSource)
 
     expect(patched).toContain('var boundCache = new WeakMap();')
     expect(patched).toContain('action: resolveRariFormActionUrl()')
     expect(patched).toContain('$$FORM_ACTION')
+    expect(patched).toContain('$$IS_SIGNATURE_EQUAL')
     expect(patched).not.toContain('function registerBoundServerReference(reference, id, bound) {')
   })
 
@@ -90,15 +86,6 @@ describe('patchBrowserClientForFormActions', () => {
 
     expect(() => patchBrowserClientForFormActions('irrelevant', fakeEdgeSource)).toThrow(
       /edge \$\$FORM_ACTION return block matched more than once/,
-    )
-  })
-})
-
-describe('fixRolldownDoubleDollarProperties', () => {
-  it('restores double-dollar React internal property names', () => {
-    const input = 'props.$FORM_ACTION = fn; props.$IS_SIGNATURE_EQUAL = eq;'
-    expect(fixRolldownDoubleDollarProperties(input)).toBe(
-      'props.$$FORM_ACTION = fn; props.$$IS_SIGNATURE_EQUAL = eq;',
     )
   })
 })
