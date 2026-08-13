@@ -1,3 +1,12 @@
+## [create-rari-app@0.5.24] - 2026-08-13
+
+### ⚙️ Miscellaneous Tasks
+
+- *(dependencies)* update async-trait to 0.1.92, thiserror to 2.0.20, and various other package versions by @skiniks
+- *(dependencies)* bump rari package version to 0.15.12 by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/create-rari-app@0.5.23...create-rari-app@0.5.24
 ## [create-rari-app@0.5.23] - 2026-08-12
 
 ### ⚙️ Miscellaneous Tasks
