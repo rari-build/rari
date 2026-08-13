@@ -77,10 +77,3 @@ export function patchBrowserClientForFormActions(
     'browser registerBoundServerReference',
   )
 }
-
-/** Rolldown collapses $$FORM_ACTION to $FORM_ACTION in property keys. */
-export function fixRolldownDoubleDollarProperties(code: string): string {
-  return code
-    .replace(/(?<!\$)\$FORM_ACTION/g, () => '$$FORM_ACTION')
-    .replace(/(?<!\$)\$IS_SIGNATURE_EQUAL/g, () => '$$IS_SIGNATURE_EQUAL')
-}
