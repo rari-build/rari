@@ -116,6 +116,9 @@ impl ImageRenderer {
             "blue" => Rgba([0, 0, 255, 255]),
             _ if color_str.starts_with('#') => {
                 let hex = color_str.trim_start_matches('#');
+                if !hex.chars().all(|c| c.is_ascii_hexdigit()) {
+                    return Rgba([0, 0, 0, 255]);
+                }
                 match hex.len() {
                     3 => {
                         let r = u8::from_str_radix(&hex[0..1], 16).unwrap_or(0) * 17;
@@ -187,5 +190,14 @@ mod tests {
     fn parse_color_accepts_six_and_eight_digit_hex() {
         assert_eq!(ImageRenderer::parse_color("#f0f6fc"), Rgba([240, 246, 252, 255]));
         assert_eq!(ImageRenderer::parse_color("#ff000080"), Rgba([255, 0, 0, 128]));
+    }
+
+    #[test]
+    fn parse_color_rejects_non_hex_tokens() {
+        assert_eq!(ImageRenderer::parse_color("#ggg"), Rgba([0, 0, 0, 255]));
+        assert_eq!(ImageRenderer::parse_color("#fffg"), Rgba([0, 0, 0, 255]));
+        assert_eq!(ImageRenderer::parse_color("#xyzxyz"), Rgba([0, 0, 0, 255]));
+        // Multi-byte input must not panic on byte slicing.
+        assert_eq!(ImageRenderer::parse_color("#ffß"), Rgba([0, 0, 0, 255]));
     }
 }

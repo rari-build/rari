@@ -180,6 +180,9 @@ impl LinearGradient {
             _ => {
                 if color_str.starts_with('#') {
                     let hex = color_str.trim_start_matches('#');
+                    if !hex.chars().all(|c| c.is_ascii_hexdigit()) {
+                        return None;
+                    }
                     if hex.len() == 6 {
                         let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
                         let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
@@ -409,6 +412,16 @@ mod tests {
         let grad = LinearGradient::parse("linear-gradient(#fff0, #0008)").unwrap();
         assert_eq!(grad.stops[0].color, Rgba([255, 255, 255, 0]));
         assert_eq!(grad.stops[1].color, Rgba([0, 0, 0, 136]));
+    }
+
+    #[test]
+    fn test_parse_rejects_invalid_hex_colors() {
+        assert!(LinearGradient::parse("linear-gradient(#ggg, #xyz)").is_none());
+        assert!(LinearGradient::parse("linear-gradient(#ffß, #00ß)").is_none());
+
+        let grad = LinearGradient::parse("linear-gradient(#ggg, blue)").unwrap();
+        assert_eq!(grad.stops.len(), 1);
+        assert_eq!(grad.stops[0].color, Rgba([0, 0, 255, 255]));
     }
 
     #[test]
