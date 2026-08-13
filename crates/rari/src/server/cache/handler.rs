@@ -42,10 +42,6 @@ pub enum CacheError {
     Backend(String),
 }
 
-#[expect(
-    clippy::double_must_use,
-    reason = "async_trait adds #[must_use] on methods that already return a must-use Future"
-)]
 #[async_trait::async_trait]
 pub trait CacheHandler: Send + Sync + fmt::Debug {
     async fn get(&self, key: &str) -> Result<Option<Vec<u8>>, CacheError>;

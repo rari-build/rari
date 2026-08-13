@@ -28,8 +28,8 @@ function mergeChildLists(
 
   if (currentList.length !== refreshList.length) return refreshChildren
 
-  const merged = currentList.map(
-    (currentChild, index): React.ReactNode => mergeFlightRefresh(currentChild, refreshList[index]),
+  const merged = currentList.map((currentChild, index): React.ReactNode =>
+    mergeFlightRefresh(currentChild, refreshList[index]),
   )
 
   if (merged.length === 1) return merged[0]
