@@ -1415,7 +1415,7 @@ mod tests {
     #[test]
     fn test_csp_embedder_policy_defaults_to_credentialless() {
         assert_eq!(CspConfig::default().embedder_policy, "credentialless");
-        assert!(CspConfig::default().frame_src.is_empty());
+        assert_eq!(CspConfig::default().frame_src, Vec::<String>::new());
         assert!(!Config::default().build_csp_policy().contains("frame-src"));
     }
 

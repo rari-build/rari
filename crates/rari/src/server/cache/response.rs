@@ -117,14 +117,19 @@ impl StaticFastCache {
 
     pub fn get(&self, key: &str) -> Option<Arc<PrebuiltResponse>> {
         let entry = self.map.get(key)?;
-        if !entry.value().is_fresh() {
-            drop(entry);
-            if self.map.remove(key).is_some() {
-                self.entry_count.fetch_sub(1, Ordering::Relaxed);
-            }
-            return None;
+        if entry.value().is_fresh() {
+            return Some(Arc::clone(entry.value()));
         }
-        Some(Arc::clone(entry.value()))
+        let observed = Arc::clone(entry.value());
+        drop(entry);
+        self.remove_observed(key, &observed);
+        None
+    }
+
+    fn remove_observed(&self, key: &str, observed: &Arc<PrebuiltResponse>) {
+        if self.map.remove_if(key, |_, current| Arc::ptr_eq(current, observed)).is_some() {
+            self.entry_count.fetch_sub(1, Ordering::Relaxed);
+        }
     }
 
     pub fn contains_key(&self, key: &str) -> bool {
@@ -1459,5 +1464,44 @@ mod tests {
             10,
         );
         assert!(cache.get("/").is_some());
+    }
+
+    #[test]
+    fn test_static_fast_cache_stale_cleanup_skips_replaced_entry() {
+        let cache = StaticFastCache::new();
+        let stale_at =
+            Instant::now().checked_sub(Duration::from_secs(10)).expect("monotonic clock");
+        let stale = Arc::new(PrebuiltResponse {
+            identity: Bytes::from("stale"),
+            gzip: None,
+            br: None,
+            zstd: None,
+            etag: "W/\"stale\"".to_string(),
+            content_type: "text/html; charset=utf-8".to_string(),
+            cache_control: "public, max-age=1".to_string(),
+            is_not_found: false,
+            cached_at: stale_at,
+        });
+        insert_static_fast_cache(&cache, "/", Arc::clone(&stale), 10);
+
+        let fresh = Arc::new(PrebuiltResponse {
+            identity: Bytes::from("fresh"),
+            gzip: None,
+            br: None,
+            zstd: None,
+            etag: "W/\"fresh\"".to_string(),
+            content_type: "text/html; charset=utf-8".to_string(),
+            cache_control: "public, max-age=60".to_string(),
+            is_not_found: false,
+            cached_at: Instant::now(),
+        });
+        insert_static_fast_cache(&cache, "/", Arc::clone(&fresh), 10);
+
+        cache.remove_observed("/", &stale);
+
+        let got = cache.get("/").expect("replacement must survive stale cleanup");
+        assert_eq!(got.identity.as_ref(), b"fresh");
+        assert!(Arc::ptr_eq(&got, &fresh));
+        assert_eq!(cache.entry_count(), 1);
     }
 }
