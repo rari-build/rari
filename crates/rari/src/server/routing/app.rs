@@ -1884,6 +1884,7 @@ pub async fn handle_app_route(
                             content_type: "text/html; charset=utf-8".to_string(),
                             cache_control: cache_control_value.to_string(),
                             is_not_found: route_match.not_found.is_some(),
+                            cached_at: Instant::now(),
                         }),
                         state.response_cache.config.max_entries,
                     );
