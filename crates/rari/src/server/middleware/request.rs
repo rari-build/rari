@@ -107,10 +107,15 @@ pub async fn security_headers_middleware(mut request: Request<Body>, next: Next)
 }
 
 fn add_security_headers(headers: &mut HeaderMap, nonce: Option<&str>) {
-    let csp_policy = if let Some(config) = Config::get() {
+    let config = Config::get();
+    let csp_policy = if let Some(config) = config.as_ref() {
         config.build_csp_policy()
     } else {
         "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' ws: wss:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'".to_string()
+    };
+    let coep = match config.as_ref().map(|c| c.csp.embedder_policy.as_str()) {
+        Some("unsafe-none") => "unsafe-none",
+        _ => COEP_CREDENTIALLESS,
     };
 
     let csp_policy = match nonce {
@@ -124,7 +129,7 @@ fn add_security_headers(headers: &mut HeaderMap, nonce: Option<&str>) {
         (X_XSS_PROTECTION, XSS_PROTECTION),
         (STRICT_TRANSPORT_SECURITY, HSTS_HEADER),
         (X_PERMITTED_CROSS_DOMAIN_POLICIES, CROSS_DOMAIN_POLICIES_NONE),
-        (CROSS_ORIGIN_EMBEDDER_POLICY, COEP_CREDENTIALLESS),
+        (CROSS_ORIGIN_EMBEDDER_POLICY, coep),
         (CROSS_ORIGIN_OPENER_POLICY, COOP_SAME_ORIGIN),
         (CROSS_ORIGIN_RESOURCE_POLICY, CORP_SAME_ORIGIN),
         (REFERRER_POLICY, REFERRER_STRICT_ORIGIN),
