@@ -7,9 +7,11 @@ export interface ServerCSPConfig {
   readonly defaultSrc?: readonly string[]
   readonly workerSrc?: readonly string[]
   readonly frameAncestors?: readonly string[]
+  readonly frameSrc?: readonly string[]
   readonly baseUri?: readonly string[]
   readonly formAction?: readonly string[]
   readonly useNonces?: boolean
+  readonly embedderPolicy?: 'credentialless' | 'unsafe-none'
 }
 
 export interface ServerCacheControlConfig {

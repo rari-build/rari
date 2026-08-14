@@ -195,12 +195,16 @@ pub struct CspConfig {
     pub worker_src: Vec<String>,
     #[serde(default = "csp_default_frame_ancestors")]
     pub frame_ancestors: Vec<String>,
+    #[serde(default)]
+    pub frame_src: Vec<String>,
     #[serde(default = "csp_default_base_uri")]
     pub base_uri: Vec<String>,
     #[serde(default = "csp_default_form_action")]
     pub form_action: Vec<String>,
     #[serde(default)]
     pub use_nonces: bool,
+    #[serde(default = "csp_default_embedder_policy")]
+    pub embedder_policy: String,
 }
 
 fn csp_default_frame_ancestors() -> Vec<String> {
@@ -215,6 +219,10 @@ fn csp_default_form_action() -> Vec<String> {
     vec!["'self'".to_string()]
 }
 
+fn csp_default_embedder_policy() -> String {
+    "credentialless".to_string()
+}
+
 impl Default for CspConfig {
     fn default() -> Self {
         Self {
@@ -226,9 +234,11 @@ impl Default for CspConfig {
             connect_src: vec!["'self'".to_string(), "ws:".to_string(), "wss:".to_string()],
             worker_src: vec!["'self'".to_string()],
             frame_ancestors: csp_default_frame_ancestors(),
+            frame_src: Vec::new(),
             base_uri: csp_default_base_uri(),
             form_action: csp_default_form_action(),
             use_nonces: false,
+            embedder_policy: csp_default_embedder_policy(),
         }
     }
 }
@@ -659,6 +669,12 @@ impl Config {
                             .filter_map(|v| v.as_str().map(ToString::to_string))
                             .collect();
                     }
+                    if let Some(frame_src) = csp_data.get("frameSrc").and_then(|v| v.as_array()) {
+                        config.csp.frame_src = frame_src
+                            .iter()
+                            .filter_map(|v| v.as_str().map(ToString::to_string))
+                            .collect();
+                    }
                     if let Some(base_uri) = csp_data.get("baseUri").and_then(|v| v.as_array()) {
                         config.csp.base_uri = base_uri
                             .iter()
@@ -674,6 +690,20 @@ impl Config {
                     }
                     if let Some(use_nonces) = csp_data.get("useNonces").and_then(Value::as_bool) {
                         config.csp.use_nonces = use_nonces;
+                    }
+                    if let Some(embedder_policy) =
+                        csp_data.get("embedderPolicy").and_then(Value::as_str)
+                    {
+                        match embedder_policy {
+                            "credentialless" | "unsafe-none" => {
+                                config.csp.embedder_policy = embedder_policy.to_string();
+                            }
+                            other => {
+                                tracing::warn!(
+                                    "Invalid csp.embedderPolicy {other:?}; expected \"credentialless\" or \"unsafe-none\". Using credentialless."
+                                );
+                            }
+                        }
                     }
                 }
 
@@ -1058,6 +1088,10 @@ impl Config {
             directives.push(format!("frame-ancestors {}", config.frame_ancestors.join(" ")));
         }
 
+        if !config.frame_src.is_empty() {
+            directives.push(format!("frame-src {}", config.frame_src.join(" ")));
+        }
+
         if !config.base_uri.is_empty() {
             directives.push(format!("base-uri {}", config.base_uri.join(" ")));
         }
@@ -1337,6 +1371,52 @@ mod tests {
         assert!(invalid.html_limited_bots_regex.is_none());
 
         let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_csp_embedder_policy_and_frame_src_from_config_json() {
+        let temp_dir = env::temp_dir().join(format!("rari_test_coep_{}", process::id()));
+        let dist_server_dir = temp_dir.join("dist").join("server");
+        fs::create_dir_all(&dist_server_dir).unwrap();
+
+        fs::write(
+            dist_server_dir.join("config.json"),
+            r#"{
+                "csp": {
+                    "embedderPolicy": "unsafe-none",
+                    "frameSrc": ["'self'", "https://www.google.com", "https://maps.google.com"]
+                }
+            }"#,
+        )
+        .unwrap();
+        let config = Config::from_env_with_base(Some(&temp_dir)).unwrap();
+        assert_eq!(config.csp.embedder_policy, "unsafe-none");
+        assert_eq!(
+            config.csp.frame_src,
+            vec!["'self'", "https://www.google.com", "https://maps.google.com"]
+        );
+        let policy = config.build_csp_policy();
+        assert!(
+            policy.contains("frame-src 'self' https://www.google.com https://maps.google.com"),
+            "frame-src missing from {policy}"
+        );
+
+        fs::write(
+            dist_server_dir.join("config.json"),
+            r#"{"csp":{"embedderPolicy":"require-corp"}}"#,
+        )
+        .unwrap();
+        let invalid = Config::from_env_with_base(Some(&temp_dir)).unwrap();
+        assert_eq!(invalid.csp.embedder_policy, "credentialless");
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_csp_embedder_policy_defaults_to_credentialless() {
+        assert_eq!(CspConfig::default().embedder_policy, "credentialless");
+        assert!(CspConfig::default().frame_src.is_empty());
+        assert!(!Config::default().build_csp_policy().contains("frame-src"));
     }
 
     #[test]
