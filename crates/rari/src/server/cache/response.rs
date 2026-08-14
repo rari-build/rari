@@ -4,7 +4,7 @@ use std::{
         Arc,
         atomic::{AtomicUsize, Ordering},
     },
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 use axum::http::HeaderMap;
@@ -32,9 +32,17 @@ pub struct PrebuiltResponse {
     pub content_type: String,
     pub cache_control: String,
     pub is_not_found: bool,
+    pub cached_at: Instant,
 }
 
 impl PrebuiltResponse {
+    fn is_fresh(&self) -> bool {
+        match RouteCachePolicy::max_age_from_cache_control(&self.cache_control) {
+            Some(secs) => self.cached_at.elapsed() < Duration::from_secs(secs),
+            None => true,
+        }
+    }
+
     pub fn body_for(&self, encoding: CompressionEncoding) -> (Bytes, Option<&'static str>) {
         match encoding {
             CompressionEncoding::Zstd => match &self.zstd {
@@ -108,7 +116,15 @@ impl StaticFastCache {
     }
 
     pub fn get(&self, key: &str) -> Option<Arc<PrebuiltResponse>> {
-        self.map.get(key).map(|entry| Arc::clone(entry.value()))
+        let entry = self.map.get(key)?;
+        if !entry.value().is_fresh() {
+            drop(entry);
+            if self.map.remove(key).is_some() {
+                self.entry_count.fetch_sub(1, Ordering::Relaxed);
+            }
+            return None;
+        }
+        Some(Arc::clone(entry.value()))
     }
 
     pub fn contains_key(&self, key: &str) -> bool {
@@ -1274,6 +1290,7 @@ mod tests {
                 content_type: "text/html; charset=utf-8".to_string(),
                 cache_control: "public".to_string(),
                 is_not_found: false,
+                cached_at: Instant::now(),
             })
         };
 
@@ -1305,6 +1322,7 @@ mod tests {
                 content_type: "text/html; charset=utf-8".to_string(),
                 cache_control: "public".to_string(),
                 is_not_found: false,
+                cached_at: Instant::now(),
             })
         };
 
@@ -1341,6 +1359,7 @@ mod tests {
                 content_type: "text/html; charset=utf-8".to_string(),
                 cache_control: "public".to_string(),
                 is_not_found: false,
+                cached_at: Instant::now(),
             })
         };
 
@@ -1381,6 +1400,7 @@ mod tests {
                         content_type: "text/html; charset=utf-8".to_string(),
                         cache_control: "public".to_string(),
                         is_not_found: false,
+                        cached_at: Instant::now(),
                     });
                     insert_static_fast_cache(&cache, &key, entry, max_entries);
                 }
@@ -1393,5 +1413,51 @@ mod tests {
 
         assert!(cache.entry_count() <= max_entries);
         assert_eq!(cache.entry_count(), max_entries);
+    }
+
+    #[test]
+    fn test_static_fast_cache_get_expires_after_max_age() {
+        let cache = StaticFastCache::new();
+        let cached_at =
+            Instant::now().checked_sub(Duration::from_secs(10)).expect("monotonic clock");
+        insert_static_fast_cache(
+            &cache,
+            "/",
+            Arc::new(PrebuiltResponse {
+                identity: Bytes::from("html"),
+                gzip: None,
+                br: None,
+                zstd: None,
+                etag: "W/\"1\"".to_string(),
+                content_type: "text/html; charset=utf-8".to_string(),
+                cache_control: "public, max-age=1".to_string(),
+                is_not_found: false,
+                cached_at,
+            }),
+            10,
+        );
+
+        assert!(cache.contains_key("/"));
+        assert!(cache.get("/").is_none());
+        assert!(!cache.contains_key("/"));
+        assert_eq!(cache.entry_count(), 0);
+
+        insert_static_fast_cache(
+            &cache,
+            "/",
+            Arc::new(PrebuiltResponse {
+                identity: Bytes::from("html"),
+                gzip: None,
+                br: None,
+                zstd: None,
+                etag: "W/\"1\"".to_string(),
+                content_type: "text/html; charset=utf-8".to_string(),
+                cache_control: "public".to_string(),
+                is_not_found: false,
+                cached_at,
+            }),
+            10,
+        );
+        assert!(cache.get("/").is_some());
     }
 }
