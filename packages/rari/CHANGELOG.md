@@ -1,3 +1,21 @@
+## [rari@0.15.13] - 2026-08-15
+
+### 🚀 Features
+
+- *(csp)* add frame-src and embedder-policy to CspConfig with default handling by @skiniks
+- *(cache)* implement cache expiration logic with freshness check and update cached_at timestamp by @skiniks
+
+### 🐛 Bug Fixes
+
+- *(tests)* update CSP test to assert frame_src as an empty vector and enhance cache response handling with observed entry removal by @skiniks
+
+### ⚙️ Miscellaneous Tasks
+
+- *(dependencies)* bump rari package version to 0.15.13 by @skiniks
+- *(dependencies)* update optional dependencies to version 0.15.13 across all platforms and adjust pnpm workspace configuration by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.15.12...rari@0.15.13
 ## [rari@0.15.12] - 2026-08-13
 
 ### 🚀 Features
