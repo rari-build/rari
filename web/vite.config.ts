@@ -27,12 +27,7 @@ export default defineConfig({
       },
       cacheControl: {
         routes: {
-          '/': 'public, max-age=60, stale-while-revalidate=300',
-          '/docs/*': 'public, max-age=3600, stale-while-revalidate=86400',
-          '/blog': 'public, max-age=300, stale-while-revalidate=600',
-          '/blog/*': 'public, max-age=1800, stale-while-revalidate=3600',
-          '/enterprise': 'public, max-age=300, stale-while-revalidate=600',
-          '/enterprise/*': 'public, max-age=300, stale-while-revalidate=600',
+          '/*': 'public, max-age=7200, stale-while-revalidate=86400',
         },
       },
       cache: {
