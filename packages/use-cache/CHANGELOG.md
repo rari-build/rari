@@ -1,3 +1,11 @@
+## [@rari/use-cache@0.15.13] - 2026-08-15
+
+### ⚙️ Miscellaneous Tasks
+
+- *(dependencies)* update optional dependencies to version 0.15.13 across all platforms by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/@rari/use-cache@0.15.12...@rari/use-cache@0.15.13
 ## [@rari/use-cache@0.15.12] - 2026-08-13
 
 ### ⚙️ Miscellaneous Tasks
