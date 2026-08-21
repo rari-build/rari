@@ -1278,9 +1278,8 @@ pub async fn handle_app_route(
     let render_mode = RequestTypeDetector::detect_render_mode(&headers);
     let accept_encoding = headers.get("accept-encoding").and_then(|v| v.to_str().ok());
 
-    let query_params_for_cache = query_params.clone();
     let cookie_header = request_cookie_header(&headers);
-    let query_params_for_cache = route_query_params_for_cache(&query_params_for_cache);
+    let query_params_for_cache = route_query_params_for_cache(&query_params);
     let query_params_ref = query_params_for_cache.as_ref();
 
     if matches!(render_mode, RenderMode::Ssr) && can_use_static_fast_cache(cookie_header) {
@@ -1326,7 +1325,7 @@ pub async fn handle_app_route(
             return Ok(builder.body(Body::from(body)).expect("Valid fast-path response"));
         }
     }
-    let search_params = extract_search_params(query_params);
+    let search_params = extract_search_params(query_params_for_cache.clone().unwrap_or_default());
 
     let request_headers = extract_headers(&headers);
 
@@ -2109,5 +2108,34 @@ mod tests {
         params.insert("utm_campaign".to_string(), "launch".to_string());
         params.insert("ref".to_string(), "nav".to_string());
         assert!(route_query_params_for_cache(&params).is_none());
+    }
+
+    #[test]
+    fn test_filtered_tracking_params_share_cache_key_and_render_inputs() {
+        let mut request_a = FxHashMap::default();
+        request_a.insert("page".to_string(), "2".to_string());
+        request_a.insert("utm_source".to_string(), "twitter".to_string());
+
+        let mut request_b = FxHashMap::default();
+        request_b.insert("page".to_string(), "2".to_string());
+        request_b.insert("utm_source".to_string(), "newsletter".to_string());
+        request_b.insert("fbclid".to_string(), "abc".to_string());
+
+        let filtered_a = route_query_params_for_cache(&request_a);
+        let filtered_b = route_query_params_for_cache(&request_b);
+
+        let key_a =
+            response::ResponseCache::generate_static_fast_cache_key("/", filtered_a.as_ref(), None);
+        let key_b =
+            response::ResponseCache::generate_static_fast_cache_key("/", filtered_b.as_ref(), None);
+        assert_eq!(key_a, key_b);
+        assert_eq!(key_a, "/?page=2");
+
+        let render_a = extract_search_params(filtered_a.unwrap_or_default());
+        let render_b = extract_search_params(filtered_b.unwrap_or_default());
+        assert_eq!(render_a, render_b);
+        assert_eq!(render_a.get("page"), Some(&vec!["2".to_string()]));
+        assert!(!render_a.contains_key("utm_source"));
+        assert!(!render_b.contains_key("fbclid"));
     }
 }
