@@ -27,6 +27,7 @@ pub struct CachedImage {
 
 const IMG_TTL_SECS: u64 = 60 * 60 * 24 * 365 * 10;
 const KEY_PREFIX: &str = "image:";
+const DEFAULT_MAX_BYTES: usize = 100 * 1024 * 1024;
 
 pub struct ImageCache {
     handler: Arc<dyn CacheHandler>,
@@ -34,23 +35,19 @@ pub struct ImageCache {
 }
 
 impl ImageCache {
-    pub fn new(max_memory_size: usize, project_path: &Path) -> Self {
+    pub fn new(project_path: &Path) -> Self {
         #[expect(clippy::expect_used, reason = "Value is clamped to >= 20, guaranteed non-zero")]
-        let capacity = NonZeroUsize::new((max_memory_size / 1024 / 50).max(20))
+        let capacity = NonZeroUsize::new((DEFAULT_MAX_BYTES / 1024 / 50).max(20))
             .expect("capacity is always at least 20");
         let handler = MemoryCacheHandler::with_config(&MemoryConfig {
             max_entries: capacity.get(),
             default_ttl: 0,
-            max_bytes: max_memory_size,
+            max_bytes: DEFAULT_MAX_BYTES,
         });
-        Self::with_handler(Arc::new(handler), max_memory_size, project_path)
+        Self::with_handler(Arc::new(handler), project_path)
     }
 
-    pub fn with_handler(
-        handler: Arc<dyn CacheHandler>,
-        _max_memory_size: usize,
-        project_path: &Path,
-    ) -> Self {
+    pub fn with_handler(handler: Arc<dyn CacheHandler>, project_path: &Path) -> Self {
         let cache_dir = Self::resolve_cache_dir(project_path);
         Self { handler, cache_dir }
     }
@@ -162,13 +159,13 @@ mod tests {
         temp_dir().join(format!("rari-test-image-cache-{test_name}"))
     }
 
-    fn fresh_cache(test_name: &str, max_memory_size: usize) -> ImageCache {
+    fn fresh_cache(test_name: &str) -> ImageCache {
         let handler = Arc::new(MemoryCacheHandler::with_config(&MemoryConfig {
             max_entries: 32,
             default_ttl: 0,
             ..Default::default()
         }));
-        ImageCache::with_handler(handler, max_memory_size, &test_project_path(test_name))
+        ImageCache::with_handler(handler, &test_project_path(test_name))
     }
 
     fn sample_image() -> CachedImage {
@@ -182,7 +179,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_handler_round_trip() {
-        let cache = fresh_cache("round-trip", 1024 * 1024);
+        let cache = fresh_cache("round-trip");
         let key = "k1".to_string();
         let image = sample_image();
 
@@ -206,7 +203,7 @@ mod tests {
             default_ttl: 0,
             ..Default::default()
         }));
-        let cache_a = ImageCache::with_handler(handler_a, 1024 * 1024, &project_path);
+        let cache_a = ImageCache::with_handler(handler_a, &project_path);
         let image = sample_image();
         cache_a.put("persistent".to_string(), image.clone()).await;
         assert!(cache_a.get("persistent").await.is_some());
@@ -219,7 +216,6 @@ mod tests {
         }));
         let cache_b = ImageCache::with_handler(
             Arc::clone(&handler_b) as Arc<dyn CacheHandler>,
-            1024 * 1024,
             &project_path,
         );
 
@@ -234,7 +230,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_handler_invalidate_drops_both_tiers() {
-        let cache = fresh_cache("invalidate", 1024 * 1024);
+        let cache = fresh_cache("invalidate");
         let key = "k1".to_string();
         let image = sample_image();
 

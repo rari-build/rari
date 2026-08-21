@@ -66,7 +66,6 @@ export const DEFAULT_DEVICE_SIZES = [640, 750, 828, 1080, 1200, 1920, 2048, 3840
 export const DEFAULT_IMAGE_SIZES = [16, 32, 48, 64, 96, 128, 256, 384];
 export const DEFAULT_FORMATS = ['image/webp'];
 export const DEFAULT_QUALITY_LEVELS = { low: 25, medium: 50, high: 75, max: 100 };
-export const DEFAULT_MAX_CACHE_SIZE = 50 * 1024 * 1024;
 export const DEFAULT_MINIMUM_CACHE_TTL = 60;
 export default Image;
 ";

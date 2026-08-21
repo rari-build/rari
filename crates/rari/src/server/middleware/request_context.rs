@@ -2,7 +2,7 @@ use std::{
     mem,
     num::NonZeroUsize,
     string::ToString,
-    sync::{Arc, LazyLock},
+    sync::{Arc, OnceLock},
     time::{Duration, Instant},
 };
 
@@ -80,21 +80,68 @@ impl CachedFetchResult {
 type InFlightFetches =
     Arc<DashMap<String, Arc<TokioMutex<Option<Result<CachedFetchResult, RariError>>>>>>;
 
-const MAX_CACHE_ENTRIES: usize = 1000;
+const DEFAULT_FETCH_CACHE_ENTRIES: usize = 1000;
 
-static GLOBAL_FETCH_CACHE: LazyLock<Arc<Mutex<LruCache<String, CachedFetchResult>>>> =
-    LazyLock::new(|| {
-        #[expect(
-            clippy::expect_used,
-            reason = "MAX_CACHE_ENTRIES const is 1000, guaranteed non-zero"
-        )]
-        Arc::new(Mutex::new(LruCache::new(
-            NonZeroUsize::new(MAX_CACHE_ENTRIES).expect("MAX_CACHE_ENTRIES must be non-zero"),
-        )))
-    });
+pub struct GlobalFetchCache {
+    lru: Mutex<LruCache<String, CachedFetchResult>>,
+    max_bytes: usize,
+}
 
-static GLOBAL_IN_FLIGHT_FETCHES: LazyLock<InFlightFetches> =
-    LazyLock::new(|| Arc::new(DashMap::new()));
+static GLOBAL_FETCH_CACHE: OnceLock<Arc<GlobalFetchCache>> = OnceLock::new();
+
+static GLOBAL_IN_FLIGHT_FETCHES: OnceLock<InFlightFetches> = OnceLock::new();
+
+fn fetch_cache_capacity(max_entries: usize) -> NonZeroUsize {
+    #[expect(
+        clippy::expect_used,
+        reason = "max_entries.max(1) is always >= 1, so NonZeroUsize::new never fails"
+    )]
+    NonZeroUsize::new(max_entries.max(1)).expect("fetch cache capacity is always non-zero")
+}
+
+pub fn init_global_fetch_cache(max_entries: usize, max_bytes: usize) {
+    let _ = GLOBAL_FETCH_CACHE.set(Arc::new(GlobalFetchCache {
+        lru: Mutex::new(LruCache::new(fetch_cache_capacity(max_entries))),
+        max_bytes,
+    }));
+}
+
+fn global_fetch_cache() -> Arc<GlobalFetchCache> {
+    Arc::clone(GLOBAL_FETCH_CACHE.get_or_init(|| {
+        Arc::new(GlobalFetchCache {
+            lru: Mutex::new(LruCache::new(fetch_cache_capacity(DEFAULT_FETCH_CACHE_ENTRIES))),
+            max_bytes: 0,
+        })
+    }))
+}
+
+fn global_in_flight_fetches() -> InFlightFetches {
+    Arc::clone(GLOBAL_IN_FLIGHT_FETCHES.get_or_init(|| Arc::new(DashMap::new())))
+}
+
+fn put_fetch_cache_entry(cache: &GlobalFetchCache, key: String, result: CachedFetchResult) {
+    let max_bytes = cache.max_bytes;
+    let new_len = result.body.len();
+    if max_bytes > 0 && new_len > max_bytes {
+        return;
+    }
+
+    let mut lru = cache.lru.lock();
+    lru.put(key, result);
+    if max_bytes == 0 {
+        return;
+    }
+
+    loop {
+        let total: usize = lru.iter().map(|(_, value)| value.body.len()).sum();
+        if total <= max_bytes {
+            break;
+        }
+        if lru.pop_lru().is_none() {
+            break;
+        }
+    }
+}
 
 struct FetchCleanupGuard {
     in_flight_fetches: InFlightFetches,
@@ -121,7 +168,7 @@ impl Drop for FetchCleanupGuard {
 }
 
 pub struct RequestContext {
-    fetch_cache: Arc<Mutex<LruCache<String, CachedFetchResult>>>,
+    fetch_cache: Arc<GlobalFetchCache>,
     in_flight_fetches: InFlightFetches,
     request_id: String,
     start_time: Instant,
@@ -138,8 +185,8 @@ pub struct RequestContext {
 impl RequestContext {
     pub fn new(route_path: String) -> Self {
         Self {
-            fetch_cache: GLOBAL_FETCH_CACHE.clone(),
-            in_flight_fetches: GLOBAL_IN_FLIGHT_FETCHES.clone(),
+            fetch_cache: global_fetch_cache(),
+            in_flight_fetches: global_in_flight_fetches(),
             request_id: Uuid::new_v4().to_string(),
             start_time: Instant::now(),
             route_path,
@@ -201,7 +248,7 @@ impl RequestContext {
         self.start_time.elapsed()
     }
 
-    pub fn fetch_cache(&self) -> &Arc<Mutex<LruCache<String, CachedFetchResult>>> {
+    pub fn fetch_cache(&self) -> &Arc<GlobalFetchCache> {
         &self.fetch_cache
     }
 
@@ -260,7 +307,7 @@ impl RequestContext {
             options.get("tags").and_then(|t| serde_json::from_str(t).ok()).unwrap_or_default();
 
         {
-            let mut cache = self.fetch_cache.lock();
+            let mut cache = self.fetch_cache.lru.lock();
             if let Some(cached) = cache.get(&cache_key) {
                 let ttl_ms =
                     options.get("cacheTTLMs").and_then(|t| t.parse::<u64>().ok()).unwrap_or(60_000);
@@ -272,7 +319,8 @@ impl RequestContext {
                     result.was_cached = true;
                     result.tags = Self::merge_and_sort_tags(result.tags, tags);
 
-                    cache.put(cache_key.clone(), result.clone());
+                    drop(cache);
+                    put_fetch_cache_entry(&self.fetch_cache, cache_key.clone(), result.clone());
 
                     return Ok(result);
                 }
@@ -302,8 +350,7 @@ impl RequestContext {
                     cached.tags = Self::merge_and_sort_tags(mem::take(&mut cached.tags), tags);
                     *guard = Some(Ok(cached.clone()));
                     if cached.is_cacheable() {
-                        let mut cache = fetch_cache.lock();
-                        cache.put(cache_key_for_task, cached.clone());
+                        put_fetch_cache_entry(&fetch_cache, cache_key_for_task, cached.clone());
                     }
                 }
                 return result;
@@ -320,8 +367,7 @@ impl RequestContext {
             if let Ok(ref cached_result) = fetch_result
                 && cached_result.is_cacheable()
             {
-                let mut cache = fetch_cache.lock();
-                cache.put(cache_key_for_task, cached_result.clone());
+                put_fetch_cache_entry(&fetch_cache, cache_key_for_task, cached_result.clone());
             }
 
             drop(guard);
@@ -391,7 +437,7 @@ mod tests {
         let ctx = RequestContext::new("/test".to_string());
         let cache = ctx.fetch_cache();
 
-        let initial_len = cache.lock().len();
+        let initial_len = cache.lru.lock().len();
 
         let result = CachedFetchResult {
             body: Bytes::from("test"),
@@ -403,14 +449,75 @@ mod tests {
         };
 
         let test_key = format!("https://test-{}.example.com", uuid::Uuid::new_v4());
-        cache.lock().put(test_key.clone(), result);
+        put_fetch_cache_entry(cache, test_key.clone(), result);
 
-        let new_len = cache.lock().len();
+        let new_len = cache.lru.lock().len();
         assert!(
             new_len == initial_len + 1 || new_len == initial_len,
             "Cache should grow by 1 or stay at capacity"
         );
 
-        assert!(cache.lock().contains(&test_key));
+        assert!(cache.lru.lock().contains(&test_key));
+    }
+
+    #[test]
+    fn test_fetch_cache_respects_max_bytes() {
+        let cache = GlobalFetchCache {
+            lru: Mutex::new(LruCache::new(fetch_cache_capacity(10))),
+            max_bytes: 8,
+        };
+
+        put_fetch_cache_entry(
+            &cache,
+            "a".into(),
+            CachedFetchResult {
+                body: Bytes::from("12345"),
+                status: 200,
+                headers: HeaderMap::new(),
+                cached_at: Instant::now(),
+                was_cached: false,
+                tags: Vec::new(),
+            },
+        );
+        put_fetch_cache_entry(
+            &cache,
+            "b".into(),
+            CachedFetchResult {
+                body: Bytes::from("12345"),
+                status: 200,
+                headers: HeaderMap::new(),
+                cached_at: Instant::now(),
+                was_cached: false,
+                tags: Vec::new(),
+            },
+        );
+
+        let guard = cache.lru.lock();
+        assert_eq!(guard.len(), 1);
+        assert!(guard.contains("b"));
+        assert!(!guard.contains("a"));
+    }
+
+    #[test]
+    fn test_fetch_cache_rejects_oversized_entry() {
+        let cache = GlobalFetchCache {
+            lru: Mutex::new(LruCache::new(fetch_cache_capacity(10))),
+            max_bytes: 4,
+        };
+
+        put_fetch_cache_entry(
+            &cache,
+            "big".into(),
+            CachedFetchResult {
+                body: Bytes::from("12345"),
+                status: 200,
+                headers: HeaderMap::new(),
+                cached_at: Instant::now(),
+                was_cached: false,
+                tags: Vec::new(),
+            },
+        );
+
+        assert!(cache.lru.lock().is_empty());
     }
 }

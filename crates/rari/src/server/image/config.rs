@@ -6,8 +6,6 @@ use super::ImageFormat;
 #[serde(rename_all = "camelCase")]
 #[non_exhaustive]
 pub struct ImageConfig {
-    #[serde(default = "default_max_cache_size")]
-    pub max_cache_size: usize,
     #[serde(default)]
     pub remote_patterns: Vec<RemotePattern>,
     #[serde(default)]
@@ -61,7 +59,6 @@ pub struct LocalPattern {
 impl Default for ImageConfig {
     fn default() -> Self {
         Self {
-            max_cache_size: default_max_cache_size(),
             remote_patterns: Vec::new(),
             local_patterns: Vec::new(),
             device_sizes: default_device_sizes(),
@@ -74,10 +71,6 @@ impl Default for ImageConfig {
             preoptimize_manifest: Vec::new(),
         }
     }
-}
-
-fn default_max_cache_size() -> usize {
-    100 * 1024 * 1024
 }
 
 fn default_device_sizes() -> Vec<u32> {

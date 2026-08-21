@@ -27,6 +27,7 @@ export interface ServerCacheLayerConfig {
 }
 
 export interface ServerCacheConfig {
+  readonly maxBytes?: number
   readonly layers?: Readonly<Record<string, ServerCacheLayerConfig>>
 }
 

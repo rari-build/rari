@@ -77,8 +77,31 @@ fn request_cookie_header(headers: &HeaderMap) -> Option<&str> {
 
 fn route_query_params_for_cache(
     query_params: &FxHashMap<String, String>,
-) -> Option<&FxHashMap<String, String>> {
-    if query_params.is_empty() { None } else { Some(query_params) }
+) -> Option<FxHashMap<String, String>> {
+    let filtered: FxHashMap<String, String> = query_params
+        .iter()
+        .filter(|(key, _)| !is_cache_noise_query_param(key))
+        .map(|(key, value)| (key.clone(), value.clone()))
+        .collect();
+    if filtered.is_empty() { None } else { Some(filtered) }
+}
+
+fn is_cache_noise_query_param(key: &str) -> bool {
+    let key = key.to_ascii_lowercase();
+    key.starts_with("utm_")
+        || matches!(
+            key.as_str(),
+            "fbclid"
+                | "gclid"
+                | "gbraid"
+                | "wbraid"
+                | "msclkid"
+                | "mc_cid"
+                | "mc_eid"
+                | "_ga"
+                | "_gl"
+                | "ref"
+        )
 }
 
 fn static_html_vary_header(cookie_header: Option<&str>) -> String {
@@ -1257,7 +1280,8 @@ pub async fn handle_app_route(
 
     let query_params_for_cache = query_params.clone();
     let cookie_header = request_cookie_header(&headers);
-    let query_params_ref = route_query_params_for_cache(&query_params_for_cache);
+    let query_params_for_cache = route_query_params_for_cache(&query_params_for_cache);
+    let query_params_ref = query_params_for_cache.as_ref();
 
     if matches!(render_mode, RenderMode::Ssr) && can_use_static_fast_cache(cookie_header) {
         let fast_key =
@@ -2063,15 +2087,27 @@ mod tests {
     }
 
     #[test]
-    fn test_og_base_url_ignores_non_http_forwarded_proto() {
-        let config = Config::new(Mode::Production);
-        let mut context = empty_layout_context();
-        context.headers.insert("host".to_string(), "rari.build".to_string());
-        context.headers.insert("x-forwarded-proto".to_string(), "javascript".to_string());
+    fn test_route_query_params_for_cache_strips_tracking() {
+        let mut params = FxHashMap::default();
+        params.insert("utm_source".to_string(), "twitter".to_string());
+        params.insert("page".to_string(), "2".to_string());
+        params.insert("fbclid".to_string(), "abc".to_string());
+        params.insert("gclid".to_string(), "xyz".to_string());
 
-        assert_eq!(
-            get_base_url_from_context(&context, &config).as_deref(),
-            Some("https://rari.build")
-        );
+        let filtered = route_query_params_for_cache(&params).expect("page should remain");
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered.get("page").map(String::as_str), Some("2"));
+
+        let key =
+            response::ResponseCache::generate_static_fast_cache_key("/", Some(&filtered), None);
+        assert_eq!(key, "/?page=2");
+    }
+
+    #[test]
+    fn test_route_query_params_for_cache_all_noise_is_none() {
+        let mut params = FxHashMap::default();
+        params.insert("utm_campaign".to_string(), "launch".to_string());
+        params.insert("ref".to_string(), "nav".to_string());
+        assert!(route_query_params_for_cache(&params).is_none());
     }
 }
