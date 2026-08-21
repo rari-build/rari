@@ -137,21 +137,34 @@ pub fn default_cache_layers() -> FxHashMap<String, CacheLayerConfig> {
     layers.insert(CACHE_LAYER_IMAGE.to_string(), CacheLayerConfig::default());
     layers.insert(CACHE_LAYER_OG.to_string(), CacheLayerConfig::default());
     layers.insert(CACHE_LAYER_LAYOUT.to_string(), CacheLayerConfig::default());
-    layers.insert(CACHE_LAYER_MODULE.to_string(), CacheLayerConfig::default());
-    layers.insert(CACHE_LAYER_FETCH.to_string(), CacheLayerConfig::default());
+    layers.insert(
+        CACHE_LAYER_MODULE.to_string(),
+        CacheLayerConfig {
+            max_entries: 5000,
+            default_ttl_secs: 3600,
+            ..CacheLayerConfig::default()
+        },
+    );
+    layers.insert(
+        CACHE_LAYER_FETCH.to_string(),
+        CacheLayerConfig { max_entries: 1000, ..CacheLayerConfig::default() },
+    );
     layers
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
 #[non_exhaustive]
 pub struct CacheConfig {
+    #[serde(default)]
+    pub max_bytes: usize,
     #[serde(default = "default_cache_layers")]
     pub layers: FxHashMap<String, CacheLayerConfig>,
 }
 
 impl Default for CacheConfig {
     fn default() -> Self {
-        Self { layers: default_cache_layers() }
+        Self { max_bytes: 0, layers: default_cache_layers() }
     }
 }
 
@@ -159,6 +172,68 @@ impl CacheConfig {
     pub fn layer(&self, name: &str) -> CacheLayerConfig {
         self.layers.get(name).cloned().unwrap_or_default()
     }
+
+    pub fn apply_total_byte_budget(&mut self) {
+        if self.max_bytes == 0 {
+            return;
+        }
+
+        let mut reserved = 0usize;
+        let mut unset: Vec<String> = Vec::new();
+
+        for (name, layer) in &self.layers {
+            if !layer_participates_in_byte_budget(layer) {
+                continue;
+            }
+            if layer.max_bytes == 0 {
+                unset.push(name.clone());
+            } else {
+                reserved = reserved.saturating_add(layer.max_bytes);
+            }
+        }
+
+        if unset.is_empty() {
+            if reserved > self.max_bytes {
+                tracing::warn!(
+                    reserved,
+                    total = self.max_bytes,
+                    "cache.layers explicit maxBytes sum exceeds cache.maxBytes; leaving explicit caps unchanged"
+                );
+            }
+            return;
+        }
+
+        if reserved >= self.max_bytes {
+            tracing::warn!(
+                reserved,
+                total = self.max_bytes,
+                unset = unset.len(),
+                "cache.maxBytes fully consumed by explicit layer maxBytes; leaving unset layers unlimited"
+            );
+            return;
+        }
+
+        let remaining = self.max_bytes - reserved;
+        let share = remaining / unset.len();
+        if share == 0 {
+            tracing::warn!(
+                remaining,
+                unset = unset.len(),
+                "cache.maxBytes remaining budget too small to split; leaving unset layers unlimited"
+            );
+            return;
+        }
+
+        for name in unset {
+            if let Some(layer) = self.layers.get_mut(&name) {
+                layer.max_bytes = share;
+            }
+        }
+    }
+}
+
+fn layer_participates_in_byte_budget(layer: &CacheLayerConfig) -> bool {
+    layer.handler == "memory"
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -782,31 +857,45 @@ impl Config {
                     }
                 }
 
-                if let Some(cache_data) = config_data.get("cache")
-                    && let Some(layers_data) = cache_data.get("layers").and_then(|v| v.as_object())
-                {
-                    for (layer_name, layer_value) in layers_data {
-                        if !layer_value.is_object() {
-                            tracing::warn!(
-                                "Invalid cache.layers.{} value type: expected object, got {:?}",
-                                layer_name,
-                                layer_value
-                            );
-                            continue;
-                        }
-                        match serde_json::from_value::<CacheLayerConfig>(layer_value.clone()) {
-                            Ok(layer) => {
-                                config.cache.layers.insert(layer_name.clone(), layer);
-                            }
-                            Err(e) => {
+                if let Some(cache_data) = config_data.get("cache") {
+                    if let Some(max_bytes) = cache_data.get("maxBytes").and_then(Value::as_u64) {
+                        match usize::try_from(max_bytes) {
+                            Ok(bytes) => config.cache.max_bytes = bytes,
+                            Err(_) => {
                                 tracing::warn!(
-                                    "Failed to parse cache.layers.{}: {}. Using default.",
-                                    layer_name,
-                                    e
+                                    "cache.maxBytes {max_bytes} does not fit in usize; ignoring"
                                 );
                             }
                         }
                     }
+
+                    if let Some(layers_data) = cache_data.get("layers").and_then(|v| v.as_object())
+                    {
+                        for (layer_name, layer_value) in layers_data {
+                            if !layer_value.is_object() {
+                                tracing::warn!(
+                                    "Invalid cache.layers.{} value type: expected object, got {:?}",
+                                    layer_name,
+                                    layer_value
+                                );
+                                continue;
+                            }
+                            match serde_json::from_value::<CacheLayerConfig>(layer_value.clone()) {
+                                Ok(layer) => {
+                                    config.cache.layers.insert(layer_name.clone(), layer);
+                                }
+                                Err(e) => {
+                                    tracing::warn!(
+                                        "Failed to parse cache.layers.{}: {}. Using default.",
+                                        layer_name,
+                                        e
+                                    );
+                                }
+                            }
+                        }
+                    }
+
+                    config.cache.apply_total_byte_budget();
                 }
 
                 if let Some(use_cache_data) = config_data.get("useCache") {
@@ -1533,6 +1622,40 @@ mod tests {
             assert!(cache.layers.contains_key(name), "missing default layer {name}");
         }
         assert_eq!(cache.layers.len(), 6);
+        let module = cache.layer(CACHE_LAYER_MODULE);
+        assert_eq!(module.max_entries, 5000);
+        assert_eq!(module.default_ttl_secs, 3600);
+        let fetch = cache.layer(CACHE_LAYER_FETCH);
+        assert_eq!(fetch.max_entries, 1000);
+    }
+
+    #[test]
+    fn test_cache_total_byte_budget_splits_unset_layers() {
+        let mut cache = CacheConfig { max_bytes: 20 * 1024 * 1024, ..CacheConfig::default() };
+        cache.apply_total_byte_budget();
+
+        let share = (20 * 1024 * 1024) / 6;
+        assert_eq!(cache.layer(CACHE_LAYER_RESPONSE).max_bytes, share);
+        assert_eq!(cache.layer(CACHE_LAYER_LAYOUT).max_bytes, share);
+        assert_eq!(cache.layer(CACHE_LAYER_IMAGE).max_bytes, share);
+        assert_eq!(cache.layer(CACHE_LAYER_OG).max_bytes, share);
+        assert_eq!(cache.layer(CACHE_LAYER_MODULE).max_bytes, share);
+        assert_eq!(cache.layer(CACHE_LAYER_FETCH).max_bytes, share);
+    }
+
+    #[test]
+    fn test_cache_total_byte_budget_respects_explicit_layer_caps() {
+        let mut cache = CacheConfig { max_bytes: 10 * 1024 * 1024, ..CacheConfig::default() };
+        cache.layers.get_mut(CACHE_LAYER_IMAGE).unwrap().max_bytes = 4 * 1024 * 1024;
+        cache.apply_total_byte_budget();
+
+        assert_eq!(cache.layer(CACHE_LAYER_IMAGE).max_bytes, 4 * 1024 * 1024);
+        let share = (10 * 1024 * 1024 - 4 * 1024 * 1024) / 5;
+        assert_eq!(cache.layer(CACHE_LAYER_RESPONSE).max_bytes, share);
+        assert_eq!(cache.layer(CACHE_LAYER_LAYOUT).max_bytes, share);
+        assert_eq!(cache.layer(CACHE_LAYER_OG).max_bytes, share);
+        assert_eq!(cache.layer(CACHE_LAYER_MODULE).max_bytes, share);
+        assert_eq!(cache.layer(CACHE_LAYER_FETCH).max_bytes, share);
     }
 
     #[test]
@@ -1559,10 +1682,13 @@ mod tests {
 
         let config_json = serde_json::json!({
             "cache": {
+                "maxBytes": 10_485_760,
                 "layers": {
                     "response": { "handler": "memory", "maxEntries": 2000, "defaultTtlSecs": 120 },
                     "image":    { "handler": "memory", "maxEntries": 500,  "defaultTtlSecs": 3600 },
                     "og":       { "handler": "memory", "maxEntries": 200,  "defaultTtlSecs": 86400 },
+                    "module":   { "handler": "memory", "maxEntries": 250,  "defaultTtlSecs": 1800, "maxBytes": 1_048_576 },
+                    "fetch":    { "handler": "memory", "maxEntries": 32 },
                     "bogus":    { "handler": "noop",  "maxEntries": 1,     "defaultTtlSecs": 0 },
                     "malformed": "not-an-object"
                 }
@@ -1596,6 +1722,23 @@ mod tests {
         let layout = config.cache.layer(CACHE_LAYER_LAYOUT);
         assert_eq!(layout.handler, "memory");
         assert_eq!(layout.max_entries, 1000);
+
+        let module = config.cache.layer(CACHE_LAYER_MODULE);
+        assert_eq!(module.max_entries, 250);
+        assert_eq!(module.default_ttl_secs, 1800);
+        assert_eq!(module.max_bytes, 1_048_576);
+
+        let fetch = config.cache.layer(CACHE_LAYER_FETCH);
+        assert_eq!(fetch.max_entries, 32);
+
+        assert_eq!(config.cache.max_bytes, 10_485_760);
+        let share = (10_485_760 - 1_048_576) / 5;
+        assert_eq!(fetch.max_bytes, share);
+        assert_eq!(config.cache.layer(CACHE_LAYER_RESPONSE).max_bytes, share);
+        assert_eq!(config.cache.layer(CACHE_LAYER_LAYOUT).max_bytes, share);
+        assert_eq!(config.cache.layer(CACHE_LAYER_IMAGE).max_bytes, share);
+        assert_eq!(config.cache.layer(CACHE_LAYER_OG).max_bytes, share);
+        assert_eq!(config.cache.layer(CACHE_LAYER_FETCH).max_bytes, share);
     }
 
     #[test]

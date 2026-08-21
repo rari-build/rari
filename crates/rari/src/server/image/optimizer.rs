@@ -50,7 +50,7 @@ pub struct ImageOptimizer {
 
 impl ImageOptimizer {
     pub fn new(config: ImageConfig, project_path: &Path) -> Self {
-        let cache = Arc::new(ImageCache::new(config.max_cache_size, project_path));
+        let cache = Arc::new(ImageCache::new(project_path));
         Self::with_cache(config, project_path, cache)
     }
 

@@ -43,13 +43,15 @@ use crate::{
             revalidate::revalidate_by_path, warmup,
         },
         config::{
-            CACHE_LAYER_IMAGE, CACHE_LAYER_LAYOUT, CACHE_LAYER_OG, CACHE_LAYER_RESPONSE, Config,
+            CACHE_LAYER_FETCH, CACHE_LAYER_IMAGE, CACHE_LAYER_LAYOUT, CACHE_LAYER_MODULE,
+            CACHE_LAYER_OG, CACHE_LAYER_RESPONSE, Config,
         },
         image::{ImageCache, ImageConfig, ImageOptimizer, ImageState, handle_image_request},
         loader::ComponentLoader,
         middleware::{
             proxy::{self, ProxyLayer},
             request::{cors_middleware, security_headers_middleware},
+            request_context,
         },
         og::{OgImageCache, OgImageGenerator, og_image_handler, og_image_handler_root},
         routing::{
@@ -106,8 +108,22 @@ pub struct Server {
 impl Server {
     #[expect(clippy::missing_errors_doc, clippy::too_many_lines)]
     pub async fn new(config: Config) -> Result<Self, RariError> {
+        let mut config = config;
+
+        let config_path = "dist/server/image.json";
+        if let Ok(image_config_str) = fs::read_to_string(config_path).await
+            && let Ok(image_config) = serde_json::from_str::<ImageConfig>(&image_config_str)
+        {
+            config.images = image_config;
+        }
+
         Config::set_global(config.clone())
             .map_err(|_| RariError::configuration("Failed to set global config".to_string()))?;
+
+        let fetch_layer = config.cache.layer(CACHE_LAYER_FETCH);
+        request_context::init_global_fetch_cache(fetch_layer.max_entries, fetch_layer.max_bytes);
+
+        Self::log_cache_layer_budgets(&config);
 
         let resource_limits = ResourceLimits {
             max_script_execution_time_ms: config.rsc.script_execution_timeout_ms,
@@ -258,15 +274,6 @@ impl Server {
             });
         }
 
-        let mut config = config;
-        let config_path = "dist/server/image.json";
-
-        if let Ok(image_config_str) = fs::read_to_string(config_path).await
-            && let Ok(image_config) = serde_json::from_str::<ImageConfig>(&image_config_str)
-        {
-            config.images = image_config;
-        }
-
         if let Err(e) = proxy::initialize_proxy(&state).await {
             tracing::error!("Failed to initialize proxy: {}", e);
         }
@@ -286,13 +293,34 @@ impl Server {
         Ok(Self { router, config, listener, address: socket_addr })
     }
 
+    fn log_cache_layer_budgets(config: &Config) {
+        for name in [
+            CACHE_LAYER_RESPONSE,
+            CACHE_LAYER_LAYOUT,
+            CACHE_LAYER_IMAGE,
+            CACHE_LAYER_OG,
+            CACHE_LAYER_MODULE,
+            CACHE_LAYER_FETCH,
+        ] {
+            let layer = config.cache.layer(name);
+            tracing::info!(
+                layer = name,
+                handler = %layer.handler,
+                max_entries = layer.max_entries,
+                max_bytes = layer.max_bytes,
+                default_ttl_secs = layer.default_ttl_secs,
+                total_max_bytes = config.cache.max_bytes,
+                "[rari] cache layer budget"
+            );
+        }
+    }
+
     async fn build_router(config: &Config, mut state: ServerState) -> Result<Router, RariError> {
         let small_body_limit = DefaultBodyLimit::max(100 * 1024);
         let medium_body_limit = DefaultBodyLimit::max(1024 * 1024);
 
         let image_cache = Arc::new(ImageCache::with_handler(
             Arc::clone(&state.image_handler),
-            config.images.max_cache_size,
             &state.project_root,
         ));
         let image_optimizer = Arc::new(ImageOptimizer::with_cache(

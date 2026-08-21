@@ -16,7 +16,6 @@ import {
   DEFAULT_DEVICE_SIZES,
   DEFAULT_FORMATS,
   DEFAULT_IMAGE_SIZES,
-  DEFAULT_MAX_CACHE_SIZE,
   DEFAULT_MINIMUM_CACHE_TTL,
   DEFAULT_QUALITY_LEVELS,
 } from '@/image/constants'
@@ -144,7 +143,6 @@ export interface RariOptions {
     readonly formats?: readonly ('avif' | 'webp')[]
     readonly qualityAllowlist?: readonly number[]
     readonly minimumCacheTTL?: number
-    readonly maxCacheSize?: number
   }
   readonly csp?: {
     readonly scriptSrc?: readonly string[]
@@ -186,7 +184,6 @@ const DEFAULT_IMAGE_CONFIG = {
   formats: DEFAULT_FORMATS,
   qualityAllowlist: DEFAULT_QUALITY_LEVELS,
   minimumCacheTTL: DEFAULT_MINIMUM_CACHE_TTL,
-  maxCacheSize: DEFAULT_MAX_CACHE_SIZE,
 }
 
 const runtimeFileCache = new Map<string, string>()

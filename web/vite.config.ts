@@ -30,9 +30,6 @@ export default defineConfig({
           '/*': 'public, max-age=7200, stale-while-revalidate=86400',
         },
       },
-      images: {
-        maxCacheSize: 8 * 1024 * 1024,
-      },
       cache: {
         layers: {
           response: {

@@ -26,7 +26,7 @@ use node_resolver::{
 use sys_traits::impls::RealSys;
 
 use super::{
-    cache::{DEFAULT_TTL_SECS, ModuleCaching},
+    cache::ModuleCaching,
     config::RuntimeConfig,
     react_vendor,
     storage::ModuleStorage,
@@ -43,7 +43,7 @@ use crate::{
         ext::{NodeCodeTranslator, NpmPackageFolderResolverImpl, Resolver},
         transpile,
     },
-    server::{cache::handler::CacheHandlerRegistry, config::CacheLayerConfig},
+    server::cache::handler::CacheHandlerRegistry,
     utils::path::path_to_file_url,
 };
 
@@ -153,7 +153,7 @@ impl fmt::Debug for RariModuleLoader {
 
 impl RariModuleLoader {
     pub fn new(resolver: Arc<Resolver>) -> Self {
-        Self::with_config(resolver, &RuntimeConfig::default())
+        Self::with_config(resolver, &RuntimeConfig::from_global())
     }
 
     pub fn with_config(resolver: Arc<Resolver>, config: &RuntimeConfig) -> Self {
@@ -169,13 +169,7 @@ impl RariModuleLoader {
         config: &RuntimeConfig,
         registry: &CacheHandlerRegistry,
     ) -> Self {
-        let layer = CacheLayerConfig {
-            handler: config.module_cache_handler.clone(),
-            url: None,
-            max_entries: config.cache_size_limit,
-            default_ttl_secs: DEFAULT_TTL_SECS,
-            ..Default::default()
-        };
+        let layer = config.as_cache_layer();
         let module_caching = ModuleCaching::from_config(&layer, registry);
         let node_resolver = resolver.node_resolver();
         let code_translator = Rc::new(resolver.code_translator(Arc::clone(&node_resolver)));
