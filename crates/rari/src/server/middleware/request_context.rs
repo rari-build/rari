@@ -83,8 +83,13 @@ type InFlightFetches =
 const DEFAULT_FETCH_CACHE_ENTRIES: usize = 1000;
 
 pub struct GlobalFetchCache {
-    lru: Mutex<LruCache<String, CachedFetchResult>>,
+    state: Mutex<FetchLruState>,
     max_bytes: usize,
+}
+
+struct FetchLruState {
+    lru: LruCache<String, CachedFetchResult>,
+    bytes: usize,
 }
 
 static GLOBAL_FETCH_CACHE: OnceLock<Arc<GlobalFetchCache>> = OnceLock::new();
@@ -99,17 +104,35 @@ fn fetch_cache_capacity(max_entries: usize) -> NonZeroUsize {
     NonZeroUsize::new(max_entries.max(1)).expect("fetch cache capacity is always non-zero")
 }
 
-pub fn init_global_fetch_cache(max_entries: usize, max_bytes: usize) {
-    let _ = GLOBAL_FETCH_CACHE.set(Arc::new(GlobalFetchCache {
-        lru: Mutex::new(LruCache::new(fetch_cache_capacity(max_entries))),
+/// Install the process-wide fetch LRU from `cache.layers.fetch`.
+/// Must run once at server boot before any `RequestContext` is created.
+///
+/// # Errors
+/// Returns an error if the fetch cache was already initialized, so configured
+/// `max_entries` / `max_bytes` are never silently ignored.
+pub fn init_global_fetch_cache(max_entries: usize, max_bytes: usize) -> Result<(), RariError> {
+    let cache = Arc::new(GlobalFetchCache {
+        state: Mutex::new(FetchLruState {
+            lru: LruCache::new(fetch_cache_capacity(max_entries)),
+            bytes: 0,
+        }),
         max_bytes,
-    }));
+    });
+    GLOBAL_FETCH_CACHE.set(cache).map_err(|_| {
+        RariError::configuration(
+            "fetch cache already initialized before server startup; configured cache.layers.fetch limits were not applied"
+                .to_string(),
+        )
+    })
 }
 
 fn global_fetch_cache() -> Arc<GlobalFetchCache> {
     Arc::clone(GLOBAL_FETCH_CACHE.get_or_init(|| {
         Arc::new(GlobalFetchCache {
-            lru: Mutex::new(LruCache::new(fetch_cache_capacity(DEFAULT_FETCH_CACHE_ENTRIES))),
+            state: Mutex::new(FetchLruState {
+                lru: LruCache::new(fetch_cache_capacity(DEFAULT_FETCH_CACHE_ENTRIES)),
+                bytes: 0,
+            }),
             max_bytes: 0,
         })
     }))
@@ -126,20 +149,21 @@ fn put_fetch_cache_entry(cache: &GlobalFetchCache, key: String, result: CachedFe
         return;
     }
 
-    let mut lru = cache.lru.lock();
-    lru.put(key, result);
+    let mut state = cache.state.lock();
+    let old_len = state.lru.peek(&key).map(|entry| entry.body.len()).unwrap_or(0);
+    state.bytes = state.bytes.saturating_sub(old_len);
+    state.lru.put(key, result);
+    state.bytes = state.bytes.saturating_add(new_len);
+
     if max_bytes == 0 {
         return;
     }
 
-    loop {
-        let total: usize = lru.iter().map(|(_, value)| value.body.len()).sum();
-        if total <= max_bytes {
+    while state.bytes > max_bytes {
+        let Some((_, evicted)) = state.lru.pop_lru() else {
             break;
-        }
-        if lru.pop_lru().is_none() {
-            break;
-        }
+        };
+        state.bytes = state.bytes.saturating_sub(evicted.body.len());
     }
 }
 
@@ -307,8 +331,8 @@ impl RequestContext {
             options.get("tags").and_then(|t| serde_json::from_str(t).ok()).unwrap_or_default();
 
         {
-            let mut cache = self.fetch_cache.lru.lock();
-            if let Some(cached) = cache.get(&cache_key) {
+            let mut state = self.fetch_cache.state.lock();
+            if let Some(cached) = state.lru.get(&cache_key) {
                 let ttl_ms =
                     options.get("cacheTTLMs").and_then(|t| t.parse::<u64>().ok()).unwrap_or(60_000);
 
@@ -319,12 +343,13 @@ impl RequestContext {
                     result.was_cached = true;
                     result.tags = Self::merge_and_sort_tags(result.tags, tags);
 
-                    drop(cache);
-                    put_fetch_cache_entry(&self.fetch_cache, cache_key.clone(), result.clone());
+                    state.lru.put(cache_key.clone(), result.clone());
 
                     return Ok(result);
                 }
-                cache.pop(&cache_key);
+                if let Some(evicted) = state.lru.pop(&cache_key) {
+                    state.bytes = state.bytes.saturating_sub(evicted.body.len());
+                }
             }
         }
 
@@ -437,7 +462,7 @@ mod tests {
         let ctx = RequestContext::new("/test".to_string());
         let cache = ctx.fetch_cache();
 
-        let initial_len = cache.lru.lock().len();
+        let initial_len = cache.state.lock().lru.len();
 
         let result = CachedFetchResult {
             body: Bytes::from("test"),
@@ -451,19 +476,22 @@ mod tests {
         let test_key = format!("https://test-{}.example.com", uuid::Uuid::new_v4());
         put_fetch_cache_entry(cache, test_key.clone(), result);
 
-        let new_len = cache.lru.lock().len();
+        let new_len = cache.state.lock().lru.len();
         assert!(
             new_len == initial_len + 1 || new_len == initial_len,
             "Cache should grow by 1 or stay at capacity"
         );
 
-        assert!(cache.lru.lock().contains(&test_key));
+        assert!(cache.state.lock().lru.contains(&test_key));
     }
 
     #[test]
     fn test_fetch_cache_respects_max_bytes() {
         let cache = GlobalFetchCache {
-            lru: Mutex::new(LruCache::new(fetch_cache_capacity(10))),
+            state: Mutex::new(FetchLruState {
+                lru: LruCache::new(fetch_cache_capacity(10)),
+                bytes: 0,
+            }),
             max_bytes: 8,
         };
 
@@ -492,16 +520,20 @@ mod tests {
             },
         );
 
-        let guard = cache.lru.lock();
-        assert_eq!(guard.len(), 1);
-        assert!(guard.contains("b"));
-        assert!(!guard.contains("a"));
+        let guard = cache.state.lock();
+        assert_eq!(guard.lru.len(), 1);
+        assert!(guard.lru.contains("b"));
+        assert!(!guard.lru.contains("a"));
+        assert_eq!(guard.bytes, 5);
     }
 
     #[test]
     fn test_fetch_cache_rejects_oversized_entry() {
         let cache = GlobalFetchCache {
-            lru: Mutex::new(LruCache::new(fetch_cache_capacity(10))),
+            state: Mutex::new(FetchLruState {
+                lru: LruCache::new(fetch_cache_capacity(10)),
+                bytes: 0,
+            }),
             max_bytes: 4,
         };
 
@@ -518,6 +550,7 @@ mod tests {
             },
         );
 
-        assert!(cache.lru.lock().is_empty());
+        assert!(cache.state.lock().lru.is_empty());
+        assert_eq!(cache.state.lock().bytes, 0);
     }
 }

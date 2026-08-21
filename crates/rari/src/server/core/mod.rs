@@ -121,7 +121,7 @@ impl Server {
             .map_err(|_| RariError::configuration("Failed to set global config".to_string()))?;
 
         let fetch_layer = config.cache.layer(CACHE_LAYER_FETCH);
-        request_context::init_global_fetch_cache(fetch_layer.max_entries, fetch_layer.max_bytes);
+        request_context::init_global_fetch_cache(fetch_layer.max_entries, fetch_layer.max_bytes)?;
 
         Self::log_cache_layer_budgets(&config);
 

@@ -182,7 +182,7 @@ impl CacheConfig {
         let mut unset: Vec<String> = Vec::new();
 
         for (name, layer) in &self.layers {
-            if !layer_participates_in_byte_budget(layer) {
+            if !layer_participates_in_byte_budget(name, layer) {
                 continue;
             }
             if layer.max_bytes == 0 {
@@ -232,8 +232,8 @@ impl CacheConfig {
     }
 }
 
-fn layer_participates_in_byte_budget(layer: &CacheLayerConfig) -> bool {
-    layer.handler == "memory"
+fn layer_participates_in_byte_budget(name: &str, layer: &CacheLayerConfig) -> bool {
+    name == CACHE_LAYER_FETCH || layer.handler == "memory"
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -1656,6 +1656,18 @@ mod tests {
         assert_eq!(cache.layer(CACHE_LAYER_OG).max_bytes, share);
         assert_eq!(cache.layer(CACHE_LAYER_MODULE).max_bytes, share);
         assert_eq!(cache.layer(CACHE_LAYER_FETCH).max_bytes, share);
+    }
+
+    #[test]
+    fn test_cache_total_byte_budget_includes_non_memory_fetch() {
+        let mut cache = CacheConfig { max_bytes: 12 * 1024 * 1024, ..CacheConfig::default() };
+        cache.layers.get_mut(CACHE_LAYER_FETCH).unwrap().handler = "redis".to_string();
+        cache.apply_total_byte_budget();
+
+        let share = (12 * 1024 * 1024) / 6;
+        assert_eq!(cache.layer(CACHE_LAYER_FETCH).handler, "redis");
+        assert_eq!(cache.layer(CACHE_LAYER_FETCH).max_bytes, share);
+        assert_eq!(cache.layer(CACHE_LAYER_RESPONSE).max_bytes, share);
     }
 
     #[test]
