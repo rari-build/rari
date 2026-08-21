@@ -150,9 +150,9 @@ fn put_fetch_cache_entry(cache: &GlobalFetchCache, key: String, result: CachedFe
     }
 
     let mut state = cache.state.lock();
-    let old_len = state.lru.peek(&key).map(|entry| entry.body.len()).unwrap_or(0);
-    state.bytes = state.bytes.saturating_sub(old_len);
-    state.lru.put(key, result);
+    if let Some((_, evicted)) = state.lru.push(key, result) {
+        state.bytes = state.bytes.saturating_sub(evicted.body.len());
+    }
     state.bytes = state.bytes.saturating_add(new_len);
 
     if max_bytes == 0 {
@@ -552,5 +552,36 @@ mod tests {
 
         assert!(cache.state.lock().lru.is_empty());
         assert_eq!(cache.state.lock().bytes, 0);
+    }
+
+    #[test]
+    fn test_fetch_cache_byte_accounting_on_capacity_eviction() {
+        let cache = GlobalFetchCache {
+            state: Mutex::new(FetchLruState {
+                lru: LruCache::new(fetch_cache_capacity(2)),
+                bytes: 0,
+            }),
+            max_bytes: 10,
+        };
+
+        let entry = |body: &'static str| CachedFetchResult {
+            body: Bytes::from(body),
+            status: 200,
+            headers: HeaderMap::new(),
+            cached_at: Instant::now(),
+            was_cached: false,
+            tags: Vec::new(),
+        };
+
+        put_fetch_cache_entry(&cache, "a".into(), entry("12345"));
+        put_fetch_cache_entry(&cache, "b".into(), entry("12345"));
+        put_fetch_cache_entry(&cache, "c".into(), entry("12345"));
+
+        let guard = cache.state.lock();
+        assert_eq!(guard.lru.len(), 2);
+        assert!(!guard.lru.contains("a"));
+        assert!(guard.lru.contains("b"));
+        assert!(guard.lru.contains("c"));
+        assert_eq!(guard.bytes, 10);
     }
 }

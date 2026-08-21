@@ -2089,13 +2089,17 @@ mod tests {
     fn test_route_query_params_for_cache_strips_tracking() {
         let mut params = FxHashMap::default();
         params.insert("utm_source".to_string(), "twitter".to_string());
+        params.insert("UTM_SOURCE".to_string(), "Ads".to_string());
         params.insert("page".to_string(), "2".to_string());
         params.insert("fbclid".to_string(), "abc".to_string());
+        params.insert("FbClId".to_string(), "mixed".to_string());
         params.insert("gclid".to_string(), "xyz".to_string());
 
         let filtered = route_query_params_for_cache(&params).expect("page should remain");
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered.get("page").map(String::as_str), Some("2"));
+        assert!(!filtered.contains_key("UTM_SOURCE"));
+        assert!(!filtered.contains_key("FbClId"));
 
         let key =
             response::ResponseCache::generate_static_fast_cache_key("/", Some(&filtered), None);
@@ -2115,11 +2119,13 @@ mod tests {
         let mut request_a = FxHashMap::default();
         request_a.insert("page".to_string(), "2".to_string());
         request_a.insert("utm_source".to_string(), "twitter".to_string());
+        request_a.insert("UTM_SOURCE".to_string(), "Twitter".to_string());
 
         let mut request_b = FxHashMap::default();
         request_b.insert("page".to_string(), "2".to_string());
         request_b.insert("utm_source".to_string(), "newsletter".to_string());
         request_b.insert("fbclid".to_string(), "abc".to_string());
+        request_b.insert("FbClId".to_string(), "ABC".to_string());
 
         let filtered_a = route_query_params_for_cache(&request_a);
         let filtered_b = route_query_params_for_cache(&request_b);
@@ -2136,6 +2142,8 @@ mod tests {
         assert_eq!(render_a, render_b);
         assert_eq!(render_a.get("page"), Some(&vec!["2".to_string()]));
         assert!(!render_a.contains_key("utm_source"));
+        assert!(!render_a.contains_key("UTM_SOURCE"));
         assert!(!render_b.contains_key("fbclid"));
+        assert!(!render_b.contains_key("FbClId"));
     }
 }
