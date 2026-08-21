@@ -30,12 +30,30 @@ export default defineConfig({
           '/*': 'public, max-age=7200, stale-while-revalidate=86400',
         },
       },
+      images: {
+        maxCacheSize: 8 * 1024 * 1024,
+      },
       cache: {
         layers: {
           response: {
             handler: 'memory',
-            maxEntries: 1000,
-            maxBytes: 128 * 1024 * 1024,
+            maxEntries: 40,
+            maxBytes: 8 * 1024 * 1024,
+          },
+          layout: {
+            handler: 'memory',
+            maxEntries: 40,
+            maxBytes: 4 * 1024 * 1024,
+          },
+          image: {
+            handler: 'memory',
+            maxEntries: 20,
+            maxBytes: 8 * 1024 * 1024,
+          },
+          og: {
+            handler: 'memory',
+            maxEntries: 20,
+            maxBytes: 4 * 1024 * 1024,
           },
         },
       },
