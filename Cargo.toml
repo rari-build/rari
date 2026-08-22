@@ -35,7 +35,7 @@ thiserror = "2.0.20"
 tokio = "1.53.1"
 tracing = "0.1.44"
 url = "2.5.8"
-uuid = { version = "1.24.0", features = ["v4"] }
+uuid = { version = "1.24.1", features = ["v4"] }
 
 # Deno ecosystem — exact pins; bump as a coordinated set with Deno releases
 deno_ast = "=0.53.3"
