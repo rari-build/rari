@@ -110,7 +110,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
         with:
-          toolchain: nightly
+          toolchain: nightly-2026-07-23
 
       - uses: ./.github/actions/setup-rust-build-deps
 
@@ -165,7 +165,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
         with:
-          toolchain: nightly
+          toolchain: nightly-2026-07-23
           components: rustfmt, clippy
 
       - uses: ./.github/actions/setup-rust-build-deps
@@ -233,7 +233,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
         with:
-          toolchain: nightly
+          toolchain: nightly-2026-07-23
 
       - uses: ./.github/actions/setup-rust-build-deps
         with:
@@ -319,7 +319,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
         with:
-          toolchain: nightly
+          toolchain: nightly-2026-07-23
 
       - uses: ./.github/actions/setup-rust-build-deps
         with:
@@ -371,7 +371,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
         with:
-          toolchain: nightly
+          toolchain: nightly-2026-07-23
 
       - uses: ./.github/actions/setup-rust-build-deps
         with:

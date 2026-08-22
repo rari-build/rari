@@ -1,3 +1,8 @@
 [toolchain]
-channel = "nightly"
+# Pin: floating nightly-2026-08-21+ clippy ICEs on opaque futures
+# ("unexpected rigid alias in layout_of after normalization").
+# Release builds already use this pin for a related tokio/LTO ICE
+# (nightly-2026-07-24+). Revisit when a newer nightly is known-good.
+channel = "nightly-2026-07-23"
 profile = "default"
+components = ["rustfmt", "clippy"]
