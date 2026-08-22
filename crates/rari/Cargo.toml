@@ -120,7 +120,7 @@ image = { version = "0.25.10", default-features = false, features = [
   "png",
   "webp",
 ] }
-parley = "0.11.0"
+parley = "0.11.1"
 resvg = "0.48.1"
 swash = "0.2.10"
 taffy = "0.13.0"
@@ -158,8 +158,8 @@ cow-utils = { workspace = true }
 dashmap = "6.2.1"
 lru = "0.18.2"
 parking_lot = { workspace = true }
-redis = { version = "1.5.0", default-features = false, features = ["tokio-comp"] }
-redb = "4.1.0"
+redis = { version = "1.6.0", default-features = false, features = ["tokio-comp"] }
+redb = "4.2.0"
 regex = { workspace = true }
 rustc-hash = { workspace = true }
 smallvec = { workspace = true }
