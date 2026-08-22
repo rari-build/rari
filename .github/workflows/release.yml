@@ -21,7 +21,8 @@ jobs:
   build-binaries:
     name: Build ${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name ==
+      'workflow_dispatch'
     strategy:
       fail-fast: false
       matrix:
@@ -72,7 +73,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: namespacelabs/nscloud-checkout-action@445c25d7009680597d73eb03c4e1cd5be522ed73 # v9.0.0
+      - uses: namespacelabs/nscloud-checkout-action@66f2dc6f6c42a8ac6c4e53473c4840006822831e # v9.0.1
         if: runner.os != 'Windows' && !matrix.github_hosted
 
       - uses: ./.github/actions/setup-platform-cache
@@ -91,7 +92,7 @@ jobs:
             pnpm
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
         with:
           toolchain: nightly-2026-07-23
           targets: ${{ matrix.target }}
@@ -99,7 +100,8 @@ jobs:
       # TODO: Remove once nightly issue is fixed.
       # nightly-2026-07-24+ ICEs on tokio with opt-level=3 + linker-plugin-lto + codegen-units=1
       - name: Pin rust-toolchain.toml to nightly-2026-07-23
-        run: printf '[toolchain]\nchannel = "nightly-2026-07-23"\nprofile = "default"\n' > rust-toolchain.toml
+        run: printf '[toolchain]\nchannel = "nightly-2026-07-23"\nprofile = "default"\n'
+          > rust-toolchain.toml
 
       - uses: ./.github/actions/setup-rust-build-deps
         with:
@@ -125,20 +127,23 @@ jobs:
 
       - name: Generate V8 snapshot (Linux)
         if: runner.os == 'Linux'
-        run: cargo run --release --manifest-path tools/snapshot/Cargo.toml -- crates/rari/snapshots
+        run: cargo run --release --manifest-path tools/snapshot/Cargo.toml --
+          crates/rari/snapshots
         env:
           RUSTFLAGS: -C link-arg=-fuse-ld=mold
 
       - name: Generate V8 snapshot (macOS)
         if: runner.os == 'macOS'
-        run: cargo run --release --manifest-path tools/snapshot/Cargo.toml -- crates/rari/snapshots
+        run: cargo run --release --manifest-path tools/snapshot/Cargo.toml --
+          crates/rari/snapshots
         env:
           RUSTFLAGS: '' # Override .cargo/config.toml to use default linker
 
       - name: Generate V8 snapshot (Windows)
         if: runner.os == 'Windows'
         shell: bash
-        run: cargo run --release --manifest-path tools/snapshot/Cargo.toml -- crates/rari/snapshots
+        run: cargo run --release --manifest-path tools/snapshot/Cargo.toml --
+          crates/rari/snapshots
         env:
           AWS_LC_SYS_PREBUILT_NASM: 1
           PKG_CONFIG_PATH: C:\vcpkg\installed\${{ matrix.vcpkg_triplet }}\lib\pkgconfig
@@ -339,7 +344,8 @@ jobs:
 
   npm-release-package:
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/rari@') || startsWith(github.ref, 'refs/tags/create-rari-app@')
+    if: startsWith(github.ref, 'refs/tags/rari@') || startsWith(github.ref,
+      'refs/tags/create-rari-app@')
     permissions:
       contents: read
       id-token: write
@@ -417,7 +423,8 @@ jobs:
   build-use-cache-addons:
     name: Build use-cache addon for ${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
-    if: startsWith(github.ref, 'refs/tags/use-cache-binaries@') || github.event_name == 'workflow_dispatch'
+    if: startsWith(github.ref, 'refs/tags/use-cache-binaries@') || github.event_name
+      == 'workflow_dispatch'
     strategy:
       fail-fast: false
       matrix:
@@ -457,7 +464,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: namespacelabs/nscloud-checkout-action@445c25d7009680597d73eb03c4e1cd5be522ed73 # v9.0.0
+      - uses: namespacelabs/nscloud-checkout-action@66f2dc6f6c42a8ac6c4e53473c4840006822831e # v9.0.1
         if: runner.os != 'Windows'
 
       - uses: ./.github/actions/setup-platform-cache
@@ -476,9 +483,9 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
         with:
-          toolchain: nightly
+          toolchain: nightly-2026-07-23
           targets: ${{ matrix.target }}
 
       - uses: ./.github/actions/setup-rust-build-deps
