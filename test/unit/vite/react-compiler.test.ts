@@ -1,7 +1,6 @@
 import type { Plugin } from 'vite-plus'
 import { rari } from '@rari/vite'
 import {
-  compilerRuntimeModule,
   createReactCompilerPlugin,
   matchesCompilerId,
   REACT_COMPILER_CODE_FILTER,
@@ -112,11 +111,19 @@ describe('react compiler helpers', () => {
     expect(shouldApplyReactCompiler(ANNOTATED_SOURCE, { compilationMode: 'annotation' })).toBe(true)
   })
 
-  it('picks the runtime module from the React target', () => {
-    expect(compilerRuntimeModule({})).toBe('react/compiler-runtime')
-    expect(compilerRuntimeModule({ target: '19' })).toBe('react/compiler-runtime')
-    expect(compilerRuntimeModule({ target: '18' })).toBe('react-compiler-runtime')
-    expect(compilerRuntimeModule({ target: '17' })).toBe('react-compiler-runtime')
+  it('forces React 19 compiler runtime regardless of requested target', async () => {
+    const plugin = createReactCompilerPlugin({ target: '18' })
+    const result = await getConfig(plugin).call(
+      {
+        error(message: string): never {
+          throw new Error(message)
+        },
+      },
+      {},
+      { command: 'build' },
+    )
+
+    expect(result?.optimizeDeps).toEqual({ include: ['react/compiler-runtime'] })
   })
 
   it('filters module ids like plugin-react include/exclude', () => {
@@ -125,6 +132,9 @@ describe('react compiler helpers', () => {
     expect(matchesCompilerId('/app/src/util.ts')).toBe(true)
     expect(matchesCompilerId('/app/node_modules/react/index.js')).toBe(false)
     expect(matchesCompilerId('/app/src/styles.css')).toBe(false)
+    expect(matchesCompilerId('virtual:app-router-provider.tsx')).toBe(false)
+    expect(matchesCompilerId('\0virtual:/app/src/Hello.tsx')).toBe(false)
+    expect(matchesCompilerId('\0ssr-virtual:/app/src/Hello.tsx')).toBe(false)
   })
 })
 
@@ -145,21 +155,6 @@ describe('createReactCompilerPlugin', () => {
       oxc: { jsx: { refresh: false } },
       optimizeDeps: { include: ['react/compiler-runtime'] },
     })
-  })
-
-  it('prebundles react-compiler-runtime for React 18 targets', async () => {
-    const plugin = createReactCompilerPlugin({ target: '18' })
-    const result = await getConfig(plugin).call(
-      {
-        error(message: string): never {
-          throw new Error(message)
-        },
-      },
-      {},
-      { command: 'build' },
-    )
-
-    expect(result?.optimizeDeps).toEqual({ include: ['react-compiler-runtime'] })
   })
 
   it('compiles client components with oxc-transform-react', async () => {

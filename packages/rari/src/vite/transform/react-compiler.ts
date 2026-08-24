@@ -16,7 +16,8 @@ type OxcTransformReact = typeof import('oxc-transform-react')
 function resolveCompilerOptions(
   compiler: Exclude<RariCompilerOption, false>,
 ): ReactCompilerOptions {
-  return compiler === true ? {} : compiler
+  const options = compiler === true ? {} : compiler
+  return { ...options, target: '19' }
 }
 
 export function shouldApplyReactCompiler(code: string, options: ReactCompilerOptions): boolean {
@@ -24,12 +25,10 @@ export function shouldApplyReactCompiler(code: string, options: ReactCompilerOpt
   return REACT_COMPILER_CODE_FILTER.test(code)
 }
 
-export function compilerRuntimeModule(options: ReactCompilerOptions): string {
-  const target = options.target
-  return target === '17' || target === '18' ? 'react-compiler-runtime' : 'react/compiler-runtime'
-}
+const COMPILER_RUNTIME = 'react/compiler-runtime'
 
 export function matchesCompilerId(id: string): boolean {
+  if (id.startsWith('\0') || id.includes('virtual:')) return false
   const cleanId = id.replace(QUERY_STRIP_RE, '')
   return DEFAULT_INCLUDE_RE.test(cleanId) && !cleanId.includes('/node_modules/')
 }
@@ -70,7 +69,7 @@ export function createReactCompilerPlugin(compiler: Exclude<RariCompilerOption, 
           },
         },
         optimizeDeps: {
-          include: [compilerRuntimeModule(options)],
+          include: [COMPILER_RUNTIME],
         },
       }
     },
