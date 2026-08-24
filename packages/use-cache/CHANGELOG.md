@@ -1,3 +1,22 @@
+## [@rari/use-cache@0.15.14] - 2026-08-24
+
+## Highlights
+
+- **Optional Oxc React Compiler:** set `rari({ compiler: true })` (or pass compiler options) to run experimental native React Compiler on the client via `oxc-transform-react`. React 19 only (`react/compiler-runtime`). Install the optional peer: `pnpm add -D oxc-transform-react`.
+- **Cache budgets and keys:** fetch/module caches honor a shared `cache.maxBytes` budget with correct eviction accounting; HTML cache TTL follows `Cache-Control` `max-age` / `s-maxage`; tracking query params are stripped from HTML cache keys (and render `searchParams`).
+- **redb `'use cache'` remote storage:** expired gets no longer panic on open page refs, and a concurrent refresh cannot be deleted by a stale expiration cleanup.
+
+## Breaking Changes
+
+- None.
+
+### ⚙️ Miscellaneous Tasks
+
+- *(dependencies)* update various package versions in Cargo.lock and Cargo.toml files by @skiniks
+- *(dependencies)* update @rari/use-cache packages to version 0.15.14 by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/@rari/use-cache@0.15.13...@rari/use-cache@0.15.14
 ## [@rari/use-cache@0.15.13] - 2026-08-15
 
 ### ⚙️ Miscellaneous Tasks
