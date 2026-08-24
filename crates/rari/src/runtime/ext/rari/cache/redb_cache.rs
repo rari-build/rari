@@ -159,30 +159,30 @@ fn read_from_database(
     database: &Arc<redb::Database>,
     key: &str,
 ) -> Result<Option<String>, RedbCacheError> {
-    let tx = database.begin_read()?;
-    let table = match tx.open_table(TABLE_DEFINITION) {
-        Ok(table) => table,
-        Err(redb::TableError::TableDoesNotExist(_)) => return Ok(None),
-        Err(err) => return Err(redb::Error::from(err).into()),
-    };
+    let (expires_at_ms, payload) = {
+        let tx = database.begin_read()?;
+        let table = match tx.open_table(TABLE_DEFINITION) {
+            Ok(table) => table,
+            Err(redb::TableError::TableDoesNotExist(_)) => return Ok(None),
+            Err(err) => return Err(redb::Error::from(err).into()),
+        };
 
-    let Some(raw) = table.get(key)? else {
-        return Ok(None);
-    };
-    let bytes = raw.value();
+        let Some(raw) = table.get(key)? else {
+            return Ok(None);
+        };
 
-    let Some((expires_at_ms, payload)) = decode_entry(bytes) else {
-        return Ok(None);
+        let Some((expires_at_ms, payload)) = decode_entry(raw.value()) else {
+            return Ok(None);
+        };
+        (expires_at_ms, payload.to_vec())
     };
 
     if expires_at_ms != EXPIRY_NEVER && now_ms()? >= expires_at_ms {
-        drop(table);
-        drop(tx);
         let _ = remove_expired(database, key);
         return Ok(None);
     }
 
-    Ok(String::from_utf8(payload.to_vec()).ok())
+    Ok(String::from_utf8(payload).ok())
 }
 
 fn write_to_database(
