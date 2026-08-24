@@ -1,4 +1,25 @@
 catalogMode: prefer
+minimumReleaseAgeExclude:
+  - '@oxc-transform-react/binding-android-arm-eabi@0.147.0'
+  - '@oxc-transform-react/binding-android-arm64@0.147.0'
+  - '@oxc-transform-react/binding-darwin-arm64@0.147.0'
+  - '@oxc-transform-react/binding-darwin-x64@0.147.0'
+  - '@oxc-transform-react/binding-freebsd-x64@0.147.0'
+  - '@oxc-transform-react/binding-linux-arm-gnueabihf@0.147.0'
+  - '@oxc-transform-react/binding-linux-arm-musleabihf@0.147.0'
+  - '@oxc-transform-react/binding-linux-arm64-gnu@0.147.0'
+  - '@oxc-transform-react/binding-linux-arm64-musl@0.147.0'
+  - '@oxc-transform-react/binding-linux-ppc64-gnu@0.147.0'
+  - '@oxc-transform-react/binding-linux-riscv64-gnu@0.147.0'
+  - '@oxc-transform-react/binding-linux-riscv64-musl@0.147.0'
+  - '@oxc-transform-react/binding-linux-s390x-gnu@0.147.0'
+  - '@oxc-transform-react/binding-linux-x64-gnu@0.147.0'
+  - '@oxc-transform-react/binding-linux-x64-musl@0.147.0'
+  - '@oxc-transform-react/binding-openharmony-arm64@0.147.0'
+  - '@oxc-transform-react/binding-win32-arm64-msvc@0.147.0'
+  - '@oxc-transform-react/binding-win32-ia32-msvc@0.147.0'
+  - '@oxc-transform-react/binding-win32-x64-msvc@0.147.0'
+  - oxc-transform-react@0.147.0
 shellEmulator: true
 trustPolicy: no-downgrade
 packages:
@@ -13,6 +34,7 @@ catalogs:
   build:
     '@napi-rs/cli': ^3.8.6
     lightningcss: ^1.33.0
+    oxc-transform-react: ^0.147.0
     rolldown: ^1.2.5
     vite: ^8.2.2
     vite-plus: ^0.2.9
