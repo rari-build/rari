@@ -5,6 +5,10 @@ import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
 import { PostHogPageView } from '@/components/PostHogPageView'
 
+async function loadPostHog() {
+  return import('posthog-js')
+}
+
 export function PostHogProvider({
   children,
   pathname,
@@ -17,7 +21,7 @@ export function PostHogProvider({
     if (key == null || key === '' || host == null || host === '') return undefined
 
     const load = async () => {
-      const { default: posthog } = await import('posthog-js')
+      const { default: posthog } = await loadPostHog()
       if (posthog.__loaded) return
       posthog.init(key, {
         api_host: host,

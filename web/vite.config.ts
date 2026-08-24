@@ -9,6 +9,7 @@ export default defineConfig({
   lint: monorepoLint,
   plugins: [
     rari({
+      compiler: true,
       csp: {
         scriptSrc: [
           "'self'",

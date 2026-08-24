@@ -1,3 +1,12 @@
+## [create-rari-app@0.5.26] - 2026-08-24
+
+### ⚙️ Miscellaneous Tasks
+
+- *(dependencies)* update pnpm version to 11.22.0 and various package versions by @skiniks
+- *(dependencies)* update package versions by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/create-rari-app@0.5.25...create-rari-app@0.5.26
 ## [create-rari-app@0.5.25] - 2026-08-15
 
 ### ⚙️ Miscellaneous Tasks

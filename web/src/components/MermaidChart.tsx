@@ -28,6 +28,10 @@ const THEME_VARIABLES = {
   titleColor: '#e5e7eb',
 }
 
+async function loadMermaid() {
+  return import('mermaid')
+}
+
 export default function MermaidChart({ children, className }: MermaidChartProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [svg, setSvg] = useState<string>('')
@@ -42,7 +46,7 @@ export default function MermaidChart({ children, className }: MermaidChartProps)
       if (!containerRef.current) return
 
       try {
-        const mermaid = (await import('mermaid')).default
+        const mermaid = (await loadMermaid()).default
 
         mermaid.initialize({
           startOnLoad: false,

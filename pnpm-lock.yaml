@@ -34,8 +34,8 @@ catalogs:
       version: 1.7.0
   default:
     rari:
-      specifier: ^0.15.14
-      version: 0.15.14
+      specifier: ^0.15.15
+      version: 0.15.15
   eslint:
     '@e18e/eslint-plugin':
       specifier: ^0.5.1
@@ -556,7 +556,7 @@ importers:
         version: 1.418.10
       rari:
         specifier: 'catalog:'
-        version: 0.15.14(@mdx-js/mdx@3.1.1(supports-color@8.1.1))(oxc-transform-react@0.147.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(webpack@5.107.2(lightningcss@1.33.0)(postcss@8.5.26))
+        version: 0.15.15(@mdx-js/mdx@3.1.1(supports-color@8.1.1))(oxc-transform-react@0.147.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(webpack@5.107.2(lightningcss@1.33.0)(postcss@8.5.26))
       react:
         specifier: catalog:react
         version: 19.2.8
@@ -4701,8 +4701,8 @@ packages:
     os: [win32]
     hasBin: true
 
-  rari@0.15.14:
-    resolution: {integrity: sha512-IQBgd7O6BTSNemzwbRVSYu960X+tcpEYaMwNhuLkqTWNqC+fBMfRU4B9fXEcLGYKYlN8f9qDU5EuRAi+9AP6fw==}
+  rari@0.15.15:
+    resolution: {integrity: sha512-7qroKynRQRJttl51wzpmK2ySUFzJssjMgd9Y6ZWsJAMjLR4YIHxXQU3NcaF2mzTFSBCAw19NHW/ClSOquQXaAg==}
     engines: {node: '>=22.18.0'}
     hasBin: true
     peerDependencies:
@@ -9417,7 +9417,7 @@ snapshots:
   rari-win32-x64@0.15.14:
     optional: true
 
-  rari@0.15.14(@mdx-js/mdx@3.1.1(supports-color@8.1.1))(oxc-transform-react@0.147.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(webpack@5.107.2(lightningcss@1.33.0)(postcss@8.5.26)):
+  rari@0.15.15(@mdx-js/mdx@3.1.1(supports-color@8.1.1))(oxc-transform-react@0.147.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(webpack@5.107.2(lightningcss@1.33.0)(postcss@8.5.26)):
     dependencies:
       lightningcss: 1.33.0
       react: 19.2.8
