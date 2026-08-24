@@ -2,11 +2,11 @@
 builder = "RAILPACK"
 buildCommand = "pnpm --filter @rari/web build"
 watchPatterns = [
-  "web/**",
-  "packages/rari/**",
-  "pnpm-workspace.yaml",
-  "railway.toml",
-  "railpack.json",
+  "/web/**",
+  "/pnpm-lock.yaml",
+  "/pnpm-workspace.yaml",
+  "/railway.toml",
+  "/railpack.json",
 ]
 
 [deploy]

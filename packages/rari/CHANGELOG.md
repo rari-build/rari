@@ -1,3 +1,12 @@
+## [rari@0.15.15] - 2026-08-24
+
+### 🐛 Bug Fixes
+
+- *(vite)* resolve react/compiler-runtime when aliasing react by @skiniks
+- *(vite)* improve handling of React alias resolution and error management by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.15.14...rari@0.15.15
 ## [rari@0.15.14] - 2026-08-24
 
 ## Highlights
