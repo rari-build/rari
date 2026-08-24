@@ -107,6 +107,19 @@ function matchesAliasImport(source: string, aliases: Readonly<Record<string, str
   return false
 }
 
+function isMissingPackageExportError(error: unknown): boolean {
+  const code = getErrnoCode(error)
+  return (
+    code === 'ENOENT' || code === 'ERR_PACKAGE_PATH_NOT_EXPORTED' || code === 'ERR_MODULE_NOT_FOUND'
+  )
+}
+
+function isExactReactAliasFind(find: string | RegExp): boolean {
+  return (
+    find === 'react' || (find instanceof RegExp && find.source === '^react$' && find.flags === '')
+  )
+}
+
 const REACT_IMPORT_REGEX = /import\s+\{[^}]*\}\s+from\s+['"]react['"]/
 const REACT_IMPORT_WITH_DEFAULT_REGEX = /import\s+[^,\s]+\s*,\s*\{[^}]*\}\s+from\s+['"]react['"]/
 const REACT_IMPORT_MATCH_REGEX = /import React(,\s*\{([^}]*)\})?\s+from\s+['"]react['"];?/
@@ -801,7 +814,12 @@ if (import.meta.hot) {
         existingAlias = aliasEntriesFromRecord(resolveOptions.alias)
       }
 
+      existingAlias = existingAlias.map(entry =>
+        entry.find === 'react' ? { find: /^react$/, replacement: entry.replacement } : entry,
+      )
+
       const aliasFinds = new Set(existingAlias.map(a => String(a.find)))
+      const hasExactReactAlias = existingAlias.some(entry => isExactReactAliasFind(entry.find))
       try {
         const reactPath = fileURLToPath(import.meta.resolve('react'))
         const reactDomClientPath = fileURLToPath(import.meta.resolve('react-dom/client'))
@@ -822,7 +840,7 @@ if (import.meta.hot) {
             })
           }
         } catch (err) {
-          if (getErrnoCode(err) !== 'ENOENT') {
+          if (!isMissingPackageExportError(err)) {
             console.warn('[rari] Unexpected error resolving react/jsx-dev-runtime:', err)
           }
         }
@@ -837,23 +855,20 @@ if (import.meta.hot) {
             })
           }
         } catch (err) {
-          if (getErrnoCode(err) !== 'ENOENT') {
+          if (!isMissingPackageExportError(err)) {
             console.warn('[rari] Unexpected error resolving react/compiler-runtime:', err)
           }
         }
-        if (!aliasFinds.has('react'))
-          aliasesToAppend.push({ find: /^react$/, replacement: reactPath })
+        if (!hasExactReactAlias) aliasesToAppend.push({ find: /^react$/, replacement: reactPath })
         if (!aliasFinds.has('react-dom/client')) {
           aliasesToAppend.push({
             find: 'react-dom/client',
             replacement: reactDomClientPath,
           })
         }
-        if (aliasesToAppend.length > 0) {
-          resolveOptions.alias = [...existingAlias, ...aliasesToAppend]
-        }
+        resolveOptions.alias = [...existingAlias, ...aliasesToAppend]
       } catch (err) {
-        if (getErrnoCode(err) !== 'ENOENT') {
+        if (!isMissingPackageExportError(err)) {
           console.warn('[rari] Unexpected error configuring React aliases:', err)
         }
       }
