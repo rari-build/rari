@@ -5,6 +5,7 @@ import type { MdxPluginOptions } from './mdx/registry'
 import type { RariPlugin } from './plugin/types'
 import type { ServerBuildOptions } from './server/build'
 import type { ServerCacheConfig, ServerCacheLayerConfig } from './server/config'
+import type { ReactCompilerOptions } from './transform/react-compiler'
 import type { ProxyPluginOptions } from '@/proxy/build/vite-plugin'
 import { Buffer } from 'node:buffer'
 import { spawn, spawnSync } from 'node:child_process'
@@ -79,6 +80,7 @@ import {
   transformInlineServerActions,
 } from './transform/inline-server-action'
 import { transformDefineMdxComponents } from './transform/mdx-components'
+import { createReactCompilerPlugin } from './transform/react-compiler'
 import { getUseCacheTransform } from './transform/use-cache'
 
 const DIST_NOT_BUILT_ERROR =
@@ -174,6 +176,7 @@ export interface RariOptions {
     readonly useCacheRemote?: ServerCacheLayerConfig
   }
   readonly mdx?: MdxPluginOptions
+  readonly compiler?: boolean | ReactCompilerOptions
 }
 
 const DEFAULT_IMAGE_CONFIG = {
@@ -290,7 +293,11 @@ async function loadRscReferences(): Promise<string> {
   return loadRuntimeFile('rsc-references.mjs')
 }
 
-async function writeImageConfig(projectRoot: string, options: RariOptions): Promise<void> {
+async function writeImageConfig(
+  projectRoot: string,
+  // oxlint-disable-next-line typescript/prefer-readonly-parameter-types -- RariOptions embeds optional peer option bags (oxc/mdx) that are not deeply readonly
+  options: RariOptions,
+): Promise<void> {
   const srcDir = path.join(projectRoot, 'src')
   const { getBinaryPath } = await import('@/cli/platform')
   const binaryPath = getBinaryPath()
@@ -348,11 +355,17 @@ async function writeImageConfig(projectRoot: string, options: RariOptions): Prom
   fs.writeFileSync(configPath, JSON.stringify(imageConfig))
 }
 
-export function defineRariOptions(config: RariOptions): RariOptions {
+export function defineRariOptions(
+  // oxlint-disable-next-line typescript/prefer-readonly-parameter-types -- RariOptions embeds optional peer option bags (oxc/mdx) that are not deeply readonly
+  config: RariOptions,
+): RariOptions {
   return config
 }
 
-export function rari(options: RariOptions = {}): RariPlugin[] {
+export function rari(
+  // oxlint-disable-next-line typescript/prefer-readonly-parameter-types -- RariOptions embeds optional peer option bags (oxc/mdx) that are not deeply readonly
+  options: RariOptions = {},
+): RariPlugin[] {
   if (options.jsPoolSize != null) {
     const size = options.jsPoolSize
     if (!Number.isInteger(size) || size < 1 || !Number.isFinite(size)) {
@@ -2244,7 +2257,12 @@ export const createTemporaryReferenceSet = module.exports.createTemporaryReferen
     },
   }
 
-  const plugins: Plugin[] = [mainPlugin, webpackRequirePatchPlugin, serverBuildPlugin]
+  const plugins: Plugin[] = []
+
+  if (options.compiler != null && options.compiler !== false)
+    plugins.push(createReactCompilerPlugin(options.compiler))
+
+  plugins.push(mainPlugin, webpackRequirePatchPlugin, serverBuildPlugin)
 
   if (options.proxy !== false) plugins.push(rariProxy(options.proxy ?? {}))
 
@@ -2276,6 +2294,8 @@ export type {
   ServerCSPConfig,
   ServerUseCacheConfig,
 } from './server/config'
+
+export type { RariCompilerOption, ReactCompilerOptions } from './transform/react-compiler'
 // oxlint-disable-next-line typescript/no-useless-empty-export -- side-effect import of ambient declarations
 export type {} from '@/ambient'
 

@@ -138,11 +138,15 @@
   },
   "peerDependencies": {
     "@mdx-js/mdx": "catalog:mdx",
+    "oxc-transform-react": "catalog:build",
     "react": "catalog:react",
     "react-dom": "catalog:react"
   },
   "peerDependenciesMeta": {
     "@mdx-js/mdx": {
+      "optional": true
+    },
+    "oxc-transform-react": {
       "optional": true
     }
   },
@@ -167,6 +171,7 @@
     "@types/node": "catalog:typescript",
     "@types/react": "catalog:react",
     "@types/react-dom": "catalog:react",
+    "oxc-transform-react": "catalog:build",
     "typescript": "catalog:typescript",
     "typescript-7": "catalog:typescript",
     "vite-plus": "catalog:build"
