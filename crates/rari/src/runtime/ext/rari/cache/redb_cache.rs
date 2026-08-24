@@ -13,7 +13,7 @@ use std::{
 
 use deno_core::{Extension, OpState, extension, op2};
 use deno_error::JsErrorBox;
-use redb::ReadableDatabase;
+use redb::{ReadableDatabase, ReadableTable};
 use tokio::task::{JoinError, spawn_blocking};
 
 use crate::{runtime::ext::ExtensionTrait, server::config::Config};
@@ -178,7 +178,7 @@ fn read_from_database(
     };
 
     if expires_at_ms != EXPIRY_NEVER && now_ms()? >= expires_at_ms {
-        let _ = remove_expired(database, key);
+        let _ = remove_expired_if_matches(database, key, expires_at_ms, &payload);
         return Ok(None);
     }
 
@@ -201,11 +201,37 @@ fn write_to_database(
     Ok(())
 }
 
-fn remove_expired(database: &Arc<redb::Database>, key: &str) -> Result<(), RedbCacheError> {
+fn delete_key(database: &Arc<redb::Database>, key: &str) -> Result<(), RedbCacheError> {
     let tx = database.begin_write()?;
     {
         let mut table = tx.open_table(TABLE_DEFINITION)?;
         let _ = table.remove(key)?;
+    }
+    tx.commit()?;
+    Ok(())
+}
+
+fn remove_expired_if_matches(
+    database: &Arc<redb::Database>,
+    key: &str,
+    expected_expires_at_ms: u64,
+    expected_payload: &[u8],
+) -> Result<(), RedbCacheError> {
+    let tx = database.begin_write()?;
+    {
+        let mut table = tx.open_table(TABLE_DEFINITION)?;
+        let matches = match table.get(key)? {
+            Some(raw) => match decode_entry(raw.value()) {
+                Some((expires_at_ms, payload)) => {
+                    expires_at_ms == expected_expires_at_ms && payload == expected_payload
+                }
+                None => false,
+            },
+            None => false,
+        };
+        if matches {
+            let _ = table.remove(key)?;
+        }
     }
     tx.commit()?;
     Ok(())
@@ -267,7 +293,7 @@ pub async fn op_redb_cache_delete(
 
     run_redb(move || {
         let database = redb_state.database()?;
-        remove_expired(&database, &key)
+        delete_key(&database, &key)
     })
     .await
 }
@@ -275,7 +301,12 @@ pub async fn op_redb_cache_delete(
 #[cfg(test)]
 #[expect(clippy::expect_used)]
 mod tests {
-    use std::{fs, thread::sleep, time::Duration};
+    use std::{
+        fs,
+        sync::Barrier,
+        thread::{self, sleep},
+        time::Duration,
+    };
 
     use redb::ReadableTable;
 
@@ -394,6 +425,56 @@ mod tests {
         let tx = db.begin_read().expect("tx");
         let table = tx.open_table(TABLE_DEFINITION).expect("table");
         assert!(table.get("k").expect("get").is_none());
+    }
+
+    #[test]
+    fn refreshed_entry_survives_stale_expiration_cleanup() {
+        let db = open_temp_db("stale-expire-vs-refresh");
+        let stale_expires = now_ms().expect("now").saturating_sub(10);
+        write_to_database(&db, "k", b"stale", stale_expires).expect("write stale");
+
+        let fresh_expires = now_ms().expect("now").saturating_add(60_000);
+        write_to_database(&db, "k", b"fresh", fresh_expires).expect("write fresh");
+
+        remove_expired_if_matches(&db, "k", stale_expires, b"stale").expect("stale cleanup");
+
+        let got = read_from_database(&db, "k").expect("read");
+        assert_eq!(got.as_deref(), Some("fresh"));
+    }
+
+    #[test]
+    fn concurrent_set_survives_expiration_cleanup() {
+        let db = open_temp_db("concurrent-set-vs-expire");
+
+        for i in 0..40 {
+            let key = format!("k{i}");
+            let stale_expires = now_ms().expect("now").saturating_sub(1);
+            write_to_database(&db, &key, b"stale", stale_expires).expect("write stale");
+
+            let barrier = Arc::new(Barrier::new(2));
+            let db_get = Arc::clone(&db);
+            let db_set = Arc::clone(&db);
+            let barrier_get = Arc::clone(&barrier);
+            let barrier_set = Arc::clone(&barrier);
+            let key_get = key.clone();
+            let key_set = key.clone();
+
+            let getter = thread::spawn(move || {
+                barrier_get.wait();
+                read_from_database(&db_get, &key_get)
+            });
+            let setter = thread::spawn(move || {
+                barrier_set.wait();
+                let fresh_expires = now_ms().expect("now").saturating_add(60_000);
+                write_to_database(&db_set, &key_set, b"fresh", fresh_expires)
+            });
+
+            getter.join().expect("getter").expect("get");
+            setter.join().expect("setter").expect("set");
+
+            let got = read_from_database(&db, &key).expect("final read");
+            assert_eq!(got.as_deref(), Some("fresh"), "key {key}");
+        }
     }
 
     #[test]
