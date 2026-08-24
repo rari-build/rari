@@ -31,27 +31,13 @@ export default defineConfig({
         },
       },
       cache: {
+        maxBytes: 24 * 1024 * 1024,
         layers: {
-          response: {
-            handler: 'memory',
-            maxEntries: 40,
-            maxBytes: 8 * 1024 * 1024,
-          },
-          layout: {
-            handler: 'memory',
-            maxEntries: 40,
-            maxBytes: 4 * 1024 * 1024,
-          },
-          image: {
-            handler: 'memory',
-            maxEntries: 20,
-            maxBytes: 8 * 1024 * 1024,
-          },
-          og: {
-            handler: 'memory',
-            maxEntries: 20,
-            maxBytes: 4 * 1024 * 1024,
-          },
+          response: { maxEntries: 40 },
+          layout: { maxEntries: 40 },
+          image: { maxEntries: 20 },
+          og: { maxEntries: 20 },
+          fetch: { maxEntries: 32 },
         },
       },
     }),
