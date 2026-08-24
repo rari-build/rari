@@ -248,3 +248,37 @@ describe('rari({ compiler })', () => {
     expect(plugins.some(plugin => plugin.name === 'rari:react-compiler')).toBe(false)
   })
 })
+
+describe('rari react resolve aliases', () => {
+  it('uses an exact react match and pins react/compiler-runtime', async () => {
+    const main = rari().find(plugin => plugin.name === 'rari')
+    expect(main).toBeDefined()
+
+    const config: {
+      resolve?: {
+        alias?: Array<{ find: string | RegExp; replacement: string }>
+      }
+    } = { resolve: {} }
+
+    await getConfig(castMock<Plugin>(main)).call(
+      {
+        error(message: string): never {
+          throw new Error(message)
+        },
+      },
+      castMock(config),
+      { command: 'build' },
+    )
+
+    const aliases = config.resolve?.alias ?? []
+    const reactAlias = aliases.find(
+      (entry): entry is { find: RegExp; replacement: string } =>
+        entry.find instanceof RegExp && entry.find.source === '^react$' && entry.find.flags === '',
+    )
+    expect(reactAlias).toBeDefined()
+    expect(reactAlias!.find.test('react')).toBe(true)
+    expect(reactAlias!.find.test('react/compiler-runtime')).toBe(false)
+    expect(aliases.some(entry => entry.find === 'react')).toBe(false)
+    expect(aliases.some(entry => entry.find === 'react/compiler-runtime')).toBe(true)
+  })
+})

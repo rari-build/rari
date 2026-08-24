@@ -2394,6 +2394,7 @@ export function createServerBuildPlugin(options: ServerBuildOptions = {}): Plugi
         'react-dom',
         'react/jsx-runtime',
         'react/jsx-dev-runtime',
+        'react/compiler-runtime',
         'react-dom/client',
       ])
 

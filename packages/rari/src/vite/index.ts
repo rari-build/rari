@@ -806,7 +806,7 @@ if (import.meta.hot) {
         const reactPath = fileURLToPath(import.meta.resolve('react'))
         const reactDomClientPath = fileURLToPath(import.meta.resolve('react-dom/client'))
         const reactJsxRuntimePath = fileURLToPath(import.meta.resolve('react/jsx-runtime'))
-        const aliasesToAppend: Array<{ find: string; replacement: string }> = []
+        const aliasesToAppend: Array<{ find: string | RegExp; replacement: string }> = []
         if (!aliasFinds.has('react/jsx-runtime')) {
           aliasesToAppend.push({
             find: 'react/jsx-runtime',
@@ -826,8 +826,23 @@ if (import.meta.hot) {
             console.warn('[rari] Unexpected error resolving react/jsx-dev-runtime:', err)
           }
         }
+        try {
+          const reactCompilerRuntimePath = fileURLToPath(
+            import.meta.resolve('react/compiler-runtime'),
+          )
+          if (!aliasFinds.has('react/compiler-runtime')) {
+            aliasesToAppend.push({
+              find: 'react/compiler-runtime',
+              replacement: reactCompilerRuntimePath,
+            })
+          }
+        } catch (err) {
+          if (getErrnoCode(err) !== 'ENOENT') {
+            console.warn('[rari] Unexpected error resolving react/compiler-runtime:', err)
+          }
+        }
         if (!aliasFinds.has('react'))
-          aliasesToAppend.push({ find: 'react', replacement: reactPath })
+          aliasesToAppend.push({ find: /^react$/, replacement: reactPath })
         if (!aliasFinds.has('react-dom/client')) {
           aliasesToAppend.push({
             find: 'react-dom/client',
@@ -1009,6 +1024,7 @@ if (import.meta.hot) {
         'react-dom',
         'react/jsx-runtime',
         'react/jsx-dev-runtime',
+        'react/compiler-runtime',
         'react-dom/client',
       ])
 
