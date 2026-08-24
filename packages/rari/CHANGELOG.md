@@ -1,3 +1,40 @@
+## [rari@0.15.14] - 2026-08-24
+
+## Highlights
+
+- **Optional Oxc React Compiler:** set `rari({ compiler: true })` (or pass compiler options) to run experimental native React Compiler on the client via `oxc-transform-react`. React 19 only (`react/compiler-runtime`). Install the optional peer: `pnpm add -D oxc-transform-react`.
+- **Cache budgets and keys:** fetch/module caches honor a shared `cache.maxBytes` budget with correct eviction accounting; HTML cache TTL follows `Cache-Control` `max-age` / `s-maxage`; tracking query params are stripped from HTML cache keys (and render `searchParams`).
+- **redb `'use cache'` remote storage:** expired gets no longer panic on open page refs, and a concurrent refresh cannot be deleted by a stale expiration cleanup.
+
+## Breaking Changes
+
+- None.
+
+### 🚀 Features
+
+- *(vite)* add optional oxc React Compiler via rari({ compiler }) by @skiniks
+
+### 🐛 Bug Fixes
+
+- *(redb)* drop read AccessGuard before removing expired entries by @skiniks
+- *(redb)* avoid deleting refreshed entries on expired-get cleanup by @skiniks
+- *(react-compiler)* enforce React 19 runtime module regardless of target and clean up related tests by @skiniks
+
+### 🚜 Refactor
+
+- *(cache)* improve fetch cache management by introducing a state structure and enhancing byte budget calculations by @skiniks
+
+### 🧪 Testing
+
+- *(cache)* add tests for byte accounting and query parameter filtering in cache management by @skiniks
+
+### ⚙️ Miscellaneous Tasks
+
+- *(config)* enhance runtime and cache configurations, adding max bytes and default TTL settings by @skiniks
+- *(dependencies)* update various package versions in Cargo.lock and Cargo.toml files by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.15.13...rari@0.15.14
 ## [rari@0.15.13] - 2026-08-15
 
 ### 🚀 Features
