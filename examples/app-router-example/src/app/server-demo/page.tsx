@@ -1,7 +1,6 @@
 import FetchExample from '@/components/FetchExample'
 
 export default function ServerDemoPage() {
-  // eslint-disable-next-line react/purity
   const serverTime = new Date().toISOString()
 
   return (

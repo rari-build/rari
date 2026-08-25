@@ -24,7 +24,6 @@ interface OuterProps {
 
 async function OuterComponent({ delay, children }: OuterProps) {
   await sleep(delay)
-  // eslint-disable-next-line react/purity
   const timestamp = new Date().toISOString()
   return (
     <div data-testid="outer-content">
@@ -42,7 +41,6 @@ interface InnerProps {
 
 async function InnerComponent({ delay, name }: InnerProps) {
   await sleep(delay)
-  // eslint-disable-next-line react/purity
   const timestamp = new Date().toISOString()
   return (
     <div data-testid={`component-${name.toLowerCase()}`}>

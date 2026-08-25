@@ -1,5 +1,3 @@
-/* eslint-disable react/purity */
-
 interface JsonPlaceholderPost {
   id: number
   title: string
