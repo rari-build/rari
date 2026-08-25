@@ -20,7 +20,7 @@ export default function InteractivePage() {
       <div className="bg-white rounded-xl p-8 shadow-2xl">
         <h3 className="text-gray-900 mb-4 text-xl font-semibold">Server Component Info</h3>
         <p className="text-gray-600 leading-relaxed">
-          This text is rendered on the server at {/* eslint-disable-next-line react/purity */}
+          This text is rendered on the server at
           <strong>{new Date().toISOString()}</strong>. The Counter and TodoList above are client
           components that hydrate on the client.
         </p>

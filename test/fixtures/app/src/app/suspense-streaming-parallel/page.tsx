@@ -23,7 +23,6 @@ async function SlowComponent({ name, delay }: SlowProps) {
   await new Promise<void>(resolve => {
     setTimeout(resolve, delay)
   })
-  // eslint-disable-next-line react/purity
   const timestamp = new Date().toISOString()
   return (
     <div data-testid={`component-${name.toLowerCase()}`}>

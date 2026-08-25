@@ -273,13 +273,11 @@ declare global {
     function umask(mask?: number): number
     function execPath(): string
 
-    interface FsFile {
-      read: (p: Uint8Array) => Promise<number | null>
-      write: (p: Uint8Array) => Promise<number>
-      close: () => void
+    class FsFile {
+      read(p: Uint8Array): Promise<number | null>
+      write(p: Uint8Array): Promise<number>
+      close(): void
     }
-
-    let FsFile: any
 
     interface WriteFileOptions {
       append?: boolean
