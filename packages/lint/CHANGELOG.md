@@ -1,3 +1,11 @@
+## [@rari/lint@0.1.2] - 2026-08-25
+
+### ⚙️ Miscellaneous Tasks
+
+- *(dependencies)* update package versions and improve eslint rules by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/@rari/lint@0.1.1...@rari/lint@0.1.2
 ## [@rari/lint@0.1.1] - 2026-08-07
 
 ### 🚜 Refactor
