@@ -108,7 +108,7 @@ export function AppRouterProvider({
 }: AppRouterProviderProps) {
   const [rscPayload, setRscPayload] = useState(initialPayload)
   const rscPayloadRef = useRef(initialPayload)
-  const [_renderKey, setRenderKey] = useState(0)
+  const [renderKey, setRenderKey] = useState(0)
   const scrollPositionRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
   const pendingScrollPayloadRef = useRef<RscPayload | null>(null)
   const formDataRef = useRef<Map<string, FormData>>(new Map())
@@ -134,7 +134,7 @@ export function AppRouterProvider({
     )
     pendingScrollPayloadRef.current = nextPending
     if (shouldScroll) window.scrollTo(0, 0)
-  }, [rscPayload])
+  }, [rscPayload, renderKey])
 
   const rememberRouteCache = (element: React.ReactNode | Thenable<React.ReactNode>) => {
     if (element == null || isFlightThenable(element)) return

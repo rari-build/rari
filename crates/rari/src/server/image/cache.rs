@@ -1,9 +1,9 @@
 #![expect(clippy::exhaustive_structs)]
 
 use std::{
-    env, fs,
+    env, fs, io,
     num::NonZeroUsize,
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
     sync::Arc,
 };
 
@@ -68,13 +68,37 @@ impl ImageCache {
         let is_production = env::var("NODE_ENV").map(|v| v == "production").unwrap_or(false);
 
         if is_production {
-            PathBuf::from("/tmp/rari-image-cache")
-        } else {
-            project_path.join(".cache").join("images")
+            return PathBuf::from("/tmp/rari-image-cache");
+        }
+
+        let Some(base) = Self::validated_project_base(project_path) else {
+            return env::temp_dir().join("rari-image-cache");
+        };
+
+        let cache_dir = base.join(".cache").join("images");
+        if !cache_dir.starts_with(&base) {
+            return env::temp_dir().join("rari-image-cache");
+        }
+        cache_dir
+    }
+
+    fn validated_project_base(project_path: &Path) -> Option<PathBuf> {
+        let as_str = project_path.to_string_lossy();
+        if as_str.contains("..") {
+            return None;
+        }
+        if project_path.components().any(|c| matches!(c, Component::ParentDir)) {
+            return None;
+        }
+
+        match fs::canonicalize(project_path) {
+            Ok(canonical) if !canonical.to_string_lossy().contains("..") => Some(canonical),
+            Ok(_) => None,
+            Err(_) => Some(project_path.to_path_buf()),
         }
     }
 
-    fn cache_filename(&self, key: &str) -> PathBuf {
+    fn cache_leaf_name(key: &str) -> String {
         use std::{
             collections::hash_map::DefaultHasher,
             hash::{Hash, Hasher},
@@ -82,9 +106,69 @@ impl ImageCache {
 
         let mut hasher = DefaultHasher::new();
         key.hash(&mut hasher);
-        let hash = hasher.finish();
+        format!("{:x}.cache", hasher.finish())
+    }
 
-        self.cache_dir.join(format!("{hash:x}.cache"))
+    fn cache_filename(&self, key: &str) -> Option<PathBuf> {
+        let file_name = Self::cache_leaf_name(key);
+        if !Self::is_safe_cache_leaf(&file_name) {
+            return None;
+        }
+
+        let path = self.cache_dir.join(&file_name);
+        if !path.starts_with(&self.cache_dir) {
+            return None;
+        }
+        if path.file_name().and_then(|n| n.to_str()) != Some(file_name.as_str()) {
+            return None;
+        }
+        Some(path)
+    }
+
+    fn is_safe_cache_leaf(file_name: &str) -> bool {
+        if file_name.contains("..") || file_name.contains('/') || file_name.contains('\\') {
+            return false;
+        }
+        if file_name.contains('\0') || file_name.is_empty() {
+            return false;
+        }
+        let Some((stem, ext)) = file_name.split_once('.') else {
+            return false;
+        };
+        ext == "cache" && !stem.is_empty() && stem.chars().all(|c| c.is_ascii_hexdigit())
+    }
+
+    fn path_for_disk_io(&self, key: &str) -> Option<PathBuf> {
+        let path = self.cache_filename(key)?;
+        let path_str = path.to_string_lossy();
+        if path_str.contains("..") {
+            return None;
+        }
+        if !path.starts_with(&self.cache_dir) {
+            return None;
+        }
+        let file_name = path.file_name()?.to_str()?;
+        if !Self::is_safe_cache_leaf(file_name) {
+            return None;
+        }
+        Some(path)
+    }
+
+    fn assert_path_within_cache(path: &Path, cache_root: &Path) -> io::Result<()> {
+        let path_str = path.to_string_lossy();
+        if path_str.contains("..")
+            || !path.starts_with(cache_root)
+            || path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .is_none_or(|name| name.contains("..") || name.contains('/') || name.contains('\\'))
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "refusing path outside image cache directory",
+            ));
+        }
+        Ok(())
     }
 
     pub async fn get(&self, key: &str) -> Option<Arc<CachedImage>> {
@@ -98,10 +182,16 @@ impl ImageCache {
             }
         }
 
-        let path = self.cache_filename(key);
-        let path_for_blocking = path.clone();
-        let read_result =
-            task::spawn_blocking(move || fs::read(&path_for_blocking)).await.ok()?.ok()?;
+        let path = self.path_for_disk_io(key)?;
+        let cache_root = self.cache_dir.clone();
+        let path_for_blocking = path;
+        let read_result = task::spawn_blocking(move || {
+            Self::assert_path_within_cache(&path_for_blocking, &cache_root)?;
+            fs::read(&path_for_blocking)
+        })
+        .await
+        .ok()?
+        .ok()?;
 
         let cached = match rkyv::from_bytes::<CachedImage, rancor::Error>(&read_result) {
             Ok(c) => c,
@@ -130,11 +220,19 @@ impl ImageCache {
         };
 
         self.ensure_cache_dir().await;
-        let path = self.cache_filename(&key);
-        let path_for_blocking = path.clone();
+        let Some(path) = self.path_for_disk_io(&key) else {
+            tracing::error!("Refusing to write image cache path outside cache directory");
+            return;
+        };
+
+        let cache_root = self.cache_dir.clone();
+        let path_for_blocking = path;
         let data_for_blocking = serialized.clone();
-        let write_result =
-            task::spawn_blocking(move || fs::write(&path_for_blocking, &data_for_blocking)).await;
+        let write_result = task::spawn_blocking(move || {
+            Self::assert_path_within_cache(&path_for_blocking, &cache_root)?;
+            fs::write(&path_for_blocking, &data_for_blocking)
+        })
+        .await;
         match write_result {
             Ok(Ok(())) => {}
             Ok(Err(e)) => tracing::error!("Failed to write image to disk cache: {}", e),
@@ -226,6 +324,41 @@ mod tests {
         assert!(in_handler_b.is_some(), "write-through to handler_b missing");
 
         let _ = fs::remove_dir_all(&project_path);
+    }
+
+    #[test]
+    fn test_is_safe_cache_leaf() {
+        assert!(ImageCache::is_safe_cache_leaf("abc123.cache"));
+        assert!(!ImageCache::is_safe_cache_leaf("../etc/passwd"));
+        assert!(!ImageCache::is_safe_cache_leaf("abc/def.cache"));
+        assert!(!ImageCache::is_safe_cache_leaf("abc\\def.cache"));
+        assert!(!ImageCache::is_safe_cache_leaf("not-hex.cache"));
+        assert!(!ImageCache::is_safe_cache_leaf("abc123.webp"));
+    }
+
+    #[test]
+    fn test_resolve_cache_dir_rejects_parent_components() {
+        let unsafe_path = PathBuf::from("/tmp/rari-cache-test/../../etc");
+        let resolved = ImageCache::resolve_cache_dir(&unsafe_path);
+        assert!(
+            resolved.starts_with(temp_dir()) || resolved == PathBuf::from("/tmp/rari-image-cache"),
+            "expected safe fallback, got {}",
+            resolved.display()
+        );
+        assert!(
+            !resolved.components().any(|c| matches!(c, Component::ParentDir)),
+            "fallback must not retain parent-dir components"
+        );
+    }
+
+    #[test]
+    fn test_resolve_cache_dir_keeps_safe_project_suffix() {
+        let project = test_project_path("safe-resolve");
+        let _ = fs::create_dir_all(&project);
+        let resolved = ImageCache::resolve_cache_dir(&project);
+        assert!(resolved.ends_with(Path::new(".cache/images")) || resolved.ends_with("images"));
+        assert!(resolved.starts_with(fs::canonicalize(&project).unwrap()));
+        let _ = fs::remove_dir_all(&project);
     }
 
     #[tokio::test]
