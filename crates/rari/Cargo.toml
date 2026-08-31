@@ -107,7 +107,7 @@ reqwest = { version = "0.13.4", default-features = false, features = [
 ] }
 tokio-tungstenite = "0.30.0"
 tower = { version = "0.5.3", default-features = false, features = ["util"] }
-tower-http = { version = "0.7.0", features = ["compression-full", "fs"] }
+tower-http = { version = "0.7.1", features = ["compression-full", "fs"] }
 tungstenite = "0.30.0"
 url = { workspace = true }
 urlencoding = "2.1.3"
