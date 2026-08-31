@@ -663,7 +663,7 @@ export function transformInlineServerActions(
     } else if (action.kind === 'declaration' && action.name != null) {
       replacement = `const ${action.name} = ${bindExpr}`
     }
-    // else: non-exported arrow/expression — preserve surrounding binding (replacement = bindExpr)
+    // else: non-exported arrow/expression; preserve surrounding binding (replacement = bindExpr)
 
     if (rewrittenExport == null) {
       hoisted.unshift(

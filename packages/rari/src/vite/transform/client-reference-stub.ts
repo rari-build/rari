@@ -6,7 +6,7 @@ const RSC_REFERENCES_IMPORT = 'react-server-dom-rari/server'
 
 /**
  * Emit a `\0client-ref:` stub module that exposes every export from the
- * underlying client file as a registerClientReference binding — not just
+ * underlying client file as a registerClientReference binding not just
  * default. Named imports that fall through to this safety net must resolve.
  */
 export function buildClientReferenceStubModule(

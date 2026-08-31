@@ -18,14 +18,17 @@ Visit [http://localhost:5173](http://localhost:5173) to see your app.
 
 ## Features
 
-- **App Router** — File-based routing with layouts, loading states, and error boundaries
-- **React Server Components** — Server components by default, client components when you need them
-- **Rust-powered Runtime** — HTTP server, RSC renderer, and routing written in Rust with embedded V8
-- **Streaming SSR** — Progressive rendering with Suspense boundaries
-- **Hot Module Reloading** — Instant feedback during development
-- **TypeScript-first** — Full type safety across the server/client boundary
-- **Zero Configuration** — Works out of the box with pre-built binaries
-- **Cross-platform** — Supports macOS, Linux, and Windows
+- **App Router** - File-based routing with layouts, loading states, and error boundaries
+- **Server-Side Rendering** - Pre-rendered HTML with instant hydration
+- **React Server Components** - Server components by default, client components when you need them
+- **Rust-powered runtime** - HTTP server, RSC renderer, and routing written in Rust with embedded V8
+- **Zero-config setup** - Works out of the box with pre-built binaries
+- **Hot module reloading** - Instant feedback during development
+- **node_modules support** - Standard npm package resolution without `npm:` specifier
+- **TypeScript-first** - Full type safety across server/client boundary
+- **Cross-platform** - Supports macOS, Linux, and Windows
+- **Streaming SSR** - Progressive rendering with Suspense boundaries
+- **Loading States** - Automatic loading skeletons during navigation
 
 ## Deploy to the Cloud
 
