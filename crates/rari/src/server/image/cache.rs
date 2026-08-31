@@ -1,10 +1,16 @@
 #![expect(clippy::exhaustive_structs)]
 
+#[cfg(unix)]
+use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::{
-    env, fs, io,
+    env, fs,
+    fs::OpenOptions,
+    io::{self, Write},
     num::NonZeroUsize,
     path::{Component, Path, PathBuf},
+    process,
     sync::Arc,
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use rkyv::{Archive, Deserialize as RkyvDeserialize, Serialize as RkyvSerialize, rancor};
@@ -58,7 +64,15 @@ impl ImageCache {
 
     async fn ensure_cache_dir(&self) {
         let dir = self.cache_dir.clone();
-        let result = task::spawn_blocking(move || fs::create_dir_all(&dir)).await;
+        let result = task::spawn_blocking(move || {
+            fs::create_dir_all(&dir)?;
+            #[cfg(unix)]
+            {
+                fs::set_permissions(&dir, fs::Permissions::from_mode(0o700))?;
+            }
+            Ok::<(), io::Error>(())
+        })
+        .await;
         if let Ok(Err(e)) = result {
             tracing::error!("Failed to create image cache directory: {}", e);
         }
@@ -68,7 +82,7 @@ impl ImageCache {
         let is_production = env::var("NODE_ENV").map(|v| v == "production").unwrap_or(false);
 
         if is_production {
-            return PathBuf::from("/tmp/rari-image-cache");
+            return env::temp_dir().join("rari-image-cache");
         }
 
         let Some(base) = Self::validated_project_base(project_path) else {
@@ -171,6 +185,48 @@ impl ImageCache {
         Ok(())
     }
 
+    fn write_cache_file_atomic(path: &Path, data: &[u8]) -> io::Result<()> {
+        let parent = path.parent().ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidInput, "cache path missing parent")
+        })?;
+        let file_name = path.file_name().ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidInput, "cache path missing file name")
+        })?;
+
+        let nanos = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+        let tmp_name = format!(".{}.tmp-{}-{nanos}", file_name.to_string_lossy(), process::id());
+        if tmp_name.contains("..") || tmp_name.contains('/') || tmp_name.contains('\\') {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "refusing unsafe cache temp name",
+            ));
+        }
+        let tmp_path = parent.join(&tmp_name);
+
+        let write_tmp = || -> io::Result<()> {
+            let mut opts = OpenOptions::new();
+            opts.write(true).create_new(true);
+            #[cfg(unix)]
+            {
+                opts.mode(0o600);
+                opts.custom_flags(libc::O_NOFOLLOW);
+            }
+            let mut file = opts.open(&tmp_path)?;
+            file.write_all(data)?;
+            file.sync_all()?;
+            Ok(())
+        };
+
+        if let Err(e) = write_tmp() {
+            let _ = fs::remove_file(&tmp_path);
+            return Err(e);
+        }
+
+        fs::rename(&tmp_path, path).inspect_err(|_| {
+            let _ = fs::remove_file(&tmp_path);
+        })
+    }
+
     pub async fn get(&self, key: &str) -> Option<Arc<CachedImage>> {
         if let Ok(Some(bytes)) = self.handler.get(&Self::ns(key)).await {
             match rkyv::from_bytes::<CachedImage, rancor::Error>(&bytes) {
@@ -230,7 +286,7 @@ impl ImageCache {
         let data_for_blocking = serialized.clone();
         let write_result = task::spawn_blocking(move || {
             Self::assert_path_within_cache(&path_for_blocking, &cache_root)?;
-            fs::write(&path_for_blocking, &data_for_blocking)
+            Self::write_cache_file_atomic(&path_for_blocking, &data_for_blocking)
         })
         .await;
         match write_result {
@@ -341,8 +397,8 @@ mod tests {
         let unsafe_path = PathBuf::from("/tmp/rari-cache-test/../../etc");
         let resolved = ImageCache::resolve_cache_dir(&unsafe_path);
         assert!(
-            resolved.starts_with(temp_dir()) || resolved == PathBuf::from("/tmp/rari-image-cache"),
-            "expected safe fallback, got {}",
+            resolved.starts_with(temp_dir()),
+            "expected safe fallback under temp_dir, got {}",
             resolved.display()
         );
         assert!(
