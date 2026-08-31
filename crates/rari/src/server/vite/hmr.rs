@@ -24,7 +24,8 @@ use crate::{
         core::utils::{
             component::extract_component_id,
             path_validation::{
-                normalize_component_path, validate_component_path, validate_safe_path,
+                build_vite_dev_module_url, normalize_component_path, validate_component_path,
+                validate_safe_path,
             },
         },
         vite::rsc::{immediate_component_reregistration, reload_component_from_dist},
@@ -384,26 +385,32 @@ async fn handle_reload(
         })));
     };
 
-    if file_path.contains("://") {
-        tracing::error!("Invalid file path: contains URL scheme");
+    let file_path = normalize_component_path(&file_path);
+    if let Err(e) = validate_component_path(&file_path) {
+        tracing::error!(file_path = %file_path, error = %e, "HMR reload path validation failed");
         return Ok(Json(serde_json::json!({
             "success": false,
             "componentId": component_id,
-            "error": "Invalid file path: URL schemes not allowed"
+            "error": e.to_string()
         })));
     }
 
     let client = Client::new();
-    let vite_base_url = format!("http://{}", config.vite_address());
-
     let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis();
 
-    let file_path =
-        if file_path.starts_with('/') { file_path.clone() } else { format!("/{file_path}") };
+    let vite_url = match build_vite_dev_module_url(&config.vite_address(), &file_path, timestamp) {
+        Ok(url) => url,
+        Err(e) => {
+            tracing::error!(file_path = %file_path, error = %e, "Rejected unsafe Vite module URL");
+            return Ok(Json(serde_json::json!({
+                "success": false,
+                "componentId": component_id,
+                "error": e.to_string()
+            })));
+        }
+    };
 
-    let vite_url = format!("{vite_base_url}{file_path}?t={timestamp}");
-
-    let transpiled_code = match client.get(&vite_url).send().await {
+    let transpiled_code = match client.get(vite_url).send().await {
         Ok(response) => {
             if !response.status().is_success() {
                 tracing::error!("Vite returned error status: {}", response.status());

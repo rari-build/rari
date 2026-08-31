@@ -682,7 +682,7 @@ impl ImageOptimizer {
             return Ok(());
         }
 
-        self.validate_remote_url(url_str)
+        self.validate_remote_url(url_str).map(|_| ())
     }
 
     fn matches_local_pattern(path: &str, pattern: &LocalPattern) -> bool {
@@ -791,7 +791,7 @@ impl ImageOptimizer {
         }
     }
 
-    fn validate_remote_url(&self, url: &str) -> Result<(), ImageError> {
+    fn validate_remote_url(&self, url: &str) -> Result<Url, ImageError> {
         let parsed = Url::parse(url)
             .map_err(|e| ImageError::InvalidUrl(format!("Invalid URL '{url}': {e}")))?;
 
@@ -936,12 +936,16 @@ impl ImageOptimizer {
             )));
         }
 
-        Ok(())
+        Ok(parsed)
     }
 
     async fn make_validated_request(&self, url: &str) -> Result<reqwest::Response, ImageError> {
-        self.validate_remote_url(url)?;
-        self.http_client.get(url).send().await.map_err(|e| ImageError::FetchError(e.to_string()))
+        let validated_url = self.validate_remote_url(url)?;
+        self.http_client
+            .get(validated_url)
+            .send()
+            .await
+            .map_err(|e| ImageError::FetchError(e.to_string()))
     }
 
     async fn fetch_image(&self, url: &str) -> Result<Vec<u8>, ImageError> {

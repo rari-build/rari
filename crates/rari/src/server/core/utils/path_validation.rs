@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use cow_utils::CowUtils;
 use rari_error::RariError;
 use tokio::fs;
+use url::Url;
 
 #[expect(clippy::missing_errors_doc)]
 pub async fn validate_safe_path(base: &Path, requested: &str) -> Result<PathBuf, RariError> {
@@ -104,6 +105,52 @@ pub fn validate_component_path(file_path: &str) -> Result<(), RariError> {
     }
 
     Ok(())
+}
+
+#[expect(clippy::missing_errors_doc)]
+pub fn build_vite_dev_module_url(
+    vite_address: &str,
+    module_path: &str,
+    timestamp_ms: u128,
+) -> Result<Url, RariError> {
+    if module_path.contains("://") {
+        return Err(RariError::bad_request("Invalid file path: URL schemes not allowed"));
+    }
+    if module_path.contains("//") {
+        return Err(RariError::bad_request("Invalid file path: contains '//'"));
+    }
+    if module_path.contains("..") {
+        return Err(RariError::bad_request("Path traversal detected in file path"));
+    }
+    if module_path.contains('\0') {
+        return Err(RariError::bad_request("Invalid file path: contains null byte"));
+    }
+    if module_path.contains('\\') {
+        return Err(RariError::bad_request("Invalid file path: backslashes not allowed"));
+    }
+
+    let base = Url::parse(&format!("http://{vite_address}/"))
+        .map_err(|_| RariError::internal("Invalid Vite server address"))?;
+    let relative = module_path.trim_start_matches('/');
+    if relative.is_empty() {
+        return Err(RariError::bad_request("Invalid file path: empty path"));
+    }
+
+    let mut url = base
+        .join(relative)
+        .map_err(|_| RariError::bad_request("Invalid file path for Vite module URL"))?;
+
+    if url.origin() != base.origin() {
+        return Err(RariError::bad_request("Invalid file path: host override not allowed"));
+    }
+
+    url.set_query(Some(&format!("t={timestamp_ms}")));
+
+    if url.origin() != base.origin() {
+        return Err(RariError::bad_request("Invalid file path: host override not allowed"));
+    }
+
+    Ok(url)
 }
 
 #[cfg(test)]
@@ -230,6 +277,26 @@ mod tests {
         assert!(validate_component_path("src/data.json").is_err());
 
         assert!(validate_component_path("app/page\0.tsx").is_err());
+    }
+
+    #[test]
+    fn test_vite_dev_module_url_pins_origin() {
+        let url = build_vite_dev_module_url("127.0.0.1:5173", "src/app/page.tsx", 123).unwrap();
+        assert_eq!(url.as_str(), "http://127.0.0.1:5173/src/app/page.tsx?t=123");
+
+        let with_slash =
+            build_vite_dev_module_url("127.0.0.1:5173", "/src/components/Button.tsx", 1).unwrap();
+        assert_eq!(with_slash.host_str(), Some("127.0.0.1"));
+        assert_eq!(with_slash.port(), Some(5173));
+    }
+
+    #[test]
+    fn test_vite_dev_module_url_rejects_ssrf_vectors() {
+        assert!(build_vite_dev_module_url("127.0.0.1:5173", "http://evil.test/x", 1).is_err());
+        assert!(build_vite_dev_module_url("127.0.0.1:5173", "//evil.test/x", 1).is_err());
+        assert!(build_vite_dev_module_url("127.0.0.1:5173", "/src/../etc/passwd", 1).is_err());
+        assert!(build_vite_dev_module_url("127.0.0.1:5173", "src//app/page.tsx", 1).is_err());
+        assert!(build_vite_dev_module_url("127.0.0.1:5173", "src/app\0/page.tsx", 1).is_err());
     }
 
     #[tokio::test]

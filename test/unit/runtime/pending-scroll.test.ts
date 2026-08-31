@@ -25,6 +25,16 @@ describe('resolvePendingScrollToTop', () => {
     expect(result.nextPending).toBeNull()
   })
 
+  it('still resolves when navigation reuses the already-committed payload object', () => {
+    const reused = payload('same-route')
+    const alreadyCommitted = reused
+
+    const result = resolvePendingScrollToTop(reused, alreadyCommitted)
+
+    expect(result.shouldScroll).toBe(true)
+    expect(result.nextPending).toBeNull()
+  })
+
   it('does not scroll a superseded payload after an interrupted navigation', () => {
     const interrupted = payload('home-article-a')
     const surviving = payload('home-article-b')
