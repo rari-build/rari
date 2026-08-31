@@ -1,3 +1,12 @@
+## [@rari/use-cache@0.15.16] - 2026-08-31
+
+### 🚜 Refactor
+
+- clean up oxlint comments across multiple files for consistency and clarity by @skiniks
+- improve oxlint comments for clarity and consistency by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/@rari/use-cache@0.15.14...@rari/use-cache@0.15.16
 ## [@rari/use-cache@0.15.14] - 2026-08-24
 
 ## Highlights
