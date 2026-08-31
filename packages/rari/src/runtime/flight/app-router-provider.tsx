@@ -1,6 +1,7 @@
 'use client'
 
 import type { Thenable } from 'virtual:react-flight-client'
+import type { PendingScrollToTop } from './pending-scroll'
 import * as React from 'react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createFromReadableStream } from 'virtual:react-flight-client'
@@ -110,7 +111,7 @@ export function AppRouterProvider({
   const rscPayloadRef = useRef(initialPayload)
   const [renderKey, setRenderKey] = useState(0)
   const scrollPositionRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
-  const pendingScrollPayloadRef = useRef<RscPayload | null>(null)
+  const pendingScrollPayloadRef = useRef<PendingScrollToTop<RscPayload> | null>(null)
   const formDataRef = useRef<Map<string, FormData>>(new Map())
   const preloadedModuleIdsRef = useRef<Set<string>>(new Set())
   const onNavigateRef = useRef(onNavigate)
@@ -131,6 +132,7 @@ export function AppRouterProvider({
     const { shouldScroll, nextPending } = resolvePendingScrollToTop(
       pendingScrollPayloadRef.current,
       rscPayload,
+      renderKey,
     )
     pendingScrollPayloadRef.current = nextPending
     if (shouldScroll) window.scrollTo(0, 0)
@@ -511,21 +513,36 @@ export function AppRouterProvider({
         const navigationId = detail.navigationId
 
         if (isStreamingResponse) {
-          pendingScrollPayloadRef.current = shouldScrollToTop ? parsedPayload : null
+          setRenderKey(prev => {
+            const commitKey = prev + 1
+            pendingScrollPayloadRef.current = shouldScrollToTop
+              ? { payload: parsedPayload, commitKey }
+              : null
+            return commitKey
+          })
           setRscPayload(parsedPayload)
-          setRenderKey(prev => prev + 1)
           setHmrError(null)
         } else if (detail.options.historyKey != null && detail.options.historyKey !== '') {
-          pendingScrollPayloadRef.current = shouldScrollToTop ? parsedPayload : null
+          setRenderKey(prev => {
+            const commitKey = prev + 1
+            pendingScrollPayloadRef.current = shouldScrollToTop
+              ? { payload: parsedPayload, commitKey }
+              : null
+            return commitKey
+          })
           setRscPayload(parsedPayload)
-          setRenderKey(prev => prev + 1)
           setHmrError(null)
         } else {
           React.startTransition(() => {
             if (currentNavigationIdRef.current !== navigationId) return
-            pendingScrollPayloadRef.current = shouldScrollToTop ? parsedPayload : null
+            setRenderKey(prev => {
+              const commitKey = prev + 1
+              pendingScrollPayloadRef.current = shouldScrollToTop
+                ? { payload: parsedPayload, commitKey }
+                : null
+              return commitKey
+            })
             setRscPayload(parsedPayload)
-            setRenderKey(prev => prev + 1)
             setHmrError(null)
           })
         }
