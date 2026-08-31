@@ -64,7 +64,7 @@ declare module 'virtual:app-router-provider' {
   export interface AppRouterProviderProps {
     readonly children?: React.ReactNode
     readonly initialPayload?: {
-      readonly element?: unknown
+      readonly element: unknown
       readonly rawElement?: unknown
       readonly flightProtocol?: string
     }
