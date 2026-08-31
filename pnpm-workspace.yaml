@@ -59,7 +59,7 @@ catalogs:
   cli:
     '@clack/prompts': ^1.7.0
   default:
-    rari: ^0.15.15
+    rari: ^0.15.16
   eslint:
     '@e18e/eslint-plugin': ^0.8.0
     '@eslint-community/eslint-plugin-eslint-comments': ^4.7.2

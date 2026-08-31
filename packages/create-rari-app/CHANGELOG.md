@@ -1,3 +1,11 @@
+## [create-rari-app@0.5.27] - 2026-08-31
+
+### ⚙️ Miscellaneous Tasks
+
+- *(dependencies)* update package versions by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/create-rari-app@0.5.26...create-rari-app@0.5.27
 ## [create-rari-app@0.5.26] - 2026-08-24
 
 ### ⚙️ Miscellaneous Tasks
