@@ -17,7 +17,7 @@ function isResolvedEntry(value: unknown): value is MdxComponentEntry {
   return isRecord(value) && typeof value.id === 'string' && 'component' in value
 }
 
-/* oxlint-disable typescript/prefer-readonly-parameter-types -- union with react's ComponentType loses its allow-listed alias and expands to mutable ComponentClass/FunctionComponent members */
+/* oxlint-disable typescript/prefer-readonly-parameter-types union with react's ComponentType loses its allow-listed alias and expands to mutable ComponentClass/FunctionComponent members */
 function isEntryArray(
   input: readonly MdxComponentEntry[] | MdxComponentsInput,
 ): input is readonly MdxComponentEntry[] {
@@ -50,7 +50,7 @@ function normalizeRegistry(
 /* oxlint-enable typescript/prefer-readonly-parameter-types */
 
 export function defineMdxComponents(
-  // oxlint-disable-next-line typescript/prefer-readonly-parameter-types -- union with react's ComponentType loses its allow-listed alias and expands to mutable ComponentClass/FunctionComponent members
+  // oxlint-disable-next-line typescript/prefer-readonly-parameter-types
   input: readonly MdxComponentEntry[] | MdxComponentsInput,
 ): (content: string) => Record<string, any> {
   const registry = normalizeRegistry(input)

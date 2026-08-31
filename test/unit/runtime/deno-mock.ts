@@ -18,7 +18,7 @@ let savedDeno: DenoLike | undefined
 let denoWasPresent = false
 
 function patchDeno(
-  // oxlint-disable-next-line typescript/prefer-readonly-parameter-types -- Deno ops bag is patched in place
+  // oxlint-disable-next-line typescript/prefer-readonly-parameter-types Deno ops bag is patched in place
   ops: DenoLike['core']['ops'],
 ): void {
   const target = globalThis as { Deno?: DenoLike }
@@ -42,7 +42,7 @@ export function patchDenoBackend(
   patchDeno(ops)
 }
 
-// oxlint-disable-next-line typescript/prefer-readonly-parameter-types -- Deno ops bag is patched in place
+// oxlint-disable-next-line typescript/prefer-readonly-parameter-types Deno ops bag is patched in place
 export function patchDenoOps(ops: DenoLike['core']['ops']): void {
   patchDeno(ops)
 }

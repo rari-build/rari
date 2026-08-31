@@ -12,14 +12,14 @@ void (async function () {
   let componentSource = 'not found'
 
   if (typeof g['{component_id}'] === 'function') {
-    Component = g['{component_id}'] as (props: unknown) => unknown // oxlint-disable-line typescript/no-unsafe-type-assertion -- generated component id
+    Component = g['{component_id}'] as (props: unknown) => unknown // oxlint-disable-line typescript/no-unsafe-type-assertion
     componentSource = 'global.{component_id}'
   } else if (g['~rsc']?.modules?.['{component_id}'] != null) {
     const moduleExports = g['~rsc'].modules['{component_id}']
     const resolved = moduleExports.default ?? Object.values(moduleExports)[0]
     if (typeof resolved !== 'function')
       throw new Error('Component {component_id} export is not a function')
-    Component = resolved as (props: unknown) => unknown // oxlint-disable-line typescript/no-unsafe-type-assertion -- RSC module default export
+    Component = resolved as (props: unknown) => unknown // oxlint-disable-line typescript/no-unsafe-type-assertion
     componentSource = '~rsc.modules.{component_id}'
   } else {
     throw new Error('Component {component_id} not found in global scope')

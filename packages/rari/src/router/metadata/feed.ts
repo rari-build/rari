@@ -21,7 +21,7 @@ function isFeed(value: unknown): value is Feed {
 
 async function resolveFeedExport(defaultExport: unknown): Promise<Feed> {
   if (typeof defaultExport === 'function') {
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- dynamic feed module default export
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion dynamic feed module default export
     const feedExport = defaultExport as () => Feed | Promise<Feed>
     const feedResult = feedExport()
     const resolved = feedResult instanceof Promise ? await feedResult : feedResult

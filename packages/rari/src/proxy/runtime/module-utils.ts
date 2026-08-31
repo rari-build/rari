@@ -50,7 +50,7 @@ export function getResponseCookies(
   const cookies = response.cookies
   if (!isRecord(cookies) || typeof cookies.toSetCookieHeaders !== 'function') return undefined
 
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- bound method loses generic signature
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion bound method loses generic signature
   const toSetCookieHeaders = cookies.toSetCookieHeaders.bind(cookies) as () => string[]
   return { toSetCookieHeaders }
 }

@@ -29,7 +29,7 @@ function bumpRemoteCallCount(scope: string, label: string): number {
   return next
 }
 
-// oxlint-disable-next-line typescript/require-await -- async is required for the 'use cache' transform
+// oxlint-disable-next-line typescript/require-await async is required for the 'use cache' transform
 async function getCachedData(label: string, cacheScope: string) {
   'use cache: remote'
   bumpRemoteCallCount(cacheScope, label)

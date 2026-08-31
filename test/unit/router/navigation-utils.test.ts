@@ -715,7 +715,7 @@ describe('findLayoutChain with additionalPaths', () => {
   })
 })
 
-// oxlint-disable-next-line typescript/prefer-readonly-parameter-types -- test helper spreads into a fresh mutable manifest
+// oxlint-disable-next-line typescript/prefer-readonly-parameter-types test helper spreads into a fresh mutable manifest
 function manifestWithTemplates(overrides: Partial<AppRouteManifest> = {}): AppRouteManifest {
   return {
     routes: [],

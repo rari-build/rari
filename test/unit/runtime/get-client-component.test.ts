@@ -16,7 +16,7 @@ type GlobalWithChunkLoader = typeof globalThis & {
   __rari_chunk_load__?: (chunkId: string) => Promise<unknown>
 }
 
-/* oxlint-disable typescript/prefer-readonly-parameter-types -- ComponentInfo is a mutable client-component registry entry */
+/* oxlint-disable typescript/prefer-readonly-parameter-types ComponentInfo is a mutable client-component registry entry */
 function setClientComponents(
   components: Readonly<NonNullable<GlobalWithRari['~clientComponents']>>,
 ) {

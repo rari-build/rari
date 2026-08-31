@@ -1,4 +1,4 @@
-/* oxlint-disable typescript/prefer-readonly-parameter-types -- oxc ReactCompilerOptions is a mutable options bag */
+/* oxlint-disable typescript/prefer-readonly-parameter-types oxc ReactCompilerOptions is a mutable options bag */
 import type { ReactCompilerOptions as OxcReactCompilerOptions } from 'oxc-transform-react'
 import type { Plugin } from 'vite-plus'
 

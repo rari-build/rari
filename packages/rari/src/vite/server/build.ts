@@ -1,4 +1,4 @@
-/* oxlint-disable typescript/prefer-readonly-parameter-types -- SSR build mutates manifest and css module buffers */
+/* oxlint-disable typescript/prefer-readonly-parameter-types SSR build mutates manifest and css module buffers */
 import type { Plugin } from 'vite-plus'
 import type { ModuleAnalysis } from '../analysis/directives'
 import type { MdxPluginOptions } from '../mdx/registry'
@@ -82,7 +82,7 @@ function barePackageName(source: string): string {
 
 /**
  * True when BYONM/Node would find the package by walking `node_modules` from
- * the app root. Avoid createRequire here -- pnpm bin shims set NODE_PATH, which
+ * the app root. Avoid createRequire here pnpm bin shims set NODE_PATH, which
  * is baked into Module.globalPaths and makes transitive workspace deps look
  * like app installs (then incorrectly get externalized).
  */
@@ -1211,7 +1211,7 @@ export class ServerComponentBuilder {
           if (!source.startsWith('.') && !source.startsWith('/')) {
             // App-visible installs stay external for runtime BYONM. Deps that only
             // exist under a workspace package (e.g. markdown-it in shared/) must be
-            // force-resolved and bundled -- Rolldown's platform:'node' otherwise
+            // force-resolved and bundled Rolldown's platform:'node' otherwise
             // leaves them as unresolved externals.
             if (isInstalledFromAppRoot(this.projectRoot, source))
               return { id: source, external: true }

@@ -39,7 +39,7 @@ function mockDirents(
 type ReadFilePath = Parameters<typeof fsSync.promises.readFile>[0]
 
 function mockReadFile(handler: (target: string) => string) {
-  // oxlint-disable-next-line typescript/prefer-readonly-parameter-types -- ReadFilePath aliases Node's fs.readFile path union
+  // oxlint-disable-next-line typescript/prefer-readonly-parameter-types ReadFilePath aliases Node's fs.readFile path union
   return async (target: ReadFilePath): Promise<string> => {
     if (typeof target !== 'string') throw new TypeError('mock readFile only supports string paths')
 

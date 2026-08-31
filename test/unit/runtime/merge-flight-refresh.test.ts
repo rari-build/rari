@@ -51,7 +51,7 @@ describe('mergeFlightRefresh', () => {
     expect(merged.type).toBe('section')
     const children = merged.props.children
     const childList: React.ReactNode[] = Array.isArray(children)
-      ? // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- React children array is widened
+      ? // oxlint-disable-next-line typescript/no-unsafe-type-assertion React children array is widened
         (children as React.ReactNode[])
       : children != null
         ? [children]

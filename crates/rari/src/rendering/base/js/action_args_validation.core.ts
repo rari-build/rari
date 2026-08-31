@@ -64,7 +64,7 @@
   }
 
   function bumpActionValidationCount(
-    // oxlint-disable-next-line typescript/prefer-readonly-parameter-types -- ctx is intentionally mutated in place as a running counter
+    // oxlint-disable-next-line typescript/prefer-readonly-parameter-types
     ctx: ActionValidationContext,
     count: number,
     config: ActionValidationConfig,
@@ -82,7 +82,7 @@
     value: unknown,
     config: ActionValidationConfig,
     depth: number,
-    // oxlint-disable-next-line typescript/prefer-readonly-parameter-types -- ctx is intentionally mutated in place as a running counter
+    // oxlint-disable-next-line typescript/prefer-readonly-parameter-types
     ctx: ActionValidationContext,
   ): unknown {
     if (isOpaqueActionArg(value)) return value

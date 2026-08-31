@@ -144,7 +144,7 @@ function buildNamespaces(sitemap: Sitemap): string[] {
   return namespaces
 }
 
-// oxlint-disable-next-line typescript/prefer-readonly-parameter-types -- appends to lines buffer
+// oxlint-disable-next-line typescript/prefer-readonly-parameter-types appends to lines buffer
 function addSitemapEntryFields(lines: string[], entry: Sitemap[number]): void {
   lines.push('  <url>')
   lines.push(`    <loc>${escapeXml(entry.url)}</loc>`)
@@ -157,7 +157,7 @@ function addSitemapEntryFields(lines: string[], entry: Sitemap[number]): void {
   if (entry.priority !== undefined) lines.push(`    <priority>${entry.priority}</priority>`)
 }
 
-// oxlint-disable-next-line typescript/prefer-readonly-parameter-types -- appends to lines buffer
+// oxlint-disable-next-line typescript/prefer-readonly-parameter-types appends to lines buffer
 function addAlternateLanguages(lines: string[], entry: Sitemap[number]): void {
   if (!entry.alternates?.languages) return
 
@@ -167,7 +167,7 @@ function addAlternateLanguages(lines: string[], entry: Sitemap[number]): void {
     )
 }
 
-// oxlint-disable-next-line typescript/prefer-readonly-parameter-types -- appends to lines buffer
+// oxlint-disable-next-line typescript/prefer-readonly-parameter-types appends to lines buffer
 function addMediaContent(lines: string[], entry: Sitemap[number]): void {
   if (entry.images && entry.images.length > 0) lines.push(generateImageXml(entry.images))
 

@@ -308,7 +308,7 @@ async function loadRscReferences(): Promise<string> {
 
 async function writeImageConfig(
   projectRoot: string,
-  // oxlint-disable-next-line typescript/prefer-readonly-parameter-types -- RariOptions embeds optional peer option bags (oxc/mdx) that are not deeply readonly
+  // oxlint-disable-next-line typescript/prefer-readonly-parameter-types RariOptions embeds optional peer option bags (oxc/mdx) that are not deeply readonly
   options: RariOptions,
 ): Promise<void> {
   const srcDir = path.join(projectRoot, 'src')
@@ -369,14 +369,14 @@ async function writeImageConfig(
 }
 
 export function defineRariOptions(
-  // oxlint-disable-next-line typescript/prefer-readonly-parameter-types -- RariOptions embeds optional peer option bags (oxc/mdx) that are not deeply readonly
+  // oxlint-disable-next-line typescript/prefer-readonly-parameter-types RariOptions embeds optional peer option bags (oxc/mdx) that are not deeply readonly
   config: RariOptions,
 ): RariOptions {
   return config
 }
 
 export function rari(
-  // oxlint-disable-next-line typescript/prefer-readonly-parameter-types -- RariOptions embeds optional peer option bags (oxc/mdx) that are not deeply readonly
+  // oxlint-disable-next-line typescript/prefer-readonly-parameter-types RariOptions embeds optional peer option bags (oxc/mdx) that are not deeply readonly
   options: RariOptions = {},
 ): RariPlugin[] {
   if (options.jsPoolSize != null) {
@@ -2336,7 +2336,7 @@ export type {
 } from './server/config'
 
 export type { RariCompilerOption, ReactCompilerOptions } from './transform/react-compiler'
-// oxlint-disable-next-line typescript/no-useless-empty-export -- side-effect import of ambient declarations
+// oxlint-disable-next-line typescript/no-useless-empty-export side-effect import of ambient declarations
 export type {} from '@/ambient'
 
 export { rariProxy } from '@/proxy/build/vite-plugin'

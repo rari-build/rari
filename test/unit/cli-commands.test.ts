@@ -26,7 +26,7 @@ async function runCLI(
       if (resolved) return
       resolved = true
       clearTimeout(timeoutId)
-      // oxlint-disable-next-line promise/no-multiple-resolved -- guarded above; close/error/timeout may race
+      // oxlint-disable-next-line promise/no-multiple-resolved guarded above; close/error/timeout may race
       resolve(result)
     }
 

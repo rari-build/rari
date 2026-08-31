@@ -132,7 +132,7 @@ export function hasClientReferenceId(type: unknown): type is { $$id: string } {
 }
 
 export function getReactElementProps(element: ReactElement): { children?: ReactNode } {
-  return element.props as { children?: ReactNode } // oxlint-disable-line typescript/no-unsafe-type-assertion -- ReactElement props are intentionally loose
+  return element.props as { children?: ReactNode } // oxlint-disable-line typescript/no-unsafe-type-assertion ReactElement props are intentionally loose
 }
 
 export function aliasEntriesFromRecord(

@@ -66,7 +66,7 @@ const lazyFlightServer = lazyExtModule<FlightServerNamespace>(
 function installReactGlobal(react: ReactVendorNamespace): void {
   if (!g.React?.createElement) {
     const resolved = react.default?.createElement ? react.default : react
-    g.React = resolved as NonNullable<typeof g.React> // oxlint-disable-line typescript/no-unsafe-type-assertion -- React vendor namespace merge
+    g.React = resolved as NonNullable<typeof g.React> // oxlint-disable-line typescript/no-unsafe-type-assertion
   }
 }
 

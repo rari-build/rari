@@ -1,4 +1,4 @@
-/* oxlint-disable typescript/no-unsafe-assignment -- vitest asymmetric matchers (expect.*) are typed as any */
+/* oxlint-disable typescript/no-unsafe-assignment vitest asymmetric matchers (expect.*) are typed as any */
 
 import { callServer } from '@rari/runtime/actions/call-server'
 import { scheduleActionFlightRefresh } from '@rari/runtime/actions/flight-refresh'

@@ -1,4 +1,4 @@
-/* oxlint-disable typescript/prefer-readonly-parameter-types -- route builder mutates accumulator arrays in place */
+/* oxlint-disable typescript/prefer-readonly-parameter-types route builder mutates accumulator arrays in place */
 import type {
   ApiRouteEntry,
   AppRouteEntry,

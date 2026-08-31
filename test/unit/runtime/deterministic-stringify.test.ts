@@ -41,7 +41,7 @@ describe('deterministicStringify', () => {
   })
 
   it('stringifies functions by source', () => {
-    // oxlint-disable-next-line eslint/prefer-arrow-callback -- need named function source text
+    // oxlint-disable-next-line eslint/prefer-arrow-callback need named function source text
     const result = deterministicStringify(function keyFn() {})
     expect(result).toBe('Function("function keyFn() {}")')
   })

@@ -140,7 +140,7 @@ function parsePackageJsonLike(raw: string): PackageJsonLike {
   return parsed
 }
 
-/* oxlint-disable typescript/prefer-readonly-parameter-types -- intentionally mutates packageJson.engines in place */
+/* oxlint-disable typescript/prefer-readonly-parameter-types intentionally mutates packageJson.engines in place */
 export function ensureMinimumNodeEngine(
   packageJson: PackageJsonLike,
   minVersion: string = MIN_NODE_VERSION,

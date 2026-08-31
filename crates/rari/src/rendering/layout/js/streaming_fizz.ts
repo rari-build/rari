@@ -1,4 +1,4 @@
-/* oxlint-disable typescript/prefer-readonly-parameter-types -- stream error buffers are mutated in place */
+/* oxlint-disable typescript/prefer-readonly-parameter-types stream error buffers are mutated in place */
 /// <reference path="../../types.d.ts" />
 
 declare function rariCreateHtmlBoundaryTracker(): {
@@ -361,7 +361,7 @@ declare function rariCreateHtmlBoundaryTracker(): {
 
     rariStreamLog('flight.createFromReadableStream.start')
     // createFromReadableStream returns a ReactPromise (custom thenable), not a
-    // native Promise -- do not chain .then/.catch directly or .catch throws.
+    // native Promise, do not chain .then/.catch directly or .catch throws.
     const ssrModules = g['~rari']?.ssrModules ?? {}
     const flightPromise = FlightClient.createFromReadableStream(stream, {
       ssrManifest: {
@@ -518,7 +518,7 @@ declare function rariCreateHtmlBoundaryTracker(): {
       const before = chunk.slice(0, bodyClose)
       const after = chunk.slice(bodyClose)
       // Collect flight before pumping so we don't await between "before" and
-      // "tail" -- that yield lets HTTP flush a penultimate chunk alone.
+      // "tail", that yield lets HTTP flush a penultimate chunk alone.
       if (ensureSourceComplete) await ensureSourceComplete()
       const flight = takeFlightBootstrap() + (await liveFlight.collectAllRemainingText(nonce))
       if (before) session.trackHtmlBoundaries(before)

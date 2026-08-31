@@ -76,7 +76,7 @@ interface RegisterResult {
 
       const fnName = entry?.name ?? exportName
       const fn = fnName === 'default' ? (moduleNs.default ?? moduleNs[fnName]) : moduleNs[fnName]
-      return typeof fn === 'function' ? (fn as (...args: readonly unknown[]) => unknown) : null // oxlint-disable-line typescript/no-unsafe-type-assertion -- manifest export lookup
+      return typeof fn === 'function' ? (fn as (...args: readonly unknown[]) => unknown) : null // oxlint-disable-line typescript/no-unsafe-type-assertion
     }
 
     let foundKey: string | null = null
@@ -100,7 +100,7 @@ interface RegisterResult {
       }
 
       foundKey = key
-      foundFunction = fn as (...args: readonly unknown[]) => unknown // oxlint-disable-line typescript/no-unsafe-type-assertion -- manifest export lookup
+      foundFunction = fn as (...args: readonly unknown[]) => unknown // oxlint-disable-line typescript/no-unsafe-type-assertion
     }
 
     return foundFunction

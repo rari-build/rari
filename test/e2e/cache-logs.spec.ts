@@ -16,7 +16,7 @@ function readLog(): string {
 
 function stripAnsi(text: string): string {
   // ANSI CSI color sequences (ESC [ ... m)
-  return text.replace(/\x1B\[[0-9;]*m/g, '') // oxlint-disable-line eslint/no-control-regex -- ANSI escape
+  return text.replace(/\x1B\[[0-9;]*m/g, '') // oxlint-disable-line eslint/no-control-regex ANSI escape
 }
 
 function grepLog(pattern: RegExp): string[] {

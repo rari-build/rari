@@ -38,7 +38,7 @@ async function collect(
       if (g['~rsc']?.modules !== undefined) {
         const moduleKey = modulePath.replace(FILE_URL_REGEX, 'app/').replace(JS_EXTENSION_REGEX, '')
 
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- RSC module table is dynamically populated
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
         const module = g['~rsc'].modules[moduleKey] as ModuleWithMetadata | undefined
 
         if (module) {
@@ -51,7 +51,7 @@ async function collect(
         }
       }
 
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- route modules are loaded dynamically at runtime
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       const module = (await import(modulePath)) as ModuleWithMetadata
 
       if (typeof module.generateMetadata === 'function') {
