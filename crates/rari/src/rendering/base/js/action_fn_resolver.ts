@@ -66,7 +66,7 @@ function resolveActionFnFromSsrModules(
   const fnName = entry?.name ?? exportName
   const fn = fnName === 'default' ? (mod.default ?? mod[fnName]) : mod[fnName]
 
-  return typeof fn === 'function' ? (fn as ActionFn) : null // oxlint-disable-line typescript/no-unsafe-type-assertion -- SSR module export lookup
+  return typeof fn === 'function' ? (fn as ActionFn) : null // oxlint-disable-line typescript/no-unsafe-type-assertion
 }
 
 function resolveActionFn(

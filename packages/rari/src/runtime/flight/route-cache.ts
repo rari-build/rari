@@ -1,4 +1,4 @@
-/* oxlint-disable typescript/prefer-readonly-parameter-types -- CacheNode is a mutable tree mutated in place by the cache implementation */
+/* oxlint-disable typescript/prefer-readonly-parameter-types CacheNode is a mutable tree mutated in place by the cache implementation */
 import type { ReactNode } from 'react'
 import type { SegmentPath } from './router-state'
 import {

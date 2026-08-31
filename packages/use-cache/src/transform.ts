@@ -17,7 +17,7 @@ function getAddon(): NativeAddon | null {
   addonLoadAttempted = true
   addon = nativeAddon
 
-  if (!addon) console.warn('[use-cache] Native addon not available -- transforms will be skipped')
+  if (!addon) console.warn('[use-cache] Native addon not available transforms will be skipped')
 
   return addon
 }

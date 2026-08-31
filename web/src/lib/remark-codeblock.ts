@@ -50,16 +50,16 @@ export function remarkCodeBlock(
 ) {
   const { highlighter, themes } = options
 
-  // oxlint-disable-next-line typescript/prefer-readonly-parameter-types -- tree is mutated in place (attributes are pushed onto matched nodes)
+  // oxlint-disable-next-line typescript/prefer-readonly-parameter-types tree is mutated in place (attributes are pushed onto matched nodes)
   return (tree: ASTNode, file: VFile) => {
-    // oxlint-disable-next-line typescript/prefer-readonly-parameter-types -- node is mutated in place
+    // oxlint-disable-next-line typescript/prefer-readonly-parameter-types node is mutated in place
     visit(tree, (node: ASTNode) => {
       if (node.type !== 'mdxJsxFlowElement' && node.type !== 'mdxJsxTextElement') return
       if (node.name !== 'CodeBlock') return
 
       let code = ''
 
-      // oxlint-disable-next-line typescript/prefer-readonly-parameter-types -- ASTNode is a mutable AST type
+      // oxlint-disable-next-line typescript/prefer-readonly-parameter-types ASTNode is a mutable AST type
       function extractText(children: readonly ASTNode[]): string {
         let text = ''
         for (const child of children) {

@@ -1,4 +1,4 @@
-/* oxlint-disable typescript/prefer-readonly-parameter-types -- commits navigation state through React setters and refs */
+/* oxlint-disable typescript/prefer-readonly-parameter-types commits navigation state through React setters and refs */
 import type { Dispatch, RefObject, SetStateAction } from 'react'
 import type { PendingScrollToTop } from './pending-scroll'
 import * as React from 'react'

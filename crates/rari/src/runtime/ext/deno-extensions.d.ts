@@ -1,3 +1,4 @@
+/// <reference path="./deno-namespace.d.ts" />
 /** `Error` as exposed via `primordials`, matching the legacy 3-arg (message, fileName, lineNumber) constructor still used by some runtime shims. */
 interface PrimordialErrorConstructor extends ErrorConstructor {
   new (message?: string, fileName?: string, lineNumber?: number): Error
@@ -6,7 +7,7 @@ interface PrimordialErrorConstructor extends ErrorConstructor {
 
 declare module 'ext:core/mod.js' {
   export const core: {
-    loadExtScript: <T = unknown>(path: string) => T // oxlint-disable-line typescript/no-unnecessary-type-parameters -- Deno ext script loader
+    loadExtScript: <T = unknown>(path: string) => T // oxlint-disable-line typescript/no-unnecessary-type-parameters
     ops: Record<string, (...args: readonly any[]) => any> & {
       op_bootstrap_args: () => string[]
       op_bootstrap_pid: () => number
@@ -33,7 +34,7 @@ declare module 'ext:core/mod.js' {
     ) => void
     setReportExceptionCallback: (callback: (error: unknown) => void) => void
     isNativeError: (value: unknown) => boolean
-    createLazyLoader: <T = { default: unknown }>(specifier: string) => () => T // oxlint-disable-line typescript/no-unnecessary-type-parameters -- Deno lazy module loader
+    createLazyLoader: <T = { default: unknown }>(specifier: string) => () => T // oxlint-disable-line typescript/no-unnecessary-type-parameters
     setBuildInfo: (target: string) => void
     [key: string]: unknown
   }
@@ -64,7 +65,7 @@ declare module 'ext:init_utilities/utilities.ts' {
   export function readOnly(value: any): PropertyDescriptor
   export function getterOnly(fn: () => any): PropertyDescriptor
   export function writeable(value: any): PropertyDescriptor
-  /* oxlint-disable typescript/no-unnecessary-type-parameters -- Deno ext loader factories */
+  /* oxlint-disable typescript/no-unnecessary-type-parameters */
   export function loadExtScriptOnce<T>(specifier: string): T
   export function lazyExtScript<T>(specifier: string): () => T
   export function lazyExtModule<T>(specifier: string): () => T

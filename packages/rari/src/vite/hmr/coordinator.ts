@@ -68,7 +68,7 @@ export class HMRCoordinator {
   private readonly LOG_BATCH_DELAY = 500
 
   constructor(
-    // oxlint-disable-next-line typescript/prefer-readonly-parameter-types -- ServerComponentBuilder is a stateful builder with internal mutable caches
+    // oxlint-disable-next-line typescript/prefer-readonly-parameter-types ServerComponentBuilder is a stateful builder with internal mutable caches
     builder: ServerComponentBuilder,
     serverPort: number = getRariServerPort(),
   ) {

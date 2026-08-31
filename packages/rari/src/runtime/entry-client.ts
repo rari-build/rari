@@ -25,12 +25,12 @@ import './shared/types'
 import 'virtual:rsc-integration.ts'
 
 function createElementWithChildren<P extends { readonly children?: React.ReactNode }>(
-  // oxlint-disable-next-line typescript/prefer-readonly-parameter-types -- React.ComponentType is not a readonly object type
+  // oxlint-disable-next-line typescript/prefer-readonly-parameter-types React.ComponentType is not a readonly object type
   type: React.ComponentType<P>,
   props: Readonly<Omit<P, 'children'>>,
   children: React.ReactNode,
 ): React.ReactElement {
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Omit children from props; pass via createElement children arg
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   return React.createElement(type, props as P, children)
 }
 
@@ -350,7 +350,7 @@ export async function renderApp(): Promise<void> {
 
     // Wrap element in providers for routing/navigation support.
     // All providers (RouterProvider, ClientRouter, AppRouterProvider) produce
-    // no extra DOM -- they only provide context and render children directly.
+    // no extra DOM they only provide context and render children directly.
     let content: React.ReactNode = React.createElement(AppRouterProvider, {
       initialPayload: { element },
     })

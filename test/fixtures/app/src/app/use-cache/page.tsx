@@ -14,7 +14,7 @@ function bumpCallCount(): number {
   return globalThis.__rariUseCacheTestCounter.total
 }
 
-// oxlint-disable-next-line typescript/require-await -- async is required for the 'use cache' transform
+// oxlint-disable-next-line typescript/require-await async is required for the 'use cache' transform
 async function getCachedData(label: string) {
   'use cache'
   const count = bumpCallCount()

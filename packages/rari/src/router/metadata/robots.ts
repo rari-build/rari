@@ -10,7 +10,7 @@ function isRobots(value: unknown): value is Robots {
 
 async function resolveRobotsExport(defaultExport: unknown): Promise<Robots> {
   if (typeof defaultExport === 'function') {
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- dynamic robots module default export
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion dynamic robots module default export
     const robotsExport = defaultExport as () => Robots | Promise<Robots>
     const robotsResult = robotsExport()
     const resolved = robotsResult instanceof Promise ? await robotsResult : robotsResult

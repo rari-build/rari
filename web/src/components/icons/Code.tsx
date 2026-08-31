@@ -8,7 +8,7 @@ interface CodeProps extends SVGProps<SVGSVGElement> {
   }
 }
 
-// oxlint-disable-next-line typescript/prefer-readonly-parameter-types -- extends SVGProps; local fields are readonly
+// oxlint-disable-next-line typescript/prefer-readonly-parameter-types extends SVGProps; local fields are readonly
 export default function Code({ gradientColors, ...props }: CodeProps) {
   const colors = gradientColors ?? {
     start: '#fd7e14',

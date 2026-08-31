@@ -3,7 +3,7 @@ import type { UseCacheTransformOptions } from '@rari/use-cache'
 type UseCacheTransform = (
   code: string,
   id: string,
-  // oxlint-disable-next-line typescript/prefer-readonly-parameter-types -- matches @rari/use-cache transform signature
+  // oxlint-disable-next-line typescript/prefer-readonly-parameter-types matches @rari/use-cache transform signature
   options?: UseCacheTransformOptions,
 ) => string | null
 

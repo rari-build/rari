@@ -1,4 +1,4 @@
-/* oxlint-disable typescript/prefer-readonly-parameter-types -- match helpers write into params records */
+/* oxlint-disable typescript/prefer-readonly-parameter-types match helpers write into params records */
 import type { AppRouteManifest, LayoutEntry, RouteSegment, TemplateEntry } from '../build/types'
 import type { RouteInfo } from './types'
 

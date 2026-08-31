@@ -18,7 +18,7 @@ async function registerComponent(
   skipGlobalBinding = false,
 ): Promise<ComponentRegistrationResult> {
   try {
-    // oxlint-disable-next-line typescript/no-unsafe-assignment -- dynamic import namespace
+    // oxlint-disable-next-line typescript/no-unsafe-assignment
     const moduleNamespace: ModuleNamespace = await import(moduleSpecifier)
 
     const isApiRoute = componentId.includes('/route') || componentId.startsWith('api/')

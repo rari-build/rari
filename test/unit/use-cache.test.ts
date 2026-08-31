@@ -763,7 +763,7 @@ export default getData;
     )
 
     expect(result).not.toBeNull()
-    // Client modules are not transformed -- use-cache is a server-side feature
+    // Client modules are not transformed  use-cache is a server-side feature
     expect(result).not.toContain('$$reactCache__')
     expect(result).not.toContain('"use client"')
     expect(result).toContain('export default getData')

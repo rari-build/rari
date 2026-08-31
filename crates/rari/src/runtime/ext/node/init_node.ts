@@ -1,4 +1,4 @@
-/* oxlint-disable typescript/prefer-readonly-parameter-types -- process shim is patched in place */
+/* oxlint-disable typescript/prefer-readonly-parameter-types process shim is patched in place */
 /// <reference path="../types.d.ts" />
 
 import { core } from 'ext:core/mod.js'

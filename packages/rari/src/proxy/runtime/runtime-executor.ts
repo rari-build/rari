@@ -20,7 +20,7 @@ export async function initializeProxyExecutor(proxyModulePath: string, rariReque
       console.error('[rari] Proxy: RariRequest constructor not found')
       return false
     }
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- proxy bootstrap module
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion proxy bootstrap module
     const RariRequest = requestModule.RariRequest as unknown as new (
       url: string,
       init: { method: string; headers: Headers },
@@ -56,7 +56,7 @@ export async function initializeProxyExecutor(proxyModulePath: string, rariReque
             })
           }
 
-          // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- proxy modules return Response-like objects
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion proxy modules return Response-like objects
           return await processProxyResult(result as ResponseLike | null)
         } catch (error) {
           console.error('[rari] Proxy: Proxy execution error:', error)

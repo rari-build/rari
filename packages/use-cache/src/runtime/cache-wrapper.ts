@@ -55,7 +55,7 @@ async function cacheKey(
   return createHash('sha256').update(serialized, 'utf8').digest('hex')
 }
 
-// oxlint-disable-next-line typescript/promise-function-async -- must return the same Promise instance stored in keyComputeInflight
+// oxlint-disable-next-line typescript/promise-function-async must return the same Promise instance stored in keyComputeInflight
 function getCacheKeyPromise(
   buildId: string,
   kind: string,
@@ -114,6 +114,6 @@ export function $$cache__<Args extends unknown[]>(
     return entryPromise
   })
 
-  // oxlint-disable-next-line typescript/only-throw-error -- intentional Promise throw for use-cache suspend
+  // oxlint-disable-next-line typescript/only-throw-error intentional Promise throw for use-cache suspend
   throw promise
 }

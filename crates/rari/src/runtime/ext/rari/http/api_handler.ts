@@ -84,8 +84,8 @@ async function callHandler(
       params: requestData.params ?? {},
     }
 
-    const moduleNamespace = (await import(moduleSpecifier)) as Record<string, unknown> // oxlint-disable-line typescript/no-unsafe-type-assertion -- dynamic API route module
-    const handler = moduleNamespace[methodName] as ApiHandler // oxlint-disable-line typescript/no-unsafe-type-assertion -- named export lookup
+    const moduleNamespace = (await import(moduleSpecifier)) as Record<string, unknown> // oxlint-disable-line typescript/no-unsafe-type-assertion
+    const handler = moduleNamespace[methodName] as ApiHandler // oxlint-disable-line typescript/no-unsafe-type-assertion
 
     if (typeof handler !== 'function') {
       const available = Object.keys(moduleNamespace).join(', ')

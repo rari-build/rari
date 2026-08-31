@@ -65,7 +65,7 @@ function lazyEventTargetMethod(
       if (typeof targetMethod !== 'function')
         throw new TypeError(`EventTarget.${method} is not a function`)
 
-      // oxlint-disable-next-line typescript/no-unsafe-return -- EventTarget prototype method is dynamically resolved
+      // oxlint-disable-next-line typescript/no-unsafe-return EventTarget prototype method is dynamically resolved
       return Reflect.apply(targetMethod, globalThis, args)
     },
     writable: true,

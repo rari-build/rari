@@ -79,7 +79,7 @@ describe('action-flight-refresh', () => {
 
   it('dispatches unresolved Flight thenables as refresh roots', async () => {
     const thenable: PromiseLike<unknown> = {
-      // oxlint-disable-next-line unicorn/no-thenable -- fixture models a Flight thenable payload
+      // oxlint-disable-next-line unicorn/no-thenable fixture models a Flight thenable payload
       async then(onFulfilled) {
         return Promise.resolve(onFulfilled?.(refreshElement)).then(onFulfilled)
       },

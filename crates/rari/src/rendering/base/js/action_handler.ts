@@ -38,7 +38,7 @@ void (async () => {
   try {
     if (typeof g['~rari']?.loadRscReactVendors === 'function') g['~rari'].loadRscReactVendors()
 
-    const flightServer = g['~reactServerRenderer'] as FlightServerActions | undefined // oxlint-disable-line typescript/no-unsafe-type-assertion -- flight runtime global
+    const flightServer = g['~reactServerRenderer'] as FlightServerActions | undefined // oxlint-disable-line typescript/no-unsafe-type-assertion
     if (
       flightServer == null ||
       typeof flightServer.decodeAction !== 'function' ||
@@ -49,7 +49,7 @@ void (async () => {
     }
 
     type ServerManifest = Record<string, { id: string; name?: string; chunks: string[] }>
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- runtime manifest may be partial before routes register
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const serverManifest = (g['~rari']?.serverManifest ?? {}) as ServerManifest
     const mode = __RARI_ACTION_MODE__
     const actionId = __RARI_ACTION_ID__

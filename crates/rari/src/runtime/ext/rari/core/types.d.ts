@@ -1,4 +1,4 @@
-/* oxlint-disable typescript/prefer-readonly-parameter-types -- stream APIs intentionally take mutable error buffers */
+/* oxlint-disable typescript/prefer-readonly-parameter-types stream APIs intentionally take mutable error buffers */
 /// <reference path="../../types.d.ts" />
 
 declare global {

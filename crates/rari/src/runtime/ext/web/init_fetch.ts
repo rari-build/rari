@@ -155,7 +155,7 @@ function generateCacheKey(input: RequestInfo | URL, init: CachedFetchInit): stri
   return `${method}:${url}:${headersStr}:${bodyStr}${tagsStr}${optionsStr}`
 }
 
-/* oxlint-disable typescript/prefer-readonly-parameter-types -- CachedFetchInit/RequestMeta carry mutable header bags */
+/* oxlint-disable typescript/prefer-readonly-parameter-types CachedFetchInit/RequestMeta carry mutable header bags */
 function shouldCache(input: RequestInfo | URL, init: CachedFetchInit, meta?: RequestMeta): boolean {
   const { method, cacheMode } = meta ?? resolveRequestMeta(input, init)
 

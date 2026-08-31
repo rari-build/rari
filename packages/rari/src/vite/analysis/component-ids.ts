@@ -16,7 +16,7 @@ export function getProjectRelativePath(filePath: string, projectRoot = process.c
   const absolutePath = path.isAbsolute(filePath) ? filePath : path.resolve(projectRoot, filePath)
   const relativePath = path.relative(projectRoot, absolutePath)
 
-  // Always prefer a path relative to the project root -- including `../…` for
+  // Always prefer a path relative to the project root including `../…` for
   // workspace packages outside the app. Absolute paths become
   // `dist/server/Users/...` and break runtime module resolution.
   if (path.isAbsolute(relativePath)) return absolutePath.replace(BACKSLASH_REGEX, '/')

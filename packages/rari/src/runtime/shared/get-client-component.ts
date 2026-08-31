@@ -93,7 +93,7 @@ function findComponentInfoByPath(
   return null
 }
 
-// oxlint-disable-next-line typescript/promise-function-async -- must return the same Promise instance stored on componentInfo.loadPromise
+// oxlint-disable-next-line typescript/promise-function-async
 function executeLoader(componentInfo: LazyComponentInfo): Promise<unknown> {
   componentInfo.loading = true
   componentInfo.loadPromise = componentInfo.loader!()

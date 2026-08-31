@@ -142,7 +142,7 @@ async function loadComponentModule(componentPath: string): Promise<ComponentModu
   return isComponentModule(module) ? module : {}
 }
 
-/* oxlint-disable typescript/prefer-readonly-parameter-types -- state is an intentional mutable accumulator */
+/* oxlint-disable typescript/prefer-readonly-parameter-types state is an intentional mutable accumulator */
 function processGetDataResult(
   result: DataFetchResult | null | undefined,
   state: ServerSidePropsResult,

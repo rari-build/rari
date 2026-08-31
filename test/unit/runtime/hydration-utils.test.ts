@@ -19,7 +19,7 @@ function mockRoot(
   vi.spyOn(document, 'createTreeWalker').mockReturnValue(
     castMock({
       currentNode: null as Node | null,
-      // oxlint-disable-next-line typescript/prefer-readonly-parameter-types -- TreeWalker mock mutates currentNode
+      // oxlint-disable-next-line typescript/prefer-readonly-parameter-types TreeWalker mock mutates currentNode
       nextNode(this: { currentNode: Node | null }) {
         if (commentIndex >= comments.length) return null
         const node = castMock<Node>({ nodeType: 8, data: comments[commentIndex++] })
@@ -30,13 +30,13 @@ function mockRoot(
   )
 
   return castMock<HTMLElement>({
-    // oxlint-disable-next-line typescript/no-deprecated -- mock DOM surface exercised by hydration helpers
+    // oxlint-disable-next-line typescript/no-deprecated mock DOM surface exercised by hydration helpers
     querySelector(selector: string) {
       if (selector === '[data-reactroot]' && options.reactRoot) return {}
 
       return null
     },
-    // oxlint-disable-next-line typescript/no-deprecated -- mock DOM surface exercised by hydration helpers
+    // oxlint-disable-next-line typescript/no-deprecated mock DOM surface exercised by hydration helpers
     querySelectorAll(selector: string) {
       if (selector === 'template[data-rri]') {
         return Array.from({ length: options.templateCount ?? 0 }, () => ({}))
