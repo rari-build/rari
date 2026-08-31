@@ -1,3 +1,33 @@
+## [rari@0.15.16] - 2026-08-31
+
+### 🚀 Features
+
+- *(AppRouterProvider)* implement pending scroll resolution logic and tests by @skiniks
+- *(path-validation)* add build_vite_dev_module_url function for safe Vite module URL construction and validation by @skiniks
+- *(image-cache)* implement atomic file writing and enhance cache directory permissions by @skiniks
+- *(react-compiler)* enhance plugin functionality and improve debounce handling in ClientRouter by @skiniks
+- *(path-validation)* enhance path validation and directory handling with new utility functions by @skiniks
+- *(path-validation)* refactor path validation logic and enhance directory creation with safety checks by @skiniks
+- *(ClientRouter)* add ClientRouter component and integrate HMR failure handling; enhance AppRouterProvider with navigation payload management by @skiniks
+
+### 🐛 Bug Fixes
+
+- *(AppRouterProvider)* change initialPayload element property from optional to required by @skiniks
+
+### 🚜 Refactor
+
+- *(AppRouterProvider)* enhance scroll behavior management with useLayoutEffect by @skiniks
+- clean up oxlint comments across multiple files for consistency and clarity by @skiniks
+- improve oxlint comments for clarity and consistency by @skiniks
+
+### ⚙️ Miscellaneous Tasks
+
+- *(dependencies)* update package versions and improve eslint rules by @skiniks
+- *(dependencies)* update package versions by @skiniks
+- *(dependencies)* update various crate versions by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.15.15...rari@0.15.16
 ## [rari@0.15.15] - 2026-08-24
 
 ### 🐛 Bug Fixes
