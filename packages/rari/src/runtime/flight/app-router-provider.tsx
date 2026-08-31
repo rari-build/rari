@@ -10,6 +10,7 @@ import { ActionDidRevalidateStaticAndDynamic } from '../actions/revalidation-kin
 import { preloadModulesFromFlightProtocol } from '../shared/preload-modules'
 import { getRariWindowBag } from '../shared/rari-global'
 import { mergeFlightRefresh } from './merge-refresh'
+import { resolvePendingScrollToTop } from './pending-scroll'
 import { currentRouteLocation, flightRouteCache } from './route-cache'
 
 const TIMESTAMP_REGEX = /"timestamp":(\d+)/
@@ -109,7 +110,7 @@ export function AppRouterProvider({
   const rscPayloadRef = useRef(initialPayload)
   const [_renderKey, setRenderKey] = useState(0)
   const scrollPositionRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
-  const pendingScrollToTopRef = useRef(false)
+  const pendingScrollPayloadRef = useRef<RscPayload | null>(null)
   const formDataRef = useRef<Map<string, FormData>>(new Map())
   const preloadedModuleIdsRef = useRef<Set<string>>(new Set())
   const onNavigateRef = useRef(onNavigate)
@@ -127,10 +128,13 @@ export function AppRouterProvider({
   }, [onNavigate])
 
   useLayoutEffect(() => {
-    if (!pendingScrollToTopRef.current) return
-    pendingScrollToTopRef.current = false
-    window.scrollTo(0, 0)
-  })
+    const { shouldScroll, nextPending } = resolvePendingScrollToTop(
+      pendingScrollPayloadRef.current,
+      rscPayload,
+    )
+    pendingScrollPayloadRef.current = nextPending
+    if (shouldScroll) window.scrollTo(0, 0)
+  }, [rscPayload])
 
   const rememberRouteCache = (element: React.ReactNode | Thenable<React.ReactNode>) => {
     if (element == null || isFlightThenable(element)) return
@@ -504,20 +508,22 @@ export function AppRouterProvider({
           (detail.options.historyKey == null || detail.options.historyKey === '') &&
           !hasHash &&
           detail.options.scroll !== false
+        const navigationId = detail.navigationId
 
         if (isStreamingResponse) {
-          pendingScrollToTopRef.current = shouldScrollToTop
+          pendingScrollPayloadRef.current = shouldScrollToTop ? parsedPayload : null
           setRscPayload(parsedPayload)
           setRenderKey(prev => prev + 1)
           setHmrError(null)
         } else if (detail.options.historyKey != null && detail.options.historyKey !== '') {
-          pendingScrollToTopRef.current = shouldScrollToTop
+          pendingScrollPayloadRef.current = shouldScrollToTop ? parsedPayload : null
           setRscPayload(parsedPayload)
           setRenderKey(prev => prev + 1)
           setHmrError(null)
         } else {
           React.startTransition(() => {
-            pendingScrollToTopRef.current = shouldScrollToTop
+            if (currentNavigationIdRef.current !== navigationId) return
+            pendingScrollPayloadRef.current = shouldScrollToTop ? parsedPayload : null
             setRscPayload(parsedPayload)
             setRenderKey(prev => prev + 1)
             setHmrError(null)
@@ -641,6 +647,7 @@ export function AppRouterProvider({
 
       preloadedModuleIdsRef.current.clear()
       currentNavigationIdRef.current = detail.navigationId
+      pendingScrollPayloadRef.current = null
 
       if (typeof window !== 'undefined') {
         const windowRari = getRariWindowBag()
