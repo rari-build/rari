@@ -1,9 +1,66 @@
-use std::path::{Path, PathBuf};
+use std::{
+    fs as std_fs,
+    path::{Component, Path, PathBuf},
+};
 
 use cow_utils::CowUtils;
 use rari_error::RariError;
 use tokio::fs;
 use url::Url;
+
+fn is_safe_single_path_component(component: &str) -> bool {
+    !component.is_empty()
+        && !component.contains("..")
+        && !component.contains('/')
+        && !component.contains('\\')
+        && !component.contains('\0')
+}
+
+#[expect(clippy::missing_errors_doc)]
+pub fn canonicalize_or_create_dir(path: &Path) -> Result<PathBuf, RariError> {
+    if path.components().any(|c| matches!(c, Component::ParentDir)) {
+        return Err(RariError::bad_request("Invalid path: parent-dir components not allowed"));
+    }
+
+    let as_str = path.to_string_lossy();
+    if as_str.contains("..") {
+        return Err(RariError::bad_request("Invalid path: contains '..' pattern"));
+    }
+
+    match std_fs::canonicalize(path) {
+        Ok(canonical) => Ok(canonical),
+        Err(_) => {
+            std_fs::create_dir_all(path)
+                .map_err(|e| RariError::io(format!("Failed to create directory: {e}")))?;
+            std_fs::canonicalize(path)
+                .map_err(|e| RariError::io(format!("Failed to canonicalize directory: {e}")))
+        }
+    }
+}
+
+#[expect(clippy::missing_errors_doc)]
+pub fn resolve_under_base(base: &Path, relative: &str) -> Result<PathBuf, RariError> {
+    if !is_safe_single_path_component(relative) {
+        return Err(RariError::bad_request("Invalid path component"));
+    }
+
+    let canonical_base = canonicalize_or_create_dir(base)?;
+    let joined = canonical_base.join(relative);
+    if !joined.starts_with(&canonical_base) {
+        return Err(RariError::bad_request("Path traversal detected"));
+    }
+
+    if joined.is_file() || joined.is_symlink() {
+        let canonical_path =
+            std_fs::canonicalize(&joined).map_err(|_| RariError::not_found("File not found"))?;
+        if !canonical_path.starts_with(&canonical_base) {
+            return Err(RariError::bad_request("Path traversal detected"));
+        }
+        return Ok(canonical_path);
+    }
+
+    Ok(canonical_base.join(relative))
+}
 
 #[expect(clippy::missing_errors_doc)]
 pub async fn validate_safe_path(base: &Path, requested: &str) -> Result<PathBuf, RariError> {
@@ -259,6 +316,30 @@ mod tests {
 
         let result = validate_safe_path(&base, "escape/secret.txt").await;
         assert!(result.is_err(), "Security failure: symlink escape was not rejected");
+    }
+
+    #[test]
+    fn test_resolve_under_base_rejects_traversal() {
+        let base = test_temp_dir("resolve-under-base");
+        let _ = fs::create_dir_all(&base);
+
+        assert!(resolve_under_base(&base, "../etc/passwd").is_err());
+        assert!(resolve_under_base(&base, "foo/bar").is_err());
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn test_resolve_under_base_accepts_safe_leaf() {
+        let base = test_temp_dir("resolve-under-base-safe");
+        let _ = fs::create_dir_all(&base);
+        let file = base.join("abc123.cache");
+        fs::write(&file, b"ok").unwrap();
+
+        let resolved = resolve_under_base(&base, "abc123.cache").unwrap();
+        assert_eq!(resolved, file.canonicalize().unwrap());
+
+        let _ = fs::remove_dir_all(&base);
     }
 
     #[test]
