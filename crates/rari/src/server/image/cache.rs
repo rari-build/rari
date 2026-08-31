@@ -17,9 +17,12 @@ use rkyv::{Archive, Deserialize as RkyvDeserialize, Serialize as RkyvSerialize, 
 use tokio::task;
 
 use super::types::ImageFormat;
-use crate::server::cache::{
-    MemoryConfig,
-    handler::{CacheHandler, MemoryCacheHandler},
+use crate::server::{
+    cache::{
+        MemoryConfig,
+        handler::{CacheHandler, MemoryCacheHandler},
+    },
+    core::utils::path_validation::{canonicalize_or_create_dir, resolve_under_base},
 };
 
 #[derive(Debug, Clone, Archive, RkyvDeserialize, RkyvSerialize)]
@@ -65,10 +68,12 @@ impl ImageCache {
     async fn ensure_cache_dir(&self) {
         let dir = self.cache_dir.clone();
         let result = task::spawn_blocking(move || {
-            fs::create_dir_all(&dir)?;
+            let canonical_dir = canonicalize_or_create_dir(&dir)
+                .map_err(|e| io::Error::new(io::ErrorKind::PermissionDenied, e.to_string()))?;
+            fs::create_dir_all(&canonical_dir)?;
             #[cfg(unix)]
             {
-                fs::set_permissions(&dir, fs::Permissions::from_mode(0o700))?;
+                fs::set_permissions(&canonical_dir, fs::Permissions::from_mode(0o700))?;
             }
             Ok::<(), io::Error>(())
         })
@@ -107,8 +112,7 @@ impl ImageCache {
 
         match fs::canonicalize(project_path) {
             Ok(canonical) if !canonical.to_string_lossy().contains("..") => Some(canonical),
-            Ok(_) => None,
-            Err(_) => Some(project_path.to_path_buf()),
+            _ => None,
         }
     }
 
@@ -123,20 +127,9 @@ impl ImageCache {
         format!("{:x}.cache", hasher.finish())
     }
 
-    fn cache_filename(&self, key: &str) -> Option<PathBuf> {
+    fn cache_leaf_for_key(key: &str) -> Option<String> {
         let file_name = Self::cache_leaf_name(key);
-        if !Self::is_safe_cache_leaf(&file_name) {
-            return None;
-        }
-
-        let path = self.cache_dir.join(&file_name);
-        if !path.starts_with(&self.cache_dir) {
-            return None;
-        }
-        if path.file_name().and_then(|n| n.to_str()) != Some(file_name.as_str()) {
-            return None;
-        }
-        Some(path)
+        if Self::is_safe_cache_leaf(&file_name) { Some(file_name) } else { None }
     }
 
     fn is_safe_cache_leaf(file_name: &str) -> bool {
@@ -152,56 +145,41 @@ impl ImageCache {
         ext == "cache" && !stem.is_empty() && stem.chars().all(|c| c.is_ascii_hexdigit())
     }
 
-    fn path_for_disk_io(&self, key: &str) -> Option<PathBuf> {
-        let path = self.cache_filename(key)?;
-        let path_str = path.to_string_lossy();
-        if path_str.contains("..") {
-            return None;
-        }
-        if !path.starts_with(&self.cache_dir) {
-            return None;
-        }
-        let file_name = path.file_name()?.to_str()?;
-        if !Self::is_safe_cache_leaf(file_name) {
-            return None;
-        }
-        Some(path)
-    }
-
-    fn assert_path_within_cache(path: &Path, cache_root: &Path) -> io::Result<()> {
-        let path_str = path.to_string_lossy();
-        if path_str.contains("..")
-            || !path.starts_with(cache_root)
-            || path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .is_none_or(|name| name.contains("..") || name.contains('/') || name.contains('\\'))
-        {
+    fn resolve_disk_path(cache_root: &Path, leaf: &str) -> io::Result<PathBuf> {
+        if !Self::is_safe_cache_leaf(leaf) {
             return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                "refusing path outside image cache directory",
+                io::ErrorKind::InvalidInput,
+                "refusing unsafe cache leaf name",
             ));
         }
-        Ok(())
+        resolve_under_base(cache_root, leaf)
+            .map_err(|e| io::Error::new(io::ErrorKind::PermissionDenied, e.to_string()))
     }
 
-    fn write_cache_file_atomic(path: &Path, data: &[u8]) -> io::Result<()> {
-        let parent = path.parent().ok_or_else(|| {
-            io::Error::new(io::ErrorKind::InvalidInput, "cache path missing parent")
-        })?;
-        let file_name = path.file_name().ok_or_else(|| {
-            io::Error::new(io::ErrorKind::InvalidInput, "cache path missing file name")
-        })?;
+    fn write_cache_file_atomic(cache_root: &Path, leaf: &str, data: &[u8]) -> io::Result<()> {
+        let path = Self::resolve_disk_path(cache_root, leaf)?;
+        let canonical_root = canonicalize_or_create_dir(cache_root)
+            .map_err(|e| io::Error::new(io::ErrorKind::PermissionDenied, e.to_string()))?;
 
         let nanos = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
-        let tmp_name = format!(".{}.tmp-{}-{nanos}", file_name.to_string_lossy(), process::id());
-        if tmp_name.contains("..") || tmp_name.contains('/') || tmp_name.contains('\\') {
+        let tmp_name = format!(".{leaf}.tmp-{}-{nanos}", process::id());
+        if tmp_name.contains("..")
+            || tmp_name.contains('/')
+            || tmp_name.contains('\\')
+            || tmp_name.contains('\0')
+        {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "refusing unsafe cache temp name",
             ));
         }
-        let tmp_path = parent.join(&tmp_name);
+        let tmp_path = canonical_root.join(&tmp_name);
+        if !tmp_path.starts_with(&canonical_root) {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "refusing temp path outside image cache directory",
+            ));
+        }
 
         let write_tmp = || -> io::Result<()> {
             let mut opts = OpenOptions::new();
@@ -222,7 +200,7 @@ impl ImageCache {
             return Err(e);
         }
 
-        fs::rename(&tmp_path, path).inspect_err(|_| {
+        fs::rename(&tmp_path, &path).inspect_err(|_| {
             let _ = fs::remove_file(&tmp_path);
         })
     }
@@ -238,12 +216,11 @@ impl ImageCache {
             }
         }
 
-        let path = self.path_for_disk_io(key)?;
+        let leaf = Self::cache_leaf_for_key(key)?;
         let cache_root = self.cache_dir.clone();
-        let path_for_blocking = path;
         let read_result = task::spawn_blocking(move || {
-            Self::assert_path_within_cache(&path_for_blocking, &cache_root)?;
-            fs::read(&path_for_blocking)
+            let path = Self::resolve_disk_path(&cache_root, &leaf)?;
+            fs::read(path)
         })
         .await
         .ok()?
@@ -276,17 +253,15 @@ impl ImageCache {
         };
 
         self.ensure_cache_dir().await;
-        let Some(path) = self.path_for_disk_io(&key) else {
+        let Some(leaf) = Self::cache_leaf_for_key(&key) else {
             tracing::error!("Refusing to write image cache path outside cache directory");
             return;
         };
 
         let cache_root = self.cache_dir.clone();
-        let path_for_blocking = path;
         let data_for_blocking = serialized.clone();
         let write_result = task::spawn_blocking(move || {
-            Self::assert_path_within_cache(&path_for_blocking, &cache_root)?;
-            Self::write_cache_file_atomic(&path_for_blocking, &data_for_blocking)
+            Self::write_cache_file_atomic(&cache_root, &leaf, &data_for_blocking)
         })
         .await;
         match write_result {
