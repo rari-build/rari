@@ -2,7 +2,7 @@
 
 import type { Thenable } from 'virtual:react-flight-client'
 import * as React from 'react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createFromReadableStream } from 'virtual:react-flight-client'
 import { PATH_TRAILING_SLASH_REGEX } from '@/shared/regex-constants'
 import { getCustomEventDetail, isRecord } from '@/shared/utils/type-guards'
@@ -109,6 +109,7 @@ export function AppRouterProvider({
   const rscPayloadRef = useRef(initialPayload)
   const [_renderKey, setRenderKey] = useState(0)
   const scrollPositionRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
+  const pendingScrollToTopRef = useRef(false)
   const formDataRef = useRef<Map<string, FormData>>(new Map())
   const preloadedModuleIdsRef = useRef<Set<string>>(new Set())
   const onNavigateRef = useRef(onNavigate)
@@ -124,6 +125,12 @@ export function AppRouterProvider({
   useEffect(() => {
     onNavigateRef.current = onNavigate
   }, [onNavigate])
+
+  useLayoutEffect(() => {
+    if (!pendingScrollToTopRef.current) return
+    pendingScrollToTopRef.current = false
+    window.scrollTo(0, 0)
+  })
 
   const rememberRouteCache = (element: React.ReactNode | Thenable<React.ReactNode>) => {
     if (element == null || isFlightThenable(element)) return
@@ -492,16 +499,25 @@ export function AppRouterProvider({
       }
 
       if (parsedPayload && currentNavigationIdRef.current === detail.navigationId) {
+        const hasHash = window.location.hash.length > 0
+        const shouldScrollToTop =
+          (detail.options.historyKey == null || detail.options.historyKey === '') &&
+          !hasHash &&
+          detail.options.scroll !== false
+
         if (isStreamingResponse) {
+          pendingScrollToTopRef.current = shouldScrollToTop
           setRscPayload(parsedPayload)
           setRenderKey(prev => prev + 1)
           setHmrError(null)
         } else if (detail.options.historyKey != null && detail.options.historyKey !== '') {
+          pendingScrollToTopRef.current = shouldScrollToTop
           setRscPayload(parsedPayload)
           setRenderKey(prev => prev + 1)
           setHmrError(null)
         } else {
           React.startTransition(() => {
+            pendingScrollToTopRef.current = shouldScrollToTop
             setRscPayload(parsedPayload)
             setRenderKey(prev => prev + 1)
             setHmrError(null)
@@ -513,13 +529,6 @@ export function AppRouterProvider({
         resetFailureTracking()
 
         if (onNavigateRef.current) onNavigateRef.current(detail)
-      }
-
-      const hasHash = typeof window !== 'undefined' && window.location.hash.length > 0
-      if ((detail.options.historyKey == null || detail.options.historyKey === '') && !hasHash) {
-        requestAnimationFrame(() => {
-          if (detail.options.scroll !== false) window.scrollTo(0, 0)
-        })
       }
     }
 
