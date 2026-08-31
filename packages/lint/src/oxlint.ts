@@ -592,7 +592,17 @@ export const lint: OxlintConfig = {
             allowTernary: true,
           },
         ],
-        'no-unused-vars': 'off',
+        'unused-imports/no-unused-vars': 'off',
+        'no-unused-vars': [
+          'error',
+          {
+            args: 'after-used',
+            argsIgnorePattern: '^_',
+            ignoreRestSiblings: true,
+            vars: 'all',
+            varsIgnorePattern: '^_',
+          },
+        ],
         'no-useless-constructor': 'off',
         'no-use-before-define': [
           'error',
@@ -815,6 +825,7 @@ export const lint: OxlintConfig = {
       rules: {
         'eslint-comments/no-unlimited-disable': 'off',
         'unused-imports/no-unused-vars': 'off',
+        'no-unused-vars': 'off',
       },
     },
     {
