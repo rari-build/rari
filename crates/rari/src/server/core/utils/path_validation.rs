@@ -16,8 +16,7 @@ fn is_safe_single_path_component(component: &str) -> bool {
         && !component.contains('\0')
 }
 
-#[expect(clippy::missing_errors_doc)]
-pub fn canonicalize_or_create_dir(path: &Path) -> Result<PathBuf, RariError> {
+fn reject_unsafe_path_structure(path: &Path) -> Result<(), RariError> {
     if path.components().any(|c| matches!(c, Component::ParentDir)) {
         return Err(RariError::bad_request("Invalid path: parent-dir components not allowed"));
     }
@@ -27,15 +26,49 @@ pub fn canonicalize_or_create_dir(path: &Path) -> Result<PathBuf, RariError> {
         return Err(RariError::bad_request("Invalid path: contains '..' pattern"));
     }
 
-    match std_fs::canonicalize(path) {
-        Ok(canonical) => Ok(canonical),
-        Err(_) => {
-            std_fs::create_dir_all(path)
-                .map_err(|e| RariError::io(format!("Failed to create directory: {e}")))?;
-            std_fs::canonicalize(path)
-                .map_err(|e| RariError::io(format!("Failed to canonicalize directory: {e}")))
-        }
+    Ok(())
+}
+
+fn validated_final_segment(path: &Path) -> Result<&str, RariError> {
+    let segment = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| RariError::bad_request("Invalid path component"))?;
+    if !is_safe_single_path_component(segment) {
+        return Err(RariError::bad_request("Invalid path component"));
     }
+    Ok(segment)
+}
+
+fn validated_parent(path: &Path) -> Result<&Path, RariError> {
+    let parent = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .ok_or_else(|| RariError::bad_request("Invalid path: missing parent directory"))?;
+    reject_unsafe_path_structure(parent)?;
+    Ok(parent)
+}
+
+#[expect(clippy::missing_errors_doc)]
+pub fn canonicalize_or_create_dir(path: &Path) -> Result<PathBuf, RariError> {
+    reject_unsafe_path_structure(path)?;
+
+    if let Ok(canonical) = std_fs::canonicalize(path) {
+        return Ok(canonical);
+    }
+
+    let segment = validated_final_segment(path)?;
+    let parent = validated_parent(path)?;
+    let canonical_parent = canonicalize_or_create_dir(parent)?;
+    let safe_path = canonical_parent.join(segment);
+    if !safe_path.starts_with(&canonical_parent) {
+        return Err(RariError::bad_request("Path traversal detected"));
+    }
+
+    std_fs::create_dir_all(&safe_path)
+        .map_err(|e| RariError::io(format!("Failed to create directory: {e}")))?;
+    std_fs::canonicalize(&safe_path)
+        .map_err(|e| RariError::io(format!("Failed to canonicalize directory: {e}")))
 }
 
 #[expect(clippy::missing_errors_doc)]
@@ -316,6 +349,29 @@ mod tests {
 
         let result = validate_safe_path(&base, "escape/secret.txt").await;
         assert!(result.is_err(), "Security failure: symlink escape was not rejected");
+    }
+
+    #[test]
+    fn test_canonicalize_or_create_dir_builds_nested_path() {
+        let base = test_temp_dir("canonicalize-or-create");
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base).unwrap();
+
+        let nested = base.join(".cache").join("images");
+        let canonical = canonicalize_or_create_dir(&nested).unwrap();
+        assert!(canonical.ends_with(".cache/images") || canonical.ends_with("images"));
+        assert!(canonical.starts_with(base.canonicalize().unwrap()));
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn test_canonicalize_or_create_dir_rejects_traversal() {
+        let base = test_temp_dir("canonicalize-or-create-reject");
+        let _ = fs::create_dir_all(&base);
+        let unsafe_path = base.join("..").join("etc");
+        assert!(canonicalize_or_create_dir(&unsafe_path).is_err());
+        let _ = fs::remove_dir_all(&base);
     }
 
     #[test]
