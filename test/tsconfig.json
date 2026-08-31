@@ -10,5 +10,5 @@
     },
     "types": ["node", "react"]
   },
-  "include": ["**/*.ts"]
+  "include": ["**/*.ts", "**/*.tsx", "../packages/rari/src/ambient.d.ts"]
 }

@@ -111,6 +111,10 @@
       "types": "./dist/runtime/ErrorBoundaryWrapper.d.mts",
       "default": "./dist/runtime/ErrorBoundaryWrapper.mjs"
     },
+    "./runtime/ClientRouter": {
+      "types": "./dist/runtime/ClientRouter.d.mts",
+      "default": "./dist/runtime/ClientRouter.mjs"
+    },
     "./vite": {
       "types": "./dist/vite.d.mts",
       "default": "./dist/vite.mjs"
