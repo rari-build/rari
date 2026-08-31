@@ -46,6 +46,34 @@ declare module 'virtual:react-flight-client' {
   ): Promise<FormData | string>
 }
 
+declare module 'virtual:client-router' {
+  import type * as React from 'react'
+
+  export interface ClientRouterProps {
+    readonly children: React.ReactNode
+    readonly initialRoute: string
+    readonly staleWindowMs?: number
+  }
+
+  export function ClientRouter(props: ClientRouterProps): React.ReactNode
+}
+
+declare module 'virtual:app-router-provider' {
+  import type * as React from 'react'
+
+  export interface AppRouterProviderProps {
+    readonly children?: React.ReactNode
+    readonly initialPayload?: {
+      readonly element?: unknown
+      readonly rawElement?: unknown
+      readonly flightProtocol?: string
+    }
+    readonly onNavigate?: (detail: Readonly<Record<string, unknown>>) => void
+  }
+
+  export function AppRouterProvider(props: AppRouterProviderProps): React.ReactNode
+}
+
 declare module 'react-server-dom-webpack/client' {
   export type { Thenable } from 'virtual:react-flight-client'
   export {

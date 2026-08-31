@@ -1746,6 +1746,8 @@ ${clientTransformedCode}`
         return 'virtual:react-flight-client.ts'
       if (id === 'virtual:app-router-provider' || id === 'virtual:app-router-provider.tsx')
         return 'virtual:app-router-provider.tsx'
+      if (id === 'virtual:client-router' || id === 'virtual:client-router.tsx')
+        return 'virtual:client-router.tsx'
       if (id === 'virtual:error-boundary-wrapper' || id === 'virtual:error-boundary-wrapper.tsx')
         return 'virtual:error-boundary-wrapper.tsx'
       if (isMdxRegistryModuleId(id)) return 'virtual:rari-mdx-components.ts'
@@ -1991,6 +1993,13 @@ for (const [path, config] of Object.entries(lazyComponentRegistry)) {
 
       if (id === 'virtual:app-router-provider.tsx') {
         const runtimeFile = resolveRuntimeDistFile('AppRouterProvider.mjs')
+        if (runtimeFile != null && runtimeFile !== '') return fs.readFileSync(runtimeFile, 'utf-8')
+
+        throw new Error(DIST_NOT_BUILT_ERROR)
+      }
+
+      if (id === 'virtual:client-router.tsx') {
+        const runtimeFile = resolveRuntimeDistFile('ClientRouter.mjs')
         if (runtimeFile != null && runtimeFile !== '') return fs.readFileSync(runtimeFile, 'utf-8')
 
         throw new Error(DIST_NOT_BUILT_ERROR)

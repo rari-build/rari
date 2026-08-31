@@ -1,11 +1,11 @@
 import * as React from 'react'
 import { createRoot, hydrateRoot } from 'react-dom/client'
-// @ts-expect-error - virtual module resolved by Vite
 import { AppRouterProvider } from 'virtual:app-router-provider'
+import { ClientRouter } from 'virtual:client-router'
 import { createFromReadableStream } from 'virtual:react-flight-client'
 import { RouterProvider } from '@/router'
-import { ClientRouter } from '@/router/navigation/client-router'
 import { getCustomEventDetail, isRecord } from '@/shared/utils/type-guards'
+import { showHydrationFailureBanner } from './boundaries/runtime-error-banner'
 import { getClientComponent } from './shared/get-client-component'
 import {
   clearServerInjectedErrors,
@@ -34,21 +34,6 @@ function createElementWithChildren<P extends { readonly children?: React.ReactNo
   return React.createElement(type, props as P, children)
 }
 
-function showHydrationFailureMessage(container: Element, message: string): void {
-  if (container.querySelector('.rari-error[data-rari-hydration-failure]')) return
-
-  const banner = document.createElement('div')
-  banner.className = 'rari-error'
-  banner.setAttribute('data-rari-hydration-failure', 'true')
-  banner.setAttribute('role', 'alert')
-  banner.style.cssText =
-    'color:red;border:1px solid red;padding:10px;border-radius:4px;background-color:#fff5f5;margin:10px 0;'
-  const messageEl = document.createElement('strong')
-  messageEl.textContent = 'Failed to load page: '
-  banner.append(messageEl, document.createTextNode(message))
-  container.prepend(banner)
-}
-
 function notifyClientReady() {
   Reflect.set(globalThis, '__rari_client_ready', true)
   window.dispatchEvent(new CustomEvent('rari:client-ready'))
@@ -70,7 +55,6 @@ function mountApp(rootElement: HTMLElement, content: React.ReactNode) {
 }
 
 const rari = getRariGlobal()
-// oxlint-disable-next-line typescript/no-unsafe-assignment -- AppRouterProvider comes from an untyped virtual module resolved by Vite at build time
 rari.AppRouterProvider = AppRouterProvider
 rari.ClientRouter = ClientRouter
 rari.getClientComponent = getClientComponent
@@ -281,10 +265,7 @@ export async function renderApp(): Promise<void> {
 
         mountApp(rootElement, hydrationContent)
       } else {
-        showHydrationFailureMessage(
-          rootElement,
-          `${hydrationErrorMessage} Try refreshing the page.`,
-        )
+        showHydrationFailureBanner(rootElement, `${hydrationErrorMessage} Try refreshing the page.`)
         console.error('[rari] Hydration skipped: failed to load RSC payload')
       }
 

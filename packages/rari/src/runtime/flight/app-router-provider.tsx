@@ -1,6 +1,7 @@
 'use client'
 
 import type { Thenable } from 'virtual:react-flight-client'
+import type { HmrFailure } from '../boundaries/hmr-failure-banner'
 import type { PendingScrollToTop } from './pending-scroll'
 import * as React from 'react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
@@ -8,9 +9,12 @@ import { createFromReadableStream } from 'virtual:react-flight-client'
 import { PATH_TRAILING_SLASH_REGEX } from '@/shared/regex-constants'
 import { getCustomEventDetail, isRecord } from '@/shared/utils/type-guards'
 import { ActionDidRevalidateStaticAndDynamic } from '../actions/revalidation-kind'
+import { HmrFailureBanner } from '../boundaries/hmr-failure-banner'
 import { preloadModulesFromFlightProtocol } from '../shared/preload-modules'
 import { getRariWindowBag } from '../shared/rari-global'
+import { commitNavigationPayload } from './commit-navigation-payload'
 import { mergeFlightRefresh } from './merge-refresh'
+import { normalizeFlightContent } from './normalize-flight-content'
 import { resolvePendingScrollToTop } from './pending-scroll'
 import { currentRouteLocation, flightRouteCache } from './route-cache'
 
@@ -46,15 +50,6 @@ interface NavigationDetail {
   readonly rscResponse?: Response
   readonly rscResponsePromise?: Promise<Response>
   readonly isStreaming?: boolean
-}
-
-interface HMRFailure {
-  readonly timestamp: number
-  readonly error: Error
-  readonly type: 'fetch' | 'parse' | 'stale' | 'network'
-  readonly details: string
-  readonly filePath?: string
-  readonly consecutiveFailures: number
 }
 
 function isFlightThenable(value: unknown): value is Thenable<React.ReactNode> {
@@ -118,10 +113,10 @@ export function AppRouterProvider({
 
   const currentNavigationIdRef = useRef<number>(0)
   const pendingFetchesRef = useRef<Map<string, Promise<RscPayload | undefined>>>(new Map())
-  const failureHistoryRef = useRef<HMRFailure[]>([])
+  const failureHistoryRef = useRef<HmrFailure[]>([])
   const lastSuccessfulPayloadRef = useRef<string | null>(null)
   const consecutiveFailuresRef = useRef<number>(0)
-  const [hmrError, setHmrError] = useState<HMRFailure | null>(null)
+  const [hmrError, setHmrError] = useState<HmrFailure | null>(null)
   const MAX_RETRIES = 3
 
   useEffect(() => {
@@ -198,13 +193,13 @@ export function AppRouterProvider({
 
   const trackHMRFailure = (
     error: Error,
-    type: HMRFailure['type'],
+    type: HmrFailure['type'],
     details: string,
     filePath?: string,
   ) => {
     consecutiveFailuresRef.current += 1
 
-    const failure: HMRFailure = {
+    const failure: HmrFailure = {
       timestamp: Date.now(),
       error,
       type,
@@ -528,41 +523,22 @@ export function AppRouterProvider({
           !hasHash &&
           detail.options.scroll !== false
         const navigationId = detail.navigationId
+        const useHistoryKey = detail.options.historyKey != null && detail.options.historyKey !== ''
 
-        if (isStreamingResponse) {
-          setRenderKey(prev => {
-            const commitKey = prev + 1
-            pendingScrollPayloadRef.current = shouldScrollToTop
-              ? { payload: parsedPayload, commitKey }
-              : null
-            return commitKey
-          })
-          setRscPayload(parsedPayload)
-          setHmrError(null)
-        } else if (detail.options.historyKey != null && detail.options.historyKey !== '') {
-          setRenderKey(prev => {
-            const commitKey = prev + 1
-            pendingScrollPayloadRef.current = shouldScrollToTop
-              ? { payload: parsedPayload, commitKey }
-              : null
-            return commitKey
-          })
-          setRscPayload(parsedPayload)
-          setHmrError(null)
-        } else {
-          React.startTransition(() => {
-            if (currentNavigationIdRef.current !== navigationId) return
-            setRenderKey(prev => {
-              const commitKey = prev + 1
-              pendingScrollPayloadRef.current = shouldScrollToTop
-                ? { payload: parsedPayload, commitKey }
-                : null
-              return commitKey
-            })
-            setRscPayload(parsedPayload)
+        commitNavigationPayload({
+          parsedPayload,
+          shouldScrollToTop,
+          navigationId,
+          useTransition: !isStreamingResponse && !useHistoryKey,
+          currentNavigationIdRef,
+          pendingScrollPayloadRef,
+          setRenderKey,
+          setRscPayload,
+          clearHmrError: () => {
             setHmrError(null)
-          })
-        }
+          },
+        })
+
         if (detail.rscFlightProtocol != null && detail.rscFlightProtocol !== '')
           lastSuccessfulPayloadRef.current = detail.rscFlightProtocol
 
@@ -747,116 +723,21 @@ export function AppRouterProvider({
     }
   }, [rscPayload])
 
-  const handleManualRefresh = () => {
-    window.location.reload()
-  }
-
-  const handleDismissError = () => {
-    setHmrError(null)
-  }
-
-  let contentToRender: React.ReactNode | Thenable<React.ReactNode> = children
-
-  if (rscPayload?.element != null) {
-    contentToRender = rscPayload.element
-  }
-
-  if (Array.isArray(contentToRender)) {
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Array.isArray widens flight payload arrays to any[]
-    const items = contentToRender as React.ReactNode[]
-    if (items.length === 1 && React.isValidElement(items[0])) contentToRender = items[0]
-    else if (
-      items.length > 0 &&
-      items.every(
-        item =>
-          React.isValidElement(item) ||
-          item == null ||
-          typeof item === 'string' ||
-          typeof item === 'number' ||
-          typeof item === 'boolean',
-      )
-    )
-      contentToRender = <>{items}</>
-  }
+  const contentToRender = normalizeFlightContent(rscPayload?.element ?? children)
 
   return (
     <>
       {hmrError && (
-        <div
-          style={{
-            position: 'fixed',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            padding: '24px',
-            background: 'rgba(220, 38, 38, 0.95)',
-            color: 'white',
-            borderRadius: '8px',
-            fontSize: '14px',
-            zIndex: 10000,
-            maxWidth: '500px',
-            boxShadow: '0 4px 6px rgba(0, 0, 0, 0.3)',
+        <HmrFailureBanner
+          failure={hmrError}
+          maxRetries={MAX_RETRIES}
+          onRefresh={() => {
+            window.location.reload()
           }}
-        >
-          <div style={{ marginBottom: '16px', fontWeight: 'bold', fontSize: '16px' }}>
-            ⚠️ HMR Update Failed
-          </div>
-          <div style={{ marginBottom: '12px', opacity: 0.9 }}>
-            {hmrError.type === 'fetch' && 'Failed to fetch updated content from server.'}
-            {hmrError.type === 'parse' && 'Failed to parse server response.'}
-            {hmrError.type === 'stale' && 'Server returned stale content.'}
-            {hmrError.type === 'network' && 'Network error occurred.'}
-          </div>
-          <div
-            style={{
-              marginBottom: '16px',
-              fontSize: '12px',
-              opacity: 0.8,
-              fontFamily: 'monospace',
-            }}
-          >
-            {hmrError.details}
-          </div>
-          <div style={{ marginBottom: '12px', fontSize: '12px', opacity: 0.7 }}>
-            Consecutive failures: {hmrError.consecutiveFailures} / {MAX_RETRIES}
-          </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              onClick={handleManualRefresh}
-              type="button"
-              style={{
-                padding: '8px 16px',
-                background: 'white',
-                color: '#dc2626',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontWeight: 'bold',
-                fontSize: '14px',
-              }}
-            >
-              Refresh Page
-            </button>
-            <button
-              onClick={handleDismissError}
-              type="button"
-              style={{
-                padding: '8px 16px',
-                background: 'rgba(255, 255, 255, 0.2)',
-                color: 'white',
-                border: '1px solid rgba(255, 255, 255, 0.3)',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '14px',
-              }}
-            >
-              Dismiss
-            </button>
-          </div>
-          <div style={{ marginTop: '12px', fontSize: '11px', opacity: 0.6 }}>
-            Check the console for detailed error logs.
-          </div>
-        </div>
+          onDismiss={() => {
+            setHmrError(null)
+          }}
+        />
       )}
 
       {contentToRender}
