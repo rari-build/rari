@@ -1,4 +1,4 @@
-/* oxlint-disable typescript/prefer-readonly-parameter-types -- ComponentInfo entries are the mutable client component registry; mutated in place throughout lazy-loading logic */
+/* oxlint-disable typescript/prefer-readonly-parameter-types ComponentInfo entries are the mutable client component registry; mutated in place throughout lazy-loading logic */
 import type { ComponentInfo } from './types'
 import * as React from 'react'
 import { isComponentType, isFunction, isRecord } from '@/shared/utils/type-guards'
@@ -228,7 +228,7 @@ function toLoadError(error: unknown): Error {
 
 function createSuspenseThrowable(promise: Promise<any>, id: string): Error {
   return Object.assign(new Error(`[rari] Lazy component "${id}" is loading`), {
-    // oxlint-disable-next-line unicorn/no-thenable -- React Suspense requires a thenable Error
+    // oxlint-disable-next-line unicorn/no-thenable React Suspense requires a thenable Error
     then: promise.then.bind(promise),
   })
 }
