@@ -476,7 +476,7 @@ impl Server {
             if host == "0.0.0.0" || host == "::" {
                 tracing::warn!(
                     host = %host,
-                    "Dev server is bound to all interfaces — /_rari/register and /_rari/hmr \
+                    "Dev server is bound to all interfaces; /_rari/register and /_rari/hmr \
                      endpoints accept unauthenticated code. Bind to 127.0.0.1 unless you \
                      intentionally need LAN access."
                 );

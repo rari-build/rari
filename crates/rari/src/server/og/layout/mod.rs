@@ -11,7 +11,7 @@ use std::cell::RefCell;
 use parley::{FontContext as ParleyFontContext, LayoutContext, TextStyle};
 use rustc_hash::FxHashMap;
 use serde_json::Value;
-use taffy::prelude::*;
+use taffy::{compute_leaf_layout, prelude::*};
 
 use super::{
     resources::fonts::FontContext,
@@ -73,12 +73,19 @@ impl LayoutEngine {
                     width: AvailableSpace::Definite(width),
                     height: AvailableSpace::Definite(height),
                 },
-                |known_dimensions, available_space, _node_id, node_context, _style| {
-                    measure_node(
-                        &self.measure_context,
-                        known_dimensions,
-                        available_space,
-                        node_context,
+                |inputs, _node_id, node_context, style| {
+                    compute_leaf_layout(
+                        inputs,
+                        style,
+                        |_, _| 0.0,
+                        |known_dimensions, available_space| {
+                            measure_node(
+                                &self.measure_context,
+                                known_dimensions,
+                                available_space,
+                                node_context,
+                            )
+                        },
                     )
                 },
             )

@@ -123,7 +123,7 @@ image = { version = "0.25.10", default-features = false, features = [
 parley = "0.11.1"
 resvg = "0.48.1"
 swash = "0.2.10"
-taffy = "0.13.0"
+taffy = "0.14.0"
 webp = "0.3.1"
 wuff = "0.2.8"
 zeno = "0.3.3"
@@ -156,7 +156,7 @@ sha2 = { workspace = true }
 bytes = { version = "1.12.1", features = ["serde"] }
 cow-utils = { workspace = true }
 dashmap = "6.2.1"
-lru = "0.18.2"
+lru = "0.18.3"
 parking_lot = { workspace = true }
 redis = { version = "1.6.0", default-features = false, features = ["tokio-comp"] }
 redb = "4.2.0"

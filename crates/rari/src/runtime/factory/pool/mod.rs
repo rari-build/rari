@@ -44,9 +44,9 @@ use crate::server::middleware::request_context::RequestContext;
 /// `broadcast_script`, request-context helpers, etc.).
 ///
 /// Overridable via `RARI_JS_POOL_TIMEOUT_MS`. Distinct from:
-/// - `RARI_SCRIPT_EXECUTION_TIMEOUT_MS` — RSC `ResourceLimits` interrupt budget
-/// - `RARI_STREAMING_SCRIPT_TIMEOUT_MS` — streaming promise wait
-/// - `RARI_PROMISE_RESOLUTION_TIMEOUT_MS` — non-streaming promise resolution
+/// - `RARI_SCRIPT_EXECUTION_TIMEOUT_MS` RSC `ResourceLimits` interrupt budget
+/// - `RARI_STREAMING_SCRIPT_TIMEOUT_MS` streaming promise wait
+/// - `RARI_PROMISE_RESOLUTION_TIMEOUT_MS` non-streaming promise resolution
 pub const DEFAULT_TIMEOUT_MS: u64 = 30_000;
 
 /// After this many ms, `pick` may re-admit slots marked unhealthy.

@@ -718,7 +718,7 @@ function parseImportStatementAt(source: string, start: number, len: number): Sca
   if (pos >= len) return null
 
   const ch = source.charCodeAt(pos)
-  // Dynamic import or import.meta — not a static statement.
+  // Dynamic import or import.meta not a static statement.
   if (ch === CH_OPEN_PAREN || ch === CH_DOT) return null
 
   if (ch === CH_SINGLE_QUOTE || ch === CH_DOUBLE_QUOTE) {

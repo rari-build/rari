@@ -93,7 +93,7 @@ rari delivers exceptional performance that significantly outperforms traditional
 | **TTFB**           | **1ms** | 12ms    | **11.1x faster** |
 | **First content**  | 107ms   | 108ms   | Comparable       |
 | **Last byte**      | 1007ms  | 1009ms  | Comparable\*     |
-| **Resolved cards** | 10/10   | 10/10   | —                |
+| **Resolved cards** | 10/10   | 10/10   | Comparable       |
 | **Throughput**     | 24.99/s | 24.99/s | 1.0x             |
 
 \*Last-byte time is dominated by intentional ~1000ms card delays, not framework overhead.
