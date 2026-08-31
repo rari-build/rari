@@ -39,6 +39,10 @@ trustPolicy: no-downgrade
 packages:
   - examples/*
   - packages/*
+  # Generated platform binary packages must not become workspace
+  # importers or frozen CI installs fail after restore-use-cache-addon.
+  - '!packages/rari-*'
+  - '!packages/use-cache-*'
   - test/fixtures/*
   - tools/bundle-react-esm
   - web

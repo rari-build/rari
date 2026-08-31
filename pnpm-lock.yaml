@@ -571,8 +571,6 @@ importers:
         specifier: 0.15.14
         version: 0.15.14
 
-  packages/use-cache-darwin-arm64: {}
-
   test/fixtures/app:
     dependencies:
       rari:
