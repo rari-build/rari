@@ -318,7 +318,9 @@ export function AppRouterProvider({
     const existingFetch = pendingFetchesRef.current.get(requestKey)
     if (existingFetch) return existingFetch
 
-    const fetchPromise = (async () => {
+    const fetchPromise = (async (): Promise<RscPayload | undefined> => {
+      let failure: unknown
+
       try {
         const rariServerUrl = (
           import.meta.env.RARI_SERVER_URL != null && import.meta.env.RARI_SERVER_URL !== ''
@@ -347,48 +349,55 @@ export function AppRouterProvider({
             `HTTP ${response.status} when fetching ${url}`,
             window.location.pathname,
           )
-          throw error
-        }
+          failure = error
+        } else {
+          let parsedPayload: RscPayload | undefined
+          let rscFlightProtocol = ''
 
-        let parsedPayload: RscPayload | undefined
-        let rscFlightProtocol = ''
-        try {
-          const clonedResponse = response.clone()
-          rscFlightProtocol = await clonedResponse.text()
+          try {
+            const clonedResponse = response.clone()
+            rscFlightProtocol = await clonedResponse.text()
 
-          if (isStaleContent(rscFlightProtocol)) {
-            if (rscPayload) return rscPayload
+            if (isStaleContent(rscFlightProtocol)) {
+              if (rscPayload) {
+                pendingFetchesRef.current.delete(requestKey)
+                return rscPayload
+              }
+            }
+
+            await preloadModulesFromFlightProtocol(rscFlightProtocol, preloadedModuleIdsRef.current)
+
+            const buffer = new Uint8Array(await response.arrayBuffer())
+            const stream = new ReadableStream<Uint8Array>({
+              start(controller) {
+                controller.enqueue(buffer)
+                controller.close()
+              },
+            })
+            const element = await createFromReadableStream<React.ReactNode>(stream)
+            parsedPayload = { element, rawElement: element, flightProtocol: rscFlightProtocol }
+          } catch (parseError) {
+            const error = parseError instanceof Error ? parseError : new Error(String(parseError))
+            trackHMRFailure(
+              error,
+              'parse',
+              `Failed to parse RSC Flight protocol: ${error.message}`,
+              window.location.pathname,
+            )
+            failure = error
           }
 
-          await preloadModulesFromFlightProtocol(rscFlightProtocol, preloadedModuleIdsRef.current)
+          if (failure == null) {
+            if (currentNavigationIdRef.current === navigationId) {
+              setRscPayload(parsedPayload)
+              lastSuccessfulPayloadRef.current = rscFlightProtocol
+              resetFailureTracking()
+            }
 
-          const buffer = new Uint8Array(await response.arrayBuffer())
-          const stream = new ReadableStream<Uint8Array>({
-            start(controller) {
-              controller.enqueue(buffer)
-              controller.close()
-            },
-          })
-          const element = await createFromReadableStream<React.ReactNode>(stream)
-          parsedPayload = { element, rawElement: element, flightProtocol: rscFlightProtocol }
-        } catch (parseError) {
-          const error = parseError instanceof Error ? parseError : new Error(String(parseError))
-          trackHMRFailure(
-            error,
-            'parse',
-            `Failed to parse RSC Flight protocol: ${error.message}`,
-            window.location.pathname,
-          )
-          throw error
+            pendingFetchesRef.current.delete(requestKey)
+            return parsedPayload
+          }
         }
-
-        if (currentNavigationIdRef.current === navigationId) {
-          setRscPayload(parsedPayload)
-          lastSuccessfulPayloadRef.current = rscFlightProtocol
-          resetFailureTracking()
-        }
-
-        return parsedPayload
       } catch (error) {
         if (
           error instanceof Error &&
@@ -403,10 +412,18 @@ export function AppRouterProvider({
           )
         }
 
-        throw error
-      } finally {
-        pendingFetchesRef.current.delete(requestKey)
+        failure = error
       }
+
+      pendingFetchesRef.current.delete(requestKey)
+      if (failure != null) {
+        throw failure instanceof Error
+          ? failure
+          : typeof failure === 'string'
+            ? new Error(failure)
+            : new Error('Failed to fetch RSC payload')
+      }
+      return undefined
     })()
 
     pendingFetchesRef.current.set(requestKey, fetchPromise)
@@ -572,13 +589,13 @@ export function AppRouterProvider({
       } catch (error) {
         console.error('HMR refetch error:', error instanceof Error ? error.message : String(error))
         if (consecutiveFailuresRef.current >= MAX_RETRIES) handleFallbackReload()
-      } finally {
-        requestAnimationFrame(() => {
-          window.scrollTo(scrollPositionRef.current.x, scrollPositionRef.current.y)
-
-          restoreFormState()
-        })
       }
+
+      requestAnimationFrame(() => {
+        window.scrollTo(scrollPositionRef.current.x, scrollPositionRef.current.y)
+
+        restoreFormState()
+      })
     }
 
     const handleActionFlightRefresh = (event: Event) => {
@@ -635,12 +652,12 @@ export function AppRouterProvider({
           window.location.pathname,
         )
         if (consecutiveFailuresRef.current >= MAX_RETRIES) handleFallbackReload()
-      } finally {
-        requestAnimationFrame(() => {
-          window.scrollTo(scrollPositionRef.current.x, scrollPositionRef.current.y)
-          restoreFormState()
-        })
       }
+
+      requestAnimationFrame(() => {
+        window.scrollTo(scrollPositionRef.current.x, scrollPositionRef.current.y)
+        restoreFormState()
+      })
     }
 
     const handleRscInvalidate = async () => {

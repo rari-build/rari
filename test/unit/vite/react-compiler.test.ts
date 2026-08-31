@@ -132,6 +132,8 @@ describe('react compiler helpers', () => {
     expect(matchesCompilerId('/app/src/util.ts')).toBe(true)
     expect(matchesCompilerId('/app/node_modules/react/index.js')).toBe(false)
     expect(matchesCompilerId('/app/src/styles.css')).toBe(false)
+    expect(matchesCompilerId('/app/src/Hello.d.ts')).toBe(false)
+    expect(matchesCompilerId('/app/src/Hello.d.mts')).toBe(false)
     expect(matchesCompilerId('virtual:app-router-provider.tsx')).toBe(false)
     expect(matchesCompilerId('\0virtual:/app/src/Hello.tsx')).toBe(false)
     expect(matchesCompilerId('\0ssr-virtual:/app/src/Hello.tsx')).toBe(false)

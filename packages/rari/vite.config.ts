@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { defineConfig } from 'vite-plus'
 import { monorepoFmt, monorepoLint } from '../../.config/lint/monorepo'
+import { createReactCompilerPlugin } from './src/vite/transform/react-compiler'
 
 export default defineConfig({
   fmt: monorepoFmt,
@@ -40,10 +41,14 @@ export default defineConfig({
       'proxy/RariResponse': 'src/proxy/http/response.ts',
     },
     minify: true,
+    plugins: [createReactCompilerPlugin(true, 'library')],
     deps: {
       neverBundle: [
         '@mdx-js/mdx',
         'lightningcss',
+        'react',
+        'react/compiler-runtime',
+        'react-dom',
         'vite',
         'vite-plus',
         'rolldown',

@@ -4,6 +4,7 @@ import type { Plugin } from 'vite-plus'
 
 export type ReactCompilerOptions = OxcReactCompilerOptions
 export type RariCompilerOption = boolean | ReactCompilerOptions
+export type ReactCompilerPluginMode = 'app' | 'library'
 
 export const REACT_COMPILER_CODE_FILTER = /forwardRef|memo|\b(?:[A-Z]|use[A-Z0-9])/
 
@@ -30,10 +31,16 @@ const COMPILER_RUNTIME = 'react/compiler-runtime'
 export function matchesCompilerId(id: string): boolean {
   if (id.startsWith('\0') || id.includes('virtual:')) return false
   const cleanId = id.replace(QUERY_STRIP_RE, '')
+  if (/\.d\.[cm]?ts$/.test(cleanId)) return false
   return DEFAULT_INCLUDE_RE.test(cleanId) && !cleanId.includes('/node_modules/')
 }
 
-export function createReactCompilerPlugin(compiler: Exclude<RariCompilerOption, false>): Plugin {
+const LIBRARY_COMPONENT_RE = /\.[jt]sx$/
+
+export function createReactCompilerPlugin(
+  compiler: Exclude<RariCompilerOption, false>,
+  mode: ReactCompilerPluginMode = 'app',
+): Plugin {
   const options = resolveCompilerOptions(compiler)
   let oxc: OxcTransformReact | undefined
   let sourcemap = true
@@ -55,10 +62,15 @@ export function createReactCompilerPlugin(compiler: Exclude<RariCompilerOption, 
   }
 
   return {
-    name: 'rari:react-compiler',
+    name: mode === 'library' ? 'rari:react-compiler-library' : 'rari:react-compiler',
     enforce: 'pre',
     async config(_, { command }) {
       await loadOxc(message => this.error(message))
+      if (mode === 'library') {
+        fastRefresh = false
+        jsxDevelopment = false
+        return {}
+      }
       fastRefresh = command === 'serve'
       return {
         // Own Fast Refresh when the compiler plugin runs so Vite's oxc
@@ -74,6 +86,12 @@ export function createReactCompilerPlugin(compiler: Exclude<RariCompilerOption, 
       }
     },
     configResolved(config) {
+      if (mode === 'library') {
+        sourcemap = config.build.sourcemap !== false
+        jsxDevelopment = false
+        fastRefresh = false
+        return
+      }
       sourcemap = config.command !== 'build' || config.build.sourcemap !== false
       jsxDevelopment = !config.isProduction
       fastRefresh =
@@ -81,13 +99,16 @@ export function createReactCompilerPlugin(compiler: Exclude<RariCompilerOption, 
     },
     async transform(code, id) {
       if (!matchesCompilerId(id)) return null
+      const filename = id.replace(QUERY_STRIP_RE, '')
+      if (mode === 'library' && !LIBRARY_COMPONENT_RE.test(filename)) return null
 
-      const isClient = this.environment.config.consumer !== 'server'
-      // Compiler + Fast Refresh are client-only; leave RSC/SSR to Vite oxc.
-      if (!isClient) return null
+      if (mode === 'app') {
+        const isClient = this.environment.config.consumer !== 'server'
+        // Compiler + Fast Refresh are client-only; leave RSC/SSR to Vite oxc.
+        if (!isClient) return null
+      }
 
       const { transform } = oxc ?? (await loadOxc(message => this.error(message)))
-      const filename = id.replace(QUERY_STRIP_RE, '')
       const shouldCompile = shouldApplyReactCompiler(code, options)
 
       const result = await transform(filename, code, {

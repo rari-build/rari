@@ -658,17 +658,20 @@ export function ClientRouter({
 
   const debouncedNavigateRef = useRef<ReturnType<typeof debounce> | null>(null)
 
-  debouncedNavigateRef.current ??= debounce(
-    (pathname: string, options: NavigationOptions) => {
-      void navigateRef.current?.(pathname, options)
-    },
-    NAVIGATION_DEBOUNCE_MS,
-    {
-      leading: true,
-      trailing: true,
-      maxWait: NAVIGATION_MAX_WAIT_MS,
-    },
-  )
+  useLayoutEffect(() => {
+    if (debouncedNavigateRef.current != null) return
+    debouncedNavigateRef.current = debounce(
+      (pathname: string, options: NavigationOptions) => {
+        void navigateRef.current?.(pathname, options)
+      },
+      NAVIGATION_DEBOUNCE_MS,
+      {
+        leading: true,
+        trailing: true,
+        maxWait: NAVIGATION_MAX_WAIT_MS,
+      },
+    )
+  }, [])
 
   const handleLinkClick = (event: MouseEvent) => {
     if (event.button !== 0) return
@@ -707,7 +710,7 @@ export function ClientRouter({
 
     const pathname = extractPathname(href)
 
-    if (debouncedNavigateRef.current) debouncedNavigateRef.current(pathname, { replace: false })
+    debouncedNavigateRef.current?.(pathname, { replace: false })
   }
 
   const handlePopState = (event: PopStateEvent) => {
@@ -815,7 +818,7 @@ export function ClientRouter({
       cancelNavigation()
       cancelAllPendingNavigations()
 
-      if (debouncedNavigateRef.current?.cancel) debouncedNavigateRef.current.cancel()
+      debouncedNavigateRef.current?.cancel()
     }
   }, [])
 
