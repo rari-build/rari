@@ -27,6 +27,7 @@ extension!(
         "react/vendor/react.js",
         "react/vendor/react-server.js",
         "react/vendor/react-jsx-runtime.js",
+        "react/vendor/react-compiler-runtime.js",
         "react/vendor/react-dom-server.js",
         "react/vendor/react-dom.js",
         "react/vendor/react-server-dom-webpack-client.js",

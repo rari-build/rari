@@ -1799,7 +1799,9 @@ export class ServerComponentBuilder {
         NODE_PROTOCOL_REGEX,
         'react',
         'react-dom',
-        /^react\//,
+        'react/jsx-runtime',
+        'react/jsx-dev-runtime',
+        'react/compiler-runtime',
         /^rari/,
         'react-server-dom-webpack/client',
         /^react-server-dom-webpack\//,
@@ -1814,7 +1816,7 @@ export class ServerComponentBuilder {
       resolve: {
         mainFields: ['module', 'main'],
         conditionNames: ['import', 'module', 'default'],
-        extensions: ['.ts', '.tsx', '.js', '.jsx'],
+        extensions: ['.ts', '.tsx', '.js', '.jsx', '.mjs'],
       },
       transform: {
         jsx: 'react-jsx',
