@@ -10,6 +10,7 @@ const VENDOR_MODULES: &[&str] = &[
     "react.js",
     "react-server.js",
     "react-jsx-runtime.js",
+    "react-compiler-runtime.js",
     "react-dom.js",
     "react-dom-server.js",
     "react-server-dom-webpack-client.js",

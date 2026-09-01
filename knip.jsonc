@@ -6,7 +6,12 @@
       "project": ["test/**/*.ts"]
     },
     "packages/rari": {
-      "entry": ["src/**/*.ts", "src/runtime/**/*.tsx"],
+      "entry": [
+        "src/**/*.ts",
+        "src/runtime/**/*.tsx",
+        // Pack entry; consumed via virtual:client-router at runtime, not a direct import.
+        "src/router/navigation/client-router.tsx"
+      ],
       "project": ["src/**/*.{ts,tsx,js,jsx,mdx}"],
       "ignoreBinaries": [
         "npx.cmd" // Windows-specific npx command used in cross-platform spawn logic

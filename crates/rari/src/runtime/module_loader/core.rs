@@ -1039,6 +1039,11 @@ impl ModuleLoader for RariModuleLoader {
                         | "react/jsx-dev-runtime.js"
                 ) {
                     react_vendor::node_vendor_specifier("react-jsx-runtime.js")
+                } else if matches!(
+                    specifier,
+                    "react/compiler-runtime" | "react/compiler-runtime.js"
+                ) {
+                    react_vendor::node_vendor_specifier("react-compiler-runtime.js")
                 } else {
                     react_vendor::node_vendor_specifier("react.js")
                 };
