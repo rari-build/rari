@@ -1,39 +1,19 @@
 catalogMode: prefer
 minimumReleaseAgeExclude:
-  - '@oxc-transform-react/binding-android-arm-eabi@0.147.0'
-  - '@oxc-transform-react/binding-android-arm64@0.147.0'
-  - '@oxc-transform-react/binding-darwin-arm64@0.147.0'
-  - '@oxc-transform-react/binding-darwin-x64@0.147.0'
-  - '@oxc-transform-react/binding-freebsd-x64@0.147.0'
-  - '@oxc-transform-react/binding-linux-arm-gnueabihf@0.147.0'
-  - '@oxc-transform-react/binding-linux-arm-musleabihf@0.147.0'
-  - '@oxc-transform-react/binding-linux-arm64-gnu@0.147.0'
-  - '@oxc-transform-react/binding-linux-arm64-musl@0.147.0'
-  - '@oxc-transform-react/binding-linux-ppc64-gnu@0.147.0'
-  - '@oxc-transform-react/binding-linux-riscv64-gnu@0.147.0'
-  - '@oxc-transform-react/binding-linux-riscv64-musl@0.147.0'
-  - '@oxc-transform-react/binding-linux-s390x-gnu@0.147.0'
-  - '@oxc-transform-react/binding-linux-x64-gnu@0.147.0'
-  - '@oxc-transform-react/binding-linux-x64-musl@0.147.0'
-  - '@oxc-transform-react/binding-openharmony-arm64@0.147.0'
-  - '@oxc-transform-react/binding-win32-arm64-msvc@0.147.0'
-  - '@oxc-transform-react/binding-win32-ia32-msvc@0.147.0'
-  - '@oxc-transform-react/binding-win32-x64-msvc@0.147.0'
-  - oxc-transform-react@0.147.0
   - '@rari/use-cache-darwin-arm64@0.15.14 || 0.15.16 || 0.15.17'
   - '@rari/use-cache-darwin-x64@0.15.14 || 0.15.16 || 0.15.17'
   - '@rari/use-cache-linux-arm64@0.15.14 || 0.15.16 || 0.15.17'
   - '@rari/use-cache-linux-x64@0.15.14 || 0.15.16 || 0.15.17'
   - '@rari/use-cache-win32-arm64@0.15.14 || 0.15.16 || 0.15.17'
   - '@rari/use-cache-win32-x64@0.15.14 || 0.15.16 || 0.15.17'
-  - '@rari/use-cache@0.15.14 || 0.15.16'
-  - rari-darwin-arm64@0.15.14 || 0.15.16
-  - rari-darwin-x64@0.15.14 || 0.15.16
-  - rari-linux-arm64@0.15.14 || 0.15.16
-  - rari-linux-x64@0.15.14 || 0.15.16
-  - rari-win32-arm64@0.15.14 || 0.15.16
-  - rari-win32-x64@0.15.14 || 0.15.16
-  - rari@0.15.15 || 0.15.16
+  - '@rari/use-cache@0.15.14 || 0.15.16 || 0.15.17'
+  - rari-darwin-arm64@0.15.14 || 0.15.16 || 0.15.17
+  - rari-darwin-x64@0.15.14 || 0.15.16 || 0.15.17
+  - rari-linux-arm64@0.15.14 || 0.15.16 || 0.15.17
+  - rari-linux-x64@0.15.14 || 0.15.16 || 0.15.17
+  - rari-win32-arm64@0.15.14 || 0.15.16 || 0.15.17
+  - rari-win32-x64@0.15.14 || 0.15.16 || 0.15.17
+  - rari@0.15.15 || 0.15.16 || 0.15.17
 shellEmulator: true
 trustPolicy: no-downgrade
 packages:

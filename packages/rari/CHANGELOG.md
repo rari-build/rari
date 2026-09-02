@@ -1,3 +1,11 @@
+## [rari@0.15.17] - 2026-09-02
+
+### 🐛 Bug Fixes
+
+- add support for react-compiler-runtime in SSR by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.15.16...rari@0.15.17
 ## [rari@0.15.16] - 2026-08-31
 
 ### 🚀 Features
