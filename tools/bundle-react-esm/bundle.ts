@@ -188,6 +188,12 @@ const entries: BundleEntry[] = [
     externals: { react: 'ext:rari/react/vendor/react.js' },
   },
   {
+    name: 'react-compiler-runtime',
+    cjsFile: resolveReactCjs('react', 'react-compiler-runtime'),
+    namedExports: ['c'],
+    externals: { react: 'ext:rari/react/vendor/react.js' },
+  },
+  {
     name: 'react-dom-server',
     cjsFile: resolveReactCjs('react-dom', 'react-dom-server.browser'),
     namedExports: [
