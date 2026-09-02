@@ -11,6 +11,10 @@ const EXTERNALIZED_ENTRIES = [
     externals: { react: 'ext:rari/react/vendor/react.js' },
   },
   {
+    name: 'react-compiler-runtime',
+    externals: { react: 'ext:rari/react/vendor/react.js' },
+  },
+  {
     name: 'react-dom-server',
     externals: {
       'react': 'ext:rari/react/vendor/react.js',
