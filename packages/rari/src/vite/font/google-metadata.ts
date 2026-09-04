@@ -2,10 +2,11 @@ import type { GoogleFontOptions } from '@/font/types'
 import { GOOGLE_FONT_SUBSETS } from './google-catalog'
 
 export function warnGoogleFontOptions(family: string, options: GoogleFontOptions): void {
-  const preload = options.preload !== false
+  const hasSubsets = options.subsets != null && options.subsets.length > 0
+  const preload = hasSubsets ? options.preload !== false : options.preload === true
   const subsets = options.subsets
 
-  if (preload && (subsets == null || subsets.length === 0)) {
+  if (preload && !hasSubsets) {
     console.warn(
       `[rari/font] ${family}: \`preload\` is true but no \`subsets\` were specified. Specify subsets to avoid downloading unused glyphs, or set \`preload: false\`.`,
     )

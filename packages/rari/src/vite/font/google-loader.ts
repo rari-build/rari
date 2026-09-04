@@ -10,8 +10,34 @@ const GOOGLE_CSS_USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/104.0.0.0 Safari/537.36'
 
 const FONT_FETCH_TIMEOUT_MS = 10_000
+const GOOGLE_FONT_ASSET_HOSTS = new Set(['fonts.gstatic.com'])
+const FONT_FETCH_MAX_REDIRECTS = 3
 
 export const FONT_PRELOAD_PREFIX = 'preload:'
+
+export function assertGoogleFontAssetUrl(urlString: string): URL {
+  let url: URL
+  try {
+    url = new URL(urlString)
+  } catch {
+    throw new Error(`Invalid Google font URL: ${urlString}`)
+  }
+  if (url.protocol !== 'https:') {
+    throw new Error(`Google font URL must use HTTPS: ${urlString}`)
+  }
+  if (!GOOGLE_FONT_ASSET_HOSTS.has(url.hostname)) {
+    throw new Error(
+      `Google font URL host not allowlisted (${url.hostname}): ${urlString}. Allowed: ${[...GOOGLE_FONT_ASSET_HOSTS].join(', ')}`,
+    )
+  }
+  return url
+}
+
+function shouldPreloadGoogleFace(options: GoogleFontOptions): boolean {
+  const hasSubsets = options.subsets != null && options.subsets.length > 0
+  if (hasSubsets) return options.preload !== false
+  return options.preload === true
+}
 
 function toGoogleFamilyParam(family: string): string {
   return family.trim().replaceAll(' ', '+')
@@ -216,7 +242,28 @@ export function filterFacesBySubsets(
 
 async function downloadToCache(url: string, cachePath: string): Promise<Buffer> {
   if (fs.existsSync(cachePath)) return fs.readFileSync(cachePath)
-  const response = await fetch(url, { signal: AbortSignal.timeout(FONT_FETCH_TIMEOUT_MS) })
+
+  let current = assertGoogleFontAssetUrl(url).href
+  let response: Response | null = null
+  for (let hop = 0; hop <= FONT_FETCH_MAX_REDIRECTS; hop += 1) {
+    const next = await fetch(current, {
+      signal: AbortSignal.timeout(FONT_FETCH_TIMEOUT_MS),
+      redirect: 'manual',
+    })
+    if (next.status >= 300 && next.status < 400) {
+      const location = next.headers.get('location')
+      if (location == null || location === '') {
+        throw new Error(`Font download redirect missing Location from ${current}`)
+      }
+      current = assertGoogleFontAssetUrl(new URL(location, current).href).href
+      continue
+    }
+    response = next
+    break
+  }
+  if (response == null) {
+    throw new Error(`Too many redirects downloading font ${url}`)
+  }
   if (!response.ok) {
     throw new Error(`Failed to download font ${url}: ${response.status} ${response.statusText}`)
   }
@@ -259,12 +306,13 @@ export async function resolveGoogleFontFaces(
   }
 
   const display = normalizeDisplay(options.display)
-  const preload = options.preload !== false
+  const preload = shouldPreloadGoogleFace(options)
   const faces: ResolvedFontFace[] = []
 
   for (const face of parsed) {
+    const assetUrl = assertGoogleFontAssetUrl(face.url)
     const fileHash = contentHash(face.url)
-    const ext = path.extname(new URL(face.url).pathname) || '.woff2'
+    const ext = path.extname(assetUrl.pathname) || '.woff2'
     const fileName = `${family.replaceAll(/\s+/g, '')}-${face.weight}-${face.style}-${fileHash}${ext}`
     const filePath = path.join(cacheDir, fileName)
     await downloadToCache(face.url, filePath)
