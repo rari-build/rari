@@ -97,10 +97,6 @@ pub fn resolve_under_base(base: &Path, relative: &str) -> Result<PathBuf, RariEr
 
 #[expect(clippy::missing_errors_doc)]
 pub async fn validate_safe_path(base: &Path, requested: &str) -> Result<PathBuf, RariError> {
-    if requested.contains("..") {
-        return Err(RariError::bad_request("Invalid path: contains '..' pattern"));
-    }
-
     if requested.contains("//") {
         return Err(RariError::bad_request("Invalid path: contains '//' pattern"));
     }
@@ -128,6 +124,9 @@ pub async fn validate_safe_path(base: &Path, requested: &str) -> Result<PathBuf,
     }
 
     let requested_clean = requested.trim_start_matches('/');
+    if Path::new(requested_clean).components().any(|c| matches!(c, Component::ParentDir)) {
+        return Err(RariError::bad_request("Invalid path: parent-dir components not allowed"));
+    }
 
     let path = base.join(requested_clean);
 
@@ -263,7 +262,7 @@ mod tests {
 
         let result = validate_safe_path(&base, "../etc/passwd").await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("'..'"));
+        assert!(result.unwrap_err().to_string().contains("parent-dir"));
     }
 
     #[tokio::test]
@@ -456,5 +455,18 @@ mod tests {
         let result = validate_safe_path(&base, "nonexistent.txt").await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
+    }
+
+    #[tokio::test]
+    async fn test_accepts_filename_containing_dotdot_substring() {
+        let base = test_temp_dir("dotdot-filename");
+        fs::create_dir_all(&base).unwrap();
+
+        let test_file = base.join("photo..jpg");
+        fs::write(&test_file, "fake").unwrap();
+
+        let result = validate_safe_path(&base, "photo..jpg").await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), test_file.canonicalize().unwrap());
     }
 }

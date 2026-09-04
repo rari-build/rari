@@ -11,6 +11,12 @@ import {
   readPackageManagerFieldFromRecord,
   readViteBinFromPackageRecord,
 } from '@/shared/utils/type-guards'
+import {
+  findImageConfigPath,
+  outDirFromImageConfigPath,
+  resolveConfiguredBuildOutDir,
+  resolveViteBuildPackageRoot,
+} from './build-target'
 import { getBinaryPath, getInstallationInstructions } from './platform'
 
 type PackageManager = 'pnpm' | 'yarn' | 'bun' | 'npm'
@@ -307,19 +313,45 @@ async function runViteBuild() {
 }
 
 async function preOptimizeImages() {
-  const imageConfigPath = resolve(process.cwd(), 'dist', 'server', 'image.json')
+  const cwd = process.cwd()
+  const { viteBin } = getProjectContext()
+  const packageRoot = resolveViteBuildPackageRoot(cwd, viteBin)
+  const configuredOutDir = resolveConfiguredBuildOutDir(packageRoot)
+  const configuredImageConfigPath = resolve(configuredOutDir, 'server', 'image.json')
+  const imageConfigPath = existsSync(configuredImageConfigPath)
+    ? configuredImageConfigPath
+    : findImageConfigPath(packageRoot)
 
-  if (!existsSync(imageConfigPath)) return
+  if (imageConfigPath == null) return
 
-  const publicPath = resolve(process.cwd(), 'public')
+  const outDir = outDirFromImageConfigPath(imageConfigPath)
 
-  if (!existsSync(publicPath)) return
+  let assetsDir = 'assets'
+  try {
+    const imageConfig = parseJsonRecord(readFileSync(imageConfigPath, 'utf-8'))
+    if (
+      imageConfig &&
+      typeof imageConfig.assetsDir === 'string' &&
+      imageConfig.assetsDir.length > 0
+    ) {
+      assetsDir = imageConfig.assetsDir.replaceAll(/^\/+|\/+$/g, '')
+    }
+  } catch {
+    // Fall back to default assets dir when config is unreadable.
+  }
+
+  const publicPath = resolve(packageRoot, 'public')
+  const distAssetsPath = resolve(outDir, assetsDir)
+  const staticImageMapPath = resolve(outDir, 'server', 'static-image-sources.json')
+
+  if (!existsSync(publicPath) && !existsSync(distAssetsPath) && !existsSync(staticImageMapPath))
+    return
 
   try {
     const binaryPath = getBinaryPath()
-    const optimizeProcess = spawn(binaryPath, ['optimize-images'], {
+    const optimizeProcess = spawn(binaryPath, ['optimize-images', '--config', imageConfigPath], {
       stdio: 'inherit',
-      cwd: process.cwd(),
+      cwd: packageRoot,
       shell: false,
     })
 
@@ -642,3 +674,13 @@ if (isCliMainModule()) {
 }
 
 export { detectPackageManager, getDeploymentConfig, isRailwayEnvironment, isRenderEnvironment }
+export {
+  findImageConfigPath,
+  outDirFromImageConfigPath,
+  readBuildOutDir,
+  readDefaultPackageTarget,
+  readViteRoot,
+  resolveConfiguredBuildOutDir,
+  resolveEffectiveViteRoot,
+  resolveViteBuildPackageRoot,
+} from './build-target'

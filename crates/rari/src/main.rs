@@ -24,7 +24,8 @@ async fn main() -> Result<(), Box<dyn error::Error + Send + Sync>> {
         CryptoProvider::install_default(aws_lc_rs::default_provider())
             .map_err(|_| "Failed to install rustls crypto provider")?;
         let dry_run = sub_matches.get_flag("dry-run");
-        return run_optimize_images(dry_run).await;
+        let config = sub_matches.get_one::<String>("config").map(PathBuf::from);
+        return run_optimize_images(dry_run, config).await;
     }
 
     if let Some(("scan-images", sub_matches)) = matches.subcommand() {
@@ -72,6 +73,12 @@ fn cli() -> Command {
                         .long("dry-run")
                         .help("Preview images that would be optimized without performing writes")
                         .action(ArgAction::SetTrue),
+                )
+                .arg(
+                    Arg::new("config")
+                        .long("config")
+                        .value_name("FILE")
+                        .help("Path to image.json (defaults to dist/server/image.json)"),
                 ),
         )
         .subcommand(
@@ -134,10 +141,17 @@ fn cli() -> Command {
         )
 }
 
-async fn run_optimize_images(dry_run: bool) -> Result<(), Box<dyn error::Error + Send + Sync>> {
+async fn run_optimize_images(
+    dry_run: bool,
+    config_path: Option<PathBuf>,
+) -> Result<(), Box<dyn error::Error + Send + Sync>> {
     let project_path = env::current_dir()?;
 
-    let image_config_path = project_path.join("dist").join("server").join("image.json");
+    let image_config_path = match config_path {
+        Some(path) if path.is_absolute() => path,
+        Some(path) => project_path.join(path),
+        None => project_path.join("dist").join("server").join("image.json"),
+    };
 
     let image_config: ImageConfig = if fs::try_exists(&image_config_path).await? {
         let config_content = fs::read_to_string(&image_config_path).await?;

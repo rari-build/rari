@@ -1,3 +1,4 @@
+/// <reference path="./static-modules.d.ts" />
 import { Image as ImageComponent } from './image'
 
 export type { ImageFormat } from './constants'

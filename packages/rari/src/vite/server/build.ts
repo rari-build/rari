@@ -47,6 +47,10 @@ import {
   resolveModuleCachePath,
 } from '../analysis/module-cache'
 import { collectSourceFilePaths, normalizeScanDirs } from '../analysis/source-walker'
+import {
+  createStaticImageRolldownPlugin,
+  finalizeStaticImageSourceMapBuild,
+} from '../image/static-import'
 import { resolveMdxRegistryEntries } from '../mdx/registry'
 import { ensureNamedImportFromModule } from '../transform/client-import'
 import {
@@ -224,6 +228,7 @@ export interface ServerBuildOptions {
   readonly serverConfigPath?: string
   readonly minify?: boolean
   readonly alias?: Readonly<Record<string, string>>
+  readonly assetsDir?: string
   readonly define?: Readonly<Record<string, string>>
   readonly csp?: ServerCSPConfig
   readonly cacheControl?: ServerCacheControlConfig
@@ -465,11 +470,12 @@ export class ServerComponentBuilder {
     this.projectRoot = projectRoot
     this.moduleAnalysisCache = options.moduleAnalysisCache ?? new ModuleAnalysisCache()
     const rscDir = options.rscDir != null && options.rscDir !== '' ? options.rscDir : 'server'
+    const rawOutDir =
+      options.outDir != null && options.outDir !== ''
+        ? options.outDir
+        : path.join(projectRoot, 'dist')
     this.options = {
-      outDir:
-        options.outDir != null && options.outDir !== ''
-          ? options.outDir
-          : path.join(projectRoot, 'dist'),
+      outDir: path.isAbsolute(rawOutDir) ? rawOutDir : path.resolve(projectRoot, rawOutDir),
       rscDir,
       manifestPath:
         options.manifestPath != null && options.manifestPath !== ''
@@ -481,6 +487,10 @@ export class ServerComponentBuilder {
           : path.join(rscDir, 'config.json'),
       minify: options.minify ?? process.env.NODE_ENV === 'production',
       alias: options.alias ?? {},
+      assetsDir:
+        options.assetsDir != null && options.assetsDir !== ''
+          ? options.assetsDir.replace(/^\/+|\/+$/g, '') || 'assets'
+          : 'assets',
       define: options.define,
       csp: options.csp,
       cacheControl: options.cacheControl,
@@ -850,6 +860,12 @@ export class ServerComponentBuilder {
     const serverActionRefs = new Map<string, { actionId: string; hasDefaultExport: boolean }>()
 
     return [
+      createStaticImageRolldownPlugin(
+        this.projectRoot,
+        this.options.assetsDir,
+        this.options.alias,
+        this.options.outDir,
+      ),
       {
         name: 'virtual-module',
         resolveId(id: string, importer: string | undefined) {
@@ -1830,6 +1846,12 @@ export class ServerComponentBuilder {
         },
       },
       plugins: [
+        createStaticImageRolldownPlugin(
+          projectRoot,
+          this.options.assetsDir,
+          this.options.alias,
+          this.options.outDir,
+        ),
         {
           name: 'ssr-client-virtual',
           resolveId(id) {
@@ -1865,7 +1887,10 @@ export class ServerComponentBuilder {
               } else if (importer != null && importer !== '') {
                 resolved = path.resolve(
                   path.dirname(
-                    importer.replace('\0ssr-virtual:', '').replace('\0server-action-ref:', ''),
+                    importer
+                      .replace('\0ssr-virtual:', '')
+                      .replace('\0virtual:', '')
+                      .replace('\0server-action-ref:', ''),
                   ),
                   id,
                 )
@@ -2381,6 +2406,7 @@ export function scanDirectory(
 export function createServerBuildPlugin(options: ServerBuildOptions = {}): Plugin {
   let builder: ServerComponentBuilder | null = null
   let projectRoot: string
+  let resolvedViteOutDir: string
   let isDev = false
   let resolvedAliases: Record<string, string> = {}
 
@@ -2389,6 +2415,7 @@ export function createServerBuildPlugin(options: ServerBuildOptions = {}): Plugi
 
     configResolved(config) {
       projectRoot = config.root
+      resolvedViteOutDir = path.resolve(config.root, config.build.outDir)
       isDev = config.command === 'serve'
 
       const excludeAliases = new Set([
@@ -2418,7 +2445,16 @@ export function createServerBuildPlugin(options: ServerBuildOptions = {}): Plugi
       }
 
       resolvedAliases = alias
-      builder = new ServerComponentBuilder(projectRoot, { ...options, alias })
+      const assetsDir =
+        typeof config.build.assetsDir === 'string' && config.build.assetsDir !== ''
+          ? config.build.assetsDir.replace(/^\/+|\/+$/g, '') || 'assets'
+          : 'assets'
+      builder = new ServerComponentBuilder(projectRoot, {
+        ...options,
+        alias,
+        assetsDir,
+        outDir: resolvedViteOutDir,
+      })
     },
 
     buildStart() {
@@ -2486,6 +2522,8 @@ export function createServerBuildPlugin(options: ServerBuildOptions = {}): Plugi
         } catch (error) {
           console.warn('[rari] Failed to generate feed:', error)
         }
+
+        finalizeStaticImageSourceMapBuild(resolvedViteOutDir)
       }
     },
 
