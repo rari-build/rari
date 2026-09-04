@@ -57,6 +57,7 @@ import {
 import { normalizeScanDirs } from './analysis/source-walker'
 import { HMRCoordinator } from './hmr/coordinator'
 import { walkImporters } from './hmr/import-graph'
+import { createStaticImagePlugin } from './image/static-import'
 import {
   generateMdxRegistryModule,
   isMdxRegistryModuleId,
@@ -202,6 +203,31 @@ const DEFAULT_IMAGE_CONFIG = {
   minimumCacheTTL: DEFAULT_MINIMUM_CACHE_TTL,
 }
 
+function normalizeAssetsDir(assetsDir: string | undefined): string {
+  const normalized = (assetsDir ?? 'assets').replace(/^\/+|\/+$/g, '')
+  return normalized === '' ? 'assets' : normalized
+}
+
+function staticImageLocalPatterns(assetsDir: string): ReadonlyArray<{ readonly pathname: string }> {
+  return [{ pathname: `/${normalizeAssetsDir(assetsDir)}/**` }]
+}
+
+function mergeLocalPatterns(
+  patterns:
+    | ReadonlyArray<{
+        readonly pathname: string
+        readonly search?: string
+      }>
+    | undefined,
+  assetsDir: string,
+): Array<{ pathname: string; search?: string }> {
+  const merged: Array<{ pathname: string; search?: string }> = [...(patterns ?? [])]
+  for (const pattern of staticImageLocalPatterns(assetsDir)) {
+    if (!merged.some(entry => entry.pathname === pattern.pathname)) merged.push({ ...pattern })
+  }
+  return merged
+}
+
 const runtimeFileCache = new Map<string, string>()
 
 async function loadRuntimeFile(filename: string): Promise<string> {
@@ -310,6 +336,8 @@ async function writeImageConfig(
   projectRoot: string,
   // oxlint-disable-next-line typescript/prefer-readonly-parameter-types RariOptions embeds optional peer option bags (oxc/mdx) that are not deeply readonly
   options: RariOptions,
+  assetsDir = 'assets',
+  outDir?: string,
 ): Promise<void> {
   const srcDir = path.join(projectRoot, 'src')
   const { getBinaryPath } = await import('@/cli/platform')
@@ -354,14 +382,22 @@ async function writeImageConfig(
     )
   }
 
+  const normalizedAssetsDir = normalizeAssetsDir(assetsDir)
+  const resolvedOutDir = (() => {
+    const candidate = outDir ?? options.serverBuild?.outDir ?? path.join(projectRoot, 'dist')
+    return path.isAbsolute(candidate) ? candidate : path.resolve(projectRoot, candidate)
+  })()
+  const relativeOutDir = path.relative(projectRoot, resolvedOutDir).replace(/\\/g, '/') || 'dist'
   const imageConfig = {
     ...DEFAULT_IMAGE_CONFIG,
     ...options.images,
+    assetsDir: normalizedAssetsDir,
+    outDir: relativeOutDir,
+    localPatterns: mergeLocalPatterns(options.images?.localPatterns, normalizedAssetsDir),
     preoptimizeManifest: imageManifest.images,
   }
 
-  const distDir = path.join(projectRoot, 'dist')
-  const serverDir = path.join(distDir, 'server')
+  const serverDir = path.join(resolvedOutDir, 'server')
   if (!fs.existsSync(serverDir)) fs.mkdirSync(serverDir, { recursive: true })
 
   const configPath = path.join(serverDir, 'image.json')
@@ -394,6 +430,8 @@ export function rari(
 
   let hmrCoordinator: HMRCoordinator | null = null
   const resolvedAlias: Record<string, string> = {}
+  let resolvedAssetsDir = 'assets'
+  let resolvedOutDir = path.join(process.cwd(), 'dist')
   let cachedMdxRegistryModule: string | null = null
 
   function invalidateMdxRegistryModuleCache(): void {
@@ -1034,6 +1072,8 @@ if (import.meta.hot) {
     },
 
     configResolved(config) {
+      resolvedAssetsDir = normalizeAssetsDir(config.build.assetsDir)
+      resolvedOutDir = path.resolve(config.root, config.build.outDir)
       const excludeAliases = new Set([
         'react',
         'react-dom',
@@ -1283,16 +1323,17 @@ ${clientTransformedCode}`
           ? options.projectRoot
           : process.cwd()
       const srcDir = path.join(projectRoot, 'src')
-      await writeImageConfig(projectRoot, options)
+      await writeImageConfig(projectRoot, options, resolvedAssetsDir, resolvedOutDir)
 
       const discoverAndRegisterComponents = async () => {
         try {
           const builder = new ServerComponentBuilder(projectRoot, {
-            outDir: 'dist',
+            outDir: resolvedOutDir,
             rscDir: 'server',
             manifestPath: 'server/manifest.json',
             serverConfigPath: 'server/config.json',
             alias: resolvedAlias,
+            assetsDir: resolvedAssetsDir,
             csp: options.csp,
             cacheControl: options.cacheControl,
             cache: options.cache,
@@ -2251,7 +2292,7 @@ export const createTemporaryReferenceSet = module.exports.createTemporaryReferen
         options.projectRoot != null && options.projectRoot !== ''
           ? options.projectRoot
           : process.cwd()
-      await writeImageConfig(projectRoot, options)
+      await writeImageConfig(projectRoot, options, resolvedAssetsDir, resolvedOutDir)
     },
   }
 
@@ -2302,7 +2343,7 @@ export const createTemporaryReferenceSet = module.exports.createTemporaryReferen
   if (options.compiler != null && options.compiler !== false)
     plugins.push(createReactCompilerPlugin(options.compiler))
 
-  plugins.push(mainPlugin, webpackRequirePatchPlugin, serverBuildPlugin)
+  plugins.push(mainPlugin, createStaticImagePlugin(), webpackRequirePatchPlugin, serverBuildPlugin)
 
   if (options.proxy !== false) plugins.push(rariProxy(options.proxy ?? {}))
 

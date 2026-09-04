@@ -517,7 +517,7 @@ export const lint: OxlintConfig = {
     'unicorn/no-useless-fallback-in-spread': 'error',
     'unicorn/no-useless-length-check': 'error',
     'unicorn/no-useless-spread': 'error',
-    'unicorn/number-literal-case': 'error',
+    'unicorn/number-literal-case': 'off',
     'unicorn/prefer-dom-node-text-content': 'error',
     'unicorn/prefer-includes': 'error',
     'unicorn/prefer-node-protocol': 'error',

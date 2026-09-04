@@ -26,6 +26,10 @@ pub struct ImageConfig {
     pub optimization_concurrency: Option<usize>,
     #[serde(default)]
     pub preoptimize_manifest: Vec<ImageVariant>,
+    #[serde(default = "default_assets_dir")]
+    pub assets_dir: String,
+    #[serde(default = "default_out_dir")]
+    pub out_dir: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -69,6 +73,8 @@ impl Default for ImageConfig {
             minimum_cache_ttl: default_minimum_cache_ttl(),
             optimization_concurrency: None,
             preoptimize_manifest: Vec::new(),
+            assets_dir: default_assets_dir(),
+            out_dir: default_out_dir(),
         }
     }
 }
@@ -95,4 +101,12 @@ fn default_max_redirects() -> u8 {
 
 fn default_minimum_cache_ttl() -> u64 {
     60
+}
+
+fn default_assets_dir() -> String {
+    "assets".to_string()
+}
+
+fn default_out_dir() -> String {
+    "dist".to_string()
 }

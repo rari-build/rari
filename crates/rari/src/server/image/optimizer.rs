@@ -1,5 +1,6 @@
 #![expect(clippy::missing_errors_doc, clippy::too_many_lines)]
 use std::{
+    io,
     path::{Path, PathBuf},
     sync::{
         Arc, PoisonError, RwLock,
@@ -11,8 +12,9 @@ use std::{
 use cow_utils::CowUtils;
 use futures::stream::{self, StreamExt};
 use image::{DynamicImage, imageops::FilterType};
+use rari_error::RariError;
 use reqwest::{Client, header::LOCATION, redirect::Policy};
-use tokio::{fs, sync::Semaphore, task};
+use tokio::{fs, io::AsyncReadExt, sync::Semaphore, task};
 use url::Url;
 
 use super::{
@@ -21,13 +23,43 @@ use super::{
     config::{ImageConfig, LocalPattern, RemotePattern},
     types::{DEFAULT_IMAGE_QUALITY, ImageFormat, OptimizeParams, OptimizedImage},
 };
-use crate::utils::{cast, float};
+use crate::{
+    server::core::utils::path_validation::validate_safe_path,
+    utils::{cast, float},
+};
 
 const MAX_SOURCE_IMAGE_SIZE: usize = 10 * 1024 * 1024;
+const MAX_STATIC_IMAGE_SOURCE_MAP_SIZE: usize = 10 * 1024 * 1024;
 const MAX_OUTPUT_WIDTH: u32 = 3840;
 const MAX_OUTPUT_HEIGHT: u32 = 2160;
 const AVIF_ENCODING_SPEED: u8 = 6;
 const DEFAULT_CONCURRENCY: usize = 4;
+
+fn encode_url_path_segments(path: &str) -> String {
+    let had_leading_slash = path.starts_with('/');
+    let encoded = path
+        .trim_start_matches('/')
+        .split('/')
+        .map(|segment| urlencoding::encode(segment).into_owned())
+        .collect::<Vec<_>>()
+        .join("/");
+    if had_leading_slash { format!("/{encoded}") } else { encoded }
+}
+
+fn decode_url_path_segments(path: &str) -> String {
+    let had_leading_slash = path.starts_with('/');
+    let decoded = path
+        .trim_start_matches('/')
+        .split('/')
+        .map(|segment| {
+            urlencoding::decode(segment)
+                .map(std::borrow::Cow::into_owned)
+                .unwrap_or_else(|_| segment.to_string())
+        })
+        .collect::<Vec<_>>()
+        .join("/");
+    if had_leading_slash { format!("/{decoded}") } else { decoded }
+}
 
 #[derive(Debug, Clone)]
 #[non_exhaustive]
@@ -81,6 +113,16 @@ impl ImageOptimizer {
         }
     }
 
+    fn out_dir_path(&self) -> PathBuf {
+        let path = Path::new(&self.config.out_dir);
+        if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            let relative = self.config.out_dir.trim_matches(|c| c == '/' || c == '\\');
+            self.project_path.join(relative)
+        }
+    }
+
     fn default_quality(&self) -> u8 {
         if self.config.quality_allowlist.is_empty()
             || self.config.quality_allowlist.contains(&DEFAULT_IMAGE_QUALITY)
@@ -131,78 +173,95 @@ impl ImageOptimizer {
             return Ok(0);
         }
 
-        tracing::debug!("No manifest found, scanning public directory...");
-
-        let public_dir = self.project_path.join("public");
-        match fs::try_exists(&public_dir).await {
-            Ok(false) => {
-                tracing::warn!(
-                    "Public directory does not exist at {:?}, skipping local image pre-optimization",
-                    public_dir
-                );
-                return Ok(0);
-            }
-            Err(e) => {
-                tracing::error!(
-                    "Failed to check if public directory exists at {:?}: {}",
-                    public_dir,
-                    e
-                );
-                return Err(ImageError::ProcessingError(format!(
-                    "Failed to check public directory: {e}"
-                )));
-            }
-            Ok(true) => {}
-        }
-
-        tracing::debug!("Scanning public directory: {:?}", public_dir);
+        tracing::debug!(
+            "No manifest found, scanning public/ and dist/{}...",
+            self.config.assets_dir
+        );
 
         let mut image_paths = Vec::new();
-        let mut dirs_to_scan = vec![public_dir.clone()];
+        let assets_dir = self.config.assets_dir.trim_matches('/').to_string();
+        let assets_url_prefix = format!("/{assets_dir}");
+        let scan_roots: [(PathBuf, Option<&str>); 2] = [
+            (self.project_path.join("public"), None),
+            (self.out_dir_path().join(&assets_dir), Some(assets_url_prefix.as_str())),
+        ];
 
-        while let Some(current_dir) = dirs_to_scan.pop() {
-            let mut entries = fs::read_dir(&current_dir).await.map_err(|e| {
-                #[expect(clippy::unnecessary_debug_formatting)]
-                ImageError::ProcessingError(format!(
-                    "Failed to read directory {current_dir:?}: {e}"
-                ))
-            })?;
-
-            while let Some(entry) = entries.next_entry().await.map_err(|e| {
-                ImageError::ProcessingError(format!("Failed to read directory entry: {e}"))
-            })? {
-                let path = entry.path();
-
-                let file_type = entry.file_type().await.map_err(|e| {
-                    #[expect(clippy::unnecessary_debug_formatting)]
-                    ImageError::ProcessingError(format!(
-                        "Failed to read file type for {path:?}: {e}"
-                    ))
-                })?;
-
-                if file_type.is_symlink() {
+        for (root_dir, forced_prefix) in &scan_roots {
+            match fs::try_exists(root_dir).await {
+                Ok(false) => continue,
+                Err(e) => {
+                    tracing::warn!("Failed to check image scan directory {:?}: {}", root_dir, e);
                     continue;
                 }
+                Ok(true) => {}
+            }
 
-                #[expect(
-                    clippy::filetype_is_file,
-                    reason = "We specifically want only regular files, not FIFOs, sockets, or devices"
-                )]
-                if file_type.is_dir() {
-                    dirs_to_scan.push(path);
-                } else if file_type.is_file() {
-                    let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+            tracing::debug!("Scanning image directory: {:?}", root_dir);
 
-                    if !matches!(
-                        extension.cow_to_lowercase().as_ref(),
-                        "jpg" | "jpeg" | "png" | "webp" | "avif"
-                    ) {
+            let mut dirs_to_scan = vec![root_dir.clone()];
+
+            while let Some(current_dir) = dirs_to_scan.pop() {
+                let mut entries = match fs::read_dir(&current_dir).await {
+                    Ok(entries) => entries,
+                    Err(e) => {
+                        tracing::warn!("Failed to read directory {:?}: {}", current_dir, e);
+                        continue;
+                    }
+                };
+
+                loop {
+                    let entry = match entries.next_entry().await {
+                        Ok(Some(entry)) => entry,
+                        Ok(None) => break,
+                        Err(e) => {
+                            tracing::warn!(
+                                "Failed to read directory entry in {:?}: {}",
+                                current_dir,
+                                e
+                            );
+                            break;
+                        }
+                    };
+                    let path = entry.path();
+
+                    let file_type = match entry.file_type().await {
+                        Ok(file_type) => file_type,
+                        Err(e) => {
+                            tracing::warn!("Failed to read file type for {:?}: {}", path, e);
+                            continue;
+                        }
+                    };
+
+                    if file_type.is_symlink() {
                         continue;
                     }
 
-                    if let Ok(relative) = path.strip_prefix(&public_dir) {
-                        let url_path =
-                            format!("/{}", relative.to_string_lossy().cow_replace('\\', "/"));
+                    #[expect(
+                        clippy::filetype_is_file,
+                        reason = "We specifically want only regular files, not FIFOs, sockets, or devices"
+                    )]
+                    if file_type.is_dir() {
+                        dirs_to_scan.push(path);
+                    } else if file_type.is_file() {
+                        let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+
+                        if !matches!(
+                            extension.cow_to_lowercase().as_ref(),
+                            "jpg" | "jpeg" | "png" | "webp" | "avif" | "gif"
+                        ) {
+                            continue;
+                        }
+
+                        let Ok(relative) = path.strip_prefix(root_dir) else {
+                            continue;
+                        };
+                        let relative_url =
+                            relative.to_string_lossy().cow_replace('\\', "/").into_owned();
+                        let encoded_relative = encode_url_path_segments(&relative_url);
+                        let url_path = match forced_prefix {
+                            Some(prefix) => format!("{prefix}/{encoded_relative}"),
+                            None => format!("/{encoded_relative}"),
+                        };
 
                         if self.matches_local_patterns(&url_path) {
                             image_paths.push(url_path);
@@ -213,9 +272,16 @@ impl ImageOptimizer {
         }
 
         if image_paths.is_empty() {
+            image_paths = self.collect_source_map_image_urls().await?;
+        }
+
+        if image_paths.is_empty() {
             tracing::debug!("No local images found for pre-optimization");
             return Ok(0);
         }
+
+        image_paths.sort_unstable();
+        image_paths.dedup();
 
         tracing::debug!("Found {} local images to scan", image_paths.len());
         for path in &image_paths {
@@ -708,7 +774,9 @@ impl ImageOptimizer {
         let path_without_query = if let Some(idx) = path.find('?') { &path[..idx] } else { path };
 
         if let Some(prefix) = pattern.strip_suffix("/**") {
-            path_without_query.starts_with(prefix)
+            path_without_query == prefix
+                || (path_without_query.starts_with(prefix)
+                    && path_without_query.as_bytes().get(prefix.len()) == Some(&b'/'))
         } else if pattern.contains('*') {
             Self::glob_match(path_without_query, pattern)
         } else {
@@ -948,45 +1016,232 @@ impl ImageOptimizer {
             .map_err(|e| ImageError::FetchError(e.to_string()))
     }
 
+    async fn read_file_bytes_capped(
+        path: &Path,
+        max_size: usize,
+        context: &str,
+    ) -> Result<Vec<u8>, ImageError> {
+        let metadata = fs::metadata(path).await.map_err(|e| {
+            ImageError::FetchError(format!("Failed to stat {context} {}: {e}", path.display()))
+        })?;
+        if !metadata.is_file() {
+            return Err(ImageError::FetchError(format!(
+                "Refusing to read non-regular {context} {}",
+                path.display()
+            )));
+        }
+
+        let file = fs::File::open(path).await.map_err(|e| {
+            ImageError::FetchError(format!("Failed to read {context} {}: {e}", path.display()))
+        })?;
+        let mut bytes = Vec::new();
+        file.take(max_size as u64 + 1).read_to_end(&mut bytes).await.map_err(|e| {
+            ImageError::FetchError(format!("Failed to read {context} {}: {e}", path.display()))
+        })?;
+
+        if bytes.len() > max_size {
+            return Err(ImageError::InvalidParams(format!(
+                "Image too large: at least {} bytes (max {max_size} bytes)",
+                bytes.len(),
+            )));
+        }
+
+        Ok(bytes)
+    }
+
+    async fn read_image_bytes_capped(path: &Path, context: &str) -> Result<Vec<u8>, ImageError> {
+        Self::read_file_bytes_capped(path, MAX_SOURCE_IMAGE_SIZE, context).await
+    }
+
+    async fn load_static_image_source_map(
+        &self,
+    ) -> Result<Option<serde_json::Map<String, serde_json::Value>>, ImageError> {
+        let map_path = match validate_safe_path(
+            &self.out_dir_path(),
+            "server/static-image-sources.json",
+        )
+        .await
+        {
+            Ok(path) => path,
+            Err(RariError::NotFound(_, _)) => return Ok(None),
+            Err(e) => {
+                return Err(ImageError::FetchError(format!(
+                    "Failed to resolve static image source map: {}",
+                    e.message()
+                )));
+            }
+        };
+
+        let map_bytes = match Self::read_file_bytes_capped(
+            &map_path,
+            MAX_STATIC_IMAGE_SOURCE_MAP_SIZE,
+            "static image source map",
+        )
+        .await
+        {
+            Ok(bytes) => bytes,
+            Err(ImageError::InvalidParams(_)) => {
+                return Err(ImageError::FetchError(format!(
+                    "static image source map too large (max {MAX_STATIC_IMAGE_SOURCE_MAP_SIZE} bytes)"
+                )));
+            }
+            Err(error) => return Err(error),
+        };
+        let map: serde_json::Map<String, serde_json::Value> = serde_json::from_slice(&map_bytes)
+            .map_err(|e| {
+                ImageError::FetchError(format!("Failed to parse static image source map: {e}"))
+            })?;
+
+        Ok(Some(map))
+    }
+
+    async fn collect_source_map_image_urls(&self) -> Result<Vec<String>, ImageError> {
+        let Some(map) = self.load_static_image_source_map().await? else {
+            return Ok(Vec::new());
+        };
+
+        let mut urls = Vec::new();
+        for url in map.keys() {
+            if self.matches_local_patterns(url) {
+                urls.push(url.clone());
+            }
+        }
+
+        if !urls.is_empty() {
+            tracing::debug!(
+                "Falling back to {} URLs from static image source map for pre-optimization",
+                urls.len()
+            );
+        }
+
+        Ok(urls)
+    }
+
+    async fn read_local_image_under_root(
+        &self,
+        url: &str,
+        root: &Path,
+        root_label: &str,
+    ) -> Result<Option<Vec<u8>>, ImageError> {
+        let canonical_file = match validate_safe_path(root, url).await {
+            Ok(path) => path,
+            Err(RariError::NotFound(_, _)) => return Ok(None),
+            Err(RariError::BadRequest(message, _)) => {
+                return Err(ImageError::InvalidUrl(format!(
+                    "Path traversal detected for {root_label}: {message}"
+                )));
+            }
+            Err(e) => {
+                return Err(ImageError::FetchError(format!(
+                    "Failed to resolve local image under {root_label}: {}",
+                    e.message()
+                )));
+            }
+        };
+
+        Ok(Some(Self::read_image_bytes_capped(&canonical_file, "local file").await?))
+    }
+
+    async fn read_static_image_source_map(&self, url: &str) -> Result<Option<Vec<u8>>, ImageError> {
+        let Some(map) = self.load_static_image_source_map().await? else {
+            return Ok(None);
+        };
+
+        let Some(source_value) = map.get(url) else {
+            return Ok(None);
+        };
+        let Some(source_path) = source_value.as_str() else {
+            return Ok(None);
+        };
+
+        let path = PathBuf::from(source_path);
+        if !path.is_absolute() {
+            return Ok(None);
+        }
+
+        let canonical_project = fs::canonicalize(&self.project_path).await.map_err(|e| {
+            ImageError::FetchError(format!("Failed to canonicalize project directory: {e}"))
+        })?;
+        let canonical_candidate = match fs::canonicalize(&path).await {
+            Ok(path) => path,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
+            Err(e) => {
+                return Err(ImageError::FetchError(format!(
+                    "Failed to canonicalize mapped static image {}: {}",
+                    path.display(),
+                    e
+                )));
+            }
+        };
+        let Ok(relative) = canonical_candidate.strip_prefix(&canonical_project) else {
+            return Err(ImageError::InvalidUrl(
+                "Path traversal detected: mapped static image escapes project directory"
+                    .to_string(),
+            ));
+        };
+        let relative = relative.to_string_lossy();
+
+        let canonical_file = match validate_safe_path(&self.project_path, relative.as_ref()).await {
+            Ok(path) => path,
+            Err(RariError::NotFound(_, _)) => return Ok(None),
+            Err(RariError::BadRequest(message, _)) => {
+                return Err(ImageError::InvalidUrl(format!(
+                    "Path traversal detected: mapped static image escapes project directory ({message})"
+                )));
+            }
+            Err(e) => {
+                return Err(ImageError::FetchError(format!(
+                    "Failed to resolve mapped static image: {}",
+                    e.message()
+                )));
+            }
+        };
+
+        Ok(Some(Self::read_image_bytes_capped(&canonical_file, "mapped static image").await?))
+    }
+
     async fn fetch_image(&self, url: &str) -> Result<Vec<u8>, ImageError> {
         if url.starts_with('/') {
-            let public_path = self.project_path.join("public");
-            let file_path = public_path.join(url.trim_start_matches('/'));
+            let pathname = url.split_once('?').map_or(url, |(path, _)| path);
+            let fs_pathname = decode_url_path_segments(pathname);
 
-            let canonical_public = fs::canonicalize(&public_path).await.map_err(|e| {
-                ImageError::FetchError(format!("Failed to canonicalize public directory: {e}"))
-            })?;
-            let canonical_file = fs::canonicalize(&file_path).await.map_err(|e| {
-                ImageError::FetchError(format!(
-                    "Failed to canonicalize file path {}: {}",
-                    file_path.display(),
-                    e
-                ))
-            })?;
-
-            if !canonical_file.starts_with(&canonical_public) {
-                return Err(ImageError::InvalidUrl(format!(
-                    "Path traversal detected: {url} escapes public directory"
-                )));
+            if let Some(bytes) = self
+                .read_local_image_under_root(
+                    &fs_pathname,
+                    &self.project_path.join("public"),
+                    "public",
+                )
+                .await?
+            {
+                return Ok(bytes);
             }
 
-            let bytes = fs::read(&canonical_file).await.map_err(|e| {
-                ImageError::FetchError(format!(
-                    "Failed to read local file {}: {}",
-                    canonical_file.display(),
-                    e
-                ))
-            })?;
-
-            if bytes.len() > MAX_SOURCE_IMAGE_SIZE {
-                return Err(ImageError::InvalidParams(format!(
-                    "Image too large: {} bytes (max {} bytes)",
-                    bytes.len(),
-                    MAX_SOURCE_IMAGE_SIZE
-                )));
+            let assets_dir = self.config.assets_dir.trim_matches('/');
+            let assets_prefix = format!("/{assets_dir}");
+            if (fs_pathname == assets_prefix
+                || fs_pathname.starts_with(&format!("{assets_prefix}/")))
+                && let Some(bytes) = self
+                    .read_local_image_under_root(&fs_pathname, &self.out_dir_path(), "dist")
+                    .await?
+            {
+                return Ok(bytes);
             }
 
-            return Ok(bytes);
+            if let Some(relative) = fs_pathname.strip_prefix("/src/")
+                && let Some(bytes) = self
+                    .read_local_image_under_root(relative, &self.project_path.join("src"), "src")
+                    .await?
+            {
+                return Ok(bytes);
+            }
+
+            if let Some(bytes) = self.read_static_image_source_map(pathname).await? {
+                return Ok(bytes);
+            }
+
+            return Err(ImageError::FetchError(format!(
+                "Local image not found for {url}. Checked public/, dist/, src/, and static import source map."
+            )));
         }
 
         let mut current_url = url.to_string();
@@ -1195,5 +1450,227 @@ impl ImageOptimizer {
             .map_err(|e| ImageError::ProcessingError(format!("PNG encoding failed: {e}")))?;
 
         Ok(buffer)
+    }
+}
+
+#[cfg(test)]
+#[expect(clippy::expect_used)]
+mod tests {
+    use std::{
+        env, fs,
+        path::PathBuf,
+        sync::atomic::{AtomicU64, Ordering},
+    };
+
+    use super::*;
+    use crate::server::image::config::LocalPattern;
+
+    static TEST_ID: AtomicU64 = AtomicU64::new(0);
+
+    fn test_project(name: &str) -> PathBuf {
+        let id = TEST_ID.fetch_add(1, Ordering::Relaxed);
+        let dir = env::temp_dir().join(format!("rari-image-optimizer-{name}-{id}"));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("create test project");
+        dir
+    }
+
+    fn tiny_png() -> Vec<u8> {
+        vec![
+            0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48,
+            0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00,
+            0x00, 0x90, 0x77, 0x53, 0xde, 0x00, 0x00, 0x00, 0x0c, 0x49, 0x44, 0x41, 0x54, 0x78,
+            0x9c, 0x63, 0xf8, 0xcf, 0xc0, 0x00, 0x00, 0x03, 0x01, 0x01, 0x00, 0xc9, 0xfe, 0x92,
+            0xef, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+        ]
+    }
+
+    fn assets_config() -> ImageConfig {
+        ImageConfig {
+            local_patterns: vec![LocalPattern { pathname: "/assets/**".to_string(), search: None }],
+            formats: vec![ImageFormat::Png],
+            quality_allowlist: vec![75],
+            ..ImageConfig::default()
+        }
+    }
+
+    #[test]
+    fn pathname_matches_requires_path_segment_boundary() {
+        assert!(ImageOptimizer::pathname_matches("/assets", "/assets/**"));
+        assert!(ImageOptimizer::pathname_matches("/assets/hero.png", "/assets/**"));
+        assert!(!ImageOptimizer::pathname_matches("/assets-private/hero.png", "/assets/**"));
+        assert!(ImageOptimizer::pathname_matches("/src/app/hero.png", "/src/**"));
+        assert!(!ImageOptimizer::pathname_matches("/src-private/hero.png", "/src/**"));
+    }
+
+    #[test]
+    fn local_pattern_rejects_assets_private_prefix() {
+        let pattern = LocalPattern { pathname: "/assets/**".to_string(), search: None };
+        assert!(ImageOptimizer::matches_local_pattern("/assets/hero.png", &pattern));
+        assert!(!ImageOptimizer::matches_local_pattern("/assets-private/hero.png", &pattern));
+    }
+
+    #[test]
+    fn encodes_and_decodes_path_segments_like_static_imports() {
+        assert_eq!(encode_url_path_segments("/assets/100%-hash.png"), "/assets/100%25-hash.png");
+        assert_eq!(encode_url_path_segments("/assets/my photo.png"), "/assets/my%20photo.png");
+        assert_eq!(decode_url_path_segments("/assets/100%25-hash.png"), "/assets/100%-hash.png");
+        assert_eq!(decode_url_path_segments("/assets/my%20photo.png"), "/assets/my photo.png");
+        assert_eq!(
+            decode_url_path_segments(&encode_url_path_segments("/assets/写真.png")),
+            "/assets/写真.png"
+        );
+    }
+
+    #[test]
+    fn out_dir_path_preserves_absolute_configured_paths() {
+        let project = test_project("out-dir-abs");
+        let absolute_out = env::temp_dir()
+            .join(format!("rari-image-abs-out-{}", TEST_ID.fetch_add(1, Ordering::Relaxed)));
+        let config =
+            ImageConfig { out_dir: absolute_out.to_string_lossy().into_owned(), ..assets_config() };
+        let optimizer = ImageOptimizer::new(config, &project);
+        assert_eq!(optimizer.out_dir_path(), absolute_out);
+
+        let relative = ImageOptimizer::new(
+            ImageConfig { out_dir: "build-output".to_string(), ..assets_config() },
+            &project,
+        );
+        assert_eq!(relative.out_dir_path(), project.join("build-output"));
+    }
+
+    #[tokio::test]
+    async fn fetch_resolves_encoded_dist_asset_without_source_map() {
+        let project = test_project("dist-encoded");
+        let assets = project.join("dist").join("assets");
+        fs::create_dir_all(&assets).expect("assets dir");
+
+        let unicode_url = format!("/assets/{}-abc12345.png", urlencoding::encode("写真"));
+        let cases = [
+            ("100%-abc12345.png", "/assets/100%25-abc12345.png"),
+            ("my photo-abc12345.png", "/assets/my%20photo-abc12345.png"),
+            ("写真-abc12345.png", unicode_url.as_str()),
+        ];
+
+        for (file_name, encoded_url) in cases {
+            fs::write(assets.join(file_name), tiny_png()).expect("write png");
+            let optimizer = ImageOptimizer::new(assets_config(), &project);
+            let bytes = optimizer
+                .fetch_image(encoded_url)
+                .await
+                .expect("encoded dist asset should resolve");
+            assert_eq!(bytes, tiny_png());
+        }
+
+        assert!(
+            !project.join("dist/server/static-image-sources.json").exists(),
+            "source map must be absent for dist-only coverage"
+        );
+    }
+
+    #[tokio::test]
+    async fn fetch_rejects_non_regular_local_path() {
+        let project = test_project("non-regular");
+        let public = project.join("public");
+        fs::create_dir_all(public.join("trap.png")).expect("dir disguised as image");
+
+        let optimizer = ImageOptimizer::new(
+            ImageConfig {
+                local_patterns: vec![LocalPattern { pathname: "/**".to_string(), search: None }],
+                ..ImageConfig::default()
+            },
+            &project,
+        );
+
+        let err = optimizer.fetch_image("/trap.png").await.expect_err("directory must fail");
+        assert!(err.to_string().contains("non-regular"), "unexpected error: {err}");
+    }
+
+    #[tokio::test]
+    async fn scan_emits_encoded_urls_for_special_filenames() {
+        let project = test_project("scan-encode");
+        let assets = project.join("dist").join("assets");
+        fs::create_dir_all(&assets).expect("assets dir");
+        fs::write(assets.join("100%-deadbeef.png"), tiny_png()).expect("write");
+        fs::write(assets.join("cool pic-deadbeef.png"), tiny_png()).expect("write");
+
+        let optimizer = ImageOptimizer::new(assets_config(), &project);
+        let count =
+            optimizer.preoptimize_local_images_preview().await.expect("preoptimize preview");
+        assert!(count > 0);
+
+        let encoded_percent = "/assets/100%25-deadbeef.png";
+        let encoded_space = "/assets/cool%20pic-deadbeef.png";
+        assert!(optimizer.fetch_image(encoded_percent).await.is_ok());
+        assert!(optimizer.fetch_image(encoded_space).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn scan_includes_gif_files() {
+        let project = test_project("scan-gif");
+        let assets = project.join("dist").join("assets");
+        fs::create_dir_all(&assets).expect("assets dir");
+        fs::write(assets.join("frame.gif"), tiny_png()).expect("write gif");
+        fs::write(assets.join("notes.txt"), b"skip").expect("write txt");
+
+        let optimizer = ImageOptimizer::new(assets_config(), &project);
+        let count =
+            optimizer.preoptimize_local_images_preview().await.expect("preoptimize preview");
+        assert!(count > 0, "gif assets should be included in the local scan");
+
+        let txt_only = test_project("scan-txt-only");
+        let txt_assets = txt_only.join("dist").join("assets");
+        fs::create_dir_all(&txt_assets).expect("assets dir");
+        fs::write(txt_assets.join("notes.txt"), b"skip").expect("write txt");
+        let txt_optimizer = ImageOptimizer::new(assets_config(), &txt_only);
+        let txt_count =
+            txt_optimizer.preoptimize_local_images_preview().await.expect("preoptimize preview");
+        assert_eq!(txt_count, 0, "non-image files must not be scanned");
+    }
+
+    #[tokio::test]
+    async fn scan_falls_back_to_source_map_urls_when_asset_roots_missing() {
+        let project = test_project("scan-source-map-only");
+        let server_dir = project.join("dist").join("server");
+        fs::create_dir_all(&server_dir).expect("server dir");
+
+        let source = project.join("photo.png");
+        fs::write(&source, tiny_png()).expect("write source");
+
+        let map = serde_json::json!({
+            "/assets/photo-deadbeef.png": source.to_string_lossy(),
+        });
+        fs::write(server_dir.join("static-image-sources.json"), map.to_string())
+            .expect("write source map");
+
+        let optimizer = ImageOptimizer::new(assets_config(), &project);
+        let count =
+            optimizer.preoptimize_local_images_preview().await.expect("preoptimize preview");
+        assert!(count > 0, "source-map URLs should be preoptimized when scan roots are absent");
+    }
+
+    #[tokio::test]
+    async fn fetch_continues_when_out_dir_is_missing() {
+        let project = test_project("missing-out-dir");
+        let public = project.join("public");
+        fs::create_dir_all(&public).expect("public");
+        fs::write(public.join("hero.png"), tiny_png()).expect("write public image");
+
+        let optimizer = ImageOptimizer::new(
+            ImageConfig {
+                out_dir: "does-not-exist".to_string(),
+                local_patterns: vec![LocalPattern { pathname: "/**".to_string(), search: None }],
+                formats: vec![ImageFormat::Png],
+                quality_allowlist: vec![75],
+                ..ImageConfig::default()
+            },
+            &project,
+        );
+
+        let bytes = optimizer
+            .fetch_image("/hero.png")
+            .await
+            .expect("missing out_dir must not abort local fetch before public/ fallback completes");
+        assert_eq!(bytes, tiny_png());
     }
 }
