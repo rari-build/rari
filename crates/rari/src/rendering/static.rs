@@ -269,28 +269,83 @@ impl RscHtmlRenderer {
             return template.to_string();
         }
 
-        let links = css_links
-            .iter()
-            .filter(|href| !template.contains(href.as_str()))
-            .map(|href| {
-                format!(r#"<link rel="stylesheet" href="{}">"#, Self::escape_html_attribute(href))
-            })
-            .collect::<Vec<_>>();
+        let mut stylesheet_links = Vec::new();
+        let mut preload_links = Vec::new();
 
-        if links.is_empty() {
+        for href in css_links {
+            if let Some(font_url) = href.strip_prefix("preload:") {
+                if template.contains(font_url) {
+                    continue;
+                }
+                let type_attr = if font_url.ends_with(".woff") {
+                    "font/woff"
+                } else if font_url.ends_with(".ttf") {
+                    "font/ttf"
+                } else if font_url.ends_with(".otf") {
+                    "font/otf"
+                } else {
+                    "font/woff2"
+                };
+                preload_links.push(format!(
+                    r#"<link rel="preload" href="{}" as="font" type="{}" crossorigin>"#,
+                    Self::escape_html_attribute(font_url),
+                    type_attr
+                ));
+            } else if !template.contains(href.as_str()) {
+                stylesheet_links.push(format!(
+                    r#"<link rel="stylesheet" href="{}">"#,
+                    Self::escape_html_attribute(href)
+                ));
+            }
+        }
+
+        if preload_links.is_empty() && stylesheet_links.is_empty() {
             return template.to_string();
         }
 
-        let link_block = format!("{}\n", links.join("\n"));
-        if let Some(head_end) = template.find("</head>") {
-            let mut result = String::with_capacity(template.len() + link_block.len());
-            result.push_str(&template[..head_end]);
-            result.push_str(&link_block);
-            result.push_str(&template[head_end..]);
-            result
-        } else {
-            format!("{link_block}{template}")
+        let mut result = template.to_string();
+        let has_head = result.find("</head>").is_some();
+
+        if !has_head {
+            let mut combined = Vec::with_capacity(preload_links.len() + stylesheet_links.len());
+            combined.extend(preload_links);
+            combined.extend(stylesheet_links);
+            let block = format!("{}\n", combined.join("\n"));
+            return format!("{block}{result}");
         }
+
+        if !preload_links.is_empty() {
+            let preload_block = format!("{}\n", preload_links.join("\n"));
+            let insert_at =
+                Self::first_stylesheet_link_offset(&result).or_else(|| result.find("</head>"));
+            if let Some(pos) = insert_at {
+                result.insert_str(pos, &preload_block);
+            }
+        }
+
+        if !stylesheet_links.is_empty() {
+            let stylesheet_block = format!("{}\n", stylesheet_links.join("\n"));
+            if let Some(head_end) = result.find("</head>") {
+                result.insert_str(head_end, &stylesheet_block);
+            }
+        }
+
+        result
+    }
+
+    fn first_stylesheet_link_offset(template: &str) -> Option<usize> {
+        let lower = template.to_ascii_lowercase();
+        let mut search_from = 0;
+        while let Some(rel) = lower[search_from..].find("<link") {
+            let start = search_from + rel;
+            let end = lower[start..].find('>').map(|offset| start + offset + 1)?;
+            let tag = &lower[start..end];
+            if tag.contains("stylesheet") || tag.contains("text/css") {
+                return Some(start);
+            }
+            search_from = end;
+        }
+        None
     }
 
     pub(crate) async fn assemble_document(
@@ -443,6 +498,54 @@ mod tests {
         let css_links = vec!["/styles/app.css".to_string()];
         let result = RscHtmlRenderer::inject_css_links(template, &css_links);
         assert!(result.contains(r#"<link rel="stylesheet" href="/styles/app.css">"#));
+    }
+
+    #[test]
+    fn test_inject_css_links_font_preloads() {
+        let template = "<html><head></head><body></body></html>";
+        let css_links = vec![
+            "preload:/assets/Geist-abcd1234.woff2".to_string(),
+            "/assets/server/comp.css".to_string(),
+        ];
+        let result = RscHtmlRenderer::inject_css_links(template, &css_links);
+        assert!(result.contains(
+            r#"<link rel="preload" href="/assets/Geist-abcd1234.woff2" as="font" type="font/woff2" crossorigin>"#
+        ));
+        assert!(result.contains(r#"<link rel="stylesheet" href="/assets/server/comp.css">"#));
+        let preload_pos = result.find("rel=\"preload\"").expect("preload");
+        let style_pos = result.find("rel=\"stylesheet\"").expect("stylesheet");
+        assert!(preload_pos < style_pos);
+    }
+
+    #[test]
+    fn test_inject_css_links_preloads_before_existing_stylesheet() {
+        let template = r#"<html><head>
+<link rel="stylesheet" href="/existing.css">
+</head><body></body></html>"#;
+        let css_links = vec![
+            "preload:/assets/Geist-abcd1234.woff2".to_string(),
+            "/assets/server/comp.css".to_string(),
+        ];
+        let result = RscHtmlRenderer::inject_css_links(template, &css_links);
+        let preload_pos = result.find("rel=\"preload\"").expect("preload");
+        let existing_pos = result.find("/existing.css").expect("existing stylesheet");
+        let generated_pos = result.find("/assets/server/comp.css").expect("generated stylesheet");
+        assert!(preload_pos < existing_pos);
+        assert!(existing_pos < generated_pos);
+    }
+
+    #[test]
+    fn test_inject_css_links_no_head_preserves_preload_before_stylesheet() {
+        let template = "<html><body>hi</body></html>";
+        let css_links = vec![
+            "preload:/assets/Geist-abcd1234.woff2".to_string(),
+            "/assets/server/comp.css".to_string(),
+        ];
+        let result = RscHtmlRenderer::inject_css_links(template, &css_links);
+        let preload_pos = result.find("rel=\"preload\"").expect("preload");
+        let style_pos = result.find("rel=\"stylesheet\"").expect("stylesheet");
+        assert!(preload_pos < style_pos);
+        assert!(result.starts_with("<link rel=\"preload\""));
     }
 
     #[test]
