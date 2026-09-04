@@ -12,6 +12,7 @@ import {
   preloadLinksForFaces,
 } from '../../../packages/rari/src/vite/font/css'
 import {
+  assertGoogleFontAssetUrl,
   buildGoogleCssUrl,
   filterFacesBySubsets,
   fontPreloadMarker,
@@ -170,9 +171,13 @@ describe('google font loader helpers', () => {
     expect(css).toContain('unicode-range: U+0000-00FF, U+0131;')
   })
 
-  it('warns when preload is enabled without subsets', () => {
+  it('warns when preload is explicitly enabled without subsets', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     warnGoogleFontOptions('Inter', {})
+    expect(warn).not.toHaveBeenCalled()
+
+    warn.mockClear()
+    warnGoogleFontOptions('Inter', { preload: true })
     expect(warn).toHaveBeenCalledOnce()
     expect(warn.mock.calls[0]?.[0]).toContain('subsets')
 
@@ -184,6 +189,16 @@ describe('google font loader helpers', () => {
     warnGoogleFontOptions('Inter', { preload: false })
     expect(warn).not.toHaveBeenCalled()
     warn.mockRestore()
+  })
+
+  it('rejects non-allowlisted Google font asset URLs', () => {
+    expect(assertGoogleFontAssetUrl('https://fonts.gstatic.com/s/inter.woff2').hostname).toBe(
+      'fonts.gstatic.com',
+    )
+    expect(() => assertGoogleFontAssetUrl('http://fonts.gstatic.com/s/inter.woff2')).toThrow(
+      /HTTPS/,
+    )
+    expect(() => assertGoogleFontAssetUrl('https://evil.example/font.woff2')).toThrow(/allowlisted/)
   })
 
   it('warns on unknown subsets for a known Google family', () => {
@@ -282,6 +297,38 @@ import * as localFonts from 'rari/font/local'
     await expect(transformFontSource(code, importer, dir, 'assets')).rejects.toThrow(
       /Namespace and side-effect imports/,
     )
+  })
+
+  it('ignores font binding names inside comments and strings', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-font-'))
+    fs.writeFileSync(path.join(dir, 'Geist.woff2'), Buffer.from('comment-font'))
+    const importer = path.join(dir, 'app.tsx')
+    const code = `import localFont from 'rari/font/local'
+// localFont({ src: './missing.woff2' })
+const note = "localFont({ src: './missing.woff2' })"
+const geist = localFont({ src: './Geist.woff2', adjustFontFallback: false })
+`
+    const result = await transformFontSource(code, importer, dir, 'assets')
+    expect(result?.code).toContain("// localFont({ src: './missing.woff2' })")
+    expect(result?.code).toContain('"localFont({ src: \'./missing.woff2\' })"')
+    expect(result?.code).toContain('className:')
+    expect(result?.assets).toHaveLength(1)
+  })
+
+  it('transforms every matching local font import statement', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-font-'))
+    const importer = path.join(dir, 'app.tsx')
+    fs.writeFileSync(path.join(dir, 'a.woff2'), Buffer.from('a'))
+    fs.writeFileSync(path.join(dir, 'b.woff2'), Buffer.from('b'))
+    const code = `
+import localFont from 'rari/font/local'
+import anotherFont from 'rari/font/local'
+const a = localFont({ src: './a.woff2', adjustFontFallback: false })
+const b = anotherFont({ src: './b.woff2', adjustFontFallback: false })
+`
+    const result = await transformFontSource(code, importer, dir, 'assets')
+    expect(result?.code).not.toContain("from 'rari/font/local'")
+    expect(result?.assets).toHaveLength(2)
   })
 
   it('maps otf files to opentype format and font/otf preload type', () => {

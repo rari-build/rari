@@ -41,8 +41,68 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const googlePath = path.join(root, 'src/font/google.ts')
 const catalogPath = path.join(root, 'src/vite/font/google-catalog.ts')
 
+const TS_RESERVED = new Set([
+  'break',
+  'case',
+  'catch',
+  'class',
+  'const',
+  'continue',
+  'debugger',
+  'default',
+  'delete',
+  'do',
+  'else',
+  'enum',
+  'export',
+  'extends',
+  'false',
+  'finally',
+  'for',
+  'function',
+  'if',
+  'import',
+  'in',
+  'instanceof',
+  'new',
+  'null',
+  'return',
+  'super',
+  'switch',
+  'this',
+  'throw',
+  'true',
+  'try',
+  'typeof',
+  'var',
+  'void',
+  'while',
+  'with',
+  'yield',
+  'let',
+  'static',
+  'implements',
+  'interface',
+  'package',
+  'private',
+  'protected',
+  'public',
+  'await',
+  'async',
+  'of',
+  'as',
+  'from',
+  'type',
+])
+
 function toExportName(family: string): string {
-  return family.replaceAll(' ', '_')
+  const exportName = family.replaceAll(' ', '_')
+  if (!/^[a-z_$][\w$]*$/i.test(exportName) || TS_RESERVED.has(exportName)) {
+    throw new Error(
+      `Google font family ${JSON.stringify(family)} normalizes to invalid TypeScript export name ${JSON.stringify(exportName)}`,
+    )
+  }
+  return exportName
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -161,9 +221,24 @@ function emitOptionsType(family: NormalizedFamily): string[] {
   return lines
 }
 
-const response = await fetch(FONT_METADATA_URL, {
-  headers: { 'User-Agent': 'rari-update-google-fonts' },
-})
+const METADATA_FETCH_TIMEOUT_MS = 30_000
+
+let response: Response
+try {
+  response = await fetch(FONT_METADATA_URL, {
+    headers: { 'User-Agent': 'rari-update-google-fonts' },
+    signal: AbortSignal.timeout(METADATA_FETCH_TIMEOUT_MS),
+  })
+} catch (error) {
+  const timedOut =
+    error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')
+  if (timedOut) {
+    throw new Error(
+      `Timed out fetching Google font metadata from ${FONT_METADATA_URL} after ${METADATA_FETCH_TIMEOUT_MS}ms`,
+    )
+  }
+  throw error
+}
 if (!response.ok) {
   throw new Error(`Failed to fetch font metadata: ${response.status} ${response.statusText}`)
 }
@@ -176,6 +251,12 @@ if (!isGoogleFontsMetadata(raw)) {
 const byExport = new Map<string, NormalizedFamily>()
 for (const entry of raw.familyMetadataList) {
   const normalized = normalizeFamily(entry)
+  const existing = byExport.get(normalized.exportName)
+  if (existing != null && existing.family !== normalized.family) {
+    throw new Error(
+      `Duplicate Google font export name ${JSON.stringify(normalized.exportName)} for families ${JSON.stringify(existing.family)} and ${JSON.stringify(normalized.family)}`,
+    )
+  }
   byExport.set(normalized.exportName, normalized)
 }
 

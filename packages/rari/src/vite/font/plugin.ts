@@ -294,15 +294,16 @@ function parseImportBindings(
   moduleId: string,
 ): {
   names: Array<{ imported: string; local: string }>
-  defaultName: string | null
-  statement: string | null
+  defaultNames: string[]
+  statements: string[]
 } {
   const escaped = moduleId.replaceAll('/', '\\/')
-  const mixed = new RegExp(
+  const mixedRe = new RegExp(
     `import\\s+(\\w+)\\s*,\\s*\\{([^}]+)\\}\\s*from\\s*['"]${escaped}['"]`,
-  ).exec(code)
-  const named = new RegExp(`import\\s*\\{([^}]+)\\}\\s*from\\s*['"]${escaped}['"]`).exec(code)
-  const def = new RegExp(`import\\s+(\\w+)\\s*from\\s*['"]${escaped}['"]`).exec(code)
+    'g',
+  )
+  const namedRe = new RegExp(`import\\s*\\{([^}]+)\\}\\s*from\\s*['"]${escaped}['"]`, 'g')
+  const defRe = new RegExp(`import\\s+(\\w+)\\s*from\\s*['"]${escaped}['"]`, 'g')
 
   const parseNamed = (body: string) =>
     body
@@ -317,20 +318,31 @@ function parseImportBindings(
       })
       .filter(entry => entry.imported !== '' && entry.local !== '')
 
-  if (mixed != null) {
-    return {
-      names: parseNamed(mixed[2]),
-      defaultName: mixed[1],
-      statement: mixed[0],
-    }
+  const names: Array<{ imported: string; local: string }> = []
+  const defaultNames: string[] = []
+  const statements: string[] = []
+
+  for (const match of code.matchAll(mixedRe)) {
+    statements.push(match[0])
+    defaultNames.push(match[1])
+    names.push(...parseNamed(match[2]))
   }
-  if (named != null) {
-    return { names: parseNamed(named[1]), defaultName: null, statement: named[0] }
+  for (const match of code.matchAll(namedRe)) {
+    if (statements.includes(match[0])) continue
+    statements.push(match[0])
+    names.push(...parseNamed(match[1]))
   }
-  if (def != null) {
-    return { names: [], defaultName: def[1], statement: def[0] }
+  for (const match of code.matchAll(defRe)) {
+    if (statements.some(statement => statement.includes(match[0]))) continue
+    statements.push(match[0])
+    defaultNames.push(match[1])
   }
-  return { names: [], defaultName: null, statement: null }
+
+  return {
+    names: names.filter(entry => entry.imported !== ''),
+    defaultNames: defaultNames.filter(name => name !== ''),
+    statements,
+  }
 }
 
 function hasUnsupportedFontImport(code: string, moduleId: string): boolean {
@@ -352,13 +364,115 @@ function serializeFont(font: Font): string {
   return `{\n  className: ${JSON.stringify(font.className)},\n  style: { ${styleEntries.join(', ')} },\n${variableLine}}`
 }
 
+function isIdentStart(code: number): boolean {
+  return (
+    (code >= 65 && code <= 90) ||
+    (code >= 97 && code <= 122) ||
+    code === 36 ||
+    code === 95 ||
+    code >= 128
+  )
+}
+
+function isIdentPart(code: number): boolean {
+  return isIdentStart(code) || (code >= 48 && code <= 57)
+}
+
+function skipStringOrTemplate(code: string, start: number): number {
+  const quote = code.charCodeAt(start)
+  let i = start + 1
+  if (quote === 96) {
+    while (i < code.length) {
+      const ch = code.charCodeAt(i)
+      if (ch === 92) {
+        i += 2
+        continue
+      }
+      if (ch === 96) return i + 1
+      if (ch === 36 && code.charCodeAt(i + 1) === 123) {
+        i += 2
+        let depth = 1
+        while (i < code.length && depth > 0) {
+          const inner = code.charCodeAt(i)
+          if (inner === 34 || inner === 39 || inner === 96) {
+            i = skipStringOrTemplate(code, i)
+            continue
+          }
+          if (inner === 47 && code.charCodeAt(i + 1) === 47) {
+            const nl = code.indexOf('\n', i + 2)
+            i = nl === -1 ? code.length : nl + 1
+            continue
+          }
+          if (inner === 47 && code.charCodeAt(i + 1) === 42) {
+            const end = code.indexOf('*/', i + 2)
+            i = end === -1 ? code.length : end + 2
+            continue
+          }
+          if (inner === 123) depth += 1
+          else if (inner === 125) depth -= 1
+          i += 1
+        }
+        continue
+      }
+      i += 1
+    }
+    return i
+  }
+
+  while (i < code.length) {
+    const ch = code.charCodeAt(i)
+    if (ch === 92) {
+      i += 2
+      continue
+    }
+    if (ch === quote) return i + 1
+    i += 1
+  }
+  return i
+}
+
 function findCalls(code: string, localName: string): Array<{ start: number; openParen: number }> {
   const sites: Array<{ start: number; openParen: number }> = []
-  const re = new RegExp(`\\b${localName}\\s*\\(`, 'g')
-  let match = re.exec(code)
-  while (match != null) {
-    sites.push({ start: match.index, openParen: match.index + match[0].length - 1 })
-    match = re.exec(code)
+  let i = 0
+  while (i < code.length) {
+    const ch = code.charCodeAt(i)
+    if (ch === 47 && code.charCodeAt(i + 1) === 47) {
+      const nl = code.indexOf('\n', i + 2)
+      i = nl === -1 ? code.length : nl + 1
+      continue
+    }
+    if (ch === 47 && code.charCodeAt(i + 1) === 42) {
+      const end = code.indexOf('*/', i + 2)
+      i = end === -1 ? code.length : end + 2
+      continue
+    }
+    if (ch === 34 || ch === 39 || ch === 96) {
+      i = skipStringOrTemplate(code, i)
+      continue
+    }
+
+    if (isIdentStart(ch) && code.startsWith(localName, i)) {
+      const end = i + localName.length
+      const prev = i === 0 ? 0 : code.charCodeAt(i - 1)
+      if (
+        (i === 0 || !isIdentPart(prev)) &&
+        (end >= code.length || !isIdentPart(code.charCodeAt(end)))
+      ) {
+        let j = end
+        while (
+          j < code.length &&
+          (code[j] === ' ' || code[j] === '\t' || code[j] === '\n' || code[j] === '\r')
+        ) {
+          j += 1
+        }
+        if (code[j] === '(') {
+          sites.push({ start: i, openParen: j })
+          i = j + 1
+          continue
+        }
+      }
+    }
+    i += 1
   }
   return sites
 }
@@ -378,7 +492,7 @@ export async function transformFontSource(
       'rari/font only supports default imports from `rari/font/local` and named imports from `rari/font/google` (optionally with `as`). Namespace and side-effect imports are not supported.',
     )
   }
-  if (localImport.statement == null && googleImport.statement == null) return null
+  if (localImport.statements.length === 0 && googleImport.statements.length === 0) return null
 
   let nextCode = code
   const cssModules: Array<{ id: string; css: string }> = []
@@ -424,8 +538,8 @@ export async function transformFontSource(
     }
   }
 
-  if (localImport.defaultName != null) {
-    await replaceCall(localImport.defaultName, async optionsLiteral => {
+  for (const defaultName of localImport.defaultNames) {
+    await replaceCall(defaultName, async optionsLiteral => {
       if (optionsLiteral == null) throw new Error('rari/font/local: options object required')
       const options = asLocalOptions(optionsLiteral)
       const faces = resolveLocalFontFaces(options, importerDir, projectRoot)
@@ -447,8 +561,9 @@ export async function transformFontSource(
     })
   }
 
-  if (localImport.statement != null) nextCode = nextCode.replace(localImport.statement, '')
-  if (googleImport.statement != null) nextCode = nextCode.replace(googleImport.statement, '')
+  for (const statement of [...localImport.statements, ...googleImport.statements]) {
+    nextCode = nextCode.replace(statement, '')
+  }
 
   const cssImportBlock = [...cssImports].map(cssId => `import ${JSON.stringify(cssId)};`).join('\n')
   if (cssImportBlock !== '') nextCode = insertAfterModulePrologue(nextCode, cssImportBlock)
