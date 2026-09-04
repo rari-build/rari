@@ -46,6 +46,18 @@
       "types": "./dist/image.d.mts",
       "default": "./dist/image.mjs"
     },
+    "./font": {
+      "types": "./dist/font.d.mts",
+      "default": "./dist/font.mjs"
+    },
+    "./font/local": {
+      "types": "./dist/font/local.d.mts",
+      "default": "./dist/font/local.mjs"
+    },
+    "./font/google": {
+      "types": "./dist/font/google.d.mts",
+      "default": "./dist/font/google.mjs"
+    },
     "./mdx": {
       "types": "./dist/mdx.d.mts",
       "default": "./dist/mdx.mjs"
@@ -138,7 +150,8 @@
     "clean": "node --eval \"import('node:fs').then(fs => fs.rmSync('dist', { recursive: true, force: true }))\"",
     "lint": "vp lint",
     "lint:fix": "vp lint --fix",
-    "typecheck": "tsc"
+    "typecheck": "tsc",
+    "update-google-fonts": "node ./scripts/update-google-fonts.ts"
   },
   "peerDependencies": {
     "@mdx-js/mdx": "catalog:mdx",
@@ -155,6 +168,8 @@
     }
   },
   "dependencies": {
+    "@capsizecss/metrics": "catalog:",
+    "@capsizecss/unpack": "catalog:",
     "lightningcss": "catalog:build",
     "react-server-dom-webpack": "catalog:react",
     "rolldown": "catalog:build"

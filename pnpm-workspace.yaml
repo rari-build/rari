@@ -39,6 +39,8 @@ catalogs:
   cli:
     '@clack/prompts': ^1.7.0
   default:
+    '@capsizecss/metrics': ^4.2.0
+    '@capsizecss/unpack': ^4.0.1
     rari: ^0.15.17
   eslint:
     '@e18e/eslint-plugin': ^0.8.0

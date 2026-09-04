@@ -134,6 +134,12 @@ catalogs:
       specifier: ^1.7.0
       version: 1.7.0
   default:
+    '@capsizecss/metrics':
+      specifier: ^4.2.0
+      version: 4.2.0
+    '@capsizecss/unpack':
+      specifier: ^4.0.1
+      version: 4.0.1
     rari:
       specifier: ^0.15.17
       version: 0.15.17
@@ -464,6 +470,12 @@ importers:
 
   packages/rari:
     dependencies:
+      '@capsizecss/metrics':
+        specifier: 'catalog:'
+        version: 4.2.0
+      '@capsizecss/unpack':
+        specifier: 'catalog:'
+        version: 4.0.1
       lightningcss:
         specifier: catalog:build
         version: 1.33.0
@@ -727,6 +739,13 @@ packages:
 
   '@braintree/sanitize-url@7.1.2':
     resolution: {integrity: sha512-jigsZK+sMF/cuiB7sERuo9V7N9jx+dhmHHnQyDSVdpZwVutaBu7WvNYqMDLSgFgfB30n452TP3vjDAvFC973mA==}
+
+  '@capsizecss/metrics@4.2.0':
+    resolution: {integrity: sha512-BkLX2NonSAVuHrStmxlRG/PVUxq4uQWeQGPY/G/4pi7GRQt/4A+7RzMWR8m85+0Tv7BsuBpR7JoniMS9QwuVRw==}
+
+  '@capsizecss/unpack@4.0.1':
+    resolution: {integrity: sha512-CuNiSqg7+e1cO/GjffyMOm5Tt2jUF9CWHHnvQ/UkqvtkGfHdgwEC0wpmq7fkN3gxwpRnrAN0WzO3vREKmNolMQ==}
+    engines: {node: '>=18'}
 
   '@chevrotain/types@11.1.2':
     resolution: {integrity: sha512-U+HFai5+zmJCkK86QsaJtoITlboZHBqrVketcO2ROv865xfCMSFpELQoz1GkX5GzME8pTa+3kbKrZHQtI0gdbw==}
@@ -3901,6 +3920,10 @@ packages:
   flatted@3.4.4:
     resolution: {integrity: sha512-5+ybhBZANEJxaH3X5evAFatUxLfEHSr7n6kYJ+1Qd0mUqr4eu9gIf6GDbWHf8RJijHrjjO8G+la14SlL2SeS1Q==}
 
+  fontkitten@1.0.3:
+    resolution: {integrity: sha512-Wp1zXWPVUPBmfoa3Cqc9ctaKuzKAV6uLstRqlR56kSjplf5uAce+qeyYym7F+PHbGTk+tCEdkCW6RD7DX/gBZw==}
+    engines: {node: '>=20'}
+
   formatly@0.7.0:
     resolution: {integrity: sha512-7CXJtIIA0zy/u12StsYk25qVKxvdLA2ep2sTNxK3ov0mGNIIDqIvAXDSgTnAfDJFsPfWjuz0WjfYSdpvnLA5Tg==}
     engines: {node: '>=18.3.0'}
@@ -4937,6 +4960,9 @@ packages:
     engines: {node: '>=10'}
     hasBin: true
 
+  tiny-inflate@1.0.3:
+    resolution: {integrity: sha512-pkY1fj1cKHb2seWDy0B16HeWyczlJA9/WW3u3c4z/NiWDsO3DOU5D7nhTLE9CF0yXv/QZFY7sEJmj24dK+Rrqw==}
+
   tinybench@2.9.0:
     resolution: {integrity: sha512-0+DUvqWMValLmha6lr4kD8iAMK1HzV0/aKnCtWb9v9641TnP/MFb7Pc2bxoxQjTXAErryXVgUOfv2YqNllqGeg==}
 
@@ -5262,6 +5288,12 @@ snapshots:
   '@blazediff/core@1.9.1': {}
 
   '@braintree/sanitize-url@7.1.2': {}
+
+  '@capsizecss/metrics@4.2.0': {}
+
+  '@capsizecss/unpack@4.0.1':
+    dependencies:
+      fontkitten: 1.0.3
 
   '@chevrotain/types@11.1.2': {}
 
@@ -7987,6 +8019,10 @@ snapshots:
 
   flatted@3.4.4: {}
 
+  fontkitten@1.0.3:
+    dependencies:
+      tiny-inflate: 1.0.3
+
   formatly@0.7.0:
     dependencies:
       fd-package-json: 2.0.0
@@ -9406,6 +9442,8 @@ snapshots:
       acorn: 8.18.0
       commander: 2.20.3
       source-map-support: 0.5.21
+
+  tiny-inflate@1.0.3: {}
 
   tinybench@2.9.0: {}
 
