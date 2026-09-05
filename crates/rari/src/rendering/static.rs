@@ -264,9 +264,110 @@ impl RscHtmlRenderer {
         css_links
     }
 
+    fn mask_html_comments(template: &str) -> String {
+        let mut out = template.as_bytes().to_vec();
+        let mut i = 0;
+        while i < out.len() {
+            if out[i..].starts_with(b"<!--") {
+                let start = i;
+                i += 4;
+                let mut closed = false;
+                while i + 2 < out.len() {
+                    if &out[i..i + 3] == b"-->" {
+                        i += 3;
+                        closed = true;
+                        break;
+                    }
+                    i += 1;
+                }
+                let end = if closed { i } else { out.len() };
+                for byte in &mut out[start..end] {
+                    if *byte != b'\n' && *byte != b'\r' {
+                        *byte = b' ';
+                    }
+                }
+                if !closed {
+                    break;
+                }
+                continue;
+            }
+            i += 1;
+        }
+        String::from_utf8(out)
+            .unwrap_or_else(|err| String::from_utf8_lossy(err.as_bytes()).into_owned())
+    }
+
+    fn decode_basic_html_entities(value: &str) -> String {
+        value
+            .cow_replace("&quot;", "\"")
+            .cow_replace("&#39;", "'")
+            .cow_replace("&lt;", "<")
+            .cow_replace("&gt;", ">")
+            .cow_replace("&amp;", "&")
+            .into_owned()
+    }
+
+    fn html_attr_value(tag: &str, name: &str) -> Option<String> {
+        let lower = tag.to_ascii_lowercase();
+        let name = name.to_ascii_lowercase();
+        let mut search_at = 0;
+        while let Some(rel) = lower[search_at..].find(&name) {
+            let start = search_at + rel;
+            let before_ok = start == 0 || {
+                let before = lower.as_bytes()[start - 1];
+                !before.is_ascii_alphanumeric()
+                    && before != b'-'
+                    && before != b'_'
+                    && before != b':'
+            };
+            if !before_ok {
+                search_at = start + 1;
+                continue;
+            }
+
+            let mut pos = start + name.len();
+            while pos < tag.len() && tag.as_bytes()[pos].is_ascii_whitespace() {
+                pos += 1;
+            }
+            if pos >= tag.len() || tag.as_bytes()[pos] != b'=' {
+                search_at = start + 1;
+                continue;
+            }
+            pos += 1;
+            while pos < tag.len() && tag.as_bytes()[pos].is_ascii_whitespace() {
+                pos += 1;
+            }
+            if pos >= tag.len() {
+                return None;
+            }
+
+            let bytes = tag.as_bytes();
+            let quote = bytes[pos];
+            if quote == b'"' || quote == b'\'' {
+                let value_start = pos + 1;
+                let quote_char = quote as char;
+                let end = tag[value_start..].find(quote_char)?;
+                return Some(Self::decode_basic_html_entities(
+                    &tag[value_start..value_start + end],
+                ));
+            }
+
+            let value_start = pos;
+            let value_end = tag[value_start..]
+                .find(|c: char| c.is_ascii_whitespace() || c == '>' || c == '/')
+                .map_or(tag.len(), |offset| value_start + offset);
+            return Some(Self::decode_basic_html_entities(&tag[value_start..value_end]));
+        }
+        None
+    }
+
     fn template_has_href(template: &str, href: &str) -> bool {
-        template.contains(&format!(r#"href="{href}""#))
-            || template.contains(&format!("href='{href}'"))
+        let searchable = Self::mask_html_comments(template);
+        #[expect(clippy::unwrap_used, reason = "Hardcoded regex pattern is guaranteed to be valid")]
+        let link_regex = Regex::new(r"(?i)<link\b[^>]*/?>").unwrap();
+        link_regex
+            .find_iter(&searchable)
+            .any(|mat| Self::html_attr_value(mat.as_str(), "href").as_deref() == Some(href))
     }
 
     pub(crate) fn inject_css_links(template: &str, css_links: &[String]) -> String {
@@ -339,7 +440,8 @@ impl RscHtmlRenderer {
     }
 
     fn first_stylesheet_link_offset(template: &str) -> Option<usize> {
-        let lower = template.to_ascii_lowercase();
+        let searchable = Self::mask_html_comments(template);
+        let lower = searchable.to_ascii_lowercase();
         let mut search_from = 0;
         while let Some(rel) = lower[search_from..].find("<link") {
             let start = search_from + rel;
@@ -644,6 +746,28 @@ mod tests {
         assert!(result.contains(r#"<link rel="stylesheet" href="/styles/app.css">"#));
         assert_eq!(result.matches("/assets/Geist-abcd1234.woff2").count(), 2);
         assert_eq!(result.matches("/styles/app.css").count(), 2);
+    }
+
+    #[test]
+    fn test_inject_css_links_ignores_anchor_and_commented_link_hrefs() {
+        let template = r#"<html><head>
+<!-- <link rel="stylesheet" href="/styles/app.css"> -->
+<!-- <link rel="preload" href="/assets/Geist-abcd1234.woff2" as="font"> -->
+</head>
+<body><a href="/styles/app.css">docs</a>
+<a href="/assets/Geist-abcd1234.woff2">font</a>
+</body></html>"#;
+        let css_links =
+            vec!["preload:/assets/Geist-abcd1234.woff2".to_string(), "/styles/app.css".to_string()];
+
+        let result = RscHtmlRenderer::inject_css_links(template, &css_links);
+        assert!(result.contains(
+            r#"<link rel="preload" href="/assets/Geist-abcd1234.woff2" as="font" type="font/woff2" crossorigin>"#
+        ));
+        assert!(result.contains(r#"<link rel="stylesheet" href="/styles/app.css">"#));
+        assert!(result.contains(r#"<a href="/styles/app.css">docs</a>"#));
+        assert!(result.contains(r#"<a href="/assets/Geist-abcd1234.woff2">font</a>"#));
+        assert!(result.contains("<!-- <link rel=\"stylesheet\" href=\"/styles/app.css\"> -->"));
     }
 
     #[test]

@@ -20,7 +20,12 @@ import {
 } from './google-loader'
 import { classNameFromHash, contentHash, hashedFontFileName, publicFontUrl } from './hash'
 import { resolveLocalFontFaces } from './local-resolve'
-import { categoryFallback, computeFallbackOverrides, loadMetricsForFamily } from './metrics'
+import {
+  categoryFallback,
+  computeFallbackOverrides,
+  cssGenericFromCategory,
+  loadMetricsForFamily,
+} from './metrics'
 import { extractObjectLiteral } from './parse-options'
 
 const LOCAL_ID = 'rari/font/local'
@@ -213,13 +218,13 @@ async function prepareFaces(
     primary.variable != null ? classNameFromHash('rari_font_var', idHash) : null
 
   let overrides = null
+  let metrics = await loadMetricsForFamily(family)
   if (primary.adjustFontFallback !== false) {
     let fallbackName: FallbackFontName | null =
       primary.adjustFontFallback === 'Arial' || primary.adjustFontFallback === 'Times New Roman'
         ? primary.adjustFontFallback
         : null
 
-    let metrics = await loadMetricsForFamily(family)
     if (metrics == null) {
       try {
         const unpacked = await fromBuffer(fs.readFileSync(primary.filePaths[0]))
@@ -258,7 +263,12 @@ async function prepareFaces(
       `}\n`
   }
 
-  const stack = buildFontFamilyStack(family, primary.fallback, overrides != null)
+  const stack = buildFontFamilyStack(
+    family,
+    primary.fallback,
+    overrides != null,
+    cssGenericFromCategory(metrics?.category),
+  )
   css += `.${className} {\n  font-family: ${stack};\n}\n`
   if (primary.variable != null && variableClassName != null) {
     css += `.${variableClassName} {\n  ${primary.variable}: ${stack};\n}\n`

@@ -106,3 +106,23 @@ export async function loadMetricsForFamily(familyName: string): Promise<FontMetr
 export function categoryFallback(category: string | undefined): FallbackFontName {
   return category === 'serif' ? 'Times New Roman' : 'Arial'
 }
+
+export type CssFontGeneric = 'serif' | 'sans-serif' | 'monospace'
+
+const CSS_FONT_GENERICS = new Set<string>([
+  'serif',
+  'sans-serif',
+  'monospace',
+  'cursive',
+  'fantasy',
+])
+
+export function cssGenericFromCategory(category: string | undefined): CssFontGeneric {
+  if (category === 'serif') return 'serif'
+  if (category === 'monospace') return 'monospace'
+  return 'sans-serif'
+}
+
+export function fallbackIncludesCssGeneric(fallback: readonly string[] | undefined): boolean {
+  return (fallback ?? []).some(name => CSS_FONT_GENERICS.has(name))
+}
