@@ -366,56 +366,75 @@ impl RscHtmlRenderer {
     }
 
     fn html_attr_value(tag: &str, name: &str) -> Option<String> {
-        let lower = tag.to_ascii_lowercase();
-        let name = name.to_ascii_lowercase();
-        let mut search_at = 0;
-        while let Some(rel) = lower[search_at..].find(&name) {
-            let start = search_at + rel;
-            let before_ok = start == 0 || {
-                let before = lower.as_bytes()[start - 1];
-                !before.is_ascii_alphanumeric()
-                    && before != b'-'
-                    && before != b'_'
-                    && before != b':'
-            };
-            if !before_ok {
-                search_at = start + 1;
-                continue;
-            }
+        let bytes = tag.as_bytes();
+        let want = name.to_ascii_lowercase();
+        let mut i = 0;
 
-            let mut pos = start + name.len();
-            while pos < tag.len() && tag.as_bytes()[pos].is_ascii_whitespace() {
-                pos += 1;
-            }
-            if pos >= tag.len() || tag.as_bytes()[pos] != b'=' {
-                search_at = start + 1;
-                continue;
-            }
-            pos += 1;
-            while pos < tag.len() && tag.as_bytes()[pos].is_ascii_whitespace() {
-                pos += 1;
-            }
-            if pos >= tag.len() {
-                return None;
-            }
-
-            let bytes = tag.as_bytes();
-            let quote = bytes[pos];
-            if quote == b'"' || quote == b'\'' {
-                let value_start = pos + 1;
-                let quote_char = quote as char;
-                let end = tag[value_start..].find(quote_char)?;
-                return Some(Self::decode_basic_html_entities(
-                    &tag[value_start..value_start + end],
-                ));
-            }
-
-            let value_start = pos;
-            let value_end = tag[value_start..]
-                .find(|c: char| c.is_ascii_whitespace() || c == '>' || c == '/')
-                .map_or(tag.len(), |offset| value_start + offset);
-            return Some(Self::decode_basic_html_entities(&tag[value_start..value_end]));
+        while i < bytes.len() && !bytes[i].is_ascii_whitespace() && bytes[i] != b'>' {
+            i += 1;
         }
+
+        while i < bytes.len() {
+            while i < bytes.len() && (bytes[i].is_ascii_whitespace() || bytes[i] == b'/') {
+                i += 1;
+            }
+            if i >= bytes.len() || bytes[i] == b'>' {
+                break;
+            }
+
+            let name_start = i;
+            while i < bytes.len()
+                && !bytes[i].is_ascii_whitespace()
+                && bytes[i] != b'='
+                && bytes[i] != b'>'
+                && bytes[i] != b'/'
+            {
+                i += 1;
+            }
+            let attr_name = tag[name_start..i].to_ascii_lowercase();
+
+            while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+                i += 1;
+            }
+
+            if i < bytes.len() && bytes[i] == b'=' {
+                i += 1;
+                while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+                    i += 1;
+                }
+
+                let value = if i < bytes.len() && (bytes[i] == b'"' || bytes[i] == b'\'') {
+                    let quote = bytes[i];
+                    i += 1;
+                    let value_start = i;
+                    while i < bytes.len() && bytes[i] != quote {
+                        i += 1;
+                    }
+                    let raw = &tag[value_start..i];
+                    if i < bytes.len() {
+                        i += 1;
+                    }
+                    Self::decode_basic_html_entities(raw)
+                } else {
+                    let value_start = i;
+                    while i < bytes.len()
+                        && !bytes[i].is_ascii_whitespace()
+                        && bytes[i] != b'>'
+                        && bytes[i] != b'/'
+                    {
+                        i += 1;
+                    }
+                    Self::decode_basic_html_entities(&tag[value_start..i])
+                };
+
+                if attr_name == want {
+                    return Some(value);
+                }
+            } else if attr_name == want {
+                return Some(String::new());
+            }
+        }
+
         None
     }
 
@@ -845,6 +864,24 @@ mod tests {
         assert!(
             result.contains(r#"const hint = '<link rel="stylesheet" href="/styles/app.css">';"#)
         );
+    }
+
+    #[test]
+    fn test_inject_css_links_ignores_href_text_inside_other_attributes() {
+        let template = r#"<html><head>
+<link rel="preload" as="font" data-note="see href='/assets/Geist-abcd1234.woff2'" crossorigin>
+<link data-doc="href='/styles/app.css'" rel="icon" href="/favicon.ico">
+</head><body></body></html>"#;
+        let css_links =
+            vec!["preload:/assets/Geist-abcd1234.woff2".to_string(), "/styles/app.css".to_string()];
+
+        let result = RscHtmlRenderer::inject_css_links(template, &css_links);
+        assert!(result.contains(
+            r#"<link rel="preload" href="/assets/Geist-abcd1234.woff2" as="font" type="font/woff2" crossorigin>"#
+        ));
+        assert!(result.contains(r#"<link rel="stylesheet" href="/styles/app.css">"#));
+        assert!(result.contains(r#"data-note="see href='/assets/Geist-abcd1234.woff2'""#));
+        assert!(result.contains(r#"data-doc="href='/styles/app.css'""#));
     }
 
     #[test]
