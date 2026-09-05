@@ -422,7 +422,6 @@ impl RscHtmlRenderer {
                         && bytes[i] != b'>'
                         && bytes[i] != b'"'
                         && bytes[i] != b'\''
-                        && bytes[i] != b'='
                         && bytes[i] != b'<'
                     {
                         i += 1;
@@ -957,6 +956,19 @@ mod tests {
         let preload_pos = result.find("rel=\"preload\"").expect("preload");
         let existing_pos = result.find("href=/existing.css").expect("existing stylesheet");
         assert!(preload_pos < existing_pos);
+    }
+
+    #[test]
+    fn test_inject_css_links_dedupes_unquoted_href_with_query_string() {
+        let template = r#"<html><head>
+<link rel="stylesheet" href=/styles/app.css?v=42>
+</head><body></body></html>"#;
+        let css_links = vec!["/styles/app.css?v=42".to_string()];
+
+        let result = RscHtmlRenderer::inject_css_links(template, &css_links);
+        assert_eq!(result.matches("href=/styles/app.css?v=42").count(), 1);
+        assert_eq!(result.matches(r#"href="/styles/app.css?v=42""#).count(), 0);
+        assert!(!result.contains(r#"rel="stylesheet" href="/styles/app.css?v=42""#));
     }
 
     #[test]
