@@ -264,6 +264,11 @@ impl RscHtmlRenderer {
         css_links
     }
 
+    fn template_has_href(template: &str, href: &str) -> bool {
+        template.contains(&format!(r#"href="{href}""#))
+            || template.contains(&format!("href='{href}'"))
+    }
+
     pub(crate) fn inject_css_links(template: &str, css_links: &[String]) -> String {
         if css_links.is_empty() {
             return template.to_string();
@@ -274,7 +279,7 @@ impl RscHtmlRenderer {
 
         for href in css_links {
             if let Some(font_url) = href.strip_prefix("preload:") {
-                if template.contains(font_url) {
+                if Self::template_has_href(template, font_url) {
                     continue;
                 }
                 let type_attr = if font_url.ends_with(".woff") {
@@ -291,7 +296,7 @@ impl RscHtmlRenderer {
                     Self::escape_html_attribute(font_url),
                     type_attr
                 ));
-            } else if !template.contains(href.as_str()) {
+            } else if !Self::template_has_href(template, href) {
                 stylesheet_links.push(format!(
                     r#"<link rel="stylesheet" href="{}">"#,
                     Self::escape_html_attribute(href)
@@ -623,6 +628,22 @@ mod tests {
         let result = RscHtmlRenderer::inject_css_links(template, &css_links);
         assert_eq!(result.matches("/styles/app.css").count(), 1);
         assert!(result.contains("/styles/new.css"));
+    }
+
+    #[test]
+    fn test_inject_css_links_ignores_href_text_outside_attributes() {
+        let template = r#"<html><head><!-- Using font: /assets/Geist-abcd1234.woff2 --></head>
+<body>See /styles/app.css in the docs</body></html>"#;
+        let css_links =
+            vec!["preload:/assets/Geist-abcd1234.woff2".to_string(), "/styles/app.css".to_string()];
+
+        let result = RscHtmlRenderer::inject_css_links(template, &css_links);
+        assert!(result.contains(
+            r#"<link rel="preload" href="/assets/Geist-abcd1234.woff2" as="font" type="font/woff2" crossorigin>"#
+        ));
+        assert!(result.contains(r#"<link rel="stylesheet" href="/styles/app.css">"#));
+        assert_eq!(result.matches("/assets/Geist-abcd1234.woff2").count(), 2);
+        assert_eq!(result.matches("/styles/app.css").count(), 2);
     }
 
     #[test]
