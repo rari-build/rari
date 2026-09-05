@@ -734,8 +734,8 @@ mod tests {
 
     #[test]
     fn test_inject_css_links_ignores_href_text_outside_attributes() {
-        let template = r#"<html><head><!-- Using font: /assets/Geist-abcd1234.woff2 --></head>
-<body>See /styles/app.css in the docs</body></html>"#;
+        let template = r"<html><head><!-- Using font: /assets/Geist-abcd1234.woff2 --></head>
+<body>See /styles/app.css in the docs</body></html>";
         let css_links =
             vec!["preload:/assets/Geist-abcd1234.woff2".to_string(), "/styles/app.css".to_string()];
 
