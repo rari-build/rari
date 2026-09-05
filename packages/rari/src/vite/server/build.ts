@@ -47,6 +47,7 @@ import {
   resolveModuleCachePath,
 } from '../analysis/module-cache'
 import { collectSourceFilePaths, normalizeScanDirs } from '../analysis/source-walker'
+import { createFontRolldownPlugin } from '../font/plugin'
 import {
   createStaticImageRolldownPlugin,
   finalizeStaticImageSourceMapBuild,
@@ -192,6 +193,7 @@ async function getLightningcssTransform() {
 interface BuiltComponent {
   code: string
   css: string[]
+  fontPreloads: string[]
 }
 
 interface ServerComponentManifest {
@@ -852,6 +854,7 @@ export class ServerComponentBuilder {
     inputPath: string,
     isPage = false,
     cssModules?: string[],
+    fontPreloads?: string[],
   ) {
     const resolveDir = path.dirname(inputPath)
     const isProxyFile = PROXY_FILE_REGEX.test(path.basename(inputPath))
@@ -865,6 +868,13 @@ export class ServerComponentBuilder {
         this.options.assetsDir,
         this.options.alias,
         this.options.outDir,
+      ),
+      createFontRolldownPlugin(
+        this.projectRoot,
+        this.options.assetsDir,
+        this.options.outDir,
+        cssModules,
+        fontPreloads,
       ),
       {
         name: 'virtual-module',
@@ -1207,6 +1217,9 @@ export class ServerComponentBuilder {
             'react/jsx-runtime',
             'react/jsx-dev-runtime',
             'rari/image',
+            'rari/font',
+            'rari/font/local',
+            'rari/font/google',
           ]
 
           if (externalPackages.includes(source)) return { id: source, external: true }
@@ -1388,7 +1401,10 @@ export class ServerComponentBuilder {
               await fs.promises.mkdir(bundleDir, { recursive: true })
 
               const built = await this.buildSingleComponent(filePath, fullBundlePath)
-              const css = await this.writeComponentCssAsset(componentId, built.css)
+              const css = [
+                ...(await this.writeComponentCssAsset(componentId, built.css)),
+                ...built.fontPreloads,
+              ]
 
               const moduleSpecifier = pathToFileURL(
                 path.resolve(this.projectRoot, fullBundlePath),
@@ -1852,6 +1868,7 @@ export class ServerComponentBuilder {
           this.options.alias,
           this.options.outDir,
         ),
+        createFontRolldownPlugin(projectRoot, this.options.assetsDir, this.options.outDir),
         {
           name: 'ssr-client-virtual',
           resolveId(id) {
@@ -1962,6 +1979,7 @@ export class ServerComponentBuilder {
 
     const virtualModuleId = `\0virtual:${inputPath}`
     const cssModules: string[] = []
+    const fontPreloads: string[] = []
 
     const result = await build({
       input: virtualModuleId,
@@ -2005,6 +2023,7 @@ export class ServerComponentBuilder {
         inputPath,
         isPage,
         cssModules,
+        fontPreloads,
       ),
     })
 
@@ -2024,7 +2043,7 @@ export class ServerComponentBuilder {
     await fd.sync()
     await fd.close()
 
-    return { code, css: cssModules }
+    return { code, css: cssModules, fontPreloads }
   }
 
   private transformClientImports(code: string, inputPath: string): string {
@@ -2195,7 +2214,10 @@ export class ServerComponentBuilder {
     await fs.promises.mkdir(bundleDir, { recursive: true })
 
     const built = await this.buildSingleComponent(filePath, fullBundlePath)
-    const css = await this.writeComponentCssAsset(componentId, built.css)
+    const css = [
+      ...(await this.writeComponentCssAsset(componentId, built.css)),
+      ...built.fontPreloads,
+    ]
 
     const storedComponent = this.serverActions.get(filePath) ?? this.serverComponents.get(filePath)
     this.buildCache.set(filePath, {

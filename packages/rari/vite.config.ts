@@ -19,6 +19,9 @@ export default defineConfig({
       'cli': 'src/cli/index.ts',
       'platform': 'src/cli/platform.ts',
       'image': 'src/image/index.ts',
+      'font': 'src/font/index.ts',
+      'font/local': 'src/font/local.ts',
+      'font/google': 'src/font/google.ts',
       'og': 'src/og/index.ts',
       'mdx': 'src/mdx/index.ts',
       'mdx/define': 'src/mdx/define.ts',
@@ -47,6 +50,8 @@ export default defineConfig({
       neverBundle: [
         '@mdx-js/mdx',
         'lightningcss',
+        '@capsizecss/metrics',
+        '@capsizecss/unpack',
         'react',
         'react/compiler-runtime',
         'react-dom',

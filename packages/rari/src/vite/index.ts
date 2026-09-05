@@ -55,6 +55,7 @@ import {
   resolveModuleCachePath,
 } from './analysis/module-cache'
 import { normalizeScanDirs } from './analysis/source-walker'
+import { createFontPlugin } from './font/plugin'
 import { HMRCoordinator } from './hmr/coordinator'
 import { walkImporters } from './hmr/import-graph'
 import { createStaticImagePlugin } from './image/static-import'
@@ -2343,7 +2344,13 @@ export const createTemporaryReferenceSet = module.exports.createTemporaryReferen
   if (options.compiler != null && options.compiler !== false)
     plugins.push(createReactCompilerPlugin(options.compiler))
 
-  plugins.push(mainPlugin, createStaticImagePlugin(), webpackRequirePatchPlugin, serverBuildPlugin)
+  plugins.push(
+    mainPlugin,
+    createStaticImagePlugin(),
+    createFontPlugin(),
+    webpackRequirePatchPlugin,
+    serverBuildPlugin,
+  )
 
   if (options.proxy !== false) plugins.push(rariProxy(options.proxy ?? {}))
 

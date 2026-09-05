@@ -8,5 +8,5 @@
       "rari/mdx/define": ["./src/mdx/define.ts"]
     }
   },
-  "include": ["src"]
+  "include": ["scripts", "src"]
 }
