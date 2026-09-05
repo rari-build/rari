@@ -264,8 +264,15 @@ impl RscHtmlRenderer {
         css_links
     }
 
-    fn mask_html_comments(template: &str) -> String {
-        let mut out = template.as_bytes().to_vec();
+    fn mask_byte_range_preserve_newlines(out: &mut [u8], start: usize, end: usize) {
+        for byte in &mut out[start..end] {
+            if *byte != b'\n' && *byte != b'\r' {
+                *byte = b' ';
+            }
+        }
+    }
+
+    fn mask_html_comments_in_place(out: &mut [u8]) {
         let mut i = 0;
         while i < out.len() {
             if out[i..].starts_with(b"<!--") {
@@ -281,11 +288,7 @@ impl RscHtmlRenderer {
                     i += 1;
                 }
                 let end = if closed { i } else { out.len() };
-                for byte in &mut out[start..end] {
-                    if *byte != b'\n' && *byte != b'\r' {
-                        *byte = b' ';
-                    }
-                }
+                Self::mask_byte_range_preserve_newlines(out, start, end);
                 if !closed {
                     break;
                 }
@@ -293,6 +296,61 @@ impl RscHtmlRenderer {
             }
             i += 1;
         }
+    }
+
+    fn find_ascii_tag_ci(haystack: &[u8], from: usize, open: &[u8]) -> Option<usize> {
+        let mut i = from;
+        while i + open.len() <= haystack.len() {
+            if haystack[i..i + open.len()].eq_ignore_ascii_case(open) {
+                let after = i + open.len();
+                let boundary_ok = after >= haystack.len()
+                    || matches!(haystack[after], b'>' | b'/' | b' ' | b'\t' | b'\n' | b'\r');
+                if boundary_ok {
+                    return Some(i);
+                }
+            }
+            i += 1;
+        }
+        None
+    }
+
+    fn mask_raw_text_element_in_place(out: &mut [u8], open: &[u8], close: &[u8]) {
+        let mut i = 0;
+        while let Some(start) = Self::find_ascii_tag_ci(out, i, open) {
+            let Some(open_end_rel) = out[start..].iter().position(|&b| b == b'>') else {
+                break;
+            };
+            let open_end = start + open_end_rel + 1;
+            let self_closing = open_end >= 2 && out[open_end - 2] == b'/';
+            if self_closing {
+                i = open_end;
+                continue;
+            }
+
+            let mut close_at = None;
+            let mut search = open_end;
+            while search + close.len() <= out.len() {
+                if out[search..search + close.len()].eq_ignore_ascii_case(close) {
+                    close_at = Some(search);
+                    break;
+                }
+                search += 1;
+            }
+
+            let end = close_at.map_or(out.len(), |pos| pos + close.len());
+            Self::mask_byte_range_preserve_newlines(out, start, end);
+            if close_at.is_none() {
+                break;
+            }
+            i = end;
+        }
+    }
+
+    fn mask_html_for_link_scan(template: &str) -> String {
+        let mut out = template.as_bytes().to_vec();
+        Self::mask_html_comments_in_place(&mut out);
+        Self::mask_raw_text_element_in_place(&mut out, b"<script", b"</script>");
+        Self::mask_raw_text_element_in_place(&mut out, b"<style", b"</style>");
         String::from_utf8(out)
             .unwrap_or_else(|err| String::from_utf8_lossy(err.as_bytes()).into_owned())
     }
@@ -362,7 +420,7 @@ impl RscHtmlRenderer {
     }
 
     fn template_has_href(template: &str, href: &str) -> bool {
-        let searchable = Self::mask_html_comments(template);
+        let searchable = Self::mask_html_for_link_scan(template);
         #[expect(clippy::unwrap_used, reason = "Hardcoded regex pattern is guaranteed to be valid")]
         let link_regex = Regex::new(r"(?i)<link\b[^>]*/?>").unwrap();
         link_regex
@@ -440,7 +498,7 @@ impl RscHtmlRenderer {
     }
 
     fn first_stylesheet_link_offset(template: &str) -> Option<usize> {
-        let searchable = Self::mask_html_comments(template);
+        let searchable = Self::mask_html_for_link_scan(template);
         let lower = searchable.to_ascii_lowercase();
         let mut search_from = 0;
         while let Some(rel) = lower[search_from..].find("<link") {
@@ -768,6 +826,25 @@ mod tests {
         assert!(result.contains(r#"<a href="/styles/app.css">docs</a>"#));
         assert!(result.contains(r#"<a href="/assets/Geist-abcd1234.woff2">font</a>"#));
         assert!(result.contains("<!-- <link rel=\"stylesheet\" href=\"/styles/app.css\"> -->"));
+    }
+
+    #[test]
+    fn test_inject_css_links_ignores_link_text_inside_script_and_style() {
+        let template = r#"<html><head>
+<script>const hint = '<link rel="stylesheet" href="/styles/app.css">';</script>
+<style>/* <link rel="preload" href="/assets/Geist-abcd1234.woff2" as="font"> */</style>
+</head><body></body></html>"#;
+        let css_links =
+            vec!["preload:/assets/Geist-abcd1234.woff2".to_string(), "/styles/app.css".to_string()];
+
+        let result = RscHtmlRenderer::inject_css_links(template, &css_links);
+        assert!(result.contains(
+            r#"<link rel="preload" href="/assets/Geist-abcd1234.woff2" as="font" type="font/woff2" crossorigin>"#
+        ));
+        assert!(result.contains(r#"<link rel="stylesheet" href="/styles/app.css">"#));
+        assert!(
+            result.contains(r#"const hint = '<link rel="stylesheet" href="/styles/app.css">';"#)
+        );
     }
 
     #[test]
