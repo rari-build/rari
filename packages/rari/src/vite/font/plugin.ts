@@ -331,7 +331,7 @@ function parseImportBindings(
 ): {
   names: Array<{ imported: string; local: string }>
   defaultNames: string[]
-  statements: string[]
+  statements: Array<{ start: number; end: number }>
 } {
   const isCode = buildCodeSpanMask(code)
   const escaped = moduleId.replaceAll('/', '\\/')
@@ -357,24 +357,24 @@ function parseImportBindings(
 
   const names: Array<{ imported: string; local: string }> = []
   const defaultNames: string[] = []
-  const statements: string[] = []
+  const statements: Array<{ start: number; end: number }> = []
+  const covers = (index: number) =>
+    statements.some(statement => index >= statement.start && index < statement.end)
 
   for (const match of code.matchAll(mixedRe)) {
-    if (!isCode[match.index]) continue
-    statements.push(match[0])
+    if (!isCode[match.index] || covers(match.index)) continue
+    statements.push({ start: match.index, end: match.index + match[0].length })
     defaultNames.push(match[1])
     names.push(...parseNamed(match[2]))
   }
   for (const match of code.matchAll(namedRe)) {
-    if (!isCode[match.index] || statements.includes(match[0])) continue
-    statements.push(match[0])
+    if (!isCode[match.index] || covers(match.index)) continue
+    statements.push({ start: match.index, end: match.index + match[0].length })
     names.push(...parseNamed(match[1]))
   }
   for (const match of code.matchAll(defRe)) {
-    if (!isCode[match.index] || statements.some(statement => statement.includes(match[0]))) {
-      continue
-    }
-    statements.push(match[0])
+    if (!isCode[match.index] || covers(match.index)) continue
+    statements.push({ start: match.index, end: match.index + match[0].length })
     defaultNames.push(match[1])
   }
 
@@ -547,6 +547,19 @@ export async function transformFontSource(
   const cssImports = new Set<string>()
   const importerDir = path.dirname(id)
   const cacheDir = path.join(projectRoot, 'node_modules', '.cache', 'rari-fonts')
+  const importRanges = [...localImport.statements, ...googleImport.statements].map(range => ({
+    start: range.start,
+    end: range.end,
+  }))
+
+  const shiftImportRanges = (editStart: number, editEnd: number, delta: number) => {
+    for (const range of importRanges) {
+      if (range.start >= editEnd) {
+        range.start += delta
+        range.end += delta
+      }
+    }
+  }
 
   const replaceCall = async (
     localName: string,
@@ -586,8 +599,9 @@ export async function transformFontSource(
       for (const url of prepared.preloadUrls) {
         if (!preloadUrls.includes(url)) preloadUrls.push(url)
       }
-      nextCode =
-        nextCode.slice(0, site.start) + serializeFont(prepared.font) + nextCode.slice(spliceEnd)
+      const replacement = serializeFont(prepared.font)
+      shiftImportRanges(site.start, spliceEnd, replacement.length - (spliceEnd - site.start))
+      nextCode = nextCode.slice(0, site.start) + replacement + nextCode.slice(spliceEnd)
     }
   }
 
@@ -626,8 +640,8 @@ export async function transformFontSource(
     }
   }
 
-  for (const statement of [...localImport.statements, ...googleImport.statements]) {
-    nextCode = nextCode.replace(statement, '')
+  for (const range of importRanges.sort((a, b) => b.start - a.start)) {
+    nextCode = nextCode.slice(0, range.start) + nextCode.slice(range.end)
   }
 
   const cssImportBlock = [...cssImports].map(cssId => `import ${JSON.stringify(cssId)};`).join('\n')

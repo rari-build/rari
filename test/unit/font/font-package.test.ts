@@ -338,6 +338,21 @@ const geist = localFont(options)
     )
   })
 
+  it('removes only the matched import when identical text appears earlier', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-font-'))
+    fs.writeFileSync(path.join(dir, 'Geist.woff2'), Buffer.from('dup-import'))
+    const importer = path.join(dir, 'app.tsx')
+    const code = `const docs = "import localFont from 'rari/font/local'"
+import localFont from 'rari/font/local'
+const geist = localFont({ src: './Geist.woff2', adjustFontFallback: false })
+`
+    const result = await transformFontSource(code, importer, dir, 'assets')
+    expect(result?.code).toContain(`const docs = "import localFont from 'rari/font/local'"`)
+    expect(result?.code.match(/import localFont from 'rari\/font\/local'/g)).toHaveLength(1)
+    expect(result?.code).toContain('className:')
+    expect(result?.code).not.toContain("from 'rari/font/local'\n")
+  })
+
   it('transforms every matching local font import statement', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-font-'))
     const importer = path.join(dir, 'app.tsx')
