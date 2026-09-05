@@ -24,6 +24,7 @@ import { contentHash, hashedFontFileName } from '../../../packages/rari/src/vite
 import {
   categoryFallback,
   computeFallbackOverrides,
+  cssGenericFromCategory,
 } from '../../../packages/rari/src/vite/font/metrics'
 import { extractObjectLiteral } from '../../../packages/rari/src/vite/font/parse-options'
 import {
@@ -59,6 +60,15 @@ describe('font css + metrics helpers', () => {
     expect(buildFontFamilyStack('Inter', ['system-ui'], true)).toBe(
       '"Inter", "Inter Fallback", system-ui, sans-serif',
     )
+    expect(buildFontFamilyStack('Merriweather', undefined, false, 'serif')).toBe(
+      '"Merriweather", serif',
+    )
+    expect(buildFontFamilyStack('Roboto Mono', ['ui-monospace'], false, 'monospace')).toBe(
+      '"Roboto Mono", ui-monospace, monospace',
+    )
+    expect(buildFontFamilyStack('Inter', ['system-ui', 'sans-serif'], false)).toBe(
+      '"Inter", system-ui, sans-serif',
+    )
   })
 
   it('defaults display to swap', () => {
@@ -86,6 +96,10 @@ describe('font css + metrics helpers', () => {
   it('picks serif fallback from category', () => {
     expect(categoryFallback('serif')).toBe('Times New Roman')
     expect(categoryFallback('sans-serif')).toBe('Arial')
+    expect(cssGenericFromCategory('serif')).toBe('serif')
+    expect(cssGenericFromCategory('monospace')).toBe('monospace')
+    expect(cssGenericFromCategory('sans-serif')).toBe('sans-serif')
+    expect(cssGenericFromCategory(undefined)).toBe('sans-serif')
   })
 })
 

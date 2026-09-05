@@ -1,5 +1,6 @@
-import type { FontMetricOverrides } from './metrics'
+import type { CssFontGeneric, FontMetricOverrides } from './metrics'
 import type { FontDisplay, ResolvedFontFace } from '@/font/types'
+import { fallbackIncludesCssGeneric } from './metrics'
 
 function cssEscape(value: string): string {
   return value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')
@@ -56,6 +57,7 @@ export function generateFontFaceCss(
   overrides: FontMetricOverrides | null,
   className: string,
   variableClassName: string | null,
+  generic: CssFontGeneric = 'sans-serif',
 ): string {
   let css = serializeFontFaceRule(face)
 
@@ -72,7 +74,7 @@ export function generateFontFaceCss(
       `}\n`
   }
 
-  const stack = buildFontFamilyStack(face.family, face.fallback, overrides != null)
+  const stack = buildFontFamilyStack(face.family, face.fallback, overrides != null, generic)
   css += `.${className} {\n  font-family: ${stack};\n}\n`
 
   if (face.variable != null && variableClassName != null) {
@@ -86,11 +88,12 @@ export function buildFontFamilyStack(
   family: string,
   fallback: readonly string[] | undefined,
   includeMetricFallback: boolean,
+  generic: CssFontGeneric = 'sans-serif',
 ): string {
   const parts = [`"${cssEscape(family)}"`]
   if (includeMetricFallback) parts.push(`"${cssEscape(`${family} Fallback`)}"`)
   for (const name of fallback ?? []) parts.push(name.includes(' ') ? `"${cssEscape(name)}"` : name)
-  parts.push('sans-serif')
+  if (!fallbackIncludesCssGeneric(fallback)) parts.push(generic)
   return parts.join(', ')
 }
 
