@@ -289,6 +289,42 @@ async function prepareFaces(
   }
 }
 
+function buildCodeSpanMask(code: string): boolean[] {
+  const isCode: boolean[] = []
+  for (let i = 0; i < code.length; i += 1) isCode.push(true)
+  const markNonCode = (from: number, to: number) => {
+    for (let j = from; j < to; j += 1) isCode[j] = false
+  }
+
+  let i = 0
+  while (i < code.length) {
+    const ch = code.charCodeAt(i)
+    if (ch === 47 && code.charCodeAt(i + 1) === 47) {
+      const start = i
+      const nl = code.indexOf('\n', i + 2)
+      i = nl === -1 ? code.length : nl
+      markNonCode(start, i)
+      continue
+    }
+    if (ch === 47 && code.charCodeAt(i + 1) === 42) {
+      const start = i
+      const end = code.indexOf('*/', i + 2)
+      i = end === -1 ? code.length : end + 2
+      markNonCode(start, i)
+      continue
+    }
+    if (ch === 34 || ch === 39 || ch === 96) {
+      const start = i
+      i = skipStringOrTemplate(code, i)
+      markNonCode(start, i)
+      continue
+    }
+    i += 1
+  }
+
+  return isCode
+}
+
 function parseImportBindings(
   code: string,
   moduleId: string,
@@ -297,6 +333,7 @@ function parseImportBindings(
   defaultNames: string[]
   statements: string[]
 } {
+  const isCode = buildCodeSpanMask(code)
   const escaped = moduleId.replaceAll('/', '\\/')
   const mixedRe = new RegExp(
     `import\\s+(\\w+)\\s*,\\s*\\{([^}]+)\\}\\s*from\\s*['"]${escaped}['"]`,
@@ -323,17 +360,20 @@ function parseImportBindings(
   const statements: string[] = []
 
   for (const match of code.matchAll(mixedRe)) {
+    if (!isCode[match.index]) continue
     statements.push(match[0])
     defaultNames.push(match[1])
     names.push(...parseNamed(match[2]))
   }
   for (const match of code.matchAll(namedRe)) {
-    if (statements.includes(match[0])) continue
+    if (!isCode[match.index] || statements.includes(match[0])) continue
     statements.push(match[0])
     names.push(...parseNamed(match[1]))
   }
   for (const match of code.matchAll(defRe)) {
-    if (statements.some(statement => statement.includes(match[0]))) continue
+    if (!isCode[match.index] || statements.some(statement => statement.includes(match[0]))) {
+      continue
+    }
     statements.push(match[0])
     defaultNames.push(match[1])
   }
@@ -346,11 +386,17 @@ function parseImportBindings(
 }
 
 function hasUnsupportedFontImport(code: string, moduleId: string): boolean {
+  const isCode = buildCodeSpanMask(code)
   const escaped = moduleId.replaceAll('/', '\\/')
-  return (
-    new RegExp(`import\\s+\\*\\s+as\\s+\\w+\\s+from\\s*['"]${escaped}['"]`).test(code) ||
-    new RegExp(`import\\s*['"]${escaped}['"]`).test(code)
-  )
+  const namespaceRe = new RegExp(`import\\s+\\*\\s+as\\s+\\w+\\s+from\\s*['"]${escaped}['"]`, 'g')
+  const sideEffectRe = new RegExp(`import\\s*['"]${escaped}['"]`, 'g')
+  for (const match of code.matchAll(namespaceRe)) {
+    if (isCode[match.index]) return true
+  }
+  for (const match of code.matchAll(sideEffectRe)) {
+    if (isCode[match.index]) return true
+  }
+  return false
 }
 
 function serializeFont(font: Font): string {
@@ -506,9 +552,13 @@ export async function transformFontSource(
     localName: string,
     resolvePrepared: (optionsLiteral: Record<string, JsonValue> | null) => Promise<PreparedFont>,
   ) => {
+    const fail = (reason: string): never => {
+      throw new Error(`rari/font: failed to transform \`${localName}()\` call: ${reason}`)
+    }
+
     for (const site of findCalls(nextCode, localName).sort((a, b) => b.start - a.start)) {
       const closeParen = findClosingParen(nextCode, site.openParen)
-      if (closeParen === -1) continue
+      if (closeParen === -1) fail('unbalanced parentheses')
 
       const inside = nextCode.slice(site.openParen + 1, closeParen).trim()
       let optionsLiteral: Record<string, JsonValue> | null = null
@@ -516,14 +566,17 @@ export async function transformFontSource(
       if (inside.startsWith('{')) {
         const openBrace = nextCode.indexOf('{', site.openParen)
         const parsed = extractObjectLiteral(nextCode, openBrace)
-        if (parsed == null) continue
-        optionsLiteral = parsed.value
-        let end = parsed.end
-        while (end < nextCode.length && /\s/.test(nextCode[end] ?? '')) end += 1
-        if (nextCode[end] !== ')') continue
-        spliceEnd = end + 1
+        if (parsed == null) {
+          fail('options must be a static object literal')
+        } else {
+          optionsLiteral = parsed.value
+          let end = parsed.end
+          while (end < nextCode.length && /\s/.test(nextCode[end] ?? '')) end += 1
+          if (nextCode[end] !== ')') fail('options must be a static object literal')
+          spliceEnd = end + 1
+        }
       } else if (inside !== '') {
-        continue
+        fail('options must be a static object literal')
       }
 
       const prepared = await resolvePrepared(optionsLiteral)
@@ -559,6 +612,18 @@ export async function transformFontSource(
       const faces = await resolveGoogleFontFaces(family, options, cacheDir)
       return prepareFaces(faces, assetsDir, family)
     })
+  }
+
+  const bindingNames = [
+    ...localImport.defaultNames,
+    ...googleImport.names.map(binding => binding.local),
+  ]
+  for (const localName of bindingNames) {
+    if (findCalls(nextCode, localName).length > 0) {
+      throw new Error(
+        `rari/font: failed to transform all \`${localName}()\` calls; leaving imports in place`,
+      )
+    }
   }
 
   for (const statement of [...localImport.statements, ...googleImport.statements]) {
