@@ -876,7 +876,7 @@ export function createFontRolldownPlugin(
       const css = cssModules.get(id)
       if (css == null) return null
       if (cssCollector != null) {
-        cssCollector.push(css)
+        if (!cssCollector.includes(css)) cssCollector.push(css)
         return { code: 'export {}', moduleType: 'js' as const }
       }
       return { code: css, moduleType: 'css' as const }

@@ -420,7 +420,10 @@ impl RscHtmlRenderer {
                     while i < bytes.len()
                         && !bytes[i].is_ascii_whitespace()
                         && bytes[i] != b'>'
-                        && bytes[i] != b'/'
+                        && bytes[i] != b'"'
+                        && bytes[i] != b'\''
+                        && bytes[i] != b'='
+                        && bytes[i] != b'<'
                     {
                         i += 1;
                     }
@@ -438,13 +441,64 @@ impl RscHtmlRenderer {
         None
     }
 
-    fn template_has_href(template: &str, href: &str) -> bool {
+    fn find_html_tag_end(source: &str) -> Option<usize> {
+        let bytes = source.as_bytes();
+        if bytes.first().copied() != Some(b'<') {
+            return None;
+        }
+        let mut i = 1;
+        let mut quote: Option<u8> = None;
+        while i < bytes.len() {
+            let byte = bytes[i];
+            if let Some(q) = quote {
+                if byte == q {
+                    quote = None;
+                }
+            } else if byte == b'"' || byte == b'\'' {
+                quote = Some(byte);
+            } else if byte == b'>' {
+                return Some(i + 1);
+            }
+            i += 1;
+        }
+        None
+    }
+
+    fn for_each_link_tag(template: &str, mut visit: impl FnMut(&str, usize) -> bool) {
         let searchable = Self::mask_html_for_link_scan(template);
-        #[expect(clippy::unwrap_used, reason = "Hardcoded regex pattern is guaranteed to be valid")]
-        let link_regex = Regex::new(r"(?i)<link\b[^>]*/?>").unwrap();
-        link_regex
-            .find_iter(&searchable)
-            .any(|mat| Self::html_attr_value(mat.as_str(), "href").as_deref() == Some(href))
+        let lower = searchable.to_ascii_lowercase();
+        let mut search_from = 0;
+        while let Some(rel) = lower[search_from..].find("<link") {
+            let start = search_from + rel;
+            let after = start + 5;
+            let boundary_ok = after >= lower.len()
+                || matches!(lower.as_bytes()[after], b'>' | b'/' | b' ' | b'\t' | b'\n' | b'\r');
+            if !boundary_ok {
+                search_from = after;
+                continue;
+            }
+            let Some(end) = Self::find_html_tag_end(&searchable[start..]).map(|len| start + len)
+            else {
+                break;
+            };
+            if visit(&searchable[start..end], start) {
+                return;
+            }
+            search_from = end;
+        }
+    }
+
+    fn template_has_href(template: &str, href: &str) -> bool {
+        let mut found = false;
+        Self::for_each_link_tag(template, |tag, _start| {
+            if Self::html_attr_value(tag, "href").as_deref() == Some(href) {
+                found = true;
+                true
+            } else {
+                false
+            }
+        });
+        found
     }
 
     pub(crate) fn inject_css_links(template: &str, css_links: &[String]) -> String {
@@ -517,19 +571,17 @@ impl RscHtmlRenderer {
     }
 
     fn first_stylesheet_link_offset(template: &str) -> Option<usize> {
-        let searchable = Self::mask_html_for_link_scan(template);
-        let lower = searchable.to_ascii_lowercase();
-        let mut search_from = 0;
-        while let Some(rel) = lower[search_from..].find("<link") {
-            let start = search_from + rel;
-            let end = lower[start..].find('>').map(|offset| start + offset + 1)?;
-            let tag = &lower[start..end];
-            if tag.contains("stylesheet") || tag.contains("text/css") {
-                return Some(start);
+        let mut found = None;
+        Self::for_each_link_tag(template, |tag, start| {
+            let lower = tag.to_ascii_lowercase();
+            if lower.contains("stylesheet") || lower.contains("text/css") {
+                found = Some(start);
+                true
+            } else {
+                false
             }
-            search_from = end;
-        }
-        None
+        });
+        found
     }
 
     pub(crate) async fn assemble_document(
@@ -882,6 +934,29 @@ mod tests {
         assert!(result.contains(r#"<link rel="stylesheet" href="/styles/app.css">"#));
         assert!(result.contains(r#"data-note="see href='/assets/Geist-abcd1234.woff2'""#));
         assert!(result.contains(r#"data-doc="href='/styles/app.css'""#));
+    }
+
+    #[test]
+    fn test_inject_css_links_handles_quoted_gt_and_unquoted_href_paths() {
+        let template = r#"<html><head>
+<link rel="stylesheet" data-note=">" href=/existing.css>
+</head><body></body></html>"#;
+        let css_links = vec![
+            "preload:/assets/Geist-abcd1234.woff2".to_string(),
+            "/existing.css".to_string(),
+            "/styles/app.css".to_string(),
+        ];
+
+        let result = RscHtmlRenderer::inject_css_links(template, &css_links);
+        assert!(result.contains(
+            r#"<link rel="preload" href="/assets/Geist-abcd1234.woff2" as="font" type="font/woff2" crossorigin>"#
+        ));
+        assert!(result.contains(r#"<link rel="stylesheet" href="/styles/app.css">"#));
+        assert_eq!(result.matches("href=/existing.css").count(), 1);
+        assert_eq!(result.matches(r#"href="/existing.css""#).count(), 0);
+        let preload_pos = result.find("rel=\"preload\"").expect("preload");
+        let existing_pos = result.find("href=/existing.css").expect("existing stylesheet");
+        assert!(preload_pos < existing_pos);
     }
 
     #[test]
