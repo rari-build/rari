@@ -315,6 +315,29 @@ const geist = localFont({ src: './Geist.woff2', adjustFontFallback: false })
     expect(result?.assets).toHaveLength(1)
   })
 
+  it('ignores font import text inside comments and strings', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-font-'))
+    const importer = path.join(dir, 'app.tsx')
+    const code = `
+const docs = "import localFont from 'rari/font/local'"
+// import { Inter } from 'rari/font/google'
+export const value = 1
+`
+    await expect(transformFontSource(code, importer, dir, 'assets')).resolves.toBeNull()
+  })
+
+  it('throws before removing imports when a font call is not statically transformable', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-font-'))
+    const importer = path.join(dir, 'app.tsx')
+    const code = `import localFont from 'rari/font/local'
+const options = { src: './Geist.woff2' }
+const geist = localFont(options)
+`
+    await expect(transformFontSource(code, importer, dir, 'assets')).rejects.toThrow(
+      /static object literal/,
+    )
+  })
+
   it('transforms every matching local font import statement', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-font-'))
     const importer = path.join(dir, 'app.tsx')
