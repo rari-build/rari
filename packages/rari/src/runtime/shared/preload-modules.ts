@@ -24,6 +24,7 @@ export async function preloadModulesFromFlightProtocol(
 
         if (isFlightImportTuple(importData)) {
           const id = importData[0]
+          if (!id.includes('/') && id.startsWith('$')) continue
           const exportName = typeof importData[2] === 'string' ? importData[2] : undefined
           const normalizedImportId = id.replace(/\\/g, '/')
 

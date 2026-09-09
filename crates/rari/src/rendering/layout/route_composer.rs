@@ -160,8 +160,8 @@ impl RouteComposer {
 
     fn generate_template_wrapper(
         index: usize,
-        _template_component_id: &str,
-        template_client_component_id: &str,
+        template_component_id: &str,
+        _template_client_component_id: &str,
         current_element: &str,
         template_var: &str,
         template_key_json: &str,
@@ -169,13 +169,10 @@ impl RouteComposer {
         format!(
             r#"
             const startTemplate{index} = performance.now();
-            const TemplateComponent{index} = {{
-                $$typeof: Symbol.for('react.client.reference'),
-                $$id: "{template_client_component_id}#default",
-                $$async: false,
-                name: 'default',
-                '~isClientComponent': true,
-            }};
+            const TemplateComponent{index} = globalThis["{template_component_id}"];
+            if (!TemplateComponent{index} || typeof TemplateComponent{index} !== 'function') {{
+                throw new Error('Template component {template_component_id} not found');
+            }}
 
             const templateKey{index} = {template_key_json};
             const templateResult{index} = React.createElement(
@@ -498,9 +495,13 @@ mod tests {
         );
 
         assert!(script.contains("TemplateComponent0"));
-        assert!(script.contains(r#"$$id: "src/app/template#default""#));
+        assert!(script.contains(r#"globalThis["template:template.tsx"]"#));
         assert!(script.contains("templateKey0 = \"/about\""));
         assert!(script.contains("key: templateKey0"));
+        assert!(
+            !script.contains("react.client.reference"),
+            "server templates must resolve from the SSR module registry, not forced client refs"
+        );
         assert!(
             !script.contains("pathname: \"/about\", children: pageElement"),
             "template wrapper must not include pathname as a prop, only key and children"

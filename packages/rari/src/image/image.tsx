@@ -257,7 +257,7 @@ export function Image({
         loading={shouldPreload ? 'eager' : loading}
         fetchPriority={shouldPreload ? 'high' : 'auto'}
         decoding={imgDecoding}
-        onLoad={handleLoad}
+        onLoad={placeholder === 'blur' || onLoad != null ? handleLoad : undefined}
         onError={handleError}
         style={imgStyle}
         className={className}
@@ -294,7 +294,7 @@ export function Image({
       loading={shouldPreload ? 'eager' : loading}
       fetchPriority={shouldPreload ? 'high' : 'auto'}
       decoding={imgDecoding}
-      onLoad={handleLoad}
+      onLoad={placeholder === 'blur' || onLoad != null ? handleLoad : undefined}
       onError={handleError}
       style={imgStyle}
       className={className}

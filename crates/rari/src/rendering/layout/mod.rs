@@ -142,6 +142,9 @@ mod tests {
         assert!(
             script.contains("const isAsync = PageComponent.constructor.name === 'AsyncFunction'")
         );
+        assert!(script.contains("React.ViewTransition"));
+        assert!(script.contains("rari-loading-exit"));
+        assert!(script.contains("rari-content-enter"));
     }
 
     #[test]

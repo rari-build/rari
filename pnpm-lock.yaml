@@ -235,20 +235,20 @@ catalogs:
       version: 10.73.0
   react:
     '@types/react':
-      specifier: ^19.2.18
-      version: 19.2.18
+      specifier: ^19.3.0
+      version: 19.3.0
     '@types/react-dom':
-      specifier: ^19.2.7
-      version: 19.2.7
+      specifier: ^19.3.0
+      version: 19.3.0
     react:
-      specifier: ^19.2.8
-      version: 19.2.8
+      specifier: ^19.3.0
+      version: 19.3.0
     react-dom:
-      specifier: ^19.2.8
-      version: 19.2.8
+      specifier: ^19.3.0
+      version: 19.3.0
     react-server-dom-webpack:
-      specifier: ^19.2.8
-      version: 19.2.8
+      specifier: ^19.3.0
+      version: 19.3.0
   tailwind:
     '@tailwindcss/vite':
       specifier: ^4.3.3
@@ -292,7 +292,7 @@ importers:
         version: 26.5.0
       '@types/react':
         specifier: catalog:react
-        version: 19.2.18
+        version: 19.3.0
       '@vitest/coverage-v8':
         specifier: catalog:testing
         version: 4.1.11(@vitest/browser@4.1.11)(vitest@4.1.11)
@@ -304,7 +304,7 @@ importers:
         version: 6.34.0
       react:
         specifier: catalog:react
-        version: 19.2.8
+        version: 19.3.0
       typescript:
         specifier: catalog:typescript
         version: '@typescript/typescript6@6.0.2'
@@ -319,20 +319,20 @@ importers:
         version: link:../../packages/rari
       react:
         specifier: catalog:react
-        version: 19.2.8
+        version: 19.3.0
       react-dom:
         specifier: catalog:react
-        version: 19.2.8(react@19.2.8)
+        version: 19.3.0(react@19.3.0)
     devDependencies:
       '@tailwindcss/vite':
         specifier: catalog:tailwind
         version: 4.3.3(vite@8.2.2(@types/node@26.5.0)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.0))
       '@types/react':
         specifier: catalog:react
-        version: 19.2.18
+        version: 19.3.0
       '@types/react-dom':
         specifier: catalog:react
-        version: 19.2.7(@types/react@19.2.18)
+        version: 19.3.0(@types/react@19.3.0)
       tailwindcss:
         specifier: catalog:tailwind
         version: 4.3.3
@@ -481,13 +481,13 @@ importers:
         version: 1.33.0
       react:
         specifier: catalog:react
-        version: 19.2.8
+        version: 19.3.0
       react-dom:
         specifier: catalog:react
-        version: 19.2.8(react@19.2.8)
+        version: 19.3.0(react@19.3.0)
       react-server-dom-webpack:
         specifier: catalog:react
-        version: 19.2.8(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(webpack@5.110.3(lightningcss@1.33.0)(postcss@8.5.28))
+        version: 19.3.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(webpack@5.110.3(lightningcss@1.33.0)(postcss@8.5.28))
       rolldown:
         specifier: catalog:build
         version: 1.2.7
@@ -506,10 +506,10 @@ importers:
         version: 26.5.0
       '@types/react':
         specifier: catalog:react
-        version: 19.2.18
+        version: 19.3.0
       '@types/react-dom':
         specifier: catalog:react
-        version: 19.2.7(@types/react@19.2.18)
+        version: 19.3.0(@types/react@19.3.0)
       oxc-transform-react:
         specifier: catalog:build
         version: 0.147.0
@@ -525,7 +525,7 @@ importers:
     optionalDependencies:
       '@rari/use-cache':
         specifier: 0.15.17
-        version: 0.15.17(react-server-dom-webpack@19.2.8(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(webpack@5.110.3(lightningcss@1.33.0)(postcss@8.5.28)))
+        version: 0.15.17(react-server-dom-webpack@19.3.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(webpack@5.110.3(lightningcss@1.33.0)(postcss@8.5.28)))
       rari-darwin-arm64:
         specifier: 0.15.17
         version: 0.15.17
@@ -549,7 +549,7 @@ importers:
     dependencies:
       react-server-dom-webpack:
         specifier: catalog:react
-        version: 19.2.8(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(webpack@5.110.3(lightningcss@1.33.0)(postcss@8.5.28))
+        version: 19.3.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(webpack@5.110.3(lightningcss@1.33.0)(postcss@8.5.28))
     devDependencies:
       '@types/node':
         specifier: catalog:typescript
@@ -590,20 +590,20 @@ importers:
         version: link:../../../packages/rari
       react:
         specifier: catalog:react
-        version: 19.2.8
+        version: 19.3.0
       react-dom:
         specifier: catalog:react
-        version: 19.2.8(react@19.2.8)
+        version: 19.3.0(react@19.3.0)
     devDependencies:
       '@tailwindcss/vite':
         specifier: catalog:tailwind
         version: 4.3.3(vite@8.2.2(@types/node@26.5.0)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.0))
       '@types/react':
         specifier: catalog:react
-        version: 19.2.18
+        version: 19.3.0
       '@types/react-dom':
         specifier: catalog:react
-        version: 19.2.7(@types/react@19.2.18)
+        version: 19.3.0(@types/react@19.3.0)
       tailwindcss:
         specifier: catalog:tailwind
         version: 4.3.3
@@ -625,13 +625,13 @@ importers:
         version: 26.5.0
       react:
         specifier: catalog:react
-        version: 19.2.8
+        version: 19.3.0
       react-dom:
         specifier: catalog:react
-        version: 19.2.8(react@19.2.8)
+        version: 19.3.0(react@19.3.0)
       react-server-dom-webpack:
         specifier: catalog:react
-        version: 19.2.8(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(webpack@5.110.3(lightningcss@1.33.0)(postcss@8.5.28))
+        version: 19.3.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(webpack@5.110.3(lightningcss@1.33.0)(postcss@8.5.28))
       rolldown:
         specifier: catalog:build
         version: 1.2.7
@@ -643,7 +643,7 @@ importers:
         version: 3.1.1(supports-color@8.1.1)
       '@sentry/react':
         specifier: catalog:monitoring
-        version: 10.73.0(react@19.2.8)
+        version: 10.73.0(react@19.3.0)
       '@shikijs/core':
         specifier: catalog:mdx
         version: 4.4.3
@@ -664,16 +664,16 @@ importers:
         version: 11.17.2
       posthog-js:
         specifier: catalog:analytics
-        version: 1.428.6(@types/react@19.2.18)(react@19.2.8)
+        version: 1.428.6(@types/react@19.3.0)(react@19.3.0)
       rari:
         specifier: 'catalog:'
-        version: 0.15.17(@mdx-js/mdx@3.1.1(supports-color@8.1.1))(oxc-transform-react@0.147.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(webpack@5.110.3(lightningcss@1.33.0)(postcss@8.5.28))
+        version: 0.15.17(@mdx-js/mdx@3.1.1(supports-color@8.1.1))(oxc-transform-react@0.147.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(webpack@5.110.3(lightningcss@1.33.0)(postcss@8.5.28))
       react:
         specifier: catalog:react
-        version: 19.2.8
+        version: 19.3.0
       react-dom:
         specifier: catalog:react
-        version: 19.2.8(react@19.2.8)
+        version: 19.3.0(react@19.3.0)
       remark-gfm:
         specifier: catalog:mdx
         version: 4.0.1(supports-color@8.1.1)
@@ -686,10 +686,10 @@ importers:
         version: 26.5.0
       '@types/react':
         specifier: catalog:react
-        version: 19.2.18
+        version: 19.3.0
       '@types/react-dom':
         specifier: catalog:react
-        version: 19.2.7(@types/react@19.2.18)
+        version: 19.3.0(@types/react@19.3.0)
       tailwindcss:
         specifier: catalog:tailwind
         version: 4.3.3
@@ -2732,13 +2732,13 @@ packages:
   '@types/node@26.5.0':
     resolution: {integrity: sha512-dVSGpriSoCgz8WnDNTuSSuSv1PC/ALXihO4ulRZt7Md8k9mlbdin3lGOcDE8SnWOgf513ByWlXd7BK4azmyg/A==}
 
-  '@types/react-dom@19.2.7':
-    resolution: {integrity: sha512-I8bPpDLcHBv1qiIiXDCy71Rt8eQDKJP0sMSWJphDdAcdqiJ1sGpZamavoEIRZmYzjia9LuEb2HlYdDpmoENpvQ==}
+  '@types/react-dom@19.3.0':
+    resolution: {integrity: sha512-ZI7bU42mZXXKHn/qNLEw2IrbiINU7X5+vfgdixBHkCNpYWXjKgfQ/P+uyGb5CjOLB9UcnTeg3rylQtV2hym44Q==}
     peerDependencies:
-      '@types/react': ^19.2.0
+      '@types/react': ^19.3.0
 
-  '@types/react@19.2.18':
-    resolution: {integrity: sha512-AnzbBERsrLKtk2XSfTbYRLjQPdy116Sty4q+T+Bp3IC4l6jNBvreVPAHmpq9qhXQM7CXZPjLVmGMw9sy+hxQ3w==}
+  '@types/react@19.3.0':
+    resolution: {integrity: sha512-N0rFCuH9YoxG9/m61l9MfpJKfmLOVU0em7ipIz6TRgSSkvReLB9vL85GB+yr8Bs5leqpvg96JSwF4ZS1s4viQg==}
 
   '@types/trusted-types@2.0.7':
     resolution: {integrity: sha512-ScaPdn1dQczgbl0QFTeTOmVHFULt394XJgOQNoyVhZ6r2vLnMLJfBPd53SB52T/3G36VI1/g2MZaX0cwDuXsfw==}
@@ -4802,10 +4802,10 @@ packages:
       oxc-transform-react:
         optional: true
 
-  react-dom@19.2.8:
-    resolution: {integrity: sha512-rVprimfGBG3DR+Tq0IQG2DT5PxKth1WIGDmj5yPmlzr4YBe7uyE+Du4oVqTDXZSHGGGXRtTJEGSSePyQCMBglQ==}
+  react-dom@19.3.0:
+    resolution: {integrity: sha512-JDk8dgif51OjFoDE70+OT9ICyYr+69HlmihNwp1+Nsfbna3t5sIiCa9ZJktDmQ4/1b/rn26hIAR2uYXDMr5r0Q==}
     peerDependencies:
-      react: ^19.2.8
+      react: ^19.3.0
 
   react-is@17.0.2:
     resolution: {integrity: sha512-w2GsyukL62IJnlaff/nRegPQR94C/XXamvMWmSHRJ4y7Ts/4ocGRmTHvOs8PSE6pB3dWOrD/nueuU5sduBsQ4w==}
@@ -4818,8 +4818,16 @@ packages:
       react-dom: ^19.2.8
       webpack: ^5.59.0
 
-  react@19.2.8:
-    resolution: {integrity: sha512-PWaYA1L/q9u2u7xYQi+Y3L3Yfnie7XyLeaJICV1MGD6LprsBxcAqGjYyr0eY3p+QdsA+x/Irkt4Qif8D63+Sbw==}
+  react-server-dom-webpack@19.3.0:
+    resolution: {integrity: sha512-ymt9RkvWtW4OpIhWf1wj4u5CxnBaVbDCkz/bw3/QFmOE7+/wg8C30uiJ/QqkEdWn/UqT5c7/rOUW/eWYMwceCg==}
+    engines: {node: '>=0.10.0'}
+    peerDependencies:
+      react: ^19.3.0
+      react-dom: ^19.3.0
+      webpack: ^5.59.0
+
+  react@19.3.0:
+    resolution: {integrity: sha512-E8LUcbtBWt20bbl2YoHfx4ZDBdxVTfOKtCZn9cDSJ4l6/nuoApcpIBcj47t2wZoVX8g2ZHuMHbiShgCR1T5Sog==}
     engines: {node: '>=0.10.0'}
 
   recma-build-jsx@1.0.0:
@@ -4886,8 +4894,8 @@ packages:
   safer-buffer@2.1.2:
     resolution: {integrity: sha512-YZo3K82SD7Riyi0E1EQPojLz7kpepnSQI9IyPbHHg1XXXevb5dJI7tpyN2ADxGcQbHG7vcyRHk0cbwqcQriUtg==}
 
-  scheduler@0.27.0:
-    resolution: {integrity: sha512-eNv+WrVbKu1f3vbYJT/xtiF5syA5HPIMtf9IgY/nKg0sWqzAUEvqY/xm7OcZc/qafLx/iO9FgOmeSAp4v5ti/Q==}
+  scheduler@0.28.0:
+    resolution: {integrity: sha512-juorfCmIkIw8tT+p5BXSm6PJjQF/ycEYmKyzURCIt/RaZIhL+PulbQ9Yu2z1HdOJDdqDTlxA1+xKBmHXJsczAw==}
 
   schema-utils@4.3.3:
     resolution: {integrity: sha512-eflK8wEtyOE6+hsaRVPxvUKYCpRgzLqDTb8krvAsRIwOGlHoSgYLgBXoubGgLd2fT41/OUYdb48v4k4WWHQurA==}
@@ -6483,9 +6491,21 @@ snapshots:
   '@rari/use-cache-win32-x64@0.15.17':
     optional: true
 
-  '@rari/use-cache@0.15.17(react-server-dom-webpack@19.2.8(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(webpack@5.110.3(lightningcss@1.33.0)(postcss@8.5.28)))':
+  '@rari/use-cache@0.15.17(react-server-dom-webpack@19.2.8(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(webpack@5.110.3(lightningcss@1.33.0)(postcss@8.5.28)))':
     dependencies:
-      react-server-dom-webpack: 19.2.8(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(webpack@5.110.3(lightningcss@1.33.0)(postcss@8.5.28))
+      react-server-dom-webpack: 19.2.8(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(webpack@5.110.3(lightningcss@1.33.0)(postcss@8.5.28))
+    optionalDependencies:
+      '@rari/use-cache-darwin-arm64': 0.15.17
+      '@rari/use-cache-darwin-x64': 0.15.17
+      '@rari/use-cache-linux-arm64': 0.15.17
+      '@rari/use-cache-linux-x64': 0.15.17
+      '@rari/use-cache-win32-arm64': 0.15.17
+      '@rari/use-cache-win32-x64': 0.15.17
+    optional: true
+
+  '@rari/use-cache@0.15.17(react-server-dom-webpack@19.3.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(webpack@5.110.3(lightningcss@1.33.0)(postcss@8.5.28)))':
+    dependencies:
+      react-server-dom-webpack: 19.3.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(webpack@5.110.3(lightningcss@1.33.0)(postcss@8.5.28))
     optionalDependencies:
       '@rari/use-cache-darwin-arm64': 0.15.17
       '@rari/use-cache-darwin-x64': 0.15.17
@@ -6566,12 +6586,12 @@ snapshots:
     dependencies:
       '@sentry/core': 10.73.0
 
-  '@sentry/react@10.73.0(react@19.2.8)':
+  '@sentry/react@10.73.0(react@19.3.0)':
     dependencies:
       '@sentry/browser': 10.73.0
       '@sentry/conventions': 0.16.0
       '@sentry/core': 10.73.0
-      react: 19.2.8
+      react: 19.3.0
 
   '@sentry/replay-canvas@10.73.0':
     dependencies:
@@ -6865,11 +6885,11 @@ snapshots:
     dependencies:
       undici-types: 8.9.0
 
-  '@types/react-dom@19.2.7(@types/react@19.2.18)':
+  '@types/react-dom@19.3.0(@types/react@19.3.0)':
     dependencies:
-      '@types/react': 19.2.18
+      '@types/react': 19.3.0
 
-  '@types/react@19.2.18':
+  '@types/react@19.3.0':
     dependencies:
       csstype: 3.2.3
 
@@ -9236,7 +9256,7 @@ snapshots:
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
-  posthog-js@1.428.6(@types/react@19.2.18)(react@19.2.8):
+  posthog-js@1.428.6(@types/react@19.3.0)(react@19.3.0):
     dependencies:
       '@posthog/browser-common': 0.8.2
       '@posthog/core': 1.51.0
@@ -9249,8 +9269,8 @@ snapshots:
       web-vitals: 6.2.1
       web-vitals-soft-navs: web-vitals@6.2.1
     optionalDependencies:
-      '@types/react': 19.2.18
-      react: 19.2.8
+      '@types/react': 19.3.0
+      react: 19.3.0
     transitivePeerDependencies:
       - preact-render-to-string
 
@@ -9292,16 +9312,16 @@ snapshots:
   rari-win32-x64@0.15.17:
     optional: true
 
-  rari@0.15.17(@mdx-js/mdx@3.1.1(supports-color@8.1.1))(oxc-transform-react@0.147.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(webpack@5.110.3(lightningcss@1.33.0)(postcss@8.5.28)):
+  rari@0.15.17(@mdx-js/mdx@3.1.1(supports-color@8.1.1))(oxc-transform-react@0.147.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(webpack@5.110.3(lightningcss@1.33.0)(postcss@8.5.28)):
     dependencies:
       lightningcss: 1.33.0
-      react: 19.2.8
-      react-dom: 19.2.8(react@19.2.8)
-      react-server-dom-webpack: 19.2.8(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(webpack@5.110.3(lightningcss@1.33.0)(postcss@8.5.28))
+      react: 19.3.0
+      react-dom: 19.3.0(react@19.3.0)
+      react-server-dom-webpack: 19.2.8(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(webpack@5.110.3(lightningcss@1.33.0)(postcss@8.5.28))
       rolldown: 1.2.7
     optionalDependencies:
       '@mdx-js/mdx': 3.1.1(supports-color@8.1.1)
-      '@rari/use-cache': 0.15.17(react-server-dom-webpack@19.2.8(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(webpack@5.110.3(lightningcss@1.33.0)(postcss@8.5.28)))
+      '@rari/use-cache': 0.15.17(react-server-dom-webpack@19.2.8(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(webpack@5.110.3(lightningcss@1.33.0)(postcss@8.5.28)))
       oxc-transform-react: 0.147.0
       rari-darwin-arm64: 0.15.17
       rari-darwin-x64: 0.15.17
@@ -9312,23 +9332,32 @@ snapshots:
     transitivePeerDependencies:
       - webpack
 
-  react-dom@19.2.8(react@19.2.8):
+  react-dom@19.3.0(react@19.3.0):
     dependencies:
-      react: 19.2.8
-      scheduler: 0.27.0
+      react: 19.3.0
+      scheduler: 0.28.0
 
   react-is@17.0.2: {}
 
-  react-server-dom-webpack@19.2.8(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(webpack@5.110.3(lightningcss@1.33.0)(postcss@8.5.28)):
+  react-server-dom-webpack@19.2.8(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(webpack@5.110.3(lightningcss@1.33.0)(postcss@8.5.28)):
     dependencies:
       acorn-loose: 8.5.2
       neo-async: 2.6.2
-      react: 19.2.8
-      react-dom: 19.2.8(react@19.2.8)
+      react: 19.3.0
+      react-dom: 19.3.0(react@19.3.0)
       webpack: 5.110.3(lightningcss@1.33.0)(postcss@8.5.28)
       webpack-sources: 3.5.1
 
-  react@19.2.8: {}
+  react-server-dom-webpack@19.3.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(webpack@5.110.3(lightningcss@1.33.0)(postcss@8.5.28)):
+    dependencies:
+      acorn-loose: 8.5.2
+      neo-async: 2.6.2
+      react: 19.3.0
+      react-dom: 19.3.0(react@19.3.0)
+      webpack: 5.110.3(lightningcss@1.33.0)(postcss@8.5.28)
+      webpack-sources: 3.5.1
+
+  react@19.3.0: {}
 
   recma-build-jsx@1.0.0:
     dependencies:
@@ -9455,7 +9484,7 @@ snapshots:
 
   safer-buffer@2.1.2: {}
 
-  scheduler@0.27.0: {}
+  scheduler@0.28.0: {}
 
   schema-utils@4.3.3:
     dependencies:

@@ -1,1 +1,33 @@
 @import 'tailwindcss';
+
+::view-transition-old(.loading-exit),
+::view-transition-new(.content-enter),
+::view-transition-old(.rari-loading-exit),
+::view-transition-new(.rari-content-enter) {
+  animation-duration: 180ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+::view-transition-old(.loading-exit),
+::view-transition-old(.rari-loading-exit) {
+  animation-name: loading-exit;
+}
+
+::view-transition-new(.content-enter),
+::view-transition-new(.rari-content-enter) {
+  animation-name: content-enter;
+}
+
+@keyframes loading-exit {
+  to {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes content-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
