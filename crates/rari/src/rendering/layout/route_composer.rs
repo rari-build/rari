@@ -9,7 +9,6 @@ pub struct LayoutInfo {
 #[derive(Debug, Clone)]
 pub struct TemplateInfo {
     pub component_id: String,
-    pub client_component_id: String,
     pub file_path: String,
 }
 
@@ -103,7 +102,6 @@ impl RouteComposer {
             script.push_str(&Self::generate_template_wrapper(
                 i,
                 &template.component_id,
-                &template.client_component_id,
                 &current_element,
                 &template_var,
                 template_key_json,
@@ -161,7 +159,6 @@ impl RouteComposer {
     fn generate_template_wrapper(
         index: usize,
         template_component_id: &str,
-        _template_client_component_id: &str,
         current_element: &str,
         template_var: &str,
         template_key_json: &str,
@@ -461,7 +458,6 @@ mod tests {
     fn template_info(file_path: &str) -> TemplateInfo {
         TemplateInfo {
             component_id: format!("template:{file_path}"),
-            client_component_id: format!("src/app/{}", file_path.trim_end_matches(".tsx")),
             file_path: file_path.to_string(),
         }
     }
@@ -534,7 +530,6 @@ mod tests {
         let wrapper = RouteComposer::generate_template_wrapper(
             0,
             "template:template.tsx",
-            "src/app/template",
             "pageElement",
             "template0",
             "\"/\"",
