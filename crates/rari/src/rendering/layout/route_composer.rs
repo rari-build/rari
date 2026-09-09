@@ -541,7 +541,7 @@ mod tests {
         );
 
         let script = format!(
-            r#"
+            r"
             globalThis.React = {{
               createElement(type, props) {{
                 return {{ type, props }};
@@ -558,7 +558,7 @@ mod tests {
               throw new Error('template did not resolve from ~rsc.modules');
             }}
             true
-            "#
+            "
         );
 
         let result = runtime
