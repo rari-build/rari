@@ -192,10 +192,31 @@ impl RouteComposer {
         defer_rsc: bool,
         capture_stream_id: Option<&str>,
     ) -> String {
-        let wrap_with_error_boundary = error_boundary.is_some();
-        let error_component_id_json = error_boundary
-            .map(|e| serde_json::to_string(&e.component_id).unwrap_or_else(|_| "\"\"".to_string()))
-            .unwrap_or_else(|| "\"\"".to_string());
+        let error_boundary_wrap = if let Some(boundary) = error_boundary {
+            let error_component_id_json = serde_json::to_string(&boundary.component_id)
+                .unwrap_or_else(|_| "\"\"".to_string());
+            format!(
+                r"
+                {{
+                    const errorComponentId = {error_component_id_json};
+                    const wrapperComponentId = 'virtual:error-boundary-wrapper.tsx#ErrorBoundaryWrapper';
+
+                    const ErrorWrapper = {{
+                        $$typeof: Symbol.for('react.client.reference'),
+                        $$id: wrapperComponentId,
+                        $$async: false,
+                    }};
+                    elementToRender = globalThis.React.createElement(
+                        ErrorWrapper,
+                        {{ errorComponentId: errorComponentId }},
+                        elementToRender
+                    );
+                }}
+                "
+            )
+        } else {
+            String::new()
+        };
 
         let rsc_render = if defer_rsc {
             if let Some(stream_id) = capture_stream_id {
@@ -234,23 +255,7 @@ impl RouteComposer {
                 const startRSC = performance.now();
 
                 let elementToRender = {final_element};
-
-                if ({wrap_with_error_boundary}) {{
-                    const errorComponentId = {error_component_id_json};
-                    const wrapperComponentId = 'virtual:error-boundary-wrapper.tsx#ErrorBoundaryWrapper';
-
-                    const ErrorWrapper = {{
-                        $$typeof: Symbol.for('react.client.reference'),
-                        $$id: wrapperComponentId,
-                        $$async: false,
-                    }};
-                    elementToRender = globalThis.React.createElement(
-                        ErrorWrapper,
-                        {{ errorComponentId: errorComponentId }},
-                        elementToRender
-                    );
-                }}
-
+                {error_boundary_wrap}
                 {rsc_render}
 
                 timings.rscConversion = performance.now() - startRSC;

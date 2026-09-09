@@ -31,3 +31,12 @@
     transform: translateY(8px);
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(.loading-exit),
+  ::view-transition-new(.content-enter),
+  ::view-transition-old(.rari-loading-exit),
+  ::view-transition-new(.rari-content-enter) {
+    animation: none;
+  }
+}

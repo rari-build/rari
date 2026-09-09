@@ -59,7 +59,7 @@ export function Image(props) {
   const mod = globalThis['~rari']?.ssrModules?.['rari/image'];
   const Impl = mod?.Image ?? mod?.default;
   if (typeof Impl === 'function' && Impl !== Image) {
-    return Impl(props);
+    return globalThis.React.createElement(Impl, props);
   }
   const React = globalThis.React;
   if (React?.createElement) {
