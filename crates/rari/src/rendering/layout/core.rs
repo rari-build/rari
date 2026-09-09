@@ -1355,9 +1355,6 @@ impl LayoutRenderer {
             .iter()
             .map(|template| TemplateInfo {
                 component_id: utils::create_component_id(&template.file_path),
-                client_component_id: utils::normalize_route_component_path_public(
-                    &template.file_path,
-                ),
                 file_path: template.file_path.clone(),
             })
             .collect();
