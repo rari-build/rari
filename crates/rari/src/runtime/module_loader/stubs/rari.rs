@@ -56,11 +56,26 @@ export default {
 
 pub const RARI_IMAGE_STUB: &str = r"
 export function Image(props) {
-  const { src, alt, width, height, className, style, ...rest } = props || {};
-  return {
-    type: 'img',
-    props: { src: typeof src === 'object' ? src.src : src, alt: alt || '', width, height, className, style },
-  };
+  const mod = globalThis['~rari']?.ssrModules?.['rari/image'];
+  const Impl = mod?.Image ?? mod?.default;
+  if (typeof Impl === 'function' && Impl !== Image) {
+    return globalThis.React.createElement(Impl, props);
+  }
+  const React = globalThis.React;
+  if (React?.createElement) {
+    const { src, alt, width, height, className, style, ...rest } = props || {};
+    const imgSrc = typeof src === 'object' && src != null ? src.src : src;
+    return React.createElement('img', {
+      src: imgSrc,
+      alt: alt || '',
+      width,
+      height,
+      className,
+      style,
+      ...rest,
+    });
+  }
+  return null;
 }
 export const DEFAULT_DEVICE_SIZES = [640, 750, 828, 1080, 1200, 1920, 2048, 3840];
 export const DEFAULT_IMAGE_SIZES = [16, 32, 48, 64, 96, 128, 256, 384];

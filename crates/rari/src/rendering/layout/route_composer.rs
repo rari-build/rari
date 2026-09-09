@@ -9,7 +9,6 @@ pub struct LayoutInfo {
 #[derive(Debug, Clone)]
 pub struct TemplateInfo {
     pub component_id: String,
-    pub client_component_id: String,
     pub file_path: String,
 }
 
@@ -103,7 +102,6 @@ impl RouteComposer {
             script.push_str(&Self::generate_template_wrapper(
                 i,
                 &template.component_id,
-                &template.client_component_id,
                 &current_element,
                 &template_var,
                 template_key_json,
@@ -160,8 +158,7 @@ impl RouteComposer {
 
     fn generate_template_wrapper(
         index: usize,
-        _template_component_id: &str,
-        template_client_component_id: &str,
+        template_component_id: &str,
         current_element: &str,
         template_var: &str,
         template_key_json: &str,
@@ -169,13 +166,17 @@ impl RouteComposer {
         format!(
             r#"
             const startTemplate{index} = performance.now();
-            const TemplateComponent{index} = {{
-                $$typeof: Symbol.for('react.client.reference'),
-                $$id: "{template_client_component_id}#default",
-                $$async: false,
-                name: 'default',
-                '~isClientComponent': true,
-            }};
+            let TemplateComponent{index} = globalThis["{template_component_id}"];
+            if (typeof TemplateComponent{index} !== 'function') {{
+                const templateModule{index} = globalThis['~rsc']?.modules?.["{template_component_id}"];
+                if (templateModule{index} != null) {{
+                    TemplateComponent{index} = templateModule{index}.default
+                        ?? Object.values(templateModule{index})[0];
+                }}
+            }}
+            if (!TemplateComponent{index} || typeof TemplateComponent{index} !== 'function') {{
+                throw new Error('Template component {template_component_id} not found');
+            }}
 
             const templateKey{index} = {template_key_json};
             const templateResult{index} = React.createElement(
@@ -195,10 +196,31 @@ impl RouteComposer {
         defer_rsc: bool,
         capture_stream_id: Option<&str>,
     ) -> String {
-        let wrap_with_error_boundary = error_boundary.is_some();
-        let error_component_id_json = error_boundary
-            .map(|e| serde_json::to_string(&e.component_id).unwrap_or_else(|_| "\"\"".to_string()))
-            .unwrap_or_else(|| "\"\"".to_string());
+        let error_boundary_wrap = if let Some(boundary) = error_boundary {
+            let error_component_id_json = serde_json::to_string(&boundary.component_id)
+                .unwrap_or_else(|_| "\"\"".to_string());
+            format!(
+                r"
+                {{
+                    const errorComponentId = {error_component_id_json};
+                    const wrapperComponentId = 'virtual:error-boundary-wrapper.tsx#ErrorBoundaryWrapper';
+
+                    const ErrorWrapper = {{
+                        $$typeof: Symbol.for('react.client.reference'),
+                        $$id: wrapperComponentId,
+                        $$async: false,
+                    }};
+                    elementToRender = globalThis.React.createElement(
+                        ErrorWrapper,
+                        {{ errorComponentId: errorComponentId }},
+                        elementToRender
+                    );
+                }}
+                "
+            )
+        } else {
+            String::new()
+        };
 
         let rsc_render = if defer_rsc {
             if let Some(stream_id) = capture_stream_id {
@@ -237,23 +259,7 @@ impl RouteComposer {
                 const startRSC = performance.now();
 
                 let elementToRender = {final_element};
-
-                if ({wrap_with_error_boundary}) {{
-                    const errorComponentId = {error_component_id_json};
-                    const wrapperComponentId = 'virtual:error-boundary-wrapper.tsx#ErrorBoundaryWrapper';
-
-                    const ErrorWrapper = {{
-                        $$typeof: Symbol.for('react.client.reference'),
-                        $$id: wrapperComponentId,
-                        $$async: false,
-                    }};
-                    elementToRender = globalThis.React.createElement(
-                        ErrorWrapper,
-                        {{ errorComponentId: errorComponentId }},
-                        elementToRender
-                    );
-                }}
-
+                {error_boundary_wrap}
                 {rsc_render}
 
                 timings.rscConversion = performance.now() - startRSC;
@@ -452,7 +458,6 @@ mod tests {
     fn template_info(file_path: &str) -> TemplateInfo {
         TemplateInfo {
             component_id: format!("template:{file_path}"),
-            client_component_id: format!("src/app/{}", file_path.trim_end_matches(".tsx")),
             file_path: file_path.to_string(),
         }
     }
@@ -498,13 +503,64 @@ mod tests {
         );
 
         assert!(script.contains("TemplateComponent0"));
-        assert!(script.contains(r#"$$id: "src/app/template#default""#));
+        assert!(script.contains(r#"globalThis["template:template.tsx"]"#));
+        assert!(
+            script.contains(r#"globalThis['~rsc']?.modules?.["template:template.tsx"]"#),
+            "templates must fall back to the SSR module registry used by RscModuleManager.register"
+        );
         assert!(script.contains("templateKey0 = \"/about\""));
         assert!(script.contains("key: templateKey0"));
+        assert!(
+            !script.contains("react.client.reference"),
+            "server templates must resolve from the SSR module registry, not forced client refs"
+        );
         assert!(
             !script.contains("pathname: \"/about\", children: pageElement"),
             "template wrapper must not include pathname as a prop, only key and children"
         );
+    }
+
+    #[tokio::test]
+    async fn test_server_template_resolves_from_rsc_module_manager_registry() {
+        use std::sync::Arc;
+
+        use crate::runtime::JsExecutionRuntime;
+
+        let runtime = Arc::new(JsExecutionRuntime::new(None));
+        let wrapper = RouteComposer::generate_template_wrapper(
+            0,
+            "template:template.tsx",
+            "pageElement",
+            "template0",
+            "\"/\"",
+        );
+
+        let script = format!(
+            r"
+            globalThis.React = {{
+              createElement(type, props) {{
+                return {{ type, props }};
+              }},
+            }};
+            const pageElement = {{ kind: 'page' }};
+            const timings = {{}};
+            globalThis['~rsc'] = {{ modules: {{}} }};
+            function RegisteredTemplate() {{ return null; }}
+            globalThis['~rsc'].modules['template:template.tsx'] = {{ default: RegisteredTemplate }};
+            delete globalThis['template:template.tsx'];
+            {wrapper}
+            if (template0.type !== RegisteredTemplate) {{
+              throw new Error('template did not resolve from ~rsc.modules');
+            }}
+            true
+            "
+        );
+
+        let result = runtime
+            .execute_script("template_rsc_modules_fallback".to_string(), script)
+            .await
+            .expect("template registry fallback script should execute");
+        assert_eq!(result, serde_json::Value::Bool(true));
     }
 
     #[test]

@@ -66,6 +66,14 @@ export default function RootLayout({ children }: LayoutProps) {
                   Actions
                 </a>
               </li>
+              <li>
+                <a
+                  href="/react-19"
+                  className="px-4 py-2 text-sm font-medium text-gray-700 no-underline hover:text-gray-900 hover:bg-gray-50 rounded-md transition-colors"
+                >
+                  React 19.3
+                </a>
+              </li>
             </ul>
           </div>
         </div>

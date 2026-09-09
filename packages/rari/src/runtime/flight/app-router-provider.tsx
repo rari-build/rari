@@ -12,7 +12,7 @@ import { ActionDidRevalidateStaticAndDynamic } from '../actions/revalidation-kin
 import { HmrFailureBanner } from '../boundaries/hmr-failure-banner'
 import { preloadModulesFromFlightProtocol } from '../shared/preload-modules'
 import { getRariWindowBag } from '../shared/rari-global'
-import { commitNavigationPayload } from './commit-navigation-payload'
+import { commitNavigationPayload, resolveCommitTransitionTypes } from './commit-navigation-payload'
 import { mergeFlightRefresh } from './merge-refresh'
 import { normalizeFlightContent } from './normalize-flight-content'
 import { resolvePendingScrollToTop } from './pending-scroll'
@@ -30,6 +30,7 @@ interface RscPayload {
 interface NavigationOptions {
   readonly historyKey?: string
   readonly scroll?: boolean
+  readonly replace?: boolean
   readonly [key: string]: unknown
 }
 
@@ -523,13 +524,17 @@ export function AppRouterProvider({
           !hasHash &&
           detail.options.scroll !== false
         const navigationId = detail.navigationId
-        const useHistoryKey = detail.options.historyKey != null && detail.options.historyKey !== ''
 
         commitNavigationPayload({
           parsedPayload,
           shouldScrollToTop,
           navigationId,
-          useTransition: !isStreamingResponse && !useHistoryKey,
+          useTransition: true,
+          transitionTypes: resolveCommitTransitionTypes({
+            isStreaming: isStreamingResponse,
+            historyKey: detail.options.historyKey,
+            replace: detail.options.replace,
+          }),
           currentNavigationIdRef,
           pendingScrollPayloadRef,
           setRenderKey,

@@ -1292,8 +1292,18 @@ impl LayoutRenderer {
                 const pageElement = (isAsync && useSuspense)
                     ? React.createElement(
                         React.Suspense,
-                        {{ fallback: React.createElement(LoadingComponent, {{}}) }},
-                        React.createElement(PageComponent, pageProps)
+                        {{
+                          fallback: React.createElement(
+                            React.ViewTransition,
+                            {{ exit: 'rari-loading-exit', default: 'none' }},
+                            React.createElement(LoadingComponent, {{}})
+                          ),
+                        }},
+                        React.createElement(
+                          React.ViewTransition,
+                          {{ enter: 'rari-content-enter', default: 'none' }},
+                          React.createElement(PageComponent, pageProps)
+                        )
                       )
                     : React.createElement(PageComponent, pageProps);
 
@@ -1345,9 +1355,6 @@ impl LayoutRenderer {
             .iter()
             .map(|template| TemplateInfo {
                 component_id: utils::create_component_id(&template.file_path),
-                client_component_id: utils::normalize_route_component_path_public(
-                    &template.file_path,
-                ),
                 file_path: template.file_path.clone(),
             })
             .collect();
