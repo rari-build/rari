@@ -1292,8 +1292,18 @@ impl LayoutRenderer {
                 const pageElement = (isAsync && useSuspense)
                     ? React.createElement(
                         React.Suspense,
-                        {{ fallback: React.createElement(LoadingComponent, {{}}) }},
-                        React.createElement(PageComponent, pageProps)
+                        {{
+                          fallback: React.createElement(
+                            React.ViewTransition,
+                            {{ exit: 'rari-loading-exit', default: 'none' }},
+                            React.createElement(LoadingComponent, {{}})
+                          ),
+                        }},
+                        React.createElement(
+                          React.ViewTransition,
+                          {{ enter: 'rari-content-enter', default: 'none' }},
+                          React.createElement(PageComponent, pageProps)
+                        )
                       )
                     : React.createElement(PageComponent, pageProps);
 

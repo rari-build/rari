@@ -67,6 +67,7 @@ function createReactDomShimSource(): string {
   ).join('\n\n')
 
   const defaultFields = [
+    'browser',
     ...REACT_DOM_CLIENT_STUBS,
     '__DOM_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE: Internals',
   ].join(',\n  ')
@@ -96,6 +97,13 @@ const Internals = {
   findDOMNode: null,
 }
 
+const REACT_RECOVERABLE_TYPE = Symbol.for('react.recoverable')
+
+/** SSR-relevant: marks work that should only run in the browser. */
+export function browser(reason) {
+  return { $$typeof: REACT_RECOVERABLE_TYPE, _reason: reason }
+}
+
 /** Client-only APIs - safe no-ops during SSR module evaluation. */
 ${stubExports}
 
@@ -111,6 +119,7 @@ const entries: BundleEntry[] = [
     name: 'react',
     cjsFile: resolveReactCjs('react', 'react'),
     namedExports: [
+      'Activity',
       'Children',
       'Component',
       'Fragment',
@@ -118,6 +127,8 @@ const entries: BundleEntry[] = [
       'PureComponent',
       'StrictMode',
       'Suspense',
+      'ViewTransition',
+      'addTransitionType',
       'cache',
       'cloneElement',
       'createContext',
@@ -165,6 +176,7 @@ const entries: BundleEntry[] = [
       'Profiler',
       'StrictMode',
       'Suspense',
+      'ViewTransition',
       'cache',
       'cloneElement',
       'createContext',
