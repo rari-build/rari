@@ -254,7 +254,7 @@ export default {{}};
 "#
                     );
 
-                    self.storage.set_module_code(stub_specifier.clone(), stub_code);
+                    self.storage.set_module_code(stub_specifier, stub_code);
                 }
             }
         }

@@ -434,7 +434,7 @@ impl AppRouter {
                     continue;
                 }
 
-                let mut layout_entry = layout.clone();
+                let mut layout_entry = layout;
                 layout_entry.is_root = Self::normalized_dir(&layout_entry.file_path).is_empty()
                     || layout_entry.path == "/";
                 layouts.push(layout_entry);

@@ -94,14 +94,8 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
         with:
-          toolchain: nightly-2026-07-23
+          toolchain: nightly
           targets: ${{ matrix.target }}
-
-      # TODO: Remove once nightly issue is fixed.
-      # nightly-2026-07-24+ ICEs on tokio with opt-level=3 + linker-plugin-lto + codegen-units=1
-      - name: Pin rust-toolchain.toml to nightly-2026-07-23
-        run: printf '[toolchain]\nchannel = "nightly-2026-07-23"\nprofile = "default"\n'
-          > rust-toolchain.toml
 
       - uses: ./.github/actions/setup-rust-build-deps
         with:
@@ -485,7 +479,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
         with:
-          toolchain: nightly-2026-07-23
+          toolchain: nightly
           targets: ${{ matrix.target }}
 
       - uses: ./.github/actions/setup-rust-build-deps

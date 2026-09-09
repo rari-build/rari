@@ -125,16 +125,20 @@ describe('google font loader helpers', () => {
   })
 
   it('includes extra axes for variable fonts', () => {
-    expect(buildGoogleCssUrl('Inter', { axes: ['opsz'] })).toBe(
+    const interAxes = [
+      { tag: 'opsz', min: 14, max: 32 },
+      { tag: 'wght', min: 100, max: 900 },
+    ] as const
+    expect(buildGoogleCssUrl('Inter', { axes: ['opsz'] }, interAxes)).toBe(
       'https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,100..900&display=swap',
     )
-    expect(buildGoogleCssUrl('Inter', { weight: '100 500', axes: ['opsz'] })).toBe(
+    expect(buildGoogleCssUrl('Inter', { weight: '100 500', axes: ['opsz'] }, interAxes)).toBe(
       'https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,100..500&display=swap',
     )
-    expect(buildGoogleCssUrl('Inter', { weight: 400, axes: ['opsz'] })).toBe(
+    expect(buildGoogleCssUrl('Inter', { weight: 400, axes: ['opsz'] }, interAxes)).toBe(
       'https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400&display=swap',
     )
-    expect(buildGoogleCssUrl('Inter', { weight: [400, 700], axes: ['opsz'] })).toBe(
+    expect(buildGoogleCssUrl('Inter', { weight: [400, 700], axes: ['opsz'] }, interAxes)).toBe(
       'https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,700&display=swap',
     )
   })
@@ -217,7 +221,11 @@ describe('google font loader helpers', () => {
 
   it('warns on unknown subsets for a known Google family', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    warnGoogleFontOptions('Inter', { subsets: ['latin', 'not-a-subset'], preload: false })
+    warnGoogleFontOptions('Inter', { subsets: ['latin', 'not-a-subset'], preload: false }, [
+      'latin',
+      'latin-ext',
+      'cyrillic',
+    ])
     expect(warn).toHaveBeenCalledOnce()
     expect(warn.mock.calls[0]?.[0]).toContain('unknown subset')
     expect(warn.mock.calls[0]?.[0]).toContain('not-a-subset')

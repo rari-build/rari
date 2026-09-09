@@ -1,8 +1,9 @@
+import type { GoogleFontAxisRange } from './google-meta'
 import type { GoogleFontOptions, ResolvedFontFace } from '@/font/types'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fontFormatFromPath, normalizeDisplay, normalizeStyle, normalizeWeight } from './css'
-import { GOOGLE_FONT_AXES } from './google-catalog'
+import { loadGoogleFontFamilyMeta } from './google-meta'
 import { warnGoogleFontOptions } from './google-metadata'
 import { contentHash, ensureCacheDir } from './hash'
 
@@ -84,15 +85,20 @@ export function variableWeightRange(weight: GoogleFontOptions['weight']): string
   return '100..900'
 }
 
-function catalogAxisRange(family: string, tag: string): string | null {
-  const axes = GOOGLE_FONT_AXES[family]
-  if (axes == null) return null
-  const axis = axes.find(entry => entry.tag === tag)
+function catalogAxisRange(
+  axisRanges: readonly GoogleFontAxisRange[] | null | undefined,
+  tag: string,
+): string | null {
+  if (axisRanges == null) return null
+  const axis = axisRanges.find(entry => entry.tag === tag)
   if (axis == null) return null
   return `${axis.min}..${axis.max}`
 }
 
-function wghtAxisRange(family: string, weight: GoogleFontOptions['weight']): string {
+function wghtAxisRange(
+  weight: GoogleFontOptions['weight'],
+  axisRanges?: readonly GoogleFontAxisRange[] | null,
+): string {
   if (isVariableWeight(weight)) {
     if (typeof weight === 'string' && isWeightRange(weight)) return variableWeightRange(weight)
     if (Array.isArray(weight)) {
@@ -100,13 +106,13 @@ function wghtAxisRange(family: string, weight: GoogleFontOptions['weight']): str
         if (typeof value === 'string' && isWeightRange(value)) return variableWeightRange(value)
       }
     }
-    return catalogAxisRange(family, 'wght') ?? variableWeightRange(weight)
+    return catalogAxisRange(axisRanges, 'wght') ?? variableWeightRange(weight)
   }
   if (weight != null) {
     const weights = weightList(weight)
     if (weights.length === 1) return `${weights[0]}..${weights[0]}`
   }
-  return catalogAxisRange(family, 'wght') ?? '100..900'
+  return catalogAxisRange(axisRanges, 'wght') ?? '100..900'
 }
 
 function styleValues(style: GoogleFontOptions['style']): string[] {
@@ -130,7 +136,11 @@ function staticWeightsForAxes(weight: GoogleFontOptions['weight']): string[] | n
   return weightList(weight)
 }
 
-export function buildGoogleCssUrl(family: string, options: GoogleFontOptions): string {
+export function buildGoogleCssUrl(
+  family: string,
+  options: GoogleFontOptions,
+  axisRanges?: readonly GoogleFontAxisRange[] | null,
+): string {
   const familyParam = toGoogleFamilyParam(family)
   const display = normalizeDisplay(options.display)
   const styles = styleValues(options.style)
@@ -146,7 +156,7 @@ export function buildGoogleCssUrl(family: string, options: GoogleFontOptions): s
     )
     const staticWeights = staticWeightsForAxes(options.weight)
     const axisValue = (name: string, wghtValue: string) =>
-      name === 'wght' ? wghtValue : (catalogAxisRange(family, name) ?? '1..1000')
+      name === 'wght' ? wghtValue : (catalogAxisRange(axisRanges, name) ?? '1..1000')
 
     if (staticWeights != null) {
       const tuples = staticWeights.map(weight =>
@@ -165,7 +175,7 @@ export function buildGoogleCssUrl(family: string, options: GoogleFontOptions): s
         axis = `${named.join(',')}@${tuples.join(';')}`
       }
     } else {
-      const wghtRange = wghtAxisRange(family, options.weight)
+      const wghtRange = wghtAxisRange(options.weight, axisRanges)
       const values = named.map(name => axisValue(name, wghtRange))
       if (hasItalic && hasNormal) {
         axis = `ital,${named.join(',')}@0,${values.join(',')};1,${values.join(',')}`
@@ -278,9 +288,9 @@ export async function resolveGoogleFontFaces(
   options: GoogleFontOptions,
   cacheDir: string,
 ): Promise<ResolvedFontFace[]> {
-  warnGoogleFontOptions(family, options)
-
-  const cssUrl = buildGoogleCssUrl(family, options)
+  const meta = await loadGoogleFontFamilyMeta(cacheDir, family)
+  warnGoogleFontOptions(family, options, meta?.subsets)
+  const cssUrl = buildGoogleCssUrl(family, options, meta?.axisRanges)
   const cssCachePath = path.join(cacheDir, `${contentHash(cssUrl)}.css`)
   let css: string
   if (fs.existsSync(cssCachePath)) {

@@ -1,5 +1,6 @@
 import type { Metadata } from 'rari'
 import { Image } from 'rari/image'
+import silhouetteOfTrees from '@/assets/images/silhouette-of-trees.jpg'
 
 export default function TestImagePage() {
   return (
@@ -75,14 +76,14 @@ export default function TestImagePage() {
           <h2 className="text-2xl font-bold text-gray-900">Local Images</h2>
         </div>
         <p className="text-sm text-gray-600 mb-6">
-          Optimized images from your public folder with automatic sizing
+          Optimized images imported from <code>src/assets</code> with automatic sizing
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-3">
             <div className="text-sm font-medium text-gray-700">Standard Loading</div>
             <div className="rounded-lg overflow-hidden border border-gray-200">
               <Image
-                src="/images/silhouette-of-trees.jpg"
+                src={silhouetteOfTrees}
                 alt="Silhouette of palm trees at night"
                 width={600}
                 height={400}
@@ -95,7 +96,7 @@ export default function TestImagePage() {
             <div className="text-sm font-medium text-gray-700">Priority Loading</div>
             <div className="rounded-lg overflow-hidden border border-gray-200">
               <Image
-                src="/images/silhouette-of-trees.jpg"
+                src={silhouetteOfTrees}
                 alt="Silhouette of palm trees at night"
                 width={600}
                 height={400}
@@ -129,7 +130,7 @@ export default function TestImagePage() {
           </div>
           <div className="rounded-lg overflow-hidden border border-gray-200 hover:shadow-md transition-shadow">
             <Image
-              src="/images/silhouette-of-trees.jpg"
+              src={silhouetteOfTrees}
               alt="Silhouette of palm trees at night"
               width={400}
               height={300}
@@ -160,7 +161,7 @@ export default function TestImagePage() {
         </p>
         <div className="relative w-full h-96 rounded-lg overflow-hidden border border-gray-200">
           <Image
-            src="/images/silhouette-of-trees.jpg"
+            src={silhouetteOfTrees}
             alt="Silhouette of palm trees at night"
             fill
             style={{ objectFit: 'cover' }}
@@ -186,7 +187,7 @@ export default function TestImagePage() {
             </div>
             <div className="rounded-lg overflow-hidden border border-gray-200">
               <Image
-                src="/images/silhouette-of-trees.jpg"
+                src={silhouetteOfTrees}
                 alt="Silhouette of palm trees at night"
                 width={400}
                 height={267}
@@ -205,7 +206,7 @@ export default function TestImagePage() {
             </div>
             <div className="rounded-lg overflow-hidden border-2 border-indigo-200">
               <Image
-                src="/images/silhouette-of-trees.jpg"
+                src={silhouetteOfTrees}
                 alt="Silhouette of palm trees at night"
                 width={400}
                 height={267}
@@ -224,7 +225,7 @@ export default function TestImagePage() {
             </div>
             <div className="rounded-lg overflow-hidden border border-gray-200">
               <Image
-                src="/images/silhouette-of-trees.jpg"
+                src={silhouetteOfTrees}
                 alt="Silhouette of palm trees at night"
                 width={400}
                 height={267}
@@ -247,7 +248,7 @@ export default function TestImagePage() {
         </p>
         <div className="rounded-lg overflow-hidden border border-gray-200">
           <Image
-            src="/images/silhouette-of-trees.jpg"
+            src={silhouetteOfTrees}
             alt="Silhouette of palm trees at night"
             width={1200}
             height={800}
@@ -268,7 +269,7 @@ export default function TestImagePage() {
         </p>
         <div className="rounded-lg overflow-hidden border border-gray-200 max-w-2xl">
           <Image
-            src="/images/silhouette-of-trees.jpg"
+            src={silhouetteOfTrees}
             alt="Silhouette of palm trees at night"
             width={600}
             height={400}

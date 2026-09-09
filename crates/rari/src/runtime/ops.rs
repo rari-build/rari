@@ -774,7 +774,7 @@ pub fn op_delete_cookie(
             );
         } else {
             for (path, domain) in cookies_to_delete {
-                let deletion_path = path.clone().unwrap_or_else(|| "/".to_string());
+                let deletion_path = path.unwrap_or_else(|| "/".to_string());
                 ctx.pending_cookies.insert(
                     PendingCookieKey::new(&name, Some(&deletion_path), domain.as_deref()),
                     PendingCookie {

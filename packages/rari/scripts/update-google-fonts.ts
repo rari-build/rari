@@ -5,17 +5,8 @@ import { fileURLToPath } from 'node:url'
 
 const FONT_METADATA_URL = 'https://fonts.google.com/metadata/fonts'
 
-interface GoogleAxisMeta {
-  readonly tag: string
-  readonly min?: number
-  readonly max?: number
-}
-
 interface GoogleFamilyMeta {
   readonly family: string
-  readonly subsets?: readonly string[]
-  readonly fonts?: Readonly<Record<string, unknown>>
-  readonly axes?: readonly GoogleAxisMeta[]
 }
 
 interface GoogleFontsMetadata {
@@ -25,21 +16,10 @@ interface GoogleFontsMetadata {
 interface NormalizedFamily {
   readonly family: string
   readonly exportName: string
-  readonly subsets: readonly string[]
-  readonly weights: readonly string[]
-  readonly styles: readonly string[]
-  readonly axes: readonly string[]
-  readonly axisRanges: ReadonlyArray<{
-    readonly tag: string
-    readonly min: number
-    readonly max: number
-  }>
-  readonly hasVariableWeight: boolean
 }
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const googlePath = path.join(root, 'src/font/google.ts')
-const catalogPath = path.join(root, 'src/vite/font/google-catalog.ts')
 
 const GENERATED_FILE_BANNER = [
   '/**',
@@ -131,102 +111,11 @@ function parseMetadataPayload(raw: string): unknown {
   return JSON.parse(text) as unknown
 }
 
-function uniqueSorted(values: Iterable<string>): string[] {
-  return [...new Set(values)].sort((a, b) => a.localeCompare(b))
-}
-
 function normalizeFamily(entry: GoogleFamilyMeta): NormalizedFamily {
-  const subsets = uniqueSorted(
-    (entry.subsets ?? []).filter(subset => subset !== 'menu' && subset !== ''),
-  )
-
-  const weights: string[] = []
-  const styles = new Set<string>()
-  for (const key of Object.keys(entry.fonts ?? {})) {
-    if (key.endsWith('i')) {
-      styles.add('italic')
-      const weight = key.slice(0, -1)
-      if (weight !== '') weights.push(weight)
-    } else {
-      styles.add('normal')
-      weights.push(key)
-    }
-  }
-
-  const axisRanges = (entry.axes ?? [])
-    .filter(
-      (axis): axis is GoogleAxisMeta & { tag: string; min: number; max: number } =>
-        typeof axis.tag === 'string' &&
-        axis.tag !== '' &&
-        typeof axis.min === 'number' &&
-        typeof axis.max === 'number',
-    )
-    .map(axis => ({ tag: axis.tag, min: axis.min, max: axis.max }))
-    .sort((a, b) => a.tag.localeCompare(b.tag))
-  const axes = uniqueSorted(axisRanges.map(axis => axis.tag))
-  const hasVariableWeight = axes.includes('wght')
-  const styleList = [...styles]
-  if (styleList.length === 0) styleList.push('normal')
-
   return {
     family: entry.family,
     exportName: toExportName(entry.family),
-    subsets,
-    weights: uniqueSorted(weights),
-    styles: uniqueSorted(styleList),
-    axes,
-    axisRanges,
-    hasVariableWeight,
   }
-}
-
-function quoteUnion(values: readonly string[]): string {
-  if (values.length === 0) return 'never'
-  return values.map(value => JSON.stringify(value)).join(' | ')
-}
-
-function optionsTypeName(exportName: string): string {
-  return `${exportName}Options`
-}
-
-function emitOptionsType(family: NormalizedFamily): string[] {
-  const lines: string[] = []
-  const name = optionsTypeName(family.exportName)
-
-  const weightLiterals = [...family.weights]
-  if (family.hasVariableWeight) weightLiterals.push('variable')
-  const weightUnion = quoteUnion(weightLiterals)
-  const styleUnion = quoteUnion(family.styles)
-  const subsetUnion = quoteUnion(family.subsets)
-  const axisUnion = quoteUnion(family.axes)
-
-  lines.push(`interface ${name} {`)
-  if (weightLiterals.length > 0) {
-    const weightType = family.hasVariableWeight
-      ? `${weightUnion} | number | \`\${number} \${number}\` | ReadonlyArray<${weightUnion} | number>`
-      : `${weightUnion} | number | ReadonlyArray<${weightUnion} | number>`
-    lines.push(`  weight?: ${weightType}`)
-  } else {
-    lines.push(`  weight?: GoogleFontOptions['weight']`)
-  }
-  lines.push(`  style?: ${styleUnion} | ReadonlyArray<${styleUnion}>`)
-  if (family.subsets.length > 0) {
-    lines.push(`  subsets?: ReadonlyArray<${subsetUnion}>`)
-  } else {
-    lines.push(`  subsets?: GoogleFontOptions['subsets']`)
-  }
-  lines.push(`  display?: FontDisplay`)
-  lines.push(`  variable?: string`)
-  lines.push(`  preload?: boolean`)
-  lines.push(`  fallback?: readonly string[]`)
-  lines.push(`  adjustFontFallback?: boolean`)
-  if (family.axes.length > 0) {
-    lines.push(`  axes?: ReadonlyArray<${axisUnion}>`)
-  } else {
-    lines.push(`  axes?: GoogleFontOptions['axes']`)
-  }
-  lines.push(`}`)
-  return lines
 }
 
 const METADATA_FETCH_TIMEOUT_MS = 30_000
@@ -272,69 +161,32 @@ const families = [...byExport.values()].sort((a, b) => a.family.localeCompare(b.
 
 const googleOut: string[] = []
 googleOut.push(GENERATED_FILE_BANNER)
-googleOut.push("import type { Font, FontDisplay, GoogleFontOptions } from './types'")
+googleOut.push("import type { Font, GoogleFontOptions } from './types'")
 googleOut.push('')
-googleOut.push(
-  'export type GoogleFontFn<Options = GoogleFontOptions> = (options?: Options) => Font',
-)
+googleOut.push('export type GoogleFontFn = (options?: GoogleFontOptions) => Font')
 googleOut.push('')
-googleOut.push('function createGoogleFontStub(family: string): GoogleFontFn {')
-googleOut.push('  return function googleFont(_options: GoogleFontOptions = {}): Font {')
-googleOut.push('    throw new Error(')
+googleOut.push('const googleFontStub: GoogleFontFn = function googleFont(')
+googleOut.push('  _options: GoogleFontOptions = {},')
+googleOut.push('): Font {')
+googleOut.push('  throw new Error(')
 googleOut.push(
-  '      `\\`$' +
-    '{family}()\\` from \\`rari/font/google\\` must be compiled by the rari Vite plugin. Add \\`rari()\\` to your Vite config, and pass a static options object.`,',
+  "    'Google font imports from `rari/font/google` must be compiled by the rari Vite plugin. Add `rari()` to your Vite config, and pass a static options object.',",
 )
-googleOut.push('    )')
-googleOut.push('  }')
+googleOut.push('  )')
 googleOut.push('}')
 googleOut.push('')
 
 for (const family of families) {
-  googleOut.push(...emitOptionsType(family))
-  googleOut.push(
-    `export const ${family.exportName}: GoogleFontFn<${optionsTypeName(family.exportName)}> = /* #__PURE__ */ createGoogleFontStub(${JSON.stringify(family.exportName)})`,
-  )
-  googleOut.push('')
+  googleOut.push(`export const ${family.exportName}: GoogleFontFn = googleFontStub`)
 }
 
-googleOut.push('export type { Font, FontDisplay, GoogleFontOptions }')
+googleOut.push('')
+googleOut.push("export type { Font, FontDisplay, GoogleFontOptions } from './types'")
 googleOut.push('')
 
 fs.writeFileSync(googlePath, googleOut.join('\n'))
 
-const catalogOut: string[] = []
-catalogOut.push(GENERATED_FILE_BANNER)
-catalogOut.push('')
-catalogOut.push('export interface GoogleFontAxisRange {')
-catalogOut.push('  readonly tag: string')
-catalogOut.push('  readonly min: number')
-catalogOut.push('  readonly max: number')
-catalogOut.push('}')
-catalogOut.push('')
-catalogOut.push('/** Family display name -> allowed subsets (excludes `menu`). */')
-catalogOut.push(
-  'export const GOOGLE_FONT_SUBSETS: Readonly<Partial<Record<string, readonly string[]>>> = {',
-)
-for (const family of families) {
-  catalogOut.push(`  ${JSON.stringify(family.family)}: ${JSON.stringify(family.subsets)},`)
-}
-catalogOut.push('}')
-catalogOut.push('')
-catalogOut.push('/** Family display name -> variable axis ranges from Google metadata. */')
-catalogOut.push(
-  'export const GOOGLE_FONT_AXES: Readonly<Partial<Record<string, readonly GoogleFontAxisRange[]>>> = {',
-)
-for (const family of families) {
-  if (family.axisRanges.length === 0) continue
-  catalogOut.push(`  ${JSON.stringify(family.family)}: ${JSON.stringify(family.axisRanges)},`)
-}
-catalogOut.push('}')
-catalogOut.push('')
-
-fs.writeFileSync(catalogPath, catalogOut.join('\n'))
-
-const formatTargets = [path.relative(root, googlePath), path.relative(root, catalogPath)]
+const formatTargets = [path.relative(root, googlePath)]
 const format = spawnSync('pnpm', ['exec', 'vp', 'fmt', ...formatTargets], {
   cwd: root,
   encoding: 'utf8',

@@ -1,7 +1,10 @@
 import type { GoogleFontOptions } from '@/font/types'
-import { GOOGLE_FONT_SUBSETS } from './google-catalog'
 
-export function warnGoogleFontOptions(family: string, options: GoogleFontOptions): void {
+export function warnGoogleFontOptions(
+  family: string,
+  options: GoogleFontOptions,
+  availableSubsets?: readonly string[] | null,
+): void {
   const hasSubsets = options.subsets != null && options.subsets.length > 0
   const preload = hasSubsets ? options.preload !== false : options.preload === true
   const subsets = options.subsets
@@ -13,15 +16,13 @@ export function warnGoogleFontOptions(family: string, options: GoogleFontOptions
   }
 
   if (subsets == null || subsets.length === 0) return
+  if (availableSubsets == null || availableSubsets.length === 0) return
 
-  const available = GOOGLE_FONT_SUBSETS[family]
-  if (available == null) return
-
-  const allowed = new Set(available.map(subset => subset.toLowerCase()))
+  const allowed = new Set(availableSubsets.map(subset => subset.toLowerCase()))
   const unknown = subsets.filter(subset => !allowed.has(subset.toLowerCase()))
   if (unknown.length === 0) return
 
   console.warn(
-    `[rari/font] ${family}: unknown subset(s) ${unknown.map(subset => JSON.stringify(subset)).join(', ')}. Available: ${available.join(', ')}`,
+    `[rari/font] ${family}: unknown subset(s) ${unknown.map(subset => JSON.stringify(subset)).join(', ')}. Available: ${availableSubsets.join(', ')}`,
   )
 }
