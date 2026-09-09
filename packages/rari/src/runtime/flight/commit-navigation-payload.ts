@@ -67,12 +67,12 @@ export function commitNavigationPayload<T extends object>(
 
   if (useTransition) {
     startTransition(() => {
+      if (currentNavigationIdRef.current !== navigationId) return
       if (transitionTypes != null) {
         for (const type of transitionTypes) {
           addTransitionType(type)
         }
       }
-      if (currentNavigationIdRef.current !== navigationId) return
       applyCommit()
     })
   } else {
