@@ -176,10 +176,7 @@ impl ComponentRegistry {
         self.dependency_graph.insert(component_id.clone(), deps_set.clone());
 
         for dep in deps_set {
-            self.reverse_dependency_graph
-                .entry(dep.clone())
-                .or_default()
-                .insert(component_id.clone());
+            self.reverse_dependency_graph.entry(dep).or_default().insert(component_id.clone());
         }
 
         Ok(())

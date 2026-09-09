@@ -5,7 +5,6 @@ edition = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
 description = { workspace = true }
-homepage = { workspace = true }
 repository = { workspace = true }
 documentation = { workspace = true }
 readme = { workspace = true }
@@ -71,7 +70,7 @@ deno_package_json = { workspace = true }
 deno_semver = { workspace = true }
 
 # === Async & Concurrency ===
-async-compression = { version = "0.4.43", features = ["brotli", "gzip", "tokio", "zstd"] }
+async-compression = { version = "0.4.46", features = ["brotli", "gzip", "tokio", "zstd"] }
 async-stream = "0.3.6"
 async-trait = "0.1.92"
 futures = "0.3.34"
@@ -100,7 +99,7 @@ thiserror = { workspace = true }
 axum = { version = "0.8.9", features = ["macros", "ws"] }
 colored = { workspace = true }
 http = "1.5.0"
-reqwest = { version = "0.13.4", default-features = false, features = [
+reqwest = { version = "0.13.5", default-features = false, features = [
   "blocking",
   "rustls",
   "stream",
@@ -125,7 +124,7 @@ resvg = "0.48.1"
 swash = "0.2.10"
 taffy = "0.14.0"
 webp = "0.3.1"
-wuff = "0.2.8"
+wuff = "0.2.9"
 zeno = "0.3.3"
 
 # === Serialization ===
@@ -140,12 +139,6 @@ libc = "0.2.189"
 nix = { workspace = true, features = ["term"] }
 rustyline = { workspace = true }
 sys_traits = { workspace = true }
-windows-sys = { workspace = true, features = [
-  "Win32_Foundation",
-  "Win32_Storage_FileSystem",
-  "Win32_System_Console",
-  "Win32_UI_Input_KeyboardAndMouse",
-] }
 
 # === TLS & Crypto ===
 hex = { workspace = true }
@@ -156,9 +149,9 @@ sha2 = { workspace = true }
 bytes = { version = "1.12.1", features = ["serde"] }
 cow-utils = { workspace = true }
 dashmap = "6.2.1"
-lru = "0.18.3"
+lru = "0.18.4"
 parking_lot = { workspace = true }
-redis = { version = "1.6.0", default-features = false, features = ["tokio-comp"] }
+redis = { version = "1.7.0", default-features = false, features = ["tokio-comp"] }
 redb = "4.2.0"
 regex = { workspace = true }
 rustc-hash = { workspace = true }
@@ -167,6 +160,14 @@ uuid = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 signal-hook = { version = "0.4.4", features = ["iterator"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = [
+  "Win32_Foundation",
+  "Win32_Storage_FileSystem",
+  "Win32_System_Console",
+  "Win32_UI_Input_KeyboardAndMouse",
+] }
 
 [lints]
 workspace = true

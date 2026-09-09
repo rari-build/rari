@@ -1,5 +1,5 @@
 [package]
-name = "rari_prepare_binaries"
+name = "rari-prepare-binaries"
 edition = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }

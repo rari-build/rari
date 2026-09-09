@@ -391,9 +391,7 @@ impl Server {
         }
 
         if has_app_router {
-            if config.is_production() {
-                router = router.route("/assets/{*path}", routing::get(serve_static_asset));
-            }
+            router = router.route("/assets/{*path}", routing::get(serve_static_asset));
 
             router = router
                 .route("/", routing::get(handle_app_route))

@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { styleText } from 'node:util'
-import { cancel, confirm, intro, isCancel, outro, select, spinner, text } from '@clack/prompts'
+import { cancel, confirm, intro, outro, select, spinner, text } from '@clack/prompts'
 
 const TEMPLATE_PLACEHOLDER_REGEX = /\{\{PROJECT_NAME\}\}/g
 const PACKAGE_MANAGER_PLACEHOLDER_REGEX = /\{\{PACKAGE_MANAGER\}\}/g
@@ -31,6 +31,14 @@ const packageManagers = {
   bun: 'bun',
 } as const
 
+function requireAnswer<T>(value: T | symbol): T {
+  if (typeof value === 'symbol') {
+    cancel('Operation cancelled.')
+    process.exit(0)
+  }
+  return value
+}
+
 async function main() {
   intro(styleText(['bgCyan', 'black'], ' create-rari-app '))
 
@@ -52,63 +60,49 @@ async function main() {
       process.exit(1)
     }
   } else {
-    const promptedName = await text({
-      message: 'What is your project named?',
-      placeholder: 'my-rari-app',
-      validate: value => {
-        if (value == null || value === '') return 'Please enter a project name.'
-        if (value.includes(' ')) return 'Project name cannot contain spaces.'
-        if (!PROJECT_NAME_REGEX.test(value))
-          return 'Project name can only contain letters, numbers, hyphens, underscores, slashes, and @ symbol.'
+    projectName = requireAnswer(
+      await text({
+        message: 'What is your project named?',
+        placeholder: 'my-rari-app',
+        validate: value => {
+          if (value == null || value === '') return 'Please enter a project name.'
+          if (value.includes(' ')) return 'Project name cannot contain spaces.'
+          if (!PROJECT_NAME_REGEX.test(value))
+            return 'Project name can only contain letters, numbers, hyphens, underscores, slashes, and @ symbol.'
 
-        return undefined
-      },
-    })
-
-    if (isCancel(promptedName)) {
-      cancel('Operation cancelled.')
-      process.exit(0)
-    }
-
-    projectName = promptedName
+          return undefined
+        },
+      }),
+    )
   }
 
-  const template = await select({
-    message: 'Which template would you like to use?',
-    options: Object.entries(templates).map(([key, { name, description }]) => ({
-      value: key,
-      label: name,
-      hint: description,
-    })),
-  })
+  const template = requireAnswer(
+    await select({
+      message: 'Which template would you like to use?',
+      options: Object.entries(templates).map(([key, { name, description }]) => ({
+        value: key,
+        label: name,
+        hint: description,
+      })),
+    }),
+  )
 
-  if (isCancel(template)) {
-    cancel('Operation cancelled.')
-    process.exit(0)
-  }
+  const packageManager = requireAnswer(
+    await select({
+      message: 'Which package manager would you like to use?',
+      options: Object.entries(packageManagers).map(([key, value]) => ({
+        value: key,
+        label: value,
+      })),
+    }),
+  )
 
-  const packageManager = await select({
-    message: 'Which package manager would you like to use?',
-    options: Object.entries(packageManagers).map(([key, value]) => ({
-      value: key,
-      label: value,
-    })),
-  })
-
-  if (isCancel(packageManager)) {
-    cancel('Operation cancelled.')
-    process.exit(0)
-  }
-
-  const installDeps = await confirm({
-    message: 'Install dependencies?',
-    initialValue: true,
-  })
-
-  if (isCancel(installDeps)) {
-    cancel('Operation cancelled.')
-    process.exit(0)
-  }
+  const installDeps = requireAnswer(
+    await confirm({
+      message: 'Install dependencies?',
+      initialValue: true,
+    }),
+  )
 
   const options: ProjectOptions = {
     name: projectName,

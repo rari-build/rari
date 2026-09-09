@@ -33,7 +33,7 @@ struct Args {
     bin: bool,
 }
 
-#[expect(clippy::print_stdout)]
+#[expect(clippy::print_stdout, clippy::too_many_lines)]
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
@@ -99,12 +99,18 @@ async fn main() -> Result<()> {
             process::exit(1);
         }
 
-        copy_binary_to_platform_package(current_target, &project_root, args.dev)?;
+        if !copy_binary_to_platform_package(current_target, &project_root, args.dev)? {
+            log_error("Failed to copy binary to platform package");
+            process::exit(1);
+        }
 
         println!();
 
         log("Validating binary...");
-        validate_binary(current_target, &project_root, args.dev)?;
+        if !validate_binary(current_target, &project_root, args.dev)? {
+            log_error("Binary validation failed");
+            process::exit(1);
+        }
 
         println!();
     }
@@ -130,12 +136,18 @@ async fn main() -> Result<()> {
             process::exit(1);
         }
 
-        copy_addon_to_platform_package(current_target, &project_root, args.dev)?;
+        if !copy_addon_to_platform_package(current_target, &project_root, args.dev)? {
+            log_error("Failed to copy addon to platform package");
+            process::exit(1);
+        }
 
         println!();
 
         log("Validating addon...");
-        validate_addon(current_target, &project_root)?;
+        if !validate_addon(current_target, &project_root)? {
+            log_error("Addon validation failed");
+            process::exit(1);
+        }
 
         println!();
     }

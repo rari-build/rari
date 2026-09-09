@@ -745,7 +745,7 @@ fn setup_concurrent_batch(
     let mut pending: Vec<PendingScript> = Vec::with_capacity(batch.len());
 
     for (script_name, script_code, tx) in batch {
-        match js_runtime.execute_script(script_name.clone(), script_code.clone()) {
+        match js_runtime.execute_script(script_name.clone(), script_code) {
             Ok(v8_val) => {
                 let slot_key = format!("__rari_b{}_{}__", batch_id, pending.len());
                 let store_result = with_scope!(js_runtime, |scope| {

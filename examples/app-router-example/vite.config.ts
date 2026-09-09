@@ -15,11 +15,6 @@ export default defineConfig({
             hostname: 'images.unsplash.com',
           },
         ],
-        localPatterns: [
-          {
-            pathname: '/images/**',
-          },
-        ],
       },
     }),
     tailwindcss(),

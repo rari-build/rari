@@ -25,7 +25,8 @@ Keep Rust and JS names aligned in meaning, but follow each ecosystem’s casing:
 
 | Layer                                                          | Convention                      | Examples                                                       |
 | -------------------------------------------------------------- | ------------------------------- | -------------------------------------------------------------- |
-| **Rust crates / modules / paths**                              | `snake_case`                    | `rari_use_cache`, `rari_error`, `tools/prepare_binaries`       |
+| **Rust crates / modules / paths**                              | `snake_case`                    | `rari_use_cache`, `rari_error`                                 |
+| **Tools under `tools/`**                                       | `kebab-case`                    | `tools/prepare-binaries`, `tools/release`                      |
 | **JS/TS packages / npm names / directories under `packages/`** | `kebab-case`                    | `@rari/use-cache`, `create-rari-app`, `use-cache-darwin-arm64` |
 | **Paired crate ↔ package**                                     | Same words, different separator | crate `rari_use_cache` ↔ package `@rari/use-cache`             |
 
@@ -101,7 +102,7 @@ rari/
 ├── test/                    # Unit, integration, e2e, fixtures
 ├── examples/                # Example applications
 ├── tools/                   # Build/release helpers
-│   ├── prepare_binaries/    # Rust - package native binaries
+│   ├── prepare-binaries/    # Rust - package native binaries
 │   ├── release/             # Rust - release automation
 │   ├── snapshot/            # Rust - V8 snapshot generation
 │   └── bundle-react-esm/    # JS - vendor React ESM for Flight
