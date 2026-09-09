@@ -169,7 +169,14 @@ impl RouteComposer {
         format!(
             r#"
             const startTemplate{index} = performance.now();
-            const TemplateComponent{index} = globalThis["{template_component_id}"];
+            let TemplateComponent{index} = globalThis["{template_component_id}"];
+            if (typeof TemplateComponent{index} !== 'function') {{
+                const templateModule{index} = globalThis['~rsc']?.modules?.["{template_component_id}"];
+                if (templateModule{index} != null) {{
+                    TemplateComponent{index} = templateModule{index}.default
+                        ?? Object.values(templateModule{index})[0];
+                }}
+            }}
             if (!TemplateComponent{index} || typeof TemplateComponent{index} !== 'function') {{
                 throw new Error('Template component {template_component_id} not found');
             }}
@@ -501,6 +508,10 @@ mod tests {
 
         assert!(script.contains("TemplateComponent0"));
         assert!(script.contains(r#"globalThis["template:template.tsx"]"#));
+        assert!(
+            script.contains(r#"globalThis['~rsc']?.modules?.["template:template.tsx"]"#),
+            "templates must fall back to the SSR module registry used by RscModuleManager.register"
+        );
         assert!(script.contains("templateKey0 = \"/about\""));
         assert!(script.contains("key: templateKey0"));
         assert!(
@@ -511,6 +522,50 @@ mod tests {
             !script.contains("pathname: \"/about\", children: pageElement"),
             "template wrapper must not include pathname as a prop, only key and children"
         );
+    }
+
+    #[tokio::test]
+    async fn test_server_template_resolves_from_rsc_module_manager_registry() {
+        use std::sync::Arc;
+
+        use crate::runtime::JsExecutionRuntime;
+
+        let runtime = Arc::new(JsExecutionRuntime::new(None));
+        let wrapper = RouteComposer::generate_template_wrapper(
+            0,
+            "template:template.tsx",
+            "src/app/template",
+            "pageElement",
+            "template0",
+            "\"/\"",
+        );
+
+        let script = format!(
+            r#"
+            globalThis.React = {{
+              createElement(type, props) {{
+                return {{ type, props }};
+              }},
+            }};
+            const pageElement = {{ kind: 'page' }};
+            const timings = {{}};
+            globalThis['~rsc'] = {{ modules: {{}} }};
+            function RegisteredTemplate() {{ return null; }}
+            globalThis['~rsc'].modules['template:template.tsx'] = {{ default: RegisteredTemplate }};
+            delete globalThis['template:template.tsx'];
+            {wrapper}
+            if (template0.type !== RegisteredTemplate) {{
+              throw new Error('template did not resolve from ~rsc.modules');
+            }}
+            true
+            "#
+        );
+
+        let result = runtime
+            .execute_script("template_rsc_modules_fallback".to_string(), script)
+            .await
+            .expect("template registry fallback script should execute");
+        assert_eq!(result, serde_json::Value::Bool(true));
     }
 
     #[test]
