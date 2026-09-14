@@ -1,7 +1,9 @@
 use std::{
     env,
     error::Error,
-    fs as std_fs, mem,
+    fs as std_fs,
+    io::ErrorKind,
+    mem,
     path::{Path, PathBuf},
     sync::{Arc, OnceLock},
     task::{Context, Poll},
@@ -169,38 +171,54 @@ struct RedirectInfo {
     permanent: bool,
 }
 
-static PROXY_MANIFEST: OnceLock<Option<ProxyManifestFile>> = OnceLock::new();
+static PROXY_MANIFEST: OnceLock<Result<Option<ProxyManifestFile>, RariError>> = OnceLock::new();
 
-fn load_proxy_manifest() -> Option<&'static ProxyManifestFile> {
-    PROXY_MANIFEST
-        .get_or_init(|| {
-            let path = Path::new(PROXY_MANIFEST_PATH);
-            let content = std_fs::read_to_string(path).ok()?;
-            match serde_json::from_str::<ProxyManifestFile>(&content) {
-                Ok(manifest) if manifest.enabled => Some(manifest),
-                Ok(_) => None,
-                Err(error) => {
-                    tracing::warn!("Failed to parse {}: {}", PROXY_MANIFEST_PATH, error);
-                    None
-                }
+fn load_proxy_manifest() -> Result<Option<&'static ProxyManifestFile>, RariError> {
+    match PROXY_MANIFEST.get_or_init(|| {
+        let path = Path::new(PROXY_MANIFEST_PATH);
+        let content = match std_fs::read_to_string(path) {
+            Ok(content) => content,
+            Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
+            Err(error) => {
+                return Err(RariError::configuration(format!(
+                    "Failed to read {PROXY_MANIFEST_PATH}: {error}"
+                )));
             }
-        })
-        .as_ref()
-}
+        };
 
-fn requires_proxy_runtime() -> bool {
-    load_proxy_manifest().is_some_and(|manifest| manifest.requires_runtime)
-}
-
-fn resolve_proxy_dist_path() -> Option<PathBuf> {
-    let manifest = load_proxy_manifest()?;
-    if !manifest.requires_runtime {
-        return None;
+        match serde_json::from_str::<ProxyManifestFile>(&content) {
+            Ok(manifest) if manifest.enabled => Ok(Some(manifest)),
+            Ok(_) => Ok(None),
+            Err(error) => Err(RariError::configuration(format!(
+                "Failed to parse {PROXY_MANIFEST_PATH}: {error}"
+            ))),
+        }
+    }) {
+        Ok(Some(manifest)) => Ok(Some(manifest)),
+        Ok(None) => Ok(None),
+        Err(error) => Err(error.clone()),
     }
-    let bundle_path = manifest.bundle_path.as_deref()?;
+}
+
+fn requires_proxy_runtime() -> Result<bool, RariError> {
+    Ok(load_proxy_manifest()?.is_some_and(|manifest| manifest.requires_runtime))
+}
+
+fn resolve_proxy_dist_path() -> Result<Option<PathBuf>, RariError> {
+    let Some(manifest) = load_proxy_manifest()? else {
+        return Ok(None);
+    };
+    if !manifest.requires_runtime {
+        return Ok(None);
+    }
+    let Some(bundle_path) = manifest.bundle_path.as_deref() else {
+        return Ok(None);
+    };
     let path = PathBuf::from("dist").join(bundle_path);
-    std_fs::metadata(&path).ok()?;
-    Some(path)
+    if std_fs::metadata(&path).is_err() {
+        return Ok(None);
+    }
+    Ok(Some(path))
 }
 
 fn normalize_proxy_path(path: &str) -> &str {
@@ -324,14 +342,23 @@ where
         self.inner.poll_ready(cx)
     }
 
+    #[expect(clippy::too_many_lines)]
     fn call(&mut self, mut request: Request) -> Self::Future {
         let state = self.state.clone();
         let inner = self.inner.clone();
         let mut inner = mem::replace(&mut self.inner, inner);
 
         Box::pin(async move {
-            let Some(manifest) = load_proxy_manifest() else {
-                return inner.call(request).await;
+            let manifest = match load_proxy_manifest() {
+                Ok(Some(manifest)) => manifest,
+                Ok(None) => return inner.call(request).await,
+                Err(error) => {
+                    tracing::error!("Invalid proxy configuration: {}", error);
+                    return Ok(Response::builder()
+                        .status(StatusCode::INTERNAL_SERVER_ERROR)
+                        .body(Body::from("Invalid proxy configuration"))
+                        .unwrap_or_else(|_| Response::new(Body::empty())));
+                }
             };
 
             let path = request.uri().path();
@@ -457,7 +484,7 @@ async fn resolve_rari_package_dir() -> Option<PathBuf> {
 
 #[expect(clippy::missing_errors_doc)]
 pub async fn initialize_proxy(state: &ServerState) -> Result<(), RariError> {
-    if !requires_proxy_runtime() {
+    if !requires_proxy_runtime()? {
         return Ok(());
     }
 
@@ -489,7 +516,7 @@ pub async fn initialize_proxy(state: &ServerState) -> Result<(), RariError> {
         fs::canonicalize(&rari_request_path).await.unwrap_or(rari_request_path);
     let rari_request_specifier = path_to_file_url(&rari_request_absolute);
 
-    let Some(proxy_file_path) = resolve_proxy_dist_path() else {
+    let Some(proxy_file_path) = resolve_proxy_dist_path()? else {
         return Err(RariError::configuration(
             "Proxy requiresRuntime is true but bundlePath is missing or the proxy bundle was not found",
         ));
