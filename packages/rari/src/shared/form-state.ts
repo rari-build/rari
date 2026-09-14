@@ -1,9 +1,16 @@
 // oxlint-disable-next-line typescript/prefer-readonly-parameter-types mutates form control values in place
 export function applyFormDataToForm(form: HTMLFormElement, formData: FormData): boolean {
   let allSucceeded = true
+  const processedKeys = new Set<string>()
 
-  formData.forEach((value, key) => {
+  for (const key of formData.keys()) {
+    if (processedKeys.has(key)) continue
+    processedKeys.add(key)
+
     try {
+      const values = formData.getAll(key)
+      const stringValues = values.filter((value): value is string => typeof value === 'string')
+      const valueSet = new Set(stringValues)
       const elements = form.elements.namedItem(key)
 
       if (elements instanceof RadioNodeList) {
@@ -11,10 +18,17 @@ export function applyFormDataToForm(form: HTMLFormElement, formData: FormData): 
           if (!(element instanceof HTMLInputElement)) return
 
           if (element.type === 'radio' || element.type === 'checkbox')
-            element.checked = element.value === value
-          else if (typeof value === 'string') element.value = value
+            element.checked = valueSet.has(element.value)
+          else if (stringValues.length === 1) element.value = stringValues[0]
         })
-        return
+        continue
+      }
+
+      if (elements instanceof HTMLSelectElement && elements.multiple) {
+        for (const option of elements.options) {
+          option.selected = valueSet.has(option.value)
+        }
+        continue
       }
 
       if (
@@ -26,13 +40,13 @@ export function applyFormDataToForm(form: HTMLFormElement, formData: FormData): 
           elements instanceof HTMLInputElement &&
           (elements.type === 'checkbox' || elements.type === 'radio')
         )
-          elements.checked = elements.value === value
-        else if (typeof value === 'string') elements.value = value
+          elements.checked = valueSet.has(elements.value)
+        else if (stringValues.length > 0) elements.value = stringValues[0]
       }
     } catch {
       allSucceeded = false
     }
-  })
+  }
 
   return allSucceeded
 }
