@@ -93,7 +93,8 @@ pub async fn static_or_spa_handler(
     State(_state): State<ServerState>,
     AxumPath(path): AxumPath<String>,
 ) -> Result<Response, HttpError> {
-    const BLOCKED_FILES: &[&str] = &["server/manifest.json", "server/routes.json", "server/"];
+    const BLOCKED_FILES: &[&str] =
+        &["server/manifest.json", "server/routes.json", "server/proxy.json", "server/"];
 
     for blocked in BLOCKED_FILES {
         if path.starts_with(blocked) || path == *blocked {
@@ -191,6 +192,7 @@ pub async fn serve_static_asset(
 ) -> Result<Response, HttpError> {
     if asset_path.contains("server/manifest.json")
         || asset_path.contains("server/routes.json")
+        || asset_path.contains("server/proxy.json")
         || asset_path.starts_with("../")
     {
         return Ok(StatusCode::NOT_FOUND.into_response());

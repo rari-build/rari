@@ -121,10 +121,10 @@ export function rariProxy(options: ProxyPluginOptions = {}): RariPlugin {
   return toRariPlugin(plugin)
 }
 
-export async function hasProxyFile(
+export async function findProxyFilePath(
   root: string = process.cwd(),
   srcDir: string = 'src',
-): Promise<boolean> {
+): Promise<string | null> {
   const extensions = ['.ts', '.tsx', '.js', '.jsx', '.mts', '.mjs']
   const proxyFileName = 'proxy'
 
@@ -132,7 +132,7 @@ export async function hasProxyFile(
     const filePath = path.join(root, `${proxyFileName}${ext}`)
     try {
       await fs.access(filePath)
-      return true
+      return filePath
     } catch {}
   }
 
@@ -140,9 +140,16 @@ export async function hasProxyFile(
     const filePath = path.join(root, srcDir, `${proxyFileName}${ext}`)
     try {
       await fs.access(filePath)
-      return true
+      return filePath
     } catch {}
   }
 
-  return false
+  return null
+}
+
+export async function hasProxyFile(
+  root: string = process.cwd(),
+  srcDir: string = 'src',
+): Promise<boolean> {
+  return (await findProxyFilePath(root, srcDir)) != null
 }
