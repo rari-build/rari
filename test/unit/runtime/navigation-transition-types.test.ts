@@ -71,6 +71,7 @@ describe('commitNavigationPayload', () => {
       clearHmrError: () => {
         order.push('clearHmrError')
       },
+      pendingNavigateCommittedIdRef: { current: null },
     })
 
     expect(order).toEqual([
@@ -109,23 +110,24 @@ describe('commitNavigationPayload', () => {
       setRenderKey: () => {},
       setRscPayload,
       clearHmrError: () => {},
+      pendingNavigateCommittedIdRef: { current: null },
     })
 
     expect(setRscPayload).not.toHaveBeenCalled()
     expect(pushState).not.toHaveBeenCalled()
   })
 
-  it('dispatches navigate-committed with the navigation id', () => {
-    const dispatchEvent = vi.fn((_event: Event) => true)
+  it('records navigation id for post-commit navigate-committed dispatch', () => {
     vi.stubGlobal('window', {
       history: { pushState: vi.fn(), replaceState: vi.fn() },
-      dispatchEvent,
+      dispatchEvent: vi.fn(),
     })
 
     const setRenderKey: Dispatch<SetStateAction<number>> = updater => {
       applyNumberUpdater(updater, 0)
     }
     const setRscPayload: Dispatch<SetStateAction<Payload | undefined>> = () => {}
+    const pendingNavigateCommittedIdRef = { current: null as number | null }
 
     commitNavigationPayload({
       parsedPayload: { element: 'next' },
@@ -139,14 +141,10 @@ describe('commitNavigationPayload', () => {
       setRenderKey,
       setRscPayload,
       clearHmrError: () => {},
+      pendingNavigateCommittedIdRef,
     })
 
-    expect(dispatchEvent).toHaveBeenCalledOnce()
-    expect(dispatchEvent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: 'rari:navigate-committed',
-        detail: { navigationId: 9 },
-      }),
-    )
+    expect(pendingNavigateCommittedIdRef.current).toBe(9)
+    expect(window.dispatchEvent).not.toHaveBeenCalled()
   })
 })

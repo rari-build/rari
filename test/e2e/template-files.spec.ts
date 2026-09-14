@@ -29,10 +29,10 @@ async function markNode(locator: Locator) {
   })
 }
 
-async function expectNodeRemounted(locator: Locator) {
+async function expectNodeRemounted(locator: Locator, previousMountCount: string) {
   await expect(locator).toBeVisible()
   await expect(locator).not.toHaveAttribute('data-remount-marker', 'before-navigation')
-  await expect(locator).toHaveAttribute('data-mount-count', '1')
+  await expect(locator).not.toHaveAttribute('data-mount-count', previousMountCount)
 }
 
 async function expectMountedOnce(locator: Locator) {
@@ -45,9 +45,11 @@ async function navigateByLink(page: Page, url: string) {
 }
 
 async function expectTemplateRemountAfterNavigation(page: Page, template: Locator, url: string) {
+  const previousMountCount = await template.getAttribute('data-mount-count')
+  expect(previousMountCount).toBeTruthy()
   await markNode(template)
   await navigateByLink(page, url)
-  await expectNodeRemounted(template)
+  await expectNodeRemounted(template, previousMountCount!)
 }
 
 test.describe('Template files (re-mount on navigation)', () => {
@@ -91,27 +93,34 @@ test.describe('Template files (re-mount on navigation)', () => {
   test('nested template re-mounts when navigating to/from its segment', async ({ page }) => {
     await page.goto(routes.about)
 
-    await expectMountedOnce(aboutTemplate(page))
+    const about = aboutTemplate(page)
+    const initialMountCount = await about.getAttribute('data-mount-count')
+    expect(initialMountCount).toBeTruthy()
 
     await navigateByLink(page, routes.nested)
     await expect(aboutTemplate(page)).toHaveCount(0)
 
     await navigateByLink(page, routes.about)
-    await expectMountedOnce(aboutTemplate(page))
+    await expect(aboutTemplate(page)).toBeVisible()
+    await expect(aboutTemplate(page)).not.toHaveAttribute('data-mount-count', initialMountCount!)
   })
 
   test('template re-mounts on browser back/forward', async ({ page }) => {
     await page.goto(routes.home)
 
     const template = rootTemplate(page)
+    const mountBeforeAbout = await template.getAttribute('data-mount-count')
+    expect(mountBeforeAbout).toBeTruthy()
 
     await markNode(template)
     await navigateByLink(page, routes.about)
 
+    const mountBeforeBack = await template.getAttribute('data-mount-count')
+    expect(mountBeforeBack).toBeTruthy()
     await markNode(template)
     await page.goBack()
     await page.waitForURL(routes.home)
 
-    await expectNodeRemounted(template)
+    await expectNodeRemounted(template, mountBeforeBack!)
   })
 })

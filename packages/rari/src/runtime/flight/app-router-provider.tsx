@@ -121,6 +121,7 @@ export function AppRouterProvider({
   const onNavigateRef = useRef(onNavigate)
 
   const currentNavigationIdRef = useRef<number>(0)
+  const pendingNavigateCommittedIdRef = useRef<number | null>(null)
   const pendingFetchesRef = useRef<Map<string, Promise<RscPayload | undefined>>>(new Map())
   const failureHistoryRef = useRef<HmrFailure[]>([])
   const lastSuccessfulPayloadRef = useRef<string | null>(null)
@@ -144,6 +145,15 @@ export function AppRouterProvider({
     )
     pendingScrollPayloadRef.current = nextPending
     if (shouldScroll) window.scrollTo(0, 0)
+
+    const committedNavigationId = pendingNavigateCommittedIdRef.current
+    if (committedNavigationId == null) return
+    pendingNavigateCommittedIdRef.current = null
+    window.dispatchEvent(
+      new CustomEvent('rari:navigate-committed', {
+        detail: { navigationId: committedNavigationId },
+      }),
+    )
   }, [rscPayload, renderKey])
 
   const rememberRouteCache = (element: React.ReactNode | PromiseLike<React.ReactNode>) => {
@@ -496,6 +506,7 @@ export function AppRouterProvider({
           clearHmrError: () => {
             setHmrError(null)
           },
+          pendingNavigateCommittedIdRef,
         })
 
         if (detail.rscFlightProtocol != null && detail.rscFlightProtocol !== '')

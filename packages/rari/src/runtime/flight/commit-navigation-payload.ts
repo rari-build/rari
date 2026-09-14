@@ -21,6 +21,7 @@ export interface CommitNavigationPayloadOptions<T extends object> {
   readonly setRenderKey: Dispatch<SetStateAction<number>>
   readonly setRscPayload: Dispatch<SetStateAction<T | undefined>>
   readonly clearHmrError: () => void
+  readonly pendingNavigateCommittedIdRef: RefObject<number | null>
 }
 
 export function resolveNavigationTransitionTypes(options: {
@@ -54,6 +55,7 @@ export function commitNavigationPayload<T extends object>(
     setRenderKey,
     setRscPayload,
     clearHmrError,
+    pendingNavigateCommittedIdRef,
   } = options
 
   startNavTransition(() => {
@@ -74,10 +76,6 @@ export function commitNavigationPayload<T extends object>(
     })
     setRscPayload(parsedPayload)
     clearHmrError()
-    window.dispatchEvent(
-      new CustomEvent('rari:navigate-committed', {
-        detail: { navigationId },
-      }),
-    )
+    pendingNavigateCommittedIdRef.current = navigationId
   })
 }
