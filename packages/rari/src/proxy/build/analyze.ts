@@ -726,6 +726,162 @@ function parseStaticStringArrayBody(body: string): {
   return { forceRuntime: true }
 }
 
+function getCodeBraceDepthAt(configObject: string, index: number): number | null {
+  const stack: ScanFrame[] = [{ kind: 'code', braceDepth: 0 }]
+
+  for (let i = 0; i < index;) {
+    const frame = stack.at(-1)
+    if (frame === undefined) return null
+
+    const ch = configObject.charAt(i)
+    const next = configObject.charAt(i + 1)
+
+    if (frame.kind === 'line-comment') {
+      if (ch === '\n') stack.pop()
+      i += 1
+      continue
+    }
+
+    if (frame.kind === 'block-comment') {
+      if (ch === '*' && next === '/') {
+        stack.pop()
+        i += 2
+      } else {
+        i += 1
+      }
+      continue
+    }
+
+    if (frame.kind === 'single' || frame.kind === 'double') {
+      if (ch === '\\') {
+        i += 2
+        continue
+      }
+      if ((frame.kind === 'single' && ch === "'") || (frame.kind === 'double' && ch === '"'))
+        stack.pop()
+      i += 1
+      continue
+    }
+
+    if (frame.kind === 'template') {
+      if (ch === '\\') {
+        i += 2
+        continue
+      }
+      if (ch === '`') {
+        stack.pop()
+        i += 1
+        continue
+      }
+      if (ch === '$' && next === '{') {
+        stack.push({ kind: 'code', braceDepth: 1 })
+        i += 2
+        continue
+      }
+      i += 1
+      continue
+    }
+
+    if (frame.kind === 'regex') {
+      if (ch === '\\') {
+        i += 2
+        continue
+      }
+      if (ch === '[') {
+        stack.push({ kind: 'regex-class' })
+        i += 1
+        continue
+      }
+      if (ch === '/') {
+        stack.pop()
+        i += 1
+        while (i < index && /[a-z]/i.test(configObject.charAt(i))) i += 1
+        continue
+      }
+      i += 1
+      continue
+    }
+
+    if (frame.kind === 'regex-class') {
+      if (ch === '\\') {
+        i += 2
+        continue
+      }
+      if (ch === ']') {
+        stack.pop()
+        i += 1
+        continue
+      }
+      i += 1
+      continue
+    }
+
+    if (ch === '/' && next === '/') {
+      stack.push({ kind: 'line-comment' })
+      i += 2
+      continue
+    }
+    if (ch === '/' && next === '*') {
+      stack.push({ kind: 'block-comment' })
+      i += 2
+      continue
+    }
+    if (ch === '/' && canStartRegexLiteral(configObject, i)) {
+      stack.push({ kind: 'regex' })
+      i += 1
+      continue
+    }
+    if (ch === "'") {
+      stack.push({ kind: 'single' })
+      i += 1
+      continue
+    }
+    if (ch === '"') {
+      stack.push({ kind: 'double' })
+      i += 1
+      continue
+    }
+    if (ch === '`') {
+      stack.push({ kind: 'template' })
+      i += 1
+      continue
+    }
+    if (ch === '{') {
+      frame.braceDepth += 1
+      i += 1
+      continue
+    }
+    if (ch === '}') {
+      frame.braceDepth -= 1
+      i += 1
+      if (frame.braceDepth === 0 && stack.length > 1) stack.pop()
+      continue
+    }
+
+    i += 1
+  }
+
+  const frame = stack.at(-1)
+  if (frame?.kind !== 'code') return null
+  return frame.braceDepth
+}
+
+function isTopLevelConfigMatcher(configObject: string, matcherIndex: number): boolean {
+  return getCodeBraceDepthAt(configObject, matcherIndex) === 1
+}
+
+function findTopLevelMatcherMatch(configObject: string, pattern: RegExp): RegExpExecArray | null {
+  const globalPattern = new RegExp(
+    pattern.source,
+    pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`,
+  )
+  for (const match of configObject.matchAll(globalPattern)) {
+    const keyIndex = match.index + match[0].indexOf('matcher')
+    if (keyIndex >= match.index && isTopLevelConfigMatcher(configObject, keyIndex)) return match
+  }
+  return null
+}
+
 function isMatcherPropertyDelimiter(configObject: string, index: number): boolean {
   let i = index
   while (i < configObject.length) {
@@ -772,11 +928,11 @@ function extractMatcher(code: string): {
   const configObject = extractExportedConfigObject(code)
   if (configObject == null) return { forceRuntime: true }
 
-  if (OBJECT_MATCHER_REGEX.test(configObject)) {
+  if (findTopLevelMatcherMatch(configObject, OBJECT_MATCHER_REGEX) != null) {
     return { forceRuntime: true }
   }
 
-  const stringMatch = STRING_MATCHER_REGEX.exec(configObject)
+  const stringMatch = findTopLevelMatcherMatch(configObject, STRING_MATCHER_REGEX)
   if (stringMatch != null) {
     const quote = stringMatch[1]
     const raw = stringMatch[2]
@@ -790,14 +946,14 @@ function extractMatcher(code: string): {
     }
   }
 
-  const arrayMatch = ARRAY_MATCHER_REGEX.exec(configObject)
+  const arrayMatch = findTopLevelMatcherMatch(configObject, ARRAY_MATCHER_REGEX)
   if (arrayMatch != null) return parseStaticStringArrayBody(arrayMatch[1])
 
-  if (MATCHER_SHORTHAND_REGEX.test(configObject)) {
+  if (findTopLevelMatcherMatch(configObject, MATCHER_SHORTHAND_REGEX) != null) {
     return resolveModuleLevelMatcherBinding(code) ?? { forceRuntime: true }
   }
 
-  if (/matcher\s*:/.test(configObject)) return { forceRuntime: true }
+  if (findTopLevelMatcherMatch(configObject, /matcher\s*:/) != null) return { forceRuntime: true }
 
   return { forceRuntime: false }
 }

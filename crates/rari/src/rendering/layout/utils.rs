@@ -47,7 +47,7 @@ pub fn generate_cache_key(
     hasher.finish()
 }
 
-pub(crate) fn normalize_route_component_path(file_path: &str) -> String {
+pub fn normalize_route_component_path(file_path: &str) -> String {
     let normalized = file_path.cow_replace('\\', "/").into_owned();
     if normalized.starts_with("src/") {
         normalized
