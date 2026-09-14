@@ -4,13 +4,69 @@ import type * as React from 'react'
 import type { NavigationError } from './error-handler'
 import type { NavigationOptions } from './types'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { isHistoryState, isRecord, parseJsonRecord } from '@/shared/utils/type-guards'
+import {
+  getCustomEventDetail,
+  isHistoryState,
+  isRecord,
+  parseJsonRecord,
+} from '@/shared/utils/type-guards'
 import { debounce } from './debounce'
 import { NavigationErrorHandler } from './error-handler'
 import { extractPathname, isExternalUrl, normalizePath } from './match'
 import { deregisterNavigate, registerNavigate } from './navigate'
 import { routeInfoCache } from './route-info'
 import { StatePreserver } from './state-preserver'
+
+function isNavigateCommittedDetail(detail: unknown): detail is { readonly navigationId: number } {
+  return isRecord(detail) && typeof detail.navigationId === 'number'
+}
+
+function isNavigateErrorDetail(
+  detail: unknown,
+): detail is { readonly navigationId: number; readonly error: unknown } {
+  return isRecord(detail) && typeof detail.navigationId === 'number' && 'error' in detail
+}
+
+async function waitForNavigationSettlement(
+  navigationId: number,
+  signal: AbortSignal,
+): Promise<'committed' | { readonly error: unknown }> {
+  return new Promise(resolve => {
+    if (signal.aborted) {
+      resolve({ error: new DOMException('Aborted', 'AbortError') })
+      return
+    }
+
+    function cleanup() {
+      window.removeEventListener('rari:navigate-committed', onCommitted)
+      window.removeEventListener('rari:navigate-error', onError)
+      signal.removeEventListener('abort', onAbort)
+    }
+
+    function onCommitted(event: Event) {
+      const detail = getCustomEventDetail(event, isNavigateCommittedDetail)
+      if (detail?.navigationId !== navigationId) return
+      cleanup()
+      resolve('committed')
+    }
+
+    function onError(event: Event) {
+      const detail = getCustomEventDetail(event, isNavigateErrorDetail)
+      if (detail?.navigationId !== navigationId) return
+      cleanup()
+      resolve({ error: detail.error })
+    }
+
+    function onAbort() {
+      cleanup()
+      resolve({ error: new DOMException('Aborted', 'AbortError') })
+    }
+
+    window.addEventListener('rari:navigate-committed', onCommitted)
+    window.addEventListener('rari:navigate-error', onError)
+    signal.addEventListener('abort', onAbort, { once: true })
+  })
+}
 
 interface PageMetadata {
   readonly title?: string
@@ -537,7 +593,6 @@ export function ClientRouter({
 
         const fetchUrl = window.location.origin + targetPath
 
-        const urlWithHash = hash ? `${targetPath}#${hash}` : targetPath
         const historyState: HistoryState = {
           route: targetPath,
           navigationId,
@@ -577,14 +632,11 @@ export function ClientRouter({
           ...historyState,
           route: actualTargetPath,
         }
-        const settledUrl =
-          actualTargetPath !== targetPath
-            ? hash
-              ? `${actualTargetPath}#${hash}`
-              : actualTargetPath
-            : urlWithHash
+        const settledUrl = `${finalUrl.pathname}${finalUrl.search}${hash ? `#${hash}` : ''}`
 
         if (navigationIdCounterRef.current !== navigationId) return
+
+        const settlement = waitForNavigationSettlement(navigationId, abortController.signal)
 
         window.dispatchEvent(
           new CustomEvent('rari:navigate', {
@@ -604,7 +656,18 @@ export function ClientRouter({
           }),
         )
 
+        if (navigationIdCounterRef.current !== navigationId) {
+          abortController.abort()
+          return
+        }
+
+        const settlementResult = await settlement
         if (navigationIdCounterRef.current !== navigationId) return
+
+        if (settlementResult !== 'committed') {
+          handleNavigationError(settlementResult.error, targetPath, navigationId, fromRoute)
+          return
+        }
 
         processMetadata(response)
 
