@@ -98,11 +98,18 @@ function extractMatcher(code: string): {
 
   const arrayMatch = ARRAY_MATCHER_REGEX.exec(code)
   if (arrayMatch != null) {
+    const body = arrayMatch[1]
+    if (body.includes('{')) return { forceRuntime: true }
+
     const items: string[] = []
     ARRAY_STRING_ITEM_REGEX.lastIndex = 0
-    for (const item of arrayMatch[1].matchAll(ARRAY_STRING_ITEM_REGEX)) {
+    for (const item of body.matchAll(ARRAY_STRING_ITEM_REGEX)) {
       if (item[2] !== '') items.push(item[2])
     }
+
+    const remainder = body.replace(ARRAY_STRING_ITEM_REGEX, '').replace(/[\s,]/g, '')
+    if (remainder !== '') return { forceRuntime: true }
+
     if (items.length > 0) return { matcher: items, forceRuntime: false }
   }
 

@@ -258,10 +258,17 @@ fn path_matches_pattern(pathname: &str, pattern: &str) -> bool {
                 end += 1;
             }
             if end > start {
-                let token = match chars.get(end).copied() {
+                let suffix = chars.get(end).copied();
+                let preceded_by_slash = rebuilt.ends_with('/');
+                let token = match suffix {
                     Some('*') => {
                         i = end + 1;
-                        "___PARAM_DOTSTAR___"
+                        if preceded_by_slash {
+                            rebuilt.pop();
+                            "___PARAM_DOTSTAR_SLASH___"
+                        } else {
+                            "___PARAM_DOTSTAR___"
+                        }
                     }
                     Some('+') => {
                         i = end + 1;
@@ -269,7 +276,12 @@ fn path_matches_pattern(pathname: &str, pattern: &str) -> bool {
                     }
                     Some('?') => {
                         i = end + 1;
-                        "___PARAM_OPT___"
+                        if preceded_by_slash {
+                            rebuilt.pop();
+                            "___PARAM_OPT_SLASH___"
+                        } else {
+                            "___PARAM_OPT___"
+                        }
                     }
                     _ => {
                         i = end;
@@ -301,6 +313,8 @@ fn path_matches_pattern(pathname: &str, pattern: &str) -> bool {
     }
 
     let regex_body = escaped
+        .replace("___PARAM_DOTSTAR_SLASH___", "(?:/(.*))?")
+        .replace("___PARAM_OPT_SLASH___", "(?:/([^/]*))?")
         .replace("___PARAM_DOTSTAR___", "(.*)")
         .replace("___PARAM_DOTPLUS___", "(.+)")
         .replace("___PARAM_OPT___", "([^/]*)")
@@ -782,6 +796,15 @@ mod tests {
         assert!(path_matches_pattern("/api/users", "/api/*"));
         assert!(path_matches_pattern("/users/123", "/users/:id"));
         assert!(!path_matches_pattern("/blog/post", "/api/*"));
+    }
+
+    #[test]
+    fn path_matches_pattern_optional_catch_all_includes_base_path() {
+        assert!(path_matches_pattern("/dashboard", "/dashboard/:path*"));
+        assert!(path_matches_pattern("/dashboard/settings", "/dashboard/:path*"));
+        assert!(path_matches_pattern("/docs", "/docs/:slug?"));
+        assert!(path_matches_pattern("/docs/intro", "/docs/:slug?"));
+        assert!(!path_matches_pattern("/dashboard", "/dashboard/:id"));
     }
 
     #[test]

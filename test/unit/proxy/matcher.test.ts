@@ -94,6 +94,23 @@ describe('matchesPattern', () => {
       expect(matchesPattern('/', '/*')).toBe(true)
     })
   })
+  describe('optional catch-all parameters', () => {
+    it('should match base path and nested paths for :param*', () => {
+      expect(matchesPattern('/dashboard', '/dashboard/:path*')).toBe(true)
+      expect(matchesPattern('/dashboard/settings', '/dashboard/:path*')).toBe(true)
+      expect(matchesPattern('/dashboard/a/b', '/dashboard/:path*')).toBe(true)
+    })
+
+    it('should match optional single segment for :param?', () => {
+      expect(matchesPattern('/docs', '/docs/:slug?')).toBe(true)
+      expect(matchesPattern('/docs/intro', '/docs/:slug?')).toBe(true)
+      expect(matchesPattern('/docs/a/b', '/docs/:slug?')).toBe(false)
+    })
+
+    it('should still require a segment for :param', () => {
+      expect(matchesPattern('/dashboard', '/dashboard/:id')).toBe(false)
+    })
+  })
 })
 
 describe('extractParams', () => {
