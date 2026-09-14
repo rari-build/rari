@@ -389,6 +389,11 @@ export function ClientRouter({
   const abortControllerRef = useRef<AbortController | null>(null)
   const isMountedRef = useRef(true)
   const currentRouteRef = useRef<string>(normalizePath(initialRoute))
+  const committedUrlRef = useRef<string>(
+    typeof window !== 'undefined'
+      ? `${window.location.pathname}${window.location.search}${window.location.hash}`
+      : normalizePath(initialRoute),
+  )
   const navigationIdCounterRef = useRef<number>(0)
 
   const errorHandlerRef = useRef<NavigationErrorHandler>(
@@ -496,12 +501,14 @@ export function ClientRouter({
     hash: string,
     options: NavigationOptions,
     navigationId: number,
+    settledUrl: string,
   ) => {
     if (!isMountedRef.current) return
 
     if (navigationIdCounterRef.current !== navigationId) return
 
     currentRouteRef.current = actualTargetPath
+    committedUrlRef.current = settledUrl
 
     setNavigationState(prev => ({
       ...prev,
@@ -581,10 +588,10 @@ export function ClientRouter({
     )
 
     const navigationPromise = (async () => {
-      const fromRoute = currentRouteRef.current
+      const fromRoute = committedUrlRef.current
       try {
         if (options.historyKey == null || options.historyKey === '')
-          statePreserverRef.current.captureState(fromRoute)
+          statePreserverRef.current.captureState(currentRouteRef.current)
 
         const historyKey =
           options.historyKey != null && options.historyKey !== ''
@@ -671,7 +678,7 @@ export function ClientRouter({
 
         processMetadata(response)
 
-        completeNavigation(actualTargetPath, hash, options, navigationId)
+        completeNavigation(actualTargetPath, hash, options, navigationId, settledUrl)
 
         pendingNavigationsRef.current.delete(targetPath)
         void processNavigationQueueRef.current?.()
