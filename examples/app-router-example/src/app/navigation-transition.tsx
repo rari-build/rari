@@ -21,7 +21,11 @@ export default function NavigationTransition(): ReactNode {
         'default': 'none',
       }}
     >
-      <span aria-hidden style={{ position: 'fixed', width: 0, height: 0, overflow: 'hidden' }} />
+      <span
+        aria-hidden
+        data-rari-nav-transition
+        style={{ position: 'fixed', width: 0, height: 0, overflow: 'hidden' }}
+      />
     </ViewTransition>
   )
 }

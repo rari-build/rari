@@ -13,9 +13,12 @@ export async function gotoWithRetry(
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 })
-      await page.waitForSelector('#root > *, [data-testid="loading"], .rari-error', {
-        timeout: 10000,
-      })
+      await page
+        .locator(
+          '#root > *:not([aria-hidden="true"]):not([data-rari-nav-transition]), [data-testid="loading"], .rari-error',
+        )
+        .first()
+        .waitFor({ state: 'visible', timeout: 10000 })
 
       return response
     } catch (error) {
