@@ -1,4 +1,4 @@
-import type { ProxyManifest, ProxyRule } from '@/proxy/http/types'
+import type { ProxyConfig, ProxyManifest, ProxyRule } from '@/proxy/http/types'
 
 const RUNTIME_MARKER_REGEX =
   /\.cookies\b|\.headers\b|\.searchParams\b|\.geo\b|\.ip\b|\bwaitUntil\b|\bfetch\s*\(|RariResponse\.json\b|\.startsWith\s*\(|\.includes\s*\(|\.endsWith\s*\(|\bawait\b|`[^`]*\$\{/
@@ -10,6 +10,12 @@ const IF_ACTION_REGEX =
 
 const PATH_EQUALITY_CLAUSE_REGEX =
   /^(?:(request\.rariUrl\.pathname|pathname|normalizedPath)\s*(?:===|==)\s*(['"`])([^'"`]+)\2|(['"`])([^'"`]+)\4\s*(?:===|==)\s*(request\.rariUrl\.pathname|pathname|normalizedPath))$/
+
+const CONFIG_EXPORT_REGEX = /export\s+const\s+config\s*=/
+const OBJECT_MATCHER_REGEX = /matcher\s*:\s*\{/
+const STRING_MATCHER_REGEX = /matcher\s*:\s*(['"`])([^'"`]+)\1/
+const ARRAY_MATCHER_REGEX = /matcher\s*:\s*\[([^\]]*)\]/
+const ARRAY_STRING_ITEM_REGEX = /(['"`])([^'"`]+)\1/g
 
 export interface ProxyAnalysis {
   readonly requiresRuntime: boolean
@@ -53,8 +59,8 @@ function extractStaticRules(code: string): ProxyRule[] {
     const condition = match[1]
     const action = match[2]
     const destination = match[4]
-    const statusToken = match[5]
-    const status = statusToken !== '' ? Number.parseInt(statusToken, 10) : undefined
+    const parsedStatus = Number.parseInt(match[5], 10)
+    const status = Number.isFinite(parsedStatus) ? parsedStatus : undefined
 
     if (condition === '' || destination === '') continue
     if (action !== 'redirect' && action !== 'rewrite') continue
@@ -75,19 +81,49 @@ function extractStaticRules(code: string): ProxyRule[] {
   return rules
 }
 
+function extractMatcher(code: string): {
+  readonly matcher?: ProxyConfig['matcher']
+  readonly forceRuntime: boolean
+} {
+  if (!CONFIG_EXPORT_REGEX.test(code)) return { forceRuntime: false }
+
+  if (OBJECT_MATCHER_REGEX.test(code)) {
+    return { forceRuntime: true }
+  }
+
+  const stringMatch = STRING_MATCHER_REGEX.exec(code)
+  if (stringMatch != null && stringMatch[2] !== '') {
+    return { matcher: stringMatch[2], forceRuntime: false }
+  }
+
+  const arrayMatch = ARRAY_MATCHER_REGEX.exec(code)
+  if (arrayMatch != null) {
+    const items: string[] = []
+    ARRAY_STRING_ITEM_REGEX.lastIndex = 0
+    for (const item of arrayMatch[1].matchAll(ARRAY_STRING_ITEM_REGEX)) {
+      if (item[2] !== '') items.push(item[2])
+    }
+    if (items.length > 0) return { matcher: items, forceRuntime: false }
+  }
+
+  return { forceRuntime: false }
+}
+
 export function analyzeProxySource(code: string): ProxyAnalysis {
-  if (RUNTIME_MARKER_REGEX.test(code)) {
-    return { requiresRuntime: true, rules: [] }
+  const { matcher, forceRuntime } = extractMatcher(code)
+
+  if (forceRuntime || RUNTIME_MARKER_REGEX.test(code)) {
+    return { requiresRuntime: true, rules: [], ...(matcher != null ? { matcher } : {}) }
   }
 
   const hasRedirectOrRewrite = REDIRECT_OR_REWRITE_CALL_REGEX.test(code)
   const rules = extractStaticRules(code)
 
   if (hasRedirectOrRewrite && rules.length === 0) {
-    return { requiresRuntime: true, rules: [] }
+    return { requiresRuntime: true, rules: [], ...(matcher != null ? { matcher } : {}) }
   }
 
-  return { requiresRuntime: false, rules }
+  return { requiresRuntime: false, rules, ...(matcher != null ? { matcher } : {}) }
 }
 
 export function buildProxyManifest(options: {
