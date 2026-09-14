@@ -165,7 +165,7 @@ impl RouteComposer {
         template_var: &str,
         template_key_json: &str,
     ) -> String {
-        let ssr_module_key = format!("src/app/{template_file_path}");
+        let ssr_module_key = super::utils::normalize_route_component_path(template_file_path);
         let ssr_module_key_json = serde_json::to_string(&ssr_module_key)
             .unwrap_or_else(|_| format!("\"{}\"", ssr_module_key.replace('"', "\\\"")));
 
@@ -534,7 +534,11 @@ mod tests {
         );
         assert!(
             script.contains(r#""src/app/template.tsx""#),
-            "client templates resolve via src/app/<file_path> SSR module keys"
+            "client templates resolve via project-relative SSR module keys"
+        );
+        assert!(
+            !script.contains(r#""src/app/src/app/template.tsx""#),
+            "template SSR keys must not double-prefix the app directory"
         );
         assert!(script.contains("templateKey0 = \"/about\""));
         assert!(script.contains("key: templateKey0"));
@@ -546,6 +550,31 @@ mod tests {
             !script.contains("pathname: \"/about\", children: pageElement"),
             "template wrapper must not include pathname as a prop, only key and children"
         );
+    }
+
+    #[test]
+    fn test_template_ssr_module_key_normalizes_app_relative_paths() {
+        let already_prefixed = RouteComposer::generate_template_wrapper(
+            0,
+            "template:src/app/template.tsx",
+            "src/app/template.tsx",
+            "pageElement",
+            "template0",
+            "\"/\"",
+        );
+        assert!(already_prefixed.contains(r#""src/app/template.tsx""#));
+        assert!(!already_prefixed.contains(r#""src/app/src/app/template.tsx""#));
+
+        let app_prefixed = RouteComposer::generate_template_wrapper(
+            0,
+            "template:app/template.tsx",
+            "app/template.tsx",
+            "pageElement",
+            "template0",
+            "\"/\"",
+        );
+        assert!(app_prefixed.contains(r#""src/app/template.tsx""#));
+        assert!(!app_prefixed.contains(r#""src/app/app/template.tsx""#));
     }
 
     #[tokio::test]

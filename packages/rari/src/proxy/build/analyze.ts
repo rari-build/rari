@@ -726,6 +726,41 @@ function parseStaticStringArrayBody(body: string): {
   return { forceRuntime: true }
 }
 
+function isMatcherPropertyDelimiter(configObject: string, index: number): boolean {
+  let i = index
+  while (i < configObject.length) {
+    const ch = configObject.charAt(i)
+    const next = configObject.charAt(i + 1)
+
+    if (/\s/.test(ch)) {
+      i += 1
+      continue
+    }
+
+    if (ch === '/' && next === '/') {
+      i += 2
+      while (i < configObject.length && !isLineTerminator(configObject.charAt(i))) i += 1
+      continue
+    }
+
+    if (ch === '/' && next === '*') {
+      i += 2
+      while (
+        i + 1 < configObject.length &&
+        (configObject.charAt(i) !== '*' || configObject.charAt(i + 1) !== '/')
+      ) {
+        i += 1
+      }
+      i += 2
+      continue
+    }
+
+    return ch === ',' || ch === '}'
+  }
+
+  return true
+}
+
 function extractMatcher(code: string): {
   readonly matcher?: ProxyConfig['matcher']
   readonly forceRuntime: boolean
@@ -747,6 +782,8 @@ function extractMatcher(code: string): {
     const raw = stringMatch[2]
     if (quote === "'" || quote === '"' || quote === '`') {
       if (quote === '`' && raw.includes('${')) return { forceRuntime: true }
+      const matchEnd = stringMatch.index + stringMatch[0].length
+      if (!isMatcherPropertyDelimiter(configObject, matchEnd)) return { forceRuntime: true }
       const decoded = decodeJsStringLiteral(raw, quote)
       if (decoded == null || decoded === '') return { forceRuntime: true }
       return { matcher: decoded, forceRuntime: false }

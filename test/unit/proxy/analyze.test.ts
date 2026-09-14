@@ -286,6 +286,21 @@ describe('analyzeProxySource', () => {
     expect(analysis.rules).toHaveLength(1)
   })
 
+  it('forces runtime when string matcher is part of a composite expression', () => {
+    const code = `
+      export const config = {
+        matcher: '/api' + '/x',
+      }
+
+      export function proxy(request) {
+        return RariResponse.next()
+      }
+    `
+    const analysis = analyzeProxySource(code)
+    expect(analysis.requiresRuntime).toBe(true)
+    expect(analysis.matcher).toBeUndefined()
+  })
+
   it('ignores braces inside strings when extracting config', () => {
     const code = `
       export const config = {
