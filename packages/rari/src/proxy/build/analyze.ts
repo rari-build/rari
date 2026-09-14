@@ -12,6 +12,7 @@ const PATH_EQUALITY_CLAUSE_REGEX =
   /^(?:(request\.rariUrl\.pathname|pathname|normalizedPath)\s*(?:===|==)\s*(['"`])([^'"`]+)\2|(['"`])([^'"`]+)\4\s*(?:===|==)\s*(request\.rariUrl\.pathname|pathname|normalizedPath))$/
 
 const CONFIG_EXPORT_REGEX = /export\s+const\s+config\s*=/
+const CONFIG_OBJECT_EXPORT_REGEX = /export\s+const\s+config\s*=\s*\{/
 const OBJECT_MATCHER_REGEX = /matcher\s*:\s*\{/
 const STRING_MATCHER_REGEX = /matcher\s*:\s*(['"`])([^'"`]+)\1/
 const ARRAY_MATCHER_REGEX = /matcher\s*:\s*\[([^\]]*)\]/
@@ -84,6 +85,24 @@ function extractStaticRules(code: string): ProxyRule[] {
   return rules
 }
 
+function extractExportedConfigObject(code: string): string | null {
+  const startMatch = CONFIG_OBJECT_EXPORT_REGEX.exec(code)
+  if (startMatch == null) return null
+
+  const braceStart = startMatch.index + startMatch[0].length - 1
+  let depth = 0
+  for (let i = braceStart; i < code.length; i++) {
+    const ch = code[i]
+    if (ch === '{') depth += 1
+    else if (ch === '}') {
+      depth -= 1
+      if (depth === 0) return code.slice(braceStart, i + 1)
+    }
+  }
+
+  return null
+}
+
 function parseStaticStringArrayBody(body: string): {
   readonly matcher?: string[]
   readonly forceRuntime: boolean
@@ -124,23 +143,26 @@ function extractMatcher(code: string): {
 } {
   if (!CONFIG_EXPORT_REGEX.test(code)) return { forceRuntime: false }
 
-  if (OBJECT_MATCHER_REGEX.test(code)) {
+  const configObject = extractExportedConfigObject(code)
+  if (configObject == null) return { forceRuntime: false }
+
+  if (OBJECT_MATCHER_REGEX.test(configObject)) {
     return { forceRuntime: true }
   }
 
-  const stringMatch = STRING_MATCHER_REGEX.exec(code)
+  const stringMatch = STRING_MATCHER_REGEX.exec(configObject)
   if (stringMatch != null && stringMatch[2] !== '') {
     return { matcher: stringMatch[2], forceRuntime: false }
   }
 
-  const arrayMatch = ARRAY_MATCHER_REGEX.exec(code)
+  const arrayMatch = ARRAY_MATCHER_REGEX.exec(configObject)
   if (arrayMatch != null) return parseStaticStringArrayBody(arrayMatch[1])
 
-  if (MATCHER_SHORTHAND_REGEX.test(code)) {
+  if (MATCHER_SHORTHAND_REGEX.test(configObject)) {
     return resolveMatcherBinding(code) ?? { forceRuntime: true }
   }
 
-  if (/matcher\s*:/.test(code)) return { forceRuntime: true }
+  if (/matcher\s*:/.test(configObject)) return { forceRuntime: true }
 
   return { forceRuntime: false }
 }

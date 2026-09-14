@@ -165,6 +165,32 @@ describe('analyzeProxySource', () => {
     expect(analysis.matcher).toBeUndefined()
   })
 
+  it('ignores unrelated shorthand matcher objects outside config', () => {
+    const code = `
+      const matcher = '/admin'
+      const unrelated = { matcher }
+
+      export const config = {}
+
+      export function proxy(request) {
+        if (request.rariUrl.pathname === '/docs')
+          return RariResponse.redirect(new URL('/docs/getting-started', request.url), 308)
+        return RariResponse.next()
+      }
+    `
+    const analysis = analyzeProxySource(code)
+    expect(analysis.requiresRuntime).toBe(false)
+    expect(analysis.matcher).toBeUndefined()
+    expect(analysis.rules).toEqual([
+      {
+        source: '/docs',
+        type: 'redirect',
+        destination: '/docs/getting-started',
+        permanent: true,
+      },
+    ])
+  })
+
   it('buildProxyManifest omits bundlePath for static proxies', () => {
     const manifest = buildProxyManifest({
       proxyFile: 'src/proxy.ts',

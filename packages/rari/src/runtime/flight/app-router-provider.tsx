@@ -482,7 +482,11 @@ export function AppRouterProvider({
       }
 
       if (parsedPayload && currentNavigationIdRef.current === detail.navigationId) {
-        const hasHash = window.location.hash.length > 0
+        const pendingUrl = detail.pendingHistory?.url
+        const hasHash =
+          pendingUrl != null && pendingUrl !== ''
+            ? new URL(pendingUrl, window.location.origin).hash.length > 0
+            : window.location.hash.length > 0
         const shouldScrollToTop =
           (detail.options.historyKey == null || detail.options.historyKey === '') &&
           !hasHash &&
