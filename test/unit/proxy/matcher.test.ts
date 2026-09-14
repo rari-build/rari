@@ -110,6 +110,12 @@ describe('matchesPattern', () => {
     it('should still require a segment for :param', () => {
       expect(matchesPattern('/dashboard', '/dashboard/:id')).toBe(false)
     })
+
+    it('should match mixed required and optional params', () => {
+      expect(matchesPattern('/api/foo', '/api/:value/:id?')).toBe(true)
+      expect(matchesPattern('/api/foo/bar', '/api/:value/:id?')).toBe(true)
+      expect(matchesPattern('/api/foo/bar/baz', '/api/:value/:id?')).toBe(false)
+    })
   })
 })
 
@@ -150,6 +156,27 @@ describe('extractParams', () => {
       expect(params).toEqual({
         version: 'v1',
         id: '123',
+      })
+    })
+
+    it('should extract mixed required and optional params in order', () => {
+      expect(extractParams('/api/foo/bar', '/api/:value/:id?')).toEqual({
+        value: 'foo',
+        id: 'bar',
+      })
+      expect(extractParams('/api/foo', '/api/:value/:id?')).toEqual({
+        value: 'foo',
+        id: '',
+      })
+      expect(extractParams('/a/b/y/c/z', '/a/:opt?/b/:req/c/:rest*')).toEqual({
+        opt: '',
+        req: 'y',
+        rest: 'z',
+      })
+      expect(extractParams('/a/x/b/y/c/z/w', '/a/:opt?/b/:req/c/:rest*')).toEqual({
+        opt: 'x',
+        req: 'y',
+        rest: 'z/w',
       })
     })
   })

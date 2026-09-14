@@ -527,21 +527,6 @@ export function rari(
     return paths
   }
 
-  function getModuleDirectives(id: string): { hasUseServer: boolean; hasUseClient: boolean } {
-    const result = { hasUseServer: false, hasUseClient: false }
-
-    const normalizedId = id.replace(BACKSLASH_REGEX, '/')
-    if (!TSX_EXT_REGEX.test(normalizedId) || !normalizedId.includes('/src/')) return result
-
-    try {
-      const analysis = moduleAnalysisCache.get(id)
-      result.hasUseServer = analysis.directives.hasUseServer
-      result.hasUseClient = analysis.directives.hasUseClient
-    } catch {}
-
-    return result
-  }
-
   let htmlEntryImports: Set<string> | null = null
   let lastIndexHtmlMtime: number | null = null
 
@@ -1064,24 +1049,6 @@ if (import.meta.hot) {
                 return null
               },
             })
-          }
-
-          output.chunkFileNames ??= chunkInfo => {
-            const hasServerAction = chunkInfo.moduleIds.some((id: string) => {
-              const directives = getModuleDirectives(id)
-              return directives.hasUseServer
-            })
-
-            if (hasServerAction) return 'client/actions/[name]-[hash].js'
-
-            const isClientComponent = chunkInfo.moduleIds.some((id: string) => {
-              const directives = getModuleDirectives(id)
-              return directives.hasUseClient
-            })
-
-            if (isClientComponent) return 'client/components/[name]-[hash].js'
-
-            return 'assets/[name]-[hash].js'
           }
         }
       }

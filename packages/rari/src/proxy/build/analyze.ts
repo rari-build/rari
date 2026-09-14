@@ -113,6 +113,8 @@ function extractMatcher(code: string): {
     if (items.length > 0) return { matcher: items, forceRuntime: false }
   }
 
+  if (/matcher\s*:/.test(code)) return { forceRuntime: true }
+
   return { forceRuntime: false }
 }
 

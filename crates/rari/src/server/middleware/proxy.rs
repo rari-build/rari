@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     env,
     error::Error,
     fs as std_fs,
@@ -231,8 +232,38 @@ fn resolve_proxy_dist_path() -> Result<Option<PathBuf>, RariError> {
     Ok(Some(path))
 }
 
-fn normalize_proxy_path(path: &str) -> &str {
-    if path.len() > 1 && path.ends_with('/') { path.trim_end_matches('/') } else { path }
+fn normalize_proxy_path(path: &str) -> Cow<'_, str> {
+    let needs_collapse = path.contains("//");
+    let needs_trim = path.len() > 1 && path.ends_with('/');
+
+    if !needs_collapse && !needs_trim {
+        return Cow::Borrowed(path);
+    }
+
+    let mut normalized = if needs_collapse {
+        let mut collapsed = String::with_capacity(path.len());
+        let mut prev_slash = false;
+        for ch in path.chars() {
+            if ch == '/' {
+                if !prev_slash {
+                    collapsed.push('/');
+                }
+                prev_slash = true;
+            } else {
+                collapsed.push(ch);
+                prev_slash = false;
+            }
+        }
+        collapsed
+    } else {
+        path.to_owned()
+    };
+
+    if normalized.len() > 1 && normalized.ends_with('/') {
+        normalized.pop();
+    }
+
+    Cow::Owned(normalized)
 }
 
 fn path_matches_source(pathname: &str, source: &str) -> bool {
@@ -324,7 +355,7 @@ fn path_matches_pattern(pathname: &str, pattern: &str) -> bool {
     let Ok(regex) = Regex::new(&format!("^{regex_body}$")) else {
         return false;
     };
-    regex.is_match(normalized_path)
+    regex.is_match(&normalized_path)
 }
 
 fn matcher_allows_path(matcher: Option<&ProxyMatcherField>, pathname: &str) -> bool {
@@ -789,6 +820,13 @@ mod tests {
 
         let matched = find_matching_rule(&rules, "/sponsors/").unwrap();
         assert_eq!(matched.destination.as_deref(), Some("/enterprise/sponsors"));
+    }
+
+    #[test]
+    fn path_matches_pattern_collapses_consecutive_slashes() {
+        assert!(path_matches_pattern("//admin", "/admin"));
+        assert!(path_matches_pattern("/admin//", "/admin"));
+        assert!(path_matches_pattern("//api//users", "/api/*"));
     }
 
     #[test]

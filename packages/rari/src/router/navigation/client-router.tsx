@@ -462,11 +462,14 @@ export function ClientRouter({
     if (hash) {
       const element = document.getElementById(hash)
       if (element) element.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }
 
-    if (!options.replace) {
-      if (!hash) return
-      window.history.pushState(window.history.state, '', nextUrl)
+      if (options.replace) {
+        window.history.replaceState(window.history.state, '', nextUrl)
+      } else {
+        window.history.pushState(window.history.state, '', nextUrl)
+      }
+    } else if (!options.replace) {
+      return
     }
 
     committedUrlRef.current = nextUrl
