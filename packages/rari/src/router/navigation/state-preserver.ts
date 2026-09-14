@@ -1,3 +1,5 @@
+import { applyFormDataToForm } from '@/shared/form-state'
+
 export interface ScrollPosition {
   readonly x: number
   readonly y: number
@@ -211,34 +213,7 @@ export class StatePreserver {
                 document.querySelectorAll('form')[Number.parseInt(formId.replace('form-', ''), 10)])
 
           if (form instanceof HTMLFormElement) {
-            formData.forEach((value, key) => {
-              try {
-                const elements = form.elements.namedItem(key)
-
-                if (elements instanceof RadioNodeList) {
-                  elements.forEach(element => {
-                    if (element instanceof HTMLInputElement) {
-                      if (element.type === 'radio' || element.type === 'checkbox')
-                        element.checked = element.value === value
-                      else if (typeof value === 'string') element.value = value
-                    }
-                  })
-                } else if (
-                  elements instanceof HTMLInputElement ||
-                  elements instanceof HTMLTextAreaElement ||
-                  elements instanceof HTMLSelectElement
-                ) {
-                  if (
-                    elements instanceof HTMLInputElement &&
-                    (elements.type === 'checkbox' || elements.type === 'radio')
-                  )
-                    elements.checked = elements.value === value
-                  else if (typeof value === 'string') elements.value = value
-                }
-              } catch {
-                allSucceeded = false
-              }
-            })
+            if (!applyFormDataToForm(form, formData)) allSucceeded = false
           } else {
             allSucceeded = false
           }

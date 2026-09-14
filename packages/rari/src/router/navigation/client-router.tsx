@@ -554,8 +554,15 @@ export function ClientRouter({
           signal: abortController.signal,
         })
 
-        if (!response.ok && response.status !== 404)
-          throw new Error(`Failed to fetch: ${response.status}`)
+        if (!response.ok && response.status !== 404) {
+          handleNavigationError(
+            new Error(`Failed to fetch: ${response.status}`),
+            targetPath,
+            navigationId,
+            fromRoute,
+          )
+          return
+        }
 
         if (abortController.signal.aborted) {
           cleanupAbortedNavigation(targetPath, navigationId)

@@ -1,4 +1,3 @@
-import type { Thenable } from 'virtual:react-flight-client'
 import * as React from 'react'
 
 function isRenderableFlightItem(item: unknown): boolean {
@@ -12,8 +11,8 @@ function isRenderableFlightItem(item: unknown): boolean {
 }
 
 export function normalizeFlightContent(
-  content: React.ReactNode | Thenable<React.ReactNode>,
-): React.ReactNode | Thenable<React.ReactNode> {
+  content: React.ReactNode | PromiseLike<React.ReactNode>,
+): React.ReactNode | PromiseLike<React.ReactNode> {
   if (!Array.isArray(content)) return content
 
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion Array.isArray widens flight payload arrays to any[]
@@ -24,5 +23,5 @@ export function normalizeFlightContent(
   }
 
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion non-renderable flight arrays are returned unchanged
-  return content as React.ReactNode | Thenable<React.ReactNode>
+  return content as React.ReactNode | PromiseLike<React.ReactNode>
 }

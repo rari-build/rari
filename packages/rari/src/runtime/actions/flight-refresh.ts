@@ -1,5 +1,5 @@
 import type { ActionRevalidationKind } from './revalidation-kind'
-import { isRecord } from '@/shared/utils/type-guards'
+import { isFlightThenable, isLikelyReactElement, isRecord } from '@/shared/utils/type-guards'
 import { ActionDidNotRevalidate, parseActionRevalidationKind } from './revalidation-kind'
 
 export interface ActionFlightRefreshDetail {
@@ -21,14 +21,6 @@ function shouldSkipRefreshForActionResult(result: unknown): boolean {
   if ('redirect' in result) return true
 
   return SKIP_REFRESH_MARKER in result || '~rariFormState' in result
-}
-
-function isLikelyReactElement(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && '$$typeof' in value
-}
-
-function isFlightThenable(value: unknown): value is PromiseLike<unknown> {
-  return isRecord(value) && typeof value.then === 'function'
 }
 
 function isActionRefreshRoot(value: unknown): boolean {

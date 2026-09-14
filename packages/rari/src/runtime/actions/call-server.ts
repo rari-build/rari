@@ -59,27 +59,23 @@ export async function callServer(id: string, args: readonly unknown[]): Promise<
     body = encoded
   }
 
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => {
-    controller.abort()
-  }, ACTION_REQUEST_TIMEOUT_MS)
-
   let response: Response
   try {
     response = await fetch(actionPostUrl(), {
       method: 'POST',
       headers,
       body,
-      signal: controller.signal,
+      signal: AbortSignal.timeout(ACTION_REQUEST_TIMEOUT_MS),
     })
   } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
+    if (
+      (error instanceof DOMException && error.name === 'TimeoutError') ||
+      (error instanceof Error && error.name === 'AbortError')
+    ) {
       throw new Error(`Server action "${id}" timed out after ${ACTION_REQUEST_TIMEOUT_MS}ms`)
     }
 
     throw error
-  } finally {
-    clearTimeout(timeoutId)
   }
 
   const redirectHeader = response.headers.get('x-action-redirect')
