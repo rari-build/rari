@@ -30,7 +30,10 @@ test.describe.serial('Streaming Suspense E2E Tests', () => {
     const times = await getServerTimestamps(page, ['component-fast', 'component-slow'])
     assertProgressiveTimestamps(times, { minGap: 500 })
 
-    await expect(page.locator('[data-testid="component-slow"]')).toBeVisible()
+    const slow = page
+      .locator('[data-testid="root-template-children"] [data-testid="component-slow"]')
+      .first()
+    await expect(slow).toBeVisible()
     await expect(page.locator('#root')).toContainText('Parallel Suspense Test')
   })
 })

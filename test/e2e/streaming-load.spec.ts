@@ -23,6 +23,12 @@ async function expectStreamingResponse(request: APIRequestContext, path: string)
   return { response, body }
 }
 
+function extractRunId(body: string): string | undefined {
+  const withoutScripts = body.replace(/<script\b[\s\S]*?<\/script>/gi, '')
+  const text = /data-testid="run-id">([^<]*)/.exec(withoutScripts)?.[1]?.trim()
+  return text == null || text === '' ? undefined : text
+}
+
 test.describe('Streaming load validation', () => {
   test.setTimeout(60000)
 
@@ -88,13 +94,12 @@ test.describe('Streaming load validation', () => {
       expect(body).toContain('__rari_f')
       expect(body).toContain('component-a')
       expect(body).toContain('component-c')
-      expect(body).toContain(`data-testid="run-id">${index}`)
       expect(body.indexOf('</body>')).toBeGreaterThan(body.indexOf('__rari_f'))
 
       const match = /data-testid="component-c"[^>]*>[\s\S]*?(\d{4}-\d{2}-\d{2}T[\d:.]+Z)/.exec(body)
       expect(match, `response ${index} should include a component-c timestamp`).toBeTruthy()
 
-      const runId = /data-testid="run-id">(\d+)/.exec(body)?.[1]
+      const runId = extractRunId(body)
       expect(runId, `response ${index} should include a run-id`).toBe(String(index))
       return runId
     })

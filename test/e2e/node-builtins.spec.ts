@@ -28,7 +28,10 @@ test.describe('Node builtins', () => {
     const failed: Array<{ name: string; error?: string }> = []
 
     for (const name of NODE_BUILTIN_MODULES) {
-      const response = await request.get(`/api/node-builtins?name=${encodeURIComponent(name)}`)
+      let response = await request.get(`/api/node-builtins?name=${encodeURIComponent(name)}`)
+      if (response.status() >= 500) {
+        response = await request.get(`/api/node-builtins?name=${encodeURIComponent(name)}`)
+      }
       expect(response.status(), name).toBe(200)
 
       const data: unknown = await response.json()

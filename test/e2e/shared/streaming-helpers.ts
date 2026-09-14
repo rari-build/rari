@@ -40,9 +40,10 @@ export async function getServerTimestamps(page: Page, ids: readonly string[]) {
   await page.waitForFunction(
     (selectorIds: readonly string[]) =>
       selectorIds.every(id => {
-        const el = document.querySelector(`[data-testid="${id}"]`)
-
-        return /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/.test(el?.textContent ?? '')
+        const nodes = document.querySelectorAll(`[data-testid="${id}"]`)
+        return Array.from(nodes).some(el =>
+          /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/.test(el.textContent),
+        )
       }),
     ids,
     { timeout: 20000 },
@@ -52,11 +53,17 @@ export async function getServerTimestamps(page: Page, ids: readonly string[]) {
     const result: Record<string, number> = {}
 
     for (const id of selectorIds) {
-      const el = document.querySelector(`[data-testid="${id}"]`)
-      const text = el?.textContent ?? ''
-      const match = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/.exec(text)
-
-      result[id] = match ? new Date(match[0]).getTime() : Number.NaN
+      const nodes = document.querySelectorAll(`[data-testid="${id}"]`)
+      let matched: string | null = null
+      for (const el of nodes) {
+        const text = el.textContent
+        const match = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/.exec(text)
+        if (match) {
+          matched = match[0]
+          break
+        }
+      }
+      result[id] = matched != null ? new Date(matched).getTime() : Number.NaN
     }
 
     return result
