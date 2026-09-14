@@ -621,7 +621,7 @@ impl LayoutRenderer {
                     route_match,
                     context,
                     loading_component_id.as_deref(),
-                    true,
+                    false,
                     true,
                     Some(&stream_id),
                 )?;
@@ -1287,23 +1287,14 @@ impl LayoutRenderer {
 
                 const pageProps = {};
                 const useSuspense = {};
-                const isAsync = PageComponent.constructor.name === 'AsyncFunction';
 
-                const pageElement = (isAsync && useSuspense)
+                const pageElement = useSuspense
                     ? React.createElement(
                         React.Suspense,
                         {{
-                          fallback: React.createElement(
-                            React.ViewTransition,
-                            {{ exit: 'rari-loading-exit', default: 'none' }},
-                            React.createElement(LoadingComponent, {{}})
-                          ),
+                          fallback: React.createElement(LoadingComponent, {{}}),
                         }},
-                        React.createElement(
-                          React.ViewTransition,
-                          {{ enter: 'rari-content-enter', default: 'none' }},
-                          React.createElement(PageComponent, pageProps)
-                        )
+                        React.createElement(PageComponent, pageProps)
                       )
                     : React.createElement(PageComponent, pageProps);
 

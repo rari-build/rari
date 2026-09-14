@@ -139,12 +139,12 @@ mod tests {
         .unwrap();
 
         assert!(script.contains("const useSuspense = true"));
-        assert!(
-            script.contains("const isAsync = PageComponent.constructor.name === 'AsyncFunction'")
-        );
-        assert!(script.contains("React.ViewTransition"));
-        assert!(script.contains("rari-loading-exit"));
-        assert!(script.contains("rari-content-enter"));
+        assert!(!script.contains("AsyncFunction"));
+        assert!(script.contains("React.Suspense"));
+        assert!(script.contains("LoadingComponent"));
+        assert!(!script.contains("React.ViewTransition"));
+        assert!(!script.contains("rari-content-enter"));
+        assert!(script.contains("const pageElement = useSuspense"));
     }
 
     #[test]
@@ -189,9 +189,8 @@ mod tests {
         .unwrap();
 
         assert!(script.contains("const useSuspense = false"));
-        assert!(
-            script.contains("const isAsync = PageComponent.constructor.name === 'AsyncFunction'")
-        );
+        assert!(!script.contains("AsyncFunction"));
+        assert!(script.contains("const pageElement = useSuspense"));
     }
 
     #[test]
@@ -346,16 +345,12 @@ mod tests {
         .unwrap();
 
         assert!(script_ssr.contains("const useSuspense = true"));
-        assert!(
-            script_ssr
-                .contains("const isAsync = PageComponent.constructor.name === 'AsyncFunction'")
-        );
+        assert!(!script_ssr.contains("AsyncFunction"));
+        assert!(script_ssr.contains("const pageElement = useSuspense"));
 
         assert!(script_rsc.contains("const useSuspense = false"));
-        assert!(
-            script_rsc
-                .contains("const isAsync = PageComponent.constructor.name === 'AsyncFunction'")
-        );
+        assert!(!script_rsc.contains("AsyncFunction"));
+        assert!(script_rsc.contains("const pageElement = useSuspense"));
     }
 
     #[test]

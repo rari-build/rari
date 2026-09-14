@@ -1771,13 +1771,24 @@ export class ServerComponentBuilder {
     const code = fs.readFileSync(filePath, 'utf-8')
     const exports = this.extractExportNames(code)
     const lines = [
-      `const __rariActionMod = globalThis.__rari_rsc_require__(${JSON.stringify(actionId)});`,
-      `if (!__rariActionMod) throw new Error("Server action module ${actionId} is not registered");`,
+      `function __rariResolveAction(name) {`,
+      `  const mod = globalThis.__rari_rsc_require__(${JSON.stringify(actionId)});`,
+      `  const fn = mod && mod[name];`,
+      `  if (typeof fn !== "function") throw new Error("Server action " + ${JSON.stringify(actionId)} + "#" + name + " is not registered");`,
+      `  return fn;`,
+      `}`,
     ]
 
     for (const name of exports) {
-      if (name === 'default') lines.push('export default __rariActionMod.default;')
-      else lines.push(`export const ${name} = __rariActionMod.${name};`)
+      if (name === 'default') {
+        lines.push(
+          `export default function __rariDefaultAction(...args) { return __rariResolveAction("default")(...args); }`,
+        )
+      } else {
+        lines.push(
+          `export function ${name}(...args) { return __rariResolveAction(${JSON.stringify(name)})(...args); }`,
+        )
+      }
     }
 
     return `${lines.join('\n')}\n`

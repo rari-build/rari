@@ -1,14 +1,11 @@
-'use client'
-
 import type { ReactNode } from 'react'
-import { useState } from 'react'
+import { PageTransition } from './page-transition'
+import { RootTemplateClient } from './template-client'
 
 export default function RootTemplate({ children }: Readonly<{ children: ReactNode }>) {
-  const [mountCount] = useState(1)
-
   return (
-    <div data-testid="root-template" data-mount-count={mountCount}>
-      <div data-testid="root-template-children">{children}</div>
-    </div>
+    <PageTransition>
+      <RootTemplateClient>{children}</RootTemplateClient>
+    </PageTransition>
   )
 }

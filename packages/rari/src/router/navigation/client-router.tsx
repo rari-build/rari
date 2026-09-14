@@ -414,30 +414,6 @@ export function ClientRouter({
     }
   }
 
-  const handleNonStreamingResponse = (
-    responsePromise: Promise<Response>,
-    fromRoute: string,
-    actualTargetPath: string,
-    navigationId: number,
-    options: NavigationOptions,
-    abortController: AbortController,
-  ) => {
-    if (navigationIdCounterRef.current !== navigationId) return
-
-    window.dispatchEvent(
-      new CustomEvent('rari:navigate', {
-        detail: {
-          from: fromRoute,
-          to: actualTargetPath,
-          navigationId,
-          options,
-          abortSignal: abortController.signal,
-          rscResponsePromise: responsePromise,
-        },
-      }),
-    )
-  }
-
   const handleScrollAfterNavigation = (
     actualTargetPath: string,
     hash: string,
@@ -570,10 +546,7 @@ export function ClientRouter({
           key: historyKey,
         }
 
-        if (options.replace) window.history.replaceState(historyState, '', urlWithHash)
-        else window.history.pushState(historyState, '', urlWithHash)
-
-        const fetchPromise = fetch(fetchUrl, {
+        const response = await fetch(fetchUrl, {
           headers: {
             'Accept': 'text/x-component',
             'rari-navigation-id': String(navigationId),
@@ -581,35 +554,47 @@ export function ClientRouter({
           signal: abortController.signal,
         })
 
-        const rscFetchPromise = fetchPromise.then(response => {
-          if (!response.ok && response.status !== 404)
-            throw new Error(`Failed to fetch: ${response.status}`)
-
-          return response
-        })
-
-        const response = await rscFetchPromise
+        if (!response.ok && response.status !== 404)
+          throw new Error(`Failed to fetch: ${response.status}`)
 
         if (abortController.signal.aborted) {
           cleanupAbortedNavigation(targetPath, navigationId)
           return
         }
 
+        const flightProtocol = await response.text()
+
         const finalUrl = new URL(response.url)
         const actualTargetPath = finalUrl.pathname
-
-        if (actualTargetPath !== targetPath) {
-          const redirectUrl = hash ? `${actualTargetPath}#${hash}` : actualTargetPath
-          window.history.replaceState({ ...historyState, route: actualTargetPath }, '', redirectUrl)
+        const settledHistoryState: HistoryState = {
+          ...historyState,
+          route: actualTargetPath,
         }
+        const settledUrl =
+          actualTargetPath !== targetPath
+            ? hash
+              ? `${actualTargetPath}#${hash}`
+              : actualTargetPath
+            : urlWithHash
 
-        handleNonStreamingResponse(
-          Promise.resolve(response),
-          fromRoute,
-          actualTargetPath,
-          navigationId,
-          options,
-          abortController,
+        if (navigationIdCounterRef.current !== navigationId) return
+
+        window.dispatchEvent(
+          new CustomEvent('rari:navigate', {
+            detail: {
+              from: fromRoute,
+              to: actualTargetPath,
+              navigationId,
+              options,
+              abortSignal: abortController.signal,
+              rscFlightProtocol: flightProtocol,
+              pendingHistory: {
+                url: settledUrl,
+                state: settledHistoryState,
+                replace: options.replace === true,
+              },
+            },
+          }),
         )
 
         processMetadata(response)
