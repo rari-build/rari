@@ -2,7 +2,7 @@ use std::{
     env,
     error::Error,
     fs as std_fs, mem,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{Arc, OnceLock},
     task::{Context, Poll},
 };
@@ -21,14 +21,43 @@ use tokio::fs;
 use tower::{Layer, Service};
 
 use crate::{
-    runtime::JsExecutionRuntime,
-    server::core::{types::ServerState, utils::component::get_dist_path_for_component},
-    utils::path::path_to_file_url,
+    runtime::JsExecutionRuntime, server::core::types::ServerState, utils::path::path_to_file_url,
 };
 
 async fn clone_renderer_runtime(state: &ServerState) -> Arc<JsExecutionRuntime> {
     let renderer = state.renderer.lock().await;
     Arc::clone(&renderer.runtime)
+}
+
+const PROXY_MANIFEST_PATH: &str = "dist/server/proxy.json";
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ProxyManifestFile {
+    enabled: bool,
+    #[serde(default)]
+    rules: Vec<ProxyRule>,
+    #[serde(rename = "requiresRuntime", default)]
+    requires_runtime: bool,
+    #[serde(rename = "bundlePath")]
+    bundle_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ProxyRule {
+    source: String,
+    #[serde(rename = "type")]
+    rule_type: String,
+    destination: Option<String>,
+    permanent: Option<bool>,
+    headers: Option<FxHashMap<String, String>>,
+}
+
+#[derive(Debug)]
+enum AppliedProxyRule {
+    Redirect { destination: String, permanent: bool },
+    Rewrite(String),
+    Headers(FxHashMap<String, String>),
+    Block,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -106,6 +135,12 @@ fn apply_request_headers(headers: &mut HeaderMap, map: FxHashMap<String, JsonHea
     }
 }
 
+fn apply_string_headers(headers: &mut HeaderMap, map: FxHashMap<String, String>) {
+    let json_map =
+        map.into_iter().map(|(key, value)| (key, JsonHeaderValue::Single(value))).collect();
+    apply_response_headers(headers, json_map);
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 struct ProxyResult {
     #[serde(rename = "continue")]
@@ -132,20 +167,93 @@ struct RedirectInfo {
     permanent: bool,
 }
 
-static PROXY_DIST_PATH: OnceLock<Option<PathBuf>> = OnceLock::new();
+static PROXY_MANIFEST: OnceLock<Option<ProxyManifestFile>> = OnceLock::new();
 
-fn resolve_proxy_dist_path() -> Option<PathBuf> {
-    PROXY_DIST_PATH
+fn load_proxy_manifest() -> Option<&'static ProxyManifestFile> {
+    PROXY_MANIFEST
         .get_or_init(|| {
-            let hashed = get_dist_path_for_component("src/proxy.ts").ok()?;
-            std_fs::metadata(&hashed).ok()?;
-            Some(hashed)
+            let path = Path::new(PROXY_MANIFEST_PATH);
+            let content = std_fs::read_to_string(path).ok()?;
+            match serde_json::from_str::<ProxyManifestFile>(&content) {
+                Ok(manifest) if manifest.enabled => Some(manifest),
+                Ok(_) => None,
+                Err(error) => {
+                    tracing::warn!("Failed to parse {}: {}", PROXY_MANIFEST_PATH, error);
+                    None
+                }
+            }
         })
-        .clone()
+        .as_ref()
 }
 
-fn is_proxy_enabled() -> bool {
-    resolve_proxy_dist_path().is_some()
+fn requires_proxy_runtime() -> bool {
+    load_proxy_manifest().is_some_and(|manifest| manifest.requires_runtime)
+}
+
+fn resolve_proxy_dist_path() -> Option<PathBuf> {
+    let manifest = load_proxy_manifest()?;
+    if !manifest.requires_runtime {
+        return None;
+    }
+    let bundle_path = manifest.bundle_path.as_deref()?;
+    let path = PathBuf::from("dist").join(bundle_path);
+    std_fs::metadata(&path).ok()?;
+    Some(path)
+}
+
+fn normalize_proxy_path(path: &str) -> &str {
+    if path.len() > 1 && path.ends_with('/') { path.trim_end_matches('/') } else { path }
+}
+
+fn path_matches_source(pathname: &str, source: &str) -> bool {
+    normalize_proxy_path(pathname) == normalize_proxy_path(source)
+}
+
+fn resolve_redirect_destination(destination: &str, request_headers: &HeaderMap) -> String {
+    if destination.starts_with("http://") || destination.starts_with("https://") {
+        return destination.to_owned();
+    }
+
+    let scheme = request_headers
+        .get("x-forwarded-proto")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("http");
+    let host = request_headers
+        .get(header::HOST)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("localhost");
+    let path = if destination.starts_with('/') {
+        destination.to_owned()
+    } else {
+        format!("/{destination}")
+    };
+    format!("{scheme}://{host}{path}")
+}
+
+fn find_matching_rule<'a>(rules: &'a [ProxyRule], pathname: &str) -> Option<&'a ProxyRule> {
+    rules.iter().find(|rule| path_matches_source(pathname, &rule.source))
+}
+
+fn apply_proxy_rule(rule: &ProxyRule) -> Option<AppliedProxyRule> {
+    match rule.rule_type.as_str() {
+        "redirect" => {
+            let destination = rule.destination.as_deref()?.to_owned();
+            Some(AppliedProxyRule::Redirect {
+                destination,
+                permanent: rule.permanent.unwrap_or(false),
+            })
+        }
+        "rewrite" => Some(AppliedProxyRule::Rewrite(rule.destination.as_deref()?.to_owned())),
+        "header" => Some(AppliedProxyRule::Headers(rule.headers.clone().unwrap_or_default())),
+        "block" => Some(AppliedProxyRule::Block),
+        _ => None,
+    }
+}
+
+fn redirect_response(destination: String, permanent: bool) -> Option<Response> {
+    let status =
+        if permanent { StatusCode::PERMANENT_REDIRECT } else { StatusCode::TEMPORARY_REDIRECT };
+    Response::builder().status(status).header("Location", destination).body(Body::empty()).ok()
 }
 
 async fn execute_proxy(
@@ -219,12 +327,49 @@ where
         let mut inner = mem::replace(&mut self.inner, inner);
 
         Box::pin(async move {
-            if !is_proxy_enabled() {
+            let Some(manifest) = load_proxy_manifest() else {
                 return inner.call(request).await;
-            }
+            };
 
             let path = request.uri().path();
             if path.starts_with("/_rari/") || path.starts_with("/vite-server/") {
+                return inner.call(request).await;
+            }
+
+            if let Some(rule) = find_matching_rule(&manifest.rules, path)
+                && let Some(applied) = apply_proxy_rule(rule)
+            {
+                match applied {
+                    AppliedProxyRule::Redirect { destination, permanent } => {
+                        let location =
+                            resolve_redirect_destination(&destination, request.headers());
+                        if let Some(response) = redirect_response(location, permanent) {
+                            return Ok(response);
+                        }
+                    }
+                    AppliedProxyRule::Rewrite(rewrite_path) => match rewrite_path.parse() {
+                        Ok(uri) => {
+                            *request.uri_mut() = uri;
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to parse rewrite path: {}", e);
+                        }
+                    },
+                    AppliedProxyRule::Headers(headers) => {
+                        let mut response = inner.call(request).await?;
+                        apply_string_headers(response.headers_mut(), headers);
+                        return Ok(response);
+                    }
+                    AppliedProxyRule::Block => {
+                        return Ok(Response::builder()
+                            .status(StatusCode::FORBIDDEN)
+                            .body(Body::empty())
+                            .unwrap_or_else(|_| Response::new(Body::empty())));
+                    }
+                }
+            }
+
+            if !manifest.requires_runtime {
                 return inner.call(request).await;
             }
 
@@ -239,20 +384,12 @@ where
             match execute_proxy(&state, method, uri, headers).await {
                 Ok(result) => {
                     if let Some(redirect) = result.redirect {
-                        let status = if redirect.permanent {
-                            StatusCode::MOVED_PERMANENTLY
-                        } else {
-                            StatusCode::TEMPORARY_REDIRECT
-                        };
-
-                        return match Response::builder()
-                            .status(status)
-                            .header("Location", redirect.destination)
-                            .body(Body::empty())
-                        {
-                            Ok(response) => Ok(response),
-                            Err(_) => inner.call(request).await,
-                        };
+                        let location =
+                            resolve_redirect_destination(&redirect.destination, request.headers());
+                        if let Some(response) = redirect_response(location, redirect.permanent) {
+                            return Ok(response);
+                        }
+                        return inner.call(request).await;
                     }
 
                     if let Some(rewrite_path) = result.rewrite {
@@ -319,7 +456,7 @@ async fn resolve_rari_package_dir() -> Option<PathBuf> {
 
 #[expect(clippy::missing_errors_doc)]
 pub async fn initialize_proxy(state: &ServerState) -> Result<(), RariError> {
-    if !is_proxy_enabled() {
+    if !requires_proxy_runtime() {
         return Ok(());
     }
 
@@ -347,6 +484,7 @@ pub async fn initialize_proxy(state: &ServerState) -> Result<(), RariError> {
     let rari_request_specifier = path_to_file_url(&rari_request_absolute);
 
     let Some(proxy_file_path) = resolve_proxy_dist_path() else {
+        tracing::debug!("Proxy: requiresRuntime is true but bundlePath is missing");
         return Ok(());
     };
     let proxy_absolute = match fs::canonicalize(&proxy_file_path).await {
@@ -469,5 +607,45 @@ mod tests {
         let set_cookies: Vec<_> =
             headers.get_all(header::SET_COOKIE).iter().map(|v| v.to_str().unwrap()).collect();
         assert_eq!(set_cookies, vec!["a=1", "b=2"]);
+    }
+
+    #[test]
+    fn path_matches_source_ignores_trailing_slash() {
+        assert!(path_matches_source("/docs/", "/docs"));
+        assert!(path_matches_source("/docs", "/docs/"));
+        assert!(!path_matches_source("/docs", "/sponsors"));
+    }
+
+    #[test]
+    fn find_matching_rule_returns_first_source_hit() {
+        let rules = vec![
+            ProxyRule {
+                source: "/docs".to_string(),
+                rule_type: "redirect".to_string(),
+                destination: Some("/docs/getting-started".to_string()),
+                permanent: Some(true),
+                headers: None,
+            },
+            ProxyRule {
+                source: "/sponsors".to_string(),
+                rule_type: "redirect".to_string(),
+                destination: Some("/enterprise/sponsors".to_string()),
+                permanent: Some(true),
+                headers: None,
+            },
+        ];
+
+        let matched = find_matching_rule(&rules, "/sponsors/").unwrap();
+        assert_eq!(matched.destination.as_deref(), Some("/enterprise/sponsors"));
+    }
+
+    #[test]
+    fn redirect_response_uses_308_for_permanent() {
+        let response = redirect_response("https://example.com/docs".to_string(), true).unwrap();
+        assert_eq!(response.status(), StatusCode::PERMANENT_REDIRECT);
+        assert_eq!(
+            response.headers().get(header::LOCATION).and_then(|v| v.to_str().ok()),
+            Some("https://example.com/docs")
+        );
     }
 }

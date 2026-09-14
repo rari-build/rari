@@ -16,6 +16,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { build } from 'rolldown'
+import { buildProxyManifest } from '@/proxy/build/analyze'
 import {
   BACKSLASH_REGEX,
   EXPORTED_CONST_FUNCTION_REGEX,
@@ -67,6 +68,7 @@ import { transformInlineServerActions } from '../transform/inline-server-action'
 import { getUseCacheTransform } from '../transform/use-cache'
 
 const PROXY_FILE_REGEX = /^proxy\.(?:tsx?|jsx?|mts|mjs)$/
+const PROXY_MANIFEST_FILE = 'proxy.json'
 const COMPONENTS_PATH_REGEX = /\/components\/(\w+)(?:\.tsx?|\.jsx?)?$/
 const COMPONENTS_PATH_ALT_REGEX = /[/\\]components[/\\]\w+(?:\.tsx?|\.jsx?)?$/
 const SPECIAL_FILE_REGEX = /^(?:robots|sitemap|feed)\.(?:tsx?|jsx?)$/
@@ -1442,10 +1444,44 @@ export class ServerComponentBuilder {
     if (errors.length > 0) throw errors[0]
   }
 
+  private async emitProxyManifest(serverOutDir: string): Promise<void> {
+    const proxyManifestPath = path.join(serverOutDir, PROXY_MANIFEST_FILE)
+    const proxyEntries = [...this.serverComponents.entries()].filter(([filePath]) =>
+      PROXY_FILE_REGEX.test(path.basename(filePath)),
+    )
+
+    if (proxyEntries.length === 0) {
+      try {
+        await fs.promises.unlink(proxyManifestPath)
+      } catch (error: unknown) {
+        if (getErrnoCode(error) !== 'ENOENT')
+          console.warn(`Failed to remove proxy manifest file:`, error)
+      }
+      return
+    }
+
+    const [filePath, component] = proxyEntries[0]
+    const relativePath = this.getProjectRelativePath(filePath).replace(BACKSLASH_REGEX, '/')
+    const componentId = this.getComponentId(relativePath)
+    const bundlePath = path
+      .join(this.options.rscDir, `${componentId}.js`)
+      .replace(BACKSLASH_REGEX, '/')
+    const proxyManifest = buildProxyManifest({
+      proxyFile: relativePath,
+      code: component.originalCode,
+      bundlePath,
+    })
+
+    if (!proxyManifest.requiresRuntime) this.serverComponents.delete(filePath)
+
+    await fs.promises.writeFile(proxyManifestPath, JSON.stringify(proxyManifest), 'utf-8')
+  }
+
   async buildServerComponents(): Promise<ServerComponentManifest> {
     const serverOutDir = path.join(this.options.outDir, this.options.rscDir)
 
     await fs.promises.mkdir(serverOutDir, { recursive: true })
+    await this.emitProxyManifest(serverOutDir)
 
     const manifest: ServerComponentManifest = {
       components: {},

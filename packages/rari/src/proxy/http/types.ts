@@ -129,4 +129,5 @@ export interface ProxyManifest {
   readonly rules?: readonly ProxyRule[]
   readonly matcher?: ProxyConfig['matcher']
   readonly requiresRuntime?: boolean
+  readonly bundlePath?: string
 }
