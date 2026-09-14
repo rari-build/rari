@@ -48,6 +48,27 @@ export function applyFormDataToForm(form: HTMLFormElement, formData: FormData): 
     }
   }
 
+  for (const element of form.elements) {
+    try {
+      if (
+        element instanceof HTMLInputElement &&
+        (element.type === 'checkbox' || element.type === 'radio')
+      ) {
+        if (element.name !== '' && !processedKeys.has(element.name)) element.checked = false
+        continue
+      }
+
+      if (element instanceof HTMLSelectElement && element.multiple) {
+        if (element.name === '' || processedKeys.has(element.name)) continue
+        for (const option of element.options) {
+          option.selected = false
+        }
+      }
+    } catch {
+      allSucceeded = false
+    }
+  }
+
   return allSucceeded
 }
 

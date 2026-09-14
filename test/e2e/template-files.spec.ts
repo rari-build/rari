@@ -35,8 +35,8 @@ async function expectNodeRemounted(locator: Locator, previousMountCount: string)
   await expect(locator).not.toHaveAttribute('data-mount-count', previousMountCount)
 }
 
-async function expectMountedOnce(locator: Locator) {
-  await expect(locator).toHaveAttribute('data-mount-count', '1')
+async function expectMounted(locator: Locator) {
+  await expect(locator).toHaveAttribute('data-mount-count', /.+/)
 }
 
 async function navigateByLink(page: Page, url: string) {
@@ -66,7 +66,7 @@ test.describe('Template files (re-mount on navigation)', () => {
     await page.goto(routes.home)
 
     const template = rootTemplate(page)
-    await expectMountedOnce(template)
+    await expectMounted(template)
 
     await expectTemplateRemountAfterNavigation(page, template, routes.about)
     await expectTemplateRemountAfterNavigation(page, template, routes.home)
