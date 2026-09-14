@@ -604,6 +604,8 @@ export function ClientRouter({
           }),
         )
 
+        if (navigationIdCounterRef.current !== navigationId) return
+
         processMetadata(response)
 
         completeNavigation(actualTargetPath, hash, options, navigationId)
