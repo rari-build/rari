@@ -24,9 +24,28 @@ async function expectStreamingResponse(request: APIRequestContext, path: string)
 }
 
 function extractRunId(body: string): string | undefined {
-  const withoutScripts = body.replace(/<script\b[\s\S]*?<\/script>/gi, '')
-  const text = /data-testid="run-id">([^<]*)/.exec(withoutScripts)?.[1]?.trim()
-  return text == null || text === '' ? undefined : text
+  const marker = 'data-testid="run-id">'
+  const start = body.indexOf(marker)
+  if (start === -1) return undefined
+
+  let index = start + marker.length
+  let text = ''
+
+  while (index < body.length) {
+    if (/^<script\b/i.test(body.slice(index))) {
+      const closeMatch = /<\/script\s*>/i.exec(body.slice(index))
+      if (closeMatch?.index == null) break
+      index += closeMatch.index + closeMatch[0].length
+      continue
+    }
+
+    if (body[index] === '<') break
+    text += body[index]
+    index += 1
+  }
+
+  text = text.trim()
+  return text === '' ? undefined : text
 }
 
 test.describe('Streaming load validation', () => {
