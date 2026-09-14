@@ -8,12 +8,15 @@ interface SoftNavSample {
   readonly hasPageEnter: boolean
   readonly hasUaGroup: boolean
   readonly urlHeldUntilCommit: boolean
+  readonly pathBeforeCommit: string | null
+  readonly pathAtCommit: string | null
 }
 
 type SoftNavWindow = Window & {
   __softNav?: {
     samples: SoftNavSample[]
     pathAtStart: string | null
+    pathBeforeCommit: string | null
     pathAtCommit: string | null
   }
 }
@@ -29,11 +32,22 @@ test.describe('Soft-nav view transitions', () => {
 
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(`(() => {
-      const softNav = { samples: [], pathAtStart: null, pathAtCommit: null };
+      const softNav = {
+        samples: [],
+        pathAtStart: null,
+        pathBeforeCommit: null,
+        pathAtCommit: null,
+      };
       window.__softNav = softNav;
 
       window.addEventListener('rari:navigation-start', () => {
         softNav.pathAtStart = location.pathname;
+        softNav.pathBeforeCommit = null;
+        softNav.pathAtCommit = null;
+      });
+
+      window.addEventListener('rari:navigate', () => {
+        softNav.pathBeforeCommit = location.pathname;
       });
 
       window.addEventListener('rari:navigate-committed', () => {
@@ -61,7 +75,9 @@ test.describe('Soft-nav view transitions', () => {
               hasPageExit: names.some((name) => name.indexOf('rari-page-exit') !== -1),
               hasPageEnter: names.some((name) => name.indexOf('rari-page-enter') !== -1),
               hasUaGroup: names.some((name) => name.indexOf('-ua-view-transition-group') !== -1),
-              urlHeldUntilCommit: softNav.pathAtStart === '/',
+              urlHeldUntilCommit: softNav.pathBeforeCommit === softNav.pathAtStart,
+              pathBeforeCommit: softNav.pathBeforeCommit,
+              pathAtCommit: softNav.pathAtCommit,
             });
             return;
           }
@@ -109,6 +125,8 @@ test.describe('Soft-nav view transitions', () => {
       ).toBe(true)
       expect(sample.hasUaGroup, `UA group morph leaked for ${route.href}`).toBe(false)
       expect(sample.urlHeldUntilCommit).toBe(true)
+      expect(sample.pathBeforeCommit).toBe('/')
+      expect(sample.pathAtCommit).toBe(route.href)
       await expect(nav).toHaveAttribute('data-persist', 'nav-ok')
     })
   }

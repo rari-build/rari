@@ -143,7 +143,7 @@ function loadNavigationTransitionModule(projectRoot: string): string {
   for (const relativePath of NAVIGATION_TRANSITION_CANDIDATES) {
     const absolutePath = path.join(projectRoot, relativePath)
     if (fs.existsSync(absolutePath)) {
-      const importPath = absolutePath.split(path.sep).join('/')
+      const importPath = `/${relativePath.replace(/\\/g, '/')}`
       return `export { default as NavigationTransition } from ${JSON.stringify(importPath)}\n`
     }
   }
