@@ -55,6 +55,19 @@ describe('analyzeProxySource', () => {
     expect(analyzeProxySource(code).requiresRuntime).toBe(true)
   })
 
+  it('requires runtime for pathname-and-method conjunctions', () => {
+    const code = `
+      export function proxy(request) {
+        if (request.rariUrl.pathname === '/admin' && request.method === 'GET')
+          return RariResponse.redirect(new URL('/login', request.url), 308)
+        return RariResponse.next()
+      }
+    `
+    const analysis = analyzeProxySource(code)
+    expect(analysis.requiresRuntime).toBe(true)
+    expect(analysis.rules).toEqual([])
+  })
+
   it('buildProxyManifest omits bundlePath for static proxies', () => {
     const manifest = buildProxyManifest({
       proxyFile: 'src/proxy.ts',
