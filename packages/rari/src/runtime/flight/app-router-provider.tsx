@@ -724,10 +724,19 @@ export function AppRouterProvider({
     }
   }, [rscPayload])
 
-  const contentToRender = normalizeFlightContent(rscPayload?.element ?? children)
-  const [committedContent, setCommittedContent] = useState<React.ReactNode>(null)
-  if (!isFlightThenable(contentToRender) && !Object.is(contentToRender, committedContent))
-    setCommittedContent(contentToRender)
+  const rawContent = rscPayload?.element ?? children
+  const contentToRender = normalizeFlightContent(rawContent)
+  const [committedSnapshot, setCommittedSnapshot] = useState<{
+    readonly raw: React.ReactNode | Thenable<React.ReactNode>
+    readonly content: React.ReactNode
+  } | null>(null)
+  if (
+    !isFlightThenable(contentToRender) &&
+    (committedSnapshot == null || !Object.is(rawContent, committedSnapshot.raw))
+  ) {
+    setCommittedSnapshot({ raw: rawContent, content: contentToRender })
+  }
+  const committedContent = committedSnapshot?.content ?? null
 
   return (
     <>

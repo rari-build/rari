@@ -529,7 +529,7 @@ mod tests {
             "templates must fall back to the SSR module registry used by RscModuleManager.register"
         );
         assert!(
-            script.contains(r#"globalThis['~rari']?.ssrModules"#),
+            script.contains(r"globalThis['~rari']?.ssrModules"),
             "client templates must fall back to production SSR client modules"
         );
         assert!(
