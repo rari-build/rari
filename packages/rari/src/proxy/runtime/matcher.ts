@@ -3,15 +3,7 @@ import { MULTIPLE_SLASHES_REGEX, PATH_TRAILING_SLASH_REGEX } from '@/shared/rege
 
 const ESCAPE_CHARS_REGEX = /[.+?^${}()|[\]\\]/g
 const ASTERISK_REGEX = /\*/g
-
-const PARAM_TOKEN_RULES = [
-  { regex: /\/:(\w+)\*/g, token: '___PARAM_DOTSTAR_SLASH___' },
-  { regex: /:(\w+)\*/g, token: '___PARAM_DOTSTAR___' },
-  { regex: /:(\w+)\+/g, token: '___PARAM_DOTPLUS___' },
-  { regex: /\/:(\w+)\?/g, token: '___PARAM_OPT_SLASH___' },
-  { regex: /:(\w+)\?/g, token: '___PARAM_OPT___' },
-  { regex: /:(\w+)/g, token: '___PARAM_SEG___' },
-] as const
+const PARAM_TOKEN_REGEX = /\/:(\w+)\*|\/:(\w+)\?|:(\w+)\*|:(\w+)\+|:(\w+)\?|:(\w+)/g
 
 const PLACEHOLDER_REPLACEMENTS: ReadonlyArray<readonly [RegExp, string]> = [
   [/___PARAM_DOTSTAR_SLASH___/g, '(?:/(.*))?'],
@@ -23,6 +15,17 @@ const PLACEHOLDER_REPLACEMENTS: ReadonlyArray<readonly [RegExp, string]> = [
   [/___STAR___/g, '.*'],
 ]
 
+function paramTokenForMatch(match: string): string {
+  if (match.startsWith('/:')) {
+    if (match.endsWith('*')) return '___PARAM_DOTSTAR_SLASH___'
+    if (match.endsWith('?')) return '___PARAM_OPT_SLASH___'
+  }
+  if (match.endsWith('*')) return '___PARAM_DOTSTAR___'
+  if (match.endsWith('+')) return '___PARAM_DOTPLUS___'
+  if (match.endsWith('?')) return '___PARAM_OPT___'
+  return '___PARAM_SEG___'
+}
+
 function normalizePath(path: string): string {
   const collapsed = path.replace(MULTIPLE_SLASHES_REGEX, '/')
   return collapsed === '/' ? '/' : collapsed.replace(PATH_TRAILING_SLASH_REGEX, '')
@@ -32,15 +35,23 @@ function compilePattern(pattern: string): {
   readonly regex: RegExp
   readonly paramNames: readonly string[]
 } {
-  const paramInfo: Array<{ name: string; pos: number }> = []
-  let regexPattern = pattern
+  const paramNames: string[] = []
 
-  for (const { regex, token } of PARAM_TOKEN_RULES) {
-    regexPattern = regexPattern.replace(regex, (_match: string, name: string, offset: number) => {
-      paramInfo.push({ name, pos: offset })
-      return token
-    })
-  }
+  let regexPattern = pattern.replace(
+    PARAM_TOKEN_REGEX,
+    (
+      match: string,
+      slashStar: string | undefined,
+      slashOpt: string | undefined,
+      star: string | undefined,
+      plus: string | undefined,
+      opt: string | undefined,
+      seg: string | undefined,
+    ) => {
+      paramNames.push(slashStar ?? slashOpt ?? star ?? plus ?? opt ?? seg ?? '')
+      return paramTokenForMatch(match)
+    },
+  )
 
   regexPattern = regexPattern.replace(ASTERISK_REGEX, '___STAR___')
   regexPattern = regexPattern.replace(ESCAPE_CHARS_REGEX, '\\$&')
@@ -51,7 +62,7 @@ function compilePattern(pattern: string): {
 
   return {
     regex: new RegExp(`^${regexPattern}$`),
-    paramNames: paramInfo.sort((a, b) => a.pos - b.pos).map(p => p.name),
+    paramNames,
   }
 }
 

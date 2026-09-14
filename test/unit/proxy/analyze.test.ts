@@ -118,6 +118,23 @@ describe('analyzeProxySource', () => {
     expect(analysis.matcher).toBeUndefined()
   })
 
+  it('forces runtime for non-literal matcher expressions', () => {
+    const code = `
+      const paths = ['/api/:path*']
+      export const config = { matcher: paths }
+
+      export function proxy(request) {
+        if (request.rariUrl.pathname === '/api/x')
+          return RariResponse.redirect(new URL('/y', request.url), 308)
+        return RariResponse.next()
+      }
+    `
+    const analysis = analyzeProxySource(code)
+    expect(analysis.requiresRuntime).toBe(true)
+    expect(analysis.matcher).toBeUndefined()
+    expect(analysis.rules).toEqual([])
+  })
+
   it('buildProxyManifest omits bundlePath for static proxies', () => {
     const manifest = buildProxyManifest({
       proxyFile: 'src/proxy.ts',
