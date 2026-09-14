@@ -452,13 +452,15 @@ export function ClientRouter({
 
   const processNavigationQueueRef = useRef<(() => Promise<void>) | null>(null)
 
-  const handleSameRouteNavigation = (targetPath: string, hash: string) => {
+  const handleSameRouteNavigation = (_targetPath: string, hash: string) => {
     if (!hash) return
 
     const element = document.getElementById(hash)
     if (element) {
       element.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      window.history.pushState(window.history.state, '', `${targetPath}#${hash}`)
+      const nextUrl = `${window.location.pathname}${window.location.search}#${hash}`
+      window.history.pushState(window.history.state, '', nextUrl)
+      committedUrlRef.current = nextUrl
     }
   }
 
@@ -526,6 +528,7 @@ export function ClientRouter({
     targetPath: string,
     navigationId: number,
     fromRoute: string,
+    options: { readonly emitEvent?: boolean } = {},
   ) => {
     if (error instanceof Error && error.name === 'AbortError') {
       cleanupAbortedNavigation(targetPath, navigationId)
@@ -544,16 +547,18 @@ export function ClientRouter({
 
     pendingNavigationsRef.current.delete(targetPath)
 
-    window.dispatchEvent(
-      new CustomEvent('rari:navigate-error', {
-        detail: {
-          from: fromRoute,
-          to: targetPath,
-          error: navError,
-          navigationId,
-        },
-      }),
-    )
+    if (options.emitEvent !== false) {
+      window.dispatchEvent(
+        new CustomEvent('rari:navigate-error', {
+          detail: {
+            from: fromRoute,
+            to: targetPath,
+            error: navError,
+            navigationId,
+          },
+        }),
+      )
+    }
 
     void processNavigationQueueRef.current?.()
   }
@@ -672,7 +677,9 @@ export function ClientRouter({
         if (navigationIdCounterRef.current !== navigationId) return
 
         if (settlementResult !== 'committed') {
-          handleNavigationError(settlementResult.error, targetPath, navigationId, fromRoute)
+          handleNavigationError(settlementResult.error, targetPath, navigationId, fromRoute, {
+            emitEvent: false,
+          })
           return
         }
 
@@ -764,7 +771,9 @@ export function ClientRouter({
       const element = document.getElementById(hash)
       if (element) {
         element.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        window.history.pushState(window.history.state, '', href)
+        const nextUrl = `${window.location.pathname}${window.location.search}#${hash}`
+        window.history.pushState(window.history.state, '', nextUrl)
+        committedUrlRef.current = nextUrl
       }
 
       return
@@ -778,11 +787,11 @@ export function ClientRouter({
   }
 
   const handlePopState = (event: PopStateEvent) => {
-    const pathname = window.location.pathname
+    const href = `${window.location.pathname}${window.location.search}${window.location.hash}`
     const historyState = isHistoryState(event.state) ? event.state : null
 
     if (navigateRef.current) {
-      void navigateRef.current(pathname, {
+      void navigateRef.current(href, {
         replace: true,
         scroll: false,
         historyKey: historyState?.key,
