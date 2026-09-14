@@ -61,9 +61,51 @@ const REGEX_AFTER_KEYWORDS = new Set([
   'instanceof',
 ])
 
+function isLineTerminator(ch: string): boolean {
+  return ch === '\n' || ch === '\r' || ch === '\u2028' || ch === '\u2029'
+}
+
 function canStartRegexLiteral(code: string, slashIndex: number): boolean {
   let i = slashIndex - 1
-  while (i >= 0 && /\s/.test(code.charAt(i))) i -= 1
+
+  while (i >= 0) {
+    while (i >= 0 && /\s/.test(code.charAt(i))) i -= 1
+    if (i < 0) return true
+
+    if (code.charAt(i) === '/' && i > 0 && code.charAt(i - 1) === '*') {
+      i -= 2
+      while (i >= 1) {
+        if (code.charAt(i - 1) === '/' && code.charAt(i) === '*') {
+          i -= 2
+          break
+        }
+        i -= 1
+      }
+      continue
+    }
+
+    let lineStart = i
+    while (lineStart > 0 && !isLineTerminator(code.charAt(lineStart - 1))) lineStart -= 1
+    let lineCommentAt = -1
+    for (let j = lineStart; j < i; j++) {
+      if (code.charAt(j) === '/' && code.charAt(j + 1) === '/') {
+        lineCommentAt = j
+        break
+      }
+      if (code.charAt(j) === '/' && code.charAt(j + 1) === '*') {
+        j += 2
+        while (j < i && (code.charAt(j) !== '*' || code.charAt(j + 1) !== '/')) j += 1
+        j += 1
+      }
+    }
+    if (lineCommentAt !== -1) {
+      i = lineCommentAt - 1
+      continue
+    }
+
+    break
+  }
+
   if (i < 0) return true
 
   const prev = code.charAt(i)
