@@ -135,6 +135,36 @@ describe('analyzeProxySource', () => {
     expect(analysis.rules).toEqual([])
   })
 
+  it('resolves shorthand matcher bindings into the manifest', () => {
+    const code = `
+      const matcher = '/dashboard/:path*'
+      export const config = { matcher }
+
+      export function proxy(request) {
+        if (request.rariUrl.pathname === '/dashboard')
+          return RariResponse.redirect(new URL('/app', request.url), 308)
+        return RariResponse.next()
+      }
+    `
+    const analysis = analyzeProxySource(code)
+    expect(analysis.requiresRuntime).toBe(false)
+    expect(analysis.matcher).toBe('/dashboard/:path*')
+    expect(analysis.rules).toHaveLength(1)
+  })
+
+  it('forces runtime for unresolved shorthand matcher bindings', () => {
+    const code = `
+      export const config = { matcher }
+
+      export function proxy() {
+        return RariResponse.next()
+      }
+    `
+    const analysis = analyzeProxySource(code)
+    expect(analysis.requiresRuntime).toBe(true)
+    expect(analysis.matcher).toBeUndefined()
+  })
+
   it('buildProxyManifest omits bundlePath for static proxies', () => {
     const manifest = buildProxyManifest({
       proxyFile: 'src/proxy.ts',

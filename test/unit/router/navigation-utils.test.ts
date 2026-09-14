@@ -576,6 +576,13 @@ describe('extractPathname', () => {
     expect(result).toBe('/about#section')
   })
 
+  it('should preserve search and hash for intercepted links', () => {
+    expect(extractPathname('/items?page=2#results')).toBe('/items?page=2#results')
+    expect(extractPathname('https://example.com/items?page=2#results')).toBe(
+      '/items?page=2#results',
+    )
+  })
+
   it('should handle relative paths', () => {
     const result = extractPathname('/about')
     expect(result).toBe('/about')

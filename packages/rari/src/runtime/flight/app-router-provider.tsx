@@ -509,8 +509,8 @@ export function AppRouterProvider({
           pendingNavigateCommittedIdRef,
         })
 
-        if (detail.rscFlightProtocol != null && detail.rscFlightProtocol !== '')
-          lastSuccessfulPayloadRef.current = detail.rscFlightProtocol
+        if (parsedPayload.flightProtocol != null && parsedPayload.flightProtocol !== '')
+          lastSuccessfulPayloadRef.current = parsedPayload.flightProtocol
 
         resetFailureTracking()
 

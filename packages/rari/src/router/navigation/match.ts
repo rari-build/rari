@@ -257,7 +257,7 @@ export function isExternalUrl(url: string, currentOrigin?: string): boolean {
 export function extractPathname(url: string): string {
   try {
     const urlObj = new URL(url, window.location.origin)
-    return urlObj.pathname + urlObj.hash
+    return `${urlObj.pathname}${urlObj.search}${urlObj.hash}`
   } catch {
     return url
   }
