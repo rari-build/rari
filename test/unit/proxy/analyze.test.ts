@@ -231,6 +231,28 @@ describe('analyzeProxySource', () => {
     expect(analysis.rules).toHaveLength(1)
   })
 
+  it('recognizes regex literals after return when a line comment intervenes', () => {
+    const code = `
+      export const config = {
+        test() {
+          return // keep brace inside regex
+          /}/
+        },
+        matcher: '/dashboard/:path*',
+      }
+
+      export function proxy(request) {
+        if (request.rariUrl.pathname === '/dashboard')
+          return RariResponse.redirect(new URL('/app', request.url), 308)
+        return RariResponse.next()
+      }
+    `
+    const analysis = analyzeProxySource(code)
+    expect(analysis.requiresRuntime).toBe(false)
+    expect(analysis.matcher).toBe('/dashboard/:path*')
+    expect(analysis.rules).toHaveLength(1)
+  })
+
   it('decodes line continuations in matcher string literals', () => {
     const code =
       'export const config = {\n' +
