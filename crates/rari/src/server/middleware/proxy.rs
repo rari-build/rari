@@ -21,7 +21,9 @@ use tokio::fs;
 use tower::{Layer, Service};
 
 use crate::{
-    runtime::JsExecutionRuntime, server::core::types::ServerState, utils::path::path_to_file_url,
+    runtime::JsExecutionRuntime,
+    server::{config::Config, core::types::ServerState},
+    utils::path::path_to_file_url,
 };
 
 async fn clone_renderer_runtime(state: &ServerState) -> Arc<JsExecutionRuntime> {
@@ -209,25 +211,26 @@ fn path_matches_source(pathname: &str, source: &str) -> bool {
     normalize_proxy_path(pathname) == normalize_proxy_path(source)
 }
 
-fn resolve_redirect_destination(destination: &str, request_headers: &HeaderMap) -> String {
+fn resolve_redirect_destination(destination: &str) -> String {
     if destination.starts_with("http://") || destination.starts_with("https://") {
         return destination.to_owned();
     }
 
-    let scheme = request_headers
-        .get("x-forwarded-proto")
-        .and_then(|value| value.to_str().ok())
-        .unwrap_or("http");
-    let host = request_headers
-        .get(header::HOST)
-        .and_then(|value| value.to_str().ok())
-        .unwrap_or("localhost");
     let path = if destination.starts_with('/') {
         destination.to_owned()
     } else {
         format!("/{destination}")
     };
-    format!("{scheme}://{host}{path}")
+
+    let Some(origin) = Config::get()
+        .and_then(|config| config.server.origin.as_deref())
+        .map(str::trim)
+        .filter(|origin| !origin.is_empty())
+    else {
+        return path;
+    };
+
+    format!("{}{path}", origin.trim_end_matches('/'))
 }
 
 fn find_matching_rule<'a>(rules: &'a [ProxyRule], pathname: &str) -> Option<&'a ProxyRule> {
@@ -341,8 +344,7 @@ where
             {
                 match applied {
                     AppliedProxyRule::Redirect { destination, permanent } => {
-                        let location =
-                            resolve_redirect_destination(&destination, request.headers());
+                        let location = resolve_redirect_destination(&destination);
                         if let Some(response) = redirect_response(location, permanent) {
                             return Ok(response);
                         }
@@ -384,8 +386,7 @@ where
             match execute_proxy(&state, method, uri, headers).await {
                 Ok(result) => {
                     if let Some(redirect) = result.redirect {
-                        let location =
-                            resolve_redirect_destination(&redirect.destination, request.headers());
+                        let location = resolve_redirect_destination(&redirect.destination);
                         if let Some(response) = redirect_response(location, redirect.permanent) {
                             return Ok(response);
                         }
@@ -484,8 +485,9 @@ pub async fn initialize_proxy(state: &ServerState) -> Result<(), RariError> {
     let rari_request_specifier = path_to_file_url(&rari_request_absolute);
 
     let Some(proxy_file_path) = resolve_proxy_dist_path() else {
-        tracing::debug!("Proxy: requiresRuntime is true but bundlePath is missing");
-        return Ok(());
+        return Err(RariError::configuration(
+            "Proxy requiresRuntime is true but bundlePath is missing or the proxy bundle was not found",
+        ));
     };
     let proxy_absolute = match fs::canonicalize(&proxy_file_path).await {
         Ok(canonical) => canonical,
@@ -647,5 +649,19 @@ mod tests {
             response.headers().get(header::LOCATION).and_then(|v| v.to_str().ok()),
             Some("https://example.com/docs")
         );
+    }
+
+    #[test]
+    fn resolve_redirect_destination_keeps_absolute_urls() {
+        assert_eq!(
+            resolve_redirect_destination("https://cdn.example/docs"),
+            "https://cdn.example/docs"
+        );
+    }
+
+    #[test]
+    fn resolve_redirect_destination_uses_relative_location_without_origin() {
+        assert_eq!(resolve_redirect_destination("/docs/getting-started"), "/docs/getting-started");
+        assert_eq!(resolve_redirect_destination("relative"), "/relative");
     }
 }

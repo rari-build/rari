@@ -274,9 +274,7 @@ impl Server {
             });
         }
 
-        if let Err(e) = proxy::initialize_proxy(&state).await {
-            tracing::error!("Failed to initialize proxy: {}", e);
-        }
+        proxy::initialize_proxy(&state).await?;
 
         let router = Self::build_router(&config, state.clone()).await?;
 

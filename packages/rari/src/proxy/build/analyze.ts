@@ -8,8 +8,8 @@ const REDIRECT_OR_REWRITE_CALL_REGEX = /RariResponse\.(?:redirect|rewrite)\s*\(/
 const IF_ACTION_REGEX =
   /if\s*\(([^)]+)\)(?:\s*\{)?\s+return\s+RariResponse\.(redirect|rewrite)\(\s*new\s+URL\(\s*(['"`])([^'"`]+)\3\s*,[^)]+\)(?:\s*,\s*(\d+))?\s*\)/g
 
-const PATH_EQ_RIGHT_REGEX = /(?:===|==)\s*(['"`])([^'"`]+)\1/g
-const PATH_EQ_LEFT_REGEX = /(['"`])([^'"`]+)\1\s*(?:===|==)/g
+const PATH_EQUALITY_CLAUSE_REGEX =
+  /^(?:(request\.rariUrl\.pathname|pathname|normalizedPath)\s*(?:===|==)\s*(['"`])([^'"`]+)\2|(['"`])([^'"`]+)\4\s*(?:===|==)\s*(request\.rariUrl\.pathname|pathname|normalizedPath))$/
 
 export interface ProxyAnalysis {
   readonly requiresRuntime: boolean
@@ -21,22 +21,28 @@ function isPermanentStatus(status: number | undefined): boolean {
   return status === 301 || status === 308
 }
 
-function extractPathsFromCondition(condition: string): string[] {
+function extractStaticPathSources(condition: string): string[] | null {
+  const trimmed = condition.trim()
+  if (trimmed === '' || trimmed.includes('&&')) return null
+
+  const clauses = trimmed.split(/\|\|/)
   const paths: string[] = []
+  let pathRef: string | undefined
 
-  PATH_EQ_RIGHT_REGEX.lastIndex = 0
-  for (const match of condition.matchAll(PATH_EQ_RIGHT_REGEX)) {
-    const path = match[2]
-    if (path !== '') paths.push(path)
+  for (const clause of clauses) {
+    const match = PATH_EQUALITY_CLAUSE_REGEX.exec(clause.trim())
+    if (match == null) return null
+
+    const ref = match[1] || match[6] || ''
+    const path = match[3] || match[5] || ''
+    if (ref === '' || path === '') return null
+    if (pathRef == null) pathRef = ref
+    else if (pathRef !== ref) return null
+
+    paths.push(path)
   }
 
-  PATH_EQ_LEFT_REGEX.lastIndex = 0
-  for (const match of condition.matchAll(PATH_EQ_LEFT_REGEX)) {
-    const path = match[2]
-    if (path !== '') paths.push(path)
-  }
-
-  return paths
+  return paths.length > 0 ? paths : null
 }
 
 function extractStaticRules(code: string): ProxyRule[] {
@@ -53,8 +59,8 @@ function extractStaticRules(code: string): ProxyRule[] {
     if (condition === '' || destination === '') continue
     if (action !== 'redirect' && action !== 'rewrite') continue
 
-    const sources = extractPathsFromCondition(condition)
-    if (sources.length === 0) return []
+    const sources = extractStaticPathSources(condition)
+    if (sources == null) return []
 
     for (const source of sources) {
       rules.push({
