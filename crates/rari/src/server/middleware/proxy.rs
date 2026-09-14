@@ -463,7 +463,9 @@ pub async fn initialize_proxy(state: &ServerState) -> Result<(), RariError> {
 
     let Some(rari_pkg_dir) = resolve_rari_package_dir().await else {
         tracing::debug!("Proxy: rari package directory not found in node_modules");
-        return Ok(());
+        return Err(RariError::configuration(
+            "Proxy requiresRuntime is true but the rari package was not found in node_modules",
+        ));
     };
 
     let executor_path = rari_pkg_dir.join("dist/proxy/runtime-executor.mjs");
@@ -473,7 +475,10 @@ pub async fn initialize_proxy(state: &ServerState) -> Result<(), RariError> {
             "Proxy: executor not found at {}, skipping proxy setup",
             executor_path.display()
         );
-        return Ok(());
+        return Err(RariError::configuration(format!(
+            "Proxy requiresRuntime is true but runtime executor was not found at {}",
+            executor_path.display()
+        )));
     }
 
     let executor_absolute = fs::canonicalize(&executor_path).await.unwrap_or(executor_path);
