@@ -16,6 +16,9 @@ const OBJECT_MATCHER_REGEX = /matcher\s*:\s*\{/
 const STRING_MATCHER_REGEX = /matcher\s*:\s*(['"`])([^'"`]+)\1/
 const ARRAY_MATCHER_REGEX = /matcher\s*:\s*\[([^\]]*)\]/
 const ARRAY_STRING_ITEM_REGEX = /(['"`])([^'"`]+)\1/g
+const MATCHER_SHORTHAND_REGEX = /(?:^|[{,]\s*)matcher\s*[,}]/
+const MATCHER_STRING_BINDING_REGEX = /(?:const|let|var)\s+matcher\s*=\s*(['"`])([^'"`]+)\1/
+const MATCHER_ARRAY_BINDING_REGEX = /(?:const|let|var)\s+matcher\s*=\s*\[([^\]]*)\]/
 
 export interface ProxyAnalysis {
   readonly requiresRuntime: boolean
@@ -81,6 +84,40 @@ function extractStaticRules(code: string): ProxyRule[] {
   return rules
 }
 
+function parseStaticStringArrayBody(body: string): {
+  readonly matcher?: string[]
+  readonly forceRuntime: boolean
+} {
+  if (body.includes('{')) return { forceRuntime: true }
+
+  const items: string[] = []
+  ARRAY_STRING_ITEM_REGEX.lastIndex = 0
+  for (const item of body.matchAll(ARRAY_STRING_ITEM_REGEX)) {
+    if (item[2] !== '') items.push(item[2])
+  }
+
+  const remainder = body.replace(ARRAY_STRING_ITEM_REGEX, '').replace(/[\s,]/g, '')
+  if (remainder !== '') return { forceRuntime: true }
+
+  if (items.length > 0) return { matcher: items, forceRuntime: false }
+  return { forceRuntime: true }
+}
+
+function resolveMatcherBinding(code: string): {
+  readonly matcher?: ProxyConfig['matcher']
+  readonly forceRuntime: boolean
+} | null {
+  const stringBind = MATCHER_STRING_BINDING_REGEX.exec(code)
+  if (stringBind != null && stringBind[2] !== '') {
+    return { matcher: stringBind[2], forceRuntime: false }
+  }
+
+  const arrayBind = MATCHER_ARRAY_BINDING_REGEX.exec(code)
+  if (arrayBind != null) return parseStaticStringArrayBody(arrayBind[1])
+
+  return null
+}
+
 function extractMatcher(code: string): {
   readonly matcher?: ProxyConfig['matcher']
   readonly forceRuntime: boolean
@@ -97,20 +134,10 @@ function extractMatcher(code: string): {
   }
 
   const arrayMatch = ARRAY_MATCHER_REGEX.exec(code)
-  if (arrayMatch != null) {
-    const body = arrayMatch[1]
-    if (body.includes('{')) return { forceRuntime: true }
+  if (arrayMatch != null) return parseStaticStringArrayBody(arrayMatch[1])
 
-    const items: string[] = []
-    ARRAY_STRING_ITEM_REGEX.lastIndex = 0
-    for (const item of body.matchAll(ARRAY_STRING_ITEM_REGEX)) {
-      if (item[2] !== '') items.push(item[2])
-    }
-
-    const remainder = body.replace(ARRAY_STRING_ITEM_REGEX, '').replace(/[\s,]/g, '')
-    if (remainder !== '') return { forceRuntime: true }
-
-    if (items.length > 0) return { matcher: items, forceRuntime: false }
+  if (MATCHER_SHORTHAND_REGEX.test(code)) {
+    return resolveMatcherBinding(code) ?? { forceRuntime: true }
   }
 
   if (/matcher\s*:/.test(code)) return { forceRuntime: true }

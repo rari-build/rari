@@ -647,8 +647,6 @@ export function ClientRouter({
           return
         }
 
-        const flightProtocol = await response.text()
-
         const finalUrl = new URL(response.url)
         const actualTargetPath = finalUrl.pathname
         const settledHistoryState: HistoryState = {
@@ -669,7 +667,7 @@ export function ClientRouter({
               navigationId,
               options,
               abortSignal: abortController.signal,
-              rscFlightProtocol: flightProtocol,
+              rscResponse: response,
               pendingHistory: {
                 url: settledUrl,
                 state: settledHistoryState,
