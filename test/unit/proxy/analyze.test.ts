@@ -103,6 +103,21 @@ describe('analyzeProxySource', () => {
     expect(analysis.rules).toEqual([])
   })
 
+  it('forces runtime for matcher arrays that include objects', () => {
+    const code = `
+      export const config = {
+        matcher: ['/api/:path*', { source: '/admin', has: [{ type: 'header', key: 'authorization' }] }],
+      }
+
+      export function proxy(request) {
+        return RariResponse.next()
+      }
+    `
+    const analysis = analyzeProxySource(code)
+    expect(analysis.requiresRuntime).toBe(true)
+    expect(analysis.matcher).toBeUndefined()
+  })
+
   it('buildProxyManifest omits bundlePath for static proxies', () => {
     const manifest = buildProxyManifest({
       proxyFile: 'src/proxy.ts',

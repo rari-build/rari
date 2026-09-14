@@ -452,16 +452,24 @@ export function ClientRouter({
 
   const processNavigationQueueRef = useRef<(() => Promise<void>) | null>(null)
 
-  const handleSameRouteNavigation = (_targetPath: string, hash: string) => {
-    if (!hash) return
+  const handleSameRouteNavigation = (
+    hash: string,
+    options: Readonly<{ replace?: boolean }> = {},
+  ) => {
+    const pathAndSearch = `${window.location.pathname}${window.location.search}`
+    const nextUrl = hash ? `${pathAndSearch}#${hash}` : pathAndSearch
 
-    const element = document.getElementById(hash)
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      const nextUrl = `${window.location.pathname}${window.location.search}#${hash}`
-      window.history.pushState(window.history.state, '', nextUrl)
-      committedUrlRef.current = nextUrl
+    if (hash) {
+      const element = document.getElementById(hash)
+      if (element) element.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
+
+    if (!options.replace) {
+      if (!hash) return
+      window.history.pushState(window.history.state, '', nextUrl)
+    }
+
+    committedUrlRef.current = nextUrl
   }
 
   const processMetadata = (response: Response) => {
@@ -569,8 +577,8 @@ export function ClientRouter({
     const [pathWithoutHash, hash] = href.includes('#') ? href.split('#') : [href, '']
     const targetPath = normalizePath(pathWithoutHash)
 
-    if (targetPath === currentRouteRef.current && !options.replace) {
-      handleSameRouteNavigation(targetPath, hash)
+    if (targetPath === currentRouteRef.current) {
+      handleSameRouteNavigation(hash, { replace: options.replace === true })
       return
     }
 
