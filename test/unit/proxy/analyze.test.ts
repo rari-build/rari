@@ -191,6 +191,64 @@ describe('analyzeProxySource', () => {
     ])
   })
 
+  it('ignores braces inside strings when extracting config', () => {
+    const code = `
+      export const config = {
+        note: "has } brace",
+        matcher: '/dashboard/:path*',
+      }
+
+      export function proxy(request) {
+        if (request.rariUrl.pathname === '/dashboard')
+          return RariResponse.redirect(new URL('/app', request.url), 308)
+        return RariResponse.next()
+      }
+    `
+    const analysis = analyzeProxySource(code)
+    expect(analysis.requiresRuntime).toBe(false)
+    expect(analysis.matcher).toBe('/dashboard/:path*')
+    expect(analysis.rules).toHaveLength(1)
+  })
+
+  it('resolves the module-level matcher binding instead of a nested declaration', () => {
+    const code = `
+      function setup() {
+        const matcher = '/wrong'
+        return matcher
+      }
+
+      const matcher = '/dashboard/:path*'
+      export const config = { matcher }
+
+      export function proxy(request) {
+        if (request.rariUrl.pathname === '/dashboard')
+          return RariResponse.redirect(new URL('/app', request.url), 308)
+        return RariResponse.next()
+      }
+    `
+    const analysis = analyzeProxySource(code)
+    expect(analysis.requiresRuntime).toBe(false)
+    expect(analysis.matcher).toBe('/dashboard/:path*')
+    expect(analysis.rules).toHaveLength(1)
+  })
+
+  it('forces runtime when matcher binding resolution is uncertain', () => {
+    const code = `
+      let matcher = '/dashboard/:path*'
+      export const config = { matcher }
+
+      export function proxy(request) {
+        if (request.rariUrl.pathname === '/dashboard')
+          return RariResponse.redirect(new URL('/app', request.url), 308)
+        return RariResponse.next()
+      }
+    `
+    const analysis = analyzeProxySource(code)
+    expect(analysis.requiresRuntime).toBe(true)
+    expect(analysis.matcher).toBeUndefined()
+    expect(analysis.rules).toEqual([])
+  })
+
   it('buildProxyManifest omits bundlePath for static proxies', () => {
     const manifest = buildProxyManifest({
       proxyFile: 'src/proxy.ts',
