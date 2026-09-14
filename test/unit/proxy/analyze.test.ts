@@ -68,6 +68,41 @@ describe('analyzeProxySource', () => {
     expect(analysis.rules).toEqual([])
   })
 
+  it('extracts string matcher into the analysis', () => {
+    const code = `
+      export const config = {
+        matcher: '/dashboard/:path*',
+      }
+
+      export function proxy(request) {
+        if (request.rariUrl.pathname === '/dashboard')
+          return RariResponse.redirect(new URL('/app', request.url), 308)
+        return RariResponse.next()
+      }
+    `
+    const analysis = analyzeProxySource(code)
+    expect(analysis.requiresRuntime).toBe(false)
+    expect(analysis.matcher).toBe('/dashboard/:path*')
+    expect(analysis.rules).toHaveLength(1)
+  })
+
+  it('forces runtime for object matchers', () => {
+    const code = `
+      export const config = {
+        matcher: { source: '/admin', has: [{ type: 'header', key: 'authorization' }] },
+      }
+
+      export function proxy(request) {
+        if (request.rariUrl.pathname === '/admin')
+          return RariResponse.redirect(new URL('/login', request.url), 308)
+        return RariResponse.next()
+      }
+    `
+    const analysis = analyzeProxySource(code)
+    expect(analysis.requiresRuntime).toBe(true)
+    expect(analysis.rules).toEqual([])
+  })
+
   it('buildProxyManifest omits bundlePath for static proxies', () => {
     const manifest = buildProxyManifest({
       proxyFile: 'src/proxy.ts',

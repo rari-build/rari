@@ -1,10 +1,17 @@
 import type { ResponseLike, SimpleProxyResult, SimpleRequest } from './shared/types'
+import type { ProxyConfig, RariRequest } from '@/proxy/http/types'
 import { isFunction, isRecord } from '@/shared/utils/type-guards'
+import { shouldRunProxy } from './matcher'
 import { processProxyResult } from './shared/process-result'
 import '@/runtime/shared/types'
 
 interface ProxyFetchEvent {
   waitUntil: (promise: Promise<unknown>) => void
+}
+
+function getProxyConfig(module: Readonly<Record<string, unknown>>): ProxyConfig | undefined {
+  if (!isRecord(module.config)) return undefined
+  return module.config
 }
 
 export async function initializeProxyExecutor(proxyModulePath: string, rariRequestPath: string) {
@@ -15,26 +22,31 @@ export async function initializeProxyExecutor(proxyModulePath: string, rariReque
       return false
     }
     const proxyFn = proxyModule.proxy
+    const proxyConfig = getProxyConfig(proxyModule)
     const requestModule: unknown = await import(rariRequestPath)
     if (!isRecord(requestModule) || !isFunction(requestModule.RariRequest)) {
       console.error('[rari] Proxy: RariRequest constructor not found')
       return false
     }
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion proxy bootstrap module
-    const RariRequest = requestModule.RariRequest as unknown as new (
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion packaged RariRequest constructor
+    const RariRequestCtor = requestModule.RariRequest as unknown as new (
       url: string,
       init: { method: string; headers: Headers },
-    ) => { url: string; method: string; headers: Headers }
+    ) => RariRequest
 
     Reflect.set(
       globalThis,
       '~rariExecuteProxy',
       async (simpleRequest: SimpleRequest): Promise<SimpleProxyResult> => {
         try {
-          const rariRequest = new RariRequest(simpleRequest.url, {
+          const rariRequest = new RariRequestCtor(simpleRequest.url, {
             method: simpleRequest.method,
             headers: new Headers(simpleRequest.headers),
           })
+
+          if (!shouldRunProxy(rariRequest, proxyConfig)) {
+            return { continue: true }
+          }
 
           const waitUntilPromises: Promise<unknown>[] = []
           const event: ProxyFetchEvent = {

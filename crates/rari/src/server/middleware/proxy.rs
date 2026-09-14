@@ -17,6 +17,7 @@ use axum::{
 };
 use futures_util::future::BoxFuture;
 use rari_error::RariError;
+use regex::Regex;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use tokio::fs;
@@ -44,6 +45,15 @@ struct ProxyManifestFile {
     requires_runtime: bool,
     #[serde(rename = "bundlePath")]
     bundle_path: Option<String>,
+    #[serde(default)]
+    matcher: Option<ProxyMatcherField>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+enum ProxyMatcherField {
+    Pattern(String),
+    Patterns(Vec<String>),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -229,6 +239,96 @@ fn path_matches_source(pathname: &str, source: &str) -> bool {
     normalize_proxy_path(pathname) == normalize_proxy_path(source)
 }
 
+fn path_matches_pattern(pathname: &str, pattern: &str) -> bool {
+    let normalized_path = normalize_proxy_path(pathname);
+    let normalized_pattern = normalize_proxy_path(pattern);
+
+    if !normalized_pattern.contains('*') && !normalized_pattern.contains(':') {
+        return normalized_path == normalized_pattern;
+    }
+
+    let chars: Vec<char> = normalized_pattern.chars().collect();
+    let mut rebuilt = String::new();
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i] == ':' {
+            let start = i + 1;
+            let mut end = start;
+            while end < chars.len() && (chars[end].is_ascii_alphanumeric() || chars[end] == '_') {
+                end += 1;
+            }
+            if end > start {
+                let token = match chars.get(end).copied() {
+                    Some('*') => {
+                        i = end + 1;
+                        "___PARAM_DOTSTAR___"
+                    }
+                    Some('+') => {
+                        i = end + 1;
+                        "___PARAM_DOTPLUS___"
+                    }
+                    Some('?') => {
+                        i = end + 1;
+                        "___PARAM_OPT___"
+                    }
+                    _ => {
+                        i = end;
+                        "___PARAM_SEG___"
+                    }
+                };
+                rebuilt.push_str(token);
+                continue;
+            }
+        }
+        if chars[i] == '*' {
+            rebuilt.push_str("___STAR___");
+            i += 1;
+            continue;
+        }
+        rebuilt.push(chars[i]);
+        i += 1;
+    }
+
+    let mut escaped = String::new();
+    for ch in rebuilt.chars() {
+        match ch {
+            '.' | '+' | '?' | '^' | '$' | '{' | '}' | '(' | ')' | '|' | '[' | ']' | '\\' => {
+                escaped.push('\\');
+                escaped.push(ch);
+            }
+            _ => escaped.push(ch),
+        }
+    }
+
+    let regex_body = escaped
+        .replace("___PARAM_DOTSTAR___", "(.*)")
+        .replace("___PARAM_DOTPLUS___", "(.+)")
+        .replace("___PARAM_OPT___", "([^/]*)")
+        .replace("___PARAM_SEG___", "([^/]+)")
+        .replace("___STAR___", ".*");
+
+    let Ok(regex) = Regex::new(&format!("^{regex_body}$")) else {
+        return false;
+    };
+    regex.is_match(normalized_path)
+}
+
+fn matcher_allows_path(matcher: Option<&ProxyMatcherField>, pathname: &str) -> bool {
+    let Some(matcher) = matcher else {
+        return true;
+    };
+
+    match matcher {
+        ProxyMatcherField::Pattern(pattern) => {
+            pattern.is_empty() || path_matches_pattern(pathname, pattern)
+        }
+        ProxyMatcherField::Patterns(patterns) => {
+            patterns.is_empty()
+                || patterns.iter().any(|pattern| path_matches_pattern(pathname, pattern))
+        }
+    }
+}
+
 fn resolve_redirect_destination(destination: &str) -> String {
     if destination.starts_with("http://") || destination.starts_with("https://") {
         return destination.to_owned();
@@ -363,6 +463,10 @@ where
 
             let path = request.uri().path();
             if path.starts_with("/_rari/") || path.starts_with("/vite-server/") {
+                return inner.call(request).await;
+            }
+
+            if !matcher_allows_path(manifest.matcher.as_ref(), path) {
                 return inner.call(request).await;
             }
 
@@ -671,6 +775,26 @@ mod tests {
 
         let matched = find_matching_rule(&rules, "/sponsors/").unwrap();
         assert_eq!(matched.destination.as_deref(), Some("/enterprise/sponsors"));
+    }
+
+    #[test]
+    fn path_matches_pattern_supports_wildcards_and_params() {
+        assert!(path_matches_pattern("/api/users", "/api/*"));
+        assert!(path_matches_pattern("/users/123", "/users/:id"));
+        assert!(!path_matches_pattern("/blog/post", "/api/*"));
+    }
+
+    #[test]
+    fn matcher_allows_path_defaults_to_true_without_matcher() {
+        assert!(matcher_allows_path(None, "/anything"));
+        assert!(!matcher_allows_path(
+            Some(&ProxyMatcherField::Pattern("/dashboard/:path*".to_string())),
+            "/about",
+        ));
+        assert!(matcher_allows_path(
+            Some(&ProxyMatcherField::Patterns(vec!["/api/*".to_string(), "/admin".to_string()])),
+            "/api/v1",
+        ));
     }
 
     #[test]
