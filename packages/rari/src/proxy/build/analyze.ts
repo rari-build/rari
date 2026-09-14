@@ -41,6 +41,87 @@ type ScanFrame =
   | { readonly kind: 'template' }
   | { readonly kind: 'line-comment' }
   | { readonly kind: 'block-comment' }
+  | { readonly kind: 'regex' }
+  | { readonly kind: 'regex-class' }
+
+function canStartRegexLiteral(code: string, slashIndex: number): boolean {
+  let i = slashIndex - 1
+  while (i >= 0 && /\s/.test(code.charAt(i))) i -= 1
+  if (i < 0) return true
+  const prev = code.charAt(i)
+  return !/[\w$)\]]/.test(prev)
+}
+
+function decodeJsStringLiteral(raw: string, quote: "'" | '"' | '`'): string | null {
+  let out = ''
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw.charAt(i)
+    if (quote === '`' && ch === '$' && raw.charAt(i + 1) === '{') return null
+    if (ch !== '\\') {
+      out += ch
+      continue
+    }
+    i += 1
+    if (i >= raw.length) return null
+    const escaped = raw.charAt(i)
+    switch (escaped) {
+      case 'n':
+        out += '\n'
+        break
+      case 'r':
+        out += '\r'
+        break
+      case 't':
+        out += '\t'
+        break
+      case 'b':
+        out += '\b'
+        break
+      case 'f':
+        out += '\f'
+        break
+      case 'v':
+        out += '\v'
+        break
+      case '0':
+        out += '\0'
+        break
+      case '\\':
+      case "'":
+      case '"':
+      case '`':
+      case '/':
+        out += escaped
+        break
+      case 'x': {
+        const hex = raw.slice(i + 1, i + 3)
+        if (!/^[\da-f]{2}$/i.test(hex)) return null
+        out += String.fromCharCode(Number.parseInt(hex, 16))
+        i += 2
+        break
+      }
+      case 'u': {
+        if (raw.charAt(i + 1) === '{') {
+          const end = raw.indexOf('}', i + 2)
+          if (end === -1) return null
+          const hex = raw.slice(i + 2, end)
+          if (!/^[\da-f]+$/i.test(hex)) return null
+          out += String.fromCodePoint(Number.parseInt(hex, 16))
+          i = end
+          break
+        }
+        const hex = raw.slice(i + 1, i + 5)
+        if (!/^[\da-f]{4}$/i.test(hex)) return null
+        out += String.fromCharCode(Number.parseInt(hex, 16))
+        i += 4
+        break
+      }
+      default:
+        out += escaped
+    }
+  }
+  return out
+}
 
 function skipStringLike(code: string, start: number, quote: "'" | '"' | '`'): number | null {
   for (let i = start + 1; i < code.length; i++) {
@@ -111,6 +192,40 @@ function extractBalancedBraces(code: string, braceStart: number): string | null 
       continue
     }
 
+    if (frame.kind === 'regex') {
+      if (ch === '\\') {
+        i += 2
+        continue
+      }
+      if (ch === '[') {
+        stack.push({ kind: 'regex-class' })
+        i += 1
+        continue
+      }
+      if (ch === '/') {
+        stack.pop()
+        i += 1
+        while (i < code.length && /[a-z]/i.test(code.charAt(i))) i += 1
+        continue
+      }
+      i += 1
+      continue
+    }
+
+    if (frame.kind === 'regex-class') {
+      if (ch === '\\') {
+        i += 2
+        continue
+      }
+      if (ch === ']') {
+        stack.pop()
+        i += 1
+        continue
+      }
+      i += 1
+      continue
+    }
+
     if (ch === '/' && next === '/') {
       stack.push({ kind: 'line-comment' })
       i += 2
@@ -119,6 +234,11 @@ function extractBalancedBraces(code: string, braceStart: number): string | null 
     if (ch === '/' && next === '*') {
       stack.push({ kind: 'block-comment' })
       i += 2
+      continue
+    }
+    if (ch === '/' && canStartRegexLiteral(code, i)) {
+      stack.push({ kind: 'regex' })
+      i += 1
       continue
     }
     if (ch === "'") {
@@ -178,9 +298,10 @@ function readStaticMatcherValue(
     const end = skipStringLike(code, i, ch)
     if (end == null) return { forceRuntime: true, endIndex: code.length }
     const raw = code.slice(i + 1, end - 1)
-    if (raw === '' || (ch === '`' && raw.includes('${')))
-      return { forceRuntime: true, endIndex: end }
-    return { matcher: raw, forceRuntime: false, endIndex: end }
+    if (ch === '`' && raw.includes('${')) return { forceRuntime: true, endIndex: end }
+    const decoded = decodeJsStringLiteral(raw, ch)
+    if (decoded == null || decoded === '') return { forceRuntime: true, endIndex: end }
+    return { matcher: decoded, forceRuntime: false, endIndex: end }
   }
 
   if (ch === '[') {
@@ -326,6 +447,39 @@ function resolveModuleLevelMatcherBinding(code: string): {
       continue
     }
 
+    if (frame.kind === 'regex') {
+      if (ch === '\\') {
+        i += 2
+        continue
+      }
+      if (ch === '[') {
+        stack.push({ kind: 'regex-class' })
+        i += 1
+        continue
+      }
+      if (ch === '/') {
+        stack.pop()
+        i += 1
+        while (i < code.length && /[a-z]/i.test(code.charAt(i))) i += 1
+        continue
+      }
+      i += 1
+      continue
+    }
+    if (frame.kind === 'regex-class') {
+      if (ch === '\\') {
+        i += 2
+        continue
+      }
+      if (ch === ']') {
+        stack.pop()
+        i += 1
+        continue
+      }
+      i += 1
+      continue
+    }
+
     if (ch === '/' && next === '/') {
       stack.push({ kind: 'line-comment' })
       i += 2
@@ -334,6 +488,11 @@ function resolveModuleLevelMatcherBinding(code: string): {
     if (ch === '/' && next === '*') {
       stack.push({ kind: 'block-comment' })
       i += 2
+      continue
+    }
+    if (ch === '/' && canStartRegexLiteral(code, i)) {
+      stack.push({ kind: 'regex' })
+      i += 1
       continue
     }
     if (ch === "'") {
@@ -478,7 +637,12 @@ function parseStaticStringArrayBody(body: string): {
   const items: string[] = []
   ARRAY_STRING_ITEM_REGEX.lastIndex = 0
   for (const item of body.matchAll(ARRAY_STRING_ITEM_REGEX)) {
-    if (item[2] !== '') items.push(item[2])
+    const quote = item[1]
+    const raw = item[2]
+    if (raw === '' || (quote !== "'" && quote !== '"' && quote !== '`')) continue
+    const decoded = decodeJsStringLiteral(raw, quote)
+    if (decoded == null) return { forceRuntime: true }
+    if (decoded !== '') items.push(decoded)
   }
 
   const remainder = body.replace(ARRAY_STRING_ITEM_REGEX, '').replace(/[\s,]/g, '')
@@ -504,8 +668,15 @@ function extractMatcher(code: string): {
   }
 
   const stringMatch = STRING_MATCHER_REGEX.exec(configObject)
-  if (stringMatch != null && stringMatch[2] !== '') {
-    return { matcher: stringMatch[2], forceRuntime: false }
+  if (stringMatch != null) {
+    const quote = stringMatch[1]
+    const raw = stringMatch[2]
+    if (quote === "'" || quote === '"' || quote === '`') {
+      if (quote === '`' && raw.includes('${')) return { forceRuntime: true }
+      const decoded = decodeJsStringLiteral(raw, quote)
+      if (decoded == null || decoded === '') return { forceRuntime: true }
+      return { matcher: decoded, forceRuntime: false }
+    }
   }
 
   const arrayMatch = ARRAY_MATCHER_REGEX.exec(configObject)

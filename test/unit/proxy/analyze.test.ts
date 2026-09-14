@@ -191,6 +191,43 @@ describe('analyzeProxySource', () => {
     ])
   })
 
+  it('ignores braces inside regex literals when extracting config', () => {
+    const code = `
+      export const config = {
+        pattern: /}/,
+        matcher: '/dashboard/:path*',
+      }
+
+      export function proxy(request) {
+        if (request.rariUrl.pathname === '/dashboard')
+          return RariResponse.redirect(new URL('/app', request.url), 308)
+        return RariResponse.next()
+      }
+    `
+    const analysis = analyzeProxySource(code)
+    expect(analysis.requiresRuntime).toBe(false)
+    expect(analysis.matcher).toBe('/dashboard/:path*')
+    expect(analysis.rules).toHaveLength(1)
+  })
+
+  it('decodes JavaScript string escapes in matcher literals', () => {
+    const code = `
+      export const config = {
+        matcher: '/api/\\u0078',
+      }
+
+      export function proxy(request) {
+        if (request.rariUrl.pathname === '/api/x')
+          return RariResponse.redirect(new URL('/y', request.url), 308)
+        return RariResponse.next()
+      }
+    `
+    const analysis = analyzeProxySource(code)
+    expect(analysis.requiresRuntime).toBe(false)
+    expect(analysis.matcher).toBe('/api/x')
+    expect(analysis.rules).toHaveLength(1)
+  })
+
   it('ignores braces inside strings when extracting config', () => {
     const code = `
       export const config = {
