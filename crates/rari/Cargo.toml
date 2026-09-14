@@ -70,7 +70,7 @@ deno_package_json = { workspace = true }
 deno_semver = { workspace = true }
 
 # === Async & Concurrency ===
-async-compression = { version = "0.4.46", features = ["brotli", "gzip", "tokio", "zstd"] }
+async-compression = { version = "0.4.47", features = ["brotli", "gzip", "tokio", "zstd"] }
 async-stream = "0.3.6"
 async-trait = "0.1.92"
 futures = "0.3.34"
