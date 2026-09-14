@@ -381,14 +381,21 @@ export function ClientRouter({
   staleWindowMs = 30_000,
 }: ClientRouterProps): React.ReactNode {
   const [navigationState, setNavigationState] = useState<NavigationState>(() => ({
-    currentRoute: normalizePath(initialRoute),
+    currentRoute:
+      typeof window !== 'undefined'
+        ? `${window.location.pathname}${window.location.search}`
+        : normalizePath(initialRoute),
     navigationId: 0,
     error: null,
   }))
 
   const abortControllerRef = useRef<AbortController | null>(null)
   const isMountedRef = useRef(true)
-  const currentRouteRef = useRef<string>(normalizePath(initialRoute))
+  const currentRouteRef = useRef<string>(
+    typeof window !== 'undefined'
+      ? `${window.location.pathname}${window.location.search}`
+      : normalizePath(initialRoute),
+  )
   const committedUrlRef = useRef<string>(
     typeof window !== 'undefined'
       ? `${window.location.pathname}${window.location.search}${window.location.hash}`
@@ -648,12 +655,13 @@ export function ClientRouter({
         }
 
         const finalUrl = new URL(response.url)
-        const actualTargetPath = finalUrl.pathname
+        const pathname = finalUrl.pathname
+        const routeIdentity = `${finalUrl.pathname}${finalUrl.search}`
         const settledHistoryState: HistoryState = {
           ...historyState,
-          route: actualTargetPath,
+          route: routeIdentity,
         }
-        const settledUrl = `${finalUrl.pathname}${finalUrl.search}${hash ? `#${hash}` : ''}`
+        const settledUrl = `${routeIdentity}${hash ? `#${hash}` : ''}`
 
         if (navigationIdCounterRef.current !== navigationId) return
 
@@ -663,7 +671,7 @@ export function ClientRouter({
           new CustomEvent('rari:navigate', {
             detail: {
               from: fromRoute,
-              to: actualTargetPath,
+              to: pathname,
               navigationId,
               options,
               abortSignal: abortController.signal,
@@ -694,7 +702,7 @@ export function ClientRouter({
 
         processMetadata(response)
 
-        completeNavigation(actualTargetPath, hash, options, navigationId, settledUrl)
+        completeNavigation(routeIdentity, hash, options, navigationId, settledUrl)
 
         pendingNavigationsRef.current.delete(targetPath)
         void processNavigationQueueRef.current?.()
@@ -813,7 +821,7 @@ export function ClientRouter({
 
     if (currentHistoryState?.key == null || currentHistoryState.key === '') {
       const initialHistoryState: HistoryState = {
-        route: normalizePath(initialRoute),
+        route: `${window.location.pathname}${window.location.search}`,
         navigationId: 0,
         scrollPosition: { x: window.scrollX, y: window.scrollY },
         timestamp: Date.now(),

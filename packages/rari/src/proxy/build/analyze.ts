@@ -18,8 +18,6 @@ const STRING_MATCHER_REGEX = /matcher\s*:\s*(['"`])([^'"`]+)\1/
 const ARRAY_MATCHER_REGEX = /matcher\s*:\s*\[([^\]]*)\]/
 const ARRAY_STRING_ITEM_REGEX = /(['"`])([^'"`]+)\1/g
 const MATCHER_SHORTHAND_REGEX = /(?:^|[{,]\s*)matcher\s*[,}]/
-const MATCHER_STRING_BINDING_REGEX = /(?:const|let|var)\s+matcher\s*=\s*(['"`])([^'"`]+)\1/
-const MATCHER_ARRAY_BINDING_REGEX = /(?:const|let|var)\s+matcher\s*=\s*\[([^\]]*)\]/
 
 export interface ProxyAnalysis {
   readonly requiresRuntime: boolean
@@ -29,6 +27,384 @@ export interface ProxyAnalysis {
 
 function isPermanentStatus(status: number | undefined): boolean {
   return status === 301 || status === 308
+}
+
+interface CodeFrame {
+  readonly kind: 'code'
+  braceDepth: number
+}
+
+type ScanFrame =
+  | CodeFrame
+  | { readonly kind: 'single' }
+  | { readonly kind: 'double' }
+  | { readonly kind: 'template' }
+  | { readonly kind: 'line-comment' }
+  | { readonly kind: 'block-comment' }
+
+function skipStringLike(code: string, start: number, quote: "'" | '"' | '`'): number | null {
+  for (let i = start + 1; i < code.length; i++) {
+    const ch = code[i]
+    if (ch === '\\') {
+      i += 1
+      continue
+    }
+    if (quote === '`' && ch === '$' && code[i + 1] === '{') return null
+    if (ch === quote) return i + 1
+  }
+  return null
+}
+
+function extractBalancedBraces(code: string, braceStart: number): string | null {
+  const stack: ScanFrame[] = [{ kind: 'code', braceDepth: 0 }]
+
+  for (let i = braceStart; i < code.length;) {
+    const frame = stack.at(-1)
+    if (frame === undefined) return null
+
+    const ch = code[i]
+    const next = code[i + 1]
+
+    if (frame.kind === 'line-comment') {
+      if (ch === '\n') stack.pop()
+      i += 1
+      continue
+    }
+
+    if (frame.kind === 'block-comment') {
+      if (ch === '*' && next === '/') {
+        stack.pop()
+        i += 2
+      } else {
+        i += 1
+      }
+      continue
+    }
+
+    if (frame.kind === 'single' || frame.kind === 'double') {
+      if (ch === '\\') {
+        i += 2
+        continue
+      }
+      if ((frame.kind === 'single' && ch === "'") || (frame.kind === 'double' && ch === '"'))
+        stack.pop()
+      i += 1
+      continue
+    }
+
+    if (frame.kind === 'template') {
+      if (ch === '\\') {
+        i += 2
+        continue
+      }
+      if (ch === '`') {
+        stack.pop()
+        i += 1
+        continue
+      }
+      if (ch === '$' && next === '{') {
+        stack.push({ kind: 'code', braceDepth: 1 })
+        i += 2
+        continue
+      }
+      i += 1
+      continue
+    }
+
+    if (ch === '/' && next === '/') {
+      stack.push({ kind: 'line-comment' })
+      i += 2
+      continue
+    }
+    if (ch === '/' && next === '*') {
+      stack.push({ kind: 'block-comment' })
+      i += 2
+      continue
+    }
+    if (ch === "'") {
+      stack.push({ kind: 'single' })
+      i += 1
+      continue
+    }
+    if (ch === '"') {
+      stack.push({ kind: 'double' })
+      i += 1
+      continue
+    }
+    if (ch === '`') {
+      stack.push({ kind: 'template' })
+      i += 1
+      continue
+    }
+    if (ch === '{') {
+      frame.braceDepth += 1
+      i += 1
+      continue
+    }
+    if (ch === '}') {
+      frame.braceDepth -= 1
+      i += 1
+      if (frame.braceDepth === 0) {
+        if (stack.length === 1) return code.slice(braceStart, i)
+        stack.pop()
+      }
+      continue
+    }
+
+    i += 1
+  }
+
+  return null
+}
+
+function readStaticMatcherValue(
+  code: string,
+  equalsIndex: number,
+): {
+  readonly matcher?: ProxyConfig['matcher']
+  readonly forceRuntime: boolean
+  readonly endIndex: number
+} | null {
+  let i = equalsIndex + 1
+  while (i < code.length && /\s/.test(code[i])) i += 1
+  if (i >= code.length) return null
+
+  const ch = code[i]
+  if (ch === "'" || ch === '"' || ch === '`') {
+    if (ch === '`') {
+      const uncertain = skipStringLike(code, i, '`')
+      if (uncertain == null) return { forceRuntime: true, endIndex: code.length }
+    }
+    const end = skipStringLike(code, i, ch)
+    if (end == null) return { forceRuntime: true, endIndex: code.length }
+    const raw = code.slice(i + 1, end - 1)
+    if (raw === '' || (ch === '`' && raw.includes('${')))
+      return { forceRuntime: true, endIndex: end }
+    return { matcher: raw, forceRuntime: false, endIndex: end }
+  }
+
+  if (ch === '[') {
+    const bodyStart = i + 1
+    let depth = 1
+    let j = bodyStart
+    const stack: ScanFrame[] = [{ kind: 'code', braceDepth: 0 }]
+    for (; j < code.length && depth > 0;) {
+      const frame = stack.at(-1)
+      if (frame === undefined) return { forceRuntime: true, endIndex: code.length }
+      const c = code[j]
+      const n = code[j + 1]
+
+      if (frame.kind === 'line-comment') {
+        if (c === '\n') stack.pop()
+        j += 1
+        continue
+      }
+      if (frame.kind === 'block-comment') {
+        if (c === '*' && n === '/') {
+          stack.pop()
+          j += 2
+        } else j += 1
+        continue
+      }
+      if (frame.kind === 'single' || frame.kind === 'double' || frame.kind === 'template') {
+        if (c === '\\') {
+          j += 2
+          continue
+        }
+        if (frame.kind === 'template' && c === '$' && n === '{')
+          return { forceRuntime: true, endIndex: code.length }
+        if (
+          (frame.kind === 'single' && c === "'") ||
+          (frame.kind === 'double' && c === '"') ||
+          (frame.kind === 'template' && c === '`')
+        )
+          stack.pop()
+        j += 1
+        continue
+      }
+
+      if (c === '/' && n === '/') {
+        stack.push({ kind: 'line-comment' })
+        j += 2
+        continue
+      }
+      if (c === '/' && n === '*') {
+        stack.push({ kind: 'block-comment' })
+        j += 2
+        continue
+      }
+      if (c === "'") {
+        stack.push({ kind: 'single' })
+        j += 1
+        continue
+      }
+      if (c === '"') {
+        stack.push({ kind: 'double' })
+        j += 1
+        continue
+      }
+      if (c === '`') {
+        stack.push({ kind: 'template' })
+        j += 1
+        continue
+      }
+      if (c === '[') {
+        depth += 1
+        j += 1
+        continue
+      }
+      if (c === ']') {
+        depth -= 1
+        j += 1
+        continue
+      }
+      if (c === '{') return { forceRuntime: true, endIndex: j }
+      j += 1
+    }
+    if (depth !== 0) return { forceRuntime: true, endIndex: code.length }
+    return { ...parseStaticStringArrayBody(code.slice(bodyStart, j - 1)), endIndex: j }
+  }
+
+  return { forceRuntime: true, endIndex: i + 1 }
+}
+
+function resolveModuleLevelMatcherBinding(code: string): {
+  readonly matcher?: ProxyConfig['matcher']
+  readonly forceRuntime: boolean
+} | null {
+  const stack: ScanFrame[] = [{ kind: 'code', braceDepth: 0 }]
+  const bindings: Array<{
+    readonly matcher?: ProxyConfig['matcher']
+    readonly forceRuntime: boolean
+  }> = []
+
+  for (let i = 0; i < code.length;) {
+    const frame = stack.at(-1)
+    if (frame === undefined) return { forceRuntime: true }
+
+    const ch = code[i]
+    const next = code[i + 1]
+
+    if (frame.kind === 'line-comment') {
+      if (ch === '\n') stack.pop()
+      i += 1
+      continue
+    }
+    if (frame.kind === 'block-comment') {
+      if (ch === '*' && next === '/') {
+        stack.pop()
+        i += 2
+      } else i += 1
+      continue
+    }
+    if (frame.kind === 'single' || frame.kind === 'double') {
+      if (ch === '\\') {
+        i += 2
+        continue
+      }
+      if ((frame.kind === 'single' && ch === "'") || (frame.kind === 'double' && ch === '"'))
+        stack.pop()
+      i += 1
+      continue
+    }
+    if (frame.kind === 'template') {
+      if (ch === '\\') {
+        i += 2
+        continue
+      }
+      if (ch === '`') {
+        stack.pop()
+        i += 1
+        continue
+      }
+      if (ch === '$' && next === '{') {
+        stack.push({ kind: 'code', braceDepth: 1 })
+        i += 2
+        continue
+      }
+      i += 1
+      continue
+    }
+
+    if (ch === '/' && next === '/') {
+      stack.push({ kind: 'line-comment' })
+      i += 2
+      continue
+    }
+    if (ch === '/' && next === '*') {
+      stack.push({ kind: 'block-comment' })
+      i += 2
+      continue
+    }
+    if (ch === "'") {
+      stack.push({ kind: 'single' })
+      i += 1
+      continue
+    }
+    if (ch === '"') {
+      stack.push({ kind: 'double' })
+      i += 1
+      continue
+    }
+    if (ch === '`') {
+      stack.push({ kind: 'template' })
+      i += 1
+      continue
+    }
+    if (ch === '{') {
+      frame.braceDepth += 1
+      i += 1
+      continue
+    }
+    if (ch === '}') {
+      frame.braceDepth -= 1
+      i += 1
+      if (frame.braceDepth === 0 && stack.length > 1) stack.pop()
+      continue
+    }
+
+    const prev = i === 0 ? '' : code.charAt(i - 1)
+    const atBoundary = i === 0 || /[\s;{}]/.test(prev)
+
+    if (
+      frame.braceDepth === 0 &&
+      stack.length === 1 &&
+      atBoundary &&
+      code.startsWith('const matcher', i)
+    ) {
+      const afterName = i + 'const matcher'.length
+      if (afterName < code.length && /[\w$]/.test(code.charAt(afterName))) {
+        i += 1
+        continue
+      }
+      let j = afterName
+      while (j < code.length && /\s/.test(code.charAt(j))) j += 1
+      if (code.charAt(j) !== '=') {
+        i += 1
+        continue
+      }
+      const resolved = readStaticMatcherValue(code, j)
+      if (resolved == null || resolved.forceRuntime) return { forceRuntime: true }
+      bindings.push({ matcher: resolved.matcher, forceRuntime: false })
+      i = resolved.endIndex
+      continue
+    }
+
+    if (
+      frame.braceDepth === 0 &&
+      stack.length === 1 &&
+      atBoundary &&
+      (code.startsWith('let matcher', i) || code.startsWith('var matcher', i))
+    ) {
+      return { forceRuntime: true }
+    }
+
+    i += 1
+  }
+
+  if (bindings.length === 0) return null
+  if (bindings.length > 1) return { forceRuntime: true }
+  return bindings[0] ?? null
 }
 
 function extractStaticPathSources(condition: string): string[] | null {
@@ -90,17 +466,7 @@ function extractExportedConfigObject(code: string): string | null {
   if (startMatch == null) return null
 
   const braceStart = startMatch.index + startMatch[0].length - 1
-  let depth = 0
-  for (let i = braceStart; i < code.length; i++) {
-    const ch = code[i]
-    if (ch === '{') depth += 1
-    else if (ch === '}') {
-      depth -= 1
-      if (depth === 0) return code.slice(braceStart, i + 1)
-    }
-  }
-
-  return null
+  return extractBalancedBraces(code, braceStart)
 }
 
 function parseStaticStringArrayBody(body: string): {
@@ -122,29 +488,16 @@ function parseStaticStringArrayBody(body: string): {
   return { forceRuntime: true }
 }
 
-function resolveMatcherBinding(code: string): {
-  readonly matcher?: ProxyConfig['matcher']
-  readonly forceRuntime: boolean
-} | null {
-  const stringBind = MATCHER_STRING_BINDING_REGEX.exec(code)
-  if (stringBind != null && stringBind[2] !== '') {
-    return { matcher: stringBind[2], forceRuntime: false }
-  }
-
-  const arrayBind = MATCHER_ARRAY_BINDING_REGEX.exec(code)
-  if (arrayBind != null) return parseStaticStringArrayBody(arrayBind[1])
-
-  return null
-}
-
 function extractMatcher(code: string): {
   readonly matcher?: ProxyConfig['matcher']
   readonly forceRuntime: boolean
 } {
   if (!CONFIG_EXPORT_REGEX.test(code)) return { forceRuntime: false }
 
+  if (!CONFIG_OBJECT_EXPORT_REGEX.test(code)) return { forceRuntime: false }
+
   const configObject = extractExportedConfigObject(code)
-  if (configObject == null) return { forceRuntime: false }
+  if (configObject == null) return { forceRuntime: true }
 
   if (OBJECT_MATCHER_REGEX.test(configObject)) {
     return { forceRuntime: true }
@@ -159,7 +512,7 @@ function extractMatcher(code: string): {
   if (arrayMatch != null) return parseStaticStringArrayBody(arrayMatch[1])
 
   if (MATCHER_SHORTHAND_REGEX.test(configObject)) {
-    return resolveMatcherBinding(code) ?? { forceRuntime: true }
+    return resolveModuleLevelMatcherBinding(code) ?? { forceRuntime: true }
   }
 
   if (/matcher\s*:/.test(configObject)) return { forceRuntime: true }
