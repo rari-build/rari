@@ -471,10 +471,13 @@ export function ClientRouter({
       if (element) element.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
 
-    if (options.replace) {
-      window.history.replaceState(window.history.state, '', nextUrl)
-    } else {
-      window.history.pushState(window.history.state, '', nextUrl)
+    const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`
+    if (nextUrl !== currentUrl) {
+      if (options.replace) {
+        window.history.replaceState(window.history.state, '', nextUrl)
+      } else {
+        window.history.pushState(window.history.state, '', nextUrl)
+      }
     }
 
     committedUrlRef.current = nextUrl

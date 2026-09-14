@@ -44,12 +44,40 @@ type ScanFrame =
   | { readonly kind: 'regex' }
   | { readonly kind: 'regex-class' }
 
+const REGEX_AFTER_KEYWORDS = new Set([
+  'return',
+  'throw',
+  'case',
+  'else',
+  'do',
+  'typeof',
+  'delete',
+  'void',
+  'await',
+  'yield',
+  'new',
+  'in',
+  'of',
+  'instanceof',
+])
+
 function canStartRegexLiteral(code: string, slashIndex: number): boolean {
   let i = slashIndex - 1
   while (i >= 0 && /\s/.test(code.charAt(i))) i -= 1
   if (i < 0) return true
+
   const prev = code.charAt(i)
-  return !/[\w$)\]]/.test(prev)
+  if (/[)}\]]/.test(prev)) return false
+  if (!/[\w$]/.test(prev)) return true
+
+  let start = i
+  while (start >= 0 && /[\w$]/.test(code.charAt(start))) start -= 1
+  const ident = code.slice(start + 1, i + 1)
+  return REGEX_AFTER_KEYWORDS.has(ident)
+}
+
+function isLineContinuationBreak(ch: string): boolean {
+  return ch === '\n' || ch === '\r' || ch === '\u2028' || ch === '\u2029'
 }
 
 function decodeJsStringLiteral(raw: string, quote: "'" | '"' | '`'): string | null {
@@ -64,6 +92,10 @@ function decodeJsStringLiteral(raw: string, quote: "'" | '"' | '`'): string | nu
     i += 1
     if (i >= raw.length) return null
     const escaped = raw.charAt(i)
+    if (isLineContinuationBreak(escaped)) {
+      if (escaped === '\r' && raw.charAt(i + 1) === '\n') i += 1
+      continue
+    }
     switch (escaped) {
       case 'n':
         out += '\n'
