@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { styleText } from 'node:util'
-import { cancel, confirm, intro, outro, select, spinner, text } from '@clack/prompts'
+import { cancel, confirm, intro, isCancel, outro, select, spinner, text } from '@clack/prompts'
 
 const TEMPLATE_PLACEHOLDER_REGEX = /\{\{PROJECT_NAME\}\}/g
 const PACKAGE_MANAGER_PLACEHOLDER_REGEX = /\{\{PACKAGE_MANAGER\}\}/g
@@ -31,12 +31,13 @@ const packageManagers = {
   bun: 'bun',
 } as const
 
-function requireAnswer<T>(value: T | symbol): T {
-  if (typeof value === 'symbol') {
+function requireAnswer<T>(value: T): Exclude<T, symbol> {
+  if (isCancel(value)) {
     cancel('Operation cancelled.')
     process.exit(0)
   }
-  return value
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion isCancel narrows cancel symbol; process.exit never returns
+  return value as Exclude<T, symbol>
 }
 
 async function main() {
