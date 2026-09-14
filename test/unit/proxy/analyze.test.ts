@@ -301,6 +301,41 @@ describe('analyzeProxySource', () => {
     expect(analysis.matcher).toBeUndefined()
   })
 
+  it('ignores nested options.matcher when extracting the config matcher', () => {
+    const nestedOnly = `
+      export const config = {
+        options: {
+          matcher: '/nested',
+        },
+      }
+
+      export function proxy(request) {
+        return RariResponse.next()
+      }
+    `
+    const nestedOnlyAnalysis = analyzeProxySource(nestedOnly)
+    expect(nestedOnlyAnalysis.requiresRuntime).toBe(false)
+    expect(nestedOnlyAnalysis.matcher).toBeUndefined()
+
+    const nestedBeforeTopLevel = `
+      export const config = {
+        options: {
+          matcher: '/nested',
+        },
+        matcher: '/top',
+      }
+
+      export function proxy(request) {
+        if (request.rariUrl.pathname === '/top')
+          return RariResponse.redirect(new URL('/y', request.url), 308)
+        return RariResponse.next()
+      }
+    `
+    const nestedBeforeTopLevelAnalysis = analyzeProxySource(nestedBeforeTopLevel)
+    expect(nestedBeforeTopLevelAnalysis.requiresRuntime).toBe(false)
+    expect(nestedBeforeTopLevelAnalysis.matcher).toBe('/top')
+  })
+
   it('ignores braces inside strings when extracting config', () => {
     const code = `
       export const config = {
