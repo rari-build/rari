@@ -5,6 +5,14 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+export function isFlightThenable<T = unknown>(value: unknown): value is PromiseLike<T> {
+  return isRecord(value) && typeof value.then === 'function'
+}
+
+export function isLikelyReactElement(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && '$$typeof' in value
+}
+
 export function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && 'code' in error
 }

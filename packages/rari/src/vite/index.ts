@@ -154,6 +154,13 @@ function loadNavigationTransitionModule(projectRoot: string): string {
 `
 }
 
+function isNavigationTransitionFile(componentPath: string, projectRoot: string): boolean {
+  const resolvedComponent = path.resolve(componentPath)
+  return NAVIGATION_TRANSITION_CANDIDATES.some(
+    candidate => path.resolve(projectRoot, candidate) === resolvedComponent,
+  )
+}
+
 export interface RouterPluginOptions {
   readonly appDir?: string
   readonly extensions?: readonly string[]
@@ -1940,6 +1947,8 @@ ${clientTransformedCode}`
         ]
 
         const clientComponentsArray = [...allClientComponents].filter(componentPath => {
+          if (isNavigationTransitionFile(componentPath, projectRoot)) return false
+
           try {
             return moduleAnalysisCache.get(componentPath).topLevelUseClient
           } catch {
@@ -2169,7 +2178,12 @@ ${cjsSource}
   if (id === 'react-dom') return ReactDOM;
   throw new Error('Cannot require "' + id + '" from react-server-dom-webpack client bundle');
 });
-export const createFromFetch = module.exports.createFromFetch;
+export function createFromFetch(promise, options) {
+  return module.exports.createFromFetch(promise, {
+    ...options,
+    callServer: options?.callServer ?? rariCallServer,
+  });
+}
 export function createFromReadableStream(stream, options) {
   return module.exports.createFromReadableStream(stream, {
     ...options,

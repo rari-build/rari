@@ -2,7 +2,7 @@ import * as React from 'react'
 import { createRoot, hydrateRoot } from 'react-dom/client'
 import { AppRouterProvider } from 'virtual:app-router-provider'
 import { ClientRouter } from 'virtual:client-router'
-import { createFromReadableStream } from 'virtual:react-flight-client'
+import { createFromFetch, createFromReadableStream } from 'virtual:react-flight-client'
 import { RouterProvider } from '@/router'
 import { getCustomEventDetail, isRecord } from '@/shared/utils/type-guards'
 import { showHydrationFailureBanner } from './boundaries/runtime-error-banner'
@@ -230,14 +230,7 @@ export async function renderApp(): Promise<void> {
           })
 
           if (response.ok) {
-            const buffer = new Uint8Array(await response.arrayBuffer())
-            const stream = new ReadableStream<Uint8Array>({
-              start(controller) {
-                controller.enqueue(buffer)
-                controller.close()
-              },
-            })
-            element = await createFromReadableStream(stream)
+            element = await createFromFetch(Promise.resolve(response))
           } else {
             hydrationErrorMessage = `Failed to fetch RSC payload fallback: HTTP ${response.status}.`
           }
@@ -295,7 +288,7 @@ export async function renderApp(): Promise<void> {
 
         if (!response.body) throw new Error('RSC response has no body')
 
-        element = await createFromReadableStream(response.body)
+        element = await createFromFetch(Promise.resolve(response))
       } catch (e) {
         if (e instanceof Promise) throw e
         console.error('[rari] Failed to fetch initial RSC data:', e)

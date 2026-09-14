@@ -1,14 +1,14 @@
 'use client'
 
-import type { Thenable } from 'virtual:react-flight-client'
 import type { HmrFailure } from '../boundaries/hmr-failure-banner'
 import type { PendingScrollToTop } from './pending-scroll'
 import * as React from 'react'
 import { Suspense, useEffect, useLayoutEffect, useRef, useState, useTransition } from 'react'
 import { NavigationTransition } from 'virtual:navigation-transition'
-import { createFromReadableStream } from 'virtual:react-flight-client'
+import { createFromFetch, createFromReadableStream } from 'virtual:react-flight-client'
+import { captureIndexedFormData, restoreIndexedFormData } from '@/shared/form-state'
 import { PATH_TRAILING_SLASH_REGEX } from '@/shared/regex-constants'
-import { getCustomEventDetail, isRecord } from '@/shared/utils/type-guards'
+import { getCustomEventDetail, isFlightThenable, isRecord } from '@/shared/utils/type-guards'
 import { ActionDidRevalidateStaticAndDynamic } from '../actions/revalidation-kind'
 import { HmrFailureBanner } from '../boundaries/hmr-failure-banner'
 import { preloadModulesFromFlightProtocol } from '../shared/preload-modules'
@@ -27,8 +27,8 @@ const TIMESTAMP_REGEX = /"timestamp":(\d+)/
 const STALE_PAYLOAD_THRESHOLD_MS = 5000
 
 interface RscPayload {
-  readonly element: React.ReactNode | Thenable<React.ReactNode>
-  readonly rawElement?: React.ReactNode | Thenable<React.ReactNode>
+  readonly element: React.ReactNode | PromiseLike<React.ReactNode>
+  readonly rawElement?: React.ReactNode | PromiseLike<React.ReactNode>
   readonly flightProtocol?: string
 }
 
@@ -61,10 +61,6 @@ interface NavigationDetail {
     readonly state: object
     readonly replace?: boolean
   }
-}
-
-function isFlightThenable(value: unknown): value is Thenable<React.ReactNode> {
-  return isRecord(value) && typeof value.then === 'function'
 }
 
 function isReactNode(value: unknown): value is React.ReactNode {
@@ -150,7 +146,7 @@ export function AppRouterProvider({
     if (shouldScroll) window.scrollTo(0, 0)
   }, [rscPayload, renderKey])
 
-  const rememberRouteCache = (element: React.ReactNode | Thenable<React.ReactNode>) => {
+  const rememberRouteCache = (element: React.ReactNode | PromiseLike<React.ReactNode>) => {
     if (element == null || isFlightThenable(element)) return
 
     const { pathname, search } = currentRouteLocation()
@@ -177,35 +173,11 @@ export function AppRouterProvider({
   }, [rscPayload])
 
   const saveFormState = () => {
-    if (typeof document === 'undefined') return
-
-    const forms = document.querySelectorAll('form')
-    formDataRef.current.clear()
-
-    forms.forEach((form, index) => {
-      const formData = new FormData(form)
-      formDataRef.current.set(`form-${index}`, formData)
-    })
+    formDataRef.current = captureIndexedFormData()
   }
 
   const restoreFormState = () => {
-    if (typeof document === 'undefined') return
-
-    const forms = document.querySelectorAll('form')
-
-    forms.forEach((form, index) => {
-      const savedData = formDataRef.current.get(`form-${index}`)
-      if (!savedData) return
-
-      savedData.forEach((value, key) => {
-        const namedItem = form.elements.namedItem(key)
-        if (!(namedItem instanceof HTMLInputElement)) return
-
-        if (namedItem.type === 'checkbox' || namedItem.type === 'radio')
-          namedItem.checked = value === 'on'
-        else if (typeof value === 'string') namedItem.value = value
-      })
-    })
+    restoreIndexedFormData(formDataRef.current)
   }
 
   const trackHMRFailure = (
@@ -296,14 +268,7 @@ export function AppRouterProvider({
     const flightProtocol = await clonedResponse.text()
     await preloadModulesFromFlightProtocol(flightProtocol, preloadedModuleIdsRef.current)
 
-    const buffer = new Uint8Array(await response.arrayBuffer())
-    const stream = new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(buffer)
-        controller.close()
-      },
-    })
-    const element = await createFromReadableStream<React.ReactNode>(stream)
+    const element = await createFromFetch<React.ReactNode>(Promise.resolve(response))
 
     return {
       element,
@@ -370,14 +335,7 @@ export function AppRouterProvider({
 
             await preloadModulesFromFlightProtocol(rscFlightProtocol, preloadedModuleIdsRef.current)
 
-            const buffer = new Uint8Array(await response.arrayBuffer())
-            const stream = new ReadableStream<Uint8Array>({
-              start(controller) {
-                controller.enqueue(buffer)
-                controller.close()
-              },
-            })
-            const element = await createFromReadableStream<React.ReactNode>(stream)
+            const element = await createFromFetch<React.ReactNode>(Promise.resolve(response))
             parsedPayload = { element, rawElement: element, flightProtocol: rscFlightProtocol }
           } catch (parseError) {
             const error = parseError instanceof Error ? parseError : new Error(String(parseError))
@@ -579,7 +537,7 @@ export function AppRouterProvider({
       const detail = getCustomEventDetail(event, isActionFlightRefreshDetail)
       if (
         detail?.element == null ||
-        (!isReactNode(detail.element) && !isFlightThenable(detail.element))
+        (!isReactNode(detail.element) && !isFlightThenable<React.ReactNode>(detail.element))
       )
         return
 
@@ -602,11 +560,11 @@ export function AppRouterProvider({
         const fallbackElement = currentPayload?.element
         const cachedElement =
           flightRouteCache.getElement(pathname, search) ??
-          (fallbackElement != null && isFlightThenable(fallbackElement)
+          (fallbackElement != null && isFlightThenable<React.ReactNode>(fallbackElement)
             ? null
             : (fallbackElement ?? null))
         const refreshElement = detail.element
-        const merged = isFlightThenable(refreshElement)
+        const merged = isFlightThenable<React.ReactNode>(refreshElement)
           ? refreshElement
           : mergeFlightRefresh(cachedElement, refreshElement)
 
@@ -727,7 +685,7 @@ export function AppRouterProvider({
   const rawContent = rscPayload?.element ?? children
   const contentToRender = normalizeFlightContent(rawContent)
   const [committedSnapshot, setCommittedSnapshot] = useState<{
-    readonly raw: React.ReactNode | Thenable<React.ReactNode>
+    readonly raw: React.ReactNode | PromiseLike<React.ReactNode>
     readonly content: React.ReactNode
   } | null>(null)
   if (
