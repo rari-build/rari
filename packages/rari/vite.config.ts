@@ -63,6 +63,8 @@ export default defineConfig({
         'react-server-dom-webpack/server',
         'virtual:app-router-provider',
         'virtual:app-router-provider.tsx',
+        'virtual:navigation-transition',
+        'virtual:navigation-transition.tsx',
         'virtual:client-router',
         'virtual:client-router.tsx',
         'virtual:react-flight-client',

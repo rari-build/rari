@@ -132,6 +132,28 @@ const JSX_TEST_REGEX = /\bJSX\b/
 const IMPORT_SPECIFIERS_REGEX = /\{([^}]*)\}/
 const USE_CLIENT_DIRECTIVE_LINE_REGEX = /^['"]use client['"];?\s*\n/
 
+const NAVIGATION_TRANSITION_CANDIDATES = [
+  'src/app/navigation-transition.tsx',
+  'src/app/navigation-transition.ts',
+  'app/navigation-transition.tsx',
+  'app/navigation-transition.ts',
+] as const
+
+function loadNavigationTransitionModule(projectRoot: string): string {
+  for (const relativePath of NAVIGATION_TRANSITION_CANDIDATES) {
+    const absolutePath = path.join(projectRoot, relativePath)
+    if (fs.existsSync(absolutePath)) {
+      const importPath = absolutePath.split(path.sep).join('/')
+      return `export { default as NavigationTransition } from ${JSON.stringify(importPath)}\n`
+    }
+  }
+
+  return `export function NavigationTransition({ children }) {
+  return children
+}
+`
+}
+
 export interface RouterPluginOptions {
   readonly appDir?: string
   readonly extensions?: readonly string[]
@@ -1788,6 +1810,8 @@ ${clientTransformedCode}`
         return 'virtual:react-flight-client.ts'
       if (id === 'virtual:app-router-provider' || id === 'virtual:app-router-provider.tsx')
         return 'virtual:app-router-provider.tsx'
+      if (id === 'virtual:navigation-transition' || id === 'virtual:navigation-transition.tsx')
+        return '\0virtual:navigation-transition.tsx'
       if (id === 'virtual:client-router' || id === 'virtual:client-router.tsx')
         return 'virtual:client-router.tsx'
       if (id === 'virtual:error-boundary-wrapper' || id === 'virtual:error-boundary-wrapper.tsx')
@@ -2038,6 +2062,14 @@ for (const [path, config] of Object.entries(lazyComponentRegistry)) {
         if (runtimeFile != null && runtimeFile !== '') return fs.readFileSync(runtimeFile, 'utf-8')
 
         throw new Error(DIST_NOT_BUILT_ERROR)
+      }
+
+      if (id === '\0virtual:navigation-transition.tsx') {
+        const projectRoot =
+          options.projectRoot != null && options.projectRoot !== ''
+            ? options.projectRoot
+            : process.cwd()
+        return loadNavigationTransitionModule(projectRoot)
       }
 
       if (id === 'virtual:client-router.tsx') {

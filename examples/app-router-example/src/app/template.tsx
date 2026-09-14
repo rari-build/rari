@@ -1,25 +1,6 @@
-import type { LayoutProps } from 'rari'
-import { ViewTransition } from 'react'
+import type { ReactNode } from 'react'
+import { PageTransition } from './page-transition'
 
-export default function RootTemplate({ children }: LayoutProps) {
-  return (
-    <ViewTransition
-      default="none"
-      update="none"
-      enter={{
-        'nav-forward': 'content-enter',
-        'nav-traverse': 'content-enter',
-        'nav-replace': 'content-enter',
-        'default': 'none',
-      }}
-      exit={{
-        'nav-forward': 'loading-exit',
-        'nav-traverse': 'loading-exit',
-        'nav-replace': 'loading-exit',
-        'default': 'none',
-      }}
-    >
-      {children}
-    </ViewTransition>
-  )
+export default function Template({ children }: { readonly children: ReactNode }) {
+  return <PageTransition>{children}</PageTransition>
 }

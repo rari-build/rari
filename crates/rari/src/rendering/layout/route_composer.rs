@@ -102,6 +102,7 @@ impl RouteComposer {
             script.push_str(&Self::generate_template_wrapper(
                 i,
                 &template.component_id,
+                &template.file_path,
                 &current_element,
                 &template_var,
                 template_key_json,
@@ -159,19 +160,38 @@ impl RouteComposer {
     fn generate_template_wrapper(
         index: usize,
         template_component_id: &str,
+        template_file_path: &str,
         current_element: &str,
         template_var: &str,
         template_key_json: &str,
     ) -> String {
+        let ssr_module_key = format!("src/app/{template_file_path}");
+        let ssr_module_key_json = serde_json::to_string(&ssr_module_key)
+            .unwrap_or_else(|_| format!("\"{}\"", ssr_module_key.replace('"', "\\\"")));
+
         format!(
             r#"
             const startTemplate{index} = performance.now();
             let TemplateComponent{index} = globalThis["{template_component_id}"];
             if (typeof TemplateComponent{index} !== 'function') {{
-                const templateModule{index} = globalThis['~rsc']?.modules?.["{template_component_id}"];
-                if (templateModule{index} != null) {{
-                    TemplateComponent{index} = templateModule{index}.default
-                        ?? Object.values(templateModule{index})[0];
+                const resolveTemplateExport{index} = (moduleNamespace) => {{
+                    if (moduleNamespace == null) return null;
+                    const resolved = moduleNamespace.default
+                        ?? Object.values(moduleNamespace).find((value) => typeof value === 'function');
+                    return typeof resolved === 'function' ? resolved : null;
+                }};
+                TemplateComponent{index} = resolveTemplateExport{index}(
+                    globalThis['~rsc']?.modules?.["{template_component_id}"]
+                );
+                if (typeof TemplateComponent{index} !== 'function') {{
+                    const ssrModules{index} = globalThis['~rari']?.ssrModules;
+                    TemplateComponent{index} = resolveTemplateExport{index}(
+                        ssrModules{index}?.["{template_component_id}"]
+                    ) ?? resolveTemplateExport{index}(
+                        ssrModules{index}?.[{ssr_module_key_json}]
+                    ) ?? resolveTemplateExport{index}(
+                        ssrModules{index}?.[{ssr_module_key_json} + '#default']
+                    );
                 }}
             }}
             if (!TemplateComponent{index} || typeof TemplateComponent{index} !== 'function') {{
@@ -508,6 +528,14 @@ mod tests {
             script.contains(r#"globalThis['~rsc']?.modules?.["template:template.tsx"]"#),
             "templates must fall back to the SSR module registry used by RscModuleManager.register"
         );
+        assert!(
+            script.contains(r#"globalThis['~rari']?.ssrModules"#),
+            "client templates must fall back to production SSR client modules"
+        );
+        assert!(
+            script.contains(r#""src/app/template.tsx""#),
+            "client templates resolve via src/app/<file_path> SSR module keys"
+        );
         assert!(script.contains("templateKey0 = \"/about\""));
         assert!(script.contains("key: templateKey0"));
         assert!(
@@ -530,6 +558,7 @@ mod tests {
         let wrapper = RouteComposer::generate_template_wrapper(
             0,
             "template:template.tsx",
+            "template.tsx",
             "pageElement",
             "template0",
             "\"/\"",
@@ -560,6 +589,50 @@ mod tests {
             .execute_script("template_rsc_modules_fallback".to_string(), script)
             .await
             .expect("template registry fallback script should execute");
+        assert_eq!(result, serde_json::Value::Bool(true));
+    }
+
+    #[tokio::test]
+    async fn test_client_template_resolves_from_ssr_modules_by_file_path() {
+        use std::sync::Arc;
+
+        use crate::runtime::JsExecutionRuntime;
+
+        let runtime = Arc::new(JsExecutionRuntime::new(None));
+        let wrapper = RouteComposer::generate_template_wrapper(
+            0,
+            "app/template_6ef52460",
+            "template.tsx",
+            "pageElement",
+            "template0",
+            "\"/\"",
+        );
+
+        let script = format!(
+            r"
+            globalThis.React = {{
+              createElement(type, props) {{
+                return {{ type, props }};
+              }},
+            }};
+            const pageElement = {{ kind: 'page' }};
+            const timings = {{}};
+            globalThis['~rari'] = {{ ssrModules: {{}} }};
+            function ClientTemplate() {{ return null; }}
+            globalThis['~rari'].ssrModules['src/app/template.tsx'] = {{ default: ClientTemplate }};
+            delete globalThis['app/template_6ef52460'];
+            {wrapper}
+            if (template0.type !== ClientTemplate) {{
+              throw new Error('template did not resolve from ~rari.ssrModules');
+            }}
+            true
+            "
+        );
+
+        let result = runtime
+            .execute_script("template_ssr_modules_fallback".to_string(), script)
+            .await
+            .expect("client template SSR module fallback should execute");
         assert_eq!(result, serde_json::Value::Bool(true));
     }
 

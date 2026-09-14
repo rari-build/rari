@@ -1,14 +1,21 @@
 /* oxlint-disable typescript/prefer-readonly-parameter-types commits navigation state through React setters and refs */
-import type { Dispatch, RefObject, SetStateAction } from 'react'
+import type { Dispatch, RefObject, SetStateAction, TransitionFunction } from 'react'
 import type { PendingScrollToTop } from './pending-scroll'
-import { addTransitionType, startTransition } from 'react'
+import { addTransitionType, startTransition as defaultStartTransition } from 'react'
+
+export interface PendingHistoryUpdate {
+  readonly url: string
+  readonly state: object
+  readonly replace?: boolean
+}
 
 export interface CommitNavigationPayloadOptions<T extends object> {
   readonly parsedPayload: T
   readonly shouldScrollToTop: boolean
   readonly navigationId: number
-  readonly useTransition: boolean
   readonly transitionTypes?: readonly string[]
+  readonly pendingHistory?: PendingHistoryUpdate
+  readonly startTransition?: (scope: TransitionFunction) => void
   readonly currentNavigationIdRef: RefObject<number>
   readonly pendingScrollPayloadRef: RefObject<PendingScrollToTop<T> | null>
   readonly setRenderKey: Dispatch<SetStateAction<number>>
@@ -20,22 +27,16 @@ export function resolveNavigationTransitionTypes(options: {
   readonly historyKey?: string
   readonly replace?: boolean
 }): readonly string[] {
-  if (options.historyKey != null && options.historyKey !== '') {
-    return ['nav', 'nav-traverse']
-  }
-  if (options.replace === true) {
-    return ['nav', 'nav-replace']
-  }
+  if (options.historyKey != null && options.historyKey !== '') return ['nav', 'nav-traverse']
+  if (options.replace === true) return ['nav', 'nav-replace']
   return ['nav', 'nav-forward']
 }
 
-export function resolveCommitTransitionTypes(options: {
-  readonly isStreaming: boolean
-  readonly historyKey?: string
-  readonly replace?: boolean
-}): readonly string[] | undefined {
-  if (options.isStreaming) return undefined
-  return resolveNavigationTransitionTypes(options)
+function applyPendingHistory(pendingHistory: PendingHistoryUpdate | undefined): void {
+  if (pendingHistory == null || typeof window === 'undefined') return
+  if (pendingHistory.replace === true)
+    window.history.replaceState(pendingHistory.state, '', pendingHistory.url)
+  else window.history.pushState(pendingHistory.state, '', pendingHistory.url)
 }
 
 export function commitNavigationPayload<T extends object>(
@@ -45,15 +46,25 @@ export function commitNavigationPayload<T extends object>(
     parsedPayload,
     shouldScrollToTop,
     navigationId,
-    useTransition,
     transitionTypes,
+    pendingHistory,
+    startTransition: startNavTransition = defaultStartTransition,
     currentNavigationIdRef,
     pendingScrollPayloadRef,
     setRenderKey,
     setRscPayload,
     clearHmrError,
   } = options
-  const applyCommit = () => {
+
+  startNavTransition(() => {
+    if (currentNavigationIdRef.current !== navigationId) return
+    if (transitionTypes != null) {
+      for (const type of transitionTypes) {
+        addTransitionType(type)
+      }
+    }
+
+    applyPendingHistory(pendingHistory)
     setRenderKey(prev => {
       const commitKey = prev + 1
       pendingScrollPayloadRef.current = shouldScrollToTop
@@ -63,19 +74,10 @@ export function commitNavigationPayload<T extends object>(
     })
     setRscPayload(parsedPayload)
     clearHmrError()
-  }
-
-  if (useTransition) {
-    startTransition(() => {
-      if (currentNavigationIdRef.current !== navigationId) return
-      if (transitionTypes != null) {
-        for (const type of transitionTypes) {
-          addTransitionType(type)
-        }
-      }
-      applyCommit()
-    })
-  } else {
-    applyCommit()
-  }
+    window.dispatchEvent(
+      new CustomEvent('rari:navigate-committed', {
+        detail: { navigationId },
+      }),
+    )
+  })
 }

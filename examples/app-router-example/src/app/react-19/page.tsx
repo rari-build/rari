@@ -14,10 +14,10 @@ export default function React19Page() {
           waiting inside <code>&lt;ViewTransition&gt;</code>.
         </p>
         <p className="text-sm text-gray-500 mt-4">
-          Ready navigations use <code>addTransitionType(&apos;nav-forward&apos;)</code> /
-          <code>nav-traverse</code> with enter/exit classes from <code>template.tsx</code>. Routes
-          with <code>loading.tsx</code> stream the shell first (no nav types), then Suspense-reveal
-          transitions animate loading → content.
+          Soft navigations call <code>addTransitionType</code> and remount{' '}
+          <code>app/navigation-transition.tsx</code> (VT sentinel outside Flight so layout
+          persists). Page motion uses typed <code>rari-page-vt</code> enter/exit; nav stays frozen
+          via <code>rari-site-nav</code>.
         </p>
       </div>
 

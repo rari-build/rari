@@ -393,7 +393,8 @@ impl ComponentLoader {
             return Ok(());
         }
 
-        Self::load_server_components_recursive(&server_dir, &server_dir, renderer).await?;
+        Self::load_server_components_recursive(&server_dir, &server_dir, renderer, true).await?;
+        Self::load_server_components_recursive(&server_dir, &server_dir, renderer, false).await?;
 
         Ok(())
     }
@@ -402,6 +403,7 @@ impl ComponentLoader {
         dir: &'a Path,
         base_dir: &'a Path,
         renderer: &'a mut RscRenderer,
+        server_actions_only: bool,
     ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + 'a>> {
         Box::pin(async move {
             let mut entries = fs::read_dir(dir).await.map_err(|e| {
@@ -420,7 +422,13 @@ impl ComponentLoader {
                     .map_err(|e| RariError::io(format!("Failed to read file type: {e}")))?;
 
                 if file_type.is_dir() {
-                    Self::load_server_components_recursive(&path, base_dir, renderer).await?;
+                    Self::load_server_components_recursive(
+                        &path,
+                        base_dir,
+                        renderer,
+                        server_actions_only,
+                    )
+                    .await?;
                 } else if path.extension().and_then(|s| s.to_str()) == Some("js") {
                     let file_name = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
                     if file_name.starts_with("proxy_") {
@@ -432,6 +440,9 @@ impl ComponentLoader {
                     })?;
 
                     if has_use_server_directive(&component_code) {
+                        if !server_actions_only {
+                            continue;
+                        }
                         let relative_path = path.strip_prefix(base_dir).unwrap_or(&path);
                         let relative_str = relative_path
                             .to_str()
@@ -555,6 +566,10 @@ impl ComponentLoader {
                                 );
                             }
                         }
+                        continue;
+                    }
+
+                    if server_actions_only {
                         continue;
                     }
 

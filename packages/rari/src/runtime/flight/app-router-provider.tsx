@@ -4,7 +4,8 @@ import type { Thenable } from 'virtual:react-flight-client'
 import type { HmrFailure } from '../boundaries/hmr-failure-banner'
 import type { PendingScrollToTop } from './pending-scroll'
 import * as React from 'react'
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Suspense, useEffect, useLayoutEffect, useRef, useState, useTransition } from 'react'
+import { NavigationTransition } from 'virtual:navigation-transition'
 import { createFromReadableStream } from 'virtual:react-flight-client'
 import { PATH_TRAILING_SLASH_REGEX } from '@/shared/regex-constants'
 import { getCustomEventDetail, isRecord } from '@/shared/utils/type-guards'
@@ -12,7 +13,11 @@ import { ActionDidRevalidateStaticAndDynamic } from '../actions/revalidation-kin
 import { HmrFailureBanner } from '../boundaries/hmr-failure-banner'
 import { preloadModulesFromFlightProtocol } from '../shared/preload-modules'
 import { getRariWindowBag } from '../shared/rari-global'
-import { commitNavigationPayload, resolveCommitTransitionTypes } from './commit-navigation-payload'
+import {
+  commitNavigationPayload,
+  resolveNavigationTransitionTypes,
+} from './commit-navigation-payload'
+import { FlightOutlet } from './flight-outlet'
 import { mergeFlightRefresh } from './merge-refresh'
 import { normalizeFlightContent } from './normalize-flight-content'
 import { resolvePendingScrollToTop } from './pending-scroll'
@@ -51,6 +56,11 @@ interface NavigationDetail {
   readonly rscResponse?: Response
   readonly rscResponsePromise?: Promise<Response>
   readonly isStreaming?: boolean
+  readonly pendingHistory?: {
+    readonly url: string
+    readonly state: object
+    readonly replace?: boolean
+  }
 }
 
 function isFlightThenable(value: unknown): value is Thenable<React.ReactNode> {
@@ -106,6 +116,8 @@ export function AppRouterProvider({
   const [rscPayload, setRscPayload] = useState(initialPayload)
   const rscPayloadRef = useRef(initialPayload)
   const [renderKey, setRenderKey] = useState(0)
+  const [, startNavTransition] = useTransition()
+  const startNavTransitionRef = useRef(startNavTransition)
   const scrollPositionRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
   const pendingScrollPayloadRef = useRef<PendingScrollToTop<RscPayload> | null>(null)
   const formDataRef = useRef<Map<string, FormData>>(new Map())
@@ -123,6 +135,10 @@ export function AppRouterProvider({
   useEffect(() => {
     onNavigateRef.current = onNavigate
   }, [onNavigate])
+
+  useEffect(() => {
+    startNavTransitionRef.current = startNavTransition
+  }, [startNavTransition])
 
   useLayoutEffect(() => {
     const { shouldScroll, nextPending } = resolvePendingScrollToTop(
@@ -271,19 +287,10 @@ export function AppRouterProvider({
     }
   }
 
-  const parseRscResponse = async (responsePromise: Promise<Response>, isStreaming = false) => {
+  const parseRscResponse = async (responsePromise: Promise<Response>) => {
     const response = await responsePromise
 
     if (!response.body) throw new Error('Response has no body stream')
-
-    if (isStreaming) {
-      const element = createFromReadableStream<React.ReactNode>(response.body)
-      return {
-        element,
-        rawElement: element,
-        flightProtocol: '',
-      }
-    }
 
     const clonedResponse = response.clone()
     const flightProtocol = await clonedResponse.text()
@@ -430,9 +437,7 @@ export function AppRouterProvider({
   const parseRscFlightProtocolRef =
     useRef<(flightProtocol: string) => Promise<RscPayload>>(parseRscFlightProtocol)
   const parseRscResponseRef =
-    useRef<(responsePromise: Promise<Response>, isStreaming?: boolean) => Promise<RscPayload>>(
-      parseRscResponse,
-    )
+    useRef<(responsePromise: Promise<Response>) => Promise<RscPayload>>(parseRscResponse)
   const refetchRscPayloadRef =
     useRef<(targetPath?: string, abortSignal?: AbortSignal) => Promise<RscPayload | undefined>>(
       refetchRscPayload,
@@ -461,24 +466,15 @@ export function AppRouterProvider({
 
       let parsedPayload: RscPayload | undefined
       let parseError: Error | null = null
-      let isStreamingResponse = false
 
       try {
         if (detail.rscResponsePromise) {
           const response = await detail.rscResponsePromise
           if (currentNavigationIdRef.current !== detail.navigationId) return
-          isStreamingResponse = response.headers.get('x-render-mode') === 'streaming'
-          parsedPayload = await parseRscResponseRef.current(
-            Promise.resolve(response),
-            isStreamingResponse,
-          )
+          parsedPayload = await parseRscResponseRef.current(Promise.resolve(response))
           if (currentNavigationIdRef.current !== detail.navigationId) return
         } else if (detail.rscResponse) {
-          isStreamingResponse = detail.rscResponse.headers.get('x-render-mode') === 'streaming'
-          parsedPayload = await parseRscResponseRef.current(
-            Promise.resolve(detail.rscResponse),
-            isStreamingResponse,
-          )
+          parsedPayload = await parseRscResponseRef.current(Promise.resolve(detail.rscResponse))
           if (currentNavigationIdRef.current !== detail.navigationId) return
         } else if (detail.rscFlightProtocol != null && detail.rscFlightProtocol !== '') {
           parsedPayload = await parseRscFlightProtocolRef.current(detail.rscFlightProtocol)
@@ -529,12 +525,12 @@ export function AppRouterProvider({
           parsedPayload,
           shouldScrollToTop,
           navigationId,
-          useTransition: true,
-          transitionTypes: resolveCommitTransitionTypes({
-            isStreaming: isStreamingResponse,
+          transitionTypes: resolveNavigationTransitionTypes({
             historyKey: detail.options.historyKey,
             replace: detail.options.replace,
           }),
+          pendingHistory: detail.pendingHistory,
+          startTransition: startNavTransitionRef.current,
           currentNavigationIdRef,
           pendingScrollPayloadRef,
           setRenderKey,
@@ -729,6 +725,9 @@ export function AppRouterProvider({
   }, [rscPayload])
 
   const contentToRender = normalizeFlightContent(rscPayload?.element ?? children)
+  const [committedContent, setCommittedContent] = useState<React.ReactNode>(null)
+  if (!isFlightThenable(contentToRender) && !Object.is(contentToRender, committedContent))
+    setCommittedContent(contentToRender)
 
   return (
     <>
@@ -745,7 +744,14 @@ export function AppRouterProvider({
         />
       )}
 
-      {contentToRender}
+      <NavigationTransition key={renderKey} />
+      {isFlightThenable(contentToRender) ? (
+        <Suspense fallback={committedContent}>
+          <FlightOutlet content={contentToRender} />
+        </Suspense>
+      ) : (
+        contentToRender
+      )}
     </>
   )
 }

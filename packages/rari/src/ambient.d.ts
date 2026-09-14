@@ -58,6 +58,14 @@ declare module 'virtual:client-router' {
   export function ClientRouter(props: ClientRouterProps): React.ReactNode
 }
 
+declare module 'virtual:navigation-transition' {
+  import type * as React from 'react'
+
+  export function NavigationTransition(_props?: {
+    readonly children?: React.ReactNode
+  }): React.ReactNode
+}
+
 declare module 'virtual:app-router-provider' {
   import type * as React from 'react'
 
