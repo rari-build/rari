@@ -210,6 +210,42 @@ describe('analyzeProxySource', () => {
     expect(analysis.rules).toHaveLength(1)
   })
 
+  it('recognizes regex literals after return when extracting config', () => {
+    const code = `
+      export const config = {
+        test() {
+          return /}/
+        },
+        matcher: '/dashboard/:path*',
+      }
+
+      export function proxy(request) {
+        if (request.rariUrl.pathname === '/dashboard')
+          return RariResponse.redirect(new URL('/app', request.url), 308)
+        return RariResponse.next()
+      }
+    `
+    const analysis = analyzeProxySource(code)
+    expect(analysis.requiresRuntime).toBe(false)
+    expect(analysis.matcher).toBe('/dashboard/:path*')
+    expect(analysis.rules).toHaveLength(1)
+  })
+
+  it('decodes line continuations in matcher string literals', () => {
+    const code =
+      'export const config = {\n' +
+      "  matcher: '/api/\\\nx',\n" +
+      '}\n' +
+      'export function proxy(request) {\n' +
+      "  if (request.rariUrl.pathname === '/api/x')\n" +
+      "    return RariResponse.redirect(new URL('/y', request.url), 308)\n" +
+      '  return RariResponse.next()\n' +
+      '}\n'
+    const analysis = analyzeProxySource(code)
+    expect(analysis.requiresRuntime).toBe(false)
+    expect(analysis.matcher).toBe('/api/x')
+  })
+
   it('decodes JavaScript string escapes in matcher literals', () => {
     const code = `
       export const config = {
