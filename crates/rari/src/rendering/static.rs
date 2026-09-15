@@ -294,12 +294,12 @@ import 'virtual:rari-entry-client';
     }
 
     fn mask_html_for_head_scan_in_place(out: &mut [u8]) {
-        Self::mask_html_comments_in_place(out);
         Self::mask_raw_text_element_in_place(out, b"<script", b"</script>");
         Self::mask_raw_text_element_in_place(out, b"<style", b"</style>");
         Self::mask_raw_text_element_in_place(out, b"<title", b"</title>");
         Self::mask_raw_text_element_in_place(out, b"<textarea", b"</textarea>");
         Self::mask_raw_text_element_in_place(out, b"<noscript", b"</noscript>");
+        Self::mask_html_comments_in_place(out);
     }
 
     fn decode_basic_html_entities(value: &str) -> String {
@@ -806,6 +806,16 @@ import '/entry.js';
             "must not inject inside the script string"
         );
         assert_eq!(result.matches(r#"src="/entry.js""#).count(), 1);
+    }
+
+    #[test]
+    fn test_find_closing_head_tag_ignores_comment_opener_inside_script() {
+        let html = r#"<html><head><script>const s = "<!--";</script>
+</head><!-- --><body></body></html>"#;
+        let idx = find_closing_head_tag(html).expect("real head close");
+        assert_eq!(&html[idx..idx + 7], "</head>");
+        assert!(idx > html.find("<script>").expect("script"));
+        assert!(idx < html.find("<!-- -->").expect("real comment"));
     }
 
     #[test]

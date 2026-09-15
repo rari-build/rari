@@ -511,12 +511,12 @@ declare function rariCreateHtmlBoundaryTracker(): {
   }
 
   function rariMaskHtmlForHeadScan(html: string): string {
-    let out = rariMaskHtmlComments(html)
-    out = rariMaskRawTextElement(out, '<script', '</script>')
+    let out = rariMaskRawTextElement(html, '<script', '</script>')
     out = rariMaskRawTextElement(out, '<style', '</style>')
     out = rariMaskRawTextElement(out, '<title', '</title>')
     out = rariMaskRawTextElement(out, '<textarea', '</textarea>')
     out = rariMaskRawTextElement(out, '<noscript', '</noscript>')
+    out = rariMaskHtmlComments(out)
     return out
   }
 
