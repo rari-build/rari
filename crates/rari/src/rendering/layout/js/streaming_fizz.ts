@@ -593,8 +593,18 @@ declare function rariCreateHtmlBoundaryTracker(): {
 
     const flushHeadPending = async (): Promise<boolean> => {
       if (!headPending) return true
-      const pending = headPending
+      let pending = headPending
       headPending = ''
+      if (!headInjected && headContent) {
+        const injected = rariInjectHeadContent('', headContent, false, pending)
+        if (injected.injected) {
+          pending = injected.chunk
+          headInjected = true
+        } else {
+          pending = `${pending}${headContent}`
+          headInjected = true
+        }
+      }
       if (!pending || session.disconnected) return true
       if (!(await session.pumpFizzChunk(pending))) return false
       session.trackHtmlBoundaries(pending)
