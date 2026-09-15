@@ -115,6 +115,10 @@ function isLikelyStaticAssetPath(pathname: string): boolean {
   return DOCUMENT_ASSET_EXT_RE.test(basename)
 }
 
+function isReservedRoutePrefix(pathname: string, segment: string): boolean {
+  return pathname === segment || pathname.startsWith(`${segment}/`)
+}
+
 const IMPORT_TYPE_SPECIFIER_REGEX =
   /import\s+type\s+(\{[^}]+\})\s+from\s+["']\.\.?\/([^"']+)["'];?/g
 const IMPORT_TYPE_NAMESPACE_REGEX =
@@ -1572,17 +1576,17 @@ ${clientTransformedCode}`
             (method === 'GET' || method === 'HEAD') &&
             acceptHeader?.includes('text/html') &&
             !pathname.startsWith('/@') &&
-            !pathname.startsWith('/node_modules') &&
-            !pathname.startsWith('/api') &&
-            !pathname.startsWith('/_rari') &&
-            !pathname.startsWith('/vite-server') &&
+            !isReservedRoutePrefix(pathname, '/node_modules') &&
+            !isReservedRoutePrefix(pathname, '/api') &&
+            !isReservedRoutePrefix(pathname, '/_rari') &&
+            !isReservedRoutePrefix(pathname, '/vite-server') &&
             !isLikelyStaticAssetPath(pathname)
 
           if (
             (isRscRequest || isDocumentRequest) &&
             url !== '' &&
-            !pathname.startsWith('/api') &&
-            !pathname.startsWith('/rsc')
+            !isReservedRoutePrefix(pathname, '/api') &&
+            !isReservedRoutePrefix(pathname, '/rsc')
           ) {
             if (!rustServerReady) {
               const ready = await waitForRustServerReady(10000)
