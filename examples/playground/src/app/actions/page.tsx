@@ -165,6 +165,6 @@ export default async function ActionsPage() {
 }
 
 export const metadata: Metadata = {
-  title: 'Server Actions Demo | rari App Router',
+  title: 'Server Actions Demo | rari Playground',
   description: 'Demonstration of React Server Actions with rari framework',
 }

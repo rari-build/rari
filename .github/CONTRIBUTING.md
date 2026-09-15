@@ -160,7 +160,7 @@ cargo build --release
 
 ```bash
 # Navigate to an example
-cd examples/app-router-example
+cd examples/playground
 
 # Install dependencies (if not already done from root)
 pnpm install
@@ -193,7 +193,7 @@ To test your changes:
 2. **Run an example app:**
 
    ```bash
-   cd examples/app-router-example
+   cd examples/playground
    pnpm run dev
    ```
 

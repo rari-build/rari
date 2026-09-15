@@ -6,14 +6,14 @@ export default function HomePage({ params, searchParams }: PageProps) {
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 md:p-12">
         <div className="flex items-center gap-3 mb-4">
           <h1 className="text-4xl md:text-5xl font-bold text-gray-900">
-            Welcome to rari App Router
+            Welcome to the rari Playground
           </h1>
           <span className="text-3xl">🚀</span>
         </div>
 
         <p className="text-lg text-gray-600 mb-6 max-w-3xl leading-relaxed">
-          A demonstration of the Next.js-style app router implementation in rari. Explore
-          server-side rendering, React Server Components, and modern routing patterns.
+          A kitchen-sink demo of the Next.js-style app router in rari. Explore server-side
+          rendering, React Server Components, and modern routing patterns.
         </p>
 
         <div className="flex flex-wrap gap-3">
@@ -83,7 +83,7 @@ export default function HomePage({ params, searchParams }: PageProps) {
       </div>
 
       <div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">Try the Examples</h2>
+        <h2 className="text-2xl font-bold text-gray-900 mb-4">Try the Demos</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <a
             href="/actions"
@@ -212,6 +212,6 @@ export default function HomePage({ params, searchParams }: PageProps) {
 }
 
 export const metadata: Metadata = {
-  title: 'Home | rari App Router',
-  description: 'Welcome to the rari app router example',
+  title: 'Home | rari Playground',
+  description: 'Welcome to the rari playground',
 }
