@@ -644,6 +644,9 @@ impl LayoutRenderer {
                             : undefined;
                         if (byStream && __RARI_STREAM_ID__ in byStream)
                             delete byStream[__RARI_STREAM_ID__];
+                        const byStreamHead = globalThis['~rari']?.blockingHeadByStream;
+                        if (byStreamHead && __RARI_STREAM_ID__ in byStreamHead)
+                            delete byStreamHead[__RARI_STREAM_ID__];
                         if (!capturedElement) {{
                             throw new Error('[rari] RSC streaming nav: no captured element for stream');
                         }}
@@ -861,17 +864,16 @@ impl LayoutRenderer {
                             : undefined;
                         if (byStream && __RARI_STREAM_ID__ in byStream)
                             delete byStream[__RARI_STREAM_ID__];
-                        if (!capturedElement) {{
-                            Deno.core.ops.op_fizz_done(__RARI_STREAM_ID__);
-                            return;
-                        }}
-
                         const byStreamHead = globalThis['~rari']?.blockingHeadByStream;
                         const blockingHead = (byStreamHead && __RARI_STREAM_ID__ in byStreamHead)
                             ? byStreamHead[__RARI_STREAM_ID__]
                             : '';
                         if (byStreamHead && __RARI_STREAM_ID__ in byStreamHead)
                             delete byStreamHead[__RARI_STREAM_ID__];
+                        if (!capturedElement) {{
+                            Deno.core.ops.op_fizz_done(__RARI_STREAM_ID__);
+                            return;
+                        }}
 
                         const renderStreaming = globalThis['~rari']?.renderStreamingDocument;
                         if (typeof renderStreaming !== 'function') {{
