@@ -49,4 +49,26 @@ describe('layout-css-imports', () => {
 
     fs.rmSync(dir, { recursive: true, force: true })
   })
+
+  it('keeps absolute paths for css resolved outside the project root', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-layout-css-mono-'))
+    const projectRoot = path.join(root, 'apps', 'web')
+    const sharedCss = path.join(root, 'packages', 'ui', 'theme.css')
+    const appDir = path.join(projectRoot, 'src', 'app')
+    fs.mkdirSync(appDir, { recursive: true })
+    fs.mkdirSync(path.dirname(sharedCss), { recursive: true })
+    fs.writeFileSync(sharedCss, 'body{}')
+    fs.writeFileSync(
+      path.join(appDir, 'layout.tsx'),
+      `import '@ui/theme.css'\nexport default function Layout({ children }) { return children }\n`,
+    )
+
+    const statements = buildLayoutCssImportStatements(projectRoot, {
+      '@ui': path.join(root, 'packages', 'ui'),
+    })
+    expect(statements).toContain(`import ${JSON.stringify(sharedCss)};`)
+    expect(statements).not.toContain('/../')
+
+    fs.rmSync(root, { recursive: true, force: true })
+  })
 })
