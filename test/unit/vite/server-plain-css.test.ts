@@ -386,4 +386,99 @@ describe('server plain css imports', () => {
     expect(emitted).toContain('.page { color: red; }')
     expect(emitted).not.toMatch(/@import\s+['"]\.\//)
   })
+
+  it('inlines unquoted url(./...) local @imports into the component css asset', async () => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-unquoted-url-css-'))
+    const appDir = path.join(dir, 'src', 'app')
+    fs.mkdirSync(appDir, { recursive: true })
+    fs.writeFileSync(path.join(appDir, 'nested.css'), '.nested { color: purple; }\n')
+    fs.writeFileSync(
+      path.join(appDir, 'page.css'),
+      '@import url(./nested.css);\n.page { color: red; }\n',
+    )
+    const pagePath = path.join(appDir, 'page.tsx')
+    fs.writeFileSync(
+      pagePath,
+      `import './page.css'\nexport default function Page() { return null }\n`,
+    )
+
+    const outDir = path.join(dir, 'dist')
+    fs.mkdirSync(path.join(outDir, 'server'), { recursive: true })
+    fs.writeFileSync(
+      path.join(outDir, 'server', 'manifest.json'),
+      JSON.stringify({ components: {}, buildTime: new Date().toISOString() }),
+    )
+
+    const builder = new ServerComponentBuilder(dir, {
+      outDir: 'dist',
+      rscDir: 'server',
+      manifestPath: 'server/manifest.json',
+      minify: false,
+      alias: {},
+    })
+
+    const result = await builder.rebuildComponent(pagePath)
+    expect(result.success).toBe(true)
+    expect(fs.existsSync(result.bundlePath)).toBe(true)
+
+    const cssHrefs = readManifestCssHrefs(path.join(outDir, 'server', 'manifest.json'))
+    expect(cssHrefs.length).toBeGreaterThan(0)
+    const cssHref = cssHrefs[0]
+    expect(cssHref).toBeTypeOf('string')
+    expect(cssHref.startsWith('/assets/server/')).toBe(true)
+    const emitted = fs.readFileSync(path.join(outDir, cssHref.replace(/^\//, '')), 'utf-8')
+    expect(emitted).toContain('.nested { color: purple; }')
+    expect(emitted).toContain('.page { color: red; }')
+    expect(emitted).not.toContain('url(./nested.css)')
+  })
+
+  it('inlines the same local file under different qualifiers', async () => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-dup-qualified-css-'))
+    const appDir = path.join(dir, 'src', 'app')
+    fs.mkdirSync(appDir, { recursive: true })
+    fs.writeFileSync(path.join(appDir, 'theme.css'), '.theme { color: orange; }\n')
+    fs.writeFileSync(
+      path.join(appDir, 'page.css'),
+      [
+        "@import './theme.css' layer(base);",
+        "@import './theme.css' layer(utilities);",
+        '.page { color: red; }',
+        '',
+      ].join('\n'),
+    )
+    const pagePath = path.join(appDir, 'page.tsx')
+    fs.writeFileSync(
+      pagePath,
+      `import './page.css'\nexport default function Page() { return null }\n`,
+    )
+
+    const outDir = path.join(dir, 'dist')
+    fs.mkdirSync(path.join(outDir, 'server'), { recursive: true })
+    fs.writeFileSync(
+      path.join(outDir, 'server', 'manifest.json'),
+      JSON.stringify({ components: {}, buildTime: new Date().toISOString() }),
+    )
+
+    const builder = new ServerComponentBuilder(dir, {
+      outDir: 'dist',
+      rscDir: 'server',
+      manifestPath: 'server/manifest.json',
+      minify: false,
+      alias: {},
+    })
+
+    const result = await builder.rebuildComponent(pagePath)
+    expect(result.success).toBe(true)
+
+    const cssHrefs = readManifestCssHrefs(path.join(outDir, 'server', 'manifest.json'))
+    expect(cssHrefs.length).toBeGreaterThan(0)
+    const cssHref = cssHrefs[0]
+    expect(cssHref).toBeTypeOf('string')
+    const emitted = fs.readFileSync(path.join(outDir, cssHref.replace(/^\//, '')), 'utf-8')
+
+    expect(emitted).toContain('@layer base')
+    expect(emitted).toContain('@layer utilities')
+    expect(emitted.match(/\.theme \{ color: orange; \}/g)?.length).toBe(2)
+    expect(emitted).toContain('.page { color: red; }')
+  })
 })
