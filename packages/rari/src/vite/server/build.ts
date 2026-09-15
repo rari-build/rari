@@ -1155,8 +1155,34 @@ export class ServerComponentBuilder {
           // Rolldown. Stub it here; Vite client entry pulls layout CSS for Tailwind.
           if (source.endsWith('.css') || /\.css(?:\?.*)?$/.test(source)) {
             const bare = source.replace(/[?#].*$/, '')
-            const resolved = path.isAbsolute(bare) ? bare : path.resolve(importerDir, bare)
-            if (fs.existsSync(resolved)) {
+            let resolved: string | null = null
+
+            if (path.isAbsolute(bare)) {
+              resolved = bare
+            } else if (bare.startsWith('./') || bare.startsWith('../')) {
+              resolved = path.resolve(importerDir, bare)
+            } else {
+              const resolveFrom = [
+                importer != null && importer !== '' && !importer.startsWith('\0') ? importer : null,
+                path.join(this.projectRoot, 'package.json'),
+              ].filter((value): value is string => value != null && value !== '')
+
+              for (const from of resolveFrom) {
+                try {
+                  resolved = createRequire(from).resolve(bare)
+                  break
+                } catch {
+                  try {
+                    resolved = fileURLToPath(import.meta.resolve(bare, pathToFileURL(from).href))
+                    break
+                  } catch {
+                    // try next resolve root
+                  }
+                }
+              }
+            }
+
+            if (resolved != null && resolved !== '' && fs.existsSync(resolved)) {
               return { id: `\0css-global:${resolved}` }
             }
           }
