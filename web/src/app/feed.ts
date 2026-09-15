@@ -1,7 +1,6 @@
 import type { Feed } from 'rari'
 import { getAllBlogPosts } from '@/lib/content'
-
-const baseUrl = 'https://rari.build'
+import { siteUrl } from '@/lib/site'
 
 export default function feed(): Feed {
   const posts = getAllBlogPosts()
@@ -10,13 +9,13 @@ export default function feed(): Feed {
     title: 'rari Blog',
     description:
       'Latest news, updates, and insights from the rari team. The performance-first React framework powered by Rust.',
-    link: baseUrl,
+    link: siteUrl,
     language: 'en',
     copyright: `© ${new Date().getFullYear()} rari. All rights reserved.`,
     lastBuildDate: new Date(),
     items: posts.map(post => ({
       title: post.title,
-      url: `${baseUrl}/blog/${post.slug}`,
+      url: `${siteUrl}/blog/${post.slug}`,
       description: post.description,
       author: post.author,
       pubDate: post.date,

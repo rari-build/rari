@@ -63,30 +63,52 @@ fn normalize_origin(url: &url::Url) -> (String, String, u16) {
     (url.scheme().to_string(), url.host_str().unwrap_or("").to_string(), effective_port(url))
 }
 
+fn server_origin_from_headers(headers: &HeaderMap) -> Result<(String, String, u16), RariError> {
+    let host = headers.get("host").and_then(|v| v.to_str().ok()).ok_or_else(|| {
+        tracing::error!("Missing host header in server action request");
+        RariError::bad_request("Missing host header")
+    })?;
+
+    let scheme = headers
+        .get("x-forwarded-proto")
+        .or_else(|| headers.get("x-forwarded-protocol"))
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or_else(|| {
+            tracing::debug!(
+                "No x-forwarded-proto header; defaulting to http for origin validation"
+            );
+            "http"
+        });
+
+    let server_origin_str = format!("{scheme}://{host}");
+    let server_origin_url = url::Url::parse(&server_origin_str).map_err(|e| {
+        tracing::error!("Failed to parse server origin: {}", e);
+        RariError::internal(format!("Failed to parse server origin: {e}"))
+    })?;
+    Ok(normalize_origin(&server_origin_url))
+}
+
+fn origin_matches_request_host(headers: &HeaderMap, origin: &str) -> bool {
+    let Ok(origin_url) = url::Url::parse(origin) else {
+        return false;
+    };
+    let Ok(server_origin) = server_origin_from_headers(headers) else {
+        return false;
+    };
+    normalize_origin(&origin_url) == server_origin
+}
+
 fn check_origin(headers: &HeaderMap, allowed_origins: &[String]) -> Result<(), RariError> {
     if allowed_origins.is_empty() {
-        let host = headers.get("host").and_then(|v| v.to_str().ok()).ok_or_else(|| {
-            tracing::error!("Missing host header in server action request");
-            RariError::bad_request("Missing host header")
-        })?;
-
-        let scheme = headers
-            .get("x-forwarded-proto")
-            .or_else(|| headers.get("x-forwarded-protocol"))
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or_else(|| {
-                tracing::debug!(
-                    "No x-forwarded-proto header; defaulting to http for origin validation"
-                );
-                "http"
-            });
-
-        let server_origin_str = format!("{scheme}://{host}");
-        let server_origin_url = url::Url::parse(&server_origin_str).map_err(|e| {
-            tracing::error!("Failed to parse server origin: {}", e);
-            RariError::internal(format!("Failed to parse server origin: {e}"))
-        })?;
-        let server_origin_tuple = normalize_origin(&server_origin_url);
+        let server_origin_tuple = server_origin_from_headers(headers)?;
+        let server_origin_str = {
+            let (scheme, host, port) = &server_origin_tuple;
+            if (*scheme == "http" && *port == 80) || (*scheme == "https" && *port == 443) {
+                format!("{scheme}://{host}")
+            } else {
+                format!("{scheme}://{host}:{port}")
+            }
+        };
 
         if let Some(origin) = headers.get("origin").and_then(|v| v.to_str().ok()) {
             if let Ok(origin_url) = url::Url::parse(origin) {
@@ -129,11 +151,13 @@ fn check_origin(headers: &HeaderMap, allowed_origins: &[String]) -> Result<(), R
     }
 
     if let Some(origin) = headers.get("origin").and_then(|v| v.to_str().ok()) {
-        if !is_origin_allowed(origin, allowed_origins) {
-            tracing::error!("Invalid origin: {}", origin);
-            return Err(RariError::forbidden("Origin not allowed"));
+        if is_origin_allowed(origin, allowed_origins)
+            || origin_matches_request_host(headers, origin)
+        {
+            return Ok(());
         }
-        return Ok(());
+        tracing::error!("Invalid origin: {}", origin);
+        return Err(RariError::forbidden("Origin not allowed"));
     }
 
     if let Some(referer) = headers.get("referer").and_then(|v| v.to_str().ok()) {
@@ -145,7 +169,9 @@ fn check_origin(headers: &HeaderMap, allowed_origins: &[String]) -> Result<(), R
                 } else {
                     format!("{scheme}://{host}:{port}")
                 };
-            if is_origin_allowed(&referer_origin, allowed_origins) {
+            if is_origin_allowed(&referer_origin, allowed_origins)
+                || origin_matches_request_host(headers, &referer_origin)
+            {
                 return Ok(());
             }
             tracing::error!("Invalid referer origin: {}", referer_origin);
@@ -1596,6 +1622,38 @@ mod tests {
             result.is_ok(),
             "Referer with explicit default HTTPS port (443) should match server origin without port"
         );
+    }
+
+    #[test]
+    fn test_configured_origin_still_allows_same_host() {
+        use axum::http::HeaderMap;
+
+        use super::check_origin;
+
+        let mut headers = HeaderMap::new();
+        headers.insert("host", "127.0.0.1:3000".parse().unwrap());
+        headers.insert("origin", "http://127.0.0.1:3000".parse().unwrap());
+
+        let result = check_origin(&headers, &["https://rari.build".to_string()]);
+        assert!(
+            result.is_ok(),
+            "Local same-origin requests should be allowed even when a public origin is configured"
+        );
+    }
+
+    #[test]
+    fn test_configured_origin_rejects_cross_site() {
+        use axum::http::HeaderMap;
+
+        use super::check_origin;
+
+        let mut headers = HeaderMap::new();
+        headers.insert("host", "rari.build".parse().unwrap());
+        headers.insert("x-forwarded-proto", "https".parse().unwrap());
+        headers.insert("origin", "https://evil.example".parse().unwrap());
+
+        let result = check_origin(&headers, &["https://rari.build".to_string()]);
+        assert!(result.is_err(), "Cross-site origins must still be rejected");
     }
 
     #[test]

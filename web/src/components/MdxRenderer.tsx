@@ -1,8 +1,7 @@
 import type { ComponentProps, ComponentType } from 'react'
 import type { BlogMetadata } from '@/lib/metadata'
 import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
-import { cwd } from 'node:process'
+import { join } from 'node:path'
 import { evaluate } from 'rari/mdx'
 import * as runtime from 'react/jsx-runtime'
 import remarkGfm from 'remark-gfm'
@@ -10,6 +9,7 @@ import NotFoundPage from '@/app/not-found'
 import Breadcrumbs from '@/components/Breadcrumbs'
 import Heading from '@/components/Heading'
 import PageHeader from '@/components/PageHeader'
+import { getContentRoot } from '@/lib/content'
 import { extractBlogMetadata } from '@/lib/metadata'
 import { remarkCodeBlock } from '@/lib/remark-codeblock'
 import { getHighlighter, SHIKI_THEMES } from '@/lib/shiki'
@@ -21,18 +21,11 @@ interface MdxRendererProps {
 }
 
 function findContentFile(filePath: string): string | null {
-  const searchPaths = [
-    resolve(cwd(), 'public', 'content', filePath),
-    resolve(cwd(), 'content', filePath),
-    resolve(cwd(), 'dist', 'content', filePath),
-  ]
-  for (const path of searchPaths) {
-    try {
-      return readFileSync(path, 'utf-8')
-    } catch {}
+  try {
+    return readFileSync(join(getContentRoot(), filePath), 'utf-8')
+  } catch {
+    return null
   }
-
-  return null
 }
 
 function PageHeaderWithFilePath({

@@ -1,9 +1,8 @@
 import type { PageProps } from 'rari'
 import { accessSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import process from 'node:process'
 import MdxRenderer from '@/components/MdxRenderer'
-import { getDocsFilePath, isValidSlugArray } from '@/lib/content'
+import { getDocsDir, getDocsFilePath, isValidSlugArray } from '@/lib/content'
 import { extractMetadataWithFallback } from '@/lib/metadata'
 import { container } from '@/lib/styles'
 
@@ -70,7 +69,7 @@ export function generateMetadata({ params }: PageProps) {
 }
 
 export function generateStaticParams() {
-  const contentDir = join(process.cwd(), 'public', 'content', 'docs')
+  const contentDir = getDocsDir()
   const params: Array<{ slug: string[] }> = []
 
   function scanDir(dir: string, segments: readonly string[]) {

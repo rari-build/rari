@@ -160,4 +160,48 @@ describe('server plain css imports', () => {
     }
     expect(entry.css).toEqual([])
   })
+
+  it('skips plain css that only has bare package @imports (e.g. tailwind)', async () => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-tw-css-'))
+    const appDir = path.join(dir, 'src', 'app')
+    fs.mkdirSync(appDir, { recursive: true })
+    fs.writeFileSync(
+      path.join(appDir, 'globals.css'),
+      "@import 'tailwindcss';\n:root { color: red; }\n",
+    )
+    const layoutPath = path.join(appDir, 'layout.tsx')
+    fs.writeFileSync(
+      layoutPath,
+      `import './globals.css'\nexport default function Layout({ children }) { return children }\n`,
+    )
+
+    const outDir = path.join(dir, 'dist')
+    fs.mkdirSync(path.join(outDir, 'server'), { recursive: true })
+    fs.writeFileSync(
+      path.join(outDir, 'server', 'manifest.json'),
+      JSON.stringify({ components: {}, buildTime: new Date().toISOString() }),
+    )
+
+    const builder = new ServerComponentBuilder(dir, {
+      outDir: 'dist',
+      rscDir: 'server',
+      manifestPath: 'server/manifest.json',
+      minify: false,
+      alias: {},
+    })
+
+    const result = await builder.rebuildComponent(layoutPath)
+    expect(result.success).toBe(true)
+
+    const manifestPath = path.join(outDir, 'server', 'manifest.json')
+    const parsed: unknown = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
+    if (!isRecord(parsed) || !isRecord(parsed.components)) {
+      throw new Error('manifest.json missing components')
+    }
+    const entry = Object.values(parsed.components)[0]
+    if (!isRecord(entry) || !Array.isArray(entry.css)) {
+      throw new Error('manifest component missing css array')
+    }
+    expect(entry.css).toEqual([])
+  })
 })

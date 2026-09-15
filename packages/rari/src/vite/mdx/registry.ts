@@ -221,7 +221,7 @@ export function resolveMdxPluginOptions(
 ): Required<MdxPluginOptions> {
   return {
     componentsDir: options?.componentsDir ?? 'src/components',
-    contentDirs: options?.contentDirs ?? ['public/content', 'content'],
+    contentDirs: options?.contentDirs ?? ['src/content', 'content', 'public/content'],
   }
 }
 
