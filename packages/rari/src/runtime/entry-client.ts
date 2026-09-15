@@ -41,6 +41,7 @@ function notifyClientReady() {
 
 function mountApp(content: React.ReactNode) {
   const scanRoot = document.documentElement
+  const ssrTitle = document.title
 
   if (shouldHydrateServerDom(scanRoot)) {
     clearServerInjectedErrors(scanRoot)
@@ -51,6 +52,19 @@ function mountApp(content: React.ReactNode) {
     })
   } else {
     createRoot(document).render(content)
+  }
+
+  if (ssrTitle !== '') {
+    const restoreTitle = () => {
+      if (document.title === '') document.title = ssrTitle
+    }
+    restoreTitle()
+    const observer = new MutationObserver(restoreTitle)
+    observer.observe(document.head, { childList: true, subtree: true })
+    window.setTimeout(() => {
+      restoreTitle()
+      observer.disconnect()
+    }, 1000)
   }
 
   notifyClientReady()

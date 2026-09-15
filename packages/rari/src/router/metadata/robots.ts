@@ -2,7 +2,11 @@ import type { Robots, RobotsRule } from './types'
 import { Buffer } from 'node:buffer'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
+import { resolveAlias } from '@/shared/utils/alias-resolver'
+import { resolveWithExtensionsAndIndex } from '@/shared/utils/file-resolver'
 import { getErrnoCode, isRecord } from '@/shared/utils/type-guards'
+
+const VIRTUAL_ROBOTS_ID = '\0virtual:robots'
 
 function isRobots(value: unknown): value is Robots {
   return isRecord(value) && value.rules != null
@@ -29,6 +33,7 @@ export interface RobotsGeneratorOptions {
   readonly appDir: string
   readonly outDir: string
   readonly extensions?: readonly string[]
+  readonly aliases?: Readonly<Record<string, string>>
 }
 
 function normalizeUserAgents(userAgent: string | readonly string[] | undefined): string[] {
@@ -120,9 +125,83 @@ export async function findRobotsFile(
 }
 /* v8 ignore stop */
 
+function determineModuleType(ext: string): 'js' | 'jsx' | 'ts' | 'tsx' {
+  switch (ext) {
+    case 'ts':
+      return 'ts'
+    case 'tsx':
+      return 'tsx'
+    case 'js':
+    case 'mjs':
+      return 'js'
+    case 'jsx':
+      return 'jsx'
+    default:
+      throw new Error(
+        `Unsupported robots file extension: .${ext}. Supported extensions are: .ts, .tsx, .js, .jsx, .mjs`,
+      )
+  }
+}
+
+function createRobotsPlugin(
+  robotsFilePath: string,
+  sourceCode: string,
+  aliases: Readonly<Record<string, string>>,
+  projectRoot: string,
+) {
+  return {
+    name: 'virtual-robots',
+    resolveId(id: string, importer?: string) {
+      if (id === VIRTUAL_ROBOTS_ID) return id
+
+      if (Object.keys(aliases).length > 0) {
+        const resolved = resolveAlias(id, aliases, projectRoot)
+        if (resolved != null && resolved !== '') {
+          const found = resolveWithExtensionsAndIndex(resolved)
+          if (found != null && found !== '') return found
+
+          return resolved
+        }
+      }
+
+      if (id.startsWith('.')) {
+        const base =
+          importer == null || importer === '' || importer.startsWith('\0')
+            ? robotsFilePath
+            : importer
+        const resolved = path.resolve(path.dirname(base), id)
+        const found = resolveWithExtensionsAndIndex(resolved)
+        if (found != null && found !== '') return found
+
+        return resolved
+      }
+
+      return null
+    },
+    async load(loadId: string) {
+      if (loadId === VIRTUAL_ROBOTS_ID) {
+        const ext = path.extname(robotsFilePath).slice(1)
+        return { code: sourceCode, moduleType: determineModuleType(ext) }
+      }
+
+      if (loadId && !loadId.startsWith('\0')) {
+        try {
+          const code = await fs.readFile(loadId, 'utf-8')
+          const ext = path.extname(loadId).slice(1)
+          return { code, moduleType: determineModuleType(ext) }
+        } catch {
+          return null
+        }
+      }
+
+      return null
+    },
+  }
+}
+
 /* v8 ignore start - file system operations and dynamic imports, better tested in integration/e2e */
 export async function generateRobotsFile(options: RobotsGeneratorOptions): Promise<boolean> {
-  const { appDir, outDir, extensions } = options
+  const { appDir, outDir, extensions, aliases = {} } = options
   const robotsFile = await findRobotsFile(appDir, extensions)
 
   if (!robotsFile) return false
@@ -139,10 +218,10 @@ export async function generateRobotsFile(options: RobotsGeneratorOptions): Promi
   try {
     const { build } = await import('rolldown')
     const sourceCode = await fs.readFile(robotsFile.path, 'utf-8')
-    const virtualModuleId = `\0virtual:robots`
+    const projectRoot = path.resolve(appDir, '..', '..')
 
     const result = await build({
-      input: virtualModuleId,
+      input: VIRTUAL_ROBOTS_ID,
       external: ['rari'],
       platform: 'node',
       write: false,
@@ -150,58 +229,7 @@ export async function generateRobotsFile(options: RobotsGeneratorOptions): Promi
         format: 'esm',
         codeSplitting: false,
       },
-      plugins: [
-        {
-          name: 'virtual-robots',
-          resolveId(resolveId) {
-            if (resolveId === virtualModuleId) return resolveId
-            if (resolveId.startsWith('.'))
-              return path.resolve(path.dirname(robotsFile.path), resolveId)
-
-            return null
-          },
-          load(loadId) {
-            if (loadId === virtualModuleId) {
-              const ext = path.extname(robotsFile.path).slice(1)
-              let moduleType:
-                | 'js'
-                | 'jsx'
-                | 'ts'
-                | 'tsx'
-                | 'json'
-                | 'text'
-                | 'base64'
-                | 'dataurl'
-                | 'binary'
-                | 'empty'
-
-              switch (ext) {
-                case 'ts':
-                  moduleType = 'ts'
-                  break
-                case 'tsx':
-                  moduleType = 'tsx'
-                  break
-                case 'js':
-                case 'mjs':
-                  moduleType = 'js'
-                  break
-                case 'jsx':
-                  moduleType = 'jsx'
-                  break
-                default:
-                  throw new Error(
-                    `Unsupported robots file extension: .${ext}. Supported extensions are: .ts, .tsx, .js, .jsx, .mjs`,
-                  )
-              }
-
-              return { code: sourceCode, moduleType }
-            }
-
-            return null
-          },
-        },
-      ],
+      plugins: [createRobotsPlugin(robotsFile.path, sourceCode, aliases, projectRoot)],
     })
 
     if (result.output.length === 0) throw new Error('Failed to build robots module')

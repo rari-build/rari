@@ -116,10 +116,34 @@ describe('hasServerRenderedDom', () => {
     expect(hasServerRenderedDom(root)).toBe(true)
   })
 
-  it('returns false when the first child is a script tag', () => {
+  it('skips leading script tags when detecting SSR content', () => {
+    const root = mockRoot({})
+    const main = {
+      tagName: 'MAIN',
+      classList: { contains: () => false },
+      nextElementSibling: null,
+    }
+    const script = {
+      tagName: 'SCRIPT',
+      classList: { contains: () => false },
+      getAttribute: () => null,
+      nextElementSibling: main,
+    }
+    main.nextElementSibling = null
+    Object.defineProperty(root, 'firstElementChild', { value: script })
+
+    expect(hasServerRenderedDom(root)).toBe(true)
+  })
+
+  it('returns false when body only has script tags', () => {
     const root = mockRoot({})
     Object.defineProperty(root, 'firstElementChild', {
-      value: { tagName: 'SCRIPT', classList: { contains: () => false } },
+      value: {
+        tagName: 'SCRIPT',
+        classList: { contains: () => false },
+        getAttribute: () => null,
+        nextElementSibling: null,
+      },
     })
 
     expect(hasServerRenderedDom(root)).toBe(false)

@@ -21,7 +21,8 @@ test.describe.serial('Streaming Suspense E2E Tests', () => {
     expect(times['outer-content']).toBeLessThan(times['component-inner'])
 
     const bodyHtml = await page.locator('body').innerHTML()
-    expect(bodyHtml).not.toContain('react.suspense')
+    const withoutScripts = bodyHtml.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+    expect(withoutScripts).not.toContain('react.suspense')
   })
 
   test('parallel: should resolve boundaries in order of their delay', async ({ page }) => {
