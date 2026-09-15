@@ -1,4 +1,7 @@
 import type { ReactNode } from 'react'
+import type { AppIconEntry } from '../metadata/app-icons'
+
+export type { AppIconEntry } from '../metadata/app-icons'
 
 export type RouteSegmentType = 'static' | 'dynamic' | 'catch-all' | 'optional-catch-all'
 
@@ -89,6 +92,7 @@ export interface AppRouteManifest {
   templates: TemplateEntry[]
   apiRoutes: ApiRouteEntry[]
   ogImages: OgImageEntry[]
+  appIcons: AppIconEntry[]
   generated: string
 }
 

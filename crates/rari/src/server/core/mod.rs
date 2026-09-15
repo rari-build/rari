@@ -240,6 +240,11 @@ impl Server {
             Some(generator)
         };
 
+        let app_icons = match &routes_manifest {
+            Ok(manifest) => Arc::new(manifest.app_icons.clone()),
+            Err(_) => Arc::new(Vec::new()),
+        };
+
         let layout_layer = config.cache.layer(CACHE_LAYER_LAYOUT);
 
         let state = ServerState {
@@ -260,6 +265,7 @@ impl Server {
             response_cache,
             static_fast_cache: Arc::new(response::StaticFastCache::new()),
             og_generator,
+            app_icons,
             project_root,
             image_optimizer: None,
             cache_registry: Arc::clone(&cache_registry),

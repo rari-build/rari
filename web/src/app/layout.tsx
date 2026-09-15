@@ -64,13 +64,6 @@ export const metadata: Metadata = {
   title: 'Runtime Accelerated Rendering Infrastructure (rari)',
   description:
     'rari is a performance-first React framework powered by Rust. Build web applications with React Server Components, zero-config setup, and runtime-accelerated rendering infrastructure.',
-  icons: {
-    icon: [
-      { url: '/favicon.svg', type: 'image/svg+xml', sizes: 'any' },
-      { url: '/favicon.ico', sizes: '32x32' },
-    ],
-    apple: [{ url: '/apple-touch-icon.png', sizes: '180x180' }],
-  },
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#e8ecf1' },
     { media: '(prefers-color-scheme: dark)', color: '#0d1117' },

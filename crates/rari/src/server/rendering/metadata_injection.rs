@@ -385,6 +385,14 @@ pub fn inject_metadata(
                                 )]
                                 write!(&mut attrs, r#" sizes="{}""#, escape_html(sizes)).unwrap();
                             }
+                            if let Some(icon_type) = &icon.icon_type {
+                                #[expect(
+                                    clippy::unwrap_used,
+                                    reason = "write! to String never fails"
+                                )]
+                                write!(&mut attrs, r#" type="{}""#, escape_html(icon_type))
+                                    .unwrap();
+                            }
                             #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
                             writeln!(&mut meta_tags, "<link {attrs} />").unwrap();
                         }

@@ -309,6 +309,11 @@ pub(crate) async fn collect_page_metadata(
             Ok(mut metadata) => {
                 inject_og_image_into_metadata(state, &route_match.pathname, &mut metadata, context)
                     .await;
+                crate::server::routing::app_icons::inject_app_icons_into_metadata(
+                    &state.app_icons,
+                    &route_match.pathname,
+                    &mut metadata,
+                );
                 Some(metadata)
             }
             Err(e) => {
@@ -1204,6 +1209,41 @@ pub async fn handle_app_route(
                     }
                 }
             }
+
+            if state.config.is_development()
+                && let Some(icon) = state
+                    .app_icons
+                    .iter()
+                    .find(|icon| icon.url.trim_start_matches('/') == path_without_leading_slash)
+            {
+                let app_dir = state.project_root.join("src").join("app");
+                if let Ok(file_path) = validate_safe_path(&app_dir, &icon.file_path).await
+                    && let Ok(metadata) = fs::metadata(&file_path).await
+                    && metadata.is_file()
+                {
+                    match fs::read(&file_path).await {
+                        Ok(content) => {
+                            let cache_control = &state.config.caching.static_files;
+                            #[expect(
+                                clippy::expect_used,
+                                reason = "Response::builder() with valid components never fails"
+                            )]
+                            return Ok(Response::builder()
+                                .header("content-type", icon.content_type.as_str())
+                                .header("cache-control", cache_control)
+                                .body(Body::from(content))
+                                .expect("Valid app icon response"));
+                        }
+                        Err(e) => {
+                            tracing::error!(
+                                "Failed to read app icon {}: {}",
+                                file_path.display(),
+                                e
+                            );
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -1970,6 +2010,7 @@ mod tests {
             response_cache: Arc::new(ResponseCache::new(CacheConfig::default())),
             static_fast_cache: Arc::new(StaticFastCache::new()),
             og_generator: None,
+            app_icons: Arc::new(Vec::new()),
             project_root: path::PathBuf::from("."),
             image_optimizer: None,
             cache_registry,
