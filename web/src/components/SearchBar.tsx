@@ -50,8 +50,12 @@ export default function SearchBar() {
 
     debounceRef.current = setTimeout(() => {
       startTransition(async () => {
-        const searchResults = await searchDocumentation(query)
-        setRawResults(searchResults)
+        try {
+          const searchResults = await searchDocumentation(query)
+          setRawResults(Array.isArray(searchResults) ? searchResults : [])
+        } catch {
+          setRawResults([])
+        }
       })
     }, 150)
 

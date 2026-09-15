@@ -201,6 +201,12 @@ declare global {
       }
       injectMetadataIntoDocument?: (element: unknown, metadata: unknown) => unknown
       buildMetadataHeadElements?: (metadata: unknown) => unknown[]
+      hoistBlockingHeadScripts?: (element: unknown) => {
+        readonly element: unknown
+        readonly html: string
+      }
+      blockingHeadScriptsHtml?: string
+      blockingHeadByStream?: Record<string, string>
       componentLoader?: {
         registerComponent: (
           moduleSpecifier: string,

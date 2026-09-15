@@ -506,7 +506,7 @@ impl LayoutRenderer {
             false,
             true,
             None,
-            false,
+            true,
         )?;
 
         let set_search_script = format!(
@@ -556,7 +556,7 @@ impl LayoutRenderer {
             false,
             true,
             None,
-            false,
+            true,
         )?;
 
         let set_search_script = format!(
@@ -627,7 +627,7 @@ impl LayoutRenderer {
                     true,
                     true,
                     Some(&stream_id),
-                    false,
+                    true,
                 )?;
 
                 let script = format!(
@@ -712,7 +712,7 @@ impl LayoutRenderer {
                 loading_component_id.is_some(),
                 false,
                 None,
-                false,
+                true,
             )?;
 
             let rsc_payload = {
@@ -866,6 +866,13 @@ impl LayoutRenderer {
                             return;
                         }}
 
+                        const byStreamHead = globalThis['~rari']?.blockingHeadByStream;
+                        const blockingHead = (byStreamHead && __RARI_STREAM_ID__ in byStreamHead)
+                            ? byStreamHead[__RARI_STREAM_ID__]
+                            : '';
+                        if (byStreamHead && __RARI_STREAM_ID__ in byStreamHead)
+                            delete byStreamHead[__RARI_STREAM_ID__];
+
                         const renderStreaming = globalThis['~rari']?.renderStreamingDocument;
                         if (typeof renderStreaming !== 'function') {{
                             throw new Error('[rari] streaming_fizz.ts not loaded');
@@ -873,7 +880,7 @@ impl LayoutRenderer {
 
                         await renderStreaming({{
                             capturedElement,
-                            headContent: {head_content_json},
+                            headContent: (typeof blockingHead === 'string' ? blockingHead : '') + {head_content_json},
                             caughtErrors,
                             streamId: __RARI_STREAM_ID__,
                         }});
@@ -993,6 +1000,9 @@ impl LayoutRenderer {
                                 return {{ ok: false, error: 'No captured element' }};
                             }}
 
+                            const blockingHead = globalThis['~rari']?.blockingHeadScriptsHtml ?? '';
+                            globalThis['~rari'].blockingHeadScriptsHtml = '';
+
                             const renderStatic = globalThis['~rari']?.renderStaticDocument;
                             if (typeof renderStatic !== 'function') {{
                                 return {{ ok: false, error: 'renderStaticDocument not loaded' }};
@@ -1000,7 +1010,7 @@ impl LayoutRenderer {
 
                             const html = await renderStatic({{
                                 capturedElement,
-                                headContent: {head_content_json},
+                                headContent: (typeof blockingHead === 'string' ? blockingHead : '') + {head_content_json},
                                 caughtErrors,
                             }});
 

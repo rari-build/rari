@@ -272,6 +272,101 @@ function asDocumentElement(element: unknown): Record<string, unknown> | null {
   return null
 }
 
+function escapeAttr(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+}
+
+function isHeadScript(child: unknown): child is Record<string, unknown> {
+  return isRecord(child) && (child.type === 'script' || child.type === 'SCRIPT')
+}
+
+function scriptChildText(children: unknown): string {
+  if (typeof children === 'string') return children
+  if (typeof children === 'number') return String(children)
+  if (!Array.isArray(children)) return ''
+  let text = ''
+  for (const child of children) {
+    if (typeof child === 'string' || typeof child === 'number') text += child
+  }
+  return text
+}
+
+function serializeHeadScript(element: Readonly<Record<string, unknown>>): string {
+  const props = isRecord(element.props) ? element.props : {}
+  let attrs = ''
+
+  for (const [key, value] of Object.entries(props)) {
+    if (key === 'children' || key === 'dangerouslySetInnerHTML') continue
+    if (value == null || value === false) continue
+    if (value === true) {
+      attrs += ` ${key}`
+      continue
+    }
+    if (typeof value === 'string' || typeof value === 'number') {
+      attrs += ` ${key}="${escapeAttr(String(value))}"`
+    }
+  }
+
+  const innerHtml = isRecord(props.dangerouslySetInnerHTML)
+    ? props.dangerouslySetInnerHTML.__html
+    : undefined
+  if (typeof innerHtml === 'string') return `<script${attrs}>${innerHtml}</script>`
+
+  return `<script${attrs}>${scriptChildText(props.children)}</script>`
+}
+
+export function hoistBlockingHeadScripts(element: unknown): {
+  readonly element: unknown
+  readonly html: string
+} {
+  const react = g.React
+  if (react == null || typeof react.cloneElement !== 'function') {
+    return { element, html: '' }
+  }
+
+  const documentElement = asDocumentElement(element)
+  if (documentElement == null) return { element, html: '' }
+
+  const props = isRecord(documentElement.props) ? documentElement.props : {}
+  const children = elementChildren(props)
+  const headIndex = children.findIndex(
+    child => isRecord(child) && (child.type === 'head' || child.type === 'HEAD'),
+  )
+  if (headIndex < 0) return { element, html: '' }
+
+  const head = children[headIndex]
+  if (!isRecord(head)) return { element, html: '' }
+
+  const headProps = isRecord(head.props) ? head.props : {}
+  const headChildren = elementChildren(headProps)
+  const kept: unknown[] = []
+  const scripts: string[] = []
+
+  for (const child of headChildren) {
+    if (isHeadScript(child)) {
+      scripts.push(serializeHeadScript(child))
+      continue
+    }
+    kept.push(child)
+  }
+
+  if (scripts.length === 0) return { element, html: '' }
+
+  const updatedHead = react.cloneElement(head, { ...headProps, children: kept })
+  const updatedChildren = [...children]
+  updatedChildren[headIndex] = updatedHead
+  const updatedDocument = react.cloneElement(documentElement, {
+    ...props,
+    children: updatedChildren,
+  })
+
+  return { element: updatedDocument, html: `${scripts.join('\n')}\n` }
+}
+
 export function injectMetadataIntoDocument(element: unknown, metadata: unknown): unknown {
   if (!isRecord(metadata) || Object.keys(metadata).length === 0) return element
   const react = g.React
@@ -308,5 +403,6 @@ export function injectMetadataIntoDocument(element: unknown, metadata: unknown):
 g['~rari'] ??= {}
 g['~rari'].injectMetadataIntoDocument = injectMetadataIntoDocument
 g['~rari'].buildMetadataHeadElements = buildMetadataHeadElements
+g['~rari'].hoistBlockingHeadScripts = hoistBlockingHeadScripts
 
 export type { MetadataParams }
