@@ -16,6 +16,10 @@ const CONFIG_OBJECT_EXPORT_REGEX = /export\s+const\s+config\s*=\s*\{/
 const OBJECT_MATCHER_REGEX = /matcher\s*:\s*\{/
 const STRING_MATCHER_REGEX = /matcher\s*:\s*(['"`])([^'"`]+)\1/
 const ARRAY_MATCHER_REGEX = /matcher\s*:\s*\[([^\]]*)\]/
+const QUOTED_OBJECT_MATCHER_REGEX = /(['"`])matcher\1\s*:\s*\{/
+const QUOTED_STRING_MATCHER_REGEX = /(['"`])matcher\1\s*:\s*(['"`])([^'"`]+)\2/
+const QUOTED_ARRAY_MATCHER_REGEX = /(['"`])matcher\1\s*:\s*\[([^\]]*)\]/
+const QUOTED_MATCHER_KEY_REGEX = /(['"`])matcher\1\s*:/
 const ARRAY_STRING_ITEM_REGEX = /(['"`])([^'"`]+)\1/g
 const MATCHER_SHORTHAND_REGEX = /(?:^|[{,]\s*)matcher\s*[,}]/
 
@@ -870,13 +874,19 @@ function isTopLevelConfigMatcher(configObject: string, matcherIndex: number): bo
   return getCodeBraceDepthAt(configObject, matcherIndex) === 1
 }
 
+function isQuotedMatcherKeyMatch(matchText: string): boolean {
+  return matchText.startsWith("'") || matchText.startsWith('"') || matchText.startsWith('`')
+}
+
 function findTopLevelMatcherMatch(configObject: string, pattern: RegExp): RegExpExecArray | null {
   const globalPattern = new RegExp(
     pattern.source,
     pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`,
   )
   for (const match of configObject.matchAll(globalPattern)) {
-    const keyIndex = match.index + match[0].indexOf('matcher')
+    const keyIndex = isQuotedMatcherKeyMatch(match[0])
+      ? match.index
+      : match.index + match[0].indexOf('matcher')
     if (keyIndex >= match.index && isTopLevelConfigMatcher(configObject, keyIndex)) return match
   }
   return null
@@ -1113,6 +1123,7 @@ function hasUnsafeTopLevelComputedMatcherKey(configObject: string): boolean {
     }
 
     if (expectPropertyKey && frame.braceDepth === 1 && !/\s/.test(ch)) {
+      if (ch === '.' && next === '.' && configObject.charAt(i + 2) === '.') return true
       if (ch === '[') {
         const parsed = parseComputedPropertyKey(configObject, i)
         if (parsed?.forceRuntime === true) return true
@@ -1145,14 +1156,20 @@ function extractMatcher(code: string): {
 
   if (hasUnsafeTopLevelComputedMatcherKey(configObject)) return { forceRuntime: true }
 
-  if (findTopLevelMatcherMatch(configObject, OBJECT_MATCHER_REGEX) != null) {
+  if (
+    findTopLevelMatcherMatch(configObject, OBJECT_MATCHER_REGEX) != null ||
+    findTopLevelMatcherMatch(configObject, QUOTED_OBJECT_MATCHER_REGEX) != null
+  ) {
     return { forceRuntime: true }
   }
 
-  const stringMatch = findTopLevelMatcherMatch(configObject, STRING_MATCHER_REGEX)
+  const stringMatch =
+    findTopLevelMatcherMatch(configObject, STRING_MATCHER_REGEX) ??
+    findTopLevelMatcherMatch(configObject, QUOTED_STRING_MATCHER_REGEX)
   if (stringMatch != null) {
-    const quote = stringMatch[1]
-    const raw = stringMatch[2]
+    const isQuotedKey = isQuotedMatcherKeyMatch(stringMatch[0])
+    const quote = isQuotedKey ? stringMatch[2] : stringMatch[1]
+    const raw = isQuotedKey ? stringMatch[3] : stringMatch[2]
     if (quote === "'" || quote === '"' || quote === '`') {
       if (quote === '`' && raw.includes('${')) return { forceRuntime: true }
       const matchEnd = stringMatch.index + stringMatch[0].length
@@ -1163,18 +1180,26 @@ function extractMatcher(code: string): {
     }
   }
 
-  const arrayMatch = findTopLevelMatcherMatch(configObject, ARRAY_MATCHER_REGEX)
+  const arrayMatch =
+    findTopLevelMatcherMatch(configObject, ARRAY_MATCHER_REGEX) ??
+    findTopLevelMatcherMatch(configObject, QUOTED_ARRAY_MATCHER_REGEX)
   if (arrayMatch != null) {
     const matchEnd = arrayMatch.index + arrayMatch[0].length
     if (!isMatcherPropertyDelimiter(configObject, matchEnd)) return { forceRuntime: true }
-    return parseStaticStringArrayBody(arrayMatch[1])
+    const isQuotedKey = isQuotedMatcherKeyMatch(arrayMatch[0])
+    return parseStaticStringArrayBody(isQuotedKey ? arrayMatch[2] : arrayMatch[1])
   }
 
   if (findTopLevelMatcherMatch(configObject, MATCHER_SHORTHAND_REGEX) != null) {
     return resolveModuleLevelMatcherBinding(code) ?? { forceRuntime: true }
   }
 
-  if (findTopLevelMatcherMatch(configObject, /matcher\s*:/) != null) return { forceRuntime: true }
+  if (
+    findTopLevelMatcherMatch(configObject, /matcher\s*:/) != null ||
+    findTopLevelMatcherMatch(configObject, QUOTED_MATCHER_KEY_REGEX) != null
+  ) {
+    return { forceRuntime: true }
+  }
 
   return { forceRuntime: false }
 }

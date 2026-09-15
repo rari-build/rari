@@ -348,6 +348,72 @@ describe('analyzeProxySource', () => {
     expect(dynamicAnalysis.matcher).toBeUndefined()
   })
 
+  it('forces runtime for top-level config spreads that may omit matcher', () => {
+    const code = `
+      const extra = { matcher: '/from-spread' }
+      export const config = { ...extra }
+
+      export function proxy(request) {
+        if (request.rariUrl.pathname === '/from-spread')
+          return RariResponse.redirect(new URL('/y', request.url), 308)
+        return RariResponse.next()
+      }
+    `
+    const analysis = analyzeProxySource(code)
+    expect(analysis.requiresRuntime).toBe(true)
+    expect(analysis.matcher).toBeUndefined()
+    expect(analysis.rules).toEqual([])
+  })
+
+  it('preserves nested spreads while still extracting top-level matcher', () => {
+    const code = `
+      export const config = {
+        matcher: '/x',
+        options: { ...{ a: 1 } },
+      }
+
+      export function proxy(request) {
+        return RariResponse.next()
+      }
+    `
+    const analysis = analyzeProxySource(code)
+    expect(analysis.requiresRuntime).toBe(false)
+    expect(analysis.matcher).toBe('/x')
+  })
+
+  it('forces runtime for quoted matcher keys with non-literal values', () => {
+    const code = `
+      const paths = '/dash'
+      export const config = { 'matcher': paths }
+
+      export function proxy(request) {
+        if (request.rariUrl.pathname === '/dash')
+          return RariResponse.redirect(new URL('/y', request.url), 308)
+        return RariResponse.next()
+      }
+    `
+    const analysis = analyzeProxySource(code)
+    expect(analysis.requiresRuntime).toBe(true)
+    expect(analysis.matcher).toBeUndefined()
+    expect(analysis.rules).toEqual([])
+  })
+
+  it('extracts quoted matcher keys with static string values', () => {
+    const code = `
+      export const config = { "matcher": '/dash' }
+
+      export function proxy(request) {
+        if (request.rariUrl.pathname === '/dash')
+          return RariResponse.redirect(new URL('/y', request.url), 308)
+        return RariResponse.next()
+      }
+    `
+    const analysis = analyzeProxySource(code)
+    expect(analysis.requiresRuntime).toBe(false)
+    expect(analysis.matcher).toBe('/dash')
+    expect(analysis.rules).toHaveLength(1)
+  })
+
   it('ignores nested options.matcher when extracting the config matcher', () => {
     const nestedOnly = `
       export const config = {
