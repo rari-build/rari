@@ -28,6 +28,6 @@ export default function BlogPage() {
 }
 
 export const metadata: Metadata = {
-  title: 'Blog | rari App Router',
+  title: 'Blog | rari Playground',
   description: 'Read our latest blog posts',
 }

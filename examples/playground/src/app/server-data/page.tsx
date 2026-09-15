@@ -69,6 +69,6 @@ export default async function ServerDataPage() {
 }
 
 export const metadata: Metadata = {
-  title: 'Server Data | rari App Router',
+  title: 'Server Data | rari Playground',
   description: 'Async server component data fetching',
 }

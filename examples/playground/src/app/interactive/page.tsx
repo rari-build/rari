@@ -34,6 +34,6 @@ export default function InteractivePage() {
 }
 
 export const metadata: Metadata = {
-  title: 'Interactive Components | rari App Router',
+  title: 'Interactive Components | rari Playground',
   description: 'Testing client components with RSC',
 }

@@ -366,7 +366,7 @@ importers:
         specifier: catalog:build
         version: 0.3.1(@types/node@26.5.1)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@4.1.11)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)
 
-  examples/app-router-example:
+  examples/playground:
     dependencies:
       rari:
         specifier: workspace:*

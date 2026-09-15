@@ -35,10 +35,7 @@ describe('analyzeProxySource', () => {
   })
 
   it('requires runtime for dynamic cookie and rewrite logic', () => {
-    const code = readFileSync(
-      path.join(repoRoot, 'examples/app-router-example/src/proxy.ts'),
-      'utf-8',
-    )
+    const code = readFileSync(path.join(repoRoot, 'examples/playground/src/proxy.ts'), 'utf-8')
     const analysis = analyzeProxySource(code)
 
     expect(analysis.requiresRuntime).toBe(true)

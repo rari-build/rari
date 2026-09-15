@@ -4,9 +4,9 @@ export default function AboutPage() {
   return (
     <div className="space-y-8">
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 md:p-12">
-        <h1 className="text-4xl font-bold text-gray-900 mb-4">About This Example</h1>
+        <h1 className="text-4xl font-bold text-gray-900 mb-4">About This Playground</h1>
         <p className="text-lg text-gray-600 leading-relaxed max-w-3xl">
-          This example demonstrates the rari app router, a server-first routing system inspired by
+          This playground exercises the rari app router, a server-first routing system inspired by
           Next.js App Router. It showcases modern React patterns including Server Components, Server
           Actions, and streaming.
         </p>
@@ -181,6 +181,6 @@ export default function AboutPage() {
 }
 
 export const metadata: Metadata = {
-  title: 'About | rari App Router',
+  title: 'About | rari Playground',
   description: 'Learn about the rari app router implementation',
 }

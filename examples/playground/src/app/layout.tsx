@@ -93,6 +93,6 @@ export default function Layout({ children }: LayoutProps) {
 }
 
 export const metadata: Metadata = {
-  title: 'rari App Router Example',
-  description: 'Testing the new app router implementation',
+  title: 'rari Playground',
+  description: 'Feature playground for the rari framework',
 }

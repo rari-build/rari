@@ -47,7 +47,7 @@
         "eslint-plugin-unused-imports"
       ]
     },
-    "examples/app-router-example": {
+    "examples/playground": {
       "entry": ["src/app/**/*.{ts,tsx}"],
       "project": ["src/**/*.{ts,tsx,css}"],
       "ignore": [
