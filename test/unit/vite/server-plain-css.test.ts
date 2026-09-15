@@ -107,4 +107,49 @@ describe('server plain css imports', () => {
     const cssPath = path.join(outDir, cssHref.replace(/^\//, ''))
     expect(fs.readFileSync(cssPath, 'utf-8')).toContain('.acme { color: blue; }')
   })
+
+  it('preserves default exports for css?raw and css?url without stylesheet assets', async () => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-css-query-'))
+    const appDir = path.join(dir, 'src', 'app')
+    fs.mkdirSync(appDir, { recursive: true })
+    fs.writeFileSync(path.join(appDir, 'theme.css'), '.theme { color: green; }')
+    const pagePath = path.join(appDir, 'page.tsx')
+    fs.writeFileSync(
+      pagePath,
+      `import raw from './theme.css?raw'\nimport href from './theme.css?url'\nexport default function Page() { return raw + href }\n`,
+    )
+
+    const outDir = path.join(dir, 'dist')
+    fs.mkdirSync(path.join(outDir, 'server'), { recursive: true })
+    fs.writeFileSync(
+      path.join(outDir, 'server', 'manifest.json'),
+      JSON.stringify({ components: {}, buildTime: new Date().toISOString() }),
+    )
+
+    const builder = new ServerComponentBuilder(dir, {
+      outDir: 'dist',
+      rscDir: 'server',
+      manifestPath: 'server/manifest.json',
+      minify: false,
+      alias: {},
+    })
+
+    const result = await builder.rebuildComponent(pagePath)
+    expect(result.success).toBe(true)
+
+    const bundle = fs.readFileSync(result.bundlePath, 'utf-8')
+    expect(bundle).toContain('.theme { color: green; }')
+    expect(bundle).toContain('/src/app/theme.css')
+
+    const manifestPath = path.join(outDir, 'server', 'manifest.json')
+    const parsed: unknown = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
+    if (!isRecord(parsed) || !isRecord(parsed.components)) {
+      throw new Error('manifest.json missing components')
+    }
+    const entry = Object.values(parsed.components)[0]
+    if (!isRecord(entry) || !Array.isArray(entry.css)) {
+      throw new Error('manifest component missing css array')
+    }
+    expect(entry.css).toEqual([])
+  })
 })

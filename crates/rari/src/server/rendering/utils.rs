@@ -150,6 +150,7 @@ import 'http://localhost:{vite_port}/@id/virtual:rari-entry-client';
 }
 
 #[cfg(test)]
+#[expect(clippy::expect_used)]
 mod tests {
     use std::{
         env, fs, process,
