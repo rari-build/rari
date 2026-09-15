@@ -294,11 +294,11 @@ export function injectMetadataIntoDocument(element: unknown, metadata: unknown):
     const head = children[headIndex]
     if (!isRecord(head)) return element
     const headProps = isRecord(head.props) ? head.props : {}
-    const nextHeadChildren = [...elementChildren(headProps), ...metaElements]
-    const nextHead = react.cloneElement(head, { ...headProps, children: nextHeadChildren })
-    const nextChildren = [...children]
-    nextChildren[headIndex] = nextHead
-    return react.cloneElement(documentElement, { ...props, children: nextChildren })
+    const updatedHeadChildren = [...elementChildren(headProps), ...metaElements]
+    const updatedHead = react.cloneElement(head, { ...headProps, children: updatedHeadChildren })
+    const updatedChildren = [...children]
+    updatedChildren[headIndex] = updatedHead
+    return react.cloneElement(documentElement, { ...props, children: updatedChildren })
   }
 
   const head = react.createElement('head', null, ...metaElements)

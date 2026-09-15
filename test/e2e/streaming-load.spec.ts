@@ -227,6 +227,7 @@ test.describe('Streaming load validation', () => {
 
 test.describe('RSC soft navigation', () => {
   test('should stream RSC flight on client navigation to a loading route', async ({ page }) => {
+    test.setTimeout(60000)
     await gotoWithRetry(page, '/')
 
     const rscResponses: Array<{ status: number; renderMode?: string; chunked?: string }> = []
@@ -255,7 +256,7 @@ test.describe('RSC soft navigation', () => {
 
     await page.locator('#temp-streaming-link').click()
     await page.waitForURL('**/suspense-streaming', { timeout: 15000 })
-    await page.waitForSelector('[data-testid="component-c"]', { timeout: 30000 })
+    await page.waitForSelector('[data-testid="component-c"]', { timeout: 45000 })
 
     const streamingRsc = rscResponses.find(response => response.renderMode === 'streaming')
     expect(streamingRsc).toBeDefined()

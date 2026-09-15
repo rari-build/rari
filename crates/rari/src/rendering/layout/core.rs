@@ -624,7 +624,7 @@ impl LayoutRenderer {
                     route_match,
                     context,
                     loading_component_id.as_deref(),
-                    false,
+                    true,
                     true,
                     Some(&stream_id),
                     false,
@@ -634,18 +634,18 @@ impl LayoutRenderer {
                     r"(async function() {{
                         {FIZZ_CHUNK_PUMP_HELPER}
                         try {{
-                        try {{ {composition_script} }} catch(e) {{
+                        try {{ await ({composition_script}); }} catch(e) {{
                             console.error('[rari] Composition error in RSC streaming nav:', e);
                         }}
 
                         const byStream = globalThis['~rari']?.capturedByStream;
                         const capturedElement = (byStream && __RARI_STREAM_ID__ in byStream)
                             ? byStream[__RARI_STREAM_ID__]
-                            : globalThis['~rari']?.capturedElement;
+                            : undefined;
                         if (byStream && __RARI_STREAM_ID__ in byStream)
                             delete byStream[__RARI_STREAM_ID__];
                         if (!capturedElement) {{
-                            return;
+                            throw new Error('[rari] RSC streaming nav: no captured element for stream');
                         }}
 
                         const pumpRsc = globalThis['~rari']?.pumpRscElementStream;
@@ -858,7 +858,7 @@ impl LayoutRenderer {
                         const byStream = globalThis['~rari']?.capturedByStream;
                         const capturedElement = (byStream && __RARI_STREAM_ID__ in byStream)
                             ? byStream[__RARI_STREAM_ID__]
-                            : globalThis['~rari']?.capturedElement;
+                            : undefined;
                         if (byStream && __RARI_STREAM_ID__ in byStream)
                             delete byStream[__RARI_STREAM_ID__];
                         if (!capturedElement) {{

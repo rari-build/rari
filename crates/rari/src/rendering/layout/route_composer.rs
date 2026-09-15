@@ -486,6 +486,7 @@ mod tests {
         assert!(script.contains("elementToRender = layout1"));
         assert!(script.contains("React.createElement(LayoutComponent0"));
         assert!(script.contains("LayoutComponent1(__layoutProps1)"));
+        assert!(!script.contains("React.createElement(LayoutComponent1"));
         let dashboard_pos = script.find("DashboardLayout").expect("dashboard");
         let error_pos = script.find("errorBoundedElement =").expect("error wrap");
         let root_pos = script.find("RootLayout").expect("root");
