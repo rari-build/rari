@@ -109,7 +109,22 @@ export class ErrorBoundaryWrapper extends Component<
         return <ErrorComponent error={this.state.error} reset={this.reset} />
       }
 
-      return null
+      return (
+        <div
+          className="rari-error"
+          role="alert"
+          style={{
+            color: 'red',
+            border: '1px solid red',
+            padding: '10px',
+            borderRadius: '4px',
+            backgroundColor: '#fff5f5',
+          }}
+        >
+          <strong>Error loading content: </strong>
+          {this.state.error.message}
+        </div>
+      )
     }
 
     return this.props.children

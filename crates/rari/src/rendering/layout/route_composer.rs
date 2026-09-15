@@ -110,23 +110,43 @@ impl RouteComposer {
             current_element = template_var;
         }
 
-        for (i, layout) in layouts.iter().rev().enumerate() {
-            let layout_var = format!("layout{i}");
+        let nested_layouts: Vec<&LayoutInfo> =
+            layouts.iter().filter(|layout| !layout.is_root).collect();
+        let root_layouts: Vec<&LayoutInfo> =
+            layouts.iter().filter(|layout| layout.is_root).collect();
 
+        let mut layout_index = 0usize;
+        for layout in nested_layouts.iter().rev() {
+            let layout_var = format!("layout{layout_index}");
             script.push_str(&Self::generate_layout_wrapper(
-                i,
+                layout_index,
                 &layout.component_id,
                 &current_element,
                 &layout_var,
                 pathname_json,
             ));
-
             current_element = layout_var;
+            layout_index += 1;
+        }
+
+        script.push_str(&Self::generate_error_boundary_wrap(&current_element, error_boundary));
+        current_element = "errorBoundedElement".to_string();
+
+        for layout in root_layouts.iter().rev() {
+            let layout_var = format!("layout{layout_index}");
+            script.push_str(&Self::generate_layout_wrapper(
+                layout_index,
+                &layout.component_id,
+                &current_element,
+                &layout_var,
+                pathname_json,
+            ));
+            current_element = layout_var;
+            layout_index += 1;
         }
 
         script.push_str(&Self::generate_rsc_conversion(
             &current_element,
-            error_boundary,
             metadata_json,
             defer_rsc,
             capture_stream_id,
@@ -209,39 +229,38 @@ impl RouteComposer {
         )
     }
 
+    fn generate_error_boundary_wrap(
+        current_element: &str,
+        error_boundary: Option<&ErrorBoundaryInfo>,
+    ) -> String {
+        let error_component_id = error_boundary.map(|b| b.component_id.as_str()).unwrap_or("");
+        let error_component_id_json =
+            serde_json::to_string(error_component_id).unwrap_or_else(|_| "\"\"".to_string());
+        format!(
+            r"
+                const errorComponentId = {error_component_id_json};
+                const wrapperComponentId = 'virtual:error-boundary-wrapper.tsx#ErrorBoundaryWrapper';
+
+                const ErrorWrapper = {{
+                    $$typeof: Symbol.for('react.client.reference'),
+                    $$id: wrapperComponentId,
+                    $$async: false,
+                }};
+                const errorBoundedElement = globalThis.React.createElement(
+                    ErrorWrapper,
+                    {{ errorComponentId: errorComponentId }},
+                    {current_element}
+                );
+                "
+        )
+    }
+
     fn generate_rsc_conversion(
         final_element: &str,
-        error_boundary: Option<&ErrorBoundaryInfo>,
         metadata_json: &str,
         defer_rsc: bool,
         capture_stream_id: Option<&str>,
     ) -> String {
-        let error_boundary_wrap = if let Some(boundary) = error_boundary {
-            let error_component_id_json = serde_json::to_string(&boundary.component_id)
-                .unwrap_or_else(|_| "\"\"".to_string());
-            format!(
-                r"
-                {{
-                    const errorComponentId = {error_component_id_json};
-                    const wrapperComponentId = 'virtual:error-boundary-wrapper.tsx#ErrorBoundaryWrapper';
-
-                    const ErrorWrapper = {{
-                        $$typeof: Symbol.for('react.client.reference'),
-                        $$id: wrapperComponentId,
-                        $$async: false,
-                    }};
-                    elementToRender = globalThis.React.createElement(
-                        ErrorWrapper,
-                        {{ errorComponentId: errorComponentId }},
-                        elementToRender
-                    );
-                }}
-                "
-            )
-        } else {
-            String::new()
-        };
-
         let rsc_render = if defer_rsc {
             if let Some(stream_id) = capture_stream_id {
                 let stream_id_json =
@@ -279,7 +298,6 @@ impl RouteComposer {
                 const startRSC = performance.now();
 
                 let elementToRender = {final_element};
-                {error_boundary_wrap}
                 {rsc_render}
 
                 timings.rscConversion = performance.now() - startRSC;
@@ -348,7 +366,8 @@ mod tests {
             RouteComposer::build_composition_script("const pageElement = Page();", &[], "\"/\"");
 
         assert!(script.contains("const pageElement = Page();"));
-        assert!(script.contains("elementToRender = pageElement"));
+        assert!(script.contains("errorBoundedElement"));
+        assert!(script.contains("elementToRender = errorBoundedElement"));
         assert!(!script.contains("LayoutComponent"));
     }
 
@@ -367,8 +386,10 @@ mod tests {
         );
 
         assert!(script.contains("const pageElement = Page();"));
+        assert!(script.contains("errorBoundedElement"));
         assert!(script.contains("LayoutComponent0"));
         assert!(script.contains("RootLayout"));
+        assert!(script.contains("children: errorBoundedElement"));
         assert!(script.contains("elementToRender = layout0"));
     }
 
@@ -397,7 +418,13 @@ mod tests {
         assert!(script.contains("LayoutComponent1"));
         assert!(script.contains("DashboardLayout"));
         assert!(script.contains("RootLayout"));
+        assert!(script.contains("children: pageElement"));
+        assert!(script.contains("children: errorBoundedElement"));
         assert!(script.contains("elementToRender = layout1"));
+        let dashboard_pos = script.find("DashboardLayout").expect("dashboard");
+        let error_pos = script.find("errorBoundedElement =").expect("error wrap");
+        let root_pos = script.find("RootLayout").expect("root");
+        assert!(dashboard_pos < error_pos && error_pos < root_pos);
     }
 
     #[test]
@@ -420,8 +447,7 @@ mod tests {
 
     #[test]
     fn test_generate_rsc_conversion() {
-        let conversion =
-            RouteComposer::generate_rsc_conversion("finalElement", None, "{}", false, None);
+        let conversion = RouteComposer::generate_rsc_conversion("finalElement", "{}", false, None);
 
         assert!(conversion.contains("elementToRender = finalElement"));
         assert!(conversion.contains("renderToRsc(elementToRender"));
@@ -431,45 +457,44 @@ mod tests {
     }
 
     #[test]
-    fn test_generate_rsc_conversion_with_error_boundary() {
+    fn test_generate_error_boundary_wrap_default() {
+        let wrap = RouteComposer::generate_error_boundary_wrap("pageElement", None);
+
+        assert!(wrap.contains("virtual:error-boundary-wrapper.tsx#ErrorBoundaryWrapper"));
+        assert!(wrap.contains(r#"const errorComponentId = """#));
+        assert!(wrap.contains("errorBoundedElement"));
+        assert!(wrap.contains("pageElement"));
+    }
+
+    #[test]
+    fn test_generate_error_boundary_wrap_with_custom_component() {
         let error_boundary = ErrorBoundaryInfo {
             component_id: "src/app/test/error.tsx".to_string(),
             file_path: "test/error.tsx".to_string(),
         };
 
-        let conversion = RouteComposer::generate_rsc_conversion(
-            "finalElement",
-            Some(&error_boundary),
-            "{}",
-            false,
-            None,
-        );
+        let wrap =
+            RouteComposer::generate_error_boundary_wrap("pageElement", Some(&error_boundary));
 
-        assert!(conversion.contains("virtual:error-boundary-wrapper.tsx#ErrorBoundaryWrapper"));
-        assert!(conversion.contains("src/app/test/error.tsx"));
-        assert!(conversion.contains("errorComponentId"));
-        assert!(conversion.contains("ErrorWrapper"));
-        assert!(conversion.contains("renderToRsc(elementToRender"));
+        assert!(wrap.contains("virtual:error-boundary-wrapper.tsx#ErrorBoundaryWrapper"));
+        assert!(wrap.contains("src/app/test/error.tsx"));
+        assert!(wrap.contains("errorComponentId"));
+        assert!(wrap.contains("ErrorWrapper"));
+        assert!(wrap.contains("errorBoundedElement"));
     }
 
     #[test]
     fn test_generate_rsc_conversion_with_metadata() {
         let metadata_json = r#"{"title":"Test Page","description":"A test"}"#;
-        let conversion = RouteComposer::generate_rsc_conversion(
-            "finalElement",
-            None,
-            metadata_json,
-            false,
-            None,
-        );
+        let conversion =
+            RouteComposer::generate_rsc_conversion("finalElement", metadata_json, false, None);
 
         assert!(conversion.contains(r#"metadata: {"title":"Test Page","description":"A test"}"#));
     }
 
     #[test]
     fn test_generate_rsc_conversion_deferred() {
-        let conversion =
-            RouteComposer::generate_rsc_conversion("finalElement", None, "{}", true, None);
+        let conversion = RouteComposer::generate_rsc_conversion("finalElement", "{}", true, None);
 
         assert!(conversion.contains("capturedElement = elementToRender"));
         assert!(!conversion.contains("renderToRsc(elementToRender"));

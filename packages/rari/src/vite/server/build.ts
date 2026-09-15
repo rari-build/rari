@@ -2783,6 +2783,7 @@ export function createServerBuildPlugin(options: ServerBuildOptions = {}): Plugi
           await generateRobotsFile({
             appDir: path.join(projectRoot, 'src', 'app'),
             outDir: path.join(projectRoot, 'dist'),
+            aliases: resolvedAliases,
           })
         } catch (error) {
           console.warn('[rari] Failed to generate robots.txt:', error)

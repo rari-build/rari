@@ -15,13 +15,35 @@ export function hasFizzMarkers(root: Element): boolean {
   return false
 }
 
+function isIgnorableLeadingNode(el: Element): boolean {
+  const tag = el.tagName
+  if (
+    tag === 'SCRIPT' ||
+    tag === 'STYLE' ||
+    tag === 'LINK' ||
+    tag === 'META' ||
+    tag === 'NOSCRIPT'
+  ) {
+    return true
+  }
+  const getAttr = typeof el.getAttribute === 'function' ? el.getAttribute.bind(el) : null
+  if (getAttr == null) return false
+  return getAttr('data-rari-nav-transition') != null || getAttr('aria-hidden') === 'true'
+}
+
+function firstMeaningfulElementChild(root: Element): Element | null {
+  let el = root.firstElementChild
+  while (el != null && isIgnorableLeadingNode(el)) {
+    el = el.nextElementSibling
+  }
+  return el
+}
+
 export function hasServerRenderedDom(root: Element): boolean {
   if (hasFizzMarkers(root)) return true
 
-  const first = root.firstElementChild
+  const first = firstMeaningfulElementChild(root)
   if (first === null) return false
-
-  if (first.tagName === 'SCRIPT') return false
 
   return !first.classList.contains('rari-error')
 }

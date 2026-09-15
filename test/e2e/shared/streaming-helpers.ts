@@ -10,15 +10,20 @@ export async function gotoWithRetry(
   let lastError: Error | undefined
   let response: Response | null = null
 
+  const visibleContent = page
+    .locator(
+      [
+        'body > :not(script):not(style):not(link):not(meta):not(noscript):not([aria-hidden="true"]):not([data-rari-nav-transition])',
+        '[data-testid="loading"]',
+        '.rari-error',
+      ].join(', '),
+    )
+    .first()
+
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 })
-      await page
-        .locator(
-          'body > *:not([aria-hidden="true"]):not([data-rari-nav-transition]), [data-testid="loading"], .rari-error',
-        )
-        .first()
-        .waitFor({ state: 'visible', timeout: 10000 })
+      await visibleContent.waitFor({ state: 'visible', timeout: 10000 })
 
       return response
     } catch (error) {
