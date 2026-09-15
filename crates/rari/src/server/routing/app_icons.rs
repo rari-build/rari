@@ -1,3 +1,5 @@
+use rustc_hash::FxHashSet;
+
 use crate::{
     rendering::layout::{IconDescriptor, IconValue, IconsMetadata, PageMetadata},
     server::routing::AppIconEntry,
@@ -19,7 +21,7 @@ pub fn resolve_app_icons_for_route(icons: &[AppIconEntry], route_path: &str) -> 
     }
 
     let mut resolved = Vec::new();
-    let mut seen_keys = std::collections::HashSet::new();
+    let mut seen_keys = FxHashSet::default();
 
     for candidate in &candidates {
         for icon in icons.iter().filter(|icon| &icon.path == candidate) {
@@ -97,6 +99,7 @@ pub fn inject_app_icons_into_metadata(
 }
 
 #[cfg(test)]
+#[expect(clippy::expect_used, clippy::panic)]
 mod tests {
     use super::*;
 
@@ -127,6 +130,15 @@ mod tests {
         assert!(resolved.iter().any(|i| i.url == "/icon.png"));
         assert!(resolved.iter().any(|i| i.url == "/favicon.ico"));
         assert!(resolved.iter().any(|i| i.url == "/blog/apple-icon.png"));
+
+        let dynamic_icons = vec![
+            entry("/", "favicon.ico", "favicon", "/favicon.ico"),
+            entry("/blog/[slug]", "blog/[slug]/icon.png", "icon", "/blog/[slug]/icon.png"),
+        ];
+        let from_pattern = resolve_app_icons_for_route(&dynamic_icons, "/blog/[slug]");
+        assert!(from_pattern.iter().any(|i| i.url == "/blog/[slug]/icon.png"));
+        let from_pathname = resolve_app_icons_for_route(&dynamic_icons, "/blog/hello");
+        assert!(!from_pathname.iter().any(|i| i.url == "/blog/[slug]/icon.png"));
     }
 
     #[test]

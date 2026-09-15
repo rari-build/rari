@@ -17,6 +17,7 @@ import process from 'node:process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { build } from 'rolldown'
 import { buildProxyManifest } from '@/proxy/build/analyze'
+import { copyAppIconsToOutDir, parseAppIconsFromManifest } from '@/router/metadata/app-icons'
 import {
   BACKSLASH_REGEX,
   EXPORTED_CONST_FUNCTION_REGEX,
@@ -480,6 +481,12 @@ export class ServerComponentBuilder {
   private readonly moduleAnalysisCache: ModuleAnalysisCache
   private readonly discoveredExternalClientComponents = new Set<string>()
   private readonly clientComponentFiles = new Map<string, string>()
+  private layoutCssSkipSet: Set<string> | null = null
+
+  private getLayoutCssSkipSet(): Set<string> {
+    this.layoutCssSkipSet ??= resolveLayoutCssServerSkipSet(this.projectRoot, this.options.alias)
+    return this.layoutCssSkipSet
+  }
 
   recordClientComponent(filePath: string, code: string): void {
     this.clientComponentFiles.set(filePath, code)
@@ -987,7 +994,7 @@ export class ServerComponentBuilder {
   ) {
     const resolveDir = path.dirname(inputPath)
     const isProxyFile = PROXY_FILE_REGEX.test(path.basename(inputPath))
-    const layoutCssSkip = resolveLayoutCssServerSkipSet(this.projectRoot, this.options.alias)
+    const layoutCssSkip = this.getLayoutCssSkipSet()
 
     const clientComponentRefs = new Map<string, string>()
     const serverActionRefs = new Map<string, { actionId: string; hasDefaultExport: boolean }>()
@@ -2819,15 +2826,13 @@ export function createServerBuildPlugin(options: ServerBuildOptions = {}): Plugi
         }
 
         try {
-          const { copyAppIconsToOutDir, parseAppIconsFromManifest } =
-            await import('@/router/metadata/app-icons')
-          const routesPath = path.join(projectRoot, 'dist', 'server', 'routes.json')
+          const routesPath = path.join(resolvedViteOutDir, 'server', 'routes.json')
           if (fs.existsSync(routesPath)) {
             const icons = parseAppIconsFromManifest(fs.readFileSync(routesPath, 'utf-8'))
             if (icons.length > 0) {
               await copyAppIconsToOutDir({
                 appDir: path.join(projectRoot, 'src', 'app'),
-                outDir: path.join(projectRoot, 'dist'),
+                outDir: resolvedViteOutDir,
                 icons,
               })
             }

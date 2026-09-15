@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { resolveAlias } from '@/shared/utils/alias-resolver'
-import { parseJsonRecord } from '@/shared/utils/type-guards'
+import { getErrnoCode, parseJsonRecord } from '@/shared/utils/type-guards'
 import { readImageDimensions } from './dimensions'
 
 const IMAGE_EXT_RE = /\.(?:avif|gif|jpe?g|png|webp)$/i
@@ -198,6 +198,15 @@ function sourceMapFilePath(outDir: string): string {
 
 function persistSharedSourceMap(outDir: string, shared: Map<string, string>): void {
   const mapPath = sourceMapFilePath(outDir)
+  if (shared.size === 0) {
+    try {
+      fs.unlinkSync(mapPath)
+    } catch (error) {
+      if (getErrnoCode(error) !== 'ENOENT') throw error
+    }
+    return
+  }
+
   fs.mkdirSync(path.dirname(mapPath), { recursive: true })
   const next: StaticImageSourceMap = Object.fromEntries(shared)
   fs.writeFileSync(mapPath, `${JSON.stringify(next, null, 2)}\n`)

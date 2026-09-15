@@ -46,9 +46,10 @@ export function findConventionImageFiles(
   return files.filter(file => pattern.test(file)).sort((a, b) => a.localeCompare(b))
 }
 
-export function publicUrlForAppIcon(routePath: string, fileName: string): string {
-  const normalizedRoute = routePath === '/' ? '' : routePath.replace(/\/$/, '')
-  return `${normalizedRoute}/${fileName}`.replace(/\/+/g, '/')
+export function publicUrlForAppIcon(relativeDir: string, fileName: string): string {
+  const normalizedDir = relativeDir.replace(BACKSLASH_REGEX, '/').replace(/^\/+|\/+$/g, '')
+  if (normalizedDir === '') return `/${fileName}`
+  return `/${normalizedDir}/${fileName}`.replace(/\/+/g, '/')
 }
 
 function readPngSize(buffer: Uint8Array): { width: number; height: number } | undefined {
@@ -95,7 +96,7 @@ export function createAppIconEntry(options: {
     path: options.routePath,
     filePath,
     kind: options.kind,
-    url: publicUrlForAppIcon(options.routePath, options.fileName),
+    url: publicUrlForAppIcon(options.relativeDir, options.fileName),
     contentType: contentTypeForIconExt(ext),
     width: options.width,
     height: options.height,

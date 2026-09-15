@@ -31,6 +31,11 @@ use crate::{
 
 const WARMUP_CONCURRENCY: usize = 10;
 
+fn is_warmup_interrupted(error: &RariError) -> bool {
+    let message = error.to_string();
+    message.contains("cancelled") || message.contains("canceled")
+}
+
 /// Serialize warmup renders to prevent V8 global state corruption.
 /// The RSC+Fizz pipeline shares V8 globals between the mutex-protected
 /// RSC render and the non-mutex Fizz render. Without serialization,
@@ -82,6 +87,13 @@ pub async fn warm_cache(state: &ServerState) {
                 match warm_route(state, app_router, path).await {
                     Ok(()) => {
                         success_count.fetch_add(1, Ordering::Relaxed);
+                    }
+                    Err(e) if is_warmup_interrupted(&e) => {
+                        tracing::debug!(
+                            "[rari] Cache warmup: interrupted while warming '{}': {}",
+                            path,
+                            e
+                        );
                     }
                     Err(e) => {
                         tracing::error!("[rari] Cache warmup: Failed to warm '{}': {}", path, e);
@@ -162,7 +174,7 @@ async fn warm_route(
         && state.response_cache.config.enabled
         && state.config.server.origin.is_some();
 
-    let html = wrap_html_with_metadata(html, context.metadata.as_ref(), state);
+    let html = wrap_html_with_metadata(html, state);
     let etag = response::ResponseCache::generate_etag(html.as_bytes());
 
     if for_response_cache {
@@ -279,6 +291,5 @@ fn create_warmup_context(route_match: &AppRouteMatch) -> LayoutRenderContext {
         pathname: route_match.pathname.clone(),
         template_navigation_id: None,
         metadata: None,
-        streaming_head_extra: None,
     }
 }

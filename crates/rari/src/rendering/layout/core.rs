@@ -35,7 +35,6 @@ use crate::{
         },
         config::{CacheLayerConfig, Config},
         middleware::request_context::RequestContext,
-        rendering::metadata_injection::merge_streaming_head_content,
         routing::app_router::AppRouteMatch,
     },
     utils::path::path_to_file_url,
@@ -826,19 +825,15 @@ impl LayoutRenderer {
                         let css_links = RscHtmlRenderer::css_links_for_route(&route_match);
                         let cache_template = config.rsc_html.cache_template;
                         let is_dev_mode = config.is_development();
+                        let vite_host = config.vite.host.clone();
                         let vite_port = config.vite.port;
                         let template = html_renderer
-                            .load_template(cache_template, is_dev_mode, vite_port)
+                            .load_template(cache_template, is_dev_mode, &vite_host, vite_port)
                             .await?;
                         let template = RscHtmlRenderer::inject_css_links(&template, &css_links);
 
-                        let head_content = {
-                            let template_head = RscHtmlRenderer::client_head_fragment(&template);
-                            merge_streaming_head_content(
-                                template_head,
-                                context.streaming_head_extra.as_deref(),
-                            )
-                        };
+                        let head_content =
+                            RscHtmlRenderer::client_head_fragment(&template).to_string();
 
                         let head_content_json = serde_json::to_string(&head_content)
                             .unwrap_or_else(|_| "\"\"".to_string());
@@ -964,9 +959,10 @@ impl LayoutRenderer {
                         let css_links = RscHtmlRenderer::css_links_for_route(&route_match);
                         let cache_template = config.rsc_html.cache_template;
                         let is_dev_mode = config.is_development();
+                        let vite_host = config.vite.host.clone();
                         let vite_port = config.vite.port;
                         let template = html_renderer
-                            .load_template(cache_template, is_dev_mode, vite_port)
+                            .load_template(cache_template, is_dev_mode, &vite_host, vite_port)
                             .await?;
                         let template = RscHtmlRenderer::inject_css_links(&template, &css_links);
 
@@ -1026,6 +1022,7 @@ impl LayoutRenderer {
                             script,
                             cache_template,
                             is_dev_mode,
+                            vite_host,
                             vite_port,
                         ))
                     })
@@ -1039,6 +1036,7 @@ impl LayoutRenderer {
                     script,
                     cache_template,
                     is_dev_mode,
+                    vite_host,
                     vite_port,
                 ) = prepared;
 
@@ -1046,10 +1044,12 @@ impl LayoutRenderer {
                     let script = script.clone();
                     let html_renderer = Arc::clone(&html_renderer);
                     let css_links = css_links.clone();
+                    let vite_host = vite_host.clone();
                     move |rt: Arc<dyn JsRuntimeInterface>| {
                         let script = script.clone();
                         let html_renderer = Arc::clone(&html_renderer);
                         let css_links = css_links.clone();
+                        let vite_host = vite_host.clone();
                         async move {
                             let result = rt
                                 .execute_script("static_document_render".to_string(), script)
@@ -1077,6 +1077,7 @@ impl LayoutRenderer {
                                     html,
                                     cache_template,
                                     is_dev_mode,
+                                    &vite_host,
                                     vite_port,
                                     &css_links,
                                 )
