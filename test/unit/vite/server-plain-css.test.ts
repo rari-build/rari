@@ -243,4 +243,90 @@ describe('server plain css imports', () => {
     expect(emitted).toContain('.page { color: red; }')
     expect(emitted).not.toContain('@import')
   })
+
+  it('strips qualified bare package @imports including layer and media', async () => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-tw-qualified-css-'))
+    const appDir = path.join(dir, 'src', 'app')
+    fs.mkdirSync(appDir, { recursive: true })
+    fs.writeFileSync(
+      path.join(appDir, 'page.css'),
+      '@import \'tailwindcss\' layer(base);\n@import "acme" layer(utilities) screen and (min-width: 40rem);\n.page { color: teal; }\n',
+    )
+    const pagePath = path.join(appDir, 'page.tsx')
+    fs.writeFileSync(
+      pagePath,
+      `import './page.css'\nexport default function Page() { return null }\n`,
+    )
+
+    const outDir = path.join(dir, 'dist')
+    fs.mkdirSync(path.join(outDir, 'server'), { recursive: true })
+    fs.writeFileSync(
+      path.join(outDir, 'server', 'manifest.json'),
+      JSON.stringify({ components: {}, buildTime: new Date().toISOString() }),
+    )
+
+    const builder = new ServerComponentBuilder(dir, {
+      outDir: 'dist',
+      rscDir: 'server',
+      manifestPath: 'server/manifest.json',
+      minify: false,
+      alias: {},
+    })
+
+    const result = await builder.rebuildComponent(pagePath)
+    expect(result.success).toBe(true)
+
+    const cssHrefs = readManifestCssHrefs(path.join(outDir, 'server', 'manifest.json'))
+    expect(cssHrefs.length).toBeGreaterThan(0)
+    const cssHref = cssHrefs[0]
+    expect(cssHref).toBeTypeOf('string')
+    const emitted = fs.readFileSync(path.join(outDir, cssHref.replace(/^\//, '')), 'utf-8')
+    expect(emitted).toContain('.page { color: teal; }')
+    expect(emitted).not.toContain('@import')
+    expect(emitted).not.toContain('layer(')
+    expect(emitted).not.toContain('screen and')
+  })
+
+  it('inlines nested local relative @imports into the server css asset', async () => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-nested-css-'))
+    const appDir = path.join(dir, 'src', 'app')
+    fs.mkdirSync(appDir, { recursive: true })
+    fs.writeFileSync(path.join(appDir, 'nested.css'), '.nested { color: blue; }\n')
+    fs.writeFileSync(
+      path.join(appDir, 'page.css'),
+      "@import './nested.css';\n.page { color: red; }\n",
+    )
+    const pagePath = path.join(appDir, 'page.tsx')
+    fs.writeFileSync(
+      pagePath,
+      `import './page.css'\nexport default function Page() { return null }\n`,
+    )
+
+    const outDir = path.join(dir, 'dist')
+    fs.mkdirSync(path.join(outDir, 'server'), { recursive: true })
+    fs.writeFileSync(
+      path.join(outDir, 'server', 'manifest.json'),
+      JSON.stringify({ components: {}, buildTime: new Date().toISOString() }),
+    )
+
+    const builder = new ServerComponentBuilder(dir, {
+      outDir: 'dist',
+      rscDir: 'server',
+      manifestPath: 'server/manifest.json',
+      minify: false,
+      alias: {},
+    })
+
+    const result = await builder.rebuildComponent(pagePath)
+    expect(result.success).toBe(true)
+
+    const nestedCssHrefs = readManifestCssHrefs(path.join(outDir, 'server', 'manifest.json'))
+    expect(nestedCssHrefs.length).toBeGreaterThan(0)
+    const nestedCssHref = nestedCssHrefs[0]
+    expect(nestedCssHref).toBeTypeOf('string')
+    const emitted = fs.readFileSync(path.join(outDir, nestedCssHref.replace(/^\//, '')), 'utf-8')
+    expect(emitted).toContain('.nested { color: blue; }')
+    expect(emitted).toContain('.page { color: red; }')
+    expect(emitted).not.toContain("@import './nested.css'")
+  })
 })
