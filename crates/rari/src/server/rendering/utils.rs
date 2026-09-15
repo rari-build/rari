@@ -6,7 +6,10 @@ use crate::{rendering::r#static::RscHtmlRenderer, server::config::Config};
 
 async fn load_client_head(config: &Config) -> Option<String> {
     if config.is_development() {
-        return Some(RscHtmlRenderer::generate_dev_client_head(config.vite.port));
+        return Some(RscHtmlRenderer::generate_dev_client_head(
+            &config.vite.host,
+            config.vite.port,
+        ));
     }
 
     let path = config.public_dir().join("rari-client-head.html");
@@ -89,12 +92,12 @@ async fn inject_content_into_template(
     ))
 }
 
-pub fn inject_vite_client(html: &str, vite_port: u16) -> String {
+pub fn inject_vite_client(html: &str, vite_host: &str, vite_port: u16) -> String {
     if html.contains("/@vite/client") || html.contains("@vite/client") {
         return html.to_string();
     }
 
-    let client_head = RscHtmlRenderer::generate_dev_client_head(vite_port);
+    let client_head = RscHtmlRenderer::generate_dev_client_head(vite_host, vite_port);
 
     if let Some(head_end) = html.find("</head>") {
         let mut result = String::with_capacity(html.len() + client_head.len());

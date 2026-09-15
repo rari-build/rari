@@ -39,9 +39,11 @@ describe('app icon conventions', () => {
     ])
   })
 
-  it('builds public urls for root and nested routes', () => {
-    expect(publicUrlForAppIcon('/', 'favicon.ico')).toBe('/favicon.ico')
-    expect(publicUrlForAppIcon('/blog', 'icon.png')).toBe('/blog/icon.png')
+  it('builds public urls from physical dirs including route groups', () => {
+    expect(publicUrlForAppIcon('', 'favicon.ico')).toBe('/favicon.ico')
+    expect(publicUrlForAppIcon('blog', 'icon.png')).toBe('/blog/icon.png')
+    expect(publicUrlForAppIcon('(marketing)', 'icon.png')).toBe('/(marketing)/icon.png')
+    expect(publicUrlForAppIcon('(shop)/products', 'icon.png')).toBe('/(shop)/products/icon.png')
   })
 
   it('discovers favicon only at app root and icons in nested segments', async () => {
@@ -68,6 +70,46 @@ describe('app icon conventions', () => {
     })
     expect(blogIcons.map(icon => icon.kind)).toEqual(['icon'])
     expect(blogIcons[0]?.url).toBe('/blog/icon.png')
+  })
+
+  it('gives distinct urls for same icon filename in different route groups', async () => {
+    const appDir = await makeTempDir()
+    await fs.mkdir(path.join(appDir, '(marketing)'))
+    await fs.mkdir(path.join(appDir, '(shop)'))
+    await fs.writeFile(path.join(appDir, '(marketing)', 'icon.png'), 'marketing')
+    await fs.writeFile(path.join(appDir, '(shop)', 'icon.png'), 'shop')
+
+    const marketingIcons = await discoverAppIconsInDir({
+      appDir,
+      relativeDir: '(marketing)',
+      routePath: '/',
+      files: ['icon.png', 'page.tsx'],
+    })
+    const shopIcons = await discoverAppIconsInDir({
+      appDir,
+      relativeDir: '(shop)',
+      routePath: '/',
+      files: ['icon.png', 'page.tsx'],
+    })
+
+    expect(marketingIcons).toHaveLength(1)
+    expect(shopIcons).toHaveLength(1)
+    expect(marketingIcons[0]?.path).toBe('/')
+    expect(shopIcons[0]?.path).toBe('/')
+    expect(marketingIcons[0]?.url).toBe('/(marketing)/icon.png')
+    expect(shopIcons[0]?.url).toBe('/(shop)/icon.png')
+    expect(marketingIcons[0]?.url).not.toBe(shopIcons[0]?.url)
+
+    const outDir = await makeTempDir()
+    await copyAppIconsToOutDir({
+      appDir,
+      outDir,
+      icons: [...marketingIcons, ...shopIcons],
+    })
+    expect(await fs.readFile(path.join(outDir, '(marketing)', 'icon.png'), 'utf8')).toBe(
+      'marketing',
+    )
+    expect(await fs.readFile(path.join(outDir, '(shop)', 'icon.png'), 'utf8')).toBe('shop')
   })
 
   it('copies icons into outDir at their public urls', async () => {

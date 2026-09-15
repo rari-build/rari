@@ -69,7 +69,6 @@ mod tests {
             pathname: "/test".to_string(),
             template_navigation_id: None,
             metadata: None,
-            streaming_head_extra: None,
         };
 
         let route_match = AppRouteMatch {
@@ -126,7 +125,6 @@ mod tests {
             pathname: "/test".to_string(),
             template_navigation_id: None,
             metadata: None,
-            streaming_head_extra: None,
         };
 
         let script = LayoutRenderer::build_composition_script(
@@ -176,7 +174,6 @@ mod tests {
             pathname: "/test".to_string(),
             template_navigation_id: None,
             metadata: None,
-            streaming_head_extra: None,
         };
 
         let script = LayoutRenderer::build_composition_script(
@@ -230,7 +227,6 @@ mod tests {
             pathname: "/test".to_string(),
             template_navigation_id: None,
             metadata: None,
-            streaming_head_extra: None,
         };
 
         let script =
@@ -272,7 +268,6 @@ mod tests {
             pathname: "/test".to_string(),
             template_navigation_id: None,
             metadata: None,
-            streaming_head_extra: None,
         };
 
         let script_ssr =
@@ -324,7 +319,6 @@ mod tests {
             pathname: "/test".to_string(),
             template_navigation_id: None,
             metadata: None,
-            streaming_head_extra: None,
         };
 
         let script_ssr = LayoutRenderer::build_composition_script(
@@ -382,7 +376,6 @@ mod tests {
             pathname: "/test".to_string(),
             template_navigation_id: None,
             metadata: None,
-            streaming_head_extra: None,
         };
 
         let script_ssr =
@@ -433,7 +426,6 @@ mod tests {
             pathname: "/test".to_string(),
             template_navigation_id: None,
             metadata: None,
-            streaming_head_extra: None,
         };
 
         let script_ssr =

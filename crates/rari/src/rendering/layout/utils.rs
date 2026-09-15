@@ -161,7 +161,6 @@ pub fn create_layout_context(
         pathname,
         template_navigation_id: None,
         metadata: None,
-        streaming_head_extra: None,
     }
 }
 

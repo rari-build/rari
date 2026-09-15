@@ -503,6 +503,19 @@ describe('createStaticImageRolldownPlugin', () => {
     expect(fs.existsSync(omitPath)).toBe(true)
   })
 
+  it('does not write an empty static image source map', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-static-image-'))
+    const outDir = resolveStaticImageOutDir(dir)
+    const mapPath = path.join(outDir, 'server', 'static-image-sources.json')
+    fs.mkdirSync(path.dirname(mapPath), { recursive: true })
+    fs.writeFileSync(mapPath, '{}\n')
+
+    beginStaticImageSourceMapBuild(outDir)
+    finalizeStaticImageSourceMapBuild(outDir)
+
+    expect(fs.existsSync(mapPath)).toBe(false)
+  })
+
   it('keeps build-session entries across idempotent begin calls', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-static-image-'))
     const srcDir = path.join(dir, 'src')

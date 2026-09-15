@@ -19,6 +19,7 @@ extension!(
         "http/headers.ts",
         "cache/use_cache.ts",
         "react/metadata_collector.ts",
+        "react/metadata_head.ts",
         "rsc/rsc_modules.ts",
         "rsc/server_functions.ts"
     ],

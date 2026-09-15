@@ -20,8 +20,12 @@ test.describe.serial('Streaming Suspense E2E Tests', () => {
     const times = await getServerTimestamps(page, ['outer-content', 'component-inner'])
     expect(times['outer-content']).toBeLessThan(times['component-inner'])
 
-    const bodyHtml = await page.locator('body').innerHTML()
-    const withoutScripts = bodyHtml.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+    const withoutScripts = await page.evaluate(() => {
+      const clone = document.body.cloneNode(true)
+      if (!(clone instanceof HTMLElement)) return ''
+      for (const el of clone.querySelectorAll('script')) el.remove()
+      return clone.innerHTML
+    })
     expect(withoutScripts).not.toContain('react.suspense')
   })
 

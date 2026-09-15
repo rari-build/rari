@@ -1,6 +1,12 @@
 use cow_utils::CowUtils;
 use serde_json::{Map, Value};
 
+use crate::rendering::layout::types::{LayoutRenderContext, PageMetadata};
+
+pub fn apply_page_metadata(context: &mut LayoutRenderContext, metadata: Option<PageMetadata>) {
+    context.metadata = metadata;
+}
+
 pub fn merge_metadata(parent: &Value, child: &Value) -> Value {
     let parent_obj = parent.as_object();
     let Some(child_obj) = child.as_object() else {

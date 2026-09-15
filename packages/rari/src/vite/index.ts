@@ -2190,7 +2190,6 @@ export const createTemporaryReferenceSet = module.exports.createTemporaryReferen
 
     generateBundle(_options, bundle) {
       const head = buildClientHeadFromBundle(bundle)
-      if (head === '') return
 
       this.emitFile({
         type: 'asset',

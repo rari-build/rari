@@ -93,9 +93,7 @@ fn find_closing_head_tag(html: &str) -> Option<usize> {
                     if !boundary_ok {
                         continue;
                     }
-                    let Some(gt_rel) = bytes[i..].iter().position(|&b| b == b'>') else {
-                        return None;
-                    };
+                    let gt_rel = bytes[i..].iter().position(|&b| b == b'>')?;
                     let gt = i + gt_rel;
                     let open_end = gt + 1;
                     if gt >= 1 && bytes[gt - 1] == b'/' {
@@ -202,6 +200,7 @@ impl RscHtmlRenderer {
         &self,
         cache_enabled: bool,
         is_dev_mode: bool,
+        vite_host: &str,
         vite_port: u16,
     ) -> Result<String, RariError> {
         if cache_enabled {
@@ -212,7 +211,7 @@ impl RscHtmlRenderer {
         }
 
         let template = if is_dev_mode {
-            Self::generate_dev_client_head(vite_port)
+            Self::generate_dev_client_head(vite_host, vite_port)
         } else {
             self.read_client_head_file().await?
         };
@@ -225,11 +224,19 @@ impl RscHtmlRenderer {
         Ok(template)
     }
 
-    pub(crate) fn generate_dev_client_head(vite_port: u16) -> String {
+    pub(crate) fn browser_vite_host(host: &str) -> &str {
+        match host {
+            "0.0.0.0" | "::" | "[::]" => "localhost",
+            other => other,
+        }
+    }
+
+    pub(crate) fn generate_dev_client_head(vite_host: &str, vite_port: u16) -> String {
+        let host = Self::browser_vite_host(vite_host);
         format!(
-            r#"<script type="module" src="http://localhost:{vite_port}/@vite/client"></script>
+            r#"<script type="module" src="http://{host}:{vite_port}/@vite/client"></script>
 <script type="module">
-import 'http://localhost:{vite_port}/@id/virtual:rari-entry-client';
+import 'http://{host}:{vite_port}/@id/virtual:rari-entry-client';
 </script>
 "#
         )
@@ -237,9 +244,13 @@ import 'http://localhost:{vite_port}/@id/virtual:rari-entry-client';
 
     async fn read_client_head_file(&self) -> Result<String, RariError> {
         let path = self.public_dir.join("rari-client-head.html");
-        fs::read_to_string(&path).await.map_err(|_| {
-            RariError::internal(format!("Client head file not found. Tried: {}", path.display()))
-        })
+        match fs::read_to_string(&path).await {
+            Ok(content) => Ok(content),
+            Err(_) => {
+                tracing::warn!(path = %path.display(), "Client head file not found");
+                Ok(String::new())
+            }
+        }
     }
 
     pub(crate) fn client_head_fragment(template: &str) -> &str {
@@ -610,6 +621,7 @@ import 'http://localhost:{vite_port}/@id/virtual:rari-entry-client';
         html_content: String,
         cache_template: bool,
         is_dev_mode: bool,
+        vite_host: &str,
         vite_port: u16,
         css_links: &[String],
     ) -> Result<String, RariError> {
@@ -626,7 +638,7 @@ import 'http://localhost:{vite_port}/@id/virtual:rari-entry-client';
         let client_head = if is_dev_mode {
             String::new()
         } else {
-            self.load_template(cache_template, is_dev_mode, vite_port).await?
+            self.load_template(cache_template, is_dev_mode, vite_host, vite_port).await?
         };
 
         let mut final_html = html_content;
@@ -724,11 +736,18 @@ mod tests {
 
     #[test]
     fn test_generate_dev_client_head() {
-        let template = RscHtmlRenderer::generate_dev_client_head(5173);
+        let template = RscHtmlRenderer::generate_dev_client_head("localhost", 5173);
         assert!(template.contains("http://localhost:5173/@vite/client"));
         assert!(template.contains("http://localhost:5173/@id/virtual:rari-entry-client"));
         assert!(!template.contains("<!DOCTYPE html>"));
         assert!(!template.contains(r#"id="root""#));
+
+        let remote = RscHtmlRenderer::generate_dev_client_head("192.168.1.10", 5173);
+        assert!(remote.contains("http://192.168.1.10:5173/@vite/client"));
+        assert!(remote.contains("http://192.168.1.10:5173/@id/virtual:rari-entry-client"));
+
+        let bind_all = RscHtmlRenderer::generate_dev_client_head("0.0.0.0", 5173);
+        assert!(bind_all.contains("http://localhost:5173/@vite/client"));
     }
 
     #[test]
@@ -896,9 +915,9 @@ import '/entry.js';
 
     #[test]
     fn test_find_closing_head_tag_ignores_script_opener_inside_comment() {
-        let html = r#"<html><head>
+        let html = r"<html><head>
 <!-- <script> -->
-</head><body><script>real()</script></body></html>"#;
+</head><body><script>real()</script></body></html>";
         let idx = find_closing_head_tag(html).expect("real head close");
         assert_eq!(&html[idx..idx + 7], "</head>");
         assert!(idx < html.find("<body>").expect("body"));
@@ -1058,7 +1077,7 @@ import '/entry.js';
         let renderer = RscHtmlRenderer::new(runtime);
 
         let err = renderer
-            .assemble_document("<main>Page</main>".to_string(), false, true, 5173, &[])
+            .assemble_document("<main>Page</main>".to_string(), false, true, "localhost", 5173, &[])
             .await
             .expect_err("fragment HTML should be rejected");
 
@@ -1074,7 +1093,7 @@ import '/entry.js';
             "<!DOCTYPE html><html><head></head><body><main>Page</main></body></html>";
 
         let html = renderer
-            .assemble_document(html_content.to_string(), false, true, 5173, &css_links)
+            .assemble_document(html_content.to_string(), false, true, "localhost", 5173, &css_links)
             .await
             .expect("assemble_document should succeed");
 

@@ -2,6 +2,10 @@
 
 import { useEffect } from 'react'
 
+async function loadSentryInit() {
+  return import('@/lib/sentry-init')
+}
+
 export function SentryInit() {
   useEffect(() => {
     const dsn = import.meta.env.VITE_SENTRY_DSN
@@ -14,7 +18,7 @@ export function SentryInit() {
         clearTimeout(timer)
         timer = undefined
       }
-      void import('@/lib/sentry-init')
+      void loadSentryInit()
       document.removeEventListener('click', loadSentry)
       document.removeEventListener('scroll', loadSentry)
       document.removeEventListener('keydown', loadSentry)

@@ -124,6 +124,7 @@ impl RouteComposer {
                 &current_element,
                 &layout_var,
                 pathname_json,
+                false,
             ));
             current_element = layout_var;
             layout_index += 1;
@@ -140,6 +141,7 @@ impl RouteComposer {
                 &current_element,
                 &layout_var,
                 pathname_json,
+                true,
             ));
             current_element = layout_var;
             layout_index += 1;
@@ -161,7 +163,27 @@ impl RouteComposer {
         current_element: &str,
         layout_var: &str,
         pathname_json: &str,
+        expand_document: bool,
     ) -> String {
+        let layout_result = if expand_document {
+            format!(
+                r#"
+                const __layoutProps{index} = {{ children: {current_element}, pathname: {pathname_json} }};
+                let {layout_var} = LayoutComponent{index}(__layoutProps{index});
+                if ({layout_var} != null && typeof {layout_var}.then === 'function') {{
+                    {layout_var} = await {layout_var};
+                }}
+                "#
+            )
+        } else {
+            format!(
+                r#"
+                const layoutResult{index} = React.createElement(LayoutComponent{index}, {{ children: {current_element}, pathname: {pathname_json} }});
+                const {layout_var} = layoutResult{index};
+                "#
+            )
+        };
+
         format!(
             r#"
                 const startLayout{index} = performance.now();
@@ -170,8 +192,7 @@ impl RouteComposer {
                     throw new Error('Layout component {layout_component_id} not found');
                 }}
 
-                const layoutResult{index} = React.createElement(LayoutComponent{index}, {{ children: {current_element}, pathname: {pathname_json} }});
-                const {layout_var} = layoutResult{index};
+                {layout_result}
                 timings.layout{index} = performance.now() - startLayout{index};
                 "#
         )
@@ -298,6 +319,18 @@ impl RouteComposer {
                 const startRSC = performance.now();
 
                 let elementToRender = {final_element};
+                const __rariMetadata = {metadata_json};
+                if (
+                    __rariMetadata &&
+                    typeof __rariMetadata === 'object' &&
+                    Object.keys(__rariMetadata).length > 0 &&
+                    typeof globalThis['~rari']?.injectMetadataIntoDocument === 'function'
+                ) {{
+                    elementToRender = await globalThis['~rari'].injectMetadataIntoDocument(
+                        elementToRender,
+                        __rariMetadata,
+                    );
+                }}
                 {rsc_render}
 
                 timings.rscConversion = performance.now() - startRSC;
@@ -391,6 +424,8 @@ mod tests {
         assert!(script.contains("RootLayout"));
         assert!(script.contains("children: errorBoundedElement"));
         assert!(script.contains("elementToRender = layout0"));
+        assert!(script.contains("LayoutComponent0(__layoutProps0)"));
+        assert!(!script.contains("React.createElement(LayoutComponent0"));
     }
 
     #[test]
@@ -421,6 +456,8 @@ mod tests {
         assert!(script.contains("children: pageElement"));
         assert!(script.contains("children: errorBoundedElement"));
         assert!(script.contains("elementToRender = layout1"));
+        assert!(script.contains("React.createElement(LayoutComponent0"));
+        assert!(script.contains("LayoutComponent1(__layoutProps1)"));
         let dashboard_pos = script.find("DashboardLayout").expect("dashboard");
         let error_pos = script.find("errorBoundedElement =").expect("error wrap");
         let root_pos = script.find("RootLayout").expect("root");
@@ -435,6 +472,7 @@ mod tests {
             "pageElement",
             "layout0",
             "\"/test\"",
+            false,
         );
 
         assert!(wrapper.contains("LayoutComponent0"));
@@ -443,6 +481,23 @@ mod tests {
         assert!(wrapper.contains("layout0"));
         assert!(wrapper.contains("\"/test\""));
         assert!(wrapper.contains("timings.layout0"));
+        assert!(wrapper.contains("React.createElement(LayoutComponent0"));
+    }
+
+    #[test]
+    fn test_generate_root_layout_wrapper_expands_document() {
+        let wrapper = RouteComposer::generate_layout_wrapper(
+            0,
+            "RootLayout",
+            "errorBoundedElement",
+            "layout0",
+            "\"/\"",
+            true,
+        );
+
+        assert!(wrapper.contains("LayoutComponent0(__layoutProps0)"));
+        assert!(!wrapper.contains("React.createElement(LayoutComponent0"));
+        assert!(wrapper.contains("await layout0"));
     }
 
     #[test]
@@ -490,6 +545,9 @@ mod tests {
             RouteComposer::generate_rsc_conversion("finalElement", metadata_json, false, None);
 
         assert!(conversion.contains(r#"metadata: {"title":"Test Page","description":"A test"}"#));
+        assert!(conversion.contains("injectMetadataIntoDocument"));
+        assert!(conversion.contains("await globalThis['~rari'].injectMetadataIntoDocument"));
+        assert!(conversion.contains("__rariMetadata"));
     }
 
     #[test]

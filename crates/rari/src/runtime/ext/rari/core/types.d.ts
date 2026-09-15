@@ -124,6 +124,7 @@ declare global {
         props: unknown,
         ...children: readonly unknown[]
       ) => unknown
+      cloneElement: (element: unknown, props?: unknown, ...children: readonly unknown[]) => unknown
       Fragment: symbol
       Suspense: symbol
       use: <T>(usable: T | Promise<T>) => T
@@ -198,6 +199,8 @@ declare global {
           searchParams: Readonly<Record<string, string>>,
         ) => Promise<unknown[]>
       }
+      injectMetadataIntoDocument?: (element: unknown, metadata: unknown) => Promise<unknown>
+      buildMetadataHeadElements?: (metadata: unknown) => unknown[]
       componentLoader?: {
         registerComponent: (
           moduleSpecifier: string,
