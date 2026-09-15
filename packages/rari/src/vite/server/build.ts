@@ -48,6 +48,7 @@ import {
   resolveModuleCachePath,
 } from '../analysis/module-cache'
 import { collectSourceFilePaths, normalizeScanDirs } from '../analysis/source-walker'
+import { collectLayoutCssImportPaths } from '../client-head'
 import { createFontRolldownPlugin } from '../font/plugin'
 import {
   createStaticImageRolldownPlugin,
@@ -348,6 +349,25 @@ function preparePlainCssForServerAsset(
   seen: Set<string> = new Set(),
 ): string {
   return inlineLocalRelativeCssImports(filePath, stripBarePackageCssImports(css), seen)
+}
+
+function resolveLayoutCssServerSkipSet(
+  projectRoot: string,
+  aliases: Readonly<Record<string, string>>,
+): Set<string> {
+  const skip = new Set<string>()
+  for (const cssImport of collectLayoutCssImportPaths(projectRoot, aliases)) {
+    if (path.isAbsolute(cssImport)) {
+      skip.add(path.resolve(cssImport))
+      continue
+    }
+    try {
+      skip.add(createRequire(path.join(projectRoot, 'package.json')).resolve(cssImport))
+    } catch {
+      // Bare package not resolvable here; client head still owns the import.
+    }
+  }
+  return skip
 }
 
 export interface ServerBuildOptions {
@@ -966,6 +986,7 @@ export class ServerComponentBuilder {
   ) {
     const resolveDir = path.dirname(inputPath)
     const isProxyFile = PROXY_FILE_REGEX.test(path.basename(inputPath))
+    const layoutCssSkip = resolveLayoutCssServerSkipSet(this.projectRoot, this.options.alias)
 
     const clientComponentRefs = new Map<string, string>()
     const serverActionRefs = new Map<string, { actionId: string; hasDefaultExport: boolean }>()
@@ -1277,9 +1298,6 @@ export class ServerComponentBuilder {
             return null
           }
 
-          // Plain CSS (e.g. layout `import './globals.css'`) cannot be bundled by
-          // Rolldown. Stub it here; Vite client entry pulls layout CSS for Tailwind.
-          // Preserve Vite semantics for `?raw` / `?url` default exports.
           if (source.endsWith('.css') || /\.css(?:\?.*)?$/.test(source)) {
             const queryIndex = source.search(/[?#]/)
             const bare = queryIndex === -1 ? source : source.slice(0, queryIndex)
@@ -1364,7 +1382,7 @@ export class ServerComponentBuilder {
 
           if (id.startsWith(CSS_GLOBAL_PREFIX)) {
             const filePath = id.slice(CSS_GLOBAL_PREFIX.length)
-            if (cssModules) {
+            if (cssModules && !layoutCssSkip.has(path.resolve(filePath))) {
               try {
                 const content = fs.readFileSync(filePath, 'utf-8')
                 const forServerAsset = preparePlainCssForServerAsset(filePath, content)

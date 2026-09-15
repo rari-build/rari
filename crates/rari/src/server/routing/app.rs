@@ -30,10 +30,14 @@ use tokio::{
 };
 
 use crate::{
-    rendering::layout::{
-        ChunkedContentType, LayoutRenderContext, LayoutRenderer, OpenGraphImage,
-        OpenGraphImageDescriptor, OpenGraphMetadata, PageMetadata, RenderResult, TwitterMetadata,
-        component_dist_path, create_layout_context, drain_chunked_stream, sort_flight_protocol,
+    rendering::{
+        layout::{
+            ChunkedContentType, LayoutRenderContext, LayoutRenderer, OpenGraphImage,
+            OpenGraphImageDescriptor, OpenGraphMetadata, PageMetadata, RenderResult,
+            TwitterMetadata, component_dist_path, create_layout_context, drain_chunked_stream,
+            sort_flight_protocol,
+        },
+        r#static::RscHtmlRenderer,
     },
     server::{
         ServerState,
@@ -1097,6 +1101,19 @@ fn fallback_html_response(html: Bytes, is_not_found: bool) -> Response {
         .expect("Valid HTML response")
 }
 
+fn emergency_fallback_shell(client_head: &str) -> String {
+    format!(
+        r#"<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+{client_head}</head>
+<body></body>
+</html>"#
+    )
+}
+
 pub async fn render_fallback_html(
     state: &ServerState,
     is_not_found: bool,
@@ -1109,49 +1126,15 @@ pub async fn render_fallback_html(
 
     let vite_port = state.config.vite.port;
     let cache_generation = state.html_cache.generation();
-    let mut html_shell = if state.config.is_development() {
-        format!(
-            r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>rari App Router</title>
-  <script type="module" src="http://localhost:{vite_port}/@vite/client"></script>
-  <script type="module">
-    import 'http://localhost:{vite_port}/@id/virtual:rari-entry-client';
-  </script>
-</head>
-<body></body>
-</html>"#
-        )
-    } else if let Ok(client_head) =
-        fs::read_to_string(state.config.public_dir().join("rari-client-head.html")).await
-    {
-        format!(
-            r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>rari App Router</title>
-  {client_head}
-</head>
-<body></body>
-</html>"#
-        )
+    let client_head = if state.config.is_development() {
+        RscHtmlRenderer::generate_dev_client_head(vite_port)
     } else {
-        r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>rari App Router</title>
-</head>
-<body></body>
-</html>"#
-            .to_string()
+        fs::read_to_string(state.config.public_dir().join("rari-client-head.html"))
+            .await
+            .unwrap_or_default()
     };
+
+    let mut html_shell = emergency_fallback_shell(&client_head);
 
     if state.config.is_development() {
         html_shell = pretty_print_html(&html_shell);

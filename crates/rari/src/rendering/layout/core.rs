@@ -826,8 +826,10 @@ impl LayoutRenderer {
                         let css_links = RscHtmlRenderer::css_links_for_route(&route_match);
                         let cache_template = config.rsc_html.cache_template;
                         let is_dev_mode = config.is_development();
-                        let template =
-                            html_renderer.load_template(cache_template, is_dev_mode).await?;
+                        let vite_port = config.vite.port;
+                        let template = html_renderer
+                            .load_template(cache_template, is_dev_mode, vite_port)
+                            .await?;
                         let template = RscHtmlRenderer::inject_css_links(&template, &css_links);
 
                         let head_content = {
@@ -962,8 +964,10 @@ impl LayoutRenderer {
                         let css_links = RscHtmlRenderer::css_links_for_route(&route_match);
                         let cache_template = config.rsc_html.cache_template;
                         let is_dev_mode = config.is_development();
-                        let template =
-                            html_renderer.load_template(cache_template, is_dev_mode).await?;
+                        let vite_port = config.vite.port;
+                        let template = html_renderer
+                            .load_template(cache_template, is_dev_mode, vite_port)
+                            .await?;
                         let template = RscHtmlRenderer::inject_css_links(&template, &css_links);
 
                         let head_content =
@@ -1022,13 +1026,21 @@ impl LayoutRenderer {
                             script,
                             cache_template,
                             is_dev_mode,
+                            vite_port,
                         ))
                     })
                     .await?
                 };
 
-                let (runtime, html_renderer, css_links, script, cache_template, is_dev_mode) =
-                    prepared;
+                let (
+                    runtime,
+                    html_renderer,
+                    css_links,
+                    script,
+                    cache_template,
+                    is_dev_mode,
+                    vite_port,
+                ) = prepared;
 
                 let render_static = {
                     let script = script.clone();
@@ -1061,7 +1073,13 @@ impl LayoutRenderer {
                                 .to_string();
 
                             let assembled = html_renderer
-                                .assemble_document(html, cache_template, is_dev_mode, &css_links)
+                                .assemble_document(
+                                    html,
+                                    cache_template,
+                                    is_dev_mode,
+                                    vite_port,
+                                    &css_links,
+                                )
                                 .await?;
 
                             let is_dynamic =
