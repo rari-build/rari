@@ -3,7 +3,6 @@
 use std::{
     env,
     io::{Cursor, Error},
-    path::PathBuf,
     string::String,
     sync::Arc,
     time::Instant,
@@ -64,7 +63,7 @@ use crate::{
                 apply_blocking_streaming_metadata, inject_metadata, streaming_metadata_chunk,
             },
             pretty_html::pretty_print_html,
-            utils::{inject_assets_into_html, inject_vite_client},
+            utils::inject_assets_into_html,
         },
         routing::app_router::AppRouteMatch,
     },
@@ -1102,94 +1101,67 @@ pub async fn render_fallback_html(
     state: &ServerState,
     is_not_found: bool,
 ) -> Result<Response, StatusCode> {
-    let index_path = if state.config.is_development() {
-        let root_index = PathBuf::from("index.html");
-        if fs::try_exists(&root_index).await.unwrap_or(false) {
-            root_index
-        } else {
-            state.config.public_dir().join("index.html")
-        }
-    } else {
-        state.config.public_dir().join("index.html")
-    };
-
-    if fs::try_exists(&index_path).await.unwrap_or(false) {
-        if state.config.is_production()
-            && let Some(html) = state.html_cache.get()
-        {
-            return Ok(fallback_html_response(html, is_not_found));
-        }
-
-        // Capture before the async disk read so a concurrent clear() cannot
-        // be undone by this request writing stale HTML back into the cache.
-        let cache_generation = state.config.is_production().then(|| state.html_cache.generation());
-
-        if let Ok(html_content) = fs::read_to_string(&index_path).await {
-            let mut final_html = if state.config.is_development() {
-                inject_vite_client(&html_content, state.config.vite.port)
-            } else {
-                html_content
-            };
-
-            if state.config.is_development() {
-                final_html = pretty_print_html(&final_html);
-            }
-
-            let body = Bytes::from(final_html);
-            if let Some(generation) = cache_generation {
-                state.html_cache.set_if_generation(body.clone(), generation);
-            }
-
-            return Ok(fallback_html_response(body, is_not_found));
-        }
+    if state.config.is_production()
+        && let Some(html) = state.html_cache.get()
+    {
+        return Ok(fallback_html_response(html, is_not_found));
     }
 
-    if state.config.is_development() {
-        let vite_port = state.config.vite.port;
-        let mut html_shell = format!(
+    let vite_port = state.config.vite.port;
+    let mut html_shell = if state.config.is_development() {
+        format!(
             r#"<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>rari App Router</title>
-</head>
-<body>
-  <div id="root"></div>
   <script type="module" src="http://localhost:{vite_port}/@vite/client"></script>
   <script type="module">
     import 'http://localhost:{vite_port}/@id/virtual:rari-entry-client';
   </script>
-</body>
+</head>
+<body></body>
 </html>"#
-        );
-
-        if state.config.is_development() {
-            html_shell = pretty_print_html(&html_shell);
-        }
-
-        return Ok(fallback_html_response(Bytes::from(html_shell), is_not_found));
-    }
-
-    let error_html = r#"<!DOCTYPE html>
+        )
+    } else if let Ok(client_head) =
+        fs::read_to_string(state.config.public_dir().join("rari-client-head.html")).await
+    {
+        format!(
+            r#"<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Build Required</title>
+  <title>rari App Router</title>
+  {client_head}
 </head>
-<body>
-  <div style="padding: 40px; font-family: sans-serif;">
-    <h1>Build Required</h1>
-    <p>Please build your application first:</p>
-    <pre>npm run build</pre>
-    <p>Or run in development mode with Vite:</p>
-    <pre>npm run dev</pre>
-  </div>
-</body>
-</html>"#;
+<body></body>
+</html>"#
+        )
+    } else {
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>rari App Router</title>
+</head>
+<body></body>
+</html>"#
+            .to_string()
+    };
 
-    Ok(fallback_html_response(Bytes::from(error_html), is_not_found))
+    if state.config.is_development() {
+        html_shell = pretty_print_html(&html_shell);
+    }
+
+    let body = Bytes::from(html_shell);
+    if state.config.is_production() {
+        state.html_cache.set(body.clone());
+    }
+
+    Ok(fallback_html_response(body, is_not_found))
 }
 
 #[axum::debug_handler]
@@ -1953,7 +1925,7 @@ pub async fn handle_app_route(
 #[expect(clippy::expect_used)]
 mod tests {
     use std::{
-        fs, process,
+        fs, path, process,
         sync::atomic::AtomicU64,
         time::{SystemTime, UNIX_EPOCH},
     };
@@ -1988,7 +1960,7 @@ mod tests {
 
     fn production_state_with_html_cache(
         html_cache: FallbackHtmlCache,
-        public_dir: PathBuf,
+        public_dir: path::PathBuf,
     ) -> ServerState {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
         let renderer = Arc::new(Mutex::new(RscRenderer::new(Arc::clone(&runtime))));
@@ -2014,7 +1986,7 @@ mod tests {
             response_cache: Arc::new(ResponseCache::new(CacheConfig::default())),
             static_fast_cache: Arc::new(StaticFastCache::new()),
             og_generator: None,
-            project_root: PathBuf::from("."),
+            project_root: path::PathBuf::from("."),
             image_optimizer: None,
             cache_registry,
             image_handler,
@@ -2029,7 +2001,8 @@ mod tests {
             SystemTime::now().duration_since(UNIX_EPOCH).expect("time").as_nanos()
         ));
         fs::create_dir_all(&public_dir).expect("temp public dir");
-        fs::write(public_dir.join("index.html"), "<html>disk</html>").expect("index.html");
+        fs::write(public_dir.join("rari-client-head.html"), "<!-- client -->")
+            .expect("rari-client-head.html");
 
         let html_cache = FallbackHtmlCache::default();
         html_cache.set(Bytes::from("<html>cached</html>"));

@@ -63,7 +63,6 @@ import {
   buildGlobalClientComponentWrapper,
   buildGlobalClientNamespaceWrapper,
 } from '../transform/component-global'
-import { parseHtmlEntryImports } from '../transform/html-entry'
 import { transformInlineServerActions } from '../transform/inline-server-action'
 import { getUseCacheTransform } from '../transform/use-cache'
 
@@ -287,15 +286,8 @@ type ResolvedServerBuildOptions = Required<
   mdx?: ServerBuildOptions['mdx']
 }
 
-export function isServerComponentFromAnalysis(
-  filePath: string,
-  analysis: ModuleAnalysis,
-  htmlOnlyImports: ReadonlySet<string>,
-  cacheKey?: string,
-): boolean {
+export function isServerComponentFromAnalysis(filePath: string, analysis: ModuleAnalysis): boolean {
   if (filePath.includes('node_modules')) return false
-
-  if (htmlOnlyImports.has(cacheKey ?? resolveModuleCachePath(filePath))) return false
 
   return !analysis.directives.hasUseClient && !analysis.directives.hasUseServer
 }
@@ -337,7 +329,6 @@ export class ServerComponentBuilder {
 
   private useCacheBuildId: string | null = null
 
-  private readonly htmlOnlyImports = new Set<string>()
   private readonly fileImporters = new Map<string, Set<string>>()
   private readonly moduleAnalysisCache: ModuleAnalysisCache
   private readonly discoveredExternalClientComponents = new Set<string>()
@@ -387,10 +378,6 @@ export class ServerComponentBuilder {
     }
 
     return copy
-  }
-
-  getHtmlOnlyImports(): ReadonlySet<string> {
-    return new Set(this.htmlOnlyImports)
   }
 
   private async writeComponentCssAsset(
@@ -506,13 +493,6 @@ export class ServerComponentBuilder {
       experimental: options.experimental,
       mdx: options.mdx,
     }
-
-    this.parseHtmlImports()
-  }
-
-  private parseHtmlImports() {
-    for (const importPath of parseHtmlEntryImports(this.projectRoot))
-      this.htmlOnlyImports.add(importPath)
   }
 
   getModuleAnalysis(filePath: string, source?: string): ModuleAnalysis {
@@ -522,7 +502,7 @@ export class ServerComponentBuilder {
   isServerComponent(filePath: string, source?: string): boolean {
     try {
       const analysis = this.moduleAnalysisCache.get(filePath, source)
-      return isServerComponentFromAnalysis(filePath, analysis, this.htmlOnlyImports)
+      return isServerComponentFromAnalysis(filePath, analysis)
     } catch {
       return false
     }
@@ -607,7 +587,7 @@ export class ServerComponentBuilder {
       return
     }
 
-    if (!isServerComponentFromAnalysis(filePath, moduleAnalysis, this.htmlOnlyImports)) return
+    if (!isServerComponentFromAnalysis(filePath, moduleAnalysis)) return
 
     this.serverComponents.set(filePath, {
       filePath,
@@ -884,7 +864,7 @@ export class ServerComponentBuilder {
           if (id === virtualModuleId) return id
 
           if (importer === virtualModuleId && (id.startsWith('./') || id.startsWith('../'))) {
-            if (id.endsWith('.module.css')) {
+            if (id.endsWith('.module.css') || id.endsWith('.css') || /\.css(?:\?.*)?$/.test(id)) {
               return null
             }
 
@@ -1156,16 +1136,28 @@ export class ServerComponentBuilder {
       },
       {
         name: 'css-modules',
+        enforce: 'pre' as const,
         resolveId: (source: string, importer: string | undefined) => {
-          if (source.endsWith('.module.css')) {
-            const importerDir =
-              importer != null && importer !== '' && !importer.startsWith('\0')
-                ? path.dirname(importer)
-                : resolveDir
-            const resolved = path.resolve(importerDir, source)
+          const importerDir =
+            importer != null && importer !== '' && !importer.startsWith('\0')
+              ? path.dirname(importer)
+              : resolveDir
 
+          if (source.endsWith('.module.css')) {
+            const resolved = path.resolve(importerDir, source)
             if (fs.existsSync(resolved)) {
               return { id: `\0css-module:${resolved}` }
+            }
+            return null
+          }
+
+          // Plain CSS (e.g. layout `import './globals.css'`) cannot be bundled by
+          // Rolldown. Stub it here; Vite client entry pulls layout CSS for Tailwind.
+          if (source.endsWith('.css') || /\.css(?:\?.*)?$/.test(source)) {
+            const bare = source.replace(/[?#].*$/, '')
+            const resolved = path.isAbsolute(bare) ? bare : path.resolve(importerDir, bare)
+            if (fs.existsSync(resolved)) {
+              return { id: `\0css-global:${resolved}` }
             }
           }
 
@@ -1173,6 +1165,12 @@ export class ServerComponentBuilder {
         },
         load: async (id: string) => {
           const CSS_MODULE_PREFIX = '\0css-module:'
+          const CSS_GLOBAL_PREFIX = '\0css-global:'
+
+          if (id.startsWith(CSS_GLOBAL_PREFIX)) {
+            return { code: 'export {}', moduleType: 'js' }
+          }
+
           if (!id.startsWith(CSS_MODULE_PREFIX)) {
             return null
           }
@@ -2420,7 +2418,6 @@ export function isEligibleServerComponent(
   code: string,
   builder: ServerComponentBuilder,
   analysis?: ModuleAnalysis,
-  cacheKey?: string,
 ): boolean {
   const fileName = path.basename(filePath)
   if (SPECIAL_FILE_REGEX.test(fileName) || fileName.endsWith('.d.ts')) return false
@@ -2434,12 +2431,8 @@ export function isEligibleServerComponent(
   if (builder.isOnlyImportedByClientComponents(filePath)) return false
 
   return (
-    isServerComponentFromAnalysis(
-      filePath,
-      moduleAnalysis,
-      builder.getHtmlOnlyImports(),
-      cacheKey,
-    ) && hasComponentExport(code, moduleAnalysis)
+    isServerComponentFromAnalysis(filePath, moduleAnalysis) &&
+    hasComponentExport(code, moduleAnalysis)
   )
 }
 
@@ -2457,13 +2450,13 @@ export function scanDirectory(
   const serverComponentPaths: string[] = []
   const clientComponentPaths: string[] = []
 
-  for (const { filePath, cacheKey, code, analysis } of files) {
+  for (const { filePath, code, analysis } of files) {
     if (analysis.directives.hasUseClient) {
       clientComponentPaths.push(filePath)
       builder.recordClientComponent(filePath, code)
     }
 
-    if (isEligibleServerComponent(filePath, code, builder, analysis, cacheKey)) {
+    if (isEligibleServerComponent(filePath, code, builder, analysis)) {
       builder.addServerComponent(filePath, code, analysis)
       serverComponentPaths.push(filePath)
     }

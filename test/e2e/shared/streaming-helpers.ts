@@ -15,7 +15,7 @@ export async function gotoWithRetry(
       response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 })
       await page
         .locator(
-          '#root > *:not([aria-hidden="true"]):not([data-rari-nav-transition]), [data-testid="loading"], .rari-error',
+          'body > *:not([aria-hidden="true"]):not([data-rari-nav-transition]), [data-testid="loading"], .rari-error',
         )
         .first()
         .waitFor({ state: 'visible', timeout: 10000 })

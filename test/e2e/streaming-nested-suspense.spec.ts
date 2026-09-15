@@ -20,7 +20,7 @@ test.describe.serial('Streaming Suspense E2E Tests', () => {
     const times = await getServerTimestamps(page, ['outer-content', 'component-inner'])
     expect(times['outer-content']).toBeLessThan(times['component-inner'])
 
-    const bodyHtml = await page.locator('#root').innerHTML()
+    const bodyHtml = await page.locator('body').innerHTML()
     expect(bodyHtml).not.toContain('react.suspense')
   })
 
@@ -34,6 +34,6 @@ test.describe.serial('Streaming Suspense E2E Tests', () => {
       .locator('[data-testid="root-template-children"] [data-testid="component-slow"]')
       .first()
     await expect(slow).toBeVisible()
-    await expect(page.locator('#root')).toContainText('Parallel Suspense Test')
+    await expect(page.locator('body')).toContainText('Parallel Suspense Test')
   })
 })

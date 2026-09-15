@@ -1,7 +1,6 @@
 import type { Dirent, PathLike, Stats } from 'node:fs'
 import fsSync from 'node:fs'
 import path from 'node:path'
-import { resolveModuleCachePath } from '@rari/vite/analysis/module-cache'
 import { hasComponentExport, ServerComponentBuilder } from '@rari/vite/server/build'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { castMock } from '../../helpers/mock-cast'
@@ -128,38 +127,6 @@ describe('server component builder', () => {
 
       expect(defaultBuilder).toBeDefined()
       expect(defaultBuilder.getComponentCount()).toBe(0)
-    })
-
-    it('should parse HTML imports on initialization', () => {
-      const htmlContent = `
-<!DOCTYPE html>
-<html>
-  <head>
-    <script type="module">
-      import '/src/main.tsx'
-    </script>
-  </head>
-</html>
-`
-      vi.mocked(fsSync.existsSync).mockReturnValue(true)
-      vi.mocked(fsSync.readFileSync).mockReturnValue(htmlContent)
-      vi.mocked(fsSync.realpathSync).mockImplementation(() => {
-        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
-      })
-
-      const builderWithHtml = new ServerComponentBuilder(mockProjectRoot, mockOptions)
-
-      const htmlImports = builderWithHtml.getHtmlOnlyImports()
-      const expectedPath = resolveModuleCachePath(path.join(mockProjectRoot, 'src', 'main.tsx'))
-
-      expect(htmlImports.has(expectedPath)).toBe(true)
-      expect(htmlImports.size).toBe(1)
-    })
-
-    it('should handle missing index.html gracefully', () => {
-      vi.mocked(fsSync.existsSync).mockReturnValue(false)
-
-      expect(() => new ServerComponentBuilder(mockProjectRoot, mockOptions)).not.toThrow()
     })
   })
 
