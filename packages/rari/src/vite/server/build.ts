@@ -234,6 +234,15 @@ function cssHasBarePackageImports(css: string): boolean {
   )
 }
 
+function stripBarePackageCssImports(css: string): string {
+  return css
+    .replace(
+      /@import\s+(?:url\(\s*)?['"](?![a-zA-Z][a-zA-Z0-9+.-]*:|\/\/|\.\/|\.\.\/|\/)[^'"]+['"]\s*\)?\s*;?/g,
+      '',
+    )
+    .trim()
+}
+
 export interface ServerBuildOptions {
   readonly outDir?: string
   readonly rscDir?: string
@@ -1251,7 +1260,10 @@ export class ServerComponentBuilder {
             if (cssModules) {
               try {
                 const content = fs.readFileSync(filePath, 'utf-8')
-                if (!cssHasBarePackageImports(content)) cssModules.push(content)
+                const forServerAsset = cssHasBarePackageImports(content)
+                  ? stripBarePackageCssImports(content)
+                  : content
+                if (forServerAsset !== '') cssModules.push(forServerAsset)
               } catch (e) {
                 throw new Error(
                   `[rari] Failed to read CSS ${filePath}: ${e instanceof Error ? e.message : String(e)}`,

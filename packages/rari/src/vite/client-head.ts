@@ -94,6 +94,9 @@ export function buildLayoutCssImportStatements(
         return `import ${JSON.stringify(cssImport)};`
       }
       const relative = path.relative(projectRoot, cssImport).replace(/\\/g, '/')
+      if (relative.startsWith('..') || path.isAbsolute(relative)) {
+        return `import ${JSON.stringify(cssImport)};`
+      }
       return `import ${JSON.stringify(`/${relative}`)};`
     })
     .join('\n')

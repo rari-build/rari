@@ -165,10 +165,7 @@ describe('server plain css imports', () => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-tw-css-'))
     const appDir = path.join(dir, 'src', 'app')
     fs.mkdirSync(appDir, { recursive: true })
-    fs.writeFileSync(
-      path.join(appDir, 'globals.css'),
-      "@import 'tailwindcss';\n:root { color: red; }\n",
-    )
+    fs.writeFileSync(path.join(appDir, 'globals.css'), "@import 'tailwindcss';\n")
     const layoutPath = path.join(appDir, 'layout.tsx')
     fs.writeFileSync(
       layoutPath,
@@ -203,5 +200,47 @@ describe('server plain css imports', () => {
       throw new Error('manifest component missing css array')
     }
     expect(entry.css).toEqual([])
+  })
+
+  it('emits local rules after stripping bare package @imports', async () => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-tw-mixed-css-'))
+    const appDir = path.join(dir, 'src', 'app')
+    fs.mkdirSync(appDir, { recursive: true })
+    fs.writeFileSync(
+      path.join(appDir, 'page.css'),
+      "@import 'tailwindcss';\n.page { color: red; }\n",
+    )
+    const pagePath = path.join(appDir, 'page.tsx')
+    fs.writeFileSync(
+      pagePath,
+      `import './page.css'\nexport default function Page() { return null }\n`,
+    )
+
+    const outDir = path.join(dir, 'dist')
+    fs.mkdirSync(path.join(outDir, 'server'), { recursive: true })
+    fs.writeFileSync(
+      path.join(outDir, 'server', 'manifest.json'),
+      JSON.stringify({ components: {}, buildTime: new Date().toISOString() }),
+    )
+
+    const builder = new ServerComponentBuilder(dir, {
+      outDir: 'dist',
+      rscDir: 'server',
+      manifestPath: 'server/manifest.json',
+      minify: false,
+      alias: {},
+    })
+
+    const result = await builder.rebuildComponent(pagePath)
+    expect(result.success).toBe(true)
+
+    const cssHrefs = readManifestCssHrefs(path.join(outDir, 'server', 'manifest.json'))
+    expect(cssHrefs.length).toBeGreaterThan(0)
+    const cssHref = cssHrefs[0]
+    expect(cssHref).toBeTypeOf('string')
+    const cssPath = path.join(outDir, cssHref.replace(/^\//, ''))
+    const emitted = fs.readFileSync(cssPath, 'utf-8')
+    expect(emitted).toContain('.page { color: red; }')
+    expect(emitted).not.toContain('@import')
   })
 })
