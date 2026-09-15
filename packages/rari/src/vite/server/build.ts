@@ -17,6 +17,7 @@ import process from 'node:process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { build } from 'rolldown'
 import { buildProxyManifest } from '@/proxy/build/analyze'
+import { copyAppIconsToOutDir, parseAppIconsFromManifest } from '@/router/metadata/app-icons'
 import {
   BACKSLASH_REGEX,
   EXPORTED_CONST_FUNCTION_REGEX,
@@ -48,12 +49,18 @@ import {
   resolveModuleCachePath,
 } from '../analysis/module-cache'
 import { collectSourceFilePaths, normalizeScanDirs } from '../analysis/source-walker'
+import { collectLayoutCssImportPaths } from '../client-head'
 import { createFontRolldownPlugin } from '../font/plugin'
 import {
   createStaticImageRolldownPlugin,
   finalizeStaticImageSourceMapBuild,
 } from '../image/static-import'
-import { resolveMdxRegistryEntries } from '../mdx/registry'
+import {
+  collectMdxContentDirs,
+  copyMdxContentDirsToDest,
+  resolveMdxPluginOptions,
+  resolveMdxRegistryEntries,
+} from '../mdx/registry'
 import { ensureNamedImportFromModule } from '../transform/client-import'
 import {
   buildClientReferenceStubModule,
@@ -63,7 +70,6 @@ import {
   buildGlobalClientComponentWrapper,
   buildGlobalClientNamespaceWrapper,
 } from '../transform/component-global'
-import { parseHtmlEntryImports } from '../transform/html-entry'
 import { transformInlineServerActions } from '../transform/inline-server-action'
 import { getUseCacheTransform } from '../transform/use-cache'
 
@@ -72,6 +78,7 @@ const PROXY_MANIFEST_FILE = 'proxy.json'
 const COMPONENTS_PATH_REGEX = /\/components\/(\w+)(?:\.tsx?|\.jsx?)?$/
 const COMPONENTS_PATH_ALT_REGEX = /[/\\]components[/\\]\w+(?:\.tsx?|\.jsx?)?$/
 const SPECIAL_FILE_REGEX = /^(?:robots|sitemap|feed)\.(?:tsx?|jsx?)$/
+const APP_ICON_FILE_REGEX = /^(?:favicon|icon\d*|apple-icon\d*)\.(?:ico|png|jpe?g|svg)$/i
 const RSC_REFERENCES_IMPORT = 'react-server-dom-rari/server'
 const LOCAL_IMPORT_SOURCE_REGEX = /^[./@~#]/
 const NODE_PROTOCOL_REGEX = /^node:/
@@ -225,6 +232,146 @@ function isServerComponentManifestRecord(value: unknown): value is ServerCompone
   return isRecord(value) && isRecord(value.components)
 }
 
+const BARE_PACKAGE_CSS_IMPORT_RE =
+  /@import\s+(?:url\(\s*)?['"](?![a-zA-Z][a-zA-Z0-9+.-]*:|\/\/|\.\/|\.\.\/|\/)[^'"]+['"][^;]*(?:;|$)/g
+
+const LOCAL_RELATIVE_CSS_IMPORT_RE =
+  /@import\s+(?:url\(\s*((?:\.\/|\.\.\/)[^)\s]+)\s*\)|url\(\s*['"]((?:\.\/|\.\.\/)[^'"]+)['"]\s*\)|['"]((?:\.\/|\.\.\/)[^'"]+)['"])([^;]*)(?:;|$)/g
+
+function stripBarePackageCssImports(css: string): string {
+  return css.replace(BARE_PACKAGE_CSS_IMPORT_RE, '').trim()
+}
+
+interface CssImportQualifiers {
+  readonly layerName: string | null
+  readonly supportsCondition: string | null
+  readonly mediaQuery: string | null
+}
+
+function extractImportQualifiers(suffix: string): CssImportQualifiers {
+  let rest = suffix.trim().replace(/^\)\s*/, '')
+  let layerName: string | null = null
+  let supportsCondition: string | null = null
+
+  const layerOpen = /^layer\s*\(/i.exec(rest)
+  if (layerOpen) {
+    const openParen = rest.indexOf('(')
+    const closeParen = rest.indexOf(')', openParen)
+    if (closeParen !== -1) {
+      layerName = rest.slice(openParen + 1, closeParen).trim()
+      rest = rest.slice(closeParen + 1).trim()
+    }
+  } else if (/^layer(?:\s|$)/i.test(rest)) {
+    layerName = ''
+    rest = rest.replace(/^layer\s*/i, '')
+  }
+
+  if (/^supports\s*\(/i.test(rest)) {
+    const openParen = rest.indexOf('(')
+    let depth = 0
+    let end = -1
+    for (let i = openParen; i < rest.length; i++) {
+      const ch = rest[i]
+      if (ch === '(') depth++
+      else if (ch === ')') {
+        depth--
+        if (depth === 0) {
+          end = i
+          break
+        }
+      }
+    }
+    if (end !== -1) {
+      supportsCondition = rest.slice(openParen + 1, end).trim()
+      rest = rest.slice(end + 1).trim()
+    }
+  }
+
+  const mediaQuery = rest.trim() === '' ? null : rest.trim()
+  return { layerName, supportsCondition, mediaQuery }
+}
+
+function applyImportQualifiers(css: string, qualifiers: CssImportQualifiers): string {
+  let out = css.trim()
+  if (out === '') return ''
+
+  if (qualifiers.layerName !== null) {
+    out =
+      qualifiers.layerName === ''
+        ? `@layer {\n${out}\n}`
+        : `@layer ${qualifiers.layerName} {\n${out}\n}`
+  }
+  if (qualifiers.supportsCondition != null && qualifiers.supportsCondition !== '') {
+    out = `@supports (${qualifiers.supportsCondition}) {\n${out}\n}`
+  }
+  if (qualifiers.mediaQuery != null && qualifiers.mediaQuery !== '') {
+    out = `@media ${qualifiers.mediaQuery} {\n${out}\n}`
+  }
+  return out
+}
+
+function inlineLocalRelativeCssImports(
+  filePath: string,
+  css: string,
+  seen: Set<string> = new Set(),
+): string {
+  const absPath = path.resolve(filePath)
+  if (seen.has(absPath)) return ''
+  seen.add(absPath)
+
+  return css
+    .replace(
+      LOCAL_RELATIVE_CSS_IMPORT_RE,
+      (
+        fullMatch,
+        urlUnquoted: string | undefined,
+        urlQuoted: string | undefined,
+        plainQuoted: string | undefined,
+        qualifierSuffix: string,
+      ) => {
+        const relPath = urlUnquoted ?? urlQuoted ?? plainQuoted
+        if (relPath == null || relPath === '') return fullMatch
+        const nestedPath = path.resolve(path.dirname(absPath), relPath)
+        try {
+          if (!fs.existsSync(nestedPath) || !fs.statSync(nestedPath).isFile()) return fullMatch
+          const nested = fs.readFileSync(nestedPath, 'utf-8')
+          const prepared = preparePlainCssForServerAsset(nestedPath, nested, new Set(seen))
+          return applyImportQualifiers(prepared, extractImportQualifiers(qualifierSuffix))
+        } catch {
+          return fullMatch
+        }
+      },
+    )
+    .trim()
+}
+
+function preparePlainCssForServerAsset(
+  filePath: string,
+  css: string,
+  seen: Set<string> = new Set(),
+): string {
+  return inlineLocalRelativeCssImports(filePath, stripBarePackageCssImports(css), seen)
+}
+
+function resolveLayoutCssServerSkipSet(
+  projectRoot: string,
+  aliases: Readonly<Record<string, string>>,
+): Set<string> {
+  const skip = new Set<string>()
+  for (const cssImport of collectLayoutCssImportPaths(projectRoot, aliases)) {
+    if (path.isAbsolute(cssImport)) {
+      skip.add(path.resolve(cssImport))
+      continue
+    }
+    try {
+      skip.add(createRequire(path.join(projectRoot, 'package.json')).resolve(cssImport))
+    } catch {
+      // Bare package not resolvable here; client head still owns the import.
+    }
+  }
+  return skip
+}
+
 export interface ServerBuildOptions {
   readonly outDir?: string
   readonly rscDir?: string
@@ -287,15 +434,8 @@ type ResolvedServerBuildOptions = Required<
   mdx?: ServerBuildOptions['mdx']
 }
 
-export function isServerComponentFromAnalysis(
-  filePath: string,
-  analysis: ModuleAnalysis,
-  htmlOnlyImports: ReadonlySet<string>,
-  cacheKey?: string,
-): boolean {
+export function isServerComponentFromAnalysis(filePath: string, analysis: ModuleAnalysis): boolean {
   if (filePath.includes('node_modules')) return false
-
-  if (htmlOnlyImports.has(cacheKey ?? resolveModuleCachePath(filePath))) return false
 
   return !analysis.directives.hasUseClient && !analysis.directives.hasUseServer
 }
@@ -337,11 +477,16 @@ export class ServerComponentBuilder {
 
   private useCacheBuildId: string | null = null
 
-  private readonly htmlOnlyImports = new Set<string>()
   private readonly fileImporters = new Map<string, Set<string>>()
   private readonly moduleAnalysisCache: ModuleAnalysisCache
   private readonly discoveredExternalClientComponents = new Set<string>()
   private readonly clientComponentFiles = new Map<string, string>()
+  private layoutCssSkipSet: Set<string> | null = null
+
+  private getLayoutCssSkipSet(): Set<string> {
+    this.layoutCssSkipSet ??= resolveLayoutCssServerSkipSet(this.projectRoot, this.options.alias)
+    return this.layoutCssSkipSet
+  }
 
   recordClientComponent(filePath: string, code: string): void {
     this.clientComponentFiles.set(filePath, code)
@@ -387,10 +532,6 @@ export class ServerComponentBuilder {
     }
 
     return copy
-  }
-
-  getHtmlOnlyImports(): ReadonlySet<string> {
-    return new Set(this.htmlOnlyImports)
   }
 
   private async writeComponentCssAsset(
@@ -506,13 +647,6 @@ export class ServerComponentBuilder {
       experimental: options.experimental,
       mdx: options.mdx,
     }
-
-    this.parseHtmlImports()
-  }
-
-  private parseHtmlImports() {
-    for (const importPath of parseHtmlEntryImports(this.projectRoot))
-      this.htmlOnlyImports.add(importPath)
   }
 
   getModuleAnalysis(filePath: string, source?: string): ModuleAnalysis {
@@ -522,7 +656,7 @@ export class ServerComponentBuilder {
   isServerComponent(filePath: string, source?: string): boolean {
     try {
       const analysis = this.moduleAnalysisCache.get(filePath, source)
-      return isServerComponentFromAnalysis(filePath, analysis, this.htmlOnlyImports)
+      return isServerComponentFromAnalysis(filePath, analysis)
     } catch {
       return false
     }
@@ -607,7 +741,7 @@ export class ServerComponentBuilder {
       return
     }
 
-    if (!isServerComponentFromAnalysis(filePath, moduleAnalysis, this.htmlOnlyImports)) return
+    if (!isServerComponentFromAnalysis(filePath, moduleAnalysis)) return
 
     this.serverComponents.set(filePath, {
       filePath,
@@ -860,6 +994,7 @@ export class ServerComponentBuilder {
   ) {
     const resolveDir = path.dirname(inputPath)
     const isProxyFile = PROXY_FILE_REGEX.test(path.basename(inputPath))
+    const layoutCssSkip = this.getLayoutCssSkipSet()
 
     const clientComponentRefs = new Map<string, string>()
     const serverActionRefs = new Map<string, { actionId: string; hasDefaultExport: boolean }>()
@@ -884,7 +1019,7 @@ export class ServerComponentBuilder {
           if (id === virtualModuleId) return id
 
           if (importer === virtualModuleId && (id.startsWith('./') || id.startsWith('../'))) {
-            if (id.endsWith('.module.css')) {
+            if (id.endsWith('.module.css') || id.endsWith('.css') || /\.css(?:\?.*)?$/.test(id)) {
               return null
             }
 
@@ -1156,16 +1291,59 @@ export class ServerComponentBuilder {
       },
       {
         name: 'css-modules',
+        enforce: 'pre' as const,
         resolveId: (source: string, importer: string | undefined) => {
-          if (source.endsWith('.module.css')) {
-            const importerDir =
-              importer != null && importer !== '' && !importer.startsWith('\0')
-                ? path.dirname(importer)
-                : resolveDir
-            const resolved = path.resolve(importerDir, source)
+          const importerDir =
+            importer != null && importer !== '' && !importer.startsWith('\0')
+              ? path.dirname(importer)
+              : resolveDir
 
+          if (source.endsWith('.module.css')) {
+            const resolved = path.resolve(importerDir, source)
             if (fs.existsSync(resolved)) {
               return { id: `\0css-module:${resolved}` }
+            }
+            return null
+          }
+
+          if (source.endsWith('.css') || /\.css(?:\?.*)?$/.test(source)) {
+            const queryIndex = source.search(/[?#]/)
+            const bare = queryIndex === -1 ? source : source.slice(0, queryIndex)
+            const query = queryIndex === -1 ? '' : source.slice(queryIndex)
+            const isRaw = /(?:\?|&)raw(?:&|$)/.test(query)
+            const isUrl = /(?:\?|&)url(?:&|$)/.test(query)
+
+            let resolved: string | null = null
+
+            if (path.isAbsolute(bare)) {
+              resolved = bare
+            } else if (bare.startsWith('./') || bare.startsWith('../')) {
+              resolved = path.resolve(importerDir, bare)
+            } else {
+              const resolveFrom = [
+                importer != null && importer !== '' && !importer.startsWith('\0') ? importer : null,
+                path.join(this.projectRoot, 'package.json'),
+              ].filter((value): value is string => value != null && value !== '')
+
+              for (const from of resolveFrom) {
+                try {
+                  resolved = createRequire(from).resolve(bare)
+                  break
+                } catch {
+                  try {
+                    resolved = fileURLToPath(import.meta.resolve(bare, pathToFileURL(from).href))
+                    break
+                  } catch {
+                    // try next resolve root
+                  }
+                }
+              }
+            }
+
+            if (resolved != null && resolved !== '' && fs.existsSync(resolved)) {
+              if (isRaw) return { id: `\0css-raw:${resolved}` }
+              if (isUrl) return { id: `\0css-url:${resolved}` }
+              return { id: `\0css-global:${resolved}` }
             }
           }
 
@@ -1173,6 +1351,59 @@ export class ServerComponentBuilder {
         },
         load: async (id: string) => {
           const CSS_MODULE_PREFIX = '\0css-module:'
+          const CSS_GLOBAL_PREFIX = '\0css-global:'
+          const CSS_RAW_PREFIX = '\0css-raw:'
+          const CSS_URL_PREFIX = '\0css-url:'
+
+          if (id.startsWith(CSS_RAW_PREFIX)) {
+            const filePath = id.slice(CSS_RAW_PREFIX.length)
+            try {
+              const content = fs.readFileSync(filePath, 'utf-8')
+              return { code: `export default ${JSON.stringify(content)}`, moduleType: 'js' }
+            } catch (e) {
+              throw new Error(
+                `[rari] Failed to read CSS ${filePath}: ${e instanceof Error ? e.message : String(e)}`,
+              )
+            }
+          }
+
+          if (id.startsWith(CSS_URL_PREFIX)) {
+            const filePath = id.slice(CSS_URL_PREFIX.length)
+            try {
+              const content = fs.readFileSync(filePath)
+              const ext = path.extname(filePath) || '.css'
+              const base = path.basename(filePath, ext)
+              const hash = sharedHashString(`${filePath}:${content.toString('utf8')}`, 8)
+              const fileName = `${base}-${hash}${ext}`
+              const assetsDirName = this.options.assetsDir.replace(/^\/+|\/+$/g, '') || 'assets'
+              const assetsDir = path.join(this.options.outDir, assetsDirName)
+              fs.mkdirSync(assetsDir, { recursive: true })
+              fs.writeFileSync(path.join(assetsDir, fileName), content)
+              const href = `/${assetsDirName}/${fileName}`
+              return { code: `export default ${JSON.stringify(href)}`, moduleType: 'js' }
+            } catch (e) {
+              throw new Error(
+                `[rari] Failed to emit CSS URL asset ${filePath}: ${e instanceof Error ? e.message : String(e)}`,
+              )
+            }
+          }
+
+          if (id.startsWith(CSS_GLOBAL_PREFIX)) {
+            const filePath = id.slice(CSS_GLOBAL_PREFIX.length)
+            if (cssModules && !layoutCssSkip.has(path.resolve(filePath))) {
+              try {
+                const content = fs.readFileSync(filePath, 'utf-8')
+                const forServerAsset = preparePlainCssForServerAsset(filePath, content)
+                if (forServerAsset !== '') cssModules.push(forServerAsset)
+              } catch (e) {
+                throw new Error(
+                  `[rari] Failed to read CSS ${filePath}: ${e instanceof Error ? e.message : String(e)}`,
+                )
+              }
+            }
+            return { code: 'export {}', moduleType: 'js' }
+          }
+
           if (!id.startsWith(CSS_MODULE_PREFIX)) {
             return null
           }
@@ -2420,10 +2651,15 @@ export function isEligibleServerComponent(
   code: string,
   builder: ServerComponentBuilder,
   analysis?: ModuleAnalysis,
-  cacheKey?: string,
 ): boolean {
   const fileName = path.basename(filePath)
-  if (SPECIAL_FILE_REGEX.test(fileName) || fileName.endsWith('.d.ts')) return false
+  if (
+    SPECIAL_FILE_REGEX.test(fileName) ||
+    APP_ICON_FILE_REGEX.test(fileName) ||
+    fileName.endsWith('.d.ts')
+  ) {
+    return false
+  }
 
   const moduleAnalysis = analysis ?? builder.getModuleAnalysis(filePath, code)
 
@@ -2434,12 +2670,8 @@ export function isEligibleServerComponent(
   if (builder.isOnlyImportedByClientComponents(filePath)) return false
 
   return (
-    isServerComponentFromAnalysis(
-      filePath,
-      moduleAnalysis,
-      builder.getHtmlOnlyImports(),
-      cacheKey,
-    ) && hasComponentExport(code, moduleAnalysis)
+    isServerComponentFromAnalysis(filePath, moduleAnalysis) &&
+    hasComponentExport(code, moduleAnalysis)
   )
 }
 
@@ -2457,13 +2689,13 @@ export function scanDirectory(
   const serverComponentPaths: string[] = []
   const clientComponentPaths: string[] = []
 
-  for (const { filePath, cacheKey, code, analysis } of files) {
+  for (const { filePath, code, analysis } of files) {
     if (analysis.directives.hasUseClient) {
       clientComponentPaths.push(filePath)
       builder.recordClientComponent(filePath, code)
     }
 
-    if (isEligibleServerComponent(filePath, code, builder, analysis, cacheKey)) {
+    if (isEligibleServerComponent(filePath, code, builder, analysis)) {
       builder.addServerComponent(filePath, code, analysis)
       serverComponentPaths.push(filePath)
     }
@@ -2564,7 +2796,8 @@ export function createServerBuildPlugin(options: ServerBuildOptions = {}): Plugi
           const { generateRobotsFile } = await import('@/router/metadata/robots')
           await generateRobotsFile({
             appDir: path.join(projectRoot, 'src', 'app'),
-            outDir: path.join(projectRoot, 'dist'),
+            outDir: resolvedViteOutDir,
+            aliases: resolvedAliases,
           })
         } catch (error) {
           console.warn('[rari] Failed to generate robots.txt:', error)
@@ -2574,7 +2807,7 @@ export function createServerBuildPlugin(options: ServerBuildOptions = {}): Plugi
           const { generateSitemapFiles } = await import('@/router/metadata/sitemap')
           await generateSitemapFiles({
             appDir: path.join(projectRoot, 'src', 'app'),
-            outDir: path.join(projectRoot, 'dist'),
+            outDir: resolvedViteOutDir,
             aliases: resolvedAliases,
           })
         } catch (error) {
@@ -2585,11 +2818,44 @@ export function createServerBuildPlugin(options: ServerBuildOptions = {}): Plugi
           const { generateFeedFile } = await import('@/router/metadata/feed')
           await generateFeedFile({
             appDir: path.join(projectRoot, 'src', 'app'),
-            outDir: path.join(projectRoot, 'dist'),
+            outDir: resolvedViteOutDir,
             aliases: resolvedAliases,
           })
         } catch (error) {
           console.warn('[rari] Failed to generate feed:', error)
+        }
+
+        try {
+          const routesPath = path.join(resolvedViteOutDir, 'server', 'routes.json')
+          if (fs.existsSync(routesPath)) {
+            const icons = parseAppIconsFromManifest(fs.readFileSync(routesPath, 'utf-8'))
+            if (icons.length > 0) {
+              await copyAppIconsToOutDir({
+                appDir: path.join(projectRoot, 'src', 'app'),
+                outDir: resolvedViteOutDir,
+                icons,
+              })
+            }
+          }
+        } catch (error) {
+          console.warn('[rari] Failed to copy app icons:', error)
+        }
+
+        try {
+          const mdxOpts = resolveMdxPluginOptions(projectRoot, options.mdx)
+          const contentDirs = collectMdxContentDirs(projectRoot, mdxOpts.contentDirs).filter(
+            dir => {
+              const rel = path.relative(projectRoot, dir).replace(BACKSLASH_REGEX, '/')
+              if (rel === 'public/content' || rel.startsWith('public/content/')) return false
+              if (rel === 'dist/content' || rel.startsWith('dist/content/')) return false
+              return true
+            },
+          )
+          if (contentDirs.length > 0) {
+            copyMdxContentDirsToDest(contentDirs, path.join(resolvedViteOutDir, 'content'))
+          }
+        } catch (error) {
+          console.warn('[rari] Failed to copy MDX content:', error)
         }
 
         finalizeStaticImageSourceMapBuild(resolvedViteOutDir)

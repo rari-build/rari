@@ -110,27 +110,30 @@ Use the `pathname` prop available in layouts and pages to style active links:
 
 <CodeBlock filename="src/app/layout.tsx" language="tsx">{`import type { LayoutProps } from 'rari'
 
-export default function RootLayout({ children, pathname }: LayoutProps) {
+export default function Layout({ children, pathname }: LayoutProps) {
   const isActive = (path: string) => pathname === path
 
   return (
-    <div>
-      <nav>
-        <a
-          href="/"
-          className={isActive('/') ? 'text-indigo-600 font-semibold' : 'text-gray-700'}
-        >
-          Home
-        </a>
-        <a
-          href="/about"
-          className={isActive('/about') ? 'text-indigo-600 font-semibold' : 'text-gray-700'}
-        >
-          About
-        </a>
-      </nav>
-      <main>{children}</main>
-    </div>
+    <html lang="en">
+      <head />
+      <body>
+        <nav>
+          <a
+            href="/"
+            className={isActive('/') ? 'text-indigo-600 font-semibold' : 'text-gray-700'}
+          >
+            Home
+          </a>
+          <a
+            href="/about"
+            className={isActive('/about') ? 'text-indigo-600 font-semibold' : 'text-gray-700'}
+          >
+            About
+          </a>
+        </nav>
+        <main>{children}</main>
+      </body>
+    </html>
   )
 }
 `}</CodeBlock>

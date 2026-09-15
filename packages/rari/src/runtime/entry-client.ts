@@ -39,18 +39,35 @@ function notifyClientReady() {
   window.dispatchEvent(new CustomEvent('rari:client-ready'))
 }
 
-function mountApp(rootElement: HTMLElement, content: React.ReactNode) {
-  if (shouldHydrateServerDom(rootElement)) {
-    clearServerInjectedErrors(rootElement)
-    hydrateRoot(rootElement, content, {
+function restoreDocumentTitle(ssrTitle: string) {
+  if (ssrTitle === '') return
+  const restore = () => {
+    if (document.title.trim() === '') document.title = ssrTitle
+  }
+  restore()
+  queueMicrotask(restore)
+  requestAnimationFrame(() => {
+    restore()
+    requestAnimationFrame(restore)
+  })
+}
+
+function mountApp(content: React.ReactNode) {
+  const scanRoot = document.documentElement
+  const ssrTitle = document.title.trim()
+
+  if (shouldHydrateServerDom(scanRoot)) {
+    clearServerInjectedErrors(scanRoot)
+    hydrateRoot(document, content, {
       onRecoverableError(error) {
         if (import.meta.env.DEV) console.warn('[rari] Hydration mismatch:', error)
       },
     })
   } else {
-    createRoot(rootElement).render(content)
+    createRoot(document).render(content)
   }
 
+  restoreDocumentTitle(ssrTitle)
   notifyClientReady()
 }
 
@@ -190,15 +207,10 @@ async function createElementFromFlightBytes(
 }
 
 export async function renderApp(): Promise<void> {
-  const rootElement = document.getElementById('root')
-  if (!rootElement) {
-    console.error('[rari] Root element not found')
-    return
-  }
-
   const hasEmbeddedPayload = hasEmbeddedFlightPayload()
   const embeddedPayloadBytes = decodeEmbeddedFlightPayload()
-  const hasServerRenderedContent = hasServerRenderedDom(rootElement) || hasFizzMarkers(rootElement)
+  const scanRoot = document.documentElement
+  const hasServerRenderedContent = hasServerRenderedDom(document.body) || hasFizzMarkers(scanRoot)
   const streaming = getRariWindowBag()!.streaming
   const hasBufferedRows = !!(streaming?.bufferedRows && streaming.bufferedRows.length > 0)
 
@@ -256,9 +268,12 @@ export async function renderApp(): Promise<void> {
           hydrationContent,
         )
 
-        mountApp(rootElement, hydrationContent)
+        mountApp(hydrationContent)
       } else {
-        showHydrationFailureBanner(rootElement, `${hydrationErrorMessage} Try refreshing the page.`)
+        showHydrationFailureBanner(
+          document.body,
+          `${hydrationErrorMessage} Try refreshing the page.`,
+        )
         console.error('[rari] Hydration skipped: failed to load RSC payload')
       }
 
@@ -358,7 +373,7 @@ export async function renderApp(): Promise<void> {
       content,
     )
 
-    mountApp(rootElement, content)
+    mountApp(content)
   } catch (error) {
     console.error('[rari] Error rendering app:', error)
   }

@@ -3,7 +3,6 @@
 use std::{
     env,
     io::{Cursor, Error},
-    path::PathBuf,
     string::String,
     sync::Arc,
     time::Instant,
@@ -18,7 +17,6 @@ use axum::{
     response::Response,
 };
 use bytes::Bytes;
-use cow_utils::CowUtils;
 use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use tokio::{
@@ -31,10 +29,14 @@ use tokio::{
 };
 
 use crate::{
-    rendering::layout::{
-        ChunkedContentType, LayoutRenderContext, LayoutRenderer, OpenGraphImage,
-        OpenGraphImageDescriptor, OpenGraphMetadata, PageMetadata, RenderResult, TwitterMetadata,
-        component_dist_path, create_layout_context, drain_chunked_stream, sort_flight_protocol,
+    rendering::{
+        layout::{
+            ChunkedContentType, LayoutRenderContext, LayoutRenderer, OpenGraphImage,
+            OpenGraphImageDescriptor, OpenGraphMetadata, PageMetadata, RenderResult,
+            TwitterMetadata, component_dist_path, create_layout_context, drain_chunked_stream,
+            sort_flight_protocol,
+        },
+        r#static::RscHtmlRenderer,
     },
     server::{
         ServerState,
@@ -59,14 +61,10 @@ use crate::{
         error_response,
         middleware::request_context::RequestContext,
         rendering::{
-            html_bots::is_html_limited_bot,
-            metadata_injection::{
-                apply_blocking_streaming_metadata, inject_metadata, streaming_metadata_chunk,
-            },
-            pretty_html::pretty_print_html,
-            utils::{inject_assets_into_html, inject_vite_client},
+            metadata::apply_page_metadata, pretty_html::pretty_print_html,
+            utils::inject_assets_into_html,
         },
-        routing::app_router::AppRouteMatch,
+        routing::{app_icons::inject_app_icons_into_metadata, app_router::AppRouteMatch},
     },
     utils::path::path_to_file_url,
 };
@@ -210,26 +208,8 @@ async fn merge_response_cache_tags(state: &ServerState, base_tags: Vec<String>) 
     response::RouteCachePolicy::merge_cache_tags(base_tags, &page_cache_tags)
 }
 
-pub(crate) fn wrap_html_with_metadata(
-    html_content: String,
-    metadata: Option<&PageMetadata>,
-    state: &ServerState,
-) -> String {
-    let trimmed = html_content.trim_start();
-    let trimmed_lower = trimmed.cow_to_lowercase();
-    let is_complete = trimmed_lower.starts_with("<!doctype") || trimmed_lower.starts_with("<html");
-
-    let html = if is_complete {
-        if let Some(metadata) = metadata {
-            inject_metadata(&html_content, metadata, state.image_optimizer.as_deref())
-        } else {
-            html_content
-        }
-    } else {
-        html_content
-    };
-
-    if state.config.is_development() { pretty_print_html(&html) } else { html }
+pub(crate) fn wrap_html_with_metadata(html_content: String, state: &ServerState) -> String {
+    if state.config.is_development() { pretty_print_html(&html_content) } else { html_content }
 }
 
 fn should_use_streaming(route_match: &AppRouteMatch, config: &Config) -> bool {
@@ -239,9 +219,6 @@ fn should_use_streaming(route_match: &AppRouteMatch, config: &Config) -> bool {
     config.loading.enabled && route_match.loading.is_some()
 }
 
-/// Start `generateMetadata` off the critical path. Caller awaits/joins before
-/// injecting into a static document, or passes the receiver into streaming so
-/// tags can be flushed without blocking Fizz/Suspense start.
 fn spawn_page_metadata(
     state: ServerState,
     route_match: AppRouteMatch,
@@ -269,7 +246,7 @@ pub(crate) async fn collect_page_metadata(
     };
 
     let Some(base_path) = dist_server_path else {
-        tracing::error!("Could not determine dist/server path for metadata collection");
+        tracing::debug!("Could not determine dist/server path for metadata collection");
         return None;
     };
 
@@ -306,6 +283,11 @@ pub(crate) async fn collect_page_metadata(
             Ok(mut metadata) => {
                 inject_og_image_into_metadata(state, &route_match.pathname, &mut metadata, context)
                     .await;
+                inject_app_icons_into_metadata(
+                    &state.app_icons,
+                    &route_match.route.path,
+                    &mut metadata,
+                );
                 Some(metadata)
             }
             Err(e) => {
@@ -422,7 +404,6 @@ pub async fn render_with_fallback(
     route_match: AppRouteMatch,
     context: LayoutRenderContext,
     accept_encoding: Option<&str>,
-    metadata_rx: Option<oneshot::Receiver<Option<PageMetadata>>>,
 ) -> Result<Response, StatusCode> {
     let layout_renderer = LayoutRenderer::with_shared_cache(
         Arc::clone(&state.renderer),
@@ -435,7 +416,6 @@ pub async fn render_with_fallback(
         context.clone(),
         &layout_renderer,
         accept_encoding,
-        metadata_rx,
     )
     .await
     {
@@ -500,7 +480,6 @@ pub async fn render_rsc_navigation_streaming(
             chunks,
             is_not_found,
             accept_encoding,
-            None,
         )),
         RenderResult::Chunked { content_type: ChunkedContentType::Html, .. } => {
             tracing::error!("HTML chunked render not supported in RSC-only mode");
@@ -573,10 +552,8 @@ fn render_chunked_response(
     mut chunks: Receiver<Result<Vec<u8>, RariError>>,
     is_not_found: bool,
     accept_encoding: Option<&str>,
-    mut metadata_rx: Option<oneshot::Receiver<Option<PageMetadata>>>,
 ) -> http::Response<Body> {
     let stall_timeout = Duration::from_millis(chunked_stream_stall_timeout_ms());
-    let image_optimizer = state.image_optimizer.clone();
 
     let byte_stream = async_stream::stream! {
         match content_type {
@@ -594,73 +571,7 @@ fn render_chunked_response(
 
                 yield Ok::<_, Error>(shell);
 
-                // Stream metadata for browsers without blocking UI.
-                // Flush head tags when ready without awaiting before Fizz start;
-                // Suspense timers already run in the isolate.
-                let mut metadata_pending = metadata_rx.take();
-                match metadata_pending.as_mut().map(oneshot::Receiver::try_recv) {
-                    Some(Ok(metadata)) => {
-                        if let Some(tags) =
-                            streaming_metadata_chunk(metadata.as_ref(), image_optimizer.as_deref())
-                        {
-                            yield Ok(Bytes::from(tags));
-                        }
-                        metadata_pending = None;
-                    }
-                    Some(Err(oneshot::error::TryRecvError::Closed)) => {
-                        metadata_pending = None;
-                    }
-                    Some(Err(oneshot::error::TryRecvError::Empty)) | None => {}
-                }
-
                 while !finished {
-                    if let Some(ref mut rx) = metadata_pending {
-                        tokio::select! {
-                            biased;
-                            metadata = &mut *rx => {
-                                metadata_pending = None;
-                                if let Ok(metadata) = metadata
-                                    && let Some(tags) = streaming_metadata_chunk(
-                                        metadata.as_ref(),
-                                        image_optimizer.as_deref(),
-                                    )
-                                {
-                                    yield Ok(Bytes::from(tags));
-                                }
-                                continue;
-                            }
-                            chunk = time::timeout(stall_timeout, chunks.recv()) => {
-                                match chunk {
-                                    Ok(Some(Ok(chunk_bytes))) => {
-                                        if chunk_bytes.is_empty() {
-                                            continue;
-                                        }
-                                        yield Ok(Bytes::from(chunk_bytes));
-                                    }
-                                    Ok(Some(Err(e))) => {
-                                        tracing::error!("Error in chunked HTML stream: {}", e);
-                                        yield Err(Error::other(e.to_string()));
-                                        finished = true;
-                                    }
-                                    Ok(None) => {
-                                        finished = true;
-                                    }
-                                    Err(_) => {
-                                        tracing::error!(
-                                            "Chunked HTML stream stalled: no chunk received within {} ms",
-                                            stall_timeout.as_millis()
-                                        );
-                                        yield Ok(chunked_stream_error_chunk(
-                                            "Stream timed out waiting for content",
-                                        ));
-                                        finished = true;
-                                    }
-                                }
-                                continue;
-                            }
-                        }
-                    }
-
                     match time::timeout(stall_timeout, chunks.recv()).await {
                         Ok(Some(Ok(chunk_bytes))) => {
                             if chunk_bytes.is_empty() {
@@ -756,14 +667,6 @@ fn render_chunked_response(
                             finished = true;
                         }
                     }
-                }
-
-                if let Some(rx) = metadata_pending
-                    && let Ok(metadata) = rx.await
-                    && let Some(tags) =
-                        streaming_metadata_chunk(metadata.as_ref(), image_optimizer.as_deref())
-                {
-                    yield Ok(Bytes::from(tags));
                 }
 
                 if !closing.is_empty() {
@@ -899,8 +802,7 @@ pub async fn render_synchronous(
                         }
                     };
 
-                let final_html =
-                    wrap_html_with_metadata(html_with_assets, context.metadata.as_ref(), &state);
+                let final_html = wrap_html_with_metadata(html_with_assets, &state);
 
                 let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
                 let cache_control = state.config.get_cache_control_for_route(&context.pathname);
@@ -932,7 +834,6 @@ pub async fn render_synchronous(
                 chunks,
                 is_not_found,
                 accept_encoding,
-                None,
             )),
             RenderResult::StaticBinary(bytes) => {
                 let html_content = String::from_utf8_lossy(&bytes).into_owned();
@@ -965,10 +866,9 @@ pub async fn render_synchronous(
 pub async fn render_streaming_with_layout(
     state: Arc<ServerState>,
     route_match: AppRouteMatch,
-    mut context: LayoutRenderContext,
+    context: LayoutRenderContext,
     layout_renderer: &LayoutRenderer,
     accept_encoding: Option<&str>,
-    metadata_rx: Option<oneshot::Receiver<Option<PageMetadata>>>,
 ) -> Result<Response, StatusCode> {
     let layout_count = route_match.layouts.len();
     let is_not_found = route_match.not_found.is_some();
@@ -978,8 +878,6 @@ pub async fn render_streaming_with_layout(
             .with_http_headers(context.headers.clone()),
     );
 
-    // Keep metadata_rx for HTTP injection / static wrap. Do not pass it into
-    // Fizz setup, try_recv there would drop a still-pending receiver.
     let render_result = match layout_renderer
         .render_route_with_streaming(&route_match, &context, Some(request_context), false, None)
         .await
@@ -1026,19 +924,9 @@ pub async fn render_streaming_with_layout(
             chunks,
             is_not_found,
             accept_encoding,
-            metadata_rx,
         )),
         RenderResult::Static(html) => {
             use crate::server::compression::compress_body;
-
-            // Deferred metadata_rx is only fed after this function returns
-            // (Fizz-first spawn in the caller). Static fallback must resolve
-            // metadata here or the request deadlocks waiting on a sender that
-            // never starts.
-            if metadata_rx.is_some() {
-                drop(metadata_rx);
-                context.metadata = collect_page_metadata(&state, &route_match, &context).await;
-            }
 
             let html_with_assets = match inject_assets_into_html(&html, &state.config).await {
                 Ok(html) => html,
@@ -1048,8 +936,7 @@ pub async fn render_streaming_with_layout(
                 }
             };
 
-            let final_html =
-                wrap_html_with_metadata(html_with_assets, context.metadata.as_ref(), &state);
+            let final_html = wrap_html_with_metadata(html_with_assets, &state);
 
             let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
             let cache_control = state.config.get_cache_control_for_route(&context.pathname);
@@ -1098,98 +985,51 @@ fn fallback_html_response(html: Bytes, is_not_found: bool) -> Response {
         .expect("Valid HTML response")
 }
 
+fn emergency_fallback_shell(client_head: &str) -> String {
+    format!(
+        r#"<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+{client_head}</head>
+<body></body>
+</html>"#
+    )
+}
+
 pub async fn render_fallback_html(
     state: &ServerState,
     is_not_found: bool,
 ) -> Result<Response, StatusCode> {
-    let index_path = if state.config.is_development() {
-        let root_index = PathBuf::from("index.html");
-        if fs::try_exists(&root_index).await.unwrap_or(false) {
-            root_index
-        } else {
-            state.config.public_dir().join("index.html")
-        }
+    if state.config.is_production()
+        && let Some(html) = state.html_cache.get()
+    {
+        return Ok(fallback_html_response(html, is_not_found));
+    }
+
+    let vite_port = state.config.vite.port;
+    let cache_generation = state.html_cache.generation();
+    let client_head = if state.config.is_development() {
+        RscHtmlRenderer::generate_dev_client_head(&state.config.vite.host, vite_port)
     } else {
-        state.config.public_dir().join("index.html")
+        fs::read_to_string(state.config.public_dir().join("rari-client-head.html"))
+            .await
+            .unwrap_or_default()
     };
 
-    if fs::try_exists(&index_path).await.unwrap_or(false) {
-        if state.config.is_production()
-            && let Some(html) = state.html_cache.get()
-        {
-            return Ok(fallback_html_response(html, is_not_found));
-        }
-
-        // Capture before the async disk read so a concurrent clear() cannot
-        // be undone by this request writing stale HTML back into the cache.
-        let cache_generation = state.config.is_production().then(|| state.html_cache.generation());
-
-        if let Ok(html_content) = fs::read_to_string(&index_path).await {
-            let mut final_html = if state.config.is_development() {
-                inject_vite_client(&html_content, state.config.vite.port)
-            } else {
-                html_content
-            };
-
-            if state.config.is_development() {
-                final_html = pretty_print_html(&final_html);
-            }
-
-            let body = Bytes::from(final_html);
-            if let Some(generation) = cache_generation {
-                state.html_cache.set_if_generation(body.clone(), generation);
-            }
-
-            return Ok(fallback_html_response(body, is_not_found));
-        }
-    }
+    let mut html_shell = emergency_fallback_shell(&client_head);
 
     if state.config.is_development() {
-        let vite_port = state.config.vite.port;
-        let mut html_shell = format!(
-            r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>rari App Router</title>
-</head>
-<body>
-  <div id="root"></div>
-  <script type="module" src="http://localhost:{vite_port}/@vite/client"></script>
-  <script type="module">
-    import 'http://localhost:{vite_port}/@id/virtual:rari-entry-client';
-  </script>
-</body>
-</html>"#
-        );
-
-        if state.config.is_development() {
-            html_shell = pretty_print_html(&html_shell);
-        }
-
-        return Ok(fallback_html_response(Bytes::from(html_shell), is_not_found));
+        html_shell = pretty_print_html(&html_shell);
     }
 
-    let error_html = r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Build Required</title>
-</head>
-<body>
-  <div style="padding: 40px; font-family: sans-serif;">
-    <h1>Build Required</h1>
-    <p>Please build your application first:</p>
-    <pre>npm run build</pre>
-    <p>Or run in development mode with Vite:</p>
-    <pre>npm run dev</pre>
-  </div>
-</body>
-</html>"#;
+    let body = Bytes::from(html_shell);
+    if state.config.is_production() {
+        state.html_cache.set_if_generation(body.clone(), cache_generation);
+    }
 
-    Ok(fallback_html_response(Bytes::from(error_html), is_not_found))
+    Ok(fallback_html_response(body, is_not_found))
 }
 
 #[axum::debug_handler]
@@ -1245,6 +1085,41 @@ pub async fn handle_app_route(
                             file_path.display(),
                             e
                         );
+                    }
+                }
+            }
+
+            if state.config.is_development()
+                && let Some(icon) = state
+                    .app_icons
+                    .iter()
+                    .find(|icon| icon.url.trim_start_matches('/') == path_without_leading_slash)
+            {
+                let app_dir = state.project_root.join("src").join("app");
+                if let Ok(file_path) = validate_safe_path(&app_dir, &icon.file_path).await
+                    && let Ok(metadata) = fs::metadata(&file_path).await
+                    && metadata.is_file()
+                {
+                    match fs::read(&file_path).await {
+                        Ok(content) => {
+                            let cache_control = &state.config.caching.static_files;
+                            #[expect(
+                                clippy::expect_used,
+                                reason = "Response::builder() with valid components never fails"
+                            )]
+                            return Ok(Response::builder()
+                                .header("content-type", icon.content_type.as_str())
+                                .header("cache-control", cache_control)
+                                .body(Body::from(content))
+                                .expect("Valid app icon response"));
+                        }
+                        Err(e) => {
+                            tracing::error!(
+                                "Failed to read app icon {}: {}",
+                                file_path.display(),
+                                e
+                            );
+                        }
                     }
                 }
             }
@@ -1582,56 +1457,16 @@ pub async fn handle_app_route(
             let use_streaming = should_use_streaming(&route_match, &state.config);
 
             if use_streaming {
-                // HTML-limited bots (Twitterbot, Slackbot, …) block on
-                // generateMetadata so tags land in the initial <head>. Browsers/capable
-                // crawlers get streaming metadata flushed when ready.
-                let user_agent = context.headers.get("user-agent").map(String::as_str);
-                let block_metadata =
-                    is_html_limited_bot(user_agent, state.config.html_limited_bots_regex.as_ref());
-
-                let response = if block_metadata {
-                    let mut context = context.clone();
-                    let metadata = collect_page_metadata(&state, &route_match, &context).await;
-                    apply_blocking_streaming_metadata(
-                        &mut context,
-                        metadata,
-                        state.image_optimizer.as_deref(),
-                    );
-                    render_with_fallback(
-                        Arc::new(state.clone()),
-                        route_match.clone(),
-                        context,
-                        accept_encoding,
-                        None,
-                    )
-                    .await?
-                } else {
-                    // Start Fizz first (priority queue), then collect metadata.
-                    // Spawning collect before Fizz contended for isolate time and
-                    // pushed lastByte behind Next; after queue, Suspense timers are
-                    // already running so metadata can share the wait window.
-                    let (metadata_tx, metadata_rx) = oneshot::channel();
-                    let response = render_with_fallback(
-                        Arc::new(state.clone()),
-                        route_match.clone(),
-                        context.clone(),
-                        accept_encoding,
-                        Some(metadata_rx),
-                    )
-                    .await?;
-
-                    let state_meta = state.clone();
-                    let route_match_meta = route_match.clone();
-                    let context_meta = context.clone();
-                    tokio::spawn(async move {
-                        let metadata =
-                            collect_page_metadata(&state_meta, &route_match_meta, &context_meta)
-                                .await;
-                        let _ = metadata_tx.send(metadata);
-                    });
-
-                    response
-                };
+                let mut context = context.clone();
+                let metadata = collect_page_metadata(&state, &route_match, &context).await;
+                apply_page_metadata(&mut context, metadata);
+                let response = render_with_fallback(
+                    Arc::new(state.clone()),
+                    route_match.clone(),
+                    context,
+                    accept_encoding,
+                )
+                .await?;
 
                 if (response.status() == StatusCode::OK
                     || response.status() == StatusCode::NOT_FOUND)
@@ -1762,8 +1597,8 @@ pub async fn handle_app_route(
                 return Ok(response);
             }
 
-            let metadata_rx =
-                spawn_page_metadata(state.clone(), route_match.clone(), context.clone());
+            let metadata = collect_page_metadata(&state, &route_match, &context).await;
+            context.metadata = metadata;
 
             let render_result = match layout_renderer
                 .render_route_with_streaming(
@@ -1782,9 +1617,6 @@ pub async fn handle_app_route(
                 }
             };
 
-            let metadata = metadata_rx.await.ok().flatten();
-            context.metadata = metadata;
-
             let cache_control_value = state.config.get_cache_control_for_route(path);
             let cache_policy =
                 response::RouteCachePolicy::from_cache_control(cache_control_value, path);
@@ -1801,11 +1633,7 @@ pub async fn handle_app_route(
                             }
                         };
 
-                    let final_html = wrap_html_with_metadata(
-                        html_with_assets,
-                        context.metadata.as_ref(),
-                        &state,
-                    );
+                    let final_html = wrap_html_with_metadata(html_with_assets, &state);
 
                     let etag = response::ResponseCache::generate_etag(final_html.as_bytes());
 
@@ -1827,8 +1655,7 @@ pub async fn handle_app_route(
                                 .await;
                         }
                     };
-                    let final_html =
-                        wrap_html_with_metadata(html, context.metadata.as_ref(), &state);
+                    let final_html = wrap_html_with_metadata(html, &state);
                     let etag = response::ResponseCache::generate_etag(final_html.as_bytes());
                     (final_html, etag)
                 }
@@ -1953,7 +1780,7 @@ pub async fn handle_app_route(
 #[expect(clippy::expect_used)]
 mod tests {
     use std::{
-        fs, process,
+        fs, path, process,
         sync::atomic::AtomicU64,
         time::{SystemTime, UNIX_EPOCH},
     };
@@ -1988,7 +1815,7 @@ mod tests {
 
     fn production_state_with_html_cache(
         html_cache: FallbackHtmlCache,
-        public_dir: PathBuf,
+        public_dir: path::PathBuf,
     ) -> ServerState {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
         let renderer = Arc::new(Mutex::new(RscRenderer::new(Arc::clone(&runtime))));
@@ -2014,7 +1841,8 @@ mod tests {
             response_cache: Arc::new(ResponseCache::new(CacheConfig::default())),
             static_fast_cache: Arc::new(StaticFastCache::new()),
             og_generator: None,
-            project_root: PathBuf::from("."),
+            app_icons: Arc::new(Vec::new()),
+            project_root: path::PathBuf::from("."),
             image_optimizer: None,
             cache_registry,
             image_handler,
@@ -2029,7 +1857,8 @@ mod tests {
             SystemTime::now().duration_since(UNIX_EPOCH).expect("time").as_nanos()
         ));
         fs::create_dir_all(&public_dir).expect("temp public dir");
-        fs::write(public_dir.join("index.html"), "<html>disk</html>").expect("index.html");
+        fs::write(public_dir.join("rari-client-head.html"), "<!-- client -->")
+            .expect("rari-client-head.html");
 
         let html_cache = FallbackHtmlCache::default();
         html_cache.set(Bytes::from("<html>cached</html>"));
@@ -2049,7 +1878,6 @@ mod tests {
             pathname: "/".to_string(),
             template_navigation_id: None,
             metadata: None,
-            streaming_head_extra: None,
         }
     }
 

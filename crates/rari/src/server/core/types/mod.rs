@@ -24,17 +24,17 @@ use crate::{
         config::Config,
         image::ImageOptimizer,
         og::OgImageGenerator,
-        routing::{ApiRouteHandler, AppRouter},
+        routing::{ApiRouteHandler, AppIconEntry, AppRouter},
     },
 };
 
-/// Single-entry cache for the production fallback index.html body.
+/// Single-entry cache for the production fallback HTML shell.
 ///
-/// The served body is the index.html file content, identical for every
-/// request path, so a per-path map only accumulates copies of the same page,
-/// growing without bound under path-diverse traffic (e.g. a crawler walking
-/// unknown URLs). One shared `Bytes` serves every path; `clear` forces a
-/// re-read from disk on the next request.
+/// The served body is a generated minimal document (with client asset tags),
+/// identical for every request path, so a per-path map only accumulates copies
+/// of the same page, growing without bound under path-diverse traffic (e.g. a
+/// crawler walking unknown URLs). One shared `Bytes` serves every path; `clear`
+/// forces regeneration on the next request.
 ///
 /// `clear` bumps a generation so an in-flight disk read that started before
 /// the clear cannot repopulate the cache via [`Self::set_if_generation`].
@@ -98,6 +98,7 @@ pub struct ServerState {
     pub response_cache: Arc<ResponseCache>,
     pub static_fast_cache: Arc<StaticFastCache>,
     pub og_generator: Option<Arc<OgImageGenerator>>,
+    pub app_icons: Arc<Vec<AppIconEntry>>,
     pub project_root: PathBuf,
     pub image_optimizer: Option<Arc<ImageOptimizer>>,
     pub cache_registry: Arc<CacheHandlerRegistry>,

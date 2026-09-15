@@ -1,7 +1,6 @@
 'use client'
 
 import type { PostHog } from 'posthog-js'
-import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
 import { PostHogPageView } from '@/components/PostHogPageView'
 
@@ -9,10 +8,7 @@ async function loadPostHog() {
   return import('posthog-js')
 }
 
-export function PostHogProvider({
-  children,
-  pathname,
-}: Readonly<{ children: ReactNode; pathname?: string }>) {
+export function PostHogInit({ pathname }: Readonly<{ pathname?: string }>) {
   const [client, setClient] = useState<PostHog | null>(null)
 
   useEffect(() => {
@@ -51,10 +47,7 @@ export function PostHogProvider({
     }
   }, [])
 
-  return (
-    <>
-      {children}
-      {client ? <PostHogPageView pathname={pathname} posthog={client} /> : null}
-    </>
-  )
+  if (!client) return null
+
+  return <PostHogPageView pathname={pathname} posthog={client} />
 }

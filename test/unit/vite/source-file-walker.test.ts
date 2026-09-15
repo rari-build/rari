@@ -2,7 +2,6 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { collectSourceFilePaths, normalizeScanDirs } from '@rari/vite/analysis/source-walker'
-import { parseHtmlEntryImports } from '@rari/vite/transform/html-entry'
 import { describe, expect, it } from 'vite-plus/test'
 
 describe('source-file-walker', () => {
@@ -57,69 +56,6 @@ describe('source-file-walker', () => {
 
     expect(dirs).toEqual([srcDir])
     expect(paths).toHaveLength(2)
-
-    fs.rmSync(dir, { recursive: true, force: true })
-  })
-})
-
-describe('html-entry-imports', () => {
-  it('parses html script imports under /src/', () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-html-'))
-    fs.writeFileSync(
-      path.join(dir, 'index.html'),
-      `<!doctype html>
-<script type="module">import "/src/main.tsx"</script>
-<script type="module">import("/src/app/page.tsx")</script>
-`,
-    )
-
-    const imports = parseHtmlEntryImports(dir)
-
-    expect(imports.has(path.join(dir, 'src', 'main.tsx'))).toBe(true)
-    expect(imports.has(path.join(dir, 'src', 'app', 'page.tsx'))).toBe(true)
-
-    fs.rmSync(dir, { recursive: true, force: true })
-  })
-
-  it('parses module script src attributes under /src/', () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-html-'))
-    fs.writeFileSync(
-      path.join(dir, 'index.html'),
-      `<!doctype html>
-<script type="module" src="/src/main.tsx"></script>
-<script src="/src/legacy.js"></script>
-`,
-    )
-
-    const imports = parseHtmlEntryImports(dir)
-
-    expect(imports.has(path.join(dir, 'src', 'main.tsx'))).toBe(true)
-    expect(imports.has(path.join(dir, 'src', 'legacy.js'))).toBe(false)
-
-    fs.rmSync(dir, { recursive: true, force: true })
-  })
-
-  it('normalizes symlinked html entry import paths', () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-html-symlink-'))
-    const realSrc = path.join(dir, 'real-src')
-    const linkSrc = path.join(dir, 'src')
-
-    fs.mkdirSync(realSrc, { recursive: true })
-    fs.symlinkSync(realSrc, linkSrc)
-    fs.writeFileSync(path.join(realSrc, 'main.tsx'), 'export default function Main() {}')
-    fs.writeFileSync(
-      path.join(dir, 'index.html'),
-      `<!doctype html>
-<script type="module" src="/src/main.tsx"></script>
-`,
-    )
-
-    const imports = parseHtmlEntryImports(dir)
-    const symlinkPath = path.join(linkSrc, 'main.tsx')
-    const realPath = fs.realpathSync(symlinkPath)
-
-    expect(imports.has(realPath)).toBe(true)
-    expect(imports.has(symlinkPath)).toBe(false)
 
     fs.rmSync(dir, { recursive: true, force: true })
   })

@@ -43,6 +43,7 @@ import {
 } from '@/shared/utils/type-guards'
 import { getComponentId } from './analysis/component-ids'
 import {
+  analyzeModuleSource,
   collectExportNames,
   hasDefaultExport,
   rewriteExportDefaultAsBinding,
@@ -55,6 +56,14 @@ import {
   resolveModuleCachePath,
 } from './analysis/module-cache'
 import { normalizeScanDirs } from './analysis/source-walker'
+import {
+  buildClientHeadFromBundle,
+  buildLayoutCssImportStatements,
+  CLIENT_HEAD_FILE,
+  collectLayoutCssDevHrefs,
+  resetClientHeadExtras,
+  VIRTUAL_CLIENT_ENTRY,
+} from './client-head'
 import { createFontPlugin } from './font/plugin'
 import { HMRCoordinator } from './hmr/coordinator'
 import { walkImporters } from './hmr/import-graph'
@@ -76,17 +85,35 @@ import {
   buildClientReferenceReplacementFromImport,
   ensureNamedImportFromModule,
 } from './transform/client-import'
-import { parseHtmlEntryImports } from './transform/html-entry'
 import {
   hasRegisterServerReferenceImport,
   transformInlineServerActions,
 } from './transform/inline-server-action'
 import { transformDefineMdxComponents } from './transform/mdx-components'
 import { createReactCompilerPlugin } from './transform/react-compiler'
+import { createReactRefreshPlugins } from './transform/react-refresh'
 import { getUseCacheTransform } from './transform/use-cache'
 
 const DIST_NOT_BUILT_ERROR =
   '[rari] Runtime dist not built. Run `pnpm build` in the rari package first.'
+
+const PROXY_BODY_MAX_BYTES = 10 * 1024 * 1024
+const DOCUMENT_ASSET_EXT_RE =
+  /\.(?:js|mjs|cjs|ts|tsx|jsx|css|map|json|svg|png|jpe?g|gif|webp|avif|ico|woff2?|ttf|eot|txt|xml|html|wasm)$/i
+
+function requestPathname(url: string): string {
+  try {
+    return new URL(url, 'http://localhost').pathname
+  } catch {
+    const pathOnly = url.split(/[?#]/, 1)[0] ?? url
+    return pathOnly === '' ? '/' : pathOnly
+  }
+}
+
+function isLikelyStaticAssetPath(pathname: string): boolean {
+  const basename = pathname.slice(pathname.lastIndexOf('/') + 1)
+  return DOCUMENT_ASSET_EXT_RE.test(basename)
+}
 
 const IMPORT_TYPE_SPECIFIER_REGEX =
   /import\s+type\s+(\{[^}]+\})\s+from\s+["']\.\.?\/([^"']+)["'];?/g
@@ -99,7 +126,6 @@ const IMPORT_DEFAULT_REGEX = /import\s+(\w+)\s+from\s+["']\.\.?\/([^"']+)["'];?/
 const IMPORT_SIDE_EFFECT_REGEX = /import\s+["']\.\.?\/([^"']+)["'];?/g
 const EXPORT_DEFAULT_FUNCTION_DECL_REGEX = /export\s+default\s+(?:async\s+)?function\s+(\w+)/
 const USE_CLIENT_DIRECTIVE_REGEX = /^['"]use client['"];?\s*$/gm
-const IMPORT_REGEX = /import\s+["']([^"']+)["']/g
 const LOCAL_IMPORT_SOURCE_REGEX = /^[./@~#]/
 
 function matchesAliasImport(source: string, aliases: Readonly<Record<string, string>>): boolean {
@@ -125,7 +151,6 @@ function isExactReactAliasFind(find: string | RegExp): boolean {
 const REACT_IMPORT_REGEX = /import\s+\{[^}]*\}\s+from\s+['"]react['"]/
 const REACT_IMPORT_WITH_DEFAULT_REGEX = /import\s+[^,\s]+\s*,\s*\{[^}]*\}\s+from\s+['"]react['"]/
 const REACT_IMPORT_MATCH_REGEX = /import React(,\s*\{([^}]*)\})?\s+from\s+['"]react['"];?/
-const IMPORT_PATH_REGEX = /import\s+["']([^"']+)["']/g
 const RSC_CLIENT_IMPORT_REGEX =
   /from(\s*)(['"])(?:\.\/vendor\/react-flight-client\/index|rari\/runtime\/vendor\/react-flight-client\/index)\.mjs\2/g
 const JSX_TEST_REGEX = /\bJSX\b/
@@ -351,11 +376,16 @@ async function loadRscClientRuntime(): Promise<string> {
   return loadRuntimeFile('rsc-client-runtime.mjs')
 }
 
-async function loadEntryClient(imports: string, registrations: string): Promise<string> {
+async function loadEntryClient(
+  imports: string,
+  registrations: string,
+  layoutCssImports = '',
+): Promise<string> {
   const template = await loadRuntimeFile('entry-client.mjs')
-  return template
+  const body = template
     .replace('/*! @preserve CLIENT_COMPONENT_IMPORTS_PLACEHOLDER */', imports)
     .replace('/*! @preserve CLIENT_COMPONENT_REGISTRATIONS_PLACEHOLDER */', registrations)
+  return layoutCssImports !== '' ? `${layoutCssImports}\n${body}` : body
 }
 
 async function loadRscReferences(): Promise<string> {
@@ -527,32 +557,6 @@ export function rari(
     return paths
   }
 
-  let htmlEntryImports: Set<string> | null = null
-  let lastIndexHtmlMtime: number | null = null
-
-  function getHtmlEntryImports(): ReadonlySet<string> {
-    if (devServerComponentBuilder) return devServerComponentBuilder.getHtmlOnlyImports()
-
-    const projectRoot =
-      options.projectRoot != null && options.projectRoot !== ''
-        ? options.projectRoot
-        : process.cwd()
-    const indexHtmlPath = path.join(projectRoot, 'index.html')
-
-    try {
-      const mtime = fs.statSync(indexHtmlPath).mtimeMs
-      if (htmlEntryImports !== null && mtime === lastIndexHtmlMtime) return htmlEntryImports
-      lastIndexHtmlMtime = mtime
-    } catch {
-      htmlEntryImports ??= new Set()
-
-      return htmlEntryImports
-    }
-
-    htmlEntryImports = parseHtmlEntryImports(projectRoot)
-    return htmlEntryImports
-  }
-
   function isServerComponent(filePath: string): boolean {
     if (filePath.includes('node_modules') || isRariInternalFile(filePath)) return false
 
@@ -560,12 +564,7 @@ export function rari(
 
     try {
       const analysis = moduleAnalysisCache.get(filePath)
-      return isServerComponentFromAnalysis(
-        resolvedPath,
-        analysis,
-        getHtmlEntryImports(),
-        resolvedPath,
-      )
+      return isServerComponentFromAnalysis(resolvedPath, analysis)
     } catch {
       return false
     }
@@ -774,6 +773,8 @@ if (import.meta.hot) {
     name: 'rari',
 
     config(config: UserConfig, { command }) {
+      // Layout owns <html>/<body>; client entry is virtual:rari-entry-client (no index.html).
+      config.appType = 'custom'
       config.define ??= {}
 
       if (
@@ -804,50 +805,6 @@ if (import.meta.hot) {
         ...config.css,
         transformer: config.css?.transformer ?? ('lightningcss' as const),
         modules: { ...existingCssModules, pattern: RARI_CSS_MODULES_PATTERN } as CSSModulesOptions,
-      }
-
-      if (command === 'build') {
-        const projectRoot =
-          options.projectRoot != null && options.projectRoot !== ''
-            ? options.projectRoot
-            : process.cwd()
-        const indexHtmlPath = path.join(projectRoot, 'index.html')
-
-        if (fs.existsSync(indexHtmlPath)) {
-          try {
-            const htmlContent = fs.readFileSync(indexHtmlPath, 'utf-8')
-            const htmlImports: Array<{ path: string; name: string }> = []
-
-            for (const match of htmlContent.matchAll(IMPORT_REGEX)) {
-              const importPath = match[1]
-              if (importPath.startsWith('/src/') && TSX_EXT_REGEX.test(importPath)) {
-                const relativePath = importPath.slice(1)
-                const filename = path.basename(relativePath, path.extname(relativePath))
-                htmlImports.push({ path: relativePath, name: filename })
-              }
-            }
-
-            if (htmlImports.length > 0) {
-              config.build ??= {}
-              config.build.rolldownOptions ??= {}
-
-              const existingInput = config.build.rolldownOptions.input ?? { main: './index.html' }
-              let inputObj: Record<string, string>
-              if (typeof existingInput === 'string') inputObj = { main: existingInput }
-              else if (Array.isArray(existingInput))
-                inputObj = { main: existingInput[0] ?? './index.html' }
-              else inputObj = { ...existingInput }
-
-              htmlImports.forEach(({ path: importPath, name }) => {
-                inputObj[name] = `./${importPath}`
-              })
-
-              config.build.rolldownOptions.input = inputObj
-            }
-          } catch (error) {
-            console.warn('[rari] Error parsing index.html for build inputs:', error)
-          }
-        }
       }
 
       config.resolve ??= {}
@@ -998,8 +955,8 @@ if (import.meta.hot) {
         config.build ??= {}
         config.build.rolldownOptions ??= {}
 
-        config.build.rolldownOptions.input ??= {
-          main: './index.html',
+        config.build.rolldownOptions.input = {
+          main: VIRTUAL_CLIENT_ENTRY,
         }
 
         config.build.rolldownOptions.output ??= {}
@@ -1055,7 +1012,9 @@ if (import.meta.hot) {
 
       config.environments.client.build ??= {}
       config.environments.client.build.rolldownOptions ??= {}
-      config.environments.client.build.rolldownOptions.input ??= {}
+      config.environments.client.build.rolldownOptions.input = {
+        main: VIRTUAL_CLIENT_ENTRY,
+      }
 
       config.environments.client.build.rolldownOptions.external ??= []
 
@@ -1066,6 +1025,10 @@ if (import.meta.hot) {
       }
 
       return config
+    },
+
+    buildStart() {
+      resetClientHeadExtras()
     },
 
     configResolved(config) {
@@ -1116,7 +1079,6 @@ if (import.meta.hot) {
 
       if (!TSX_EXT_REGEX.test(id)) return null
 
-      const originalCode = code
       let wasUseCacheTransformed = false
       if (options.experimental?.useCache || options.experimental?.useCacheRemote) {
         const transform = await getUseCacheTransform()
@@ -1130,7 +1092,25 @@ if (import.meta.hot) {
       }
 
       const environment = this.environment
-      const moduleAnalysis = moduleAnalysisCache.get(id, originalCode)
+      const moduleAnalysis =
+        id.startsWith('\0') || id.includes('virtual:')
+          ? analyzeModuleSource(code)
+          : (() => {
+              try {
+                return moduleAnalysisCache.get(id)
+              } catch {
+                return analyzeModuleSource(code)
+              }
+            })()
+
+      if (moduleAnalysis.topLevelUseServer) {
+        setComponentType(id, 'server')
+
+        if (environment.name === 'rsc' || environment.name === 'ssr') {
+          return transformServerModule(code, id, moduleAnalysis)
+        }
+        return transformClientModule(code, id, moduleAnalysis)
+      }
 
       if (moduleAnalysis.topLevelUseClient) {
         setComponentType(id, 'client')
@@ -1146,10 +1126,13 @@ if (import.meta.hot) {
 
           const resolvedImportPath = resolveImportToFilePath(importPath, id, resolvedAlias)
 
-          if (fs.existsSync(resolvedImportPath)) {
-            setComponentType(resolvedImportPath, 'client')
-            addTrackedClientComponent(resolvedImportPath)
-          }
+          if (!fs.existsSync(resolvedImportPath)) continue
+
+          const importedAnalysis = moduleAnalysisCache.get(resolvedImportPath)
+          if (importedAnalysis.topLevelUseServer) continue
+
+          setComponentType(resolvedImportPath, 'client')
+          addTrackedClientComponent(resolvedImportPath)
         }
 
         return transformClientModuleForClient(code, id, moduleAnalysis)
@@ -1179,16 +1162,6 @@ if (import.meta.hot) {
 ${clientTransformedCode}`
 
           return clientTransformedCode
-        }
-      }
-
-      if (moduleAnalysis.topLevelUseServer) {
-        setComponentType(id, 'server')
-
-        if (environment.name === 'rsc' || environment.name === 'ssr') {
-          return transformServerModule(code, id, moduleAnalysis)
-        } else {
-          return transformClientModule(code, id, moduleAnalysis)
         }
       }
 
@@ -1458,6 +1431,7 @@ ${clientTransformedCode}`
         const vitePort = server.config.server.port
         const origin = options.origin?.trim().replace(/\/+$/, '')
         const envOrigin = process.env.RARI_ORIGIN?.trim().replace(/\/+$/, '')
+        const layoutCssHrefs = collectLayoutCssDevHrefs(projectRoot, resolvedAlias)
 
         const args = ['--mode', mode, '--port', serverPort.toString(), '--host', '127.0.0.1']
 
@@ -1471,6 +1445,7 @@ ${clientTransformedCode}`
                 ? process.env.RUST_LOG
                 : 'error',
             RARI_VITE_PORT: vitePort.toString(),
+            ...(layoutCssHrefs.length > 0 ? { RARI_DEV_LAYOUT_CSS: layoutCssHrefs.join(',') } : {}),
             // Dev starts the binary before config.json is written; pass pool size / origin / bots via env.
             ...(options.jsPoolSize != null &&
             (process.env.RARI_JS_POOL_SIZE == null || process.env.RARI_JS_POOL_SIZE === '')
@@ -1588,22 +1563,34 @@ ${clientTransformedCode}`
       server.middlewares.use((req, res, next) => {
         void (async () => {
           const acceptHeader = req.headers.accept
+          const method = req.method ?? 'GET'
+          const url = req.url ?? ''
+          const pathname = requestPathname(url)
           const isRscRequest =
             acceptHeader != null && acceptHeader !== '' && acceptHeader.includes('text/x-component')
+          const isDocumentRequest =
+            (method === 'GET' || method === 'HEAD') &&
+            acceptHeader?.includes('text/html') &&
+            !pathname.startsWith('/@') &&
+            !pathname.startsWith('/node_modules') &&
+            !pathname.startsWith('/api') &&
+            !pathname.startsWith('/_rari') &&
+            !pathname.startsWith('/vite-server') &&
+            !isLikelyStaticAssetPath(pathname)
 
           if (
-            isRscRequest &&
-            req.url != null &&
-            req.url !== '' &&
-            !req.url.startsWith('/api') &&
-            !req.url.startsWith('/rsc') &&
-            !req.url.includes('.')
+            (isRscRequest || isDocumentRequest) &&
+            url !== '' &&
+            !pathname.startsWith('/api') &&
+            !pathname.startsWith('/rsc')
           ) {
             if (!rustServerReady) {
               const ready = await waitForRustServerReady(10000)
 
               if (!ready) {
-                console.error('[rari] Rust server not ready, cannot proxy RSC request')
+                console.error(
+                  `[rari] Rust server not ready, cannot proxy ${isRscRequest ? 'RSC' : 'HTML'} request`,
+                )
                 if (!res.headersSent) {
                   res.statusCode = 503
                   res.end('Server not ready')
@@ -1615,7 +1602,7 @@ ${clientTransformedCode}`
 
             const serverPort = getRariServerPort()
 
-            const targetUrl = `http://localhost:${serverPort}${req.url}`
+            const targetUrl = `http://localhost:${serverPort}${url}`
 
             try {
               const headers: Record<string, string> = {}
@@ -1626,9 +1613,54 @@ ${clientTransformedCode}`
               headers.host = `localhost:${serverPort}`
               headers['accept-encoding'] = 'identity'
 
+              const hasBody = method !== 'GET' && method !== 'HEAD'
+              const body = hasBody
+                ? await new Promise<Blob>((resolve, reject) => {
+                    const chunks: Buffer[] = []
+                    let totalBytes = 0
+                    let settled = false
+
+                    function fail(error: Error) {
+                      if (settled) return
+                      settled = true
+                      req.removeListener('data', onData)
+                      req.removeListener('end', onEnd)
+                      req.removeListener('error', onError)
+                      reject(error)
+                    }
+
+                    function onData(chunk: Buffer) {
+                      totalBytes += chunk.length
+                      if (totalBytes > PROXY_BODY_MAX_BYTES) {
+                        req.destroy()
+                        fail(
+                          Object.assign(new Error('Request body too large'), { statusCode: 413 }),
+                        )
+                        return
+                      }
+                      chunks.push(chunk)
+                    }
+
+                    function onEnd() {
+                      if (settled) return
+                      settled = true
+                      resolve(new Blob([Buffer.concat(chunks)]))
+                    }
+
+                    function onError(error: Error) {
+                      fail(error)
+                    }
+
+                    req.on('data', onData)
+                    req.on('end', onEnd)
+                    req.on('error', onError)
+                  })
+                : undefined
+
               const response = await fetch(targetUrl, {
-                method: req.method,
+                method,
                 headers,
+                ...(body != null ? { body } : {}),
               })
 
               res.statusCode = response.status
@@ -1636,29 +1668,44 @@ ${clientTransformedCode}`
                 if (key.toLowerCase() !== 'content-encoding') res.setHeader(key, value)
               })
 
-              if (response.body) {
-                const reader = response.body.getReader()
+              if (method === 'HEAD' || !response.body) {
+                res.end()
+                return
+              }
 
-                try {
-                  let streamDone = false
-                  while (!streamDone) {
-                    const { done, value } = await reader.read()
-                    streamDone = done
-                    if (!streamDone && value != null) res.write(Buffer.from(value))
-                  }
-                  res.end()
-                } catch (streamError) {
-                  console.error('[rari] Stream error:', streamError)
-                  if (!res.headersSent) res.statusCode = 500
-                  res.end()
+              const reader = response.body.getReader()
+
+              try {
+                let streamDone = false
+                while (!streamDone) {
+                  const { done, value } = await reader.read()
+                  streamDone = done
+                  if (!streamDone && value != null) res.write(Buffer.from(value))
                 }
-              } else {
+                res.end()
+              } catch (streamError) {
+                console.error('[rari] Stream error:', streamError)
+                if (!res.headersSent) res.statusCode = 500
                 res.end()
               }
 
               return
             } catch (error) {
-              console.error('[rari] Failed to proxy RSC request:', error)
+              const statusCode =
+                isRecord(error) && typeof error.statusCode === 'number'
+                  ? error.statusCode
+                  : undefined
+              if (statusCode === 413) {
+                if (!res.headersSent) {
+                  res.statusCode = 413
+                  res.end('Request Entity Too Large')
+                }
+                return
+              }
+              console.error(
+                `[rari] Failed to proxy ${isRscRequest ? 'RSC' : 'HTML'} request:`,
+                error,
+              )
               if (!res.headersSent) {
                 res.statusCode = 500
                 res.end('Internal Server Error')
@@ -2027,8 +2074,9 @@ for (const [path, config] of Object.entries(lazyComponentRegistry)) {
 
         const allImports = externalImports
         const allRegistrations = [registrations, externalRegistrations].filter(Boolean).join('\n')
+        const layoutCssImports = buildLayoutCssImportStatements(projectRoot, resolvedAlias)
 
-        return loadEntryClient(allImports, allRegistrations)
+        return loadEntryClient(allImports, allRegistrations, layoutCssImports)
       }
 
       if (id === 'react-server-dom-rari/server') return loadRscReferences()
@@ -2245,60 +2293,14 @@ export const createTemporaryReferenceSet = module.exports.createTemporaryReferen
       return undefined
     },
 
-    transformIndexHtml: {
-      order: 'pre',
-      handler(html) {
-        const imports: string[] = []
+    generateBundle(_options, bundle) {
+      const head = buildClientHeadFromBundle(bundle)
 
-        for (const match of html.matchAll(IMPORT_PATH_REGEX)) {
-          const importPath = match[1]
-          if (importPath.startsWith('/src/')) imports.push(importPath)
-        }
-
-        const tags = []
-
-        tags.push({
-          tag: 'script',
-          attrs: {
-            type: 'module',
-          },
-          children: "import 'virtual:rari-entry-client';",
-          injectTo: 'head-prepend' as const,
-        })
-
-        if (imports.length > 0) {
-          tags.push(
-            ...imports.map(importPath => ({
-              tag: 'script',
-              attrs: {
-                type: 'module',
-                src: importPath,
-              },
-              injectTo: 'head-prepend' as const,
-            })),
-          )
-        }
-
-        let modifiedHtml = html
-
-        modifiedHtml = modifiedHtml.replace(/^\s*import\s+["']\/src\/[^"']+["'];?\s*$/gm, '')
-
-        modifiedHtml = modifiedHtml.replace(
-          /^\s*import\s+["']virtual:rari-entry-client["'];?\s*$/gm,
-          '',
-        )
-
-        let previousHtml: string
-        do {
-          previousHtml = modifiedHtml
-          modifiedHtml = modifiedHtml.replace(
-            /<script\s+type=["']module["'][^>]*>\s*<\/script>/gi,
-            '',
-          )
-        } while (modifiedHtml !== previousHtml)
-
-        return { html: modifiedHtml, tags }
-      },
+      this.emitFile({
+        type: 'asset',
+        fileName: CLIENT_HEAD_FILE,
+        source: head,
+      })
     },
 
     async writeBundle() {
@@ -2354,8 +2356,9 @@ export const createTemporaryReferenceSet = module.exports.createTemporaryReferen
 
   const plugins: Plugin[] = []
 
-  if (options.compiler != null && options.compiler !== false)
-    plugins.push(createReactCompilerPlugin(options.compiler))
+  if (options.compiler != null && options.compiler !== false) {
+    plugins.push(...createReactRefreshPlugins(), createReactCompilerPlugin(options.compiler))
+  }
 
   plugins.push(
     mainPlugin,

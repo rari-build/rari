@@ -6,6 +6,8 @@ import { cwd } from 'node:process'
 import Footer from '@/components/Footer'
 import { Providers } from '@/components/Providers'
 import Sidebar from '@/components/Sidebar'
+import { siteUrl } from '@/lib/site'
+import './globals.css'
 
 function getRariVersion(): string {
   try {
@@ -24,25 +26,37 @@ function getRariVersion(): string {
 
 const RARI_VERSION = getRariVersion()
 
-export default function RootLayout({ children, pathname }: LayoutProps) {
+export default function Layout({ children, pathname }: LayoutProps) {
   return (
-    <Providers pathname={pathname}>
-      <div
-        className="min-h-screen bg-chrome text-fg-body font-sans overflow-x-hidden"
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion CSS custom property
-        style={{ '--sidebar-width': 'calc(8rem)' } as CSSProperties}
-      >
-        <div className="flex min-h-screen">
-          <Sidebar version={RARI_VERSION} />
-          <div className="flex-1 flex flex-col min-h-screen min-w-0 gap-0.5 md:pl-0.5 md:pr-0.5">
-            <main className="flex-1 min-w-0 bg-canvas rounded-b-md overflow-hidden">
-              {children}
-            </main>
-            <Footer />
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          // eslint-disable-next-line react/dom-no-dangerously-set-innerhtml
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var stored=localStorage.getItem('preferred-theme');var preference=stored==='light'||stored==='dark'||stored==='system'?stored:'system';var resolved=preference==='system'?window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light':preference;document.documentElement.classList.toggle('light',resolved==='light');document.documentElement.classList.toggle('dark',resolved==='dark')}catch(e){document.documentElement.classList.add('dark')}})()`,
+          }}
+        />
+      </head>
+      <body className="min-h-screen bg-canvas text-fg-body">
+        <Providers pathname={pathname}>
+          <div
+            className="min-h-screen bg-chrome text-fg-body font-sans overflow-x-hidden"
+            // oxlint-disable-next-line typescript/no-unsafe-type-assertion CSS custom property
+            style={{ '--sidebar-width': 'calc(8rem)' } as CSSProperties}
+          >
+            <div className="flex min-h-screen">
+              <Sidebar version={RARI_VERSION} />
+              <div className="flex-1 flex flex-col min-h-screen min-w-0 gap-0.5 md:pl-0.5 md:pr-0.5">
+                <main className="flex-1 min-w-0 bg-canvas rounded-b-md overflow-hidden">
+                  {children}
+                </main>
+                <Footer />
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
-    </Providers>
+        </Providers>
+      </body>
+    </html>
   )
 }
 
@@ -50,13 +64,6 @@ export const metadata: Metadata = {
   title: 'Runtime Accelerated Rendering Infrastructure (rari)',
   description:
     'rari is a performance-first React framework powered by Rust. Build web applications with React Server Components, zero-config setup, and runtime-accelerated rendering infrastructure.',
-  icons: {
-    icon: [
-      { url: '/favicon.svg', type: 'image/svg+xml', sizes: 'any' },
-      { url: '/favicon.ico', sizes: '32x32' },
-    ],
-    apple: [{ url: '/apple-touch-icon.png', sizes: '180x180' }],
-  },
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#e8ecf1' },
     { media: '(prefers-color-scheme: dark)', color: '#0d1117' },
@@ -76,7 +83,7 @@ export const metadata: Metadata = {
   },
   alternates: {
     types: {
-      'application/rss+xml': 'https://rari.build/feed.xml',
+      'application/rss+xml': `${siteUrl}/feed.xml`,
     },
   },
 }

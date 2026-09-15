@@ -75,16 +75,20 @@ With the app router, your application structure is based on the `src/app/` direc
 Create `src/app/layout.tsx` (root layout):
 
 <CodeBlock filename="src/app/layout.tsx" language="tsx">{`import type { LayoutProps } from 'rari'
+import './globals.css'
 
-export default function RootLayout({ children }: LayoutProps) {
+export default function Layout({ children }: LayoutProps) {
   return (
-    <div>
-      <nav>
-        <a href="/">Home</a>
-        <a href="/about">About</a>
-      </nav>
-      <main>{children}</main>
-    </div>
+    <html lang="en">
+      <head />
+      <body>
+        <nav>
+          <a href="/">Home</a>
+          <a href="/about">About</a>
+        </nav>
+        <main>{children}</main>
+      </body>
+    </html>
   )
 }
 
@@ -288,7 +292,6 @@ A typical rari project (created with `create-rari-app`) looks like this:
 │   └── actions/
 │       └── todo-actions.ts
 ├── public/
-├── index.html
 ├── package.json
 ├── vite.config.ts
 ├── tsconfig.json

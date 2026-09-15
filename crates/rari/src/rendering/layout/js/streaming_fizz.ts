@@ -423,6 +423,116 @@ declare function rariCreateHtmlBoundaryTracker(): {
     return `<div class=rari-error style=color:red;border:1px_solid_red;padding:10px;border-radius:4px;background-color:#fff5f5><strong>Error loading content: </strong>${errMsg}</div>`
   }
 
+  function rariFindClosingHeadTag(html: string): number {
+    const HEAD_CLOSE = '</head>'
+    const RAW_TAGS: ReadonlyArray<{ readonly open: string; readonly close: string }> = [
+      { open: '<script', close: '</script>' },
+      { open: '<style', close: '</style>' },
+      { open: '<title', close: '</title>' },
+      { open: '<textarea', close: '</textarea>' },
+      { open: '<noscript', close: '</noscript>' },
+    ]
+
+    type ScanState = 'data' | 'comment' | { readonly rawClose: string }
+    let state: ScanState = 'data'
+    let i = 0
+
+    while (i < html.length) {
+      if (state === 'data') {
+        if (html.startsWith('<!--', i)) {
+          state = 'comment'
+          i += 4
+          continue
+        }
+
+        if (html.slice(i, i + HEAD_CLOSE.length).toLowerCase() === HEAD_CLOSE) {
+          return i
+        }
+
+        let enteredRaw = false
+        for (const { open, close } of RAW_TAGS) {
+          if (html.slice(i, i + open.length).toLowerCase() !== open) continue
+          const after = i + open.length
+          if (after < html.length) {
+            const next = html.charAt(after)
+            if (
+              next !== '>' &&
+              next !== '/' &&
+              next !== ' ' &&
+              next !== '\t' &&
+              next !== '\n' &&
+              next !== '\r'
+            ) {
+              continue
+            }
+          }
+          const gt = html.indexOf('>', i)
+          if (gt === -1) return -1
+          const openEnd = gt + 1
+          if (gt >= 1 && html.charAt(gt - 1) === '/') {
+            i = openEnd
+          } else {
+            state = { rawClose: close }
+            i = openEnd
+          }
+          enteredRaw = true
+          break
+        }
+        if (enteredRaw) continue
+
+        i++
+        continue
+      }
+
+      if (state === 'comment') {
+        if (html.startsWith('-->', i)) {
+          state = 'data'
+          i += 3
+        } else {
+          i++
+        }
+        continue
+      }
+
+      const close = state.rawClose
+      if (html.slice(i, i + close.length).toLowerCase() === close) {
+        state = 'data'
+        i += close.length
+      } else {
+        i++
+      }
+    }
+
+    return -1
+  }
+
+  function rariInjectHeadContent(
+    chunk: string,
+    headContent: string,
+    alreadyInjected: boolean,
+    pendingPrefix = '',
+  ): {
+    readonly chunk: string
+    readonly injected: boolean
+    readonly pending: string
+  } {
+    if (alreadyInjected || !headContent) {
+      return { chunk: pendingPrefix + chunk, injected: alreadyInjected, pending: '' }
+    }
+
+    const combined = pendingPrefix + chunk
+    const headClose = rariFindClosingHeadTag(combined)
+    if (headClose === -1) {
+      return { chunk: '', injected: false, pending: combined }
+    }
+
+    return {
+      chunk: `${combined.slice(0, headClose)}${headContent}${combined.slice(headClose)}`,
+      injected: true,
+      pending: '',
+    }
+  }
+
   async function rariPumpLiveMux(
     session: RariFizzSession,
     fizzStream: ReadableStream<Uint8Array> & { allReady?: Promise<void> },
@@ -430,6 +540,7 @@ declare function rariCreateHtmlBoundaryTracker(): {
     ensureSourceComplete?: () => Promise<void>,
     caughtErrors?: unknown[],
     nonce = '',
+    headContent = '',
   ) {
     const reader = fizzStream.getReader()
     const decoder = new TextDecoder()
@@ -439,6 +550,8 @@ declare function rariCreateHtmlBoundaryTracker(): {
     let strippedDoctype = false
     let completeScriptSent = false
     let finalPackageSent = false
+    let headInjected = false
+    let headPending = ''
 
     const takeFlightBootstrap = (): string => {
       if (flightBootstrapped) return ''
@@ -472,7 +585,30 @@ declare function rariCreateHtmlBoundaryTracker(): {
         chunk = rariStripLeadingDoctype(chunk)
       }
 
-      return chunk
+      const injected = rariInjectHeadContent(chunk, headContent, headInjected, headPending)
+      headInjected = injected.injected
+      headPending = injected.pending
+      return injected.chunk
+    }
+
+    const flushHeadPending = async (): Promise<boolean> => {
+      if (!headPending) return true
+      let pending = headPending
+      headPending = ''
+      if (!headInjected && headContent) {
+        const injected = rariInjectHeadContent('', headContent, false, pending)
+        if (injected.injected) {
+          pending = injected.chunk
+          headInjected = true
+        } else {
+          pending = `${pending}${headContent}`
+          headInjected = true
+        }
+      }
+      if (!pending || session.disconnected) return true
+      if (!(await session.pumpFizzChunk(pending))) return false
+      session.trackHtmlBoundaries(pending)
+      return true
     }
 
     const pumpPendingFlight = async (): Promise<boolean> => {
@@ -544,11 +680,10 @@ declare function rariCreateHtmlBoundaryTracker(): {
         const { done, value } = await reader.read()
         if (done) {
           const tail = decoder.decode()
-          if (tail) {
-            if (!(await pumpFizzText(tail))) return
-            if (!finalPackageSent && session.safeToInjectFlight()) {
-              if (!(await pumpPendingFlight())) return
-            }
+          if (tail && !(await pumpFizzText(tail))) return
+          if (!(await flushHeadPending())) return
+          if (!finalPackageSent && session.safeToInjectFlight()) {
+            if (!(await pumpPendingFlight())) return
           }
           rariStreamLog('mux.fizzLoop.done', `htmlChunks=${htmlChunkCount}`)
           break
@@ -557,7 +692,7 @@ declare function rariCreateHtmlBoundaryTracker(): {
         const chunkText = decoder.decode(value, { stream: true })
         rariStreamLog('mux.htmlChunk', `n=${htmlChunkCount} bytes=${value.byteLength}`)
         if (!(await pumpFizzText(chunkText))) return
-        if (!finalPackageSent && session.safeToInjectFlight()) {
+        if (!finalPackageSent && !headPending && session.safeToInjectFlight()) {
           if (!(await pumpPendingFlight())) return
         }
       }
@@ -621,12 +756,10 @@ declare function rariCreateHtmlBoundaryTracker(): {
 
     const ReactServerRenderer = g['~reactServerRenderer']
     const ReactDOMServer = g['~reactServer']
-    const R = g.React
 
     if (!ReactServerRenderer?.renderToReadableStream)
       throw new Error('[rari] RSC renderer not loaded')
     if (!ReactDOMServer?.renderToReadableStream) throw new Error('[rari] Fizz renderer not loaded')
-    if (!R?.createElement) throw new Error('[rari] React not loaded')
 
     session.resetHtmlState()
     rariStreamLog('render.start')
@@ -646,16 +779,7 @@ declare function rariCreateHtmlBoundaryTracker(): {
     const { flightReadable, liveFlight, ensureSourceComplete } =
       rariCreatePullFlightFanout(rscStream)
 
-    const fullDoc = R.createElement(
-      'html',
-      { lang: 'en' },
-      R.createElement('head', { dangerouslySetInnerHTML: { __html: headContent } }),
-      R.createElement(
-        'body',
-        null,
-        R.createElement('div', { id: 'root' }, rariCreateStreamingRoot(flightReadable)),
-      ),
-    )
+    const fullDoc = rariCreateStreamingRoot(flightReadable)
 
     rariStreamLog('fizz.render.start')
     const fizzStream = (await ReactDOMServer.renderToReadableStream(fullDoc, {
@@ -673,6 +797,7 @@ declare function rariCreateHtmlBoundaryTracker(): {
       ensureSourceComplete,
       caughtErrors,
       nonce,
+      headContent,
     )
     rariStreamLog('render.done')
   }
@@ -705,12 +830,10 @@ declare function rariCreateHtmlBoundaryTracker(): {
     const nonce = rariGetCurrentNonce()
     const ReactServerRenderer = g['~reactServerRenderer']
     const ReactDOMServer = g['~reactServer']
-    const R = g.React
 
     if (!ReactServerRenderer?.renderToReadableStream)
       throw new Error('[rari] RSC renderer not loaded')
     if (!ReactDOMServer?.renderToReadableStream) throw new Error('[rari] Fizz renderer not loaded')
-    if (!R?.createElement) throw new Error('[rari] React not loaded')
 
     const bundlerConfig = g['~rari']?.clientReferenceManifest ?? {}
 
@@ -726,16 +849,7 @@ declare function rariCreateHtmlBoundaryTracker(): {
     const { flightReadable, liveFlight, ensureSourceComplete } =
       rariCreatePullFlightFanout(rscStream)
 
-    const fullDoc = R.createElement(
-      'html',
-      { lang: 'en' },
-      R.createElement('head', { dangerouslySetInnerHTML: { __html: headContent } }),
-      R.createElement(
-        'body',
-        null,
-        R.createElement('div', { id: 'root' }, rariCreateStreamingRoot(flightReadable)),
-      ),
-    )
+    const fullDoc = rariCreateStreamingRoot(flightReadable)
 
     const fizzStream = (await ReactDOMServer.renderToReadableStream(fullDoc, {
       onError(error: unknown) {
@@ -750,6 +864,12 @@ declare function rariCreateHtmlBoundaryTracker(): {
     let html = await rariReadStream(fizzStream)
     html = rariStripLeadingDoctype(html)
     if (!html.trimStart().toLowerCase().startsWith('<!doctype')) html = `<!DOCTYPE html>\n${html}`
+
+    if (headContent) {
+      const headClose = rariFindClosingHeadTag(html)
+      if (headClose !== -1)
+        html = `${html.slice(0, headClose)}${headContent}${html.slice(headClose)}`
+    }
 
     const flightScripts = await rariCollectFlightEmbedScripts(liveFlight, nonce)
     const completionScript = rariStreamingCompleteScript(nonce)

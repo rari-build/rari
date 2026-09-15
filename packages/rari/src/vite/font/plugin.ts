@@ -12,6 +12,7 @@ import type {
 import fs from 'node:fs'
 import path from 'node:path'
 import { fromBuffer } from '@capsizecss/unpack'
+import { addClientHeadExtraTag } from '../client-head'
 import { buildFontFamilyStack, fontMimeType, serializeFontFaceRule } from './css'
 import {
   fontPreloadMarker,
@@ -747,29 +748,22 @@ export function createFontPlugin(): Plugin {
 
       for (const entry of result.cssModules) cssModules.set(entry.id, entry.css)
       for (const asset of result.assets) pendingAssets.set(asset.fileName, asset.source)
-      for (const url of result.preloadUrls) pendingPreloads.add(url)
+      for (const url of result.preloadUrls) {
+        pendingPreloads.add(url)
+        const ext = path.extname(url).toLowerCase()
+        const format =
+          ext === '.woff'
+            ? 'woff'
+            : ext === '.ttf'
+              ? 'truetype'
+              : ext === '.otf'
+                ? 'opentype'
+                : 'woff2'
+        addClientHeadExtraTag(
+          `<link rel="preload" href="${url}" as="font" type="${fontMimeType(format)}" crossorigin />`,
+        )
+      }
       return { code: result.code, map: null }
-    },
-    transformIndexHtml(html) {
-      if (pendingPreloads.size === 0) return html
-      const tags = [...pendingPreloads]
-        .map(url => {
-          const ext = path.extname(url).toLowerCase()
-          const format =
-            ext === '.woff'
-              ? 'woff'
-              : ext === '.ttf'
-                ? 'truetype'
-                : ext === '.otf'
-                  ? 'opentype'
-                  : 'woff2'
-          return `<link rel="preload" href="${url}" as="font" type="${fontMimeType(format)}" crossorigin />`
-        })
-        .filter(tag => !html.includes(tag))
-        .join('\n')
-      if (tags === '') return html
-      if (html.includes('</head>')) return html.replace('</head>', `${tags}\n</head>`)
-      return `${tags}\n${html}`
     },
     generateBundle() {
       for (const [fileName, source] of pendingAssets) {

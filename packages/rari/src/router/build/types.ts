@@ -1,4 +1,7 @@
 import type { ReactNode } from 'react'
+import type { AppIconEntry } from '../metadata/app-icons'
+
+export type { AppIconEntry } from '../metadata/app-icons'
 
 export type RouteSegmentType = 'static' | 'dynamic' | 'catch-all' | 'optional-catch-all'
 
@@ -89,6 +92,7 @@ export interface AppRouteManifest {
   templates: TemplateEntry[]
   apiRoutes: ApiRouteEntry[]
   ogImages: OgImageEntry[]
+  appIcons: AppIconEntry[]
   generated: string
 }
 
@@ -124,9 +128,18 @@ export interface RouteMetadata {
       }
     | string
   icons?: {
-    icon?: string | Array<{ url: string; type?: string; sizes?: string }>
+    icon?:
+      | string
+      | { url: string; type?: string; sizes?: string; rel?: string }
+      | Array<{ url: string; type?: string; sizes?: string; rel?: string }>
     shortcut?: string
-    apple?: string | Array<{ url: string; sizes?: string; type?: string }>
+    apple?:
+      | string
+      | { url: string; sizes?: string; type?: string; rel?: string }
+      | Array<{ url: string; sizes?: string; type?: string; rel?: string }>
+    other?:
+      | { url: string; rel?: string; type?: string; sizes?: string }
+      | Array<{ url: string; rel?: string; type?: string; sizes?: string }>
   }
   manifest?: string
   themeColor?: string | Array<{ media?: string; color: string }>

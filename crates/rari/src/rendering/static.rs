@@ -1,14 +1,139 @@
 #![expect(clippy::missing_errors_doc)]
 
-use std::sync::Arc;
+use std::{env, fmt::Write, path::PathBuf, sync::Arc};
 
 use cow_utils::CowUtils;
 use rari_error::RariError;
-use regex::Regex;
 use rustc_hash::FxHashSet;
 use tokio::fs;
 
 use crate::{runtime::JsExecutionRuntime, server::routing::app_router::AppRouteMatch};
+
+fn split_head_inject_units(tags: &str) -> Vec<String> {
+    let mut units = Vec::new();
+    let mut rest = tags.trim();
+
+    while !rest.is_empty() {
+        let trimmed = rest.trim_start();
+        if trimmed.is_empty() {
+            break;
+        }
+
+        let trimmed_lower = trimmed.to_ascii_lowercase();
+        if trimmed_lower.starts_with("<script") {
+            const CLOSE: &str = "</script>";
+            if let Some(rel) = trimmed_lower.find(CLOSE) {
+                let end = rel + CLOSE.len();
+                units.push(trimmed[..end].trim_end().to_string());
+                rest = &trimmed[end..];
+                continue;
+            }
+        }
+
+        if let Some(nl) = trimmed.find('\n') {
+            let line = trimmed[..nl].trim();
+            if !line.is_empty() {
+                units.push(line.to_string());
+            }
+            rest = &trimmed[nl + 1..];
+        } else {
+            units.push(trimmed.to_string());
+            break;
+        }
+    }
+
+    units
+}
+
+fn find_closing_head_tag(html: &str) -> Option<usize> {
+    const HEAD_CLOSE: &[u8] = b"</head>";
+    const RAW_TAGS: &[(&[u8], &[u8])] = &[
+        (b"<script", b"</script>"),
+        (b"<style", b"</style>"),
+        (b"<title", b"</title>"),
+        (b"<textarea", b"</textarea>"),
+        (b"<noscript", b"</noscript>"),
+    ];
+
+    enum ScanState {
+        Data,
+        Comment,
+        RawText { close: &'static [u8] },
+    }
+
+    let bytes = html.as_bytes();
+    let mut i = 0;
+    let mut state = ScanState::Data;
+
+    while i < bytes.len() {
+        match state {
+            ScanState::Data => {
+                if bytes[i..].starts_with(b"<!--") {
+                    state = ScanState::Comment;
+                    i += 4;
+                    continue;
+                }
+
+                if i + HEAD_CLOSE.len() <= bytes.len()
+                    && bytes[i..i + HEAD_CLOSE.len()].eq_ignore_ascii_case(HEAD_CLOSE)
+                {
+                    return Some(i);
+                }
+
+                let mut entered_raw = false;
+                for &(open, close) in RAW_TAGS {
+                    if i + open.len() > bytes.len()
+                        || !bytes[i..i + open.len()].eq_ignore_ascii_case(open)
+                    {
+                        continue;
+                    }
+                    let after = i + open.len();
+                    let boundary_ok = after >= bytes.len()
+                        || matches!(bytes[after], b'>' | b'/' | b' ' | b'\t' | b'\n' | b'\r');
+                    if !boundary_ok {
+                        continue;
+                    }
+                    let gt_rel = bytes[i..].iter().position(|&b| b == b'>')?;
+                    let gt = i + gt_rel;
+                    let open_end = gt + 1;
+                    if gt >= 1 && bytes[gt - 1] == b'/' {
+                        i = open_end;
+                    } else {
+                        state = ScanState::RawText { close };
+                        i = open_end;
+                    }
+                    entered_raw = true;
+                    break;
+                }
+                if entered_raw {
+                    continue;
+                }
+
+                i += 1;
+            }
+            ScanState::Comment => {
+                if i + 2 < bytes.len() && &bytes[i..i + 3] == b"-->" {
+                    state = ScanState::Data;
+                    i += 3;
+                } else {
+                    i += 1;
+                }
+            }
+            ScanState::RawText { close } => {
+                if i + close.len() <= bytes.len()
+                    && bytes[i..i + close.len()].eq_ignore_ascii_case(close)
+                {
+                    state = ScanState::Data;
+                    i += close.len();
+                } else {
+                    i += 1;
+                }
+            }
+        }
+    }
+
+    None
+}
 
 pub fn escape_html(text: &str) -> String {
     text.cow_replace('&', "&amp;")
@@ -22,51 +147,27 @@ pub fn escape_html(text: &str) -> String {
 pub struct RscHtmlRenderer {
     runtime: Arc<JsExecutionRuntime>,
     template_cache: parking_lot::Mutex<Option<String>>,
+    public_dir: PathBuf,
 }
 
 impl RscHtmlRenderer {
     pub fn new(runtime: Arc<JsExecutionRuntime>) -> Self {
-        Self { runtime, template_cache: parking_lot::Mutex::new(None) }
+        Self::with_public_dir(runtime, PathBuf::from("dist"))
     }
 
-    fn extract_script_tags(template: &str) -> String {
-        #[expect(clippy::unwrap_used, reason = "Hardcoded regex pattern is guaranteed to be valid")]
-        let script_regex = Regex::new(r"(?s)<script[^>]*>.*?</script>|<script[^>]*/>").unwrap();
-
-        script_regex
-            .find_iter(template)
-            .map(|m| m.as_str().to_string())
-            .collect::<Vec<_>>()
-            .join("\n")
+    pub fn with_public_dir(runtime: Arc<JsExecutionRuntime>, public_dir: PathBuf) -> Self {
+        Self { runtime, template_cache: parking_lot::Mutex::new(None), public_dir }
     }
 
-    fn is_stylesheet_link_tag(tag: &str) -> bool {
-        let lower = tag.to_lowercase();
-        lower.contains("stylesheet") || lower.contains("text/css")
-    }
-
-    fn extract_non_stylesheet_link_tags(template: &str) -> String {
-        #[expect(clippy::unwrap_used, reason = "Hardcoded regex pattern is guaranteed to be valid")]
-        let link_regex = Regex::new(r"(?i)<link\b[^>]*/?>").unwrap();
-
-        link_regex
-            .find_iter(template)
-            .map(|m| m.as_str())
-            .filter(|tag| !Self::is_stylesheet_link_tag(tag))
-            .map(ToString::to_string)
-            .collect::<Vec<_>>()
-            .join("\n")
-    }
-
-    fn inject_head_tags(template: &str, tags: &str) -> String {
+    pub(crate) fn inject_head_tags(template: &str, tags: &str) -> String {
         let tags = tags.trim();
         if tags.is_empty() {
             return template.to_string();
         }
 
-        let tag_block = tags
-            .lines()
-            .filter(|line| !line.trim().is_empty() && !template.contains(line))
+        let tag_block = split_head_inject_units(tags)
+            .into_iter()
+            .filter(|unit| !template.contains(unit.as_str()))
             .collect::<Vec<_>>()
             .join("\n");
 
@@ -75,7 +176,7 @@ impl RscHtmlRenderer {
         }
 
         let tag_block = format!("{tag_block}\n");
-        if let Some(head_end) = template.find("</head>") {
+        if let Some(head_end) = find_closing_head_tag(template) {
             let mut result = String::with_capacity(template.len() + tag_block.len());
             result.push_str(&template[..head_end]);
             result.push_str(&tag_block);
@@ -99,6 +200,8 @@ impl RscHtmlRenderer {
         &self,
         cache_enabled: bool,
         is_dev_mode: bool,
+        vite_host: &str,
+        vite_port: u16,
     ) -> Result<String, RariError> {
         if cache_enabled {
             let cache = self.template_cache.lock();
@@ -107,21 +210,10 @@ impl RscHtmlRenderer {
             }
         }
 
-        let template = match self.read_template_file(is_dev_mode).await {
-            Ok(content) => {
-                if is_dev_mode {
-                    Self::inject_vite_client_if_needed(&content)
-                } else {
-                    content
-                }
-            }
-            Err(e) => {
-                if is_dev_mode {
-                    Self::generate_dev_template_fallback()
-                } else {
-                    return Err(e);
-                }
-            }
+        let template = if is_dev_mode {
+            Self::generate_dev_client_head(vite_host, vite_port)
+        } else {
+            self.read_client_head_file().await?
         };
 
         if cache_enabled {
@@ -132,102 +224,89 @@ impl RscHtmlRenderer {
         Ok(template)
     }
 
-    fn inject_vite_client_if_needed(html: &str) -> String {
-        if html.contains("/@vite/client") || html.contains("@vite/client") {
-            return html.to_string();
+    pub(crate) fn browser_vite_host(host: &str) -> &str {
+        match host {
+            "0.0.0.0" | "::" | "[::]" => "localhost",
+            other => other,
         }
+    }
 
-        if let Some(head_end) = html.find("</head>") {
-            let mut result = String::new();
-            result.push_str(&html[..head_end]);
-            result.push_str(
-                r#"<script type="module" src="/@vite/client"></script>
-<script type="module" src="/src/main.tsx"></script>
-"#,
-            );
-            result.push_str(&html[head_end..]);
-            return result;
+    pub(crate) fn format_vite_origin_host(host: &str) -> String {
+        let host = Self::browser_vite_host(host);
+        if host.contains(':') && !host.starts_with('[') {
+            format!("[{host}]")
+        } else {
+            host.to_string()
         }
+    }
 
-        if let Some(body_end) = html.find("</body>") {
-            let mut result = String::new();
-            result.push_str(&html[..body_end]);
-            result.push_str(
-                r#"<script type="module" src="/@vite/client"></script>
-<script type="module" src="/src/main.tsx"></script>
-"#,
-            );
-            result.push_str(&html[body_end..]);
-            return result;
-        }
-
-        format!(
-            r#"<script type="module" src="/@vite/client"></script>
-<script type="module" src="/src/main.tsx"></script>
-{html}"#
+    pub(crate) fn generate_dev_client_head(vite_host: &str, vite_port: u16) -> String {
+        Self::generate_dev_client_head_with_css(
+            vite_host,
+            vite_port,
+            env::var("RARI_DEV_LAYOUT_CSS").ok().as_deref(),
         )
     }
 
-    fn generate_dev_template_fallback() -> String {
-        r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>rari App</title>
-    <script type="module" src="/@vite/client"></script>
-    <script type="module" src="/src/main.tsx"></script>
-</head>
-<body>
-    <div id="root"></div>
-</body>
-</html>"#
-            .to_string()
-    }
+    pub(crate) fn generate_dev_client_head_with_css(
+        vite_host: &str,
+        vite_port: u16,
+        layout_css: Option<&str>,
+    ) -> String {
+        let host = Self::format_vite_origin_host(vite_host);
+        let mut head = String::new();
 
-    async fn read_template_file(&self, is_dev_mode: bool) -> Result<String, RariError> {
-        let possible_paths = if is_dev_mode {
-            vec!["index.html", "public/index.html", "dist/index.html", "build/index.html"]
-        } else {
-            vec!["dist/index.html", "build/index.html", "index.html", "public/index.html"]
-        };
-
-        for path in possible_paths {
-            if let Ok(content) = fs::read_to_string(path).await {
-                return Ok(content);
+        if let Some(css_list) = layout_css {
+            for href in css_list.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+                let url = if href.starts_with("http://") || href.starts_with("https://") {
+                    href.to_string()
+                } else if href.starts_with('/') {
+                    format!("http://{host}:{vite_port}{href}")
+                } else {
+                    format!("http://{host}:{vite_port}/{href}")
+                };
+                let _ = write!(head, r#"<link rel="stylesheet" href="{url}" />"#);
+                head.push('\n');
             }
         }
 
-        Err(RariError::internal(
-            "Template file not found. Tried: index.html, public/index.html, dist/index.html, build/index.html"
-                .to_string(),
-        ))
+        let _ = write!(
+            head,
+            r#"<script type="module">
+import {{ injectIntoGlobalHook }} from 'http://{host}:{vite_port}/@react-refresh'
+injectIntoGlobalHook(window)
+window.$RefreshReg$ = () => {{}}
+window.$RefreshSig$ = () => type => type
+window.__vite_plugin_react_preamble_installed__ = true
+</script>
+<script type="module" src="http://{host}:{vite_port}/@vite/client"></script>
+<script type="module">
+import 'http://{host}:{vite_port}/@id/virtual:rari-entry-client';
+</script>
+"#
+        );
+        head
     }
 
-    pub fn inject_into_template(
-        &self,
-        html_content: &str,
-        template: &str,
-    ) -> Result<String, RariError> {
-        let root_div_regex =
-            Regex::new(r#"<div\s+id=["']root["'](?:\s+[^>]*)?\s*(?:/>|>\s*</div>)"#)
-                .map_err(|e| RariError::internal(format!("Failed to create regex: {e}")))?;
-
-        if !root_div_regex.is_match(template) {
-            return Err(RariError::internal(
-                "Template does not contain a root div with id='root'".to_string(),
-            ));
+    async fn read_client_head_file(&self) -> Result<String, RariError> {
+        let path = self.public_dir.join("rari-client-head.html");
+        match fs::read_to_string(&path).await {
+            Ok(content) => Ok(content),
+            Err(_) => {
+                tracing::warn!(path = %path.display(), "Client head file not found");
+                Ok(String::new())
+            }
         }
+    }
 
-        let replacement = format!(r#"<div id="root">{html_content}</div>"#);
-
-        // NoExpand: the rendered app HTML is a literal replacement, not a
-        // pattern. Without it, `$0`/`$1`/`$&` in page content (e.g. a "$0.20"
-        // headline) would be interpreted as capture-group references and expand
-        // to the matched root div, corrupting the output.
-        let result = root_div_regex.replace(template, regex::NoExpand(replacement.as_str()));
-
-        Ok(result.to_string())
+    pub(crate) fn client_head_fragment(template: &str) -> &str {
+        if let Some(start) = template.find("<head>")
+            && let Some(end) = template.find("</head>")
+            && end >= start + 6
+        {
+            return &template[start + 6..end];
+        }
+        template
     }
 
     pub(crate) fn css_links_for_route(route_match: &AppRouteMatch) -> Vec<String> {
@@ -540,7 +619,7 @@ impl RscHtmlRenderer {
         }
 
         let mut result = template.to_string();
-        let has_head = result.find("</head>").is_some();
+        let has_head = find_closing_head_tag(&result).is_some();
 
         if !has_head {
             let mut combined = Vec::with_capacity(preload_links.len() + stylesheet_links.len());
@@ -552,8 +631,8 @@ impl RscHtmlRenderer {
 
         if !preload_links.is_empty() {
             let preload_block = format!("{}\n", preload_links.join("\n"));
-            let insert_at =
-                Self::first_stylesheet_link_offset(&result).or_else(|| result.find("</head>"));
+            let insert_at = Self::first_stylesheet_link_offset(&result)
+                .or_else(|| find_closing_head_tag(&result));
             if let Some(pos) = insert_at {
                 result.insert_str(pos, &preload_block);
             }
@@ -561,7 +640,7 @@ impl RscHtmlRenderer {
 
         if !stylesheet_links.is_empty() {
             let stylesheet_block = format!("{}\n", stylesheet_links.join("\n"));
-            if let Some(head_end) = result.find("</head>") {
+            if let Some(head_end) = find_closing_head_tag(&result) {
                 result.insert_str(head_end, &stylesheet_block);
             }
         }
@@ -588,44 +667,36 @@ impl RscHtmlRenderer {
         html_content: String,
         cache_template: bool,
         is_dev_mode: bool,
+        vite_host: &str,
+        vite_port: u16,
         css_links: &[String],
     ) -> Result<String, RariError> {
         let is_complete_document = html_content.trim_start().starts_with("<!DOCTYPE")
             || html_content.trim_start().cow_to_lowercase().starts_with("<html");
 
-        if is_complete_document {
-            let (script_tags, head_link_tags) = if is_dev_mode {
-                (String::new(), String::new())
-            } else {
-                let template = self.load_template(cache_template, is_dev_mode).await?;
-                (
-                    Self::extract_script_tags(&template),
-                    Self::extract_non_stylesheet_link_tags(&template),
-                )
-            };
-
-            let mut final_html = html_content;
-
-            if !script_tags.is_empty()
-                && let Some(body_end) = final_html.rfind("</body>")
-            {
-                final_html.insert_str(body_end, &format!("\n{script_tags}\n"));
-            }
-
-            final_html = Self::inject_css_links(&final_html, css_links);
-            final_html = Self::inject_head_tags(&final_html, &head_link_tags);
-
-            let trimmed_lower = final_html.trim_start().cow_to_lowercase();
-            if !trimmed_lower.starts_with("<!doctype") {
-                final_html = format!("<!DOCTYPE html>\n{final_html}");
-            }
-
-            return Ok(final_html);
+        if !is_complete_document {
+            return Err(RariError::internal(
+                "Expected a complete HTML document from the root layout (<html>...</html>)"
+                    .to_string(),
+            ));
         }
 
-        let template = self.load_template(cache_template, is_dev_mode).await?;
-        let template = Self::inject_css_links(&template, css_links);
-        self.inject_into_template(&html_content, &template)
+        let client_head = if is_dev_mode {
+            String::new()
+        } else {
+            self.load_template(cache_template, is_dev_mode, vite_host, vite_port).await?
+        };
+
+        let mut final_html = html_content;
+        final_html = Self::inject_head_tags(&final_html, &client_head);
+        final_html = Self::inject_css_links(&final_html, css_links);
+
+        let trimmed_lower = final_html.trim_start().cow_to_lowercase();
+        if !trimmed_lower.starts_with("<!doctype") {
+            final_html = format!("<!DOCTYPE html>\n{final_html}");
+        }
+
+        Ok(final_html)
     }
 
     fn escape_html_attribute(text: &str) -> String {
@@ -638,7 +709,7 @@ impl RscHtmlRenderer {
 }
 
 #[cfg(test)]
-#[expect(clippy::expect_used, clippy::unwrap_used, clippy::clone_on_ref_ptr)]
+#[expect(clippy::expect_used, clippy::clone_on_ref_ptr)]
 mod tests {
     use rustc_hash::FxHashMap;
 
@@ -710,11 +781,53 @@ mod tests {
     }
 
     #[test]
-    fn test_generate_dev_template_fallback() {
-        let template = RscHtmlRenderer::generate_dev_template_fallback();
-        assert!(template.contains("<!DOCTYPE html>"));
-        assert!(template.contains(r#"<div id="root""#));
-        assert!(template.contains("/@vite/client"));
+    fn test_generate_dev_client_head() {
+        let template = RscHtmlRenderer::generate_dev_client_head_with_css("localhost", 5173, None);
+        assert!(template.contains("http://localhost:5173/@react-refresh"));
+        assert!(template.contains("injectIntoGlobalHook"));
+        assert!(template.contains("__vite_plugin_react_preamble_installed__"));
+        assert!(template.contains("http://localhost:5173/@vite/client"));
+        assert!(template.contains("http://localhost:5173/@id/virtual:rari-entry-client"));
+        assert!(!template.contains("<!DOCTYPE html>"));
+        assert!(!template.contains(r#"id="root""#));
+        assert!(!template.contains("rel=\"stylesheet\""));
+        assert!(
+            template.find("@react-refresh").expect("preamble")
+                < template.find("@vite/client").expect("vite client")
+        );
+
+        let remote = RscHtmlRenderer::generate_dev_client_head_with_css("192.168.1.10", 5173, None);
+        assert!(remote.contains("http://192.168.1.10:5173/@react-refresh"));
+        assert!(remote.contains("http://192.168.1.10:5173/@vite/client"));
+        assert!(remote.contains("http://192.168.1.10:5173/@id/virtual:rari-entry-client"));
+
+        let bind_all = RscHtmlRenderer::generate_dev_client_head_with_css("0.0.0.0", 5173, None);
+        assert!(bind_all.contains("http://localhost:5173/@react-refresh"));
+        assert!(bind_all.contains("http://localhost:5173/@vite/client"));
+
+        let ipv6 = RscHtmlRenderer::generate_dev_client_head_with_css("::1", 5173, None);
+        assert!(ipv6.contains("http://[::1]:5173/@react-refresh"));
+        assert!(ipv6.contains("http://[::1]:5173/@vite/client"));
+        assert!(!ipv6.contains("http://::1:5173"));
+    }
+
+    #[test]
+    fn test_generate_dev_client_head_includes_layout_css_links() {
+        let template = RscHtmlRenderer::generate_dev_client_head_with_css(
+            "localhost",
+            5173,
+            Some("/src/app/globals.css,/src/app/blog/theme.css"),
+        );
+        assert!(template.contains(
+            r#"<link rel="stylesheet" href="http://localhost:5173/src/app/globals.css" />"#
+        ));
+        assert!(template.contains(
+            r#"<link rel="stylesheet" href="http://localhost:5173/src/app/blog/theme.css" />"#
+        ));
+        assert!(
+            template.find("rel=\"stylesheet\"").expect("css")
+                < template.find("@vite/client").expect("vite client")
+        );
     }
 
     #[test]
@@ -733,6 +846,16 @@ mod tests {
         let css_links = vec!["/styles/app.css".to_string()];
         let result = RscHtmlRenderer::inject_css_links(template, &css_links);
         assert!(result.contains(r#"<link rel="stylesheet" href="/styles/app.css">"#));
+    }
+
+    #[test]
+    fn test_inject_css_links_uppercase_closing_head() {
+        let template = "<html><HEAD></HEAD><body></body></html>";
+        let css_links = vec!["/styles/app.css".to_string()];
+        let result = RscHtmlRenderer::inject_css_links(template, &css_links);
+        let head_close = result.find("</HEAD>").expect("preserves casing");
+        let link_pos = result.find(r#"href="/styles/app.css""#).expect("css link");
+        assert!(link_pos < head_close);
     }
 
     #[test]
@@ -784,59 +907,6 @@ mod tests {
     }
 
     #[test]
-    fn test_inject_into_template() {
-        let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = RscHtmlRenderer::new(runtime);
-        let template = r#"<!DOCTYPE html><html><body><div id="root"></div></body></html>"#;
-        let html = renderer.inject_into_template("<p>Hello</p>", template).unwrap();
-        assert!(html.contains(r#"<div id="root"><p>Hello</p></div>"#));
-    }
-
-    #[test]
-    fn test_inject_into_template_preserves_dollar_sequences() {
-        // Regression: `$0`/`$1`/`$&` in page content must not be expanded as
-        // regex capture references during root-div injection.
-        let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = RscHtmlRenderer::new(runtime);
-
-        let template = r#"<html><body><div id="root"></div></body></html>"#;
-        let content = r"<h1>XLM eyes $0.20 breakout</h1><p>$1 &amp; $&amp;</p>";
-
-        let html = renderer.inject_into_template(content, template).expect("inject should succeed");
-
-        assert!(
-            html.contains(
-                r#"<div id="root"><h1>XLM eyes $0.20 breakout</h1><p>$1 &amp; $&amp;</p></div>"#
-            ),
-            "dollar sequences must survive verbatim, got: {html}"
-        );
-    }
-
-    #[test]
-    fn test_inject_into_template_self_closing_root_div() {
-        let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = RscHtmlRenderer::new(runtime);
-
-        let template = r#"<html><body><div id="root"/></body></html>"#;
-        let html = renderer.inject_into_template("<p>Hi</p>", template).unwrap();
-        assert!(html.contains(r#"<div id="root"><p>Hi</p></div>"#));
-    }
-
-    #[test]
-    fn test_extract_non_stylesheet_link_tags() {
-        let template = r#"<html><head>
-<link rel="stylesheet" href="/app.css">
-<link rel="icon" href="/favicon.ico">
-<link rel="preload" href="/font.woff2" as="font">
-</head></html>"#;
-
-        let tags = RscHtmlRenderer::extract_non_stylesheet_link_tags(template);
-        assert!(tags.contains(r#"<link rel="icon" href="/favicon.ico">"#));
-        assert!(tags.contains(r#"<link rel="preload" href="/font.woff2" as="font">"#));
-        assert!(!tags.contains("stylesheet"));
-    }
-
-    #[test]
     fn test_inject_head_tags_deduplicates_existing_tags() {
         let html = r#"<!DOCTYPE html><html><head>
 <link rel="icon" href="/favicon.ico">
@@ -847,6 +917,101 @@ mod tests {
         let result = RscHtmlRenderer::inject_head_tags(html, tags);
         assert_eq!(result.matches("/favicon.ico").count(), 1);
         assert!(result.contains("/manifest.webmanifest"));
+    }
+
+    #[test]
+    fn test_inject_head_tags_keeps_multiline_script_when_closing_tag_exists() {
+        let html = r#"<!DOCTYPE html><html><head>
+<script type="module" src="/other.js"></script>
+</head><body></body></html>"#;
+        let tags = r#"<script type="module">
+import '/entry.js';
+</script>"#;
+
+        let result = RscHtmlRenderer::inject_head_tags(html, tags);
+        assert!(result.contains("import '/entry.js';"));
+        assert!(
+            result.contains("</script>\n</head>")
+                || result.contains("import '/entry.js';\n</script>"),
+            "injected multiline script must keep its closing tag; got:\n{result}"
+        );
+        assert_eq!(result.matches("</script>").count(), 2);
+    }
+
+    #[test]
+    fn test_inject_head_tags_dedupes_multiline_script_as_unit() {
+        let script = r#"<script type="module">
+import '/entry.js';
+</script>"#;
+        let html = format!("<!DOCTYPE html><html><head>\n{script}\n</head><body></body></html>");
+
+        let result = RscHtmlRenderer::inject_head_tags(&html, script);
+        assert_eq!(result.matches("import '/entry.js';").count(), 1);
+        assert_eq!(result.matches("</script>").count(), 1);
+    }
+
+    #[test]
+    fn test_inject_head_tags_finds_uppercase_closing_head() {
+        let html = "<!DOCTYPE html><html><HEAD></HEAD><body></body></html>";
+        let tags = r#"<script type="module" src="/entry.js"></script>"#;
+
+        let result = RscHtmlRenderer::inject_head_tags(html, tags);
+        assert!(result.contains("</HEAD>"));
+        assert!(result.contains(r#"src="/entry.js""#));
+        let head_close = result.find("</HEAD>").expect("preserves original closing tag");
+        let script_pos = result.find(r#"src="/entry.js""#).expect("script inserted");
+        assert!(script_pos < head_close);
+    }
+
+    #[test]
+    fn test_inject_head_tags_ignores_false_head_in_script_and_comment() {
+        let html = r#"<!DOCTYPE html><html><head>
+<!-- fake </head> in comment -->
+<script>const s = "</head>";</script>
+<style>.x::before { content: "</head>"; }</style>
+</head><body></body></html>"#;
+        let tags = r#"<script type="module" src="/entry.js"></script>"#;
+
+        let result = RscHtmlRenderer::inject_head_tags(html, tags);
+        let real_close = result.rfind("</head>").expect("real closing head");
+        let script_pos = result.find(r#"src="/entry.js""#).expect("injected script");
+        assert!(script_pos < real_close);
+        assert!(
+            result[..script_pos].contains(r#"const s = "</head>";"#),
+            "must not inject inside the script string"
+        );
+        assert_eq!(result.matches(r#"src="/entry.js""#).count(), 1);
+    }
+
+    #[test]
+    fn test_find_closing_head_tag_ignores_comment_opener_inside_script() {
+        let html = r#"<html><head><script>const s = "<!--";</script>
+</head><!-- --><body></body></html>"#;
+        let idx = find_closing_head_tag(html).expect("real head close");
+        assert_eq!(&html[idx..idx + 7], "</head>");
+        assert!(idx > html.find("<script>").expect("script"));
+        assert!(idx < html.find("<!-- -->").expect("real comment"));
+    }
+
+    #[test]
+    fn test_find_closing_head_tag_ignores_script_opener_inside_comment() {
+        let html = r"<html><head>
+<!-- <script> -->
+</head><body><script>real()</script></body></html>";
+        let idx = find_closing_head_tag(html).expect("real head close");
+        assert_eq!(&html[idx..idx + 7], "</head>");
+        assert!(idx < html.find("<body>").expect("body"));
+        assert!(idx < html.find("<script>real()").expect("real script"));
+    }
+
+    #[test]
+    fn test_find_closing_head_tag_across_chunk_concatenation() {
+        let chunk1 = "<html><head><script>var x = '</he";
+        let chunk2 = "ad>';</script></head><body></body></html>";
+        let combined = format!("{chunk1}{chunk2}");
+        let idx = find_closing_head_tag(&combined).expect("real head close");
+        assert_eq!(&combined[idx..idx + 7], "</head>");
+        assert!(idx > combined.find("<script>").expect("script"));
     }
 
     #[test]
@@ -987,18 +1152,16 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_assemble_document_wraps_fragment_in_dev_template() {
+    async fn test_assemble_document_rejects_fragment() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
         let renderer = RscHtmlRenderer::new(runtime);
 
-        let html = renderer
-            .assemble_document("<main>Page</main>".to_string(), false, true, &[])
+        let err = renderer
+            .assemble_document("<main>Page</main>".to_string(), false, true, "localhost", 5173, &[])
             .await
-            .expect("assemble_document should succeed");
+            .expect_err("fragment HTML should be rejected");
 
-        assert!(html.contains("<!DOCTYPE html>"));
-        assert!(html.contains(r#"<div id="root"><main>Page</main></div>"#));
-        assert!(html.contains("/@vite/client"));
+        assert!(err.to_string().contains("complete HTML document"));
     }
 
     #[tokio::test]
@@ -1010,7 +1173,7 @@ mod tests {
             "<!DOCTYPE html><html><head></head><body><main>Page</main></body></html>";
 
         let html = renderer
-            .assemble_document(html_content.to_string(), false, true, &css_links)
+            .assemble_document(html_content.to_string(), false, true, "localhost", 5173, &css_links)
             .await
             .expect("assemble_document should succeed");
 

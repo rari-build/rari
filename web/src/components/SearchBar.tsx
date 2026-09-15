@@ -46,16 +46,22 @@ export default function SearchBar() {
   useEffect(() => {
     if (!query.trim()) return undefined
 
+    let cancelled = false
     if (debounceRef.current) clearTimeout(debounceRef.current)
 
     debounceRef.current = setTimeout(() => {
       startTransition(async () => {
-        const searchResults = await searchDocumentation(query)
-        setRawResults(searchResults)
+        try {
+          const searchResults = await searchDocumentation(query)
+          if (!cancelled) setRawResults(Array.isArray(searchResults) ? searchResults : [])
+        } catch {
+          if (!cancelled) setRawResults([])
+        }
       })
     }, 150)
 
     return () => {
+      cancelled = true
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
   }, [query])

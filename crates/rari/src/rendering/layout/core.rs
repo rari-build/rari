@@ -35,7 +35,6 @@ use crate::{
         },
         config::{CacheLayerConfig, Config},
         middleware::request_context::RequestContext,
-        rendering::metadata_injection::merge_streaming_head_content,
         routing::app_router::AppRouteMatch,
     },
     utils::path::path_to_file_url,
@@ -500,11 +499,13 @@ impl LayoutRenderer {
             None
         };
 
-        let composition_script = Self::build_composition_script(
+        let composition_script = Self::build_composition_script_with_stream(
             route_match,
             context,
             loading_component_id.as_deref(),
             false,
+            true,
+            None,
             true,
         )?;
 
@@ -548,11 +549,13 @@ impl LayoutRenderer {
             None
         };
 
-        let composition_script = Self::build_composition_script(
+        let composition_script = Self::build_composition_script_with_stream(
             route_match,
             context,
             loading_component_id.as_deref(),
             false,
+            true,
+            None,
             true,
         )?;
 
@@ -621,27 +624,31 @@ impl LayoutRenderer {
                     route_match,
                     context,
                     loading_component_id.as_deref(),
-                    false,
+                    true,
                     true,
                     Some(&stream_id),
+                    true,
                 )?;
 
                 let script = format!(
                     r"(async function() {{
                         {FIZZ_CHUNK_PUMP_HELPER}
                         try {{
-                        try {{ {composition_script} }} catch(e) {{
+                        try {{ await ({composition_script}); }} catch(e) {{
                             console.error('[rari] Composition error in RSC streaming nav:', e);
                         }}
 
                         const byStream = globalThis['~rari']?.capturedByStream;
                         const capturedElement = (byStream && __RARI_STREAM_ID__ in byStream)
                             ? byStream[__RARI_STREAM_ID__]
-                            : globalThis['~rari']?.capturedElement;
+                            : undefined;
                         if (byStream && __RARI_STREAM_ID__ in byStream)
                             delete byStream[__RARI_STREAM_ID__];
+                        const byStreamHead = globalThis['~rari']?.blockingHeadByStream;
+                        if (byStreamHead && __RARI_STREAM_ID__ in byStreamHead)
+                            delete byStreamHead[__RARI_STREAM_ID__];
                         if (!capturedElement) {{
-                            return;
+                            throw new Error('[rari] RSC streaming nav: no captured element for stream');
                         }}
 
                         const pumpRsc = globalThis['~rari']?.pumpRscElementStream;
@@ -701,12 +708,14 @@ impl LayoutRenderer {
                 });
             }
 
-            let composition_script = Self::build_composition_script(
+            let composition_script = Self::build_composition_script_with_stream(
                 route_match,
                 context,
                 loading_component_id.as_deref(),
                 loading_component_id.is_some(),
                 false,
+                None,
+                true,
             )?;
 
             let rsc_payload = {
@@ -797,6 +806,7 @@ impl LayoutRenderer {
                     true,
                     true,
                     Some(&stream_id),
+                    true,
                 ) {
                     Ok(script) => script,
                     Err(e) => {
@@ -819,26 +829,22 @@ impl LayoutRenderer {
                     async move {
                         renderer.ensure_streaming_pipeline().await?;
 
-                        let html_renderer = RscHtmlRenderer::new(Arc::clone(&renderer.runtime));
+                        let html_renderer = RscHtmlRenderer::with_public_dir(
+                            Arc::clone(&renderer.runtime),
+                            config.public_dir().clone(),
+                        );
                         let css_links = RscHtmlRenderer::css_links_for_route(&route_match);
                         let cache_template = config.rsc_html.cache_template;
                         let is_dev_mode = config.is_development();
-                        let template =
-                            html_renderer.load_template(cache_template, is_dev_mode).await?;
+                        let vite_host = config.vite.host.clone();
+                        let vite_port = config.vite.port;
+                        let template = html_renderer
+                            .load_template(cache_template, is_dev_mode, &vite_host, vite_port)
+                            .await?;
                         let template = RscHtmlRenderer::inject_css_links(&template, &css_links);
 
-                        let head_content = {
-                            let template_head = template
-                                .find("<head>")
-                                .and_then(|start| {
-                                    template.find("</head>").map(|end| &template[start + 6..end])
-                                })
-                                .unwrap_or("");
-                            merge_streaming_head_content(
-                                template_head,
-                                context.streaming_head_extra.as_deref(),
-                            )
-                        };
+                        let head_content =
+                            RscHtmlRenderer::client_head_fragment(&template).to_string();
 
                         let head_content_json = serde_json::to_string(&head_content)
                             .unwrap_or_else(|_| "\"\"".to_string());
@@ -855,9 +861,15 @@ impl LayoutRenderer {
                         const byStream = globalThis['~rari']?.capturedByStream;
                         const capturedElement = (byStream && __RARI_STREAM_ID__ in byStream)
                             ? byStream[__RARI_STREAM_ID__]
-                            : globalThis['~rari']?.capturedElement;
+                            : undefined;
                         if (byStream && __RARI_STREAM_ID__ in byStream)
                             delete byStream[__RARI_STREAM_ID__];
+                        const byStreamHead = globalThis['~rari']?.blockingHeadByStream;
+                        const blockingHead = (byStreamHead && __RARI_STREAM_ID__ in byStreamHead)
+                            ? byStreamHead[__RARI_STREAM_ID__]
+                            : '';
+                        if (byStreamHead && __RARI_STREAM_ID__ in byStreamHead)
+                            delete byStreamHead[__RARI_STREAM_ID__];
                         if (!capturedElement) {{
                             Deno.core.ops.op_fizz_done(__RARI_STREAM_ID__);
                             return;
@@ -870,7 +882,7 @@ impl LayoutRenderer {
 
                         await renderStreaming({{
                             capturedElement,
-                            headContent: {head_content_json},
+                            headContent: (typeof blockingHead === 'string' ? blockingHead : '') + {head_content_json},
                             caughtErrors,
                             streamId: __RARI_STREAM_ID__,
                         }});
@@ -957,22 +969,22 @@ impl LayoutRenderer {
                         renderer.ensure_streaming_pipeline().await?;
 
                         let runtime = Arc::clone(&renderer.runtime);
-                        let html_renderer =
-                            Arc::new(RscHtmlRenderer::new(Arc::clone(&renderer.runtime)));
+                        let html_renderer = Arc::new(RscHtmlRenderer::with_public_dir(
+                            Arc::clone(&renderer.runtime),
+                            config.public_dir().clone(),
+                        ));
                         let css_links = RscHtmlRenderer::css_links_for_route(&route_match);
                         let cache_template = config.rsc_html.cache_template;
                         let is_dev_mode = config.is_development();
-                        let template =
-                            html_renderer.load_template(cache_template, is_dev_mode).await?;
+                        let vite_host = config.vite.host.clone();
+                        let vite_port = config.vite.port;
+                        let template = html_renderer
+                            .load_template(cache_template, is_dev_mode, &vite_host, vite_port)
+                            .await?;
                         let template = RscHtmlRenderer::inject_css_links(&template, &css_links);
 
-                        let head_content = template
-                            .find("<head>")
-                            .and_then(|start| {
-                                template.find("</head>").map(|end| &template[start + 6..end])
-                            })
-                            .unwrap_or("")
-                            .to_string();
+                        let head_content =
+                            RscHtmlRenderer::client_head_fragment(&template).to_string();
 
                         let head_content_json = serde_json::to_string(&head_content)
                             .unwrap_or_else(|_| "\"\"".to_string());
@@ -990,6 +1002,9 @@ impl LayoutRenderer {
                                 return {{ ok: false, error: 'No captured element' }};
                             }}
 
+                            const blockingHead = globalThis['~rari']?.blockingHeadScriptsHtml ?? '';
+                            globalThis['~rari'].blockingHeadScriptsHtml = '';
+
                             const renderStatic = globalThis['~rari']?.renderStaticDocument;
                             if (typeof renderStatic !== 'function') {{
                                 return {{ ok: false, error: 'renderStaticDocument not loaded' }};
@@ -997,7 +1012,7 @@ impl LayoutRenderer {
 
                             const html = await renderStatic({{
                                 capturedElement,
-                                headContent: {head_content_json},
+                                headContent: (typeof blockingHead === 'string' ? blockingHead : '') + {head_content_json},
                                 caughtErrors,
                             }});
 
@@ -1027,22 +1042,34 @@ impl LayoutRenderer {
                             script,
                             cache_template,
                             is_dev_mode,
+                            vite_host,
+                            vite_port,
                         ))
                     })
                     .await?
                 };
 
-                let (runtime, html_renderer, css_links, script, cache_template, is_dev_mode) =
-                    prepared;
+                let (
+                    runtime,
+                    html_renderer,
+                    css_links,
+                    script,
+                    cache_template,
+                    is_dev_mode,
+                    vite_host,
+                    vite_port,
+                ) = prepared;
 
                 let render_static = {
                     let script = script.clone();
                     let html_renderer = Arc::clone(&html_renderer);
                     let css_links = css_links.clone();
+                    let vite_host = vite_host.clone();
                     move |rt: Arc<dyn JsRuntimeInterface>| {
                         let script = script.clone();
                         let html_renderer = Arc::clone(&html_renderer);
                         let css_links = css_links.clone();
+                        let vite_host = vite_host.clone();
                         async move {
                             let result = rt
                                 .execute_script("static_document_render".to_string(), script)
@@ -1066,7 +1093,14 @@ impl LayoutRenderer {
                                 .to_string();
 
                             let assembled = html_renderer
-                                .assemble_document(html, cache_template, is_dev_mode, &css_links)
+                                .assemble_document(
+                                    html,
+                                    cache_template,
+                                    is_dev_mode,
+                                    &vite_host,
+                                    vite_port,
+                                    &css_links,
+                                )
                                 .await?;
 
                             let is_dynamic =
@@ -1216,6 +1250,7 @@ impl LayoutRenderer {
             use_suspense,
             defer_rsc,
             None,
+            true,
         )
     }
 
@@ -1227,6 +1262,7 @@ impl LayoutRenderer {
         use_suspense: bool,
         defer_rsc: bool,
         capture_stream_id: Option<&str>,
+        expand_root_layout: bool,
     ) -> Result<String, RariError> {
         let page_props = utils::create_page_props(route_match, context).map_err(|e| {
             tracing::error!(
@@ -1379,6 +1415,7 @@ impl LayoutRenderer {
             defer_rsc,
             &action_post_url_json,
             capture_stream_id,
+            expand_root_layout,
         );
 
         Ok(script)

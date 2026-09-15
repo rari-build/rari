@@ -55,6 +55,12 @@ export interface MetadataResult {
           readonly sizes?: string
           readonly rel?: string
         }>
+      | {
+          readonly url: string
+          readonly type?: string
+          readonly sizes?: string
+          readonly rel?: string
+        }
       | string
       | readonly string[]
     readonly apple?:
@@ -63,15 +69,28 @@ export interface MetadataResult {
           readonly sizes?: string
           readonly rel?: string
         }>
+      | {
+          readonly url: string
+          readonly sizes?: string
+          readonly rel?: string
+        }
       | string
       | readonly string[]
-    readonly other?: ReadonlyArray<{
-      readonly url: string
-      readonly rel?: string
-      readonly type?: string
-      readonly sizes?: string
-      readonly color?: string
-    }>
+    readonly other?:
+      | ReadonlyArray<{
+          readonly url: string
+          readonly rel?: string
+          readonly type?: string
+          readonly sizes?: string
+          readonly color?: string
+        }>
+      | {
+          readonly url: string
+          readonly rel?: string
+          readonly type?: string
+          readonly sizes?: string
+          readonly color?: string
+        }
   }
   readonly manifest?: string
   readonly themeColor?:

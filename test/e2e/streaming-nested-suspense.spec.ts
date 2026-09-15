@@ -20,8 +20,13 @@ test.describe.serial('Streaming Suspense E2E Tests', () => {
     const times = await getServerTimestamps(page, ['outer-content', 'component-inner'])
     expect(times['outer-content']).toBeLessThan(times['component-inner'])
 
-    const bodyHtml = await page.locator('#root').innerHTML()
-    expect(bodyHtml).not.toContain('react.suspense')
+    const withoutScripts = await page.evaluate(() => {
+      const clone = document.body.cloneNode(true)
+      if (!(clone instanceof HTMLElement)) return ''
+      for (const el of clone.querySelectorAll('script')) el.remove()
+      return clone.innerHTML
+    })
+    expect(withoutScripts).not.toContain('react.suspense')
   })
 
   test('parallel: should resolve boundaries in order of their delay', async ({ page }) => {
@@ -34,6 +39,6 @@ test.describe.serial('Streaming Suspense E2E Tests', () => {
       .locator('[data-testid="root-template-children"] [data-testid="component-slow"]')
       .first()
     await expect(slow).toBeVisible()
-    await expect(page.locator('#root')).toContainText('Parallel Suspense Test')
+    await expect(page.locator('body')).toContainText('Parallel Suspense Test')
   })
 })

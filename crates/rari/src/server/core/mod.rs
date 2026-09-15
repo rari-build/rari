@@ -4,7 +4,7 @@ pub mod utils;
 use std::{
     env,
     future::{self, Future},
-    net::SocketAddr,
+    net::{IpAddr, SocketAddr},
     path::PathBuf,
     sync::{Arc, atomic::AtomicU64},
     time::Instant,
@@ -66,7 +66,6 @@ use crate::{
             cors_preflight_ok, root_handler, serve_static_asset, static_or_spa_handler,
         },
         vite::{
-            check_vite_server_health,
             hmr::handle_hmr_action,
             rsc::{health_check, register_client_component, register_component},
             vite_reverse_proxy, vite_src_proxy, vite_websocket_proxy,
@@ -183,7 +182,7 @@ impl Server {
 
         let ssr_renderer = {
             let runtime = Arc::clone(&renderer.runtime);
-            let ssr = RscHtmlRenderer::new(runtime);
+            let ssr = RscHtmlRenderer::with_public_dir(runtime, config.public_dir().clone());
             Arc::new(ssr)
         };
 
@@ -240,6 +239,11 @@ impl Server {
             Some(generator)
         };
 
+        let app_icons = match &routes_manifest {
+            Ok(manifest) => Arc::new(manifest.app_icons.clone()),
+            Err(_) => Arc::new(Vec::new()),
+        };
+
         let layout_layer = config.cache.layer(CACHE_LAYER_LAYOUT);
 
         let state = ServerState {
@@ -260,6 +264,7 @@ impl Server {
             response_cache,
             static_fast_cache: Arc::new(response::StaticFastCache::new()),
             og_generator,
+            app_icons,
             project_root,
             image_optimizer: None,
             cache_registry: Arc::clone(&cache_registry),
@@ -276,7 +281,7 @@ impl Server {
 
         proxy::initialize_proxy(&state).await?;
 
-        let router = Self::build_router(&config, state.clone()).await?;
+        let router = Self::build_router(&config, state.clone());
 
         let address = config.server_address();
 
@@ -313,7 +318,7 @@ impl Server {
         }
     }
 
-    async fn build_router(config: &Config, mut state: ServerState) -> Result<Router, RariError> {
+    fn build_router(config: &Config, mut state: ServerState) -> Router {
         let small_body_limit = DefaultBodyLimit::max(100 * 1024);
         let medium_body_limit = DefaultBodyLimit::max(1024 * 1024);
 
@@ -372,10 +377,6 @@ impl Server {
                 .route("/vite-server/", routing::get(vite_websocket_proxy))
                 .route("/vite-server/{*path}", routing::any(vite_reverse_proxy))
                 .route("/src/{*path}", routing::any(vite_src_proxy));
-
-            if let Err(e) = check_vite_server_health().await {
-                tracing::debug!("Vite server not yet available: {}", e);
-            }
         }
 
         let has_app_router = state.app_router.is_some();
@@ -423,7 +424,7 @@ impl Server {
             router = router.layer(ProxyLayer::new(state));
         }
 
-        Ok(router)
+        router
     }
 
     #[expect(clippy::missing_errors_doc)]
@@ -455,7 +456,7 @@ impl Server {
     }
 
     fn display_startup_message(&self) {
-        let server_url = format!("http://{}", self.address);
+        let server_url = display_server_url(self.address);
 
         if self.config.is_production() {
             #[expect(clippy::print_stdout, reason = "Server startup information output")]
@@ -482,5 +483,57 @@ impl Server {
 
     pub fn address(&self) -> SocketAddr {
         self.address
+    }
+}
+
+fn display_server_url(addr: SocketAddr) -> String {
+    let host = match addr.ip() {
+        IpAddr::V4(ip) if ip.is_loopback() || ip.is_unspecified() => "localhost".to_string(),
+        IpAddr::V6(ip) if ip.is_loopback() || ip.is_unspecified() => "localhost".to_string(),
+        IpAddr::V4(ip) => ip.to_string(),
+        IpAddr::V6(ip) => format!("[{ip}]"),
+    };
+    format!("http://{host}:{}", addr.port())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
+
+    use super::*;
+
+    #[test]
+    fn display_server_url_maps_loopback_and_unspecified_to_localhost() {
+        assert_eq!(
+            display_server_url(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 3000)),
+            "http://localhost:3000"
+        );
+        assert_eq!(
+            display_server_url(SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 3000)),
+            "http://localhost:3000"
+        );
+        assert_eq!(
+            display_server_url(SocketAddr::new(IpAddr::V6(Ipv6Addr::LOCALHOST), 3000)),
+            "http://localhost:3000"
+        );
+        assert_eq!(
+            display_server_url(SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), 3000)),
+            "http://localhost:3000"
+        );
+    }
+
+    #[test]
+    fn display_server_url_keeps_non_loopback_hosts() {
+        assert_eq!(
+            display_server_url(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 10)), 3000)),
+            "http://192.168.1.10:3000"
+        );
+        assert_eq!(
+            display_server_url(SocketAddr::new(
+                IpAddr::V6(Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1)),
+                3000
+            )),
+            "http://[2001:db8::1]:3000"
+        );
     }
 }

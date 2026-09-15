@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
 import { parseDate } from '@/lib/date'
@@ -16,13 +16,33 @@ export function isValidSlugArray(slug: unknown): slug is string[] {
   )
 }
 
+export function getContentRoot(): string {
+  const candidates = [
+    join(process.cwd(), 'src', 'content'),
+    join(process.cwd(), 'content'),
+    join(process.cwd(), 'dist', 'content'),
+  ]
+  for (const dir of candidates) {
+    if (existsSync(dir)) return dir
+  }
+  return candidates[0]
+}
+
+export function getBlogDir(): string {
+  return join(getContentRoot(), 'blog')
+}
+
+export function getDocsDir(): string {
+  return join(getContentRoot(), 'docs')
+}
+
 export function getBlogFilePath(slug: string) {
-  return join(process.cwd(), 'public', 'content', 'blog', `${slug}.mdx`)
+  return join(getBlogDir(), `${slug}.mdx`)
 }
 
 export function getDocsFilePath(slug: string | readonly string[]) {
   const slugPath = typeof slug === 'string' ? slug : slug.join('/')
-  return join(process.cwd(), 'public', 'content', 'docs', `${slugPath}.mdx`)
+  return join(getDocsDir(), `${slugPath}.mdx`)
 }
 
 export interface BlogPost {
@@ -35,7 +55,7 @@ export interface BlogPost {
 
 export function getAllBlogPosts(): BlogPost[] {
   try {
-    const blogDir = join(process.cwd(), 'public', 'content', 'blog')
+    const blogDir = getBlogDir()
     const files = readdirSync(blogDir)
     const mdxFiles = files.filter(file => file.endsWith('.mdx'))
 
@@ -62,7 +82,7 @@ export function getAllBlogPosts(): BlogPost[] {
 
 export function getBlogPostsMinimal(): Array<{ slug: string; date: string }> {
   try {
-    const blogDir = join(process.cwd(), 'public', 'content', 'blog')
+    const blogDir = getBlogDir()
     const files = readdirSync(blogDir)
     const mdxFiles = files.filter(file => file.endsWith('.mdx'))
 

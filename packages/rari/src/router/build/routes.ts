@@ -1,4 +1,5 @@
 /* oxlint-disable typescript/prefer-readonly-parameter-types route builder mutates accumulator arrays in place */
+import type { AppIconEntry } from '../metadata/app-icons'
 import type {
   ApiRouteEntry,
   AppRouteEntry,
@@ -14,6 +15,7 @@ import type {
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { BACKSLASH_REGEX, PATH_SEPARATOR_REGEX } from '@/shared/regex-constants'
+import { discoverAppIconsInDir } from '../metadata/app-icons'
 
 export interface AppRouteGeneratorOptions {
   readonly appDir: string
@@ -139,6 +141,7 @@ class AppRouteGenerator {
     const templates: TemplateEntry[] = []
     const apiRoutes: ApiRouteEntry[] = []
     const ogImages: OgImageEntry[] = []
+    const appIcons: AppIconEntry[] = []
 
     await this.scanDirectory(
       '',
@@ -150,6 +153,7 @@ class AppRouteGenerator {
       templates,
       apiRoutes,
       ogImages,
+      appIcons,
     )
 
     for (const entries of [layouts, loading, errors, notFound, templates, ogImages]) {
@@ -167,6 +171,7 @@ class AppRouteGenerator {
       console.warn(`[rari] Router: Found ${templates.length} templates`)
       console.warn(`[rari] Router: Found ${apiRoutes.length} API routes`)
       console.warn(`[rari] Router: Found ${ogImages.length} OG images`)
+      console.warn(`[rari] Router: Found ${appIcons.length} app icons`)
     }
 
     return {
@@ -178,6 +183,7 @@ class AppRouteGenerator {
       templates: this.sortTemplates(templates),
       apiRoutes: this.sortApiRoutes(apiRoutes),
       ogImages,
+      appIcons,
       generated: new Date().toISOString(),
     }
   }
@@ -239,6 +245,7 @@ class AppRouteGenerator {
     templates: TemplateEntry[],
     apiRoutes: ApiRouteEntry[],
     ogImages: OgImageEntry[],
+    appIcons: AppIconEntry[],
   ): Promise<void> {
     const fullPath = path.join(this.appDir, relativePath)
 
@@ -274,6 +281,7 @@ class AppRouteGenerator {
       templates,
       apiRoutes,
       ogImages,
+      appIcons,
     )
 
     for (const dir of dirs) {
@@ -288,6 +296,7 @@ class AppRouteGenerator {
         templates,
         apiRoutes,
         ogImages,
+        appIcons,
       )
     }
   }
@@ -303,6 +312,7 @@ class AppRouteGenerator {
     templates: TemplateEntry[],
     apiRoutes: ApiRouteEntry[],
     ogImages: OgImageEntry[],
+    appIcons: AppIconEntry[],
   ): Promise<void> {
     const routePath = this.pathToRoute(relativePath)
 
@@ -394,6 +404,14 @@ class AppRouteGenerator {
         contentType,
       })
     }
+
+    const discoveredIcons = await discoverAppIconsInDir({
+      appDir: this.appDir,
+      relativeDir: relativePath,
+      routePath,
+      files,
+    })
+    appIcons.push(...discoveredIcons)
 
     const routeFile = this.findFile(files, SPECIAL_FILES.ROUTE)
     if (routeFile != null && routeFile !== '') {

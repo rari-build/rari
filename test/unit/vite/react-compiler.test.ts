@@ -131,6 +131,7 @@ describe('react compiler helpers', () => {
     expect(matchesCompilerId('/app/src/Hello.tsx?v=1')).toBe(true)
     expect(matchesCompilerId('/app/src/util.ts')).toBe(true)
     expect(matchesCompilerId('/app/node_modules/react/index.js')).toBe(false)
+    expect(matchesCompilerId('/packages/rari/dist/type-guards-B2eFgzsb.mjs')).toBe(false)
     expect(matchesCompilerId('/app/src/styles.css')).toBe(false)
     expect(matchesCompilerId('/app/src/Hello.d.ts')).toBe(false)
     expect(matchesCompilerId('/app/src/Hello.d.mts')).toBe(false)
@@ -157,6 +158,46 @@ describe('createReactCompilerPlugin', () => {
       oxc: { jsx: { refresh: false } },
       optimizeDeps: { include: ['react/compiler-runtime'] },
     })
+  })
+
+  it('emits Fast Refresh registration in serve mode', async () => {
+    const plugin = createReactCompilerPlugin(true)
+    await getConfig(plugin).call(
+      {
+        error(message: string): never {
+          throw new Error(message)
+        },
+      },
+      {},
+      { command: 'serve' },
+    )
+    const result = await getTransform(plugin).call(
+      createClientContext(),
+      COMPONENT_SOURCE,
+      '/app/src/Hello.tsx',
+    )
+
+    expect(result?.code).toContain('$RefreshReg$')
+  })
+
+  it('skips modules with a top-level use server directive', async () => {
+    const plugin = createReactCompilerPlugin(true)
+    await getConfig(plugin).call(
+      {
+        error(message: string): never {
+          throw new Error(message)
+        },
+      },
+      {},
+      { command: 'serve' },
+    )
+    const result = await getTransform(plugin).call(
+      createClientContext(),
+      `'use server'\nexport async function save() { return 1 }\n`,
+      '/app/src/actions/save.ts',
+    )
+
+    expect(result).toBeNull()
   })
 
   it('compiles client components with oxc-transform-react', async () => {

@@ -3,16 +3,20 @@ function rariCreateHtmlBoundaryTracker() {
   let pendingTagText = ''
   let pendingClosePrefix = ''
   let pendingRawTextClose = ''
+  let bodyOpened = false
+  let bodyHasContent = false
 
   function reset() {
     htmlState = 'outside'
     pendingTagText = ''
     pendingClosePrefix = ''
     pendingRawTextClose = ''
+    bodyOpened = false
+    bodyHasContent = false
   }
 
   function safeToInjectFlight() {
-    return htmlState === 'outside'
+    return htmlState === 'outside' && bodyHasContent
   }
 
   function trackHtmlBoundaries(text: string) {
@@ -35,7 +39,13 @@ function rariCreateHtmlBoundaryTracker() {
       switch (htmlState) {
         case 'outside': {
           const openAt = lower.indexOf('<', i)
-          if (openAt === -1) return true
+          if (openAt === -1) {
+            if (bodyOpened && work.slice(i).trim() !== '') bodyHasContent = true
+            return true
+          }
+          if (bodyOpened && openAt > i && work.slice(i, openAt).trim() !== '') {
+            bodyHasContent = true
+          }
           htmlState = 'in_tag'
           i = openAt
           break
@@ -48,12 +58,20 @@ function rariCreateHtmlBoundaryTracker() {
           }
           const openTag = work.slice(i, closeAt + 1)
           pendingTagText = ''
+          if (/^<body\b/i.test(openTag)) bodyOpened = true
           const rawTextTag = /^<(style|title|textarea|xmp)\b/i.exec(openTag)
           if (rawTextTag) {
             htmlState = 'in_raw_text'
             pendingRawTextClose = `</${rawTextTag[1].toLowerCase()}>`
           } else {
             const isInlineScript = /^<script/i.test(openTag) && !/\bsrc\s*=/.test(openTag)
+            if (
+              bodyOpened &&
+              !isInlineScript &&
+              !/^<\/?(?:script|style|link|meta|noscript)\b/i.test(openTag)
+            ) {
+              bodyHasContent = true
+            }
             htmlState = isInlineScript ? 'in_inline_script' : 'outside'
           }
           i = closeAt + 1
@@ -88,7 +106,7 @@ function rariCreateHtmlBoundaryTracker() {
       }
     }
 
-    return safeToInjectFlight()
+    return htmlState === 'outside'
   }
 
   return {

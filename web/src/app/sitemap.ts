@@ -1,11 +1,9 @@
 import type { Sitemap } from 'rari'
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import process from 'node:process'
-import { getBlogPostsMinimal } from '@/lib/content'
+import { getBlogPostsMinimal, getDocsDir } from '@/lib/content'
 import { parseDate } from '@/lib/date'
-
-const baseUrl = 'https://rari.build'
+import { siteUrl } from '@/lib/site'
 
 interface DocPage {
   slug: string
@@ -40,8 +38,7 @@ async function getDocPages(): Promise<DocPage[]> {
     } catch {}
   }
 
-  const docsDir = join(process.cwd(), 'public', 'content', 'docs')
-  await scanDir(docsDir)
+  await scanDir(getDocsDir())
 
   return pages
 }
@@ -52,43 +49,43 @@ export default async function sitemap(): Promise<Sitemap> {
 
   return [
     {
-      url: baseUrl,
+      url: siteUrl,
       lastModified: new Date(),
       changeFrequency: 'daily',
       priority: 1,
     },
     {
-      url: `${baseUrl}/docs`,
+      url: `${siteUrl}/docs`,
       lastModified: new Date(),
       changeFrequency: 'weekly',
       priority: 0.9,
     },
     ...docPages.map(doc => ({
-      url: `${baseUrl}/docs/${doc.slug}`,
+      url: `${siteUrl}/docs/${doc.slug}`,
       lastModified: doc.lastModified,
       changeFrequency: 'weekly' as const,
       priority: 0.8,
     })),
     {
-      url: `${baseUrl}/blog`,
+      url: `${siteUrl}/blog`,
       lastModified: new Date(),
       changeFrequency: 'weekly',
       priority: 0.8,
     },
     ...blogPosts.map(post => ({
-      url: `${baseUrl}/blog/${post.slug}`,
+      url: `${siteUrl}/blog/${post.slug}`,
       lastModified: parseDate(post.date),
       changeFrequency: 'monthly' as const,
       priority: 0.7,
     })),
     {
-      url: `${baseUrl}/enterprise`,
+      url: `${siteUrl}/enterprise`,
       lastModified: new Date(),
       changeFrequency: 'monthly',
       priority: 0.6,
     },
     {
-      url: `${baseUrl}/enterprise/sponsors`,
+      url: `${siteUrl}/enterprise/sponsors`,
       lastModified: new Date(),
       changeFrequency: 'monthly',
       priority: 0.6,

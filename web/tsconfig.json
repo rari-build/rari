@@ -1,6 +1,7 @@
 {
   "extends": "../.config/typescript/app.json",
   "compilerOptions": {
+    "types": ["node", "vite-plus/client"],
     "paths": {
       "@/*": ["./src/*"]
     }

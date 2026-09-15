@@ -197,9 +197,6 @@ catalogs:
     '@capsizecss/unpack':
       specifier: ^4.0.1
       version: 4.0.1
-    rari:
-      specifier: ^0.15.17
-      version: 0.15.17
   eslint:
     '@e18e/eslint-plugin':
       specifier: ^0.8.0
@@ -723,8 +720,8 @@ importers:
         specifier: catalog:analytics
         version: 1.430.3(@types/react@19.3.0)(react@19.3.0)
       rari:
-        specifier: 'catalog:'
-        version: 0.15.17(@mdx-js/mdx@3.1.1(supports-color@8.1.1))(oxc-transform-react@0.147.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(webpack@5.110.3(lightningcss@1.33.0)(postcss@8.5.28))
+        specifier: workspace:*
+        version: link:../packages/rari
       react:
         specifier: catalog:react
         version: 19.3.0
@@ -4843,21 +4840,6 @@ packages:
     cpu: [x64]
     os: [win32]
     hasBin: true
-
-  rari@0.15.17:
-    resolution: {integrity: sha512-MevrGv0bvV/jbI66joYxlFMZtH65OSGardBVCzeAyDp5FRwin0dZ6VihRm/wp0hRxRZjdWofifgWtRYCOf7QFA==}
-    engines: {node: '>=22.18.0'}
-    hasBin: true
-    peerDependencies:
-      '@mdx-js/mdx': ^3.1.1
-      oxc-transform-react: ^0.147.0
-      react: ^19.2.8
-      react-dom: ^19.2.8
-    peerDependenciesMeta:
-      '@mdx-js/mdx':
-        optional: true
-      oxc-transform-react:
-        optional: true
 
   react-dom@19.3.0:
     resolution: {integrity: sha512-JDk8dgif51OjFoDE70+OT9ICyYr+69HlmihNwp1+Nsfbna3t5sIiCa9ZJktDmQ4/1b/rn26hIAR2uYXDMr5r0Q==}
@@ -9348,26 +9330,6 @@ snapshots:
 
   rari-win32-x64@0.15.17:
     optional: true
-
-  rari@0.15.17(@mdx-js/mdx@3.1.1(supports-color@8.1.1))(oxc-transform-react@0.147.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(webpack@5.110.3(lightningcss@1.33.0)(postcss@8.5.28)):
-    dependencies:
-      lightningcss: 1.33.0
-      react: 19.3.0
-      react-dom: 19.3.0(react@19.3.0)
-      react-server-dom-webpack: 19.3.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(webpack@5.110.3(lightningcss@1.33.0)(postcss@8.5.28))
-      rolldown: 1.2.8
-    optionalDependencies:
-      '@mdx-js/mdx': 3.1.1(supports-color@8.1.1)
-      '@rari/use-cache': 0.15.17(react-server-dom-webpack@19.3.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(webpack@5.110.3(lightningcss@1.33.0)(postcss@8.5.28)))
-      oxc-transform-react: 0.147.0
-      rari-darwin-arm64: 0.15.17
-      rari-darwin-x64: 0.15.17
-      rari-linux-arm64: 0.15.17
-      rari-linux-x64: 0.15.17
-      rari-win32-arm64: 0.15.17
-      rari-win32-x64: 0.15.17
-    transitivePeerDependencies:
-      - webpack
 
   react-dom@19.3.0(react@19.3.0):
     dependencies:
