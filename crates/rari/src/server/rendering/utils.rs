@@ -4,7 +4,7 @@ use axum::http::StatusCode;
 use cow_utils::CowUtils;
 use tokio::fs;
 
-use crate::server::config::Config;
+use crate::{rendering::r#static::RscHtmlRenderer, server::config::Config};
 
 fn dev_client_head(vite_port: u16) -> String {
     format!(
@@ -28,24 +28,6 @@ async fn load_client_head(config: &Config) -> Option<String> {
             tracing::warn!(path = %path.display(), "Client head file not found");
             None
         }
-    }
-}
-
-fn inject_tags_before_head_close(html: &str, tags: &str) -> String {
-    let tags = tags.trim();
-    if tags.is_empty() {
-        return html.to_string();
-    }
-
-    let block = format!("{tags}\n");
-    if let Some(head_end) = html.find("</head>") {
-        let mut result = String::with_capacity(html.len() + block.len());
-        result.push_str(&html[..head_end]);
-        result.push_str(&block);
-        result.push_str(&html[head_end..]);
-        result
-    } else {
-        format!("{block}{html}")
     }
 }
 
@@ -88,7 +70,7 @@ async fn inject_assets_into_complete_document(
         return Ok(format!("<!DOCTYPE html>\n{html}"));
     };
 
-    let mut final_html = inject_tags_before_head_close(html, &client_head);
+    let mut final_html = RscHtmlRenderer::inject_head_tags(html, &client_head);
 
     let trimmed_lower = final_html.trim_start().cow_to_lowercase();
     if !trimmed_lower.starts_with("<!doctype") {
@@ -165,4 +147,57 @@ import 'http://localhost:{vite_port}/@id/virtual:rari-entry-client';
 </script>
 {html}"#
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        env, fs, process,
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
+    use super::*;
+    use crate::server::config::{Config, Mode};
+
+    #[tokio::test]
+    async fn test_inject_assets_dedupes_existing_client_head_tags() {
+        let public_dir = env::temp_dir().join(format!(
+            "rari-client-head-dedupe-{}-{}",
+            process::id(),
+            SystemTime::now().duration_since(UNIX_EPOCH).expect("time").as_nanos()
+        ));
+        fs::create_dir_all(&public_dir).expect("temp public dir");
+
+        let client_head = r#"<link rel="stylesheet" href="/assets/app.css" />
+<script type="module" src="/assets/entry.js"></script>
+"#;
+        fs::write(public_dir.join("rari-client-head.html"), client_head).expect("write head");
+
+        let mut config = Config::new(Mode::Production);
+        config.static_files.prod_public_dir = public_dir.clone();
+
+        let html = r#"<!DOCTYPE html>
+<html>
+<head>
+<link rel="stylesheet" href="/assets/app.css" />
+<script type="module" src="/assets/entry.js"></script>
+</HEAD>
+<body></body>
+</html>"#;
+
+        let result = inject_assets_into_html(html, &config).await.expect("inject");
+        assert_eq!(
+            result.matches(r#"href="/assets/app.css""#).count(),
+            1,
+            "stylesheet must appear once"
+        );
+        assert_eq!(
+            result.matches(r#"src="/assets/entry.js""#).count(),
+            1,
+            "script must appear once"
+        );
+        assert!(result.contains("</HEAD>"), "must preserve original head close casing");
+
+        let _ = fs::remove_dir_all(public_dir);
+    }
 }

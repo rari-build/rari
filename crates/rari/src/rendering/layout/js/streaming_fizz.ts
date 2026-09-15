@@ -423,6 +423,10 @@ declare function rariCreateHtmlBoundaryTracker(): {
     return `<div class=rari-error style=color:red;border:1px_solid_red;padding:10px;border-radius:4px;background-color:#fff5f5><strong>Error loading content: </strong>${errMsg}</div>`
   }
 
+  function rariFindClosingHeadTag(html: string): number {
+    return html.search(/<\/head>/i)
+  }
+
   function rariInjectHeadContent(
     chunk: string,
     headContent: string,
@@ -438,7 +442,7 @@ declare function rariCreateHtmlBoundaryTracker(): {
     }
 
     const combined = pendingPrefix + chunk
-    const headClose = combined.indexOf('</head>')
+    const headClose = rariFindClosingHeadTag(combined)
     if (headClose === -1) {
       return { chunk: '', injected: false, pending: combined }
     }
@@ -773,7 +777,7 @@ declare function rariCreateHtmlBoundaryTracker(): {
     if (!html.trimStart().toLowerCase().startsWith('<!doctype')) html = `<!DOCTYPE html>\n${html}`
 
     if (headContent) {
-      const headClose = html.indexOf('</head>')
+      const headClose = rariFindClosingHeadTag(html)
       if (headClose !== -1)
         html = `${html.slice(0, headClose)}${headContent}${html.slice(headClose)}`
     }

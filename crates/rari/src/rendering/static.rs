@@ -9,6 +9,15 @@ use tokio::fs;
 
 use crate::{runtime::JsExecutionRuntime, server::routing::app_router::AppRouteMatch};
 
+fn find_closing_head_tag(html: &str) -> Option<usize> {
+    const NEEDLE: &[u8] = b"</head>";
+    let bytes = html.as_bytes();
+    if bytes.len() < NEEDLE.len() {
+        return None;
+    }
+    bytes.windows(NEEDLE.len()).position(|window| window.eq_ignore_ascii_case(NEEDLE))
+}
+
 pub fn escape_html(text: &str) -> String {
     text.cow_replace('&', "&amp;")
         .cow_replace('<', "&lt;")
@@ -33,7 +42,7 @@ impl RscHtmlRenderer {
         Self { runtime, template_cache: parking_lot::Mutex::new(None), public_dir }
     }
 
-    fn inject_head_tags(template: &str, tags: &str) -> String {
+    pub(crate) fn inject_head_tags(template: &str, tags: &str) -> String {
         let tags = tags.trim();
         if tags.is_empty() {
             return template.to_string();
@@ -50,7 +59,7 @@ impl RscHtmlRenderer {
         }
 
         let tag_block = format!("{tag_block}\n");
-        if let Some(head_end) = template.find("</head>") {
+        if let Some(head_end) = find_closing_head_tag(template) {
             let mut result = String::with_capacity(template.len() + tag_block.len());
             result.push_str(&template[..head_end]);
             result.push_str(&tag_block);
@@ -677,6 +686,19 @@ mod tests {
         let result = RscHtmlRenderer::inject_head_tags(html, tags);
         assert_eq!(result.matches("/favicon.ico").count(), 1);
         assert!(result.contains("/manifest.webmanifest"));
+    }
+
+    #[test]
+    fn test_inject_head_tags_finds_uppercase_closing_head() {
+        let html = "<!DOCTYPE html><html><HEAD></HEAD><body></body></html>";
+        let tags = r#"<script type="module" src="/entry.js"></script>"#;
+
+        let result = RscHtmlRenderer::inject_head_tags(html, tags);
+        assert!(result.contains("</HEAD>"));
+        assert!(result.contains(r#"src="/entry.js""#));
+        let head_close = result.find("</HEAD>").expect("preserves original closing tag");
+        let script_pos = result.find(r#"src="/entry.js""#).expect("script inserted");
+        assert!(script_pos < head_close);
     }
 
     #[test]

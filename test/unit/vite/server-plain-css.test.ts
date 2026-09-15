@@ -64,4 +64,47 @@ describe('server plain css imports', () => {
     const cssPath = path.join(outDir, cssHref.replace(/^\//, ''))
     expect(fs.readFileSync(cssPath, 'utf-8')).toContain('.page { color: red; }')
   })
+
+  it('records bare package css imports in the component css asset', async () => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-pkg-css-'))
+    const pkgDir = path.join(dir, 'node_modules', 'acme-ui')
+    fs.mkdirSync(pkgDir, { recursive: true })
+    fs.writeFileSync(path.join(pkgDir, 'package.json'), JSON.stringify({ name: 'acme-ui' }))
+    fs.writeFileSync(path.join(pkgDir, 'styles.css'), '.acme { color: blue; }')
+
+    const appDir = path.join(dir, 'src', 'app')
+    fs.mkdirSync(appDir, { recursive: true })
+    const pagePath = path.join(appDir, 'page.tsx')
+    fs.writeFileSync(
+      pagePath,
+      `import 'acme-ui/styles.css'\nexport default function Page() { return null }\n`,
+    )
+
+    const outDir = path.join(dir, 'dist')
+    fs.mkdirSync(path.join(outDir, 'server'), { recursive: true })
+    fs.writeFileSync(
+      path.join(outDir, 'server', 'manifest.json'),
+      JSON.stringify({ components: {}, buildTime: new Date().toISOString() }),
+    )
+    fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: 'app' }))
+
+    const builder = new ServerComponentBuilder(dir, {
+      outDir: 'dist',
+      rscDir: 'server',
+      manifestPath: 'server/manifest.json',
+      minify: false,
+      alias: {},
+    })
+
+    const result = await builder.rebuildComponent(pagePath)
+    expect(result.success).toBe(true)
+
+    const cssHrefs = readManifestCssHrefs(path.join(outDir, 'server', 'manifest.json'))
+    expect(cssHrefs.length).toBeGreaterThan(0)
+
+    const cssHref = cssHrefs[0]
+    expect(cssHref).toBeTypeOf('string')
+    const cssPath = path.join(outDir, cssHref.replace(/^\//, ''))
+    expect(fs.readFileSync(cssPath, 'utf-8')).toContain('.acme { color: blue; }')
+  })
 })
