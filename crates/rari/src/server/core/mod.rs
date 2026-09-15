@@ -183,7 +183,7 @@ impl Server {
 
         let ssr_renderer = {
             let runtime = Arc::clone(&renderer.runtime);
-            let ssr = RscHtmlRenderer::new(runtime);
+            let ssr = RscHtmlRenderer::with_public_dir(runtime, config.public_dir().clone());
             Arc::new(ssr)
         };
 

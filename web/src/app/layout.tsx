@@ -27,7 +27,7 @@ const RARI_VERSION = getRariVersion()
 
 export default function Layout({ children, pathname }: LayoutProps) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <script
           // eslint-disable-next-line react/dom-no-dangerously-set-innerhtml

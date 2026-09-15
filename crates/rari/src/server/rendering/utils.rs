@@ -6,8 +6,6 @@ use tokio::fs;
 
 use crate::server::config::Config;
 
-const CLIENT_HEAD_PATHS: &[&str] = &["dist/rari-client-head.html", "build/rari-client-head.html"];
-
 fn dev_client_head(vite_port: u16) -> String {
     format!(
         r#"<script type="module" src="http://localhost:{vite_port}/@vite/client"></script>
@@ -23,12 +21,14 @@ async fn load_client_head(config: &Config) -> Option<String> {
         return Some(dev_client_head(config.vite.port));
     }
 
-    for path in CLIENT_HEAD_PATHS {
-        if let Ok(content) = fs::read_to_string(path).await {
-            return Some(content);
+    let path = config.public_dir().join("rari-client-head.html");
+    match fs::read_to_string(&path).await {
+        Ok(content) => Some(content),
+        Err(_) => {
+            tracing::warn!(path = %path.display(), "Client head file not found");
+            None
         }
     }
-    None
 }
 
 fn inject_tags_before_head_close(html: &str, tags: &str) -> String {

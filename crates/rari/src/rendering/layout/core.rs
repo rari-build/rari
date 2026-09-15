@@ -819,7 +819,10 @@ impl LayoutRenderer {
                     async move {
                         renderer.ensure_streaming_pipeline().await?;
 
-                        let html_renderer = RscHtmlRenderer::new(Arc::clone(&renderer.runtime));
+                        let html_renderer = RscHtmlRenderer::with_public_dir(
+                            Arc::clone(&renderer.runtime),
+                            config.public_dir().clone(),
+                        );
                         let css_links = RscHtmlRenderer::css_links_for_route(&route_match);
                         let cache_template = config.rsc_html.cache_template;
                         let is_dev_mode = config.is_development();
@@ -952,8 +955,10 @@ impl LayoutRenderer {
                         renderer.ensure_streaming_pipeline().await?;
 
                         let runtime = Arc::clone(&renderer.runtime);
-                        let html_renderer =
-                            Arc::new(RscHtmlRenderer::new(Arc::clone(&renderer.runtime)));
+                        let html_renderer = Arc::new(RscHtmlRenderer::with_public_dir(
+                            Arc::clone(&renderer.runtime),
+                            config.public_dir().clone(),
+                        ));
                         let css_links = RscHtmlRenderer::css_links_for_route(&route_match);
                         let cache_template = config.rsc_html.cache_template;
                         let is_dev_mode = config.is_development();

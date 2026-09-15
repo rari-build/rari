@@ -1,0 +1,67 @@
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { isRecord } from '@rari/shared/utils/type-guards'
+import { ServerComponentBuilder } from '@rari/vite/server/build'
+import { afterEach, describe, expect, it } from 'vite-plus/test'
+
+function readManifestCssHrefs(manifestPath: string): string[] {
+  const parsed: unknown = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
+  if (!isRecord(parsed) || !isRecord(parsed.components)) {
+    throw new Error('manifest.json missing components')
+  }
+
+  const entries = Object.values(parsed.components)
+  const first = entries[0]
+  if (!isRecord(first) || !Array.isArray(first.css)) {
+    throw new Error('manifest component missing css array')
+  }
+
+  return first.css.filter((href): href is string => typeof href === 'string')
+}
+
+describe('server plain css imports', () => {
+  let dir = ''
+
+  afterEach(() => {
+    if (dir !== '') fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('records page plain css in the component css asset', async () => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-plain-css-'))
+    const appDir = path.join(dir, 'src', 'app')
+    fs.mkdirSync(appDir, { recursive: true })
+    fs.writeFileSync(path.join(appDir, 'page.css'), '.page { color: red; }')
+    const pagePath = path.join(appDir, 'page.tsx')
+    fs.writeFileSync(
+      pagePath,
+      `import './page.css'\nexport default function Page() { return null }\n`,
+    )
+
+    const outDir = path.join(dir, 'dist')
+    fs.mkdirSync(path.join(outDir, 'server'), { recursive: true })
+    fs.writeFileSync(
+      path.join(outDir, 'server', 'manifest.json'),
+      JSON.stringify({ components: {}, buildTime: new Date().toISOString() }),
+    )
+
+    const builder = new ServerComponentBuilder(dir, {
+      outDir: 'dist',
+      rscDir: 'server',
+      manifestPath: 'server/manifest.json',
+      minify: false,
+      alias: {},
+    })
+
+    const result = await builder.rebuildComponent(pagePath)
+    expect(result.success).toBe(true)
+
+    const cssHrefs = readManifestCssHrefs(path.join(outDir, 'server', 'manifest.json'))
+    expect(cssHrefs.length).toBeGreaterThan(0)
+
+    const cssHref = cssHrefs[0]
+    expect(cssHref).toBeTypeOf('string')
+    const cssPath = path.join(outDir, cssHref.replace(/^\//, ''))
+    expect(fs.readFileSync(cssPath, 'utf-8')).toContain('.page { color: red; }')
+  })
+})

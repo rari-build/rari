@@ -195,7 +195,7 @@ export async function renderApp(): Promise<void> {
   const hasEmbeddedPayload = hasEmbeddedFlightPayload()
   const embeddedPayloadBytes = decodeEmbeddedFlightPayload()
   const scanRoot = document.documentElement
-  const hasServerRenderedContent = hasServerRenderedDom(scanRoot) || hasFizzMarkers(scanRoot)
+  const hasServerRenderedContent = hasServerRenderedDom(document.body) || hasFizzMarkers(scanRoot)
   const streaming = getRariWindowBag()!.streaming
   const hasBufferedRows = !!(streaming?.bufferedRows && streaming.bufferedRows.length > 0)
 
