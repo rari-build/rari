@@ -171,14 +171,9 @@ impl RouteComposer {
             format!(
                 r"
                 const __layoutProps{index} = {{ children: {current_element}, pathname: {pathname_json} }};
-                let {layout_var};
-                try {{
-                    {layout_var} = LayoutComponent{index}(__layoutProps{index});
-                    if ({layout_var} != null && typeof {layout_var}.then === 'function') {{
-                        {layout_var} = await {layout_var};
-                    }}
-                }} catch (__layoutExpandError{index}) {{
-                    {layout_var} = React.createElement(LayoutComponent{index}, __layoutProps{index});
+                let {layout_var} = LayoutComponent{index}(__layoutProps{index});
+                if ({layout_var} != null && typeof {layout_var}.then === 'function') {{
+                    {layout_var} = await {layout_var};
                 }}
                 "
             )
@@ -432,8 +427,7 @@ mod tests {
         assert!(script.contains("children: errorBoundedElement"));
         assert!(script.contains("elementToRender = layout0"));
         assert!(script.contains("LayoutComponent0(__layoutProps0)"));
-        assert!(script.contains("catch (__layoutExpandError0)"));
-        assert!(script.contains("React.createElement(LayoutComponent0, __layoutProps0)"));
+        assert!(!script.contains("React.createElement(LayoutComponent0"));
     }
 
     #[test]
@@ -530,38 +524,9 @@ mod tests {
         );
 
         assert!(wrapper.contains("LayoutComponent0(__layoutProps0)"));
+        assert!(!wrapper.contains("React.createElement(LayoutComponent0"));
         assert!(wrapper.contains("await layout0"));
-        assert!(wrapper.contains("catch (__layoutExpandError0)"));
-        assert!(wrapper.contains("React.createElement(LayoutComponent0, __layoutProps0)"));
-    }
-
-    #[test]
-    fn test_generate_root_layout_wrapper_catches_sync_throw_and_rejected_promise() {
-        let wrapper = RouteComposer::generate_layout_wrapper(
-            1,
-            "RootLayout",
-            "errorBoundedElement",
-            "layout1",
-            "\"/fail\"",
-            true,
-        );
-
-        let try_pos = wrapper.find("try {").expect("try around expand");
-        let invoke_pos =
-            wrapper.find("layout1 = LayoutComponent1(__layoutProps1)").expect("sync invoke");
-        let await_pos = wrapper.find("layout1 = await layout1").expect("await thenable");
-        let catch_pos = wrapper
-            .find("catch (__layoutExpandError1)")
-            .expect("catch sync throw / rejected promise");
-        let fallback_pos = wrapper
-            .find("React.createElement(LayoutComponent1, __layoutProps1)")
-            .expect("createElement fallback");
-
-        assert!(try_pos < invoke_pos);
-        assert!(invoke_pos < await_pos);
-        assert!(await_pos < catch_pos);
-        assert!(catch_pos < fallback_pos);
-        assert!(wrapper.contains("typeof layout1.then === 'function'"));
+        assert!(!wrapper.contains("catch (__layoutExpandError"));
     }
 
     #[test]
