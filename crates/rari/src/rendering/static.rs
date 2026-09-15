@@ -9,6 +9,42 @@ use tokio::fs;
 
 use crate::{runtime::JsExecutionRuntime, server::routing::app_router::AppRouteMatch};
 
+fn split_head_inject_units(tags: &str) -> Vec<String> {
+    let mut units = Vec::new();
+    let mut rest = tags.trim();
+
+    while !rest.is_empty() {
+        let trimmed = rest.trim_start();
+        if trimmed.is_empty() {
+            break;
+        }
+
+        let trimmed_lower = trimmed.to_ascii_lowercase();
+        if trimmed_lower.starts_with("<script") {
+            const CLOSE: &str = "</script>";
+            if let Some(rel) = trimmed_lower.find(CLOSE) {
+                let end = rel + CLOSE.len();
+                units.push(trimmed[..end].trim_end().to_string());
+                rest = &trimmed[end..];
+                continue;
+            }
+        }
+
+        if let Some(nl) = trimmed.find('\n') {
+            let line = trimmed[..nl].trim();
+            if !line.is_empty() {
+                units.push(line.to_string());
+            }
+            rest = &trimmed[nl + 1..];
+        } else {
+            units.push(trimmed.to_string());
+            break;
+        }
+    }
+
+    units
+}
+
 fn find_closing_head_tag(html: &str) -> Option<usize> {
     const NEEDLE: &[u8] = b"</head>";
     let mut masked = html.as_bytes().to_vec();
@@ -49,9 +85,9 @@ impl RscHtmlRenderer {
             return template.to_string();
         }
 
-        let tag_block = tags
-            .lines()
-            .filter(|line| !line.trim().is_empty() && !template.contains(line))
+        let tag_block = split_head_inject_units(tags)
+            .into_iter()
+            .filter(|unit| !template.contains(unit.as_str()))
             .collect::<Vec<_>>()
             .join("\n");
 
@@ -451,7 +487,7 @@ import 'virtual:rari-entry-client';
         }
 
         let mut result = template.to_string();
-        let has_head = result.find("</head>").is_some();
+        let has_head = find_closing_head_tag(&result).is_some();
 
         if !has_head {
             let mut combined = Vec::with_capacity(preload_links.len() + stylesheet_links.len());
@@ -463,8 +499,8 @@ import 'virtual:rari-entry-client';
 
         if !preload_links.is_empty() {
             let preload_block = format!("{}\n", preload_links.join("\n"));
-            let insert_at =
-                Self::first_stylesheet_link_offset(&result).or_else(|| result.find("</head>"));
+            let insert_at = Self::first_stylesheet_link_offset(&result)
+                .or_else(|| find_closing_head_tag(&result));
             if let Some(pos) = insert_at {
                 result.insert_str(pos, &preload_block);
             }
@@ -472,7 +508,7 @@ import 'virtual:rari-entry-client';
 
         if !stylesheet_links.is_empty() {
             let stylesheet_block = format!("{}\n", stylesheet_links.join("\n"));
-            if let Some(head_end) = result.find("</head>") {
+            if let Some(head_end) = find_closing_head_tag(&result) {
                 result.insert_str(head_end, &stylesheet_block);
             }
         }
@@ -638,6 +674,16 @@ mod tests {
     }
 
     #[test]
+    fn test_inject_css_links_uppercase_closing_head() {
+        let template = "<html><HEAD></HEAD><body></body></html>";
+        let css_links = vec!["/styles/app.css".to_string()];
+        let result = RscHtmlRenderer::inject_css_links(template, &css_links);
+        let head_close = result.find("</HEAD>").expect("preserves casing");
+        let link_pos = result.find(r#"href="/styles/app.css""#).expect("css link");
+        assert!(link_pos < head_close);
+    }
+
+    #[test]
     fn test_inject_css_links_font_preloads() {
         let template = "<html><head></head><body></body></html>";
         let css_links = vec![
@@ -696,6 +742,37 @@ mod tests {
         let result = RscHtmlRenderer::inject_head_tags(html, tags);
         assert_eq!(result.matches("/favicon.ico").count(), 1);
         assert!(result.contains("/manifest.webmanifest"));
+    }
+
+    #[test]
+    fn test_inject_head_tags_keeps_multiline_script_when_closing_tag_exists() {
+        let html = r#"<!DOCTYPE html><html><head>
+<script type="module" src="/other.js"></script>
+</head><body></body></html>"#;
+        let tags = r#"<script type="module">
+import '/entry.js';
+</script>"#;
+
+        let result = RscHtmlRenderer::inject_head_tags(html, tags);
+        assert!(result.contains("import '/entry.js';"));
+        assert!(
+            result.contains("</script>\n</head>")
+                || result.contains("import '/entry.js';\n</script>"),
+            "injected multiline script must keep its closing tag; got:\n{result}"
+        );
+        assert_eq!(result.matches("</script>").count(), 2);
+    }
+
+    #[test]
+    fn test_inject_head_tags_dedupes_multiline_script_as_unit() {
+        let script = r#"<script type="module">
+import '/entry.js';
+</script>"#;
+        let html = format!("<!DOCTYPE html><html><head>\n{script}\n</head><body></body></html>");
+
+        let result = RscHtmlRenderer::inject_head_tags(&html, script);
+        assert_eq!(result.matches("import '/entry.js';").count(), 1);
+        assert_eq!(result.matches("</script>").count(), 1);
     }
 
     #[test]

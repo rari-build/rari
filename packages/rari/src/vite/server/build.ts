@@ -1217,9 +1217,23 @@ export class ServerComponentBuilder {
 
           if (id.startsWith(CSS_URL_PREFIX)) {
             const filePath = id.slice(CSS_URL_PREFIX.length)
-            const relative = path.relative(this.projectRoot, filePath).replace(/\\/g, '/')
-            const href = relative.startsWith('/') ? relative : `/${relative}`
-            return { code: `export default ${JSON.stringify(href)}`, moduleType: 'js' }
+            try {
+              const content = fs.readFileSync(filePath)
+              const ext = path.extname(filePath) || '.css'
+              const base = path.basename(filePath, ext)
+              const hash = sharedHashString(`${filePath}:${content.toString('utf8')}`, 8)
+              const fileName = `${base}-${hash}${ext}`
+              const assetsDirName = this.options.assetsDir.replace(/^\/+|\/+$/g, '') || 'assets'
+              const assetsDir = path.join(this.options.outDir, assetsDirName)
+              fs.mkdirSync(assetsDir, { recursive: true })
+              fs.writeFileSync(path.join(assetsDir, fileName), content)
+              const href = `/${assetsDirName}/${fileName}`
+              return { code: `export default ${JSON.stringify(href)}`, moduleType: 'js' }
+            } catch (e) {
+              throw new Error(
+                `[rari] Failed to emit CSS URL asset ${filePath}: ${e instanceof Error ? e.message : String(e)}`,
+              )
+            }
           }
 
           if (id.startsWith(CSS_GLOBAL_PREFIX)) {
