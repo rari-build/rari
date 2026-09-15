@@ -499,12 +499,14 @@ impl LayoutRenderer {
             None
         };
 
-        let composition_script = Self::build_composition_script(
+        let composition_script = Self::build_composition_script_with_stream(
             route_match,
             context,
             loading_component_id.as_deref(),
             false,
             true,
+            None,
+            false,
         )?;
 
         let set_search_script = format!(
@@ -547,12 +549,14 @@ impl LayoutRenderer {
             None
         };
 
-        let composition_script = Self::build_composition_script(
+        let composition_script = Self::build_composition_script_with_stream(
             route_match,
             context,
             loading_component_id.as_deref(),
             false,
             true,
+            None,
+            false,
         )?;
 
         let set_search_script = format!(
@@ -623,6 +627,7 @@ impl LayoutRenderer {
                     false,
                     true,
                     Some(&stream_id),
+                    false,
                 )?;
 
                 let script = format!(
@@ -700,11 +705,13 @@ impl LayoutRenderer {
                 });
             }
 
-            let composition_script = Self::build_composition_script(
+            let composition_script = Self::build_composition_script_with_stream(
                 route_match,
                 context,
                 loading_component_id.as_deref(),
                 loading_component_id.is_some(),
+                false,
+                None,
                 false,
             )?;
 
@@ -796,6 +803,7 @@ impl LayoutRenderer {
                     true,
                     true,
                     Some(&stream_id),
+                    true,
                 ) {
                     Ok(script) => script,
                     Err(e) => {
@@ -1230,6 +1238,7 @@ impl LayoutRenderer {
             use_suspense,
             defer_rsc,
             None,
+            true,
         )
     }
 
@@ -1241,6 +1250,7 @@ impl LayoutRenderer {
         use_suspense: bool,
         defer_rsc: bool,
         capture_stream_id: Option<&str>,
+        expand_root_layout: bool,
     ) -> Result<String, RariError> {
         let page_props = utils::create_page_props(route_match, context).map_err(|e| {
             tracing::error!(
@@ -1393,6 +1403,7 @@ impl LayoutRenderer {
             defer_rsc,
             &action_post_url_json,
             capture_stream_id,
+            expand_root_layout,
         );
 
         Ok(script)
