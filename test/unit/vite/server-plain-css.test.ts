@@ -329,4 +329,61 @@ describe('server plain css imports', () => {
     expect(emitted).toContain('.page { color: red; }')
     expect(emitted).not.toContain("@import './nested.css'")
   })
+
+  it('preserves layer, supports, and media qualifiers when inlining local @imports', async () => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-qualified-inline-css-'))
+    const appDir = path.join(dir, 'src', 'app')
+    fs.mkdirSync(appDir, { recursive: true })
+    fs.writeFileSync(path.join(appDir, 'layer.css'), '.layered { color: navy; }\n')
+    fs.writeFileSync(path.join(appDir, 'supports.css'), '.supported { display: grid; }\n')
+    fs.writeFileSync(path.join(appDir, 'print.css'), '.printed { color: black; }\n')
+    fs.writeFileSync(
+      path.join(appDir, 'page.css'),
+      [
+        "@import './layer.css' layer(base);",
+        "@import './supports.css' supports(display: grid);",
+        "@import './print.css' print;",
+        '.page { color: red; }',
+        '',
+      ].join('\n'),
+    )
+    const pagePath = path.join(appDir, 'page.tsx')
+    fs.writeFileSync(
+      pagePath,
+      `import './page.css'\nexport default function Page() { return null }\n`,
+    )
+
+    const outDir = path.join(dir, 'dist')
+    fs.mkdirSync(path.join(outDir, 'server'), { recursive: true })
+    fs.writeFileSync(
+      path.join(outDir, 'server', 'manifest.json'),
+      JSON.stringify({ components: {}, buildTime: new Date().toISOString() }),
+    )
+
+    const builder = new ServerComponentBuilder(dir, {
+      outDir: 'dist',
+      rscDir: 'server',
+      manifestPath: 'server/manifest.json',
+      minify: false,
+      alias: {},
+    })
+
+    const result = await builder.rebuildComponent(pagePath)
+    expect(result.success).toBe(true)
+
+    const cssHrefs = readManifestCssHrefs(path.join(outDir, 'server', 'manifest.json'))
+    expect(cssHrefs.length).toBeGreaterThan(0)
+    const cssHref = cssHrefs[0]
+    expect(cssHref).toBeTypeOf('string')
+    const emitted = fs.readFileSync(path.join(outDir, cssHref.replace(/^\//, '')), 'utf-8')
+
+    expect(emitted).toContain('@layer base')
+    expect(emitted).toContain('.layered { color: navy; }')
+    expect(emitted).toContain('@supports (display: grid)')
+    expect(emitted).toContain('.supported { display: grid; }')
+    expect(emitted).toContain('@media print')
+    expect(emitted).toContain('.printed { color: black; }')
+    expect(emitted).toContain('.page { color: red; }')
+    expect(emitted).not.toMatch(/@import\s+['"]\.\//)
+  })
 })

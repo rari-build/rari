@@ -232,10 +232,78 @@ const BARE_PACKAGE_CSS_IMPORT_RE =
   /@import\s+(?:url\(\s*)?['"](?![a-zA-Z][a-zA-Z0-9+.-]*:|\/\/|\.\/|\.\.\/|\/)[^'"]+['"][^;]*(?:;|$)/g
 
 const LOCAL_RELATIVE_CSS_IMPORT_RE =
-  /@import\s+(?:url\(\s*)?['"]((?:\.\/|\.\.\/)[^'"]+)['"][^;]*(?:;|$)/g
+  /@import\s+(?:url\(\s*)?['"]((?:\.\/|\.\.\/)[^'"]+)['"]([^;]*)(?:;|$)/g
 
 function stripBarePackageCssImports(css: string): string {
   return css.replace(BARE_PACKAGE_CSS_IMPORT_RE, '').trim()
+}
+
+interface CssImportQualifiers {
+  readonly layerName: string | null
+  readonly supportsCondition: string | null
+  readonly mediaQuery: string | null
+}
+
+function extractImportQualifiers(suffix: string): CssImportQualifiers {
+  let rest = suffix.trim().replace(/^\)\s*/, '')
+  let layerName: string | null = null
+  let supportsCondition: string | null = null
+
+  const layerOpen = /^layer\s*\(/i.exec(rest)
+  if (layerOpen) {
+    const openParen = rest.indexOf('(')
+    const closeParen = rest.indexOf(')', openParen)
+    if (closeParen !== -1) {
+      layerName = rest.slice(openParen + 1, closeParen).trim()
+      rest = rest.slice(closeParen + 1).trim()
+    }
+  } else if (/^layer(?:\s|$)/i.test(rest)) {
+    layerName = ''
+    rest = rest.replace(/^layer\s*/i, '')
+  }
+
+  if (/^supports\s*\(/i.test(rest)) {
+    const openParen = rest.indexOf('(')
+    let depth = 0
+    let end = -1
+    for (let i = openParen; i < rest.length; i++) {
+      const ch = rest[i]
+      if (ch === '(') depth++
+      else if (ch === ')') {
+        depth--
+        if (depth === 0) {
+          end = i
+          break
+        }
+      }
+    }
+    if (end !== -1) {
+      supportsCondition = rest.slice(openParen + 1, end).trim()
+      rest = rest.slice(end + 1).trim()
+    }
+  }
+
+  const mediaQuery = rest.trim() === '' ? null : rest.trim()
+  return { layerName, supportsCondition, mediaQuery }
+}
+
+function applyImportQualifiers(css: string, qualifiers: CssImportQualifiers): string {
+  let out = css.trim()
+  if (out === '') return ''
+
+  if (qualifiers.layerName !== null) {
+    out =
+      qualifiers.layerName === ''
+        ? `@layer {\n${out}\n}`
+        : `@layer ${qualifiers.layerName} {\n${out}\n}`
+  }
+  if (qualifiers.supportsCondition != null && qualifiers.supportsCondition !== '') {
+    out = `@supports (${qualifiers.supportsCondition}) {\n${out}\n}`
+  }
+  if (qualifiers.mediaQuery != null && qualifiers.mediaQuery !== '') {
+    out = `@media ${qualifiers.mediaQuery} {\n${out}\n}`
+  }
+  return out
 }
 
 function inlineLocalRelativeCssImports(
@@ -248,16 +316,20 @@ function inlineLocalRelativeCssImports(
   seen.add(absPath)
 
   return css
-    .replace(LOCAL_RELATIVE_CSS_IMPORT_RE, (fullMatch, relPath: string) => {
-      const nestedPath = path.resolve(path.dirname(absPath), relPath)
-      try {
-        if (!fs.existsSync(nestedPath) || !fs.statSync(nestedPath).isFile()) return fullMatch
-        const nested = fs.readFileSync(nestedPath, 'utf-8')
-        return preparePlainCssForServerAsset(nestedPath, nested, seen)
-      } catch {
-        return fullMatch
-      }
-    })
+    .replace(
+      LOCAL_RELATIVE_CSS_IMPORT_RE,
+      (fullMatch, relPath: string, qualifierSuffix: string) => {
+        const nestedPath = path.resolve(path.dirname(absPath), relPath)
+        try {
+          if (!fs.existsSync(nestedPath) || !fs.statSync(nestedPath).isFile()) return fullMatch
+          const nested = fs.readFileSync(nestedPath, 'utf-8')
+          const prepared = preparePlainCssForServerAsset(nestedPath, nested, seen)
+          return applyImportQualifiers(prepared, extractImportQualifiers(qualifierSuffix))
+        } catch {
+          return fullMatch
+        }
+      },
+    )
     .trim()
 }
 
