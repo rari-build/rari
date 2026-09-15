@@ -232,6 +232,40 @@ export function collectMdxContentDirs(
   return contentDirs.map(dir => path.join(projectRoot, dir)).filter(dir => fs.existsSync(dir))
 }
 
+function listContentFilesRelative(rootDir: string): string[] {
+  const files: string[] = []
+  const walk = (dir: string) => {
+    if (!fs.existsSync(dir)) return
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const fullPath = path.join(dir, entry.name)
+      if (entry.isDirectory()) {
+        walk(fullPath)
+      } else if (entry.isFile()) {
+        files.push(path.relative(rootDir, fullPath).replace(BACKSLASH_REGEX, '/'))
+      }
+    }
+  }
+  walk(rootDir)
+  return files
+}
+
+export function copyMdxContentDirsToDest(sourceDirs: readonly string[], destRoot: string): void {
+  for (const srcDir of sourceDirs) {
+    for (const rel of listContentFilesRelative(srcDir)) {
+      const from = path.join(srcDir, rel)
+      const to = path.join(destRoot, rel)
+      if (fs.existsSync(to)) {
+        console.warn(
+          `[rari] Skipping MDX content conflict: ${rel} already copied from an earlier content dir`,
+        )
+        continue
+      }
+      fs.mkdirSync(path.dirname(to), { recursive: true })
+      fs.copyFileSync(from, to)
+    }
+  }
+}
+
 export function collectMdxComponentScanDirs(
   projectRoot: string,
   componentsDir: string,

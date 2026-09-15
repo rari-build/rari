@@ -55,6 +55,7 @@ import {
 } from '../image/static-import'
 import {
   collectMdxContentDirs,
+  copyMdxContentDirsToDest,
   resolveMdxPluginOptions,
   resolveMdxRegistryEntries,
 } from '../mdx/registry'
@@ -232,7 +233,7 @@ const BARE_PACKAGE_CSS_IMPORT_RE =
   /@import\s+(?:url\(\s*)?['"](?![a-zA-Z][a-zA-Z0-9+.-]*:|\/\/|\.\/|\.\.\/|\/)[^'"]+['"][^;]*(?:;|$)/g
 
 const LOCAL_RELATIVE_CSS_IMPORT_RE =
-  /@import\s+(?:url\(\s*)?['"]((?:\.\/|\.\.\/)[^'"]+)['"]([^;]*)(?:;|$)/g
+  /@import\s+(?:url\(\s*((?:\.\/|\.\.\/)[^)\s]+)\s*\)|url\(\s*['"]((?:\.\/|\.\.\/)[^'"]+)['"]\s*\)|['"]((?:\.\/|\.\.\/)[^'"]+)['"])([^;]*)(?:;|$)/g
 
 function stripBarePackageCssImports(css: string): string {
   return css.replace(BARE_PACKAGE_CSS_IMPORT_RE, '').trim()
@@ -318,12 +319,20 @@ function inlineLocalRelativeCssImports(
   return css
     .replace(
       LOCAL_RELATIVE_CSS_IMPORT_RE,
-      (fullMatch, relPath: string, qualifierSuffix: string) => {
+      (
+        fullMatch,
+        urlUnquoted: string | undefined,
+        urlQuoted: string | undefined,
+        plainQuoted: string | undefined,
+        qualifierSuffix: string,
+      ) => {
+        const relPath = urlUnquoted ?? urlQuoted ?? plainQuoted
+        if (relPath == null || relPath === '') return fullMatch
         const nestedPath = path.resolve(path.dirname(absPath), relPath)
         try {
           if (!fs.existsSync(nestedPath) || !fs.statSync(nestedPath).isFile()) return fullMatch
           const nested = fs.readFileSync(nestedPath, 'utf-8')
-          const prepared = preparePlainCssForServerAsset(nestedPath, nested, seen)
+          const prepared = preparePlainCssForServerAsset(nestedPath, nested, new Set(seen))
           return applyImportQualifiers(prepared, extractImportQualifiers(qualifierSuffix))
         } catch {
           return fullMatch
@@ -2785,13 +2794,16 @@ export function createServerBuildPlugin(options: ServerBuildOptions = {}): Plugi
 
         try {
           const mdxOpts = resolveMdxPluginOptions(projectRoot, options.mdx)
-          const contentDirs = collectMdxContentDirs(projectRoot, mdxOpts.contentDirs)
-          const destRoot = path.join(resolvedViteOutDir, 'content')
-          for (const dir of contentDirs) {
-            const rel = path.relative(projectRoot, dir).replace(BACKSLASH_REGEX, '/')
-            if (rel === 'public/content' || rel.startsWith('public/content/')) continue
-            if (rel === 'dist/content' || rel.startsWith('dist/content/')) continue
-            fs.cpSync(dir, destRoot, { recursive: true })
+          const contentDirs = collectMdxContentDirs(projectRoot, mdxOpts.contentDirs).filter(
+            dir => {
+              const rel = path.relative(projectRoot, dir).replace(BACKSLASH_REGEX, '/')
+              if (rel === 'public/content' || rel.startsWith('public/content/')) return false
+              if (rel === 'dist/content' || rel.startsWith('dist/content/')) return false
+              return true
+            },
+          )
+          if (contentDirs.length > 0) {
+            copyMdxContentDirsToDest(contentDirs, path.join(resolvedViteOutDir, 'content'))
           }
         } catch (error) {
           console.warn('[rari] Failed to copy MDX content:', error)
