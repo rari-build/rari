@@ -171,9 +171,14 @@ impl RouteComposer {
             format!(
                 r"
                 const __layoutProps{index} = {{ children: {current_element}, pathname: {pathname_json} }};
-                let {layout_var} = LayoutComponent{index}(__layoutProps{index});
-                if ({layout_var} != null && typeof {layout_var}.then === 'function') {{
-                    {layout_var} = await {layout_var};
+                let {layout_var};
+                try {{
+                    {layout_var} = LayoutComponent{index}(__layoutProps{index});
+                    if ({layout_var} != null && typeof {layout_var}.then === 'function') {{
+                        {layout_var} = await {layout_var};
+                    }}
+                }} catch (__layoutExpandError{index}) {{
+                    {layout_var} = React.createElement(LayoutComponent{index}, __layoutProps{index});
                 }}
                 "
             )
@@ -437,7 +442,8 @@ mod tests {
         assert!(script.contains("children: errorBoundedElement"));
         assert!(script.contains("elementToRender = layout0"));
         assert!(script.contains("LayoutComponent0(__layoutProps0)"));
-        assert!(!script.contains("React.createElement(LayoutComponent0"));
+        assert!(script.contains("catch (__layoutExpandError0)"));
+        assert!(script.contains("React.createElement(LayoutComponent0, __layoutProps0)"));
     }
 
     #[test]
@@ -496,7 +502,8 @@ mod tests {
         assert!(script.contains("elementToRender = layout1"));
         assert!(script.contains("React.createElement(LayoutComponent0"));
         assert!(script.contains("LayoutComponent1(__layoutProps1)"));
-        assert!(!script.contains("React.createElement(LayoutComponent1"));
+        assert!(script.contains("catch (__layoutExpandError1)"));
+        assert!(script.contains("React.createElement(LayoutComponent1, __layoutProps1)"));
         let dashboard_pos = script.find("DashboardLayout").expect("dashboard");
         let error_pos = script.find("errorBoundedElement =").expect("error wrap");
         let root_pos = script.find("RootLayout").expect("root");
@@ -535,9 +542,9 @@ mod tests {
         );
 
         assert!(wrapper.contains("LayoutComponent0(__layoutProps0)"));
-        assert!(!wrapper.contains("React.createElement(LayoutComponent0"));
+        assert!(wrapper.contains("catch (__layoutExpandError0)"));
+        assert!(wrapper.contains("React.createElement(LayoutComponent0, __layoutProps0)"));
         assert!(wrapper.contains("await layout0"));
-        assert!(!wrapper.contains("catch (__layoutExpandError"));
     }
 
     #[test]

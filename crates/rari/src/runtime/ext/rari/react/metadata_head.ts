@@ -45,9 +45,22 @@ function createLink(react: ReactApi, attrs: Readonly<Record<string, string>>): u
   return react.createElement('link', { ...attrs, 'data-rari-meta': '1' })
 }
 
+function iconDescriptorFromRecord(
+  item: Readonly<Record<string, unknown>>,
+  defaultRel: string,
+): IconDescriptor {
+  return {
+    url: typeof item.url === 'string' ? item.url : undefined,
+    rel: typeof item.rel === 'string' ? item.rel : defaultRel,
+    type: typeof item.type === 'string' ? item.type : undefined,
+    sizes: typeof item.sizes === 'string' ? item.sizes : undefined,
+  }
+}
+
 function iconDescriptors(value: unknown, defaultRel: string): IconDescriptor[] {
   if (value == null) return []
   if (typeof value === 'string') return [{ url: value, rel: defaultRel }]
+  if (isRecord(value)) return [iconDescriptorFromRecord(value, defaultRel)]
   if (!Array.isArray(value) || value.length === 0) return []
 
   if (typeof value[0] === 'string') {
@@ -61,12 +74,7 @@ function iconDescriptors(value: unknown, defaultRel: string): IconDescriptor[] {
   const icons: IconDescriptor[] = []
   for (const item of value) {
     if (!isRecord(item)) continue
-    icons.push({
-      url: typeof item.url === 'string' ? item.url : undefined,
-      rel: typeof item.rel === 'string' ? item.rel : defaultRel,
-      type: typeof item.type === 'string' ? item.type : undefined,
-      sizes: typeof item.sizes === 'string' ? item.sizes : undefined,
-    })
+    icons.push(iconDescriptorFromRecord(item, defaultRel))
   }
   return icons
 }
