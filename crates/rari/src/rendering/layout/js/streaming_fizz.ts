@@ -700,7 +700,7 @@ declare function rariCreateHtmlBoundaryTracker(): {
         const chunkText = decoder.decode(value, { stream: true })
         rariStreamLog('mux.htmlChunk', `n=${htmlChunkCount} bytes=${value.byteLength}`)
         if (!(await pumpFizzText(chunkText))) return
-        if (!finalPackageSent && session.safeToInjectFlight()) {
+        if (!finalPackageSent && !headPending && session.safeToInjectFlight()) {
           if (!(await pumpPendingFlight())) return
         }
       }
