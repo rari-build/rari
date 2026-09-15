@@ -46,13 +46,95 @@ fn split_head_inject_units(tags: &str) -> Vec<String> {
 }
 
 fn find_closing_head_tag(html: &str) -> Option<usize> {
-    const NEEDLE: &[u8] = b"</head>";
-    let mut masked = html.as_bytes().to_vec();
-    RscHtmlRenderer::mask_html_for_head_scan_in_place(&mut masked);
-    if masked.len() < NEEDLE.len() {
-        return None;
+    const HEAD_CLOSE: &[u8] = b"</head>";
+    const RAW_TAGS: &[(&[u8], &[u8])] = &[
+        (b"<script", b"</script>"),
+        (b"<style", b"</style>"),
+        (b"<title", b"</title>"),
+        (b"<textarea", b"</textarea>"),
+        (b"<noscript", b"</noscript>"),
+    ];
+
+    enum ScanState {
+        Data,
+        Comment,
+        RawText { close: &'static [u8] },
     }
-    masked.windows(NEEDLE.len()).position(|window| window.eq_ignore_ascii_case(NEEDLE))
+
+    let bytes = html.as_bytes();
+    let mut i = 0;
+    let mut state = ScanState::Data;
+
+    while i < bytes.len() {
+        match state {
+            ScanState::Data => {
+                if bytes[i..].starts_with(b"<!--") {
+                    state = ScanState::Comment;
+                    i += 4;
+                    continue;
+                }
+
+                if i + HEAD_CLOSE.len() <= bytes.len()
+                    && bytes[i..i + HEAD_CLOSE.len()].eq_ignore_ascii_case(HEAD_CLOSE)
+                {
+                    return Some(i);
+                }
+
+                let mut entered_raw = false;
+                for &(open, close) in RAW_TAGS {
+                    if i + open.len() > bytes.len()
+                        || !bytes[i..i + open.len()].eq_ignore_ascii_case(open)
+                    {
+                        continue;
+                    }
+                    let after = i + open.len();
+                    let boundary_ok = after >= bytes.len()
+                        || matches!(bytes[after], b'>' | b'/' | b' ' | b'\t' | b'\n' | b'\r');
+                    if !boundary_ok {
+                        continue;
+                    }
+                    let Some(gt_rel) = bytes[i..].iter().position(|&b| b == b'>') else {
+                        return None;
+                    };
+                    let gt = i + gt_rel;
+                    let open_end = gt + 1;
+                    if gt >= 1 && bytes[gt - 1] == b'/' {
+                        i = open_end;
+                    } else {
+                        state = ScanState::RawText { close };
+                        i = open_end;
+                    }
+                    entered_raw = true;
+                    break;
+                }
+                if entered_raw {
+                    continue;
+                }
+
+                i += 1;
+            }
+            ScanState::Comment => {
+                if i + 2 < bytes.len() && &bytes[i..i + 3] == b"-->" {
+                    state = ScanState::Data;
+                    i += 3;
+                } else {
+                    i += 1;
+                }
+            }
+            ScanState::RawText { close } => {
+                if i + close.len() <= bytes.len()
+                    && bytes[i..i + close.len()].eq_ignore_ascii_case(close)
+                {
+                    state = ScanState::Data;
+                    i += close.len();
+                } else {
+                    i += 1;
+                }
+            }
+        }
+    }
+
+    None
 }
 
 pub fn escape_html(text: &str) -> String {
@@ -120,6 +202,7 @@ impl RscHtmlRenderer {
         &self,
         cache_enabled: bool,
         is_dev_mode: bool,
+        vite_port: u16,
     ) -> Result<String, RariError> {
         if cache_enabled {
             let cache = self.template_cache.lock();
@@ -129,7 +212,7 @@ impl RscHtmlRenderer {
         }
 
         let template = if is_dev_mode {
-            Self::generate_dev_client_head()
+            Self::generate_dev_client_head(vite_port)
         } else {
             self.read_client_head_file().await?
         };
@@ -142,13 +225,14 @@ impl RscHtmlRenderer {
         Ok(template)
     }
 
-    fn generate_dev_client_head() -> String {
-        r#"<script type="module" src="/@vite/client"></script>
+    pub(crate) fn generate_dev_client_head(vite_port: u16) -> String {
+        format!(
+            r#"<script type="module" src="http://localhost:{vite_port}/@vite/client"></script>
 <script type="module">
-import 'virtual:rari-entry-client';
+import 'http://localhost:{vite_port}/@id/virtual:rari-entry-client';
 </script>
 "#
-        .to_string()
+        )
     }
 
     async fn read_client_head_file(&self) -> Result<String, RariError> {
@@ -291,15 +375,6 @@ import 'virtual:rari-entry-client';
         Self::mask_raw_text_element_in_place(&mut out, b"<style", b"</style>");
         String::from_utf8(out)
             .unwrap_or_else(|err| String::from_utf8_lossy(err.as_bytes()).into_owned())
-    }
-
-    fn mask_html_for_head_scan_in_place(out: &mut [u8]) {
-        Self::mask_raw_text_element_in_place(out, b"<script", b"</script>");
-        Self::mask_raw_text_element_in_place(out, b"<style", b"</style>");
-        Self::mask_raw_text_element_in_place(out, b"<title", b"</title>");
-        Self::mask_raw_text_element_in_place(out, b"<textarea", b"</textarea>");
-        Self::mask_raw_text_element_in_place(out, b"<noscript", b"</noscript>");
-        Self::mask_html_comments_in_place(out);
     }
 
     fn decode_basic_html_entities(value: &str) -> String {
@@ -535,6 +610,7 @@ import 'virtual:rari-entry-client';
         html_content: String,
         cache_template: bool,
         is_dev_mode: bool,
+        vite_port: u16,
         css_links: &[String],
     ) -> Result<String, RariError> {
         let is_complete_document = html_content.trim_start().starts_with("<!DOCTYPE")
@@ -550,7 +626,7 @@ import 'virtual:rari-entry-client';
         let client_head = if is_dev_mode {
             String::new()
         } else {
-            self.load_template(cache_template, is_dev_mode).await?
+            self.load_template(cache_template, is_dev_mode, vite_port).await?
         };
 
         let mut final_html = html_content;
@@ -648,9 +724,9 @@ mod tests {
 
     #[test]
     fn test_generate_dev_client_head() {
-        let template = RscHtmlRenderer::generate_dev_client_head();
-        assert!(template.contains("/@vite/client"));
-        assert!(template.contains("virtual:rari-entry-client"));
+        let template = RscHtmlRenderer::generate_dev_client_head(5173);
+        assert!(template.contains("http://localhost:5173/@vite/client"));
+        assert!(template.contains("http://localhost:5173/@id/virtual:rari-entry-client"));
         assert!(!template.contains("<!DOCTYPE html>"));
         assert!(!template.contains(r#"id="root""#));
     }
@@ -819,6 +895,17 @@ import '/entry.js';
     }
 
     #[test]
+    fn test_find_closing_head_tag_ignores_script_opener_inside_comment() {
+        let html = r#"<html><head>
+<!-- <script> -->
+</head><body><script>real()</script></body></html>"#;
+        let idx = find_closing_head_tag(html).expect("real head close");
+        assert_eq!(&html[idx..idx + 7], "</head>");
+        assert!(idx < html.find("<body>").expect("body"));
+        assert!(idx < html.find("<script>real()").expect("real script"));
+    }
+
+    #[test]
     fn test_find_closing_head_tag_across_chunk_concatenation() {
         let chunk1 = "<html><head><script>var x = '</he";
         let chunk2 = "ad>';</script></head><body></body></html>";
@@ -971,7 +1058,7 @@ import '/entry.js';
         let renderer = RscHtmlRenderer::new(runtime);
 
         let err = renderer
-            .assemble_document("<main>Page</main>".to_string(), false, true, &[])
+            .assemble_document("<main>Page</main>".to_string(), false, true, 5173, &[])
             .await
             .expect_err("fragment HTML should be rejected");
 
@@ -987,7 +1074,7 @@ import '/entry.js';
             "<!DOCTYPE html><html><head></head><body><main>Page</main></body></html>";
 
         let html = renderer
-            .assemble_document(html_content.to_string(), false, true, &css_links)
+            .assemble_document(html_content.to_string(), false, true, 5173, &css_links)
             .await
             .expect("assemble_document should succeed");
 

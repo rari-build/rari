@@ -423,105 +423,87 @@ declare function rariCreateHtmlBoundaryTracker(): {
     return `<div class=rari-error style=color:red;border:1px_solid_red;padding:10px;border-radius:4px;background-color:#fff5f5><strong>Error loading content: </strong>${errMsg}</div>`
   }
 
-  function rariMaskRangeInString(html: string, start: number, end: number): string {
-    let out = html.slice(0, start)
-    for (let i = start; i < end; i++) {
-      const ch = html.charAt(i)
-      out += ch === '\n' || ch === '\r' ? ch : ' '
-    }
-    return out + html.slice(end)
-  }
+  function rariFindClosingHeadTag(html: string): number {
+    const HEAD_CLOSE = '</head>'
+    const RAW_TAGS: ReadonlyArray<{ readonly open: string; readonly close: string }> = [
+      { open: '<script', close: '</script>' },
+      { open: '<style', close: '</style>' },
+      { open: '<title', close: '</title>' },
+      { open: '<textarea', close: '</textarea>' },
+      { open: '<noscript', close: '</noscript>' },
+    ]
 
-  function rariFindAsciiTagCi(haystack: string, from: number, open: string): number {
-    const openLower = open.toLowerCase()
-    for (let i = from; i <= haystack.length - open.length; i++) {
-      if (haystack.slice(i, i + open.length).toLowerCase() === openLower) {
-        const after = i + open.length
-        if (after >= haystack.length) return i
-        const next = haystack.charAt(after)
-        if (
-          next === '>' ||
-          next === '/' ||
-          next === ' ' ||
-          next === '\t' ||
-          next === '\n' ||
-          next === '\r'
-        ) {
+    type ScanState = 'data' | 'comment' | { readonly rawClose: string }
+    let state: ScanState = 'data'
+    let i = 0
+
+    while (i < html.length) {
+      if (state === 'data') {
+        if (html.startsWith('<!--', i)) {
+          state = 'comment'
+          i += 4
+          continue
+        }
+
+        if (html.slice(i, i + HEAD_CLOSE.length).toLowerCase() === HEAD_CLOSE) {
           return i
         }
-      }
-    }
-    return -1
-  }
 
-  function rariMaskHtmlComments(html: string): string {
-    let out = html
-    let i = 0
-    while (i < out.length) {
-      if (out.slice(i, i + 4) === '<!--') {
-        const start = i
-        i += 4
-        let closed = false
-        while (i + 2 < out.length) {
-          if (out.slice(i, i + 3) === '-->') {
-            i += 3
-            closed = true
-            break
+        let enteredRaw = false
+        for (const { open, close } of RAW_TAGS) {
+          if (html.slice(i, i + open.length).toLowerCase() !== open) continue
+          const after = i + open.length
+          if (after < html.length) {
+            const next = html.charAt(after)
+            if (
+              next !== '>' &&
+              next !== '/' &&
+              next !== ' ' &&
+              next !== '\t' &&
+              next !== '\n' &&
+              next !== '\r'
+            ) {
+              continue
+            }
           }
-          i++
-        }
-        const end = closed ? i : out.length
-        out = rariMaskRangeInString(out, start, end)
-        if (!closed) break
-        continue
-      }
-      i++
-    }
-    return out
-  }
-
-  function rariMaskRawTextElement(html: string, open: string, close: string): string {
-    let out = html
-    let i = 0
-    for (;;) {
-      const start = rariFindAsciiTagCi(out, i, open)
-      if (start === -1) break
-      const gt = out.indexOf('>', start)
-      if (gt === -1) break
-      const openEnd = gt + 1
-      if (gt >= 1 && out.charAt(gt - 1) === '/') {
-        i = openEnd
-        continue
-      }
-
-      const closeLower = close.toLowerCase()
-      let closeAt = -1
-      for (let search = openEnd; search <= out.length - close.length; search++) {
-        if (out.slice(search, search + close.length).toLowerCase() === closeLower) {
-          closeAt = search
+          const gt = html.indexOf('>', i)
+          if (gt === -1) return -1
+          const openEnd = gt + 1
+          if (gt >= 1 && html.charAt(gt - 1) === '/') {
+            i = openEnd
+          } else {
+            state = { rawClose: close }
+            i = openEnd
+          }
+          enteredRaw = true
           break
         }
+        if (enteredRaw) continue
+
+        i++
+        continue
       }
-      const end = closeAt === -1 ? out.length : closeAt + close.length
-      out = rariMaskRangeInString(out, start, end)
-      if (closeAt === -1) break
-      i = end
+
+      if (state === 'comment') {
+        if (html.startsWith('-->', i)) {
+          state = 'data'
+          i += 3
+        } else {
+          i++
+        }
+        continue
+      }
+
+      const close = state.rawClose
+      if (html.slice(i, i + close.length).toLowerCase() === close) {
+        state = 'data'
+        i += close.length
+      } else {
+        i++
+      }
     }
-    return out
-  }
 
-  function rariMaskHtmlForHeadScan(html: string): string {
-    let out = rariMaskRawTextElement(html, '<script', '</script>')
-    out = rariMaskRawTextElement(out, '<style', '</style>')
-    out = rariMaskRawTextElement(out, '<title', '</title>')
-    out = rariMaskRawTextElement(out, '<textarea', '</textarea>')
-    out = rariMaskRawTextElement(out, '<noscript', '</noscript>')
-    out = rariMaskHtmlComments(out)
-    return out
-  }
-
-  function rariFindClosingHeadTag(html: string): number {
-    return rariMaskHtmlForHeadScan(html).search(/<\/head>/i)
+    return -1
   }
 
   function rariInjectHeadContent(

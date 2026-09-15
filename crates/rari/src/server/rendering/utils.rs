@@ -1,24 +1,12 @@
-use std::fmt::Write;
-
 use axum::http::StatusCode;
 use cow_utils::CowUtils;
 use tokio::fs;
 
 use crate::{rendering::r#static::RscHtmlRenderer, server::config::Config};
 
-fn dev_client_head(vite_port: u16) -> String {
-    format!(
-        r#"<script type="module" src="http://localhost:{vite_port}/@vite/client"></script>
-<script type="module">
-import 'http://localhost:{vite_port}/@id/virtual:rari-entry-client';
-</script>
-"#
-    )
-}
-
 async fn load_client_head(config: &Config) -> Option<String> {
     if config.is_development() {
-        return Some(dev_client_head(config.vite.port));
+        return Some(RscHtmlRenderer::generate_dev_client_head(config.vite.port));
     }
 
     let path = config.public_dir().join("rari-client-head.html");
@@ -106,47 +94,25 @@ pub fn inject_vite_client(html: &str, vite_port: u16) -> String {
         return html.to_string();
     }
 
+    let client_head = RscHtmlRenderer::generate_dev_client_head(vite_port);
+
     if let Some(head_end) = html.find("</head>") {
-        let mut result = String::new();
+        let mut result = String::with_capacity(html.len() + client_head.len());
         result.push_str(&html[..head_end]);
-        #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
-        write!(
-            result,
-            r#"<script type="module" src="http://localhost:{vite_port}/@vite/client"></script>
-<script type="module">
-import 'http://localhost:{vite_port}/@id/virtual:rari-entry-client';
-</script>
-"#
-        )
-        .unwrap();
+        result.push_str(&client_head);
         result.push_str(&html[head_end..]);
         return result;
     }
 
     if let Some(body_end) = html.find("</body>") {
-        let mut result = String::new();
+        let mut result = String::with_capacity(html.len() + client_head.len());
         result.push_str(&html[..body_end]);
-        #[expect(clippy::unwrap_used, reason = "write! to String never fails")]
-        write!(
-            result,
-            r#"<script type="module" src="http://localhost:{vite_port}/@vite/client"></script>
-<script type="module">
-import 'http://localhost:{vite_port}/@id/virtual:rari-entry-client';
-</script>
-"#
-        )
-        .unwrap();
+        result.push_str(&client_head);
         result.push_str(&html[body_end..]);
         return result;
     }
 
-    format!(
-        r#"<script type="module" src="http://localhost:{vite_port}/@vite/client"></script>
-<script type="module">
-import 'http://localhost:{vite_port}/@id/virtual:rari-entry-client';
-</script>
-{html}"#
-    )
+    format!("{client_head}{html}")
 }
 
 #[cfg(test)]

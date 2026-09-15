@@ -161,11 +161,14 @@ describe('server plain css imports', () => {
     expect(entry.css).toEqual([])
   })
 
-  it('skips plain css that only has bare package @imports (e.g. tailwind)', async () => {
-    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-tw-css-'))
+  it('skips layout-owned plain css from server assets (client head owns it)', async () => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-layout-css-skip-'))
     const appDir = path.join(dir, 'src', 'app')
     fs.mkdirSync(appDir, { recursive: true })
-    fs.writeFileSync(path.join(appDir, 'globals.css'), "@import 'tailwindcss';\n")
+    fs.writeFileSync(
+      path.join(appDir, 'globals.css'),
+      "@import 'tailwindcss';\n:root { --brand: red; }\n",
+    )
     const layoutPath = path.join(appDir, 'layout.tsx')
     fs.writeFileSync(
       layoutPath,

@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { buildLayoutCssImportStatements } from '@rari/vite/client-head'
+import { buildLayoutCssImportStatements, collectLayoutCssImportPaths } from '@rari/vite/client-head'
 import { describe, expect, it } from 'vite-plus/test'
 
 describe('layout-css-imports', () => {
@@ -14,6 +14,9 @@ describe('layout-css-imports', () => {
       path.join(appDir, 'layout.tsx'),
       `import './globals.css'\nexport default function Layout({ children }) { return children }\n`,
     )
+
+    const paths = collectLayoutCssImportPaths(dir)
+    expect([...paths]).toEqual([path.join(appDir, 'globals.css')])
 
     const statements = buildLayoutCssImportStatements(dir)
     expect(statements).toContain(`import "/src/app/globals.css";`)

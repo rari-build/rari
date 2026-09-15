@@ -71,14 +71,10 @@ function collectLayoutCssImportsFromDir(
   }
 }
 
-/**
- * CSS imported by app layouts must enter the Vite client graph (Tailwind etc.).
- * The server Rolldown build stubs plain CSS imports and does not process them.
- */
-export function buildLayoutCssImportStatements(
+export function collectLayoutCssImportPaths(
   projectRoot: string,
   aliases: Readonly<Record<string, string>> = {},
-): string {
+): Set<string> {
   const cssPaths = new Set<string>()
   collectLayoutCssImportsFromDir(
     path.join(projectRoot, 'src', 'app'),
@@ -86,6 +82,14 @@ export function buildLayoutCssImportStatements(
     aliases,
     cssPaths,
   )
+  return cssPaths
+}
+
+export function buildLayoutCssImportStatements(
+  projectRoot: string,
+  aliases: Readonly<Record<string, string>> = {},
+): string {
+  const cssPaths = collectLayoutCssImportPaths(projectRoot, aliases)
 
   return [...cssPaths]
     .sort()
