@@ -10,6 +10,7 @@ interface IconDescriptor {
   readonly rel?: string
   readonly type?: string
   readonly sizes?: string
+  readonly color?: string
 }
 
 interface OpenGraphImageDescriptor {
@@ -54,6 +55,7 @@ function iconDescriptorFromRecord(
     rel: typeof item.rel === 'string' ? item.rel : defaultRel,
     type: typeof item.type === 'string' ? item.type : undefined,
     sizes: typeof item.sizes === 'string' ? item.sizes : undefined,
+    color: typeof item.color === 'string' ? item.color : undefined,
   }
 }
 
@@ -63,18 +65,13 @@ function iconDescriptors(value: unknown, defaultRel: string): IconDescriptor[] {
   if (isRecord(value)) return [iconDescriptorFromRecord(value, defaultRel)]
   if (!Array.isArray(value) || value.length === 0) return []
 
-  if (typeof value[0] === 'string') {
-    const icons: IconDescriptor[] = []
-    for (const item of value) {
-      if (typeof item === 'string') icons.push({ url: item, rel: defaultRel })
-    }
-    return icons
-  }
-
   const icons: IconDescriptor[] = []
   for (const item of value) {
-    if (!isRecord(item)) continue
-    icons.push(iconDescriptorFromRecord(item, defaultRel))
+    if (typeof item === 'string') {
+      icons.push({ url: item, rel: defaultRel })
+      continue
+    }
+    if (isRecord(item)) icons.push(iconDescriptorFromRecord(item, defaultRel))
   }
   return icons
 }
@@ -189,6 +186,7 @@ export function buildMetadataHeadElements(metadata: unknown): unknown[] {
     const attrs: Record<string, string> = { rel: icon.rel ?? 'icon', href: icon.url }
     if (hasNonEmptyString(icon.type)) attrs.type = icon.type
     if (hasNonEmptyString(icon.sizes)) attrs.sizes = icon.sizes
+    if (hasNonEmptyString(icon.color)) attrs.color = icon.color
     push(createLink(react, attrs))
   }
 

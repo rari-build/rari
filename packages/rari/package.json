@@ -151,7 +151,8 @@
     "lint": "vp lint",
     "lint:fix": "vp lint --fix",
     "typecheck": "tsc",
-    "update-google-fonts": "node ./scripts/update-google-fonts.ts"
+    "update-google-fonts": "node ./scripts/update-google-fonts.ts",
+    "update-react-refresh-runtime": "node ./scripts/update-react-refresh-runtime.ts"
   },
   "peerDependencies": {
     "@mdx-js/mdx": "catalog:mdx",

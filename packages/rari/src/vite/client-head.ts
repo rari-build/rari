@@ -107,12 +107,22 @@ export function collectLayoutCssDevHrefs(
     .map(cssImport => layoutCssViteHref(cssImport, projectRoot))
 }
 
+function layoutCssImportSpecifier(cssImport: string, projectRoot: string): string {
+  if (!path.isAbsolute(cssImport)) return cssImport
+
+  const relative = path.relative(projectRoot, cssImport).replace(/\\/g, '/')
+  if (relative.startsWith('..') || path.isAbsolute(relative)) return cssImport
+
+  return `/${relative}`
+}
+
 export function buildLayoutCssImportStatements(
   projectRoot: string,
   aliases: Readonly<Record<string, string>> = {},
 ): string {
-  return collectLayoutCssDevHrefs(projectRoot, aliases)
-    .map(href => `import ${JSON.stringify(href)};`)
+  return [...collectLayoutCssImportPaths(projectRoot, aliases)]
+    .sort()
+    .map(cssImport => `import ${JSON.stringify(layoutCssImportSpecifier(cssImport, projectRoot))};`)
     .join('\n')
 }
 
