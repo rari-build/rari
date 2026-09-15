@@ -4,7 +4,7 @@ pub mod utils;
 use std::{
     env,
     future::{self, Future},
-    net::SocketAddr,
+    net::{IpAddr, SocketAddr},
     path::PathBuf,
     sync::{Arc, atomic::AtomicU64},
     time::Instant,
@@ -461,7 +461,7 @@ impl Server {
     }
 
     fn display_startup_message(&self) {
-        let server_url = format!("http://{}", self.address);
+        let server_url = display_server_url(self.address);
 
         if self.config.is_production() {
             #[expect(clippy::print_stdout, reason = "Server startup information output")]
@@ -488,5 +488,52 @@ impl Server {
 
     pub fn address(&self) -> SocketAddr {
         self.address
+    }
+}
+
+fn display_server_url(addr: SocketAddr) -> String {
+    let host = match addr.ip() {
+        IpAddr::V4(ip) if ip.is_loopback() || ip.is_unspecified() => "localhost".to_string(),
+        IpAddr::V6(ip) if ip.is_loopback() || ip.is_unspecified() => "localhost".to_string(),
+        IpAddr::V4(ip) => ip.to_string(),
+        IpAddr::V6(ip) => format!("[{ip}]"),
+    };
+    format!("http://{host}:{}", addr.port())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn display_server_url_maps_loopback_and_unspecified_to_localhost() {
+        assert_eq!(
+            display_server_url("127.0.0.1:3000".parse().unwrap()),
+            "http://localhost:3000"
+        );
+        assert_eq!(
+            display_server_url("0.0.0.0:3000".parse().unwrap()),
+            "http://localhost:3000"
+        );
+        assert_eq!(
+            display_server_url("[::1]:3000".parse().unwrap()),
+            "http://localhost:3000"
+        );
+        assert_eq!(
+            display_server_url("[::]:3000".parse().unwrap()),
+            "http://localhost:3000"
+        );
+    }
+
+    #[test]
+    fn display_server_url_keeps_non_loopback_hosts() {
+        assert_eq!(
+            display_server_url("192.168.1.10:3000".parse().unwrap()),
+            "http://192.168.1.10:3000"
+        );
+        assert_eq!(
+            display_server_url("[2001:db8::1]:3000".parse().unwrap()),
+            "http://[2001:db8::1]:3000"
+        );
     }
 }
