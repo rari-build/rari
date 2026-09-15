@@ -85,24 +85,34 @@ export function collectLayoutCssImportPaths(
   return cssPaths
 }
 
+function layoutCssViteHref(cssImport: string, projectRoot: string): string {
+  if (!path.isAbsolute(cssImport)) {
+    return cssImport.startsWith('/') ? cssImport : `/${cssImport}`
+  }
+
+  const relative = path.relative(projectRoot, cssImport).replace(/\\/g, '/')
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    return `/@fs/${cssImport}`
+  }
+
+  return `/${relative}`
+}
+
+export function collectLayoutCssDevHrefs(
+  projectRoot: string,
+  aliases: Readonly<Record<string, string>> = {},
+): string[] {
+  return [...collectLayoutCssImportPaths(projectRoot, aliases)]
+    .sort()
+    .map(cssImport => layoutCssViteHref(cssImport, projectRoot))
+}
+
 export function buildLayoutCssImportStatements(
   projectRoot: string,
   aliases: Readonly<Record<string, string>> = {},
 ): string {
-  const cssPaths = collectLayoutCssImportPaths(projectRoot, aliases)
-
-  return [...cssPaths]
-    .sort()
-    .map(cssImport => {
-      if (!path.isAbsolute(cssImport)) {
-        return `import ${JSON.stringify(cssImport)};`
-      }
-      const relative = path.relative(projectRoot, cssImport).replace(/\\/g, '/')
-      if (relative.startsWith('..') || path.isAbsolute(relative)) {
-        return `import ${JSON.stringify(cssImport)};`
-      }
-      return `import ${JSON.stringify(`/${relative}`)};`
-    })
+  return collectLayoutCssDevHrefs(projectRoot, aliases)
+    .map(href => `import ${JSON.stringify(href)};`)
     .join('\n')
 }
 
@@ -157,10 +167,39 @@ export function buildClientHeadFromBundle(bundle: Readonly<Record<string, Bundle
   return tags.length > 0 ? `${tags.join('\n')}\n` : ''
 }
 
-export function buildDevClientHead(): string {
-  return `<script type="module" src="/@vite/client"></script>
-<script type="module">
-import '${VIRTUAL_CLIENT_ENTRY}';
-</script>
-`
+export function buildDevClientHead(
+  options: {
+    readonly viteOrigin?: string
+    readonly cssHrefs?: readonly string[]
+  } = {},
+): string {
+  const origin = (options.viteOrigin ?? '').replace(/\/$/, '')
+  const tags: string[] = []
+
+  for (const href of options.cssHrefs ?? []) {
+    if (href === '') continue
+    const url =
+      href.startsWith('http://') || href.startsWith('https://')
+        ? href
+        : `${origin}${href.startsWith('/') ? href : `/${href}`}`
+    tags.push(`<link rel="stylesheet" href="${url}" />`)
+  }
+
+  const refreshSrc = origin === '' ? '/@react-refresh' : `${origin}/@react-refresh`
+  const viteClientSrc = origin === '' ? '/@vite/client' : `${origin}/@vite/client`
+  const entryImport = origin === '' ? VIRTUAL_CLIENT_ENTRY : `${origin}/@id/${VIRTUAL_CLIENT_ENTRY}`
+
+  tags.push(`<script type="module">
+import { injectIntoGlobalHook } from '${refreshSrc}'
+injectIntoGlobalHook(window)
+window.$RefreshReg$ = () => {}
+window.$RefreshSig$ = () => type => type
+window.__vite_plugin_react_preamble_installed__ = true
+</script>`)
+  tags.push(`<script type="module" src="${viteClientSrc}"></script>`)
+  tags.push(`<script type="module">
+import '${entryImport}';
+</script>`)
+
+  return `${tags.join('\n')}\n`
 }

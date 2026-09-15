@@ -8,6 +8,7 @@ export const monorepoIgnorePatterns: string[] = [
   'packages/rari-*/',
   'packages/use-cache-*/',
   'packages/create-rari-app/templates/**',
+  'packages/rari/src/vite/transform/react-refresh-runtime.ts',
 ]
 
 export const monorepoReadonlyParameterAllows: Array<

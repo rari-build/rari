@@ -292,7 +292,9 @@ impl RouteComposer {
                     r"
                 if (!globalThis['~rari']) globalThis['~rari'] = {{}};
                 if (!globalThis['~rari'].capturedByStream) globalThis['~rari'].capturedByStream = Object.create(null);
+                if (!globalThis['~rari'].blockingHeadByStream) globalThis['~rari'].blockingHeadByStream = Object.create(null);
                 globalThis['~rari'].capturedByStream[{stream_id_json}] = elementToRender;
+                globalThis['~rari'].blockingHeadByStream[{stream_id_json}] = __blockingHeadHtml;
                 return;
             "
                 )
@@ -304,6 +306,7 @@ impl RouteComposer {
                 } else {
                     globalThis['~rari'].capturedElement = elementToRender;
                 }
+                globalThis['~rari'].blockingHeadScriptsHtml = __blockingHeadHtml;
                 return;
             "
                 .to_string()
@@ -332,6 +335,13 @@ impl RouteComposer {
                         elementToRender,
                         __rariMetadata,
                     );
+                }}
+                let __blockingHeadHtml = '';
+                if (typeof globalThis['~rari']?.hoistBlockingHeadScripts === 'function') {{
+                    const __hoisted = globalThis['~rari'].hoistBlockingHeadScripts(elementToRender);
+                    elementToRender = __hoisted.element;
+                    __blockingHeadHtml =
+                        typeof __hoisted.html === 'string' ? __hoisted.html : '';
                 }}
                 {rsc_render}
 
@@ -577,7 +587,9 @@ mod tests {
         assert!(conversion.contains(r#"metadata: {"title":"Test Page","description":"A test"}"#));
         assert!(conversion.contains("injectMetadataIntoDocument"));
         assert!(conversion.contains("await globalThis['~rari'].injectMetadataIntoDocument"));
+        assert!(conversion.contains("hoistBlockingHeadScripts"));
         assert!(conversion.contains("__rariMetadata"));
+        assert!(conversion.contains("__blockingHeadHtml"));
     }
 
     #[test]
@@ -585,6 +597,7 @@ mod tests {
         let conversion = RouteComposer::generate_rsc_conversion("finalElement", "{}", true, None);
 
         assert!(conversion.contains("capturedElement = elementToRender"));
+        assert!(conversion.contains("blockingHeadScriptsHtml = __blockingHeadHtml"));
         assert!(!conversion.contains("renderToRsc(elementToRender"));
     }
 

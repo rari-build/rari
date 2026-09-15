@@ -1,6 +1,8 @@
 /* oxlint-disable typescript/prefer-readonly-parameter-types oxc ReactCompilerOptions is a mutable options bag */
 import type { ReactCompilerOptions as OxcReactCompilerOptions } from 'oxc-transform-react'
 import type { Plugin } from 'vite-plus'
+import fs from 'node:fs'
+import { hasTopLevelUseServerDirective } from '../analysis/directives'
 
 export type ReactCompilerOptions = OxcReactCompilerOptions
 export type RariCompilerOption = boolean | ReactCompilerOptions
@@ -32,7 +34,16 @@ export function matchesCompilerId(id: string): boolean {
   if (id.startsWith('\0') || id.includes('virtual:')) return false
   const cleanId = id.replace(QUERY_STRIP_RE, '')
   if (/\.d\.[cm]?ts$/.test(cleanId)) return false
+  if (cleanId.includes('/dist/')) return false
   return DEFAULT_INCLUDE_RE.test(cleanId) && !cleanId.includes('/node_modules/')
+}
+
+function isUseServerModule(filename: string, code: string): boolean {
+  try {
+    return hasTopLevelUseServerDirective(fs.readFileSync(filename, 'utf-8'))
+  } catch {
+    return hasTopLevelUseServerDirective(code)
+  }
 }
 
 const LIBRARY_COMPONENT_RE = /\.[jt]sx$/
@@ -73,8 +84,6 @@ export function createReactCompilerPlugin(
       }
       fastRefresh = command === 'serve'
       return {
-        // Own Fast Refresh when the compiler plugin runs so Vite's oxc
-        // refresh pass does not double-register.
         oxc: {
           jsx: {
             refresh: false,
@@ -101,6 +110,7 @@ export function createReactCompilerPlugin(
       if (!matchesCompilerId(id)) return null
       const filename = id.replace(QUERY_STRIP_RE, '')
       if (mode === 'library' && !LIBRARY_COMPONENT_RE.test(filename)) return null
+      if (isUseServerModule(filename, code)) return null
 
       if (mode === 'app') {
         const isClient = this.environment.config.consumer !== 'server'

@@ -232,14 +232,50 @@ impl RscHtmlRenderer {
     }
 
     pub(crate) fn generate_dev_client_head(vite_host: &str, vite_port: u16) -> String {
+        Self::generate_dev_client_head_with_css(
+            vite_host,
+            vite_port,
+            std::env::var("RARI_DEV_LAYOUT_CSS").ok().as_deref(),
+        )
+    }
+
+    pub(crate) fn generate_dev_client_head_with_css(
+        vite_host: &str,
+        vite_port: u16,
+        layout_css: Option<&str>,
+    ) -> String {
         let host = Self::browser_vite_host(vite_host);
-        format!(
-            r#"<script type="module" src="http://{host}:{vite_port}/@vite/client"></script>
+        let mut head = String::new();
+
+        if let Some(css_list) = layout_css {
+            for href in css_list.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+                let url = if href.starts_with("http://") || href.starts_with("https://") {
+                    href.to_string()
+                } else if href.starts_with('/') {
+                    format!("http://{host}:{vite_port}{href}")
+                } else {
+                    format!("http://{host}:{vite_port}/{href}")
+                };
+                head.push_str(&format!(r#"<link rel="stylesheet" href="{url}" />"#));
+                head.push('\n');
+            }
+        }
+
+        head.push_str(&format!(
+            r#"<script type="module">
+import {{ injectIntoGlobalHook }} from 'http://{host}:{vite_port}/@react-refresh'
+injectIntoGlobalHook(window)
+window.$RefreshReg$ = () => {{}}
+window.$RefreshSig$ = () => type => type
+window.__vite_plugin_react_preamble_installed__ = true
+</script>
+<script type="module" src="http://{host}:{vite_port}/@vite/client"></script>
 <script type="module">
 import 'http://{host}:{vite_port}/@id/virtual:rari-entry-client';
 </script>
 "#
-        )
+        ));
+        head
     }
 
     async fn read_client_head_file(&self) -> Result<String, RariError> {
@@ -736,18 +772,47 @@ mod tests {
 
     #[test]
     fn test_generate_dev_client_head() {
-        let template = RscHtmlRenderer::generate_dev_client_head("localhost", 5173);
+        let template = RscHtmlRenderer::generate_dev_client_head_with_css("localhost", 5173, None);
+        assert!(template.contains("http://localhost:5173/@react-refresh"));
+        assert!(template.contains("injectIntoGlobalHook"));
+        assert!(template.contains("__vite_plugin_react_preamble_installed__"));
         assert!(template.contains("http://localhost:5173/@vite/client"));
         assert!(template.contains("http://localhost:5173/@id/virtual:rari-entry-client"));
         assert!(!template.contains("<!DOCTYPE html>"));
         assert!(!template.contains(r#"id="root""#));
+        assert!(!template.contains("rel=\"stylesheet\""));
+        assert!(
+            template.find("@react-refresh").expect("preamble")
+                < template.find("@vite/client").expect("vite client")
+        );
 
-        let remote = RscHtmlRenderer::generate_dev_client_head("192.168.1.10", 5173);
+        let remote = RscHtmlRenderer::generate_dev_client_head_with_css("192.168.1.10", 5173, None);
+        assert!(remote.contains("http://192.168.1.10:5173/@react-refresh"));
         assert!(remote.contains("http://192.168.1.10:5173/@vite/client"));
         assert!(remote.contains("http://192.168.1.10:5173/@id/virtual:rari-entry-client"));
 
-        let bind_all = RscHtmlRenderer::generate_dev_client_head("0.0.0.0", 5173);
+        let bind_all = RscHtmlRenderer::generate_dev_client_head_with_css("0.0.0.0", 5173, None);
+        assert!(bind_all.contains("http://localhost:5173/@react-refresh"));
         assert!(bind_all.contains("http://localhost:5173/@vite/client"));
+    }
+
+    #[test]
+    fn test_generate_dev_client_head_includes_layout_css_links() {
+        let template = RscHtmlRenderer::generate_dev_client_head_with_css(
+            "localhost",
+            5173,
+            Some("/src/app/globals.css,/src/app/blog/theme.css"),
+        );
+        assert!(template.contains(
+            r#"<link rel="stylesheet" href="http://localhost:5173/src/app/globals.css" />"#
+        ));
+        assert!(template.contains(
+            r#"<link rel="stylesheet" href="http://localhost:5173/src/app/blog/theme.css" />"#
+        ));
+        assert!(
+            template.find("rel=\"stylesheet\"").expect("css")
+                < template.find("@vite/client").expect("vite client")
+        );
     }
 
     #[test]

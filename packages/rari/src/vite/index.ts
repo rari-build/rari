@@ -43,6 +43,7 @@ import {
 } from '@/shared/utils/type-guards'
 import { getComponentId } from './analysis/component-ids'
 import {
+  analyzeModuleSource,
   collectExportNames,
   hasDefaultExport,
   rewriteExportDefaultAsBinding,
@@ -59,6 +60,7 @@ import {
   buildClientHeadFromBundle,
   buildLayoutCssImportStatements,
   CLIENT_HEAD_FILE,
+  collectLayoutCssDevHrefs,
   resetClientHeadExtras,
   VIRTUAL_CLIENT_ENTRY,
 } from './client-head'
@@ -89,6 +91,7 @@ import {
 } from './transform/inline-server-action'
 import { transformDefineMdxComponents } from './transform/mdx-components'
 import { createReactCompilerPlugin } from './transform/react-compiler'
+import { createReactRefreshPlugins } from './transform/react-refresh'
 import { getUseCacheTransform } from './transform/use-cache'
 
 const DIST_NOT_BUILT_ERROR =
@@ -1058,7 +1061,6 @@ if (import.meta.hot) {
 
       if (!TSX_EXT_REGEX.test(id)) return null
 
-      const originalCode = code
       let wasUseCacheTransformed = false
       if (options.experimental?.useCache || options.experimental?.useCacheRemote) {
         const transform = await getUseCacheTransform()
@@ -1072,7 +1074,25 @@ if (import.meta.hot) {
       }
 
       const environment = this.environment
-      const moduleAnalysis = moduleAnalysisCache.get(id, originalCode)
+      const moduleAnalysis =
+        id.startsWith('\0') || id.includes('virtual:')
+          ? analyzeModuleSource(code)
+          : (() => {
+              try {
+                return moduleAnalysisCache.get(id)
+              } catch {
+                return analyzeModuleSource(code)
+              }
+            })()
+
+      if (moduleAnalysis.topLevelUseServer) {
+        setComponentType(id, 'server')
+
+        if (environment.name === 'rsc' || environment.name === 'ssr') {
+          return transformServerModule(code, id, moduleAnalysis)
+        }
+        return transformClientModule(code, id, moduleAnalysis)
+      }
 
       if (moduleAnalysis.topLevelUseClient) {
         setComponentType(id, 'client')
@@ -1088,10 +1108,13 @@ if (import.meta.hot) {
 
           const resolvedImportPath = resolveImportToFilePath(importPath, id, resolvedAlias)
 
-          if (fs.existsSync(resolvedImportPath)) {
-            setComponentType(resolvedImportPath, 'client')
-            addTrackedClientComponent(resolvedImportPath)
-          }
+          if (!fs.existsSync(resolvedImportPath)) continue
+
+          const importedAnalysis = moduleAnalysisCache.get(resolvedImportPath)
+          if (importedAnalysis.topLevelUseServer) continue
+
+          setComponentType(resolvedImportPath, 'client')
+          addTrackedClientComponent(resolvedImportPath)
         }
 
         return transformClientModuleForClient(code, id, moduleAnalysis)
@@ -1121,16 +1144,6 @@ if (import.meta.hot) {
 ${clientTransformedCode}`
 
           return clientTransformedCode
-        }
-      }
-
-      if (moduleAnalysis.topLevelUseServer) {
-        setComponentType(id, 'server')
-
-        if (environment.name === 'rsc' || environment.name === 'ssr') {
-          return transformServerModule(code, id, moduleAnalysis)
-        } else {
-          return transformClientModule(code, id, moduleAnalysis)
         }
       }
 
@@ -1400,6 +1413,7 @@ ${clientTransformedCode}`
         const vitePort = server.config.server.port
         const origin = options.origin?.trim().replace(/\/+$/, '')
         const envOrigin = process.env.RARI_ORIGIN?.trim().replace(/\/+$/, '')
+        const layoutCssHrefs = collectLayoutCssDevHrefs(projectRoot, resolvedAlias)
 
         const args = ['--mode', mode, '--port', serverPort.toString(), '--host', '127.0.0.1']
 
@@ -1413,6 +1427,7 @@ ${clientTransformedCode}`
                 ? process.env.RUST_LOG
                 : 'error',
             RARI_VITE_PORT: vitePort.toString(),
+            ...(layoutCssHrefs.length > 0 ? { RARI_DEV_LAYOUT_CSS: layoutCssHrefs.join(',') } : {}),
             // Dev starts the binary before config.json is written; pass pool size / origin / bots via env.
             ...(options.jsPoolSize != null &&
             (process.env.RARI_JS_POOL_SIZE == null || process.env.RARI_JS_POOL_SIZE === '')
@@ -1530,22 +1545,33 @@ ${clientTransformedCode}`
       server.middlewares.use((req, res, next) => {
         void (async () => {
           const acceptHeader = req.headers.accept
+          const method = req.method ?? 'GET'
+          const url = req.url ?? ''
           const isRscRequest =
             acceptHeader != null && acceptHeader !== '' && acceptHeader.includes('text/x-component')
+          const isDocumentRequest =
+            (method === 'GET' || method === 'HEAD') &&
+            acceptHeader?.includes('text/html') &&
+            !url.startsWith('/@') &&
+            !url.startsWith('/node_modules') &&
+            !url.startsWith('/api') &&
+            !url.startsWith('/_rari') &&
+            !url.startsWith('/vite-server') &&
+            !url.includes('.')
 
           if (
-            isRscRequest &&
-            req.url != null &&
-            req.url !== '' &&
-            !req.url.startsWith('/api') &&
-            !req.url.startsWith('/rsc') &&
-            !req.url.includes('.')
+            (isRscRequest || isDocumentRequest) &&
+            url !== '' &&
+            !url.startsWith('/api') &&
+            !url.startsWith('/rsc')
           ) {
             if (!rustServerReady) {
               const ready = await waitForRustServerReady(10000)
 
               if (!ready) {
-                console.error('[rari] Rust server not ready, cannot proxy RSC request')
+                console.error(
+                  `[rari] Rust server not ready, cannot proxy ${isRscRequest ? 'RSC' : 'HTML'} request`,
+                )
                 if (!res.headersSent) {
                   res.statusCode = 503
                   res.end('Server not ready')
@@ -1557,7 +1583,7 @@ ${clientTransformedCode}`
 
             const serverPort = getRariServerPort()
 
-            const targetUrl = `http://localhost:${serverPort}${req.url}`
+            const targetUrl = `http://localhost:${serverPort}${url}`
 
             try {
               const headers: Record<string, string> = {}
@@ -1568,9 +1594,24 @@ ${clientTransformedCode}`
               headers.host = `localhost:${serverPort}`
               headers['accept-encoding'] = 'identity'
 
+              const hasBody = method !== 'GET' && method !== 'HEAD'
+              const body = hasBody
+                ? await new Promise<Blob>((resolve, reject) => {
+                    const chunks: Buffer[] = []
+                    req.on('data', (chunk: Buffer) => {
+                      chunks.push(chunk)
+                    })
+                    req.on('end', () => {
+                      resolve(new Blob([Buffer.concat(chunks)]))
+                    })
+                    req.on('error', reject)
+                  })
+                : undefined
+
               const response = await fetch(targetUrl, {
-                method: req.method,
+                method,
                 headers,
+                ...(body != null ? { body } : {}),
               })
 
               res.statusCode = response.status
@@ -1578,29 +1619,33 @@ ${clientTransformedCode}`
                 if (key.toLowerCase() !== 'content-encoding') res.setHeader(key, value)
               })
 
-              if (response.body) {
-                const reader = response.body.getReader()
+              if (method === 'HEAD' || !response.body) {
+                res.end()
+                return
+              }
 
-                try {
-                  let streamDone = false
-                  while (!streamDone) {
-                    const { done, value } = await reader.read()
-                    streamDone = done
-                    if (!streamDone && value != null) res.write(Buffer.from(value))
-                  }
-                  res.end()
-                } catch (streamError) {
-                  console.error('[rari] Stream error:', streamError)
-                  if (!res.headersSent) res.statusCode = 500
-                  res.end()
+              const reader = response.body.getReader()
+
+              try {
+                let streamDone = false
+                while (!streamDone) {
+                  const { done, value } = await reader.read()
+                  streamDone = done
+                  if (!streamDone && value != null) res.write(Buffer.from(value))
                 }
-              } else {
+                res.end()
+              } catch (streamError) {
+                console.error('[rari] Stream error:', streamError)
+                if (!res.headersSent) res.statusCode = 500
                 res.end()
               }
 
               return
             } catch (error) {
-              console.error('[rari] Failed to proxy RSC request:', error)
+              console.error(
+                `[rari] Failed to proxy ${isRscRequest ? 'RSC' : 'HTML'} request:`,
+                error,
+              )
               if (!res.headersSent) {
                 res.statusCode = 500
                 res.end('Internal Server Error')
@@ -2251,8 +2296,9 @@ export const createTemporaryReferenceSet = module.exports.createTemporaryReferen
 
   const plugins: Plugin[] = []
 
-  if (options.compiler != null && options.compiler !== false)
-    plugins.push(createReactCompilerPlugin(options.compiler))
+  if (options.compiler != null && options.compiler !== false) {
+    plugins.push(...createReactRefreshPlugins(), createReactCompilerPlugin(options.compiler))
+  }
 
   plugins.push(
     mainPlugin,

@@ -66,7 +66,6 @@ use crate::{
             cors_preflight_ok, root_handler, serve_static_asset, static_or_spa_handler,
         },
         vite::{
-            check_vite_server_health,
             hmr::handle_hmr_action,
             rsc::{health_check, register_client_component, register_component},
             vite_reverse_proxy, vite_src_proxy, vite_websocket_proxy,
@@ -378,10 +377,6 @@ impl Server {
                 .route("/vite-server/", routing::get(vite_websocket_proxy))
                 .route("/vite-server/{*path}", routing::any(vite_reverse_proxy))
                 .route("/src/{*path}", routing::any(vite_src_proxy));
-
-            if let Err(e) = check_vite_server_health().await {
-                tracing::debug!("Vite server not yet available: {}", e);
-            }
         }
 
         let has_app_router = state.app_router.is_some();
@@ -507,22 +502,10 @@ mod tests {
 
     #[test]
     fn display_server_url_maps_loopback_and_unspecified_to_localhost() {
-        assert_eq!(
-            display_server_url("127.0.0.1:3000".parse().unwrap()),
-            "http://localhost:3000"
-        );
-        assert_eq!(
-            display_server_url("0.0.0.0:3000".parse().unwrap()),
-            "http://localhost:3000"
-        );
-        assert_eq!(
-            display_server_url("[::1]:3000".parse().unwrap()),
-            "http://localhost:3000"
-        );
-        assert_eq!(
-            display_server_url("[::]:3000".parse().unwrap()),
-            "http://localhost:3000"
-        );
+        assert_eq!(display_server_url("127.0.0.1:3000".parse().unwrap()), "http://localhost:3000");
+        assert_eq!(display_server_url("0.0.0.0:3000".parse().unwrap()), "http://localhost:3000");
+        assert_eq!(display_server_url("[::1]:3000".parse().unwrap()), "http://localhost:3000");
+        assert_eq!(display_server_url("[::]:3000".parse().unwrap()), "http://localhost:3000");
     }
 
     #[test]
