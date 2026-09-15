@@ -62,7 +62,7 @@ A `layout.tsx` wraps all pages in its directory and below. Layouts persist acros
 
 <CodeBlock filename="src/app/layout.tsx" language="tsx">{`import type { LayoutProps } from 'rari'
 
-export default function RootLayout({ children }: LayoutProps) {
+export default function Layout({ children }: LayoutProps) {
   return (
     <html lang="en">
       <body>
@@ -113,11 +113,11 @@ export default function DashboardLayout({ children }: LayoutProps) {
 
 When you visit `/dashboard/analytics`, the rendering tree is:
 
-<CodeBlock language="tsx">{`<RootLayout>          {/* src/app/layout.tsx */}
+<CodeBlock language="tsx">{`<Layout>          {/* src/app/layout.tsx */}
   <DashboardLayout>   {/* src/app/dashboard/layout.tsx */}
     <AnalyticsPage /> {/* src/app/dashboard/analytics/page.tsx */}
   </DashboardLayout>
-</RootLayout>
+</Layout>
 `}</CodeBlock>
 
 Navigating from `/dashboard/analytics` to `/dashboard/settings` only re-renders the page. Both layouts stay mounted.

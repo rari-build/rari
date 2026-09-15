@@ -52,40 +52,6 @@ fn asset_search_roots(state: &ServerState) -> Vec<PathBuf> {
 }
 
 pub async fn root_handler(State(_state): State<ServerState>) -> Result<Response, HttpError> {
-    let Some(config) = Config::get() else {
-        tracing::error!("Failed to get global configuration for root_handler");
-        return Err(HttpError::new(
-            RariError::configuration("Configuration not available"),
-            static_dev(),
-        ));
-    };
-
-    let index_path = config.public_dir().join("index.html");
-    if fs::try_exists(&index_path).await.unwrap_or(false) {
-        match fs::read_to_string(&index_path).await {
-            Ok(content) => {
-                let cache_control = config.get_cache_control_for_route("/");
-                let response_builder = Response::builder()
-                    .header("content-type", "text/html")
-                    .header("cache-control", cache_control);
-
-                #[expect(
-                    clippy::expect_used,
-                    reason = "Response::builder() with valid components never fails"
-                )]
-                return Ok(response_builder
-                    .body(Body::from(content))
-                    .expect("Valid HTML response"));
-            }
-            Err(e) => {
-                tracing::error!("Failed to read index.html: {}", e);
-                return Err(HttpError::new(
-                    RariError::io(format!("Failed to read index.html: {e}")),
-                    static_dev(),
-                ));
-            }
-        }
-    }
     Ok(StatusCode::NOT_FOUND.into_response())
 }
 
@@ -155,34 +121,6 @@ pub async fn static_or_spa_handler(
         }
     }
 
-    let route_path = if path.is_empty() { "/" } else { &format!("/{path}") };
-
-    let index_path = config.public_dir().join("index.html");
-    if fs::try_exists(&index_path).await.unwrap_or(false) {
-        match fs::read_to_string(&index_path).await {
-            Ok(content) => {
-                let cache_control = config.get_cache_control_for_route(route_path);
-                let response_builder = Response::builder()
-                    .header("content-type", "text/html")
-                    .header("cache-control", cache_control);
-
-                #[expect(
-                    clippy::expect_used,
-                    reason = "Response::builder() with valid components never fails"
-                )]
-                return Ok(response_builder
-                    .body(Body::from(content))
-                    .expect("Valid HTML response"));
-            }
-            Err(e) => {
-                tracing::error!("Failed to read index.html: {}", e);
-                return Err(HttpError::new(
-                    RariError::io(format!("Failed to read index.html: {e}")),
-                    static_dev(),
-                ));
-            }
-        }
-    }
     Ok(StatusCode::NOT_FOUND.into_response())
 }
 

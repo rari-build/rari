@@ -55,6 +55,13 @@ import {
   resolveModuleCachePath,
 } from './analysis/module-cache'
 import { normalizeScanDirs } from './analysis/source-walker'
+import {
+  buildClientHeadFromBundle,
+  buildLayoutCssImportStatements,
+  CLIENT_HEAD_FILE,
+  resetClientHeadExtras,
+  VIRTUAL_CLIENT_ENTRY,
+} from './client-head'
 import { createFontPlugin } from './font/plugin'
 import { HMRCoordinator } from './hmr/coordinator'
 import { walkImporters } from './hmr/import-graph'
@@ -76,7 +83,6 @@ import {
   buildClientReferenceReplacementFromImport,
   ensureNamedImportFromModule,
 } from './transform/client-import'
-import { parseHtmlEntryImports } from './transform/html-entry'
 import {
   hasRegisterServerReferenceImport,
   transformInlineServerActions,
@@ -99,7 +105,6 @@ const IMPORT_DEFAULT_REGEX = /import\s+(\w+)\s+from\s+["']\.\.?\/([^"']+)["'];?/
 const IMPORT_SIDE_EFFECT_REGEX = /import\s+["']\.\.?\/([^"']+)["'];?/g
 const EXPORT_DEFAULT_FUNCTION_DECL_REGEX = /export\s+default\s+(?:async\s+)?function\s+(\w+)/
 const USE_CLIENT_DIRECTIVE_REGEX = /^['"]use client['"];?\s*$/gm
-const IMPORT_REGEX = /import\s+["']([^"']+)["']/g
 const LOCAL_IMPORT_SOURCE_REGEX = /^[./@~#]/
 
 function matchesAliasImport(source: string, aliases: Readonly<Record<string, string>>): boolean {
@@ -125,7 +130,6 @@ function isExactReactAliasFind(find: string | RegExp): boolean {
 const REACT_IMPORT_REGEX = /import\s+\{[^}]*\}\s+from\s+['"]react['"]/
 const REACT_IMPORT_WITH_DEFAULT_REGEX = /import\s+[^,\s]+\s*,\s*\{[^}]*\}\s+from\s+['"]react['"]/
 const REACT_IMPORT_MATCH_REGEX = /import React(,\s*\{([^}]*)\})?\s+from\s+['"]react['"];?/
-const IMPORT_PATH_REGEX = /import\s+["']([^"']+)["']/g
 const RSC_CLIENT_IMPORT_REGEX =
   /from(\s*)(['"])(?:\.\/vendor\/react-flight-client\/index|rari\/runtime\/vendor\/react-flight-client\/index)\.mjs\2/g
 const JSX_TEST_REGEX = /\bJSX\b/
@@ -351,11 +355,16 @@ async function loadRscClientRuntime(): Promise<string> {
   return loadRuntimeFile('rsc-client-runtime.mjs')
 }
 
-async function loadEntryClient(imports: string, registrations: string): Promise<string> {
+async function loadEntryClient(
+  imports: string,
+  registrations: string,
+  layoutCssImports = '',
+): Promise<string> {
   const template = await loadRuntimeFile('entry-client.mjs')
-  return template
+  const body = template
     .replace('/*! @preserve CLIENT_COMPONENT_IMPORTS_PLACEHOLDER */', imports)
     .replace('/*! @preserve CLIENT_COMPONENT_REGISTRATIONS_PLACEHOLDER */', registrations)
+  return layoutCssImports !== '' ? `${layoutCssImports}\n${body}` : body
 }
 
 async function loadRscReferences(): Promise<string> {
@@ -527,32 +536,6 @@ export function rari(
     return paths
   }
 
-  let htmlEntryImports: Set<string> | null = null
-  let lastIndexHtmlMtime: number | null = null
-
-  function getHtmlEntryImports(): ReadonlySet<string> {
-    if (devServerComponentBuilder) return devServerComponentBuilder.getHtmlOnlyImports()
-
-    const projectRoot =
-      options.projectRoot != null && options.projectRoot !== ''
-        ? options.projectRoot
-        : process.cwd()
-    const indexHtmlPath = path.join(projectRoot, 'index.html')
-
-    try {
-      const mtime = fs.statSync(indexHtmlPath).mtimeMs
-      if (htmlEntryImports !== null && mtime === lastIndexHtmlMtime) return htmlEntryImports
-      lastIndexHtmlMtime = mtime
-    } catch {
-      htmlEntryImports ??= new Set()
-
-      return htmlEntryImports
-    }
-
-    htmlEntryImports = parseHtmlEntryImports(projectRoot)
-    return htmlEntryImports
-  }
-
   function isServerComponent(filePath: string): boolean {
     if (filePath.includes('node_modules') || isRariInternalFile(filePath)) return false
 
@@ -560,12 +543,7 @@ export function rari(
 
     try {
       const analysis = moduleAnalysisCache.get(filePath)
-      return isServerComponentFromAnalysis(
-        resolvedPath,
-        analysis,
-        getHtmlEntryImports(),
-        resolvedPath,
-      )
+      return isServerComponentFromAnalysis(resolvedPath, analysis)
     } catch {
       return false
     }
@@ -774,6 +752,8 @@ if (import.meta.hot) {
     name: 'rari',
 
     config(config: UserConfig, { command }) {
+      // Layout owns <html>/<body>; client entry is virtual:rari-entry-client (no index.html).
+      config.appType = 'custom'
       config.define ??= {}
 
       if (
@@ -804,50 +784,6 @@ if (import.meta.hot) {
         ...config.css,
         transformer: config.css?.transformer ?? ('lightningcss' as const),
         modules: { ...existingCssModules, pattern: RARI_CSS_MODULES_PATTERN } as CSSModulesOptions,
-      }
-
-      if (command === 'build') {
-        const projectRoot =
-          options.projectRoot != null && options.projectRoot !== ''
-            ? options.projectRoot
-            : process.cwd()
-        const indexHtmlPath = path.join(projectRoot, 'index.html')
-
-        if (fs.existsSync(indexHtmlPath)) {
-          try {
-            const htmlContent = fs.readFileSync(indexHtmlPath, 'utf-8')
-            const htmlImports: Array<{ path: string; name: string }> = []
-
-            for (const match of htmlContent.matchAll(IMPORT_REGEX)) {
-              const importPath = match[1]
-              if (importPath.startsWith('/src/') && TSX_EXT_REGEX.test(importPath)) {
-                const relativePath = importPath.slice(1)
-                const filename = path.basename(relativePath, path.extname(relativePath))
-                htmlImports.push({ path: relativePath, name: filename })
-              }
-            }
-
-            if (htmlImports.length > 0) {
-              config.build ??= {}
-              config.build.rolldownOptions ??= {}
-
-              const existingInput = config.build.rolldownOptions.input ?? { main: './index.html' }
-              let inputObj: Record<string, string>
-              if (typeof existingInput === 'string') inputObj = { main: existingInput }
-              else if (Array.isArray(existingInput))
-                inputObj = { main: existingInput[0] ?? './index.html' }
-              else inputObj = { ...existingInput }
-
-              htmlImports.forEach(({ path: importPath, name }) => {
-                inputObj[name] = `./${importPath}`
-              })
-
-              config.build.rolldownOptions.input = inputObj
-            }
-          } catch (error) {
-            console.warn('[rari] Error parsing index.html for build inputs:', error)
-          }
-        }
       }
 
       config.resolve ??= {}
@@ -998,8 +934,8 @@ if (import.meta.hot) {
         config.build ??= {}
         config.build.rolldownOptions ??= {}
 
-        config.build.rolldownOptions.input ??= {
-          main: './index.html',
+        config.build.rolldownOptions.input = {
+          main: VIRTUAL_CLIENT_ENTRY,
         }
 
         config.build.rolldownOptions.output ??= {}
@@ -1055,7 +991,9 @@ if (import.meta.hot) {
 
       config.environments.client.build ??= {}
       config.environments.client.build.rolldownOptions ??= {}
-      config.environments.client.build.rolldownOptions.input ??= {}
+      config.environments.client.build.rolldownOptions.input = {
+        main: VIRTUAL_CLIENT_ENTRY,
+      }
 
       config.environments.client.build.rolldownOptions.external ??= []
 
@@ -1066,6 +1004,10 @@ if (import.meta.hot) {
       }
 
       return config
+    },
+
+    buildStart() {
+      resetClientHeadExtras()
     },
 
     configResolved(config) {
@@ -2027,8 +1969,9 @@ for (const [path, config] of Object.entries(lazyComponentRegistry)) {
 
         const allImports = externalImports
         const allRegistrations = [registrations, externalRegistrations].filter(Boolean).join('\n')
+        const layoutCssImports = buildLayoutCssImportStatements(projectRoot, resolvedAlias)
 
-        return loadEntryClient(allImports, allRegistrations)
+        return loadEntryClient(allImports, allRegistrations, layoutCssImports)
       }
 
       if (id === 'react-server-dom-rari/server') return loadRscReferences()
@@ -2245,60 +2188,15 @@ export const createTemporaryReferenceSet = module.exports.createTemporaryReferen
       return undefined
     },
 
-    transformIndexHtml: {
-      order: 'pre',
-      handler(html) {
-        const imports: string[] = []
+    generateBundle(_options, bundle) {
+      const head = buildClientHeadFromBundle(bundle)
+      if (head === '') return
 
-        for (const match of html.matchAll(IMPORT_PATH_REGEX)) {
-          const importPath = match[1]
-          if (importPath.startsWith('/src/')) imports.push(importPath)
-        }
-
-        const tags = []
-
-        tags.push({
-          tag: 'script',
-          attrs: {
-            type: 'module',
-          },
-          children: "import 'virtual:rari-entry-client';",
-          injectTo: 'head-prepend' as const,
-        })
-
-        if (imports.length > 0) {
-          tags.push(
-            ...imports.map(importPath => ({
-              tag: 'script',
-              attrs: {
-                type: 'module',
-                src: importPath,
-              },
-              injectTo: 'head-prepend' as const,
-            })),
-          )
-        }
-
-        let modifiedHtml = html
-
-        modifiedHtml = modifiedHtml.replace(/^\s*import\s+["']\/src\/[^"']+["'];?\s*$/gm, '')
-
-        modifiedHtml = modifiedHtml.replace(
-          /^\s*import\s+["']virtual:rari-entry-client["'];?\s*$/gm,
-          '',
-        )
-
-        let previousHtml: string
-        do {
-          previousHtml = modifiedHtml
-          modifiedHtml = modifiedHtml.replace(
-            /<script\s+type=["']module["'][^>]*>\s*<\/script>/gi,
-            '',
-          )
-        } while (modifiedHtml !== previousHtml)
-
-        return { html: modifiedHtml, tags }
-      },
+      this.emitFile({
+        type: 'asset',
+        fileName: CLIENT_HEAD_FILE,
+        source: head,
+      })
     },
 
     async writeBundle() {

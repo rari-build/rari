@@ -4,7 +4,6 @@ use std::sync::Arc;
 
 use cow_utils::CowUtils;
 use rari_error::RariError;
-use regex::Regex;
 use rustc_hash::FxHashSet;
 use tokio::fs;
 
@@ -27,35 +26,6 @@ pub struct RscHtmlRenderer {
 impl RscHtmlRenderer {
     pub fn new(runtime: Arc<JsExecutionRuntime>) -> Self {
         Self { runtime, template_cache: parking_lot::Mutex::new(None) }
-    }
-
-    fn extract_script_tags(template: &str) -> String {
-        #[expect(clippy::unwrap_used, reason = "Hardcoded regex pattern is guaranteed to be valid")]
-        let script_regex = Regex::new(r"(?s)<script[^>]*>.*?</script>|<script[^>]*/>").unwrap();
-
-        script_regex
-            .find_iter(template)
-            .map(|m| m.as_str().to_string())
-            .collect::<Vec<_>>()
-            .join("\n")
-    }
-
-    fn is_stylesheet_link_tag(tag: &str) -> bool {
-        let lower = tag.to_lowercase();
-        lower.contains("stylesheet") || lower.contains("text/css")
-    }
-
-    fn extract_non_stylesheet_link_tags(template: &str) -> String {
-        #[expect(clippy::unwrap_used, reason = "Hardcoded regex pattern is guaranteed to be valid")]
-        let link_regex = Regex::new(r"(?i)<link\b[^>]*/?>").unwrap();
-
-        link_regex
-            .find_iter(template)
-            .map(|m| m.as_str())
-            .filter(|tag| !Self::is_stylesheet_link_tag(tag))
-            .map(ToString::to_string)
-            .collect::<Vec<_>>()
-            .join("\n")
     }
 
     fn inject_head_tags(template: &str, tags: &str) -> String {
@@ -107,21 +77,10 @@ impl RscHtmlRenderer {
             }
         }
 
-        let template = match self.read_template_file(is_dev_mode).await {
-            Ok(content) => {
-                if is_dev_mode {
-                    Self::inject_vite_client_if_needed(&content)
-                } else {
-                    content
-                }
-            }
-            Err(e) => {
-                if is_dev_mode {
-                    Self::generate_dev_template_fallback()
-                } else {
-                    return Err(e);
-                }
-            }
+        let template = if is_dev_mode {
+            Self::generate_dev_client_head()
+        } else {
+            self.read_client_head_file().await?
         };
 
         if cache_enabled {
@@ -132,65 +91,18 @@ impl RscHtmlRenderer {
         Ok(template)
     }
 
-    fn inject_vite_client_if_needed(html: &str) -> String {
-        if html.contains("/@vite/client") || html.contains("@vite/client") {
-            return html.to_string();
-        }
-
-        if let Some(head_end) = html.find("</head>") {
-            let mut result = String::new();
-            result.push_str(&html[..head_end]);
-            result.push_str(
-                r#"<script type="module" src="/@vite/client"></script>
-<script type="module" src="/src/main.tsx"></script>
-"#,
-            );
-            result.push_str(&html[head_end..]);
-            return result;
-        }
-
-        if let Some(body_end) = html.find("</body>") {
-            let mut result = String::new();
-            result.push_str(&html[..body_end]);
-            result.push_str(
-                r#"<script type="module" src="/@vite/client"></script>
-<script type="module" src="/src/main.tsx"></script>
-"#,
-            );
-            result.push_str(&html[body_end..]);
-            return result;
-        }
-
-        format!(
-            r#"<script type="module" src="/@vite/client"></script>
-<script type="module" src="/src/main.tsx"></script>
-{html}"#
-        )
+    fn generate_dev_client_head() -> String {
+        r#"<script type="module" src="/@vite/client"></script>
+<script type="module">
+import 'virtual:rari-entry-client';
+</script>
+"#
+        .to_string()
     }
 
-    fn generate_dev_template_fallback() -> String {
-        r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>rari App</title>
-    <script type="module" src="/@vite/client"></script>
-    <script type="module" src="/src/main.tsx"></script>
-</head>
-<body>
-    <div id="root"></div>
-</body>
-</html>"#
-            .to_string()
-    }
-
-    async fn read_template_file(&self, is_dev_mode: bool) -> Result<String, RariError> {
-        let possible_paths = if is_dev_mode {
-            vec!["index.html", "public/index.html", "dist/index.html", "build/index.html"]
-        } else {
-            vec!["dist/index.html", "build/index.html", "index.html", "public/index.html"]
-        };
+    async fn read_client_head_file(&self) -> Result<String, RariError> {
+        let possible_paths =
+            ["dist/rari-client-head.html", "build/rari-client-head.html", "rari-client-head.html"];
 
         for path in possible_paths {
             if let Ok(content) = fs::read_to_string(path).await {
@@ -199,35 +111,19 @@ impl RscHtmlRenderer {
         }
 
         Err(RariError::internal(
-            "Template file not found. Tried: index.html, public/index.html, dist/index.html, build/index.html"
+            "Client head file not found. Tried: dist/rari-client-head.html, build/rari-client-head.html"
                 .to_string(),
         ))
     }
 
-    pub fn inject_into_template(
-        &self,
-        html_content: &str,
-        template: &str,
-    ) -> Result<String, RariError> {
-        let root_div_regex =
-            Regex::new(r#"<div\s+id=["']root["'](?:\s+[^>]*)?\s*(?:/>|>\s*</div>)"#)
-                .map_err(|e| RariError::internal(format!("Failed to create regex: {e}")))?;
-
-        if !root_div_regex.is_match(template) {
-            return Err(RariError::internal(
-                "Template does not contain a root div with id='root'".to_string(),
-            ));
+    pub(crate) fn client_head_fragment(template: &str) -> &str {
+        if let Some(start) = template.find("<head>")
+            && let Some(end) = template.find("</head>")
+            && end >= start + 6
+        {
+            return &template[start + 6..end];
         }
-
-        let replacement = format!(r#"<div id="root">{html_content}</div>"#);
-
-        // NoExpand: the rendered app HTML is a literal replacement, not a
-        // pattern. Without it, `$0`/`$1`/`$&` in page content (e.g. a "$0.20"
-        // headline) would be interpreted as capture-group references and expand
-        // to the matched root div, corrupting the output.
-        let result = root_div_regex.replace(template, regex::NoExpand(replacement.as_str()));
-
-        Ok(result.to_string())
+        template
     }
 
     pub(crate) fn css_links_for_route(route_match: &AppRouteMatch) -> Vec<String> {
@@ -593,39 +489,29 @@ impl RscHtmlRenderer {
         let is_complete_document = html_content.trim_start().starts_with("<!DOCTYPE")
             || html_content.trim_start().cow_to_lowercase().starts_with("<html");
 
-        if is_complete_document {
-            let (script_tags, head_link_tags) = if is_dev_mode {
-                (String::new(), String::new())
-            } else {
-                let template = self.load_template(cache_template, is_dev_mode).await?;
-                (
-                    Self::extract_script_tags(&template),
-                    Self::extract_non_stylesheet_link_tags(&template),
-                )
-            };
-
-            let mut final_html = html_content;
-
-            if !script_tags.is_empty()
-                && let Some(body_end) = final_html.rfind("</body>")
-            {
-                final_html.insert_str(body_end, &format!("\n{script_tags}\n"));
-            }
-
-            final_html = Self::inject_css_links(&final_html, css_links);
-            final_html = Self::inject_head_tags(&final_html, &head_link_tags);
-
-            let trimmed_lower = final_html.trim_start().cow_to_lowercase();
-            if !trimmed_lower.starts_with("<!doctype") {
-                final_html = format!("<!DOCTYPE html>\n{final_html}");
-            }
-
-            return Ok(final_html);
+        if !is_complete_document {
+            return Err(RariError::internal(
+                "Expected a complete HTML document from the root layout (<html>...</html>)"
+                    .to_string(),
+            ));
         }
 
-        let template = self.load_template(cache_template, is_dev_mode).await?;
-        let template = Self::inject_css_links(&template, css_links);
-        self.inject_into_template(&html_content, &template)
+        let client_head = if is_dev_mode {
+            String::new()
+        } else {
+            self.load_template(cache_template, is_dev_mode).await?
+        };
+
+        let mut final_html = html_content;
+        final_html = Self::inject_head_tags(&final_html, &client_head);
+        final_html = Self::inject_css_links(&final_html, css_links);
+
+        let trimmed_lower = final_html.trim_start().cow_to_lowercase();
+        if !trimmed_lower.starts_with("<!doctype") {
+            final_html = format!("<!DOCTYPE html>\n{final_html}");
+        }
+
+        Ok(final_html)
     }
 
     fn escape_html_attribute(text: &str) -> String {
@@ -710,11 +596,12 @@ mod tests {
     }
 
     #[test]
-    fn test_generate_dev_template_fallback() {
-        let template = RscHtmlRenderer::generate_dev_template_fallback();
-        assert!(template.contains("<!DOCTYPE html>"));
-        assert!(template.contains(r#"<div id="root""#));
+    fn test_generate_dev_client_head() {
+        let template = RscHtmlRenderer::generate_dev_client_head();
         assert!(template.contains("/@vite/client"));
+        assert!(template.contains("virtual:rari-entry-client"));
+        assert!(!template.contains("<!DOCTYPE html>"));
+        assert!(!template.contains(r#"id="root""#));
     }
 
     #[test]
@@ -781,59 +668,6 @@ mod tests {
         let style_pos = result.find("rel=\"stylesheet\"").expect("stylesheet");
         assert!(preload_pos < style_pos);
         assert!(result.starts_with("<link rel=\"preload\""));
-    }
-
-    #[test]
-    fn test_inject_into_template() {
-        let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = RscHtmlRenderer::new(runtime);
-        let template = r#"<!DOCTYPE html><html><body><div id="root"></div></body></html>"#;
-        let html = renderer.inject_into_template("<p>Hello</p>", template).unwrap();
-        assert!(html.contains(r#"<div id="root"><p>Hello</p></div>"#));
-    }
-
-    #[test]
-    fn test_inject_into_template_preserves_dollar_sequences() {
-        // Regression: `$0`/`$1`/`$&` in page content must not be expanded as
-        // regex capture references during root-div injection.
-        let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = RscHtmlRenderer::new(runtime);
-
-        let template = r#"<html><body><div id="root"></div></body></html>"#;
-        let content = r"<h1>XLM eyes $0.20 breakout</h1><p>$1 &amp; $&amp;</p>";
-
-        let html = renderer.inject_into_template(content, template).expect("inject should succeed");
-
-        assert!(
-            html.contains(
-                r#"<div id="root"><h1>XLM eyes $0.20 breakout</h1><p>$1 &amp; $&amp;</p></div>"#
-            ),
-            "dollar sequences must survive verbatim, got: {html}"
-        );
-    }
-
-    #[test]
-    fn test_inject_into_template_self_closing_root_div() {
-        let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = RscHtmlRenderer::new(runtime);
-
-        let template = r#"<html><body><div id="root"/></body></html>"#;
-        let html = renderer.inject_into_template("<p>Hi</p>", template).unwrap();
-        assert!(html.contains(r#"<div id="root"><p>Hi</p></div>"#));
-    }
-
-    #[test]
-    fn test_extract_non_stylesheet_link_tags() {
-        let template = r#"<html><head>
-<link rel="stylesheet" href="/app.css">
-<link rel="icon" href="/favicon.ico">
-<link rel="preload" href="/font.woff2" as="font">
-</head></html>"#;
-
-        let tags = RscHtmlRenderer::extract_non_stylesheet_link_tags(template);
-        assert!(tags.contains(r#"<link rel="icon" href="/favicon.ico">"#));
-        assert!(tags.contains(r#"<link rel="preload" href="/font.woff2" as="font">"#));
-        assert!(!tags.contains("stylesheet"));
     }
 
     #[test]
@@ -987,18 +821,16 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_assemble_document_wraps_fragment_in_dev_template() {
+    async fn test_assemble_document_rejects_fragment() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
         let renderer = RscHtmlRenderer::new(runtime);
 
-        let html = renderer
+        let err = renderer
             .assemble_document("<main>Page</main>".to_string(), false, true, &[])
             .await
-            .expect("assemble_document should succeed");
+            .expect_err("fragment HTML should be rejected");
 
-        assert!(html.contains("<!DOCTYPE html>"));
-        assert!(html.contains(r#"<div id="root"><main>Page</main></div>"#));
-        assert!(html.contains("/@vite/client"));
+        assert!(err.to_string().contains("complete HTML document"));
     }
 
     #[tokio::test]

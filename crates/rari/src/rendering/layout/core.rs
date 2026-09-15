@@ -828,12 +828,7 @@ impl LayoutRenderer {
                         let template = RscHtmlRenderer::inject_css_links(&template, &css_links);
 
                         let head_content = {
-                            let template_head = template
-                                .find("<head>")
-                                .and_then(|start| {
-                                    template.find("</head>").map(|end| &template[start + 6..end])
-                                })
-                                .unwrap_or("");
+                            let template_head = RscHtmlRenderer::client_head_fragment(&template);
                             merge_streaming_head_content(
                                 template_head,
                                 context.streaming_head_extra.as_deref(),
@@ -966,13 +961,8 @@ impl LayoutRenderer {
                             html_renderer.load_template(cache_template, is_dev_mode).await?;
                         let template = RscHtmlRenderer::inject_css_links(&template, &css_links);
 
-                        let head_content = template
-                            .find("<head>")
-                            .and_then(|start| {
-                                template.find("</head>").map(|end| &template[start + 6..end])
-                            })
-                            .unwrap_or("")
-                            .to_string();
+                        let head_content =
+                            RscHtmlRenderer::client_head_fragment(&template).to_string();
 
                         let head_content_json = serde_json::to_string(&head_content)
                             .unwrap_or_else(|_| "\"\"".to_string());

@@ -159,7 +159,6 @@ async function copyTemplate(templatePath: string, projectPath: string, options: 
     'package.json',
     'vite.config.ts',
     'tsconfig.json',
-    'index.html',
     'README.md',
     'src/app/globals.css',
     'src/app/layout.tsx',
