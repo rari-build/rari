@@ -1,6 +1,6 @@
 #![expect(clippy::missing_errors_doc)]
 
-use std::{path::PathBuf, sync::Arc};
+use std::{env, fmt::Write, path::PathBuf, sync::Arc};
 
 use cow_utils::CowUtils;
 use rari_error::RariError;
@@ -231,11 +231,20 @@ impl RscHtmlRenderer {
         }
     }
 
+    pub(crate) fn format_vite_origin_host(host: &str) -> String {
+        let host = Self::browser_vite_host(host);
+        if host.contains(':') && !host.starts_with('[') {
+            format!("[{host}]")
+        } else {
+            host.to_string()
+        }
+    }
+
     pub(crate) fn generate_dev_client_head(vite_host: &str, vite_port: u16) -> String {
         Self::generate_dev_client_head_with_css(
             vite_host,
             vite_port,
-            std::env::var("RARI_DEV_LAYOUT_CSS").ok().as_deref(),
+            env::var("RARI_DEV_LAYOUT_CSS").ok().as_deref(),
         )
     }
 
@@ -244,7 +253,7 @@ impl RscHtmlRenderer {
         vite_port: u16,
         layout_css: Option<&str>,
     ) -> String {
-        let host = Self::browser_vite_host(vite_host);
+        let host = Self::format_vite_origin_host(vite_host);
         let mut head = String::new();
 
         if let Some(css_list) = layout_css {
@@ -256,12 +265,13 @@ impl RscHtmlRenderer {
                 } else {
                     format!("http://{host}:{vite_port}/{href}")
                 };
-                head.push_str(&format!(r#"<link rel="stylesheet" href="{url}" />"#));
+                let _ = write!(head, r#"<link rel="stylesheet" href="{url}" />"#);
                 head.push('\n');
             }
         }
 
-        head.push_str(&format!(
+        let _ = write!(
+            head,
             r#"<script type="module">
 import {{ injectIntoGlobalHook }} from 'http://{host}:{vite_port}/@react-refresh'
 injectIntoGlobalHook(window)
@@ -274,7 +284,7 @@ window.__vite_plugin_react_preamble_installed__ = true
 import 'http://{host}:{vite_port}/@id/virtual:rari-entry-client';
 </script>
 "#
-        ));
+        );
         head
     }
 
@@ -794,6 +804,11 @@ mod tests {
         let bind_all = RscHtmlRenderer::generate_dev_client_head_with_css("0.0.0.0", 5173, None);
         assert!(bind_all.contains("http://localhost:5173/@react-refresh"));
         assert!(bind_all.contains("http://localhost:5173/@vite/client"));
+
+        let ipv6 = RscHtmlRenderer::generate_dev_client_head_with_css("::1", 5173, None);
+        assert!(ipv6.contains("http://[::1]:5173/@react-refresh"));
+        assert!(ipv6.contains("http://[::1]:5173/@vite/client"));
+        assert!(!ipv6.contains("http://::1:5173"));
     }
 
     #[test]

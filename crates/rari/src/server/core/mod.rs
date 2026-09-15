@@ -281,7 +281,7 @@ impl Server {
 
         proxy::initialize_proxy(&state).await?;
 
-        let router = Self::build_router(&config, state.clone()).await?;
+        let router = Self::build_router(&config, state.clone());
 
         let address = config.server_address();
 
@@ -318,7 +318,7 @@ impl Server {
         }
     }
 
-    async fn build_router(config: &Config, mut state: ServerState) -> Result<Router, RariError> {
+    fn build_router(config: &Config, mut state: ServerState) -> Router {
         let small_body_limit = DefaultBodyLimit::max(100 * 1024);
         let medium_body_limit = DefaultBodyLimit::max(1024 * 1024);
 
@@ -424,7 +424,7 @@ impl Server {
             router = router.layer(ProxyLayer::new(state));
         }
 
-        Ok(router)
+        router
     }
 
     #[expect(clippy::missing_errors_doc)]
@@ -498,24 +498,41 @@ fn display_server_url(addr: SocketAddr) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
+
     use super::*;
 
     #[test]
     fn display_server_url_maps_loopback_and_unspecified_to_localhost() {
-        assert_eq!(display_server_url("127.0.0.1:3000".parse().unwrap()), "http://localhost:3000");
-        assert_eq!(display_server_url("0.0.0.0:3000".parse().unwrap()), "http://localhost:3000");
-        assert_eq!(display_server_url("[::1]:3000".parse().unwrap()), "http://localhost:3000");
-        assert_eq!(display_server_url("[::]:3000".parse().unwrap()), "http://localhost:3000");
+        assert_eq!(
+            display_server_url(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 3000)),
+            "http://localhost:3000"
+        );
+        assert_eq!(
+            display_server_url(SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 3000)),
+            "http://localhost:3000"
+        );
+        assert_eq!(
+            display_server_url(SocketAddr::new(IpAddr::V6(Ipv6Addr::LOCALHOST), 3000)),
+            "http://localhost:3000"
+        );
+        assert_eq!(
+            display_server_url(SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), 3000)),
+            "http://localhost:3000"
+        );
     }
 
     #[test]
     fn display_server_url_keeps_non_loopback_hosts() {
         assert_eq!(
-            display_server_url("192.168.1.10:3000".parse().unwrap()),
+            display_server_url(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 10)), 3000)),
             "http://192.168.1.10:3000"
         );
         assert_eq!(
-            display_server_url("[2001:db8::1]:3000".parse().unwrap()),
+            display_server_url(SocketAddr::new(
+                IpAddr::V6(Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1)),
+                3000
+            )),
             "http://[2001:db8::1]:3000"
         );
     }

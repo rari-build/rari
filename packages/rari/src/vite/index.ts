@@ -97,6 +97,24 @@ import { getUseCacheTransform } from './transform/use-cache'
 const DIST_NOT_BUILT_ERROR =
   '[rari] Runtime dist not built. Run `pnpm build` in the rari package first.'
 
+const PROXY_BODY_MAX_BYTES = 10 * 1024 * 1024
+const DOCUMENT_ASSET_EXT_RE =
+  /\.(?:js|mjs|cjs|ts|tsx|jsx|css|map|json|svg|png|jpe?g|gif|webp|avif|ico|woff2?|ttf|eot|txt|xml|html|wasm)$/i
+
+function requestPathname(url: string): string {
+  try {
+    return new URL(url, 'http://localhost').pathname
+  } catch {
+    const pathOnly = url.split(/[?#]/, 1)[0] ?? url
+    return pathOnly === '' ? '/' : pathOnly
+  }
+}
+
+function isLikelyStaticAssetPath(pathname: string): boolean {
+  const basename = pathname.slice(pathname.lastIndexOf('/') + 1)
+  return DOCUMENT_ASSET_EXT_RE.test(basename)
+}
+
 const IMPORT_TYPE_SPECIFIER_REGEX =
   /import\s+type\s+(\{[^}]+\})\s+from\s+["']\.\.?\/([^"']+)["'];?/g
 const IMPORT_TYPE_NAMESPACE_REGEX =
@@ -1547,23 +1565,24 @@ ${clientTransformedCode}`
           const acceptHeader = req.headers.accept
           const method = req.method ?? 'GET'
           const url = req.url ?? ''
+          const pathname = requestPathname(url)
           const isRscRequest =
             acceptHeader != null && acceptHeader !== '' && acceptHeader.includes('text/x-component')
           const isDocumentRequest =
             (method === 'GET' || method === 'HEAD') &&
             acceptHeader?.includes('text/html') &&
-            !url.startsWith('/@') &&
-            !url.startsWith('/node_modules') &&
-            !url.startsWith('/api') &&
-            !url.startsWith('/_rari') &&
-            !url.startsWith('/vite-server') &&
-            !url.includes('.')
+            !pathname.startsWith('/@') &&
+            !pathname.startsWith('/node_modules') &&
+            !pathname.startsWith('/api') &&
+            !pathname.startsWith('/_rari') &&
+            !pathname.startsWith('/vite-server') &&
+            !isLikelyStaticAssetPath(pathname)
 
           if (
             (isRscRequest || isDocumentRequest) &&
             url !== '' &&
-            !url.startsWith('/api') &&
-            !url.startsWith('/rsc')
+            !pathname.startsWith('/api') &&
+            !pathname.startsWith('/rsc')
           ) {
             if (!rustServerReady) {
               const ready = await waitForRustServerReady(10000)
@@ -1598,13 +1617,43 @@ ${clientTransformedCode}`
               const body = hasBody
                 ? await new Promise<Blob>((resolve, reject) => {
                     const chunks: Buffer[] = []
-                    req.on('data', (chunk: Buffer) => {
+                    let totalBytes = 0
+                    let settled = false
+
+                    function fail(error: Error) {
+                      if (settled) return
+                      settled = true
+                      req.removeListener('data', onData)
+                      req.removeListener('end', onEnd)
+                      req.removeListener('error', onError)
+                      reject(error)
+                    }
+
+                    function onData(chunk: Buffer) {
+                      totalBytes += chunk.length
+                      if (totalBytes > PROXY_BODY_MAX_BYTES) {
+                        req.destroy()
+                        fail(
+                          Object.assign(new Error('Request body too large'), { statusCode: 413 }),
+                        )
+                        return
+                      }
                       chunks.push(chunk)
-                    })
-                    req.on('end', () => {
+                    }
+
+                    function onEnd() {
+                      if (settled) return
+                      settled = true
                       resolve(new Blob([Buffer.concat(chunks)]))
-                    })
-                    req.on('error', reject)
+                    }
+
+                    function onError(error: Error) {
+                      fail(error)
+                    }
+
+                    req.on('data', onData)
+                    req.on('end', onEnd)
+                    req.on('error', onError)
                   })
                 : undefined
 
@@ -1642,6 +1691,17 @@ ${clientTransformedCode}`
 
               return
             } catch (error) {
+              const statusCode =
+                isRecord(error) && typeof error.statusCode === 'number'
+                  ? error.statusCode
+                  : undefined
+              if (statusCode === 413) {
+                if (!res.headersSent) {
+                  res.statusCode = 413
+                  res.end('Request Entity Too Large')
+                }
+                return
+              }
               console.error(
                 `[rari] Failed to proxy ${isRscRequest ? 'RSC' : 'HTML'} request:`,
                 error,
