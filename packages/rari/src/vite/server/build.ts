@@ -228,19 +228,45 @@ function isServerComponentManifestRecord(value: unknown): value is ServerCompone
   return isRecord(value) && isRecord(value.components)
 }
 
-function cssHasBarePackageImports(css: string): boolean {
-  return /@import\s+(?:url\(\s*)?['"](?![a-zA-Z][a-zA-Z0-9+.-]*:|\/\/|\.\/|\.\.\/|\/)[^'"]+['"]/.test(
-    css,
-  )
-}
+const BARE_PACKAGE_CSS_IMPORT_RE =
+  /@import\s+(?:url\(\s*)?['"](?![a-zA-Z][a-zA-Z0-9+.-]*:|\/\/|\.\/|\.\.\/|\/)[^'"]+['"][^;]*(?:;|$)/g
+
+const LOCAL_RELATIVE_CSS_IMPORT_RE =
+  /@import\s+(?:url\(\s*)?['"]((?:\.\/|\.\.\/)[^'"]+)['"][^;]*(?:;|$)/g
 
 function stripBarePackageCssImports(css: string): string {
+  return css.replace(BARE_PACKAGE_CSS_IMPORT_RE, '').trim()
+}
+
+function inlineLocalRelativeCssImports(
+  filePath: string,
+  css: string,
+  seen: Set<string> = new Set(),
+): string {
+  const absPath = path.resolve(filePath)
+  if (seen.has(absPath)) return ''
+  seen.add(absPath)
+
   return css
-    .replace(
-      /@import\s+(?:url\(\s*)?['"](?![a-zA-Z][a-zA-Z0-9+.-]*:|\/\/|\.\/|\.\.\/|\/)[^'"]+['"]\s*\)?\s*;?/g,
-      '',
-    )
+    .replace(LOCAL_RELATIVE_CSS_IMPORT_RE, (fullMatch, relPath: string) => {
+      const nestedPath = path.resolve(path.dirname(absPath), relPath)
+      try {
+        if (!fs.existsSync(nestedPath) || !fs.statSync(nestedPath).isFile()) return fullMatch
+        const nested = fs.readFileSync(nestedPath, 'utf-8')
+        return preparePlainCssForServerAsset(nestedPath, nested, seen)
+      } catch {
+        return fullMatch
+      }
+    })
     .trim()
+}
+
+function preparePlainCssForServerAsset(
+  filePath: string,
+  css: string,
+  seen: Set<string> = new Set(),
+): string {
+  return inlineLocalRelativeCssImports(filePath, stripBarePackageCssImports(css), seen)
 }
 
 export interface ServerBuildOptions {
@@ -1260,9 +1286,7 @@ export class ServerComponentBuilder {
             if (cssModules) {
               try {
                 const content = fs.readFileSync(filePath, 'utf-8')
-                const forServerAsset = cssHasBarePackageImports(content)
-                  ? stripBarePackageCssImports(content)
-                  : content
+                const forServerAsset = preparePlainCssForServerAsset(filePath, content)
                 if (forServerAsset !== '') cssModules.push(forServerAsset)
               } catch (e) {
                 throw new Error(
