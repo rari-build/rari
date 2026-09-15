@@ -21,6 +21,21 @@ describe('layout-css-imports', () => {
     fs.rmSync(dir, { recursive: true, force: true })
   })
 
+  it('preserves bare package css specifiers for Vite resolution', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-layout-css-pkg-'))
+    const appDir = path.join(dir, 'src', 'app')
+    fs.mkdirSync(appDir, { recursive: true })
+    fs.writeFileSync(
+      path.join(appDir, 'layout.tsx'),
+      `import 'acme-ui/styles.css'\nexport default function Layout({ children }) { return children }\n`,
+    )
+
+    const statements = buildLayoutCssImportStatements(dir)
+    expect(statements).toContain(`import "acme-ui/styles.css";`)
+
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
   it('returns empty string when layouts have no css imports', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-layout-css-empty-'))
     const appDir = path.join(dir, 'src', 'app')

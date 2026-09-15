@@ -427,18 +427,26 @@ declare function rariCreateHtmlBoundaryTracker(): {
     chunk: string,
     headContent: string,
     alreadyInjected: boolean,
+    pendingPrefix = '',
   ): {
     readonly chunk: string
     readonly injected: boolean
+    readonly pending: string
   } {
-    if (alreadyInjected || !headContent) return { chunk, injected: alreadyInjected }
+    if (alreadyInjected || !headContent) {
+      return { chunk: pendingPrefix + chunk, injected: alreadyInjected, pending: '' }
+    }
 
-    const headClose = chunk.indexOf('</head>')
-    if (headClose === -1) return { chunk, injected: false }
+    const combined = pendingPrefix + chunk
+    const headClose = combined.indexOf('</head>')
+    if (headClose === -1) {
+      return { chunk: '', injected: false, pending: combined }
+    }
 
     return {
-      chunk: `${chunk.slice(0, headClose)}${headContent}${chunk.slice(headClose)}`,
+      chunk: `${combined.slice(0, headClose)}${headContent}${combined.slice(headClose)}`,
       injected: true,
+      pending: '',
     }
   }
 
@@ -460,6 +468,7 @@ declare function rariCreateHtmlBoundaryTracker(): {
     let completeScriptSent = false
     let finalPackageSent = false
     let headInjected = false
+    let headPending = ''
 
     const takeFlightBootstrap = (): string => {
       if (flightBootstrapped) return ''
@@ -493,9 +502,20 @@ declare function rariCreateHtmlBoundaryTracker(): {
         chunk = rariStripLeadingDoctype(chunk)
       }
 
-      const injected = rariInjectHeadContent(chunk, headContent, headInjected)
+      const injected = rariInjectHeadContent(chunk, headContent, headInjected, headPending)
       headInjected = injected.injected
+      headPending = injected.pending
       return injected.chunk
+    }
+
+    const flushHeadPending = async (): Promise<boolean> => {
+      if (!headPending) return true
+      const pending = headPending
+      headPending = ''
+      if (!pending || session.disconnected) return true
+      if (!(await session.pumpFizzChunk(pending))) return false
+      session.trackHtmlBoundaries(pending)
+      return true
     }
 
     const pumpPendingFlight = async (): Promise<boolean> => {
@@ -567,11 +587,10 @@ declare function rariCreateHtmlBoundaryTracker(): {
         const { done, value } = await reader.read()
         if (done) {
           const tail = decoder.decode()
-          if (tail) {
-            if (!(await pumpFizzText(tail))) return
-            if (!finalPackageSent && session.safeToInjectFlight()) {
-              if (!(await pumpPendingFlight())) return
-            }
+          if (tail && !(await pumpFizzText(tail))) return
+          if (!(await flushHeadPending())) return
+          if (!finalPackageSent && session.safeToInjectFlight()) {
+            if (!(await pumpPendingFlight())) return
           }
           rariStreamLog('mux.fizzLoop.done', `htmlChunks=${htmlChunkCount}`)
           break

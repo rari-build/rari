@@ -1108,6 +1108,7 @@ pub async fn render_fallback_html(
     }
 
     let vite_port = state.config.vite.port;
+    let cache_generation = state.html_cache.generation();
     let mut html_shell = if state.config.is_development() {
         format!(
             r#"<!DOCTYPE html>
@@ -1158,7 +1159,7 @@ pub async fn render_fallback_html(
 
     let body = Bytes::from(html_shell);
     if state.config.is_production() {
-        state.html_cache.set(body.clone());
+        state.html_cache.set_if_generation(body.clone(), cache_generation);
     }
 
     Ok(fallback_html_response(body, is_not_found))

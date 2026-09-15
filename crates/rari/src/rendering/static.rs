@@ -1,6 +1,6 @@
 #![expect(clippy::missing_errors_doc)]
 
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use cow_utils::CowUtils;
 use rari_error::RariError;
@@ -21,11 +21,16 @@ pub fn escape_html(text: &str) -> String {
 pub struct RscHtmlRenderer {
     runtime: Arc<JsExecutionRuntime>,
     template_cache: parking_lot::Mutex<Option<String>>,
+    public_dir: PathBuf,
 }
 
 impl RscHtmlRenderer {
     pub fn new(runtime: Arc<JsExecutionRuntime>) -> Self {
-        Self { runtime, template_cache: parking_lot::Mutex::new(None) }
+        Self::with_public_dir(runtime, PathBuf::from("dist"))
+    }
+
+    pub fn with_public_dir(runtime: Arc<JsExecutionRuntime>, public_dir: PathBuf) -> Self {
+        Self { runtime, template_cache: parking_lot::Mutex::new(None), public_dir }
     }
 
     fn inject_head_tags(template: &str, tags: &str) -> String {
@@ -101,19 +106,10 @@ import 'virtual:rari-entry-client';
     }
 
     async fn read_client_head_file(&self) -> Result<String, RariError> {
-        let possible_paths =
-            ["dist/rari-client-head.html", "build/rari-client-head.html", "rari-client-head.html"];
-
-        for path in possible_paths {
-            if let Ok(content) = fs::read_to_string(path).await {
-                return Ok(content);
-            }
-        }
-
-        Err(RariError::internal(
-            "Client head file not found. Tried: dist/rari-client-head.html, build/rari-client-head.html"
-                .to_string(),
-        ))
+        let path = self.public_dir.join("rari-client-head.html");
+        fs::read_to_string(&path).await.map_err(|_| {
+            RariError::internal(format!("Client head file not found. Tried: {}", path.display()))
+        })
     }
 
     pub(crate) fn client_head_fragment(template: &str) -> &str {
@@ -524,7 +520,7 @@ import 'virtual:rari-entry-client';
 }
 
 #[cfg(test)]
-#[expect(clippy::expect_used, clippy::unwrap_used, clippy::clone_on_ref_ptr)]
+#[expect(clippy::expect_used, clippy::clone_on_ref_ptr)]
 mod tests {
     use rustc_hash::FxHashMap;
 

@@ -1168,6 +1168,16 @@ export class ServerComponentBuilder {
           const CSS_GLOBAL_PREFIX = '\0css-global:'
 
           if (id.startsWith(CSS_GLOBAL_PREFIX)) {
+            const filePath = id.slice(CSS_GLOBAL_PREFIX.length)
+            if (cssModules) {
+              try {
+                cssModules.push(fs.readFileSync(filePath, 'utf-8'))
+              } catch (e) {
+                throw new Error(
+                  `[rari] Failed to read CSS ${filePath}: ${e instanceof Error ? e.message : String(e)}`,
+                )
+              }
+            }
             return { code: 'export {}', moduleType: 'js' }
           }
 

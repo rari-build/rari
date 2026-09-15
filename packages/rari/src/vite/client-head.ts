@@ -33,16 +33,18 @@ function resolveCssImport(
   const bare = source.replace(/[?#].*$/, '')
   if (!CSS_IMPORT_REGEX.test(bare)) return null
 
-  let resolved: string | null = null
   if (bare.startsWith('./') || bare.startsWith('../')) {
-    resolved = path.resolve(path.dirname(fromFile), bare)
-  } else {
-    resolved = resolveAlias(bare, aliases, projectRoot)
+    const resolved = path.resolve(path.dirname(fromFile), bare)
+    if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) return null
+    return resolved
   }
 
-  if (resolved == null || resolved === '') return null
-  if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) return null
-  return resolved
+  const aliased = resolveAlias(bare, aliases, projectRoot)
+  if (aliased != null && aliased !== '') {
+    if (fs.existsSync(aliased) && fs.statSync(aliased).isFile()) return aliased
+  }
+
+  return bare
 }
 
 function collectLayoutCssImportsFromDir(
@@ -87,8 +89,11 @@ export function buildLayoutCssImportStatements(
 
   return [...cssPaths]
     .sort()
-    .map(absolute => {
-      const relative = path.relative(projectRoot, absolute).replace(/\\/g, '/')
+    .map(cssImport => {
+      if (!path.isAbsolute(cssImport)) {
+        return `import ${JSON.stringify(cssImport)};`
+      }
+      const relative = path.relative(projectRoot, cssImport).replace(/\\/g, '/')
       return `import ${JSON.stringify(`/${relative}`)};`
     })
     .join('\n')
