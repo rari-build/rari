@@ -917,6 +917,221 @@ function isMatcherPropertyDelimiter(configObject: string, index: number): boolea
   return true
 }
 
+function skipWhitespaceAndComments(configObject: string, start: number): number {
+  let i = start
+  while (i < configObject.length) {
+    const ch = configObject.charAt(i)
+    const next = configObject.charAt(i + 1)
+    if (/\s/.test(ch)) {
+      i += 1
+      continue
+    }
+    if (ch === '/' && next === '/') {
+      i += 2
+      while (i < configObject.length && !isLineTerminator(configObject.charAt(i))) i += 1
+      continue
+    }
+    if (ch === '/' && next === '*') {
+      i += 2
+      while (
+        i + 1 < configObject.length &&
+        (configObject.charAt(i) !== '*' || configObject.charAt(i + 1) !== '/')
+      ) {
+        i += 1
+      }
+      i += 2
+      continue
+    }
+    break
+  }
+  return i
+}
+
+function parseComputedPropertyKey(
+  configObject: string,
+  openBracketIndex: number,
+): { readonly endIndex: number; readonly forceRuntime: boolean } | null {
+  if (configObject.charAt(openBracketIndex) !== '[') return null
+
+  let i = skipWhitespaceAndComments(configObject, openBracketIndex + 1)
+  if (i >= configObject.length) return { endIndex: configObject.length, forceRuntime: true }
+
+  const quote = configObject.charAt(i)
+  if (quote === "'" || quote === '"' || quote === '`') {
+    const end = skipStringLike(configObject, i, quote)
+    if (end == null) return { endIndex: configObject.length, forceRuntime: true }
+    const raw = configObject.slice(i + 1, end - 1)
+    if (quote === '`' && raw.includes('${')) return { endIndex: end, forceRuntime: true }
+    const decoded = decodeJsStringLiteral(raw, quote)
+    i = skipWhitespaceAndComments(configObject, end)
+    if (configObject.charAt(i) !== ']') return { endIndex: i, forceRuntime: true }
+    return { endIndex: i + 1, forceRuntime: decoded === 'matcher' }
+  }
+
+  return { endIndex: openBracketIndex + 1, forceRuntime: true }
+}
+
+function hasUnsafeTopLevelComputedMatcherKey(configObject: string): boolean {
+  const stack: ScanFrame[] = [{ kind: 'code', braceDepth: 0 }]
+  let expectPropertyKey = false
+
+  for (let i = 0; i < configObject.length;) {
+    const frame = stack.at(-1)
+    if (frame === undefined) return false
+
+    const ch = configObject.charAt(i)
+    const next = configObject.charAt(i + 1)
+
+    if (frame.kind === 'line-comment') {
+      if (ch === '\n') stack.pop()
+      i += 1
+      continue
+    }
+    if (frame.kind === 'block-comment') {
+      if (ch === '*' && next === '/') {
+        stack.pop()
+        i += 2
+      } else i += 1
+      continue
+    }
+    if (frame.kind === 'single' || frame.kind === 'double') {
+      if (ch === '\\') {
+        i += 2
+        continue
+      }
+      if ((frame.kind === 'single' && ch === "'") || (frame.kind === 'double' && ch === '"'))
+        stack.pop()
+      i += 1
+      continue
+    }
+    if (frame.kind === 'template') {
+      if (ch === '\\') {
+        i += 2
+        continue
+      }
+      if (ch === '`') {
+        stack.pop()
+        i += 1
+        continue
+      }
+      if (ch === '$' && next === '{') {
+        stack.push({ kind: 'code', braceDepth: 1 })
+        i += 2
+        continue
+      }
+      i += 1
+      continue
+    }
+    if (frame.kind === 'regex') {
+      if (ch === '\\') {
+        i += 2
+        continue
+      }
+      if (ch === '[') {
+        stack.push({ kind: 'regex-class' })
+        i += 1
+        continue
+      }
+      if (ch === '/') {
+        stack.pop()
+        i += 1
+        while (i < configObject.length && /[a-z]/i.test(configObject.charAt(i))) i += 1
+        continue
+      }
+      i += 1
+      continue
+    }
+    if (frame.kind === 'regex-class') {
+      if (ch === '\\') {
+        i += 2
+        continue
+      }
+      if (ch === ']') {
+        stack.pop()
+        i += 1
+        continue
+      }
+      i += 1
+      continue
+    }
+
+    if (ch === '/' && next === '/') {
+      stack.push({ kind: 'line-comment' })
+      i += 2
+      continue
+    }
+    if (ch === '/' && next === '*') {
+      stack.push({ kind: 'block-comment' })
+      i += 2
+      continue
+    }
+    if (ch === '/' && canStartRegexLiteral(configObject, i)) {
+      stack.push({ kind: 'regex' })
+      i += 1
+      continue
+    }
+    if (ch === "'") {
+      if (expectPropertyKey && frame.braceDepth === 1) expectPropertyKey = false
+      stack.push({ kind: 'single' })
+      i += 1
+      continue
+    }
+    if (ch === '"') {
+      if (expectPropertyKey && frame.braceDepth === 1) expectPropertyKey = false
+      stack.push({ kind: 'double' })
+      i += 1
+      continue
+    }
+    if (ch === '`') {
+      if (expectPropertyKey && frame.braceDepth === 1) expectPropertyKey = false
+      stack.push({ kind: 'template' })
+      i += 1
+      continue
+    }
+    if (ch === '{') {
+      frame.braceDepth += 1
+      if (frame.braceDepth === 1) expectPropertyKey = true
+      i += 1
+      continue
+    }
+    if (ch === '}') {
+      frame.braceDepth -= 1
+      expectPropertyKey = false
+      i += 1
+      if (frame.braceDepth === 0 && stack.length > 1) stack.pop()
+      continue
+    }
+    if (ch === ',' && frame.braceDepth === 1) {
+      expectPropertyKey = true
+      i += 1
+      continue
+    }
+    if (ch === ':' && frame.braceDepth === 1) {
+      expectPropertyKey = false
+      i += 1
+      continue
+    }
+
+    if (expectPropertyKey && frame.braceDepth === 1 && !/\s/.test(ch)) {
+      if (ch === '[') {
+        const parsed = parseComputedPropertyKey(configObject, i)
+        if (parsed?.forceRuntime === true) return true
+        if (parsed != null) {
+          expectPropertyKey = false
+          i = parsed.endIndex
+          continue
+        }
+        return true
+      }
+      expectPropertyKey = false
+    }
+
+    i += 1
+  }
+
+  return false
+}
+
 function extractMatcher(code: string): {
   readonly matcher?: ProxyConfig['matcher']
   readonly forceRuntime: boolean
@@ -927,6 +1142,8 @@ function extractMatcher(code: string): {
 
   const configObject = extractExportedConfigObject(code)
   if (configObject == null) return { forceRuntime: true }
+
+  if (hasUnsafeTopLevelComputedMatcherKey(configObject)) return { forceRuntime: true }
 
   if (findTopLevelMatcherMatch(configObject, OBJECT_MATCHER_REGEX) != null) {
     return { forceRuntime: true }
@@ -947,7 +1164,11 @@ function extractMatcher(code: string): {
   }
 
   const arrayMatch = findTopLevelMatcherMatch(configObject, ARRAY_MATCHER_REGEX)
-  if (arrayMatch != null) return parseStaticStringArrayBody(arrayMatch[1])
+  if (arrayMatch != null) {
+    const matchEnd = arrayMatch.index + arrayMatch[0].length
+    if (!isMatcherPropertyDelimiter(configObject, matchEnd)) return { forceRuntime: true }
+    return parseStaticStringArrayBody(arrayMatch[1])
+  }
 
   if (findTopLevelMatcherMatch(configObject, MATCHER_SHORTHAND_REGEX) != null) {
     return resolveModuleLevelMatcherBinding(code) ?? { forceRuntime: true }

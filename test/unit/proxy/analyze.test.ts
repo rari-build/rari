@@ -301,6 +301,53 @@ describe('analyzeProxySource', () => {
     expect(analysis.matcher).toBeUndefined()
   })
 
+  it('forces runtime when array matcher continues after the closing bracket', () => {
+    const code = `
+      export const config = {
+        matcher: ['/api'] . concat(['/x']),
+      }
+
+      export function proxy(request) {
+        return RariResponse.next()
+      }
+    `
+    const analysis = analyzeProxySource(code)
+    expect(analysis.requiresRuntime).toBe(true)
+    expect(analysis.matcher).toBeUndefined()
+  })
+
+  it('forces runtime for computed matcher keys', () => {
+    const literalComputed = `
+      export const config = {
+        ['matcher']: '/dash',
+      }
+
+      export function proxy(request) {
+        if (request.rariUrl.pathname === '/dash')
+          return RariResponse.redirect(new URL('/y', request.url), 308)
+        return RariResponse.next()
+      }
+    `
+    const literalAnalysis = analyzeProxySource(literalComputed)
+    expect(literalAnalysis.requiresRuntime).toBe(true)
+    expect(literalAnalysis.matcher).toBeUndefined()
+    expect(literalAnalysis.rules).toEqual([])
+
+    const dynamicComputed = `
+      const key = 'matcher'
+      export const config = {
+        [key]: '/dash',
+      }
+
+      export function proxy(request) {
+        return RariResponse.next()
+      }
+    `
+    const dynamicAnalysis = analyzeProxySource(dynamicComputed)
+    expect(dynamicAnalysis.requiresRuntime).toBe(true)
+    expect(dynamicAnalysis.matcher).toBeUndefined()
+  })
+
   it('ignores nested options.matcher when extracting the config matcher', () => {
     const nestedOnly = `
       export const config = {
