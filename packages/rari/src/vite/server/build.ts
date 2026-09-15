@@ -2796,7 +2796,7 @@ export function createServerBuildPlugin(options: ServerBuildOptions = {}): Plugi
           const { generateRobotsFile } = await import('@/router/metadata/robots')
           await generateRobotsFile({
             appDir: path.join(projectRoot, 'src', 'app'),
-            outDir: path.join(projectRoot, 'dist'),
+            outDir: resolvedViteOutDir,
             aliases: resolvedAliases,
           })
         } catch (error) {
@@ -2807,7 +2807,7 @@ export function createServerBuildPlugin(options: ServerBuildOptions = {}): Plugi
           const { generateSitemapFiles } = await import('@/router/metadata/sitemap')
           await generateSitemapFiles({
             appDir: path.join(projectRoot, 'src', 'app'),
-            outDir: path.join(projectRoot, 'dist'),
+            outDir: resolvedViteOutDir,
             aliases: resolvedAliases,
           })
         } catch (error) {
@@ -2818,7 +2818,7 @@ export function createServerBuildPlugin(options: ServerBuildOptions = {}): Plugi
           const { generateFeedFile } = await import('@/router/metadata/feed')
           await generateFeedFile({
             appDir: path.join(projectRoot, 'src', 'app'),
-            outDir: path.join(projectRoot, 'dist'),
+            outDir: resolvedViteOutDir,
             aliases: resolvedAliases,
           })
         } catch (error) {

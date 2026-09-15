@@ -167,20 +167,20 @@ impl RouteComposer {
     ) -> String {
         let layout_result = if expand_document {
             format!(
-                r#"
+                r"
                 const __layoutProps{index} = {{ children: {current_element}, pathname: {pathname_json} }};
                 let {layout_var} = LayoutComponent{index}(__layoutProps{index});
                 if ({layout_var} != null && typeof {layout_var}.then === 'function') {{
                     {layout_var} = await {layout_var};
                 }}
-                "#
+                "
             )
         } else {
             format!(
-                r#"
+                r"
                 const layoutResult{index} = React.createElement(LayoutComponent{index}, {{ children: {current_element}, pathname: {pathname_json} }});
                 const {layout_var} = layoutResult{index};
-                "#
+                "
             )
         };
 
