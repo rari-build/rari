@@ -34,7 +34,13 @@ where
         f(guard).await
     })
     .await
-    .map_err(|e| RariError::js_runtime(format!("renderer task join failed: {e}")))
+    .map_err(|e| {
+        let mut err = RariError::js_runtime(format!("renderer task join failed: {e}"));
+        if e.is_cancelled() {
+            err.set_property("cancelled", "true");
+        }
+        err
+    })
 }
 
 /// Like [`run_with_renderer`], but flattens an inner `Result`.

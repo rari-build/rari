@@ -302,7 +302,12 @@ export async function injectMetadataIntoDocument(
   if (typeof react.cloneElement !== 'function') return element
 
   const documentElement = await resolveDocumentElement(element)
-  if (!isRecord(documentElement) || documentElement.type !== 'html') return element
+  if (
+    !isRecord(documentElement) ||
+    (documentElement.type !== 'html' && documentElement.type !== 'HTML')
+  ) {
+    return element
+  }
 
   const metaElements = buildMetadataHeadElements(metadata)
   if (metaElements.length === 0) return element

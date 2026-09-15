@@ -32,8 +32,16 @@ use crate::{
 const WARMUP_CONCURRENCY: usize = 10;
 
 fn is_warmup_interrupted(error: &RariError) -> bool {
-    let message = error.to_string();
-    message.contains("cancelled") || message.contains("canceled")
+    error.get_property("cancelled") == Some("true")
+}
+
+fn wrap_warmup_render_error(error: RariError) -> RariError {
+    let cancelled = error.get_property("cancelled") == Some("true");
+    let mut wrapped = RariError::internal(format!("Render failed: {error}"));
+    if cancelled {
+        wrapped.set_property("cancelled", "true");
+    }
+    wrapped
 }
 
 /// Serialize warmup renders to prevent V8 global state corruption.
@@ -148,7 +156,7 @@ async fn warm_route(
             None,
         )
         .await
-        .map_err(|e| RariError::internal(format!("Render failed: {e}")))?;
+        .map_err(wrap_warmup_render_error)?;
 
     let html = match render_result {
         RenderResult::Static(html) => html,
