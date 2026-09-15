@@ -121,8 +121,8 @@ mod tests {
         let icons = vec![
             entry("/", "favicon.ico", "favicon", "/favicon.ico"),
             entry("/", "icon.png", "icon", "/icon.png"),
-            entry("/blog", "icon.png", "icon", "/blog/icon.png"),
-            entry("/blog", "apple-icon.png", "apple-icon", "/blog/apple-icon.png"),
+            entry("/blog", "blog/icon.png", "icon", "/blog/icon.png"),
+            entry("/blog", "blog/apple-icon.png", "apple-icon", "/blog/apple-icon.png"),
         ];
 
         let resolved = resolve_app_icons_for_route(&icons, "/blog/post");
