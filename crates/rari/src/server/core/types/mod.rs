@@ -98,6 +98,7 @@ pub struct ServerState {
     pub response_cache: Arc<ResponseCache>,
     pub static_fast_cache: Arc<StaticFastCache>,
     pub og_generator: Option<Arc<OgImageGenerator>>,
+    pub app_icons: Arc<Vec<crate::server::routing::AppIconEntry>>,
     pub project_root: PathBuf,
     pub image_optimizer: Option<Arc<ImageOptimizer>>,
     pub cache_registry: Arc<CacheHandlerRegistry>,

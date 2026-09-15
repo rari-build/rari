@@ -10,6 +10,24 @@ use crate::server::og::OgImageEntry;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[non_exhaustive]
+pub struct AppIconEntry {
+    pub path: String,
+    #[serde(rename = "filePath")]
+    pub file_path: String,
+    pub kind: String,
+    pub url: String,
+    #[serde(rename = "contentType")]
+    pub content_type: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sizes: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub width: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub height: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct RoutesManifest {
     #[serde(flatten)]
     pub app: AppRouteManifest,
@@ -17,6 +35,8 @@ pub struct RoutesManifest {
     pub api_routes: Vec<ApiRouteEntry>,
     #[serde(rename = "ogImages", default)]
     pub og_images: Vec<OgImageEntry>,
+    #[serde(rename = "appIcons", default)]
+    pub app_icons: Vec<AppIconEntry>,
 }
 
 impl RoutesManifest {

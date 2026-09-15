@@ -77,6 +77,7 @@ const PROXY_MANIFEST_FILE = 'proxy.json'
 const COMPONENTS_PATH_REGEX = /\/components\/(\w+)(?:\.tsx?|\.jsx?)?$/
 const COMPONENTS_PATH_ALT_REGEX = /[/\\]components[/\\]\w+(?:\.tsx?|\.jsx?)?$/
 const SPECIAL_FILE_REGEX = /^(?:robots|sitemap|feed)\.(?:tsx?|jsx?)$/
+const APP_ICON_FILE_REGEX = /^(?:favicon|icon\d*|apple-icon\d*)\.(?:ico|png|jpe?g|svg)$/i
 const RSC_REFERENCES_IMPORT = 'react-server-dom-rari/server'
 const LOCAL_IMPORT_SOURCE_REGEX = /^[./@~#]/
 const NODE_PROTOCOL_REGEX = /^node:/
@@ -2645,7 +2646,13 @@ export function isEligibleServerComponent(
   analysis?: ModuleAnalysis,
 ): boolean {
   const fileName = path.basename(filePath)
-  if (SPECIAL_FILE_REGEX.test(fileName) || fileName.endsWith('.d.ts')) return false
+  if (
+    SPECIAL_FILE_REGEX.test(fileName) ||
+    APP_ICON_FILE_REGEX.test(fileName) ||
+    fileName.endsWith('.d.ts')
+  ) {
+    return false
+  }
 
   const moduleAnalysis = analysis ?? builder.getModuleAnalysis(filePath, code)
 
@@ -2809,6 +2816,24 @@ export function createServerBuildPlugin(options: ServerBuildOptions = {}): Plugi
           })
         } catch (error) {
           console.warn('[rari] Failed to generate feed:', error)
+        }
+
+        try {
+          const { copyAppIconsToOutDir, parseAppIconsFromManifest } =
+            await import('@/router/metadata/app-icons')
+          const routesPath = path.join(projectRoot, 'dist', 'server', 'routes.json')
+          if (fs.existsSync(routesPath)) {
+            const icons = parseAppIconsFromManifest(fs.readFileSync(routesPath, 'utf-8'))
+            if (icons.length > 0) {
+              await copyAppIconsToOutDir({
+                appDir: path.join(projectRoot, 'src', 'app'),
+                outDir: path.join(projectRoot, 'dist'),
+                icons,
+              })
+            }
+          }
+        } catch (error) {
+          console.warn('[rari] Failed to copy app icons:', error)
         }
 
         try {
