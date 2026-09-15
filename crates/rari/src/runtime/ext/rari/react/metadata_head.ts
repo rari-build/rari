@@ -266,48 +266,20 @@ export function buildMetadataHeadElements(metadata: unknown): unknown[] {
   return elements
 }
 
-function isThenable(value: unknown): value is PromiseLike<unknown> {
-  return isRecord(value) && typeof Reflect.get(value, 'then') === 'function'
+function asDocumentElement(element: unknown): Record<string, unknown> | null {
+  if (!isRecord(element)) return null
+  if (element.type === 'html' || element.type === 'HTML') return element
+  return null
 }
 
-async function resolveDocumentElement(element: unknown): Promise<unknown> {
-  let current = element
-  for (let depth = 0; depth < 8; depth++) {
-    if (!isRecord(current)) return element
-    if (current.type === 'html' || current.type === 'HTML') return current
-    if (typeof current.type !== 'function') return element
-
-    const props = isRecord(current.props) ? current.props : {}
-    let next: unknown
-    try {
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion narrowed to function above
-      const render = current.type as (props: Readonly<Record<string, unknown>>) => unknown
-      next = render(props)
-    } catch {
-      return element
-    }
-    if (isThenable(next)) next = await next
-    current = next
-  }
-  return element
-}
-
-export async function injectMetadataIntoDocument(
-  element: unknown,
-  metadata: unknown,
-): Promise<unknown> {
+export function injectMetadataIntoDocument(element: unknown, metadata: unknown): unknown {
   if (!isRecord(metadata) || Object.keys(metadata).length === 0) return element
   const react = g.React
   if (react == null || typeof react.createElement !== 'function') return element
   if (typeof react.cloneElement !== 'function') return element
 
-  const documentElement = await resolveDocumentElement(element)
-  if (
-    !isRecord(documentElement) ||
-    (documentElement.type !== 'html' && documentElement.type !== 'HTML')
-  ) {
-    return element
-  }
+  const documentElement = asDocumentElement(element)
+  if (documentElement == null) return element
 
   const metaElements = buildMetadataHeadElements(metadata)
   if (metaElements.length === 0) return element

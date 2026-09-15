@@ -35,7 +35,7 @@ fn is_warmup_interrupted(error: &RariError) -> bool {
     error.get_property("cancelled") == Some("true")
 }
 
-fn wrap_warmup_render_error(error: RariError) -> RariError {
+fn wrap_warmup_render_error(error: &RariError) -> RariError {
     let cancelled = error.get_property("cancelled") == Some("true");
     let mut wrapped = RariError::internal(format!("Render failed: {error}"));
     if cancelled {
@@ -156,7 +156,7 @@ async fn warm_route(
             None,
         )
         .await
-        .map_err(wrap_warmup_render_error)?;
+        .map_err(|error| wrap_warmup_render_error(&error))?;
 
     let html = match render_result {
         RenderResult::Static(html) => html,

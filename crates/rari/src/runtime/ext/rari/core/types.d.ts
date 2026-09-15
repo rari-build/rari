@@ -199,7 +199,7 @@ declare global {
           searchParams: Readonly<Record<string, string>>,
         ) => Promise<unknown[]>
       }
-      injectMetadataIntoDocument?: (element: unknown, metadata: unknown) => Promise<unknown>
+      injectMetadataIntoDocument?: (element: unknown, metadata: unknown) => unknown
       buildMetadataHeadElements?: (metadata: unknown) => unknown[]
       componentLoader?: {
         registerComponent: (
