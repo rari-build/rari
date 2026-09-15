@@ -139,7 +139,15 @@ describe('server plain css imports', () => {
 
     const bundle = fs.readFileSync(result.bundlePath, 'utf-8')
     expect(bundle).toContain('.theme { color: green; }')
-    expect(bundle).toContain('/src/app/theme.css')
+
+    const urlMatch = /\/assets\/theme-[a-z0-9]+\.css/.exec(bundle)
+    expect(urlMatch, `bundle missing emitted asset URL:\n${bundle}`).not.toBeNull()
+    const exportedUrl = urlMatch![0]
+    expect(exportedUrl).toMatch(/^\/assets\/theme-[a-z0-9]+\.css$/)
+
+    const emittedPath = path.join(outDir, exportedUrl.replace(/^\//, ''))
+    expect(fs.existsSync(emittedPath)).toBe(true)
+    expect(fs.readFileSync(emittedPath, 'utf-8')).toContain('.theme { color: green; }')
 
     const manifestPath = path.join(outDir, 'server', 'manifest.json')
     const parsed: unknown = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
