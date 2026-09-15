@@ -6,6 +6,7 @@ import { cwd } from 'node:process'
 import Footer from '@/components/Footer'
 import { Providers } from '@/components/Providers'
 import Sidebar from '@/components/Sidebar'
+import { siteUrl } from '@/lib/site'
 import './globals.css'
 
 function getRariVersion(): string {
@@ -89,7 +90,7 @@ export const metadata: Metadata = {
   },
   alternates: {
     types: {
-      'application/rss+xml': 'https://rari.build/feed.xml',
+      'application/rss+xml': `${siteUrl}/feed.xml`,
     },
   },
 }

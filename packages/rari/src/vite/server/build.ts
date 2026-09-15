@@ -53,7 +53,11 @@ import {
   createStaticImageRolldownPlugin,
   finalizeStaticImageSourceMapBuild,
 } from '../image/static-import'
-import { resolveMdxRegistryEntries } from '../mdx/registry'
+import {
+  collectMdxContentDirs,
+  resolveMdxPluginOptions,
+  resolveMdxRegistryEntries,
+} from '../mdx/registry'
 import { ensureNamedImportFromModule } from '../transform/client-import'
 import {
   buildClientReferenceStubModule,
@@ -222,6 +226,12 @@ interface ServerComponentManifest {
 
 function isServerComponentManifestRecord(value: unknown): value is ServerComponentManifest {
   return isRecord(value) && isRecord(value.components)
+}
+
+function cssHasBarePackageImports(css: string): boolean {
+  return /@import\s+(?:url\(\s*)?['"](?![a-zA-Z][a-zA-Z0-9+.-]*:|\/\/|\.\/|\.\.\/|\/)[^'"]+['"]/.test(
+    css,
+  )
 }
 
 export interface ServerBuildOptions {
@@ -1240,7 +1250,8 @@ export class ServerComponentBuilder {
             const filePath = id.slice(CSS_GLOBAL_PREFIX.length)
             if (cssModules) {
               try {
-                cssModules.push(fs.readFileSync(filePath, 'utf-8'))
+                const content = fs.readFileSync(filePath, 'utf-8')
+                if (!cssHasBarePackageImports(content)) cssModules.push(content)
               } catch (e) {
                 throw new Error(
                   `[rari] Failed to read CSS ${filePath}: ${e instanceof Error ? e.message : String(e)}`,
@@ -2662,6 +2673,20 @@ export function createServerBuildPlugin(options: ServerBuildOptions = {}): Plugi
           })
         } catch (error) {
           console.warn('[rari] Failed to generate feed:', error)
+        }
+
+        try {
+          const mdxOpts = resolveMdxPluginOptions(projectRoot, options.mdx)
+          const contentDirs = collectMdxContentDirs(projectRoot, mdxOpts.contentDirs)
+          const destRoot = path.join(resolvedViteOutDir, 'content')
+          for (const dir of contentDirs) {
+            const rel = path.relative(projectRoot, dir).replace(BACKSLASH_REGEX, '/')
+            if (rel === 'public/content' || rel.startsWith('public/content/')) continue
+            if (rel === 'dist/content' || rel.startsWith('dist/content/')) continue
+            fs.cpSync(dir, destRoot, { recursive: true })
+          }
+        } catch (error) {
+          console.warn('[rari] Failed to copy MDX content:', error)
         }
 
         finalizeStaticImageSourceMapBuild(resolvedViteOutDir)

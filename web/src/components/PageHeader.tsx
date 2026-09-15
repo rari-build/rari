@@ -23,7 +23,7 @@ export default function PageHeader({
   tags,
   children,
 }: PageHeaderProps) {
-  const repoPath = filePath != null && filePath !== '' ? `web/public/content/${filePath}` : pagePath
+  const repoPath = filePath != null && filePath !== '' ? `web/src/content/${filePath}` : pagePath
   const isBlog = filePath?.startsWith('blog/') ?? false
 
   if (isBlog) {

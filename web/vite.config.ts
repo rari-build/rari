@@ -3,6 +3,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { rari } from 'rari/vite'
 import { defineConfig } from 'vite-plus'
 import { monorepoFmt, monorepoLint } from '../.config/lint/monorepo'
+import { siteUrl } from './src/lib/site'
 
 export default defineConfig({
   fmt: monorepoFmt,
@@ -10,6 +11,7 @@ export default defineConfig({
   plugins: [
     rari({
       compiler: true,
+      origin: siteUrl,
       csp: {
         scriptSrc: [
           "'self'",
@@ -24,7 +26,7 @@ export default defineConfig({
           'https://t.rari.build',
           'https://*.ingest.us.sentry.io',
         ],
-        workerSrc: ["'self'", 'blob:'],
+        workerSrc: ["'self'", 'blob:', 'https://t.rari.build'],
       },
       cacheControl: {
         routes: {

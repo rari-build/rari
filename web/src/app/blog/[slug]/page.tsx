@@ -1,9 +1,7 @@
 import type { PageProps } from 'rari'
 import { accessSync, readdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
-import process from 'node:process'
 import MdxRenderer from '@/components/MdxRenderer'
-import { getBlogFilePath, isValidSlug } from '@/lib/content'
+import { getBlogDir, getBlogFilePath, isValidSlug } from '@/lib/content'
 import { extractBasicMetadata } from '@/lib/metadata'
 import { container } from '@/lib/styles'
 
@@ -66,7 +64,7 @@ export function generateMetadata({ params }: PageProps) {
 }
 
 export function generateStaticParams() {
-  const contentDir = join(process.cwd(), 'public', 'content', 'blog')
+  const contentDir = getBlogDir()
 
   try {
     const entries = readdirSync(contentDir)

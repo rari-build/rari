@@ -13,7 +13,7 @@ describe('mdx registry', () => {
   it('discovers only client components referenced in MDX content', () => {
     const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-mdx-registry-'))
     const componentsDir = path.join(projectRoot, 'src', 'components')
-    const contentDir = path.join(projectRoot, 'public', 'content', 'docs')
+    const contentDir = path.join(projectRoot, 'src', 'content', 'docs')
     fs.mkdirSync(componentsDir, { recursive: true })
     fs.mkdirSync(contentDir, { recursive: true })
 
@@ -34,7 +34,7 @@ describe('mdx registry', () => {
     const entries = discoverMdxRegistryEntries({
       projectRoot,
       componentsDir: 'src/components',
-      contentDirs: ['public/content'],
+      contentDirs: ['src/content'],
       cache,
       componentScanDirs: [componentsDir],
     })

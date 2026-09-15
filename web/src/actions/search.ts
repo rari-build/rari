@@ -2,7 +2,7 @@
 
 import { readdir, readFile } from 'node:fs/promises'
 import { join, relative, sep } from 'node:path'
-import process from 'node:process'
+import { getDocsDir } from '@/lib/content'
 import { TITLE_EXPORT_REGEX, WHITESPACE_REGEX } from '@/lib/regex-constants'
 
 export interface SearchResult {
@@ -253,7 +253,7 @@ export async function searchDocumentation(query: string): Promise<SearchResult[]
     .trim()
   if (!normalizedQuery) return []
 
-  const contentDir = join(process.cwd(), 'public', 'content', 'docs')
+  const contentDir = getDocsDir()
 
   const index = await getSearchIndex(contentDir)
 
