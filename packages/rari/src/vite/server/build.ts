@@ -1153,8 +1153,14 @@ export class ServerComponentBuilder {
 
           // Plain CSS (e.g. layout `import './globals.css'`) cannot be bundled by
           // Rolldown. Stub it here; Vite client entry pulls layout CSS for Tailwind.
+          // Preserve Vite semantics for `?raw` / `?url` default exports.
           if (source.endsWith('.css') || /\.css(?:\?.*)?$/.test(source)) {
-            const bare = source.replace(/[?#].*$/, '')
+            const queryIndex = source.search(/[?#]/)
+            const bare = queryIndex === -1 ? source : source.slice(0, queryIndex)
+            const query = queryIndex === -1 ? '' : source.slice(queryIndex)
+            const isRaw = /(?:\?|&)raw(?:&|$)/.test(query)
+            const isUrl = /(?:\?|&)url(?:&|$)/.test(query)
+
             let resolved: string | null = null
 
             if (path.isAbsolute(bare)) {
@@ -1183,6 +1189,8 @@ export class ServerComponentBuilder {
             }
 
             if (resolved != null && resolved !== '' && fs.existsSync(resolved)) {
+              if (isRaw) return { id: `\0css-raw:${resolved}` }
+              if (isUrl) return { id: `\0css-url:${resolved}` }
               return { id: `\0css-global:${resolved}` }
             }
           }
@@ -1192,6 +1200,27 @@ export class ServerComponentBuilder {
         load: async (id: string) => {
           const CSS_MODULE_PREFIX = '\0css-module:'
           const CSS_GLOBAL_PREFIX = '\0css-global:'
+          const CSS_RAW_PREFIX = '\0css-raw:'
+          const CSS_URL_PREFIX = '\0css-url:'
+
+          if (id.startsWith(CSS_RAW_PREFIX)) {
+            const filePath = id.slice(CSS_RAW_PREFIX.length)
+            try {
+              const content = fs.readFileSync(filePath, 'utf-8')
+              return { code: `export default ${JSON.stringify(content)}`, moduleType: 'js' }
+            } catch (e) {
+              throw new Error(
+                `[rari] Failed to read CSS ${filePath}: ${e instanceof Error ? e.message : String(e)}`,
+              )
+            }
+          }
+
+          if (id.startsWith(CSS_URL_PREFIX)) {
+            const filePath = id.slice(CSS_URL_PREFIX.length)
+            const relative = path.relative(this.projectRoot, filePath).replace(/\\/g, '/')
+            const href = relative.startsWith('/') ? relative : `/${relative}`
+            return { code: `export default ${JSON.stringify(href)}`, moduleType: 'js' }
+          }
 
           if (id.startsWith(CSS_GLOBAL_PREFIX)) {
             const filePath = id.slice(CSS_GLOBAL_PREFIX.length)

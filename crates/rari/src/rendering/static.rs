@@ -11,11 +11,12 @@ use crate::{runtime::JsExecutionRuntime, server::routing::app_router::AppRouteMa
 
 fn find_closing_head_tag(html: &str) -> Option<usize> {
     const NEEDLE: &[u8] = b"</head>";
-    let bytes = html.as_bytes();
-    if bytes.len() < NEEDLE.len() {
+    let mut masked = html.as_bytes().to_vec();
+    RscHtmlRenderer::mask_html_for_head_scan_in_place(&mut masked);
+    if masked.len() < NEEDLE.len() {
         return None;
     }
-    bytes.windows(NEEDLE.len()).position(|window| window.eq_ignore_ascii_case(NEEDLE))
+    masked.windows(NEEDLE.len()).position(|window| window.eq_ignore_ascii_case(NEEDLE))
 }
 
 pub fn escape_html(text: &str) -> String {
@@ -254,6 +255,15 @@ import 'virtual:rari-entry-client';
         Self::mask_raw_text_element_in_place(&mut out, b"<style", b"</style>");
         String::from_utf8(out)
             .unwrap_or_else(|err| String::from_utf8_lossy(err.as_bytes()).into_owned())
+    }
+
+    fn mask_html_for_head_scan_in_place(out: &mut [u8]) {
+        Self::mask_html_comments_in_place(out);
+        Self::mask_raw_text_element_in_place(out, b"<script", b"</script>");
+        Self::mask_raw_text_element_in_place(out, b"<style", b"</style>");
+        Self::mask_raw_text_element_in_place(out, b"<title", b"</title>");
+        Self::mask_raw_text_element_in_place(out, b"<textarea", b"</textarea>");
+        Self::mask_raw_text_element_in_place(out, b"<noscript", b"</noscript>");
     }
 
     fn decode_basic_html_entities(value: &str) -> String {
@@ -699,6 +709,36 @@ mod tests {
         let head_close = result.find("</HEAD>").expect("preserves original closing tag");
         let script_pos = result.find(r#"src="/entry.js""#).expect("script inserted");
         assert!(script_pos < head_close);
+    }
+
+    #[test]
+    fn test_inject_head_tags_ignores_false_head_in_script_and_comment() {
+        let html = r#"<!DOCTYPE html><html><head>
+<!-- fake </head> in comment -->
+<script>const s = "</head>";</script>
+<style>.x::before { content: "</head>"; }</style>
+</head><body></body></html>"#;
+        let tags = r#"<script type="module" src="/entry.js"></script>"#;
+
+        let result = RscHtmlRenderer::inject_head_tags(html, tags);
+        let real_close = result.rfind("</head>").expect("real closing head");
+        let script_pos = result.find(r#"src="/entry.js""#).expect("injected script");
+        assert!(script_pos < real_close);
+        assert!(
+            result[..script_pos].contains(r#"const s = "</head>";"#),
+            "must not inject inside the script string"
+        );
+        assert_eq!(result.matches(r#"src="/entry.js""#).count(), 1);
+    }
+
+    #[test]
+    fn test_find_closing_head_tag_across_chunk_concatenation() {
+        let chunk1 = "<html><head><script>var x = '</he";
+        let chunk2 = "ad>';</script></head><body></body></html>";
+        let combined = format!("{chunk1}{chunk2}");
+        let idx = find_closing_head_tag(&combined).expect("real head close");
+        assert_eq!(&combined[idx..idx + 7], "</head>");
+        assert!(idx > combined.find("<script>").expect("script"));
     }
 
     #[test]
