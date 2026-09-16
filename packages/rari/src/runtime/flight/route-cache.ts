@@ -1,11 +1,7 @@
 /* oxlint-disable typescript/prefer-readonly-parameter-types CacheNode is a mutable tree mutated in place by the cache implementation */
 import type { ReactNode } from 'react'
 import type { SegmentPath } from './router-state'
-import {
-  buildFlightRouterState,
-  pathnameFromSegmentPath,
-  segmentPathFromPathname,
-} from './router-state'
+import { segmentPathFromPathname } from './router-state'
 
 export interface CacheNode {
   rsc: ReactNode
@@ -70,7 +66,6 @@ function invalidateFromSegmentPath(root: CacheNode, segmentPath: SegmentPath): v
 
 export class FlightRouteCache {
   private root = createCacheNode()
-  private renderedSearch = ''
 
   get(pathname: string, search: string): FlightRouteCacheEntry | undefined {
     const segmentPath = segmentPathFromPathname(pathname)
@@ -90,10 +85,10 @@ export class FlightRouteCache {
   }
 
   set(pathname: string, search: string, element: ReactNode): void {
+    void search
     const segmentPath = segmentPathFromPathname(pathname)
     const node = getNodeAtSegmentPath(this.root, segmentPath)
     node.rsc = element
-    this.renderedSearch = search
   }
 
   invalidate(pathname: string, search = ''): void {
@@ -101,21 +96,8 @@ export class FlightRouteCache {
     invalidateFromSegmentPath(this.root, segmentPathFromPathname(pathname))
   }
 
-  invalidateSegmentPath(segmentPath: SegmentPath): void {
-    invalidateFromSegmentPath(this.root, segmentPath)
-  }
-
-  getRenderedSearch(): string {
-    return this.renderedSearch
-  }
-
-  getRouterTree(pathname: string) {
-    return buildFlightRouterState(pathname)
-  }
-
   clear(): void {
     this.root = createCacheNode()
-    this.renderedSearch = ''
   }
 }
 
@@ -129,10 +111,3 @@ export function currentRouteLocation(): { pathname: string; search: string } {
     search: window.location.search,
   }
 }
-
-export function currentSegmentPath(): SegmentPath {
-  const { pathname } = currentRouteLocation()
-  return segmentPathFromPathname(pathname)
-}
-
-export { pathnameFromSegmentPath }

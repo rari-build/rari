@@ -1,5 +1,6 @@
 import type { Metadata } from 'rari'
 import { cacheTag } from '@rari/use-cache/runtime/cache-wrapper'
+import RevalidateTagButton from './revalidate-tag-button'
 
 // oxlint-disable-next-line typescript/require-await async is required for the 'use cache' transform
 async function getTaggedCachedValue() {
@@ -15,6 +16,7 @@ export default async function UseCacheRevalidatePage() {
     <div>
       <h1>use cache revalidate Test</h1>
       <p data-testid="cached-value">{value}</p>
+      <RevalidateTagButton />
     </div>
   )
 }

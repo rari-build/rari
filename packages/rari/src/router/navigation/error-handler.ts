@@ -1,4 +1,3 @@
-import { throwIfNotOk } from '@/shared/utils/http'
 import { asError, isError } from '@/shared/utils/type-guards'
 
 export type NavigationErrorType =
@@ -23,14 +22,8 @@ export interface NavigationError {
 const NETWORK_ERROR_REGEX = /fetch|networkerror|load failed/i
 
 export interface NavigationErrorHandlerOptions {
-  readonly timeout?: number
-  readonly maxRetries?: number
   readonly onError?: (error: Readonly<NavigationError>) => void
-  readonly onRetry?: (attempt: number, error: Readonly<NavigationError>) => void
 }
-
-const DEFAULT_TIMEOUT = 10000
-const DEFAULT_MAX_RETRIES = 3
 
 function handleAbortError(error: Error, url?: string): NavigationError {
   return {
@@ -149,55 +142,18 @@ export function createNavigationError(error: unknown, url?: string): NavigationE
   return handleUnknownError(error, url)
 }
 
-/* v8 ignore start - requires actual fetch calls, better tested in integration/e2e */
-export async function fetchWithTimeout(
-  url: string,
-  options: RequestInit & { timeout?: number } = {},
-): Promise<Response> {
-  const timeout = options.timeout ?? DEFAULT_TIMEOUT
-  const { timeout: _timeout, signal: userSignal, ...fetchOptions } = options
-  const timeoutSignal = AbortSignal.timeout(timeout)
-  const signal = userSignal ? AbortSignal.any([userSignal, timeoutSignal]) : timeoutSignal
-
-  try {
-    const response = await fetch(url, {
-      ...fetchOptions,
-      signal,
-    })
-
-    await throwIfNotOk(response)
-    return response
-  } catch (error) {
-    if (error instanceof DOMException && error.name === 'TimeoutError') {
-      const timeoutError = new Error(`Request timeout after ${timeout}ms`)
-      timeoutError.name = 'TimeoutError'
-      throw timeoutError
-    }
-
-    throw error
-  }
-}
-/* v8 ignore stop */
-
 export class NavigationErrorHandler {
-  private readonly options: Required<NavigationErrorHandlerOptions>
-  private readonly retryCount: Map<string, number>
+  private readonly onError: (error: Readonly<NavigationError>) => void
 
   constructor(options: NavigationErrorHandlerOptions = {}) {
-    this.options = {
-      timeout: options.timeout ?? DEFAULT_TIMEOUT,
-      maxRetries: options.maxRetries ?? DEFAULT_MAX_RETRIES,
-      /* v8 ignore next - default no-op callback */
-      onError: options.onError ?? (() => {}),
-      onRetry: options.onRetry ?? (() => {}),
-    }
-    this.retryCount = new Map()
+    /* v8 ignore next - default no-op callback */
+    this.onError = options.onError ?? (() => {})
   }
 
   handleError(error: unknown, url: string): NavigationError {
     const navError = createNavigationError(error, url)
 
-    this.options.onError(navError)
+    this.onError(navError)
 
     console.error('[rari] Navigation:', navError.type, navError.message, {
       url: navError.url,
@@ -206,40 +162,5 @@ export class NavigationErrorHandler {
     })
 
     return navError
-  }
-
-  canRetry(error: NavigationError, url: string): boolean {
-    if (!error.retryable) return false
-
-    const currentRetries = this.retryCount.get(url) ?? 0
-    return currentRetries < this.options.maxRetries
-  }
-
-  incrementRetry(url: string): number {
-    const currentRetries = this.retryCount.get(url) ?? 0
-    const newRetries = currentRetries + 1
-    this.retryCount.set(url, newRetries)
-
-    this.options.onRetry(newRetries, {
-      type: 'fetch-error',
-      message: `Retry attempt ${newRetries}`,
-      url,
-      timestamp: Date.now(),
-      retryable: true,
-    })
-
-    return newRetries
-  }
-
-  resetRetry(url: string): void {
-    this.retryCount.delete(url)
-  }
-
-  getRetryCount(url: string): number {
-    return this.retryCount.get(url) ?? 0
-  }
-
-  clearRetries(): void {
-    this.retryCount.clear()
   }
 }

@@ -6,7 +6,6 @@ import { createFromFetch, createFromReadableStream } from 'virtual:react-flight-
 import { RouterProvider } from '@/router'
 import { asError, errorMessage, getCustomEventDetail, isRecord } from '@/shared/utils/type-guards'
 import { showHydrationFailureBanner } from './boundaries/runtime-error-banner'
-import { getClientComponent } from './shared/get-client-component'
 import {
   clearServerInjectedErrors,
   hasFizzMarkers,
@@ -17,7 +16,6 @@ import { preloadModulesFromFlightProtocol } from './shared/preload-modules'
 import {
   getClientComponentPaths,
   getClientComponents,
-  getRariGlobal,
   getRariWindowBag,
 } from './shared/rari-global'
 import './shared/types'
@@ -70,21 +68,6 @@ function mountApp(content: React.ReactNode) {
   restoreDocumentTitle(ssrTitle)
   notifyClientReady()
 }
-
-const rari = getRariGlobal()
-rari.AppRouterProvider = AppRouterProvider
-rari.ClientRouter = ClientRouter
-rari.getClientComponent = getClientComponent
-
-export async function preloadClientComponent(id: string): Promise<void> {
-  try {
-    await getClientComponent(id)
-  } catch (error) {
-    console.error(`[rari] Failed to preload component ${id}:`, error)
-  }
-}
-
-rari.preloadClientComponent = preloadClientComponent
 
 getClientComponents()
 

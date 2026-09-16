@@ -279,7 +279,6 @@ The hook returns:
 | `refresh()` | Re-render the current route |
 | `prefetch(href)` | Prefetch a route for faster future navigation |
 | `pathname` | Current pathname (reactive) |
-| `params` | Current route parameters (reactive) |
 | `searchParams` | Current URL search params (reactive) |
 
 ### Navigation Options
@@ -296,15 +295,10 @@ If you only need a specific piece of route state, use the focused hooks to avoid
 
 <CodeBlock language="tsx">{`'use client'
 
-import { usePathname, useParams, useSearchParams } from 'rari/router'
+import { usePathname, useSearchParams } from 'rari/router'
 
 function Breadcrumb() {
   const pathname = usePathname()
-  // ...
-}
-
-function ProductPage() {
-  const params = useParams() // { slug: 'my-product' }
   // ...
 }
 

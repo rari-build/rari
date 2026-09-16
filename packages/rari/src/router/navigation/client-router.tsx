@@ -400,17 +400,13 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps): Rea
 
   const errorHandlerRef = useRef<NavigationErrorHandler>(
     new NavigationErrorHandler({
-      timeout: 10000,
-      maxRetries: 3,
       onError: error => {
         console.error('[rari] Router: Navigation error:', error)
       },
-      onRetry: () => {},
     }),
   )
 
   const pendingNavigationsRef = useRef<Map<string, PendingNavigation>>(new Map())
-  const navigationQueueRef = useRef<Array<{ path: string; options: NavigationOptions }>>([])
 
   const statePreserverRef = useRef<StatePreserver>(
     new StatePreserver({
@@ -452,8 +448,6 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps): Rea
       }))
     }
   }
-
-  const processNavigationQueueRef = useRef<(() => Promise<void>) | null>(null)
 
   const handleSameRouteNavigation = (
     hash: string,
@@ -534,7 +528,6 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps): Rea
       error: null,
     }))
 
-    errorHandlerRef.current.resetRetry(actualTargetPath)
     handleScrollAfterNavigation(actualTargetPath, hash, options)
   }
 
@@ -574,8 +567,6 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps): Rea
         }),
       )
     }
-
-    void processNavigationQueueRef.current?.()
   }
 
   const navigate = async (href: string, options: NavigationOptions = {}) => {
@@ -702,7 +693,6 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps): Rea
         completeNavigation(routeIdentity, hash, options, navigationId, settledUrl)
 
         pendingNavigationsRef.current.delete(targetPath)
-        void processNavigationQueueRef.current?.()
       } catch (error) {
         handleNavigationError(error, targetPath, navigationId, fromRoute)
       }
@@ -718,25 +708,12 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps): Rea
     return navigationPromise
   }
 
-  const processNavigationQueue = async () => {
-    if (navigationQueueRef.current.length === 0) return
-
-    const lastNavigation = navigationQueueRef.current.at(-1)
-    if (!lastNavigation) return
-
-    navigationQueueRef.current = []
-
-    await navigate(lastNavigation.path, lastNavigation.options)
-  }
-
   const navigateRef = useRef<typeof navigate | null>(navigate)
 
   useLayoutEffect(() => {
-    processNavigationQueueRef.current = processNavigationQueue
     navigateRef.current = navigate
 
     return () => {
-      processNavigationQueueRef.current = null
       navigateRef.current = null
     }
   })

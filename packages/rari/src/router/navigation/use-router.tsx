@@ -17,7 +17,6 @@ function isRegisterNavigateDetail(
 
 export interface RouterContextValue {
   pathname: string
-  params: Record<string, string | string[]>
   searchParams: URLSearchParams
   push: (href: string, options?: NavigationOptions) => Promise<void>
   replace: (href: string, options?: NavigationOptions) => Promise<void>
@@ -85,7 +84,6 @@ export function RouterProvider({ children, initialPathname }: RouterProviderProp
   const value = useMemo<RouterContextValue>(
     () => ({
       pathname,
-      params: {},
       searchParams,
       push: async (href: string, options?: NavigationOptions) => {
         if (navigateRef.current) {
@@ -143,12 +141,6 @@ export function useRouter(): RouterContextValue {
 export function usePathname(): string {
   const router = useRouter()
   return router.pathname
-}
-
-// eslint-disable-next-line react-refresh/only-export-components
-export function useParams(): Record<string, string | string[]> {
-  const router = useRouter()
-  return router.params
 }
 
 // eslint-disable-next-line react-refresh/only-export-components

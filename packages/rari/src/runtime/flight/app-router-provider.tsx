@@ -19,7 +19,6 @@ import {
 import { ActionDidRevalidateStaticAndDynamic } from '../actions/revalidation-kind'
 import { HmrFailureBanner } from '../boundaries/hmr-failure-banner'
 import { preloadModulesFromFlightProtocol } from '../shared/preload-modules'
-import { getRariWindowBag } from '../shared/rari-global'
 import {
   commitNavigationPayload,
   resolveNavigationTransitionTypes,
@@ -631,11 +630,6 @@ export function AppRouterProvider({
       preloadedModuleIdsRef.current.clear()
       currentNavigationIdRef.current = detail.navigationId
       pendingScrollPayloadRef.current = null
-
-      if (typeof window !== 'undefined') {
-        const windowRari = getRariWindowBag()
-        if (windowRari) windowRari.navigationId = detail.navigationId
-      }
     }
 
     const handleManifestUpdated = async () => {

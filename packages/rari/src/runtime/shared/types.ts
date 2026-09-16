@@ -53,11 +53,6 @@ export type RariGlobalBag = NonNullable<GlobalWithRari['~rari']>
 export interface GlobalWithRari {
   '~rari'?: {
     isDevelopment?: boolean
-    navigationId?: number
-    AppRouterProvider?: any
-    ClientRouter?: any
-    getClientComponent?: (id: string) => Promise<any>
-    preloadClientComponent?: (id: string) => Promise<void>
     streaming?: {
       enabled?: boolean
       complete?: boolean

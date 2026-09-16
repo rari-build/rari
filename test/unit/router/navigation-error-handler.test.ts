@@ -238,24 +238,15 @@ describe('createNavigationError', () => {
 describe('navigation error handler', () => {
   let handler: NavigationErrorHandler
   let onErrorSpy: ReturnType<typeof vi.fn<(error: any) => void>>
-  let onRetrySpy: ReturnType<typeof vi.fn<(attempt: number, error: any) => void>>
-  let originalWindow: (Window & typeof globalThis) | undefined
 
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2024-01-15T10:00:00Z'))
     onErrorSpy = vi.fn<(error: any) => void>()
-    onRetrySpy = vi.fn<(attempt: number, error: any) => void>()
-    originalWindow = globalThis.window
   })
 
   afterEach(() => {
     vi.useRealTimers()
-    if (originalWindow === undefined) {
-      delete (globalThis as { window?: unknown }).window
-    } else {
-      globalThis.window = originalWindow
-    }
   })
 
   describe('constructor', () => {
@@ -265,26 +256,12 @@ describe('navigation error handler', () => {
       expect(handler).toBeDefined()
     })
 
-    it('should create handler with custom options', () => {
+    it('should create handler with custom onError', () => {
       handler = new NavigationErrorHandler({
-        timeout: 5000,
-        maxRetries: 5,
         onError: onErrorSpy,
-        onRetry: onRetrySpy,
       })
 
       expect(handler).toBeDefined()
-    })
-
-    it('should use default callbacks when not provided', () => {
-      handler = new NavigationErrorHandler({
-        timeout: 5000,
-        maxRetries: 5,
-      })
-
-      expect(() => {
-        handler.incrementRetry('https://example.com')
-      }).not.toThrow()
     })
   })
 
@@ -306,111 +283,6 @@ describe('navigation error handler', () => {
       expect(result.message).toBe('Test error')
       expect(onErrorSpy).toHaveBeenCalledWith(result)
       expect(console.error).toHaveBeenCalled()
-    })
-  })
-
-  describe('retry logic', () => {
-    beforeEach(() => {
-      handler = new NavigationErrorHandler({
-        maxRetries: 3,
-        onRetry: onRetrySpy,
-      })
-    })
-
-    it('should allow retry for retryable error', () => {
-      const error = {
-        type: 'timeout' as const,
-        message: 'Timeout',
-        timestamp: Date.now(),
-        retryable: true,
-      }
-
-      const canRetry = handler.canRetry(error, 'https://example.com')
-
-      expect(canRetry).toBe(true)
-    })
-
-    it('should not allow retry for non-retryable error', () => {
-      const error = {
-        type: 'abort' as const,
-        message: 'Aborted',
-        timestamp: Date.now(),
-        retryable: false,
-      }
-
-      const canRetry = handler.canRetry(error, 'https://example.com')
-
-      expect(canRetry).toBe(false)
-    })
-
-    it('should not allow retry after max retries', () => {
-      const error = {
-        type: 'timeout' as const,
-        message: 'Timeout',
-        timestamp: Date.now(),
-        retryable: true,
-      }
-      const url = 'https://example.com'
-
-      handler.incrementRetry(url)
-      handler.incrementRetry(url)
-      handler.incrementRetry(url)
-
-      const canRetry = handler.canRetry(error, url)
-
-      expect(canRetry).toBe(false)
-    })
-
-    it('should increment retry count', () => {
-      const url = 'https://example.com'
-
-      const count1 = handler.incrementRetry(url)
-      const count2 = handler.incrementRetry(url)
-
-      expect(count1).toBe(1)
-      expect(count2).toBe(2)
-      expect(onRetrySpy).toHaveBeenCalledTimes(2)
-    })
-
-    it('should get retry count', () => {
-      const url = 'https://example.com'
-
-      handler.incrementRetry(url)
-      handler.incrementRetry(url)
-
-      const count = handler.getRetryCount(url)
-
-      expect(count).toBe(2)
-    })
-
-    it('should return 0 for URL with no retries', () => {
-      const count = handler.getRetryCount('https://example.com')
-
-      expect(count).toBe(0)
-    })
-
-    it('should reset retry count for URL', () => {
-      const url = 'https://example.com'
-
-      handler.incrementRetry(url)
-      handler.incrementRetry(url)
-      handler.resetRetry(url)
-
-      const count = handler.getRetryCount(url)
-
-      expect(count).toBe(0)
-    })
-
-    it('should clear all retry counts', () => {
-      handler.incrementRetry('https://example.com/1')
-      handler.incrementRetry('https://example.com/2')
-      handler.incrementRetry('https://example.com/3')
-
-      handler.clearRetries()
-
-      expect(handler.getRetryCount('https://example.com/1')).toBe(0)
-      expect(handler.getRetryCount('https://example.com/2')).toBe(0)
-      expect(handler.getRetryCount('https://example.com/3')).toBe(0)
     })
   })
 })

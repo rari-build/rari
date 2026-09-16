@@ -1,10 +1,8 @@
 #![expect(clippy::missing_errors_doc)]
 
-use std::{env, sync::Arc};
+use std::sync::Arc;
 
-use axum::{extract::State, http::StatusCode, response::Json};
 use rari_error::RariError;
-use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
 use crate::{
@@ -12,47 +10,6 @@ use crate::{
     runtime::factory::JsRuntimeInterface,
     server::{ServerState, cache::response},
 };
-
-fn constant_time_eq(a: &str, b: &str) -> bool {
-    let a = a.as_bytes();
-    let b = b.as_bytes();
-    let mut diff = a.len() ^ b.len();
-    if !b.is_empty() {
-        for i in 0..a.len() {
-            diff |= usize::from(a[i] ^ b[i % b.len()]);
-        }
-    }
-    if !a.is_empty() {
-        for i in 0..b.len() {
-            diff |= usize::from(a[i % a.len()] ^ b[i]);
-        }
-    }
-    diff == 0
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(tag = "type", rename_all = "lowercase")]
-#[non_exhaustive]
-pub enum RevalidateRequest {
-    Path {
-        path: String,
-        #[serde(default)]
-        secret: Option<String>,
-    },
-    Tag {
-        tag: String,
-        #[serde(default)]
-        secret: Option<String>,
-    },
-}
-
-#[derive(Debug, Serialize)]
-#[non_exhaustive]
-pub struct RevalidateResponse {
-    pub revalidated: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub message: Option<String>,
-}
 
 pub(crate) async fn invalidate_use_cache_entries(
     renderer: &Arc<Mutex<RscRenderer>>,
@@ -156,92 +113,4 @@ async fn invalidate_route_caches_inner(
         );
         RariError::from(format!("layout cache clear error: {e}"))
     })
-}
-
-#[axum::debug_handler]
-pub async fn revalidate_by_path(
-    State(state): State<ServerState>,
-    Json(request): Json<RevalidateRequest>,
-) -> Result<Json<RevalidateResponse>, StatusCode> {
-    let expected_secret = env::var("RARI_REVALIDATE_SECRET").map_err(|_| {
-        tracing::error!("RARI_REVALIDATE_SECRET not configured. Set this environment variable to enable revalidation.");
-        StatusCode::FORBIDDEN
-    })?;
-
-    match &request {
-        RevalidateRequest::Path { path, secret } => {
-            match secret {
-                Some(provided_secret) if constant_time_eq(provided_secret, &expected_secret) => {}
-                _ => {
-                    return Ok(Json(RevalidateResponse {
-                        revalidated: false,
-                        message: Some("Invalid or missing secret".to_string()),
-                    }));
-                }
-            }
-
-            let res = match invalidate_route_caches(&state, path).await {
-                Ok(()) => RevalidateResponse {
-                    revalidated: true,
-                    message: Some(format!("Revalidated path: {path}")),
-                },
-                Err(e) => {
-                    tracing::error!(error = %e, path = %path, "route cache invalidation failed");
-                    RevalidateResponse {
-                        revalidated: false,
-                        message: Some(format!(
-                            "Revalidation failed: layout cache clear error: {e}"
-                        )),
-                    }
-                }
-            };
-
-            Ok(Json(res))
-        }
-        RevalidateRequest::Tag { tag, secret } => {
-            match secret {
-                Some(provided_secret) if constant_time_eq(provided_secret, &expected_secret) => {}
-                _ => {
-                    return Ok(Json(RevalidateResponse {
-                        revalidated: false,
-                        message: Some("Invalid or missing secret".to_string()),
-                    }));
-                }
-            }
-
-            state.response_cache.invalidate_by_tag(tag).await;
-            response::invalidate_static_fast_cache_for_path(&state.static_fast_cache, tag);
-            let use_cache_result =
-                invalidate_use_cache_entries(&state.renderer, Some(tag), None).await;
-
-            let layout_result = state.layout_html_cache.invalidate_by_tag(tag).await;
-
-            let res = match (layout_result, use_cache_result) {
-                (Ok(()), Ok(())) => RevalidateResponse {
-                    revalidated: true,
-                    message: Some(format!("Revalidated tag: {tag}")),
-                },
-                (Err(e), _) => {
-                    tracing::error!(error = %e, tag = %tag, "layout_html_cache.invalidate_by_tag failed");
-                    RevalidateResponse {
-                        revalidated: false,
-                        message: Some(format!(
-                            "Revalidation failed: layout cache invalidate_by_tag error: {e}"
-                        )),
-                    }
-                }
-                (Ok(()), Err(e)) => {
-                    tracing::error!(error = %e, tag = %tag, "use cache invalidate script failed");
-                    RevalidateResponse {
-                        revalidated: false,
-                        message: Some(format!(
-                            "Revalidation failed: use cache invalidate error: {e}"
-                        )),
-                    }
-                }
-            };
-
-            Ok(Json(res))
-        }
-    }
 }
