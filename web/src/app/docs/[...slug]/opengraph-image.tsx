@@ -4,7 +4,7 @@ import { getDocsFilePath, isValidSlugArray } from '@/lib/content'
 import { extractBasicMetadata } from '@/lib/metadata'
 import { generateOGImage } from '@/lib/og-image'
 
-export default async function Image({ params }: PageProps) {
+export default async function Image({ params }: PageProps<'/docs/[...slug]'>) {
   const slug = params.slug
   let title = 'rari Docs'
   let description = 'Complete documentation for rari framework.'

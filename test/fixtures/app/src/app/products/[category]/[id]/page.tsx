@@ -1,6 +1,6 @@
 import type { Metadata, PageProps } from 'rari'
 
-export default function ProductPage({ params }: PageProps) {
+export default function ProductPage({ params }: PageProps<'/products/[category]/[id]'>) {
   const { category, id } = params
 
   return (
@@ -14,11 +14,11 @@ export default function ProductPage({ params }: PageProps) {
   )
 }
 
-export function generateMetadata({ params }: PageProps): Metadata {
+export function generateMetadata({ params }: PageProps<'/products/[category]/[id]'>): Metadata {
   const { category, id } = params
 
   return {
-    title: `${String(category)} - Product ${String(id)}`,
-    description: `Product ${String(id)} in ${String(category)} category`,
+    title: `${category} - Product ${id}`,
+    description: `Product ${id} in ${category} category`,
   }
 }

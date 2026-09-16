@@ -147,7 +147,7 @@ Access route parameters to generate dynamic images based on the URL:
 <CodeBlock filename="src/app/blog/[slug]/opengraph-image.tsx" language="tsx">{`import type { PageProps } from 'rari'
 import { ImageResponse } from 'rari/og'
 
-export default function Image({ params }: PageProps<{ slug: string }>) {
+export default function Image({ params }: PageProps<'/blog/[slug]'>) {
   return new ImageResponse(
     <div
       style={{
@@ -179,7 +179,7 @@ async function getPost(slug: string) {
   return res.json()
 }
 
-export default async function Image({ params }: PageProps<{ slug: string }>) {
+export default async function Image({ params }: PageProps<'/blog/[slug]'>) {
   const post = await getPost(params.slug)
 
   return new ImageResponse(
@@ -327,7 +327,7 @@ import { ImageResponse } from 'rari/og'
 
 export const size = { width: 1200, height: 630 }
 
-export default async function Image({ params }: PageProps<{ slug: string }>) {
+export default async function Image({ params }: PageProps<'/blog/[slug]'>) {
   const post = await fetch(\`https://api.example.com/posts/\${params.slug}\`)
     .then(res => res.json())
 
@@ -390,7 +390,7 @@ async function getProduct(id: string) {
   return res.json()
 }
 
-export default async function Image({ params }: PageProps<{ id: string }>) {
+export default async function Image({ params }: PageProps<'/products/[id]'>) {
   const product = await getProduct(params.id)
 
   return new ImageResponse(
@@ -462,7 +462,7 @@ async function getArticle(id: string) {
   return res.json()
 }
 
-export default async function Image({ params }: PageProps<{ id: string }>) {
+export default async function Image({ params }: PageProps<'/articles/[id]'>) {
   const article = await getArticle(params.id)
 
   return new ImageResponse(

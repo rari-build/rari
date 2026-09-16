@@ -250,7 +250,7 @@ Fetch data that depends on previous requests:
 
 <CodeBlock filename="src/app/users/[id]/page.tsx" language="tsx">{`import type { PageProps } from 'rari'
 
-export default async function UserPage({ params }: PageProps<{ id: string }>) {
+export default async function UserPage({ params }: PageProps<'/users/[id]'>) {
   // First fetch user
   const user = await fetch(\`https://api.example.com/users/\${params.id}\`)
     .then(r => r.json())

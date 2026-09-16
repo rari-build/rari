@@ -14,6 +14,7 @@ export type {
   LayoutProps,
   Metadata,
   PageProps,
+  ParamsOf,
   Register,
   RouteParams,
   SearchParams,

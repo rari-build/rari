@@ -31,7 +31,7 @@ Use the `generateMetadata` function to create metadata based on route parameters
 
 <CodeBlock filename="src/app/blog/[slug]/page.tsx" language="tsx">{`import type { PageProps, Metadata } from 'rari'
 
-export async function generateMetadata({ params }: PageProps<{ slug: string }>): Promise<Metadata> {
+export async function generateMetadata({ params }: PageProps<'/blog/[slug]'>): Promise<Metadata> {
   const post = await fetchPost(params.slug)
 
   return {
@@ -41,7 +41,7 @@ export async function generateMetadata({ params }: PageProps<{ slug: string }>):
   }
 }
 
-export default async function BlogPost({ params }: PageProps<{ slug: string }>) {
+export default async function BlogPost({ params }: PageProps<'/blog/[slug]'>) {
   const post = await fetchPost(params.slug)
   return <article>{post.content}</article>
 }
@@ -214,7 +214,7 @@ Generate Open Graph images dynamically by creating an `opengraph-image.tsx` file
 <CodeBlock filename="src/app/blog/[slug]/opengraph-image.tsx" language="tsx">{`import type { PageProps } from 'rari'
 import { ImageResponse } from 'rari/og'
 
-export default async function Image({ params }: PageProps<{ slug: string }>) {
+export default async function Image({ params }: PageProps<'/blog/[slug]'>) {
   const post = await fetchPost(params.slug)
 
   return new ImageResponse(
@@ -404,7 +404,7 @@ Here's a comprehensive example combining multiple metadata features:
 
 <CodeBlock filename="src/app/products/[id]/page.tsx" language="tsx">{`import type { PageProps, Metadata } from 'rari'
 
-export async function generateMetadata({ params }: PageProps<{ id: string }>): Promise<Metadata> {
+export async function generateMetadata({ params }: PageProps<'/products/[id]'>): Promise<Metadata> {
   const product = await fetchProduct(params.id)
 
   return {
@@ -442,7 +442,7 @@ export async function generateMetadata({ params }: PageProps<{ id: string }>): P
   }
 }
 
-export default async function ProductPage({ params }: PageProps<{ id: string }>) {
+export default async function ProductPage({ params }: PageProps<'/products/[id]'>) {
   const product = await fetchProduct(params.id)
 
   return (

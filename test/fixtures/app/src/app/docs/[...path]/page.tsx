@@ -7,7 +7,7 @@ function normalizePathSegments(path: string | readonly string[] | undefined): st
   return [...path]
 }
 
-export default function DocsPage({ params }: PageProps) {
+export default function DocsPage({ params }: PageProps<'/docs/[...path]'>) {
   const pathArray = normalizePathSegments(params.path)
   const pathString = pathArray.join('/')
 
@@ -27,7 +27,7 @@ export default function DocsPage({ params }: PageProps) {
   )
 }
 
-export function generateMetadata({ params }: PageProps): Metadata {
+export function generateMetadata({ params }: PageProps<'/docs/[...path]'>): Metadata {
   const pathArray = normalizePathSegments(params.path)
   const pathString = pathArray.join('/')
 

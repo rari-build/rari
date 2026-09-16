@@ -15,7 +15,7 @@ function paramsTypeFromSegments(segments: readonly RouteSegment[]): string {
 
   for (const segment of segments) {
     if (segment.param == null) continue
-    const valueType = segment.type === 'dynamic' ? 'string' : 'string[]'
+    const valueType = segment.type === 'dynamic' ? 'string' : 'readonly string[]'
     fields.push(`readonly ${escapeIdent(segment.param)}: ${valueType}`)
   }
 

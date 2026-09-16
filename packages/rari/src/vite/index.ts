@@ -2399,6 +2399,7 @@ export type {
   LoadingEntry,
   NotFoundEntry,
   PageProps,
+  ParamsOf,
   Register,
   RouteParams,
   RouteSegment,

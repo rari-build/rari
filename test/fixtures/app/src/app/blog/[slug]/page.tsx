@@ -1,6 +1,6 @@
 import type { Metadata, PageProps } from 'rari'
 
-export default function BlogPostPage({ params }: PageProps) {
+export default function BlogPostPage({ params }: PageProps<'/blog/[slug]'>) {
   const { slug } = params
 
   return (
@@ -13,10 +13,10 @@ export default function BlogPostPage({ params }: PageProps) {
   )
 }
 
-export function generateMetadata({ params }: PageProps): Metadata {
+export function generateMetadata({ params }: PageProps<'/blog/[slug]'>): Metadata {
   const { slug } = params
   return {
-    title: `Blog: ${String(slug)}`,
-    description: `Blog post about ${String(slug)}`,
+    title: `Blog: ${slug}`,
+    description: `Blog post about ${slug}`,
   }
 }

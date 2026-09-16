@@ -77,8 +77,8 @@ describe('generateRouteTypesDts', () => {
 
     expect(dts).toContain('"/": Record<string, never>')
     expect(dts).toContain('"/blog/[slug]": { readonly slug: string }')
-    expect(dts).toContain('"/docs/[...slug]": { readonly slug: string[] }')
-    expect(dts).toContain('"/shop/[[...categories]]": { readonly categories: string[] }')
+    expect(dts).toContain('"/docs/[...slug]": { readonly slug: readonly string[] }')
+    expect(dts).toContain('"/shop/[[...categories]]": { readonly categories: readonly string[] }')
     expect(dts).toMatch(/"\/": Record<string, never>,/)
   })
 

@@ -4,7 +4,7 @@ import { getBlogFilePath, isValidSlug } from '@/lib/content'
 import { extractBasicMetadata } from '@/lib/metadata'
 import { generateOGImage } from '@/lib/og-image'
 
-export default async function Image({ params }: PageProps) {
+export default async function Image({ params }: PageProps<'/blog/[slug]'>) {
   const slug = params.slug
   let title = 'rari Blog'
 

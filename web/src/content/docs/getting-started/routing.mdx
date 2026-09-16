@@ -128,7 +128,7 @@ Layouts receive `children` (required) and optionally `params` and `pathname`:
 
 <CodeBlock filename="src/app/users/[id]/layout.tsx" language="tsx">{`import type { LayoutProps } from 'rari'
 
-export default function UserLayout({ children, params, pathname }: LayoutProps<{ id: string }>) {
+export default function UserLayout({ children, params, pathname }: LayoutProps<'/users/[id]'>) {
   return (
     <div>
       <p>Current path: {pathname}</p>
@@ -206,7 +206,7 @@ export default function DocsPage({ params }: PageProps<'/docs/[[...slug]]'>) {
 }
 `}</CodeBlock>
 
-Optional catch-all params are always a `string[]` (empty when the route matches with no extra segments).
+Optional catch-all params are always a `readonly string[]` (empty when the route matches with no extra segments).
 
 ### Route Priority
 

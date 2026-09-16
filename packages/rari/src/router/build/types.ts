@@ -185,6 +185,12 @@ type RegisteredRoutes = AppRegister extends { routes: infer R }
     : Record<string, RouteParams>
   : Record<string, RouteParams>
 
+type AppRoutePath = string extends keyof RegisteredRoutes
+  ? string
+  : Extract<keyof RegisteredRoutes, string>
+
+type Prettify<T> = { [K in keyof T]: T[K] } & {}
+
 type ResolveParams<T> = T extends string
   ? string extends keyof RegisteredRoutes
     ? RouteParams
@@ -195,19 +201,27 @@ type ResolveParams<T> = T extends string
     ? T
     : RouteParams
 
-export type PageProps<
-  TParamsOrRoute extends string | RouteParams = RouteParams,
-  TSearchParams extends SearchParams = SearchParams,
-> = Readonly<{
-  params: ResolveParams<TParamsOrRoute>
-  searchParams: TSearchParams
-}>
+export type ParamsOf<T extends AppRoutePath | RouteParams = RouteParams> = Prettify<
+  ResolveParams<T>
+>
 
-export type LayoutProps<TParamsOrRoute extends string | RouteParams = RouteParams> = Readonly<{
-  children: ReactNode
-  params?: ResolveParams<TParamsOrRoute>
-  pathname?: string
-}>
+export type PageProps<
+  TParamsOrRoute extends AppRoutePath | RouteParams = RouteParams,
+  TSearchParams extends SearchParams = SearchParams,
+> = Prettify<
+  Readonly<{
+    params: ResolveParams<TParamsOrRoute>
+    searchParams: TSearchParams
+  }>
+>
+
+export type LayoutProps<TParamsOrRoute extends AppRoutePath | RouteParams = RouteParams> = Prettify<
+  Readonly<{
+    children: ReactNode
+    params?: ResolveParams<TParamsOrRoute>
+    pathname?: string
+  }>
+>
 
 export interface ErrorProps {
   readonly error: Error
@@ -226,15 +240,16 @@ export interface AppRouteMatch {
 }
 
 export type GenerateMetadata<
-  TParamsOrRoute extends string | RouteParams = RouteParams,
+  TParamsOrRoute extends AppRoutePath | RouteParams = RouteParams,
   TSearchParams extends SearchParams = SearchParams,
 > = (
-  props: Readonly<{
-    params: ResolveParams<TParamsOrRoute>
-    searchParams: TSearchParams
-  }>,
+  props: Prettify<
+    Readonly<{
+      params: ResolveParams<TParamsOrRoute>
+      searchParams: TSearchParams
+    }>
+  >,
 ) => RouteMetadata | Promise<RouteMetadata>
 
-export type GenerateStaticParams<TParamsOrRoute extends string | RouteParams = RouteParams> = () =>
-  | ResolveParams<TParamsOrRoute>[]
-  | Promise<ResolveParams<TParamsOrRoute>[]>
+export type GenerateStaticParams<TParamsOrRoute extends AppRoutePath | RouteParams = RouteParams> =
+  () => ResolveParams<TParamsOrRoute>[] | Promise<ResolveParams<TParamsOrRoute>[]>

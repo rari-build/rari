@@ -7,7 +7,7 @@ function normalizeCategories(categories: string | readonly string[] | undefined)
   return [...categories]
 }
 
-export default function ShopPage({ params }: PageProps) {
+export default function ShopPage({ params }: PageProps<'/shop/[[...categories]]'>) {
   const { categories } = params
   const categoriesArray = normalizeCategories(categories)
   const hasCategories = categoriesArray.length > 0
@@ -35,7 +35,7 @@ export default function ShopPage({ params }: PageProps) {
   )
 }
 
-export function generateMetadata({ params }: PageProps): Metadata {
+export function generateMetadata({ params }: PageProps<'/shop/[[...categories]]'>): Metadata {
   const { categories } = params
   const categoriesArray = normalizeCategories(categories)
   const title = categoriesArray.length > 0 ? `Shop: ${categoriesArray.join(' > ')}` : 'Shop'

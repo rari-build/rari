@@ -11,7 +11,7 @@ const DEFAULT_METADATA = {
   description: 'Complete documentation for rari framework.',
 }
 
-export default function DocPage({ params }: PageProps) {
+export default function DocPage({ params }: PageProps<'/docs/[...slug]'>) {
   const slug = params.slug
 
   if (!isValidSlugArray(slug))
@@ -27,7 +27,7 @@ export default function DocPage({ params }: PageProps) {
   )
 }
 
-export function getData({ params }: PageProps) {
+export function getData({ params }: PageProps<'/docs/[...slug]'>) {
   const slug = params.slug
 
   if (!isValidSlugArray(slug)) return { notFound: true }
@@ -40,7 +40,7 @@ export function getData({ params }: PageProps) {
   }
 }
 
-export function generateMetadata({ params }: PageProps) {
+export function generateMetadata({ params }: PageProps<'/docs/[...slug]'>) {
   const slug = params.slug
 
   if (!isValidSlugArray(slug)) return DEFAULT_METADATA

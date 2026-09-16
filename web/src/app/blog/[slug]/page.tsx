@@ -10,7 +10,7 @@ const DEFAULT_METADATA = {
   description: 'Latest news and updates from the rari team.',
 }
 
-export default function BlogPage({ params }: PageProps) {
+export default function BlogPage({ params }: PageProps<'/blog/[slug]'>) {
   const slug = params.slug
 
   if (!isValidSlug(slug)) return <div className={container.base}>Invalid blog post path.</div>
@@ -22,7 +22,7 @@ export default function BlogPage({ params }: PageProps) {
   )
 }
 
-export function getData({ params }: PageProps) {
+export function getData({ params }: PageProps<'/blog/[slug]'>) {
   const slug = params.slug
 
   if (!isValidSlug(slug)) return { notFound: true }
@@ -35,7 +35,7 @@ export function getData({ params }: PageProps) {
   }
 }
 
-export function generateMetadata({ params }: PageProps) {
+export function generateMetadata({ params }: PageProps<'/blog/[slug]'>) {
   const slug = params.slug
 
   if (!isValidSlug(slug)) return DEFAULT_METADATA
