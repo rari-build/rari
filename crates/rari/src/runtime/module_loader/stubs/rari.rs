@@ -2,7 +2,6 @@ pub const RARI_ROUTER_STUB: &str = r"
 export function useRouter() {
   return {
     pathname: '',
-    params: {},
     searchParams: new URLSearchParams(),
     push() { return Promise.resolve(); },
     replace() { return Promise.resolve(); },
@@ -14,10 +13,9 @@ export function useRouter() {
 }
 
 export function usePathname() { return ''; }
-export function useParams() { return {}; }
 export function useSearchParams() { return new URLSearchParams(); }
 
-export default { useRouter, usePathname, useParams, useSearchParams };
+export default { useRouter, usePathname, useSearchParams };
 ";
 
 pub const RARI_HEADERS_STUB: &str = r"

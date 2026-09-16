@@ -39,7 +39,6 @@ export default defineConfig({
     env: {
       NODE_ENV: 'production',
       RUST_LOG: 'debug',
-      RARI_REVALIDATE_SECRET: 'e2e-test-secret',
     },
   },
 

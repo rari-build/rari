@@ -1,5 +1,5 @@
 import type { ActionFlightRefreshDetail } from '@rari/runtime/actions/flight-refresh'
-import { refreshRouter, scheduleActionFlightRefresh } from '@rari/runtime/actions/flight-refresh'
+import { scheduleActionFlightRefresh } from '@rari/runtime/actions/flight-refresh'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { castMock } from '../../helpers/mock-cast'
 
@@ -103,13 +103,5 @@ describe('action-flight-refresh', () => {
     expect(refreshEvent.type).toBe('rari:action-flight-refresh')
     expect(refreshEvent.detail.element).toBe(thenable)
     expect(refreshEvent.detail.revalidationKind).toBe(2)
-  })
-
-  it('refreshRouter dispatches app router rerender', () => {
-    refreshRouter()
-
-    expect(globalThis.dispatchEvent).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'rari:app-router-rerender' }),
-    )
   })
 })

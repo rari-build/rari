@@ -19,7 +19,7 @@ export interface StatePreserverConfig {
 
 export class StatePreserver {
   private readonly stateHistory: Map<string, PreservedState>
-  private routeAccessOrder: string[]
+  private readonly routeAccessOrder: string[]
   private readonly maxHistorySize: number
   private readonly scrollableSelector: string
 
@@ -127,29 +127,6 @@ export class StatePreserver {
       const oldestRoute = this.routeAccessOrder.shift()
       if (oldestRoute != null && oldestRoute !== '') this.stateHistory.delete(oldestRoute)
     }
-  }
-
-  public getHistorySize(): number {
-    return this.stateHistory.size
-  }
-
-  public hasState(route: string): boolean {
-    return this.stateHistory.has(route)
-  }
-
-  public getState(route: string): PreservedState | undefined {
-    return this.stateHistory.get(route)
-  }
-
-  public clearAll(): void {
-    this.stateHistory.clear()
-    this.routeAccessOrder = []
-  }
-
-  public clearState(route: string): void {
-    this.stateHistory.delete(route)
-    const index = this.routeAccessOrder.indexOf(route)
-    if (index !== -1) this.routeAccessOrder.splice(index, 1)
   }
 
   public restoreState(route: string): boolean {

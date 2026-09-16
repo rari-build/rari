@@ -94,12 +94,6 @@ export function scheduleActionFlightRefresh(
   })
 }
 
-export function refreshRouter(): void {
-  if (typeof globalThis.dispatchEvent !== 'function') return
-
-  globalThis.dispatchEvent(new CustomEvent('rari:app-router-rerender'))
-}
-
 export {
   ActionDidNotRevalidate,
   ActionDidRevalidateDynamicOnly,

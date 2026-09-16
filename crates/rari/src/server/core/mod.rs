@@ -38,10 +38,7 @@ use crate::{
     runtime::JsExecutionRuntime,
     server::{
         actions::{handle_page_server_action, handle_server_action},
-        cache::{
-            handler::CacheHandlerRegistry, loader::CacheLoader, response,
-            revalidate::revalidate_by_path, warmup,
-        },
+        cache::{handler::CacheHandlerRegistry, loader::CacheLoader, response, warmup},
         config::{
             CACHE_LAYER_FETCH, CACHE_LAYER_IMAGE, CACHE_LAYER_LAYOUT, CACHE_LAYER_MODULE,
             CACHE_LAYER_OG, CACHE_LAYER_RESPONSE, Config,
@@ -318,7 +315,6 @@ impl Server {
     }
 
     fn build_router(config: &Config, mut state: ServerState) -> Router {
-        let small_body_limit = DefaultBodyLimit::max(100 * 1024);
         let medium_body_limit = DefaultBodyLimit::max(1024 * 1024);
 
         let image_cache = Arc::new(ImageCache::with_handler(
@@ -335,16 +331,11 @@ impl Server {
 
         let image_state = ImageState { optimizer: image_optimizer };
 
-        let revalidation_router = Router::new()
-            .route("/_rari/revalidate", routing::post(revalidate_by_path))
-            .layer(small_body_limit);
-
         let mut router = Router::new()
             .route("/_rari/health", routing::get(health_check))
             .layer(medium_body_limit)
             .route("/_rari/action", routing::post(handle_server_action))
-            .layer(medium_body_limit)
-            .merge(revalidation_router);
+            .layer(medium_body_limit);
 
         let image_router = Router::new()
             .route("/_rari/image", routing::get(handle_image_request))
