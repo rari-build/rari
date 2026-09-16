@@ -4,7 +4,6 @@ pub mod api_routes;
 pub mod app;
 pub mod app_icons;
 pub mod app_router;
-pub mod route_info;
 pub mod routes_manifest;
 pub mod types;
 

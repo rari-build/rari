@@ -60,7 +60,6 @@ use crate::{
             api_routes,
             app::handle_app_route,
             app_router,
-            route_info::get_route_info,
         },
         static_assets::{
             cors_preflight_ok, root_handler, serve_static_asset, static_or_spa_handler,
@@ -343,8 +342,6 @@ impl Server {
         let mut router = Router::new()
             .route("/_rari/health", routing::get(health_check))
             .layer(medium_body_limit)
-            .route("/_rari/route-info", routing::post(get_route_info))
-            .layer(small_body_limit)
             .route("/_rari/action", routing::post(handle_server_action))
             .layer(medium_body_limit)
             .merge(revalidation_router);

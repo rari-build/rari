@@ -260,9 +260,6 @@ if (import.meta.hot) {
           }
         }
 
-        const windowRari = getRariWindowBag()
-        if (data.manifestUpdated && windowRari?.routeInfoCache) windowRari.routeInfoCache.clear()
-
         window.dispatchEvent(
           new CustomEvent('rari:app-router-rerender', {
             detail: {

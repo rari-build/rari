@@ -52,7 +52,6 @@ declare module 'virtual:client-router' {
   export interface ClientRouterProps {
     readonly children: React.ReactNode
     readonly initialRoute: string
-    readonly staleWindowMs?: number
   }
 
   export function ClientRouter(props: ClientRouterProps): React.ReactNode
