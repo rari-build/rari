@@ -55,10 +55,14 @@ const APP_DIR_KEY = String.raw`['"]?appDir['"]?`
 const EXTENSIONS_KEY = String.raw`['"]?extensions['"]?`
 
 function readRouterBlock(configSource: string): string | null {
-  const match = new RegExp(String.raw`(?:^|[,{\s])${ROUTER_KEY}\s*:\s*\{([^}]*)\}`).exec(
-    stripConfigComments(configSource),
-  )
-  return match?.[1] ?? null
+  const probe = stripConfigNoise(configSource)
+  const match = new RegExp(String.raw`(?:^|[,{\s])${ROUTER_KEY}\s*:\s*\{([^}]*)\}`).exec(probe)
+  if (match?.[1] == null) return null
+
+  const openBrace = match.index + match[0].indexOf('{')
+  const start = openBrace + 1
+  const end = start + match[1].length
+  return stripConfigComments(configSource).slice(start, end)
 }
 
 function quotedPropertyNameEnd(source: string, quoteIndex: number): number | null {

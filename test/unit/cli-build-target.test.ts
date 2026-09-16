@@ -73,6 +73,25 @@ describe('cli build target resolution', () => {
     ).toBe('app')
   })
 
+  it('ignores router-like text inside string literals when reading appDir', () => {
+    expect(
+      readRouterAppDir(`
+        export default {
+          note: 'router: { appDir: wrong }',
+          plugins: [rari({ router: { appDir: 'app' } })],
+        }
+      `),
+    ).toBe('app')
+    expect(
+      readRouterAppDir(`
+        export default {
+          note: "before router: { appDir: 'wrong' } after",
+          plugins: [rari({ router: { appDir: 'app' } })],
+        }
+      `),
+    ).toBe('app')
+  })
+
   it('ignores router: false inside comments and string literals', () => {
     expect(
       isRouterDisabled(`
