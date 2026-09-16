@@ -4,7 +4,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { throwIfNotOk } from '@/shared/utils/http'
 import { getRariServerPort } from '@/shared/utils/server-port'
-import { errorMessage, isRecord, toError } from '@/shared/utils/type-guards'
+import { errorMessage, isError, isRecord, toError } from '@/shared/utils/type-guards'
 import { HMRErrorHandler } from './error-handler'
 import { walkImporters } from './import-graph'
 
@@ -47,7 +47,7 @@ function isFailedRebuildResult(value: unknown): value is FailedRebuildResult {
     value.success === false &&
     typeof value.filePath === 'string' &&
     typeof value.relativePath === 'string' &&
-    Error.isError(value.error)
+    isError(value.error)
   )
 }
 

@@ -1,5 +1,5 @@
 import { throwIfNotOk } from '@/shared/utils/http'
-import { asError, errorMessage } from '@/shared/utils/type-guards'
+import { asError, errorMessage, isError } from '@/shared/utils/type-guards'
 
 export type NavigationErrorType =
   | 'fetch-error'
@@ -127,12 +127,12 @@ function handleUnknownError(error: unknown, url?: string): NavigationError {
 }
 
 export function createNavigationError(error: unknown, url?: string): NavigationError {
-  if (Error.isError(error) && error.name === 'AbortError') return handleAbortError(error, url)
+  if (isError(error) && error.name === 'AbortError') return handleAbortError(error, url)
 
-  if (Error.isError(error) && (error.name === 'TimeoutError' || error.message.includes('timeout')))
+  if (isError(error) && (error.name === 'TimeoutError' || error.message.includes('timeout')))
     return handleTimeoutError(error, url)
 
-  if (Error.isError(error) && 'status' in error) {
+  if (isError(error) && 'status' in error) {
     const status = (error as Error & { status?: unknown }).status
     if (typeof status !== 'number') return handleUnknownError(error, url)
 
@@ -143,7 +143,7 @@ export function createNavigationError(error: unknown, url?: string): NavigationE
     return handleNetworkError(error, url)
   }
 
-  if (error instanceof SyntaxError || (Error.isError(error) && error.message.includes('parse')))
+  if (error instanceof SyntaxError || (isError(error) && error.message.includes('parse')))
     return handleParseError(error, url)
 
   return handleUnknownError(error, url)
