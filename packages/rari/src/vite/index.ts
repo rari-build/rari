@@ -1,4 +1,5 @@
 import type { ChildProcess } from 'node:child_process'
+import type { IncomingMessage } from 'node:http'
 import type { CSSModulesOptions, Plugin, UserConfig } from 'vite-plus'
 import type { ModuleAnalysis } from './analysis/directives'
 import type { MdxPluginOptions } from './mdx/registry'
@@ -12,6 +13,7 @@ import { spawn, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
+import { text as readRequestText } from 'node:stream/consumers'
 import { fileURLToPath } from 'node:url'
 import {
   DEFAULT_DEVICE_SIZES,
@@ -101,6 +103,30 @@ const DIST_NOT_BUILT_ERROR =
 const PROXY_BODY_MAX_BYTES = 10 * 1024 * 1024
 const DOCUMENT_ASSET_EXT_RE =
   /\.(?:js|mjs|cjs|ts|tsx|jsx|css|map|json|svg|png|jpe?g|gif|webp|avif|ico|woff2?|ttf|eot|txt|xml|html|wasm)$/i
+
+/* oxlint-disable-next-line typescript/prefer-readonly-parameter-types IncomingMessage is a mutable Node stream */
+async function readRequestBodyAsBlob(req: IncomingMessage, maxBytes: number): Promise<Blob> {
+  const chunks: Uint8Array[] = []
+  let totalBytes = 0
+
+  for await (const chunk of req) {
+    const bytes = Uint8Array.from(Buffer.from(chunk))
+    totalBytes += bytes.byteLength
+    if (totalBytes > maxBytes) {
+      req.destroy()
+      throw Object.assign(new Error('Request body too large'), { statusCode: 413 })
+    }
+    chunks.push(bytes)
+  }
+
+  const body = new Uint8Array(totalBytes)
+  let offset = 0
+  for (const chunk of chunks) {
+    body.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return new Blob([body])
+}
 
 function isLikelyStaticAssetPath(pathname: string): boolean {
   const basename = pathname.slice(pathname.lastIndexOf('/') + 1)
@@ -1584,46 +1610,7 @@ ${clientTransformedCode}`
 
               const hasBody = method !== 'GET' && method !== 'HEAD'
               const body = hasBody
-                ? await new Promise<Blob>((resolve, reject) => {
-                    const chunks: Buffer[] = []
-                    let totalBytes = 0
-                    let settled = false
-
-                    function fail(error: Error) {
-                      if (settled) return
-                      settled = true
-                      req.removeListener('data', onData)
-                      req.removeListener('end', onEnd)
-                      req.removeListener('error', onError)
-                      reject(error)
-                    }
-
-                    function onData(chunk: Buffer) {
-                      totalBytes += chunk.length
-                      if (totalBytes > PROXY_BODY_MAX_BYTES) {
-                        req.destroy()
-                        fail(
-                          Object.assign(new Error('Request body too large'), { statusCode: 413 }),
-                        )
-                        return
-                      }
-                      chunks.push(chunk)
-                    }
-
-                    function onEnd() {
-                      if (settled) return
-                      settled = true
-                      resolve(new Blob([Buffer.concat(chunks)]))
-                    }
-
-                    function onError(error: Error) {
-                      fail(error)
-                    }
-
-                    req.on('data', onData)
-                    req.on('end', onEnd)
-                    req.on('error', onError)
-                  })
+                ? await readRequestBodyAsBlob(req, PROXY_BODY_MAX_BYTES)
                 : undefined
 
               const response = await fetch(targetUrl, {
@@ -1718,49 +1705,43 @@ ${clientTransformedCode}`
           return
         }
 
-        let body = ''
-        req.on('data', (chunk: Buffer) => {
-          body += chunk.toString()
-        })
+        void (async () => {
+          try {
+            const body = await readRequestText(req)
+            const bodyRecord = parseJsonRecord(body)
+            const filePath =
+              bodyRecord && typeof bodyRecord.filePath === 'string'
+                ? bodyRecord.filePath
+                : undefined
 
-        req.on('end', () => {
-          void (async () => {
-            try {
-              const bodyRecord = parseJsonRecord(body)
-              const filePath =
-                bodyRecord && typeof bodyRecord.filePath === 'string'
-                  ? bodyRecord.filePath
-                  : undefined
-
-              if (filePath == null || filePath === '') {
-                res.statusCode = 400
-                res.end(JSON.stringify({ error: 'filePath is required' }))
-                return
-              }
-
-              await handleServerComponentHMR(filePath)
-
-              res.statusCode = 200
-              res.setHeader('Content-Type', 'application/json')
-              res.end(
-                JSON.stringify({
-                  success: true,
-                  filePath,
-                  message: 'Component transformation completed',
-                }),
-              )
-            } catch (error) {
-              res.statusCode = 500
-              res.setHeader('Content-Type', 'application/json')
-              res.end(
-                JSON.stringify({
-                  success: false,
-                  error: error instanceof Error ? error.message : String(error),
-                }),
-              )
+            if (filePath == null || filePath === '') {
+              res.statusCode = 400
+              res.end(JSON.stringify({ error: 'filePath is required' }))
+              return
             }
-          })()
-        })
+
+            await handleServerComponentHMR(filePath)
+
+            res.statusCode = 200
+            res.setHeader('Content-Type', 'application/json')
+            res.end(
+              JSON.stringify({
+                success: true,
+                filePath,
+                message: 'Component transformation completed',
+              }),
+            )
+          } catch (error) {
+            res.statusCode = 500
+            res.setHeader('Content-Type', 'application/json')
+            res.end(
+              JSON.stringify({
+                success: false,
+                error: error instanceof Error ? error.message : String(error),
+              }),
+            )
+          }
+        })()
       })
 
       server.httpServer?.on('close', () => {

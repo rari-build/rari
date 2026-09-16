@@ -24,12 +24,11 @@ export function normalizePath(path: string, options: NormalizePathOptions = {}):
 }
 
 export function pathnameFromUrl(url: string, base = 'http://localhost'): string {
-  try {
-    return new URL(url, base).pathname
-  } catch {
-    const pathOnly = url.split(/[?#]/, 1)[0] ?? url
-    return pathOnly === '' ? '/' : pathOnly
-  }
+  const parsed = URL.parse(url, base)
+  if (parsed != null) return parsed.pathname
+
+  const pathOnly = url.split(/[?#]/, 1)[0] ?? url
+  return pathOnly === '' ? '/' : pathOnly
 }
 
 export function toPosixPath(value: string): string {

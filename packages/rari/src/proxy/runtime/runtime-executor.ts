@@ -3,7 +3,6 @@ import type { ProxyConfig, RariRequest } from '@/proxy/http/types'
 import { isFunction, isRecord } from '@/shared/utils/type-guards'
 import { shouldRunProxy } from './matcher'
 import { processProxyResult } from './shared/process-result'
-import '@/runtime/shared/types'
 
 interface ProxyFetchEvent {
   waitUntil: (promise: Promise<unknown>) => void

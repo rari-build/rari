@@ -1,5 +1,6 @@
 import type { ChildProcess, SpawnOptions } from 'node:child_process'
 import { spawn } from 'node:child_process'
+import { once } from 'node:events'
 import { existsSync, readdirSync, readFileSync, realpathSync, rmSync } from 'node:fs'
 import { resolve } from 'node:path'
 import process from 'node:process'
@@ -188,19 +189,22 @@ async function waitForProcess(
   child: ChildProcess,
   options: Readonly<{ tolerateErrors?: boolean }> = {},
 ): Promise<number | null> {
-  return new Promise((resolve, reject) => {
-    child.on('exit', code => {
-      resolve(code)
-    })
-    child.on('error', error => {
-      if (options.tolerateErrors) {
-        logWarn(normalizeError(error))
-        resolve(1)
-      } else {
-        reject(error)
-      }
-    })
-  })
+  try {
+    const settled = await Promise.race([
+      once(child, 'exit').then((args: readonly unknown[]) => ({ kind: 'exit' as const, args })),
+      once(child, 'error').then(([error]) => {
+        throw error
+      }),
+    ])
+    const code = settled.args[0]
+    return typeof code === 'number' || code === null ? code : null
+  } catch (error) {
+    if (options.tolerateErrors) {
+      logWarn(normalizeError(error))
+      return 1
+    }
+    throw error
+  }
 }
 
 function normalizeError(error: unknown): string {
