@@ -24,24 +24,6 @@ export function isProxyFunction(value: unknown): value is ProxyModule['proxy'] {
   return isFunction(value)
 }
 
-export function mergeHeaderValue(
-  // oxlint-disable-next-line typescript/prefer-readonly-parameter-types
-  target: { [key: string]: string | string[] },
-  key: string,
-  value: string,
-): void {
-  const existing = target[key]
-  if (!(key in target)) target[key] = value
-  else if (Array.isArray(existing)) existing.push(value)
-  else target[key] = [existing, value]
-}
-
-export function hasGetSetCookie(
-  headers: Headers,
-): headers is Headers & { getSetCookie: () => string[] } {
-  return typeof headers.getSetCookie === 'function'
-}
-
 export function getResponseCookies(
   response: Response,
 ): { toSetCookieHeaders: () => string[] } | undefined {

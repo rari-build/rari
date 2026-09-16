@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { BACKSLASH_REGEX } from '@/shared/regex-constants'
+import { toPosixPath } from '@/shared/utils/path'
+import { escapeRegExp } from '@/shared/utils/regexp'
 import { isRecord } from '@/shared/utils/type-guards'
 
 export type AppIconKind = 'favicon' | 'icon' | 'apple-icon'
@@ -28,10 +29,6 @@ const CONTENT_TYPES: Readonly<Record<string, string>> = {
   '.svg': 'image/svg+xml',
 }
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
 export function contentTypeForIconExt(ext: string): string {
   return CONTENT_TYPES[ext.toLowerCase()] ?? 'application/octet-stream'
 }
@@ -47,7 +44,7 @@ export function findConventionImageFiles(
 }
 
 export function publicUrlForAppIcon(relativeDir: string, fileName: string): string {
-  const normalizedDir = relativeDir.replace(BACKSLASH_REGEX, '/').replace(/^\/+|\/+$/g, '')
+  const normalizedDir = toPosixPath(relativeDir).replace(/^\/+|\/+$/g, '')
   if (normalizedDir === '') return `/${fileName}`
   return `/${normalizedDir}/${fileName}`.replace(/\/+/g, '/')
 }
@@ -90,7 +87,7 @@ export function createAppIconEntry(options: {
   readonly height?: number
   readonly sizes?: string
 }): AppIconEntry {
-  const filePath = path.join(options.relativeDir, options.fileName).replace(BACKSLASH_REGEX, '/')
+  const filePath = toPosixPath(path.join(options.relativeDir, options.fileName))
   const ext = path.extname(options.fileName).toLowerCase()
   return {
     path: options.routePath,

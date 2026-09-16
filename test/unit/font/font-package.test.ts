@@ -3,6 +3,8 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { describe, expect, it, vi } from 'vite-plus/test'
+import { contentHash } from '../../../packages/rari/src/shared/utils/content-hash'
+import { hashedFontFileName } from '../../../packages/rari/src/vite/font/assets'
 import {
   buildFontFamilyStack,
   fontFormatFromPath,
@@ -20,7 +22,6 @@ import {
   parseCssFontFaces,
 } from '../../../packages/rari/src/vite/font/google-loader'
 import { warnGoogleFontOptions } from '../../../packages/rari/src/vite/font/google-metadata'
-import { contentHash, hashedFontFileName } from '../../../packages/rari/src/vite/font/hash'
 import {
   categoryFallback,
   computeFallbackOverrides,

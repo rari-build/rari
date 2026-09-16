@@ -19,7 +19,6 @@ import { build } from 'rolldown'
 import { buildProxyManifest } from '@/proxy/build/analyze'
 import { copyAppIconsToOutDir, parseAppIconsFromManifest } from '@/router/metadata/app-icons'
 import {
-  BACKSLASH_REGEX,
   EXPORTED_CONST_FUNCTION_REGEX,
   EXPORTED_DEFAULT_ARROW_REGEX,
   EXPORTED_FUNCTION_REGEX,
@@ -27,17 +26,19 @@ import {
   TSX_EXT_REGEX,
 } from '@/shared/regex-constants'
 import { resolveAlias } from '@/shared/utils/alias-resolver'
+import { contentHash } from '@/shared/utils/content-hash'
 import {
   resolveIndexFile,
   resolveWithExtensions,
   resolveWithExtensionsAndIndex,
 } from '@/shared/utils/file-resolver'
+import { normalizeAssetsDir, toPosixPath } from '@/shared/utils/path'
 import { getErrnoCode, isRecord, parseJsonRecord } from '@/shared/utils/type-guards'
+import { readViteAliases } from '@/shared/utils/vite-aliases'
 import {
   getReadableComponentId,
   getComponentId as getSharedComponentId,
   getProjectRelativePath as getSharedProjectRelativePath,
-  hashString as sharedHashString,
 } from '../analysis/component-ids'
 import { analyzeModuleSource, scanImportStatements } from '../analysis/directives'
 import {
@@ -158,7 +159,7 @@ function resolveErrorBoundarySourcePath(): string | null {
 }
 
 function isErrorBoundaryWrapperPath(filePath: string): boolean {
-  const normalized = filePath.replace(BACKSLASH_REGEX, '/')
+  const normalized = toPosixPath(filePath)
   return (
     normalized.includes('ErrorBoundaryWrapper') ||
     normalized.includes('/boundaries/error-boundary-wrapper') ||
@@ -169,20 +170,19 @@ function isErrorBoundaryWrapperPath(filePath: string): boolean {
 function ssrClientComponentId(filePath: string, projectRoot: string): string {
   if (isErrorBoundaryWrapperPath(filePath)) return 'virtual:error-boundary-wrapper.tsx'
 
-  const relativePath = path.relative(projectRoot, filePath).replace(BACKSLASH_REGEX, '/')
-  if (relativePath.startsWith('..') || path.isAbsolute(relativePath))
-    return filePath.replace(BACKSLASH_REGEX, '/')
+  const relativePath = toPosixPath(path.relative(projectRoot, filePath))
+  if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) return toPosixPath(filePath)
 
   return relativePath
 }
 
 function ssrClientBundleName(filePath: string, projectRoot: string): string {
   if (isErrorBoundaryWrapperPath(filePath))
-    return `error_boundary_wrapper_${sharedHashString('virtual:error-boundary-wrapper.tsx')}`
+    return `error_boundary_wrapper_${contentHash('virtual:error-boundary-wrapper.tsx')}`
 
   if (isRariInternalPath(filePath)) {
-    const relative = path.relative(RARI_PACKAGE_ROOT, filePath).replace(BACKSLASH_REGEX, '/')
-    return `${getReadableComponentId(relative)}_${sharedHashString(relative)}`
+    const relative = toPosixPath(path.relative(RARI_PACKAGE_ROOT, filePath))
+    return `${getReadableComponentId(relative)}_${contentHash(relative)}`
   }
 
   return getSharedComponentId(filePath, projectRoot)
@@ -544,7 +544,7 @@ export class ServerComponentBuilder {
     await fs.promises.mkdir(assetsDir, { recursive: true })
 
     const cssContent = `${cssModules.join('\n')}\n`
-    const cssFileName = `${sharedHashString(componentId + cssContent, 12)}.css`
+    const cssFileName = `${contentHash(componentId + cssContent, 12)}.css`
     const cssPath = path.join(assetsDir, cssFileName)
     await fs.promises.writeFile(cssPath, cssContent, 'utf-8')
 
@@ -634,7 +634,7 @@ export class ServerComponentBuilder {
       alias: options.alias ?? {},
       assetsDir:
         options.assetsDir != null && options.assetsDir !== ''
-          ? options.assetsDir.replace(/^\/+|\/+$/g, '') || 'assets'
+          ? normalizeAssetsDir(options.assetsDir)
           : 'assets',
       define: options.define,
       csp: options.csp,
@@ -856,14 +856,7 @@ export class ServerComponentBuilder {
       return null
     }
 
-    let resolvedPath: string | null = null
-    for (const [alias, replacement] of Object.entries(this.options.alias)) {
-      if (importPath.startsWith(`${alias}/`) || importPath === alias) {
-        const relativePath = importPath.slice(alias.length).replace(/^\/+/, '')
-        resolvedPath = path.join(replacement, relativePath)
-        break
-      }
-    }
+    const resolvedPath = resolveAlias(importPath, this.options.alias, this.projectRoot)
 
     if (resolvedPath == null || resolvedPath === '') return null
 
@@ -1024,18 +1017,10 @@ export class ServerComponentBuilder {
             }
 
             const resolved = path.resolve(resolveDir, id)
-            const extensions = ['.ts', '.tsx', '.js', '.jsx', '']
-            for (const ext of extensions) {
-              const pathWithExt = resolved + ext
-              if (fs.existsSync(pathWithExt) && fs.statSync(pathWithExt).isFile())
-                return pathWithExt
-            }
-            for (const ext of ['.ts', '.tsx', '.js', '.jsx']) {
-              const indexPath = path.join(resolved, `index${ext}`)
-              if (fs.existsSync(indexPath)) return indexPath
-            }
-
-            return resolved
+            return (
+              resolveWithExtensionsAndIndex(resolved, ['', '.ts', '.tsx', '.js', '.jsx']) ??
+              resolved
+            )
           }
 
           return null
@@ -1090,41 +1075,43 @@ export class ServerComponentBuilder {
           if ((resolvedPath == null || resolvedPath === '') && path.isAbsolute(source))
             resolvedPath = source
 
-          if (resolvedPath !== '') {
-            const extensions = ['', '.ts', '.tsx', '.js', '.jsx']
-            for (const ext of extensions) {
-              const pathWithExt = resolvedPath + ext
-              if (fs.existsSync(pathWithExt) && fs.statSync(pathWithExt).isFile()) {
-                if (this.isClientComponent(pathWithExt)) {
-                  const relativePath = path.relative(this.projectRoot, pathWithExt)
-                  const componentId = (
-                    relativePath.startsWith('..') ? pathWithExt : relativePath
-                  ).replace(BACKSLASH_REGEX, '/')
-                  clientComponentRefs.set(pathWithExt, componentId)
+          if (resolvedPath != null && resolvedPath !== '') {
+            const pathWithExt = resolveWithExtensionsAndIndex(resolvedPath, [
+              '',
+              '.ts',
+              '.tsx',
+              '.js',
+              '.jsx',
+            ])
+            if (pathWithExt != null && pathWithExt !== '') {
+              if (this.isClientComponent(pathWithExt)) {
+                const relativePath = path.relative(this.projectRoot, pathWithExt)
+                const componentId = toPosixPath(
+                  relativePath.startsWith('..') ? pathWithExt : relativePath,
+                )
+                clientComponentRefs.set(pathWithExt, componentId)
 
-                  if (relativePath.startsWith('..'))
-                    this.discoveredExternalClientComponents.add(pathWithExt)
+                if (relativePath.startsWith('..'))
+                  this.discoveredExternalClientComponents.add(pathWithExt)
 
-                  return { id: `\0client-ref:${pathWithExt}` }
+                return { id: `\0client-ref:${pathWithExt}` }
+              }
+
+              try {
+                const analysis = this.moduleAnalysisCache.get(pathWithExt)
+                if (analysis.directives.hasUseServer) {
+                  const actionId = this.getComponentId(pathWithExt)
+                  serverActionRefs.set(pathWithExt, {
+                    actionId,
+                    hasDefaultExport: analysis.hasDefaultExport,
+                  })
+                  return { id: `\0server-action:${pathWithExt}` }
                 }
-
-                try {
-                  const analysis = this.moduleAnalysisCache.get(pathWithExt)
-                  if (analysis.directives.hasUseServer) {
-                    const actionId = this.getComponentId(pathWithExt)
-                    serverActionRefs.set(pathWithExt, {
-                      actionId,
-                      hasDefaultExport: analysis.hasDefaultExport,
-                    })
-                    return { id: `\0server-action:${pathWithExt}` }
-                  }
-                } catch (error) {
-                  console.error(
-                    `[rari] Failed to read file for server action detection: ${pathWithExt}`,
-                    error,
-                  )
-                }
-                break
+              } catch (error) {
+                console.error(
+                  `[rari] Failed to read file for server action detection: ${pathWithExt}`,
+                  error,
+                )
               }
             }
           }
@@ -1135,10 +1122,10 @@ export class ServerComponentBuilder {
           if (id.startsWith('\0client-ref:')) {
             const filePath = id.slice('\0client-ref:'.length)
             const relativePath = path.relative(this.projectRoot, filePath)
-            const componentId = (
+            const componentId = toPosixPath(
               clientComponentRefs.get(filePath) ??
-              (relativePath.startsWith('..') ? filePath : relativePath)
-            ).replace(BACKSLASH_REGEX, '/')
+                (relativePath.startsWith('..') ? filePath : relativePath),
+            )
 
             return {
               code: this.generateClientReferenceStub(filePath, componentId),
@@ -1192,28 +1179,29 @@ export class ServerComponentBuilder {
 
           if (importerDir.includes('node_modules')) return null
 
-          const extensions = ['', '.ts', '.tsx', '.js', '.jsx']
-          for (const ext of extensions) {
-            const pathWithExt = resolvedPath + ext
-            if (fs.existsSync(pathWithExt) && fs.statSync(pathWithExt).isFile()) {
-              if (this.isClientComponent(pathWithExt)) return null
+          const pathWithExt = resolveWithExtensionsAndIndex(resolvedPath, [
+            '',
+            '.ts',
+            '.tsx',
+            '.js',
+            '.jsx',
+          ])
+          if (pathWithExt != null && pathWithExt !== '') {
+            if (this.isClientComponent(pathWithExt)) return null
 
-              if (this.isServerActionFile(pathWithExt)) return null
+            if (this.isServerActionFile(pathWithExt)) return null
 
-              const srcDir = path.join(this.projectRoot, 'src')
-              if (!pathWithExt.startsWith(srcDir)) return null
+            const srcDir = path.join(this.projectRoot, 'src')
+            if (!pathWithExt.startsWith(srcDir)) return null
 
-              const componentId = this.getComponentId(pathWithExt)
-              const distPath = path.join(
-                this.options.outDir,
-                this.options.rscDir,
-                `${componentId}.js`,
-              )
+            const componentId = this.getComponentId(pathWithExt)
+            const distPath = path.join(
+              this.options.outDir,
+              this.options.rscDir,
+              `${componentId}.js`,
+            )
 
-              if (fs.existsSync(distPath)) return { id: `\0transformed:${distPath}` }
-
-              break
-            }
+            if (fs.existsSync(distPath)) return { id: `\0transformed:${distPath}` }
           }
 
           return null
@@ -1239,37 +1227,24 @@ export class ServerComponentBuilder {
           const resolved = resolveAlias(source, this.options.alias, this.projectRoot)
           if (resolved == null || resolved === '') return null
 
-          const extensions = ['', '.ts', '.tsx', '.js', '.jsx']
-          for (const ext of extensions) {
-            const pathWithExt = resolved + ext
-            if (fs.existsSync(pathWithExt) && fs.statSync(pathWithExt).isFile()) {
-              if (this.isServerActionFile(pathWithExt)) {
-                const actionId = this.getComponentId(pathWithExt)
-                serverActionRefs.set(pathWithExt, {
-                  actionId,
-                  hasDefaultExport: this.moduleAnalysisCache.get(pathWithExt).hasDefaultExport,
-                })
-                return { id: `\0server-action:${pathWithExt}` }
-              }
-
-              return pathWithExt
+          const pathWithExt = resolveWithExtensionsAndIndex(resolved, [
+            '',
+            '.ts',
+            '.tsx',
+            '.js',
+            '.jsx',
+          ])
+          if (pathWithExt != null && pathWithExt !== '') {
+            if (this.isServerActionFile(pathWithExt)) {
+              const actionId = this.getComponentId(pathWithExt)
+              serverActionRefs.set(pathWithExt, {
+                actionId,
+                hasDefaultExport: this.moduleAnalysisCache.get(pathWithExt).hasDefaultExport,
+              })
+              return { id: `\0server-action:${pathWithExt}` }
             }
-          }
 
-          for (const ext of ['.ts', '.tsx', '.js', '.jsx']) {
-            const indexPath = path.join(resolved, `index${ext}`)
-            if (fs.existsSync(indexPath)) {
-              if (this.isServerActionFile(indexPath)) {
-                const actionId = this.getComponentId(indexPath)
-                serverActionRefs.set(indexPath, {
-                  actionId,
-                  hasDefaultExport: this.moduleAnalysisCache.get(indexPath).hasDefaultExport,
-                })
-                return { id: `\0server-action:${indexPath}` }
-              }
-
-              return indexPath
-            }
+            return pathWithExt
           }
 
           return resolved
@@ -1373,9 +1348,9 @@ export class ServerComponentBuilder {
               const content = fs.readFileSync(filePath)
               const ext = path.extname(filePath) || '.css'
               const base = path.basename(filePath, ext)
-              const hash = sharedHashString(`${filePath}:${content.toString('utf8')}`, 8)
+              const hash = contentHash(`${filePath}:${content.toString('utf8')}`, 8)
               const fileName = `${base}-${hash}${ext}`
-              const assetsDirName = this.options.assetsDir.replace(/^\/+|\/+$/g, '') || 'assets'
+              const assetsDirName = normalizeAssetsDir(this.options.assetsDir)
               const assetsDir = path.join(this.options.outDir, assetsDirName)
               fs.mkdirSync(assetsDir, { recursive: true })
               fs.writeFileSync(path.join(assetsDir, fileName), content)
@@ -1692,11 +1667,9 @@ export class ServerComponentBuilder {
     }
 
     const [filePath, component] = proxyEntries[0]
-    const relativePath = this.getProjectRelativePath(filePath).replace(BACKSLASH_REGEX, '/')
+    const relativePath = toPosixPath(this.getProjectRelativePath(filePath))
     const componentId = this.getComponentId(relativePath)
-    const bundlePath = path
-      .join(this.options.rscDir, `${componentId}.js`)
-      .replace(BACKSLASH_REGEX, '/')
+    const bundlePath = toPosixPath(path.join(this.options.rscDir, `${componentId}.js`))
     const proxyManifest = buildProxyManifest({
       proxyFile: relativePath,
       code: component.originalCode,
@@ -1741,7 +1714,7 @@ export class ServerComponentBuilder {
     await this.buildComponentBatch(pageComponents, manifest, concurrency)
 
     if (useCacheEnabled) {
-      this.useCacheBuildId = sharedHashString(JSON.stringify(manifest.components), 16)
+      this.useCacheBuildId = contentHash(JSON.stringify(manifest.components), 16)
       manifest.useCacheBuildId = this.useCacheBuildId
     }
 
@@ -1989,7 +1962,7 @@ export class ServerComponentBuilder {
       if (sourcePath == null || sourcePath === '') continue
 
       try {
-        const bundleName = `external_${sharedHashString(componentId)}`
+        const bundleName = `external_${contentHash(componentId)}`
         const bundlePath = `ssr/${bundleName}.js`
         const fullBundlePath = path.join(this.options.outDir, bundlePath)
         await fs.promises.mkdir(path.dirname(fullBundlePath), { recursive: true })
@@ -2350,7 +2323,7 @@ export class ServerComponentBuilder {
         const resolvedPath = this.resolveImportPath(imp.source, inputPath)
         if (this.isClientComponent(resolvedPath)) {
           isClientComponent = true
-          componentId = path.relative(this.projectRoot, resolvedPath).replace(BACKSLASH_REGEX, '/')
+          componentId = toPosixPath(path.relative(this.projectRoot, resolvedPath))
         }
       }
 
@@ -2404,16 +2377,8 @@ export class ServerComponentBuilder {
   }
 
   private resolveImportPath(importPath: string, importerPath: string): string {
-    let resolvedPath = importPath
-    const aliases = this.options.alias
-
-    for (const [alias, replacement] of Object.entries(aliases)) {
-      if (importPath.startsWith(`${alias}/`) || importPath === alias) {
-        const relativePath = importPath.slice(alias.length).replace(/^\/+/, '')
-        resolvedPath = path.join(replacement, relativePath)
-        break
-      }
-    }
+    const aliased = resolveAlias(importPath, this.options.alias, this.projectRoot)
+    let resolvedPath = aliased ?? importPath
 
     if (!path.isAbsolute(resolvedPath))
       resolvedPath = path.resolve(path.dirname(importerPath), resolvedPath)
@@ -2719,36 +2684,11 @@ export function createServerBuildPlugin(options: ServerBuildOptions = {}): Plugi
       resolvedViteOutDir = path.resolve(config.root, config.build.outDir)
       isDev = config.command === 'serve'
 
-      const excludeAliases = new Set([
-        'react',
-        'react-dom',
-        'react/jsx-runtime',
-        'react/jsx-dev-runtime',
-        'react/compiler-runtime',
-        'react-dom/client',
-      ])
-
-      const alias: Record<string, string> = {}
-      const aliasConfig = config.resolve.alias
-      if (Array.isArray(aliasConfig)) {
-        aliasConfig.forEach(entry => {
-          if (
-            typeof entry.find === 'string' &&
-            typeof entry.replacement === 'string' &&
-            !excludeAliases.has(entry.find)
-          )
-            alias[entry.find] = entry.replacement
-        })
-      } else if (typeof aliasConfig === 'object') {
-        Object.entries(aliasConfig).forEach(([key, value]) => {
-          if (typeof value === 'string' && !excludeAliases.has(key)) alias[key] = value
-        })
-      }
-
+      const alias = readViteAliases(config)
       resolvedAliases = alias
       const assetsDir =
         typeof config.build.assetsDir === 'string' && config.build.assetsDir !== ''
-          ? config.build.assetsDir.replace(/^\/+|\/+$/g, '') || 'assets'
+          ? normalizeAssetsDir(config.build.assetsDir)
           : 'assets'
       builder = new ServerComponentBuilder(projectRoot, {
         ...options,
@@ -2845,7 +2785,7 @@ export function createServerBuildPlugin(options: ServerBuildOptions = {}): Plugi
           const mdxOpts = resolveMdxPluginOptions(projectRoot, options.mdx)
           const contentDirs = collectMdxContentDirs(projectRoot, mdxOpts.contentDirs).filter(
             dir => {
-              const rel = path.relative(projectRoot, dir).replace(BACKSLASH_REGEX, '/')
+              const rel = toPosixPath(path.relative(projectRoot, dir))
               if (rel === 'public/content' || rel.startsWith('public/content/')) return false
               if (rel === 'dist/content' || rel.startsWith('dist/content/')) return false
               return true
@@ -2865,7 +2805,7 @@ export function createServerBuildPlugin(options: ServerBuildOptions = {}): Plugi
     async handleHotUpdate({ file }) {
       if (!builder || !isDev) return
 
-      const relativePath = path.relative(projectRoot, file).replace(BACKSLASH_REGEX, '/')
+      const relativePath = toPosixPath(path.relative(projectRoot, file))
       if (!relativePath.startsWith('src/') || !TSX_EXT_REGEX.test(relativePath)) return
 
       try {

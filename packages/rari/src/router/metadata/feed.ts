@@ -1,11 +1,14 @@
 import type { Feed, FeedEntry } from './types'
-import { Buffer } from 'node:buffer'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { resolveAlias } from '@/shared/utils/alias-resolver'
-import { resolveWithExtensionsAndIndex } from '@/shared/utils/file-resolver'
 import { isRecord } from '@/shared/utils/type-guards'
 import { escapeXml } from '@/shared/utils/xml'
+import { findConventionAppFile } from './convention-file'
+import {
+  buildAndImportMetadataModule,
+  metadataProjectRootFromAppDir,
+  requireMetadataDefaultExport,
+} from './execute'
 
 const VIRTUAL_FEED_ID = '\0virtual:feed'
 
@@ -155,105 +158,19 @@ export function generateFeedXml(feed: Feed): string {
   return lines.join('\n')
 }
 
-function determineModuleType(ext: string): 'js' | 'jsx' | 'ts' | 'tsx' {
-  switch (ext) {
-    case 'ts':
-      return 'ts'
-    case 'tsx':
-      return 'tsx'
-    case 'js':
-    case 'mjs':
-      return 'js'
-    case 'jsx':
-      return 'jsx'
-    default:
-      throw new Error(
-        `Unsupported feed file extension: ".${ext}". ` +
-          `Allowed extensions are: .ts, .tsx, .js, .jsx, .mjs`,
-      )
-  }
-}
-
 /* v8 ignore start - file system operations, better tested in integration/e2e */
 export async function findFeedFile(
   appDir: string,
   extensions: readonly string[] = ['.ts', '.tsx', '.js', '.jsx', '.mjs'],
 ): Promise<{ type: 'static' | 'dynamic'; path: string } | null> {
-  const staticPath = path.join(appDir, 'feed.xml')
-  try {
-    await fs.access(staticPath)
-    return { type: 'static', path: staticPath }
-  } catch {}
-
-  for (const ext of extensions) {
-    const dynamicPath = path.join(appDir, `feed${ext}`)
-    try {
-      await fs.access(dynamicPath)
-      return { type: 'dynamic', path: dynamicPath }
-    } catch {}
-  }
-
-  return null
+  return findConventionAppFile({
+    appDir,
+    staticFileName: 'feed.xml',
+    dynamicBaseName: 'feed',
+    extensions,
+  })
 }
 /* v8 ignore stop */
-
-function createFeedPlugin(
-  feedFile: Readonly<{ path: string }>,
-  sourceCode: string,
-  aliases: Readonly<Record<string, string>> = {},
-  projectRoot: string,
-) {
-  return {
-    name: 'virtual-feed',
-    resolveId(id: string, importer?: string) {
-      if (id === VIRTUAL_FEED_ID) return id
-
-      if (Object.keys(aliases).length > 0) {
-        const resolved = resolveAlias(id, aliases, projectRoot)
-        if (resolved != null && resolved !== '') {
-          const found = resolveWithExtensionsAndIndex(resolved)
-          if (found != null && found !== '') return found
-
-          return resolved
-        }
-      }
-
-      if (id.startsWith('.')) {
-        const base =
-          importer == null || importer === '' || importer.startsWith('\0')
-            ? feedFile.path
-            : importer
-        const resolved = path.resolve(path.dirname(base), id)
-        const found = resolveWithExtensionsAndIndex(resolved)
-        if (found != null && found !== '') return found
-
-        return resolved
-      }
-
-      return null
-    },
-    async load(loadId: string) {
-      if (loadId === VIRTUAL_FEED_ID) {
-        const ext = path.extname(feedFile.path).slice(1)
-        const moduleType = determineModuleType(ext)
-        return { code: sourceCode, moduleType }
-      }
-
-      if (loadId && !loadId.startsWith('\0')) {
-        try {
-          const code = await fs.readFile(loadId, 'utf-8')
-          const ext = path.extname(loadId).slice(1)
-          const moduleType = determineModuleType(ext)
-          return { code, moduleType }
-        } catch {
-          return null
-        }
-      }
-
-      return null
-    },
-  }
-}
 
 /* v8 ignore start - file system operations and dynamic imports, better tested in integration/e2e */
 export async function generateFeedFile(options: FeedGeneratorOptions): Promise<boolean> {
@@ -272,39 +189,19 @@ export async function generateFeedFile(options: FeedGeneratorOptions): Promise<b
   }
 
   try {
-    const { build } = await import('rolldown')
     const sourceCode = await fs.readFile(feedFile.path, 'utf-8')
-    const projectRoot = path.dirname(path.dirname(appDir))
-
-    const result = await build({
-      input: VIRTUAL_FEED_ID,
-      external: ['rari'],
-      platform: 'node',
-      write: false,
-      output: { format: 'esm', codeSplitting: false },
-      plugins: [createFeedPlugin(feedFile, sourceCode, aliases, projectRoot)],
+    const module = await buildAndImportMetadataModule({
+      virtualId: VIRTUAL_FEED_ID,
+      sourcePath: feedFile.path,
+      sourceCode,
+      aliases,
+      projectRoot: metadataProjectRootFromAppDir(appDir),
+      kind: 'feed',
+      pluginName: 'virtual-feed',
+      label: 'feed',
     })
 
-    if (result.output.length === 0) throw new Error('Failed to build feed module')
-
-    const entryChunk =
-      result.output.find(item => item.type === 'chunk' && item.isEntry) ??
-      result.output.find(item => item.type === 'chunk')
-
-    if (entryChunk?.type !== 'chunk') throw new Error('No chunk output found in feed build result')
-
-    const code = entryChunk.code
-    const dataUrl = `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`
-    const module: unknown = await import(dataUrl)
-    if (!isRecord(module)) {
-      throw new Error('Feed file must export a default export (either an object or a function)')
-    }
-
-    const defaultExport = module.default
-    if (defaultExport == null)
-      throw new Error('Feed file must export a default export (either an object or a function)')
-
-    const feedData = await resolveFeedExport(defaultExport)
+    const feedData = await resolveFeedExport(requireMetadataDefaultExport(module, 'Feed'))
 
     const content = generateFeedXml(feedData)
     await fs.writeFile(outputPath, content)

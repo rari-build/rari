@@ -1,13 +1,10 @@
 import type { CssFontGeneric, FontMetricOverrides } from './metrics'
 import type { FontDisplay, ResolvedFontFace } from '@/font/types'
+import { escapeXml } from '@/shared/utils/xml'
 import { fallbackIncludesCssGeneric } from './metrics'
 
 function cssEscape(value: string): string {
   return value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')
-}
-
-function htmlEscapeAttr(value: string): string {
-  return value.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;')
 }
 
 function formatSource(url: string, format: string): string {
@@ -103,7 +100,7 @@ export function preloadLinksForFaces(faces: readonly ResolvedFontFace[]): string
     if (!face.preload) continue
     for (const entry of face.src) {
       links.push(
-        `<link rel="preload" href="${htmlEscapeAttr(entry.url)}" as="font" type="${fontMimeType(entry.format)}" crossorigin />`,
+        `<link rel="preload" href="${escapeXml(entry.url)}" as="font" type="${fontMimeType(entry.format)}" crossorigin />`,
       )
     }
   }

@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { resolveAlias } from '@/shared/utils/alias-resolver'
+import { toPosixPath } from '@/shared/utils/path'
 import { scanImportStatements } from './analysis/directives'
 
 export const CLIENT_HEAD_FILE = 'rari-client-head.html'
@@ -90,7 +91,7 @@ function layoutCssViteHref(cssImport: string, projectRoot: string): string {
     return cssImport.startsWith('/') ? cssImport : `/${cssImport}`
   }
 
-  const relative = path.relative(projectRoot, cssImport).replace(/\\/g, '/')
+  const relative = toPosixPath(path.relative(projectRoot, cssImport))
   if (relative.startsWith('..') || path.isAbsolute(relative)) {
     return `/@fs/${cssImport}`
   }
@@ -110,7 +111,7 @@ export function collectLayoutCssDevHrefs(
 function layoutCssImportSpecifier(cssImport: string, projectRoot: string): string {
   if (!path.isAbsolute(cssImport)) return cssImport
 
-  const relative = path.relative(projectRoot, cssImport).replace(/\\/g, '/')
+  const relative = toPosixPath(path.relative(projectRoot, cssImport))
   if (relative.startsWith('..') || path.isAbsolute(relative)) return cssImport
 
   return `/${relative}`

@@ -1,6 +1,7 @@
 /* oxlint-disable typescript/prefer-readonly-parameter-types ComponentInfo entries are the mutable client component registry; mutated in place throughout lazy-loading logic */
 import type { ComponentInfo } from './types'
 import * as React from 'react'
+import { toPosixPath } from '@/shared/utils/path'
 import { isComponentType, isFunction, isRecord } from '@/shared/utils/type-guards'
 import {
   getClientComponentNames,
@@ -21,7 +22,7 @@ function getPathVariants(path: string): string[] {
 }
 
 function getLookupPathCandidates(path: string): string[] {
-  const normalized = path.replace(/\\/g, '/')
+  const normalized = toPosixPath(path)
   const candidates = new Set<string>([normalized])
 
   const srcIndex = normalized.indexOf('/src/')
@@ -46,8 +47,8 @@ function resolveExportName(
 }
 
 export function pathsMatch(registryPath: string, candidatePath: string): boolean {
-  const normalizedRegistryPath = registryPath.replace(/\\/g, '/')
-  const normalizedCandidatePath = candidatePath.replace(/\\/g, '/')
+  const normalizedRegistryPath = toPosixPath(registryPath)
+  const normalizedCandidatePath = toPosixPath(candidatePath)
 
   if (normalizedRegistryPath === normalizedCandidatePath) return true
 
@@ -153,7 +154,7 @@ function getComponentFromInfo(componentInfo: LazyComponentInfo, exportName?: str
 }
 
 function getIdCandidates(id: string): string[] {
-  const normalizedId = id.replace(/\\/g, '/')
+  const normalizedId = toPosixPath(id)
   return normalizedId === id ? [normalizedId] : [normalizedId, id]
 }
 
@@ -162,7 +163,7 @@ function findComponentInfo(id: string): ComponentLookup | null {
   const clientComponentPaths = getClientComponentPaths()
   const clientComponentNames = getClientComponentNames()
 
-  const normalizedId = id.replace(/\\/g, '/')
+  const normalizedId = toPosixPath(id)
 
   for (const candidateId of getIdCandidates(id)) {
     if (candidateId in clientComponents) {
@@ -343,7 +344,7 @@ export function installRscChunkLoader(): void {
 
   Reflect.set(globalThis, '__rari_chunk_load__', async (chunkId: string) => {
     const clientComponents = getClientComponents()
-    const normalized = chunkId.replace(/\\/g, '/')
+    const normalized = toPosixPath(chunkId)
     const componentInfo =
       chunkId in clientComponents
         ? clientComponents[chunkId]

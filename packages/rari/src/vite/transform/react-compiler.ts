@@ -1,6 +1,7 @@
 /* oxlint-disable typescript/prefer-readonly-parameter-types oxc ReactCompilerOptions is a mutable options bag */
 import type { ReactCompilerOptions as OxcReactCompilerOptions } from 'oxc-transform-react'
 import type { Plugin } from 'vite-plus'
+import { stripQuery } from '../../shared/utils/path'
 import { hasTopLevelUseServerDirective } from '../analysis/directives'
 
 export type ReactCompilerOptions = OxcReactCompilerOptions
@@ -10,7 +11,6 @@ export type ReactCompilerPluginMode = 'app' | 'library'
 export const REACT_COMPILER_CODE_FILTER = /forwardRef|memo|\b(?:[A-Z]|use[A-Z0-9])/
 
 const DEFAULT_INCLUDE_RE = /\.[cm]?[jt]sx?$/
-const QUERY_STRIP_RE = /\?.*$/
 const USE_MEMO_DIRECTIVE_RE = /['"]use memo['"]/
 
 type OxcTransformReact = typeof import('oxc-transform-react')
@@ -31,7 +31,7 @@ const COMPILER_RUNTIME = 'react/compiler-runtime'
 
 export function matchesCompilerId(id: string): boolean {
   if (id.startsWith('\0') || id.includes('virtual:')) return false
-  const cleanId = id.replace(QUERY_STRIP_RE, '')
+  const cleanId = stripQuery(id)
   if (/\.d\.[cm]?ts$/.test(cleanId)) return false
   if (cleanId.includes('/dist/')) return false
   return DEFAULT_INCLUDE_RE.test(cleanId) && !cleanId.includes('/node_modules/')
@@ -103,7 +103,7 @@ export function createReactCompilerPlugin(
     },
     async transform(code, id) {
       if (!matchesCompilerId(id)) return null
-      const filename = id.replace(QUERY_STRIP_RE, '')
+      const filename = stripQuery(id)
       if (mode === 'library' && !LIBRARY_COMPONENT_RE.test(filename)) return null
       if (isUseServerModule(code)) return null
 

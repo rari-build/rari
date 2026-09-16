@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { ensureCacheDir } from './hash'
+import { isRecord } from '@/shared/utils/type-guards'
+import { ensureCacheDir } from './assets'
 
 const FONT_METADATA_URL = 'https://fonts.google.com/metadata/fonts'
 const METADATA_FETCH_TIMEOUT_MS = 30_000
@@ -36,10 +37,6 @@ interface GoogleFontsMetadata {
 
 const indexesByCacheDir = new Map<string, Map<string, GoogleFontFamilyMeta>>()
 const pendingByCacheDir = new Map<string, Promise<Map<string, GoogleFontFamilyMeta>>>()
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value != null && typeof value === 'object' && !Array.isArray(value)
-}
 
 function isGoogleFontsMetadata(value: unknown): value is GoogleFontsMetadata {
   if (!isRecord(value) || !Array.isArray(value.familyMetadataList)) return false

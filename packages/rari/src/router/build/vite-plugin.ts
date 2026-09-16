@@ -4,7 +4,8 @@ import type { RariPlugin } from '@/vite/plugin/types'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
-import { BACKSLASH_REGEX, QUOTE_REGEX, TSX_EXT_REGEX } from '@/shared/regex-constants'
+import { QUOTE_REGEX, TSX_EXT_REGEX } from '@/shared/regex-constants'
+import { toPosixPath } from '@/shared/utils/path'
 import { getRariServerUrl } from '@/shared/utils/server-port'
 import {
   isRecord,
@@ -14,7 +15,7 @@ import {
 } from '@/shared/utils/type-guards'
 import { toRariPlugin } from '@/vite/plugin/types'
 import { evaluateGenerateStaticParams } from './evaluate-static-params'
-import { generateAppRouteManifest } from './routes'
+import { generateAppRouteManifest, isGroupSegment } from './routes'
 
 const METADATA_EXPORT_REGEX = /export\s+const\s+metadata\s*(?::\s*\w+\s*)?=\s*(\{[\s\S]*?\n\})/
 const TITLE_REGEX = /title\s*:\s*['"]([^'"]+)['"]/
@@ -80,15 +81,10 @@ function getAppRouterFileType(filePath: string): AppRouterFileType | null {
   }
 }
 
-function isGroupSegment(segment: string): boolean {
-  return /^\([^/]+\)$/.test(segment)
-}
-
 function stripRouteGroups(routePath: string): string {
   if (!routePath || routePath === '/') return '/'
 
-  const segments = routePath
-    .replace(BACKSLASH_REGEX, '/')
+  const segments = toPosixPath(routePath)
     .split('/')
     .filter(segment => Boolean(segment) && !isGroupSegment(segment))
 
@@ -100,7 +96,7 @@ function filePathToRoutePath(filePath: string, appDir: string): string {
 
   if (!relativePath || relativePath === '.') return '/'
 
-  const normalized = relativePath.replace(BACKSLASH_REGEX, '/')
+  const normalized = toPosixPath(relativePath)
   const segments = normalized.split('/').filter(Boolean)
 
   return stripRouteGroups(`/${segments.join('/')}`)

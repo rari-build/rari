@@ -24,7 +24,6 @@ import { rariProxy } from '@/proxy/build/vite-plugin'
 import { rariRouter } from '@/router/build/vite-plugin'
 import { patchBrowserClientForFormActions } from '@/shared/patch-flight-browser-client'
 import {
-  BACKSLASH_REGEX,
   EXPORT_NAMED_DECLARATION_REGEX,
   EXTENSION_REGEX,
   HTTP_PROTOCOL_REGEX,
@@ -32,6 +31,7 @@ import {
   WINDOWS_PATH_REGEX,
 } from '@/shared/regex-constants'
 import { clearFileResolverCache, resolveImportToFilePath } from '@/shared/utils/file-resolver'
+import { normalizeAssetsDir, pathnameFromUrl, toPosixPath } from '@/shared/utils/path'
 import { getRariServerPort } from '@/shared/utils/server-port'
 import {
   aliasEntriesFromRecord,
@@ -41,6 +41,7 @@ import {
   parseJsonArrayRecord,
   parseJsonRecord,
 } from '@/shared/utils/type-guards'
+import { readViteAliases, resolvePluginPaths } from '@/shared/utils/vite-aliases'
 import { getComponentId } from './analysis/component-ids'
 import {
   analyzeModuleSource,
@@ -100,15 +101,6 @@ const DIST_NOT_BUILT_ERROR =
 const PROXY_BODY_MAX_BYTES = 10 * 1024 * 1024
 const DOCUMENT_ASSET_EXT_RE =
   /\.(?:js|mjs|cjs|ts|tsx|jsx|css|map|json|svg|png|jpe?g|gif|webp|avif|ico|woff2?|ttf|eot|txt|xml|html|wasm)$/i
-
-function requestPathname(url: string): string {
-  try {
-    return new URL(url, 'http://localhost').pathname
-  } catch {
-    const pathOnly = url.split(/[?#]/, 1)[0] ?? url
-    return pathOnly === '' ? '/' : pathOnly
-  }
-}
 
 function isLikelyStaticAssetPath(pathname: string): boolean {
   const basename = pathname.slice(pathname.lastIndexOf('/') + 1)
@@ -172,7 +164,7 @@ function loadNavigationTransitionModule(projectRoot: string): string {
   for (const relativePath of NAVIGATION_TRANSITION_CANDIDATES) {
     const absolutePath = path.join(projectRoot, relativePath)
     if (fs.existsSync(absolutePath)) {
-      const importPath = `/${relativePath.replace(/\\/g, '/')}`
+      const importPath = `/${toPosixPath(relativePath)}`
       return `export { default as NavigationTransition } from ${JSON.stringify(importPath)}\n`
     }
   }
@@ -260,11 +252,6 @@ const DEFAULT_IMAGE_CONFIG = {
   formats: DEFAULT_FORMATS,
   qualityAllowlist: DEFAULT_QUALITY_LEVELS,
   minimumCacheTTL: DEFAULT_MINIMUM_CACHE_TTL,
-}
-
-function normalizeAssetsDir(assetsDir: string | undefined): string {
-  const normalized = (assetsDir ?? 'assets').replace(/^\/+|\/+$/g, '')
-  return normalized === '' ? 'assets' : normalized
 }
 
 function staticImageLocalPatterns(assetsDir: string): ReadonlyArray<{ readonly pathname: string }> {
@@ -451,7 +438,7 @@ async function writeImageConfig(
     const candidate = outDir ?? options.serverBuild?.outDir ?? path.join(projectRoot, 'dist')
     return path.isAbsolute(candidate) ? candidate : path.resolve(projectRoot, candidate)
   })()
-  const relativeOutDir = path.relative(projectRoot, resolvedOutDir).replace(/\\/g, '/') || 'dist'
+  const relativeOutDir = toPosixPath(path.relative(projectRoot, resolvedOutDir)) || 'dist'
   const imageConfig = {
     ...DEFAULT_IMAGE_CONFIG,
     ...options.images,
@@ -1036,32 +1023,10 @@ if (import.meta.hot) {
     },
 
     configResolved(config) {
-      resolvedAssetsDir = normalizeAssetsDir(config.build.assetsDir)
-      resolvedOutDir = path.resolve(config.root, config.build.outDir)
-      const excludeAliases = new Set([
-        'react',
-        'react-dom',
-        'react/jsx-runtime',
-        'react/jsx-dev-runtime',
-        'react/compiler-runtime',
-        'react-dom/client',
-      ])
-
-      const aliasConfig = config.resolve.alias
-      if (Array.isArray(aliasConfig)) {
-        aliasConfig.forEach(entry => {
-          if (
-            typeof entry.find === 'string' &&
-            typeof entry.replacement === 'string' &&
-            !excludeAliases.has(entry.find)
-          )
-            resolvedAlias[entry.find] = entry.replacement
-        })
-      } else if (typeof aliasConfig === 'object') {
-        Object.entries(aliasConfig).forEach(([key, value]) => {
-          if (typeof value === 'string' && !excludeAliases.has(key)) resolvedAlias[key] = value
-        })
-      }
+      const paths = resolvePluginPaths(config)
+      resolvedAssetsDir = paths.assetsDir
+      resolvedOutDir = paths.outDir
+      Object.assign(resolvedAlias, readViteAliases(config))
     },
 
     async transform(code, id) {
@@ -1569,7 +1534,7 @@ ${clientTransformedCode}`
           const acceptHeader = req.headers.accept
           const method = req.method ?? 'GET'
           const url = req.url ?? ''
-          const pathname = requestPathname(url)
+          const pathname = pathnameFromUrl(url)
           const isRscRequest =
             acceptHeader != null && acceptHeader !== '' && acceptHeader.includes('text/x-component')
           const isDocumentRequest =
@@ -1976,12 +1941,10 @@ ${clientTransformedCode}`
 
         const lazyLoaderRegistry = clientComponentsArray
           .map(componentPath => {
-            const relativePath = path
-              .relative(process.cwd(), componentPath)
-              .replace(BACKSLASH_REGEX, '/')
+            const relativePath = toPosixPath(path.relative(process.cwd(), componentPath))
             const componentId = relativePath.replace(TSX_EXT_REGEX, '')
             const registrationPath = relativePath.startsWith('..')
-              ? componentPath.replace(BACKSLASH_REGEX, '/')
+              ? toPosixPath(componentPath)
               : relativePath
 
             let hasNamedExport = false
@@ -2014,7 +1977,7 @@ ${clientTransformedCode}`
               ? namedExportName
               : path.basename(componentPath, path.extname(componentPath))
 
-            const normalizedPath = registrationPath.replace(BACKSLASH_REGEX, '/')
+            const normalizedPath = toPosixPath(registrationPath)
             const importPath =
               normalizedPath.startsWith('/') || WINDOWS_PATH_REGEX.test(normalizedPath)
                 ? normalizedPath

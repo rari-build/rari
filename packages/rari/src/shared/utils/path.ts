@@ -1,0 +1,48 @@
+import { BACKSLASH_REGEX, MULTIPLE_SLASHES_REGEX } from '../regex-constants'
+
+export interface NormalizePathOptions {
+  readonly collapseSlashes?: boolean
+  readonly ensureLeadingSlash?: boolean
+}
+
+export function normalizePath(path: string, options: NormalizePathOptions = {}): string {
+  const { collapseSlashes = false, ensureLeadingSlash = true } = options
+
+  let normalized = collapseSlashes ? path.replace(MULTIPLE_SLASHES_REGEX, '/') : path
+  if (normalized === '/') return '/'
+  if (!normalized) return ensureLeadingSlash ? '/' : ''
+
+  while (normalized.endsWith('/') && normalized.length > 1) {
+    normalized = normalized.slice(0, -1)
+  }
+
+  if (ensureLeadingSlash && !normalized.startsWith('/')) {
+    normalized = `/${normalized}`
+  }
+
+  return normalized
+}
+
+export function pathnameFromUrl(url: string, base = 'http://localhost'): string {
+  try {
+    return new URL(url, base).pathname
+  } catch {
+    const pathOnly = url.split(/[?#]/, 1)[0] ?? url
+    return pathOnly === '' ? '/' : pathOnly
+  }
+}
+
+export function toPosixPath(value: string): string {
+  return value.replace(BACKSLASH_REGEX, '/')
+}
+
+export function normalizeAssetsDir(assetsDir: string | undefined, fallback = 'assets'): string {
+  const normalized = (assetsDir ?? fallback).replace(/^\/+|\/+$/g, '')
+  return normalized === '' ? fallback : normalized
+}
+
+const QUERY_RE = /\?.*$/
+
+export function stripQuery(id: string): string {
+  return id.replace(QUERY_RE, '')
+}

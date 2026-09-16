@@ -1,5 +1,4 @@
 import fs from 'node:fs'
-import { BACKSLASH_REGEX } from '@/shared/regex-constants'
 import { resolveImportToFilePath } from '@/shared/utils/file-resolver'
 import { getProjectRelativePath } from '../analysis/component-ids'
 import { analyzeModuleSource } from '../analysis/directives'
@@ -108,7 +107,7 @@ export function transformDefineMdxComponents(
     }
 
     const absolutePath = resolveImportToFilePath(importPath, id, resolvedAlias)
-    const moduleId = getProjectRelativePath(absolutePath, projectRoot).replace(BACKSLASH_REGEX, '/')
+    const moduleId = getProjectRelativePath(absolutePath, projectRoot)
     const client = isClientComponent(absolutePath)
 
     return `  { name: ${JSON.stringify(name)}, component: ${binding}, id: ${JSON.stringify(moduleId)}, client: ${client} }`

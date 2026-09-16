@@ -2,11 +2,8 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import {
-  getComponentId,
-  getReadableComponentId,
-  hashString,
-} from '@rari/vite/analysis/component-ids'
+import { contentHash } from '@rari/shared/utils/content-hash'
+import { getComponentId, getReadableComponentId } from '@rari/vite/analysis/component-ids'
 import {
   getDirectives,
   hasTopLevelUseClientDirective,
@@ -44,7 +41,7 @@ describe('analysis goldens (shared with Rust)', () => {
 
     for (const testCase of fixture.cases) {
       expect(getReadableComponentId(testCase.input)).toBe(testCase.readable)
-      expect(hashString(testCase.input)).toBe(testCase.id.split('_').pop())
+      expect(contentHash(testCase.input)).toBe(testCase.id.split('_').pop())
       expect(getComponentId(path.join(projectRoot, testCase.input), projectRoot)).toBe(testCase.id)
     }
   })

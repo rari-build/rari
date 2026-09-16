@@ -6,10 +6,9 @@ import {
   getProxyConfig,
   getProxyFunction,
   getResponseCookies,
-  hasGetSetCookie,
   loadProxyModule,
-  mergeHeaderValue,
 } from './module-utils'
+import { applyResponseCookies, extractProxyHeaders } from './shared/headers'
 
 export class ProxyExecutor {
   private proxyFn: ProxyFunction | null = null
@@ -124,38 +123,18 @@ export class ProxyExecutor {
     }
 
     if (continueHeader === 'true') {
-      const requestHeaders: Record<string, string | string[]> = {}
-      const responseHeaders: Record<string, string | string[]> = {}
-
-      const setCookiesFromForEach: string[] = []
-      const hasSetCookie = hasGetSetCookie(response.headers)
-
-      response.headers.forEach((value, key) => {
-        if (key.toLowerCase() === 'set-cookie') {
-          if (!hasSetCookie) setCookiesFromForEach.push(value)
-
-          return
-        }
-        if (key.startsWith('x-rari-proxy-request-')) {
-          const headerName = key.replace('x-rari-proxy-request-', '')
-          mergeHeaderValue(requestHeaders, headerName, value)
-        } else if (!key.startsWith('x-rari-proxy-')) {
-          mergeHeaderValue(responseHeaders, key, value)
-        }
-      })
-
-      const setCookies = hasSetCookie ? response.headers.getSetCookie() : setCookiesFromForEach
-      for (const value of setCookies) mergeHeaderValue(responseHeaders, 'set-cookie', value)
+      const extracted = extractProxyHeaders(response.headers)
+      const requestHeaders = extracted.requestHeaders
+      const responseHeaders: Record<string, string | string[]> = extracted.responseHeaders
+        ? { ...extracted.responseHeaders }
+        : {}
 
       const cookies = getResponseCookies(response)
-      if (cookies) {
-        for (const value of cookies.toSetCookieHeaders())
-          mergeHeaderValue(responseHeaders, 'set-cookie', value)
-      }
+      if (cookies) applyResponseCookies({ cookies }, responseHeaders)
 
       return {
         continue: true,
-        requestHeaders: Object.keys(requestHeaders).length > 0 ? requestHeaders : undefined,
+        requestHeaders,
         responseHeaders: Object.keys(responseHeaders).length > 0 ? responseHeaders : undefined,
       }
     }

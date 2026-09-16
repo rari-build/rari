@@ -2,10 +2,11 @@ import type { GoogleFontAxisRange } from './google-meta'
 import type { GoogleFontOptions, ResolvedFontFace } from '@/font/types'
 import fs from 'node:fs'
 import path from 'node:path'
+import { contentHash } from '@/shared/utils/content-hash'
+import { ensureCacheDir } from './assets'
 import { fontFormatFromPath, normalizeDisplay, normalizeStyle, normalizeWeight } from './css'
 import { loadGoogleFontFamilyMeta } from './google-meta'
 import { warnGoogleFontOptions } from './google-metadata'
-import { contentHash, ensureCacheDir } from './hash'
 
 const GOOGLE_CSS_USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/104.0.0.0 Safari/537.36'
