@@ -15,7 +15,7 @@ permissions:
   contents: write
 
 env:
-  NODE_VERSION: 22.18.0
+  NODE_VERSION: 24.21.0
 
 jobs:
   build-binaries:

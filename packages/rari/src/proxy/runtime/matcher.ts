@@ -1,65 +1,72 @@
 import type { ProxyConfig, ProxyMatcher, ProxyRuleCondition, RariRequest } from '@/proxy/http/types'
 import { normalizePath } from '@/shared/utils/path'
-import { escapeRegExp } from '@/shared/utils/regexp'
 
-const ASTERISK_REGEX = /\*/g
-const PARAM_TOKEN_REGEX = /\/:(\w+)\*|\/:(\w+)\?|:(\w+)\*|:(\w+)\+|:(\w+)\?|:(\w+)/g
 const PROXY_NORMALIZE_OPTIONS = { collapseSlashes: true, ensureLeadingSlash: false } as const
+const PARAM_OR_WILDCARD_RE = /:(\w+)([?*+]?)|\*/g
+const URL_PATTERN_LITERAL_ESCAPE_RE = /[\\+?(){}]/g
+const PATHNAME_RESERVED_RE = /[?#]/g
 
-const PLACEHOLDER_REPLACEMENTS: ReadonlyArray<readonly [RegExp, string]> = [
-  [/___PARAM_DOTSTAR_SLASH___/g, '(?:/(.*))?'],
-  [/___PARAM_OPT_SLASH___/g, '(?:/([^/]*))?'],
-  [/___PARAM_DOTSTAR___/g, '(.*)'],
-  [/___PARAM_DOTPLUS___/g, '(.+)'],
-  [/___PARAM_OPT___/g, '([^/]*)'],
-  [/___PARAM_SEG___/g, '([^/]+)'],
-  [/___STAR___/g, '.*'],
-]
-
-function paramTokenForMatch(match: string): string {
-  if (match.startsWith('/:')) {
-    if (match.endsWith('*')) return '___PARAM_DOTSTAR_SLASH___'
-    if (match.endsWith('?')) return '___PARAM_OPT_SLASH___'
-  }
-  if (match.endsWith('*')) return '___PARAM_DOTSTAR___'
-  if (match.endsWith('+')) return '___PARAM_DOTPLUS___'
-  if (match.endsWith('?')) return '___PARAM_OPT___'
-  return '___PARAM_SEG___'
+interface CompiledProxyPattern {
+  readonly urlPattern: URLPattern
+  readonly paramNames: readonly string[]
 }
 
-function compilePattern(pattern: string): {
-  readonly regex: RegExp
+const compiledPatterns = new Map<string, CompiledProxyPattern>()
+
+function encodePathnameReserved(value: string): string {
+  return value.replace(PATHNAME_RESERVED_RE, char => encodeURIComponent(char))
+}
+
+function escapeUrlPatternLiteral(literal: string): string {
+  return encodePathnameReserved(literal).replace(URL_PATTERN_LITERAL_ESCAPE_RE, '\\$&')
+}
+
+function toUrlPatternPathname(pattern: string): {
+  readonly pathname: string
   readonly paramNames: readonly string[]
 } {
   const paramNames: string[] = []
+  let pathname = ''
+  let lastIndex = 0
 
-  let regexPattern = pattern.replace(
-    PARAM_TOKEN_REGEX,
-    (
-      match: string,
-      slashStar: string | undefined,
-      slashOpt: string | undefined,
-      star: string | undefined,
-      plus: string | undefined,
-      opt: string | undefined,
-      seg: string | undefined,
-    ) => {
-      paramNames.push(slashStar ?? slashOpt ?? star ?? plus ?? opt ?? seg ?? '')
-      return paramTokenForMatch(match)
-    },
-  )
+  for (const match of pattern.matchAll(PARAM_OR_WILDCARD_RE)) {
+    const index = match.index
+    pathname += escapeUrlPatternLiteral(pattern.slice(lastIndex, index))
 
-  regexPattern = regexPattern.replace(ASTERISK_REGEX, '___STAR___')
-  regexPattern = escapeRegExp(regexPattern, { escapeAsterisk: false })
+    const token = match[0]
+    if (token === '*') {
+      pathname += '*'
+    } else {
+      const name = match[1]
+      const modifier = match[2]
+      paramNames.push(name)
+      pathname += `:${name}${modifier}`
+    }
 
-  for (const [placeholder, replacement] of PLACEHOLDER_REPLACEMENTS) {
-    regexPattern = regexPattern.replace(placeholder, replacement)
+    lastIndex = index + token.length
   }
 
-  return {
-    regex: new RegExp(`^${regexPattern}$`),
+  pathname += escapeUrlPatternLiteral(pattern.slice(lastIndex))
+  return { pathname, paramNames }
+}
+
+function compileProxyPattern(pattern: string): CompiledProxyPattern {
+  const normalizedPattern = normalizePath(pattern, PROXY_NORMALIZE_OPTIONS)
+  const cached = compiledPatterns.get(normalizedPattern)
+  if (cached) return cached
+
+  const { pathname, paramNames } = toUrlPatternPathname(normalizedPattern)
+  const compiled: CompiledProxyPattern = {
+    urlPattern: new URLPattern({ pathname }),
     paramNames,
   }
+  compiledPatterns.set(normalizedPattern, compiled)
+  return compiled
+}
+
+function execProxyPattern(pathname: string, pattern: string): URLPatternResult | null {
+  const normalizedPath = encodePathnameReserved(normalizePath(pathname, PROXY_NORMALIZE_OPTIONS))
+  return compileProxyPattern(pattern).urlPattern.exec({ pathname: normalizedPath })
 }
 
 /* v8 ignore start - requires complex RariRequest mocking */
@@ -134,10 +141,7 @@ function matchesConditions(request: RariRequest, matcher: ProxyMatcher): boolean
 /* v8 ignore stop */
 
 export function matchesPattern(pathname: string, pattern: string): boolean {
-  const normalizedPath = normalizePath(pathname, PROXY_NORMALIZE_OPTIONS)
-  const normalizedPattern = normalizePath(pattern, PROXY_NORMALIZE_OPTIONS)
-  const { regex } = compilePattern(normalizedPattern)
-  return regex.test(normalizedPath)
+  return execProxyPattern(pathname, pattern) != null
 }
 
 /* v8 ignore start - requires complex RariRequest mocking */
@@ -168,16 +172,16 @@ export function shouldRunProxy(request: RariRequest, config?: ProxyConfig): bool
 /* v8 ignore stop */
 
 export function extractParams(pathname: string, pattern: string): Record<string, string> | null {
+  const compiled = compileProxyPattern(pattern)
+  const result = execProxyPattern(pathname, pattern)
+  if (result == null) return null
+
   const params: Record<string, string> = {}
+  const groups = result.pathname.groups
 
-  const normalizedPath = normalizePath(pathname, PROXY_NORMALIZE_OPTIONS)
-  const normalizedPattern = normalizePath(pattern, PROXY_NORMALIZE_OPTIONS)
-  const { regex, paramNames } = compilePattern(normalizedPattern)
-  const match = normalizedPath.match(regex)
-
-  if (!match) return null
-
-  for (let i = 0; i < paramNames.length; i++) params[paramNames[i]] = match[i + 1] ?? ''
+  for (const name of compiled.paramNames) {
+    params[name] = groups[name] ?? ''
+  }
 
   return params
 }

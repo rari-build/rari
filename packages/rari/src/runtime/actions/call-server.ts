@@ -70,7 +70,7 @@ export async function callServer(id: string, args: readonly unknown[]): Promise<
   } catch (error) {
     if (
       (error instanceof DOMException && error.name === 'TimeoutError') ||
-      (error instanceof Error && error.name === 'AbortError')
+      (Error.isError(error) && error.name === 'AbortError')
     ) {
       throw new Error(`Server action "${id}" timed out after ${ACTION_REQUEST_TIMEOUT_MS}ms`)
     }

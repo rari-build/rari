@@ -19,7 +19,8 @@ export function warnGoogleFontOptions(
   if (availableSubsets == null || availableSubsets.length === 0) return
 
   const allowed = new Set(availableSubsets.map(subset => subset.toLowerCase()))
-  const unknown = subsets.filter(subset => !allowed.has(subset.toLowerCase()))
+  const requested = new Set(subsets.map(subset => subset.toLowerCase()))
+  const unknown = [...requested.difference(allowed)]
   if (unknown.length === 0) return
 
   console.warn(

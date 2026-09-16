@@ -4,7 +4,7 @@ import { AppRouterProvider } from 'virtual:app-router-provider'
 import { ClientRouter } from 'virtual:client-router'
 import { createFromFetch, createFromReadableStream } from 'virtual:react-flight-client'
 import { RouterProvider } from '@/router'
-import { getCustomEventDetail, isRecord } from '@/shared/utils/type-guards'
+import { asError, errorMessage, getCustomEventDetail, isRecord } from '@/shared/utils/type-guards'
 import { showHydrationFailureBanner } from './boundaries/runtime-error-banner'
 import { getClientComponent } from './shared/get-client-component'
 import {
@@ -225,8 +225,7 @@ export async function renderApp(): Promise<void> {
       try {
         element = await createElementFromFlightBytes(embeddedPayloadBytes, { streaming: false })
       } catch (parseErr) {
-        hydrationErrorMessage =
-          parseErr instanceof Error ? parseErr.message : 'Failed to parse embedded RSC payload.'
+        hydrationErrorMessage = errorMessage(parseErr, 'Failed to parse embedded RSC payload.')
 
         try {
           const currentPath = window.location.pathname + window.location.search
@@ -247,8 +246,7 @@ export async function renderApp(): Promise<void> {
             hydrationErrorMessage = `Failed to fetch RSC payload fallback: HTTP ${response.status}.`
           }
         } catch (fetchErr) {
-          hydrationErrorMessage =
-            fetchErr instanceof Error ? fetchErr.message : 'Failed to fetch RSC payload fallback.'
+          hydrationErrorMessage = errorMessage(fetchErr, 'Failed to fetch RSC payload fallback.')
           console.error('[rari] Failed to fetch RSC payload fallback:', fetchErr)
         }
       }
@@ -314,7 +312,7 @@ export async function renderApp(): Promise<void> {
         element = await createElementFromFlightBytes(embeddedPayloadBytes, { streaming: true })
       } catch (e) {
         console.error('[rari] Failed to parse embedded RSC payload:', e)
-        console.error('[rari] Error stack:', e instanceof Error ? e.stack : 'no stack')
+        console.error('[rari] Error stack:', asError(e)?.stack ?? 'no stack')
         element = null
       }
     } else if (hasBufferedRows) {

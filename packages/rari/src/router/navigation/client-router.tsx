@@ -549,7 +549,7 @@ export function ClientRouter({
     fromRoute: string,
     options: { readonly emitEvent?: boolean } = {},
   ) => {
-    if (error instanceof Error && error.name === 'AbortError') {
+    if (Error.isError(error) && error.name === 'AbortError') {
       cleanupAbortedNavigation(targetPath, navigationId)
       return
     }

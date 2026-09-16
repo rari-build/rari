@@ -36,7 +36,7 @@ When adding a new feature that spans both sides, name the crate with underscores
 
 ### Prerequisites
 
-- **Node.js** `>=22.18.0` (see `engines` in `packages/rari/package.json`)
+- **Node.js** `>=24.21.0` (see `engines` in `packages/rari/package.json`)
 - **Rust nightly** via `rust-toolchain.toml` (rustup will install it automatically)
 - **pnpm** via Corepack (`packageManager` is pinned in the root `package.json`)
 - **just** (command runner, optional but recommended)

@@ -147,7 +147,7 @@ body:
     attributes:
       label: Node.js Version
       description: What version of Node.js are you using?
-      placeholder: v22.0.0
+      placeholder: v24.21.0
     validations:
       required: true
 

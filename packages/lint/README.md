@@ -55,7 +55,7 @@ export default [
 
 ## Notes
 
-- Node.js `>=22.18.0`
+- Node.js `>=24.21.0`
 - Extend with project-specific ignores and overrides as needed
 
 ## Links

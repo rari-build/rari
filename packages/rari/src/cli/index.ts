@@ -208,7 +208,7 @@ async function waitForProcess(
 }
 
 function normalizeError(error: unknown): string {
-  if (error instanceof Error) return error.message
+  if (Error.isError(error)) return error.message
   if (typeof error === 'string') return error
   try {
     return JSON.stringify(error)

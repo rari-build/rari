@@ -327,7 +327,7 @@ jobs:
 
       - uses: ./.github/actions/setup-pnpm
         with:
-          node-version: 22.18.0
+          node-version: 24.21.0
           cache: 'false'
           setup-toolchain: 'false'
 
@@ -379,7 +379,7 @@ jobs:
 
       - uses: ./.github/actions/setup-pnpm
         with:
-          node-version: 22.18.0
+          node-version: 24.21.0
           cache: 'false'
           setup-toolchain: 'false'
 
@@ -422,7 +422,7 @@ jobs:
 
       - uses: ./.github/actions/setup-pnpm
         with:
-          node-version: 22.18.0
+          node-version: 24.21.0
           cache: 'false'
           setup-toolchain: 'false'
 
@@ -482,7 +482,7 @@ jobs:
 
       - uses: ./.github/actions/setup-pnpm
         with:
-          node-version: 22.18.0
+          node-version: 24.21.0
           cache: 'false'
           setup-toolchain: 'false'
 
@@ -526,7 +526,7 @@ jobs:
       fail-fast: ${{ github.event_name == 'merge_group' }}
       matrix:
         os: [namespace-profile-rari-linux-amd64, namespace-profile-rari-windows-amd64]
-        node: [22.18.0]
+        node: [24.21.0]
         exclude:
           - os: ${{ github.event_name == 'merge_group' &&
               'namespace-profile-rari-windows-amd64' || '' }}

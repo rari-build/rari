@@ -8,7 +8,13 @@ import { NavigationTransition } from 'virtual:navigation-transition'
 import { createFromFetch, createFromReadableStream } from 'virtual:react-flight-client'
 import { captureIndexedFormData, restoreIndexedFormData } from '@/shared/form-state'
 import { PATH_TRAILING_SLASH_REGEX } from '@/shared/regex-constants'
-import { getCustomEventDetail, isFlightThenable, isRecord } from '@/shared/utils/type-guards'
+import {
+  errorMessage,
+  getCustomEventDetail,
+  isFlightThenable,
+  isRecord,
+  toError,
+} from '@/shared/utils/type-guards'
 import { ActionDidRevalidateStaticAndDynamic } from '../actions/revalidation-kind'
 import { HmrFailureBanner } from '../boundaries/hmr-failure-banner'
 import { preloadModulesFromFlightProtocol } from '../shared/preload-modules'
@@ -348,7 +354,7 @@ export function AppRouterProvider({
             const element = await createFromFetch<React.ReactNode>(Promise.resolve(response))
             parsedPayload = { element, rawElement: element, flightProtocol: rscFlightProtocol }
           } catch (parseError) {
-            const error = parseError instanceof Error ? parseError : new Error(String(parseError))
+            const error = toError(parseError)
             trackHMRFailure(
               error,
               'parse',
@@ -371,7 +377,7 @@ export function AppRouterProvider({
         }
       } catch (error) {
         if (
-          error instanceof Error &&
+          Error.isError(error) &&
           !error.message.includes('Failed to fetch RSC data') &&
           !error.message.includes('Failed to parse')
         ) {
@@ -388,11 +394,7 @@ export function AppRouterProvider({
 
       pendingFetchesRef.current.delete(requestKey)
       if (failure != null) {
-        throw failure instanceof Error
-          ? failure
-          : typeof failure === 'string'
-            ? new Error(failure)
-            : new Error('Failed to fetch RSC payload')
+        throw toError(failure)
       }
       return undefined
     })()
@@ -450,8 +452,8 @@ export function AppRouterProvider({
           parsedPayload = await refetchRscPayloadRef.current(detail.to, detail.abortSignal)
         }
       } catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') return
-        parseError = error instanceof Error ? error : new Error(String(error))
+        if (Error.isError(error) && error.name === 'AbortError') return
+        parseError = toError(error)
       }
 
       if (parseError) {
@@ -537,7 +539,7 @@ export function AppRouterProvider({
 
         setHmrError(null)
       } catch (error) {
-        console.error('HMR refetch error:', error instanceof Error ? error.message : String(error))
+        console.error('HMR refetch error:', errorMessage(error, String(error)))
         if (consecutiveFailuresRef.current >= MAX_RETRIES) handleFallbackReload()
       }
 
@@ -594,7 +596,7 @@ export function AppRouterProvider({
         rememberRouteCache(merged)
         resetFailureTracking()
       } catch (error) {
-        const refreshError = error instanceof Error ? error : new Error(String(error))
+        const refreshError = toError(error)
         trackHMRFailure(
           refreshError,
           'parse',
@@ -617,10 +619,7 @@ export function AppRouterProvider({
         setRenderKey(prev => prev + 1)
         setHmrError(null)
       } catch (error) {
-        console.error(
-          'RSC invalidate error:',
-          error instanceof Error ? error.message : String(error),
-        )
+        console.error('RSC invalidate error:', errorMessage(error, String(error)))
         if (consecutiveFailuresRef.current >= MAX_RETRIES) handleFallbackReload()
       }
     }
@@ -644,10 +643,7 @@ export function AppRouterProvider({
         await refetchRscPayloadRef.current()
         setHmrError(null)
       } catch (error) {
-        console.error(
-          'Manifest update error:',
-          error instanceof Error ? error.message : String(error),
-        )
+        console.error('Manifest update error:', errorMessage(error, String(error)))
         if (consecutiveFailuresRef.current >= MAX_RETRIES) handleFallbackReload()
       }
     }
