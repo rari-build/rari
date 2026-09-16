@@ -72,12 +72,13 @@ export async function buildAndImportMetadataModule(
   await fs.mkdir(cacheDir, { recursive: true })
   const tempFile = path.join(cacheDir, `${label}-${randomUUID()}.mjs`)
 
-  try {
-    await fs.writeFile(tempFile, entryChunk.code, 'utf8')
-    return await import(pathToFileURL(tempFile).href)
-  } finally {
+  await using stack = new AsyncDisposableStack()
+  stack.defer(async () => {
     await fs.rm(tempFile, { force: true })
-  }
+  })
+
+  await fs.writeFile(tempFile, entryChunk.code, 'utf8')
+  return await import(pathToFileURL(tempFile).href)
 }
 
 export function requireMetadataDefaultExport(module: unknown, label: string): unknown {

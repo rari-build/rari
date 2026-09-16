@@ -5,7 +5,13 @@ import { logError, logInfo, logSuccess, logWarn } from '@rari/logger'
 
 export { logError, logInfo, logSuccess, logWarn }
 
-export const MIN_SUPPORTED_NODE_MAJOR = 22
+export const MIN_SUPPORTED_NODE_MAJOR = 24
+
+function errorMessage(error: unknown, fallback = 'Unknown error'): string {
+  if (Error.isError(error)) return error.message
+  if (typeof error === 'string') return error
+  return fallback
+}
 
 const AND_SPLIT_REGEX = /\s+(?:&&\s+)?/
 const LOWER_BOUND_REGEX = /^>=?\s*(\d+)/
@@ -119,7 +125,7 @@ function extractMajorAndCompare(versionRange: string, minMajor: number): boolean
   return false
 }
 
-export const MIN_NODE_VERSION = '>=22.18.0'
+export const MIN_NODE_VERSION = '>=24.21.0'
 
 export interface PackageJsonLike {
   version?: string
@@ -307,9 +313,7 @@ export function getRariVersion(cwd: string = process.cwd()): string {
     process.exit(1)
     return ''
   } catch (error) {
-    logError(
-      `Failed to read rari package.json: ${error instanceof Error ? error.message : 'Unknown error'}`,
-    )
+    logError(`Failed to read rari package.json: ${errorMessage(error)}`)
     process.exit(1)
     return ''
   }
@@ -362,9 +366,7 @@ export function updatePackageJsonForProvider(cwd: string, config: ProviderConfig
     writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`)
     logSuccess(`Updated package.json for ${config.providerName} deployment`)
   } catch (error) {
-    logError(
-      `Failed to update package.json: ${error instanceof Error ? error.message : 'Unknown error'}`,
-    )
+    logError(`Failed to update package.json: ${errorMessage(error)}`)
     process.exit(1)
   }
 }
@@ -450,9 +452,7 @@ export function createOrBackupConfigFile(cwd: string, filename: string, content:
     writeFileSync(configPath, content)
     logSuccess(`Created ${filename} configuration`)
   } catch (error) {
-    logError(
-      `Failed to create or backup ${filename}: ${error instanceof Error ? error.message : 'Unknown error'}`,
-    )
+    logError(`Failed to create or backup ${filename}: ${errorMessage(error)}`)
     process.exit(1)
   }
 }

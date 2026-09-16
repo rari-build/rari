@@ -5,7 +5,7 @@ inputs:
   node-version:
     description: Node.js version passed to actions/setup-node
     required: false
-    default: 22.18.0
+    default: 24.21.0
   install:
     description: Run pnpm install --frozen-lockfile after setup
     required: false

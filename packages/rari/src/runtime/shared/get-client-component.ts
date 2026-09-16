@@ -2,7 +2,7 @@
 import type { ComponentInfo } from './types'
 import * as React from 'react'
 import { toPosixPath } from '@/shared/utils/path'
-import { isComponentType, isFunction, isRecord } from '@/shared/utils/type-guards'
+import { isComponentType, isFunction, isRecord, toError } from '@/shared/utils/type-guards'
 import {
   getClientComponentNames,
   getClientComponentPaths,
@@ -224,7 +224,7 @@ function findComponentInfo(id: string): ComponentLookup | null {
 }
 
 function toLoadError(error: unknown): Error {
-  return error instanceof Error ? error : new Error(String(error))
+  return toError(error)
 }
 
 function createSuspenseThrowable(promise: Promise<any>, id: string): Error {

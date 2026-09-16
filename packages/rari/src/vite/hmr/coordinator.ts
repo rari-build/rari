@@ -4,7 +4,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { throwIfNotOk } from '@/shared/utils/http'
 import { getRariServerPort } from '@/shared/utils/server-port'
-import { isRecord } from '@/shared/utils/type-guards'
+import { errorMessage, isRecord, toError } from '@/shared/utils/type-guards'
 import { HMRErrorHandler } from './error-handler'
 import { walkImporters } from './import-graph'
 
@@ -47,7 +47,7 @@ function isFailedRebuildResult(value: unknown): value is FailedRebuildResult {
     value.success === false &&
     typeof value.filePath === 'string' &&
     typeof value.relativePath === 'string' &&
-    value.error instanceof Error
+    Error.isError(value.error)
   )
 }
 
@@ -98,9 +98,9 @@ export class HMRCoordinator {
         this.queueLog('warning', `Client component module not found in graph: ${relativePath}`)
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      this.queueLog('error', `Failed to update client component: ${relativePath} - ${errorMessage}`)
-      this.errorHandler.recordError(error instanceof Error ? error : new Error(errorMessage))
+      const message = errorMessage(error, String(error))
+      this.queueLog('error', `Failed to update client component: ${relativePath} - ${message}`)
+      this.errorHandler.recordError(toError(error))
     }
 
     return Promise.resolve()
@@ -154,7 +154,7 @@ export class HMRCoordinator {
                 success: false,
                 filePath: file,
                 relativePath,
-                error: error instanceof Error ? error : new Error(String(error)),
+                error: toError(error),
               }
             }
           }),
@@ -201,12 +201,12 @@ export class HMRCoordinator {
           const timestamp = Date.now()
 
           failed.forEach(({ relativePath, error }) => {
-            const errorMessage = error.message
+            const message = error.message
             const errorStack = (
               error.stack != null && error.stack !== '' ? error.stack : ''
             ).substring(0, 500)
 
-            this.queueLog('error', `Failed to rebuild: ${relativePath} - ${errorMessage}`)
+            this.queueLog('error', `Failed to rebuild: ${relativePath} - ${message}`)
 
             this.errorHandler.recordError(error)
 
@@ -214,7 +214,7 @@ export class HMRCoordinator {
               type: 'custom',
               event: 'rari:hmr-error',
               data: {
-                msg: errorMessage,
+                msg: message,
                 stack: errorStack,
                 file: relativePath,
                 t: timestamp,
@@ -261,7 +261,7 @@ export class HMRCoordinator {
         parsed = JSON.parse(responseText)
       } catch (parseError) {
         throw new Error(
-          `Failed to parse server response (status ${response.status}): ${parseError instanceof Error ? parseError.message : String(parseError)}. ` +
+          `Failed to parse server response (status ${response.status}): ${errorMessage(parseError, String(parseError))}. ` +
             `Response body: ${responseText.substring(0, 200)}${responseText.length > 200 ? '...' : ''}`,
         )
       }

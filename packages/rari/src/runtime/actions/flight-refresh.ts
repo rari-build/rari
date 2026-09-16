@@ -1,5 +1,10 @@
 import type { ActionRevalidationKind } from './revalidation-kind'
-import { isFlightThenable, isLikelyReactElement, isRecord } from '@/shared/utils/type-guards'
+import {
+  errorMessage,
+  isFlightThenable,
+  isLikelyReactElement,
+  isRecord,
+} from '@/shared/utils/type-guards'
 import { ActionDidNotRevalidate, parseActionRevalidationKind } from './revalidation-kind'
 
 export interface ActionFlightRefreshDetail {
@@ -85,10 +90,7 @@ export function scheduleActionFlightRefresh(
 
     queueMicrotask(applyRefresh)
   })().catch((error: unknown) => {
-    console.error(
-      '[rari] Action flight refresh failed:',
-      error instanceof Error ? error.message : String(error),
-    )
+    console.error('[rari] Action flight refresh failed:', errorMessage(error, String(error)))
   })
 }
 

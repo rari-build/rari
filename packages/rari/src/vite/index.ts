@@ -37,6 +37,7 @@ import { normalizeAssetsDir, pathnameFromUrl, toPosixPath } from '@/shared/utils
 import { getRariServerPort } from '@/shared/utils/server-port'
 import {
   aliasEntriesFromRecord,
+  errorMessage,
   getErrnoCode,
   isAliasArray,
   isRecord,
@@ -447,11 +448,7 @@ async function writeImageConfig(
     imageManifest = { images: parseJsonArrayRecord(result.stdout, 'images') ?? [] }
   } catch (error) {
     const parseMessage =
-      error instanceof SyntaxError
-        ? error.message
-        : error instanceof Error
-          ? error.message
-          : String(error)
+      error instanceof SyntaxError ? error.message : errorMessage(error, String(error))
     const outputPreview = (result.stdout || result.stderr || '(empty)').slice(0, 500)
     throw new Error(
       `Failed to parse image scanner output as JSON: ${parseMessage}. Scanner output: ${outputPreview}`,
@@ -828,7 +825,7 @@ if (import.meta.hot) {
       const resolveOptions = config.resolve
       const existingDedupe = Array.isArray(resolveOptions.dedupe) ? resolveOptions.dedupe : []
       const toAdd = ['react', 'react-dom']
-      resolveOptions.dedupe = [...new Set([...existingDedupe, ...toAdd])]
+      resolveOptions.dedupe = [...new Set(existingDedupe).union(new Set(toAdd))]
 
       let existingAlias: Array<{
         find: string | RegExp
@@ -1356,7 +1353,7 @@ ${clientTransformedCode}`
               } catch (error) {
                 console.error(
                   `[rari] Runtime: Failed to register component ${component.id}:`,
-                  error instanceof Error ? error.message : String(error),
+                  errorMessage(error, String(error)),
                 )
               }
             }),
@@ -1364,7 +1361,7 @@ ${clientTransformedCode}`
         } catch (error) {
           console.error(
             '[rari] Runtime: Component discovery failed:',
-            error instanceof Error ? error.message : String(error),
+            errorMessage(error, String(error)),
           )
         }
       }
@@ -1415,7 +1412,7 @@ ${clientTransformedCode}`
           binaryPath = getBinaryPath()
         } catch (error) {
           console.error('rari binary not found')
-          console.error(`   ${error instanceof Error ? error.message : String(error)}`)
+          console.error(`   ${errorMessage(error, String(error))}`)
           console.error(getInstallationInstructions())
           return
         }
@@ -1537,7 +1534,7 @@ ${clientTransformedCode}`
                 console.error(
                   '[rari] Failed to register component',
                   `${component.id}:`,
-                  error instanceof Error ? error.message : String(error),
+                  errorMessage(error, String(error)),
                 )
               }
             }),
@@ -1546,7 +1543,7 @@ ${clientTransformedCode}`
           console.error(
             '[rari] Targeted HMR failed for',
             `${filePath}:`,
-            error instanceof Error ? error.message : String(error),
+            errorMessage(error, String(error)),
           )
         }
       }
@@ -1737,7 +1734,7 @@ ${clientTransformedCode}`
             res.end(
               JSON.stringify({
                 success: false,
-                error: error instanceof Error ? error.message : String(error),
+                error: errorMessage(error, String(error)),
               }),
             )
           }
@@ -1900,10 +1897,9 @@ ${clientTransformedCode}`
           moduleAnalysisCache,
         )
 
-        const allClientComponents = new Set([
-          ...getKnownClientComponentPaths(),
-          ...scannedClientComponents,
-        ])
+        const allClientComponents = getKnownClientComponentPaths().union(
+          new Set(scannedClientComponents),
+        )
 
         const externalClientComponents = [
           { path: 'rari/image', exports: ['Image'] },

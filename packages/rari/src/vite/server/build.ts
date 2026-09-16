@@ -33,7 +33,13 @@ import {
   resolveWithExtensionsAndIndex,
 } from '@/shared/utils/file-resolver'
 import { normalizeAssetsDir, toPosixPath } from '@/shared/utils/path'
-import { getErrnoCode, isRecord, parseJsonRecord } from '@/shared/utils/type-guards'
+import {
+  errorMessage,
+  getErrnoCode,
+  isRecord,
+  parseJsonRecord,
+  toError,
+} from '@/shared/utils/type-guards'
 import { readViteAliases } from '@/shared/utils/vite-aliases'
 import {
   getReadableComponentId,
@@ -1337,7 +1343,7 @@ export class ServerComponentBuilder {
               return { code: `export default ${JSON.stringify(content)}`, moduleType: 'js' }
             } catch (e) {
               throw new Error(
-                `[rari] Failed to read CSS ${filePath}: ${e instanceof Error ? e.message : String(e)}`,
+                `[rari] Failed to read CSS ${filePath}: ${errorMessage(e, String(e))}`,
               )
             }
           }
@@ -1358,7 +1364,7 @@ export class ServerComponentBuilder {
               return { code: `export default ${JSON.stringify(href)}`, moduleType: 'js' }
             } catch (e) {
               throw new Error(
-                `[rari] Failed to emit CSS URL asset ${filePath}: ${e instanceof Error ? e.message : String(e)}`,
+                `[rari] Failed to emit CSS URL asset ${filePath}: ${errorMessage(e, String(e))}`,
               )
             }
           }
@@ -1372,7 +1378,7 @@ export class ServerComponentBuilder {
                 if (forServerAsset !== '') cssModules.push(forServerAsset)
               } catch (e) {
                 throw new Error(
-                  `[rari] Failed to read CSS ${filePath}: ${e instanceof Error ? e.message : String(e)}`,
+                  `[rari] Failed to read CSS ${filePath}: ${errorMessage(e, String(e))}`,
                 )
               }
             }
@@ -1406,7 +1412,7 @@ export class ServerComponentBuilder {
             return { code: `export default ${JSON.stringify(classes)}`, moduleType: 'js' }
           } catch (e) {
             throw new Error(
-              `[rari] Failed to process CSS module ${id}: ${e instanceof Error ? e.message : String(e)}`,
+              `[rari] Failed to process CSS module ${id}: ${errorMessage(e, String(e))}`,
             )
           }
         },
@@ -1629,7 +1635,7 @@ export class ServerComponentBuilder {
                 css,
               }
             } catch (error) {
-              errors.push(error instanceof Error ? error : new Error(String(error)))
+              errors.push(toError(error))
             } finally {
               active--
               if (index >= entries.length && active === 0) {
@@ -1879,7 +1885,7 @@ export class ServerComponentBuilder {
             } catch (error) {
               console.warn(
                 `[rari] SSR build failed for ${componentId}:`,
-                error instanceof Error ? error.message : error,
+                errorMessage(error, String(error)),
               )
             } finally {
               active--
@@ -1977,7 +1983,7 @@ export class ServerComponentBuilder {
       } catch (error) {
         console.warn(
           `[rari] SSR build failed for ${componentId}:`,
-          error instanceof Error ? error.message : error,
+          errorMessage(error, String(error)),
         )
       }
     }
@@ -2591,10 +2597,7 @@ function collectScannedFiles(
       const analysis = builder.getModuleAnalysis(fullPath, code)
       files.push({ filePath: fullPath, cacheKey, code, analysis })
     } catch (error) {
-      console.warn(
-        `[server-build] Error reading ${fullPath}:`,
-        error instanceof Error ? error.message : error,
-      )
+      console.warn(`[server-build] Error reading ${fullPath}:`, errorMessage(error, String(error)))
     }
   }
 

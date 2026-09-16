@@ -1,4 +1,5 @@
 import { throwIfNotOk } from '@/shared/utils/http'
+import { asError, errorMessage } from '@/shared/utils/type-guards'
 
 export type NavigationErrorType =
   | 'fetch-error'
@@ -107,7 +108,7 @@ function handleParseError(error: unknown, url?: string): NavigationError {
     type: 'parse-error',
     message: 'Failed to parse server response',
     /* v8 ignore next - defensive check for non-Error values from parse-related condition */
-    originalError: error instanceof Error ? error : undefined,
+    originalError: asError(error),
     url,
     timestamp: Date.now(),
     retryable: false,
@@ -117,8 +118,8 @@ function handleParseError(error: unknown, url?: string): NavigationError {
 function handleUnknownError(error: unknown, url?: string): NavigationError {
   return {
     type: 'fetch-error',
-    message: error instanceof Error ? error.message : 'Unknown error occurred',
-    originalError: error instanceof Error ? error : undefined,
+    message: errorMessage(error, 'Unknown error occurred'),
+    originalError: asError(error),
     url,
     timestamp: Date.now(),
     retryable: false,
@@ -126,15 +127,12 @@ function handleUnknownError(error: unknown, url?: string): NavigationError {
 }
 
 export function createNavigationError(error: unknown, url?: string): NavigationError {
-  if (error instanceof Error && error.name === 'AbortError') return handleAbortError(error, url)
+  if (Error.isError(error) && error.name === 'AbortError') return handleAbortError(error, url)
 
-  if (
-    error instanceof Error &&
-    (error.name === 'TimeoutError' || error.message.includes('timeout'))
-  )
+  if (Error.isError(error) && (error.name === 'TimeoutError' || error.message.includes('timeout')))
     return handleTimeoutError(error, url)
 
-  if (error instanceof Error && 'status' in error) {
+  if (Error.isError(error) && 'status' in error) {
     const status = (error as Error & { status?: unknown }).status
     if (typeof status !== 'number') return handleUnknownError(error, url)
 
@@ -145,7 +143,7 @@ export function createNavigationError(error: unknown, url?: string): NavigationE
     return handleNetworkError(error, url)
   }
 
-  if (error instanceof SyntaxError || (error instanceof Error && error.message.includes('parse')))
+  if (error instanceof SyntaxError || (Error.isError(error) && error.message.includes('parse')))
     return handleParseError(error, url)
 
   return handleUnknownError(error, url)

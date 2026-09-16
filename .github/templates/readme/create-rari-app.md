@@ -106,7 +106,7 @@ Visit [rari.build/docs](https://rari.build/docs) for:
 
 If you encounter issues during installation:
 
-1. Ensure you're using Node.js 22 or higher: `node --version`
+1. Ensure you're using Node.js 24.21.0 or higher: `node --version`
 2. Clear npm cache: `npm cache clean --force`
 3. Try with a different package manager (pnpm, yarn, or bun)
 
