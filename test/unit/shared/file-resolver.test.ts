@@ -5,6 +5,7 @@ import {
   clearFileResolverCache,
   resolveIndexFile,
   resolveWithExtensions,
+  resolveWithExtensionsAndIndex,
 } from '@rari/shared/utils/file-resolver'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { castMock } from '../../helpers/mock-cast'
@@ -215,6 +216,38 @@ describe('file-resolver', () => {
     })
   })
 
+  describe('resolveWithExtensionsAndIndex', () => {
+    it('should resolve directory imports to index when empty extension is present', () => {
+      const dirPath = '/test/components'
+      const indexPath = path.join(dirPath, 'index.tsx')
+      const extensions = ['', '.tsx', '.ts', '.jsx', '.js']
+
+      vi.mocked(fs.existsSync).mockImplementation(p => {
+        const value = String(p)
+        return value === dirPath || value === indexPath
+      })
+      vi.mocked(fs.statSync).mockImplementation(p =>
+        String(p) === dirPath ? DIR_STAT : NON_DIR_STAT,
+      )
+
+      const result = resolveWithExtensionsAndIndex(dirPath, extensions)
+
+      expect(result).toBe(indexPath)
+    })
+
+    it('should still resolve an exact file path with empty extension', () => {
+      const filePath = '/test/component.tsx'
+      const extensions = ['', '.ts', '.tsx']
+
+      vi.mocked(fs.existsSync).mockReturnValue(true)
+      vi.mocked(fs.statSync).mockReturnValue(NON_DIR_STAT)
+
+      const result = resolveWithExtensionsAndIndex(filePath, extensions)
+
+      expect(result).toBe(filePath)
+    })
+  })
+
   describe('integration scenarios', () => {
     it('should resolve component with extension first, then index', () => {
       const basePath = '/test/Button'
@@ -237,6 +270,7 @@ describe('file-resolver', () => {
       const extensions = ['.tsx']
 
       vi.mocked(fs.existsSync).mockReturnValue(true)
+      vi.mocked(fs.statSync).mockReturnValue(NON_DIR_STAT)
 
       const result = resolveWithExtensions(basePath, extensions)
 
@@ -261,6 +295,7 @@ describe('file-resolver', () => {
       const extensions = ['.tsx']
 
       vi.mocked(fs.existsSync).mockReturnValue(true)
+      vi.mocked(fs.statSync).mockReturnValue(NON_DIR_STAT)
 
       const result = resolveWithExtensions(basePath, extensions)
 
