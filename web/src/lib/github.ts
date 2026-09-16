@@ -62,6 +62,21 @@ function isGitHubRepo(value: unknown): value is GitHubRepo {
   )
 }
 
+function isGitHubRelease(value: unknown): value is { tag_name: string } {
+  if (typeof value !== 'object' || value === null) return false
+  return typeof Reflect.get(value, 'tag_name') === 'string'
+}
+
+function isGitHubReleaseArray(value: unknown): value is { tag_name: string }[] {
+  return Array.isArray(value) && value.every(isGitHubRelease)
+}
+
+function versionFromRariReleaseTag(tagName: string): string | null {
+  if (!tagName.startsWith('rari@')) return null
+  const version = tagName.slice('rari@'.length)
+  return version !== '' ? version : null
+}
+
 export async function getLastCommitDate(filePath: string): Promise<string | null> {
   try {
     const url = `${GITHUB_API_BASE}/repos/${GITHUB_REPO}/commits?path=${encodeURIComponent(filePath)}&page=1&per_page=1`
@@ -137,5 +152,34 @@ export async function getLatestCommitHash(): Promise<string | null> {
   } catch (error) {
     console.error('Error fetching latest commit:', error)
     return null
+  }
+}
+
+export async function getLatestRariVersion(): Promise<string> {
+  try {
+    const url = `${GITHUB_API_BASE}/repos/${GITHUB_REPO}/releases?per_page=30`
+
+    const response = await fetch(url, {
+      headers: getGitHubHeaders(),
+      rari: { revalidate: 3600 },
+    })
+
+    if (!response.ok) {
+      console.warn(`Failed to fetch releases: ${response.status}`)
+      return '0.0.0'
+    }
+
+    const data: unknown = await response.json()
+    if (!isGitHubReleaseArray(data)) return '0.0.0'
+
+    for (const release of data) {
+      const version = versionFromRariReleaseTag(release.tag_name)
+      if (version != null) return version
+    }
+
+    return '0.0.0'
+  } catch (error) {
+    console.error('Error fetching latest rari release:', error)
+    return '0.0.0'
   }
 }

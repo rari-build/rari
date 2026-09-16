@@ -1,32 +1,15 @@
 import type { LayoutProps, Metadata } from 'rari'
 import type { CSSProperties } from 'react'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { cwd } from 'node:process'
 import Footer from '@/components/Footer'
 import { Providers } from '@/components/Providers'
 import Sidebar from '@/components/Sidebar'
+import { getLatestRariVersion } from '@/lib/github'
 import { siteUrl } from '@/lib/site'
 import './globals.css'
 
-function getRariVersion(): string {
-  try {
-    const pkgPath = join(cwd(), 'node_modules', 'rari', 'package.json')
-    const parsed: unknown = JSON.parse(readFileSync(pkgPath, 'utf-8'))
-    if (typeof parsed === 'object' && parsed !== null) {
-      const version: unknown = Reflect.get(parsed, 'version')
-      if (typeof version === 'string' && version !== '') return version
-    }
-  } catch {
-    return '0.0.0'
-  }
+export default async function Layout({ children, pathname }: LayoutProps) {
+  const version = await getLatestRariVersion()
 
-  return '0.0.0'
-}
-
-const RARI_VERSION = getRariVersion()
-
-export default function Layout({ children, pathname }: LayoutProps) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -45,7 +28,7 @@ export default function Layout({ children, pathname }: LayoutProps) {
             style={{ '--sidebar-width': 'calc(8rem)' } as CSSProperties}
           >
             <div className="flex min-h-screen">
-              <Sidebar version={RARI_VERSION} />
+              <Sidebar version={version} />
               <div className="flex-1 flex flex-col min-h-screen min-w-0 gap-0.5 md:pl-0.5 md:pr-0.5">
                 <main className="flex-1 min-w-0 bg-canvas rounded-b-md overflow-hidden">
                   {children}
