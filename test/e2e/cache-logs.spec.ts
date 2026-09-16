@@ -170,16 +170,16 @@ test('fetch cache: GET /fetch-test twice - first miss, second hit', async ({ pag
 // 7) Handler: distinct URLs trigger set_with_tags / hit / miss lines
 // ---------------------------------------------------------------------------
 
-test('handler: multiple GETs against distinct URLs eventually trigger set_with_tags / hit / miss lines', async ({
-  request,
-}) => {
+test('handler: multiple GETs against distinct URLs serve repeat hits', async ({ request }) => {
   const urls = ['/', '/about', '/nested', '/nested/deep', '/blog', '/products']
 
   const missesBefore = grepLog(/memory cache miss/).length
+  let sawMiss = false
 
   for (const path of urls) {
     const r = await request.get(path)
     expect([200, 404]).toContain(r.status())
+    if (r.status() === 200 && r.headers()['x-cache'] === 'MISS') sawMiss = true
   }
 
   for (const path of urls) {
@@ -187,11 +187,13 @@ test('handler: multiple GETs against distinct URLs eventually trigger set_with_t
     if (r.status() === 200) expect(r.headers()['x-cache']).toBe('HIT')
   }
 
-  await expect
-    .poll(() => grepLog(/memory cache miss/).length, {
-      message: 'memory cache misses after cold GETs',
-    })
-    .toBeGreaterThanOrEqual(missesBefore)
+  if (sawMiss) {
+    await expect
+      .poll(() => grepLog(/memory cache miss/).length, {
+        message: 'memory cache misses after cold GETs',
+      })
+      .toBeGreaterThan(missesBefore)
+  }
 
   await expectAllLogged([/memory cache handler initialized/])
 })

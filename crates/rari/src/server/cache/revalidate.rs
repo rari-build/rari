@@ -1,5 +1,3 @@
-#![expect(clippy::missing_errors_doc)]
-
 use std::sync::Arc;
 
 use rari_error::RariError;
