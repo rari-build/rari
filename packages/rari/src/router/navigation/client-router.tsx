@@ -430,7 +430,13 @@ export function ClientRouter({
   const NAVIGATION_DEBOUNCE_MS = 50
   const NAVIGATION_MAX_WAIT_MS = 200
 
-  const generateHistoryKey = (): string => crypto.randomUUID()
+  const generateHistoryKey = (): string => {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID()
+    }
+
+    return `hk-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`
+  }
 
   const cancelNavigation = () => {
     if (abortControllerRef.current) {
