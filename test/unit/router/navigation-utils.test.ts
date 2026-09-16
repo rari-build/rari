@@ -6,9 +6,9 @@ import {
   findTemplateChain,
   isExternalUrl,
   matchRouteParams,
-  normalizePath,
   parseRoutePath,
 } from '@rari/router/navigation/match'
+import { normalizePath } from '@rari/shared/utils/path'
 import { afterEach, beforeEach, describe, expect, it } from 'vite-plus/test'
 import { castMock } from '../../helpers/mock-cast'
 
@@ -227,6 +227,7 @@ describe('findLayoutChain', () => {
       templates: [],
       apiRoutes: [],
       ogImages: [],
+      appIcons: [],
       generated: '2024-01-01',
     }
 
@@ -249,6 +250,7 @@ describe('findLayoutChain', () => {
       templates: [],
       apiRoutes: [],
       ogImages: [],
+      appIcons: [],
       generated: '2024-01-01',
     }
 
@@ -272,6 +274,7 @@ describe('findLayoutChain', () => {
       templates: [],
       apiRoutes: [],
       ogImages: [],
+      appIcons: [],
       generated: '2024-01-01',
     }
 
@@ -291,6 +294,7 @@ describe('findLayoutChain', () => {
       templates: [],
       apiRoutes: [],
       ogImages: [],
+      appIcons: [],
       generated: '2024-01-01',
     }
 
@@ -311,6 +315,7 @@ describe('findLayoutChain', () => {
       templates: [],
       apiRoutes: [],
       ogImages: [],
+      appIcons: [],
       generated: '2024-01-01',
     }
 
@@ -330,6 +335,7 @@ describe('findLayoutChain', () => {
       templates: [],
       apiRoutes: [],
       ogImages: [],
+      appIcons: [],
       generated: '2024-01-01',
     }
 
@@ -347,6 +353,7 @@ describe('findLayoutChain', () => {
       templates: [],
       apiRoutes: [],
       ogImages: [],
+      appIcons: [],
       generated: '2024-01-01',
     }
 
@@ -376,6 +383,7 @@ describe('createRouteInfo', () => {
       templates: [],
       apiRoutes: [],
       ogImages: [],
+      appIcons: [],
       generated: '2024-01-01',
     }
 
@@ -408,6 +416,7 @@ describe('createRouteInfo', () => {
       templates: [],
       apiRoutes: [],
       ogImages: [],
+      appIcons: [],
       generated: '2024-01-01',
     }
 
@@ -436,6 +445,7 @@ describe('createRouteInfo', () => {
       templates: [],
       apiRoutes: [],
       ogImages: [],
+      appIcons: [],
       generated: '2024-01-01',
     }
 
@@ -465,6 +475,7 @@ describe('createRouteInfo', () => {
       templates: [],
       apiRoutes: [],
       ogImages: [],
+      appIcons: [],
       generated: '2024-01-01',
     }
 
@@ -491,6 +502,7 @@ describe('createRouteInfo', () => {
       templates: [],
       apiRoutes: [],
       ogImages: [],
+      appIcons: [],
       generated: '2024-01-01',
     }
 
@@ -510,6 +522,7 @@ describe('createRouteInfo', () => {
       templates: [],
       apiRoutes: [],
       ogImages: [],
+      appIcons: [],
       generated: '2024-01-01',
     }
 
@@ -540,6 +553,7 @@ describe('createRouteInfo', () => {
       templates: [],
       apiRoutes: [],
       ogImages: [],
+      appIcons: [],
       generated: '2024-01-01',
     }
 
@@ -624,6 +638,7 @@ describe('findLayoutChain with additionalPaths', () => {
       templates: [],
       apiRoutes: [],
       ogImages: [],
+      appIcons: [],
       generated: '2026-01-01T00:00:00.000Z',
     }
 
@@ -650,6 +665,7 @@ describe('findLayoutChain with additionalPaths', () => {
       templates: [],
       apiRoutes: [],
       ogImages: [],
+      appIcons: [],
       generated: '2026-01-01T00:00:00.000Z',
     }
 
@@ -674,6 +690,7 @@ describe('findLayoutChain with additionalPaths', () => {
       templates: [],
       apiRoutes: [],
       ogImages: [],
+      appIcons: [],
       generated: '2026-01-01T00:00:00.000Z',
     }
 
@@ -697,6 +714,7 @@ describe('findLayoutChain with additionalPaths', () => {
       templates: [],
       apiRoutes: [],
       ogImages: [],
+      appIcons: [],
       generated: '2026-01-01T00:00:00.000Z',
     }
 
@@ -714,6 +732,7 @@ describe('findLayoutChain with additionalPaths', () => {
       templates: [],
       apiRoutes: [],
       ogImages: [],
+      appIcons: [],
       generated: '2026-01-01T00:00:00.000Z',
     }
 
@@ -733,6 +752,7 @@ function manifestWithTemplates(overrides: Partial<AppRouteManifest> = {}): AppRo
     templates: [],
     apiRoutes: [],
     ogImages: [],
+    appIcons: [],
     generated: '2026-01-01T00:00:00.000Z',
     ...overrides,
   }

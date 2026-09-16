@@ -12,14 +12,16 @@ import type {
 import fs from 'node:fs'
 import path from 'node:path'
 import { fromBuffer } from '@capsizecss/unpack'
+import { contentHash } from '@/shared/utils/content-hash'
+import { resolvePluginPaths } from '@/shared/utils/vite-aliases'
 import { addClientHeadExtraTag } from '../client-head'
+import { classNameFromHash, hashedFontFileName, publicFontUrl } from './assets'
 import { buildFontFamilyStack, fontMimeType, serializeFontFaceRule } from './css'
 import {
   fontPreloadMarker,
   googleExportNameToFamily,
   resolveGoogleFontFaces,
 } from './google-loader'
-import { classNameFromHash, contentHash, hashedFontFileName, publicFontUrl } from './hash'
 import { resolveLocalFontFaces } from './local-resolve'
 import {
   categoryFallback,
@@ -730,9 +732,10 @@ export function createFontPlugin(): Plugin {
     name: 'rari:font',
     enforce: 'pre',
     configResolved(config) {
-      projectRoot = config.root
-      assetsDir = config.build.assetsDir || 'assets'
-      outDir = path.resolve(config.root, config.build.outDir)
+      const paths = resolvePluginPaths(config)
+      projectRoot = paths.projectRoot
+      assetsDir = paths.assetsDir
+      outDir = paths.outDir
     },
     resolveId(id) {
       if (id.startsWith(CSS_PREFIX)) return id

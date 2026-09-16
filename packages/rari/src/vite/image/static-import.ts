@@ -1,23 +1,21 @@
 import type { Plugin } from 'vite-plus'
-import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { resolveAlias } from '@/shared/utils/alias-resolver'
+import { contentHash } from '@/shared/utils/content-hash'
+import { hashedAssetFileName, publicHashedAssetPath } from '@/shared/utils/hashed-asset'
+import { stripQuery } from '@/shared/utils/path'
 import { getErrnoCode, parseJsonRecord } from '@/shared/utils/type-guards'
+import { resolvePluginPaths } from '@/shared/utils/vite-aliases'
 import { readImageDimensions } from './dimensions'
 
 const IMAGE_EXT_RE = /\.(?:avif|gif|jpe?g|png|webp)$/i
-const QUERY_RE = /\?.*$/
 const VIRTUAL_PREFIX = '\0rari-static-image:'
 const BYPASS_QUERY = 'rari-static-bypass'
 const VITE_NATIVE_IMAGE_QUERIES = new Set(['raw', 'url', 'inline', 'no-inline'])
 const VIRTUAL_IMPORTER_PREFIXES = ['\0ssr-virtual:', '\0virtual:'] as const
 
 export type StaticImageSourceMap = Record<string, string>
-
-function stripQuery(id: string): string {
-  return id.replace(QUERY_RE, '')
-}
 
 function queryParams(id: string): string[] {
   const queryIndex = id.indexOf('?')
@@ -37,22 +35,12 @@ function hasViteNativeImageQuery(id: string): boolean {
   return queryParams(id).some(param => VITE_NATIVE_IMAGE_QUERIES.has(param))
 }
 
-function contentHash(buffer: Buffer): string {
-  return createHash('sha256').update(buffer).digest('hex').slice(0, 8)
-}
-
 function publicAssetPath(filePath: string, hash: string, assetsDir: string): string {
-  const ext = path.extname(filePath)
-  const base = path.basename(filePath, ext)
-  const normalizedAssetsDir = assetsDir.replace(/^\/+|\/+$/g, '')
-  return `/${normalizedAssetsDir}/${encodeURIComponent(base)}-${hash}${ext.toLowerCase()}`
+  return publicHashedAssetPath(filePath, hash, assetsDir, { encodeBase: true })
 }
 
 function assetFileName(filePath: string, hash: string, assetsDir: string): string {
-  const ext = path.extname(filePath)
-  const base = path.basename(filePath, ext)
-  const normalizedAssetsDir = assetsDir.replace(/^\/+|\/+$/g, '')
-  return `${normalizedAssetsDir}/${base}-${hash}${ext.toLowerCase()}`
+  return hashedAssetFileName(filePath, hash, assetsDir)
 }
 
 function generateModuleSource(publicPath: string, width: number, height: number): string {
@@ -271,9 +259,10 @@ export function createStaticImagePlugin(): Plugin {
     name: 'rari:static-image',
     enforce: 'pre',
     configResolved(config) {
-      projectRoot = config.root
-      outDir = path.resolve(config.root, config.build.outDir)
-      assetsDir = config.build.assetsDir || 'assets'
+      const paths = resolvePluginPaths(config)
+      projectRoot = paths.projectRoot
+      outDir = paths.outDir
+      assetsDir = paths.assetsDir
       isBuildCommand = config.command === 'build'
     },
     buildStart() {

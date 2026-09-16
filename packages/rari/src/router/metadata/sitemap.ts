@@ -1,12 +1,10 @@
-import type { RolldownOutput } from 'rolldown'
 import type { Sitemap, SitemapImage, SitemapVideo } from './types'
-import { Buffer } from 'node:buffer'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { resolveAlias } from '@/shared/utils/alias-resolver'
-import { resolveWithExtensionsAndIndex } from '@/shared/utils/file-resolver'
 import { isRecord } from '@/shared/utils/type-guards'
 import { escapeXml } from '@/shared/utils/xml'
+import { findConventionAppFile } from './convention-file'
+import { buildAndImportMetadataModule, metadataProjectRootFromAppDir } from './execute'
 
 const SANITIZE_ID_REGEX = /[^\w-]/g
 const VIRTUAL_SITEMAP_ID = '\0virtual:sitemap'
@@ -198,124 +196,21 @@ export async function findSitemapFiles(
   appDir: string,
   extensions: readonly string[] = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.json'],
 ): Promise<SitemapFile[]> {
-  const sitemapFiles: SitemapFile[] = []
-
-  const staticPath = path.join(appDir, 'sitemap.xml')
-  try {
-    await fs.access(staticPath)
-    sitemapFiles.push({ type: 'static', path: staticPath })
-    return sitemapFiles
-  } catch {}
-
-  for (const ext of extensions) {
-    const dynamicPath = path.join(appDir, `sitemap${ext}`)
-    try {
-      await fs.access(dynamicPath)
-      sitemapFiles.push({ type: 'dynamic', path: dynamicPath })
-      return sitemapFiles
-    } catch {}
-  }
-
-  return sitemapFiles
+  const found = await findConventionAppFile({
+    appDir,
+    staticFileName: 'sitemap.xml',
+    dynamicBaseName: 'sitemap',
+    extensions,
+  })
+  return found ? [found] : []
 }
 /* v8 ignore stop */
-
-function determineModuleType(ext: string): 'js' | 'jsx' | 'ts' | 'tsx' | 'json' {
-  switch (ext) {
-    case 'ts':
-      return 'ts'
-    case 'tsx':
-      return 'tsx'
-    case 'js':
-    case 'mjs':
-      return 'js'
-    case 'jsx':
-      return 'jsx'
-    case 'json':
-      return 'json'
-    default:
-      throw new Error(
-        `Unsupported sitemap file extension: ".${ext}". ` +
-          `Allowed extensions are: .ts, .tsx, .js, .jsx, .mjs, .json`,
-      )
-  }
-}
-
-function createSitemapPlugin(
-  sitemapFile: SitemapFile,
-  sourceCode: string,
-  aliases: Readonly<Record<string, string>> = {},
-  projectRoot: string,
-) {
-  return {
-    name: 'virtual-sitemap',
-    resolveId(id: string, importer?: string) {
-      if (id === VIRTUAL_SITEMAP_ID) return id
-
-      if (Object.keys(aliases).length > 0) {
-        const resolved = resolveAlias(id, aliases, projectRoot)
-        if (resolved != null && resolved !== '') {
-          const found = resolveWithExtensionsAndIndex(resolved)
-          if (found != null && found !== '') return found
-
-          return resolved
-        }
-      }
-
-      if (id.startsWith('.')) {
-        const base =
-          importer == null || importer === '' || importer.startsWith('\0')
-            ? sitemapFile.path
-            : importer
-        const resolved = path.resolve(path.dirname(base), id)
-        const found = resolveWithExtensionsAndIndex(resolved)
-        if (found != null && found !== '') return found
-
-        return resolved
-      }
-
-      return null
-    },
-    async load(loadId: string) {
-      if (loadId === VIRTUAL_SITEMAP_ID) {
-        const ext = path.extname(sitemapFile.path).slice(1)
-        const moduleType = determineModuleType(ext)
-        return { code: sourceCode, moduleType }
-      }
-
-      if (loadId && !loadId.startsWith('\0')) {
-        try {
-          const code = await fs.readFile(loadId, 'utf-8')
-          const ext = path.extname(loadId).slice(1)
-          const moduleType = determineModuleType(ext)
-          return { code, moduleType }
-        } catch {
-          return null
-        }
-      }
-
-      return null
-    },
-  }
-}
 
 interface SitemapModuleExports {
   readonly default?: Sitemap | ((params?: Readonly<{ id: string }>) => Sitemap | Promise<Sitemap>)
   readonly generateSitemaps?: () =>
     | Promise<ReadonlyArray<{ readonly id: string }>>
     | ReadonlyArray<{ readonly id: string }>
-}
-
-function extractChunkCode(result: RolldownOutput): string {
-  if (result.output.length === 0) throw new Error('Failed to build sitemap module')
-
-  const entryChunk =
-    result.output.find(item => item.type === 'chunk' && item.isEntry) ??
-    result.output.find(item => item.type === 'chunk')
-
-  if (entryChunk?.type !== 'chunk') throw new Error('No chunk output found in sitemap build result')
-
-  return entryChunk.code
 }
 
 function isSitemapDefaultExport(
@@ -335,20 +230,17 @@ async function buildSitemapModule(
   aliases: Readonly<Record<string, string>> = {},
   projectRoot: string,
 ): Promise<SitemapModuleExports> {
-  const { build } = await import('rolldown')
-
-  const result = await build({
-    input: VIRTUAL_SITEMAP_ID,
-    external: ['rari'],
-    platform: 'node',
-    write: false,
-    output: { format: 'esm', codeSplitting: false },
-    plugins: [createSitemapPlugin(sitemapFile, sourceCode, aliases, projectRoot)],
+  const module = await buildAndImportMetadataModule({
+    virtualId: VIRTUAL_SITEMAP_ID,
+    sourcePath: sitemapFile.path,
+    sourceCode,
+    aliases,
+    projectRoot,
+    kind: 'sitemap',
+    pluginName: 'virtual-sitemap',
+    label: 'sitemap',
   })
 
-  const code = extractChunkCode(result)
-  const dataUrl = `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`
-  const module: unknown = await import(dataUrl)
   if (!isSitemapModuleExports(module))
     throw new Error(
       'Sitemap module must export a default sitemap array or sitemap generator function',
@@ -428,8 +320,12 @@ export async function generateSitemapFiles(options: SitemapGeneratorOptions): Pr
 
   try {
     const sourceCode = await fs.readFile(sitemapFile.path, 'utf-8')
-    const projectRoot = path.dirname(path.dirname(appDir))
-    const module = await buildSitemapModule(sitemapFile, sourceCode, aliases, projectRoot)
+    const module = await buildSitemapModule(
+      sitemapFile,
+      sourceCode,
+      aliases,
+      metadataProjectRootFromAppDir(appDir),
+    )
 
     if (typeof module.generateSitemaps === 'function')
       await generateMultipleSitemaps(module, outDir)

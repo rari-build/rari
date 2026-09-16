@@ -1,6 +1,7 @@
 /* oxlint-disable typescript/prefer-readonly-parameter-types match helpers write into params records */
 import type { AppRouteManifest, LayoutEntry, RouteSegment, TemplateEntry } from '../build/types'
 import type { RouteInfo } from './types'
+import { normalizePath } from '@/shared/utils/path'
 
 const LEADING_TRAILING_SLASHES_REGEX = /(^\/+)|(\/+$)/g
 
@@ -196,17 +197,6 @@ export function findTemplateChain(routePath: string, manifest: AppRouteManifest)
   manifestCache.set(routePath, chain)
 
   return chain
-}
-
-export function normalizePath(path: string): string {
-  if (!path || path === '/') return '/'
-
-  let normalized = path
-  while (normalized.endsWith('/') && normalized.length > 1) normalized = normalized.slice(0, -1)
-
-  if (!normalized.startsWith('/')) normalized = `/${normalized}`
-
-  return normalized
 }
 
 export function createRouteInfo(

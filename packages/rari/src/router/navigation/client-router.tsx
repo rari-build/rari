@@ -4,6 +4,7 @@ import type * as React from 'react'
 import type { NavigationError } from './error-handler'
 import type { NavigationOptions } from './types'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { normalizePath } from '@/shared/utils/path'
 import {
   getCustomEventDetail,
   isHistoryState,
@@ -12,7 +13,7 @@ import {
 } from '@/shared/utils/type-guards'
 import { debounce } from './debounce'
 import { NavigationErrorHandler } from './error-handler'
-import { extractPathname, isExternalUrl, normalizePath } from './match'
+import { extractPathname, isExternalUrl } from './match'
 import { deregisterNavigate, registerNavigate } from './navigate'
 import { routeInfoCache } from './route-info'
 import { StatePreserver } from './state-preserver'

@@ -14,7 +14,8 @@ import type {
 } from './types'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { BACKSLASH_REGEX, PATH_SEPARATOR_REGEX } from '@/shared/regex-constants'
+import { PATH_SEPARATOR_REGEX } from '@/shared/regex-constants'
+import { toPosixPath } from '@/shared/utils/path'
 import { discoverAppIconsInDir } from '../metadata/app-icons'
 
 export interface AppRouteGeneratorOptions {
@@ -73,7 +74,7 @@ function isInGroup(filePath: string) {
     return false
   }
 
-  return filePath.replace(BACKSLASH_REGEX, '/').split('/').filter(Boolean).some(isGroupSegment)
+  return toPosixPath(filePath).split('/').filter(Boolean).some(isGroupSegment)
 }
 
 function matchRouteSegment(segment: string) {
@@ -194,14 +195,14 @@ class AppRouteGenerator {
   ): void {
     for (let i = entries.length - 1; i >= 0; i--) {
       const entry = entries[i]
-      const fileDir = path.dirname(entry.filePath).replace(BACKSLASH_REGEX, '/')
+      const fileDir = toPosixPath(path.dirname(entry.filePath))
       if (!isInGroup(fileDir)) {
         continue
       }
 
       const pagesInSubtree = pages
         .filter(p => {
-          const pDir = path.dirname(p.filePath).replace(BACKSLASH_REGEX, '/')
+          const pDir = toPosixPath(path.dirname(p.filePath))
 
           return pDir === fileDir || pDir.startsWith(`${fileDir}/`)
         })
@@ -323,7 +324,7 @@ class AppRouteGenerator {
 
       routes.push({
         path: routePath,
-        filePath: path.join(relativePath, pageFile).replace(BACKSLASH_REGEX, '/'),
+        filePath: toPosixPath(path.join(relativePath, pageFile)),
         segments,
         params,
         isDynamic: params.length > 0,
@@ -335,7 +336,7 @@ class AppRouteGenerator {
       const parentPath = this.getParentPath(relativePath)
       layouts.push({
         path: routePath,
-        filePath: path.join(relativePath, layoutFile).replace(BACKSLASH_REGEX, '/'),
+        filePath: toPosixPath(path.join(relativePath, layoutFile)),
         parentPath: parentPath !== null ? this.pathToRoute(parentPath) : undefined,
       })
     }
@@ -344,7 +345,7 @@ class AppRouteGenerator {
     if (loadingFile != null && loadingFile !== '') {
       loading.push({
         path: routePath,
-        filePath: path.join(relativePath, loadingFile).replace(BACKSLASH_REGEX, '/'),
+        filePath: toPosixPath(path.join(relativePath, loadingFile)),
       })
     }
 
@@ -352,7 +353,7 @@ class AppRouteGenerator {
     if (errorFile != null && errorFile !== '') {
       errors.push({
         path: routePath,
-        filePath: path.join(relativePath, errorFile).replace(BACKSLASH_REGEX, '/'),
+        filePath: toPosixPath(path.join(relativePath, errorFile)),
       })
     }
 
@@ -360,7 +361,7 @@ class AppRouteGenerator {
     if (notFoundFile != null && notFoundFile !== '') {
       notFound.push({
         path: routePath,
-        filePath: path.join(relativePath, notFoundFile).replace(BACKSLASH_REGEX, '/'),
+        filePath: toPosixPath(path.join(relativePath, notFoundFile)),
       })
     }
 
@@ -369,14 +370,14 @@ class AppRouteGenerator {
       const parentPath = this.getParentPath(relativePath)
       templates.push({
         path: routePath,
-        filePath: path.join(relativePath, templateFile).replace(BACKSLASH_REGEX, '/'),
+        filePath: toPosixPath(path.join(relativePath, templateFile)),
         parentPath: parentPath !== null ? this.pathToRoute(parentPath) : undefined,
       })
     }
 
     const ogImageFile = this.findFile(files, SPECIAL_FILES.OG_IMAGE)
     if (ogImageFile != null && ogImageFile !== '') {
-      const filePath = path.join(relativePath, ogImageFile).replace(BACKSLASH_REGEX, '/')
+      const filePath = toPosixPath(path.join(relativePath, ogImageFile))
       const fullFilePath = path.join(this.appDir, filePath)
 
       let width: number | undefined
@@ -432,7 +433,7 @@ class AppRouteGenerator {
   private pathToRoute(filePath: string): string {
     if (!filePath) return '/'
 
-    const normalized = filePath.replace(BACKSLASH_REGEX, '/')
+    const normalized = toPosixPath(filePath)
 
     const segments = normalized.split('/').filter(Boolean)
     const routeSegments = segments
@@ -568,7 +569,7 @@ class AppRouteGenerator {
     relativePath: string,
     fileName: string,
   ): Promise<ApiRouteEntry> {
-    const filePath = path.join(relativePath, fileName).replace(BACKSLASH_REGEX, '/')
+    const filePath = toPosixPath(path.join(relativePath, fileName))
     const routePath = this.pathToRoute(relativePath)
     const segments = this.parseRouteSegments(relativePath)
     const params = this.extractParams(segments)

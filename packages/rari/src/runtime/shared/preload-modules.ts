@@ -1,3 +1,4 @@
+import { toPosixPath } from '@/shared/utils/path'
 import { isFlightImportTuple } from '@/shared/utils/type-guards'
 import { getClientComponent } from './get-client-component'
 
@@ -26,7 +27,7 @@ export async function preloadModulesFromFlightProtocol(
           const id = importData[0]
           if (!id.includes('/') && id.startsWith('$')) continue
           const exportName = typeof importData[2] === 'string' ? importData[2] : undefined
-          const normalizedImportId = id.replace(/\\/g, '/')
+          const normalizedImportId = toPosixPath(id)
 
           let moduleId: string
           if (normalizedImportId.includes('#')) {

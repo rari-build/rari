@@ -2,13 +2,14 @@ import type { ModuleAnalysisCache } from '../analysis/module-cache'
 import fs from 'node:fs'
 import path from 'node:path'
 import { scanMdxComponentNames } from '@/mdx/scan/names'
-import { BACKSLASH_REGEX, EXPORT_NAMED_DECLARATION_REGEX } from '@/shared/regex-constants'
+import { EXPORT_NAMED_DECLARATION_REGEX } from '@/shared/regex-constants'
+import { toPosixPath } from '@/shared/utils/path'
 import { getProjectRelativePath } from '../analysis/component-ids'
 import { collectClientComponentPaths } from '../analysis/module-cache'
 import { normalizeScanDirs } from '../analysis/source-walker'
 
 export function isMdxRegistryModuleId(id: string): boolean {
-  const normalized = id.replace(BACKSLASH_REGEX, '/')
+  const normalized = toPosixPath(id)
 
   if (normalized === 'rari/mdx/registry' || normalized.startsWith('rari/mdx/registry?')) return true
 
@@ -110,10 +111,7 @@ export function discoverMdxRegistryEntries(
     const name = getComponentName(componentPath, options.cache)
     if (name == null || name === '' || !usedNames.has(name)) continue
 
-    const moduleId = getProjectRelativePath(componentPath, options.projectRoot).replace(
-      BACKSLASH_REGEX,
-      '/',
-    )
+    const moduleId = getProjectRelativePath(componentPath, options.projectRoot)
     const importPath = moduleId.startsWith('/') ? moduleId : `/${moduleId}`
 
     let binding = name.replace(/[^\w$]/g, '_')
@@ -241,7 +239,7 @@ function listContentFilesRelative(rootDir: string): string[] {
       if (entry.isDirectory()) {
         walk(fullPath)
       } else if (entry.isFile()) {
-        files.push(path.relative(rootDir, fullPath).replace(BACKSLASH_REGEX, '/'))
+        files.push(toPosixPath(path.relative(rootDir, fullPath)))
       }
     }
   }

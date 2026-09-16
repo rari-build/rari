@@ -1,16 +1,8 @@
-import crypto from 'node:crypto'
 import path from 'node:path'
 import process from 'node:process'
-import {
-  BACKSLASH_REGEX,
-  COMPONENT_ID_REGEX,
-  SRC_PREFIX_REGEX,
-  TSX_EXT_REGEX,
-} from '@/shared/regex-constants'
-
-export function hashString(value: string, length = 8): string {
-  return crypto.createHash('sha256').update(value).digest('hex').slice(0, length)
-}
+import { COMPONENT_ID_REGEX, SRC_PREFIX_REGEX, TSX_EXT_REGEX } from '@/shared/regex-constants'
+import { contentHash } from '@/shared/utils/content-hash'
+import { toPosixPath } from '@/shared/utils/path'
 
 export function getProjectRelativePath(filePath: string, projectRoot = process.cwd()): string {
   const absolutePath = path.isAbsolute(filePath) ? filePath : path.resolve(projectRoot, filePath)
@@ -19,9 +11,9 @@ export function getProjectRelativePath(filePath: string, projectRoot = process.c
   // Always prefer a path relative to the project root including `../…` for
   // workspace packages outside the app. Absolute paths become
   // `dist/server/Users/...` and break runtime module resolution.
-  if (path.isAbsolute(relativePath)) return absolutePath.replace(BACKSLASH_REGEX, '/')
+  if (path.isAbsolute(relativePath)) return toPosixPath(absolutePath)
 
-  return relativePath.replace(BACKSLASH_REGEX, '/')
+  return toPosixPath(relativePath)
 }
 
 export function getReadableComponentId(projectRelativePath: string): string {
@@ -33,5 +25,5 @@ export function getReadableComponentId(projectRelativePath: string): string {
 
 export function getComponentId(filePath: string, projectRoot = process.cwd()): string {
   const projectRelativePath = getProjectRelativePath(filePath, projectRoot)
-  return `${getReadableComponentId(projectRelativePath)}_${hashString(projectRelativePath)}`
+  return `${getReadableComponentId(projectRelativePath)}_${contentHash(projectRelativePath)}`
 }

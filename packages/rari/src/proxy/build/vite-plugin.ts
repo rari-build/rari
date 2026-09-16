@@ -19,12 +19,51 @@ interface ProxyFileInfo {
   relativePath: string
 }
 
+const DEFAULT_PROXY_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx', '.mts', '.mjs'] as const
+
+export async function findProxyFilePath(
+  root: string = process.cwd(),
+  srcDir: string = 'src',
+  options: {
+    readonly proxyFileName?: string
+    readonly extensions?: readonly string[]
+  } = {},
+): Promise<string | null> {
+  const proxyFileName = options.proxyFileName ?? 'proxy'
+  const extensions = options.extensions ?? DEFAULT_PROXY_EXTENSIONS
+
+  for (const ext of extensions) {
+    const filePath = path.join(root, `${proxyFileName}${ext}`)
+    try {
+      await fs.access(filePath)
+      return filePath
+    } catch {}
+  }
+
+  for (const ext of extensions) {
+    const filePath = path.join(root, srcDir, `${proxyFileName}${ext}`)
+    try {
+      await fs.access(filePath)
+      return filePath
+    } catch {}
+  }
+
+  return null
+}
+
+export async function hasProxyFile(
+  root: string = process.cwd(),
+  srcDir: string = 'src',
+): Promise<boolean> {
+  return (await findProxyFilePath(root, srcDir)) != null
+}
+
 export function rariProxy(options: ProxyPluginOptions = {}): RariPlugin {
   const {
     root = process.cwd(),
     srcDir = 'src',
     proxyFileName = 'proxy',
-    extensions = ['.ts', '.tsx', '.js', '.jsx', '.mts', '.mjs'],
+    extensions = DEFAULT_PROXY_EXTENSIONS,
     verbose = false,
   } = options
 
@@ -35,42 +74,16 @@ export function rariProxy(options: ProxyPluginOptions = {}): RariPlugin {
   }
 
   async function findProxyFile(): Promise<ProxyFileInfo | null> {
-    for (const ext of extensions) {
-      const fileName = `${proxyFileName}${ext}`
-      const filePath = path.join(root, fileName)
+    const filePath = await findProxyFilePath(root, srcDir, { proxyFileName, extensions })
+    if (filePath == null) return null
 
-      try {
-        await fs.access(filePath)
-        log(`Found proxy file: ${fileName}`)
-        return {
-          filePath,
-          exists: true,
-          relativePath: fileName,
-        }
-      } catch {}
+    const relativePath = path.relative(root, filePath)
+    log(`Found proxy file: ${relativePath}`)
+    return {
+      filePath,
+      exists: true,
+      relativePath,
     }
-
-    const srcPath = path.join(root, srcDir)
-    try {
-      await fs.access(srcPath)
-
-      for (const ext of extensions) {
-        const fileName = `${proxyFileName}${ext}`
-        const filePath = path.join(srcPath, fileName)
-
-        try {
-          await fs.access(filePath)
-          log(`Found proxy file: ${path.join(srcDir, fileName)}`)
-          return {
-            filePath,
-            exists: true,
-            relativePath: path.join(srcDir, fileName),
-          }
-        } catch {}
-      }
-    } catch {}
-
-    return null
   }
 
   const plugin = {
@@ -119,37 +132,4 @@ export function rariProxy(options: ProxyPluginOptions = {}): RariPlugin {
   } satisfies Plugin
 
   return toRariPlugin(plugin)
-}
-
-export async function findProxyFilePath(
-  root: string = process.cwd(),
-  srcDir: string = 'src',
-): Promise<string | null> {
-  const extensions = ['.ts', '.tsx', '.js', '.jsx', '.mts', '.mjs']
-  const proxyFileName = 'proxy'
-
-  for (const ext of extensions) {
-    const filePath = path.join(root, `${proxyFileName}${ext}`)
-    try {
-      await fs.access(filePath)
-      return filePath
-    } catch {}
-  }
-
-  for (const ext of extensions) {
-    const filePath = path.join(root, srcDir, `${proxyFileName}${ext}`)
-    try {
-      await fs.access(filePath)
-      return filePath
-    } catch {}
-  }
-
-  return null
-}
-
-export async function hasProxyFile(
-  root: string = process.cwd(),
-  srcDir: string = 'src',
-): Promise<boolean> {
-  return (await findProxyFilePath(root, srcDir)) != null
 }
