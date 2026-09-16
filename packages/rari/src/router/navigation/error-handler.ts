@@ -1,5 +1,5 @@
 import { throwIfNotOk } from '@/shared/utils/http'
-import { asError, errorMessage, isError } from '@/shared/utils/type-guards'
+import { asError, isError } from '@/shared/utils/type-guards'
 
 export type NavigationErrorType =
   | 'fetch-error'
@@ -118,7 +118,7 @@ function handleParseError(error: unknown, url?: string): NavigationError {
 function handleUnknownError(error: unknown, url?: string): NavigationError {
   return {
     type: 'fetch-error',
-    message: errorMessage(error, 'Unknown error occurred'),
+    message: asError(error)?.message ?? 'Unknown error occurred',
     originalError: asError(error),
     url,
     timestamp: Date.now(),

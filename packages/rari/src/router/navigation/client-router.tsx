@@ -37,38 +37,36 @@ async function waitForNavigationSettlement(
     return { error: new DOMException('Aborted', 'AbortError') }
   }
 
-  const { promise, resolve } = Promise.withResolvers<'committed' | { readonly error: unknown }>()
+  return new Promise((resolve) => {
+    function cleanup() {
+      window.removeEventListener('rari:navigate-committed', onCommitted)
+      window.removeEventListener('rari:navigate-error', onError)
+      signal.removeEventListener('abort', onAbort)
+    }
 
-  function cleanup() {
-    window.removeEventListener('rari:navigate-committed', onCommitted)
-    window.removeEventListener('rari:navigate-error', onError)
-    signal.removeEventListener('abort', onAbort)
-  }
+    function onCommitted(event: Event) {
+      const detail = getCustomEventDetail(event, isNavigateCommittedDetail)
+      if (detail?.navigationId !== navigationId) return
+      cleanup()
+      resolve('committed')
+    }
 
-  function onCommitted(event: Event) {
-    const detail = getCustomEventDetail(event, isNavigateCommittedDetail)
-    if (detail?.navigationId !== navigationId) return
-    cleanup()
-    resolve('committed')
-  }
+    function onError(event: Event) {
+      const detail = getCustomEventDetail(event, isNavigateErrorDetail)
+      if (detail?.navigationId !== navigationId) return
+      cleanup()
+      resolve({ error: detail.error })
+    }
 
-  function onError(event: Event) {
-    const detail = getCustomEventDetail(event, isNavigateErrorDetail)
-    if (detail?.navigationId !== navigationId) return
-    cleanup()
-    resolve({ error: detail.error })
-  }
+    function onAbort() {
+      cleanup()
+      resolve({ error: new DOMException('Aborted', 'AbortError') })
+    }
 
-  function onAbort() {
-    cleanup()
-    resolve({ error: new DOMException('Aborted', 'AbortError') })
-  }
-
-  window.addEventListener('rari:navigate-committed', onCommitted)
-  window.addEventListener('rari:navigate-error', onError)
-  signal.addEventListener('abort', onAbort, { once: true })
-
-  return promise
+    window.addEventListener('rari:navigate-committed', onCommitted)
+    window.addEventListener('rari:navigate-error', onError)
+    signal.addEventListener('abort', onAbort, { once: true })
+  })
 }
 
 interface PageMetadata {
