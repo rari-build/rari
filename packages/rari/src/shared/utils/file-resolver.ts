@@ -35,15 +35,14 @@ export function resolveWithExtensions(
 ): string | null {
   let checkedExists: boolean | null = null
   for (const ext of extensions) {
-    if (resolvedPath.endsWith(ext)) {
-      checkedExists ??= cachedExistsSync(resolvedPath)
-      if (checkedExists) return resolvedPath
-    }
+    if (ext === '' || !resolvedPath.endsWith(ext)) continue
+    checkedExists ??= cachedExistsSync(resolvedPath)
+    if (checkedExists && !cachedIsDirectory(resolvedPath)) return resolvedPath
   }
 
   for (const ext of extensions) {
     const pathWithExt = `${resolvedPath}${ext}`
-    if (cachedExistsSync(pathWithExt)) return pathWithExt
+    if (cachedExistsSync(pathWithExt) && !cachedIsDirectory(pathWithExt)) return pathWithExt
   }
 
   return null

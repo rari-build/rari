@@ -21,7 +21,11 @@ const GITHUB_REPO = 'rari-build/rari'
 const GITHUB_API_BASE = 'https://api.github.com'
 
 export function getGitHubEditUrl(repoPath: string): string {
-  return `https://github.com/${GITHUB_REPO}/edit/main/${repoPath}`
+  const encodedPath = repoPath
+    .split('/')
+    .map(segment => encodeURIComponent(segment))
+    .join('/')
+  return `https://github.com/${GITHUB_REPO}/edit/main/${encodedPath}`
 }
 
 function getGitHubHeaders(): HeadersInit {
