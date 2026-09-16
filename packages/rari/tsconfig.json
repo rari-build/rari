@@ -4,6 +4,7 @@
     "jsx": "react-jsx",
     "paths": {
       "@/*": ["./src/*"],
+      "rari": ["./src/index.ts"],
       "rari/mdx/registry": ["./src/mdx/registry.ts"],
       "rari/mdx/define": ["./src/mdx/define.ts"]
     }

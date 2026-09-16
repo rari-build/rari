@@ -53,6 +53,50 @@ describe('cli build target resolution', () => {
     expect(isRouterDisabled(`export default { plugins: [rari({ router: false })] }`)).toBe(true)
   })
 
+  it('ignores router: false inside comments and string literals', () => {
+    expect(
+      isRouterDisabled(`
+        // router: false
+        export default { plugins: [rari()] }
+      `),
+    ).toBe(false)
+    expect(
+      isRouterDisabled(`
+        /* router: false */
+        export default { plugins: [rari({ router: { appDir: 'app' } })] }
+      `),
+    ).toBe(false)
+    expect(
+      isRouterDisabled(`
+        export default { plugins: [rari()], note: 'router: false' }
+      `),
+    ).toBe(false)
+    expect(
+      isRouterDisabled(`
+        // keep router enabled
+        export default { plugins: [rari({ router: false })] }
+      `),
+    ).toBe(true)
+  })
+
+  it('still resolves router options when a comment mentions router: false', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-cli-router-comment-'))
+    fs.writeFileSync(
+      path.join(root, 'vite.config.ts'),
+      `// router: false\nexport default { plugins: [rari()] }\n`,
+    )
+
+    try {
+      expect(resolveEffectiveRouterOptions(root)).toEqual({
+        root,
+        appDir: 'src/app',
+        extensions: ['.tsx', '.jsx', '.ts', '.js'],
+      })
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   it('resolves effective router options from package Vite config', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-cli-router-opts-'))
     fs.writeFileSync(

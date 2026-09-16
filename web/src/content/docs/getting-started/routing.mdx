@@ -190,7 +190,7 @@ Catch-all segments require at least one segment. `/docs` alone would not match.
 Use `[[...param]]` to also match the route without any segments:
 
 <CodeBlock language="bash">{`src/app/docs/[[...slug]]/page.tsx
-  →  /docs                          (slug = [])
+  →  /docs                          (slug = undefined)
   →  /docs/getting-started          (slug = ["getting-started"])
   →  /docs/api/reference/image      (slug = ["api", "reference", "image"])
 `}</CodeBlock>
@@ -198,7 +198,7 @@ Use `[[...param]]` to also match the route without any segments:
 <CodeBlock filename="src/app/docs/[[...slug]]/page.tsx" language="tsx">{`import type { PageProps } from 'rari'
 
 export default function DocsPage({ params }: PageProps<'/docs/[[...slug]]'>) {
-  if (params.slug.length === 0) {
+  if (params.slug == null || params.slug.length === 0) {
     return <h1>Docs Home</h1>
   }
 
@@ -206,7 +206,7 @@ export default function DocsPage({ params }: PageProps<'/docs/[[...slug]]'>) {
 }
 `}</CodeBlock>
 
-Optional catch-all params are always a `readonly string[]` (empty when the route matches with no extra segments).
+Optional catch-all params are `readonly string[] | undefined` — omitted (undefined) when the route matches with no extra segments.
 
 ### Route Priority
 

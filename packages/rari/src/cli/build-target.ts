@@ -55,8 +55,70 @@ function readRouterBlock(configSource: string): string | null {
   return match?.[1] ?? null
 }
 
+export function stripConfigNoise(source: string): string {
+  let out = ''
+  let i = 0
+
+  while (i < source.length) {
+    const char = source[i]
+    const next = source[i + 1]
+
+    if (char === '/' && next === '/') {
+      out += '  '
+      i += 2
+      while (i < source.length && source[i] !== '\n') {
+        out += ' '
+        i += 1
+      }
+      continue
+    }
+
+    if (char === '/' && next === '*') {
+      out += '  '
+      i += 2
+      while (i < source.length) {
+        if (source[i] === '*' && source[i + 1] === '/') {
+          out += '  '
+          i += 2
+          break
+        }
+        out += source[i] === '\n' ? '\n' : ' '
+        i += 1
+      }
+      continue
+    }
+
+    if (char === "'" || char === '"' || char === '`') {
+      const quote = char
+      out += quote
+      i += 1
+      while (i < source.length) {
+        const inner = source[i]
+        if (inner === '\\' && i + 1 < source.length) {
+          out += '  '
+          i += 2
+          continue
+        }
+        if (inner === quote) {
+          out += quote
+          i += 1
+          break
+        }
+        out += inner === '\n' ? '\n' : ' '
+        i += 1
+      }
+      continue
+    }
+
+    out += char
+    i += 1
+  }
+
+  return out
+}
+
 export function isRouterDisabled(configSource: string): boolean {
-  return /(?:^|[,{\s])router\s*:\s*false\b/.test(configSource)
+  return /(?:^|[,{\s])router\s*:\s*false\b/.test(stripConfigNoise(configSource))
 }
 
 export function readRouterAppDir(configSource: string): string | null {
