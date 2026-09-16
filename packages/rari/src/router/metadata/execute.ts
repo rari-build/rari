@@ -1,6 +1,8 @@
 import type { MetadataVirtualPluginOptions } from './virtual-plugin'
-import { Buffer } from 'node:buffer'
+import { randomUUID } from 'node:crypto'
+import { promises as fs } from 'node:fs'
 import path from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { isRecord } from '@/shared/utils/type-guards'
 import { createMetadataVirtualPlugin } from './virtual-plugin'
 
@@ -13,6 +15,10 @@ export interface BuildAndImportMetadataModuleOptions {
   readonly kind: MetadataVirtualPluginOptions['kind']
   readonly pluginName: string
   readonly label: string
+}
+
+function isRariPackageId(id: string): boolean {
+  return id === 'rari' || id.startsWith('rari/')
 }
 
 export async function buildAndImportMetadataModule(
@@ -33,7 +39,7 @@ export async function buildAndImportMetadataModule(
 
   const result = await build({
     input: virtualId,
-    external: ['rari'],
+    external: isRariPackageId,
     platform: 'node',
     write: false,
     output: {
@@ -62,8 +68,16 @@ export async function buildAndImportMetadataModule(
   if (entryChunk?.type !== 'chunk')
     throw new Error(`No chunk output found in ${label} build result`)
 
-  const dataUrl = `data:text/javascript;base64,${Buffer.from(entryChunk.code).toString('base64')}`
-  return import(dataUrl)
+  const cacheDir = path.join(projectRoot, 'node_modules', '.cache', 'rari-metadata')
+  await fs.mkdir(cacheDir, { recursive: true })
+  const tempFile = path.join(cacheDir, `${label}-${randomUUID()}.mjs`)
+
+  try {
+    await fs.writeFile(tempFile, entryChunk.code, 'utf8')
+    return await import(pathToFileURL(tempFile).href)
+  } finally {
+    await fs.rm(tempFile, { force: true })
+  }
 }
 
 export function requireMetadataDefaultExport(module: unknown, label: string): unknown {
