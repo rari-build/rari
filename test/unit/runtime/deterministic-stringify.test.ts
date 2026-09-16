@@ -52,8 +52,8 @@ describe('deterministicStringify', () => {
   })
 
   it('stringifies dates as ISO', () => {
-    const result = deterministicStringify(new Date('2024-01-01T00:00:00.000Z'))
-    expect(result).toBe('Date(2024-01-01T00:00:00.000Z)')
+    const result = deterministicStringify(new Date('2026-01-01T00:00:00.000Z'))
+    expect(result).toBe('Date(2026-01-01T00:00:00.000Z)')
   })
 
   it('stringifies regexps', () => {
@@ -181,7 +181,7 @@ describe('deterministicStringify', () => {
 
     const args1: unknown[] = [
       1n,
-      new Date('2024-01-01T00:00:00.000Z'),
+      new Date('2026-01-01T00:00:00.000Z'),
       new Map([['a', new Set([2, 1])]]),
       /abc/gi,
       circular,
@@ -190,7 +190,7 @@ describe('deterministicStringify', () => {
     ]
     const args2: unknown[] = [
       1n,
-      new Date('2024-01-01T00:00:00.000Z'),
+      new Date('2026-01-01T00:00:00.000Z'),
       new Map([['a', new Set([1, 2])]]),
       /abc/gi,
       circular,

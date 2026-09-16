@@ -20,6 +20,9 @@ minimumReleaseAgeExclude:
   - scheduler@0.28.0
   - '@types/react-dom@19.3.0'
   - '@types/react@19.3.0'
+  - '@posthog/core@1.54.2'
+  - '@posthog/types@1.412.1'
+  - posthog-js@1.433.5
 shellEmulator: true
 trustPolicy: no-downgrade
 packages:
@@ -34,7 +37,7 @@ packages:
   - web
 catalogs:
   analytics:
-    posthog-js: ^1.430.3
+    posthog-js: ^1.433.5
   build:
     '@napi-rs/cli': ^3.9.1
     lightningcss: ^1.33.0

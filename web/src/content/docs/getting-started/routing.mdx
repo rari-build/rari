@@ -151,7 +151,7 @@ src/app/users/[id]/page.tsx   →  /users/123, /users/abc
 
 <CodeBlock filename="src/app/blog/[slug]/page.tsx" language="tsx">{`import type { PageProps } from 'rari'
 
-export default async function BlogPost({ params }: PageProps<{ slug: string }>) {
+export default async function BlogPost({ params }: PageProps<'/blog/[slug]'>) {
   const post = await fetch(\`https://api.example.com/posts/\${params.slug}\`).then(r => r.json())
 
   return (
@@ -162,6 +162,8 @@ export default async function BlogPost({ params }: PageProps<{ slug: string }>) 
   )
 }
 `}</CodeBlock>
+
+After `rari dev` or `rari build`, rari writes `src/rari-routes.d.ts` from your route tree so path-based `PageProps` (as in the example above) types `params` from the matched route. Object generics like `PageProps` with an explicit params shape still work.
 
 ### Catch-All Segments
 
@@ -174,7 +176,7 @@ Use `[...param]` to match one or more segments:
 
 <CodeBlock filename="src/app/docs/[...slug]/page.tsx" language="tsx">{`import type { PageProps } from 'rari'
 
-export default function DocsPage({ params }: PageProps<{ slug: string[] }>) {
+export default function DocsPage({ params }: PageProps<'/docs/[...slug]'>) {
   const path = params.slug.join('/')
 
   return <h1>Docs: {path}</h1>
@@ -188,21 +190,23 @@ Catch-all segments require at least one segment. `/docs` alone would not match.
 Use `[[...param]]` to also match the route without any segments:
 
 <CodeBlock language="bash">{`src/app/docs/[[...slug]]/page.tsx
-  →  /docs                          (slug = undefined)
+  →  /docs                          (slug = [])
   →  /docs/getting-started          (slug = ["getting-started"])
   →  /docs/api/reference/image      (slug = ["api", "reference", "image"])
 `}</CodeBlock>
 
 <CodeBlock filename="src/app/docs/[[...slug]]/page.tsx" language="tsx">{`import type { PageProps } from 'rari'
 
-export default function DocsPage({ params }: PageProps<{ slug?: string[] }>) {
-  if (!params.slug) {
+export default function DocsPage({ params }: PageProps<'/docs/[[...slug]]'>) {
+  if (params.slug.length === 0) {
     return <h1>Docs Home</h1>
   }
 
   return <h1>Docs: {params.slug.join('/')}</h1>
 }
 `}</CodeBlock>
+
+Optional catch-all params are always a `string[]` (empty when the route matches with no extra segments).
 
 ### Route Priority
 

@@ -9,7 +9,15 @@ export type { ProxyConfig, ProxyFunction, RariFetchEvent, RariURL } from './prox
 export { ApiResponse } from './router/build/api-routes'
 export type { ApiRouteHandlers, RouteContext, RouteHandler } from './router/build/api-routes'
 
-export type { ErrorProps, LayoutProps, Metadata, PageProps } from './router/build/types'
+export type {
+  ErrorProps,
+  LayoutProps,
+  Metadata,
+  PageProps,
+  Register,
+  RouteParams,
+  SearchParams,
+} from './router/build/types'
 export type {
   Feed,
   FeedEntry,

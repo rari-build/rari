@@ -175,17 +175,37 @@ export interface SearchParams {
   readonly [key: string]: string | readonly string[] | undefined
 }
 
+export interface Register {}
+
+type AppRegister = import('rari').Register
+
+type RegisteredRoutes = AppRegister extends { routes: infer R }
+  ? R extends Record<string, RouteParams>
+    ? R
+    : Record<string, RouteParams>
+  : Record<string, RouteParams>
+
+type ResolveParams<T> = T extends string
+  ? string extends keyof RegisteredRoutes
+    ? RouteParams
+    : T extends keyof RegisteredRoutes
+      ? RegisteredRoutes[T]
+      : never
+  : T extends RouteParams
+    ? T
+    : RouteParams
+
 export type PageProps<
-  TParams extends RouteParams = RouteParams,
+  TParamsOrRoute extends string | RouteParams = RouteParams,
   TSearchParams extends SearchParams = SearchParams,
 > = Readonly<{
-  params: TParams
+  params: ResolveParams<TParamsOrRoute>
   searchParams: TSearchParams
 }>
 
-export type LayoutProps<TParams extends RouteParams = RouteParams> = Readonly<{
+export type LayoutProps<TParamsOrRoute extends string | RouteParams = RouteParams> = Readonly<{
   children: ReactNode
-  params?: TParams
+  params?: ResolveParams<TParamsOrRoute>
   pathname?: string
 }>
 
@@ -206,15 +226,15 @@ export interface AppRouteMatch {
 }
 
 export type GenerateMetadata<
-  TParams extends RouteParams = RouteParams,
+  TParamsOrRoute extends string | RouteParams = RouteParams,
   TSearchParams extends SearchParams = SearchParams,
 > = (
   props: Readonly<{
-    params: TParams
+    params: ResolveParams<TParamsOrRoute>
     searchParams: TSearchParams
   }>,
 ) => RouteMetadata | Promise<RouteMetadata>
 
-export type GenerateStaticParams<TParams extends RouteParams = RouteParams> = () =>
-  | TParams[]
-  | Promise<TParams[]>
+export type GenerateStaticParams<TParamsOrRoute extends string | RouteParams = RouteParams> = () =>
+  | ResolveParams<TParamsOrRoute>[]
+  | Promise<ResolveParams<TParamsOrRoute>[]>

@@ -152,7 +152,7 @@ describe('rari response', () => {
 
     it('should generate Set-Cookie header with expires', () => {
       const res = new RariResponse()
-      const expires = new Date('2025-12-31T23:59:59Z')
+      const expires = new Date('2027-12-31T23:59:59Z')
 
       res.cookies.set('persistent', 'value', { expires })
 
@@ -193,7 +193,7 @@ describe('rari response', () => {
 
     it('should generate Set-Cookie header with all options', () => {
       const res = new RariResponse()
-      const expires = new Date('2025-12-31T23:59:59Z')
+      const expires = new Date('2027-12-31T23:59:59Z')
 
       res.cookies.set('full', 'value', {
         path: '/app',

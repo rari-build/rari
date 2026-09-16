@@ -59,8 +59,8 @@ describe('generateFeedXml', () => {
         description: 'Test',
         link: 'https://example.com',
         language: 'en',
-        copyright: '© 2024 Test',
-        lastBuildDate: new Date('2024-06-01T00:00:00Z'),
+        copyright: '© 2026 Test',
+        lastBuildDate: new Date('2026-06-01T00:00:00Z'),
         ttl: 60,
         items: [],
       }
@@ -68,7 +68,7 @@ describe('generateFeedXml', () => {
       const result = generateFeedXml(feed)
 
       expect(result).toContain('<language>en</language>')
-      expect(result).toContain('<copyright>© 2024 Test</copyright>')
+      expect(result).toContain('<copyright>© 2026 Test</copyright>')
       expect(result).toContain('<lastBuildDate>')
       expect(result).toContain('<ttl>60</ttl>')
     })
@@ -130,7 +130,7 @@ describe('generateFeedXml', () => {
             title: 'Full Post',
             url: 'https://example.com/blog/full',
             description: 'A detailed description',
-            pubDate: new Date('2024-06-01T12:00:00Z'),
+            pubDate: new Date('2026-06-01T12:00:00Z'),
             categories: ['tech', 'rust'],
           },
         ],

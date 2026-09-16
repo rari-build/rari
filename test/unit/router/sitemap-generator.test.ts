@@ -51,26 +51,26 @@ describe('generateSitemapXml', () => {
       const sitemap: Sitemap = [
         {
           url: 'https://example.com/',
-          lastModified: new Date('2024-01-15T10:30:00Z'),
+          lastModified: new Date('2026-01-15T10:30:00Z'),
         },
       ]
 
       const result = generateSitemapXml(sitemap)
 
-      expect(result).toContain('<lastmod>2024-01-15T10:30:00.000Z</lastmod>')
+      expect(result).toContain('<lastmod>2026-01-15T10:30:00.000Z</lastmod>')
     })
 
     it('should include lastModified as string', () => {
       const sitemap: Sitemap = [
         {
           url: 'https://example.com/',
-          lastModified: '2024-01-15T10:30:00Z',
+          lastModified: '2026-01-15T10:30:00Z',
         },
       ]
 
       const result = generateSitemapXml(sitemap)
 
-      expect(result).toContain('<lastmod>2024-01-15T10:30:00.000Z</lastmod>')
+      expect(result).toContain('<lastmod>2026-01-15T10:30:00.000Z</lastmod>')
     })
   })
 
@@ -331,7 +331,7 @@ describe('generateSitemapXml', () => {
         expiration_date: '2025-12-31',
         rating: 4.5,
         view_count: 1000,
-        publication_date: '2024-01-01',
+        publication_date: '2026-01-01',
         family_friendly: true,
         restriction: {
           relationship: 'allow',
@@ -361,7 +361,7 @@ describe('generateSitemapXml', () => {
       expect(result).toContain('<video:expiration_date>2025-12-31</video:expiration_date>')
       expect(result).toContain('<video:rating>4.5</video:rating>')
       expect(result).toContain('<video:view_count>1000</video:view_count>')
-      expect(result).toContain('<video:publication_date>2024-01-01</video:publication_date>')
+      expect(result).toContain('<video:publication_date>2026-01-01</video:publication_date>')
       expect(result).toContain('<video:family_friendly>yes</video:family_friendly>')
       expect(result).toContain('<video:restriction relationship="allow">US CA</video:restriction>')
       expect(result).toContain('<video:platform relationship="deny">mobile</video:platform>')
@@ -452,7 +452,7 @@ describe('generateSitemapXml', () => {
       const sitemap: Sitemap = [
         {
           url: 'https://example.com/',
-          lastModified: '2024-01-15',
+          lastModified: '2026-01-15',
           changeFrequency: 'daily',
           priority: 1.0,
           alternates: {

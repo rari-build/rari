@@ -2,7 +2,7 @@ import type { PageProps } from 'rari'
 import { ImageResponse } from 'rari/og'
 import { getBlogPost } from '@/data/blog-posts'
 
-export default function Image({ params }: PageProps<{ readonly slug: string }>) {
+export default function Image({ params }: PageProps<'/blog/[slug]'>) {
   const post = getBlogPost(params.slug) ?? {
     title: 'Post Not Found',
     content: 'The requested blog post could not be found.',

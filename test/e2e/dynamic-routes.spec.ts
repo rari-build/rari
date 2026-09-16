@@ -22,9 +22,9 @@ test.describe('Dynamic Routes', () => {
     })
 
     test('should handle slugs with special characters', async ({ page }) => {
-      await page.goto('/blog/my-post-2024')
+      await page.goto('/blog/my-post-2026')
 
-      await expect(page.locator('[data-testid="slug-value"]')).toHaveText('my-post-2024')
+      await expect(page.locator('[data-testid="slug-value"]')).toHaveText('my-post-2026')
     })
 
     test('should update metadata based on slug', async ({ page }) => {

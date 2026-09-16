@@ -24,7 +24,7 @@ export function PostHogInit({ pathname }: Readonly<{ pathname?: string }>) {
         person_profiles: 'always',
         capture_pageview: false,
         capture_pageleave: true,
-        defaults: '2026-01-30',
+        defaults: '2026-08-30',
         disable_beacon: true,
       })
       setClient(posthog)

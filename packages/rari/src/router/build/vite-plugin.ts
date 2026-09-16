@@ -15,6 +15,7 @@ import {
 } from '@/shared/utils/type-guards'
 import { toRariPlugin } from '@/vite/plugin/types'
 import { evaluateGenerateStaticParams } from './evaluate-static-params'
+import { generateRouteTypesDts } from './generate-route-types'
 import { generateAppRouteManifest, isGroupSegment } from './routes'
 
 const METADATA_EXPORT_REGEX = /export\s+const\s+metadata\s*(?::\s*\w+\s*)?=\s*(\{[\s\S]*?\n\})/
@@ -283,6 +284,12 @@ export function rariRouter(options: RariRouterPluginOptions = {}): RariPlugin {
       await fs.mkdir(serverDir, { recursive: true })
       await fs.writeFile(path.join(serverDir, 'routes.json'), manifestContent, 'utf-8')
 
+      await fs.writeFile(
+        path.join(path.dirname(appDir), 'rari-routes.d.ts'),
+        generateRouteTypesDts(manifest),
+        'utf-8',
+      )
+
       routeStructureHash = currentHash
       routeFiles.clear()
       currentRouteFiles.forEach(file => {
@@ -351,6 +358,11 @@ export function rariRouter(options: RariRouterPluginOptions = {}): RariPlugin {
       }
     },
 
+    async buildStart() {
+      const root = viteRoot || process.cwd()
+      cachedManifestContent = await generateAppRoutes(root, true)
+    },
+
     async writeBundle() {
       const root = viteRoot || process.cwd()
       cachedManifestContent = await generateAppRoutes(root, true)
@@ -358,6 +370,9 @@ export function rariRouter(options: RariRouterPluginOptions = {}): RariPlugin {
 
     configureServer(devServer: ViteDevServer) {
       setupWatcher(devServer)
+      void generateAppRoutes(devServer.config.root, true).then(content => {
+        cachedManifestContent = content
+      })
     },
 
     async handleHotUpdate(ctx: HmrContext) {

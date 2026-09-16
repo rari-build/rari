@@ -2399,8 +2399,11 @@ export type {
   LoadingEntry,
   NotFoundEntry,
   PageProps,
+  Register,
+  RouteParams,
   RouteSegment,
   RouteSegmentType,
+  SearchParams,
   TemplateEntry,
 } from '@/router/build/types'
 

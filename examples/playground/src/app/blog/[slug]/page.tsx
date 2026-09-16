@@ -1,7 +1,7 @@
 import type { PageProps } from 'rari'
 import { getBlogPost } from '@/data/blog-posts'
 
-export default function BlogPostPage({ params }: PageProps<{ readonly slug: string }>) {
+export default function BlogPostPage({ params }: PageProps<'/blog/[slug]'>) {
   const { slug } = params
 
   const post = getBlogPost(slug) ?? {
@@ -38,7 +38,7 @@ export default function BlogPostPage({ params }: PageProps<{ readonly slug: stri
   )
 }
 
-export function generateMetadata({ params }: PageProps<{ readonly slug: string }>) {
+export function generateMetadata({ params }: PageProps<'/blog/[slug]'>) {
   const post = getBlogPost(params.slug)
 
   return {

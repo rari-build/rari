@@ -131,7 +131,7 @@ describe('$$cache__', () => {
 
     const args = [
       1n,
-      new Date('2024-01-01T00:00:00.000Z'),
+      new Date('2026-01-01T00:00:00.000Z'),
       new Map([['a', new Set([1, 2])]]),
       /abc/gi,
       circular,

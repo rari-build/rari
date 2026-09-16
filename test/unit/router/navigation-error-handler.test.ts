@@ -13,7 +13,7 @@ function httpError(message: string, status: number): Error {
 describe('createNavigationError', () => {
   beforeEach(() => {
     vi.useFakeTimers()
-    vi.setSystemTime(new Date('2024-01-15T10:00:00Z'))
+    vi.setSystemTime(new Date('2026-01-15T10:00:00Z'))
   })
 
   afterEach(() => {
@@ -241,7 +241,7 @@ describe('navigation error handler', () => {
 
   beforeEach(() => {
     vi.useFakeTimers()
-    vi.setSystemTime(new Date('2024-01-15T10:00:00Z'))
+    vi.setSystemTime(new Date('2026-01-15T10:00:00Z'))
     onErrorSpy = vi.fn<(error: any) => void>()
   })
 
