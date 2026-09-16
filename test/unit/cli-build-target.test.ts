@@ -53,6 +53,26 @@ describe('cli build target resolution', () => {
     expect(isRouterDisabled(`export default { plugins: [rari({ router: false })] }`)).toBe(true)
   })
 
+  it('detects quoted router: false property names', () => {
+    expect(isRouterDisabled(`export default { plugins: [rari({ "router": false })] }`)).toBe(true)
+    expect(isRouterDisabled(`export default { plugins: [rari({ 'router': false })] }`)).toBe(true)
+  })
+
+  it('ignores commented router blocks when reading appDir', () => {
+    expect(
+      readRouterAppDir(`
+        // router: { appDir: 'wrong' }
+        export default { plugins: [rari({ router: { appDir: 'app' } })] }
+      `),
+    ).toBe('app')
+    expect(
+      readRouterAppDir(`
+        /* router: { appDir: 'wrong' } */
+        export default { plugins: [rari({ router: { appDir: 'app' } })] }
+      `),
+    ).toBe('app')
+  })
+
   it('ignores router: false inside comments and string literals', () => {
     expect(
       isRouterDisabled(`

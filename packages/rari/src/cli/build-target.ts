@@ -50,12 +50,52 @@ export interface EffectiveRouterOptions {
   readonly extensions: readonly string[]
 }
 
+const ROUTER_KEY = String.raw`['"]?router['"]?`
+const APP_DIR_KEY = String.raw`['"]?appDir['"]?`
+const EXTENSIONS_KEY = String.raw`['"]?extensions['"]?`
+
 function readRouterBlock(configSource: string): string | null {
-  const match = /(?:^|[,{\s])router\s*:\s*\{([^}]*)\}/.exec(configSource)
+  const match = new RegExp(String.raw`(?:^|[,{\s])${ROUTER_KEY}\s*:\s*\{([^}]*)\}`).exec(
+    stripConfigComments(configSource),
+  )
   return match?.[1] ?? null
 }
 
+function quotedPropertyNameEnd(source: string, quoteIndex: number): number | null {
+  const quote = source[quoteIndex]
+  if (quote !== "'" && quote !== '"') return null
+
+  let i = quoteIndex + 1
+  let content = ''
+  while (i < source.length) {
+    const inner = source[i]
+    if (inner === '\\') return null
+    if (inner === quote) break
+    if (inner === '\n') return null
+    content += inner
+    i += 1
+  }
+  if (i >= source.length || source[i] !== quote) return null
+  if (!/^[A-Z_$][\w$]*$/i.test(content)) return null
+
+  let j = i + 1
+  while (j < source.length && /\s/.test(source[j] ?? '')) j += 1
+  if (source[j] !== ':') return null
+  return i + 1
+}
+
+export function stripConfigComments(source: string): string {
+  return stripConfigText(source, 'keep-strings')
+}
+
 export function stripConfigNoise(source: string): string {
+  return stripConfigText(source, 'blank-non-key-strings')
+}
+
+function stripConfigText(
+  source: string,
+  stringMode: 'keep-strings' | 'blank-non-key-strings',
+): string {
   let out = ''
   let i = 0
 
@@ -89,6 +129,31 @@ export function stripConfigNoise(source: string): string {
     }
 
     if (char === "'" || char === '"' || char === '`') {
+      if (stringMode === 'keep-strings') {
+        const quote = char
+        out += quote
+        i += 1
+        while (i < source.length) {
+          const inner = source[i]
+          out += inner
+          i += 1
+          if (inner === '\\' && i < source.length) {
+            out += source[i]
+            i += 1
+            continue
+          }
+          if (inner === quote) break
+        }
+        continue
+      }
+
+      const propertyEnd = quotedPropertyNameEnd(source, i)
+      if (propertyEnd != null) {
+        out += source.slice(i, propertyEnd)
+        i = propertyEnd
+        continue
+      }
+
       const quote = char
       out += quote
       i += 1
@@ -118,13 +183,17 @@ export function stripConfigNoise(source: string): string {
 }
 
 export function isRouterDisabled(configSource: string): boolean {
-  return /(?:^|[,{\s])router\s*:\s*false\b/.test(stripConfigNoise(configSource))
+  return new RegExp(String.raw`(?:^|[,{\s])${ROUTER_KEY}\s*:\s*false\b`).test(
+    stripConfigNoise(configSource),
+  )
 }
 
 export function readRouterAppDir(configSource: string): string | null {
   const block = readRouterBlock(configSource)
   if (block == null) return null
-  const match = /(?:^|[,{\s])appDir\s*:\s*['"]([^'"]+)['"]/.exec(block)
+  const match = new RegExp(String.raw`(?:^|[,{\s])${APP_DIR_KEY}\s*:\s*['"]([^'"]+)['"]`).exec(
+    block,
+  )
   const appDir = match?.[1]
   return appDir != null && appDir !== '' ? appDir : null
 }
@@ -132,7 +201,7 @@ export function readRouterAppDir(configSource: string): string | null {
 export function readRouterExtensions(configSource: string): string[] | null {
   const block = readRouterBlock(configSource)
   if (block == null) return null
-  const match = /(?:^|[,{\s])extensions\s*:\s*\[([^\]]*)\]/.exec(block)
+  const match = new RegExp(String.raw`(?:^|[,{\s])${EXTENSIONS_KEY}\s*:\s*\[([^\]]*)\]`).exec(block)
   if (match?.[1] == null) return null
 
   const extensions = [...match[1].matchAll(/['"]([^'"]+)['"]/g)].map(entry => entry[1])
