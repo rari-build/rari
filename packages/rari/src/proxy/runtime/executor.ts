@@ -1,7 +1,7 @@
 import type { RariResponse } from '../http/response'
 import type { ProxyConfig, ProxyFunction, ProxyResult } from '@/proxy/http/types'
 import { RariRequest } from '../http/request'
-import { shouldRunProxy } from './matcher'
+import { clearCompiledProxyPatterns, shouldRunProxy } from './matcher'
 import {
   getProxyConfig,
   getProxyFunction,
@@ -150,6 +150,7 @@ export class ProxyExecutor {
     this.config = null
     this.initialized = false
     this.initializationPromise = null
+    clearCompiledProxyPatterns()
 
     if (typeof require !== 'undefined') {
       const nodeRequire = require as {
