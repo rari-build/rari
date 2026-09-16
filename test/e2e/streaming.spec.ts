@@ -1,12 +1,7 @@
 import type { Response } from '@playwright/test'
 import { expect, test } from '@playwright/test'
 import { URL_PATTERNS } from './shared/constants'
-import {
-  hasClientRouter,
-  hasRariRuntime,
-  hasRouteCache,
-  waitForRariRuntime,
-} from './shared/helpers'
+import { hasClientRouter, hasRariRuntime, waitForRariRuntime } from './shared/helpers'
 import {
   assertProgressiveTimestamps,
   getServerTimestamps,
@@ -345,13 +340,6 @@ test.describe('Client-Side Navigation Tests', () => {
     await page.waitForLoadState('networkidle')
 
     expect(await hasClientRouter(page)).toBe(true)
-  })
-
-  test('should have route info cache', async ({ page }) => {
-    await page.goto('/')
-    await page.waitForLoadState('networkidle')
-
-    expect(await hasRouteCache(page)).toBe(true)
   })
 
   test('should make RSC requests on client-side navigation', async ({ page }) => {

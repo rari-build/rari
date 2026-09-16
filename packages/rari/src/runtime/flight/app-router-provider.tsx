@@ -57,7 +57,6 @@ interface NavigationDetail {
   readonly to: string
   readonly navigationId: number
   readonly options: NavigationOptions
-  readonly routeInfo?: any
   readonly abortSignal?: AbortSignal
   readonly rscFlightProtocol?: string
   readonly rscResponse?: Response

@@ -16,7 +16,6 @@ import { debounce } from './debounce'
 import { NavigationErrorHandler } from './error-handler'
 import { extractPathname, isExternalUrl } from './match'
 import { deregisterNavigate, registerNavigate } from './navigate'
-import { routeInfoCache } from './route-info'
 import { StatePreserver } from './state-preserver'
 
 function isNavigateCommittedDetail(detail: unknown): detail is { readonly navigationId: number } {
@@ -348,7 +347,6 @@ function updateDocumentMetadata(metadata: PageMetadata): void {
 export interface ClientRouterProps {
   readonly children: React.ReactNode
   readonly initialRoute: string
-  readonly staleWindowMs?: number
 }
 
 interface NavigationState {
@@ -376,11 +374,7 @@ function isPageMetadata(value: unknown): value is PageMetadata {
   return isRecord(value)
 }
 
-export function ClientRouter({
-  children,
-  initialRoute,
-  staleWindowMs = 30_000,
-}: ClientRouterProps): React.ReactNode {
+export function ClientRouter({ children, initialRoute }: ClientRouterProps): React.ReactNode {
   const [navigationState, setNavigationState] = useState<NavigationState>(() => ({
     currentRoute:
       typeof window !== 'undefined'
@@ -423,9 +417,6 @@ export function ClientRouter({
       maxHistorySize: 50,
     }),
   )
-
-  const lastHiddenAtRef = useRef<number | null>(null)
-  const staleWindowMsRef = useRef<number>(staleWindowMs)
 
   const NAVIGATION_DEBOUNCE_MS = 50
   const NAVIGATION_MAX_WAIT_MS = 200
@@ -876,29 +867,6 @@ export function ClientRouter({
       window.removeEventListener('pageshow', handlePageShow)
     }
   }, [])
-
-  useEffect(() => {
-    staleWindowMsRef.current = staleWindowMs
-
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        lastHiddenAtRef.current = Date.now()
-      } else {
-        if (lastHiddenAtRef.current !== null) {
-          const hiddenDuration = Date.now() - lastHiddenAtRef.current
-          if (hiddenDuration > staleWindowMsRef.current) {
-            routeInfoCache.clear()
-          }
-        }
-      }
-    }
-
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-    }
-  }, [staleWindowMs])
 
   useEffect(() => {
     isMountedRef.current = true
