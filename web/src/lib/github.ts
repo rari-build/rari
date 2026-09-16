@@ -20,6 +20,10 @@ interface GitHubRepo {
 const GITHUB_REPO = 'rari-build/rari'
 const GITHUB_API_BASE = 'https://api.github.com'
 
+export function getGitHubEditUrl(repoPath: string): string {
+  return `https://github.com/${GITHUB_REPO}/edit/main/${repoPath}`
+}
+
 function getGitHubHeaders(): HeadersInit {
   return {
     'Accept': 'application/vnd.github.v3+json',
