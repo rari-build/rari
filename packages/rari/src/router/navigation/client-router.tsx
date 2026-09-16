@@ -7,6 +7,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { normalizePath } from '@/shared/utils/path'
 import {
   getCustomEventDetail,
+  isError,
   isHistoryState,
   isRecord,
   parseJsonRecord,
@@ -549,7 +550,7 @@ export function ClientRouter({
     fromRoute: string,
     options: { readonly emitEvent?: boolean } = {},
   ) => {
-    if (Error.isError(error) && error.name === 'AbortError') {
+    if (isError(error) && error.name === 'AbortError') {
       cleanupAbortedNavigation(targetPath, navigationId)
       return
     }

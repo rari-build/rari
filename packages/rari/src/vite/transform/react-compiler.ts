@@ -1,8 +1,8 @@
 /* oxlint-disable typescript/prefer-readonly-parameter-types oxc ReactCompilerOptions is a mutable options bag */
 import type { ReactCompilerOptions as OxcReactCompilerOptions } from 'oxc-transform-react'
 import type { Plugin } from 'vite-plus'
-import { asError } from '@/shared/utils/type-guards'
 import { stripQuery } from '../../shared/utils/path'
+import { asError } from '../../shared/utils/type-guards'
 import { hasTopLevelUseServerDirective } from '../analysis/directives'
 
 export type ReactCompilerOptions = OxcReactCompilerOptions

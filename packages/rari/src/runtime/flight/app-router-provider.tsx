@@ -11,6 +11,7 @@ import { PATH_TRAILING_SLASH_REGEX } from '@/shared/regex-constants'
 import {
   errorMessage,
   getCustomEventDetail,
+  isError,
   isFlightThenable,
   isRecord,
   toError,
@@ -377,7 +378,7 @@ export function AppRouterProvider({
         }
       } catch (error) {
         if (
-          Error.isError(error) &&
+          isError(error) &&
           !error.message.includes('Failed to fetch RSC data') &&
           !error.message.includes('Failed to parse')
         ) {
@@ -452,7 +453,7 @@ export function AppRouterProvider({
           parsedPayload = await refetchRscPayloadRef.current(detail.to, detail.abortSignal)
         }
       } catch (error) {
-        if (Error.isError(error) && error.name === 'AbortError') return
+        if (isError(error) && error.name === 'AbortError') return
         parseError = toError(error)
       }
 

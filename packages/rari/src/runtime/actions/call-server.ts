@@ -3,7 +3,7 @@ import {
   createTemporaryReferenceSet,
   encodeReply,
 } from 'virtual:react-flight-client'
-import { isRecord } from '@/shared/utils/type-guards'
+import { isError, isRecord } from '@/shared/utils/type-guards'
 import { serializeRouterState } from '../flight/serialize-router-state'
 import { scheduleActionFlightRefresh } from './flight-refresh'
 
@@ -70,7 +70,7 @@ export async function callServer(id: string, args: readonly unknown[]): Promise<
   } catch (error) {
     if (
       (error instanceof DOMException && error.name === 'TimeoutError') ||
-      (Error.isError(error) && error.name === 'AbortError')
+      (isError(error) && error.name === 'AbortError')
     ) {
       throw new Error(`Server action "${id}" timed out after ${ACTION_REQUEST_TIMEOUT_MS}ms`)
     }

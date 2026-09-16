@@ -14,11 +14,15 @@ export function isLikelyReactElement(value: unknown): value is Record<string, un
 }
 
 export function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
-  return Error.isError(error) && 'code' in error
+  return isError(error) && 'code' in error
+}
+
+export function isError(value: unknown): value is Error {
+  return typeof Error.isError === 'function' ? Error.isError(value) : value instanceof Error
 }
 
 export function asError(value: unknown): Error | undefined {
-  return Error.isError(value) ? value : undefined
+  return isError(value) ? value : undefined
 }
 
 export function toError(value: unknown): Error {
@@ -26,7 +30,7 @@ export function toError(value: unknown): Error {
 }
 
 export function errorMessage(value: unknown, fallback = 'Unknown error'): string {
-  if (Error.isError(value)) return value.message
+  if (isError(value)) return value.message
   if (typeof value === 'string') return value
   return fallback
 }

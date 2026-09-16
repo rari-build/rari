@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url'
 import { parseArgs, styleText } from 'node:util'
 import { logError, logInfo, logSuccess, logWarn } from '@rari/logger'
 import {
+  isError,
   parseJsonRecord,
   readPackageManagerFieldFromRecord,
   readViteBinFromPackageRecord,
@@ -190,14 +191,9 @@ async function waitForProcess(
   options: Readonly<{ tolerateErrors?: boolean }> = {},
 ): Promise<number | null> {
   try {
-    const settled = await Promise.race([
-      once(child, 'exit').then((args: readonly unknown[]) => ({ kind: 'exit' as const, args })),
-      once(child, 'error').then(([error]) => {
-        throw error
-      }),
-    ])
-    const code = settled.args[0]
-    return typeof code === 'number' || code === null ? code : null
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    const [code] = (await once(child, 'close')) as [number | null, NodeJS.Signals | null]
+    return code
   } catch (error) {
     if (options.tolerateErrors) {
       logWarn(normalizeError(error))
@@ -208,7 +204,7 @@ async function waitForProcess(
 }
 
 function normalizeError(error: unknown): string {
-  if (Error.isError(error)) return error.message
+  if (isError(error)) return error.message
   if (typeof error === 'string') return error
   try {
     return JSON.stringify(error)
