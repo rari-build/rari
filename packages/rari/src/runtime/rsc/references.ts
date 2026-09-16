@@ -3,7 +3,6 @@ import {
   registerClientReference as registerClientReferenceBase,
   registerServerReference,
 } from 'react-server-dom-webpack/server'
-import '@/runtime/shared/types'
 
 export { registerServerReference }
 

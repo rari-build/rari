@@ -32,41 +32,42 @@ async function waitForNavigationSettlement(
   navigationId: number,
   signal: AbortSignal,
 ): Promise<'committed' | { readonly error: unknown }> {
-  return new Promise(resolve => {
-    if (signal.aborted) {
-      resolve({ error: new DOMException('Aborted', 'AbortError') })
-      return
-    }
+  if (signal.aborted) {
+    return { error: new DOMException('Aborted', 'AbortError') }
+  }
 
-    function cleanup() {
-      window.removeEventListener('rari:navigate-committed', onCommitted)
-      window.removeEventListener('rari:navigate-error', onError)
-      signal.removeEventListener('abort', onAbort)
-    }
+  const { promise, resolve } = Promise.withResolvers<'committed' | { readonly error: unknown }>()
 
-    function onCommitted(event: Event) {
-      const detail = getCustomEventDetail(event, isNavigateCommittedDetail)
-      if (detail?.navigationId !== navigationId) return
-      cleanup()
-      resolve('committed')
-    }
+  function cleanup() {
+    window.removeEventListener('rari:navigate-committed', onCommitted)
+    window.removeEventListener('rari:navigate-error', onError)
+    signal.removeEventListener('abort', onAbort)
+  }
 
-    function onError(event: Event) {
-      const detail = getCustomEventDetail(event, isNavigateErrorDetail)
-      if (detail?.navigationId !== navigationId) return
-      cleanup()
-      resolve({ error: detail.error })
-    }
+  function onCommitted(event: Event) {
+    const detail = getCustomEventDetail(event, isNavigateCommittedDetail)
+    if (detail?.navigationId !== navigationId) return
+    cleanup()
+    resolve('committed')
+  }
 
-    function onAbort() {
-      cleanup()
-      resolve({ error: new DOMException('Aborted', 'AbortError') })
-    }
+  function onError(event: Event) {
+    const detail = getCustomEventDetail(event, isNavigateErrorDetail)
+    if (detail?.navigationId !== navigationId) return
+    cleanup()
+    resolve({ error: detail.error })
+  }
 
-    window.addEventListener('rari:navigate-committed', onCommitted)
-    window.addEventListener('rari:navigate-error', onError)
-    signal.addEventListener('abort', onAbort, { once: true })
-  })
+  function onAbort() {
+    cleanup()
+    resolve({ error: new DOMException('Aborted', 'AbortError') })
+  }
+
+  window.addEventListener('rari:navigate-committed', onCommitted)
+  window.addEventListener('rari:navigate-error', onError)
+  signal.addEventListener('abort', onAbort, { once: true })
+
+  return promise
 }
 
 interface PageMetadata {
@@ -430,9 +431,7 @@ export function ClientRouter({
   const NAVIGATION_DEBOUNCE_MS = 50
   const NAVIGATION_MAX_WAIT_MS = 200
 
-  const generateHistoryKey = (): string => {
-    return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
-  }
+  const generateHistoryKey = (): string => crypto.randomUUID()
 
   const cancelNavigation = () => {
     if (abortControllerRef.current) {

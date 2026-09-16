@@ -212,11 +212,11 @@ export function createRouteInfo(
     return params !== null
   })
 
-  const params: Record<string, string | string[]> = {}
+  let params: Record<string, string | string[]> = {}
   if (route) {
     const matchedParams = matchRouteParams(route.path, route.segments, normalizedPath)
     /* v8 ignore start - defensive check, matchedParams should always be non-null if route was found */
-    if (matchedParams) Object.assign(params, matchedParams)
+    if (matchedParams) params = { ...matchedParams }
     /* v8 ignore stop */
   }
 
@@ -231,14 +231,11 @@ export function createRouteInfo(
 
 export function isExternalUrl(url: string, currentOrigin?: string): boolean {
   try {
-    const urlObj = new URL(
-      url,
-      currentOrigin != null && currentOrigin !== '' ? currentOrigin : window.location.origin,
-    )
-    return (
-      urlObj.origin !==
-      (currentOrigin != null && currentOrigin !== '' ? currentOrigin : window.location.origin)
-    )
+    const origin =
+      currentOrigin != null && currentOrigin !== '' ? currentOrigin : window.location.origin
+    const urlObj = URL.parse(url, origin)
+    if (urlObj == null) return false
+    return urlObj.origin !== origin
   } catch {
     return false
   }
@@ -246,7 +243,8 @@ export function isExternalUrl(url: string, currentOrigin?: string): boolean {
 
 export function extractPathname(url: string): string {
   try {
-    const urlObj = new URL(url, window.location.origin)
+    const urlObj = URL.parse(url, window.location.origin)
+    if (urlObj == null) return url
     return `${urlObj.pathname}${urlObj.search}${urlObj.hash}`
   } catch {
     return url

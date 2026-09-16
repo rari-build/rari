@@ -18,10 +18,8 @@ const FONT_FETCH_MAX_REDIRECTS = 3
 export const FONT_PRELOAD_PREFIX = 'preload:'
 
 export function assertGoogleFontAssetUrl(urlString: string): URL {
-  let url: URL
-  try {
-    url = new URL(urlString)
-  } catch {
+  const url = URL.parse(urlString)
+  if (url == null) {
     throw new Error(`Invalid Google font URL: ${urlString}`)
   }
   if (url.protocol !== 'https:') {
