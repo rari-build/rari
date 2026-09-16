@@ -41,6 +41,56 @@ export function readViteRoot(configSource: string): string | null {
   return root != null && root !== '' ? root : null
 }
 
+const DEFAULT_ROUTER_APP_DIR = 'src/app'
+const DEFAULT_ROUTER_EXTENSIONS = ['.tsx', '.jsx', '.ts', '.js'] as const
+
+export interface EffectiveRouterOptions {
+  readonly root: string
+  readonly appDir: string
+  readonly extensions: readonly string[]
+}
+
+function readRouterBlock(configSource: string): string | null {
+  const match = /(?:^|[,{\s])router\s*:\s*\{([^}]*)\}/.exec(configSource)
+  return match?.[1] ?? null
+}
+
+export function isRouterDisabled(configSource: string): boolean {
+  return /(?:^|[,{\s])router\s*:\s*false\b/.test(configSource)
+}
+
+export function readRouterAppDir(configSource: string): string | null {
+  const block = readRouterBlock(configSource)
+  if (block == null) return null
+  const match = /(?:^|[,{\s])appDir\s*:\s*['"]([^'"]+)['"]/.exec(block)
+  const appDir = match?.[1]
+  return appDir != null && appDir !== '' ? appDir : null
+}
+
+export function readRouterExtensions(configSource: string): string[] | null {
+  const block = readRouterBlock(configSource)
+  if (block == null) return null
+  const match = /(?:^|[,{\s])extensions\s*:\s*\[([^\]]*)\]/.exec(block)
+  if (match?.[1] == null) return null
+
+  const extensions = [...match[1].matchAll(/['"]([^'"]+)['"]/g)].map(entry => entry[1])
+  return extensions.length > 0 ? extensions : null
+}
+
+export function resolveEffectiveRouterOptions(packageRoot: string): EffectiveRouterOptions | null {
+  const configSource = readViteConfigSource(packageRoot)
+  if (configSource != null && isRouterDisabled(configSource)) return null
+
+  return {
+    root: resolveEffectiveViteRoot(packageRoot, configSource),
+    appDir:
+      (configSource != null ? readRouterAppDir(configSource) : null) ?? DEFAULT_ROUTER_APP_DIR,
+    extensions:
+      (configSource != null ? readRouterExtensions(configSource) : null) ??
+      DEFAULT_ROUTER_EXTENSIONS,
+  }
+}
+
 function readViteConfigSource(dir: string): string | null {
   for (const fileName of VITE_CONFIG_FILES) {
     const configPath = resolve(dir, fileName)

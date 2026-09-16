@@ -18,6 +18,7 @@ import {
   findImageConfigPath,
   outDirFromImageConfigPath,
   resolveConfiguredBuildOutDir,
+  resolveEffectiveRouterOptions,
   resolveViteBuildPackageRoot,
 } from './build-target'
 import { getBinaryPath, getInstallationInstructions } from './platform'
@@ -280,14 +281,22 @@ function getDeploymentConfig() {
 
 async function runViteBuild() {
   cleanDistFolder()
+  const cwd = process.cwd()
   const viteBin = getProjectContext().viteBin
+  const packageRoot = resolveViteBuildPackageRoot(cwd, viteBin)
+  const routerOptions = resolveEffectiveRouterOptions(packageRoot)
 
-  await writeAppRouteTypes(process.cwd())
+  if (routerOptions != null) {
+    await writeAppRouteTypes(routerOptions.root, {
+      appDir: routerOptions.appDir,
+      extensions: routerOptions.extensions,
+    })
+  }
 
   logInfo('Type checking...')
   const typecheckProcess = spawnTool('tsc', [], {
     stdio: 'inherit',
-    cwd: process.cwd(),
+    cwd,
   })
 
   const typecheckCode = await waitForProcess(typecheckProcess)
@@ -679,11 +688,15 @@ if (isCliMainModule()) {
 export { detectPackageManager, getDeploymentConfig, isRailwayEnvironment, isRenderEnvironment }
 export {
   findImageConfigPath,
+  isRouterDisabled,
   outDirFromImageConfigPath,
   readBuildOutDir,
   readDefaultPackageTarget,
+  readRouterAppDir,
+  readRouterExtensions,
   readViteRoot,
   resolveConfiguredBuildOutDir,
+  resolveEffectiveRouterOptions,
   resolveEffectiveViteRoot,
   resolveViteBuildPackageRoot,
 } from './build-target'
