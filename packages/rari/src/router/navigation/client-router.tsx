@@ -37,7 +37,7 @@ async function waitForNavigationSettlement(
     return { error: new DOMException('Aborted', 'AbortError') }
   }
 
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     function cleanup() {
       window.removeEventListener('rari:navigate-committed', onCommitted)
       window.removeEventListener('rari:navigate-error', onError)

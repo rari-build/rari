@@ -233,8 +233,7 @@ export function isExternalUrl(url: string, currentOrigin?: string): boolean {
   try {
     const origin =
       currentOrigin != null && currentOrigin !== '' ? currentOrigin : window.location.origin
-    const urlObj =
-      typeof URL.parse === 'function' ? URL.parse(url, origin) : new URL(url, origin)
+    const urlObj = typeof URL.parse === 'function' ? URL.parse(url, origin) : new URL(url, origin)
     if (urlObj == null) return false
     return urlObj.origin !== origin
   } catch {
