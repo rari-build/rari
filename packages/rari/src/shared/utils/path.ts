@@ -1,3 +1,4 @@
+import process from 'node:process'
 import { BACKSLASH_REGEX, MULTIPLE_SLASHES_REGEX } from '../regex-constants'
 
 export interface NormalizePathOptions {
@@ -33,6 +34,16 @@ export function pathnameFromUrl(url: string, base = 'http://localhost'): string 
 
 export function toPosixPath(value: string): string {
   return value.replace(BACKSLASH_REGEX, '/')
+}
+
+export function isPathInside(filePath: string, dirPath: string): boolean {
+  let file = toPosixPath(filePath)
+  let dir = toPosixPath(dirPath).replace(/\/+$/, '')
+  if (process.platform === 'win32') {
+    file = file.toLowerCase()
+    dir = dir.toLowerCase()
+  }
+  return file === dir || file.startsWith(`${dir}/`)
 }
 
 export function normalizeAssetsDir(assetsDir: string | undefined, fallback = 'assets'): string {

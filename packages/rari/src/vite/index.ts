@@ -33,7 +33,7 @@ import {
   WINDOWS_PATH_REGEX,
 } from '@/shared/regex-constants'
 import { clearFileResolverCache, resolveImportToFilePath } from '@/shared/utils/file-resolver'
-import { normalizeAssetsDir, pathnameFromUrl, toPosixPath } from '@/shared/utils/path'
+import { isPathInside, normalizeAssetsDir, pathnameFromUrl, toPosixPath } from '@/shared/utils/path'
 import { getRariServerPort } from '@/shared/utils/server-port'
 import {
   aliasEntriesFromRecord,
@@ -1682,7 +1682,7 @@ ${clientTransformedCode}`
 
           if (
             TSX_EXT_REGEX.test(filePath) &&
-            filePath.includes(srcDir) &&
+            isPathInside(filePath, srcDir) &&
             isServerComponent(filePath)
           ) {
             server.ws.send({
@@ -2298,11 +2298,10 @@ export const createTemporaryReferenceSet = module.exports.createTemporaryReferen
     },
   }
 
-  const plugins: Plugin[] = []
+  const plugins: Plugin[] = [...createReactRefreshPlugins()]
 
-  if (options.compiler != null && options.compiler !== false) {
-    plugins.push(...createReactRefreshPlugins(), createReactCompilerPlugin(options.compiler))
-  }
+  if (options.compiler != null && options.compiler !== false)
+    plugins.push(createReactCompilerPlugin(options.compiler))
 
   plugins.push(
     mainPlugin,

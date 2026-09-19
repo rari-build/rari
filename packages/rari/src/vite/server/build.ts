@@ -2825,6 +2825,7 @@ export function createServerBuildPlugin(options: ServerBuildOptions = {}): Plugi
 
         if (!isTracked) builder.addServerComponent(file, content, analysis)
 
+        builder.invalidateBuildCacheFor(file)
         await builder.rebuildComponent(file)
       } catch (error) {
         console.error(`[rari] Build: Error rebuilding ${relativePath}:`, error)

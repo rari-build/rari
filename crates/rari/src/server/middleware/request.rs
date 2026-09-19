@@ -5,7 +5,7 @@ use axum::{
 };
 use cow_utils::CowUtils;
 
-use crate::server::config::Config;
+use crate::server::{config::Config, core::utils::http::CORS_ALLOW_HEADERS};
 
 #[derive(Clone, Debug)]
 #[non_exhaustive]
@@ -28,7 +28,7 @@ const REFERRER_POLICY: &str = "Referrer-Policy";
 const PERMISSIONS_POLICY: &str = "Permissions-Policy";
 const ALLOW_ALL_ORIGINS: &str = "*";
 const ALLOWED_METHODS: &str = "GET, POST, PUT, DELETE, OPTIONS";
-const ALLOWED_HEADERS: &str = "Content-Type, Authorization, Accept, Origin, X-Requested-With, Cache-Control, Pragma, X-RSC-Streaming";
+const ALLOWED_HEADERS: &str = CORS_ALLOW_HEADERS;
 const MAX_AGE_SECONDS: &str = "86400";
 const NOSNIFF: &str = "nosniff";
 const FRAME_DENY: &str = "DENY";

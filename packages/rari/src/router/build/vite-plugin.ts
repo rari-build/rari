@@ -5,7 +5,7 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { QUOTE_REGEX, TSX_EXT_REGEX } from '@/shared/regex-constants'
-import { toPosixPath } from '@/shared/utils/path'
+import { isPathInside, toPosixPath } from '@/shared/utils/path'
 import { getRariServerUrl } from '@/shared/utils/server-port'
 import {
   isRecord,
@@ -92,7 +92,7 @@ function stripRouteGroups(routePath: string): string {
 }
 
 function filePathToRoutePath(filePath: string, appDir: string): string {
-  const relativePath = path.relative(appDir, path.dirname(filePath))
+  const relativePath = path.relative(path.normalize(appDir), path.normalize(path.dirname(filePath)))
 
   if (!relativePath || relativePath === '.') return '/'
 
@@ -237,7 +237,7 @@ export function rariRouter(options: RariRouterPluginOptions = {}): RariPlugin {
             await scanDir(fullPath)
           } else if (entry.isFile() && opts.extensions.some(ext => entry.name.endsWith(ext))) {
             const fileType = getAppRouterFileType(fullPath)
-            if (fileType) files.add(fullPath)
+            if (fileType) files.add(toPosixPath(fullPath))
           }
         }
       } catch {}
@@ -301,19 +301,19 @@ export function rariRouter(options: RariRouterPluginOptions = {}): RariPlugin {
 
     devServer.watcher.on('all', (event: string, filePath: string) => {
       void (async () => {
-        if (!filePath.startsWith(appDir)) return
+        if (!isPathInside(filePath, appDir)) return
 
         if (opts.extensions.some(ext => filePath.endsWith(ext))) {
           try {
             const fileType = getAppRouterFileType(filePath)
             const isRouteFile = fileType !== null
             const isAddOrUnlink = event === 'add' || event === 'unlink'
-            const isNewRouteFile = isRouteFile && !routeFiles.has(filePath)
+            const isNewRouteFile = isRouteFile && !routeFiles.has(toPosixPath(filePath))
 
             if (isAddOrUnlink || isNewRouteFile) {
               await generateAppRoutes(devServer.config.root, true)
 
-              if (filePath.includes(opts.appDir)) {
+              if (isPathInside(filePath, appDir)) {
                 devServer.ws.send({
                   type: 'full-reload',
                   path: '*',
@@ -365,7 +365,8 @@ export function rariRouter(options: RariRouterPluginOptions = {}): RariPlugin {
 
       const appDir = path.resolve(server.config.root, opts.appDir)
 
-      const isAppFile = file.startsWith(appDir) && opts.extensions.some(ext => file.endsWith(ext))
+      const isAppFile =
+        isPathInside(file, appDir) && opts.extensions.some(ext => file.endsWith(ext))
 
       if (isAppFile) {
         const fileType = getAppRouterFileType(file)
@@ -378,7 +379,8 @@ export function rariRouter(options: RariRouterPluginOptions = {}): RariPlugin {
             void (async () => {
               pendingHMRUpdates.delete(file)
 
-              const isNewRouteFile = !routeFiles.has(file)
+              const normalizedFile = toPosixPath(file)
+              const isNewRouteFile = !routeFiles.has(normalizedFile)
               const previousManifest = cachedManifestContent
               cachedManifestContent = await generateAppRoutes(server.config.root, isNewRouteFile)
               const manifestUpdated = previousManifest !== cachedManifestContent
@@ -431,7 +433,7 @@ export function rariRouter(options: RariRouterPluginOptions = {}): RariPlugin {
 
               const hmrData: AppRouterHMRData = {
                 fileType,
-                filePath: path.relative(server.config.root, file),
+                filePath: toPosixPath(path.relative(server.config.root, file)),
                 routePath,
                 affectedRoutes,
                 manifestUpdated,
