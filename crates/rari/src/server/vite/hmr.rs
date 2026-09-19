@@ -28,7 +28,9 @@ use crate::{
                 validate_safe_path,
             },
         },
-        vite::rsc::{immediate_component_reregistration, reload_component_from_dist},
+        vite::rsc::{
+            DistReloadOutcome, immediate_component_reregistration, reload_component_from_dist,
+        },
     },
 };
 
@@ -127,20 +129,12 @@ async fn handle_register(state: ServerState, file_path: String) -> Result<Json<V
         }
     };
 
-    {
-        let renderer = state.renderer.lock().await;
-        {
-            let mut registry = renderer.component_registry.lock();
-            registry.mark_module_stale(&component_id);
-        }
-    }
-
     let reload_result = reload_component_from_dist(&state, &file_path, &component_id).await;
 
     let mut reload_error_details: Option<serde_json::Value> = None;
 
     match &reload_result {
-        Ok(()) => {}
+        Ok(_) => {}
         Err(e) => {
             tracing::error!(
                 component_id = component_id,
@@ -183,6 +177,17 @@ async fn handle_register(state: ServerState, file_path: String) -> Result<Json<V
                 "previous_error": reload_error_details,
                 "suggestion": "Component reload failed. Last known good version is still available. Consider checking for syntax errors or manual page refresh."
             }
+        })));
+    }
+
+    if reload_result.as_ref().is_ok_and(|outcome| *outcome == DistReloadOutcome::Unchanged) {
+        return Ok(Json(serde_json::json!({
+            "success": true,
+            "file_path": file_path,
+            "component_id": component_id,
+            "reloaded": false,
+            "content_unchanged": true,
+            "error": null
         })));
     }
 

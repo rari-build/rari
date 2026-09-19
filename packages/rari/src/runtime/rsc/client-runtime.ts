@@ -229,11 +229,14 @@ if (import.meta.hot) {
         const result: unknown = await reloadResponse.json()
         const success = isRecord(result) && result.success === true
         const reloaded = isRecord(result) && result.reloaded === true
+        const contentUnchanged = isRecord(result) && result.content_unchanged === true
         const errorMessage =
           isRecord(result) && typeof result.error === 'string'
             ? result.error
             : 'Component reload unsuccessful'
         if (!success && !reloaded) throw new Error(errorMessage)
+
+        if (contentUnchanged) return
 
         await fetch(`${rariServerUrl}/_rari/hmr`, {
           method: 'POST',

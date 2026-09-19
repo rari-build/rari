@@ -614,7 +614,9 @@ pluginDescribe('use-cache Vite plugin integration', () => {
   beforeAll(() => {
     cleanFixtures()
     const plugins = rari({ projectRoot: process.cwd(), experimental: { useCache: true } })
-    mainPlugin = plugins[0]
+    const plugin = plugins.find(entry => entry.name === 'rari')
+    if (plugin == null) throw new Error('expected rari main plugin')
+    mainPlugin = plugin
   })
 
   afterAll(() => {
