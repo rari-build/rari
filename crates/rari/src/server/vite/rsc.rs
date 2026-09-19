@@ -22,6 +22,13 @@ use crate::{
     },
 };
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum DistReloadOutcome {
+    Reloaded,
+    Unchanged,
+}
+
 #[axum::debug_handler]
 pub async fn register_component(
     State(state): State<ServerState>,
@@ -108,7 +115,7 @@ pub async fn reload_component_from_dist(
     state: &ServerState,
     file_path: &str,
     component_id: &str,
-) -> Result<(), RariError> {
+) -> Result<DistReloadOutcome, RariError> {
     let normalized_path = normalize_component_path(file_path);
 
     if let Err(e) = validate_component_path(&normalized_path) {
@@ -190,6 +197,16 @@ pub async fn reload_component_from_dist(
                 }
             }
         }
+
+        if dist_code == *existing {
+            return Ok(DistReloadOutcome::Unchanged);
+        }
+    }
+
+    {
+        let renderer = state.renderer.lock().await;
+        let mut registry = renderer.component_registry.lock();
+        registry.mark_module_stale(component_id);
     }
 
     let is_esm = is_esm_code(&dist_code);
@@ -314,7 +331,9 @@ pub async fn reload_component_from_dist(
 
         Ok(())
     })
-    .await
+    .await?;
+
+    Ok(DistReloadOutcome::Reloaded)
 }
 
 pub async fn immediate_component_reregistration(
