@@ -3,6 +3,7 @@ use cow_utils::CowUtils;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 pub const RARI_NAVIGATION_ID_HEADER: &str = "rari-navigation-id";
+pub const CORS_ALLOW_HEADERS: &str = "Content-Type, Authorization, Accept, Origin, X-Requested-With, Cache-Control, Pragma, X-RSC-Streaming, rari-navigation-id, rari-router-state, rsc-action-id";
 
 #[expect(
     clippy::implicit_hasher,
@@ -207,12 +208,8 @@ pub fn add_api_cors_headers(
     }
 
     if !headers.contains_key("Access-Control-Allow-Headers") {
-        headers.insert(
-            "Access-Control-Allow-Headers",
-            HeaderValue::from_static(
-                "Content-Type, Authorization, Accept, Origin, X-Requested-With, Cache-Control, X-RSC-Streaming",
-            ),
-        );
+        headers
+            .insert("Access-Control-Allow-Headers", HeaderValue::from_static(CORS_ALLOW_HEADERS));
     }
 
     if !headers.contains_key("Access-Control-Max-Age")
@@ -327,7 +324,11 @@ mod tests {
         assert_eq!(headers.get("Access-Control-Allow-Credentials").unwrap(), "true");
         assert_eq!(headers.get("Access-Control-Max-Age").unwrap(), "86400");
         assert!(headers.contains_key("Access-Control-Allow-Methods"));
-        assert!(headers.contains_key("Access-Control-Allow-Headers"));
+        assert_eq!(headers.get("Access-Control-Allow-Headers").unwrap(), CORS_ALLOW_HEADERS);
+        assert!(
+            CORS_ALLOW_HEADERS.contains("rari-navigation-id"),
+            "HMR refetch from Vite origin sends rari-navigation-id"
+        );
         assert_eq!(headers.get("Vary").unwrap(), "Origin");
     }
 

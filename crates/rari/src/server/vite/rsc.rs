@@ -162,53 +162,34 @@ pub async fn reload_component_from_dist(
         }
     };
 
-    let needs_retry = {
+    let existing_source = {
         let renderer = state.renderer.lock().await;
         let registry = renderer.component_registry.lock();
-        if let Some(existing_component) = registry.get_component(component_id) {
-            let existing_snippet =
-                existing_component.transformed_source.chars().take(500).collect::<String>();
-            let new_snippet = dist_code.chars().take(500).collect::<String>();
-
-            existing_snippet == new_snippet
-        } else {
-            false
-        }
+        registry.get_component(component_id).map(|c| c.transformed_source.clone())
     };
 
-    if needs_retry {
-        time::sleep(time::Duration::from_millis(100)).await;
-
-        let new_dist_code = match fs::read_to_string(&dist_path).await {
-            Ok(code) => code,
-            Err(e) => {
-                tracing::error!(
-                    component_id = component_id,
-                    dist_path = %dist_path.display(),
-                    error = %e,
-                    "Failed to re-read dist file after retry"
-                );
-                return Err(RariError::io(format!("Failed to re-read dist file: {e}")));
-            }
-        };
-
-        let renderer = state.renderer.lock().await;
-        let registry = renderer.component_registry.lock();
-        if let Some(existing_component) = registry.get_component(component_id) {
-            let existing_snippet =
-                existing_component.transformed_source.chars().take(500).collect::<String>();
-            let new_snippet = new_dist_code.chars().take(500).collect::<String>();
-
-            if existing_snippet == new_snippet {
-                return Err(RariError::state(
-                    "Dist file not yet updated by Vite. Last known good version preserved.",
-                ));
+    if let Some(existing) = existing_source.as_ref()
+        && dist_code == *existing
+    {
+        for delay_ms in [50_u64, 100, 200, 400] {
+            time::sleep(time::Duration::from_millis(delay_ms)).await;
+            match fs::read_to_string(&dist_path).await {
+                Ok(code) if code != *existing => {
+                    dist_code = code;
+                    break;
+                }
+                Ok(code) => dist_code = code,
+                Err(e) => {
+                    tracing::error!(
+                        component_id = component_id,
+                        dist_path = %dist_path.display(),
+                        error = %e,
+                        "Failed to re-read dist file after retry"
+                    );
+                    return Err(RariError::io(format!("Failed to re-read dist file: {e}")));
+                }
             }
         }
-        drop(registry);
-        drop(renderer);
-
-        dist_code = new_dist_code;
     }
 
     let is_esm = is_esm_code(&dist_code);

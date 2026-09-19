@@ -14,7 +14,10 @@ use tokio::fs;
 use crate::server::{
     ServerState,
     config::Config,
-    core::utils::{http::get_content_type, path_validation::validate_safe_path},
+    core::utils::{
+        http::{CORS_ALLOW_HEADERS, get_content_type},
+        path_validation::validate_safe_path,
+    },
     error_response::HttpError,
 };
 
@@ -187,12 +190,7 @@ pub fn cors_preflight_response() -> Response {
         "Access-Control-Allow-Methods",
         HeaderValue::from_static("GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS"),
     );
-    headers.insert(
-        "Access-Control-Allow-Headers",
-        HeaderValue::from_static(
-            "Content-Type, Authorization, Accept, Origin, X-Requested-With, Cache-Control, X-RSC-Streaming",
-        ),
-    );
+    headers.insert("Access-Control-Allow-Headers", HeaderValue::from_static(CORS_ALLOW_HEADERS));
     headers.insert("Access-Control-Max-Age", HeaderValue::from_static("86400"));
 
     #[expect(clippy::expect_used, reason = "Response::builder() with valid components never fails")]
