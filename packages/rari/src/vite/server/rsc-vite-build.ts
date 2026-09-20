@@ -203,6 +203,7 @@ export type BuildEntriesWithViteEnvironmentOptions = Readonly<{
   environmentName: 'rsc' | 'ssr'
   entries: readonly EnvViteBuildEntry[]
   minify?: boolean
+  codeSplitting?: boolean
   label?: string
 }>
 
@@ -245,6 +246,7 @@ export async function buildEntriesWithViteEnvironment(
         entryFileNames: '[name].js',
         chunkFileNames: 'chunks/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash][extname]',
+        ...(options.codeSplitting === false ? { codeSplitting: false } : {}),
       },
       external: [...(options.environmentName === 'ssr' ? SSR_EXTERNALS : RSC_EXTERNALS)],
     }
@@ -318,6 +320,7 @@ export type BuildRscEntriesWithViteEnvironmentOptions = Readonly<{
   viteBuilder: ViteBuilder
   entries: readonly RscViteBuildEntry[]
   minify?: boolean
+  codeSplitting?: boolean
 }>
 
 export async function buildRscEntriesWithViteEnvironment(
@@ -331,6 +334,7 @@ export async function buildRscEntriesWithViteEnvironment(
       filePath: entry.filePath,
     })),
     minify: options.minify,
+    codeSplitting: options.codeSplitting,
     label: 'RSC',
   })
 }

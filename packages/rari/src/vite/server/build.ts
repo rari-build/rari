@@ -322,14 +322,15 @@ export class ServerComponentBuilder {
 
   private async emitRscEntries(
     entries: ReadonlyArray<{ readonly componentId: string; readonly filePath: string }>,
-    minify?: boolean,
+    options?: { readonly minify?: boolean; readonly codeSplitting?: boolean },
   ) {
     return this.withEnvEmitLock(async () => {
       const viteBuilder = await this.getEmitBuilder()
       const result = await buildRscEntriesWithViteEnvironment({
         viteBuilder,
         entries,
-        minify: minify ?? false,
+        minify: options?.minify ?? false,
+        codeSplitting: options?.codeSplitting,
       })
       if (result == null) {
         throw new Error('Vite RSC environment build failed')
@@ -653,7 +654,14 @@ export class ServerComponentBuilder {
 
     const result = await this.emitRscEntries(
       entries.map(({ componentId, filePath }) => ({ componentId, filePath })),
+      { codeSplitting: false },
     )
+
+    for (const file of result.extraFiles) {
+      const fullPath = this.resolveExtraFileOutPath(file.fileName)
+      await fs.promises.mkdir(path.dirname(fullPath), { recursive: true })
+      await fs.promises.writeFile(fullPath, file.code, 'utf-8')
+    }
 
     return entries.map(entry => {
       const output = result.outputs.get(entry.componentId)
@@ -1172,7 +1180,9 @@ export class ServerComponentBuilder {
     const bundleDir = path.dirname(fullBundlePath)
     await fs.promises.mkdir(bundleDir, { recursive: true })
 
-    const result = await this.emitRscEntries([{ componentId, filePath }], this.options.minify)
+    const result = await this.emitRscEntries([{ componentId, filePath }], {
+      minify: this.options.minify,
+    })
     const built = result.outputs.get(componentId)
     if (built == null) {
       throw new Error(`Vite RSC environment build missed entry: ${componentId}`)
