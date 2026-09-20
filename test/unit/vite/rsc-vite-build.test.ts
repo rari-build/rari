@@ -1,10 +1,12 @@
+import type { ViteBuilder } from 'vite-plus'
 import { buildRscEntriesWithViteEnvironment } from '@rari/vite/server/rsc-vite-build'
 import { describe, expect, it, vi } from 'vite-plus/test'
+import { castMock } from '../../helpers/mock-cast'
 
 describe('buildRscEntriesWithViteEnvironment', () => {
   it('returns empty outputs for empty entries', async () => {
     const result = await buildRscEntriesWithViteEnvironment({
-      viteBuilder: { environments: {} } as never,
+      viteBuilder: castMock<ViteBuilder>({ environments: {} }),
       entries: [],
     })
     expect(result).toEqual({ outputs: new Map(), extraFiles: [] })
@@ -12,20 +14,21 @@ describe('buildRscEntriesWithViteEnvironment', () => {
 
   it('returns null when rsc environment is missing', async () => {
     const result = await buildRscEntriesWithViteEnvironment({
-      viteBuilder: { environments: {} } as never,
+      viteBuilder: castMock<ViteBuilder>({ environments: {} }),
       entries: [{ componentId: 'App', filePath: '/app.tsx' }],
     })
     expect(result).toBeNull()
   })
 
   it('maps entry chunks from a Vite environment build', async () => {
+    const previousRolldown = { keep: 'me' }
     const buildConfig = {
-      write: false,
+      write: true,
       emptyOutDir: true,
       copyPublicDir: true,
-      minify: false,
+      minify: 'esbuild' as const,
       emitAssets: false,
-      rolldownOptions: {},
+      rolldownOptions: previousRolldown,
     }
     const build = vi.fn().mockResolvedValue({
       output: [
@@ -45,7 +48,7 @@ describe('buildRscEntriesWithViteEnvironment', () => {
     })
 
     const result = await buildRscEntriesWithViteEnvironment({
-      viteBuilder: {
+      viteBuilder: castMock<ViteBuilder>({
         environments: {
           rsc: {
             init: async () => {},
@@ -53,7 +56,7 @@ describe('buildRscEntriesWithViteEnvironment', () => {
           },
         },
         build,
-      } as never,
+      }),
       entries: [{ componentId: 'App', filePath: '/src/App.tsx' }],
     })
 
@@ -64,8 +67,12 @@ describe('buildRscEntriesWithViteEnvironment', () => {
       cssAssetSources: ['.x{color:red}'],
     })
     expect(result?.extraFiles).toEqual([])
-    expect(buildConfig.write).toBe(false)
-    expect(buildConfig.rolldownOptions).toEqual({})
+    expect(buildConfig.write).toBe(true)
+    expect(buildConfig.emptyOutDir).toBe(true)
+    expect(buildConfig.copyPublicDir).toBe(true)
+    expect(buildConfig.minify).toBe('esbuild')
+    expect(buildConfig.emitAssets).toBe(false)
+    expect(buildConfig.rolldownOptions).toBe(previousRolldown)
   })
 
   it('returns null and restores config when build throws', async () => {
@@ -81,7 +88,7 @@ describe('buildRscEntriesWithViteEnvironment', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     const result = await buildRscEntriesWithViteEnvironment({
-      viteBuilder: {
+      viteBuilder: castMock<ViteBuilder>({
         environments: {
           rsc: {
             init: async () => {},
@@ -89,7 +96,7 @@ describe('buildRscEntriesWithViteEnvironment', () => {
           },
         },
         build: vi.fn().mockRejectedValue(new Error('boom')),
-      } as never,
+      }),
       entries: [{ componentId: 'App', filePath: '/src/App.tsx' }],
     })
 
