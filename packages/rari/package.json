@@ -18,19 +18,11 @@
     "react",
     "server-components",
     "rsc",
-    "rust",
-    "vite",
-    "framework",
-    "performance",
     "ssr",
-    "typescript",
+    "vite",
+    "rust",
     "deno",
-    "v8",
-    "streaming",
-    "fast",
-    "zero-config",
-    "full-stack",
-    "web-framework"
+    "framework"
   ],
   "sideEffects": [
     "./dist/runtime/entry-client.mjs",
@@ -171,9 +163,7 @@
   "dependencies": {
     "@capsizecss/metrics": "catalog:",
     "@capsizecss/unpack": "catalog:",
-    "lightningcss": "catalog:build",
-    "react-server-dom-webpack": "catalog:react",
-    "rolldown": "catalog:build"
+    "react-server-dom-webpack": "catalog:react"
   },
   "optionalDependencies": {
     "@rari/use-cache": "0.15.17",

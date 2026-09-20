@@ -49,7 +49,6 @@ export default defineConfig({
     deps: {
       neverBundle: [
         '@mdx-js/mdx',
-        'lightningcss',
         '@capsizecss/metrics',
         '@capsizecss/unpack',
         'react',
@@ -57,7 +56,6 @@ export default defineConfig({
         'react-dom',
         'vite',
         'vite-plus',
-        'rolldown',
         'react-server-dom-webpack',
         'react-server-dom-webpack/client',
         'react-server-dom-webpack/server',

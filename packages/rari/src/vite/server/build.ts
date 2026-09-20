@@ -1,5 +1,5 @@
 /* oxlint-disable typescript/prefer-readonly-parameter-types SSR build mutates manifest and css module buffers */
-import type { Plugin } from 'vite-plus'
+import type { Plugin, ViteBuilder } from 'vite-plus'
 import type { ModuleAnalysis } from '../analysis/directives'
 import type { MdxPluginOptions } from '../mdx/registry'
 import type {
@@ -11,114 +11,57 @@ import type {
   ServerCSPConfig,
 } from './config'
 import fs from 'node:fs'
-import { createRequire } from 'node:module'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { build } from 'rolldown'
 import { buildProxyManifest } from '@/proxy/build/analyze'
 import { copyAppIconsToOutDir, parseAppIconsFromManifest } from '@/router/metadata/app-icons'
 import {
   EXPORTED_CONST_FUNCTION_REGEX,
   EXPORTED_DEFAULT_ARROW_REGEX,
   EXPORTED_FUNCTION_REGEX,
-  FILE_PROTOCOL_REGEX,
   TSX_EXT_REGEX,
 } from '@/shared/regex-constants'
 import { resolveAlias } from '@/shared/utils/alias-resolver'
 import { contentHash } from '@/shared/utils/content-hash'
-import {
-  resolveIndexFile,
-  resolveWithExtensions,
-  resolveWithExtensionsAndIndex,
-} from '@/shared/utils/file-resolver'
+import { resolveWithExtensionsAndIndex } from '@/shared/utils/file-resolver'
 import { normalizeAssetsDir, toPosixPath } from '@/shared/utils/path'
-import {
-  errorMessage,
-  getErrnoCode,
-  isRecord,
-  parseJsonRecord,
-  toError,
-} from '@/shared/utils/type-guards'
+import { errorMessage, getErrnoCode, isRecord, parseJsonRecord } from '@/shared/utils/type-guards'
 import { readViteAliases } from '@/shared/utils/vite-aliases'
 import {
   getReadableComponentId,
   getComponentId as getSharedComponentId,
   getProjectRelativePath as getSharedProjectRelativePath,
 } from '../analysis/component-ids'
-import { analyzeModuleSource, scanImportStatements } from '../analysis/directives'
+import { analyzeModuleSource } from '../analysis/directives'
 import {
   filterExternalDependencies,
   filterRelativeImportSources,
   hasNodeImportsFromAnalysis,
-  isNodeBuiltinModule,
   ModuleAnalysisCache,
   resolveModuleCachePath,
 } from '../analysis/module-cache'
 import { collectSourceFilePaths, normalizeScanDirs } from '../analysis/source-walker'
-import { collectLayoutCssImportPaths } from '../client-head'
-import { createFontRolldownPlugin } from '../font/plugin'
-import {
-  createStaticImageRolldownPlugin,
-  finalizeStaticImageSourceMapBuild,
-} from '../image/static-import'
+import { finalizeStaticImageSourceMapBuild } from '../image/static-import'
 import {
   collectMdxContentDirs,
   copyMdxContentDirsToDest,
   resolveMdxPluginOptions,
   resolveMdxRegistryEntries,
 } from '../mdx/registry'
-import { ensureNamedImportFromModule } from '../transform/client-import'
+import { collectExportNames } from '../transform/client-reference-stub'
 import {
-  buildClientReferenceStubModule,
-  collectExportNames,
-} from '../transform/client-reference-stub'
-import {
-  buildGlobalClientComponentWrapper,
-  buildGlobalClientNamespaceWrapper,
-} from '../transform/component-global'
-import { transformInlineServerActions } from '../transform/inline-server-action'
-import { getUseCacheTransform } from '../transform/use-cache'
+  buildRscEntriesWithViteEnvironment,
+  buildSsrEntriesWithViteEnvironment,
+  getOrCreateViteEmitBuilder,
+  rscBundlePathForComponent,
+} from './rsc-vite-build'
 
 const PROXY_FILE_REGEX = /^proxy\.(?:tsx?|jsx?|mts|mjs)$/
 const PROXY_MANIFEST_FILE = 'proxy.json'
-const COMPONENTS_PATH_REGEX = /\/components\/(\w+)(?:\.tsx?|\.jsx?)?$/
-const COMPONENTS_PATH_ALT_REGEX = /[/\\]components[/\\]\w+(?:\.tsx?|\.jsx?)?$/
 const SPECIAL_FILE_REGEX = /^(?:robots|sitemap|feed)\.(?:tsx?|jsx?)$/
 const APP_ICON_FILE_REGEX = /^(?:favicon|icon\d*|apple-icon\d*)\.(?:ico|png|jpe?g|svg)$/i
-const RSC_REFERENCES_IMPORT = 'react-server-dom-rari/server'
-const LOCAL_IMPORT_SOURCE_REGEX = /^[./@~#]/
-const NODE_PROTOCOL_REGEX = /^node:/
 export const RARI_CSS_MODULES_PATTERN = '[hash]_[local]'
-
-/** Bare package name including scope (e.g. `markdown-it`, `@scope/pkg`). */
-function barePackageName(source: string): string {
-  if (source.startsWith('@')) {
-    const parts = source.split('/')
-    return parts.length >= 2 ? `${parts[0]}/${parts[1]}` : source
-  }
-
-  return source.split('/')[0] ?? source
-}
-
-/**
- * True when BYONM/Node would find the package by walking `node_modules` from
- * the app root. Avoid createRequire here pnpm bin shims set NODE_PATH, which
- * is baked into Module.globalPaths and makes transitive workspace deps look
- * like app installs (then incorrectly get externalized).
- */
-function isInstalledFromAppRoot(projectRoot: string, source: string): boolean {
-  const packageName = barePackageName(source)
-  let dir = projectRoot
-  for (;;) {
-    const candidate = path.join(dir, 'node_modules', ...packageName.split('/'))
-    if (fs.existsSync(path.join(candidate, 'package.json'))) return true
-
-    const parent = path.dirname(dir)
-    if (parent === dir) return false
-    dir = parent
-  }
-}
 
 const EXTERNAL_CLIENT_COMPONENT_MANIFESTS: Array<{
   componentId: string
@@ -138,12 +81,6 @@ const RARI_DIST_DIR = path.dirname(fileURLToPath(import.meta.url))
 const RARI_PACKAGE_ROOT = path.dirname(RARI_DIST_DIR)
 function isRariInternalPath(filePath: string): boolean {
   return filePath.startsWith(RARI_PACKAGE_ROOT)
-}
-
-function aliasRootForPath(filePath: string, projectRoot: string): string {
-  if (isRariInternalPath(filePath)) return path.join(RARI_PACKAGE_ROOT, 'src')
-
-  return path.join(projectRoot, 'src')
 }
 
 function resolveErrorBoundarySourcePath(): string | null {
@@ -173,44 +110,6 @@ function isErrorBoundaryWrapperPath(filePath: string): boolean {
   )
 }
 
-function ssrClientComponentId(filePath: string, projectRoot: string): string {
-  if (isErrorBoundaryWrapperPath(filePath)) return 'virtual:error-boundary-wrapper.tsx'
-
-  const relativePath = toPosixPath(path.relative(projectRoot, filePath))
-  if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) return toPosixPath(filePath)
-
-  return relativePath
-}
-
-function ssrClientBundleName(filePath: string, projectRoot: string): string {
-  if (isErrorBoundaryWrapperPath(filePath))
-    return `error_boundary_wrapper_${contentHash('virtual:error-boundary-wrapper.tsx')}`
-
-  if (isRariInternalPath(filePath)) {
-    const relative = toPosixPath(path.relative(RARI_PACKAGE_ROOT, filePath))
-    return `${getReadableComponentId(relative)}_${contentHash(relative)}`
-  }
-
-  return getSharedComponentId(filePath, projectRoot)
-}
-
-let lightningcssTransform: typeof import('lightningcss').transform | null = null
-
-async function getLightningcssTransform() {
-  if (!lightningcssTransform) {
-    const mod = await import('lightningcss')
-    lightningcssTransform = mod.transform
-  }
-
-  return lightningcssTransform
-}
-
-interface BuiltComponent {
-  code: string
-  css: string[]
-  fontPreloads: string[]
-}
-
 interface ServerComponentManifest {
   components: Record<
     string,
@@ -238,144 +137,25 @@ function isServerComponentManifestRecord(value: unknown): value is ServerCompone
   return isRecord(value) && isRecord(value.components)
 }
 
-const BARE_PACKAGE_CSS_IMPORT_RE =
-  /@import\s+(?:url\(\s*)?['"](?![a-zA-Z][a-zA-Z0-9+.-]*:|\/\/|\.\/|\.\.\/|\/)[^'"]+['"][^;]*(?:;|$)/g
+function ssrClientComponentId(filePath: string, projectRoot: string): string {
+  if (isErrorBoundaryWrapperPath(filePath)) return 'virtual:error-boundary-wrapper.tsx'
 
-const LOCAL_RELATIVE_CSS_IMPORT_RE =
-  /@import\s+(?:url\(\s*((?:\.\/|\.\.\/)[^)\s]+)\s*\)|url\(\s*['"]((?:\.\/|\.\.\/)[^'"]+)['"]\s*\)|['"]((?:\.\/|\.\.\/)[^'"]+)['"])([^;]*)(?:;|$)/g
+  const relativePath = toPosixPath(path.relative(projectRoot, filePath))
+  if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) return toPosixPath(filePath)
 
-function stripBarePackageCssImports(css: string): string {
-  return css.replace(BARE_PACKAGE_CSS_IMPORT_RE, '').trim()
+  return relativePath
 }
 
-interface CssImportQualifiers {
-  readonly layerName: string | null
-  readonly supportsCondition: string | null
-  readonly mediaQuery: string | null
-}
+function ssrClientBundleName(filePath: string, projectRoot: string): string {
+  if (isErrorBoundaryWrapperPath(filePath))
+    return `error_boundary_wrapper_${contentHash('virtual:error-boundary-wrapper.tsx')}`
 
-function extractImportQualifiers(suffix: string): CssImportQualifiers {
-  let rest = suffix.trim().replace(/^\)\s*/, '')
-  let layerName: string | null = null
-  let supportsCondition: string | null = null
-
-  const layerOpen = /^layer\s*\(/i.exec(rest)
-  if (layerOpen) {
-    const openParen = rest.indexOf('(')
-    const closeParen = rest.indexOf(')', openParen)
-    if (closeParen !== -1) {
-      layerName = rest.slice(openParen + 1, closeParen).trim()
-      rest = rest.slice(closeParen + 1).trim()
-    }
-  } else if (/^layer(?:\s|$)/i.test(rest)) {
-    layerName = ''
-    rest = rest.replace(/^layer\s*/i, '')
+  if (isRariInternalPath(filePath)) {
+    const relative = toPosixPath(path.relative(RARI_PACKAGE_ROOT, filePath))
+    return `${getReadableComponentId(relative)}_${contentHash(relative)}`
   }
 
-  if (/^supports\s*\(/i.test(rest)) {
-    const openParen = rest.indexOf('(')
-    let depth = 0
-    let end = -1
-    for (let i = openParen; i < rest.length; i++) {
-      const ch = rest[i]
-      if (ch === '(') depth++
-      else if (ch === ')') {
-        depth--
-        if (depth === 0) {
-          end = i
-          break
-        }
-      }
-    }
-    if (end !== -1) {
-      supportsCondition = rest.slice(openParen + 1, end).trim()
-      rest = rest.slice(end + 1).trim()
-    }
-  }
-
-  const mediaQuery = rest.trim() === '' ? null : rest.trim()
-  return { layerName, supportsCondition, mediaQuery }
-}
-
-function applyImportQualifiers(css: string, qualifiers: CssImportQualifiers): string {
-  let out = css.trim()
-  if (out === '') return ''
-
-  if (qualifiers.layerName !== null) {
-    out =
-      qualifiers.layerName === ''
-        ? `@layer {\n${out}\n}`
-        : `@layer ${qualifiers.layerName} {\n${out}\n}`
-  }
-  if (qualifiers.supportsCondition != null && qualifiers.supportsCondition !== '') {
-    out = `@supports (${qualifiers.supportsCondition}) {\n${out}\n}`
-  }
-  if (qualifiers.mediaQuery != null && qualifiers.mediaQuery !== '') {
-    out = `@media ${qualifiers.mediaQuery} {\n${out}\n}`
-  }
-  return out
-}
-
-function inlineLocalRelativeCssImports(
-  filePath: string,
-  css: string,
-  seen: Set<string> = new Set(),
-): string {
-  const absPath = path.resolve(filePath)
-  if (seen.has(absPath)) return ''
-  seen.add(absPath)
-
-  return css
-    .replace(
-      LOCAL_RELATIVE_CSS_IMPORT_RE,
-      (
-        fullMatch,
-        urlUnquoted: string | undefined,
-        urlQuoted: string | undefined,
-        plainQuoted: string | undefined,
-        qualifierSuffix: string,
-      ) => {
-        const relPath = urlUnquoted ?? urlQuoted ?? plainQuoted
-        if (relPath == null || relPath === '') return fullMatch
-        const nestedPath = path.resolve(path.dirname(absPath), relPath)
-        try {
-          if (!fs.existsSync(nestedPath) || !fs.statSync(nestedPath).isFile()) return fullMatch
-          const nested = fs.readFileSync(nestedPath, 'utf-8')
-          const prepared = preparePlainCssForServerAsset(nestedPath, nested, new Set(seen))
-          return applyImportQualifiers(prepared, extractImportQualifiers(qualifierSuffix))
-        } catch {
-          return fullMatch
-        }
-      },
-    )
-    .trim()
-}
-
-function preparePlainCssForServerAsset(
-  filePath: string,
-  css: string,
-  seen: Set<string> = new Set(),
-): string {
-  return inlineLocalRelativeCssImports(filePath, stripBarePackageCssImports(css), seen)
-}
-
-function resolveLayoutCssServerSkipSet(
-  projectRoot: string,
-  aliases: Readonly<Record<string, string>>,
-): Set<string> {
-  const skip = new Set<string>()
-  for (const cssImport of collectLayoutCssImportPaths(projectRoot, aliases)) {
-    if (path.isAbsolute(cssImport)) {
-      skip.add(path.resolve(cssImport))
-      continue
-    }
-    try {
-      skip.add(createRequire(path.join(projectRoot, 'package.json')).resolve(cssImport))
-    } catch {
-      // Bare package not resolvable here; client head still owns the import.
-    }
-  }
-  return skip
+  return getSharedComponentId(filePath, projectRoot)
 }
 
 export interface ServerBuildOptions {
@@ -487,11 +267,49 @@ export class ServerComponentBuilder {
   private readonly moduleAnalysisCache: ModuleAnalysisCache
   private readonly discoveredExternalClientComponents = new Set<string>()
   private readonly clientComponentFiles = new Map<string, string>()
-  private layoutCssSkipSet: Set<string> | null = null
+  private viteBuilder: ViteBuilder | null = null
+  private envEmitLock: Promise<void> = Promise.resolve()
 
-  private getLayoutCssSkipSet(): Set<string> {
-    this.layoutCssSkipSet ??= resolveLayoutCssServerSkipSet(this.projectRoot, this.options.alias)
-    return this.layoutCssSkipSet
+  setViteBuilder(viteBuilder: ViteBuilder | null): void {
+    this.viteBuilder = viteBuilder
+  }
+
+  private async getEmitBuilder(): Promise<ViteBuilder> {
+    if (this.viteBuilder != null) return this.viteBuilder
+    this.viteBuilder = await getOrCreateViteEmitBuilder(this.projectRoot)
+    return this.viteBuilder
+  }
+
+  private async withEnvEmitLock<T>(fn: () => Promise<T>): Promise<T> {
+    const previous = this.envEmitLock
+    let release!: () => void
+    this.envEmitLock = new Promise(resolve => {
+      release = resolve
+    })
+    await previous
+    try {
+      return await fn()
+    } finally {
+      release()
+    }
+  }
+
+  private async emitRscEntries(
+    entries: ReadonlyArray<{ readonly componentId: string; readonly filePath: string }>,
+    minify?: boolean,
+  ) {
+    return this.withEnvEmitLock(async () => {
+      const viteBuilder = await this.getEmitBuilder()
+      const result = await buildRscEntriesWithViteEnvironment({
+        viteBuilder,
+        entries,
+        minify: minify ?? false,
+      })
+      if (result == null) {
+        throw new Error('Vite RSC environment build failed')
+      }
+      return result
+    })
   }
 
   recordClientComponent(filePath: string, code: string): void {
@@ -785,875 +603,44 @@ export class ServerComponentBuilder {
   async getTransformedComponentsForDevelopment(
     filter?: (filePath: string) => boolean,
   ): Promise<Array<{ id: string; code: string; isAction: boolean }>> {
-    const components: Array<{ id: string; code: string; isAction: boolean }> = []
+    const entries: Array<{ componentId: string; filePath: string; isAction: boolean }> = []
 
     for (const [filePath] of this.serverComponents) {
       if (filter && !filter(filePath)) continue
-
-      const relativePath = path.relative(this.projectRoot, filePath)
-      const componentId = this.getComponentId(relativePath)
-
-      const transformedCode = await this.buildComponentCodeOnly(filePath)
-
-      components.push({
-        id: componentId,
-        code: transformedCode,
+      entries.push({
+        componentId: this.getComponentId(filePath),
+        filePath,
         isAction: false,
       })
     }
 
     for (const [filePath] of this.serverActions) {
       if (filter && !filter(filePath)) continue
-
-      const relativePath = path.relative(this.projectRoot, filePath)
-      const actionId = this.getComponentId(relativePath)
-
-      const transformedCode = await this.buildComponentCodeOnly(filePath)
-
-      components.push({
-        id: actionId,
-        code: transformedCode,
+      entries.push({
+        componentId: this.getComponentId(filePath),
+        filePath,
         isAction: true,
       })
     }
 
-    return components
-  }
-
-  /**
-   * Resolve a page import to a client component under src/components when
-   * present. Returns the registry key used by ~clientComponents.
-   */
-  private resolveComponentsDirClientImport(
-    importPath: string,
-  ): { registryKey: string; absolutePath: string } | null {
-    if (
-      !importPath.startsWith('.') &&
-      !importPath.startsWith('@') &&
-      !importPath.startsWith('~') &&
-      !importPath.startsWith('#')
-    ) {
-      return null
-    }
-
-    if (importPath.startsWith('.')) {
-      if (!importPath.includes('/components/')) return null
-
-      const componentMatch = COMPONENTS_PATH_REGEX.exec(importPath)
-      if (!componentMatch) return null
-
-      const componentName = componentMatch[1]
-      const possiblePaths = [
-        path.resolve(this.projectRoot, 'src', 'components', `${componentName}.tsx`),
-        path.resolve(this.projectRoot, 'src', 'components', `${componentName}.ts`),
-        path.resolve(this.projectRoot, 'src', 'components', `${componentName}.jsx`),
-        path.resolve(this.projectRoot, 'src', 'components', `${componentName}.js`),
-      ]
-
-      for (const possiblePath of possiblePaths) {
-        if (fs.existsSync(possiblePath) && this.isClientComponent(possiblePath)) {
-          return {
-            registryKey: `components/${componentName}`,
-            absolutePath: possiblePath,
-          }
-        }
-      }
-
-      return null
-    }
-
-    const resolvedPath = resolveAlias(importPath, this.options.alias, this.projectRoot)
-
-    if (resolvedPath == null || resolvedPath === '') return null
-
-    const componentMatch = COMPONENTS_PATH_ALT_REGEX.exec(resolvedPath)
-    if (!componentMatch) return null
-
-    const absolutePath = path.isAbsolute(resolvedPath)
-      ? resolvedPath
-      : path.resolve(this.projectRoot, resolvedPath)
-
-    const possiblePaths = [
-      absolutePath,
-      `${absolutePath}.tsx`,
-      `${absolutePath}.ts`,
-      `${absolutePath}.jsx`,
-      `${absolutePath}.js`,
-    ]
-
-    for (const possiblePath of possiblePaths) {
-      if (fs.existsSync(possiblePath) && this.isClientComponent(possiblePath)) {
-        return {
-          registryKey: this.getComponentReferenceId(possiblePath),
-          absolutePath: possiblePath,
-        }
-      }
-    }
-
-    return null
-  }
-
-  private transformComponentImportsToGlobal(code: string): string {
-    const replacements: Array<{ start: number; end: number; replacement: string }> = []
-
-    for (const imp of scanImportStatements(code)) {
-      if (imp.typeOnly || imp.sideEffectOnly) continue
-
-      const resolved = this.resolveComponentsDirClientImport(imp.source)
-      if (resolved == null) continue
-
-      const parts: string[] = []
-
-      if (imp.namespaceBinding != null) {
-        parts.push(buildGlobalClientNamespaceWrapper(imp.namespaceBinding, resolved.registryKey))
-      }
-
-      if (imp.defaultBinding != null) {
-        parts.push(
-          buildGlobalClientComponentWrapper(imp.defaultBinding, resolved.registryKey, 'default'),
-        )
-      }
-
-      for (const spec of imp.named) {
-        if (spec.typeOnly) continue
-        parts.push(
-          buildGlobalClientComponentWrapper(spec.local, resolved.registryKey, spec.imported),
-        )
-      }
-
-      if (parts.length === 0) continue
-
-      replacements.push({
-        start: imp.start,
-        end: imp.end,
-        replacement: parts.join('\n'),
-      })
-    }
-
-    if (replacements.length === 0) return code
-
-    let transformedCode = code
-    for (const { start, end, replacement } of [...replacements].sort((a, b) => b.start - a.start))
-      transformedCode = transformedCode.slice(0, start) + replacement + transformedCode.slice(end)
-
-    return transformedCode
-  }
-
-  private isPageComponent(inputPath: string): boolean {
-    return inputPath.includes('/app/') || inputPath.includes('\\app\\')
-  }
-
-  private createRolldownModuleInfoPlugin(filePath: string): Plugin {
-    const externalDeps = new Set<string>()
-
-    return {
-      name: 'rari-rolldown-module-info',
-      moduleParsed(moduleInfo) {
-        for (const id of moduleInfo.importedIds) {
-          if (
-            !id.startsWith('.') &&
-            !id.startsWith('/') &&
-            !id.startsWith('node:') &&
-            !isNodeBuiltinModule(id)
-          )
-            externalDeps.add(id)
-        }
-
-        for (const id of moduleInfo.dynamicallyImportedIds) {
-          if (
-            !id.startsWith('.') &&
-            !id.startsWith('/') &&
-            !id.startsWith('node:') &&
-            !isNodeBuiltinModule(id)
-          )
-            externalDeps.add(id)
-        }
-      },
-      buildEnd: () => {
-        if (externalDeps.size === 0) return
-
-        const dependencies = [...externalDeps].sort()
-        const component = this.serverComponents.get(filePath) ?? this.serverActions.get(filePath)
-        if (component) component.dependencies = dependencies
-
-        const cached = this.buildCache.get(filePath)
-        if (cached) cached.bundledDependencies = dependencies
-      },
-    }
-  }
-
-  private createBuildPlugins(
-    virtualModuleId: string,
-    transformedCode: string,
-    loader: 'tsx' | 'jsx' | 'ts' | 'js',
-    inputPath: string,
-    isPage = false,
-    cssModules?: string[],
-    fontPreloads?: string[],
-  ) {
-    const resolveDir = path.dirname(inputPath)
-    const isProxyFile = PROXY_FILE_REGEX.test(path.basename(inputPath))
-    const layoutCssSkip = this.getLayoutCssSkipSet()
-
-    const clientComponentRefs = new Map<string, string>()
-    const serverActionRefs = new Map<string, { actionId: string; hasDefaultExport: boolean }>()
-
-    return [
-      createStaticImageRolldownPlugin(
-        this.projectRoot,
-        this.options.assetsDir,
-        this.options.alias,
-        this.options.outDir,
-      ),
-      createFontRolldownPlugin(
-        this.projectRoot,
-        this.options.assetsDir,
-        this.options.outDir,
-        cssModules,
-        fontPreloads,
-      ),
-      {
-        name: 'virtual-module',
-        resolveId(id: string, importer: string | undefined) {
-          if (id === virtualModuleId) return id
-
-          if (importer === virtualModuleId && (id.startsWith('./') || id.startsWith('../'))) {
-            if (id.endsWith('.module.css') || id.endsWith('.css') || /\.css(?:\?.*)?$/.test(id)) {
-              return null
-            }
-
-            const resolved = path.resolve(resolveDir, id)
-            return (
-              resolveWithExtensionsAndIndex(resolved, ['', '.ts', '.tsx', '.js', '.jsx']) ??
-              resolved
-            )
-          }
-
-          return null
-        },
-        load(id: string) {
-          if (id === virtualModuleId) {
-            return {
-              code: transformedCode,
-              moduleType: loader,
-            }
-          }
-
-          return null
-        },
-      },
-      {
-        name: 'resolve-client-server-boundaries',
-        enforce: 'pre' as const,
-        resolveId: (source: string, importer: string | undefined) => {
-          if (
-            importer == null ||
-            importer === '' ||
-            importer.includes('node_modules') ||
-            isRariInternalPath(importer)
-          )
-            return null
-
-          if (
-            source.startsWith('node:') ||
-            isNodeBuiltinModule(source) ||
-            source === 'react' ||
-            source === 'react-dom' ||
-            source === 'react/jsx-runtime' ||
-            source === 'react/jsx-dev-runtime'
-          ) {
-            return null
-          }
-
-          let resolvedPath: string | null = null
-          const aliases = this.options.alias
-
-          resolvedPath = resolveAlias(source, aliases, this.projectRoot)
-
-          if (
-            (resolvedPath == null || resolvedPath === '') &&
-            (source.startsWith('./') || source.startsWith('../'))
-          ) {
-            const importerDir = importer === virtualModuleId ? resolveDir : path.dirname(importer)
-            resolvedPath = path.resolve(importerDir, source)
-          }
-
-          if ((resolvedPath == null || resolvedPath === '') && path.isAbsolute(source))
-            resolvedPath = source
-
-          if (resolvedPath != null && resolvedPath !== '') {
-            const pathWithExt = resolveWithExtensionsAndIndex(resolvedPath, [
-              '',
-              '.ts',
-              '.tsx',
-              '.js',
-              '.jsx',
-            ])
-            if (pathWithExt != null && pathWithExt !== '') {
-              if (this.isClientComponent(pathWithExt)) {
-                const relativePath = path.relative(this.projectRoot, pathWithExt)
-                const componentId = toPosixPath(
-                  relativePath.startsWith('..') ? pathWithExt : relativePath,
-                )
-                clientComponentRefs.set(pathWithExt, componentId)
-
-                if (relativePath.startsWith('..'))
-                  this.discoveredExternalClientComponents.add(pathWithExt)
-
-                return { id: `\0client-ref:${pathWithExt}` }
-              }
-
-              try {
-                const analysis = this.moduleAnalysisCache.get(pathWithExt)
-                if (analysis.directives.hasUseServer) {
-                  const actionId = this.getComponentId(pathWithExt)
-                  serverActionRefs.set(pathWithExt, {
-                    actionId,
-                    hasDefaultExport: analysis.hasDefaultExport,
-                  })
-                  return { id: `\0server-action:${pathWithExt}` }
-                }
-              } catch (error) {
-                console.error(
-                  `[rari] Failed to read file for server action detection: ${pathWithExt}`,
-                  error,
-                )
-              }
-            }
-          }
-
-          return null
-        },
-        load: (id: string) => {
-          if (id.startsWith('\0client-ref:')) {
-            const filePath = id.slice('\0client-ref:'.length)
-            const relativePath = path.relative(this.projectRoot, filePath)
-            const componentId = toPosixPath(
-              clientComponentRefs.get(filePath) ??
-                (relativePath.startsWith('..') ? filePath : relativePath),
-            )
-
-            return {
-              code: this.generateClientReferenceStub(filePath, componentId),
-              moduleType: 'js',
-            }
-          }
-
-          if (id.startsWith('\0server-action:')) {
-            const filePath = id.slice('\0server-action:'.length)
-            const actionId =
-              serverActionRefs.get(filePath)?.actionId ?? this.getComponentId(filePath)
-
-            return {
-              code: this.generateServerActionRuntimeModule(filePath, actionId),
-              moduleType: 'js',
-            }
-          }
-
-          return null
-        },
-      },
-      {
-        name: 'use-transformed-server-components',
-        resolveId: (source: string, importer: string | undefined) => {
-          if (!isPage) return null
-
-          if (source.startsWith('file://')) {
-            const filePath = source.replace(FILE_PROTOCOL_REGEX, '')
-            if (fs.existsSync(filePath)) return { id: `\0transformed:${filePath}` }
-
-            return null
-          }
-
-          let resolvedPath: string | null = null
-          const aliases = this.options.alias
-
-          resolvedPath = resolveAlias(source, aliases, this.projectRoot)
-
-          const importerDir = importer?.startsWith('\0')
-            ? resolveDir
-            : importer != null && importer !== ''
-              ? path.dirname(importer)
-              : resolveDir
-          if (
-            (resolvedPath == null || resolvedPath === '') &&
-            (source.startsWith('./') || source.startsWith('../'))
-          )
-            resolvedPath = path.resolve(importerDir, source)
-
-          if (resolvedPath == null || resolvedPath === '') return null
-
-          if (importerDir.includes('node_modules')) return null
-
-          const pathWithExt = resolveWithExtensionsAndIndex(resolvedPath, [
-            '',
-            '.ts',
-            '.tsx',
-            '.js',
-            '.jsx',
-          ])
-          if (pathWithExt != null && pathWithExt !== '') {
-            if (this.isClientComponent(pathWithExt)) return null
-
-            if (this.isServerActionFile(pathWithExt)) return null
-
-            const srcDir = path.join(this.projectRoot, 'src')
-            if (!pathWithExt.startsWith(srcDir)) return null
-
-            const componentId = this.getComponentId(pathWithExt)
-            const distPath = path.join(
-              this.options.outDir,
-              this.options.rscDir,
-              `${componentId}.js`,
-            )
-
-            if (fs.existsSync(distPath)) return { id: `\0transformed:${distPath}` }
-          }
-
-          return null
-        },
-        load(id: string) {
-          if (id.startsWith('\0transformed:')) {
-            const filePath = id.slice('\0transformed:'.length)
-            const contents = fs.readFileSync(filePath, 'utf-8')
-            return {
-              code: contents,
-              moduleType: 'js',
-            }
-          }
-
-          return null
-        },
-      },
-      {
-        name: 'resolve-aliases',
-        resolveId: (source: string) => {
-          if (source.startsWith('\0')) return null
-
-          const resolved = resolveAlias(source, this.options.alias, this.projectRoot)
-          if (resolved == null || resolved === '') return null
-
-          const pathWithExt = resolveWithExtensionsAndIndex(resolved, [
-            '',
-            '.ts',
-            '.tsx',
-            '.js',
-            '.jsx',
-          ])
-          if (pathWithExt != null && pathWithExt !== '') {
-            if (this.isServerActionFile(pathWithExt)) {
-              const actionId = this.getComponentId(pathWithExt)
-              serverActionRefs.set(pathWithExt, {
-                actionId,
-                hasDefaultExport: this.moduleAnalysisCache.get(pathWithExt).hasDefaultExport,
-              })
-              return { id: `\0server-action:${pathWithExt}` }
-            }
-
-            return pathWithExt
-          }
-
-          return resolved
-        },
-      },
-      {
-        name: 'resolve-rari-proxy',
-        resolveId: (source: string) => {
-          if (isProxyFile && source === 'rari') {
-            const rariResponsePath = path.join(RARI_DIST_DIR, 'proxy/RariResponse.mjs')
-            if (fs.existsSync(rariResponsePath)) return rariResponsePath
-
-            const rariResponseSrcPath = path.join(RARI_PACKAGE_ROOT, 'src/proxy/http/response.ts')
-            if (fs.existsSync(rariResponseSrcPath)) return rariResponseSrcPath
-          }
-
-          return null
-        },
-      },
-      {
-        name: 'css-modules',
-        enforce: 'pre' as const,
-        resolveId: (source: string, importer: string | undefined) => {
-          const importerDir =
-            importer != null && importer !== '' && !importer.startsWith('\0')
-              ? path.dirname(importer)
-              : resolveDir
-
-          if (source.endsWith('.module.css')) {
-            const resolved = path.resolve(importerDir, source)
-            if (fs.existsSync(resolved)) {
-              return { id: `\0css-module:${resolved}` }
-            }
-            return null
-          }
-
-          if (source.endsWith('.css') || /\.css(?:\?.*)?$/.test(source)) {
-            const queryIndex = source.search(/[?#]/)
-            const bare = queryIndex === -1 ? source : source.slice(0, queryIndex)
-            const query = queryIndex === -1 ? '' : source.slice(queryIndex)
-            const isRaw = /(?:\?|&)raw(?:&|$)/.test(query)
-            const isUrl = /(?:\?|&)url(?:&|$)/.test(query)
-
-            let resolved: string | null = null
-
-            if (path.isAbsolute(bare)) {
-              resolved = bare
-            } else if (bare.startsWith('./') || bare.startsWith('../')) {
-              resolved = path.resolve(importerDir, bare)
-            } else {
-              const resolveFrom = [
-                importer != null && importer !== '' && !importer.startsWith('\0') ? importer : null,
-                path.join(this.projectRoot, 'package.json'),
-              ].filter((value): value is string => value != null && value !== '')
-
-              for (const from of resolveFrom) {
-                try {
-                  resolved = createRequire(from).resolve(bare)
-                  break
-                } catch {
-                  try {
-                    resolved = fileURLToPath(import.meta.resolve(bare, pathToFileURL(from).href))
-                    break
-                  } catch {
-                    // try next resolve root
-                  }
-                }
-              }
-            }
-
-            if (resolved != null && resolved !== '' && fs.existsSync(resolved)) {
-              if (isRaw) return { id: `\0css-raw:${resolved}` }
-              if (isUrl) return { id: `\0css-url:${resolved}` }
-              return { id: `\0css-global:${resolved}` }
-            }
-          }
-
-          return null
-        },
-        load: async (id: string) => {
-          const CSS_MODULE_PREFIX = '\0css-module:'
-          const CSS_GLOBAL_PREFIX = '\0css-global:'
-          const CSS_RAW_PREFIX = '\0css-raw:'
-          const CSS_URL_PREFIX = '\0css-url:'
-
-          if (id.startsWith(CSS_RAW_PREFIX)) {
-            const filePath = id.slice(CSS_RAW_PREFIX.length)
-            try {
-              const content = fs.readFileSync(filePath, 'utf-8')
-              return { code: `export default ${JSON.stringify(content)}`, moduleType: 'js' }
-            } catch (e) {
-              throw new Error(
-                `[rari] Failed to read CSS ${filePath}: ${errorMessage(e, String(e))}`,
-              )
-            }
-          }
-
-          if (id.startsWith(CSS_URL_PREFIX)) {
-            const filePath = id.slice(CSS_URL_PREFIX.length)
-            try {
-              const content = fs.readFileSync(filePath)
-              const ext = path.extname(filePath) || '.css'
-              const base = path.basename(filePath, ext)
-              const hash = contentHash(`${filePath}:${content.toString('utf8')}`, 8)
-              const fileName = `${base}-${hash}${ext}`
-              const assetsDirName = normalizeAssetsDir(this.options.assetsDir)
-              const assetsDir = path.join(this.options.outDir, assetsDirName)
-              fs.mkdirSync(assetsDir, { recursive: true })
-              fs.writeFileSync(path.join(assetsDir, fileName), content)
-              const href = `/${assetsDirName}/${fileName}`
-              return { code: `export default ${JSON.stringify(href)}`, moduleType: 'js' }
-            } catch (e) {
-              throw new Error(
-                `[rari] Failed to emit CSS URL asset ${filePath}: ${errorMessage(e, String(e))}`,
-              )
-            }
-          }
-
-          if (id.startsWith(CSS_GLOBAL_PREFIX)) {
-            const filePath = id.slice(CSS_GLOBAL_PREFIX.length)
-            if (cssModules && !layoutCssSkip.has(path.resolve(filePath))) {
-              try {
-                const content = fs.readFileSync(filePath, 'utf-8')
-                const forServerAsset = preparePlainCssForServerAsset(filePath, content)
-                if (forServerAsset !== '') cssModules.push(forServerAsset)
-              } catch (e) {
-                throw new Error(
-                  `[rari] Failed to read CSS ${filePath}: ${errorMessage(e, String(e))}`,
-                )
-              }
-            }
-            return { code: 'export {}', moduleType: 'js' }
-          }
-
-          if (!id.startsWith(CSS_MODULE_PREFIX)) {
-            return null
-          }
-
-          const filePath = id.slice(CSS_MODULE_PREFIX.length)
-
-          try {
-            const transform = await getLightningcssTransform()
-            const code = fs.readFileSync(filePath)
-            const result = transform({
-              filename: path.relative(this.projectRoot, filePath),
-              code,
-              cssModules: { pattern: RARI_CSS_MODULES_PATTERN },
-            })
-
-            if (cssModules) cssModules.push(new TextDecoder().decode(result.code))
-
-            const classes: Record<string, string> = {}
-            if (result.exports) {
-              for (const [key, value] of Object.entries(result.exports)) {
-                classes[key] = value.name
-              }
-            }
-
-            return { code: `export default ${JSON.stringify(classes)}`, moduleType: 'js' }
-          } catch (e) {
-            throw new Error(
-              `[rari] Failed to process CSS module ${id}: ${errorMessage(e, String(e))}`,
-            )
-          }
-        },
-      } satisfies Plugin,
-      {
-        name: 'externalize-deps',
-        resolveId: (source: string, importer: string | undefined) => {
-          if (source.startsWith('\0')) return null
-
-          if (source.startsWith('node:') || isNodeBuiltinModule(source))
-            return { id: source, external: true }
-
-          const externalPackages = [
-            'react',
-            'react-dom',
-            'react/jsx-runtime',
-            'react/jsx-dev-runtime',
-            'rari/image',
-            'rari/font',
-            'rari/font/local',
-            'rari/font/google',
-          ]
-
-          if (externalPackages.includes(source)) return { id: source, external: true }
-
-          const externalPackageMappings: Record<string, string | null> = {
-            'rari/runtime/cache-wrapper': 'node_modules/rari/dist/runtime/cache-wrapper.mjs',
-            'react-server-dom-rari/server': 'node_modules/rari/dist/runtime/rsc-references.mjs',
-          }
-
-          if (source in externalPackageMappings) {
-            return { id: source, external: true }
-          }
-
-          if (source === 'rari') return null
-
-          if (resolveAlias(source, this.options.alias, this.projectRoot) != null) return null
-
-          if (!source.startsWith('.') && !source.startsWith('/')) {
-            // App-visible installs stay external for runtime BYONM. Deps that only
-            // exist under a workspace package (e.g. markdown-it in shared/) must be
-            // force-resolved and bundled Rolldown's platform:'node' otherwise
-            // leaves them as unresolved externals.
-            if (isInstalledFromAppRoot(this.projectRoot, source))
-              return { id: source, external: true }
-
-            const resolveFrom = [
-              importer != null && importer !== '' && !importer.startsWith('\0') ? importer : null,
-              inputPath,
-            ].filter((value): value is string => Boolean(value))
-
-            for (const from of resolveFrom) {
-              try {
-                return { id: createRequire(from).resolve(source) }
-              } catch {
-                try {
-                  const resolved = import.meta.resolve(source, pathToFileURL(from).href)
-                  return { id: fileURLToPath(resolved) }
-                } catch {
-                  // try next candidate
-                }
-              }
-            }
-
-            return null
-          }
-
-          return null
-        },
-      },
-      this.createRolldownModuleInfoPlugin(inputPath),
-      {
-        name: 'use-cache',
-        transform: async (code: string, id: string) => {
-          if (!this.options.experimental?.useCache && !this.options.experimental?.useCacheRemote)
-            return null
-
-          const transform = await getUseCacheTransform()
-          if (!transform) {
-            return null
-          }
-
-          return transform(code, id, {
-            hashSalt: `${this.useCacheBuildId ?? 'development'}:rari-use-cache-v1`,
-          })
-        },
-      },
-    ]
-  }
-
-  private async buildComponentCodeOnly(inputPath: string): Promise<string> {
-    const originalCode = await fs.promises.readFile(inputPath, 'utf-8')
-    const withInlineActions =
-      transformInlineServerActions(originalCode, this.getComponentId(inputPath))?.code ??
-      originalCode
-    const clientTransformedCode = this.transformClientImports(withInlineActions, inputPath)
-    const isPage = this.isPageComponent(inputPath)
-    const transformedCode = isPage
-      ? this.transformComponentImportsToGlobal(clientTransformedCode)
-      : clientTransformedCode
-
-    const ext = path.extname(inputPath)
-    let loader: 'tsx' | 'jsx' | 'ts' | 'js'
-    if (ext === '.tsx') loader = 'tsx'
-    else if (ext === '.ts') loader = 'ts'
-    else if (ext === '.jsx') loader = 'jsx'
-    else loader = 'js'
-
-    const virtualModuleId = `\0virtual:${inputPath}`
-
-    const result = await build({
-      input: virtualModuleId,
-      platform: 'node',
-      write: false,
-      external: [
-        NODE_PROTOCOL_REGEX,
-        'react',
-        'react-dom',
-        'react/jsx-runtime',
-        'react/jsx-dev-runtime',
-      ],
-      output: {
-        format: 'esm',
-        minify: this.options.minify,
-      },
-      moduleTypes: {
-        [`.${loader}`]: loader,
-      },
-      resolve: {
-        mainFields: ['module', 'main'],
-        conditionNames: ['import', 'module', 'default'],
-        extensions: ['.ts', '.tsx', '.js', '.jsx'],
-      },
-      transform: {
-        jsx: 'react',
-        define: {
-          'global': 'globalThis',
-          'process.env.NODE_ENV': JSON.stringify(
-            process.env.NODE_ENV != null && process.env.NODE_ENV !== ''
-              ? process.env.NODE_ENV
-              : 'production',
-          ),
-          ...this.options.define,
-        },
-      },
-      plugins: this.createBuildPlugins(
-        virtualModuleId,
-        transformedCode,
-        loader,
-        inputPath,
-        isPage,
-        [],
-      ),
-    })
-
-    if (result.output.length === 0) throw new Error('No output generated from Rolldown')
-
-    const entryChunk = result.output.find(chunk => chunk.type === 'chunk' && chunk.isEntry)
-    if (entryChunk?.type !== 'chunk') throw new Error('No entry chunk found in Rolldown output')
-
-    let code = entryChunk.code
+    if (entries.length === 0) return []
+
+    const result = await this.emitRscEntries(
+      entries.map(({ componentId, filePath }) => ({ componentId, filePath })),
+    )
 
     const timestamp = new Date().toISOString()
-    code = `// Built: ${timestamp}\n${code}`
-
-    return code
-  }
-
-  private async buildComponentBatch(
-    entries: ReadonlyArray<
-      readonly [
-        string,
-        {
-          readonly filePath: string
-          readonly dependencies: readonly string[]
-          readonly hasNodeImports: boolean
-        },
-      ]
-    >,
-    manifest: ServerComponentManifest,
-    concurrency: number,
-  ): Promise<void> {
-    let active = 0
-    let index = 0
-    const errors: Error[] = []
-
-    await new Promise<void>(resolve => {
-      const next = () => {
-        while (active < concurrency && index < entries.length) {
-          const [filePath, component] = entries[index++]
-          const relativePath = path.relative(this.projectRoot, filePath)
-          const componentId = this.getComponentId(filePath)
-          const bundlePath = path.join(this.options.rscDir, `${componentId}.js`)
-          const fullBundlePath = path.join(this.options.outDir, bundlePath)
-
-          active++
-          void (async () => {
-            try {
-              const bundleDir = path.dirname(fullBundlePath)
-              await fs.promises.mkdir(bundleDir, { recursive: true })
-
-              const built = await this.buildSingleComponent(filePath, fullBundlePath)
-              const css = [
-                ...(await this.writeComponentCssAsset(componentId, built.css)),
-                ...built.fontPreloads,
-              ]
-
-              const moduleSpecifier = pathToFileURL(
-                path.resolve(this.projectRoot, fullBundlePath),
-              ).href
-
-              manifest.components[componentId] = {
-                id: componentId,
-                filePath,
-                relativePath,
-                bundlePath,
-                moduleSpecifier,
-                dependencies: [...component.dependencies],
-                hasNodeImports: component.hasNodeImports,
-                css,
-              }
-            } catch (error) {
-              errors.push(toError(error))
-            } finally {
-              active--
-              if (index >= entries.length && active === 0) {
-                resolve()
-              } else {
-                next()
-              }
-            }
-          })()
-        }
-
-        if (entries.length === 0) resolve()
+    return entries.map(entry => {
+      const output = result.outputs.get(entry.componentId)
+      if (output == null) {
+        throw new Error(`Vite RSC environment build missed entry: ${entry.componentId}`)
       }
-
-      next()
+      return {
+        id: entry.componentId,
+        code: `// Built: ${timestamp}\n${output.code}`,
+        isAction: entry.isAction,
+      }
     })
-
-    if (errors.length > 0) throw errors[0]
   }
 
   private async emitProxyManifest(serverOutDir: string): Promise<void> {
@@ -1702,22 +689,36 @@ export class ServerComponentBuilder {
       this.options.experimental?.useCache === true ||
       this.options.experimental?.useCacheRemote != null
 
-    const concurrency = Math.min(8, Math.max(1, (await import('node:os')).cpus().length))
+    const allRscEntries = [...this.serverComponents.entries(), ...this.serverActions.entries()]
+    const viteBuilt = await this.buildRscEntriesWithVite(allRscEntries)
 
-    const nonPageComponents = [...this.serverComponents.entries()].filter(
-      ([filePath]) => !this.isPageComponent(filePath),
-    )
-    const pageComponents = [...this.serverComponents.entries()].filter(([filePath]) =>
-      this.isPageComponent(filePath),
-    )
-    const actions = [...this.serverActions.entries()]
+    for (const file of viteBuilt.extraFiles) {
+      const fullPath = path.join(serverOutDir, file.fileName)
+      await fs.promises.mkdir(path.dirname(fullPath), { recursive: true })
+      await fs.promises.writeFile(fullPath, file.code, 'utf-8')
+    }
 
-    await Promise.all([
-      this.buildComponentBatch(nonPageComponents, manifest, concurrency),
-      this.buildComponentBatch(actions, manifest, concurrency),
-    ])
-
-    await this.buildComponentBatch(pageComponents, manifest, concurrency)
+    for (const [filePath, built] of viteBuilt.entries) {
+      const relativePath = path.relative(this.projectRoot, filePath)
+      const componentId = this.getComponentId(filePath)
+      const bundlePath = rscBundlePathForComponent(this.options.rscDir, componentId)
+      const fullBundlePath = path.join(this.options.outDir, bundlePath)
+      await fs.promises.mkdir(path.dirname(fullBundlePath), { recursive: true })
+      const timestamp = new Date().toISOString()
+      await fs.promises.writeFile(fullBundlePath, `// Built: ${timestamp}\n${built.code}`, 'utf-8')
+      const css = [...(await this.writeComponentCssAsset(componentId, [...built.cssAssetSources]))]
+      const component = this.serverComponents.get(filePath) ?? this.serverActions.get(filePath)
+      manifest.components[componentId] = {
+        id: componentId,
+        filePath,
+        relativePath,
+        bundlePath,
+        moduleSpecifier: pathToFileURL(path.resolve(this.projectRoot, fullBundlePath)).href,
+        dependencies: [...(component?.dependencies ?? [])],
+        hasNodeImports: component?.hasNodeImports ?? false,
+        css,
+      }
+    }
 
     if (useCacheEnabled) {
       this.useCacheBuildId = contentHash(JSON.stringify(manifest.components), 16)
@@ -1771,6 +772,75 @@ export class ServerComponentBuilder {
     }
 
     return manifest
+  }
+
+  private async buildRscEntriesWithVite(
+    entries: ReadonlyArray<
+      readonly [
+        string,
+        {
+          readonly filePath: string
+          readonly dependencies: readonly string[]
+          readonly hasNodeImports: boolean
+        },
+      ]
+    >,
+  ): Promise<{
+    readonly entries: Map<
+      string,
+      {
+        readonly code: string
+        readonly cssAssetSources: readonly string[]
+      }
+    >
+    readonly extraFiles: ReadonlyArray<{ readonly fileName: string; readonly code: string }>
+  }> {
+    const empty = {
+      entries: new Map<
+        string,
+        {
+          readonly code: string
+          readonly cssAssetSources: readonly string[]
+        }
+      >(),
+      extraFiles: [] as Array<{ readonly fileName: string; readonly code: string }>,
+    }
+    if (entries.length === 0) return empty
+    if (this.viteBuilder == null) {
+      throw new Error('Vite builder is required for RSC environment emit')
+    }
+
+    const viteEntries = entries.map(([filePath]) => ({
+      componentId: this.getComponentId(filePath),
+      filePath,
+    }))
+
+    const result = await buildRscEntriesWithViteEnvironment({
+      viteBuilder: this.viteBuilder,
+      entries: viteEntries,
+      minify: this.options.minify,
+    })
+    if (result == null) {
+      throw new Error('Vite RSC environment build failed')
+    }
+
+    const built = new Map<
+      string,
+      {
+        readonly code: string
+        readonly cssAssetSources: readonly string[]
+      }
+    >()
+    for (const [filePath] of entries) {
+      const componentId = this.getComponentId(filePath)
+      const output = result.outputs.get(componentId)
+      if (output == null) {
+        throw new Error(`Vite RSC environment build missed entry: ${componentId}`)
+      }
+      built.set(filePath, output)
+    }
+
+    return { entries: built, extraFiles: [...result.extraFiles] }
   }
 
   async buildMdxRegistry(mdxOptions?: MdxPluginOptions): Promise<void> {
@@ -1834,76 +904,116 @@ export class ServerComponentBuilder {
       }
     } catch {}
 
-    if (clientFiles.length === 0) {
-      const manifest: Record<
-        string,
-        { id: string; filePath: string; bundlePath: string; exports: string[] }
-      > = {}
-      await this.buildExternalClientComponents(manifest, new Map())
-      await this.writeClientReferenceManifest(ssrOutDir, manifest)
-      return
-    }
-
-    const clientModuleSpecifiers = new Map<string, string>()
-    for (const { filePath } of clientFiles) {
-      const bundleName = ssrClientBundleName(filePath, this.projectRoot)
-      clientModuleSpecifiers.set(path.resolve(filePath), `file:///ssr/${bundleName}.js`)
+    const externalSources: Array<{
+      componentId: string
+      filePath: string
+      code: string
+      exports: string[]
+      bundleName: string
+    }> = []
+    for (const {
+      componentId,
+      devSourceSegments,
+      publishedExport,
+      exports,
+    } of EXTERNAL_CLIENT_COMPONENT_MANIFESTS) {
+      const sourcePath = this.resolveExternalClientSourcePath(devSourceSegments, publishedExport)
+      if (sourcePath == null || sourcePath === '') continue
+      try {
+        const code = fs.readFileSync(sourcePath, 'utf-8')
+        externalSources.push({
+          componentId,
+          filePath: sourcePath,
+          code,
+          exports: [...exports],
+          bundleName: `external_${contentHash(componentId)}`,
+        })
+      } catch {}
     }
 
     const manifest: Record<
       string,
       { id: string; filePath: string; bundlePath: string; exports: string[] }
     > = {}
-    const concurrency = Math.min(8, Math.max(1, (await import('node:os')).cpus().length))
-    let active = 0
-    let index = 0
 
-    await new Promise<void>(resolve => {
-      const next = () => {
-        while (active < concurrency && index < clientFiles.length) {
-          const { filePath, code } = clientFiles[index++]
-          const componentId = ssrClientComponentId(filePath, this.projectRoot)
-          const bundleName = ssrClientBundleName(filePath, this.projectRoot)
-          const bundlePath = `ssr/${bundleName}.js`
-          const fullBundlePath = path.join(this.options.outDir, bundlePath)
+    const viteBuilt = await this.buildSsrEntriesWithVite(clientFiles, externalSources)
+    for (const file of viteBuilt.extraFiles) {
+      const fullPath = path.join(ssrOutDir, file.fileName)
+      await fs.promises.mkdir(path.dirname(fullPath), { recursive: true })
+      await fs.promises.writeFile(fullPath, file.code, 'utf-8')
+    }
 
-          active++
-          void (async () => {
-            try {
-              const bundleDir = path.dirname(fullBundlePath)
-              await fs.promises.mkdir(bundleDir, { recursive: true })
-
-              await this.buildSSRSingleClient(filePath, fullBundlePath, clientModuleSpecifiers)
-
-              const exports = this.extractExportNames(code)
-              manifest[componentId] = {
-                id: componentId,
-                filePath,
-                bundlePath,
-                exports,
-              }
-            } catch (error) {
-              console.warn(
-                `[rari] SSR build failed for ${componentId}:`,
-                errorMessage(error, String(error)),
-              )
-            } finally {
-              active--
-              if (index >= clientFiles.length && active === 0) resolve()
-              else next()
-            }
-          })()
-        }
-
-        if (clientFiles.length === 0) resolve()
+    for (const [filePath, built] of viteBuilt.entries) {
+      const external = externalSources.find(entry => entry.filePath === filePath)
+      const componentId = external?.componentId ?? ssrClientComponentId(filePath, this.projectRoot)
+      const bundleName = external?.bundleName ?? ssrClientBundleName(filePath, this.projectRoot)
+      const bundlePath = `ssr/${bundleName}.js`
+      const fullBundlePath = path.join(this.options.outDir, bundlePath)
+      await fs.promises.mkdir(path.dirname(fullBundlePath), { recursive: true })
+      await fs.promises.writeFile(fullBundlePath, built.code, 'utf-8')
+      const sourceCode =
+        external?.code ??
+        clientFiles.find(entry => entry.filePath === filePath)?.code ??
+        fs.readFileSync(filePath, 'utf-8')
+      manifest[componentId] = {
+        id: componentId,
+        filePath,
+        bundlePath,
+        exports: external?.exports ?? this.extractExportNames(sourceCode),
       }
-
-      next()
-    })
-
-    await this.buildExternalClientComponents(manifest, clientModuleSpecifiers)
+    }
 
     await this.writeClientReferenceManifest(ssrOutDir, manifest)
+  }
+
+  private async buildSsrEntriesWithVite(
+    clientFiles: ReadonlyArray<{ readonly filePath: string; readonly code: string }>,
+    externalSources: ReadonlyArray<{
+      readonly filePath: string
+      readonly bundleName: string
+    }> = [],
+  ): Promise<{
+    readonly entries: Map<string, { readonly code: string }>
+    readonly extraFiles: ReadonlyArray<{ readonly fileName: string; readonly code: string }>
+  }> {
+    const empty = {
+      entries: new Map<string, { readonly code: string }>(),
+      extraFiles: [] as Array<{ readonly fileName: string; readonly code: string }>,
+    }
+
+    const viteEntries = [
+      ...clientFiles.map(({ filePath }) => ({
+        entryName: ssrClientBundleName(filePath, this.projectRoot),
+        filePath,
+      })),
+      ...externalSources.map(entry => ({
+        entryName: entry.bundleName,
+        filePath: entry.filePath,
+      })),
+    ]
+    if (viteEntries.length === 0) return empty
+    if (this.viteBuilder == null) {
+      throw new Error('Vite builder is required for SSR environment emit')
+    }
+
+    const result = await buildSsrEntriesWithViteEnvironment({
+      viteBuilder: this.viteBuilder,
+      entries: viteEntries,
+    })
+    if (result == null) {
+      throw new Error('Vite SSR environment build failed')
+    }
+
+    const built = new Map<string, { readonly code: string }>()
+    for (const entry of viteEntries) {
+      const output = result.outputs.get(entry.entryName)
+      if (output == null) {
+        throw new Error(`Vite SSR environment build missed entry: ${entry.entryName}`)
+      }
+      built.set(entry.filePath, { code: output.code })
+    }
+
+    return { entries: built, extraFiles: [...result.extraFiles] }
   }
 
   private async writeClientReferenceManifest(
@@ -1952,451 +1062,8 @@ export class ServerComponentBuilder {
     return null
   }
 
-  private async buildExternalClientComponents(
-    manifest: {
-      [key: string]: { id: string; filePath: string; bundlePath: string; exports: string[] }
-    },
-    clientModuleSpecifiers: Map<string, string>,
-  ): Promise<void> {
-    for (const {
-      componentId,
-      devSourceSegments,
-      publishedExport,
-      exports,
-    } of EXTERNAL_CLIENT_COMPONENT_MANIFESTS) {
-      const sourcePath = this.resolveExternalClientSourcePath(devSourceSegments, publishedExport)
-      if (sourcePath == null || sourcePath === '') continue
-
-      try {
-        const bundleName = `external_${contentHash(componentId)}`
-        const bundlePath = `ssr/${bundleName}.js`
-        const fullBundlePath = path.join(this.options.outDir, bundlePath)
-        await fs.promises.mkdir(path.dirname(fullBundlePath), { recursive: true })
-        await this.buildSSRSingleClient(sourcePath, fullBundlePath, clientModuleSpecifiers)
-
-        manifest[componentId] = {
-          id: componentId,
-          filePath: sourcePath,
-          bundlePath,
-          exports: [...exports],
-        }
-      } catch (error) {
-        console.warn(
-          `[rari] SSR build failed for ${componentId}:`,
-          errorMessage(error, String(error)),
-        )
-      }
-    }
-  }
-
   private extractExportNames(code: string): string[] {
     return collectExportNames(code)
-  }
-
-  private generateClientReferenceStub(filePath: string, componentId: string): string {
-    let exports = ['default']
-    try {
-      exports = collectExportNames(fs.readFileSync(filePath, 'utf-8'))
-    } catch {
-      // Fall back to default-only when the source is unreadable.
-    }
-
-    return buildClientReferenceStubModule(componentId, exports)
-  }
-
-  private isServerActionFile(filePath: string): boolean {
-    try {
-      const code = fs.readFileSync(filePath, 'utf-8')
-      return this.isServerAction(code, filePath)
-    } catch {
-      return false
-    }
-  }
-
-  private generateServerActionRuntimeModule(filePath: string, actionId: string): string {
-    const code = fs.readFileSync(filePath, 'utf-8')
-    const exports = this.extractExportNames(code)
-    const lines = [
-      `function __rariResolveAction(name) {`,
-      `  const mod = globalThis.__rari_rsc_require__(${JSON.stringify(actionId)});`,
-      `  const fn = mod && mod[name];`,
-      `  if (typeof fn !== "function") throw new Error("Server action " + ${JSON.stringify(actionId)} + "#" + name + " is not registered");`,
-      `  return fn;`,
-      `}`,
-    ]
-
-    for (const name of exports) {
-      if (name === 'default') {
-        lines.push(
-          `export default function __rariDefaultAction(...args) { return __rariResolveAction("default")(...args); }`,
-        )
-      } else {
-        lines.push(
-          `export function ${name}(...args) { return __rariResolveAction(${JSON.stringify(name)})(...args); }`,
-        )
-      }
-    }
-
-    return `${lines.join('\n')}\n`
-  }
-
-  private generateServerActionReferenceModule(filePath: string): string {
-    const code = fs.readFileSync(filePath, 'utf-8')
-    const exports = this.extractExportNames(code)
-    const actionId = this.getComponentId(filePath)
-
-    let stub = `import { createServerReference } from 'react-server-dom-webpack/client';\n`
-    stub += `import { callServer } from 'rari/runtime/call-server';\n`
-    for (const name of exports) {
-      const refId = `${actionId}#${name}`
-      if (name === 'default')
-        stub += `export default createServerReference(${JSON.stringify(refId)}, callServer);\n`
-      else
-        stub += `export const ${name} = createServerReference(${JSON.stringify(refId)}, callServer);\n`
-    }
-
-    return stub
-  }
-
-  private async buildSSRSingleClient(
-    inputPath: string,
-    outputPath: string,
-    clientModuleSpecifiers?: Map<string, string>,
-  ): Promise<{ code: string }> {
-    const originalCode = await fs.promises.readFile(inputPath, 'utf-8')
-    const strippedCode = originalCode.replace(/^['"]use client['"];?\s*/m, '')
-
-    const ext = path.extname(inputPath)
-    let loader: 'tsx' | 'jsx' | 'ts' | 'js'
-    if (ext === '.tsx') loader = 'tsx'
-    else if (ext === '.ts') loader = 'ts'
-    else if (ext === '.jsx') loader = 'jsx'
-    else loader = 'js'
-
-    const virtualModuleId = `\0ssr-virtual:${inputPath}`
-    const projectRoot = this.projectRoot
-    const aliasRoot = aliasRootForPath(inputPath, projectRoot)
-    const generateServerActionReferenceModule = (filePath: string) =>
-      this.generateServerActionReferenceModule(filePath)
-    const isServerActionFile = (filePath: string) => this.isServerActionFile(filePath)
-
-    const result = await build({
-      input: virtualModuleId,
-      platform: 'node',
-      write: false,
-      external: [
-        NODE_PROTOCOL_REGEX,
-        'react',
-        'react-dom',
-        'react/jsx-runtime',
-        'react/jsx-dev-runtime',
-        'react/compiler-runtime',
-        /^rari/,
-        'react-server-dom-webpack/client',
-        /^react-server-dom-webpack\//,
-      ],
-      output: {
-        format: 'esm',
-        minify: false,
-      },
-      moduleTypes: {
-        [`.${loader}`]: loader,
-      },
-      resolve: {
-        mainFields: ['module', 'main'],
-        conditionNames: ['import', 'module', 'default'],
-        extensions: ['.ts', '.tsx', '.js', '.jsx', '.mjs'],
-      },
-      transform: {
-        jsx: 'react-jsx',
-        define: {
-          'global': 'globalThis',
-          'process.env.NODE_ENV': JSON.stringify(
-            process.env.NODE_ENV != null && process.env.NODE_ENV !== ''
-              ? process.env.NODE_ENV
-              : 'production',
-          ),
-        },
-      },
-      plugins: [
-        createStaticImageRolldownPlugin(
-          projectRoot,
-          this.options.assetsDir,
-          this.options.alias,
-          this.options.outDir,
-        ),
-        createFontRolldownPlugin(projectRoot, this.options.assetsDir, this.options.outDir),
-        {
-          name: 'ssr-client-virtual',
-          resolveId(id) {
-            if (id === virtualModuleId) return id
-
-            return null
-          },
-          load(id) {
-            if (id === virtualModuleId) return { code: strippedCode, moduleType: loader }
-
-            if (id.startsWith('\0server-action-ref:')) {
-              const filePath = id.slice('\0server-action-ref:'.length)
-              return {
-                code: generateServerActionReferenceModule(filePath),
-                moduleType: 'js',
-              }
-            }
-
-            return null
-          },
-        },
-        {
-          name: 'ssr-client-resolve',
-          resolveId(id, importer) {
-            if (id.startsWith('\0server-action-ref:')) return id
-
-            if (id.startsWith('.') || id.startsWith('/') || id.startsWith('@/')) {
-              let resolved = id
-              if (id.startsWith('@/')) {
-                resolved = path.join(aliasRoot, id.slice(2))
-              } else if (importer === virtualModuleId) {
-                resolved = path.resolve(path.dirname(inputPath), id)
-              } else if (importer != null && importer !== '') {
-                resolved = path.resolve(
-                  path.dirname(
-                    importer
-                      .replace('\0ssr-virtual:', '')
-                      .replace('\0virtual:', '')
-                      .replace('\0server-action-ref:', ''),
-                  ),
-                  id,
-                )
-              }
-
-              const foundByExt = resolveWithExtensions(resolved, [
-                '.mjs',
-                '.mts',
-                '.ts',
-                '.tsx',
-                '.js',
-                '.jsx',
-              ])
-              const found =
-                foundByExt != null && foundByExt !== ''
-                  ? foundByExt
-                  : resolveIndexFile(resolved, ['.mjs', '.mts', '.ts', '.tsx', '.js', '.jsx'])
-
-              if (found != null && found !== '' && isServerActionFile(found))
-                return `\0server-action-ref:${path.resolve(found)}`
-
-              if (found != null && found !== '' && clientModuleSpecifiers != null) {
-                const resolvedAbs = path.resolve(found)
-                const specifier = clientModuleSpecifiers.get(resolvedAbs)
-                if (
-                  specifier != null &&
-                  specifier !== '' &&
-                  resolvedAbs !== path.resolve(inputPath)
-                )
-                  return { id: specifier, external: true }
-              }
-
-              return found != null && found !== '' ? found : null
-            }
-
-            return null
-          },
-        },
-      ],
-    })
-
-    const output = result.output[0]
-    const code = typeof output === 'object' && 'code' in output ? output.code : ''
-
-    await fs.promises.writeFile(outputPath, code, 'utf-8')
-    return { code }
-  }
-
-  private async buildSingleComponent(
-    inputPath: string,
-    outputPath: string,
-  ): Promise<BuiltComponent> {
-    const originalCode = await fs.promises.readFile(inputPath, 'utf-8')
-    const withInlineActions =
-      transformInlineServerActions(originalCode, this.getComponentId(inputPath))?.code ??
-      originalCode
-    const clientTransformedCode = this.transformClientImports(withInlineActions, inputPath)
-    const isPage = this.isPageComponent(inputPath)
-    const transformedCode = isPage
-      ? this.transformComponentImportsToGlobal(clientTransformedCode)
-      : clientTransformedCode
-
-    const ext = path.extname(inputPath)
-    let loader: 'tsx' | 'jsx' | 'ts' | 'js'
-    if (ext === '.tsx') loader = 'tsx'
-    else if (ext === '.ts') loader = 'ts'
-    else if (ext === '.jsx') loader = 'jsx'
-    else loader = 'js'
-
-    const virtualModuleId = `\0virtual:${inputPath}`
-    const cssModules: string[] = []
-    const fontPreloads: string[] = []
-
-    const result = await build({
-      input: virtualModuleId,
-      platform: 'node',
-      write: false,
-      external: [
-        NODE_PROTOCOL_REGEX,
-        'react',
-        'react-dom',
-        'react/jsx-runtime',
-        'react/jsx-dev-runtime',
-      ],
-      output: {
-        format: 'esm',
-        minify: this.options.minify,
-      },
-      moduleTypes: {
-        [`.${loader}`]: loader,
-      },
-      resolve: {
-        mainFields: ['module', 'main'],
-        conditionNames: ['import', 'module', 'default'],
-        extensions: ['.ts', '.tsx', '.js', '.jsx'],
-      },
-      transform: {
-        jsx: 'react',
-        define: {
-          'global': 'globalThis',
-          'process.env.NODE_ENV': JSON.stringify(
-            process.env.NODE_ENV != null && process.env.NODE_ENV !== ''
-              ? process.env.NODE_ENV
-              : 'production',
-          ),
-          ...this.options.define,
-        },
-      },
-      plugins: this.createBuildPlugins(
-        virtualModuleId,
-        transformedCode,
-        loader,
-        inputPath,
-        isPage,
-        cssModules,
-        fontPreloads,
-      ),
-    })
-
-    if (result.output.length === 0) throw new Error('No output generated from Rolldown')
-
-    const entryChunk = result.output.find(chunk => chunk.type === 'chunk' && chunk.isEntry)
-    if (entryChunk?.type !== 'chunk') throw new Error('No entry chunk found in Rolldown output')
-
-    let code = entryChunk.code
-
-    const timestamp = new Date().toISOString()
-    code = `// Built: ${timestamp}\n${code}`
-
-    await fs.promises.writeFile(outputPath, code, 'utf-8')
-
-    const fd = await fs.promises.open(outputPath, 'r+')
-    await fd.sync()
-    await fd.close()
-
-    return { code, css: cssModules, fontPreloads }
-  }
-
-  private transformClientImports(code: string, inputPath: string): string {
-    const externalClientComponents = EXTERNAL_CLIENT_COMPONENT_MANIFESTS.map(
-      entry => entry.componentId,
-    )
-
-    const replacements: Array<{ start: number; end: number; replacement: string }> = []
-    let needsRegisterImport = false
-    let needsProxyImport = false
-
-    for (const imp of scanImportStatements(code)) {
-      if (imp.typeOnly || imp.sideEffectOnly) continue
-
-      let isClientComponent = false
-      let componentId = imp.source
-
-      if (externalClientComponents.includes(imp.source)) {
-        isClientComponent = true
-      } else if (
-        LOCAL_IMPORT_SOURCE_REGEX.test(imp.source) ||
-        Object.keys(this.options.alias).some(
-          alias => imp.source === alias || imp.source.startsWith(`${alias}/`),
-        )
-      ) {
-        const resolvedPath = this.resolveImportPath(imp.source, inputPath)
-        if (this.isClientComponent(resolvedPath)) {
-          isClientComponent = true
-          componentId = toPosixPath(path.relative(this.projectRoot, resolvedPath))
-        }
-      }
-
-      if (!isClientComponent) continue
-
-      const parts: string[] = []
-
-      if (imp.namespaceBinding != null) {
-        needsProxyImport = true
-        parts.push(
-          `const ${imp.namespaceBinding} = createClientModuleProxy(${JSON.stringify(componentId)});`,
-        )
-      }
-
-      if (imp.defaultBinding != null) {
-        needsRegisterImport = true
-        parts.push(`const ${imp.defaultBinding} = registerClientReference(
-  null,
-  ${JSON.stringify(componentId)},
-  "default"
-);`)
-      }
-
-      for (const spec of imp.named) {
-        if (spec.typeOnly) continue
-        needsRegisterImport = true
-        parts.push(`const ${spec.local} = registerClientReference(
-  null,
-  ${JSON.stringify(componentId)},
-  ${JSON.stringify(spec.imported)}
-);`)
-      }
-
-      if (parts.length === 0) continue
-
-      replacements.push({ start: imp.start, end: imp.end, replacement: parts.join('\n') })
-    }
-
-    if (replacements.length === 0) return code
-
-    let transformedCode = code
-    for (const { start, end, replacement } of [...replacements].sort((a, b) => b.start - a.start))
-      transformedCode = transformedCode.slice(0, start) + replacement + transformedCode.slice(end)
-
-    const referenceImports = [
-      ...(needsRegisterImport ? ['registerClientReference'] : []),
-      ...(needsProxyImport ? ['createClientModuleProxy'] : []),
-    ]
-
-    return ensureNamedImportFromModule(transformedCode, RSC_REFERENCES_IMPORT, referenceImports)
-  }
-
-  private resolveImportPath(importPath: string, importerPath: string): string {
-    const aliased = resolveAlias(importPath, this.options.alias, this.projectRoot)
-    let resolvedPath = aliased ?? importPath
-
-    if (!path.isAbsolute(resolvedPath))
-      resolvedPath = path.resolve(path.dirname(importerPath), resolvedPath)
-
-    const extensions = ['.tsx', '.jsx', '.ts', '.js']
-    const withExt = resolveWithExtensions(resolvedPath, extensions)
-    if (withExt != null && withExt !== '') return withExt
-
-    const indexFile = resolveIndexFile(resolvedPath, extensions)
-    if (indexFile != null && indexFile !== '') return indexFile
-
-    return `${resolvedPath}.tsx`
   }
 
   private getProjectRelativePath(filePath: string): string {
@@ -2462,15 +1129,27 @@ export class ServerComponentBuilder {
     const bundleDir = path.dirname(fullBundlePath)
     await fs.promises.mkdir(bundleDir, { recursive: true })
 
-    const built = await this.buildSingleComponent(filePath, fullBundlePath)
-    const css = [
-      ...(await this.writeComponentCssAsset(componentId, built.css)),
-      ...built.fontPreloads,
-    ]
+    const result = await this.emitRscEntries([{ componentId, filePath }], this.options.minify)
+    const built = result.outputs.get(componentId)
+    if (built == null) {
+      throw new Error(`Vite RSC environment build missed entry: ${componentId}`)
+    }
+
+    const timestamp = new Date().toISOString()
+    const codeWithBanner = `// Built: ${timestamp}\n${built.code}`
+    await fs.promises.writeFile(fullBundlePath, codeWithBanner, 'utf-8')
+
+    const css = [...(await this.writeComponentCssAsset(componentId, [...built.cssAssetSources]))]
+
+    for (const file of result.extraFiles) {
+      const fullPath = path.join(this.options.outDir, this.options.rscDir, file.fileName)
+      await fs.promises.mkdir(path.dirname(fullPath), { recursive: true })
+      await fs.promises.writeFile(fullPath, file.code, 'utf-8')
+    }
 
     const storedComponent = this.serverActions.get(filePath) ?? this.serverComponents.get(filePath)
     this.buildCache.set(filePath, {
-      code: built.code,
+      code: codeWithBanner,
       css,
       timestamp: Date.now(),
       sourceDependencies,
@@ -2565,10 +1244,6 @@ export class ServerComponentBuilder {
 
   invalidateBuildCacheFor(filePath: string): void {
     this.buildCache.delete(filePath)
-  }
-
-  async getTransformedComponentCode(filePath: string): Promise<string> {
-    return this.buildComponentCodeOnly(filePath)
   }
 }
 
@@ -2678,14 +1353,93 @@ export function createServerBuildPlugin(options: ServerBuildOptions = {}): Plugi
   let resolvedViteOutDir: string
   let isDev = false
   let resolvedAliases: Record<string, string> = {}
+  let serverArtifactsEmitted = false
+
+  async function emitPostBuildArtifacts(): Promise<void> {
+    if (!builder) return
+
+    try {
+      await builder.buildMdxRegistry(options.mdx)
+    } catch (error) {
+      console.warn('[rari] Failed to build MDX component registry:', error)
+    }
+
+    try {
+      const { generateRobotsFile } = await import('@/router/metadata/robots')
+      await generateRobotsFile({
+        appDir: path.join(projectRoot, 'src', 'app'),
+        outDir: resolvedViteOutDir,
+        aliases: resolvedAliases,
+      })
+    } catch (error) {
+      console.warn('[rari] Failed to generate robots.txt:', error)
+    }
+
+    try {
+      const { generateSitemapFiles } = await import('@/router/metadata/sitemap')
+      await generateSitemapFiles({
+        appDir: path.join(projectRoot, 'src', 'app'),
+        outDir: resolvedViteOutDir,
+        aliases: resolvedAliases,
+      })
+    } catch (error) {
+      console.warn('[rari] Failed to generate sitemap:', error)
+    }
+
+    try {
+      const { generateFeedFile } = await import('@/router/metadata/feed')
+      await generateFeedFile({
+        appDir: path.join(projectRoot, 'src', 'app'),
+        outDir: resolvedViteOutDir,
+        aliases: resolvedAliases,
+      })
+    } catch (error) {
+      console.warn('[rari] Failed to generate feed:', error)
+    }
+
+    try {
+      const routesPath = path.join(resolvedViteOutDir, 'server', 'routes.json')
+      if (fs.existsSync(routesPath)) {
+        const icons = parseAppIconsFromManifest(fs.readFileSync(routesPath, 'utf-8'))
+        if (icons.length > 0) {
+          await copyAppIconsToOutDir({
+            appDir: path.join(projectRoot, 'src', 'app'),
+            outDir: resolvedViteOutDir,
+            icons,
+          })
+        }
+      }
+    } catch (error) {
+      console.warn('[rari] Failed to copy app icons:', error)
+    }
+
+    try {
+      const mdxOpts = resolveMdxPluginOptions(projectRoot, options.mdx)
+      const contentDirs = collectMdxContentDirs(projectRoot, mdxOpts.contentDirs).filter(dir => {
+        const rel = toPosixPath(path.relative(projectRoot, dir))
+        if (rel === 'public/content' || rel.startsWith('public/content/')) return false
+        if (rel === 'dist/content' || rel.startsWith('dist/content/')) return false
+        return true
+      })
+      if (contentDirs.length > 0) {
+        copyMdxContentDirsToDest(contentDirs, path.join(resolvedViteOutDir, 'content'))
+      }
+    } catch (error) {
+      console.warn('[rari] Failed to copy MDX content:', error)
+    }
+
+    finalizeStaticImageSourceMapBuild(resolvedViteOutDir)
+  }
 
   return {
     name: 'rari-server-build',
+    sharedDuringBuild: true,
 
     configResolved(config) {
       projectRoot = config.root
       resolvedViteOutDir = path.resolve(config.root, config.build.outDir)
       isDev = config.command === 'serve'
+      serverArtifactsEmitted = false
 
       const alias = readViteAliases(config)
       resolvedAliases = alias
@@ -2724,85 +1478,24 @@ export function createServerBuildPlugin(options: ServerBuildOptions = {}): Plugi
       if (fs.existsSync(srcDir)) scanDirectory(srcDir, builder, Object.values(resolvedAliases))
     },
 
-    async closeBundle() {
-      if (builder) {
-        await builder.buildServerComponents()
-        await builder.buildSSRClientComponents()
+    async buildApp(viteBuilder) {
+      if (!builder || serverArtifactsEmitted) return
 
-        try {
-          await builder.buildMdxRegistry(options.mdx)
-        } catch (error) {
-          console.warn('[rari] Failed to build MDX component registry:', error)
-        }
+      const clientEnv = viteBuilder.environments.client
+      if (!clientEnv.isBuilt) await viteBuilder.build(clientEnv)
 
-        try {
-          const { generateRobotsFile } = await import('@/router/metadata/robots')
-          await generateRobotsFile({
-            appDir: path.join(projectRoot, 'src', 'app'),
-            outDir: resolvedViteOutDir,
-            aliases: resolvedAliases,
-          })
-        } catch (error) {
-          console.warn('[rari] Failed to generate robots.txt:', error)
-        }
+      const rscEnv = viteBuilder.environments.rsc
+      const ssrEnv = viteBuilder.environments.ssr
+      await rscEnv.init()
+      await ssrEnv.init()
 
-        try {
-          const { generateSitemapFiles } = await import('@/router/metadata/sitemap')
-          await generateSitemapFiles({
-            appDir: path.join(projectRoot, 'src', 'app'),
-            outDir: resolvedViteOutDir,
-            aliases: resolvedAliases,
-          })
-        } catch (error) {
-          console.warn('[rari] Failed to generate sitemap:', error)
-        }
+      builder.setViteBuilder(viteBuilder)
+      await builder.buildServerComponents()
 
-        try {
-          const { generateFeedFile } = await import('@/router/metadata/feed')
-          await generateFeedFile({
-            appDir: path.join(projectRoot, 'src', 'app'),
-            outDir: resolvedViteOutDir,
-            aliases: resolvedAliases,
-          })
-        } catch (error) {
-          console.warn('[rari] Failed to generate feed:', error)
-        }
+      await builder.buildSSRClientComponents()
 
-        try {
-          const routesPath = path.join(resolvedViteOutDir, 'server', 'routes.json')
-          if (fs.existsSync(routesPath)) {
-            const icons = parseAppIconsFromManifest(fs.readFileSync(routesPath, 'utf-8'))
-            if (icons.length > 0) {
-              await copyAppIconsToOutDir({
-                appDir: path.join(projectRoot, 'src', 'app'),
-                outDir: resolvedViteOutDir,
-                icons,
-              })
-            }
-          }
-        } catch (error) {
-          console.warn('[rari] Failed to copy app icons:', error)
-        }
-
-        try {
-          const mdxOpts = resolveMdxPluginOptions(projectRoot, options.mdx)
-          const contentDirs = collectMdxContentDirs(projectRoot, mdxOpts.contentDirs).filter(
-            dir => {
-              const rel = toPosixPath(path.relative(projectRoot, dir))
-              if (rel === 'public/content' || rel.startsWith('public/content/')) return false
-              if (rel === 'dist/content' || rel.startsWith('dist/content/')) return false
-              return true
-            },
-          )
-          if (contentDirs.length > 0) {
-            copyMdxContentDirsToDest(contentDirs, path.join(resolvedViteOutDir, 'content'))
-          }
-        } catch (error) {
-          console.warn('[rari] Failed to copy MDX content:', error)
-        }
-
-        finalizeStaticImageSourceMapBuild(resolvedViteOutDir)
-      }
+      serverArtifactsEmitted = true
+      await emitPostBuildArtifacts()
     },
 
     async handleHotUpdate({ file }) {

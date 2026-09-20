@@ -902,7 +902,9 @@ impl ComponentLoader {
                 continue;
             };
 
-            let module_specifier = format!("file:///{}", bundle_path.cow_replace('\\', "/"));
+            let canonical_path =
+                fs::canonicalize(&component_file).await.unwrap_or_else(|_| component_file.clone());
+            let module_specifier = path_to_file_url(&canonical_path);
             if let Err(e) = runtime.add_module_to_loader(&module_specifier, code).await {
                 tracing::error!("Failed to add SSR module {}: {}", module_path, e);
                 continue;

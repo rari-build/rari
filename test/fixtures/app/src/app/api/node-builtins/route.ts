@@ -15,7 +15,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    await import(`node:${name}`)
+    await import(/* @vite-ignore */ `node:${name}`)
     return Response.json({ name, ok: true })
   } catch (error) {
     return Response.json({

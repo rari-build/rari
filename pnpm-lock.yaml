@@ -171,9 +171,6 @@ catalogs:
     '@napi-rs/cli':
       specifier: ^3.9.1
       version: 3.9.1
-    lightningcss:
-      specifier: ^1.33.0
-      version: 1.33.0
     oxc-transform-react:
       specifier: ^0.147.0
       version: 0.147.0
@@ -530,9 +527,6 @@ importers:
       '@capsizecss/unpack':
         specifier: 'catalog:'
         version: 4.0.1
-      lightningcss:
-        specifier: catalog:build
-        version: 1.33.0
       react:
         specifier: catalog:react
         version: 19.3.0
@@ -542,9 +536,6 @@ importers:
       react-server-dom-webpack:
         specifier: catalog:react
         version: 19.3.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(webpack@5.110.3(lightningcss@1.33.0)(postcss@8.5.28))
-      rolldown:
-        specifier: catalog:build
-        version: 1.2.8
     devDependencies:
       '@mdx-js/mdx':
         specifier: catalog:mdx

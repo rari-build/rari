@@ -37,7 +37,6 @@ catalogs:
     posthog-js: ^1.430.3
   build:
     '@napi-rs/cli': ^3.9.1
-    lightningcss: ^1.33.0
     oxc-transform-react: ^0.147.0
     rolldown: ^1.2.8
     vite: ^8.3.0

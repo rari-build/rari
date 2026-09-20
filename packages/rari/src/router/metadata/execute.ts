@@ -1,9 +1,11 @@
+import type { Plugin } from 'vite-plus'
 import type { MetadataVirtualPluginOptions } from './virtual-plugin'
 import { randomUUID } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { isRecord } from '@/shared/utils/type-guards'
+import { buildMetadataModuleWithViteEnvironment } from '@/vite/server/rsc-vite-build'
 import { createMetadataVirtualPlugin } from './virtual-plugin'
 
 export interface BuildAndImportMetadataModuleOptions {
@@ -35,18 +37,12 @@ export async function buildAndImportMetadataModule(
     label,
   } = options
 
-  const { build } = await import('rolldown')
-
-  const result = await build({
-    input: virtualId,
+  const result = await buildMetadataModuleWithViteEnvironment({
+    root: projectRoot,
+    virtualId,
     external: isRariPackageId,
-    platform: 'node',
-    write: false,
-    output: {
-      format: 'esm',
-      codeSplitting: false,
-    },
     plugins: [
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       createMetadataVirtualPlugin({
         name: pluginName,
         virtualId,
@@ -55,18 +51,11 @@ export async function buildAndImportMetadataModule(
         aliases,
         projectRoot,
         kind,
-      }),
+      }) as Plugin,
     ],
   })
 
-  if (result.output.length === 0) throw new Error(`Failed to build ${label} module`)
-
-  const entryChunk =
-    result.output.find(item => item.type === 'chunk' && item.isEntry) ??
-    result.output.find(item => item.type === 'chunk')
-
-  if (entryChunk?.type !== 'chunk')
-    throw new Error(`No chunk output found in ${label} build result`)
+  if (result == null) throw new Error(`Failed to build ${label} module`)
 
   const cacheDir = path.join(projectRoot, 'node_modules', '.cache', 'rari-metadata')
   await fs.mkdir(cacheDir, { recursive: true })
@@ -77,7 +66,7 @@ export async function buildAndImportMetadataModule(
     await fs.rm(tempFile, { force: true })
   })
 
-  await fs.writeFile(tempFile, entryChunk.code, 'utf8')
+  await fs.writeFile(tempFile, result.code, 'utf8')
   return await import(pathToFileURL(tempFile).href)
 }
 
