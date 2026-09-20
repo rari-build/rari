@@ -75,6 +75,51 @@ describe('buildRscEntriesWithViteEnvironment', () => {
     expect(buildConfig.rolldownOptions).toBe(previousRolldown)
   })
 
+  it('preserves binary non-css asset sources without utf-8 conversion', async () => {
+    const buildConfig = {
+      write: false,
+      emptyOutDir: false,
+      copyPublicDir: false,
+      minify: false,
+      emitAssets: true,
+      rolldownOptions: {},
+    }
+    const binary = new Uint8Array([0x00, 0xff, 0x80, 0xfe])
+    const build = vi.fn().mockResolvedValue({
+      output: [
+        {
+          type: 'chunk',
+          isEntry: true,
+          name: 'App',
+          fileName: 'App.js',
+          code: 'export default function App() {}',
+        },
+        {
+          type: 'asset',
+          fileName: 'assets/font-abc.woff2',
+          source: binary,
+        },
+      ],
+    })
+
+    const result = await buildRscEntriesWithViteEnvironment({
+      viteBuilder: castMock<ViteBuilder>({
+        environments: {
+          rsc: {
+            init: async () => {},
+            config: { build: buildConfig },
+          },
+        },
+        build,
+      }),
+      entries: [{ componentId: 'App', filePath: '/src/App.tsx' }],
+    })
+
+    expect(result?.extraFiles).toHaveLength(1)
+    expect(result?.extraFiles[0]?.fileName).toBe('assets/font-abc.woff2')
+    expect(result?.extraFiles[0]?.code).toBe(binary)
+  })
+
   it('returns null and restores config when build throws', async () => {
     const previousOptions = { keep: true }
     const buildConfig = {

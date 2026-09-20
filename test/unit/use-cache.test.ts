@@ -601,12 +601,22 @@ pluginDescribe('use-cache Vite plugin integration', () => {
   function getTransform(plugin: Plugin): TransformHook {
     const hook = plugin.transform
     if (typeof hook === 'function') {
-      return async (code, id) =>
-        castMock(await hook.call(castMock({ environment: { name: 'ssr' } }), code, id))
+      return async function (
+        this: Readonly<{ readonly environment: { readonly name: string } }>,
+        code: string,
+        id: string,
+      ) {
+        return castMock(await hook.call(castMock(this), code, id))
+      }
     }
     if (hook && typeof hook === 'object' && typeof hook.handler === 'function') {
-      return async (code, id) =>
-        castMock(await hook.handler.call(castMock({ environment: { name: 'ssr' } }), code, id))
+      return async function (
+        this: Readonly<{ readonly environment: { readonly name: string } }>,
+        code: string,
+        id: string,
+      ) {
+        return castMock(await hook.handler.call(castMock(this), code, id))
+      }
     }
     throw new Error('expected transform hook on use-cache plugin')
   }

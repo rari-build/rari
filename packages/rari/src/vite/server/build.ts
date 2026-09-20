@@ -62,6 +62,7 @@ const PROXY_FILE_REGEX = /^proxy\.(?:tsx?|jsx?|mts|mjs)$/
 const PROXY_MANIFEST_FILE = 'proxy.json'
 const SPECIAL_FILE_REGEX = /^(?:robots|sitemap|feed)\.(?:tsx?|jsx?)$/
 const APP_ICON_FILE_REGEX = /^(?:favicon|icon\d*|apple-icon\d*)\.(?:ico|png|jpe?g|svg)$/i
+const LAYOUT_FILENAME_REGEX = /^layout\.(?:tsx|ts|jsx|js)$/
 export const RARI_CSS_MODULES_PATTERN = '[hash]_[local]'
 
 const EXTERNAL_CLIENT_COMPONENT_MANIFESTS: Array<{
@@ -268,11 +269,13 @@ export class ServerComponentBuilder {
   private readonly moduleAnalysisCache: ModuleAnalysisCache
   private readonly discoveredExternalClientComponents = new Set<string>()
   private readonly clientComponentFiles = new Map<string, string>()
+  private layoutCssSkipSet: Set<string> | null = null
   private viteBuilder: ViteBuilder | null = null
   private envEmitLock: Promise<void> = Promise.resolve()
 
   private getLayoutCssSkipSet(): Set<string> {
-    return resolveLayoutCssServerSkipSet(this.projectRoot, this.options.alias)
+    this.layoutCssSkipSet ??= resolveLayoutCssServerSkipSet(this.projectRoot, this.options.alias)
+    return this.layoutCssSkipSet
   }
 
   private resolveServerCssSources(filePath: string, code: string): string[] {
@@ -660,7 +663,7 @@ export class ServerComponentBuilder {
     for (const file of result.extraFiles) {
       const fullPath = this.resolveExtraFileOutPath(file.fileName)
       await fs.promises.mkdir(path.dirname(fullPath), { recursive: true })
-      await fs.promises.writeFile(fullPath, file.code, 'utf-8')
+      await fs.promises.writeFile(fullPath, file.code)
     }
 
     return entries.map(entry => {
@@ -728,7 +731,7 @@ export class ServerComponentBuilder {
     for (const file of viteBuilt.extraFiles) {
       const fullPath = this.resolveExtraFileOutPath(file.fileName)
       await fs.promises.mkdir(path.dirname(fullPath), { recursive: true })
-      await fs.promises.writeFile(fullPath, file.code, 'utf-8')
+      await fs.promises.writeFile(fullPath, file.code)
     }
 
     for (const [filePath, built] of viteBuilt.entries) {
@@ -834,7 +837,10 @@ export class ServerComponentBuilder {
         readonly cssAssetSources: readonly string[]
       }
     >
-    readonly extraFiles: ReadonlyArray<{ readonly fileName: string; readonly code: string }>
+    readonly extraFiles: ReadonlyArray<{
+      readonly fileName: string
+      readonly code: string | Uint8Array
+    }>
   }> {
     const empty = {
       entries: new Map<
@@ -844,7 +850,7 @@ export class ServerComponentBuilder {
           readonly cssAssetSources: readonly string[]
         }
       >(),
-      extraFiles: [] as Array<{ readonly fileName: string; readonly code: string }>,
+      extraFiles: [] as Array<{ readonly fileName: string; readonly code: string | Uint8Array }>,
     }
     if (entries.length === 0) return empty
     if (this.viteBuilder == null) {
@@ -988,7 +994,7 @@ export class ServerComponentBuilder {
           ? path.join(this.options.outDir, normalized)
           : path.join(ssrOutDir, normalized)
       await fs.promises.mkdir(path.dirname(fullPath), { recursive: true })
-      await fs.promises.writeFile(fullPath, file.code, 'utf-8')
+      await fs.promises.writeFile(fullPath, file.code)
     }
 
     for (const [filePath, built] of viteBuilt.entries) {
@@ -1022,11 +1028,14 @@ export class ServerComponentBuilder {
     }> = [],
   ): Promise<{
     readonly entries: Map<string, { readonly code: string }>
-    readonly extraFiles: ReadonlyArray<{ readonly fileName: string; readonly code: string }>
+    readonly extraFiles: ReadonlyArray<{
+      readonly fileName: string
+      readonly code: string | Uint8Array
+    }>
   }> {
     const empty = {
       entries: new Map<string, { readonly code: string }>(),
-      extraFiles: [] as Array<{ readonly fileName: string; readonly code: string }>,
+      extraFiles: [] as Array<{ readonly fileName: string; readonly code: string | Uint8Array }>,
     }
 
     const viteEntries = [
@@ -1130,6 +1139,10 @@ export class ServerComponentBuilder {
   }
 
   async rebuildComponent(filePath: string): Promise<ComponentRebuildResult> {
+    if (LAYOUT_FILENAME_REGEX.test(path.basename(filePath))) {
+      this.layoutCssSkipSet = null
+    }
+
     const componentId = this.getComponentId(filePath)
 
     const code = await fs.promises.readFile(filePath, 'utf-8')
@@ -1201,7 +1214,7 @@ export class ServerComponentBuilder {
     for (const file of result.extraFiles) {
       const fullPath = this.resolveExtraFileOutPath(file.fileName)
       await fs.promises.mkdir(path.dirname(fullPath), { recursive: true })
-      await fs.promises.writeFile(fullPath, file.code, 'utf-8')
+      await fs.promises.writeFile(fullPath, file.code)
     }
 
     const storedComponent = this.serverActions.get(filePath) ?? this.serverComponents.get(filePath)
