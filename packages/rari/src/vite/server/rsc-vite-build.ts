@@ -68,9 +68,14 @@ export interface EnvViteBuiltEntry {
   readonly cssAssetSources: readonly string[]
 }
 
+export type EnvViteExtraFile = Readonly<{
+  readonly fileName: string
+  readonly code: string | Uint8Array
+}>
+
 export interface EnvViteBuildResult {
   readonly outputs: ReadonlyMap<string, EnvViteBuiltEntry>
-  readonly extraFiles: ReadonlyArray<{ readonly fileName: string; readonly code: string }>
+  readonly extraFiles: ReadonlyArray<EnvViteExtraFile>
 }
 
 export interface RscViteBuildEntry {
@@ -256,7 +261,7 @@ export async function buildEntriesWithViteEnvironment(
     if (outputs.length === 0) return null
 
     const cssByFileName = new Map<string, string>()
-    const extraFiles: Array<{ readonly fileName: string; readonly code: string }> = []
+    const extraFiles: EnvViteExtraFile[] = []
     const entryOutputs = new Map<string, EnvViteBuiltEntry>()
     const entryCssFiles = new Map<string, string[]>()
 
@@ -266,7 +271,7 @@ export async function buildEntriesWithViteEnvironment(
         if (fileName.endsWith('.css')) {
           cssByFileName.set(fileName, assetSourceToString(item.source))
         } else {
-          extraFiles.push({ fileName, code: assetSourceToString(item.source) })
+          extraFiles.push({ fileName, code: item.source })
         }
         continue
       }
