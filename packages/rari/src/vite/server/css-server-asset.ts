@@ -4,7 +4,7 @@ import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { resolveAlias } from '@/shared/utils/alias-resolver'
 import { contentHash } from '@/shared/utils/content-hash'
-import { normalizeAssetsDir } from '@/shared/utils/path'
+import { normalizeAssetsDir, toPosixPath } from '@/shared/utils/path'
 import { scanImportStatements } from '../analysis/directives'
 import { collectLayoutCssImportPaths } from '../client-head'
 
@@ -15,6 +15,11 @@ const LOCAL_RELATIVE_CSS_IMPORT_RE =
   /@import\s+(?:url\(\s*((?:\.\/|\.\.\/)[^)\s]+)\s*\)|url\(\s*['"]((?:\.\/|\.\.\/)[^'"]+)['"]\s*\)|['"]((?:\.\/|\.\.\/)[^'"]+)['"])([^;]*)(?:;|$)/g
 
 const CSS_IMPORT_SOURCE_RE = /\.css(?:\?.*)?$/
+const CSS_MODULE_PATH_RE = /\.module\.css(?:\?.*)?$/i
+
+function isCssModulePath(sourceOrPath: string): boolean {
+  return CSS_MODULE_PATH_RE.test(sourceOrPath.replace(/[?#].*$/, ''))
+}
 
 function stripBarePackageCssImports(css: string): string {
   return css.replace(BARE_PACKAGE_CSS_IMPORT_RE, '').trim()
@@ -206,6 +211,7 @@ export function collectComponentServerCssSources(options: {
   const cssModules: string[] = []
   for (const imp of scanImportStatements(options.code)) {
     if (!CSS_IMPORT_SOURCE_RE.test(imp.source)) continue
+    if (isCssModulePath(imp.source)) continue
     const query = imp.source.includes('?') ? imp.source.slice(imp.source.indexOf('?')) : ''
     if (/(?:\?|&)raw(?:&|$)/.test(query) || /(?:\?|&)url(?:&|$)/.test(query)) continue
 
@@ -216,6 +222,7 @@ export function collectComponentServerCssSources(options: {
       options.aliases,
     )
     if (resolved == null) continue
+    if (isCssModulePath(resolved)) continue
     if (options.layoutCssSkip.has(path.resolve(resolved))) continue
 
     try {
@@ -242,6 +249,7 @@ export function transformCssQueryImportsForEmit(options: {
   const assetsDirName = normalizeAssetsDir(options.assetsDir ?? 'assets')
   const extraFiles: Array<{ readonly fileName: string; readonly code: string }> = []
   const replacements: Array<{ start: number; end: number; code: string }> = []
+  let syntheticBindingCount = 0
 
   for (const imp of scanImportStatements(options.code)) {
     if (!CSS_IMPORT_SOURCE_RE.test(imp.source)) continue
@@ -262,7 +270,9 @@ export function transformCssQueryImportsForEmit(options: {
 
     if (isRaw) {
       const content = fs.readFileSync(resolved, 'utf-8')
-      const binding = imp.defaultBinding ?? 'cssRaw'
+      const binding =
+        imp.defaultBinding ?? `cssRaw${syntheticBindingCount === 0 ? '' : syntheticBindingCount}`
+      if (imp.defaultBinding == null) syntheticBindingCount++
       replacements.push({
         start: imp.start,
         end: imp.end,
@@ -274,12 +284,15 @@ export function transformCssQueryImportsForEmit(options: {
     const content = fs.readFileSync(resolved)
     const ext = path.extname(resolved) || '.css'
     const base = path.basename(resolved, ext)
-    const hash = contentHash(`${resolved}:${content.toString('utf8')}`, 8)
+    const relativeSource = toPosixPath(path.relative(options.projectRoot, resolved))
+    const hash = contentHash(`${relativeSource}:${content.toString('utf8')}`, 8)
     const fileName = `${base}-${hash}${ext}`
     const relativeFileName = `${assetsDirName}/${fileName}`
     extraFiles.push({ fileName: relativeFileName, code: content.toString('utf8') })
     const href = `/${relativeFileName}`
-    const binding = imp.defaultBinding ?? 'cssUrl'
+    const binding =
+      imp.defaultBinding ?? `cssUrl${syntheticBindingCount === 0 ? '' : syntheticBindingCount}`
+    if (imp.defaultBinding == null) syntheticBindingCount++
     replacements.push({
       start: imp.start,
       end: imp.end,
