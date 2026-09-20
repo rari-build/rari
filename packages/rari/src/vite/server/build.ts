@@ -50,6 +50,7 @@ import {
   resolveMdxRegistryEntries,
 } from '../mdx/registry'
 import { collectExportNames } from '../transform/client-reference-stub'
+import { collectComponentServerCssSources, resolveLayoutCssServerSkipSet } from './css-server-asset'
 import {
   buildRscEntriesWithViteEnvironment,
   buildSsrEntriesWithViteEnvironment,
@@ -267,8 +268,35 @@ export class ServerComponentBuilder {
   private readonly moduleAnalysisCache: ModuleAnalysisCache
   private readonly discoveredExternalClientComponents = new Set<string>()
   private readonly clientComponentFiles = new Map<string, string>()
+  private layoutCssSkipSet: Set<string> | null = null
   private viteBuilder: ViteBuilder | null = null
   private envEmitLock: Promise<void> = Promise.resolve()
+
+  private getLayoutCssSkipSet(): Set<string> {
+    this.layoutCssSkipSet ??= resolveLayoutCssServerSkipSet(this.projectRoot, this.options.alias)
+    return this.layoutCssSkipSet
+  }
+
+  private resolveServerCssSources(filePath: string, code: string): string[] {
+    return collectComponentServerCssSources({
+      filePath,
+      code,
+      projectRoot: this.projectRoot,
+      aliases: this.options.alias,
+      layoutCssSkip: this.getLayoutCssSkipSet(),
+    })
+  }
+
+  private resolveExtraFileOutPath(fileName: string): string {
+    const normalized = toPosixPath(fileName)
+    if (
+      normalized === this.options.assetsDir ||
+      normalized.startsWith(`${this.options.assetsDir}/`)
+    ) {
+      return path.join(this.options.outDir, normalized)
+    }
+    return path.join(this.options.outDir, this.options.rscDir, normalized)
+  }
 
   setViteBuilder(viteBuilder: ViteBuilder | null): void {
     this.viteBuilder = viteBuilder
@@ -693,7 +721,7 @@ export class ServerComponentBuilder {
     const viteBuilt = await this.buildRscEntriesWithVite(allRscEntries)
 
     for (const file of viteBuilt.extraFiles) {
-      const fullPath = path.join(serverOutDir, file.fileName)
+      const fullPath = this.resolveExtraFileOutPath(file.fileName)
       await fs.promises.mkdir(path.dirname(fullPath), { recursive: true })
       await fs.promises.writeFile(fullPath, file.code, 'utf-8')
     }
@@ -706,8 +734,17 @@ export class ServerComponentBuilder {
       await fs.promises.mkdir(path.dirname(fullBundlePath), { recursive: true })
       const timestamp = new Date().toISOString()
       await fs.promises.writeFile(fullBundlePath, `// Built: ${timestamp}\n${built.code}`, 'utf-8')
-      const css = [...(await this.writeComponentCssAsset(componentId, [...built.cssAssetSources]))]
       const component = this.serverComponents.get(filePath) ?? this.serverActions.get(filePath)
+      const cssSources = this.resolveServerCssSources(
+        filePath,
+        component?.originalCode ?? (await fs.promises.readFile(filePath, 'utf-8')),
+      )
+      const css = [
+        ...(await this.writeComponentCssAsset(
+          componentId,
+          cssSources.length > 0 ? cssSources : [...built.cssAssetSources],
+        )),
+      ]
       manifest.components[componentId] = {
         id: componentId,
         filePath,
@@ -809,38 +846,41 @@ export class ServerComponentBuilder {
     if (this.viteBuilder == null) {
       throw new Error('Vite builder is required for RSC environment emit')
     }
+    const viteBuilder = this.viteBuilder
 
-    const viteEntries = entries.map(([filePath]) => ({
-      componentId: this.getComponentId(filePath),
-      filePath,
-    }))
+    return this.withEnvEmitLock(async () => {
+      const viteEntries = entries.map(([filePath]) => ({
+        componentId: this.getComponentId(filePath),
+        filePath,
+      }))
 
-    const result = await buildRscEntriesWithViteEnvironment({
-      viteBuilder: this.viteBuilder,
-      entries: viteEntries,
-      minify: this.options.minify,
+      const result = await buildRscEntriesWithViteEnvironment({
+        viteBuilder,
+        entries: viteEntries,
+        minify: this.options.minify,
+      })
+      if (result == null) {
+        throw new Error('Vite RSC environment build failed')
+      }
+
+      const built = new Map<
+        string,
+        {
+          readonly code: string
+          readonly cssAssetSources: readonly string[]
+        }
+      >()
+      for (const [filePath] of entries) {
+        const componentId = this.getComponentId(filePath)
+        const output = result.outputs.get(componentId)
+        if (output == null) {
+          throw new Error(`Vite RSC environment build missed entry: ${componentId}`)
+        }
+        built.set(filePath, output)
+      }
+
+      return { entries: built, extraFiles: [...result.extraFiles] }
     })
-    if (result == null) {
-      throw new Error('Vite RSC environment build failed')
-    }
-
-    const built = new Map<
-      string,
-      {
-        readonly code: string
-        readonly cssAssetSources: readonly string[]
-      }
-    >()
-    for (const [filePath] of entries) {
-      const componentId = this.getComponentId(filePath)
-      const output = result.outputs.get(componentId)
-      if (output == null) {
-        throw new Error(`Vite RSC environment build missed entry: ${componentId}`)
-      }
-      built.set(filePath, output)
-    }
-
-    return { entries: built, extraFiles: [...result.extraFiles] }
   }
 
   async buildMdxRegistry(mdxOptions?: MdxPluginOptions): Promise<void> {
@@ -995,25 +1035,28 @@ export class ServerComponentBuilder {
     if (this.viteBuilder == null) {
       throw new Error('Vite builder is required for SSR environment emit')
     }
+    const viteBuilder = this.viteBuilder
 
-    const result = await buildSsrEntriesWithViteEnvironment({
-      viteBuilder: this.viteBuilder,
-      entries: viteEntries,
-    })
-    if (result == null) {
-      throw new Error('Vite SSR environment build failed')
-    }
-
-    const built = new Map<string, { readonly code: string }>()
-    for (const entry of viteEntries) {
-      const output = result.outputs.get(entry.entryName)
-      if (output == null) {
-        throw new Error(`Vite SSR environment build missed entry: ${entry.entryName}`)
+    return this.withEnvEmitLock(async () => {
+      const result = await buildSsrEntriesWithViteEnvironment({
+        viteBuilder,
+        entries: viteEntries,
+      })
+      if (result == null) {
+        throw new Error('Vite SSR environment build failed')
       }
-      built.set(entry.filePath, { code: output.code })
-    }
 
-    return { entries: built, extraFiles: [...result.extraFiles] }
+      const built = new Map<string, { readonly code: string }>()
+      for (const entry of viteEntries) {
+        const output = result.outputs.get(entry.entryName)
+        if (output == null) {
+          throw new Error(`Vite SSR environment build missed entry: ${entry.entryName}`)
+        }
+        built.set(entry.filePath, { code: output.code })
+      }
+
+      return { entries: built, extraFiles: [...result.extraFiles] }
+    })
   }
 
   private async writeClientReferenceManifest(
@@ -1139,10 +1182,16 @@ export class ServerComponentBuilder {
     const codeWithBanner = `// Built: ${timestamp}\n${built.code}`
     await fs.promises.writeFile(fullBundlePath, codeWithBanner, 'utf-8')
 
-    const css = [...(await this.writeComponentCssAsset(componentId, [...built.cssAssetSources]))]
+    const cssSources = this.resolveServerCssSources(filePath, code)
+    const css = [
+      ...(await this.writeComponentCssAsset(
+        componentId,
+        cssSources.length > 0 ? cssSources : [...built.cssAssetSources],
+      )),
+    ]
 
     for (const file of result.extraFiles) {
-      const fullPath = path.join(this.options.outDir, this.options.rscDir, file.fileName)
+      const fullPath = this.resolveExtraFileOutPath(file.fileName)
       await fs.promises.mkdir(path.dirname(fullPath), { recursive: true })
       await fs.promises.writeFile(fullPath, file.code, 'utf-8')
     }

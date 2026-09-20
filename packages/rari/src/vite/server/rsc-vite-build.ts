@@ -18,7 +18,13 @@ export type ViteEmitBuilderOptions = Readonly<{
 }>
 
 function emitBuilderKey(options: ViteEmitBuilderOptions): string {
-  return path.resolve(options.root)
+  const root = path.resolve(options.root)
+  return JSON.stringify({
+    root,
+    configFile: options.configFile ?? null,
+    mode: options.mode ?? null,
+    logLevel: options.logLevel ?? null,
+  })
 }
 
 export async function getOrCreateViteEmitBuilder(
@@ -26,14 +32,18 @@ export async function getOrCreateViteEmitBuilder(
 ): Promise<ViteBuilder> {
   const options: ViteEmitBuilderOptions =
     typeof projectRootOrOptions === 'string' ? { root: projectRootOrOptions } : projectRootOrOptions
+  const root = path.resolve(options.root)
   const key = emitBuilderKey(options)
   let pending = emitBuilderByRoot.get(key)
   if (pending == null) {
     pending = createBuilder({
-      root: key,
+      root,
       ...(options.configFile !== undefined ? { configFile: options.configFile } : {}),
       ...(options.mode != null && options.mode !== '' ? { mode: options.mode } : {}),
       ...(options.logLevel != null ? { logLevel: options.logLevel } : {}),
+    }).catch((error: unknown) => {
+      emitBuilderByRoot.delete(key)
+      throw error
     })
     emitBuilderByRoot.set(key, pending)
   }
@@ -41,7 +51,11 @@ export async function getOrCreateViteEmitBuilder(
 }
 
 export function clearViteEmitBuilder(projectRoot: string): void {
-  emitBuilderByRoot.delete(path.resolve(projectRoot))
+  const root = path.resolve(projectRoot)
+  for (const key of emitBuilderByRoot.keys()) {
+    const parsed: unknown = JSON.parse(key)
+    if (isRecord(parsed) && parsed.root === root) emitBuilderByRoot.delete(key)
+  }
 }
 
 export interface EnvViteBuildEntry {
@@ -293,10 +307,7 @@ export async function buildEntriesWithViteEnvironment(
 
     return { outputs: entryOutputs, extraFiles }
   } catch (error) {
-    console.warn(
-      `[rari] Vite ${label} environment build failed:`,
-      error instanceof Error ? error.message : error,
-    )
+    console.warn(`[rari] Vite ${label} environment build failed:`, error)
     return null
   } finally {
     restoreEnvBuildConfig(buildConfig, previous)

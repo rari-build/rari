@@ -3,7 +3,52 @@ import os from 'node:os'
 import path from 'node:path'
 import { isRecord } from '@rari/shared/utils/type-guards'
 import { ServerComponentBuilder } from '@rari/vite/server/build'
-import { afterEach, describe, expect, it } from 'vite-plus/test'
+import { transformCssQueryImportsForEmit } from '@rari/vite/server/css-server-asset'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
+
+vi.mock('@rari/vite/server/rsc-vite-build', async importOriginal => {
+  const actual = await importOriginal<typeof import('@rari/vite/server/rsc-vite-build')>()
+  return {
+    ...actual,
+    getOrCreateViteEmitBuilder: vi.fn(async () => {
+      await Promise.resolve()
+      return {}
+    }),
+    buildRscEntriesWithViteEnvironment: vi.fn(
+      async (options: {
+        readonly entries: ReadonlyArray<{
+          readonly componentId: string
+          readonly filePath: string
+        }>
+      }) => {
+        await Promise.resolve()
+        const outputs = new Map<
+          string,
+          { readonly code: string; readonly cssAssetSources: readonly string[] }
+        >()
+        const extraFiles: Array<{ readonly fileName: string; readonly code: string }> = []
+
+        for (const entry of options.entries) {
+          const source = fs.readFileSync(entry.filePath, 'utf-8')
+          const projectRoot = path.resolve(entry.filePath, '..', '..', '..')
+          const transformed = transformCssQueryImportsForEmit({
+            filePath: entry.filePath,
+            code: source,
+            projectRoot,
+            aliases: {},
+          })
+          outputs.set(entry.componentId, {
+            code: transformed.code,
+            cssAssetSources: [],
+          })
+          extraFiles.push(...transformed.extraFiles)
+        }
+
+        return { outputs, extraFiles }
+      },
+    ),
+  }
+})
 
 function readManifestCssHrefs(manifestPath: string): string[] {
   const parsed: unknown = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
