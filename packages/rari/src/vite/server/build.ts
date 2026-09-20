@@ -268,13 +268,11 @@ export class ServerComponentBuilder {
   private readonly moduleAnalysisCache: ModuleAnalysisCache
   private readonly discoveredExternalClientComponents = new Set<string>()
   private readonly clientComponentFiles = new Map<string, string>()
-  private layoutCssSkipSet: Set<string> | null = null
   private viteBuilder: ViteBuilder | null = null
   private envEmitLock: Promise<void> = Promise.resolve()
 
   private getLayoutCssSkipSet(): Set<string> {
-    this.layoutCssSkipSet ??= resolveLayoutCssServerSkipSet(this.projectRoot, this.options.alias)
-    return this.layoutCssSkipSet
+    return resolveLayoutCssServerSkipSet(this.projectRoot, this.options.alias)
   }
 
   private resolveServerCssSources(filePath: string, code: string): string[] {
@@ -657,7 +655,6 @@ export class ServerComponentBuilder {
       entries.map(({ componentId, filePath }) => ({ componentId, filePath })),
     )
 
-    const timestamp = new Date().toISOString()
     return entries.map(entry => {
       const output = result.outputs.get(entry.componentId)
       if (output == null) {
@@ -665,7 +662,7 @@ export class ServerComponentBuilder {
       }
       return {
         id: entry.componentId,
-        code: `// Built: ${timestamp}\n${output.code}`,
+        code: output.code,
         isAction: entry.isAction,
       }
     })
@@ -732,8 +729,7 @@ export class ServerComponentBuilder {
       const bundlePath = rscBundlePathForComponent(this.options.rscDir, componentId)
       const fullBundlePath = path.join(this.options.outDir, bundlePath)
       await fs.promises.mkdir(path.dirname(fullBundlePath), { recursive: true })
-      const timestamp = new Date().toISOString()
-      await fs.promises.writeFile(fullBundlePath, `// Built: ${timestamp}\n${built.code}`, 'utf-8')
+      await fs.promises.writeFile(fullBundlePath, built.code, 'utf-8')
       const component = this.serverComponents.get(filePath) ?? this.serverActions.get(filePath)
       const cssSources = this.resolveServerCssSources(
         filePath,
@@ -742,7 +738,7 @@ export class ServerComponentBuilder {
       const css = [
         ...(await this.writeComponentCssAsset(
           componentId,
-          cssSources.length > 0 ? cssSources : [...built.cssAssetSources],
+          built.cssAssetSources.length > 0 ? [...built.cssAssetSources] : cssSources,
         )),
       ]
       manifest.components[componentId] = {
@@ -978,7 +974,11 @@ export class ServerComponentBuilder {
 
     const viteBuilt = await this.buildSsrEntriesWithVite(clientFiles, externalSources)
     for (const file of viteBuilt.extraFiles) {
-      const fullPath = path.join(ssrOutDir, file.fileName)
+      const normalized = toPosixPath(file.fileName)
+      const fullPath =
+        normalized === this.options.assetsDir || normalized.startsWith(`${this.options.assetsDir}/`)
+          ? path.join(this.options.outDir, normalized)
+          : path.join(ssrOutDir, normalized)
       await fs.promises.mkdir(path.dirname(fullPath), { recursive: true })
       await fs.promises.writeFile(fullPath, file.code, 'utf-8')
     }
@@ -1178,15 +1178,13 @@ export class ServerComponentBuilder {
       throw new Error(`Vite RSC environment build missed entry: ${componentId}`)
     }
 
-    const timestamp = new Date().toISOString()
-    const codeWithBanner = `// Built: ${timestamp}\n${built.code}`
-    await fs.promises.writeFile(fullBundlePath, codeWithBanner, 'utf-8')
+    await fs.promises.writeFile(fullBundlePath, built.code, 'utf-8')
 
     const cssSources = this.resolveServerCssSources(filePath, code)
     const css = [
       ...(await this.writeComponentCssAsset(
         componentId,
-        cssSources.length > 0 ? cssSources : [...built.cssAssetSources],
+        built.cssAssetSources.length > 0 ? [...built.cssAssetSources] : cssSources,
       )),
     ]
 
@@ -1198,7 +1196,7 @@ export class ServerComponentBuilder {
 
     const storedComponent = this.serverActions.get(filePath) ?? this.serverComponents.get(filePath)
     this.buildCache.set(filePath, {
-      code: codeWithBanner,
+      code: built.code,
       css,
       timestamp: Date.now(),
       sourceDependencies,
