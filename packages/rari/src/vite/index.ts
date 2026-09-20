@@ -1128,7 +1128,7 @@ if (import.meta.hot) {
       if (moduleAnalysis.topLevelUseServer) {
         setComponentType(id, 'server')
 
-        if (environment.name === 'rsc' || environment.name === 'ssr') {
+        if (environment.name === 'rsc') {
           return transformServerModule(code, id, moduleAnalysis)
         }
         return transformClientModule(code, id, moduleAnalysis)
